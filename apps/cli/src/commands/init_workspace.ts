@@ -39,11 +39,12 @@ import { buildClaudeMd, buildStandardsRoutingSection } from "../lib/claude_md.js
 import {
   Colors,
   error,
-  getInfraRoot,
   getReposRoot,
   info,
   loadArchetypes,
   loadMcpServers,
+  loadReposConfig,
+  loadServices,
   success,
   warn,
 } from "../lib/config.js";
@@ -1022,15 +1023,7 @@ function resolveTask(
 /** Load services and repos config from services.yaml. Both may be empty. */
 export function loadSandboxServiceConfigs(): [Record<string, any>, Record<string, any>] {
   try {
-    const servicesYaml = path.join(getInfraRoot(), "config", "services.yaml");
-    if (!fs.existsSync(servicesYaml)) {
-      return [{}, {}];
-    }
-    const data = YAML.parse(fs.readFileSync(servicesYaml, "utf8"));
-    if (typeof data !== "object" || data === null || Array.isArray(data)) {
-      return [{}, {}];
-    }
-    return [data["services"] ?? {}, data["repos"] ?? {}];
+    return [loadServices(), loadReposConfig()];
   } catch {
     return [{}, {}];
   }
