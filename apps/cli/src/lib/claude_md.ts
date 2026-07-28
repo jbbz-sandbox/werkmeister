@@ -1,0 +1,498 @@
+/**
+ * CLAUDE.md / routing-table / sandbox-context builders — extracted from
+ * init-workspace per DEBT-03 (it was the largest file in the codebase,
+ * mixing workspace discovery,
+ * input resolution, interactive prompting, CLAUDE.md generation, and compose
+ * orchestration).
+ *
+ * This module owns pure string-rendering logic for the workspace-facing
+ * markdown artifacts: the workspace `CLAUDE.md`, its routing table and
+ * Feature Testing section, and `.sandbox/sandbox-context.md`. No behavior
+ * change from the pre-move implementation — see
+ * `src/lib/__tests__/claude_md.test.ts` for the
+ * byte-for-byte parity regression guard.
+ */
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+import { getServicePort } from "./slots.js";
+import { UNIVERSAL_STANDARDS } from "./standards.js";
+
+function isDict(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// ---------------------------------------------------------------------------
+// CLAUDE.md generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Render the ## Feature Testing section — identity, URL, and X-Feature cookie only.
+ *
+ * Lifecycle commands (sandbox up/down, docker compose) live in .sandbox/sandbox-context.md.
+ * Returns an empty string if FEATURE is not set.
+ */
+export function buildFeatureTestingSection(meta: Record<string, string>): string {
+  const feature = (meta["FEATURE"] ?? "").trim();
+  if (!feature) {
+    return "";
+  }
+
+  const jiraId = (meta["JIRA_ID"] ?? "").trim();
+  const testPath = (meta["TEST_PATH"] ?? "").trim();
+  const serviceNames = (meta["SERVICES"] ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s);
+
+  const metaParts = [`**Feature:** \`${feature}\``];
+  if (jiraId) {
+    metaParts.push(`**Jira:** [${jiraId}](https://hgdata.atlassian.net/browse/${jiraId})`);
+  }
+  if (serviceNames.length > 0) {
+    metaParts.push(`**Services:** ${serviceNames.join(", ")}`);
+  }
+  const metaLine = metaParts.join(" | ");
+
+  const proxyBase = "https://sb-web.local.sandbox.com";
+  const proxyUrl = testPath ? `${proxyBase}/${testPath.replace(/^\/+/, "")}` : proxyBase;
+
+  return `
+## Feature Testing
+
+${metaLine}
+
+### URL
+
+- ${proxyUrl}
+
+### X-Feature Cookie
+
+Set the routing cookie so the sandbox proxy directs requests to your local containers:
+
+**Browser DevTools console:**
+\`\`\`js
+document.cookie = "X-Feature=${feature}; domain=.local.sandbox.com; path=/; SameSite=Lax";
+\`\`\`
+
+**Sandbox UI:** Visit https://sb-web.local.sandbox.com/__sandbox and select \`${feature}\`
+
+For ports, health checks, and lifecycle commands → [.sandbox/sandbox-context.md](./.sandbox/sandbox-context.md)
+
+`;
+}
+
+/**
+ * Build the routing table for CLAUDE.md.
+ *
+ * Per-repo routing rows are only emitted when `{repo}/CLAUDE.md` actually
+ * exists — pointing at a file that isn't there is worse than no row at all.
+ */
+export function buildRoutingTable(
+  repos: Array<[string, string]>,
+  workspaceRoot: string,
+  hasFeature: boolean,
+  hasServiceMap: boolean,
+): string {
+  const alsoCol = hasServiceMap ? ".sandbox/service-map.md" : "—";
+  const rows: string[] = [];
+
+  for (const [name] of repos) {
+    let isFile = false;
+    try {
+      isFile = fs.statSync(path.join(workspaceRoot, name, "CLAUDE.md")).isFile();
+    } catch {
+      /* missing — no row */
+    }
+    if (isFile) {
+      rows.push(`| Working in ${name} | ${name}/CLAUDE.md | ${alsoCol} |`);
+    }
+  }
+
+  if (hasFeature) {
+    rows.push("| Debugging routing / ports | .sandbox/sandbox-context.md | — |");
+    rows.push("| Container lifecycle | .sandbox/sandbox-context.md | — |");
+  }
+
+  if (repos.length > 1) {
+    rows.push(
+      `| Cross-repo contract change | .sandbox/notes/ (\`contract\` notes) | ${alsoCol} |`,
+    );
+  }
+
+  if (rows.length === 0) {
+    return "";
+  }
+
+  return "| Task | Read first | Also read |\n|------|-----------|----------|\n" + rows.join("\n");
+}
+
+/**
+ * Render the "Standards routing" block (jit-standards-loading-spec.md §5.3).
+ *
+ * The compiled, inspectable projection of services.yaml `standards:` +
+ * workspace.yml `standards_override` — the ICM Layer-1 table. The
+ * `sb-<key>-standard` skills it references are generated from
+ * docs/standards/ and projected into the workspace's `.claude/skills/` by
+ * init-workspace (`workspace_skills.ts`); `sb-implement`/`sb-research`/
+ * `sb-test`/`sb-review` are the phase-entry skills that read this table (spec §5.6 — the
+ * CLAUDE.md-table → entry-skill chain is the measured 15/15 PREVENTIVE
+ * mechanism, so the table must name them).
+ */
+export function buildStandardsRoutingSection(
+  active: string[],
+  notActive: string[],
+  modules: Record<string, Record<string, any>>,
+  repoNames: string[],
+): string {
+  const rows: string[] = [];
+  for (const key of active) {
+    const meta = modules[key] ?? {};
+    let loadsOn: string;
+    if (UNIVERSAL_STANDARDS.includes(key)) {
+      loadsOn = "any code edit";
+    } else {
+      loadsOn =
+        ((meta["applies_to"] || []) as string[]).map((g) => `\`${g}\``).join(", ") || "—";
+    }
+    rows.push(`| ${key} | \`sb-${key}-standard\` | ${loadsOn} |`);
+  }
+
+  const reposLabel = repoNames.length > 0 ? repoNames.join(", ") : "none discovered";
+  const notActiveLine =
+    notActive.length > 0
+      ? `Not active (no matching repo): ${notActive.join(", ")} — do not load.\n\n`
+      : "";
+
+  return `## Standards routing
+
+> Compiled from services.yaml + .sandbox/workspace.yml (\`standards_override\`) — regenerated by \`sandbox init-workspace\`. Do not hand-edit.
+> Module source: https://github.com/JayAndCory/sandbox/blob/main/docs/code-style-guide.md
+
+**Active in this workspace** (repos: ${reposLabel}):
+
+| Standard | Skill | Loads on |
+|----------|-------|----------|
+${rows.join("\n")}
+
+${notActiveLine}**Phase entry:** invoke \`sb-research\` when exploring or planning; invoke \`sb-implement\` BEFORE your first code edit — it loads the universal base (\`ponytail\` + \`sb-comments-standard\` + \`sb-engineering-standard\`) and the Active rows matching the files you edit; invoke \`sb-test\` to run or write tests; invoke \`sb-review\` BEFORE reviewing any diff or PR; invoke \`sb-pr\` to finish the branch and create the PR.
+
+> Sessions must start at the **workspace root** (this directory) — the sb-* skills, agents, and hooks live in \`.claude/\` here and are not found from inside a repo worktree. \`sandbox skills check\` verifies the skills are current with the sandbox repo.
+
+**By phase:**
+
+| Phase | Entry skill | Load |
+|-------|-------------|------|
+| research / planning | \`sb-research\` | nothing — spawns the read-only \`sb-researcher\` agent |
+| implementing | \`sb-implement\` | universal base + rows matching the files you edit |
+| testing | \`sb-test\` | nothing — spawns the matching \`sb-tester-<archetype>\` agent(s) |
+| review | \`sb-review\` | the standards covering files in the diff |
+| PR / finishing | \`sb-pr\` | nothing — runs the pre-PR gate, then \`sb-review\` |
+
+`;
+}
+
+/** Render the workspace CLAUDE.md content. */
+export function buildClaudeMd(
+  workspaceName: string,
+  workspaceRoot: string,
+  repos: Array<[string, string]>,
+  task: string,
+  meta: Record<string, string>,
+  hasServiceMap = false,
+  standardsSection: string | null = null,
+): string {
+  const layoutLines = repos.map(([name, branch]) => `- ${name}/ — branch: ${branch}`).join("\n");
+
+  const hasFeature = Boolean((meta["FEATURE"] ?? "").trim());
+  const routingTable = buildRoutingTable(repos, workspaceRoot, hasFeature, hasServiceMap);
+  const routingSection = routingTable
+    ? `\n## Routing\n\n${routingTable}\n\n## Context Budget\n\n` +
+      "Load only what the routing table points to for your current task. " +
+      "Target: ≤ 3 context files per step unless a repo's CLAUDE.md explicitly requires more.\n"
+    : "";
+
+  const repoCount = repos.length;
+  const layoutHeader =
+    repoCount > 1
+      ? "This is a multi-repo workspace. Repositories:"
+      : "This is a single-repo workspace. Repository:";
+
+  // Notes — a generated pointer to the durable .sandbox/notes/ store
+  // (jit-notes-and-handoffs-spec.md §4.2: this file is a compiled projection
+  // and holds no handoff state, so regen loses nothing). Multi-repo
+  // workspaces get the cross-repo contract-note rule folded into the
+  // pointer text; single-repo workspaces don't need the coordination rubric.
+  const contractRule =
+    repoCount > 1
+      ? "\nRecord contract changes (API schema, shared types, event contracts) as " +
+        "`contract` notes **before** switching repos; read them when entering the " +
+        "receiving repo.\n"
+      : "";
+  const notesSection = `## Notes
+
+Working notes for this feature live in [.sandbox/notes/](.sandbox/notes/) — one note per file, \`NNN-<type>-<slug>.md\`. Types: \`finding\` (research output), \`decision\` (settled choices — binding), \`attempt\` (tried-and-failed approaches), \`handoff\` (session/phase transition state), \`contract\` (cross-repo interface changes). Conventions: docs/notes-conventions.md in the sandbox repo.
+
+List and read the relevant notes before starting work; skip \`status: superseded\` notes. \`decision\` notes override task-level instincts (minimal-change, "the prompt didn't mention it") — if one conflicts with the task as given, raise the conflict to the user instead of silently picking a side.
+${contractRule}`;
+
+  // Current Task — Jira inlined when available. The task description, when
+  // provided, fills the "what + why" body; otherwise an HTML comment prompts
+  // the developer to write a 1-2 sentence "what + why" rather than leaving the
+  // workspace context with only the task title.
+  const jiraId = (meta["JIRA_ID"] ?? "").trim();
+  const currentTaskLine = jiraId
+    ? `${task} — [${jiraId}](https://hgdata.atlassian.net/browse/${jiraId})`
+    : task;
+  const description = (meta["DESCRIPTION"] ?? "").trim();
+  const taskBody = description
+    ? description
+    : "<!-- Replace this comment with 1-2 sentences describing what this " +
+      "feature does and the user-visible outcome. -->";
+  const currentTaskSection = `## Current Task\n\n${currentTaskLine}\n\n${taskBody}\n`;
+
+  const featureTesting = buildFeatureTestingSection(meta);
+
+  // Code Standards — the compiled "Standards routing" block when the caller
+  // resolved one (repo-scoped JIT loading, spec §5.3); otherwise fall back to
+  // the canonical style-guide link. Source of truth stays in the sandbox repo.
+  let codeStandardsSection: string;
+  if (standardsSection !== null) {
+    codeStandardsSection = standardsSection;
+  } else {
+    codeStandardsSection =
+      "## Code Standards\n\n" +
+      "Follow the canonical cross-repo code style guide (comment rubric, per-repo " +
+      "quirks): " +
+      "https://github.com/JayAndCory/sandbox/blob/main/docs/code-style-guide.md\n\n";
+  }
+
+  return `# Workspace: jayboyer/${workspaceName}
+
+${currentTaskSection}
+## Layout
+
+${layoutHeader}
+
+${layoutLines}
+${routingSection}
+${codeStandardsSection}${featureTesting}${notesSection}`;
+}
+
+// ---------------------------------------------------------------------------
+// sandbox-context.md generation
+// ---------------------------------------------------------------------------
+
+/** Render .sandbox/sandbox-context.md — ports, service topology, lifecycle commands, health checks. */
+export function buildSandboxContextMd(
+  feature: string,
+  slot: number,
+  portStart: number,
+  portEnd: number,
+  localServices: string[],
+  servicesConfig: Record<string, any>,
+): string {
+  const k8sPort = (svc: string): number | null => {
+    // k8s-forwards container listen-port; single source is services.yaml.
+    const svcDef = servicesConfig[svc] ?? {};
+    if (isDict(svcDef) && svcDef["k8s_forward_port"] !== null && svcDef["k8s_forward_port"] !== undefined) {
+      return Number(svcDef["k8s_forward_port"]);
+    }
+    return null;
+  };
+
+  // Unified service table — one row per service, sorted local-first then alpha.
+  // Replaces the previous three-way split (Local Services / k8s Port-Forwarded /
+  // Service Discovery URLs) which described the same services three different ways.
+  const serviceRows: string[] = [];
+  let firstLocalHostPort: number | null = null;
+  for (const svc of [...localServices].sort()) {
+    const svcDef = servicesConfig[svc] ?? {};
+    if (!isDict(svcDef)) {
+      continue;
+    }
+    const offset = svcDef["port_offset"] ?? 0;
+    const hostPort = getServicePort(slot, offset);
+    if (firstLocalHostPort === null) {
+      firstLocalHostPort = hostPort;
+    }
+    const internalPort = svcDef["internal_port"] ?? 3000;
+    const envVar = `${svc.toUpperCase().replace(/-/g, "_")}_URL`;
+    serviceRows.push(
+      `| \`${svc}\` | local | \`${feature}-${svc}\` | ${hostPort} | \`${envVar}=http://${svc}:${internalPort}\` |`,
+    );
+  }
+  for (const svc of Object.keys(servicesConfig).sort()) {
+    if (localServices.includes(svc)) {
+      continue;
+    }
+    const svcDef = servicesConfig[svc] ?? {};
+    if (!isDict(svcDef)) {
+      continue;
+    }
+    const port = k8sPort(svc);
+    if (!port) {
+      continue;
+    }
+    const envVar = `${svc.toUpperCase().replace(/-/g, "_")}_URL`;
+    serviceRows.push(`| \`${svc}\` | k8s | — | — | \`${envVar}=http://k8s-forwards:${port}\` |`);
+  }
+
+  let servicesTable: string;
+  if (serviceRows.length > 0) {
+    servicesTable =
+      "| Service | Location | Container | Host Port | In-cluster URL (env var) |\n" +
+      "|---------|----------|-----------|-----------|--------------------------|\n" +
+      serviceRows.join("\n");
+  } else {
+    servicesTable = "_No services configured._";
+  }
+
+  // Container commands — show the naming pattern once instead of repeating
+  // `docker logs {feature}-{svc} -f` for every service.
+  let containerCommandsBlock: string;
+  if (localServices.length > 0) {
+    const svcs = [...localServices].sort();
+    const containerList = svcs.map((s) => `\`${feature}-${s}\``).join(", ");
+    const sampleSvc = svcs[0];
+    containerCommandsBlock = `### Container Commands
+
+Container naming pattern: \`${feature}-<service>\` — ${containerList}
+
+\`\`\`bash
+docker logs <container> -f         # follow logs
+docker logs <container> --tail 50  # last 50 lines
+docker exec -it <container> sh     # shell in
+
+# Or via compose (run from workspace root):
+docker compose ps
+docker compose logs -f ${sampleSvc}
+docker compose restart ${sampleSvc}
+\`\`\`
+
+`;
+  } else {
+    containerCommandsBlock = "";
+  }
+
+  // Quick health checks — direct-to-localhost line must hit a real local
+  // service port, not `port_start` (the slot base) where nothing listens.
+  let healthChecks: string;
+  if (localServices.length > 0 && firstLocalHostPort !== null) {
+    const directCheck =
+      "# Direct to a local service (bypass Caddy — isolates routing vs app issues):\n" +
+      'curl -s -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
+      `"http://localhost:${firstLocalHostPort}/"\n\n`;
+    const proxyCheck =
+      "# Through Caddy (verifies full proxy routing):\n" +
+      `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
+      '"https://sb-web.local.sandbox.com/"\n' +
+      `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
+      '"https://vendor.local.sandbox.com/"\n\n';
+    const statusCheck =
+      "# Container status:\n" +
+      `docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" | grep ${feature}`;
+    healthChecks = proxyCheck + directCheck + statusCheck;
+  } else {
+    healthChecks =
+      "# Through Caddy (all traffic routes to k8s):\n" +
+      'curl -sk -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
+      '"https://sb-web.local.sandbox.com/"\n' +
+      'curl -sk -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
+      '"https://vendor.local.sandbox.com/"';
+  }
+
+  return `<!--
+  AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
+  Source:    ~/.sandbox/services.yaml + ports.yaml
+             + .sandbox/workspace.yml (feature, services, slot)
+  Generator: src/commands/init_workspace.ts :: _build_sandbox_context_md
+  Regen:     sandbox init-workspace  (or \`sandbox up\` after slot changes)
+  To change ports/health endpoints/services, edit services.yaml / ports.yaml.
+  To change which services run locally, edit .sandbox/workspace.yml and rerun.
+-->
+
+# Sandbox Context: ${feature}
+
+## Slot & Port Range
+
+- **Slot:** ${slot}
+- **Port range:** ${portStart}–${portEnd}
+
+## Container Lifecycle
+
+Run from anywhere in the workspace — \`sandbox\` reads \`FEATURE\` from \`.env\` at the workspace root.
+
+\`\`\`bash
+sandbox up          # start containers + configure Caddy proxy
+sandbox stop        # stop (slot preserved, fast resume)
+sandbox restart     # restart all containers
+sandbox down        # tear down + release slot
+sandbox down -v     # tear down + remove volumes (node_modules, caches)
+\`\`\`
+
+> **Fallback:** If \`sandbox\` CLI is unavailable, \`docker compose up -d --build\` / \`docker compose down\` from the workspace root works equivalently. Prefer \`sandbox\` — it also manages slot allocation and Caddy proxy regeneration.
+
+## Services
+
+Every container gets each service's URL injected as an env var (the last column). Local services resolve to the Docker DNS alias on the per-feature network; k8s-forwarded services resolve via the shared \`k8s-forwards\` container.
+
+${servicesTable}
+
+${containerCommandsBlock}## Infrastructure
+
+| Service | Host | Port | Notes |
+|---------|------|------|-------|
+| MongoDB | \`host.docker.internal\` | \`9052\` | k8s port-forward |
+| PostgreSQL | \`host.docker.internal\` | \`9051\` | k8s-forward (k8s) |
+| Redis | \`host.docker.internal\` | \`9050\` | k8s-forward (k8s) |
+
+## Quick Health Checks
+
+\`\`\`bash
+${healthChecks}
+\`\`\`
+
+## Proxy Routing
+
+Two domains are routed through Caddy:
+
+FIXME: This needs to be configurable
+- \`https://sb-web.local.sandbox.com\` — main Sandbox web app (web-v0, web-v1, web-v2)
+- \`https://vendor.local.sandbox.com\` — vendor portal (vendor-portal-client)
+
+Set \`X-Feature=${feature}\` (cookie or header) to route to this workspace's local containers; otherwise traffic falls through to the k8s port-forwards.
+
+**Sandbox selector UI (\`/__sandbox\`):** Only available on \`https://sb-web.local.sandbox.com\`. Setting the cookie there applies to both domains.
+
+## Troubleshooting
+
+### Feature missing from \`/__sandbox\` selector
+
+The dropdown is populated from \`$SANDBOX_ROOT/infra/proxy/ui/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
+
+Diagnose — compare what's labeled vs. what the UI shows:
+\`\`\`bash
+docker ps -a --filter label=com.sandbox.local.feature   --format '{{ .Label "com.sandbox.local.feature" }}' | sort -u
+jq '[.[].name]' "\${SANDBOX_ROOT:-$HOME/workspace/sandbox}/infra/proxy/ui/features.json"
+\`\`\`
+
+Resync:
+\`\`\`bash
+sandbox proxy-reload      # regenerates Caddyfile + features.json, reloads Caddy
+\`\`\`
+
+### Caddy returns \`content-length: 0\` but direct service hit works
+
+Caddy routing issue, not an app issue. Try \`sandbox proxy-reload\` first; if Caddy is still misrouting, check \`docker logs sandbox-caddy --tail 50\`.
+
+### Containers expected per the table above are missing from \`docker ps\`
+
+\`sandbox up\` may have partially failed. Re-run from the workspace root:
+\`\`\`bash
+sandbox up                # idempotent — starts missing containers
+docker compose logs -f    # watch startup if something crashes
+\`\`\`
+`;
+}

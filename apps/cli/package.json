@@ -1,0 +1,27 @@
+{
+  "name": "sandbox-cli",
+  "version": "0.1.0",
+  "description": "Multi-feature concurrent development orchestrator for Sandbox (TypeScript port)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "nunjucks": "^3.2.4",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/nunjucks": "^3.2.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

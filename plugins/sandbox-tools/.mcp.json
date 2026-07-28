@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sandbox-workspace": {
+      "command": "sandbox",
+      "args": ["mcp", "--stdio"]
+    }
+  }
+}

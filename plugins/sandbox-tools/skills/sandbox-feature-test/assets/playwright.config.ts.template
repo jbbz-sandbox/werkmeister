@@ -1,0 +1,22 @@
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: '.',
+  fullyParallel: false,
+  retries: 0,
+  reporter: 'line',
+  use: {
+    // Filled by setup_feature.py from ingress.local_domain in ~/.sandbox/config.yaml.
+    baseURL: '{{BASE_URL}}',
+    ignoreHTTPSErrors: true,
+    extraHTTPHeaders: {
+      'X-Feature': process.env.SANDBOX_FEATURE || '',
+    },
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+});

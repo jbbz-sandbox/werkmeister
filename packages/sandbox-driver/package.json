@@ -1,0 +1,24 @@
+{
+  "name": "sandbox-driver",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Shared CLI-driving layer for the `sandbox` sandbox CLI. Shells out to the CLI and exposes typed functions (createWorkspace, listWorkspaces, …) consumed by the sandbox-dashboard and claudeck MCP servers.",
+  "main": "dist/sandbox.js",
+  "types": "dist/sandbox.d.ts",
+  "exports": {
+    ".": "./dist/sandbox.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test *.test.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/jayandcory/sandbox/main/infra/schemas/workspace.schema.json",
+  "title": "Sandbox workspace config (.sandbox/workspace.yml)",
+  "description": "Durable source of truth for a sandbox workspace's inputs. Generated and re-read by `sandbox init-workspace`. Unmanaged keys are preserved across writes, so additional properties are allowed.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URL of this JSON Schema, for editor validation."
+    },
+    "feature": {
+      "type": "string",
+      "description": "Feature slug — names the workspace, containers, and routing cookie."
+    },
+    "work_type": {
+      "type": "string",
+      "description": "Kind of work (e.g. feature, bugfix). Drives workspace scaffolding."
+    },
+    "repos": {
+      "type": "string",
+      "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `sandbox init-workspace` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."
+    },
+    "services": {
+      "type": "string",
+      "description": "Comma-separated list of services to run locally (kept a flat string for back-compat)."
+    },
+    "jira_id": {
+      "type": "string",
+      "description": "Jira ticket key (e.g. TRE-1897)."
+    },
+    "test_path": {
+      "type": "string",
+      "description": "Path or URL the feature is tested against."
+    },
+    "description": {
+      "type": "string",
+      "description": "Short human description of the workspace's purpose."
+    },
+    "task": {
+      "type": "string",
+      "description": "Task title embedded into CLAUDE.md."
+    },
+    "starting_prompt": {
+      "type": "string",
+      "description": "First instruction seeded to the agent."
+    },
+    "labels": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Freeform labels for the workspace."
+    },
+    "standards_override": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tunes the CLAUDE.md Standards routing block (see docs/jit-standards-loading-spec.md).",
+      "properties": {
+        "add": { "type": "array", "items": { "type": "string" } },
+        "remove": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "dev_links": {
+      "type": "object",
+      "description": "Per-workspace dev-link bind mounts. Maps a service name to a list of \"host:container[:ro]\" specs merged into that service's compose volumes — mount a locally built package over its node_modules copy without editing the global services.yaml. Vars: ${WORKSPACE} (workspace root), ${REPO} (the service's repo dir), ${SANDBOX_ROOT}.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "description": "A bind mount, e.g. \"${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core\"."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+# Overrides for the rest-hello release. Anything omitted falls back to charts/webapp/values.yaml.
+image: rest-hello:local
+replicaCount: 2
+probePath: /health
+service:
+  port: 80

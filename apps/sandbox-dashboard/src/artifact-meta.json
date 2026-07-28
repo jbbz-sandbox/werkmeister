@@ -1,0 +1,24 @@
+{
+  "name": "Workspace List",
+  "schemaVersion": 1,
+  "serverName": "sandbox-workspace",
+  "description": "Live Sandbox workspaces control panel. Top bar: shared-infra state with a Connect button (disabled while infra is up and healthy), default k8s port-forward health (click to re-check), and the kube context with a switch-to-dev button. Each workspace shows its container state, Jira ticket + status, and repo/open-PR counts, and expands to reveal action buttons (open in VS Code, open feature, start/stop/restart/down, remove, resume Claude in Terminal), its git repo worktrees and per-branch PRs, and an embedded Claude Code chat panel that continues the workspace's newest session (claude-transcript for history with tool-activity rows, fire-and-forget claude-send turns, claude-turn-status for exact turn tracking). Filter by name, Jira ID, status, repo, branch, or PR title. Refreshes on reload.",
+  "tools": [
+    "list-workspaces",
+    "jira-statuses",
+    "workspace-prs",
+    "workspace-status",
+    "open-workspace",
+    "open-feature",
+    "workspace-action",
+    "remove-workspace",
+    "claude-transcript",
+    "claude-send",
+    "claude-resume",
+    "claude-turn-status",
+    "sandbox-connect",
+    "k8s-forwards-status",
+    "kube-context",
+    "kube-switch"
+  ]
+}

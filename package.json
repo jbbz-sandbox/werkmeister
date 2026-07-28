@@ -1,0 +1,29 @@
+{
+  "name": "sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turborepo monorepo — sandbox CLI and sandbox-dashboard app.",
+  "packageManager": "npm@10.9.4",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "claudeck:sync": "node scripts/sync-workspaces-to-claudeck.mjs"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}

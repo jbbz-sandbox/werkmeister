@@ -1,0 +1,16 @@
+# Port Allocation Scheme
+# Each feature slot (1-12) gets a dedicated port range.
+#
+# k8s port-forward listen-ports (the 9000-range) are NOT defined here — they
+# live per-service in services.yaml as `k8s_forward_port:` (single source of
+# truth for the forward table). See docs/superpowers/plans/
+# 2026-07-19-k8s-forward-table-consolidation.md.
+
+feature_slots:
+  count: 12
+  base_port: 11100
+  ports_per_slot: 20
+  # Slot 1: 11100-11119
+  # Slot 2: 11200-11219
+  # ...
+  # Slot 12: 12200-12219

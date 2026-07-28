@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "sandbox-tools",
+  "displayName": "Sandbox Tools",
+  "version": "0.0.1",
+  "description": "Diagnostics and operations skills for the sandbox: full-stack health checks, URL routing tracing, safe Caddy reloads, and status overviews.",
+  "author": {
+    "name": "Sandboxx DevTools"
+  },
+  "homepage": "https://github.com/jayandcory/sandbox",
+  "repository": "https://github.com/jayandcory/sandbox",
+  "keywords": [
+    "sandbox",
+    "caddy",
+    "diagnostics",
+    "routing"
+  ],
+  "mcpServers": "./.mcp.json"
+}

@@ -1,0 +1,6 @@
+# Overrides for the next-hello release.
+image: next-hello:local
+replicaCount: 1
+probePath: /
+service:
+  port: 8080          # distinct from rest-hello's :80 — single-node host-port rule

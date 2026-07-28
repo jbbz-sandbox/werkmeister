@@ -1,0 +1,70 @@
+{
+  "name": "claudeck",
+  "version": "1.0.0",
+  "//": "private: this is a vendored fork sharing upstream's package name — publishing would collide with the real claudeck on npm.",
+  "private": true,
+  "type": "module",
+  "description": "A browser-based UI for Claude Code — chat, run workflows, manage MCP servers, track costs, and orchestrate autonomous agents from a local web interface. Installable as a PWA.",
+  "main": "server.js",
+  "bin": {
+    "claudeck": "./cli.js"
+  },
+  "files": [
+    "cli.js",
+    "server.js",
+    "db.js",
+    "db/",
+    "server/",
+    "public/",
+    "config/",
+    "plugins/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "llm",
+    "web-ui",
+    "chat",
+    "mcp",
+    "agents",
+    "workflows",
+    "pwa",
+    "developer-tools"
+  ],
+  "homepage": "https://github.com/JayAndCory/sandbox/tree/main/apps/claudeck",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JayAndCory/sandbox",
+    "directory": "apps/claudeck"
+  },
+  "license": "MIT",
+  "author": "Jay Boyer",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:perf": "vitest run --config vitest.config.perf.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.128",
+    "better-sqlite3": "^11",
+    "dotenv": "^17.3.1",
+    "express": "^4",
+    "sandbox-driver": "*",
+    "web-push": "^3.6.7",
+    "ws": "^8"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.0",
+    "happy-dom": "^20.8.4",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.0"
+  }
+}
