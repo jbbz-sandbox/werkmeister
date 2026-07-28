@@ -11,7 +11,16 @@ FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d650
 # kubectl: port-forward + resource discovery. bash: the entrypoint uses arrays,
 # [[ ]], here-strings, and `wait -n`. netcat-openbsd: the `nc -z` / `nc -w` health
 # probes (busybox nc lacks -z). Everything else (awk/sed/grep/date/mktemp) is busybox.
-RUN apk add --no-cache kubectl bash netcat-openbsd
+#
+# corp_ca secret: on machines behind a TLS-intercepting proxy (Netskope/Zscaler),
+# outbound HTTPS from the build hits a cert the host trusts but alpine's shipped
+# root store doesn't. `sandbox connect` extracts the proxy root into
+# ~/.sandbox/corp-ca.crt and mounts it as a BuildKit secret. Missing/empty file
+# is a no-op — off-proxy builds work unchanged. The CA is appended to alpine's
+# combined bundle before apk runs, so the fetch validates cleanly.
+RUN --mount=type=secret,id=corp_ca,target=/tmp/corp-ca.crt \
+    sh -c '[ -s /tmp/corp-ca.crt ] && cat /tmp/corp-ca.crt >> /etc/ssl/cert.pem; \
+           apk add --no-cache kubectl bash netcat-openbsd'
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

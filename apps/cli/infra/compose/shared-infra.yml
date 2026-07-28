@@ -43,6 +43,13 @@ services:
       dockerfile: Dockerfile
       platforms:
         - linux/amd64
+      # See Dockerfile: corp-ca.crt is appended to alpine's trust store so
+      # `apk add` validates through a corporate TLS proxy (Netskope/Zscaler).
+      # `sandbox connect` writes ~/.sandbox/corp-ca.crt if it can find a
+      # proxy root in the System keychain; otherwise the file is empty and
+      # the build path is a no-op.
+      secrets:
+        - corp_ca
     platform: linux/amd64
     container_name: sandbox-k8s-forwards
     restart: unless-stopped
@@ -201,3 +208,7 @@ volumes:
   sandbox-caddy-data:
   sandbox-caddy-config:
   redisinsight-data:
+
+secrets:
+  corp_ca:
+    file: ${HOME}/.sandbox/corp-ca.crt
