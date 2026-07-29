@@ -16,11 +16,25 @@ import * as path from "node:path";
 import { parse as yamlParse } from "yaml";
 
 import { openFeatureBrowser } from "../lib/browser.js";
+import { ingressHostnames } from "../lib/feature_routing.js";
 import { error, warn } from "../lib/config.js";
 import { getSlot } from "../lib/slots.js";
 
-// FIXME: This should come from the services registry
-const DEFAULT_BASE = "https://sb-web.local.sandbox.com";
+/**
+ * Base URL for `--path`, from the registry rather than a literal.
+ *
+ * The routed host set is per-machine (ingress config + `feature_router:`
+ * blocks), so a hardcoded host would open a page that may not exist. Returns
+ * null when nothing is routed, letting the caller require an explicit `--url`.
+ */
+function defaultBase(): string | null {
+  try {
+    const hosts = ingressHostnames();
+    return hosts.length > 0 ? `https://${hosts[0]}` : null;
+  } catch {
+    return null;
+  }
+}
 
 function loadDotenv(start: string): Record<string, string> {
   let dir = start;
@@ -93,7 +107,15 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     if (!p.startsWith("/")) {
       p = "/" + p;
     }
-    url = DEFAULT_BASE + p;
+    const base = defaultBase();
+    if (base === null) {
+      error(
+        "No routed hosts in services.yaml (no service declares `feature_router:`) — " +
+          "pass an explicit --url.",
+      );
+      return;
+    }
+    url = base + p;
   }
 
   if (getSlot(feature) === null) {

@@ -1,6 +1,6 @@
 /**
  * sandbox standards check — structural regression gate over the docs/standards/
- * source tree (2026-07-18-standards-structural-regression-gate-design.md).
+ * source tree (docs/jit-context-system.md §7).
  *
  * Runs the three source-tree validators and exits non-zero on any error, so a
  * malformed standards edit fails loudly instead of silently dropping out of

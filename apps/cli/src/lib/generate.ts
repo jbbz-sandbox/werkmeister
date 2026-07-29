@@ -478,16 +478,6 @@ export function generateFeatureCompose(
         resolvedEnv[k] = resolveServiceRefs(v, localServices, servicesConfig, portsConfig);
       }
       svcObj["environment"] = resolvedEnv;
-      // Special handling: when web-v2 is running locally, override BASE_LOCAL_URL
-      // to prevent circular dependency (web-v2 needs feature flags during SSR)
-      if (svcName === "web-v2") {
-        const webV0Port = k8sPortForService("web-v0", servicesConfig, portsConfig);
-        if (webV0Port) {
-          svcObj["environment"]["BASE_LOCAL_URL"] = `http://k8s-forwards:${webV0Port}`;
-        } else {
-          svcObj["environment"]["BASE_LOCAL_URL"] = "http://k8s-forwards:3000";
-        }
-      }
       setdefault(svcObj, "command", null);
       setdefault(svcObj, "memory_limit", "2G");
       setdefault(svcObj, "memory_reservation", "512M");
@@ -604,22 +594,6 @@ export function generateFeatureCompose(
         if (k8sPort) {
           environment[`${envPrefix}_URL`] = `http://k8s-forwards:${k8sPort}`;
         }
-      }
-    }
-
-    // Special handling: when web-v2 is running locally, override BASE_LOCAL_URL
-    // to prevent circular dependency (web-v2 needs to fetch feature flags from
-    // itself during SSR, but if BASE_LOCAL_URL points to localhost:3060,
-    // the request loops back to the same container)
-    if (svcName === "web-v2") {
-      // Point to web-v0 (k8s) or use k8s-forwards for feature flag fetching
-      const webV0Port = k8sPortForService("web-v0", servicesConfig, portsConfig);
-      if (webV0Port) {
-        // Use k8s web-v0 (has stable feature flags)
-        environment["BASE_LOCAL_URL"] = `http://k8s-forwards:${webV0Port}`;
-      } else {
-        // Fallback: assume web-v2 is available on k8s port 3060
-        environment["BASE_LOCAL_URL"] = "http://k8s-forwards:3000";
       }
     }
 
@@ -768,14 +742,14 @@ const _BASE_SUFFIX_MAP: Record<string, string> = {
  * via its docker-compose `environment:` block, to a `*_BASE_*` form.
  *
  * Compose `environment:` always wins over `env_file: .env`. Before this
- * rename, a key like `CATEGORY_API_URL` in `.env` was silently shadowed
- * by web-v2's compose override, so the `.env` value was dead weight inside
- * the container and misleading to anyone reading `.env` to understand what
- * a service sees.
+ * rename, a key like `REST_HELLO_URL` in `.env` was silently shadowed by a
+ * consuming service's compose override, so the `.env` value was dead weight
+ * inside the container and misleading to anyone reading `.env` to understand
+ * what a service sees.
  *
- * The rename produces `CATEGORY_API_BASE_URL` (etc.) in `.env`, keeping
+ * The rename produces `REST_HELLO_BASE_URL` (etc.) in `.env`, keeping
  * the default value inspectable as a reference while leaving the service's
- * overridden `CATEGORY_API_URL` unambiguous.
+ * overridden `REST_HELLO_URL` unambiguous.
  */
 function avoidComposeEnvShadowing(
   serviceUrls: Record<string, string>,
@@ -922,17 +896,6 @@ export function generateFeatureEnv(
   fallbackUrls = avoidComposeEnvShadowing(fallbackUrls, localServices, servicesConfig);
   for (const [key, value] of Object.entries(fallbackUrls)) {
     lines.push(`${key}=${value}`);
-  }
-
-  // Special handling: when web-v2 is running locally, override BASE_LOCAL_URL
-  // to prevent circular dependency (web-v2 needs feature flags during SSR)
-  if (localServices.includes("web-v2")) {
-    const webV0Port = k8sPortForService("web-v0", servicesConfig, portsConfig);
-    if (webV0Port) {
-      lines.push(`BASE_LOCAL_URL=http://k8s-forwards:${webV0Port}`);
-    } else {
-      lines.push("BASE_LOCAL_URL=http://k8s-forwards:3000");
-    }
   }
 
   lines.push("");
@@ -1326,8 +1289,8 @@ export function generateWorkspaceCompose(
   const config = { services: servicesConfig, ports: portsConfig };
 
   // Build alias map: path basename → canonical service name.
-  // Handles cases like SERVICES=vendor-portal-client mapping to the registry
-  // key `vendor` (which has path: apps/vendor-portal-client).
+  // Handles a SERVICES entry naming a container/alias that maps to a
+  // differently-keyed registry entry.
   const pathAliases: Record<string, string> = {};
   for (const [svcName, svcDef] of Object.entries(servicesConfig)) {
     if (!isDict(svcDef)) {

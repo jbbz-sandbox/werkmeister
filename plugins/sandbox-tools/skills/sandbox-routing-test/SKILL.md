@@ -9,11 +9,11 @@ Trace a URL through the full routing chain. The user provides a URL (full or rel
 
 ## Step 1: Determine Expected Service
 
-Read `cloudflare-workers/shared/routing/route-config.js`. Locate the repo:
-use a `cloudflare-workers/` worktree in the current workspace if one exists,
-else `${CLOUDFLARE_WORKERS_ROOT:-$HOME/workspace/cloudflare-workers}`.
-
-Match the URL path against the route config rules **in order** to determine which service should handle it.
+Routing is per-hostname, not per-path: Caddy terminates each service's public
+hostname directly. The service handling a URL is the one whose `feature_router:`
+block in `~/.sandbox/services.yaml` owns that hostname — so read the host from
+the URL and match it there. `sandbox services <feature>` lists the routed
+services for a running feature.
 
 Derive the feature's host ports from its slot — do NOT assume slot 1. Get the
 slot from `sandbox status --json` (each entry in `features` has `slot`; slots
@@ -21,14 +21,11 @@ are Docker-label-derived, there is no registry file), then:
 
 ```bash
 BASE=$((11100 + (SLOT - 1) * 100))   # slot 1 → 11100, slot 2 → 11200, …
+PORT=$((BASE + OFFSET))              # OFFSET = the service's `port_offset`
 ```
 
-Service-to-port mapping (offset from `BASE`; offsets are `port_offset` in
-`~/.sandbox/services.yaml`, written by `sandbox setup`):
-- webV0 → localhost:$BASE
-- webV1 → localhost:$((BASE + 1))
-- webV2 → localhost:$((BASE + 2))
-- mcp → localhost:$((BASE + 11))
+`port_offset` per service lives in `~/.sandbox/services.yaml` (written by
+`sandbox setup`).
 
 ## Step 2: Test Direct to Expected Service
 

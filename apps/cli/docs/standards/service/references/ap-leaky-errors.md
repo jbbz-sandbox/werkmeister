@@ -22,7 +22,7 @@ async findById(id: string): Promise<T> {
 
 ## Why it's wrong
 
-Real code: `comx:libs/modules/rest-crud/src/lib/base-crud.service.ts` wraps
+A shared CRUD base service wraps
 `findById`/`findOne`/`findMany`/`findAll` in exactly this shape. The outer
 catch re-wraps *any* thrown error — including a Mongo connection timeout or
 a malformed filter, not just "not found" — as a 404, and interpolates the

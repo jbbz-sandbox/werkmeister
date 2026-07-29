@@ -70,7 +70,7 @@ The CLI owns the inputs and the create logic:
 | `lib/sandbox.ts` | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs |
 | `lib/jira-rest.ts` | Direct Jira REST fast path (+ creds from `jira:` in `~/.sandbox/config.yaml`) |
 | `lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
-| `lib/localhost-form.ts` | Blocking localhost create-form server (`gcloud auth login` pattern) |
+| `lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
 | `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
 

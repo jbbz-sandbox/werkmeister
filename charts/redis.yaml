@@ -1,5 +1,5 @@
 # Redis for the OrbStack sandbox cluster.
-# ClusterIP (internal only) — reached from the docker world via the gke-forwards
+# ClusterIP (internal only) — reached from the docker world via the k8s-forwards
 # container, which `kubectl port-forward`s this Service to host port 9050.
 # Apply with: kubectl apply -f charts/redis.yaml
 apiVersion: apps/v1

@@ -1,6 +1,6 @@
 # Known Issues
 
-Tracked concurrency and isolation issues in the developer sandbox.
+Tracked concurrency and isolation issues in the sandbox.
 
 ---
 
@@ -55,27 +55,25 @@ and `docker compose` interpolation may rely on the exported value, so set it in
 Several service environment variables use `{service-name}` placeholders:
 
 ```yaml
-TRWEB_API_URL: "http://{sb-web-api}/api"
-CATEGORY_API_URL: "http://{category-api}/api"
-GRAPHQL_URL: "http://{federated-graph}"
+REST_HELLO_URL: "http://{rest-hello}/api"
 ```
 
 These are rendered verbatim into Docker Compose environment blocks. The literal curly braces are not valid hostnames and are not Docker Compose variable syntax (`${...}`). The intent is for these to resolve to Docker network aliases, but the braces need to be stripped.
 
-**Workaround:** The programmatic compose generator (`apps/cli/src/lib/generate.ts`) builds its own `*_URL` environment variables using Docker DNS names (e.g., `http://web-v2:3060` for local services, `http://gke-forwards:9000` for GKE services), bypassing these placeholders entirely. The `_resolve_service_refs()` function in `generate.ts` also resolves `{service-name}` placeholders in the nunjucks template path to Docker DNS aliases.
+**Workaround:** The programmatic compose generator (`apps/cli/src/lib/generate.ts`) builds its own `*_URL` environment variables using Docker DNS names (e.g., `http://next-hello:3000` for local services, `http://k8s-forwards:9053` for k8s services), bypassing these placeholders entirely. The `_resolve_service_refs()` function in `generate.ts` also resolves `{service-name}` placeholders in the nunjucks template path to Docker DNS aliases.
 
 **Fix:** Either:
 1. Strip braces at template render time and resolve to the Docker network alias (the service name)
-2. Replace `{service-name}` with the correct Docker DNS alias (e.g., `gke-forwards:9000`)
+2. Replace `{service-name}` with the correct Docker DNS alias (e.g., `k8s-forwards:9000`)
 
 ---
 
-## GKE Port-Forward PID Tracking (Legacy Fallback)
+## k8s Port-Forward PID Tracking (Legacy Fallback)
 
 **Severity:** Low
 **Status:** Resolved
 
-The legacy in-process fallback and bash script PID management are no longer used. GKE port-forwards now run inside a Docker container (`gke-forwards`) managed by Docker Compose with built-in health checks and auto-restart, eliminating the PID tracking problem entirely.
+The legacy in-process fallback and bash script PID management are no longer used. k8s port-forwards now run inside a Docker container (`k8s-forwards`) managed by Docker Compose with built-in health checks and auto-restart, eliminating the PID tracking problem entirely.
 
 ---
 

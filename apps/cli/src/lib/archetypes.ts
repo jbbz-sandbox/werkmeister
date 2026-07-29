@@ -1,13 +1,13 @@
 /**
  * Service archetype resolution — build-plan step 1 of
- * docs/jit-agents-and-tools-spec.md (§4.1).
+ * docs/jit-context-system.md (§4.1).
  *
  * An archetype is a named bundle in services.yaml's `archetypes:` registry
  * describing what a service *type* contributes to workspace generation:
  * standards modules today; MCP servers, test commands, and per-archetype
  * subagents in later build steps. A service opts in with `archetype: <name>`.
  *
- * Migration (spec §4.1, decided 2026-07-04): the shipped per-service
+ * Migration (§4.1): the shipped per-service
  * `standards: [key]` form stays valid — it normalizes here into an anonymous
  * archetype `{standards: [...]}` — so both forms coexist with no flag day.
  * Everything downstream reads through `resolveServiceArchetype` and never

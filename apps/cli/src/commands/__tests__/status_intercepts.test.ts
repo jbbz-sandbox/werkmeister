@@ -1,6 +1,5 @@
 /**
- * Row composition for `sandbox status --intercepts` (see
- * docs/superpowers/specs/2026-07-25-sandbox-intercept-toggle-design.md).
+ * Row composition for `sandbox status --intercepts`.
  *
  * The join under test: every active feature's services × the service registry ×
  * the deployments telepresence reports as intercepted.

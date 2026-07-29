@@ -17,11 +17,11 @@ sandbox status --json
 
 This returns structured JSON covering:
 - `infrastructure` — all shared-infra containers and their health state
-- `gke_forwards` — per-service GKE forward status with real HTTP health checks
+- `k8s_forwards` — per-service k8s forward status with real HTTP health checks
 - `features` — active feature slots with containers and port ranges
-- `summary` — quick counts: `infra_healthy`, `gke_alive`/`gke_total`, `total_features`/`available_slots`
+- `summary` — quick counts: `infra_healthy`, `k8s_alive`/`k8s_total`, `total_features`/`available_slots`
 
-Use this as the primary source of truth. The `gke_forwards` statuses are HTTP-checked (not just TCP),
+Use this as the primary source of truth. The `k8s_forwards` statuses are HTTP-checked (not just TCP),
 so a `"dead"` status means the service is genuinely not responding, not just a port-binding check.
 
 ## Step 2: Feature Slots
@@ -38,7 +38,7 @@ sandbox logs <feature> [service]
 For any locally-running web services, verify their health endpoints directly:
 
 ```bash
-for port_name in "11100:web-v0:/healthcheck" "11101:web-v1:/healthcheck" "11102:web-v2:/api/healthcheck"; do
+for port_name in "11100:rest-hello:/health" "11101:next-hello:/"; do
     port=$(echo $port_name | cut -d: -f1)
     name=$(echo $port_name | cut -d: -f2)
     endpoint=$(echo $port_name | cut -d: -f3)
@@ -63,17 +63,17 @@ CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c < /etc/caddy/Caddyfile 2>/dev/n
 echo "Caddyfile: host=${HOST_SIZE}B container=${CONTAINER_SIZE}B"
 ```
 
-## Step 5: GKE Port-Forward Detail
+## Step 5: k8s Port-Forward Detail
 
-If Step 1 shows `gke_alive < gke_total`, get the full per-service breakdown:
+If Step 1 shows `k8s_alive < k8s_total`, get the full per-service breakdown:
 
 ```bash
-sandbox status --gke
+sandbox status --k8s
 ```
 
 This performs real HTTP health checks against each forward's health endpoint and shows
 the `listen_port → remote_port` mapping. The `listen_port` is what you use on `localhost`
-(e.g. federated-graph is `localhost:9004`, not `localhost:4321`).
+(e.g. next-hello is `localhost:9053`, not `localhost:8080`).
 
 ## Step 6: Resource Usage
 
@@ -98,20 +98,18 @@ docker system df 2>/dev/null
 | Caddy | Running/Down | Config valid, {N} routes |
 | Redis | Running/Down | Port 9050 |
 | Cloud SQL Proxy | Running/Down | Port 9051 |
-| GKE Forwards | Healthy/Unhealthy | {N}/{M} forwards alive (HTTP-checked) |
-| Cloudflare Worker | Running/Down/Not deployed | Port 8787 |
+| k8s Forwards | Healthy/Unhealthy | {N}/{M} forwards alive (HTTP-checked) |
 
 ### Active Features
 | Feature | Slot | Services | Status |
 |---------|------|----------|--------|
-| {name} | {N} | web-v0, web-v1, web-v2, ... | All healthy / Issues |
+| {name} | {N} | rest-hello, next-hello | All healthy / Issues |
 
 ### Service Health
 | Service | Direct | Through Caddy |
 |---------|--------|---------------|
-| web-v0 | HTTP {code} | HTTP {code} |
-| web-v1 | HTTP {code} | HTTP {code} |
-| web-v2 | HTTP {code} | HTTP {code} |
+| rest-hello | HTTP {code} | HTTP {code} |
+| next-hello | HTTP {code} | HTTP {code} |
 
 ### Resources
 | Container | CPU | Memory |

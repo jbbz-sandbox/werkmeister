@@ -14,7 +14,7 @@ summary: Data standard — Airflow ordering/scheduling requirements, epoch-ms co
 
 # Data standard
 
-> Placeholder module — extend as data-engineering review nits accumulate (see the
+> Placeholder module — extend as data-pipeline review nits accumulate (see the
 > living-document rule in [../code-style-guide.md](../code-style-guide.md)).
 
 The shared comment rubric ([comments.md](comments.md)) applies in full. Below are the

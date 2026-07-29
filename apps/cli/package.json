@@ -1,7 +1,7 @@
 {
   "name": "sandbox-cli",
   "version": "0.1.0",
-  "description": "Multi-feature concurrent development orchestrator for Sandbox (TypeScript port)",
+  "description": "Multi-feature concurrent development orchestrator CLI tool",
   "type": "module",
   "private": true,
   "engines": {

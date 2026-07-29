@@ -39,7 +39,7 @@ console.log("✓ isWithin30Days");
 // FIXME: Update the git repository names
 // 3. prFromView mapping.
 const view = {
-  url: "https://github.com/sandbox/econx/pull/1234",
+  url: "https://github.com/sandbox/sandbox/pull/1234",
   number: 1234,
   title: "PROJ-999 fix the thing",
   body: "body text",
@@ -52,7 +52,7 @@ const view = {
   statusCheckRollup: [{ conclusion: "FAILURE" }],
 };
 const pr = prFromView(view, "jaysonboyer");
-assert.equal(pr.repo, "econx", "repo parsed from url");
+assert.equal(pr.repo, "sandbox", "repo parsed from url");
 assert.equal(pr.number, 1234, "number");
 assert.equal(pr.changesRequested, true, "reviewDecision CHANGES_REQUESTED");
 assert.equal(pr.outOfDate, true, "mergeStateStatus BEHIND");
@@ -65,17 +65,17 @@ const clean = prFromView({ ...view, mergeStateStatus: "UNKNOWN", reviewDecision:
 assert.equal(clean.outOfDate, false, "UNKNOWN is not flagged out-of-date");
 assert.equal(clean.changesRequested, false, "APPROVED is not changes-requested");
 
-const stub = prFromView({ url: "https://github.com/sandbox/web-v2/pull/77", unavailable: true }, "me");
-assert.equal(stub.repo, "web-v2", "unavailable stub still knows repo from url");
+const stub = prFromView({ url: "https://github.com/sandbox/next-hello/pull/77", unavailable: true }, "me");
+assert.equal(stub.repo, "next-hello", "unavailable stub still knows repo from url");
 assert.equal(stub.number, 77, "unavailable stub knows number from url");
 assert.equal(stub.title, "(details unavailable)", "unavailable stub title");
 console.log("✓ prFromView");
 
 // 4. Section split: mine keeps my PRs; others excludes me + drops stale.
-const mineView = { ...view, url: "https://github.com/sandbox/econx/pull/1", author: { login: "jaysonboyer" } };
-const otherFresh = { ...view, url: "https://github.com/sandbox/econx/pull/2", author: { login: "coworker" } };
-const otherIsMe = { ...view, url: "https://github.com/sandbox/econx/pull/3", author: { login: "jaysonboyer" } };
-const otherStale = { ...view, url: "https://github.com/sandbox/econx/pull/4", author: { login: "coworker" }, updatedAt: "2026-01-01T00:00:00Z" };
+const mineView = { ...view, url: "https://github.com/sandbox/sandbox/pull/1", author: { login: "jaysonboyer" } };
+const otherFresh = { ...view, url: "https://github.com/sandbox/sandbox/pull/2", author: { login: "coworker" } };
+const otherIsMe = { ...view, url: "https://github.com/sandbox/sandbox/pull/3", author: { login: "jaysonboyer" } };
+const otherStale = { ...view, url: "https://github.com/sandbox/sandbox/pull/4", author: { login: "coworker" }, updatedAt: "2026-01-01T00:00:00Z" };
 const res = assembleOpenPrs([mineView], [otherFresh, otherIsMe, otherStale], "jaysonboyer", now);
 assert.equal(res.me, "jaysonboyer");
 assert.deepEqual(res.mine.map((p) => p.number), [1], "mine section");
@@ -91,16 +91,16 @@ assert.ok(html.includes('href="https://example.com"'), "bare URL linkified");
 console.log("✓ renderMarkdown config");
 
 // 6. launchPrReconcile URL guard: only canonical GitHub PR URLs pass (injection guard).
-assert.equal(isValidPrUrl("https://github.com/sandbox/econx/pull/1234"), true, "canonical PR url ok");
-assert.equal(isValidPrUrl('https://github.com/sandbox/econx/pull/1234" ; rm -rf ~'), false, "shell-metachar url rejected");
+assert.equal(isValidPrUrl("https://github.com/sandbox/sandbox/pull/1234"), true, "canonical PR url ok");
+assert.equal(isValidPrUrl('https://github.com/sandbox/sandbox/pull/1234" ; rm -rf ~'), false, "shell-metachar url rejected");
 assert.equal(isValidPrUrl("https://evil.com/a/b/pull/1"), false, "non-github host rejected");
-assert.equal(isValidPrUrl("https://github.com/sandbox/econx/pull/abc"), false, "non-numeric PR rejected");
+assert.equal(isValidPrUrl("https://github.com/sandbox/sandbox/pull/abc"), false, "non-numeric PR rejected");
 console.log("✓ isValidPrUrl injection guard");
 
 // 7. buildReconcileContext: embeds Jira + PR + diff; truncates a huge diff.
 const ctx = buildReconcileContext(
   { key: "PROJ-1", summary: "Do a thing", status: "In Review", description: "ticket body" },
-  { url: "https://github.com/sandbox/econx/pull/9", title: "PR title", body: "pr body", author: { login: "me" }, labels: [{ name: "ready-for-human-approval" }] },
+  { url: "https://github.com/sandbox/sandbox/pull/9", title: "PR title", body: "pr body", author: { login: "me" }, labels: [{ name: "ready-for-human-approval" }] },
   "diff --git a b",
 );
 assert.ok(ctx.includes("PROJ-1") && ctx.includes("ticket body"), "embeds Jira ticket");

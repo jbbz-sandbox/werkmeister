@@ -34,7 +34,7 @@ generated from [`apps/cli/docs/standards/`](../../apps/cli/docs/standards) by
 
 The plugin's [`.mcp.json`](./.mcp.json) auto-wires an MCP server (`sandbox mcp --stdio`,
 source in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard)) exposing ~26 tools —
-workspace create/manage, PR review, Jira lookups, GKE/kube health, and a Claude
+workspace create/manage, PR review, Jira lookups, k8s/kube health, and a Claude
 session bridge — with **one form definition and graceful UI degradation per client**:
 
 | Surface | How it connects | UI |

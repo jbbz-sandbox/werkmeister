@@ -23,20 +23,16 @@ services:
   # demonstrates the same port-forward path used for real k8s services.
 
   # Trust boundary (SEC-03/D-16): k8s-forwards receives real, live k8s cluster
-  # credentials via the three bind mounts below, equivalent to the host user's own
-  # `kubectl`/`gcloud` access to production-adjacent k8s clusters:
+  # credentials via the two bind mounts below, equivalent to the host user's own
+  # `kubectl` access to the cluster:
   #   - ${HOME}/.kube:/root/.kube:ro                          (read-only)
-  #   - ${HOME}/.config/gcloud:/root/.config/gcloud           (READ-WRITE, not :ro —
-  #       gcloud writes refreshed OAuth token caches here at runtime; mounting this
-  #       :ro breaks token refresh, so this asymmetry is intentional but should stay
-  #       visible to future maintainers)
   #   - ./k8s-port-forward/tmp/kubeconfig:/tmp/kubeconfig:ro  (read-only, generated)
   # A container escape, or a compromised/tampered image running at the pinned
   # digest below, would have that same k8s access. The digest pin on the
-  # `google/cloud-sdk:slim` base image (see k8s-port-forward/Dockerfile) is the
-  # primary mitigation against an unexpected image swap introducing that risk;
-  # full sandboxing/credential-scoping of this container is accepted as
-  # out-of-scope for this phase (see 03-03-PLAN.md threat register T-03-09/T-03-10).
+  # `alpine` base image (see k8s-port-forward/Dockerfile) is the primary
+  # mitigation against an unexpected image swap introducing that risk; full
+  # sandboxing/credential-scoping of this container is accepted as out-of-scope
+  # for this phase.
   k8s-forwards:
     build:
       context: ./k8s-port-forward
@@ -62,7 +58,6 @@ services:
       # <<< GENERATED k8s-forward ports
     volumes:
       - ${HOME}/.kube:/root/.kube:ro
-      - ${HOME}/.config/gcloud:/root/.config/gcloud
       - ./k8s-port-forward/tmp/kubeconfig:/tmp/kubeconfig:ro
       # Forward table generated from services.yaml by `sandbox connect`.
       - ./k8s-port-forward/tmp/forwards:/tmp/forwards:ro
@@ -75,7 +70,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - USE_k8s_GCLOUD_AUTH_PLUGIN=True
       - KUBECONFIG=/tmp/kubeconfig
     deploy:
       resources:

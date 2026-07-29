@@ -7,17 +7,43 @@
  *
  * This module owns pure string-rendering logic for the workspace-facing
  * markdown artifacts: the workspace `CLAUDE.md`, its routing table and
- * Feature Testing section, and `.sandbox/sandbox-context.md`. No behavior
- * change from the pre-move implementation — see
- * `src/lib/__tests__/claude_md.test.ts` for the
- * byte-for-byte parity regression guard.
+ * Feature Testing section, and `.sandbox/sandbox-context.md`.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
+import { loadIngress } from "./global_config.js";
 import { getServicePort } from "./slots.js";
 import { UNIVERSAL_STANDARDS } from "./standards.js";
+
+/**
+ * The public hostname to point the reader at, and the cookie's domain scope.
+ *
+ * Derived from the ingress config + `feature_router:` blocks rather than
+ * hardcoded: the routed host set is per-machine, so a literal would send every
+ * workspace to a host that may not exist. Prefers a service this feature
+ * actually runs, else any routed service. Returns null when nothing is routed
+ * (or the config can't be read) so callers omit the URL instead of inventing one.
+ */
+function resolveProxyHost(serviceNames: string[]): { host: string; domain: string } | null {
+  try {
+    const ingress = loadIngress();
+    const routers = loadFeatureRouters(undefined, ingress);
+    const preferred = serviceNames.find((name) => routers[name]?.hostname);
+    const host = preferred
+      ? routers[preferred].hostname
+      : Object.values(routers)
+          .map((r) => r.hostname)
+          .filter(Boolean)
+          .sort()[0];
+    if (!host) return null;
+    return { host, domain: ingress.local_domain.replace(/^\.+/, "") };
+  } catch {
+    return null;
+  }
+}
 
 function isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -55,28 +81,36 @@ export function buildFeatureTestingSection(meta: Record<string, string>): string
   }
   const metaLine = metaParts.join(" | ");
 
-  const proxyBase = "https://sb-web.local.sandbox.com";
-  const proxyUrl = testPath ? `${proxyBase}/${testPath.replace(/^\/+/, "")}` : proxyBase;
+  const proxy = resolveProxyHost(serviceNames);
+  const proxyBase = proxy ? `https://${proxy.host}` : null;
+  const proxyUrl =
+    proxyBase && testPath ? `${proxyBase}/${testPath.replace(/^\/+/, "")}` : proxyBase;
+
+  const urlSection = proxyUrl
+    ? `### URL
+
+- ${proxyUrl}
+
+`
+    : "";
+  const uiLine = proxyBase
+    ? `\n**Sandbox UI:** Visit ${proxyBase}/__sandbox and select \`${feature}\`\n`
+    : "";
 
   return `
 ## Feature Testing
 
 ${metaLine}
 
-### URL
-
-- ${proxyUrl}
-
-### X-Feature Cookie
+${urlSection}### X-Feature Cookie
 
 Set the routing cookie so the sandbox proxy directs requests to your local containers:
 
 **Browser DevTools console:**
 \`\`\`js
-document.cookie = "X-Feature=${feature}; domain=.local.sandbox.com; path=/; SameSite=Lax";
+document.cookie = "X-Feature=${feature}; domain=.${proxy?.domain ?? "local"}; path=/; SameSite=Lax";
 \`\`\`
-
-**Sandbox UI:** Visit https://sb-web.local.sandbox.com/__sandbox and select \`${feature}\`
+${uiLine}
 
 For ports, health checks, and lifecycle commands → [.sandbox/sandbox-context.md](./.sandbox/sandbox-context.md)
 
@@ -129,14 +163,14 @@ export function buildRoutingTable(
 }
 
 /**
- * Render the "Standards routing" block (jit-standards-loading-spec.md §5.3).
+ * Render the "Standards routing" block (jit-context-system.md §5.3).
  *
  * The compiled, inspectable projection of services.yaml `standards:` +
  * workspace.yml `standards_override` — the ICM Layer-1 table. The
  * `sb-<key>-standard` skills it references are generated from
  * docs/standards/ and projected into the workspace's `.claude/skills/` by
  * init-workspace (`workspace_skills.ts`); `sb-implement`/`sb-research`/
- * `sb-test`/`sb-review` are the phase-entry skills that read this table (spec §5.6 — the
+ * `sb-test`/`sb-review` are the phase-entry skills that read this table (docs/jit-context-system.md §5.2 — the
  * CLAUDE.md-table → entry-skill chain is the measured 15/15 PREVENTIVE
  * mechanism, so the table must name them).
  */
@@ -220,7 +254,7 @@ export function buildClaudeMd(
       : "This is a single-repo workspace. Repository:";
 
   // Notes — a generated pointer to the durable .sandbox/notes/ store
-  // (jit-notes-and-handoffs-spec.md §4.2: this file is a compiled projection
+  // (jit-context-system.md §5.3: this file is a compiled projection
   // and holds no handoff state, so regen loses nothing). Multi-repo
   // workspaces get the cross-repo contract-note rule folded into the
   // pointer text; single-repo workspaces don't need the coordination rubric.
@@ -255,7 +289,7 @@ ${contractRule}`;
   const featureTesting = buildFeatureTestingSection(meta);
 
   // Code Standards — the compiled "Standards routing" block when the caller
-  // resolved one (repo-scoped JIT loading, spec §5.3); otherwise fall back to
+  // resolved one (repo-scoped JIT loading, docs/jit-context-system.md §5.3); otherwise fall back to
   // the canonical style-guide link. Source of truth stays in the sandbox repo.
   let codeStandardsSection: string;
   if (standardsSection !== null) {
@@ -293,6 +327,20 @@ export function buildSandboxContextMd(
   localServices: string[],
   servicesConfig: Record<string, any>,
 ): string {
+  // Routed hosts come from the ingress config + `feature_router:` blocks — the
+  // same source Caddy's site blocks are generated from — so this file can never
+  // name a host the proxy doesn't actually terminate.
+  let routedHosts: string[] = [];
+  try {
+    routedHosts = ingressHostnames(servicesConfig);
+  } catch {
+    routedHosts = [];
+  }
+  const routingHostList = routedHosts.length
+    ? `These hosts are routed through Caddy:\n\n` +
+      routedHosts.map((host) => `- \`https://${host}\``).join("\n")
+    : "No services declare a `feature_router:` block, so Caddy terminates no public hosts for this workspace.";
+
   const k8sPort = (svc: string): number | null => {
     // k8s-forwards container listen-port; single source is services.yaml.
     const svcDef = servicesConfig[svc] ?? {};
@@ -386,10 +434,14 @@ docker compose restart ${sampleSvc}
       `"http://localhost:${firstLocalHostPort}/"\n\n`;
     const proxyCheck =
       "# Through Caddy (verifies full proxy routing):\n" +
-      `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
-      '"https://sb-web.local.sandbox.com/"\n' +
-      `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
-      '"https://vendor.local.sandbox.com/"\n\n';
+      routedHosts
+        .map(
+          (host) =>
+            `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
+            `"https://${host}/"\n`,
+        )
+        .join("") +
+      "\n";
     const statusCheck =
       "# Container status:\n" +
       `docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" | grep ${feature}`;
@@ -397,10 +449,14 @@ docker compose restart ${sampleSvc}
   } else {
     healthChecks =
       "# Through Caddy (all traffic routes to k8s):\n" +
-      'curl -sk -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
-      '"https://sb-web.local.sandbox.com/"\n' +
-      'curl -sk -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
-      '"https://vendor.local.sandbox.com/"';
+      routedHosts
+        .map(
+          (host) =>
+            'curl -sk -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
+            `"https://${host}/"\n`,
+        )
+        .join("")
+        .trimEnd();
   }
 
   return `<!--
@@ -456,15 +512,11 @@ ${healthChecks}
 
 ## Proxy Routing
 
-Two domains are routed through Caddy:
-
-FIXME: This needs to be configurable
-- \`https://sb-web.local.sandbox.com\` — main Sandbox web app (web-v0, web-v1, web-v2)
-- \`https://vendor.local.sandbox.com\` — vendor portal (vendor-portal-client)
+${routingHostList}
 
 Set \`X-Feature=${feature}\` (cookie or header) to route to this workspace's local containers; otherwise traffic falls through to the k8s port-forwards.
 
-**Sandbox selector UI (\`/__sandbox\`):** Only available on \`https://sb-web.local.sandbox.com\`. Setting the cookie there applies to both domains.
+**Sandbox selector UI (\`/__sandbox\`):** served on every routed host above. Setting the cookie there applies to each host sharing the base domain.
 
 ## Troubleshooting
 

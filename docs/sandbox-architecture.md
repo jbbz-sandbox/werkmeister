@@ -1,4 +1,4 @@
-# Developer Sandbox Architecture
+# sandbox Architecture
 
 ## Multi-Feature Concurrent Development for Distributed Application
 
@@ -6,17 +6,17 @@
 
 ## Overview
 
-A system that enables up to 12 Claude Code agents to concurrently develop features across a distributed application (~20 services, ~9 repos) on a 32GB M2 Mac. Each feature runs only the services it modifies locally (typically ~3), with everything else port-forwarded from GKE. A reverse proxy routes traffic per-feature using HTTP headers/cookies.
+A system that enables up to 12 Claude Code agents to concurrently develop features across a multi-service application on a 32GB M2 Mac. Each feature runs only the services it modifies locally, with everything else port-forwarded from k8s. A reverse proxy routes traffic per-feature using HTTP headers/cookies.
 
 ---
 
 ## Core Design Principles
 
-1. **Minimal local footprint** — only run containers for services with code changes; everything else comes from GKE via `kubectl port-forward`.
+1. **Minimal local footprint** — only run containers for services with code changes; everything else comes from k8s via `kubectl port-forward`.
 2. **Feature isolation** — each feature gets its own Docker network, port range, and routing identity. No cross-contamination.
 3. **Auto-detection** — the system infers which services to run locally by analyzing which repos/worktrees have changes.
-4. **Shared state** — single shared dev database and Redis (containerized, on the shared Docker network). No per-feature data isolation needed.
-5. **Production-parity routing** — the Cloudflare Worker runs the consolidated `tr-proxy` app locally (in `IS_SANDBOX` mode) — the same real code deployed to dev/stage/prod, no fork. It does buyer-site path routing and forwards each web service to a Caddy internal router; Caddy resolves feature-vs-GKE per request from the `X-Feature` cookie.
+4. **Shared state** — a single shared dev database and Redis, served from the cluster through the forward table. No per-feature data isolation needed.
+5. **Cookie-driven routing** — Caddy terminates each service's public hostname and resolves feature-vs-k8s per request from the `X-Feature` cookie, copying it onto the upstream call as a header so the app can read the selected feature.
 
 ---
 
@@ -30,38 +30,24 @@ A system that enables up to 12 Claude Code agents to concurrently develop featur
                            │ HTTPS (:443)
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Caddy  (sb-web.local.sandbox.com:443)                          │
+│  Caddy  (one site block per service hostname, :443)                 │
 │                                                                     │
 │  • TLS termination (local certs)                                    │
-│  • Serves feature selector UI at /__sandbox/                        │
-│  • Sets X-Feature, X-Sandbox-Slot, X-Sandbox-Base-Port headers      │
-│  • Forwards ALL other traffic to cloudflare-worker:8787             │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Cloudflare Worker — tr-proxy (sandbox-cloudflare-worker:8787)      │
-│                                                                     │
-│  • Production routing rules (119+ path routes, 200+ redirects)      │
-│  • Path-based service selection → forwards to caddy:91xx routers    │
-│  • Security headers, redirects                                      │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ (per web service)
-┌──────────────────────────────▼──────────────────────────────────────┐
-│  Caddy internal routers (caddy:9100/9101/9102/9103)                 │
-│  • Match X-Feature cookie → local container, else GKE baseline      │
+│  • Serves feature selector UI at /__sandbox                         │
+│  • Copies the X-Feature cookie onto the upstream as a header        │
+│  • Match X-Feature cookie → local container, else k8s baseline      │
 └──────────┬──────────────────────────────────┬───────────────────────┘
            │                                  │
      ┌─────▼──────┐                    ┌──────▼──────┐
-     │  Local      │                    │  GKE        │
+     │  Local      │                    │  k8s        │
      │  Containers │                    │  Baseline   │
-     │  (host.docker│                   │  (gke-fwds  │
+     │  (host.docker│                   │  (k8s-fwds  │
      │   .internal)│                    │   container)│
      └─────────────┘                    └─────────────┘
 
 All services communicate via Docker DNS on the sandbox-shared network.
 Local feature containers are reached from Caddy via host.docker.internal:<port>.
-GKE services are reached via the gke-forwards container (e.g., gke-forwards:9000).
+k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052).
 ```
 
 ---
@@ -72,110 +58,48 @@ GKE services are reached via the gke-forwards container (e.g., gke-forwards:9000
 
 **Why Caddy**: native header/cookie matching, automatic config reload, simple config syntax, lightweight, built-in TLS support.
 
-**Role in the new architecture**: Caddy is the browser-facing entry point. It terminates HTTPS, serves the feature selector UI, and forwards everything else to the Cloudflare Worker for path-based routing. Caddy no longer does path-based routing itself -- that responsibility belongs to the worker.
+**Role**: Caddy is the browser-facing entry point and the only routing layer. It terminates HTTPS, serves the feature selector UI, and reverse-proxies each service's public hostname straight to its upstream — the feature's local container when one is running, otherwise the k8s baseline.
 
 **What Caddy does**:
-- Terminates HTTPS/TLS using local certificates (mounted from `~/.docker/certs`).
-- Serves the feature selector UI at `/__sandbox/` -- a static page that lets the user pick a feature and sets the `X-Feature` cookie.
-- Sets `X-Feature`, `X-Sandbox-Slot`, and `X-Sandbox-Base-Port` headers on proxied requests (read from the cookie or incoming header).
-- Forwards ALL non-`/__sandbox` traffic to `cloudflare-worker:8787` (the Cloudflare Worker running on the Docker network).
-- Routes `vendor.local.sandbox.com` to the worker with the `Host` header rewritten to `vendors.dev.sandbox.com`.
-- No feature header/cookie means default (GKE baseline) routing through the worker.
+- Terminates HTTPS/TLS using local certificates (mounted from the directory named by `ingress.certs_dir` in `~/.sandbox/config.yaml`).
+- Serves the feature selector UI at `/__sandbox` on every host — a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__sandbox/features.json` is matched first (a real file); any other `/__sandbox` path returns the picker.
+- Copies an `X-Feature` cookie value into an `X-Feature` header on the upstream call, so the app can read the selected feature.
+- Proxies to `host.docker.internal:<port>` for a local feature container, or to `k8s-<service>:<forward_port>` for the k8s baseline.
 
-**Caddyfile generation**: The orchestrator CLI regenerates the Caddyfile whenever a feature is started/stopped. Caddy watches for changes and hot-reloads.
+**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`sandbox proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.sandbox/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `apps/cli/src/lib/feature_routing.ts`).
 
 ```
 # Example generated Caddyfile snippet
-sb-web.local.sandbox.com {
-    tls /etc/caddy/certs/localhost.crt /etc/caddy/certs/localhost.key
+next-hello.remote.sandbox.com {
+    tls internal
 
     # Feature selector UI
-    handle_path /__sandbox/* {
+    handle /__sandbox/features.json {
         root * /sandbox/proxy/ui
+        rewrite * /features.json
+        file_server
+    }
+    handle /__sandbox* {
+        root * /sandbox/proxy/ui
+        rewrite * /index.html
         file_server
     }
 
-    # Feature: payment-refactor (slot 1)
-    @payment_refactor expression `header({'X-Feature': 'payment-refactor'}) || header_regexp('Cookie', '.*X-Feature=payment-refactor.*')`
-    handle @payment_refactor {
-        reverse_proxy cloudflare-worker:8787 {
-            header_up X-Feature payment-refactor
-            header_up X-Sandbox-Slot 1
-            header_up X-Sandbox-Base-Port 11100
+    # Cookie present -> copy its value into an X-Feature header, then proxy.
+    @xf header_regexp xf Cookie X-Feature=([^;]+)
+    handle @xf {
+        reverse_proxy k8s-next-hello:9053 {
+            header_up X-Feature {re.xf.1}
         }
     }
-
-    # Default: forward to worker with no feature header (GKE baseline)
-    reverse_proxy cloudflare-worker:8787
 }
 ```
 
-#### Caddy internal feature routers
+A feature only gets a match block for a service it actually runs locally, so
+per-service granularity is preserved: one service can come from the local
+container while its siblings still resolve to the k8s baseline.
 
-Besides the browser-facing `:443` site, the same Caddy process hosts a set of
-**internal HTTP listeners** — one per feature-routable web service — that the
-worker forwards to (`SANDBOX_WEBV*_URL=http://caddy:91xx`). Each resolves
-feature-vs-GKE from the `X-Feature` cookie:
-
-```
-# web-v2 router — tr-proxy dials caddy:9102
-:9102 {
-    @payment_refactor header_regexp Cookie X-Feature=payment-refactor(;|$)
-    handle @payment_refactor {
-        reverse_proxy host.docker.internal:11102   # feature's local container
-    }
-    reverse_proxy gke-forwards:9010                # GKE baseline fallback
-}
-```
-
-A feature only gets a match block on a listener for a service it runs locally,
-so per-service granularity is preserved (e.g. web-v2 local, web-v1 from GKE).
-The listeners + per-feature match blocks are generated into the Caddyfile by
-`generate.ts` (`_build_internal_routers`), keyed off the router table in
-`apps/cli/src/lib/feature_routing.ts`, and refreshed on every `sandbox up`/`down` reload.
-
-### 2. Cloudflare Worker Proxy
-
-The Cloudflare Worker is the path-based routing brain of the sandbox. It runs the consolidated **`tr-proxy`** app locally via `wrangler dev`, in sandbox mode (`IS_SANDBOX=true`). `tr-proxy` is the same real worker deployed to dev/stage/prod — there is no sandbox fork — so buyer-site path routing (the shared `ProxyHandler`) matches production exactly. Feature-vs-GKE resolution is **not** done here; the worker forwards each web service to a Caddy internal router (see below).
-
-**How it runs**:
-- Docker container `sandbox-cloudflare-worker` using `node:20-slim`.
-- The `cloudflare-workers` repo (specifically the `tr-proxy` app) is mounted as a volume.
-- Runs `wrangler dev --port 8787 --ip 0.0.0.0` inside the container.
-- Connected to the `sandbox-shared` Docker network with the DNS alias `cloudflare-worker`.
-- Depends on `gke-forwards` being healthy before starting.
-
-**What it does**:
-- **Path-based routing** (119+ rules): maps URL paths to backend services. Examples:
-  - `/categories/*` -> webV2
-  - `/products/*/reviews` -> webV1
-  - `/api/v2/*` -> sb-web-api
-  - Catch-all -> webV0
-- **Redirect rules** (200+): production redirect logic, SEO rewrites.
-- **Security headers**: CSP, HSTS, X-Frame-Options, etc.
-
-**Endpoint resolution** (in Caddy, not the worker):
-- `tr-proxy` points each web service at a Caddy internal router instead of at a
-  backend directly. These are plain-HTTP listeners on the shared Docker network,
-  one per feature-routable service (see `apps/cli/src/lib/feature_routing.ts`):
-  ```
-  SANDBOX_WEBV0_URL=http://caddy:9100
-  SANDBOX_WEBV1_URL=http://caddy:9101
-  SANDBOX_WEBV2_URL=http://caddy:9102
-  SANDBOX_MCP_URL=http://caddy:9103
-  SANDBOX_LOGGING_URL=http://gke-forwards:9000   # not feature-routed
-  ```
-- Each router matches the `X-Feature` cookie (forwarded unchanged through the
-  worker) and routes to the feature's local container if that feature runs the
-  service locally, else to the GKE baseline (`gke-forwards:<port>`).
-- Because resolution lives in Caddy, `infra/proxy/worker.env` is now **static**
-  (the same for every feature set), and starting/stopping a feature only reloads
-  Caddy — the shared worker no longer needs restarting.
-
-The per-feature routing table therefore lives in the generated Caddyfile (see
-§Caddy internal feature routers), not in `worker.env`.
-
-### 3. Port Allocation Scheme
+### 2. Port Allocation Scheme
 
 Each feature slot (1–12) gets a port range. Deterministic, no collisions.
 
@@ -187,68 +111,64 @@ Each feature slot (1–12) gets a port range. Deterministic, no collisions.
 | ...  | ...               | |
 | 12   | 12200–12219       | |
 
-**GKE port-forwards** run inside the `gke-forwards` container and are accessible via Docker DNS (e.g., `gke-forwards:9000`). Host ports are also exposed for debugging:
+**k8s port-forwards** run inside the `k8s-forwards` container and are accessible via Docker DNS (e.g., `k8s-forwards:9052`). Host ports are also exposed for debugging:
 
-| Listen Port | GKE Service | Docker DNS Alias |
+| Listen Port | k8s Service | Docker DNS Alias |
 |-------------|-------------|------------------|
-| 9000 | web-v0 (baseline) | `gke-web-v0` |
-| 9001 | sb-web-api | `gke-sb-web-api` |
-| 9002 | category-api | `gke-category-api` |
-| 9003 | product-api | `gke-product-api` |
-| 9004 | federated-graph | `gke-federated-graph` |
-| 9005 | taxonomy-api | `gke-taxonomy-api` |
-| 9006 | interview-api | `gke-interview-api` |
-| 9007 | vendor-portal-server | `gke-vendor-portal-server` |
-| 9008 | sandbox-mcp | `gke-sandbox-mcp` |
-| 9052 | mongodb | `gke-mongodb` |
+| 9050 | redis | `k8s-redis` |
+| 9051 | postgres | `k8s-postgres` |
+| 9052 | rest-hello | `k8s-rest-hello` |
+| 9053 | next-hello | `k8s-next-hello` |
 
-**Shared infrastructure** (not GKE -- runs locally as containers):
+**Shared infrastructure** (not k8s -- runs locally as containers):
 
 | Service | Docker DNS | Port |
 |---------|-----------|------|
-| Redis | `redis` | 6379 |
-| Cloud SQL Proxy | `cloud-sql-proxy` | 5432 |
+| Jaeger (tracing UI) | `jaeger` | 16686 |
+| RedisInsight | `redisinsight` | 5540 |
 
-These are defined in `infra/compose/shared-infra.yml` and managed by Docker Compose.
+Redis and Postgres themselves run in the k8s cluster and are reached through the
+forward table above, not as compose services. The containers listed here are defined
+in `infra/compose/shared-infra.yml` and managed by Docker Compose.
 
-### 4. Service Registry & Auto-Detection
+### 3. Service Registry & Auto-Detection
 
 A central config maps repos → services → Docker compose files:
 
 ```yaml
-# sandbox-config/services.yaml
+# ~/.sandbox/services.yaml
+repos:
+  sandbox:
+    services: [rest-hello, next-hello]
+    path_mappings:
+      apps/rest-hello: rest-hello
+      apps/next-hello: next-hello
+
 services:
-  web-app:
-    repo: turbo-mono
-    path: apps/web-app
-    compose: infra/compose/web-app.yml
+  rest-hello:
+    repo: sandbox
+    path: apps/rest-hello
+    type: api
+    internal_port: 3000
+    port_offset: 0          # within the feature's port range
+    health_endpoint: /health
+    k8s_deployment: rest-hello
+    k8s_namespace: default
+    k8s_port: 80
+    k8s_forward_port: 9052
+
+  next-hello:
+    repo: sandbox
+    path: apps/next-hello
     type: web
-    port_offset: 0          # within feature's port range
-    gke_deployment: web-app
-    gke_namespace: dev
-    gke_port: 3000
-
-  rest-orders:
-    repo: turbo-mono
-    path: apps/rest-orders
-    compose: infra/compose/rest-orders.yml
-    type: rest
+    internal_port: 3000
     port_offset: 1
-    gke_deployment: rest-orders
-    gke_namespace: dev
-    gke_port: 4000
-
-  graphql-inventory:
-    repo: standalone-inventory
-    path: .
-    compose: infra/compose/graphql-inventory.yml
-    type: graphql-subgraph
-    port_offset: 2
-    gke_deployment: graphql-inventory
-    gke_namespace: dev
-    gke_port: 4001
-
-  # ... all ~20 services
+    health_endpoint: /
+    archetype: node-web
+    k8s_deployment: next-hello
+    k8s_namespace: default
+    k8s_port: 8080
+    k8s_forward_port: 9053
 ```
 
 **Auto-detection algorithm**:
@@ -260,7 +180,7 @@ For a given feature workspace:
   3. Run `git diff main..HEAD --name-only` in each worktree
   4. Map changed file paths → services using services.yaml path mappings
   5. Result: set of services that need to run locally
-  6. Everything else: use GKE port-forward
+  6. Everything else: use k8s port-forward
 ```
 
 **Re-detection triggers**:
@@ -269,7 +189,7 @@ For a given feature workspace:
 - On-demand via `sandbox detect <feature>`
 - Optionally: file watcher that re-detects when new files are committed
 
-### 5. Orchestrator CLI (`sandbox`)
+### 4. Orchestrator CLI (`sandbox`)
 
 The core tool that agents and developers invoke.
 
@@ -287,26 +207,26 @@ sandbox logs <feature> [svc] # tail logs for a feature's service
 
 # Manual overrides
 sandbox up <feature> -s <svc>  # force a service to run locally
-sandbox remove <feature> <svc> # stop a local service, fall back to GKE
+sandbox remove <feature> <svc> # stop a local service, fall back to k8s
 
 # Testing
 sandbox test <feature>       # run Playwright against this feature's stack
 
 # Infrastructure
-sandbox infra-up             # start shared infrastructure (redis, cloud-sql, gke-forwards, worker, caddy)
-sandbox gke-status           # check gke-forwards container health
+sandbox infra-up             # start shared infrastructure (redis, cloud-sql, k8s-forwards, worker, caddy)
+sandbox k8s-status           # check k8s-forwards container health
 sandbox proxy-reload         # regenerate Caddyfile + worker.env, restart worker
 ```
 
 **Implementation**: A TypeScript CLI that lives in the sandbox repo. Each command is a module in `apps/cli/src/commands/`.
 
-### 6. Per-Feature Docker Compose Generation
+### 5. Per-Feature Docker Compose Generation
 
 When `sandbox up <feature>` runs, it dynamically generates a `docker-compose.feature-<name>.yml`:
 
 ```yaml
 # Auto-generated for feature: payment-refactor
-# Services detected: web-v2, rest-orders
+# Services detected: next-hello, rest-hello
 
 networks:
   feature-payment-refactor:
@@ -315,121 +235,113 @@ networks:
     external: true
 
 services:
-  web-v2:
+  next-hello:
     build:
-      context: /Users/dev/workspaces/payment-refactor/turbo-mono
-      dockerfile: apps/web-v2/Dockerfile
+      context: /Users/dev/workspaces/payment-refactor/sandbox
+      dockerfile: apps/next-hello/Dockerfile
       target: development     # use dev stage for hot-reload
     ports:
-      - "11100:3060"
+      - "11101:3000"
     environment:
-      - REST_ORDERS_URL=http://rest-orders:4000          # local (same feature)
-      - REST_USERS_URL=http://gke-forwards:9003          # GKE baseline
-      - GRAPHQL_GATEWAY_URL=http://gke-forwards:9004     # GKE baseline
-      - REDIS_URL=redis://redis:6379                     # shared infra
-      - DATABASE_URL=postgresql://cloud-sql-proxy:5432/dev  # shared infra
+      - REST_HELLO_URL=http://rest-hello:3000            # local (same feature)
+      - REDIS_URL=redis://k8s-redis:9050                 # k8s baseline
+      - DATABASE_URL=postgresql://postgres:5432/dev  # shared infra
     volumes:
-      - /Users/dev/workspaces/payment-refactor/turbo-mono/apps/web-v2/src:/app/src
+      - /Users/dev/workspaces/payment-refactor/sandbox/apps/next-hello/src:/app/src
     networks:
       feature-payment-refactor:
         aliases:
-          - web-v2
+          - next-hello
       sandbox-shared:
         aliases:
-          - web-v2
+          - next-hello
 
-  rest-orders:
+  rest-hello:
     build:
-      context: /Users/dev/workspaces/payment-refactor/turbo-mono
-      dockerfile: apps/rest-orders/Dockerfile
+      context: /Users/dev/workspaces/payment-refactor/sandbox
+      dockerfile: apps/rest-hello/Dockerfile
       target: development
     ports:
       - "11101:4000"
     environment:
-      - GRAPHQL_GATEWAY_URL=http://gke-forwards:9004     # GKE baseline
+      - GRAPHQL_GATEWAY_URL=http://k8s-forwards:9004     # k8s baseline
       - REDIS_URL=redis://redis:6379                     # shared infra
-      - DATABASE_URL=postgresql://cloud-sql-proxy:5432/dev  # shared infra
+      - DATABASE_URL=postgresql://postgres:5432/dev  # shared infra
     volumes:
-      - /Users/dev/workspaces/payment-refactor/turbo-mono/apps/rest-orders/src:/app/src
+      - /Users/dev/workspaces/payment-refactor/sandbox/apps/rest-hello/src:/app/src
     networks:
       feature-payment-refactor:
         aliases:
-          - rest-orders
+          - rest-hello
       sandbox-shared:
         aliases:
-          - rest-orders
+          - rest-hello
 ```
 
 **Key design choices**:
 - Docker DNS aliases on the `sandbox-shared` network to reach all services -- no `host.docker.internal` anywhere.
-- Local services (same feature): referenced by Docker DNS name (e.g., `http://rest-orders:4000`).
-- GKE baseline services: reached via the `gke-forwards` container (e.g., `http://gke-forwards:9004`).
-- Shared infrastructure: Redis at `redis://redis:6379`, Postgres at `postgresql://cloud-sql-proxy:5432/dev`.
-- Feature containers join both the per-feature network (isolation) and the `sandbox-shared` network (access to shared infra and GKE forwards).
+- Local services (same feature): referenced by Docker DNS name (e.g., `http://rest-hello:3000`). The env-var name is the service name upper-cased with `-` → `_`, plus `_URL`.
+- k8s baseline services: reached via the `k8s-forwards` container (e.g., `http://k8s-forwards:9052`).
+- Shared infrastructure: Redis at `redis://k8s-redis:9050`, Postgres at `postgresql://k8s-postgres:9051/dev`.
+- Feature containers join both the per-feature network (isolation) and the `sandbox-shared` network (access to shared infra and k8s forwards).
 - Volume mounts for hot-reload of source code from the worktree.
-- Environment variables are generated per-service, mixing local and GKE endpoints using Docker DNS names.
+- Environment variables are generated per-service, mixing local and k8s endpoints using Docker DNS names.
 
-### 7. Apollo Federation Gateway Configuration
+### 6. Apollo Federation Gateway Configuration
 
-The gateway needs to know where each subgraph lives. Since subgraph locations vary per feature (some local, some GKE), the config must be per-feature.
+The gateway needs to know where each subgraph lives. Since subgraph locations vary per feature (some local, some k8s), the config must be per-feature.
 
-**Approach**: Generate a `supergraph-config.yaml` per feature and mount it into the gateway container (or the GKE gateway if the gateway itself isn't running locally). All URLs use Docker DNS names on the `sandbox-shared` network.
+**Approach**: Generate a `supergraph-config.yaml` per feature and mount it into the gateway container (or the k8s gateway if the gateway itself isn't running locally). All URLs use Docker DNS names on the `sandbox-shared` network.
 
 ```yaml
 # Auto-generated: supergraph-config.payment-refactor.yaml
 subgraphs:
   inventory:
-    routing_url: http://gke-forwards:9005            # GKE baseline
+    routing_url: http://k8s-forwards:9005            # k8s baseline
     schema:
-      subgraph_url: http://gke-forwards:9005
+      subgraph_url: http://k8s-forwards:9005
   orders:
-    routing_url: http://rest-orders:4000             # LOCAL (Docker DNS)
+    routing_url: http://orders-subgraph:4000        # LOCAL (Docker DNS)
     schema:
-      subgraph_url: http://rest-orders:4000
+      subgraph_url: http://orders-subgraph:4000
   users:
-    routing_url: http://gke-forwards:9006            # GKE baseline
+    routing_url: http://k8s-forwards:9006            # k8s baseline
     schema:
-      subgraph_url: http://gke-forwards:9006
+      subgraph_url: http://k8s-forwards:9006
 ```
 
-If the gateway itself runs on GKE (not locally), the feature's local services would need to be exposed via a tunnel (e.g., `cloudflared` or `ngrok`) so GKE can reach them. **Recommendation**: always run the gateway locally per-feature if any subgraph is local -- it's lightweight and avoids tunneling complexity.
+If the gateway itself runs on k8s (not locally), the feature's local services would need to be exposed via a tunnel (e.g., `ngrok`) so k8s can reach them. **Recommendation**: always run the gateway locally per-feature if any subgraph is local -- it's lightweight and avoids tunneling complexity.
 
-### 8. GKE Port-Forward Manager (Containerized)
+### 7. k8s Port-Forward Manager (Containerized)
 
-All GKE port-forwards run inside a single Docker container (`gke-forwards`) rather than as host-level background processes. This simplifies lifecycle management, networking, and health monitoring.
+All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rather than as host-level background processes. This simplifies lifecycle management, networking, and health monitoring.
 
 **Container details**:
-- Built from `infra/compose/gke-port-forward/Dockerfile` (based on `google/cloud-sdk:slim`).
-- Installs `gke-gcloud-auth-plugin`, `curl`, and `netcat` for auth and health checks.
-- Entrypoint script (`infra/compose/gke-port-forward/entrypoint.sh`) runs all port-forwards as background processes with auto-restart loops.
-- Mounts `~/.kube` and `~/.config/gcloud` (read-only) for `kubectl` authentication.
+- Built from `infra/compose/k8s-port-forward/Dockerfile` (based on a digest-pinned `alpine`).
+- Installs `kubectl`, `bash`, and `netcat-openbsd` for port-forwarding and health probes. No cloud-provider auth plugin is needed — the cluster authenticates via the client cert embedded in the mounted kubeconfig.
+- Entrypoint script (`infra/compose/k8s-port-forward/entrypoint.sh`) runs all port-forwards as background processes with auto-restart loops.
+- Mounts `~/.kube` (read-only) and the generated kubeconfig for `kubectl` authentication.
 
 **Networking**:
 - Connected to the `sandbox-shared` Docker network.
-- Registers DNS aliases for each forwarded service (e.g., `gke-web-v0`, `gke-sb-web-api`, `gke-category-api`, `gke-mongodb`).
-- The primary alias `gke-forwards` is the canonical name used by other containers.
+- Registers DNS aliases for each forwarded service (e.g., `k8s-rest-hello`, `k8s-next-hello`, `k8s-redis`, `k8s-postgres`).
+- The primary alias `k8s-forwards` is the canonical name used by other containers.
 - Each forward listens on `0.0.0.0:<listen_port>` so it is reachable from any container on the shared network.
 
-**Port mappings** (inside the `gke-forwards` container):
+**Port mappings** (inside the `k8s-forwards` container):
 
-| Listen Port | GKE Service | Namespace | Remote Port |
+| Listen Port | k8s Service | Namespace | Remote Port |
 |-------------|-------------|-----------|-------------|
-| 9000 | web-v0 | sandbox | 3000 |
-| 9001 | sb-web-api | sandbox | 3061 |
-| 9002 | category-api | category | 3001 |
-| 9003 | product-api | product | 3001 |
-| 9004 | federated-graph | federated-graph | 4321 |
-| 9005 | taxonomy-api | taxonomy-service | 3001 |
-| 9006 | interview-api | interview-service | 3004 |
-| 9007 | vendor-portal-server | vendor-portal | 3003 |
-| 9008 | sandbox-mcp | sandbox-mcp | 4322 |
-| 9052 | mongodb | psmdb | 27017 |
+| 9050 | redis | default | 6379 |
+| 9051 | postgres | default | 5432 |
+| 9052 | rest-hello | default | 80 |
+| 9053 | next-hello | default | 8080 |
 
-**Health checks**: Docker Compose healthcheck probes key ports (`nc -z localhost 9000 && nc -z localhost 9002 && nc -z localhost 9052`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `cloudflare-worker`) use `depends_on: gke-forwards: condition: service_healthy` to wait.
+**Health checks**: Docker Compose healthcheck probes key ports (`nc -z localhost 9000 && nc -z localhost 9002 && nc -z localhost 9052`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
-**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs sandbox-gke-forwards`. The `sandbox gke-status` command checks the container's health status.
+**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs sandbox-k8s-forwards`. The `sandbox k8s-status` command checks the container's health status.
 
-### 9. Playwright Integration
+### 8. Playwright Integration
 
 Each feature can run its full Playwright test suite against its own isolated stack.
 
@@ -438,7 +350,7 @@ Each feature can run its full Playwright test suite against its own isolated sta
 // playwright.config.ts — generated or parameterized per feature
 export default defineConfig({
   use: {
-    baseURL: 'https://sb-web.local.sandbox.com',
+    baseURL: 'https://next-hello.local.sandbox.com',
     extraHTTPHeaders: {
       'X-Feature': process.env.SANDBOX_FEATURE || 'default',
     },
@@ -453,7 +365,7 @@ sandbox test payment-refactor
 # SANDBOX_FEATURE=payment-refactor npx playwright test
 ```
 
-The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which routes to the correct containers. Playwright hits the same `sb-web.local.sandbox.com` URL every feature uses -- only the header differs.
+Caddy reads the `X-Feature` cookie/header and routes to the correct containers. Playwright hits the same service URL every feature uses -- only the header differs.
 
 **Header propagation for API calls from the browser**: The web app needs to forward the `X-Feature` cookie/header on its API calls. Options:
 - The reverse proxy injects the header on all proxied requests based on the cookie (simplest — Caddy handles this).
@@ -466,7 +378,7 @@ The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which 
 ## Directory Structure
 
 ```
-~/sandbox/                              # Developer sandbox repo
+~/sandbox/                              # sandbox repo
 ├── sandbox                             # CLI entrypoint (bash wrapper -> node)
 ├── apps/cli/src/               # CLI command scripts
 │   ├── up.sh
@@ -479,30 +391,19 @@ The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which 
 │   ├── services.yaml                   # Service registry
 │   └── ports.yaml                      # Port allocation map
 ├── infra/compose/                      # Docker Compose files
-│   ├── shared-infra.yml                # Shared infrastructure (redis, cloud-sql-proxy,
-│   │                                   #   gke-forwards, sb-sandbox-proxy worker, caddy)
-│   ├── gke-port-forward/               # Containerized GKE port-forwards
-│   │   ├── Dockerfile                  # Based on google/cloud-sdk:slim
+│   ├── shared-infra.yml                # Shared infrastructure (jaeger, redisinsight,
+│   │                                   #   k8s-forwards, sb-sandbox-proxy worker, caddy)
+│   ├── k8s-port-forward/               # Containerized k8s port-forwards
+│   │   ├── Dockerfile                  # Based on alpine (kubectl only)
 │   │   └── entrypoint.sh              # Port-forward supervisor script
-│   ├── web-v0.yml                      # Per-service compose files
-│   ├── web-v1.yml
-│   ├── web-v2.yml
-│   ├── sb-web-api.yml
-│   ├── category-api.yml
-│   ├── product-api.yml
-│   ├── federated-graph.yml
-│   ├── taxonomy-api.yml
-│   ├── interview-api.yml
-│   ├── vendor-portal-server.yml
-│   ├── vendor-portal-client.yml
-│   └── sandbox-mcp.yml
+│   ├── rest-hello.yml                  # Per-service compose files
+│   └── next-hello.yml
 ├── infra/templates/
 │   ├── docker-compose.feature.yml.j2   # nunjucks template for per-feature compose
 │   ├── Caddyfile.j2                    # Template for proxy config
 │   └── supergraph-config.yml.j2        # Template for Apollo gateway
 ├── infra/proxy/
 │   ├── Caddyfile                       # Generated — do not edit
-│   ├── worker.env                      # Generated worker endpoint overrides (gitignored)
 │   └── ui/                             # Feature selector web UI
 │       ├── index.html
 │       └── features.json               # Generated feature list for UI
@@ -516,15 +417,15 @@ The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which 
 │   ├── .env                            # Generated resolved env vars
 │   ├── .sandbox/
 │   │   └── supergraph-config.yml       # Generated Apollo gateway config
-│   ├── turbo-mono/                     # git worktree
+│   ├── sandbox/                     # git worktree
 │   ├── nx-mono/                        # git worktree
-│   └── standalone-inventory/           # git worktree
+│   └── sandbox/           # git worktree
 ├── auth-redesign/
 │   ├── docker-compose.yml
 │   ├── .env
 │   ├── .sandbox/
 │   │   └── supergraph-config.yml
-│   ├── turbo-mono/
+│   ├── sandbox/
 │   └── standalone-auth/
 └── ...
 ```
@@ -538,7 +439,7 @@ The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which 
    ├── Scan ~/workspaces/payment-refactor/ for worktrees
    ├── For each worktree: git diff main..HEAD --name-only
    ├── Map changed paths → services via services.yaml
-   └── Result: [web-app, rest-orders]
+   └── Result: [next-hello, rest-hello]
 
 2. ALLOCATE
    ├── Find next available feature slot (e.g., slot 3)
@@ -547,15 +448,15 @@ The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which 
 
 3. GENERATE
    ├── Render docker-compose from template with:
-   │   ├── Local services: web-app → 11300, rest-orders → 11301
-   │   ├── GKE services: all others → their 9xxx ports
+   │   ├── Local services: next-hello → 11300, rest-hello → 11301
+   │   ├── k8s services: all others → their 9xxx ports
    │   └── Volume mounts pointing at worktree paths
    ├── Render supergraph-config.yml (if any graphql subgraph is local)
    └── Render .env file with all service URLs
 
-4. VERIFY GKE
-   ├── Check that gke-forwards container is healthy (docker inspect --format)
-   └── If unhealthy/stopped: restart via docker compose -f infra/compose/shared-infra.yml up -d gke-forwards
+4. VERIFY k8s
+   ├── Check that k8s-forwards container is healthy (docker inspect --format)
+   └── If unhealthy/stopped: restart via docker compose -f infra/compose/shared-infra.yml up -d k8s-forwards
 
 5. START CONTAINERS
    ├── docker compose -f ~/workspaces/payment-refactor/docker-compose.yml up -d
@@ -564,14 +465,13 @@ The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which 
 6. CONFIGURE PROXY
    ├── Regenerate Caddyfile with new feature routes
    ├── Regenerate infra/proxy/worker.env with per-feature endpoint overrides
-   ├── Restart cloudflare-worker container to pick up new env vars
    └── Caddy hot-reloads Caddyfile changes automatically
 
 7. REPORT
    └── Print feature URL, service endpoints, and status
-       "✓ payment-refactor ready at https://sb-web.local.sandbox.com (cookie: X-Feature=payment-refactor)"
-       "  Local:  web-app (:11300), rest-orders (:11301)"
-       "  GKE:    graphql-gateway (:9004), redis (:9050), ..."
+       "✓ payment-refactor ready at https://next-hello.local.sandbox.com (cookie: X-Feature=payment-refactor)"
+       "  Local:  next-hello (:11300), rest-hello (:11301)"
+       "  k8s:    graphql-gateway (:9004), redis (:9050), ..."
 ```
 
 ---
@@ -584,8 +484,7 @@ The `X-Feature` header propagates through Caddy to the Cloudflare Worker, which 
 
 **Shared overhead**:
 - Caddy proxy: ~20MB
-- Cloudflare Worker (wrangler dev): ~128–512MB
-- GKE port-forwards container: ~64–256MB
+- k8s port-forwards container: ~64–256MB
 - Redis: ~32–64MB
 - Cloud SQL Proxy: ~32–64MB
 - Docker daemon overhead: ~500MB

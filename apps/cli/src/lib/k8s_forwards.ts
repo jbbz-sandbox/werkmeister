@@ -12,8 +12,7 @@
  *    `# >>> GENERATED` / `# <<< GENERATED` markers.
  *
  * All three (entrypoint data file, published ports, network aliases) derive from
- * the same `forwardSpecs()` list so they cannot drift. See docs/superpowers/
- * plans/2026-07-19-k8s-forward-table-consolidation.md (Tier 2).
+ * the same `forwardSpecs()` list so they cannot drift.
  */
 
 import * as fs from "node:fs";
@@ -26,7 +25,7 @@ const _PORTS_END = "# <<< GENERATED k8s-forward ports";
 const _ALIASES_START = "# >>> GENERATED k8s-forward aliases (from services.yaml — do not edit; `sandbox connect` regenerates)";
 const _ALIASES_END = "# <<< GENERATED k8s-forward aliases";
 
-interface ForwardSpec {
+export interface ForwardSpec {
   name: string;
   listen: number;
   remote: number;
@@ -41,12 +40,12 @@ interface ForwardSpec {
  * (redis, postgres, mongodb, …) in declaration order.
  *
  * A service is forwarded iff it declares `k8s_forward_port`. The forward
- * *name* is `k8s_forward_name` when set (e.g. vendor → vendor-portal-client),
+ * *name* is `k8s_forward_name` when set (an alias differing from the key),
  * else the service key. `remote` is the in-pod container port (`internal_port`)
  * for both services and infrastructure — `kubectl port-forward deployment/x`
  * binds a pod port, not the cluster-facing Service port (`k8s_port`).
  */
-function forwardSpecs(
+export function forwardSpecs(
   services?: Record<string, any> | null,
   infrastructure?: Record<string, any> | null,
 ): ForwardSpec[] {

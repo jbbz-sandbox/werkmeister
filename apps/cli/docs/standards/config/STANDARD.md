@@ -26,14 +26,14 @@ How services find and address each other. The shared comment rubric
 
 ## Rules
 
-- **Inter-service URLs use stable Docker DNS names** — e.g. `http://web-v2:3060`,
-  `http://gke-forwards:9000`. Never `host.docker.internal` from inside a
+- **Inter-service URLs use stable Docker DNS names** — e.g. `http://next-hello:3000`,
+  `http://k8s-forwards:9000`. Never `host.docker.internal` from inside a
   container: it doesn't resolve there, so the URL only works on one host.
 - **No `{service-name}` placeholder syntax in new env vars** — use the Docker DNS
   alias directly. The placeholder templating is not expanded for new vars and
   silently yields a literal `{service-name}` string.
-- **GKE forward ports are container-internal** — reach them at
-  `http://gke-forwards:<port>`; never expose a forward port to the host.
+- **k8s forward ports are container-internal** — reach them at
+  `http://k8s-forwards:<port>`; never expose a forward port to the host.
 
 ## Don't
 

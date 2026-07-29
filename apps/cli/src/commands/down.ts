@@ -46,7 +46,7 @@ function loadDotenv(start: string): Record<string, string> {
   return {};
 }
 
-/** Regenerate Caddyfile and worker env, then reload running services. */
+/** Regenerate the Caddyfile, then reload running services. */
 function reloadProxy(): void {
   info("Updating reverse proxy configuration...");
   generateCaddyfile();

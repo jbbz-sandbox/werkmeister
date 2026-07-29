@@ -1,7 +1,7 @@
-# Developer Sandbox — User's Guide
+# sandbox — User's Guide
 
 > Multi-feature concurrent development environment for Sandbox.
-> Enables up to 12 features to be developed simultaneously, each running only the services that have code changes locally while everything else is served from GKE.
+> Enables up to 12 features to be developed simultaneously, each running only the services that have code changes locally while everything else is served from k8s.
 
 ---
 
@@ -13,7 +13,7 @@
 4. [Concepts](#concepts)
    - [Features & Workspaces](#features--workspaces)
    - [Slots & Port Ranges](#slots--port-ranges)
-   - [GKE Port-Forwards (Baseline)](#gke-port-forwards-baseline)
+   - [k8s Port-Forwards (Baseline)](#k8s-port-forwards-baseline)
    - [Caddy Reverse Proxy](#caddy-reverse-proxy)
    - [Service Auto-Detection](#service-auto-detection)
 5. [Getting Started](#getting-started)
@@ -27,8 +27,8 @@
    - [sandbox logs](#sandbox-logs)
    - [sandbox remove](#sandbox-remove)
    - [sandbox test](#sandbox-test)
-   - [sandbox gke-connect](#sandbox-gke-connect)
-   - [sandbox gke-status](#sandbox-gke-status)
+   - [sandbox k8s-connect](#sandbox-k8s-connect)
+   - [sandbox k8s-status](#sandbox-k8s-status)
    - [sandbox proxy-reload](#sandbox-proxy-reload)
 7. [Services Reference](#services-reference)
    - [Application Services](#application-services)
@@ -36,14 +36,14 @@
    - [Setup Services](#setup-services)
 8. [Port Allocation](#port-allocation)
    - [Feature Slot Ports](#feature-slot-ports)
-   - [GKE Forward Ports](#gke-forward-ports)
+   - [k8s Forward Ports](#k8s-forward-ports)
 9. [Configuration Files](#configuration-files)
    - [infra/config/services.yaml](#infraconfigservicesyaml)
    - [infra/config/ports.yaml](#infraconfigportsyaml)
-   - [GKE forward table (in services.yaml)](#gke-forward-table-in-servicesyaml)
+   - [k8s forward table (in services.yaml)](#k8s-forward-table-in-servicesyaml)
 10. [Generated Files](#generated-files)
 11. [Caddy Proxy & Feature Selector UI](#caddy-proxy--feature-selector-ui)
-12. [GKE Port-Forward Scripts](#gke-port-forward-scripts)
+12. [k8s Port-Forward Scripts](#k8s-port-forward-scripts)
 13. [Environment Variables](#environment-variables)
 14. [File Paths Reference](#file-paths-reference)
 15. [Workflows](#workflows)
@@ -59,9 +59,9 @@
 
 ## Overview
 
-The Developer Sandbox is a CLI-driven orchestration layer that enables concurrent feature development across Sandbox's distributed architecture (~15 services across ~9 repos). Instead of running all services locally, each feature runs **only the services with code changes** in Docker containers, while everything else is transparently served from GKE via containerized `kubectl port-forward` processes.
+The sandbox is a CLI-driven orchestration layer that enables concurrent feature development across Sandbox's distributed architecture (~15 services across ~9 repos). Instead of running all services locally, each feature runs **only the services with code changes** in Docker containers, while everything else is transparently served from k8s via containerized `kubectl port-forward` processes.
 
-A Caddy reverse proxy terminates HTTPS and serves the feature selector UI, forwarding traffic to a local Cloudflare worker that provides production-parity path-based routing between web versions (webV0/V1/V2). The worker reads an `X-Feature` header or cookie from incoming requests and routes them to the correct feature's local containers — or falls back to the GKE baseline for services that aren't running locally.
+A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and routes each service's public hostname directly. It reads an `X-Feature` cookie or header from incoming requests and routes them to the correct feature's local containers — or falls back to the k8s baseline for services that aren't running locally.
 
 **Key benefits:**
 
@@ -79,20 +79,26 @@ A Caddy reverse proxy terminates HTTPS and serves the feature selector UI, forwa
 | **Node.js 20+** | CLI runtime | `brew install node` (or nvm) |
 | **Docker Desktop** | Container runtime | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) |
 | **Docker Compose v2** | Container orchestration | Included with Docker Desktop |
-| **kubectl** | Kubernetes CLI | `brew install kubectl` or `gcloud components install kubectl` |
-| **gcloud CLI** | GCP authentication | `brew install --cask google-cloud-sdk` |
+| **kubectl** | Kubernetes CLI | `brew install kubectl` |
 | **Git** | Workspace detection | Included with macOS Xcode tools |
 | **Playwright** | Running browser tests | `npx playwright install` (optional) |
 
-### GCP Authentication
+### Cluster Access
 
-Before using GKE port-forwards, authenticate with Google Cloud:
+The k8s port-forwards need a working kubectl context. The sandbox's default is the
+local OrbStack cluster, named by the top-level `k8s_context` key in
+`~/.sandbox/services.yaml` (e.g. `k8s_context: orbstack`).
 
 ```bash
-gcloud auth login
-gcloud auth application-default login
-gcloud container clusters get-credentials <cluster-name> --zone <zone> --project <project>
+kubectl config get-contexts        # list available contexts
+kubectl config current-context     # confirm the active one
+kubectl get nodes                  # confirm the cluster answers
 ```
+
+Authentication is whatever your kubeconfig already carries — OrbStack embeds a
+client cert, so no cloud-provider CLI or auth plugin is required. If you point
+`k8s_context` at a remote cluster, set that context up with your provider's own
+tooling first; the sandbox only reads the resulting kubeconfig.
 
 ### Workspace Directory
 
@@ -102,11 +108,7 @@ The sandbox supports two workspace layouts:
 
 ```
 ~/workspace/
-├── econx/              # standard git clone
-├── comx/               # standard git clone
-├── sb-web/             # standard git clone
-├── sandbox/        # standard git clone
-└── taxonomy-service/   # standard git clone
+└── sandbox/            # standard git clone
 ```
 
 Feature names are arbitrary labels (not directory names). Override the default path with `--workspace` or the `WORKSPACE` env var.
@@ -116,11 +118,9 @@ Feature names are arbitrary labels (not directory names). Override the default p
 ```
 ~/workspace/         # set SANDBOX_WORKSPACES_ROOT to this
 ├── feature-abc/
-│   ├── econx/          # git worktree of the econx repo
-│   ├── comx/           # git worktree of the comx repo
-│   └── sandbox/    # git worktree of the sandbox repo
+│   └── sandbox/        # git worktree of the sandbox repo
 ├── feature-xyz/
-│   └── econx/
+│   └── sandbox/
 └── ...
 ```
 
@@ -151,12 +151,9 @@ After the initial build, `./sandbox` is self-contained — it resolves a node ru
 Create a `.env` file in the repository root (see `.env.example`):
 
 ```bash
-# Required
+# Optional — only needed by services that use them. The demo services
+# (rest-hello, next-hello) require none.
 GITHUB_AUTH_TOKEN=ghp_...          # npm registry access for private packages
-POSTGRES_INSTANCE=project:region:instance  # Cloud SQL connection string
-
-# Optional
-MONGO_CONNECTION_STRING=...        # Direct MongoDB URI (or use GKE forward on :9052)
 ```
 
 ---
@@ -196,7 +193,7 @@ When you run `sandbox up my-feature`, the CLI:
 ```bash
 sandbox init-workspace \
     --feature blog \
-    --services web-v2,sb-web-api \
+    --services next-hello,rest-hello \
     --jira-id PROJ-1234
 ```
 
@@ -218,41 +215,33 @@ Each slot provides 20 ports. A service's host port is calculated as:
 host_port = base_port + (slot - 1) * 100 + port_offset
 ```
 
-Where `port_offset` is defined per service in `infra/config/services.yaml` (e.g., web-v0 = 0, web-v1 = 1, web-v2 = 2, sb-web-api = 3, etc.).
+Where `port_offset` is defined per service in `~/.sandbox/services.yaml` (in the demo registry: rest-hello = 0, next-hello = 1).
 
 Slot assignments are persisted in `~/.sandbox/slots.json` and survive terminal restarts.
 
-### GKE Port-Forwards (Baseline)
+### k8s Port-Forwards (Baseline)
 
-All services are available from GKE on a fixed port range (9000–9099), shared across all features. These are the "baseline" — when a feature doesn't run a service locally, requests are routed to the GKE forward.
+All services are available from k8s on a fixed port range (9000–9099), shared across all features. These are the "baseline" — when a feature doesn't run a service locally, requests are routed to the k8s forward.
 
-GKE port-forwards now run inside a Docker container (`gke-forwards`) as part of shared infrastructure (`infra/compose/shared-infra.yml`). They are accessible via the Docker DNS name `gke-forwards` on the `sandbox-shared` network.
+k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of shared infrastructure (`infra/compose/shared-infra.yml`). They are accessible via the Docker DNS name `k8s-forwards` on the `sandbox-shared` network.
 
-| Port | Service | GKE Namespace |
+| Port | Service | k8s Namespace |
 |---|---|---|
-| 9000 | web-v0 | sandbox |
-| 9001 | sb-web-api | sandbox |
-| 9002 | category-api | category |
-| 9003 | product-api | product |
-| 9004 | federated-graph | federated-graph |
-| 9005 | taxonomy-api | taxonomy-service |
-| 9006 | interview-api | interview-service |
-| 9007 | vendor-portal-server | vendor-portal |
-| 9008 | sandbox-mcp | sandbox-mcp |
-| 9050 | redis | dev |
-| 9051 | cloud-sql-proxy | dev |
-| 9052 | mongodb | psmdb |
+| 9050 | redis | default |
+| 9051 | postgres | default |
+| 9052 | rest-hello | default |
+| 9053 | next-hello | default |
 
-These ports are internal to the Docker network — other containers reach them via `gke-forwards:9xxx`. GKE forwards must be running before starting features. Start them with `sandbox connect`.
+These ports are internal to the Docker network — other containers reach them via `k8s-forwards:9xxx`. k8s forwards must be running before starting features. Start them with `sandbox connect`.
 
 ### Caddy Reverse Proxy
 
 Caddy runs as a Docker container (ports 80 and 443) and provides:
 
 1. **HTTPS termination** — Caddy terminates HTTPS on port 443 using locally-trusted certificates
-2. **Feature selector UI** — a web page at `https://sb-web.local.sandbox.com/__sandbox/` for setting the active feature in your browser
-3. **Cloudflare worker forwarding** — Caddy forwards traffic to the Cloudflare worker (`:8787`) for path-based routing between webV0/V1/V2 based on URL path, providing production-parity routing logic
-4. **Subdomain routing** — supports subdomain-based routing (e.g., `vendor.local.sandbox.com`) for services like the vendor portal
+2. **Feature selector UI** — a web page at `https://next-hello.local.sandbox.com/__sandbox` for setting the active feature in your browser
+3. **Feature resolution** — Caddy matches the `X-Feature` cookie and reverse-proxies to that feature's local container, falling back to the k8s baseline when the service isn't running locally
+4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `next-hello.local.sandbox.com`)
 
 The Caddyfile is regenerated automatically whenever you run `sandbox up`, `sandbox down`, `sandbox remove`, or `sandbox proxy-reload`.
 
@@ -264,11 +253,11 @@ When `sandbox up <feature>` or `sandbox detect <feature>` is run, the detection 
 2. Lists all non-hidden subdirectories that match known repo names from `infra/config/services.yaml`
 3. For each repo, runs `git diff main..HEAD --name-only` (falls back to `origin/main` if `main` branch doesn't exist locally)
 4. Maps the repo name and changed file paths to services using the `repos` section of `infra/config/services.yaml`
-5. For monorepos (comx, econx), uses `path_mappings` to match specific subdirectories to specific services
+5. For monorepos, uses `path_mappings` to match specific subdirectories to specific services
 
-**Example:** If `econx/apps/web-v2/src/pages/Home.tsx` is changed, the detector maps:
-- Repo: `econx`
-- Path matches: `apps/web-v2` → service `web-v2`
+**Example:** If `sandbox/apps/next-hello/app/page.tsx` is changed, the detector maps:
+- Repo: `sandbox`
+- Path matches: `apps/next-hello` → service `next-hello`
 
 **Skipping auto-detection:** Pass `--services` (or `-s`) to `sandbox up` to specify services explicitly instead of relying on git diff. See [sandbox up](#sandbox-up).
 
@@ -278,7 +267,7 @@ Each feature runs in an isolated environment:
 
 - **Docker networks** — each feature gets its own bridge network (`sandbox-<feature>`)
 - **Container names** — prefixed with the feature name (`<feature>-<service>`)
-- **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-vendor_portal_node_modules`) so concurrent features never share mutable state
+- **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-next-hello_node_modules`) so concurrent features never share mutable state
 - **Port ranges** — each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
 - **Generated files** — each feature's `docker-compose.yml` and `.env` are written to its workspace root, and `supergraph-config.yml` to `<workspace>/.sandbox/`
 
@@ -290,16 +279,16 @@ Each feature runs in an isolated environment:
 
 ### Step 1: Start Shared Infrastructure
 
-Start all shared infrastructure (redis, cloud-sql-proxy, gke-forwards, cloudflare-worker, caddy):
+Start all shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy):
 
 ```bash
 ./sandbox connect
 ```
 
-Verify GKE forwards are healthy:
+Verify k8s forwards are healthy:
 
 ```bash
-./sandbox gke-status
+./sandbox k8s-status
 ```
 
 ### Step 2: Configure Local DNS
@@ -307,7 +296,7 @@ Verify GKE forwards are healthy:
 Add to `/etc/hosts`:
 
 ```
-127.0.0.1 sb-web.local.sandbox.com vendor.local.sandbox.com
+127.0.0.1 next-hello.local.sandbox.com
 ```
 
 ### Step 3: Start a Feature
@@ -320,22 +309,22 @@ Add to `/etc/hosts`:
 ./sandbox up my-feature --workspace /path/to/repos
 
 # Skip auto-detection — specify services explicitly
-./sandbox up my-feature --services product-api,category-api
-./sandbox up my-feature -s web-v2
+./sandbox up my-feature --services rest-hello,next-hello
+./sandbox up my-feature -s next-hello
 
-# Force start with no services (all traffic goes to GKE)
+# Force start with no services (all traffic goes to k8s)
 ./sandbox up my-feature --force
 ```
 
 ### Step 5: Access Your Feature
 
 **Option A: Browser cookie**
-Visit `https://sb-web.local.sandbox.com/__sandbox/`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
+Visit `https://next-hello.local.sandbox.com/__sandbox`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
 
 **Option B: HTTP header**
 Use a browser extension or curl:
 ```bash
-curl -H "X-Feature: my-feature" https://sb-web.local.sandbox.com/
+curl -H "X-Feature: my-feature" https://next-hello.local.sandbox.com/
 ```
 
 ### Step 6: View Status
@@ -379,7 +368,7 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
 | `feature` | Yes | Feature name (arbitrary label for slot allocation and proxy routing) |
 | `--force` | No | Start even if no changed services are detected |
 | `--workspace`, `-w` | No | Path to directory containing repo checkouts. Default: `~/workspace/`. Also settable via `WORKSPACE` env var. |
-| `--services`, `-s` | No | Comma-separated list of services to run locally (e.g. `product-api,category-api`). Skips git diff auto-detection entirely. |
+| `--services`, `-s` | No | Comma-separated list of services to run locally (e.g. `rest-hello,next-hello`). Skips git diff auto-detection entirely. |
 
 **What it does:**
 
@@ -390,28 +379,28 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
    - `docker-compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)
    - `<workspace>/.sandbox/supergraph-config.yml` — Apollo Federation config
-5. Verifies GKE port-forwards are healthy (restarts if needed)
+5. Verifies k8s port-forwards are healthy (restarts if needed)
 6. Starts containers with `docker compose up -d --build --remove-orphans`
-7. Regenerates `infra/proxy/Caddyfile`, generates worker endpoint overrides (`infra/proxy/worker.env`), reloads Caddy, and restarts the Cloudflare worker
+7. Regenerates `infra/proxy/Caddyfile` and reloads Caddy
 
 **Output example:**
 
 ```
 [info] Scanning workspace for feature: my-feature
-[info] Detected 2 service(s): web-v2, federated-graph
+[info] Detected 2 service(s): rest-hello, next-hello
 [ok]   Allocated slot 1 (ports 11100-11119)
 [info] Generating config files...
 [info] Starting containers...
 [ok]   Feature 'my-feature' is up!
 
-  URL:       http://sb-web.local.sandbox.com
+  URL:       https://next-hello.local.sandbox.com
   Header:    X-Feature: my-feature
   Slot:      1
   Ports:     11100-11119
-  Services:  web-v2 (:11102), federated-graph (:11108)
+  Services:  rest-hello (:11100), next-hello (:11101)
 ```
 
-**If no services are detected** and `--force` is not set, the command prints a warning but still proceeds — the feature is registered and routes entirely to GKE. You can add services later with `sandbox up <feature> -s <service>` (or by editing `.sandbox/workspace.yml` and rerunning `sandbox init-workspace`).
+**If no services are detected** and `--force` is not set, the command prints a warning but still proceeds — the feature is registered and routes entirely to k8s. You can add services later with `sandbox up <feature> -s <service>` (or by editing `.sandbox/workspace.yml` and rerunning `sandbox init-workspace`).
 
 **If all 12 slots are occupied**, the command exits with an error. Free a slot by running `sandbox down` on another feature.
 
@@ -435,8 +424,7 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
 1. Stops all Docker containers for the feature (`docker compose down --remove-orphans`)
 2. Releases the slot back to the pool
 3. Regenerates the Caddyfile (removing this feature's routing rules)
-4. Regenerates worker endpoint overrides (`infra/proxy/worker.env`) and restarts the Cloudflare worker
-5. Reloads Caddy if running
+4. Reloads Caddy if running
 The feature's generated files (`docker-compose.yml`, `.env`, `.sandbox/`) are left in place in its workspace — they're overwritten on the next `sandbox up`.
 
 By default, per-feature Docker volumes (node_modules, build caches) are preserved so the next `sandbox up` is faster. Use `--volumes` to remove them for a full cleanup.
@@ -478,8 +466,8 @@ Useful after making code changes that hot-reload doesn't pick up. If the feature
 ```
   Slot  Feature         Services                          Ports          Status
   ──────────────────────────────────────────────────────────────────────────────
-  1     my-feature      web-v2, federated-graph           11100-11119    up (2/2)
-  3     other-feature   sb-web-api, product-api, cate...  11300-11319    partial (2/3)
+  1     my-feature      rest-hello, next-hello            11100-11119    up (2/2)
+  3     other-feature   next-hello                        11300-11319    partial (0/1)
 
   2 active feature(s), 10 slot(s) available
 ```
@@ -513,13 +501,10 @@ This command does **not** start anything. It scans the workspace, runs git diff 
 [info] Scanning workspace: ~/workspace
 
 Detected services:
-  web-v2              repo: econx       type: web
-  federated-graph     repo: econx       type: graphql-gateway
+  next-hello          repo: sandbox     type: web
 
-Services from GKE (no local changes):
-  web-v0, web-v1, sb-web-api, category-api, product-api,
-  taxonomy-api, interview-api, vendor-portal-server,
-  vendor-portal-client, sandbox-mcp
+Services from k8s (no local changes):
+  rest-hello
 ```
 
 ---
@@ -536,16 +521,13 @@ Services from GKE (no local changes):
 |---|---|---|
 | `feature` | Yes | Feature name |
 
-Shows each service with its source (local container or GKE forward) and endpoint:
+Shows each service with its source (local container or k8s forward) and endpoint:
 
 ```
   Service                Source    Endpoint              Type
   ────────────────────────────────────────────────────────────
-  web-v0                 GKE      localhost:9000         web
-  web-v2                 local    localhost:11102        web
-  sb-web-api             GKE      localhost:9001         api
-  federated-graph        local    localhost:11108        graphql-gateway
-  ...
+  rest-hello             k8s      localhost:9052         api
+  next-hello             local    localhost:11101        web
 ```
 
 ---
@@ -569,8 +551,8 @@ Streams logs in real-time (equivalent to `docker compose logs -f --tail 100`). P
 # All services
 ./sandbox logs my-feature
 
-# Just web-v2
-./sandbox logs my-feature web-v2
+# Just next-hello
+./sandbox logs my-feature next-hello
 ```
 
 ---
@@ -589,7 +571,7 @@ There is no `sandbox add` command. To force a service to run locally:
 
 ### sandbox remove
 
-**Remove a local service, falling back to GKE.**
+**Remove a local service, falling back to k8s.**
 
 ```
 ./sandbox remove <feature> <service>
@@ -600,12 +582,12 @@ There is no `sandbox add` command. To force a service to run locally:
 | `feature` | Yes | Feature name |
 | `service` | Yes | Service name |
 
-Removes the service from the feature's local stack. The service will now be served from GKE. Config files are regenerated and Caddy is reloaded.
+Removes the service from the feature's local stack. The service will now be served from k8s. Config files are regenerated and Caddy is reloaded.
 
 If removing the last service, the feature's containers are fully stopped (though the slot remains allocated — use `sandbox down` to release it).
 
 ```bash
-./sandbox remove my-feature taxonomy-api
+./sandbox remove my-feature next-hello
 ```
 
 ---
@@ -627,7 +609,6 @@ If removing the last service, the feature's containers are fully stopped (though
 
 1. Sets environment variables `SANDBOX_FEATURE` and `SANDBOX_SLOT` for the Playwright process
 2. Searches for a `playwright.config.ts` (or `.js`/`.mjs`) in the following locations, in order:
-   - `~/workspace/<feature>/sb-web/`
    - `~/workspace/<feature>/sandbox/`
    - `~/workspace/<feature>/`
    - The sandbox root directory
@@ -648,50 +629,50 @@ The feature doesn't need to have an active slot — if it doesn't, the command w
 
 ---
 
-### sandbox gke-connect
+### sandbox k8s-connect
 
-**Start or check the containerized GKE port-forwards.**
+**Start or check the containerized k8s port-forwards.**
 
 ```
-./sandbox gke-connect
+./sandbox k8s-connect
 ```
 
-No arguments. Starts the `gke-forwards` Docker container (part of `infra/compose/shared-infra.yml`) which runs all 12 `kubectl port-forward` processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
+No arguments. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`) which runs all 12 `kubectl port-forward` processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
 
-The container runs on the `sandbox-shared` Docker network and is accessible to other containers via the DNS name `gke-forwards`. Port-forward processes inside the container auto-restart if they disconnect, managed by the container's entrypoint script.
+The container runs on the `sandbox-shared` Docker network and is accessible to other containers via the DNS name `k8s-forwards`. Port-forward processes inside the container auto-restart if they disconnect, managed by the container's entrypoint script.
 
 After starting, it runs a health check and reports the status.
 
 ```
-[info] Starting gke-forwards container...
-[ok]   gke-forwards container is healthy. 12/12 forwards active.
+[info] Starting k8s-forwards container...
+[ok]   k8s-forwards container is healthy. 12/12 forwards active.
 ```
 
 ---
 
-### sandbox gke-status
+### sandbox k8s-status
 
-**Check the health of the GKE port-forwards container.**
-
-```
-./sandbox gke-status
-```
-
-No arguments. Checks the Docker container health of `sandbox-gke-forwards` and reports the status of each forwarded port:
+**Check the health of the k8s port-forwards container.**
 
 ```
-  Container: sandbox-gke-forwards    Status: healthy
+./sandbox k8s-status
+```
 
-  Service                Port   GKE Target                            Status
+No arguments. Checks the Docker container health of `sandbox-k8s-forwards` and reports the status of each forwarded port:
+
+```
+  Container: sandbox-k8s-forwards    Status: healthy
+
+  Service                Port   k8s Target                            Status
   ─────────────────────────────────────────────────────────────────────────────────
-  web-v0                 9000   sandbox/sandbox:3000           healthy
-  sb-web-api             9001   sandbox/sb-web-nx-api:3061        healthy
-  category-api           9002   category:3001                         healthy
+  redis                  9050   default/redis:6379                    healthy
+  postgres               9051   default/postgres:5432                 healthy
+  rest-hello             9052   default/rest-hello:80                 healthy
   redis                  9050   dev:6379                              healthy
-  mongodb                9052   psmdb/percona-mongodb:27017           down
+  next-hello             9053   default/next-hello:8080               down
 
   11/12 healthy, 1 down
-  Run 'sandbox gke-connect' to restart the gke-forwards container
+  Run 'sandbox k8s-connect' to restart the k8s-forwards container
 ```
 
 ---
@@ -764,13 +745,13 @@ Running multiple features concurrently creates per-feature Docker volumes for `n
 **Manual volume inspection:**
 ```bash
 # List all sandbox-related Docker volumes
-docker volume ls | grep -E '^\S+-(vendor_portal|comx|sandbox|legacy_tr_web)'
+docker volume ls | grep -E '^\S+-(rest-hello|next-hello)'
 
 # Remove a specific volume
-docker volume rm my-feature-vendor_portal_node_modules
+docker volume rm my-feature-next-hello_node_modules
 ```
 
-Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g., `my-feature-vendor_portal_node_modules`, `my-feature-comx-nx-cache`). This ensures concurrent features never share mutable Docker state.
+Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g., `my-feature-next-hello_node_modules`). This ensures concurrent features never share mutable Docker state.
 
 ---
 
@@ -778,30 +759,25 @@ Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g.
 
 ### Application Services
 
-| Service | Repo | Path in Repo | Type | Internal Port | port_offset | Monorepo | Health Endpoint |
-|---|---|---|---|---|---|---|---|
-| web-v0 | sandbox | `.` | web | 3000 | 0 | — | /healthcheck |
-| web-v1 | sb-web | `.` | web | 3030 | 1 | — | /healthcheck |
-| web-v2 | econx | `apps/web-v2` | web | 3060 | 2 | Turbo | /api/healthcheck |
-| sb-web-api | comx | `apps/sb-web-api` | api | 3335 | 3 | NX | /api-nest/healthcheck |
-| category-api | comx | `apps/category-api` | api | 3334 | 4 | NX | /api/healthcheck |
-| product-api | econx | `apps/product-api` | graphql-subgraph | 3333 | 5 | Turbo | /api/healthcheck |
-| taxonomy-api | taxonomy-service | `.` | api | 3001 | 6 | — | /api |
-| interview-api | econx | `apps/interview-service` | graphql-subgraph | 4322 | 7 | Turbo | /graphql |
-| federated-graph | econx | `apps/federated-graph` | graphql-gateway | 4321 | 8 | Turbo | /health |
-| vendor-portal-server | econx | `apps/vendor-portal-server` | api | 3081 | 9 | Turbo | /ping |
-| vendor-portal-client | econx | `apps/vendor-portal-client` | web | 3000 | 10 | Turbo | /health |
-| sandbox-mcp | econx | `apps/sandbox-mcp` | api | 4322 | 11 | Turbo | /health |
+The registry is `~/.sandbox/services.yaml`. The shipped demo registry defines two
+services in the `sandbox` repo:
+
+| Service | Repo | Path in Repo | Type | Internal Port | port_offset | Health Endpoint |
+|---|---|---|---|---|---|---|
+| rest-hello | sandbox | `apps/rest-hello` | api | 3000 | 0 | /health |
+| next-hello | sandbox | `apps/next-hello` | web | 3000 | 1 | / |
+
+Add your own by appending to `services:` (and `repos:`) in that file — the columns above
+are the required keys. `sandbox services` lists whatever is registered.
 
 ### Infrastructure Services
 
-These are always served from GKE — they are never run locally:
+These are always served from k8s — they are never run locally:
 
-| Service | GKE Forward Port | Internal Port | Namespace |
+| Service | k8s Forward Port | Internal Port | Namespace |
 |---|---|---|---|
-| Redis | 9050 | 6379 | dev |
-| Cloud SQL Proxy (PostgreSQL) | 9051 | 5432 | dev |
-| MongoDB | 9052 | 27017 | psmdb |
+| Redis | 9050 | 6379 | default |
+| PostgreSQL | 9051 | 5432 | default |
 
 ### Setup Services
 
@@ -809,8 +785,7 @@ Monorepo services require initialization before the application services can sta
 
 | Setup Service | Repo | Monorepo Type | Memory Limit | Purpose |
 |---|---|---|---|---|
-| comx-setup | comx | NX | 4G | Installs NX workspace deps, builds shared libraries |
-| econx-setup | econx | Turbo | 3G | Installs Turbo workspace deps |
+| _(none)_ | — | — | — | The demo registry defines no setup services. Add them under `setup_services:` in `~/.sandbox/services.yaml` for monorepos that need a shared install/build step before their services start. |
 
 Setup services are automatically included in generated Docker Compose files when a feature uses services from the corresponding monorepo.
 
@@ -842,28 +817,21 @@ Slot N: base = 11100 + (N-1) * 100
 | 11 | 12100 | 12100–12119 |
 | 12 | 12200 | 12200–12219 |
 
-A service's specific host port = `base_port + port_offset`. For example, `web-v2` (offset 2) in slot 3 = `11300 + 2 = 11302`.
+A service's specific host port = `base_port + port_offset`. For example, `next-hello` (offset 1) in slot 3 = `11300 + 1 = 11301`.
 
 The 80-port gap between each slot's 20-port range is reserved for future expansion.
 
-### GKE Forward Ports
+### k8s Forward Ports
 
 Fixed ports shared by all features:
 
 | Port | Service |
 |---|---|
-| 9000 | web-v0 |
-| 9001 | sb-web-api |
-| 9002 | category-api |
-| 9003 | product-api |
-| 9004 | federated-graph |
-| 9005 | taxonomy-api |
-| 9006 | interview-api |
-| 9007 | vendor-portal-server |
-| 9008 | sandbox-mcp |
+
 | 9050 | redis |
-| 9051 | cloud-sql-proxy |
-| 9052 | mongodb |
+| 9051 | postgres |
+| 9052 | rest-hello |
+| 9053 | next-hello |
 
 ---
 
@@ -871,20 +839,20 @@ Fixed ports shared by all features:
 
 ### infra/config/services.yaml
 
-The central service registry. Defines all services, their repos, paths, ports, GKE details, and dependencies.
+The central service registry. Defines all services, their repos, paths, ports, k8s details, and dependencies.
 
 **Top-level keys:**
 
 - **`services`** — Map of service name to service definition. Each service has:
   - `repo` (string) — Repository name (directory name in workspace)
-  - `path` (string) — Path within the repo (`.` for entire repo, `apps/web-v2` for monorepo packages)
+  - `path` (string) — Path within the repo (`.` for entire repo, `apps/next-hello` for monorepo packages)
   - `type` (string) — Service category: `web`, `api`, `graphql-subgraph`, `graphql-gateway`
   - `internal_port` (int) — Port the service listens on inside its container
   - `port_offset` (int) — Offset within the feature slot range (0–19)
-  - `gke_deployment` (string | null) — Kubernetes deployment name
-  - `gke_namespace` (string | null) — Kubernetes namespace
-  - `gke_port` (int | null) — Port the GKE pod listens on
-  - `gke_pod_prefix` (string | null) — Pod name prefix for kubectl
+  - `k8s_deployment` (string | null) — Kubernetes deployment name
+  - `k8s_namespace` (string | null) — Kubernetes namespace
+  - `k8s_port` (int | null) — Port the k8s pod listens on
+  - `k8s_pod_prefix` (string | null) — Pod name prefix for kubectl
   - `health_endpoint` (string) — HTTP path for health checks
   - `monorepo` (string | null) — `turbo` or `nx` if part of a monorepo
   - `setup_service` (string | null) — Required setup service name
@@ -897,8 +865,8 @@ The central service registry. Defines all services, their repos, paths, ports, G
   - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
   - `extra_volumes` (list | null) — Additional volume mounts
 
-- **`infrastructure`** — Infrastructure services (redis, cloud-sql-proxy, mongodb) with GKE forward ports
-- **`setup_services`** — Setup service definitions (comx-setup, econx-setup)
+- **`infrastructure`** — Infrastructure services (redis, postgres) with k8s forward ports
+- **`setup_services`** — Optional per-monorepo install/build steps that run before a repo's services start
 - **`repos`** — Repo-to-service mapping with `path_mappings` for monorepos
 
 ### infra/config/ports.yaml
@@ -912,37 +880,42 @@ feature_slots:
   ports_per_slot: 20  # Ports available per slot
 ```
 
-(GKE forward listen-ports live per-service in `services.yaml` as
-`gke_forward_port:` — the single source of truth for the forward table.)
+(k8s forward listen-ports live per-service in `services.yaml` as
+`k8s_forward_port:` — the single source of truth for the forward table.)
 
-### GKE forward table (in services.yaml)
+### k8s forward table (in services.yaml)
 
-The GKE port-forward table is not a separate file — each forwarded service in
+The k8s port-forward table is not a separate file — each forwarded service in
 `services.yaml` carries its forward fields inline:
 
 ```yaml
 services:
-  web-v0:
-    gke_forward_port: 9000   # Host/container listen-port (the 9000-range)
-    gke_port: 3000           # Port on the GKE pod (remote)
-    gke_namespace: sandbox
-    gke_pod_prefix: sandbox
-    health_endpoint: /healthcheck
-  vendor:
-    gke_forward_port: 9013
-    gke_forward_name: vendor-portal-client  # forward/alias name ≠ service key
-    # ...
+  rest-hello:
+    k8s_forward_port: 9052   # Host/container listen-port (the 9000-range)
+    k8s_port: 80             # Port on the k8s Service (remote)
+    k8s_namespace: default
+    k8s_pod_prefix: rest-hello
+    health_endpoint: /health
+  next-hello:
+    k8s_forward_port: 9053
+    k8s_port: 8080
+    k8s_namespace: default
+    k8s_pod_prefix: next-hello
+    health_endpoint: /
 infrastructure:
-  mongodb:
-    gke_forward_port: 9052   # no health_endpoint → TCP-only health check
+  postgres:
+    k8s_forward_port: 9051   # no health_endpoint → TCP-only health check
 ```
 
+A service whose forward/alias name differs from its service key can set
+`k8s_forward_name:` to override it.
+
 Both runtime consumers of this table are **generated** from `services.yaml` by
-`sandbox connect` (`apps/cli/src/lib/gke_forwards.ts`): the container's forward list is
-written to `gke-port-forward/tmp/forwards` (mounted at `/tmp/forwards`, read by
-`entrypoint.sh`), and the `gke-forwards` service's `ports:`/`aliases:` in
+`sandbox connect` (`apps/cli/src/lib/k8s_forwards.ts`): the container's forward list is
+written to `k8s-port-forward/tmp/forwards` (mounted at `/tmp/forwards`, read by
+`entrypoint.sh`), and the `k8s-forwards` service's `ports:`/`aliases:` in
 `shared-infra.yml` are regenerated in place between `# >>> GENERATED` markers.
-`apps/cli/src/lib/__tests__/gke_forward_drift.test.ts` fails if the committed
+`apps/cli/src/lib/__tests__/k8s_forward_drift.test.ts` fails if the committed
 `shared-infra.yml` drifts out of sync. To add or change a forward, edit only
 `services.yaml` and run `sandbox connect`.
 
@@ -960,23 +933,23 @@ Per-feature Docker Compose stack containing:
 - **Application services**: One container per local service with:
   - Source code mounted from the workspace
   - Port mapping from the feature's slot range to the service's internal port
-  - Environment variables with resolved URLs for all services (Docker DNS names for local services, `gke-forwards:9xxx` for GKE services)
+  - Environment variables with resolved URLs for all services (Docker DNS names for local services, `k8s-forwards:9xxx` for k8s services)
   - Memory limits from `services.yaml`
   - Health checks using `curl` to the service's health endpoint
   - `depends_on` the setup service (with `service_healthy` condition)
-- **Networks**: Feature containers join both the feature-specific network (`sandbox-<feature>`) and the `sandbox-shared` network, enabling communication with shared infrastructure (gke-forwards, redis, cloud-sql-proxy, cloudflare-worker, caddy)
+- **Networks**: Feature containers join both the feature-specific network (`sandbox-<feature>`) and the `sandbox-shared` network, enabling communication with shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy)
 
 ### .env
 
 Environment file loaded by Docker Compose, containing:
 - `SANDBOX_FEATURE`, `SANDBOX_SLOT`, `COMPOSE_PROJECT_NAME`
 - Node.js version and environment settings
-- Resolved URLs for every service (e.g., `WEB_V2_URL=http://web-v2:3060`)
+- Resolved URLs for every service (e.g., `NEXT_HELLO_URL=http://next-hello:3000`)
 - Database connection strings pointing to shared infrastructure (e.g., `REDIS_URL=redis://redis:6379`)
 
 ### supergraph-config.yml
 
-Apollo Federation supergraph configuration. Lists each GraphQL subgraph with its URL — local services point to slot ports, remote services point to GKE forwards.
+Apollo Federation supergraph configuration. Lists each GraphQL subgraph with its URL — local services point to slot ports, remote services point to k8s forwards.
 
 ---
 
@@ -1006,10 +979,10 @@ docker compose -f infra/compose/shared-infra.yml logs -f caddy
 
 ### Feature Selector UI
 
-Visit **`http://sb-web.local.sandbox.com/__sandbox/`** in your browser to:
+Visit **`https://next-hello.local.sandbox.com/__sandbox`** in your browser to:
 - See the currently active feature (from the `X-Feature` cookie)
 - Switch to a different feature by typing the name and clicking "Set Feature"
-- Clear the feature cookie to return to the GKE baseline
+- Clear the feature cookie to return to the k8s baseline
 
 The UI sets a cookie named `X-Feature` with a 30-day expiry. Caddy reads this cookie to determine routing.
 
@@ -1024,38 +997,38 @@ document.cookie = "X-Feature=my-feature; path=/; max-age=2592000";
 
 **Header (curl/API tools):**
 ```bash
-curl -H "X-Feature: my-feature" http://sb-web.local.sandbox.com/
+curl -H "X-Feature: my-feature" https://next-hello.local.sandbox.com/
 ```
 
 **Browser extension:** Use a header-injection extension like ModHeader to add `X-Feature: my-feature` to all requests.
 
 ---
 
-## GKE Port-Forwards (Containerized)
+## k8s Port-Forwards (Containerized)
 
-GKE port-forwards run inside a Docker container rather than as host-side shell scripts. The container is part of shared infrastructure and is managed via `infra/compose/shared-infra.yml`.
+k8s port-forwards run inside a Docker container rather than as host-side shell scripts. The container is part of shared infrastructure and is managed via `infra/compose/shared-infra.yml`.
 
 ### Container Details
 
-- **Container name**: `sandbox-gke-forwards`
-- **Built from**: `infra/compose/gke-port-forward/Dockerfile`
-- **Network**: `sandbox-shared` (accessible to all feature containers via DNS name `gke-forwards`)
+- **Container name**: `sandbox-k8s-forwards`
+- **Built from**: `infra/compose/k8s-port-forward/Dockerfile`
+- **Network**: `sandbox-shared` (accessible to all feature containers via DNS name `k8s-forwards`)
 - **Health checks**: Managed by Docker health checks defined in the compose file
 
 ### Common Operations
 
 ```bash
 # View port-forward logs
-docker logs sandbox-gke-forwards
+docker logs sandbox-k8s-forwards
 
 # Follow logs in real-time
-docker logs -f sandbox-gke-forwards
+docker logs -f sandbox-k8s-forwards
 
 # Restart the container (re-establishes all port-forwards)
-docker compose -f infra/compose/shared-infra.yml restart gke-forwards
+docker compose -f infra/compose/shared-infra.yml restart k8s-forwards
 
 # Check container health
-docker inspect --format='{{.State.Health.Status}}' sandbox-gke-forwards
+docker inspect --format='{{.State.Health.Status}}' sandbox-k8s-forwards
 ```
 
 ### How It Works
@@ -1075,7 +1048,6 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 | `SANDBOX_SLOT` | test command, .env | (not set) | Set in the environment of Playwright test processes |
 | `GITHUB_AUTH_TOKEN` | .env, containers | (required) | GitHub token for npm registry access |
 | `POSTGRES_INSTANCE` | .env | (required) | Cloud SQL Proxy instance connection string |
-| `MONGO_CONNECTION_STRING` | .env | (optional) | Direct MongoDB URI |
 
 ---
 
@@ -1088,15 +1060,14 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 | `sandbox` | Bash entrypoint (runs the CLI via uv; falls back to venv+pip) |
 | `apps/cli/src/main.ts` | CLI dispatcher |
 | `apps/cli/src/commands/` | Command modules (up, down, status, etc.) |
-| `apps/cli/src/lib/` | Shared libraries (config, detect, slots, generate, docker, gke, caddy) |
+| `apps/cli/src/lib/` | Shared libraries (config, detect, slots, generate, docker, k8s, caddy) |
 | `infra/config/services.yaml` | Service registry |
 | `infra/config/ports.yaml` | Port allocation scheme |
 | `infra/compose/` | Per-service base Docker Compose fragments |
-| `infra/compose/gke-port-forward/` | Dockerfile and entrypoint for containerized GKE port-forwards |
+| `infra/compose/k8s-port-forward/` | Dockerfile and entrypoint for containerized k8s port-forwards |
 | `infra/templates/` | nunjucks templates for per-feature file generation |
-| `infra/compose/shared-infra.yml` | Shared infrastructure (redis, cloud-sql-proxy, gke-forwards, cloudflare-worker, caddy) |
+| `infra/compose/shared-infra.yml` | Shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy) |
 | `infra/proxy/Caddyfile` | Generated Caddy config (gitignored) |
-| `infra/proxy/worker.env` | Generated worker endpoint overrides (gitignored) |
 | `infra/proxy/ui/index.html` | Feature selector web UI |
 | `apps/graphql-tools/` & `apps/otel-init/` | Node.js tooling (now an npm-workspaces monorepo with a root `package.json` + single root `package-lock.json`): GraphQL extract/validate scripts and `apps/graphql-tools/queries/` in `apps/graphql-tools/`, OTel source in `apps/otel-init/` |
 | `bin/` | Setup helper scripts (authenticate, generate-certs, generate-env, ...) |
@@ -1117,20 +1088,19 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 ### Starting a New Feature
 
 ```bash
-# 1. Ensure GKE baseline is running
-./sandbox gke-connect
-./sandbox gke-status
+# 1. Ensure k8s baseline is running
+./sandbox k8s-connect
+./sandbox k8s-status
 
 # 2. Create your workspace directory (skip if your VK / agent runner already did)
 mkdir -p ~/workspace/PROJ-1234
 cd ~/workspace/PROJ-1234
 
 # 3. Create worktrees for the repos you'll modify
-git -C ~/repos/econx worktree add ~/workspace/PROJ-1234/econx feature/PROJ-1234
-git -C ~/repos/comx worktree add ~/workspace/PROJ-1234/comx feature/PROJ-1234
+git -C ~/repos/sandbox worktree add ~/workspace/PROJ-1234/sandbox feature/PROJ-1234
 
 # 4. Make your code changes
-cd ~/workspace/PROJ-1234/econx
+cd ~/workspace/PROJ-1234/sandbox
 # ... edit files ...
 git add . && git commit -m "WIP"
 
@@ -1139,7 +1109,7 @@ cd ~/workspace/sandbox
 ./sandbox up PROJ-1234
 
 # 6. Set the feature in your browser
-# Visit http://sb-web.local.sandbox.com/__sandbox/ and enter "PROJ-1234"
+# Visit https://next-hello.local.sandbox.com/__sandbox and enter "PROJ-1234"
 
 # 7. Develop and iterate
 ./sandbox logs PROJ-1234
@@ -1151,14 +1121,14 @@ cd ~/workspace/sandbox
 
 ### Adding a Service Mid-Development
 
-If you started with just `web-v2` but now need `product-api` running locally:
+If you started with just `next-hello` but now need `rest-hello` running locally:
 
 ```bash
 # Check what's currently running
 ./sandbox services PROJ-1234
 
-# Add product-api locally
-./sandbox up PROJ-1234 -s product-api
+# Add rest-hello locally
+./sandbox up PROJ-1234 -s rest-hello
 
 # Verify
 ./sandbox services PROJ-1234
@@ -1207,16 +1177,16 @@ The test command sets `SANDBOX_FEATURE` and `SANDBOX_SLOT` in the Playwright pro
 
 ```bash
 # Tail logs for a specific service
-./sandbox logs PROJ-1234 web-v2
+./sandbox logs PROJ-1234 next-hello
 
 # Check service endpoints
 ./sandbox services PROJ-1234
 
 # Access the service directly (bypassing Caddy)
-curl http://localhost:11102/api/healthcheck  # web-v2 at slot 1, offset 2
+curl http://localhost:11101/  # next-hello at slot 1, offset 1
 
 # Access via Caddy with feature header
-curl -H "X-Feature: PROJ-1234" http://sb-web.local.sandbox.com/api/healthcheck
+curl -H "X-Feature: PROJ-1234" https://next-hello.local.sandbox.com/
 
 # Check container status
 ./sandbox status -v
@@ -1238,17 +1208,17 @@ All 12 slots are occupied. Free one by stopping a feature:
 ./sandbox down old-feature  # Free up a slot
 ```
 
-### GKE Port-Forwards Are Down
+### k8s Port-Forwards Are Down
 
 ```bash
 # Check container status
-./sandbox gke-status
+./sandbox k8s-status
 
 # View port-forward logs
-docker logs sandbox-gke-forwards
+docker logs sandbox-k8s-forwards
 
-# Restart the gke-forwards container
-docker compose -f infra/compose/shared-infra.yml restart gke-forwards
+# Restart the k8s-forwards container
+docker compose -f infra/compose/shared-infra.yml restart k8s-forwards
 
 # Verify kubectl context (used inside the container)
 kubectl config current-context
@@ -1281,7 +1251,7 @@ cat infra/proxy/Caddyfile | grep -A 5 "PROJ-1234"
 ./sandbox proxy-reload
 
 # Test with explicit header
-curl -v -H "X-Feature: PROJ-1234" http://sb-web.local.sandbox.com/
+curl -v -H "X-Feature: PROJ-1234" https://next-hello.local.sandbox.com/
 
 # Check Caddy is running
 docker compose -f infra/compose/shared-infra.yml ps caddy
@@ -1294,14 +1264,14 @@ docker compose -f infra/compose/shared-infra.yml ps caddy
 ./sandbox detect PROJ-1234
 
 # Check that the workspace has committed changes
-cd ~/workspace/PROJ-1234/econx
+cd ~/workspace/PROJ-1234/sandbox
 git diff main..HEAD --name-only
 
 # Verify repo name matches config
 grep -A 3 "repos:" infra/config/services.yaml
 
 # Force-add a service manually
-./sandbox up PROJ-1234 -s web-v2
+./sandbox up PROJ-1234 -s next-hello
 ```
 
 ### Build/Dependency Errors
@@ -1361,33 +1331,25 @@ cat ~/.sandbox/slots.json | jq .
 │                          ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │  Caddy (HTTPS :443)                                          │    │
-│  │  sb-web.local.sandbox.com / vendor.local.sandbox.com │    │
+│  │  next-hello.local.sandbox.com                              │    │
 │  │                                                               │    │
 │  │  1. Terminate HTTPS                                           │    │
-│  │  2. Serve feature selector UI (/__sandbox/)                   │    │
-│  │  3. Forward traffic to Cloudflare worker                      │    │
-│  └───────────────────────┬───────────────────────────────────────┘    │
-│                          │                                           │
-│                          ▼                                           │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Cloudflare Worker (:8787)                                    │    │
-│  │                                                               │    │
-│  │  1. Read X-Feature cookie/header                              │    │
-│  │  2. Path-based routing (webV0/V1/V2)                          │    │
-│  │  3. Route to feature's local containers (if running)          │    │
-│  │  4. Fall back to GKE baseline (via gke-forwards)              │    │
+│  │  2. Serve feature selector UI (/__sandbox)                     │    │
+│  │  3. Read X-Feature cookie/header                              │    │
+│  │  4. Route to feature's local containers (if running)          │    │
+│  │  5. Fall back to k8s baseline (via k8s-forwards)              │    │
 │  └──────────┬───────────────────────────┬────────────────────────┘    │
 │             │                           │                            │
 │      ┌──────▼──────┐            ┌───────▼───────┐                    │
-│      │  Local       │            │  gke-forwards  │                    │
+│      │  Local       │            │  k8s-forwards  │                    │
 │      │  Containers  │            │  (container)   │                    │
 │      │              │            │                │                    │
 │      │  Feature A:  │            │  :9000-9008    │                    │
-│      │  web-v2,     │            │  (apps)        │                    │
+│      │  next-hello, │            │  (apps)        │                    │
 │      │  fed-graph   │            │                │                    │
 │      │              │            │  :9050-9052    │                    │
 │      │  Feature B:  │            │  (infra)       │                    │
-│      │  sb-web-api  │            │                │                    │
+│      │  rest-hello  │            │                │                    │
 │      │              │            │  Shared by all │                    │
 │      │  ...         │            │  features      │                    │
 │      └──────────────┘            └───────┬───────┘                    │
@@ -1396,7 +1358,7 @@ cat ~/.sandbox/slots.json | jq .
                                            │
                                            ▼
                                    ┌──────────────┐
-                                   │  GKE Dev     │
+                                   │  k8s Dev     │
                                    │  Cluster     │
                                    │              │
                                    │  Kubernetes  │
@@ -1416,9 +1378,8 @@ cat ~/.sandbox/slots.json | jq .
 Docker Network: sandbox-PROJ-1234 (isolated)
 
 Containers:
-├── sandbox-PROJ-1234-econx-setup    (init, exits after install)
-├── sandbox-PROJ-1234-web-v2         (:11102 → :3060)
-└── sandbox-PROJ-1234-federated-graph (:11108 → :4321)
+├── sandbox-PROJ-1234-rest-hello     (:11100 → :3000)
+└── sandbox-PROJ-1234-next-hello     (:11101 → :3000)
 ```
 
 ### Lifecycle Flow
@@ -1436,11 +1397,9 @@ sandbox up PROJ-1234
     │       ├── .env                    (from infra/templates/)
     │       └── .sandbox/supergraph-config.yml
     │
-    ├── 4. Verify GKE forwards → sandbox gke-status
+    ├── 4. Verify k8s forwards → sandbox k8s-status
     │
     ├── 5. Start containers → docker compose up -d
     │
-    ├── 6. Update proxy → infra/proxy/Caddyfile → caddy reload
-    │
-    └── 7. Update worker → infra/proxy/worker.env → restart cloudflare-worker
+    └── 6. Update proxy → infra/proxy/Caddyfile → caddy reload
 ```

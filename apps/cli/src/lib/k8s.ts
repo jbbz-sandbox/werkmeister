@@ -10,28 +10,13 @@ import * as net from "node:net";
 import * as path from "node:path";
 
 import { Colors, error, getInfraRoot, success, warn } from "./config.js";
+import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
 import { ProcError, run } from "./proc.js";
 
-// Service definitions mirrored from compose/k8s-port-forward/entrypoint.sh FORWARDS array.
-// Format: [name, listen_port, remote_port, health_path]
-// health_path: HTTP path to check liveness (empty string = TCP-only, e.g. mongodb)
-// FIXME: This needs to be generated from the service registry
-const _k8s_FORWARDS: Array<[string, number, number, string]> = [
-  ["web-v0",               9000, 3000,  "/healthcheck"],
-  ["sb-web-api",           9001, 3061,  "/api-nest/healthcheck"],
-  ["category-api",         9002, 3001,  "/api/healthcheck"],
-  ["product-api",          9003, 3001,  "/api/healthcheck"],
-  ["federated-graph",      9004, 4321,  "/health"],
-  ["taxonomy-api",         9005, 3001,  "/api"],
-  ["interview-api",        9006, 3004,  "/graphql"],
-  ["vendor-portal-server", 9007, 3003,  "/ping"],
-  ["sandbox-mcp",      9008, 4322,  "/health"],
-  ["web-v1",               9009, 3030,  "/healthcheck"],
-  ["web-v2",               9010, 3060,  "/api/healthcheck"],
-  ["award-api",            9011, 3005,  "/graphql"],
-  ["user-api",             9012, 3001,  "/graphql"],
-  ["mongodb",              9052, 27017, ""],
-];
+// The forward table is NOT duplicated here: `forwardSpecs()` derives it from
+// ~/.sandbox/services.yaml — the same call that generates the entrypoint's
+// data file and shared-infra.yml's ports/aliases, so health checks can never
+// probe a service the container isn't actually forwarding.
 
 function infraComposeFile(): string {
   return path.join(getInfraRoot(), "compose", "shared-infra.yml");
@@ -197,9 +182,10 @@ export interface ForwardStatus {
 /**
  * Return per-service k8s port-forward health.
  *
- * For each service in _k8s_FORWARDS, performs an HTTP health check against the
- * published host port when a health_path is defined, or TCP-only for services
- * like mongodb. This catches tunnels that are TCP-bound but not serving traffic.
+ * For each forwarded service in the registry, performs an HTTP health check
+ * against the published host port when a health_path is defined, or TCP-only
+ * when it is blank (databases and the like). This catches tunnels that are
+ * TCP-bound but not serving traffic.
  *
  * Returns a list of dicts with keys: name, listen_port, remote_port, health_path, status.
  * status is one of: "alive", "dead", "container_down".
@@ -207,15 +193,23 @@ export interface ForwardStatus {
 export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
   const containerRunning = isContainerRunning();
 
+  let specs: ForwardSpec[];
+  try {
+    specs = forwardSpecs();
+  } catch {
+    // Unreadable registry — report nothing rather than probing a stale guess.
+    return [];
+  }
+
   const results: ForwardStatus[] = [];
-  for (const [name, listenPort, remotePort, healthPath] of _k8s_FORWARDS) {
+  for (const spec of specs) {
     results.push({
-      name,
-      listen_port: listenPort,
-      remote_port: remotePort,
-      health_path: healthPath,
+      name: spec.name,
+      listen_port: spec.listen,
+      remote_port: spec.remote,
+      health_path: spec.health,
       status: containerRunning
-        ? await classifyForward(listenPort, healthPath)
+        ? await classifyForward(spec.listen, spec.health)
         : "container_down",
     });
   }

@@ -1,8 +1,8 @@
 /**
  * Telepresence OSS wrapper for `sandbox intercept` (live testing in k8s dev).
  *
- * Design (2026-07-19-sandbox-k8s-intercept-design.md §5): this module is the
- * single seam between the sandbox CLI and the interception tool — arg builders
+ * Design: this module is the single seam between the sandbox CLI and the
+ * interception tool — arg builders
  * are pure functions, subprocess execution goes through an injectable runner,
  * and every cluster coordinate comes from services.yaml. Swapping the backend
  * (e.g. to mirrord) means replacing this module only.
@@ -133,10 +133,10 @@ export function buildInterceptArgs(
   feature: string,
 ): string[] {
   // --port <local>:<identifier>. *portId* is the Service port NUMBER (k8s_port),
-  // NOT the port name: econx#1943 named the web-v2/product-api Service `targetPort`
-  // (the ambient-mesh precondition, telepresenceio#3990) but left the Service `port`
-  // itself unnamed, so `:http` returns "no interceptable port matching port http"
-  // while `:3060` resolves. Verified live in the Phase-0 spike (docs/k8s-intercept-spike.md).
+  // NOT the port name: a Service commonly names its `targetPort` (the
+  // ambient-mesh precondition, telepresenceio#3990) while leaving the Service
+  // `port` itself unnamed, so `:http` returns "no interceptable port matching
+  // port http" while the number resolves. Verified live in the Phase-0 spike.
   // --mount false: singular in 2.30.1; disables the FUSE volume mount (we only route traffic).
   return [
     "telepresence", "intercept", deployment,
@@ -169,7 +169,7 @@ export function buildListInterceptsArgs(): string[] {
  * The single definition of "interceptable", shared by `sandbox intercept` (which
  * turns a non-null into a fatal error) and `sandbox status --intercepts` (which
  * reports it). Returns the predicate half of a sentence — callers prefix the
- * service name, e.g. `'web-v2' ${blocker}`.
+ * service name, e.g. `'next-hello' ${blocker}`.
  */
 export function interceptBlocker(svcDef: unknown): string | null {
   if (typeof svcDef !== "object" || svcDef === null || Array.isArray(svcDef)) {
@@ -185,8 +185,8 @@ export function interceptBlocker(svcDef: unknown): string | null {
   if (!svc["k8s_port_name"]) {
     return (
       "has no k8s_port_name in services.yaml. Interception under Istio ambient " +
-      "requires a NAMED Service targetPort (docs/k8s-intercept.md — named-port " +
-      "audit); add the port name there once the service's manifests are fixed."
+      "requires a NAMED Service targetPort; add the port name there once the " +
+      "service's manifests are fixed."
     );
   }
   return null;
@@ -270,7 +270,7 @@ export function listIntercepts(runner: Runner = _run): InterceptState {
  *
  * Any parse miss is treated as disconnected — the caller then (re)connects,
  * which is idempotent-safe. Shape verified against the Phase-0 spike's saved
- * `telepresence status --format json` (docs/k8s-intercept-spike.md): the
+ * `telepresence status --format json`: the
  * connected daemon is the top-level `daemon` object in 2.30.1 (docker mode). We
  * also check `user_daemon` as a fallback — the host-mode shape couldn't be
  * captured live (root-daemon install needs interactive sudo), and a wrong guess

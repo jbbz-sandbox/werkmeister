@@ -3,7 +3,7 @@
 Harness #4 — Structured-notes contract compliance (write side + read side).
 
 Answers the open questions in research §5b threads 11–12 empirically, before the
-jit-notes-and-handoffs-spec is drafted (decision 2026-07-04: measure first):
+the notes layer is specced (decision 2026-07-04: measure first):
 
   WRITE side — when a research subagent's definition carries a return contract
   ("write your full findings to .sandbox/notes/<file> before returning"), does it

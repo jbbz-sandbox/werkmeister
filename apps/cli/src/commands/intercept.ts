@@ -2,7 +2,7 @@
  * sandbox intercept <feature> -s <service>
  *
  * Route a header-scoped slice of live k8s **dev** traffic to the feature's
- * local service via Telepresence OSS (2026-07-19-sandbox-k8s-intercept-design.md).
+ * local service via Telepresence OSS.
  * Additive to the compose path: the container `sandbox up` publishes on the
  * slot host port is the intercept target, so hot-reload keeps working. Only
  * requests carrying `x-feature: <feature>` are rerouted; teammates and

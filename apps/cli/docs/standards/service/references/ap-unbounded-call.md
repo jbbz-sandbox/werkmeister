@@ -1,6 +1,6 @@
 ---
 kind: anti-pattern
-canonical: "sandbox:infra/compose/gke-port-forward/entrypoint.sh"
+canonical: "sandbox:infra/compose/k8s-port-forward/entrypoint.sh"
 ---
 
 # An outbound call with no timeout, inside a retry loop
@@ -22,8 +22,8 @@ done
 
 ## Why it's wrong
 
-Real code: `sandbox:infra/compose/gke-port-forward/entrypoint.sh`.
-When a spot GKE node is preempted, a `kubectl` call with no `--request-timeout`
+Real code: `sandbox:infra/compose/k8s-port-forward/entrypoint.sh`.
+When a spot k8s node is preempted, a `kubectl` call with no `--request-timeout`
 blocks indefinitely against the unreachable API server. The enclosing
 `while true` retry subshell never comes back around, so the forward dies
 silently — the log file just stops updating. An unbounded blocking call inside

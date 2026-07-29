@@ -1,8 +1,7 @@
 /**
- * Workspace skill projection — jit-standards-loading-spec.md §5.5, delivery
- * amended 2026-07-04.
+ * Workspace skill projection — docs/jit-context-system.md §5.
  *
- * The eleven sb-* skills are projected into each workspace's `.claude/skills/`
+ * The sb-* skills are projected into each workspace's `.claude/skills/`
  * at init-workspace, exactly like the generated agents — NOT shipped through
  * the user-scope sandbox-tools plugin. Projection scopes them to the sessions
  * they apply to and kills the plugin-refresh lag for the volatile skills:

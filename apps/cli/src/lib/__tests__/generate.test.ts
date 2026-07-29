@@ -83,24 +83,24 @@ describe("dev_links", () => {
   it("emits a dev link with ${WORKSPACE} resolved", () => {
     writeDevLinks(
       tmp,
-      "dev_links:\n  web-v2:\n" +
+      "dev_links:\n  next-hello:\n" +
         '    - "${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core"\n',
     );
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["web-v2"], null, tmp), "utf8");
+    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
     expect(content).toContain(`- ${tmp}/shared/packages/core:/app/node_modules/@sandbox/core`);
     expect(content).not.toContain("${WORKSPACE}");
   });
 
   it("empty dev_links is byte-identical to none", () => {
-    const baseline = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["web-v2"], null, tmp), "utf8");
+    const baseline = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
     writeDevLinks(tmp, "dev_links: {}\n");
-    const withEmpty = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["web-v2"], null, tmp), "utf8");
+    const withEmpty = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
     expect(withEmpty).toBe(baseline);
   });
 
   it("dev_link for another service does not leak", () => {
-    writeDevLinks(tmp, 'dev_links:\n  web-v1:\n    - "${WORKSPACE}/shared:/app/x"\n');
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["web-v2"], null, tmp), "utf8");
+    writeDevLinks(tmp, 'dev_links:\n  rest-hello:\n    - "${WORKSPACE}/shared:/app/x"\n');
+    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
     expect(content).not.toContain("/app/x");
   });
 });
@@ -109,28 +109,20 @@ describe("dev_links", () => {
 
 describe("generateFeatureCompose", () => {
   it("writes header and service block", () => {
-    const outPath = generateFeatureCompose("myfeat", 1, ["web-v2"], null, tmp);
+    const outPath = generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp);
     expect(outPath).toBe(path.join(tmp, "docker-compose.yml"));
     const content = fs.readFileSync(outPath, "utf8");
     expect(content).toContain("# Sandbox docker-compose for feature: myfeat");
-    expect(content).toContain("web-v2:");
+    expect(content).toContain("next-hello:");
   });
 
   it("empty local services still writes a valid file", () => {
     const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, [], null, tmp), "utf8");
     expect(content.startsWith("# Sandbox docker-compose for feature: myfeat")).toBe(true);
-    expect(content).not.toContain("web-v0:");
-    expect(content).not.toContain("web-v1:");
-    expect(content).not.toContain("web-v2:");
+    expect(content).not.toContain("rest-hello:");
+    expect(content).not.toContain("next-hello:");
   });
 
-  it("web-v2 BASE_LOCAL_URL points at k8s-forwards", () => {
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["web-v2"], null, tmp), "utf8");
-    expect(content).toContain("BASE_LOCAL_URL");
-    expect(content).toContain("k8s-forwards:");
-    const firstLineAfter = content.split("BASE_LOCAL_URL")[1].split("\n")[0];
-    expect(firstLineAfter).not.toContain("http://web-v2");
-  });
 });
 
 describe("generateFeatureEnv", () => {
@@ -147,7 +139,7 @@ describe("generateFeatureEnv", () => {
 
   it("preserves workspace metadata across regeneration", () => {
     fs.writeFileSync(path.join(tmp, ".env"), "FEATURE=x\n");
-    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["web-v2"], null, tmp), "utf8");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["next-hello"], null, tmp), "utf8");
     expect(content).toContain("Workspace metadata (preserved across regeneration)");
     expect(content).toContain("FEATURE=x");
   });
@@ -155,7 +147,7 @@ describe("generateFeatureEnv", () => {
   it("removes legacy docker-compose.env file", () => {
     const legacy = path.join(tmp, "docker-compose.env");
     fs.writeFileSync(legacy, "LEGACY=1\n");
-    generateFeatureEnv("myfeat", 1, ["web-v2"], null, tmp);
+    generateFeatureEnv("myfeat", 1, ["next-hello"], null, tmp);
     expect(fs.existsSync(legacy)).toBe(false);
   });
 });

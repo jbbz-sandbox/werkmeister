@@ -1,7 +1,7 @@
 # Workspace Notes — Conventions
 
 > The `.sandbox/notes/` layer specced in
-> [jit-notes-and-handoffs-spec.md](jit-notes-and-handoffs-spec.md) (§4.1). This file is
+> [jit-context-system.md](jit-context-system.md) (§5.7). This file is
 > the canonical convention reference for anything that reads or writes notes: the
 > generated CLAUDE.md `## Notes` pointer, the `sb-implement` / `sb-research` /
 > `sb-handoff` skills, subagent return contracts, and `sandbox down` printing.
@@ -54,7 +54,7 @@ below, kebab-case slug.
 type: finding | decision | attempt | handoff | contract
 phase: research | implement | test | review
 author: main | <subagent name>          # who wrote it
-refs: [src/paginate.ts, web-v2]         # files / services it concerns
+refs: [src/paginate.ts, next-hello]     # files / services it concerns
 status: open | superseded               # supersede, don't delete — attempts especially
 ---
 ```

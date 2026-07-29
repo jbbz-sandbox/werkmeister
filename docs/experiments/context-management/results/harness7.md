@@ -2,8 +2,8 @@
 
 > **Ran:** 2026-07-18. **Model:** Haiku 4.5. **Method:** 15 isolated subagent cells fed a
 > **post-compaction, mid-task** context (routing table + resumption note; standard body absent),
-> told nothing about the experiment. **Ground truth = the code each cell wrote.** Spec:
-> `docs/superpowers/specs/2026-07-18-gap3-reinjection-eval-design.md`. Runbook:
+> told nothing about the experiment. **Ground truth = the code each cell wrote.**
+> Runbook:
 > [harness7-manual-runbook.md](../harness7-manual-runbook.md). Baits 1–3 reused from
 > [baits.md](../baits.md); baseline/ceiling cited from [harness6.md](harness6.md).
 >

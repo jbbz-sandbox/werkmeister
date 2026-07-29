@@ -210,8 +210,8 @@ services:
     # k8s-forwards:9053. remote is the pod containerPort (3000), not port 8080.
     k8s_forward_port: 9053
     k8s_pod_prefix: next-hello
-    # Caddy feature routing (feature_routing.ts). There is no Cloudflare worker
-    # in this sandbox: Caddy terminates the derived hostname directly and
+    # Caddy feature routing (feature_routing.ts): Caddy terminates the derived
+    # hostname directly and
     # reverse-proxies to the running next-hello container (via its published
     # host port). When an X-Feature cookie is present, its value is copied into
     # an X-Feature header on the upstream call so the app can read the feature.

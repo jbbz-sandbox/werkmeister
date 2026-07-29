@@ -169,11 +169,11 @@ export function detectWorkspaceFromCwd(): string | null {
  * A workspace is the parent directory containing git worktrees for a feature:
  *
  *     $SANDBOX_WORKSPACES_ROOT/feature-a/     <- workspace (multi-repo)
- *         econx/                              <- worktree (.git file)
- *         comx/                               <- worktree (.git file)
+ *         repo-a/                             <- worktree (.git file)
+ *         repo-b/                             <- worktree (.git file)
  *
  *     ~/workspace/                            <- workspace (single-repo)
- *         econx/                              <- repo (.git dir)
+ *         repo-a/                             <- repo (.git dir)
  *
  * Resolution order:
  *
@@ -296,7 +296,8 @@ export function getK8sContext(): string {
   if (!context || typeof context !== "string") {
     throw new Error(
       "services.yaml has no top-level `k8s_context` key — add the dev " +
-      "cluster kube context there (see docs/k8s-intercept.md).",
+      "cluster kube context there (e.g. `k8s_context: orbstack`); " +
+      "`kubectl config get-contexts` lists the available names.",
     );
   }
   return context;
@@ -352,7 +353,7 @@ export function loadReposConfig(): Record<string, any> {
  * Load the `archetypes:` registry from config/services.yaml.
  *
  * Maps archetype name → bundle dict (standards, mcp_servers, ...) — see
- * docs/jit-agents-and-tools-spec.md §4.1.  Returns an empty dict if
+ * docs/jit-context-system.md §4.1.  Returns an empty dict if
  * unavailable (a checkout that predates the registry): services then
  * resolve only through the legacy per-service `standards:` form.
  */
@@ -365,7 +366,7 @@ export function loadArchetypes(): Record<string, any> {
  * Load the `mcp_servers:` definition registry from config/services.yaml.
  *
  * Maps server name → verbatim .mcp.json server body — see
- * docs/jit-agents-and-tools-spec.md §4.5.  Returns an empty dict if
+ * docs/jit-context-system.md §5.5.  Returns an empty dict if
  * unavailable (a checkout that predates the registry): no MCP projection
  * happens.
  */

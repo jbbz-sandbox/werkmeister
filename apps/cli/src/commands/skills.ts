@@ -2,9 +2,9 @@
  * sandbox skills <check|sync>
  *
  * Freshness control for the sb-* skills projected into a workspace's
- * `.claude/skills/` (jit-standards-loading-spec.md §5.5, delivery amended
- * 2026-07-04 — skills are projected at init-workspace, not shipped via the
- * plugin, so a workspace inited before a standards edit lags until re-synced).
+ * `.claude/skills/` (docs/jit-context-system.md §5 — skills are projected at
+ * init-workspace, not shipped via the plugin, so a workspace inited before a
+ * standards edit lags until re-synced).
  *
  * check: compare the workspace's projected skills against a fresh rendering
  *       from this repo; exit 1 with a per-skill report when stale.

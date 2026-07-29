@@ -10,7 +10,7 @@ const { filterWorkspaces } = await import("../dist/lib/workspace-search.js");
 const all = [
   { name: "proj-2165-pageview-500-fix", jiraId: "PROJ-2165", labels: ["urgent", "webapp"] },
   { name: "blog-mdx-poc", jiraId: null, labels: ["blog"] },
-  { name: "vendor-portal-refresh", jiraId: "PROJ-9001", labels: ["webapp", "vendor"] },
+  { name: "next-hello-refresh", jiraId: "PROJ-9001", labels: ["webapp"] },
 ];
 
 // Empty query: passthrough, original order preserved.
@@ -27,21 +27,21 @@ assert.deepEqual(
 // Labels field is searchable.
 assert.deepEqual(
   filterWorkspaces(all, "webapp").map((w) => w.name),
-  ["proj-2165-pageview-500-fix", "vendor-portal-refresh"],
+  ["proj-2165-pageview-500-fix", "next-hello-refresh"],
   "labels field matches, order preserved from `all`",
 );
 
 // Multi-term query combines with AND, not OR.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp vendor").map((w) => w.name),
-  ["vendor-portal-refresh"],
+  filterWorkspaces(all, "webapp hello").map((w) => w.name),
+  ["next-hello-refresh"],
   "multi-token query requires every token to match (AND)",
 );
 
 // jiraId is still searchable (existing field).
 assert.deepEqual(
   filterWorkspaces(all, "proj-9001").map((w) => w.name),
-  ["vendor-portal-refresh"],
+  ["next-hello-refresh"],
   "jiraId substring match",
 );
 
@@ -50,22 +50,22 @@ assert.deepEqual(filterWorkspaces(all, "nonexistentxyz"), []);
 
 // `-term` excludes.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp -vendor").map((w) => w.name),
+  filterWorkspaces(all, "webapp -hello").map((w) => w.name),
   ["proj-2165-pageview-500-fix"],
   "-term excludes matches for that term",
 );
 
 // `a|b` is an OR of alternatives.
 assert.deepEqual(
-  filterWorkspaces(all, "blog|vendor").map((w) => w.name),
-  ["blog-mdx-poc", "vendor-portal-refresh"],
+  filterWorkspaces(all, "blog|hello").map((w) => w.name),
+  ["blog-mdx-poc", "next-hello-refresh"],
   "a|b matches either alternative",
 );
 
 // -/| combine: required term AND excluded term AND an OR group.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp -urgent vendor|refresh").map((w) => w.name),
-  ["vendor-portal-refresh"],
+  filterWorkspaces(all, "webapp -urgent hello|refresh").map((w) => w.name),
+  ["next-hello-refresh"],
   "-exclude and a|b OR-group combine with the rest via AND",
 );
 

@@ -1,6 +1,5 @@
 /**
- * Generated workspace hooks — jit-notes-and-handoffs-spec.md §4.5 (build step 5)
- * and 2026-07-18-pretooluse-standards-gate-design.md §2.4.
+ * Generated workspace hooks — docs/jit-context-system.md §5.6, §6.
  *
  * Emits two managed hooks into each workspace's `.claude/settings.json`:
  *

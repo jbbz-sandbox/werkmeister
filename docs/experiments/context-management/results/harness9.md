@@ -2,8 +2,8 @@
 
 > **Ran:** 2026-07-19. **Model:** Haiku 4.5. **Method:** 21 isolated subagent cells (n=1 Arm A
 > spot-check + n=3 Arm B + n=3 Arm C per bait × 3 baits), told nothing about the experiment,
-> **ground truth = the emitted code**. Spec: `docs/superpowers/specs/2026-07-18-pretooluse-standards-gate-design.md`
-> §4 Phase 2. Runbook: [harness9-manual-runbook.md](../harness9-manual-runbook.md). Baits 1–3
+> **ground truth = the emitted code**. Mechanism: [jit-context-system.md](../../../jit-context-system.md) §6.
+> Runbook: [harness9-manual-runbook.md](../harness9-manual-runbook.md). Baits 1–3
 > reused from [baits.md](../baits.md); Arm A's 0/9 floor and the loaded-arm 3/3 ceiling cited from
 > [harness6.md](harness6.md), spot-checked fresh here (0/3, floor holds).
 >

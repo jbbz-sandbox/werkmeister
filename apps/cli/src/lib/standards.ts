@@ -1,6 +1,6 @@
 /**
  * JIT code-standards resolution — the repo-presence axis of the standards
- * system (docs/jit-standards-loading-spec.md §5.2–§5.4).
+ * system (docs/jit-context-system.md §4.1).
  *
  * Maps a workspace's repo composition to the set of applicable standards
  * modules:
@@ -13,7 +13,7 @@
  *     "Standards routing" block in the workspace CLAUDE.md  (rendered by claude_md.ts)
  *
  * `comments` is the universal base: always active, never listed in
- * `standards:`. Since jit-agents-and-tools-spec.md §4.1 this module is a
+ * `standards:`. Since jit-context-system.md §4.1 this module is a
  * *projection* of the archetype resolution — it never reads a service's raw
  * fields directly.
  */
@@ -445,8 +445,8 @@ export function domainsMatchingTaskText(
  * `standards:` form), apply workspace.yml `standards_override` add/remove,
  * always include the universal base. The workspace's *selected* services
  * (its declared intent) win over the repo-derived set — a monorepo like
- * econx spans ui/graphql/api, so repo-level union would activate everything
- * for every econx workspace; a web-v2-only workspace must resolve to just
+ * a monorepo spans ui/graphql/api, so repo-level union would activate everything
+ * for every workspace on it; a ui-only workspace must resolve to just
  * `comments, ui` (the spec's acceptance case). Repo-derived services are the
  * fallback when the workspace has no service selection. Only keys with a
  * real module survive (unknown keys are reported by

@@ -54,7 +54,7 @@
     "standards_override": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Tunes the CLAUDE.md Standards routing block (see docs/jit-standards-loading-spec.md).",
+      "description": "Tunes the CLAUDE.md Standards routing block (see docs/jit-context-system.md).",
       "properties": {
         "add": { "type": "array", "items": { "type": "string" } },
         "remove": { "type": "array", "items": { "type": "string" } }

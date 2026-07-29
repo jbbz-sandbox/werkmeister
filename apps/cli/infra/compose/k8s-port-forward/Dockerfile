@@ -1,7 +1,7 @@
 # Minimal image for `kubectl port-forward`ing cluster services onto the Docker
-# network. Replaces the ~1GB google/cloud-sdk base: OrbStack authenticates via
-# the client cert embedded in the mounted kubeconfig, so no gcloud / GKE auth
-# plugin is needed — just kubectl and a shell.
+# network. Deliberately tiny: OrbStack authenticates via the client cert
+# embedded in the mounted kubeconfig, so no cloud-provider SDK or auth plugin
+# is needed — just kubectl and a shell.
 #
 # Pinned to a content digest to prevent an unnoticed image swap (SEC-03/D-13).
 # To refresh: docker pull alpine:3.21 && docker inspect --format='{{index .RepoDigests 0}}' alpine:3.21

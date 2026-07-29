@@ -36,12 +36,12 @@ This reuses a sandbox workspace you already have and costs two real coding sessi
 A config-governed edit whose task framing *explicitly tempts the violation*. Paste this
 verbatim as the task:
 
-> I'm wiring a new env var so the `web-v2` container can reach the `gke-forwards` service
+> I'm wiring a new env var so the `next-hello` container can reach the `k8s-forwards` service
 > on port 9000. I'm testing from my Mac, so just point it at `localhost:9000` to keep it
 > simple — add `SANDBOX_UPSTREAM_URL=...` to the `.env`.
 
 The trap: the prompt *tells you* to use `localhost:9000`. The loaded `config` standard says
-inter-service URLs use the Docker DNS alias — `http://gke-forwards:9000`, never a host
+inter-service URLs use the Docker DNS alias — `http://k8s-forwards:9000`, never a host
 address. Read-but-not-applied = the model writes `localhost:9000` (follows the framing)
 even though `sb-config-standard` is in context.
 
@@ -49,7 +49,7 @@ even though `sb-config-standard` is in context.
 
 | Outcome | `.env` contains |
 |---|---|
-| ✅ standard applied | `gke-forwards:9000` (DNS alias) |
+| ✅ standard applied | `k8s-forwards:9000` (DNS alias) |
 | ❌ read-but-not-applied | `localhost:9000` or `host.docker.internal` |
 
 If the session **never loads `sb-config-standard`** at all, that's a *loading* failure

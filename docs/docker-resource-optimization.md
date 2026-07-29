@@ -1,6 +1,6 @@
 # Docker Resource Optimization Guide
 
-This guide explains how to optimize CPU and memory usage for the developer sandbox Docker environment.
+This guide explains how to optimize CPU and memory usage for the sandbox Docker environment.
 
 ## Overview
 
@@ -36,10 +36,10 @@ Each service in `infra/config/services.yaml` has `memory_limit` and `memory_rese
 ```yaml
 # infra/config/services.yaml
 services:
-  web-v2:
+  next-hello:
     memory_limit: 2560M
     memory_reservation: 1024M
-  product-api:
+  rest-hello:
     memory_limit: 4G
     memory_reservation: 2G
   redis:
@@ -50,7 +50,7 @@ These values are applied as `deploy.resources.limits.memory` and `deploy.resourc
 
 ### Shared Infrastructure (`infra/compose/shared-infra.yml`)
 
-Infrastructure services (redis, cloud-sql-proxy, gke-forwards, cloudflare-worker, caddy) have resource limits defined directly in `infra/compose/shared-infra.yml`:
+Infrastructure services (k8s-forwards, jaeger, redisinsight, caddy) have resource limits defined directly in `infra/compose/shared-infra.yml`:
 
 ```yaml
 # infra/compose/shared-infra.yml
@@ -131,12 +131,12 @@ Example output:
   Service                         Max Mem     Limit   Usage  Status
   ──────────────────────────────────────────────────────────────────
   sandbox-redis                       42M       64M     66%  OK - moderate
-  feat-myfeature-web-v2-1          2.1G     2560M     84%  RISK - near limit
-  feat-myfeature-product-api-1      892M        4G     22%  OK
+  feat-myfeature-next-hello-1      2.1G     2560M     84%  RISK - near limit
+  feat-myfeature-rest-hello-1       892M        4G     22%  OK
 
 --- Recommendations ---
 
-  ! feat-myfeature-web-v2-1: Using 84% of memory limit. Consider increasing.
+  ! feat-myfeature-next-hello-1: Using 84% of memory limit. Consider increasing.
 ```
 
 ## Step 3: Apply Changes
@@ -147,7 +147,7 @@ Edit `infra/config/services.yaml` and update the `memory_limit` and `memory_rese
 
 ```yaml
 services:
-  web-v2:
+  next-hello:
     memory_limit: 4G       # was 2560M
     memory_reservation: 2G  # was 1024M
 ```
@@ -225,22 +225,11 @@ From `infra/config/services.yaml` and `infra/compose/shared-infra.yml`:
 
 | Service | Memory Limit | Memory Reservation | Type |
 |---------|-------------|-------------------|------|
-| web-v0 | 4G | 1G | Web app |
-| web-v1 | 2G | 512M | Web app |
-| web-v2 | 2560M | 1024M | Web app (Next.js) |
-| sb-web-api | 2G | 1G | API server |
-| category-api | 2G | 1G | API server |
-| product-api | 4G | 2G | API server |
-| taxonomy-api | 1G | 512M | API server |
-| interview-api | 2G | 512M | GraphQL subgraph |
-| federated-graph | 2G | 512M | GraphQL gateway |
-| vendor-portal-server | 2G | 512M | API server |
-| vendor-portal-client | 2G | 512M | Web app |
-| sandbox-mcp | 1G | 512M | API server |
+| next-hello | 2560M | 1024M | Web app (Next.js) |
+| rest-hello | 256M | 64M | API server |
 | redis | 64M | 32M | Infrastructure |
-| cloud-sql-proxy | 64M | 32M | Infrastructure |
-| gke-forwards | 256M | 64M | Infrastructure |
-| cloudflare-worker | 512M | 128M | Infrastructure |
+
+| k8s-forwards | 256M | 64M | Infrastructure |
 
 ## Troubleshooting
 

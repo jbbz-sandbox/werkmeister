@@ -1,6 +1,5 @@
 ---
 kind: example
-canonical: "econx:apps/web-v2/schema.graphql"
 ---
 
 # Relay Cursor Connections — the paginated-list shape
@@ -39,7 +38,7 @@ type PageInfo {
 
 ## Going deeper
 
-Avoid (present in web-v2 `schema.graphql`, don't copy): a per-connection
+Avoid (seen in the wild, don't copy): a per-connection
 `<Type>PageInfo` — collapse to the single shared `PageInfo`; and nullable
 `edges`/`pageInfo` — make both non-null so callers never null-check a list that
 is always returnable.

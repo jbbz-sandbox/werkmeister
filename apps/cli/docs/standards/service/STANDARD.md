@@ -68,7 +68,7 @@ applies in full.
 - **Nullability as a contract choice** — a nullable field that tolerates a flaky
   upstream deserves a comment saying so, or the next editor "fixes" it to non-null.
 - **Sanitize external-system filters** — reject injection into `filter_by`-style
-  strings (keep in sync with web-v2 `sanitizeFilterValue`).
+  strings (keep the sanitizer in sync across every caller).
 
 ### Cross-service resilience
 

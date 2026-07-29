@@ -3,11 +3,11 @@
  *
  * `context`: print the workspace's notes context for injection into a fresh
  * Claude Code window — the SessionStart hook target
- * (jit-notes-and-handoffs-spec.md §4.5). Output is plain text on stdout, hook-
+ * (jit-context-system.md §5.8). Output is plain text on stdout, hook-
  * safe (never raises, always exits 0).
  *
  * `graduate`: scaffold an open `decision` note into `docs/standards/`
- * (2026-07-12-authoring-pipeline-design.md). Mechanical scaffolding is
+ * (docs/jit-context-system.md §3.2). Mechanical scaffolding is
  * `graduate.ts`; this module resolves domain/kind
  * (interactively at a TTY, or via `--domain`/`--kind` flags otherwise) and is
  * reused by `sandbox down`'s teardown prompt.
@@ -328,7 +328,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     }
     const payload = hookPayload();
     const source = String(payload["source"] || "");
-    // Standards gate (2026-07-18-pretooluse-standards-gate-design.md §2.3):
+    // Standards gate (docs/jit-context-system.md §6):
     // compact/clear wipe the context, so delivered standards must re-gate.
     if (source === "compact" || source === "clear") {
       resetSessionState(workspace, String(payload["session_id"] || ""));

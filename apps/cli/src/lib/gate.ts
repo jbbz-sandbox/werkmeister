@@ -1,5 +1,5 @@
 /**
- * PreToolUse standards gate — 2026-07-18-pretooluse-standards-gate-design.md.
+ * PreToolUse standards gate — docs/jit-context-system.md §6.
  *
  * Denies the first governed `Edit`/`Write` per session x domain, carrying the
  * loading instructions in the deny reason, then allows everything after
@@ -210,7 +210,7 @@ function _sorted(values: Iterable<string>): string[] {
 }
 
 /**
- * The gate decision table (§2.1). Returns a deny reason, or null to allow.
+ * The gate decision table (docs/jit-context-system.md §6). Returns a deny reason, or null to allow.
  *
  * Never throws — every failure mode (no workspace, no manifest, corrupt or
  * unwritable state, malformed inputs) resolves to null (allow), matching the
@@ -256,7 +256,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
     return null;
   }
 
-  // Coalesce (§2.1): a first edit that also lands on a governed path carries
+  // Coalesce (§6): a first edit that also lands on a governed path carries
   // both payloads in one deny, never two separate denials.
   const parts: string[] = [];
   if (needsPhaseEntry) {

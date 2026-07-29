@@ -2,7 +2,7 @@
 # k8s Port-Forward Entrypoint
 # Runs inside a Docker container to forward k8s services onto the Docker network.
 # Each forward listens on the remote service's native port so Docker DNS aliases
-# (e.g., k8s-web-v0:3000) work transparently.
+# (e.g., k8s-next-hello:8080) work transparently.
 
 set -euo pipefail
 
@@ -20,17 +20,17 @@ NC='\033[0m'
 # health_path = HTTP path for end-to-end health check (empty = nc -z only, e.g. mongodb)
 #
 # Other containers reach these via: k8s-forwards:<listen_port>
-# The cloudflare-worker and feature containers reference these ports
-# through environment variable configuration.
+# Feature containers reference these ports through environment variable
+# configuration.
 #
-# The table is NOT hardcoded here — it is generated from infra/config/services.yaml
-# by `sandbox connect` (cli/lib/k8s_forwards.py) and mounted at /tmp/forwards.
+# The table is NOT hardcoded here — it is generated from ~/.sandbox/services.yaml
+# by `sandbox connect` (src/lib/k8s_forwards.ts) and mounted at /tmp/forwards.
 # This keeps the container, services.yaml, and shared-infra.yml ports/aliases in
 # lockstep. Blank lines and #-comments in the file are ignored.
 FORWARDS_FILE="${FORWARDS_FILE:-/tmp/forwards}"
 if [ ! -f "$FORWARDS_FILE" ]; then
     echo -e "${RED}FATAL: forward table $FORWARDS_FILE not found.${NC}" >&2
-    echo "Run 'sandbox connect' on the host to generate it (from infra/config/services.yaml)." >&2
+    echo "Run 'sandbox connect' on the host to generate it (from ~/.sandbox/services.yaml)." >&2
     exit 1
 fi
 FORWARDS=()

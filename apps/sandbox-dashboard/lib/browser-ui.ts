@@ -13,7 +13,7 @@
  *   • main.ts (HTTP mode) mounts {@link createBrowserUiRouter} so
  *     `node dist/main.js` also serves the dashboard alongside `/mcp`.
  *   • The `open-workspaces-ui` tool calls {@link launchBrowserUi} to spin up a
- *     localhost server and open the browser — the `gcloud auth` pattern the
+ *     localhost server and open the browser — the localhost-callback pattern the
  *     create-workspace form already uses (see localhost-form.ts).
  */
 import express, { type Router } from "express";

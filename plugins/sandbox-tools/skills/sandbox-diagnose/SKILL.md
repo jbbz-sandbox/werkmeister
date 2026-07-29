@@ -17,11 +17,11 @@ sandbox status --json
 
 Parse the JSON to identify:
 - Any infra service not in `healthy` or `running` state
-- Any GKE forward with `status != "alive"` — these now use real HTTP checks, not just TCP
+- Any k8s forward with `status != "alive"` — these now use real HTTP checks, not just TCP
 - Any feature with `containers_running < containers_total`
-- `summary.infra_healthy` and `summary.gke_alive` / `summary.gke_total` counts
+- `summary.infra_healthy` and `summary.k8s_alive` / `summary.k8s_total` counts
 
-If `gke_forwards` contains dead entries, note the service names and ports for Step 6.
+If `k8s_forwards` contains dead entries, note the service names and ports for Step 6.
 
 ## Step 2: Direct Service Connectivity
 
@@ -98,32 +98,31 @@ fixed threshold; the number changes with the config. If the compiled count is
 ## Step 5: Network Connectivity from Caddy
 
 ```bash
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/healthcheck 2>&1 && echo "PASS: Caddy -> web-v0" || echo "FAIL: Caddy -> web-v0"
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/healthcheck 2>&1 && echo "PASS: Caddy -> web-v1" || echo "FAIL: Caddy -> web-v1"
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11102/api/healthcheck 2>&1 && echo "PASS: Caddy -> web-v2" || echo "FAIL: Caddy -> web-v2"
+docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/health 2>&1 && echo "PASS: Caddy -> rest-hello" || echo "FAIL: Caddy -> rest-hello"
+docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/ 2>&1 && echo "PASS: Caddy -> next-hello" || echo "FAIL: Caddy -> next-hello"
 ```
 
-## Step 6: GKE Port-Forward Detail
+## Step 6: k8s Port-Forward Detail
 
-If Step 1 flagged any dead GKE forwards, get the full per-service table with HTTP health status:
+If Step 1 flagged any dead k8s forwards, get the full per-service table with HTTP health status:
 
 ```bash
-sandbox status --gke
+sandbox status --k8s
 ```
 
 This performs real HTTP health checks (not just TCP) against each forward's health endpoint.
-Dead entries indicate the forward is TCP-bound but the GKE service isn't responding at the
+Dead entries indicate the forward is TCP-bound but the k8s service isn't responding at the
 application layer. The entrypoint's self-healing monitor will restart those forwards within
-~45s — check `docker logs sandbox-gke-forwards` to confirm restart activity.
+~45s — check `docker logs sandbox-k8s-forwards` to confirm restart activity.
 
-To check logs for a specific failing service (e.g. federated-graph on port 9004):
+To check logs for a specific failing service (e.g. next-hello on port 9053):
 
 ```bash
-docker logs sandbox-gke-forwards 2>&1 | grep "\[federated-graph\]" | tail -20
+docker logs sandbox-k8s-forwards 2>&1 | grep "\[next-hello\]" | tail -20
 ```
 
-Note: the correct host port for GKE-forwarded services is the `listen_port` from `sandbox status --gke`
-output, **not** the remote GKE pod port. For example, federated-graph is at `localhost:9004`,
+Note: the correct host port for k8s-forwarded services is the `listen_port` from `sandbox status --k8s`
+output, **not** the remote k8s pod port. For example, next-hello is at `localhost:9053`,
 not `localhost:4321`.
 
 ## Step 7: Docker Desktop File Sync
@@ -149,13 +148,11 @@ Present results as:
 | Check | Status | Details |
 |-------|--------|---------|
 | Container Health | PASS/FAIL | N infra healthy, M features running |
-| GKE Forwards | PASS/FAIL | N/M alive (HTTP-checked) |
-| web-v0 Direct | PASS/FAIL | HTTP xxx, size |
-| web-v1 Direct | PASS/FAIL | HTTP xxx, size |
-| web-v2 Direct | PASS/FAIL | HTTP xxx, size |
-| Caddy → web-v0 | PASS/FAIL | HTTP xxx, size |
-| Caddy → web-v1 | PASS/FAIL | HTTP xxx, size |
-| Caddy → web-v2 | PASS/FAIL | HTTP xxx, size |
+| k8s Forwards | PASS/FAIL | N/M alive (HTTP-checked) |
+| rest-hello Direct | PASS/FAIL | HTTP xxx, size |
+| next-hello Direct | PASS/FAIL | HTTP xxx, size |
+| Caddy → rest-hello | PASS/FAIL | HTTP xxx, size |
+| Caddy → next-hello | PASS/FAIL | HTTP xxx, size |
 | Caddyfile Valid | PASS/FAIL | N routes compiled |
 | Caddyfile Synced | PASS/WARN | host vs container size |
 | Network Caddy→backends | PASS/FAIL | per-backend results |

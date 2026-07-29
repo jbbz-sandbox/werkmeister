@@ -1,5 +1,5 @@
 #!/bin/bash
-# Developer Sandbox CLI - Multi-feature concurrent development orchestrator
+# Sandbox CLI - Multi-feature concurrent development orchestrator
 # TypeScript port: the wrapper only resolves SANDBOX_ROOT + node and execs dist/main.js.
 set -euo pipefail
 

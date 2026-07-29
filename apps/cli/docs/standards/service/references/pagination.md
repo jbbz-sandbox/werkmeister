@@ -1,12 +1,11 @@
 ---
 kind: example
-canonical: comx:libs/modules/rest-crud/src/lib/base-crud.service.ts
 ---
 
 # Offset pagination with a shared envelope
 
 `page` (1-based) + `perPage` in, `{ data, total, page, perPage }` out. This
-is the direction chosen where repos disagree: taxonomy-service's
+is the direction chosen where repos disagree: an older service's
 `FilteredPaginationQueryDto` instead names the params `limit`/`offset` and
 returns no shared envelope of its own — but `BaseCrudService.findMany` is
 the implementation actually reused across Product/Category/Feature/
@@ -36,6 +35,3 @@ async findMany(query: QueryParams<T>): Promise<PaginatedResponse<T>> {
   };
 }
 ```
-
-If this workspace has `comx` checked out, read the full canonical file
-before writing your own.

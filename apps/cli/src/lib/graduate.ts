@@ -1,6 +1,6 @@
 /**
  * Decision-note → docs/standards/ graduation
- * (2026-07-12-authoring-pipeline-design.md).
+ * (docs/jit-context-system.md §3.2).
  *
  * Pure mechanics: scaffold placeholder content and wire the structural links a
  * domain's STANDARD.md needs. No prose judgment (that's `sb-author`, a skill)
@@ -61,7 +61,7 @@ function insertAtSectionEnd(
 }
 
 /**
- * Domains already in the Rules/Don't/Going-deeper shape (spec §2.3/§4).
+ * Domains already in the Rules/Don't/Going-deeper shape (docs/jit-context-system.md §3.2).
  *
  * Computed from the content shape, not a fixed list: a domain is eligible
  * once its STANDARD.md carries both `## Rules` and `## Don't`. Today that's

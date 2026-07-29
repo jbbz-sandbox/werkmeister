@@ -6,8 +6,7 @@
 }
 
 # ---------------------------------------------------------------------------
-# Host routers. There is no Cloudflare worker in this sandbox: Caddy terminates
-# each service's public hostname directly and reverse-proxies to its upstream
+# Host routers. Caddy terminates each service's public hostname directly and reverse-proxies to its upstream
 # (a local feature container via host.docker.internal:<port>, or a remote K8s
 # Service). When an X-Feature cookie is present, its value is copied into an
 # X-Feature header on the upstream call so the app can read the selected feature.

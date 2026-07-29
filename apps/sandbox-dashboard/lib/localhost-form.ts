@@ -8,8 +8,9 @@
  * create-form page (`dist/form.html`, the same src/create-form.ts the browser
  * dashboard's "New workspace" tab renders — fully self-contained, no CDN),
  * opens the user's browser, and blocks until they submit or cancel. It's the
- * `gcloud auth login` pattern: server + browser are both on the user's machine,
- * so collecting input never depends on the MCP client rendering anything.
+ * localhost-callback (OAuth loopback) pattern: server + browser are both on the
+ * user's machine, so collecting input never depends on the MCP client
+ * rendering anything.
  *
  * One form definition, one create path — this module only handles *collecting*
  * the values. The page talks the dashboard's `POST /api/tool` bridge protocol,

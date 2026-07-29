@@ -2,8 +2,7 @@
 
 Generalizes [harness5-manual-runbook.md](harness5-manual-runbook.md) from one rule to a
 bait library. Measures whether a **loaded** standard is **applied** on **Haiku 4.5**, across
-3 backstop-free convention baits ([baits.md](baits.md)). Spec:
-`docs/superpowers/specs/2026-07-18-loaded-and-applied-eval-baseline-design.md`.
+3 backstop-free convention baits ([baits.md](baits.md)).
 
 ## Cells
 
@@ -12,7 +11,7 @@ bait library. Measures whether a **loaded** standard is **applied** on **Haiku 4
 read repo files**, emitting the implementation in its response. Ground truth = that code.
 
 - **Arm A (loaded):** prompt = routing block + `sb-implement` steps 1–6 + **the matching
-  `tr-*-standard` body** + the bait task.
+  `sb-*-standard` body** + the bait task.
 - **Arm B (control):** identical, **minus the standard body**.
 
 ## Shared context inlined into every cell
@@ -21,7 +20,7 @@ read repo files**, emitting the implementation in its response. Ground truth = t
 
 ```
 ## Standards routing
-**Active in this workspace** (repos: sb-web-api, taxonomy-service):
+**Active in this workspace** (repos: sandbox):
 | Standard | Skill | Loads on |
 | --- | --- | --- |
 | service | `sb-service-standard` | `**/*.controller.ts`, `**/*.service.ts`, `**/resolvers/**` |
@@ -39,7 +38,7 @@ verbose-checks sections are omitted (irrelevant to a single-function task).
 ### Standard body (Arm A only)
 
 The matching `docs/standards/<domain>/STANDARD.md` body, presented as "the loaded
-`tr-<domain>-standard` skill".
+`sb-<domain>-standard` skill".
 
 ## Scoring
 

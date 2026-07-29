@@ -3,8 +3,7 @@
 #
 # k8s port-forward listen-ports (the 9000-range) are NOT defined here — they
 # live per-service in services.yaml as `k8s_forward_port:` (single source of
-# truth for the forward table). See docs/superpowers/plans/
-# 2026-07-19-k8s-forward-table-consolidation.md.
+# truth for the forward table).
 
 feature_slots:
   count: 12

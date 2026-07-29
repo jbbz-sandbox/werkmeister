@@ -1,14 +1,12 @@
 /**
- * JIT standards skill generation — build-plan step 4 of
- * docs/jit-standards-loading-spec.md (§5.5, decision 2; delivery amended
- * 2026-07-04).
+ * JIT standards skill generation — docs/jit-context-system.md §5.1.
  *
  *     docs/standards/<domain>.md  →  sb-<domain>-standard SKILL.md content
  *
  * The standards doc is the single source of truth: the skill's description is
  * composed from the module frontmatter (summary + applies_to + phase → the
  * trigger gate), and the skill body is the doc body with relative links
- * rewritten so they resolve from any ephemeral workspace (spec decision 1 —
+ * rewritten so they resolve from any ephemeral workspace (§5.1 —
  * a workspace almost never has the sandbox repo checked out, so doc-relative
  * paths would dangle). Cross-module links become skill references; everything
  * else becomes the canonical GitHub URL.
@@ -78,7 +76,7 @@ export function skillNameFor(domain: string): string {
  * Render every standards module into {skillName: {relpath: content}}.
  *
  * Every bundle has a "SKILL.md"; directory-form modules with references add
- * "references/<name>.md" entries (content-model spec §5).
+ * "references/<name>.md" entries (§3).
  */
 export function generateSkills(
   standardsDir?: string | null,
@@ -136,10 +134,11 @@ function renderSkill(
 }
 
 /**
- * Compose the trigger gate — the description IS the phase+domain gate (§5.5).
+ * Compose the trigger gate — the description IS the phase+domain gate (§5.1).
  *
- * Measured (RESULTS.md): description length costs nothing standing; wording
- * drives trigger accuracy — so spell out the phases and file patterns.
+ * Measured (docs/experiments/context-management/results/): description length
+ * costs nothing standing; wording drives trigger accuracy — so spell out the
+ * phases and file patterns.
  */
 function buildDescription(domain: string, meta: Record<string, any>): string {
   const summary = String(meta["summary"] || `${domain} coding standard.`).trim();
@@ -179,7 +178,7 @@ function buildDescription(domain: string, meta: Record<string, any>): string {
 }
 
 /**
- * Make doc-relative links usable from any workspace (spec decision 1).
+ * Make doc-relative links usable from any workspace (§5.1).
  *
  * A link to a sibling module (`comments.md`) becomes its skill reference;
  * any other relative link becomes the canonical GitHub URL. Absolute URLs
@@ -217,7 +216,7 @@ function moduleBody(filePath: string): string {
  * A reference file, frontmatter stripped, plus the canonical footer.
  *
  * Body links are NOT rewritten: the projected bundle keeps references next
- * to SKILL.md, so sibling-relative links resolve as-is (spec §5).
+ * to SKILL.md, so sibling-relative links resolve as-is (§5.1).
  */
 function renderReference(filePath: string): string {
   let body = moduleBody(filePath).trim();
@@ -232,7 +231,7 @@ function renderReference(filePath: string): string {
 }
 
 /**
- * Authoring invariants (content-model spec §5): every reference is linked
+ * Authoring invariants (§3): every reference is linked
  * from its STANDARD.md index; every ap- file additionally has an inline
  * don't-line bullet linking to it.
  */

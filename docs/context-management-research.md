@@ -4,7 +4,7 @@
 > conclusions from the design exploration on **2026-06-29**, and frames the open
 > threads worth pursuing next.
 > **Scope:** sandbox — ephemeral, multi-repo, multi-feature workspaces.
-> **Companion doc:** [jit-standards-loading-spec.md](jit-standards-loading-spec.md) is the
+> **Companion doc:** [jit-context-system.md](jit-context-system.md) is the
 > implementation handoff that came out of this research. This document is the *why* and the
 > *research trail*; that one is the *what to build*.
 
@@ -41,7 +41,7 @@ Constraint: **explore before building** — no code until the solution shape was
   guide is *named* every session but never gated by phase or domain, and isn't even copied into
   the workspace.
 - **`code-style-guide.md` is a monolith** — one shared "comments" rubric plus ~9 per-repo note
-  blocks. An econx-only workspace still carries taxonomy-service and data-engineering notes if
+  blocks. A web-only workspace still carries unrelated per-repo notes if
   the file is ever read.
 - **`services.yaml` already knows the repo/service composition** of every workspace — but
   nothing maps a service to *which docs matter*. **That linkage is the missing wire.**
@@ -187,7 +187,7 @@ Wire **each axis to its natural mechanism**, and add a thin explicit routing lay
    globs, `phase:`). Single source of truth.
 2. **Repo axis → `services.yaml`.** Add `standards: [ui, graphql]` per service. The workspace
    generator already knows the repo combo, so it computes and writes an **"Active standards"**
-   line per workspace. An econx-only workspace never hears about data-engineering notes.
+   line per workspace. A web-only workspace never hears about data-pipeline notes.
 3. **Domain axis → skills.** One thin skill per module, sharp trigger description, generated from
    the `docs/standards/*.md` source (ponytail's single-source pattern). Native JIT, near-zero
    standing cost.
@@ -259,7 +259,7 @@ remain open.
    sandbox ever appears as a workspace repo — this validates the content-in-body vs.
    pointer bet before committing to generation (step 4 of the spec build plan).
    **Sharpened by the 2026-07-04 gap review — this thread is now load-bearing:** the whole
-   read-side rides on `tr-*` skills surfacing in sessions, but the user-scope plugin install
+   read-side rides on `sb-*` skills surfacing in sessions, but the user-scope plugin install
    is a *snapshot* — freshly generated skills in the repo reach no session until the plugin
    is refreshed, and nothing detects the drift. Planned fix: a version check at
    `sandbox init-workspace` (warn when the installed plugin's skills lag the repo's
@@ -269,9 +269,9 @@ remain open.
    (missing/stale/orphaned) as the backstop for same-version drift; warn-only, and
    silent (never a false alarm) when Claude's plugin state is absent or unreadable.
    Verified against the live machine: correctly flagged the v0.1.0 install missing
-   all nine tr-* skills. Plugin manifest bumped to 0.2.0.
+   all nine sb-* skills. Plugin manifest bumped to 0.2.0.
    — ✅ **RE-DECIDED same day (delivery moved to workspace projection):** the guard
-   treated the symptom; the disease was user-scope delivery itself. The tr-* skills
+   treated the symptom; the disease was user-scope delivery itself. The sb-* skills
    moved out of the plugin entirely — `init-workspace` now projects them into each
    workspace's `.claude/skills/` (standards skills rendered fresh from docs/standards/,
    entry skills from `infra/skills/`), so a standards edit reaches new workspaces with
@@ -342,7 +342,7 @@ different context.* Two directions were decided in that session and are recorded
    - **MCP tool schemas are *already* JIT** (deferred tools → `ToolSearch` loads a schema only on
      demand). So half the tool-cost problem is solved by the harness. The lever the **sandbox**
      controls is coarser and upstream: *which MCP servers even connect per workspace* (a GraphQL
-     workspace mounts `context7` + a schema registry; a data workspace mounts the MongoDB MCP; a
+     workspace mounts `context7` + a schema registry; a data workspace mounts its database MCP; a
      UI workspace mounts neither). That maps cleanly onto the archetype registry (thread #10).
    - **`permissions` allow/deny** in settings.json is a session-level coarse tool gate — a blunt
      backstop, not a per-phase mechanism.
@@ -372,7 +372,7 @@ different context.* Two directions were decided in that session and are recorded
      typical 2-archetype workspace generates ~5–7 agents, not 30.
    - **Skills nest *inside* subagents — the standards design is not superseded.** A subagent gets
      a fresh window but still sees the workspace `CLAUDE.md` routing table and can invoke the
-     `tr-*-standard` skills. So archetype *context* still rides the skills mechanism from §5.5,
+     `sb-*-standard` skills. So archetype *context* still rides the skills mechanism from §5.5,
      now loaded **within** the implement subagent. The subagent adds only what skills can't: the
      **tool** gate and **context isolation**. Everything in §4 survives intact.
    - **Isolation is a benefit for research/test but a cost for implement.** Research's large
@@ -388,9 +388,9 @@ different context.* Two directions were decided in that session and are recorded
     it.* Generalize the planned `standards: [ui, graphql]` field (§5.2) into a service `archetype`
     that bundles the whole profile:
     ```yaml
-    web-v2:          { archetype: nextjs-ui }
-    federated-graph: { archetype: graphql-subgraph }
-    category-api:    { archetype: nest-api }
+    next-hello:      { archetype: nextjs-ui }
+    graph-gateway:   { archetype: graphql-subgraph }
+    rest-hello:      { archetype: nest-api }
 
     archetypes:
       graphql-subgraph:
@@ -405,8 +405,8 @@ different context.* Two directions were decided in that session and are recorded
     surfaces: the routing table (§5.3), the domain skills (§5.5), the subagent definitions (#9),
     and per-workspace MCP-server enablement (#8). It is thread #6 ("generalize beyond standards")
     made concrete plus the tool axis (#8). The candidate archetype set mirrors the service
-    taxonomy: `nextjs-ui`, `graphql-subgraph`, `nest-api`, `legacy-ruby` (web-v0), `data`
-    (taxonomy/airflow), `mcp-server`.
+    taxonomy: `nextjs-ui`, `graphql-subgraph`, `nest-api`, `data` (airflow),
+    `mcp-server`.
     ~~*Open:* migration and multi-archetype union.~~ **Resolved 2026-07-04** (see decisions
     above): `standards:` ships first and normalizes to an anonymous archetype (no flag day);
     union `mcp_servers` at the workspace level, never `agent_tools` at the agent level.
@@ -441,7 +441,7 @@ user/repo-lifetime *learning*; this expansion is about feature-lifetime *working
   `decision` notes to the terminal before deletion; the human decides what graduates. No
   automatic writes to PR/Jira surfaces.
 
-The companion [jit-notes-and-handoffs-spec.md](jit-notes-and-handoffs-spec.md) is now
+The companion [jit-context-system.md](jit-context-system.md) is now
 drafted (2026-07-04, post-harness-4) — threads 11–13 below are the research trail behind it.
 
 11. **The notes layer — write-side JIT (`.sandbox/notes/`).** *Proposed.* One directory per
@@ -516,7 +516,7 @@ follows:
   `init-workspace`.
 - **Cross-workspace context: explicit NON-GOAL.** Parallel features touching the same
   service don't see each other's `contract` notes. Coordination across concurrent features
-  is a human/GKE-mainline concern, not a workspace-context one — declared out of scope
+  is a human/k8s-mainline concern, not a workspace-context one — declared out of scope
   rather than left looking like a hole.
 - **Inbound external-context staleness: DEFERRED.** The Jira ticket is captured once at
   workspace creation; mid-feature ticket updates and PR review feedback re-enter only via
@@ -532,6 +532,6 @@ follows:
 - **ICM (Interpretable Context Methodology)** — layered context loading (Layer 0/1 router ≈ 800
   tok; Layer 2 contract + Inputs table; Layer 3 scoped reference; Layer 4 working). Figure 3's
   ~5k focused vs. ~42k monolithic is the token pitch.
-- **Companion handoff spec:** [jit-standards-loading-spec.md](jit-standards-loading-spec.md).
+- **Companion spec:** [jit-context-system.md](jit-context-system.md).
 - **Source discussion:** design session 2026-06-29 (Claude Code session
   `77b3bcbb-ad16-41a1-bc2c-33e26e25caa8`).

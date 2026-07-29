@@ -35,11 +35,11 @@ comment rubric ([comments.md](comments.md)) applies in full.
   tenant; an audience pointing at a prod API the dev tenant doesn't have returns
   Auth0 `access_denied "Service not found"`.
 - **Request an audience only when you need an access token** — a service that
-  builds its session from the ID token (e.g. sb-web) must set no audience;
+  builds its session from the ID token must set no audience;
   requesting one is both wrong-tenant and unnecessary.
 - **Scope shared-session cookies to the common parent domain** — `COOKIE_DOMAIN`
-  unset scopes the cookie to the emitting host, so a downstream gate (web-v2 admin)
-  never sees the upstream (web-v1) session. Scope to the shared parent domain.
+  unset scopes the cookie to the emitting host, so a downstream gate on one
+  service never sees the session issued by another. Scope to the shared parent domain.
 - **Per-service auth config lives at the service level, never the global** — set
   it per service (`services.yaml`), not the shared `env.j2`; siblings read the
   same var with their own audiences and must not be affected.

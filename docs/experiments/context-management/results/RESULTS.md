@@ -4,7 +4,7 @@
 > (harness 2 both arms N=5; harness 3 N=3/arm; harness 4 N=3/arm) · `claude` CLI 2.1.197 ·
 > model `claude-sonnet-5` · headless `-p`.
 > Raw data: `harness1.json` … `harness4.json`. Interpretation and caveats below.
-> Feeds back into [../../context-management-research.md](../../context-management-research.md)
+> Feeds back into [../../context-management-research.md](../../../context-management-research.md)
 > open threads #1, #2, §5a threads #8/#9, and §5b threads #11/#12.
 >
 > **Harness 5 (read-but-not-applied)** ran 2026-07-18 by subagent stand-in — separate writeup
@@ -271,7 +271,7 @@ context reached the edit.
 - **Harness 5 — do standards hold inside an implementing subagent? (blocks concurrent-implement).**
   Motivation: adopting a design→plan→implement framework (e.g. Superpowers) that *implements
   with subagents* only preserves the JIT standards guarantee if a subagent can get the
-  universal base (`ponytail`) + the matching `tr-*-standard` into context **before its first
+  universal base (`ponytail`) + the matching `sb-*-standard` into context **before its first
   code pass** — the §5.9 prevention-timing requirement. Subagents *can* invoke skills, and the
   `skills:` frontmatter field claims to preload full skill content at subagent startup (Claude
   Code sub-agents docs), which would be the structural equivalent of `sb-implement`'s
@@ -279,14 +279,14 @@ context reached the edit.
   the system, so measure before building any `sb-implementer` agent.**
   Arms to run (N≥3, in a real feature workspace, not this repo):
   1. **`skills:`-preload, project scope** — agent def with `skills: [sb-comments-standard,
-     tr-<domain>-standard]`; confirm both bodies are actually in the subagent's context at
+     sb-<domain>-standard]`; confirm both bodies are actually in the subagent's context at
      startup (not just invokable), and that generated code obeys them without the agent being
      told to read any file.
   2. **`skills:`-preload, plugin scope** — same, but include `ponytail` (a *plugin* skill).
      Open question the docs don't settle: can `skills:` preload a plugin skill, or only
      project/user skills? If not, fall back to arm 3.
   3. **`tools: [..., Skill]` + invoke-first contract** — no preload; the def's first
-     instruction is "invoke `ponytail`, then the matching `tr-*-standard`, before editing."
+     instruction is "invoke `ponytail`, then the matching `sb-*-standard`, before editing."
      Measures whether discretionary invoke-first fires reliably (compare to harness 2's
      description-match miss rate).
   Kill/keep: if no arm gets prevention rules in before the first edit ≥ the main-agent 15/15

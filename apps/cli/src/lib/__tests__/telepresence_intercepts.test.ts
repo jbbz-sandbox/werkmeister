@@ -1,6 +1,5 @@
 /**
- * Intercept-state reads for `sandbox status --intercepts` (see
- * docs/superpowers/specs/2026-07-25-sandbox-intercept-toggle-design.md).
+ * Intercept-state reads for `sandbox status --intercepts`.
  *
  * The active-intercept fixture below is trimmed from a real
  * `telepresence list -i --format json` captured against the OrbStack cluster

@@ -1,9 +1,9 @@
 /**
  * Generated workspace MCP enablement — build-plan step 5 of
- * docs/jit-agents-and-tools-spec.md (§4.5).
+ * docs/jit-context-system.md (§5.5).
  *
  * Projects the union of the workspace's present archetypes' `mcp_servers:`
- * into the workspace's `.mcp.json`. Union rule (spec §4.2): connection is
+ * into the workspace's `.mcp.json`. Union rule (§5.5): connection is
  * cheap — schemas defer until ToolSearch — so over-granting across archetypes
  * is fine; the win is *not connecting* servers no archetype wants.
  *

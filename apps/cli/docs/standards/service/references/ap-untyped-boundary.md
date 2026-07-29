@@ -20,7 +20,7 @@ async update(@Param('id') id: string, @Body() updateDto: any): Promise<T> {
 
 ## Why it's wrong
 
-Real code: `comx:libs/modules/rest-crud/src/lib/base-crud.controller.ts`'s
+A shared CRUD base controller's
 generic `CrudController<T>()` factory has exactly this — `create`/`update`
 take `any`, with no DTO class and no `ValidationPipe`. Every current
 consumer (Product/Category/Feature/FeatureGroup controllers) has to

@@ -1250,7 +1250,7 @@ export interface InfraStatus {
 const INFRA_PROJECT = "sandbox-infra";
 
 /**
- * One-shot setup containers (`econx-setup`, `comx-setup`) run once and exit by
+ * One-shot setup containers (`<repo>-setup`) run once and exit by
  * design — they have no `restart` policy, unlike real services. Counting them
  * would make a healthy feature read as "partial", so they're excluded from the
  * up/down tally. Matched by the `-setup` service-name convention (the only
@@ -2026,11 +2026,11 @@ export async function removeWorkspace(name: string): Promise<{ command: string; 
 export type KubeEnv = "dev" | "stage" | "prod" | "other";
 export type KubeSwitchEnv = "dev" | "stage" | "prod";
 
-/** Classify a kube context name (e.g. `gke_sb-stage-…_sb-stage-gke`) as dev/stage/prod. */
+/** Classify a kube context name (e.g. `sb-stage-cluster`) as dev/stage/prod. */
 function classifyContext(ctx: string): KubeEnv {
-  if (/sb-dev|-dev-gke|\bdev\b/i.test(ctx)) return "dev";
-  if (/sb-stage|-stage-gke|\bstage\b/i.test(ctx)) return "stage";
-  if (/sb-prod|-prod-gke|\bprod\b/i.test(ctx)) return "prod";
+  if (/sb-dev|\bdev\b/i.test(ctx)) return "dev";
+  if (/sb-stage|\bstage\b/i.test(ctx)) return "stage";
+  if (/sb-prod|\bprod\b/i.test(ctx)) return "prod";
   return "other";
 }
 
@@ -2094,7 +2094,7 @@ export async function openFeatureBrowser(name: string): Promise<{ path: string }
 
 /**
  * Start shared infrastructure via `sandbox connect` (local services + k8s
- * port-forwards + the Cloudflare worker proxy). Runs `docker compose up -d`
+ * port-forwards). Runs `docker compose up -d`
  * under the hood, so it returns once infra is up rather than tailing. Returns
  * the (ANSI-stripped) output; throws {@link WorkspaceError} on failure.
  */
@@ -2132,7 +2132,7 @@ export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
  *
  * Runs the CLI with cwd = the workspace directory so it resolves the feature
  * name and slot from that workspace's `.env` (the directory name is NOT the
- * feature name — e.g. `proj-2044-federated-graph` → FEATURE `federated-graph`),
+ * feature name — e.g. `proj-2044-next-hello` → FEATURE `next-hello`),
  * matching how a user would run the command from inside the workspace. Returns
  * the command and its (ANSI-stripped) output; throws {@link WorkspaceError} on
  * a non-zero exit (e.g. stopping a feature that isn't running).
@@ -2768,7 +2768,7 @@ async function findRepoFile(rel: string): Promise<string | null> {
  * Extract the forward table from services.yaml: every service with a
  * k8s_forward_port, plus infrastructure entries (mongodb). Forward name is the
  * service key unless k8s_forward_name overrides it (e.g. vendor →
- * vendor-portal-client). Services without k8s_forward_port (e.g. storybook)
+ * an aliased name). Services without k8s_forward_port (e.g. storybook)
  * are skipped.
  */
 function parseK8sForwards(yaml: string): Array<{ name: string; port: number; healthEndpoint: string | null }> {
@@ -2915,7 +2915,7 @@ export async function resumeClaudeInTerminal(
   return { path: target, sessionId: transcript.sessionId };
 }
 
-// A canonical GitHub PR URL, e.g. https://github.com/sandbox/econx/pull/1234.
+// A canonical GitHub PR URL, e.g. https://github.com/sandbox/sandbox/pull/1234.
 // Exported and pure so the launchPrReconcile injection guard has a smoke test.
 const PR_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 export function isValidPrUrl(url: string): boolean {

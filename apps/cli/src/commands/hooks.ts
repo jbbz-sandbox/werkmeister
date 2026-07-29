@@ -1,6 +1,6 @@
 /**
  * sandbox hooks gate — PreToolUse standards gate
- * (2026-07-18-pretooluse-standards-gate-design.md).
+ * (docs/jit-context-system.md §6).
  *
  * CLI-registered path (`sandbox hooks gate`; manual runs, tests). The actual
  * per-edit hook installed in a workspace's `.claude/settings.json` is

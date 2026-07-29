@@ -1,6 +1,5 @@
 ---
 kind: example
-canonical: comx:domains/communication/modules/contact/src/lib/contact.controller.ts
 ---
 
 # 404 on missing, no custom exception filter
@@ -24,6 +23,3 @@ async findByEmail(@Query('email') email: string) {
   return contact;
 }
 ```
-
-If this workspace has `comx` checked out, read the full canonical file
-before writing your own.

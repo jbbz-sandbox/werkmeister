@@ -977,7 +977,7 @@ export function createServer(): McpServer {
       title: "Connect Shared Infrastructure",
       description:
         "Run `sandbox connect` to start shared infrastructure (local services, k8s " +
-        "port-forwards, Cloudflare worker proxy). Returns once infra is up.",
+        "port-forwards). Returns once infra is up.",
       inputSchema: {},
       outputSchema: z.object({ command: z.string(), output: z.string() }),
     },

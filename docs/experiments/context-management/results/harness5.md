@@ -1,19 +1,19 @@
 # Harness 5 — results (read-but-not-applied)
 
 > **Run:** 2026-07-18, by subagent stand-in (not the automated `harness5_precedence_placement.py`, still deferred).
-> **Method:** each "session" is an isolated subagent (fresh context, same model family as production) fed exactly what a post-`sb-implement` session holds — the standards-routing block, the `sb-implement` skill, and the matching `tr-*-standard`. The subagent is told nothing about the experiment; it just does a normal workspace task. **Ground truth = the file it wrote**, never its self-report.
+> **Method:** each "session" is an isolated subagent (fresh context, same model family as production) fed exactly what a post-`sb-implement` session holds — the standards-routing block, the `sb-implement` skill, and the matching `sb-*-standard`. The subagent is told nothing about the experiment; it just does a normal workspace task. **Ground truth = the file it wrote**, never its self-report.
 > **Headline:** read-but-not-applied is **real** on a backstop-free rule + the weakest deployed model (Haiku baseline **0/3**). The 2026-07-18 fix's **precedence block is load-bearing** (0/3 → 3/3). The runbook's original config bait is **invalid** — it has a correctness backstop that masks the failure.
 
 ## Why the first run said "no bug" — and why that was the instrument, not the system
 
-The manual runbook's bait (`SANDBOX_UPSTREAM_URL` → `gke-forwards:9000` DNS alias vs. the
+The manual runbook's bait (`SANDBOX_UPSTREAM_URL` → `k8s-forwards:9000` DNS alias vs. the
 tempting `localhost:9000`) was run first, on Opus, with the **baseline** `sb-implement`
 (no precedence block, no recitation):
 
 | Arm | Runs | Result |
 |-----|------|--------|
-| **A** — edit early (low context) | 3 | ✅✅✅ all wrote `gke-forwards:9000` |
-| **B** — edit late (~176K tokens of unrelated filler read first, bait delivered fresh) | 3 | ✅✅✅ all wrote `gke-forwards:9000` |
+| **A** — edit early (low context) | 3 | ✅✅✅ all wrote `k8s-forwards:9000` |
+| **B** — edit late (~176K tokens of unrelated filler read first, bait delivered fresh) | 3 | ✅✅✅ all wrote `k8s-forwards:9000` |
 
 Baseline **6/6 pass** → verdict table row 3 ("no live bug at this scale"). But that was wrong
 about *why*. Control experiment:
@@ -22,7 +22,7 @@ about *why*. Control experiment:
 
 | Run | `.env` result |
 |-----|---------------|
-| E1-1/2/3 | `http://gke-forwards:9000` (3/3) |
+| E1-1/2/3 | `http://k8s-forwards:9000` (3/3) |
 
 With **no standard loaded at all**, Opus still refuses `localhost` — it re-derives the DNS
 alias from pure container-networking correctness ("inside the container `localhost` is the

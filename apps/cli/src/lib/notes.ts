@@ -1,5 +1,5 @@
 /**
- * Workspace notes — the `.sandbox/notes/` layer (jit-notes-and-handoffs-spec.md §4.1,
+ * Workspace notes — the `.sandbox/notes/` layer (jit-context-system.md §5.7,
  * conventions in docs/notes-conventions.md).
  *
  * One note per file, `NNN-<type>-<slug>.md`, YAML frontmatter carrying
@@ -80,7 +80,7 @@ function _split3(text: string, sep: string): string[] {
  *
  * Returns null for files that don't match the naming convention or whose
  * frontmatter fails to parse — readers skip malformed notes rather than crash
- * (spec §4.6: printing failures never block teardown).
+ * (docs/jit-context-system.md §5.7: printing failures never block teardown).
  */
 export function parseNote(notePath: string): Note | null {
   const match = _FILENAME_RE.exec(path.basename(notePath));

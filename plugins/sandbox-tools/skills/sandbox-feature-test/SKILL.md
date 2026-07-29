@@ -59,7 +59,7 @@ Parse `WORKSPACE_PATH` from the script output. All subsequent file operations an
 sandbox connect
 ```
 
-This is idempotent — safe to run even if infra is already up. It starts Caddy, the Cloudflare Worker, Redis, Cloud SQL Proxy, and GKE port-forwards.
+This is idempotent — safe to run even if infra is already up. It starts Caddy, Jaeger, RedisInsight, and the k8s port-forwards.
 
 ### Step 4 — Start feature containers
 
@@ -67,7 +67,7 @@ This is idempotent — safe to run even if infra is already up. It starts Caddy,
 sandbox up <feature-name>
 ```
 
-Auto-detects which services have local changes (via `git diff main..HEAD`) and starts only those containers. The rest are forwarded from GKE. Wait for the command to complete before proceeding.
+Auto-detects which services have local changes (via `git diff main..HEAD`) and starts only those containers. The rest are forwarded from k8s. Wait for the command to complete before proceeding.
 
 ### Step 5 — Run the test
 

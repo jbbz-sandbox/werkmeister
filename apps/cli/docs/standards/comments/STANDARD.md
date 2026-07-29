@@ -44,7 +44,7 @@ const collection = COLLECTION_NAME;
 
 // Good — explains a non-obvious *why* the code can't show
 // Typesense builds `filter_by` from user input; reject whitespace / && / || so a
-// value can never inject an extra clause. Keep in sync with web-v2 sanitizeFilterValue.
+// value can never inject an extra clause. Keep in sync with the caller's sanitizer.
 const safe = sanitizeFilterValue(input);
 
 // Best — a precise name removes the need for any comment

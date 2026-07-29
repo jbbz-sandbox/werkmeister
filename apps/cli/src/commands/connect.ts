@@ -112,14 +112,12 @@ function ensureCorpCa(): void {
   }
 }
 
-/** Generate proxy/worker.env + proxy/Caddyfile, and refresh the k8s kubeconfig. */
+/** Generate proxy/Caddyfile and refresh the k8s kubeconfig. */
 function ensureProxyFiles(): void {
   const root = getInfraRoot();
 
-  // Always regenerate: worker.env is static (points at the Caddy routers) and
-  // the worker reads it at container start, so it must be current *before*
-  // compose starts the worker. The Caddyfile must likewise carry the internal
-  // feature routers (and any active feature's routes) before Caddy loads it.
+  // Always regenerate: the Caddyfile must carry the host routers (and any
+  // active feature's routes) before Caddy loads it.
   const caddyfile = path.join(root, "proxy", "Caddyfile");
   if (isDir(caddyfile)) {
     fs.rmSync(caddyfile, { recursive: true, force: true });
@@ -285,7 +283,7 @@ function runK8sOnly(): void {
     } else {
       console.log(`\n  ${Colors.RED}Failed to start k8s port-forwards.${Colors.RESET}`);
       console.log(
-        `  ${Colors.DIM}Ensure Docker is running and gcloud credentials are configured.${Colors.RESET}`,
+        `  ${Colors.DIM}Ensure Docker is running and your kubeconfig is valid.${Colors.RESET}`,
       );
       console.log(`  ${Colors.DIM}Run 'sandbox connect' to start all infrastructure.${Colors.RESET}`);
     }
@@ -368,7 +366,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     const down = total - totalHealthy;
     console.log(`  ${Colors.YELLOW}${totalHealthy}/${total} healthy, ${down} down${Colors.RESET}`);
     if (!infraOk) {
-      console.log(`  ${Colors.DIM}Check docker and gcloud credentials.${Colors.RESET}`);
+      console.log(`  ${Colors.DIM}Check docker and your kubeconfig.${Colors.RESET}`);
     }
   }
 

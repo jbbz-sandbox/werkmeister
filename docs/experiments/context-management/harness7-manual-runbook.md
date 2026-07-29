@@ -5,7 +5,7 @@ re-invoke directive, with the standard's full rule text absent) re-anchors a **m
 post-compaction** Haiku agent. Reuses the harness-6 protocol
 ([harness6-manual-runbook.md](harness6-manual-runbook.md), [baits.md](baits.md) baits 1–3)
 with one departure: the cell is framed as a *compaction resumption*, not a fresh phase entry.
-Spec: `docs/superpowers/specs/2026-07-18-gap3-reinjection-eval-design.md`.
+Mechanism: [jit-context-system.md](../../jit-context-system.md) §5.8 (session re-injection).
 
 ## Cells — 15 Haiku 4.5, isolated subagents
 
@@ -30,7 +30,7 @@ spot-checks that the floor still holds this session.
 
 ```
 ## Standards routing
-**Active in this workspace** (repos: sb-web-api, taxonomy-service):
+**Active in this workspace** (repos: sandbox):
 | Standard | Skill | Loads on |
 | --- | --- | --- |
 | service | `sb-service-standard` | `**/*.controller.ts`, `**/*.service.ts`, `**/resolvers/**` |

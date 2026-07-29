@@ -86,7 +86,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "-s, --services <list>",
-          "Comma-separated list of services to run locally (e.g. 'product-api,category-api'). " +
+          "Comma-separated list of services to run locally (e.g. 'rest-hello,next-hello'). " +
             "Skips auto-detection from git diff.",
         );
     },
@@ -254,10 +254,10 @@ const SPECS: CommandSpec[] = [
           "[feature]",
           "Feature name -> sets X-Feature=<feature>. If omitted, read from FEATURE in a .env file.",
         )
-        .option("--url <url>", "Full start URL (overrides --path). Default: the sb-web homepage.")
+        .option("--url <url>", "Full start URL (overrides --path). Default: the first routed host's homepage.")
         .option(
           "--path <path>",
-          "Path appended to https://sb-web.local.sandbox.com " +
+          "Path appended to the first routed host " +
             "(default: test_path from .sandbox/workspace.yml, else TEST_PATH from .env, else '/').",
         )
         .option("--size <W,H>", "Window size WIDTH,HEIGHT (default: 1440,900).", "1440,900")

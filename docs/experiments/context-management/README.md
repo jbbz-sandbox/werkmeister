@@ -56,7 +56,7 @@ the task framing? Disk state, not the tool stream — can't be faked.
 - Fails **only** at B → **lost-in-middle** (position-dependent). Recitation / re-anchoring
   is the fix; wording alone won't help.
 - The fix row (C, D) then says whether the 2026-07-18 skill change
-  ([`../../../infra/skills/sb-implement/SKILL.md`](../../../infra/skills/sb-implement/SKILL.md)
+  ([`../../../apps/cli/infra/skills/sb-implement/SKILL.md`](../../../apps/cli/infra/skills/sb-implement/SKILL.md)
   precedence block + step 6) actually closed the arm it targets — i.e. which addition
   earned its keep. Guard against Gotcha 5 (prompt-quality masquerading as degradation): if A
   fails, the cause is wording/clash, not context length.

@@ -336,7 +336,7 @@ const _WORKSPACE_CONFIG_HEADER =
   "#          Adding/removing a repo here reconciles git worktrees on rerun;\n" +
   "#          removing a repo with uncommitted edits needs `--force`.\n" +
   "#          Optional `standards_override: {add: [...], remove: [...]}` tunes\n" +
-  "#          the CLAUDE.md Standards routing block (docs/jit-standards-loading-spec.md).\n" +
+  "#          the CLAUDE.md Standards routing block (docs/jit-context-system.md).\n" +
   "#          To register a brand-new service, edit\n" +
   "#          ~/.sandbox/services.yaml instead.\n" +
   "# Format:  YAML — line comments (`#`) are supported. The loader also\n" +
@@ -583,7 +583,7 @@ const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   {
     key: "test_path",
     label: "Feature test path (blank to skip)",
-    help: "URL path for the feature entry point, appended to https://sb-web.local.sandbox.com.",
+    help: "URL path for the feature entry point, appended to the routed host.",
     pattern: "^/\\S*$",
     placeholder: "/products/foo",
   },
@@ -1345,7 +1345,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     }
   }
 
-  // 5b. Resolve the workspace's active standards (spec §5.2–§5.4).
+  // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
   let standardsSection: string | null = null;
   const modules = loadStandardsModules();
   if (Object.keys(modules).length) {

@@ -2,8 +2,8 @@
 
 > **Ran:** 2026-07-18. **Model:** Haiku 4.5. **Method:** 18 isolated subagent cells (3 baits ×
 > loaded/control × n=3), each fed a self-contained post-`sb-implement` context, told nothing
-> about the experiment. **Ground truth = the code the subagent wrote.** Spec:
-> `docs/superpowers/specs/2026-07-18-loaded-and-applied-eval-baseline-design.md`. Runbook +
+> about the experiment. **Ground truth = the code the subagent wrote.**
+> Runbook +
 > baits: [harness6-manual-runbook.md](../harness6-manual-runbook.md), [baits.md](../baits.md).
 >
 > **Headline:** All 3 baits are backstop-free (**control 0/9 applied**) and JIT loading +

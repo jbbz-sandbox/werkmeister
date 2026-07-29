@@ -1,6 +1,6 @@
 # Advanced Troubleshooting Guide
 
-Operational runbook for debugging developer sandbox infrastructure issues that go beyond the basic troubleshooting in the users guide.
+Operational runbook for debugging sandbox infrastructure issues that go beyond the basic troubleshooting in the users guide.
 
 ---
 
@@ -14,7 +14,7 @@ When something doesn't work, follow this layered approach:
 3. Is Caddy routing correctly?         → curl through Caddy vs direct
 4. Is the Caddyfile config correct?    → caddy adapt + count routes
 5. Is the network connected?           → wget from inside Caddy container
-6. Are GKE forwards working?           → nc -z inside gke-forwards container
+6. Are k8s forwards working?           → nc -z inside k8s-forwards container
 ```
 
 Always test **direct to the service first**, then **through Caddy**. If direct works but Caddy doesn't, it's a routing/proxy issue. If direct fails too, it's a service issue.
@@ -30,7 +30,7 @@ This is the most common infrastructure issue.
 ```bash
 # Test through Caddy
 curl -sk -o /dev/null -w "Caddy: HTTP %{http_code} | Size: %{size_download}\n" \
-  "https://sb-web.local.sandbox.com/your/path"
+  "https://next-hello.local.sandbox.com/your/path"
 
 # Test direct to expected service (check CLAUDE.md routing table for correct port)
 curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
@@ -65,7 +65,7 @@ docker logs {feature}-{service} --tail 50 2>&1
 
 Common causes:
 - Service crashed during startup (check for Node.js OOM or missing env vars)
-- Database connection failed (check cloud-sql-proxy and mongodb GKE forward)
+- Database connection failed (check the postgres/redis k8s forwards)
 - Missing dependencies (setup service didn't complete)
 
 ---
@@ -81,7 +81,7 @@ docker logs {container_name} --tail 100 2>&1
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `ECONNREFUSED` to database | cloud-sql-proxy or mongodb not ready | `docker restart sandbox-cloud-sql-proxy` or check GKE forwards |
+| `ECONNREFUSED` to database | postgres forward not ready | `docker restart sandbox-k8s-forwards` or check k8s forwards |
 | `yarn: command not found` | Bad Docker image or missing node_modules volume | `sandbox down --volumes && sandbox up` |
 | OOM Killed | Container exceeded memory limit | Increase `memory_limit` in `infra/config/services.yaml` |
 | Port already in use | Another process using the port | `lsof -i :{port}` to find the conflict |
@@ -94,17 +94,17 @@ docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}"
 
 ---
 
-## GKE Port-Forward Issues
+## k8s Port-Forward Issues
 
 ### Check Overall Health
 ```bash
-docker inspect sandbox-gke-forwards --format '{{.State.Health.Status}}'
-docker logs sandbox-gke-forwards --tail 30 2>&1
+docker inspect sandbox-k8s-forwards --format '{{.State.Health.Status}}'
+docker logs sandbox-k8s-forwards --tail 30 2>&1
 ```
 
 ### Test Individual Forwards
 ```bash
-docker exec sandbox-gke-forwards sh -c '
+docker exec sandbox-k8s-forwards sh -c '
 for p in 9000 9001 9002 9003 9004 9005 9006 9007 9008 9052; do
     if nc -z localhost $p 2>/dev/null; then echo "UP:   port $p"
     else echo "DOWN: port $p"; fi
@@ -113,24 +113,26 @@ done'
 
 ### Restart Forwards
 ```bash
-docker restart sandbox-gke-forwards
+docker restart sandbox-k8s-forwards
 # Wait for health check (start_period is 60s)
 sleep 65
-docker inspect sandbox-gke-forwards --format '{{.State.Health.Status}}'
+docker inspect sandbox-k8s-forwards --format '{{.State.Health.Status}}'
 ```
 
-### GKE Auth Issues
+### k8s Auth Issues
 If forwards fail to connect:
 ```bash
-# Check GKE credentials
-gcloud auth application-default print-access-token >/dev/null 2>&1 && echo "Auth OK" || echo "Auth expired"
+# Check the cluster answers with the context the sandbox uses
+kubectl config current-context
+kubectl get nodes >/dev/null 2>&1 && echo "Cluster OK" || echo "Cluster unreachable"
 
-# Re-authenticate
-gcloud auth application-default login
-gcloud container clusters get-credentials tr-dev --region us-central1 --project tr-dev-361214
+# The container reads the generated kubeconfig, not your live one —
+# `sandbox connect` regenerates it (rewriting the API server to
+# host.docker.internal so it resolves from inside the container).
+sandbox connect
 
-# Restart forwards after re-auth
-docker restart sandbox-gke-forwards
+# Restart forwards afterwards
+docker restart sandbox-k8s-forwards
 ```
 
 ---
@@ -194,37 +196,37 @@ docker network inspect sandbox-shared --format '{{range .Containers}}{{.Name}} {
 ### DNS Resolution Inside Containers
 ```bash
 docker exec sandbox-caddy nslookup host.docker.internal
-docker exec {feature}-web-v2 nslookup gke-forwards
+docker exec {feature}-next-hello nslookup k8s-forwards
 ```
 
 ---
 
 ## Service-Specific Issues
 
-### web-v2 (econx/apps/web-v2)
+### next-hello (sandbox/apps/next-hello)
 
-**Next.js build errors:** Check if the setup service completed:
+**Next.js build errors:** Check if the repo's setup service (if any) completed:
 ```bash
-docker logs {feature}-econx-setup --tail 20 2>&1
+docker logs {feature}-sandbox-setup --tail 20 2>&1
 ```
 
-**API errors in web-v2 logs:** Usually means sb-web-api, category-api, or product-api aren't reachable. Check environment variable resolution:
+**API errors in next-hello logs:** Usually means an upstream service isn't reachable. Check environment variable resolution:
 ```bash
-docker exec {feature}-web-v2 env | grep -E "API_URL|GRAPHQL_URL"
+docker exec {feature}-next-hello env | grep -E "_URL"
 ```
 
-### web-v1 (sb-web)
+### rest-hello (sandbox/apps/rest-hello)
 
 **Auth0 errors:** Check that Auth0 secrets are set in `~/.sandbox/secrets.env`:
 ```bash
 grep -c "AUTH0" ~/.sandbox/secrets.env
 ```
 
-### federated-graph
+### GraphQL gateway (if your registry defines one)
 
-**Subgraph connection errors:** Check that all dependent services (product-api, category-api, interview-api) are running and accessible:
+**Subgraph connection errors:** Check that every dependent subgraph is running and accessible:
 ```bash
-docker exec {feature}-federated-graph wget -q -O /dev/null http://product-api:3333/graphql 2>&1
+docker exec {feature}-<gateway> wget -q -O /dev/null http://<subgraph>:<port>/graphql 2>&1
 ```
 
 ---
@@ -271,19 +273,13 @@ sandbox up {feature}
 ## Canonical test URLs
 
 Known-good URLs for each web tier (salvaged from the retired `~/workspace/CLAUDE.md`;
-routing source of truth is `cloudflare-workers/shared/routing/route-config.js`):
+routing source of truth is the `feature_router:` blocks in `~/.sandbox/services.yaml`):
 
 ```
-# web-v2
-https://sb-web.local.sandbox.com/categories/crm
-https://sb-web.local.sandbox.com/products/sap-sales-performance-management/pricing
-https://sb-web.local.sandbox.com/products/sap-sales-performance-management/reviews/all
+# next-hello (web)
+https://next-hello.local.sandbox.com/
+https://next-hello.local.sandbox.com/__sandbox
 
-# web-v1
-https://sb-web.local.sandbox.com/
-https://sb-web.local.sandbox.com/products/sap-sales-performance-management/reviews
-
-# web-v0
-https://sb-web.local.sandbox.com/compare-products/sap-sales-performance-management-vs-xactly-incent
-https://sb-web.local.sandbox.com/products/sap-sales-performance-management/competitors
+# rest-hello (api)
+https://rest-hello.local.sandbox.com/health
 ```

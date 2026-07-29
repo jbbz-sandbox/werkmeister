@@ -4,7 +4,6 @@
 // so each workspace is selectable and chat roots at its dir. Idempotent and
 // non-destructive: managed entries carry `source: "sandbox"`; manual entries and
 // entries whose workspace is gone are preserved / pruned accordingly.
-// See docs/superpowers/specs/2026-07-24-claudeck-workspaces-as-projects-design.md
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";

@@ -1,12 +1,12 @@
 /**
  * Generated workspace subagents — build-plan steps 2 and 4 of
- * docs/jit-agents-and-tools-spec.md (§4.2).
+ * docs/jit-context-system.md (§5.4).
  *
  * Emits agent definitions into each workspace's `.claude/agents/`:
  * `sb-researcher`, the workspace-shared read-only research agent spawned by
  * the `sb-research` entry skill (step 2), and one `sb-tester-<archetype>`
  * per archetype present in the workspace, spawned by `sb-test` (step 4).
- * Phase gates *tools*, archetype gates *context* (spec §3): every tester gets
+ * Phase gates *tools*, archetype gates *context* (§5.4): every tester gets
  * the same test-phase toolset; what differs per archetype is the services, the
  * test commands, and which standard applies to test code.
  */
@@ -28,7 +28,7 @@ const _GENERATED_NOTICE = `<!--
 
 export const RESEARCHER_AGENT_NAME = "sb-researcher";
 
-/** Render the sb-researcher agent definition (agents spec §4.2 + notes spec §4.3.1). */
+/** Render the sb-researcher agent definition (§5.4, §5.7). */
 export function buildResearcherAgent(): string {
   return `---
 name: ${RESEARCHER_AGENT_NAME}
@@ -104,7 +104,7 @@ export function buildTesterSpecs(
   return specs;
 }
 
-/** Render one sb-tester-<archetype> definition (agents spec §4.2/§4.3). */
+/** Render one sb-tester-<archetype> definition (§5.4). */
 export function buildTesterAgent(spec: Record<string, any>): string {
   const archName = spec["archetype"];
   const services: Array<Record<string, any>> = spec["services"];

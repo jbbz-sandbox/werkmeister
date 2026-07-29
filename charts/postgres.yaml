@@ -1,5 +1,5 @@
 # Postgres for the OrbStack sandbox cluster.
-# ClusterIP (internal only) — reached from the docker world via the gke-forwards
+# ClusterIP (internal only) — reached from the docker world via the k8s-forwards
 # container, which `kubectl port-forward`s this Service to host port 9051
 # (the port the feature .env already expects for POSTGRES_URL).
 # Apply with: kubectl apply -f charts/postgres.yaml

@@ -7,7 +7,7 @@ description: "Begin the implementation/coding phase in a sandbox workspace. Use 
 
 Run these steps now, before drafting any code. Prevention rules only work if they are
 in context before the first generation pass — loading them after code exists is too late
-(jit-standards-loading-spec.md §5.9).
+(jit-context-system.md §2).
 
 1. **Read the "Standards routing" block** in the workspace `CLAUDE.md`. It is the
    compiled map of which standards are active for this workspace's services.

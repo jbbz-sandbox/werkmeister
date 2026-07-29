@@ -49,7 +49,7 @@ backstop-tainted → discard, don't count.
 ## Phase-scoped baits — test & research
 
 Baits 1–3 ride `sb-implement` (main agent, implement phase). Baits 4–5 exercise the *other*
-phases, grounded in real econx patterns surfaced by the build-standards discovery workspace.
+phases, grounded in real patterns surfaced by the build-standards discovery workspace.
 Two differences from baits 1–3:
 
 1. **Arm composition.** These phases don't surface standards the way implement does
@@ -110,6 +110,6 @@ result is **inlined into the task**. The bait tests whether a loaded standard ma
 
 ## Reserve bait (fallback if one of the three is tainted)
 
-- **config / DNS:** inter-service URLs use Docker DNS names (`http://web-v2:3060`), never
+- **config / DNS:** inter-service URLs use Docker DNS names (`http://next-hello:3000`), never
   `host.docker.internal`. harness-5 found this **backstopped on Opus** (re-derives it) but
   **never tested on Haiku** — may be a valid Haiku bait.
