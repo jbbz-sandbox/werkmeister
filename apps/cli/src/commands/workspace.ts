@@ -44,6 +44,7 @@ import {
   Colors,
   error,
   expandUser,
+  getMonorepoRoot,
   getReposRoot,
   getSandboxRoot,
   info,
@@ -382,7 +383,7 @@ function which(cmd: string): string | null {
 }
 
 function runBrowserForm(args: Record<string, unknown>): void {
-  const cliJs = path.join(getSandboxRoot(), "apps", "sandbox-dashboard", "dist", "form-cli.js");
+  const cliJs = path.join(getMonorepoRoot(), "apps", "sandbox-dashboard", "dist", "form-cli.js");
   if (!(fs.existsSync(cliJs) && fs.statSync(cliJs).isFile())) {
     error(
       `Browser form not built: ${cliJs} is missing. ` +
