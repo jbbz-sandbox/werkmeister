@@ -3,8 +3,8 @@
   "name": "sandbox",
   "description": "Diagnostics and operations tooling for the multi-feature developer sandbox.",
   "owner": {
-    "name": "JayAndCory",
-    "url": "https://github.com/JayAndCory"
+    "name": "jbbz-sandbox",
+    "url": "https://github.com/jbbz-sandbox"
   },
   "plugins": [
     {

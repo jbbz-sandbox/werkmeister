@@ -402,7 +402,7 @@ export function validateStandardModules(standardsDir?: string | null): string[] 
     if (domain.trim() !== expected) {
       errors.push(
         `${rel}: \`domain: ${domain}\` does not match its location ` +
-          `(expected \`${expected}\` — tr-<domain>-standard would diverge ` +
+          `(expected \`${expected}\` — sb-<domain>-standard would diverge ` +
           `from where the standard lives)`,
       );
     }

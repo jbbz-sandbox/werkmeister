@@ -261,8 +261,8 @@ Also test:
 
 ## Context
 
-- Claudeck GitHub: https://github.com/JayAndCory/sandbox/tree/main/apps/claudeck
-- Full documentation: https://github.com/JayAndCory/sandbox/blob/main/apps/claudeck/docs/DOCUMENTATION.md
+- Claudeck GitHub: https://github.com/jbbz-sandbox/sandbox/tree/main/apps/claudeck
+- Full documentation: https://github.com/jbbz-sandbox/sandbox/blob/main/apps/claudeck/docs/DOCUMENTATION.md
 - This bug was reported via Discord: two computers viewing the same session prompt don't receive each other's updates
 - The current mechanism pulls full history on first load but has no live sync mechanism for ongoing streams
 

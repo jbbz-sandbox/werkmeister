@@ -45,7 +45,7 @@ const existing = {
   ],
 };
 const workspaces = [
-  { name: "test-me", path: "/ws/test-me", jiraUrl: "https://j/TRE-1" },
+  { name: "test-me", path: "/ws/test-me", jiraUrl: "https://j/PROJ-1" },
   { name: "claudeck-test", path: "/ws/claudeck-test", jiraUrl: null },
 ];
 
@@ -53,7 +53,7 @@ test("adds managed group and workspace repos", () => {
   const out = mergeWorkspaces(existing, workspaces);
   assert.ok(out.groups.some((g) => g.id === "g_sandbox_workspaces" && g.name === "Feature Workspaces"));
   const tm = out.repos.find((r) => r.id === "r_ws_test-me");
-  assert.deepEqual(tm, { id: "r_ws_test-me", name: "test-me", path: "/ws/test-me", groupId: "g_sandbox_workspaces", url: "https://j/TRE-1" });
+  assert.deepEqual(tm, { id: "r_ws_test-me", name: "test-me", path: "/ws/test-me", groupId: "g_sandbox_workspaces", url: "https://j/PROJ-1" });
   assert.ok(out.repos.some((r) => r.id === "r_ws_claudeck-test" && r.url === null));
 });
 

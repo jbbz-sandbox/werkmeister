@@ -34,10 +34,10 @@
     "pwa",
     "developer-tools"
   ],
-  "homepage": "https://github.com/JayAndCory/sandbox/tree/main/apps/claudeck",
+  "homepage": "https://github.com/jbbz-sandbox/sandbox/tree/main/apps/claudeck",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JayAndCory/sandbox",
+    "url": "https://github.com/jbbz-sandbox/sandbox",
     "directory": "apps/claudeck"
   },
   "license": "MIT",

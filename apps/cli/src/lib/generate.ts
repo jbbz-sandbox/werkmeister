@@ -390,7 +390,7 @@ function resolveServiceRefs(
  * Maps service name -> list of `"host:container[:ro]"` specs (same grammar
  * as services.yaml `extra_volumes`), letting a workspace mount a locally
  * built package over its `node_modules` copy without editing the global
- * service registry (TRE-1897 — see .sandbox/notes/008). Absent field, missing
+ * service registry (PROJ-1897 — see .sandbox/notes/008). Absent field, missing
  * or malformed file -> `{}` so non-opted-in workspaces render identically.
  */
 function loadDevLinks(workspaceRoot: string): Record<string, string[]> {

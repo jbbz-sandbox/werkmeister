@@ -23,9 +23,9 @@ note lists what is **still broken or undecided**, in priority order.
 - **Ingress hosts** removed from every `plugins/sandbox-tools` skill; they now
   derive from `ingress.local_domain` in `~/.sandbox/config.yaml`.
 - **`superpowers`** added as an opt-in plugin (`OPTIONAL_PLUGINS` + wizard section 6).
-- **Old identity erased** from source: `developer-sandbox`, `trustradius`,
-  `apps/sandbox-cli/cli`, and the `multi-feature` branch. `apps/cli` package
-  renamed `sandbox-cli`.
+- **Old identity erased** from source: `developer-sandbox`, the previous org
+  name, `apps/sandbox-cli/cli`, and the `multi-feature` branch. `apps/cli`
+  package renamed `sandbox-cli`.
 
 `sandbox setup --check` currently reports:
 
@@ -118,9 +118,8 @@ copy (derive domain, join to service name).
 
 ## 5. Skills depend on `dist/`, which is gitignored
 
-`sandbox-caddy-reload` Step 2 and `sandbox-diagnose` Step 4 previously shelled
-into the **Python** CLI (`uv run python -c "from cli.lib.caddy import
-count_compiled_routes"`) — dead since the TypeScript port. They now run:
+`sandbox-caddy-reload` Step 2 and `sandbox-diagnose` Step 4 shelled into a CLI
+entrypoint that no longer exists. They now run:
 
 ```bash
 node --input-type=module -e "
@@ -152,21 +151,21 @@ npm tolerates the duplicate (tested), but `npm -w sandbox` and
 
 ---
 
-## 7. Decision needed — ~52 Python references in `apps/cli/src`
+## 7. ~52 source comments in `apps/cli/src` still name the previous language
 
-The rename erased *provenance* ("ported from `worker.py`", "Source of truth:
-~/workspace/developer-sandbox"). It deliberately left references where Python
-explains **current behavior**:
+**Decided (2026-07-28): documentation is clean; the source comments are not yet.**
+No doc under `docs/`, `apps/*/README.md`, or `apps/cli/CONVENTIONS.md` references
+the previous implementation. The remaining ~52 mentions are inline comments where
+the old semantics still explain **current behavior**:
 
-- `generate.ts` — the `.j2` templates rely on Python truthiness and dict
-  `get`/`items`; this is why `_stampDictMethods` exists at all
+- `generate.ts` — the `.j2` templates rely on the old truthiness and dict
+  `get`/`items` semantics; this is why `_stampDictMethods` exists at all
 - `gate.ts` / `standards.ts` — `fnmatch` semantics where `*` crosses `/`
 - `proc.ts` — `timeout` is in **seconds**, an unusual choice that comment justifies
 - `notes.ts` — `repr(list)` / `repr(tuple)` output formats that are contract-shaped
 
-Deleting the word "Python" there destroys the explanation rather than the history.
-If they must go, each needs rewriting to describe the behavior directly — roughly
-52 individual judgment calls, not a substitution. **This is a decision, not a task.**
+Each must be **rewritten to describe the behavior directly**, not substituted —
+deleting the language name alone destroys the explanation. ~52 judgment calls.
 
 ---
 

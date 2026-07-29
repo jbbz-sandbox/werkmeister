@@ -29,7 +29,7 @@
  * Naming
  * ------
  *     feature only           dir: feature              branch: <user>/feature
- *     jira + feature         dir: tre-123-feature       branch: <user>/tre-123-feature
+ *     jira + feature         dir: proj-123-feature       branch: <user>/proj-123-feature
  *
  * (The Jira id is lower-cased and prefixed to the feature name.)
  *

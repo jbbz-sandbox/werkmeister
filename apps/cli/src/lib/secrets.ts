@@ -39,7 +39,7 @@ export const REQUIRED_SECRET_KEYS: readonly string[] = [
   "NEXTAUTH_SECRET",
   "POSTGRES_PASSWORD",
   "TAXONOMY_API_KEY",
-  // TinaCMS self-hosted backend secrets (TRE-1896), now served by web-v2.
+  // TinaCMS self-hosted backend secrets (PROJ-1896), now served by web-v2.
   "TINA_MONGO_PASSWORD",
   "TINA_MONGO_USER",
   "TINA_WRITE_SHARED_SECRET",

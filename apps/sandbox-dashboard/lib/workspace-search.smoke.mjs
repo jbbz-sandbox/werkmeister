@@ -8,9 +8,9 @@ import assert from "node:assert";
 const { filterWorkspaces } = await import("../dist/lib/workspace-search.js");
 
 const all = [
-  { name: "tre-2165-pageview-500-fix", jiraId: "TRE-2165", labels: ["urgent", "webapp"] },
+  { name: "proj-2165-pageview-500-fix", jiraId: "PROJ-2165", labels: ["urgent", "webapp"] },
   { name: "blog-mdx-poc", jiraId: null, labels: ["blog"] },
-  { name: "vendor-portal-refresh", jiraId: "TRE-9001", labels: ["webapp", "vendor"] },
+  { name: "vendor-portal-refresh", jiraId: "PROJ-9001", labels: ["webapp", "vendor"] },
 ];
 
 // Empty query: passthrough, original order preserved.
@@ -20,14 +20,14 @@ assert.deepEqual(filterWorkspaces(all, "   "), all, "whitespace-only query retur
 // Substring match on a partial word.
 assert.deepEqual(
   filterWorkspaces(all, "pagev").map((w) => w.name),
-  ["tre-2165-pageview-500-fix"],
+  ["proj-2165-pageview-500-fix"],
   "substring match on workspace name",
 );
 
 // Labels field is searchable.
 assert.deepEqual(
   filterWorkspaces(all, "webapp").map((w) => w.name),
-  ["tre-2165-pageview-500-fix", "vendor-portal-refresh"],
+  ["proj-2165-pageview-500-fix", "vendor-portal-refresh"],
   "labels field matches, order preserved from `all`",
 );
 
@@ -40,7 +40,7 @@ assert.deepEqual(
 
 // jiraId is still searchable (existing field).
 assert.deepEqual(
-  filterWorkspaces(all, "tre-9001").map((w) => w.name),
+  filterWorkspaces(all, "proj-9001").map((w) => w.name),
   ["vendor-portal-refresh"],
   "jiraId substring match",
 );
@@ -51,7 +51,7 @@ assert.deepEqual(filterWorkspaces(all, "nonexistentxyz"), []);
 // `-term` excludes.
 assert.deepEqual(
   filterWorkspaces(all, "webapp -vendor").map((w) => w.name),
-  ["tre-2165-pageview-500-fix"],
+  ["proj-2165-pageview-500-fix"],
   "-term excludes matches for that term",
 );
 

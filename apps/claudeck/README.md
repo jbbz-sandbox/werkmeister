@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/claudeck"><img src="https://img.shields.io/npm/v/claudeck?color=cb3837&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/JayAndCory/sandbox/blob/main/apps/claudeck/LICENSE"><img src="https://img.shields.io/npm/l/claudeck?color=blue" alt="license" /></a>
+  <a href="https://github.com/jbbz-sandbox/sandbox/blob/main/apps/claudeck/LICENSE"><img src="https://img.shields.io/npm/l/claudeck?color=blue" alt="license" /></a>
   <img src="https://img.shields.io/node/v/claudeck?color=339933" alt="node version" />
   <img src="https://img.shields.io/badge/dependencies-6-brightgreen" alt="dependencies" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="platform" />
@@ -337,7 +337,7 @@ The `test:perf` suite measures WebSocket relay performance with real TCP connect
 Contributions are welcome! Fork the repo, make your changes, and open a PR.
 
 ```bash
-git clone https://github.com/JayAndCory/sandbox.git
+git clone https://github.com/jbbz-sandbox/sandbox.git
 cd sandbox/apps/claudeck
 cd claudeck
 npm install

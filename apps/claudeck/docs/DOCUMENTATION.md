@@ -2,7 +2,7 @@
 
 A browser-based UI for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — chat, run workflows, manage MCP servers, track costs, and orchestrate autonomous agents from a local web interface. Installable as a PWA. Cross-platform (macOS, Linux, Windows).
 
-- **GitHub**: [github.com/JayAndCory/sandbox](https://github.com/JayAndCory/sandbox)
+- **GitHub**: [github.com/jbbz-sandbox/sandbox](https://github.com/jbbz-sandbox/sandbox)
 - **npm**: [npmjs.com/package/claudeck](https://www.npmjs.com/package/claudeck)
 
 ## Quick Start
@@ -22,7 +22,7 @@ npm install -g claudeck
 claudeck
 
 # Or clone and run from source
-git clone https://github.com/JayAndCory/sandbox.git
+git clone https://github.com/jbbz-sandbox/sandbox.git
 cd claudeck
 npm install
 npm start

@@ -210,8 +210,8 @@ function isBlank(v: unknown): boolean {
 /**
  * Merge Jira-derived fields into the current form data, fill-empty style: a
  * field the user already touched is never clobbered, so re-fetching is safe.
- * `jira_id` is the exception — the lookup normalizes it (e.g. `tre-1234` →
- * `TRE-1234`), so the canonical key always wins.
+ * `jira_id` is the exception — the lookup normalizes it (e.g. `proj-1234` →
+ * `PROJ-1234`), so the canonical key always wins.
  */
 function mergeJiraFields(
   current: Record<string, unknown>,

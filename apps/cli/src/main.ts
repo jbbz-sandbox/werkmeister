@@ -446,12 +446,12 @@ const SPECS: CommandSpec[] = [
         .argument(
           "[feature]",
           "Feature name (lower-cased). Combined with --jira-id to form the " +
-            "workspace dir name, e.g. TRE-123 + feature -> tre-123-feature. " +
+            "workspace dir name, e.g. PROJ-123 + feature -> proj-123-feature. " +
             "If omitted, resolved from ./.sandbox/workspace.yml, then interactively (TTY).",
         )
         .option(
           "--jira-id <id>",
-          "Jira ticket ID (e.g. TRE-123). Lower-cased and prefixed to the " +
+          "Jira ticket ID (e.g. PROJ-123). Lower-cased and prefixed to the " +
             "workspace dir name; passed through to init-workspace.",
         )
         .option(

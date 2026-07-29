@@ -18,20 +18,19 @@ npm run build
 
 ## Layout
 
-- `src/main.ts` — commander program (argparse-parity subcommands + dispatch)
+- `src/main.ts` — commander program (subcommand registry + dispatch)
 - `src/commands/` — one module per subcommand (`run(args)` entrypoints)
-- `src/lib/` — shared logic, one-to-one with the Python `cli/lib/`
-- `infra/`, `docs/standards/`, `bin/` — runtime data, copied verbatim from the source repo
-- `PORTING.md` — the Python→TS conventions used throughout
-- `docs/design.md` — scope and decisions for the port
+- `src/lib/` — shared logic
+- `infra/`, `docs/standards/`, `bin/` — runtime data the CLI consumes as-is
+- `CONVENTIONS.md` — the code conventions used throughout
+- `docs/design.md` — scope and decisions
 
-## Differences from the Python original
+## Notes
 
-- argparse → commander (help layout differs; flags/behavior do not)
-- jinja2 → nunjucks with a compat layer (`{% do %}`, dict truthiness,
-  `map(attribute=…)`); templates unchanged on disk
-- pyyaml → `yaml`
-- `sandbox mcp` prints guidance — the MCP dashboard app lives in the original
-  repo and is already TypeScript; it is not duplicated here
+- CLI parsing is commander; templates in `infra/templates/*.j2` render through
+  nunjucks with a small compat layer (`{% do %}`, dict truthiness,
+  `map(attribute=…)`) so they stay shared verbatim with other consumers
+- `sandbox mcp` prints guidance — the MCP dashboard app lives in
+  `apps/sandbox-dashboard` and is not duplicated here
 - interactive prompts and process-spawn edges are async (`run()` is
-  `async` throughout); core logic stays synchronous like the Python
+  `async` throughout); core logic stays synchronous

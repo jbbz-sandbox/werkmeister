@@ -338,7 +338,7 @@ async function buildRefineContext(formData?: Record<string, unknown>): Promise<s
 
   // When the form carries a Jira ticket, fold the real ticket content (summary,
   // description, acceptance criteria, comments) into the background — so a terse
-  // prompt like "add the trustmap field" is grounded in what the ticket asks for.
+  // prompt like "add the rating field" is grounded in what the ticket asks for.
   // Reuse the briefing captured at form-open if we have it (the common path when
   // the form was opened with --jira); only fetch here when it's absent (e.g. the
   // user typed the jira_id into the form by hand). Best-effort: a failed/empty
@@ -479,7 +479,7 @@ const JIRA_CLOUD_ID = "4a4bd20b-0645-4d11-9c98-8d0285630fd4";
 
 /**
  * Pull a Jira issue key out of a bare ID or a browse/board URL, normalised to
- * upper-case (`tre-1234` and `…/browse/TRE-1234?x=1` both → `TRE-1234`). The
+ * upper-case (`proj-1234` and `…/browse/PROJ-1234?x=1` both → `PROJ-1234`). The
  * first `LETTERS-DIGITS` token wins, which is the issue key in every Jira URL
  * shape we see. Returns null if there's nothing key-shaped.
  */
@@ -758,7 +758,7 @@ async function fetchJiraStatusBatch(keys: string[]): Promise<Record<string, stri
     `1. Run searchJiraIssuesUsingJql (Atlassian cloud id ${JIRA_CLOUD_ID}) with jql ` +
     `'key in (${keys.join(",")})' and fields ["status"].\n` +
     "2. Output ONLY a JSON object between <result> and </result> tags mapping each issue key " +
-    'to its status name, e.g. {"TRE-1234":"In Progress"}. Omit keys you could not fetch. ' +
+    'to its status name, e.g. {"PROJ-1234":"In Progress"}. Omit keys you could not fetch. ' +
     "Do not create, edit, transition, or comment on anything; write no prose outside the tags.\n" +
     "If the search fails entirely, output <result>{}</result> and nothing else.";
   try {
@@ -2132,7 +2132,7 @@ export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
  *
  * Runs the CLI with cwd = the workspace directory so it resolves the feature
  * name and slot from that workspace's `.env` (the directory name is NOT the
- * feature name — e.g. `tre-2044-federated-graph` → FEATURE `federated-graph`),
+ * feature name — e.g. `proj-2044-federated-graph` → FEATURE `federated-graph`),
  * matching how a user would run the command from inside the workspace. Returns
  * the command and its (ANSI-stripped) output; throws {@link WorkspaceError} on
  * a non-zero exit (e.g. stopping a feature that isn't running).

@@ -27,7 +27,7 @@ workspace, and prints a single outcome JSON to **stdout** (progress → stderr).
 
 ```bash
 sandbox workspace --browser-form                      # open the form; create on submit
-sandbox workspace --browser-form --jira-id TRE-1234   # pre-fill from a Jira ticket
+sandbox workspace --browser-form --jira-id PROJ-1234   # pre-fill from a Jira ticket
 sandbox workspace --browser-form --open               # also launch VS Code afterward
 ```
 
@@ -63,7 +63,7 @@ Desktop.
 If the user already gave every input, skip the form:
 
 ```bash
-sandbox workspace add-pricing --jira-id TRE-1234 --services product-api,web-v2
+sandbox workspace add-pricing --jira-id PROJ-1234 --services product-api,web-v2
 ```
 
 `feature` is positional; other form keys map 1:1 onto flags (`jira_id` → `--jira-id`,

@@ -43,6 +43,30 @@ you to run `sandbox setup`.
 | `~/.sandbox/ports.yaml` | Feature-slot port allocation. |
 | `~/.sandbox/secrets.env` | Real credentials, injected into each feature's `.env`. Never committed. |
 | `~/.sandbox/env.sh` | Generated `SANDBOX_*` exports, sourced by `~/.zshenv` and the CLI wrapper. |
+| `~/.sandbox/corp-ca.crt` | Corporate TLS-proxy root(s), trusted by image builds. Auto-populated on macOS; see below. |
+
+### Behind a TLS-intercepting proxy
+
+On a corporate network that intercepts TLS (Netskope, Zscaler, Palo Alto), the
+`k8s-forwards` image build fails: `apk add` can't verify the proxy-minted cert
+served for `dl-cdn.alpinelinux.org`, and shared infra comes up degraded.
+
+`sandbox connect` handles this automatically on macOS — it extracts the proxy
+root(s) from the System keychain into `~/.sandbox/corp-ca.crt`, which the build
+mounts as a BuildKit secret and appends to alpine's trust store. Off-proxy the
+file is empty and the build is unchanged.
+
+Auto-extraction matches a fixed list of vendor certificate names, so a vendor
+outside that list — or a non-macOS host — needs the CA placed by hand:
+
+```bash
+# any PEM bundle; sandbox never overwrites a file that already has a cert in it
+cat /path/to/corp-root.crt > ~/.sandbox/corp-ca.crt
+./sandbox connect
+```
+
+The symptom that this is what you're hitting: `docker compose build` failing on
+`k8s-forwards` with a certificate verification error from `apk`.
 
 Public hostnames are **derived**, not restated: a service that declares a
 `feature_router:` block in `services.yaml` is served at

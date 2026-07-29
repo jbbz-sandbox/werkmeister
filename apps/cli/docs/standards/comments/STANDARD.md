@@ -19,7 +19,7 @@ it tells the reader something the code cannot.
 2. **Keep and sharpen comments that explain genuine ambiguity.** The *why* behind a
    decision, non-obvious constraints, units, invariants, ordering/scheduling requirements,
    external-system quirks, cross-service contracts, edge cases, and ticket references
-   (e.g. `TRE-1234`). If a competent reader couldn't infer it from the code, it belongs in
+   (e.g. `PROJ-1234`). If a competent reader couldn't infer it from the code, it belongs in
    a comment. See the per-repo notes under [repos/](repos/) for the quirks that matter most
    in each codebase.
 3. **Tighten survivors to one concise, useful line.** No banner art, no restating types,

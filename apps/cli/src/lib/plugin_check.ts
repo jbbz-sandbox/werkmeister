@@ -195,7 +195,7 @@ export function pluginDriftWarnings(
       `${PLUGIN_NAME} plugin is not installed — the sandbox-* ops skills ` +
         `(sandbox-diagnose, sandbox-status, sandbox-workspace, …) will not ` +
         `surface in Claude Code sessions. Run \`sandbox setup\` to install ` +
-        `it (or use /plugin in Claude Code). The tr-* skills are ` +
+        `it (or use /plugin in Claude Code). The sb-* skills are ` +
         `unaffected — they are projected into each workspace by ` +
         `init-workspace.`,
     ];
