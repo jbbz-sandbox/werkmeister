@@ -11,6 +11,7 @@
 
 import * as fs from "node:fs";
 import * as net from "node:net";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import {
@@ -28,6 +29,7 @@ import { configureGitHooksPath } from "../lib/git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy } from "../lib/k8s.js";
 import { CLAUDECK, DASHBOARD, startAll, status as webStatus } from "../lib/web_servers.js";
 import { ProcError, run as procRun } from "../lib/proc.js";
+import { sandboxHome } from "../lib/global_config.js";
 
 function isDir(p: string): boolean {
   return fs.existsSync(p) && fs.statSync(p).isDirectory();
@@ -49,6 +51,65 @@ function shimLocalApiServer(kubeconfig: string): string {
   return kubeconfig
     .replace(/(server:\s*https:\/\/)(127\.0\.0\.1|localhost)\b/g, "$1host.docker.internal")
     .replace(/^(\s*)certificate-authority-data:.*$/gm, "$1insecure-skip-tls-verify: true");
+}
+
+/**
+ * Ensure `~/.sandbox/corp-ca.crt` is populated with the corporate TLS-proxy
+ * root(s) from the macOS System keychain, if any. Docker build mounts this as
+ * a BuildKit secret so `apk`/`curl` inside images validate through Netskope/
+ * Zscaler-style intercept. Empty file (no proxy roots found, or non-mac) is a
+ * no-op at build time. The file must always EXIST — compose fails hard on a
+ * missing `secrets.file` even if no build stage consumes it.
+ *
+ * ponytail: mac-only extraction via `security`. Linux/WSL devs behind the same
+ * proxy can drop their CA at ~/.sandbox/corp-ca.crt manually; this function
+ * won't overwrite a pre-populated file (only touches empty/missing).
+ */
+function ensureCorpCa(): void {
+  const dest = path.join(sandboxHome(), "corp-ca.crt");
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const existing = fs.existsSync(dest) ? fs.readFileSync(dest, "utf8") : "";
+  if (existing.includes("BEGIN CERTIFICATE")) {
+    return;
+  }
+  if (os.platform() !== "darwin") {
+    fs.writeFileSync(dest, "");
+    return;
+  }
+  // `security find-certificate -c` filters by CN substring. Common corporate
+  // TLS-intercept vendors and the CN pattern they use:
+  //   Netskope    → goskope.com intermediate + certadmin root
+  //   Zscaler     → Zscaler Root CA
+  //   Palo Alto   → Palo Alto Networks
+  // The intermediate alone is NOT enough — openssl walks up to the root and
+  // rejects the chain if the root isn't trusted. Netskope's chain terminates
+  // at CN=certadmin (O=Netskope Inc.), so we grab both. Empty output on all
+  // matches → off-proxy machine; write an empty file so compose's secret path
+  // still resolves.
+  const filters = ["goskope", "certadmin", "Zscaler", "Palo Alto"];
+  const pems: string[] = [];
+  for (const filter of filters) {
+    const result = procRun(
+      [
+        "security",
+        "find-certificate",
+        "-a",
+        "-p",
+        "-c",
+        filter,
+        "/Library/Keychains/System.keychain",
+      ],
+      { capture: true, timeout: 5 },
+    );
+    if (result.status === 0 && result.stdout.includes("BEGIN CERTIFICATE")) {
+      pems.push(result.stdout);
+    }
+  }
+  const pem = pems.join("");
+  fs.writeFileSync(dest, pem);
+  if (pem.includes("BEGIN CERTIFICATE")) {
+    info(`Corporate CA extracted to ${dest} (image builds will trust it)`);
+  }
 }
 
 /** Generate proxy/worker.env + proxy/Caddyfile, and refresh the k8s kubeconfig. */
@@ -266,6 +327,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // Ensure proxy files exist before docker compose tries to read them
   ensureProxyFiles();
+
+  // Extract corporate TLS-proxy root(s) so the k8s-forwards image build can
+  // validate outbound HTTPS. Must run before `docker compose up` — the
+  // compose file declares `secrets.corp_ca.file: ~/.sandbox/corp-ca.crt` and
+  // will hard-fail if the path doesn't exist.
+  ensureCorpCa();
 
   // Start all infrastructure (including k8s port-forwards)
   const infraOk = startSharedInfra();

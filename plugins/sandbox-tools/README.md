@@ -21,15 +21,14 @@ sandbox environment.
 | `sandbox-starting-prompt` | Run the `starting_prompt` defined in the workspace's `.sandbox/workspace.yml`. |
 | `install-workspace-dashboard` | Install the Sandbox Workspaces live dashboard as a **Cowork artifact** (`apps/sandbox-dashboard/dist/workspace-list.artifact.html`). |
 
-### Code standards (`tr-*`) — NOT in this plugin
+### Code standards (`sb-*`) — NOT in this plugin
 
-The `tr-implement` / `tr-research` entry skills and the `tr-*-standard` code
+The `sb-implement` / `sb-research` entry skills and the `sb-*-standard` code
 standards are **not shipped here**. They are projected into each workspace's
 `.claude/skills/` by `sandbox init-workspace`: entry-skill sources live in
-[`infra/skills/`](../../infra/skills), and the standards are generated from
-[`docs/standards/`](../../docs/standards) by `sandbox standards build`
-(drift-gated by `sandbox standards check` / `cli/tests/test_skill_gen.py`) — see
-[`docs/jit-standards-loading-spec.md`](../../docs/jit-standards-loading-spec.md).
+[`apps/cli/infra/skills/`](../../apps/cli/infra/skills), and the standards are
+generated from [`apps/cli/docs/standards/`](../../apps/cli/docs/standards) by
+`sandbox standards build` (drift-gated by `sandbox standards check`).
 
 ## Bundled MCP server (`sandbox-workspace`)
 
@@ -47,7 +46,7 @@ session bridge — with **one form definition and graceful UI degradation per cl
 The server detects whether the client renders MCP App UI (`io.modelcontextprotocol/ui`
 capability); every tool also returns markdown/text, so any host degrades gracefully.
 Call the create tool directly: `mcp__sandbox-workspace__workspace` (optionally
-`{ "jira": "TRE-1234" }`). Full tool table in the
+`{ "jira": "PROJ-1234" }`). Full tool table in the
 [app README](../../apps/sandbox-dashboard/README.md).
 
 ### Register on Claude Desktop
@@ -74,7 +73,7 @@ This repo doubles as a plugin marketplace. From any Claude Code session
 every session, not just inside this repo):
 
 ```
-/plugin marketplace add jayandcory/sandbox
+/plugin marketplace add jbbz-sandbox/sandbox
 /plugin install sandbox-tools@sandbox
 ```
 

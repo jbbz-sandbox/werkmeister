@@ -41,9 +41,9 @@ console.log("✓ isWithin30Days");
 const view = {
   url: "https://github.com/sandbox/econx/pull/1234",
   number: 1234,
-  title: "TRE-999 fix the thing",
+  title: "PROJ-999 fix the thing",
   body: "body text",
-  headRefName: "jaysonboyer/tre-999",
+  headRefName: "jaysonboyer/proj-999",
   updatedAt: "2026-07-10T00:00:00Z",
   author: { login: "someoneelse" },
   labels: [{ name: "ready-for-human-approval" }, { name: "bug" }],
@@ -58,7 +58,7 @@ assert.equal(pr.changesRequested, true, "reviewDecision CHANGES_REQUESTED");
 assert.equal(pr.outOfDate, true, "mergeStateStatus BEHIND");
 assert.equal(pr.failingChecks, 1, "one failing check");
 assert.equal(pr.hasApprovalLabel, true, "approval label present");
-assert.equal(pr.jiraKey, "TRE-999", "jira key parsed from title");
+assert.equal(pr.jiraKey, "PROJ-999", "jira key parsed from title");
 assert.deepEqual(pr.labels, ["ready-for-human-approval", "bug"], "label names");
 
 const clean = prFromView({ ...view, mergeStateStatus: "UNKNOWN", reviewDecision: "APPROVED" }, "me");
@@ -99,14 +99,14 @@ console.log("✓ isValidPrUrl injection guard");
 
 // 7. buildReconcileContext: embeds Jira + PR + diff; truncates a huge diff.
 const ctx = buildReconcileContext(
-  { key: "TRE-1", summary: "Do a thing", status: "In Review", description: "ticket body" },
+  { key: "PROJ-1", summary: "Do a thing", status: "In Review", description: "ticket body" },
   { url: "https://github.com/sandbox/econx/pull/9", title: "PR title", body: "pr body", author: { login: "me" }, labels: [{ name: "ready-for-human-approval" }] },
   "diff --git a b",
 );
-assert.ok(ctx.includes("TRE-1") && ctx.includes("ticket body"), "embeds Jira ticket");
+assert.ok(ctx.includes("PROJ-1") && ctx.includes("ticket body"), "embeds Jira ticket");
 assert.ok(ctx.includes("PR title") && ctx.includes("pr body") && ctx.includes("@me"), "embeds PR details");
 assert.ok(ctx.includes("diff --git a b"), "embeds diff");
-const bigCtx = buildReconcileContext({ key: "TRE-2" }, { url: "https://github.com/x/y/pull/1", unavailable: true }, "x".repeat(200_000));
+const bigCtx = buildReconcileContext({ key: "PROJ-2" }, { url: "https://github.com/x/y/pull/1", unavailable: true }, "x".repeat(200_000));
 assert.ok(bigCtx.includes("diff truncated"), "huge diff is truncated");
 assert.ok(bigCtx.includes("(PR details unavailable)"), "unavailable PR degrades in place");
 console.log("✓ buildReconcileContext");

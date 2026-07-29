@@ -143,7 +143,7 @@ export function createServer(): McpServer {
           .string()
           .optional()
           .describe(
-            "Jira ticket ID (e.g. TRE-1234) or URL. When set, the ticket is fetched " +
+            "Jira ticket ID (e.g. PROJ-1234) or URL. When set, the ticket is fetched " +
               "and used to pre-fill the form (feature, jira_id, task, description, " +
               "starting_prompt).",
           ),
@@ -300,7 +300,7 @@ export function createServer(): McpServer {
         "Distil a Jira ticket into New Sandbox Workspace form fields (jira_id, feature, task, " +
         "description, starting_prompt, suggested services) from a ticket key or URL. Best-effort; " +
         "returns just { jira_id } if the lookup fails. Called by the form's “Fetch from Jira” button.",
-      inputSchema: { ref: z.string().describe("A Jira key (e.g. TRE-1234) or a string containing one.") },
+      inputSchema: { ref: z.string().describe("A Jira key (e.g. PROJ-1234) or a string containing one.") },
       outputSchema: z.object({ formData: z.record(z.string(), z.unknown()) }),
     },
     async (args): Promise<CallToolResult> => {
@@ -597,10 +597,10 @@ export function createServer(): McpServer {
     {
       title: "Jira Ticket Statuses",
       description:
-        "Fetch the current Jira status name for a batch of issue keys (e.g. TRE-1234) in one " +
+        "Fetch the current Jira status name for a batch of issue keys (e.g. PROJ-1234) in one " +
         "lookup. Best-effort: keys that can't be fetched are omitted from the result.",
       inputSchema: {
-        keys: z.array(z.string()).describe("Jira issue keys, e.g. [\"TRE-1234\", \"TRE-1300\"]."),
+        keys: z.array(z.string()).describe("Jira issue keys, e.g. [\"PROJ-1234\", \"PROJ-1300\"]."),
         refresh: z
           .boolean()
           .optional()
@@ -739,7 +739,7 @@ export function createServer(): McpServer {
         "Fetch a compact Jira card (key, summary, status, type, assignee, description, url) for a " +
         "ticket key or any string containing one. Best-effort: returns `{ key }` alone if the " +
         "lookup fails.",
-      inputSchema: { ref: z.string().describe("A Jira key (e.g. TRE-1234) or a string containing one.") },
+      inputSchema: { ref: z.string().describe("A Jira key (e.g. PROJ-1234) or a string containing one.") },
       outputSchema: z.object({
         key: z.string(),
         summary: z.string().optional(),
@@ -778,7 +778,7 @@ export function createServer(): McpServer {
         "the `sessionKey` the dashboard chat panel streams from (a `reconcile:<repo>-<number>` key).",
       inputSchema: {
         url: z.string().describe("The pull request URL to reconcile."),
-        jiraKey: z.string().optional().describe("Jira key hint (e.g. TRE-1234); inferred from the PR when omitted."),
+        jiraKey: z.string().optional().describe("Jira key hint (e.g. PROJ-1234); inferred from the PR when omitted."),
       },
       outputSchema: z.object({
         sessionKey: z.string(),

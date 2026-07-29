@@ -22,7 +22,7 @@ upstream's numbering.
   here. `README.md`, `CHANGELOG.md` and `docs/index.html` were re-attributed
   too: author bylines, `<meta name="author">`, schema.org author fields, the
   star-count API call and every link to *this* project now point at
-  `JayAndCory/sandbox`. `CHANGELOG.md` gained a note marking entries
+  `jbbz-sandbox/sandbox`. `CHANGELOG.md` gained a note marking entries
   through 1.4.2 as inherited upstream history. Added `private: true` to
   `package.json` so this fork cannot be published under upstream's npm name.
 - Still pointing at upstream, because they are third-party service addresses

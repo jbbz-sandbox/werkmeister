@@ -10,6 +10,6 @@ Typesense, source DBs). Keep docstrings that add value; drop ones that echo the 
 
 ```python
 # Stored as epoch ms (0 when absent) so range filters never hit a missing-field
-# error across the non-published statuses. (TRE-2022)
+# error across the non-published statuses. (PROJ-2022)
 indexed_at = to_epoch_ms(doc.get("updated_at")) or 0
 ```

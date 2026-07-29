@@ -10,6 +10,6 @@ without its original context, so contract stability deserves a comment.
 
 ```ts
 // Consumers depend on this shape staying backward-compatible; add fields, never
-// rename or remove without a coordinated migration. (TRE-1234)
+// rename or remove without a coordinated migration. (PROJ-1234)
 export interface ReviewSummary { /* ... */ }
 ```

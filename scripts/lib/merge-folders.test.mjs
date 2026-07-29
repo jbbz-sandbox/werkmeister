@@ -8,7 +8,7 @@ const existing = [
   { name: "gone", path: "/ws/gone", source: "sandbox" }, // stale managed
 ];
 const workspaces = [
-  { name: "test-me", path: "/ws/test-me", jiraUrl: "https://j/TRE-1" },
+  { name: "test-me", path: "/ws/test-me", jiraUrl: "https://j/PROJ-1" },
   { name: "claudeck-test", path: "/ws/claudeck-test", jiraUrl: null },
 ];
 

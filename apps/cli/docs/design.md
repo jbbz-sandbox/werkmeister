@@ -14,15 +14,14 @@ standalone and runnable.
 
 - **Node ≥20, ESM, tsc build** (`src/` → `dist/`), no bundler. `./sandbox` wrapper
   execs `node dist/main.js`.
-- **Dependency swap:** argparse → commander, pyyaml → `yaml`, jinja2 → nunjucks
-  (the four `infra/templates/*.j2` files use only nunjucks-compatible constructs
-  and are reused unchanged).
-- **1:1 module mapping** (same file names, `.ts`), behavior-preserving: identical
-  flags, help text, output, exit codes, generated-file content.
-- **Sync core, async at the edges:** subprocess calls use `spawnSync` (matching
-  Python's sync flow); interactive prompts use `readline/promises`, so command
-  `run()` is `async`.
-- **Tests:** vitest; the highest-value Python test files (generate/config/slots/
-  form_schema) are ported first; the remaining ~35 test files are a follow-up.
+- **Dependencies kept to three:** commander (CLI parsing), `yaml`, nunjucks (the
+  four `infra/templates/*.j2` files use only nunjucks-compatible constructs and
+  are shared verbatim with other consumers).
+- **One module per command, one per shared concern**, behavior-preserving:
+  flags, help text, output, exit codes, and generated-file content are contracts.
+- **Sync core, async at the edges:** subprocess calls use `spawnSync`;
+  interactive prompts use `readline/promises`, so command `run()` is `async`.
+- **Tests:** vitest, covering the highest-value modules first (generate/config/
+  slots/form_schema); broader coverage is a follow-up.
 
-Conventions for the port live in `PORTING.md`.
+Code conventions live in `../CONVENTIONS.md`.

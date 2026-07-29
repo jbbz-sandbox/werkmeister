@@ -390,10 +390,10 @@ registerDocSection({
 
     <h3>GitHub</h3>
     <ul>
-      <li><a href="https://github.com/JayAndCory/sandbox" target="_blank" style="color:var(--accent)">github.com/JayAndCory/sandbox</a> — Source code, issues, and discussions</li>
-      <li><a href="https://github.com/JayAndCory/sandbox/issues" target="_blank" style="color:var(--accent)">Issues</a> — Report bugs or request features</li>
-      <li><a href="https://github.com/JayAndCory/sandbox/blob/main/apps/claudeck/docs/DOCUMENTATION.md" target="_blank" style="color:var(--accent)">Full Documentation</a> — Complete feature docs and API reference</li>
-      <li><a href="https://github.com/JayAndCory/sandbox/blob/main/apps/claudeck/docs/CONFIGURATION.md" target="_blank" style="color:var(--accent)">Configuration Guide</a> — User data directory, config files, plugin system</li>
+      <li><a href="https://github.com/jbbz-sandbox/sandbox" target="_blank" style="color:var(--accent)">github.com/jbbz-sandbox/sandbox</a> — Source code, issues, and discussions</li>
+      <li><a href="https://github.com/jbbz-sandbox/sandbox/issues" target="_blank" style="color:var(--accent)">Issues</a> — Report bugs or request features</li>
+      <li><a href="https://github.com/jbbz-sandbox/sandbox/blob/main/apps/claudeck/docs/DOCUMENTATION.md" target="_blank" style="color:var(--accent)">Full Documentation</a> — Complete feature docs and API reference</li>
+      <li><a href="https://github.com/jbbz-sandbox/sandbox/blob/main/apps/claudeck/docs/CONFIGURATION.md" target="_blank" style="color:var(--accent)">Configuration Guide</a> — User data directory, config files, plugin system</li>
     </ul>
 
     <h3>npm</h3>

@@ -17,7 +17,7 @@ Run these steps in order. Steps 1 and 2 are gates — a failure stops the PR.
      conventional-commit types (`feat`, `fix`, `refactor`, `chore`, `docs`,
      `test`, `ci`, `perf`); scope optional, use it when targeting a specific
      app/package.
-     Example: `feat(product-api): TRE-1125 Add trustmap field to Product type`
+     Example: `feat(product-api): PROJ-1125 Add rating field to Product type`
    - **Body:**
 
      ```markdown

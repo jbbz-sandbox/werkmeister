@@ -33,7 +33,7 @@ Both are required: the header covers Playwright requests; the cookie covers brow
 ### Step 1 — Get the feature name
 
 If the user has not provided a feature name, ask for one. Feature names must:
-- Be lowercase, hyphen-separated (e.g., `add-solutions-tr`, `payment-refactor`)
+- Be lowercase, hyphen-separated (e.g., `add-solutions-panel`, `payment-refactor`)
 - Not already be allocated (collision = already running). Slot ownership lives in
   the `com.sandbox.local.feature` docker label; `~/.sandbox/slots.json` is gone.
 

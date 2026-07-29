@@ -235,7 +235,7 @@ const BUNDLE = {
     required: ["feature", "work_type"],
   },
   uiSchema: {
-    jira_id: { "ui:placeholder": "TRE-1234" },
+    jira_id: { "ui:placeholder": "PROJ-1234" },
     services: { "ui:widget": "checkboxes" },
     starting_prompt: {
       "ui:widget": "textarea",
@@ -253,7 +253,7 @@ test("maps widgets, required, pattern, placeholder", () => {
   assert.equal(by.feature.widget, "text");
   assert.equal(by.feature.required, true);
   assert.equal(by.feature.pattern, "^[a-z]+$");
-  assert.equal(by.jira_id.placeholder, "TRE-1234");
+  assert.equal(by.jira_id.placeholder, "PROJ-1234");
   assert.equal(by.jira_id.required, false);
   assert.equal(by.work_type.widget, "select");
   assert.deepEqual(by.work_type.enumOptions, ["feature", "bugfix"]);

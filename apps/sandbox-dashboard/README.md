@@ -54,7 +54,7 @@ The CLI owns the inputs and the create logic:
 
 - **Form fields** come from `sandbox workspace --print-form-schema` — a
   render-ready RJSF bundle (`{schema, uiSchema, formData, title}`) shared with
-  the terminal wizard (`cli/lib/form_schema.py`). Change a prompt in the CLI and
+  the terminal wizard (`apps/cli/src/lib/form_schema.ts`). Change a prompt in the CLI and
   every form tracks it.
 - **Creation** runs `sandbox workspace <feature> [--flag value …]`; form keys
   map 1:1 onto CLI flags. The CLI validates, refuses existing branches, and

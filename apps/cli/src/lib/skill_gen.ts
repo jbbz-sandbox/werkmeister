@@ -29,7 +29,7 @@ import {
   parseFrontmatter,
 } from "./standards.js";
 
-export const GITHUB_REPO_BASE = "https://github.com/JayAndCory/sandbox";
+export const GITHUB_REPO_BASE = "https://github.com/jbbz-sandbox/sandbox";
 // Generated links target the default branch; there is no long-lived side
 // branch to pin, so anything else would dangle.
 export const GITHUB_BRANCH = "main";

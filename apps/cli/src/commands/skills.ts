@@ -1,7 +1,7 @@
 /**
  * sandbox skills <check|sync>
  *
- * Freshness control for the tr-* skills projected into a workspace's
+ * Freshness control for the sb-* skills projected into a workspace's
  * `.claude/skills/` (jit-standards-loading-spec.md §5.5, delivery amended
  * 2026-07-04 — skills are projected at init-workspace, not shipped via the
  * plugin, so a workspace inited before a standards edit lags until re-synced).
@@ -9,7 +9,7 @@
  * check: compare the workspace's projected skills against a fresh rendering
  *       from this repo; exit 1 with a per-skill report when stale.
  * sync:  rewrite the projection (same writer init-workspace uses) and prune
- *       orphaned tr-* skills.
+ *       orphaned sb-* skills.
  *
  * Run from anywhere inside a workspace — the workspace root is resolved by
  * walking up to the nearest `.sandbox/` directory.
@@ -93,7 +93,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       info(`wrote ${p}`);
     }
     success(
-      `Projected ${written.length} tr-* skill(s) into ${path.join(workspace, ".claude", "skills")}`,
+      `Projected ${written.length} sb-* skill(s) into ${path.join(workspace, ".claude", "skills")}`,
     );
 
     const manifest = resolveWorkspaceManifest(workspace);
@@ -142,5 +142,5 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (authoring.length || drift.length) {
     process.exit(1);
   }
-  success("Workspace tr-* skills are current.");
+  success("Workspace sb-* skills are current.");
 }

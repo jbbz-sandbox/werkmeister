@@ -28,7 +28,7 @@ assert.deepEqual(await jiraCreds(), {
 
 // 2. briefingFromIssue: full card
 const briefing = briefingFromIssue({
-  key: "TRE-1",
+  key: "PROJ-1",
   fields: {
     summary: "Do the thing",
     description: "  Long body  ",
@@ -44,7 +44,7 @@ const briefing = briefingFromIssue({
     },
   },
 });
-assert.match(briefing, /^TRE-1: Do the thing/);
+assert.match(briefing, /^PROJ-1: Do the thing/);
 assert.match(briefing, /Status: In Progress · Type: Story · Assignee: Jay/);
 assert.match(briefing, /Description:\nLong body/);
 assert.match(briefing, /- \[A 2026-07-01\] first/);
@@ -52,8 +52,8 @@ assert.match(briefing, /- \[unknown\] no author/);
 assert.ok(!briefing.includes("[B"));
 
 // 3. briefingFromIssue: sparse card (no description/comments/meta)
-const sparse = briefingFromIssue({ key: "TRE-2", fields: {} });
-assert.equal(sparse, "TRE-2: (no summary)");
+const sparse = briefingFromIssue({ key: "PROJ-2", fields: {} });
+assert.equal(sparse, "PROJ-2: (no summary)");
 
 // 4. process env overrides the YAML, but a placeholder token never counts as a
 // credential — it falls through to the configured section instead.
@@ -79,12 +79,13 @@ fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("jira-rest pure-function smoke: PASS");
 
-// 6. LIVE (only with real creds in ~/.sandbox/config.yaml; key from argv or a default)
+// 6. LIVE (needs real creds in ~/.sandbox/config.yaml and a real issue key in argv —
+// no default key, since a hardcoded one only exists on one Jira site)
 const creds = await jiraCreds();
-if (!creds) {
-  console.log("live section: SKIPPED (no credentials)");
+if (!creds || !process.argv[2]) {
+  console.log(`live section: SKIPPED (${creds ? "pass an issue key as argv[2]" : "no credentials"})`);
 } else {
-  const key = process.argv[2] || "TRE-2164";
+  const key = process.argv[2];
   const issue = await fetchIssueRest(key);
   assert.ok(issue, `fetchIssueRest(${key}) returned null with creds present`);
   assert.equal(issue.key.toUpperCase(), key.toUpperCase());

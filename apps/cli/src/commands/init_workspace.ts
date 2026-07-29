@@ -321,7 +321,7 @@ function hasWorkspaceConfig(workspaceRoot: string, override: string | null): boo
 // `# yaml-language-server` modeline below; the `$schema` key we also emit is
 // the machine-readable pointer for other tooling.
 const _WORKSPACE_SCHEMA_URL =
-  "https://raw.githubusercontent.com/JayAndCory/sandbox/" +
+  "https://raw.githubusercontent.com/jbbz-sandbox/sandbox/" +
   "main/infra/schemas/workspace.schema.json";
 
 const _WORKSPACE_CONFIG_HEADER =
@@ -541,7 +541,7 @@ const _WIZARD_PROMPTS: readonly PromptSpec[] = [
       "Renders a clickable ticket link in CLAUDE.md. Fill it first — the " +
       "browser form's “Fetch from Jira” button uses it to pre-fill the rest.",
     pattern: "^[A-Z][A-Z0-9]+-[0-9]+$",
-    placeholder: "TRE-1234",
+    placeholder: "PROJ-1234",
     defaultFn: (ws) => scrapeJiraId(ws),
   },
   {
