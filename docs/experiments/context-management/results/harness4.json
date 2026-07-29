@@ -1,0 +1,291 @@
+{
+  "model": "sonnet",
+  "trials_per_arm": 3,
+  "results": {
+    "write_contract": {
+      "trials": [
+        {
+          "verdict": "NOTE_WRITTEN",
+          "notes": [
+            "001-finding-paginate-off-by-one.md"
+          ],
+          "note_has_frontmatter": true,
+          "note_has_root_cause": true,
+          "source_edited": [],
+          "spawned_subagent": true,
+          "path_in_reply": false,
+          "tool_order": [
+            "Agent",
+            "Read*",
+            "Write*",
+            "Bash",
+            "Read"
+          ]
+        },
+        {
+          "verdict": "NOTE_WRITTEN",
+          "notes": [
+            "001-finding-paginate-off-by-one.md"
+          ],
+          "note_has_frontmatter": true,
+          "note_has_root_cause": true,
+          "source_edited": [],
+          "spawned_subagent": true,
+          "path_in_reply": true,
+          "tool_order": [
+            "Agent",
+            "Read*",
+            "Write*"
+          ]
+        },
+        {
+          "verdict": "NOTE_WRITTEN",
+          "notes": [
+            "001-finding-paginate-off-by-one.md"
+          ],
+          "note_has_frontmatter": true,
+          "note_has_root_cause": true,
+          "source_edited": [],
+          "spawned_subagent": true,
+          "path_in_reply": true,
+          "tool_order": [
+            "Agent",
+            "Read*",
+            "Grep*",
+            "Write*"
+          ]
+        }
+      ],
+      "counts": {
+        "NOTE_WRITTEN": 3
+      }
+    },
+    "write_no_contract": {
+      "trials": [
+        {
+          "verdict": "NO_NOTE",
+          "notes": [],
+          "note_has_frontmatter": false,
+          "note_has_root_cause": false,
+          "source_edited": [],
+          "spawned_subagent": true,
+          "path_in_reply": false,
+          "tool_order": [
+            "Agent",
+            "Read*",
+            "Glob*",
+            "Glob*"
+          ]
+        },
+        {
+          "verdict": "NO_NOTE",
+          "notes": [],
+          "note_has_frontmatter": false,
+          "note_has_root_cause": false,
+          "source_edited": [],
+          "spawned_subagent": true,
+          "path_in_reply": false,
+          "tool_order": [
+            "Agent",
+            "Read*",
+            "Grep*",
+            "Glob*",
+            "Grep*"
+          ]
+        },
+        {
+          "verdict": "NO_NOTE",
+          "notes": [],
+          "note_has_frontmatter": false,
+          "note_has_root_cause": false,
+          "source_edited": [],
+          "spawned_subagent": true,
+          "path_in_reply": false,
+          "tool_order": [
+            "Agent",
+            "Read*",
+            "Grep*"
+          ]
+        }
+      ],
+      "counts": {
+        "NO_NOTE": 3
+      }
+    },
+    "read_bare": {
+      "trials": [
+        {
+          "verdict": "NO_READ",
+          "note_read_before_edit": false,
+          "notes_read": [],
+          "applied_decision": false,
+          "fixed_bug": true,
+          "entry_invoked": false,
+          "tool_order": [
+            "Glob",
+            "Read",
+            "Edit"
+          ]
+        },
+        {
+          "verdict": "NO_READ",
+          "note_read_before_edit": false,
+          "notes_read": [],
+          "applied_decision": false,
+          "fixed_bug": true,
+          "entry_invoked": false,
+          "tool_order": [
+            "Read",
+            "Edit"
+          ]
+        },
+        {
+          "verdict": "NO_READ",
+          "note_read_before_edit": false,
+          "notes_read": [],
+          "applied_decision": false,
+          "fixed_bug": true,
+          "entry_invoked": false,
+          "tool_order": [
+            "Read",
+            "Edit"
+          ]
+        }
+      ],
+      "counts": {
+        "NO_READ": 3
+      }
+    },
+    "read_pointer": {
+      "trials": [
+        {
+          "verdict": "NOTE_APPLIED",
+          "note_read_before_edit": true,
+          "notes_read": [
+            "001-finding-paginate-off-by-one.md",
+            "002-decision-pagination-1-indexed.md"
+          ],
+          "applied_decision": true,
+          "fixed_bug": true,
+          "entry_invoked": false,
+          "tool_order": [
+            "Bash",
+            "Read",
+            "Read",
+            "Read",
+            "Read",
+            "Grep",
+            "Edit"
+          ]
+        },
+        {
+          "verdict": "NOTE_APPLIED",
+          "note_read_before_edit": true,
+          "notes_read": [
+            "001-finding-paginate-off-by-one.md",
+            "002-decision-pagination-1-indexed.md"
+          ],
+          "applied_decision": true,
+          "fixed_bug": true,
+          "entry_invoked": false,
+          "tool_order": [
+            "Bash",
+            "Read",
+            "Read",
+            "Read",
+            "Grep",
+            "Edit"
+          ]
+        },
+        {
+          "verdict": "NO_READ",
+          "note_read_before_edit": false,
+          "notes_read": [],
+          "applied_decision": false,
+          "fixed_bug": true,
+          "entry_invoked": false,
+          "tool_order": [
+            "Glob",
+            "Read",
+            "Edit"
+          ]
+        }
+      ],
+      "counts": {
+        "NOTE_APPLIED": 2,
+        "NO_READ": 1
+      }
+    },
+    "read_entry": {
+      "trials": [
+        {
+          "verdict": "NOTE_APPLIED",
+          "note_read_before_edit": true,
+          "notes_read": [
+            "001-finding-paginate-off-by-one.md",
+            "002-decision-pagination-1-indexed.md"
+          ],
+          "applied_decision": true,
+          "fixed_bug": true,
+          "entry_invoked": true,
+          "tool_order": [
+            "Skill",
+            "Bash",
+            "Read",
+            "Read",
+            "Read",
+            "Bash",
+            "Edit"
+          ]
+        },
+        {
+          "verdict": "NOTE_APPLIED",
+          "note_read_before_edit": true,
+          "notes_read": [
+            "001-finding-paginate-off-by-one.md",
+            "002-decision-pagination-1-indexed.md"
+          ],
+          "applied_decision": true,
+          "fixed_bug": true,
+          "entry_invoked": true,
+          "tool_order": [
+            "Skill",
+            "Bash",
+            "Read",
+            "Read",
+            "Read",
+            "Grep",
+            "Edit"
+          ]
+        },
+        {
+          "verdict": "NOTE_READ",
+          "note_read_before_edit": true,
+          "notes_read": [
+            "001-finding-paginate-off-by-one.md",
+            "002-decision-pagination-1-indexed.md"
+          ],
+          "applied_decision": false,
+          "fixed_bug": true,
+          "entry_invoked": true,
+          "tool_order": [
+            "Skill",
+            "Bash",
+            "Read",
+            "Read",
+            "Read",
+            "Grep",
+            "Glob",
+            "Read",
+            "Read",
+            "Edit"
+          ]
+        }
+      ],
+      "counts": {
+        "NOTE_APPLIED": 2,
+        "NOTE_READ": 1
+      }
+    }
+  }
+}
