@@ -1,21 +1,23 @@
 /**
- * Lifecycle for the sandbox-workspace MCP web server (apps/sandbox-dashboard).
+ * Lifecycle for the sandbox's host web servers — the workspaces dashboard /
+ * MCP app (apps/sandbox-dashboard) and Claudeck (apps/claudeck).
  *
- * This runs as a plain host `node` process — NOT a container — because its tools
- * drive host-local things (Docker, VS Code, Terminal, kubectl, the `sandbox` and
- * `claude` CLIs) that a container can't reach. `sandbox connect` builds and starts
- * it alongside the shared-infra containers; `sandbox down/stop/restart infra`
- * tears it down or bounces it; `sandbox status` reports it.
+ * Both run as plain host `node` processes — NOT containers — because their
+ * tools drive host-local things (Docker, VS Code, Terminal, kubectl, the
+ * `sandbox` and `claude` CLIs) that a container can't reach. `sandbox connect`
+ * builds and starts them alongside the shared-infra containers; `sandbox
+ * down/stop/restart infra` tears them down or bounces them; `sandbox status`
+ * reports the dashboard.
  *
- * Tracked by a PID file under `~/.sandbox/` (same state dir as the slot locks).
- * Serves the MCP endpoint at `/mcp` and the workspaces dashboard at `/`.
+ * Each is tracked by a PID file under `~/.sandbox/` (same state dir as the slot
+ * locks), keyed by {@link WebApp.stem}.
  *
- * The port is fixed at {@link PORT} (3001) — NOT configurable. A floating port
- * (read from the launching shell's env) let the dashboard land on a different port
- * per invocation, which orphaned the previous server: the PID file tracks a single
- * pid, so a server left on an old port became untracked and unreapable. Pinning the
- * port plus `freePort` (reap whatever holds the port before binding) keeps
- * it to exactly one server on one known URL.
+ * Ports are fixed per app — NOT configurable. A floating port (read from the
+ * launching shell's env) let a server land on a different port per invocation,
+ * which orphaned the previous one: the PID file tracks a single pid, so a server
+ * left on an old port became untracked and unreapable. Pinning the port plus
+ * `freePort` (reap whatever holds the port before binding) keeps it to exactly
+ * one server per app on one known URL.
  */
 
 import { spawn } from "node:child_process";
@@ -24,14 +26,48 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { error, getSandboxRoot, info, success, warn } from "./config.js";
+import { error, getMonorepoRoot, info, success, warn } from "./config.js";
 import { ProcError, run } from "./proc.js";
 
-export const PORT = 3001;
-
-function portNum(): number {
-  return PORT;
+/** One managed host web server. */
+export interface WebApp {
+  /** Human label used in every message this module prints. */
+  label: string;
+  /** Directory name under `apps/`. */
+  dir: string;
+  /** Fixed listen port (see the module docstring for why it isn't configurable). */
+  port: number;
+  /** PID/log file stem under `~/.sandbox`. */
+  stem: string;
+  /** Entry script, relative to the app dir. */
+  entry: string;
+  /**
+   * Build artifact used as the staleness reference, or null for an app with no
+   * build step (Claudeck serves its sources directly).
+   */
+  buildRef: string | null;
 }
+
+export const DASHBOARD: WebApp = {
+  label: "MCP web server",
+  dir: "sandbox-dashboard",
+  port: 3001,
+  stem: "mcp-server",
+  entry: "dist/main.js",
+  buildRef: "dist/main.js",
+};
+
+export const CLAUDECK: WebApp = {
+  label: "Claudeck",
+  dir: "claudeck",
+  port: 9009,
+  stem: "claudeck",
+  entry: "server.js",
+  buildRef: null,
+};
+
+/** Every app `sandbox connect` brings up (and `down`/`stop`/`restart` manage). */
+export const ALL: readonly WebApp[] = [DASHBOARD, CLAUDECK];
 
 function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -39,7 +75,7 @@ function sleep(seconds: number): Promise<void> {
 
 /**
  * Kill whatever is listening on *port* (SIGTERM, then SIGKILL) so a start
- * always binds cleanly. Reaps a stale/orphaned dashboard the PID file lost
+ * always binds cleanly. Reaps a stale/orphaned server the PID file lost
  * track of. Best-effort: no-op if lsof is missing or the port is free.
  */
 async function freePort(port: number): Promise<void> {
@@ -92,16 +128,16 @@ function stateDir(): string {
   return d;
 }
 
-function pidFile(): string {
-  return path.join(stateDir(), "mcp-server.pid");
+function pidFile(app: WebApp): string {
+  return path.join(stateDir(), `${app.stem}.pid`);
 }
 
-function logFile(): string {
-  return path.join(stateDir(), "mcp-server.log");
+function logFile(app: WebApp): string {
+  return path.join(stateDir(), `${app.stem}.log`);
 }
 
-function mcpDir(): string {
-  return path.join(getSandboxRoot(), "apps", "sandbox-dashboard");
+function appDir(app: WebApp): string {
+  return path.join(getMonorepoRoot(), "apps", app.dir);
 }
 
 /** Match one of the fixed one-level glob patterns below (Python Path.glob subset). */
@@ -129,13 +165,16 @@ function globMatch(dir: string, pattern: string): string[] {
 /**
  * True if the build is missing or any source file is newer than it.
  *
- * `dist/main.js` is the reference: `npm run build` regenerates it (tsc) after
+ * `buildRef` is the reference: `npm run build` regenerates it (tsc) after
  * the UI bundles, so it's the newest artifact after a successful build. Any
  * source edit afterwards makes that source newer → stale.
  */
-function distStale(): boolean {
-  const dir = mcpDir();
-  const ref = path.join(dir, "dist", "main.js");
+function distStale(app: WebApp): boolean {
+  if (!app.buildRef) {
+    return false;
+  }
+  const dir = appDir(app);
+  const ref = path.join(dir, app.buildRef);
   let refMtime: number;
   try {
     const st = fs.statSync(ref);
@@ -169,23 +208,26 @@ function distStale(): boolean {
  * `start()` rewrites the PID file on every launch, so its mtime marks when the
  * live process began. A direct `npm run build` (outside `sandbox connect`)
  * updates `dist/` without bouncing the server, leaving it serving a stale
- * bundle — this catches that: `dist/main.js` newer than the PID file means the
- * running process predates the build. Best-effort: unknown → false (don't
+ * bundle — this catches that: the build artifact newer than the PID file means
+ * the running process predates the build. Best-effort: unknown → false (don't
  * bounce a healthy server on a stat error).
  */
-function buildNewerThanRunning(): boolean {
-  const ref = path.join(mcpDir(), "dist", "main.js");
+function buildNewerThanRunning(app: WebApp): boolean {
+  if (!app.buildRef) {
+    return false;
+  }
+  const ref = path.join(appDir(app), app.buildRef);
   try {
-    return fs.statSync(ref).mtimeMs > fs.statSync(pidFile()).mtimeMs;
+    return fs.statSync(ref).mtimeMs > fs.statSync(pidFile(app)).mtimeMs;
   } catch {
     return false;
   }
 }
 
-function readPid(): number | null {
+function readPid(app: WebApp): number | null {
   let text: string;
   try {
-    text = fs.readFileSync(pidFile(), "utf8");
+    text = fs.readFileSync(pidFile(app), "utf8");
   } catch {
     return null;
   }
@@ -227,15 +269,15 @@ function portOpen(port: number): Promise<boolean> {
 }
 
 /** [running, pid] from the PID file, verified against the live process. */
-export function isRunning(): [boolean, number | null] {
-  const pid = readPid();
+export function isRunning(app: WebApp = DASHBOARD): [boolean, number | null] {
+  const pid = readPid(app);
   if (pid && alive(pid)) {
     return [true, pid];
   }
   return [false, null];
 }
 
-export interface McpServerStatus {
+export interface WebServerStatus {
   running: boolean;
   pid: number | null;
   port: number;
@@ -244,48 +286,47 @@ export interface McpServerStatus {
 }
 
 /** Snapshot for `sandbox status` (and its --json). */
-export async function status(): Promise<McpServerStatus> {
-  const [running, pid] = isRunning();
-  const port = portNum();
+export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> {
+  const [running, pid] = isRunning(app);
   return {
     running,
     pid,
-    port,
-    url: `http://localhost:${port}/`,
-    healthy: running && (await portOpen(port)),
+    port: app.port,
+    url: `http://localhost:${app.port}/`,
+    healthy: running && (await portOpen(app.port)),
   };
 }
 
 /**
- * Build (optional) and start the MCP web server.
+ * Build (optional) and start one web server.
  *
  * Non-fatal: on any failure it warns and returns false so `sandbox connect`
  * still finishes bringing up the infra. With `force` it rebuilds and bounces
  * an already-running server (so `sandbox connect` picks up code changes);
  * without it, an already-running server is left as-is.
  */
-export async function start(build = true, force = false): Promise<boolean> {
-  const [running, pid] = isRunning();
+export async function start(app: WebApp = DASHBOARD, build = true, force = false): Promise<boolean> {
+  const [running, pid] = isRunning(app);
 
-  const dir = mcpDir();
+  const dir = appDir(app);
   if (!fs.existsSync(path.join(dir, "package.json"))) {
-    warn(`MCP app not found at ${dir}; skipping web server`);
+    warn(`${app.label} not found at ${dir}; skipping`);
     return false;
   }
 
   let rebuilt = false;
-  if (build && distStale()) {
-    info("Building MCP web server (sources changed)...");
+  if (build && distStale(app)) {
+    info(`Building ${app.label} (sources changed)...`);
     let result;
     try {
       result = run(["npm", "run", "build"], { cwd: dir, capture: true, timeout: 300 });
     } catch (err) {
       if (err instanceof ProcError && err.code === "ENOENT") {
-        warn("npm not found; skipping MCP web server");
+        warn(`npm not found; skipping ${app.label}`);
         return false;
       }
       if (err instanceof ProcError && err.code === "ETIMEDOUT") {
-        error("MCP web server build timed out; skipping");
+        error(`${app.label} build timed out; skipping`);
         return false;
       }
       throw err;
@@ -293,45 +334,44 @@ export async function start(build = true, force = false): Promise<boolean> {
     if (result.status !== 0) {
       // Build failed — leave any running server untouched.
       const detail = (result.stderr.trim() || result.stdout.trim()).slice(-800);
-      error(`MCP web server build failed; skipping start:\n${detail}`);
+      error(`${app.label} build failed; skipping start:\n${detail}`);
       return false;
     }
     rebuilt = true;
-  } else if (build) {
-    info("MCP web server build up to date; skipping build");
+  } else if (build && app.buildRef) {
+    info(`${app.label} build up to date; skipping build`);
   }
 
   // A direct `npm run build` can refresh dist without bouncing the server,
   // leaving it serving a stale bundle. Treat that like an explicit force so the
   // bounce path below reloads it.
-  if (running && !rebuilt && buildNewerThanRunning()) {
-    info("Running dashboard predates the current build; bouncing to reload it.");
+  if (running && !rebuilt && buildNewerThanRunning(app)) {
+    info(`Running ${app.label} predates the current build; bouncing to reload it.`);
     force = true;
   }
 
   // Already running with nothing new to load → leave it as-is.
   if (running && !rebuilt && !force) {
-    success(`MCP web server already running (pid ${pid}, http://localhost:${portNum()}/)`);
+    success(`${app.label} already running (pid ${pid}, http://localhost:${app.port}/)`);
     return true;
   }
 
   // Bounce a running instance to pick up a rebuild (or a forced restart).
   if (running) {
-    await stop();
+    await stop(app);
   }
 
-  const port = portNum();
   // Reap anything still holding the port — a server the PID file lost track of
   // (e.g. one left on this port by an older, floating-port launch), so the
-  // start below always binds cleanly and we never leak a second dashboard.
-  await freePort(port);
-  const log = logFile();
-  const env = { ...process.env, PORT: String(port) };
-  info(`Starting MCP web server on http://localhost:${port}/ ...`);
+  // start below always binds cleanly and we never leak a second server.
+  await freePort(app.port);
+  const log = logFile(app);
+  const env = { ...process.env, PORT: String(app.port) };
+  info(`Starting ${app.label} on http://localhost:${app.port}/ ...`);
   // Detached (own session) so it outlives this CLI invocation; logs to a
   // fresh file each start to stay bounded.
   const logFd = fs.openSync(log, "w");
-  const child = spawn("node", ["dist/main.js"], {
+  const child = spawn("node", [app.entry], {
     cwd: dir,
     detached: true,
     stdio: ["ignore", logFd, logFd],
@@ -344,14 +384,14 @@ export async function start(build = true, force = false): Promise<boolean> {
   fs.closeSync(logFd);
   if (spawnResult !== "spawned") {
     if ((spawnResult as NodeJS.ErrnoException).code === "ENOENT") {
-      warn("node not found; skipping MCP web server");
+      warn(`node not found; skipping ${app.label}`);
       return false;
     }
     throw spawnResult;
   }
   child.unref();
 
-  fs.writeFileSync(pidFile(), String(child.pid));
+  fs.writeFileSync(pidFile(app), String(child.pid));
 
   let exited = false;
   child.once("exit", () => {
@@ -361,36 +401,36 @@ export async function start(build = true, force = false): Promise<boolean> {
   // Give it a moment to bind (or die) before reporting.
   for (let i = 0; i < 20; i++) {
     if (exited) {
-      error(`MCP web server exited immediately (see ${log})`);
-      fs.rmSync(pidFile(), { force: true });
+      error(`${app.label} exited immediately (see ${log})`);
+      fs.rmSync(pidFile(app), { force: true });
       return false;
     }
-    if (await portOpen(port)) {
-      success(`MCP web server started (pid ${child.pid}, http://localhost:${port}/)`);
+    if (await portOpen(app.port)) {
+      success(`${app.label} started (pid ${child.pid}, http://localhost:${app.port}/)`);
       return true;
     }
     await sleep(0.25);
   }
 
-  warn(`MCP web server started (pid ${child.pid}) but port ${port} not up yet; check ${log}`);
+  warn(`${app.label} started (pid ${child.pid}) but port ${app.port} not up yet; check ${log}`);
   return true;
 }
 
-/** Stop the MCP web server (SIGTERM, then SIGKILL). Returns true if it was running. */
-export async function stop(): Promise<boolean> {
-  const [running, pid] = isRunning();
+/** Stop one web server (SIGTERM, then SIGKILL). Returns true if it was running. */
+export async function stop(app: WebApp = DASHBOARD): Promise<boolean> {
+  const [running, pid] = isRunning(app);
   if (!running || pid === null) {
-    fs.rmSync(pidFile(), { force: true });
+    fs.rmSync(pidFile(app), { force: true });
     return false;
   }
 
-  info(`Stopping MCP web server (pid ${pid})...`);
+  info(`Stopping ${app.label} (pid ${pid})...`);
   try {
     process.kill(pid, "SIGTERM");
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === "ESRCH") {
-      fs.rmSync(pidFile(), { force: true });
+      fs.rmSync(pidFile(app), { force: true });
       return false;
     }
     if (code === "EPERM") {
@@ -416,15 +456,34 @@ export async function stop(): Promise<boolean> {
     }
   }
 
-  fs.rmSync(pidFile(), { force: true });
+  fs.rmSync(pidFile(app), { force: true });
   // Reap a rogue holder of the port too, in case the PID file had drifted off
   // the process actually bound to it.
-  await freePort(portNum());
-  success("MCP web server stopped");
+  await freePort(app.port);
+  success(`${app.label} stopped`);
   return true;
 }
 
-/** Bounce the server (no rebuild by default — mirrors `docker compose restart`). */
-export async function restart(build = false): Promise<void> {
-  await start(build, true);
+/** Bounce a server (no rebuild by default — mirrors `docker compose restart`). */
+export async function restart(app: WebApp = DASHBOARD, build = false): Promise<void> {
+  await start(app, build, true);
+}
+
+/** Start/stop/bounce every managed server, in {@link ALL} order. */
+export async function startAll(build = true): Promise<void> {
+  for (const app of ALL) {
+    await start(app, build);
+  }
+}
+
+export async function stopAll(): Promise<void> {
+  for (const app of ALL) {
+    await stop(app);
+  }
+}
+
+export async function restartAll(build = false): Promise<void> {
+  for (const app of ALL) {
+    await restart(app, build);
+  }
 }

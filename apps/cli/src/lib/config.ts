@@ -72,6 +72,30 @@ export function getSandboxRoot(): string {
 }
 
 /**
+ * Return the root of the MONOREPO containing the CLI.
+ *
+ * `getSandboxRoot()` is the CLI package (`<repo>/apps/cli`) — right for
+ * `infra/`, wrong for the sibling apps under `<repo>/apps/`. Walks up looking
+ * for the `apps/` directory rather than assuming a fixed depth, so a checkout
+ * laid out differently (or an `SANDBOX_ROOT` already pointing at the repo root)
+ * still resolves.
+ */
+export function getMonorepoRoot(): string {
+  let dir = getSandboxRoot();
+  for (let i = 0; i < 4; i++) {
+    if (fs.existsSync(path.join(dir, "apps"))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return getSandboxRoot();
+}
+
+/**
  * Directory holding the canonical source-repo checkouts (and the
  * hand-authored top-level CLAUDE.md context file).
  *

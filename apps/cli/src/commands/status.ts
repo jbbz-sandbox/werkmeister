@@ -10,7 +10,7 @@ import * as path from "node:path";
 import { Colors, getInfraRoot, loadServices } from "../lib/config.js";
 import { getContainerStatus, type ContainerStatus } from "../lib/docker.js";
 import { getPerServiceStatus, type ForwardStatus } from "../lib/k8s.js";
-import { status as mcpStatus, type McpServerStatus } from "../lib/mcp_server.js";
+import { status as webStatus, type WebServerStatus } from "../lib/web_servers.js";
 import { getAllSlots, getPortRange, type SlotEntry } from "../lib/slots.js";
 import { ProcError, run as procRun } from "../lib/proc.js";
 import {
@@ -72,7 +72,7 @@ function getInfraStatus(): InfraContainer[] {
   }
 }
 
-function printInfraSection(containers: InfraContainer[], mcp: McpServerStatus): void {
+function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): void {
   console.log(`  ${Colors.BOLD}Infrastructure${Colors.RESET}`);
   console.log(`  ${Colors.BOLD}${"Service".padEnd(25)}  Status${Colors.RESET}`);
   console.log(`  ${"─".repeat(40)}`);
@@ -381,7 +381,7 @@ function runJson(
   infra: InfraContainer[],
   k8s: ForwardStatus[],
   allSlots: Record<string, SlotEntry>,
-  mcp: McpServerStatus,
+  mcp: WebServerStatus,
 ): void {
   // Same intercept data as `--intercepts`, grouped per feature so this stays the
   // one place system state is described.
@@ -481,7 +481,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const infra = getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = getAllSlots();
-  const mcp = await mcpStatus();
+  const mcp = await webStatus();
 
   if (args.json) {
     runJson(infra, k8s, allSlots, mcp);

@@ -153,9 +153,12 @@ export const REQUIRED_PLUGINS: readonly PluginSpec[] = [
  */
 export const OPTIONAL_PLUGINS: readonly PluginSpec[] = [
   {
+    // Not obra/superpowers directly: that repo's manifest names itself
+    // `superpowers-dev` and tracks main. The official marketplace carries the
+    // same plugin pinned to a released SHA.
     name: "superpowers",
-    marketplace: "superpowers",
-    source: "obra/superpowers",
+    marketplace: "claude-plugins-official",
+    source: "anthropics/claude-plugins-official",
     note: "brainstorming/planning skills; writes plans under docs/superpowers/",
   },
 ];

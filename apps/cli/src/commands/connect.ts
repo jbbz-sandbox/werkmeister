@@ -27,7 +27,7 @@ import { generateCaddyfile } from "../lib/generate.js";
 import { generateK8sForwards } from "../lib/k8s_forwards.js";
 import { configureGitHooksPath } from "../lib/git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy } from "../lib/k8s.js";
-import { start as mcpStart, status as mcpStatus } from "../lib/mcp_server.js";
+import { CLAUDECK, DASHBOARD, startAll, status as webStatus } from "../lib/web_servers.js";
 import { ProcError, run as procRun } from "../lib/proc.js";
 import { sandboxHome } from "../lib/global_config.js";
 
@@ -337,11 +337,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // Start all infrastructure (including k8s port-forwards)
   const infraOk = startSharedInfra();
 
-  // Build + start the MCP web server (a host node process, not a container —
-  // its tools drive host-local Docker/VS Code/kubectl/claude). Rebuilds only
-  // when a source is newer than the last build, and bounces a running server
-  // only when it actually rebuilt — a no-change re-run leaves it untouched.
-  await mcpStart(true);
+  // Build + start the host web servers (the workspaces dashboard and Claudeck
+  // — node processes, not containers, since their tools drive host-local
+  // Docker/VS Code/kubectl/claude). Rebuilds only when a source is newer than
+  // the last build, and bounces a running server only when it actually
+  // rebuilt — a no-change re-run leaves them untouched.
+  await startAll(true);
 
   // Health summary
   console.log(`\n${Colors.BOLD}--- Health Summary ---${Colors.RESET}\n`);
@@ -376,7 +377,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`    ${Colors.CYAN}RedisInsight:${Colors.RESET}  https://tools.local.sandbox.com/redisinsight`);
   console.log(`    ${Colors.CYAN}Jaeger:${Colors.RESET}        https://tools.local.sandbox.com/jaeger`);
   console.log(`    ${Colors.CYAN}GraphQL:${Colors.RESET}       https://tools.local.sandbox.com/graphql`);
-  const mcp = await mcpStatus();
+  const mcp = await webStatus(DASHBOARD);
   console.log(`    ${Colors.CYAN}Sandbox MCP:${Colors.RESET}   ${mcp.url}  (workspaces dashboard; MCP at /mcp)`);
+  const claudeck = await webStatus(CLAUDECK);
+  console.log(`    ${Colors.CYAN}Claudeck:${Colors.RESET}      ${claudeck.url}`);
   console.log();
 }
