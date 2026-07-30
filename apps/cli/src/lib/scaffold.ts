@@ -17,8 +17,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { REQUIRED_SECRET_KEYS } from "./secrets.js";
-
 /** One seeded file and what happened to it. */
 export interface SeedResult {
   path: string;
@@ -66,31 +64,24 @@ models:
 // ---------------------------------------------------------------------------
 
 /**
- * Render the secrets template from the required-key list.
+ * Render the starter secrets.env template.
  *
- * Generated from `REQUIRED_SECRET_KEYS` rather than restated, so the template
- * and the validator `sandbox up` runs can never drift apart — the old
- * committed `secrets.env.example` had to be hand-synced and had already fallen
- * out of step with the module that owns the list.
+ * Empty by default: a service opts into a required secret by listing it in
+ * its own `secrets:` entry in services.yaml, and `sandbox up` only fails fast
+ * on the keys the feature's own services declare (lib/secrets.ts
+ * `requiredSecretKeys`). Add real values here as your services need them.
  */
 export function renderSecretsEnv(): string {
-  const lines = [
+  return [
     "# Machine-global secrets — real values, never committed.",
     "#",
     "# Consumed by infra/templates/env.j2 when generating each feature's .env,",
-    "# and read directly by docker compose as an env_file. Every key below is",
-    "# REQUIRED: `sandbox up` fails fast when one is missing or empty (the list",
-    "# is owned by lib/secrets.ts REQUIRED_SECRET_KEYS).",
-    "#",
-    "# Keys env.j2 defaults to a working dev placeholder (COOKIE_SECRET,",
-    "# ENCRYPTION_KEY, LOOKER_KEY, NEXT_PUBLIC_SEGMENT_WRITE_KEY) are optional",
-    "# and deliberately absent here — the sandbox boots fine without them.",
+    "# and read directly by docker compose as an env_file. A service declares",
+    "# the keys it needs via `secrets:` in its services.yaml entry; `sandbox up`",
+    "# fails fast when a key a workspace's own services declare is missing or",
+    "# empty. Add KEY=value lines below as your services require them.",
     "",
-  ];
-  for (const key of REQUIRED_SECRET_KEYS) {
-    lines.push(`${key}=`);
-  }
-  return lines.join("\n") + "\n";
+  ].join("\n") + "\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +282,10 @@ function emptyServices(): string {
 #     # derives from ingress.local_domain in ~/.sandbox/config.yaml as
 #     # <service>.<local_domain>; set \`hostname:\` here only to override it.
 #     feature_router: {}
+#     # Optional — env keys this service needs from ~/.sandbox/secrets.env.
+#     # \`sandbox up\` fails fast on any that are missing or empty, but only
+#     # for services in the feature workspace being started.
+#     secrets: [MY_API_TOKEN]
 services: {}
 
 # Non-service infra forwarded from the k8s cluster into the docker world by the

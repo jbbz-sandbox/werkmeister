@@ -28,7 +28,7 @@ import {
   generateSupergraphConfig,
 } from "../lib/generate.js";
 import { ensurePortForwardsHealthy } from "../lib/k8s.js";
-import { getSecretsPath, loadSecrets, validateRequiredSecrets } from "../lib/secrets.js";
+import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "../lib/secrets.js";
 import { loadFeatureRouters } from "../lib/feature_routing.js";
 import { allocateSlot, getPortRange, getServicePort } from "../lib/slots.js";
 
@@ -97,16 +97,18 @@ function readServicesFromWorkspace(workspace: string): string[] {
 }
 
 /**
- * Fail fast if any required secret key is missing or empty.
+ * Fail fast if a secret key required by this workspace's own services is
+ * missing or empty.
  *
  * Called before slot allocation / composeUp so a missing secret aborts with a
  * clear, value-free message instead of surfacing as an opaque runtime error
  * deep in container logs.
  */
-function checkRequiredSecrets(): void {
+function checkRequiredSecrets(servicesConfig: Record<string, any>, localServices: string[]): void {
   const secretsPath = getSecretsPath();
   const secrets = loadSecrets(secretsPath);
-  const missing = validateRequiredSecrets(secrets);
+  const required = requiredSecretKeys(servicesConfig, localServices);
+  const missing = validateRequiredSecrets(secrets, required);
   if (missing.length) {
     error(
       `Missing required secret(s) in ${secretsPath}: ` +
@@ -150,13 +152,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   // ------------------------------------------------------------------
-  // Step 0: Fail fast if required secrets are missing, before mutating
-  // any slot state or starting containers.
-  // ------------------------------------------------------------------
-  checkRequiredSecrets();
-
-  // ------------------------------------------------------------------
-  // Step 1: Load configuration (needed for proxy generation)
+  // Step 0: Load configuration (needed for proxy generation), then fail
+  // fast if a secret this workspace's own services require is missing,
+  // before mutating any slot state or starting containers.
   // ------------------------------------------------------------------
   info("Loading configuration...");
   const servicesConfig = loadServices();
@@ -165,13 +163,14 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     services: servicesConfig,
     ports: portsConfig,
   };
+  const localServices = readServicesFromWorkspace(workspace);
+  checkRequiredSecrets(servicesConfig, localServices);
 
   // ------------------------------------------------------------------
   // Step 2: Re-register slot (may have been released by 'sandbox down')
   // ------------------------------------------------------------------
   info("Allocating feature slot...");
   const preferredSlot = readSlotFromWorkspace(workspace);
-  const localServices = readServicesFromWorkspace(workspace);
   let slot: number;
   try {
     slot = allocateSlot(feature, localServices, preferredSlot);

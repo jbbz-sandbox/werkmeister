@@ -33,7 +33,7 @@ const UNFILLED_TOKEN = "PASTE_TOKEN_HERE";
  * than imported: the dashboard and the CLI are separate workspace packages with
  * no build-time dependency between them.
  */
-function configPath(): string {
+export function configPath(): string {
   return process.env.SANDBOX_CONFIG_FILE || path.join(os.homedir(), ".sandbox", "config.yaml");
 }
 

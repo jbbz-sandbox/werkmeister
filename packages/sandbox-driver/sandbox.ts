@@ -25,7 +25,7 @@ import { createReadStream } from "node:fs";
 import readline from "node:readline";
 import { parse as parseYaml } from "yaml";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
-import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
+import { briefingFromIssue, configPath, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -878,16 +878,32 @@ function pickValidServices(raw: unknown, known: string[]): string[] {
 
 /**
  * Resolve the workspaces root — the directory that holds one subdir per
- * workspace. Mirrors the CLI's env resolution order (SANDBOX_WORKSPACES_ROOT →
- * deprecated/legacy aliases → ~/workspace fallback); see
- * cli/lib/config.py::resolve_workspace.
+ * workspace. Mirrors the CLI's resolution order (see
+ * `apps/cli/src/lib/config.ts::resolveWorkspace`): an explicit env override,
+ * then `paths.workspaces_root` from `~/.sandbox/config.yaml` — the single
+ * source of truth, per `global_config.ts` — then the `~/workspace` fallback.
+ *
+ * `SANDBOX_WORKSPACES_ROOT` is a generated backward-compat shell export
+ * (`~/.sandbox/env.sh`, sourced by `~/.zshenv`), invisible to a GUI-launched
+ * process like the VS Code extension host — reading the YAML directly is what
+ * keeps this correct there.
  */
-function resolveWorkspacesRoot(): string {
+async function resolveWorkspacesRoot(): Promise<string> {
   const env =
     process.env.SANDBOX_WORKSPACES_ROOT ||
     process.env.SANDBOX_WORKSPACE_ROOT ||
     process.env.WORKSPACE;
-  return env ? path.resolve(env.replace(/^~/, os.homedir())) : path.join(os.homedir(), "workspace");
+  if (env) return path.resolve(env.replace(/^~/, os.homedir()));
+
+  try {
+    const cfg = parseYaml(await fs.readFile(configPath(), "utf-8")) as Record<string, any> | null;
+    const configured = cfg?.paths?.workspaces_root;
+    if (configured) return path.resolve(String(configured).replace(/^~/, os.homedir()));
+  } catch {
+    // Fall through to the default below.
+  }
+
+  return path.join(os.homedir(), "workspace");
 }
 
 export interface WorkspaceEntry {
@@ -925,7 +941,7 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<{ jiraId: stri
  * dotfiles skipped.
  */
 export async function listWorkspaces(): Promise<{ root: string; workspaces: WorkspaceEntry[] }> {
-  const root = resolveWorkspacesRoot();
+  const root = await resolveWorkspacesRoot();
   let entries: import("node:fs").Dirent[];
   try {
     entries = await fs.readdir(root, { withFileTypes: true });
@@ -1090,7 +1106,7 @@ async function resolveWorkspaceDir(name: string): Promise<string> {
   if (!clean || clean.includes("/") || clean.includes("\\") || clean.includes("..")) {
     throw new WorkspaceError(`Invalid workspace name: ${JSON.stringify(name)}`);
   }
-  const target = path.join(resolveWorkspacesRoot(), clean);
+  const target = path.join(await resolveWorkspacesRoot(), clean);
   if (!(await isDir(target))) {
     throw new WorkspaceError(`No such workspace: ${clean}`);
   }
@@ -1376,7 +1392,7 @@ function slotPortRange(slot: number, cfg: { base: number; span: number }): strin
  * {@link listWorkspaces}.
  */
 export async function getWorkspaceStatuses(): Promise<{ statuses: WorkspaceStatus[]; infra: InfraStatus }> {
-  const root = resolveWorkspacesRoot();
+  const root = await resolveWorkspacesRoot();
   const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
   const names = entries
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))
@@ -1435,6 +1451,39 @@ export async function getWorkspaceStatuses(): Promise<{ statuses: WorkspaceStatu
   }
 
   return { statuses, infra };
+}
+
+export interface InterceptRow {
+  feature: string;
+  service: string;
+  deployment: string | null;
+  interceptable: boolean;
+  blocker: string | null;
+  intercepted: boolean;
+  intercepted_by: string | null;
+}
+
+export interface InterceptsResult {
+  available: boolean;
+  connectedNamespace: string | null;
+  byFeature: Map<string, Map<string, InterceptRow>>;
+}
+
+/** Telepresence intercept state for every active feature, from `sandbox status --intercepts --json`. */
+export async function getIntercepts(): Promise<InterceptsResult> {
+  const { stdout } = await runSandbox(["status", "--intercepts", "--json"]);
+  const parsed = JSON.parse(stdout) as {
+    available: boolean;
+    connected_namespace: string | null;
+    intercepts: InterceptRow[];
+  };
+  const byFeature = new Map<string, Map<string, InterceptRow>>();
+  for (const row of parsed.intercepts) {
+    let svcs = byFeature.get(row.feature);
+    if (!svcs) byFeature.set(row.feature, (svcs = new Map()));
+    svcs.set(row.service, row);
+  }
+  return { available: parsed.available, connectedNamespace: parsed.connected_namespace, byFeature };
 }
 
 // --- Repos & pull requests --------------------------------------------------
@@ -1522,7 +1571,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
  * ponytail: no concurrency cap on the gh fan-out; add one if workspace×repo count grows large.
  */
 export async function getWorkspacePRs(): Promise<WorkspacePrs[]> {
-  const root = resolveWorkspacesRoot();
+  const root = await resolveWorkspacesRoot();
   const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
   const names = entries
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))

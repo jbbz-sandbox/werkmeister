@@ -25,7 +25,7 @@ import {
   type Step,
 } from "../machine_setup.js";
 import { renderSecretsEnv, renderServicesYaml } from "../scaffold.js";
-import { REQUIRED_SECRET_KEYS } from "../secrets.js";
+import { requiredSecretKeys, validateRequiredSecrets } from "../secrets.js";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 let home: SandboxHome;
@@ -100,11 +100,9 @@ describe("syncRegistryConfigs", () => {
 });
 
 describe("scaffold content", () => {
-  it("renders the secrets template from the validator's key list, so they can't drift", () => {
+  it("seeds an empty secrets template -- required keys come from each service's own secrets: list", () => {
     const text = renderSecretsEnv();
-    for (const key of REQUIRED_SECRET_KEYS) {
-      expect(text, `missing ${key}`).toContain(`${key}=`);
-    }
+    expect(text).not.toMatch(/^[A-Z_]+=/m);
   });
 
   it("omits per-service hostnames from the demo registry — they derive from ingress", () => {
@@ -119,6 +117,30 @@ describe("scaffold content", () => {
     for (const section of ["services:", "infrastructure:", "setup_services:", "repos:"]) {
       expect(text, `missing ${section}`).toContain(section);
     }
+  });
+});
+
+describe("requiredSecretKeys", () => {
+  const servicesConfig = {
+    "rest-hello": {},
+    "auth-web": { secrets: ["AUTH0_CLIENT_SECRET", "NEXTAUTH_SECRET"] },
+  };
+
+  it("is empty for a workspace whose services declare no secrets", () => {
+    expect(requiredSecretKeys(servicesConfig, ["rest-hello"])).toEqual([]);
+  });
+
+  it("only requires the keys declared by services actually in the workspace", () => {
+    expect(requiredSecretKeys(servicesConfig, ["rest-hello", "auth-web"])).toEqual([
+      "AUTH0_CLIENT_SECRET",
+      "NEXTAUTH_SECRET",
+    ]);
+  });
+
+  it("validateRequiredSecrets reports only missing/empty declared keys", () => {
+    const required = requiredSecretKeys(servicesConfig, ["auth-web"]);
+    const missing = validateRequiredSecrets({ AUTH0_CLIENT_SECRET: "abc123" }, required);
+    expect(missing).toEqual(["NEXTAUTH_SECRET"]);
   });
 });
 

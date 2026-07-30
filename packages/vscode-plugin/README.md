@@ -1,0 +1,50 @@
+# Sandbox Workspaces (VS Code extension)
+
+A tree view over the developer-sandbox: every workspace under
+`paths.workspaces_root`, its container state, its Telepresence intercepts, and
+the `sandbox` CLI lifecycle — without leaving the editor.
+
+The fourth consumer of `packages/sandbox-driver`, after the
+`sandbox-dashboard` MCP server and claudeck's workspace plugin. Unlike those two
+it imports the driver directly: the extension host is plain Node, so there is no
+HTTP or stdio hop.
+
+## How it works
+
+**Reads** — three driver calls, whose cost is flat regardless of workspace count:
+
+| Data | Call |
+|---|---|
+| Names, paths, Jira keys, labels | `listWorkspaces()` |
+| State, slot, ports, per-service health | `getWorkspaceStatuses()` — one `docker ps -a` sweep |
+| Per-service intercept state | `getIntercepts()` — one `sandbox status --intercepts --json` |
+
+Polled every 5s **only while the view is visible**.
+
+**Writes** — every mutating command opens a `vscode.Terminal` with `cwd` set to
+the workspace directory and runs the CLI there. The extension never spawns
+`sandbox` itself except for `sandbox open`, which blocks for the lifetime of the
+browser window it launches.
+
+## Configuration
+
+Normally none: the driver resolves paths from `SANDBOX_*` env vars and falls back
+to `~/.sandbox/config.yaml`, which `sandbox config` maintains.
+
+| Setting | Use when |
+|---|---|
+| `sandbox.binPath` | You have a non-standard checkout and want to name the `sandbox` wrapper directly |
+| `sandbox.root` | Same, but naming the checkout directory that contains it |
+
+## Install
+
+```bash
+npm run build && npm run package
+code --install-extension sandbox-workspaces-0.1.0.vsix
+```
+
+## Not included
+
+Repos + PR state, a status bar item, the Claude session `waiting` signal, a
+shared-infra node, and token usage — all available in the driver payload and
+additive later.
