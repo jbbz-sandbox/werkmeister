@@ -9,9 +9,6 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cpush-"));
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
 const gitEnv = {
@@ -32,7 +29,7 @@ commit(src, "a.txt", "c1");
 commit(src, "a.txt", "c2");
 execFileSync("git", ["push", "origin", "main"], { cwd: src });
 
-const { commitAndPush } = await import(path.join(pkgRoot, "dist/lib/sandbox.js"));
+const { commitAndPush } = await import("sandbox-driver");
 
 // Case 1 (the bug): a worktree on `main` reset one commit BEHIND origin/main,
 // clean tree. Nothing to hand off → must return ok WITHOUT pushing.

@@ -1,13 +1,10 @@
 // Smoke test for parseComposeStatus: groups docker-ps lines by Compose project,
 // tallies running/total, retains per-container name+state, and excludes one-shot
 // `-setup` services from the tally (they're expected to exit).
-//   npm run build:server && node lib/sandbox.smoke.mjs
+//   npm run build && node lib/sandbox.smoke.mjs
 import assert from "node:assert";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { parseComposeStatus } = await import(path.join(pkgRoot, "dist/lib/sandbox.js"));
+const { parseComposeStatus } = await import("sandbox-driver");
 
 // Mixed running/exited containers across two projects, plus a one-shot setup
 // container that should be excluded entirely. Column 4 is `{{.Status}}` (health

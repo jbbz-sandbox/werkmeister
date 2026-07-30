@@ -1,20 +1,17 @@
-// Smoke test for lib/cache: persistence, TTL, stale-while-revalidate, atomic
-// merge, refresh bypass, failure-is-not-stored.
+// Smoke test for sandbox-driver/cache: persistence, TTL, stale-while-revalidate,
+// atomic merge, refresh bypass, failure-is-not-stored.
 //   npm run build && node lib/cache.smoke.mjs
 import assert from "node:assert";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cache-"));
 const cacheFile = path.join(tmp, "jira-cache.json");
 process.env.SANDBOX_CACHE_FILE = cacheFile;
 
-const { cacheGet, cacheSet, withCache, runBatchOnce } = await import(
-  path.join(pkgRoot, "dist", "lib", "cache.js")
-);
+// SANDBOX_CACHE_FILE must be set before the module loads — hence the dynamic import.
+const { cacheGet, cacheSet, withCache, runBatchOnce } = await import("sandbox-driver/cache");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 1. cold miss → fetcher runs, value stored + returned

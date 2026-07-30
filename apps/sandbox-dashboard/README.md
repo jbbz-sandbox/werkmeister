@@ -67,11 +67,11 @@ The CLI owns the inputs and the create logic:
 | `server.ts` | All tool registrations + `ui://` resources + capability routing |
 | `main.ts` | stdio (Desktop / plugin) and HTTP entry; HTTP mode also serves the dashboard |
 | `form-cli.ts` | `sandbox workspace --browser-form` — the no-MCP standalone form path |
-| `lib/sandbox.ts` | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs |
-| `lib/jira-rest.ts` | Direct Jira REST fast path (+ creds from `jira:` in `~/.sandbox/config.yaml`) |
 | `lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
 | `lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
+| `lib/markdown.ts` · `lib/workspace-search.ts` | markdown-it config (`html:false`); workspace fuzzy match |
+| `sandbox-driver` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, Jira REST fast path, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
 | `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
 
 ## Build & test
@@ -83,13 +83,9 @@ npm run build                    # typecheck + 5 UI bundles + server → dist/
 node lib/localhost-form.smoke.mjs   # and the other lib/*.smoke.mjs
 ```
 
-Passing here: `browser-ui`, `localhost-form`, `workspace-search`.
-
-The other seven — `cache`, `commit-push`, `open-prs`, `sandbox`, `session-picker`,
-`session-stream`, `usage` — exercise `lib/sandbox.ts` and `lib/cache.ts`, which are
-not part of this checkout (no source, never in git history, nothing here imports
-them). They fail with `ERR_MODULE_NOT_FOUND` and are kept as the behavior spec for
-those modules if they ever land.
+All ten `lib/*.smoke.mjs` pass. Seven of them exercise `sandbox-driver`, so
+`packages/sandbox-driver` must be built first (`npm run build` there, or at the
+repo root) — they import the package by name, never by relative path.
 
 ## Wiring
 

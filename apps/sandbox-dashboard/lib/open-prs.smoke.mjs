@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { countFailingChecks, isWithin30Days, prFromView, assembleOpenPrs, APPROVAL_LABEL, isValidPrUrl, buildReconcileContext } =
-  await import(path.join(pkgRoot, "dist/lib/sandbox.js"));
+  await import("sandbox-driver");
 const { renderMarkdown } = await import(path.join(pkgRoot, "dist/lib/markdown.js"));
 
 // 1. Failing-checks classifier: bad conclusions count; good/in-progress don't.
@@ -36,7 +36,6 @@ assert.equal(isWithin30Days("2026-05-01T00:00:00Z", now), false, "71 days ago is
 assert.equal(isWithin30Days(undefined, now), true, "missing updatedAt → kept");
 console.log("✓ isWithin30Days");
 
-// FIXME: Update the git repository names
 // 3. prFromView mapping.
 const view = {
   url: "https://github.com/sandbox/sandbox/pull/1234",
@@ -54,7 +53,7 @@ const view = {
 const pr = prFromView(view, "jaysonboyer");
 assert.equal(pr.repo, "sandbox", "repo parsed from url");
 assert.equal(pr.number, 1234, "number");
-assert.equal(pr.changesRequested, true, "reviewDecision CHANGES_REQUESTED");
+assert.equal(pr.reviewStatus, "CHANGES_REQUESTED", "reviewDecision CHANGES_REQUESTED");
 assert.equal(pr.outOfDate, true, "mergeStateStatus BEHIND");
 assert.equal(pr.failingChecks, 1, "one failing check");
 assert.equal(pr.hasApprovalLabel, true, "approval label present");
@@ -63,7 +62,15 @@ assert.deepEqual(pr.labels, ["ready-for-human-approval", "bug"], "label names");
 
 const clean = prFromView({ ...view, mergeStateStatus: "UNKNOWN", reviewDecision: "APPROVED" }, "me");
 assert.equal(clean.outOfDate, false, "UNKNOWN is not flagged out-of-date");
-assert.equal(clean.changesRequested, false, "APPROVED is not changes-requested");
+assert.equal(clean.reviewStatus, "APPROVED", "reviewDecision APPROVED");
+
+// DISMISSED is the one status GitHub's reviewDecision cannot express — it has to
+// be recovered from latestReviews, so it gets its own case.
+const dismissed = prFromView(
+  { ...view, reviewDecision: undefined, latestReviews: [{ state: "DISMISSED" }] },
+  "me",
+);
+assert.equal(dismissed.reviewStatus, "DISMISSED", "DISMISSED recovered from latestReviews");
 
 const stub = prFromView({ url: "https://github.com/sandbox/next-hello/pull/77", unavailable: true }, "me");
 assert.equal(stub.repo, "next-hello", "unavailable stub still knows repo from url");

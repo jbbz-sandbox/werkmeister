@@ -5,7 +5,7 @@
  * so the two surfaces share ONE chat UI rather than drifting apart.
  *
  * Keyed by an opaque `name` (a workspace name OR a `reconcile:` session key);
- * the server resolves it to a directory (lib/sandbox.ts `resolveSessionDir`).
+ * the server resolves it to a directory (sandbox-driver `resolveSessionDir`).
  * The browser surface live-streams over SSE (`bridge.streamSession`); hosts
  * that leave it undefined (Desktop-inline, Cowork artifact) fall back to
  * `claude-transcript` / `claude-turn-status` polling.
