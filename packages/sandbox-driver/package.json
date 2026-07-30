@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test *.test.mjs"
+    "test": "tsc && node --test *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
     "yaml": "^2.9.0"
