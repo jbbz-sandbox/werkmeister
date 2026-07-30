@@ -5,7 +5,7 @@
  * 1. Heuristic pre-filter (instant, no cost) — remove obvious noise
  * 2. Model-based consolidation (Claude Haiku) — merge, rewrite, re-categorize
  */
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execPath } from "process";
 import { listMemories, getDb } from "../db.js";
 

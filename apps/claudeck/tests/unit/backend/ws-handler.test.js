@@ -67,7 +67,7 @@ vi.mock("../../../server/paths.js", () => ({
   configPath: vi.fn((name) => `/mock-config/${name}`),
 }));
 
-vi.mock("@anthropic-ai/claude-code", () => ({
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: vi.fn(() =>
     (async function* () {
       yield { type: "system", subtype: "init", session_id: "test-sid", model: "claude-sonnet-4-6" };
@@ -107,7 +107,7 @@ import {
   MODEL_MAP,
   READ_ONLY_TOOLS,
 } from "../../../server/ws-handler.js";
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   createSession,
   updateClaudeSessionId,
@@ -957,7 +957,7 @@ describe("ws-handler", () => {
       await sendChat({ systemPrompt: "You are a helpful bot" });
 
       const callArgs = query.mock.calls[query.mock.calls.length - 1][0];
-      expect(callArgs.options.appendSystemPrompt).toContain("You are a helpful bot");
+      expect(callArgs.options.systemPrompt.append).toContain("You are a helpful bot");
     });
 
     it("appends projectPrompt when getProjectSystemPrompt returns a value", async () => {
@@ -972,7 +972,7 @@ describe("ws-handler", () => {
       await sendChat({});
 
       const callArgs = query.mock.calls[query.mock.calls.length - 1][0];
-      expect(callArgs.options.appendSystemPrompt).toContain("Project rules here");
+      expect(callArgs.options.systemPrompt.append).toContain("Project rules here");
     });
 
     it("combines projectPrompt and systemPrompt with separator", async () => {
@@ -987,8 +987,8 @@ describe("ws-handler", () => {
       await sendChat({ systemPrompt: "Custom system" });
 
       const callArgs = query.mock.calls[query.mock.calls.length - 1][0];
-      expect(callArgs.options.appendSystemPrompt).toContain("Project rules");
-      expect(callArgs.options.appendSystemPrompt).toContain("Custom system");
+      expect(callArgs.options.systemPrompt.append).toContain("Project rules");
+      expect(callArgs.options.systemPrompt.append).toContain("Custom system");
     });
 
     // ── disabledTools ──────────────────────────────────────────────────────
@@ -1310,7 +1310,7 @@ describe("ws-handler", () => {
       await sendChat({});
 
       const callArgs = query.mock.calls[query.mock.calls.length - 1][0];
-      expect(callArgs.options.appendSystemPrompt).toContain("Memory: always use semicolons");
+      expect(callArgs.options.systemPrompt.append).toContain("Memory: always use semicolons");
     });
 
     it("memory injection: no memories does not send memories_injected", async () => {
@@ -2750,7 +2750,7 @@ describe("ws-handler", () => {
       await handleChat(makeMsg({ systemPrompt: "You are a bot" }), ctx);
 
       const callArgs = query.mock.calls[query.mock.calls.length - 1][0];
-      expect(callArgs.options.appendSystemPrompt).toContain("You are a bot");
+      expect(callArgs.options.systemPrompt.append).toContain("You are a bot");
     });
 
     it("passes settingSources to query options", async () => {
@@ -2795,7 +2795,7 @@ describe("ws-handler", () => {
       await handleChat(makeMsg(), ctx);
 
       const callArgs = query.mock.calls[query.mock.calls.length - 1][0];
-      expect(callArgs.options.appendSystemPrompt).toContain("Remember: always use semicolons");
+      expect(callArgs.options.systemPrompt.append).toContain("Remember: always use semicolons");
 
       const memMsg = ctx.ws.messages.find((m) => m.type === "memories_injected");
       expect(memMsg).toBeDefined();

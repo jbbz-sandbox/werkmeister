@@ -75,7 +75,7 @@ function makeSynthesisOutput(text) {
 
 let queryCallCount = 0;
 
-vi.mock("@anthropic-ai/claude-code", () => ({
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: vi.fn(() => {
     // First call = planner, second call = synthesis
     queryCallCount++;
@@ -90,7 +90,7 @@ vi.mock("@anthropic-ai/claude-code", () => ({
 
 import { runOrchestrator } from "../../../server/orchestrator.js";
 import { runAgent } from "../../../server/agent-loop.js";
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   createSession,
   getSession,
@@ -627,11 +627,11 @@ describe("orchestrator — runOrchestrator", () => {
     await runOrchestrator(opts);
 
     const plannerCall = query.mock.calls[0][0];
-    expect(plannerCall.options.appendSystemPrompt).toBe("Always use TypeScript");
+    expect(plannerCall.options.systemPrompt.append).toBe("Always use TypeScript");
   });
 
   // ── Branch: no project system prompt ──────────────────────────────────
-  it("does not set appendSystemPrompt when no project prompt exists", async () => {
+  it("does not set system prompt append when no project prompt exists", async () => {
     const { getProjectSystemPrompt } = await import("../../../server/routes/projects.js");
     getProjectSystemPrompt.mockReturnValue(null);
 
@@ -641,7 +641,7 @@ describe("orchestrator — runOrchestrator", () => {
     await runOrchestrator(opts);
 
     const plannerCall = query.mock.calls[0][0];
-    expect(plannerCall.options.appendSystemPrompt).toBeUndefined();
+    expect(plannerCall.options.systemPrompt.append).toBeUndefined();
   });
 
   // ── Branch: session resume — clientSid exists with mapped sessionId ──

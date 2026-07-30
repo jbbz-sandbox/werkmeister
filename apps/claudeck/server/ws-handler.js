@@ -1,4 +1,4 @@
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execPath } from "process";
 import { existsSync } from "fs";
 import { homedir } from "os";
@@ -41,6 +41,7 @@ import { generateSessionSummary } from "./summarizer.js";
 import { runAgent } from "./agent-loop.js";
 import { runOrchestrator } from "./orchestrator.js";
 import { runDag } from "./dag-executor.js";
+import { withClaudeCodePreset } from "./sdk-options.js";
 
 // ── Session broadcast rooms ───────────────────────────────────────────────
 // Maps sessionId → Set of WebSocket clients watching that session
@@ -501,7 +502,7 @@ export async function handleWorkflow(msg, { ws, sessionIds, activeQueries, pendi
     if (resumeId) stepOpts.resume = resumeId;
 
     try {
-      const q = query({ prompt: step.prompt, options: stepOpts });
+      const q = query({ prompt: step.prompt, options: withClaudeCodePreset(stepOpts) });
       const result = await processSdkStream(q, {
         ws, wsSend: wfSend, sessionIds,
         clientSid: resolvedSid, chatId: null,
@@ -877,7 +878,7 @@ export async function handleChat(msg, { ws, sessionIds, activeQueries, pendingAp
   if (clientSid) registerGlobalQuery(clientSid, queryKey);
 
   async function runChatQuery(queryOpts) {
-    const q = query({ prompt: buildPrompt(message, images), options: queryOpts });
+    const q = query({ prompt: buildPrompt(message, images), options: withClaudeCodePreset(queryOpts) });
     activeQueries.set(queryKey, { abort: () => abortController.abort() });
 
     let claudeSessionId = null;

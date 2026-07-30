@@ -84,7 +84,7 @@ vi.mock("../../server/paths.js", () => ({
   configPath: vi.fn((name) => `/mock-config/${name}`),
 }));
 
-vi.mock("@anthropic-ai/claude-code", () => ({
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: vi.fn(() =>
     (async function* () {
       yield { type: "system", subtype: "init", session_id: "perf-sid", model: "claude-sonnet-4-6" };

@@ -1,7 +1,8 @@
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execPath } from "process";
 import { existsSync } from "fs";
 import { homedir } from "os";
+import { withClaudeCodePreset } from "./sdk-options.js";
 
 // Map short model names to current model IDs
 const MODEL_MAP = {
@@ -171,7 +172,7 @@ export async function runAgent({
   let lastAgentMetrics = {};
 
   try {
-    const q = query({ prompt, options: opts });
+    const q = query({ prompt, options: withClaudeCodePreset(opts) });
 
     for await (const sdkMsg of q) {
       if (ws.readyState !== 1) break;

@@ -42,7 +42,7 @@ On first run, Claudeck creates `~/.claudeck/` with your config files, database, 
 | --------- | ----------------------------------------------------------------- |
 | Runtime   | Node.js 18+ (ESM)                                                |
 | Backend   | Express 4, WebSocket (ws 8), web-push 3, dotenv                  |
-| AI SDK    | @anthropic-ai/claude-code ^1                                     |
+| AI SDK    | @anthropic-ai/claude-agent-sdk ^0.3                              |
 | Database  | SQLite 3 via better-sqlite3 ^11, WAL mode, adapter pattern (async interface, multi-DB ready) |
 | Frontend  | Vanilla JavaScript ES modules (no bundler), CSS custom properties |
 | PWA       | Web App Manifest, Service Worker (offline fallback + push + caching), standalone display |
