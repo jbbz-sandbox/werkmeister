@@ -83,6 +83,14 @@ npm run build                    # typecheck + 5 UI bundles + server → dist/
 node lib/localhost-form.smoke.mjs   # and the other lib/*.smoke.mjs
 ```
 
+Passing here: `browser-ui`, `localhost-form`, `workspace-search`.
+
+The other seven — `cache`, `commit-push`, `open-prs`, `sandbox`, `session-picker`,
+`session-stream`, `usage` — exercise `lib/sandbox.ts` and `lib/cache.ts`, which are
+not part of this checkout (no source, never in git history, nothing here imports
+them). They fail with `ERR_MODULE_NOT_FOUND` and are kept as the behavior spec for
+those modules if they ever land.
+
 ## Wiring
 
 - **Claude Code (CLI / VS Code):** installed automatically by the
