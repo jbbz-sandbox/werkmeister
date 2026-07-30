@@ -46,7 +46,7 @@ vi.mock("../../../server/notification-logger.js", () => ({
 }));
 
 // Default mock: yields init, assistant text, and a success result
-vi.mock("@anthropic-ai/claude-code", () => ({
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: vi.fn(({ prompt, options }) => {
     const messages = [
       { type: "system", subtype: "init", session_id: "test-claude-sid", model: "claude-sonnet-4-6" },
@@ -70,7 +70,7 @@ vi.mock("@anthropic-ai/claude-code", () => ({
 }));
 
 import { runAgent } from "../../../server/agent-loop.js";
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   recordAgentRunStart,
   recordAgentRunComplete,
@@ -876,22 +876,22 @@ describe("agent-loop — runAgent", () => {
 
   // ── Project system prompt ──────────────────────────────────────────────
   describe("project system prompt", () => {
-    it("does not set appendSystemPrompt when no project prompt", async () => {
+    it("does not set system prompt append when no project prompt", async () => {
       const { getProjectSystemPrompt } = await import("../../../server/routes/projects.js");
       getProjectSystemPrompt.mockReturnValue(null);
       const opts = baseOpts();
       await runAgent(opts);
       const callArgs = query.mock.calls[0][0];
-      expect(callArgs.options.appendSystemPrompt).toBeUndefined();
+      expect(callArgs.options.systemPrompt.append).toBeUndefined();
     });
 
-    it("sets appendSystemPrompt when project has system prompt", async () => {
+    it("sets system prompt append when project has system prompt", async () => {
       const { getProjectSystemPrompt } = await import("../../../server/routes/projects.js");
       getProjectSystemPrompt.mockReturnValue("Always use TypeScript");
       const opts = baseOpts();
       await runAgent(opts);
       const callArgs = query.mock.calls[0][0];
-      expect(callArgs.options.appendSystemPrompt).toBe("Always use TypeScript");
+      expect(callArgs.options.systemPrompt.append).toBe("Always use TypeScript");
     });
   });
 

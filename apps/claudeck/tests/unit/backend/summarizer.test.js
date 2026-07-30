@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock @anthropic-ai/claude-code
-vi.mock("@anthropic-ai/claude-code", () => ({
+// Mock @anthropic-ai/claude-agent-sdk
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: vi.fn(),
 }));
 
@@ -13,7 +13,7 @@ vi.mock("../../../db.js", () => ({
 }));
 
 import { generateSessionSummary } from "../../../server/summarizer.js";
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { getSession, getMessagesNoChatId, updateSessionSummary } from "../../../db.js";
 
 beforeEach(() => {

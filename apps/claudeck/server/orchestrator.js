@@ -8,7 +8,7 @@
  * 4. Feed results back to orchestrator for synthesis (via session resume)
  */
 
-import { query } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execPath } from "process";
 import { existsSync } from "fs";
 import { homedir } from "os";
@@ -28,6 +28,7 @@ import { runAgent } from "./agent-loop.js";
 import { sendPushNotification } from "./push-sender.js";
 import { sendTelegramNotification } from "./telegram-sender.js";
 import { buildAgentMemoryPrompt } from "./memory-injector.js";
+import { withClaudeCodePreset } from "./sdk-options.js";
 
 const MODEL_MAP = {
   haiku: "claude-haiku-4-5-20251001",
@@ -187,7 +188,7 @@ export async function runOrchestrator({
 
   try {
     const prompt = await buildOrchestratorPromptWithMemory(task, agents, cwd);
-    const q = query({ prompt, options: plannerOpts });
+    const q = query({ prompt, options: withClaudeCodePreset(plannerOpts) });
 
     for await (const sdkMsg of q) {
       if (ws.readyState !== 1) break;
@@ -421,7 +422,7 @@ export async function runOrchestrator({
       delete synthOpts.abortController;
       synthOpts.abortController = new AbortController();
 
-      const sq = query({ prompt: synthPrompt, options: synthOpts });
+      const sq = query({ prompt: synthPrompt, options: withClaudeCodePreset(synthOpts) });
 
       for await (const sdkMsg of sq) {
         if (ws.readyState !== 1) break;
