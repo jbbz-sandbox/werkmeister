@@ -13,7 +13,8 @@
     "serve:stdio": "node dist/main.js --stdio",
     "serve:http": "node dist/main.js",
     "dev": "cross-env NODE_ENV=development concurrently \"npm run watch:ui\" \"tsx --watch main.ts\"",
-    "start:stdio": "tsx main.ts --stdio"
+    "start:stdio": "tsx main.ts --stdio",
+    "test": "npm run build:server && for f in lib/*.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.0",
