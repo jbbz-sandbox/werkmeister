@@ -5,14 +5,15 @@
  * prerequisite that lives outside the checkout, writing the machine-global
  * config in `~/.sandbox` and converging the rest:
  *
- * The wizard asks everything up front, in six sections:
+ * The wizard asks everything up front, in seven sections:
  *
  *   1. paths        — repos root and workspaces root (`paths:` in config.yaml)
- *   2. ingress      — base domains + cert directory (`ingress:`)
- *   3. registry     — how to create services.yaml, if it doesn't exist yet
- *   4. jira         — OPTIONAL REST credentials for the dashboard fast path
- *   5. telepresence — OPTIONAL OSS client, via Homebrew
- *   6. superpowers  — OPTIONAL plugin, installed alongside ponytail
+ *   2. browser      — which browser `sandbox open` launches (`overrides.browser`)
+ *   3. ingress      — base domains + cert directory (`ingress:`)
+ *   4. registry     — how to create services.yaml, if it doesn't exist yet
+ *   5. jira         — OPTIONAL REST credentials for the dashboard fast path
+ *   6. telepresence — OPTIONAL OSS client, via Homebrew
+ *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
  *
  * then writes the config and converges the machine (lib/machine_setup):
  * seeding the `~/.sandbox` registry files (or migrating them up from a legacy
@@ -37,6 +38,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "../lib/browser.js";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { ingressHostnames } from "../lib/feature_routing.js";
 import * as gc from "../lib/global_config.js";
@@ -112,8 +114,28 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     }
   }
 
-  // --- 2. ingress ---------------------------------------------------------
-  heading("2. Ingress");
+  // --- 2. browser -----------------------------------------------------------
+  heading("2. Browser");
+  const resolvedBrowser: Record<string, string> = {};
+  const browserDefault = () => ((cfg.overrides ?? {}).browser as string) || DEFAULT_BROWSER;
+
+  if (interactive) {
+    await runWizard([BROWSER_PROMPT], resolvedBrowser, browserDefault, {
+      intro: "Which browser `sandbox open` launches.",
+    });
+  } else {
+    resolvedBrowser.browser = browserDefault();
+    info(`  browser: ${resolvedBrowser.browser}`);
+  }
+  if (BROWSERS[resolvedBrowser.browser]?.engine !== "chromium" && resolvedBrowser.browser !== "safari") {
+    warn(
+      `  ${BROWSERS[resolvedBrowser.browser].label} isn't wired up yet -- ` +
+        "`sandbox open` will error until it's picked to chrome/chromium/brave/edge/safari.",
+    );
+  }
+
+  // --- 3. ingress ---------------------------------------------------------
+  heading("3. Ingress");
   const resolvedIngress: Record<string, string> = {};
   const ingressDefault = (spec: PromptSpec): string =>
     String(currentIngress[spec.key as keyof gc.IngressSettings] ?? "");
@@ -132,8 +154,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     }
   }
 
-  // --- 3. registry --------------------------------------------------------
-  heading("3. Service registry");
+  // --- 4. registry --------------------------------------------------------
+  heading("4. Service registry");
   const servicesYaml = gc.servicesYamlPath();
   const legacyDir = path.join(getSandboxRoot(), LEGACY_CONFIG_DIR);
   const hasLegacy = fs.existsSync(path.join(legacyDir, "services.yaml"));
@@ -159,8 +181,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     }
   }
 
-  // --- 4. jira (optional; prompted here so all writes happen together) -----
-  heading("4. Jira credentials (optional)");
+  // --- 5. jira (optional; prompted here so all writes happen together) -----
+  heading("5. Jira credentials (optional)");
   const jira: gc.JiraSettings = { ...gc.loadJira() };
   const jiraConfigured = Boolean(jira.base_url && jira.email && jira.api_token);
   if (jiraConfigured) {
@@ -178,8 +200,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     }
   }
 
-  // --- 5. telepresence (optional) -----------------------------------------
-  heading("5. Telepresence (optional)");
+  // --- 6. telepresence (optional) -----------------------------------------
+  heading("6. Telepresence (optional)");
   info("Only `sandbox intercept` needs it — reroutes cluster traffic to a local container.");
   const installTelepresence = await confirm(
     "  Install/upgrade the OSS client via Homebrew if it's missing or stale?",
@@ -187,8 +209,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     interactive,
   );
 
-  // --- 6. optional plugins -------------------------------------------------
-  heading("6. Superpowers plugin (optional)");
+  // --- 7. optional plugins -------------------------------------------------
+  heading("7. Superpowers plugin (optional)");
   info(
     "Brainstorming/planning skills, installed alongside ponytail. Writes its " +
       "plans and specs under docs/superpowers/. Nothing in the sandbox depends " +
@@ -218,7 +240,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       remote_domain: resolvedIngress.remote_domain,
       certs_dir: resolvedIngress.certs_dir,
     },
-    overrides: cfg.overrides ?? {},
+    overrides: { ...(cfg.overrides ?? {}), browser: resolvedBrowser.browser },
     ...(jira.base_url || jira.email || jira.api_token ? { jira } : {}),
   };
 

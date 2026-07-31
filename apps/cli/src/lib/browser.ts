@@ -29,13 +29,118 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { Colors, error, info } from "./config.js";
+import * as gc from "./global_config.js";
+import type { PromptSpec } from "./wizard.js";
 
-// Chrome binary: overridable via CHROME_BIN for non-default installs / Linux CI.
-export const CHROME =
-  process.env.CHROME_BIN ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 export const COOKIE_DOMAIN = ".local.sandbox.com";
 
-function sleep(ms: number): Promise<void> {
+// --------------------------------------------------------------------------
+// Browser choice
+// --------------------------------------------------------------------------
+/**
+ * Browsers `sandbox setup` can offer for `sandbox open`.
+ *
+ * `sandbox open` drives the Chrome DevTools Protocol (CDP) over a raw
+ * websocket -- only Chromium-engine browsers speak that. Firefox
+ * (WebDriver BiDi) and the WebKit browsers (Safari, DuckDuckGo) are listed
+ * so they show up as recognized choices, but picking one is a clear error
+ * at launch rather than a silent `waitForBrowserWs` timeout.
+ */
+interface BrowserSpec {
+  label: string;
+  engine: "chromium" | "webkit" | "gecko";
+  macPath: string;
+}
+
+export const BROWSERS: Record<string, BrowserSpec> = {
+  chrome: {
+    label: "Google Chrome",
+    engine: "chromium",
+    macPath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  },
+  chromium: {
+    label: "Chromium",
+    engine: "chromium",
+    macPath: "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  },
+  brave: {
+    label: "Brave Browser",
+    engine: "chromium",
+    macPath: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+  },
+  edge: {
+    label: "Microsoft Edge",
+    engine: "chromium",
+    macPath: "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  },
+  firefox: {
+    label: "Firefox",
+    engine: "gecko",
+    macPath: "/Applications/Firefox.app/Contents/MacOS/firefox",
+  },
+  safari: {
+    label: "Safari",
+    engine: "webkit",
+    macPath: "/Applications/Safari.app/Contents/MacOS/Safari",
+  },
+  duckduckgo: {
+    label: "DuckDuckGo",
+    engine: "webkit",
+    macPath: "/Applications/DuckDuckGo.app/Contents/MacOS/DuckDuckGo",
+  },
+};
+
+export const DEFAULT_BROWSER = "chrome";
+
+/** `sandbox setup` prompt for `overrides.browser`. */
+export const BROWSER_PROMPT: PromptSpec = {
+  key: "browser",
+  label: "Browser for `sandbox open`",
+  help:
+    "Chromium browsers (chrome, chromium, brave, edge) work via CDP; safari works via " +
+    "Apple's bundled safaridriver. Firefox/DuckDuckGo are listed for visibility but " +
+    "aren't wired up yet.",
+  acceptEmpty: false,
+  pattern: `(${Object.keys(BROWSERS).join("|")})`,
+  placeholder: DEFAULT_BROWSER,
+  choicesFn: () => Object.keys(BROWSERS),
+};
+
+/**
+ * Resolve the browser binary to launch.
+ *
+ * `CHROME_BIN` (a raw path) wins, for CI / non-default installs. Otherwise
+ * `overrides.browser_path` (a raw path) wins, then `overrides.browser` (a
+ * name from `BROWSERS`) resolves to its default macOS path. Returns null
+ * (after printing why) when the choice isn't a Chromium-engine browser.
+ */
+export function resolveBrowserBinary(): string | null {
+  if (process.env.CHROME_BIN) return process.env.CHROME_BIN;
+
+  const overrides = (gc.load()["overrides"] ?? {}) as Record<string, string>;
+  if (overrides.browser_path) return overrides.browser_path;
+
+  const key = overrides.browser || DEFAULT_BROWSER;
+  const spec = BROWSERS[key];
+  if (!spec) {
+    error(`Unknown overrides.browser '${key}' -- choices: ${Object.keys(BROWSERS).join(", ")}`);
+    return null;
+  }
+  if (spec.engine !== "chromium") {
+    const engineName = spec.engine === "webkit" ? "WebKit" : "Gecko";
+    const chromiumChoices = Object.keys(BROWSERS).filter((k) => BROWSERS[k].engine === "chromium");
+    error(
+      `${spec.label} uses ${engineName}, not Chromium -- \`sandbox open\` only speaks the ` +
+        `Chrome DevTools Protocol, which just Chromium-based browsers support. ` +
+        `Run \`sandbox setup\` and pick one of: ${chromiumChoices.join(", ")}.`,
+    );
+    return null;
+  }
+  return spec.macPath;
+}
+
+// Shared with lib/safari.ts, which has no CDP client of its own to piggyback on.
+export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -300,7 +405,8 @@ export function badgeScript(feature: string, color: string): string {
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
-function findFreePort(): Promise<number> {
+// Shared with lib/safari.ts.
+export function findFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
     srv.once("error", reject);
@@ -420,11 +526,40 @@ class FeatureSession {
 // Public entry point
 // --------------------------------------------------------------------------
 /**
- * Launch a feature-tagged Chrome window. Blocks until closed.
+ * True when the configured browser is Safari *and* nothing forces the raw
+ * Chromium/CDP path (`CHROME_BIN`, `overrides.browser_path`) over it. Those
+ * two overrides have always meant "launch this literal Chromium-family
+ * binary", so they win even if `overrides.browser` happens to say "safari".
+ */
+function wantsSafari(): boolean {
+  if (process.env.CHROME_BIN) return false;
+  const overrides = (gc.load()["overrides"] ?? {}) as Record<string, string>;
+  if (overrides.browser_path) return false;
+  return (overrides.browser || DEFAULT_BROWSER) === "safari";
+}
+
+/**
+ * Launch a feature-tagged browser window. Blocks until closed.
  *
- * Returns a process exit code (0 on clean exit).
+ * Dispatches to Safari's WebDriver client (`lib/safari.ts`) when configured,
+ * otherwise the Chromium/CDP client below. Firefox and non-Safari WebKit
+ * browsers (DuckDuckGo) aren't wired up to either protocol yet --
+ * `resolveBrowserBinary` reports that clearly instead of hanging.
  */
 export async function openFeatureBrowser(
+  feature: string,
+  url: string,
+  opts: { size?: string; position?: string | null } = {},
+): Promise<number> {
+  if (wantsSafari()) {
+    const { openSafariBrowser } = await import("./safari.js");
+    return openSafariBrowser(feature, url, opts);
+  }
+  return openChromiumBrowser(feature, url, opts);
+}
+
+/** Chromium/CDP launcher -- see the module header for how it works. */
+async function openChromiumBrowser(
   feature: string,
   url: string,
   opts: { size?: string; position?: string | null } = {},
@@ -432,8 +567,13 @@ export async function openFeatureBrowser(
   const size = opts.size ?? "1440,900";
   let position = opts.position ?? null;
 
+  const CHROME = resolveBrowserBinary();
+  if (!CHROME) return 1; // resolveBrowserBinary already printed why
   if (!fs.existsSync(CHROME)) {
-    error(`Chrome not found at ${CHROME} (set CHROME_BIN to override)`);
+    error(
+      `Browser not found at ${CHROME} (set CHROME_BIN, or overrides.browser_path in ` +
+        "config.yaml, to override -- or run `sandbox setup` to pick an installed browser)",
+    );
     return 1;
   }
 
