@@ -14,12 +14,12 @@
  *     local_domain: local.sandbox.com
  *     remote_domain: remote.sandbox.com
  *
- *   next-hello:                     # ~/.sandbox/services.yaml
+ *   frontend:                     # ~/.sandbox/services.yaml
  *     feature_router:
- *       remote_upstream: next-hello.default.svc.cluster.local:8080
+ *       remote_upstream: k8s-frontend:9053
  *
- * yields `next-hello.local.sandbox.com` (local docker feature) and
- * `next-hello.remote.sandbox.com` (the cluster deployment). A service that
+ * yields `frontend.local.sandbox.com` (local docker feature) and
+ * `frontend.remote.sandbox.com` (the cluster deployment). A service that
  * needs a non-conforming host pins it explicitly with `hostname:` /
  * `remote_hostname:`, which always wins over the derived value.
  *
@@ -37,11 +37,21 @@ import { loadIngress, type IngressSettings } from "./global_config.js";
 export interface FeatureRouter {
   /** Public host Caddy terminates for the local docker feature. */
   hostname?: string;
-  /** k8s baseline (`k8s-forwards:<port>`); absent for local-only services. */
+  /**
+   * k8s baseline (`k8s-forwards:<port>`); absent for local-only services.
+   *
+   * TODO(routing): dead field — nothing in services.yaml sets `k8s:` and no
+   * consumer reads it. `remote_upstream` carries the tunnel address instead
+   * (`k8s-frontend:9053`), which is arguably what this field was meant to
+   * hold: `remoteUpstream` is documented as "a cluster Service" but can never
+   * be cluster DNS, since the one Caddy is a docker container that can't
+   * resolve CoreDNS. Decide which it is — fold the tunnel address into `k8s:`
+   * and let `remoteUpstream` mean something else, or delete `k8s:`.
+   */
   k8s?: string;
   /** Public host Caddy terminates for the remote (K8s) deployment. */
   remoteHostname?: string;
-  /** Static upstream `host:port` for `remoteHostname` (e.g. a cluster Service). */
+  /** Static upstream `host:port` for `remoteHostname` — the k8s-forwards tunnel alias. */
   remoteUpstream?: string;
 }
 

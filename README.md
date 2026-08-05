@@ -87,3 +87,19 @@ npm run dev        # turbo run dev (dashboard watch/serve)
 ```
 
 The `sandbox` CLI launcher lives at [apps/cli/sandbox](apps/cli/sandbox) (symlinked at the repo root as `./sandbox` for convenience).
+
+## Local Kubernetes bootstrap
+
+The cluster manifests (`charts/`) and their helper scripts now live in the
+**demo-services** repo, checked out alongside this one under `paths.repos_root`:
+
+```bash
+cd ../demo-services
+kubectl config use-context orbstack
+./bin/bootstrap-k8s-env.sh   # shared infra: postgres + redis
+./bin/deploy.sh              # the demo backend + frontend releases
+```
+
+Shared infra (postgres, redis) is deployed from there too — the sandbox
+`k8s-forwards` container tunnels those Services into the docker world on the
+ports the generated feature `.env` expects.

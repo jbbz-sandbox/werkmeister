@@ -30,7 +30,7 @@ This is the most common infrastructure issue.
 ```bash
 # Test through Caddy
 curl -sk -o /dev/null -w "Caddy: HTTP %{http_code} | Size: %{size_download}\n" \
-  "https://next-hello.local.sandbox.com/your/path"
+  "https://frontend.local.sandbox.com/your/path"
 
 # Test direct to expected service (check CLAUDE.md routing table for correct port)
 curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
@@ -196,26 +196,26 @@ docker network inspect sandbox-shared --format '{{range .Containers}}{{.Name}} {
 ### DNS Resolution Inside Containers
 ```bash
 docker exec sandbox-caddy nslookup host.docker.internal
-docker exec {feature}-next-hello nslookup k8s-forwards
+docker exec {feature}-frontend nslookup k8s-forwards
 ```
 
 ---
 
 ## Service-Specific Issues
 
-### next-hello (sandbox/apps/next-hello)
+### frontend (demo-services/apps/frontend)
 
 **Next.js build errors:** Check if the repo's setup service (if any) completed:
 ```bash
-docker logs {feature}-sandbox-setup --tail 20 2>&1
+docker logs {feature}-demo-services-setup --tail 20 2>&1
 ```
 
-**API errors in next-hello logs:** Usually means an upstream service isn't reachable. Check environment variable resolution:
+**API errors in frontend logs:** Usually means an upstream service isn't reachable. Check environment variable resolution:
 ```bash
-docker exec {feature}-next-hello env | grep -E "_URL"
+docker exec {feature}-frontend env | grep -E "_URL"
 ```
 
-### rest-hello (sandbox/apps/rest-hello)
+### backend (demo-services/apps/backend)
 
 **Auth0 errors:** Check that Auth0 secrets are set in `~/.sandbox/secrets.env`:
 ```bash
@@ -276,10 +276,10 @@ Known-good URLs for each web tier (salvaged from the retired `~/workspace/CLAUDE
 routing source of truth is the `feature_router:` blocks in `~/.sandbox/services.yaml`):
 
 ```
-# next-hello (web)
-https://next-hello.local.sandbox.com/
-https://next-hello.local.sandbox.com/__sandbox
+# frontend (web)
+https://frontend.local.sandbox.com/
+https://frontend.local.sandbox.com/__sandbox
 
-# rest-hello (api)
-https://rest-hello.local.sandbox.com/health
+# backend (api)
+https://backend.local.sandbox.com/health
 ```
