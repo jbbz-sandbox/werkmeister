@@ -33,7 +33,7 @@ assert.deepEqual(
 
 // Multi-term query combines with AND, not OR.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp hello").map((w) => w.name),
+  filterWorkspaces(all, "webapp frontend").map((w) => w.name),
   ["frontend-refresh"],
   "multi-token query requires every token to match (AND)",
 );
@@ -50,21 +50,21 @@ assert.deepEqual(filterWorkspaces(all, "nonexistentxyz"), []);
 
 // `-term` excludes.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp -hello").map((w) => w.name),
+  filterWorkspaces(all, "webapp -frontend").map((w) => w.name),
   ["proj-2165-pageview-500-fix"],
   "-term excludes matches for that term",
 );
 
 // `a|b` is an OR of alternatives.
 assert.deepEqual(
-  filterWorkspaces(all, "blog|hello").map((w) => w.name),
+  filterWorkspaces(all, "blog|frontend").map((w) => w.name),
   ["blog-mdx-poc", "frontend-refresh"],
   "a|b matches either alternative",
 );
 
 // -/| combine: required term AND excluded term AND an OR group.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp -urgent hello|refresh").map((w) => w.name),
+  filterWorkspaces(all, "webapp -urgent frontend|refresh").map((w) => w.name),
   ["frontend-refresh"],
   "-exclude and a|b OR-group combine with the rest via AND",
 );
