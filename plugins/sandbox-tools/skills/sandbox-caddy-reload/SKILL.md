@@ -94,7 +94,7 @@ The ingress host is configured per machine — never hardcode it. Derive it from
 
 ```bash
 DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.sandbox/config.yaml | head -1)
-SERVICE=next-hello   # the routed service under test; `sandbox services <feature>` lists them
+SERVICE=frontend   # the routed service under test; `sandbox services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
 curl -sk -o /dev/null -w "homepage: HTTP %{http_code} | Size: %{size_download}\n" "$BASE/"

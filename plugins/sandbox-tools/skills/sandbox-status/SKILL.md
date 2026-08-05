@@ -38,7 +38,7 @@ sandbox logs <feature> [service]
 For any locally-running web services, verify their health endpoints directly:
 
 ```bash
-for port_name in "11100:rest-hello:/health" "11101:next-hello:/"; do
+for port_name in "11100:backend:/health" "11101:frontend:/"; do
     port=$(echo $port_name | cut -d: -f1)
     name=$(echo $port_name | cut -d: -f2)
     endpoint=$(echo $port_name | cut -d: -f3)
@@ -73,7 +73,7 @@ sandbox status --k8s
 
 This performs real HTTP health checks against each forward's health endpoint and shows
 the `listen_port → remote_port` mapping. The `listen_port` is what you use on `localhost`
-(e.g. next-hello is `localhost:9053`, not `localhost:8080`).
+(e.g. frontend is `localhost:9053`, not `localhost:8080`).
 
 ## Step 6: Resource Usage
 
@@ -103,13 +103,13 @@ docker system df 2>/dev/null
 ### Active Features
 | Feature | Slot | Services | Status |
 |---------|------|----------|--------|
-| {name} | {N} | rest-hello, next-hello | All healthy / Issues |
+| {name} | {N} | backend, frontend | All healthy / Issues |
 
 ### Service Health
 | Service | Direct | Through Caddy |
 |---------|--------|---------------|
-| rest-hello | HTTP {code} | HTTP {code} |
-| next-hello | HTTP {code} | HTTP {code} |
+| backend | HTTP {code} | HTTP {code} |
+| frontend | HTTP {code} | HTTP {code} |
 
 ### Resources
 | Container | CPU | Memory |

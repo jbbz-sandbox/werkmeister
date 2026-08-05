@@ -10,7 +10,7 @@ const { filterWorkspaces } = await import("../dist/lib/workspace-search.js");
 const all = [
   { name: "proj-2165-pageview-500-fix", jiraId: "PROJ-2165", labels: ["urgent", "webapp"] },
   { name: "blog-mdx-poc", jiraId: null, labels: ["blog"] },
-  { name: "next-hello-refresh", jiraId: "PROJ-9001", labels: ["webapp"] },
+  { name: "frontend-refresh", jiraId: "PROJ-9001", labels: ["webapp"] },
 ];
 
 // Empty query: passthrough, original order preserved.
@@ -27,21 +27,21 @@ assert.deepEqual(
 // Labels field is searchable.
 assert.deepEqual(
   filterWorkspaces(all, "webapp").map((w) => w.name),
-  ["proj-2165-pageview-500-fix", "next-hello-refresh"],
+  ["proj-2165-pageview-500-fix", "frontend-refresh"],
   "labels field matches, order preserved from `all`",
 );
 
 // Multi-term query combines with AND, not OR.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp hello").map((w) => w.name),
-  ["next-hello-refresh"],
+  filterWorkspaces(all, "webapp frontend").map((w) => w.name),
+  ["frontend-refresh"],
   "multi-token query requires every token to match (AND)",
 );
 
 // jiraId is still searchable (existing field).
 assert.deepEqual(
   filterWorkspaces(all, "proj-9001").map((w) => w.name),
-  ["next-hello-refresh"],
+  ["frontend-refresh"],
   "jiraId substring match",
 );
 
@@ -50,22 +50,22 @@ assert.deepEqual(filterWorkspaces(all, "nonexistentxyz"), []);
 
 // `-term` excludes.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp -hello").map((w) => w.name),
+  filterWorkspaces(all, "webapp -frontend").map((w) => w.name),
   ["proj-2165-pageview-500-fix"],
   "-term excludes matches for that term",
 );
 
 // `a|b` is an OR of alternatives.
 assert.deepEqual(
-  filterWorkspaces(all, "blog|hello").map((w) => w.name),
-  ["blog-mdx-poc", "next-hello-refresh"],
+  filterWorkspaces(all, "blog|frontend").map((w) => w.name),
+  ["blog-mdx-poc", "frontend-refresh"],
   "a|b matches either alternative",
 );
 
 // -/| combine: required term AND excluded term AND an OR group.
 assert.deepEqual(
-  filterWorkspaces(all, "webapp -urgent hello|refresh").map((w) => w.name),
-  ["next-hello-refresh"],
+  filterWorkspaces(all, "webapp -urgent frontend|refresh").map((w) => w.name),
+  ["frontend-refresh"],
   "-exclude and a|b OR-group combine with the rest via AND",
 );
 

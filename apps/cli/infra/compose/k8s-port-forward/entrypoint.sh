@@ -2,7 +2,7 @@
 # k8s Port-Forward Entrypoint
 # Runs inside a Docker container to forward k8s services onto the Docker network.
 # Each forward listens on the remote service's native port so Docker DNS aliases
-# (e.g., k8s-next-hello:8080) work transparently.
+# (e.g., k8s-frontend:8080) work transparently.
 
 set -euo pipefail
 

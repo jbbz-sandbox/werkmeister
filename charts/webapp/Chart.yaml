@@ -1,6 +1,0 @@
-apiVersion: v2
-name: webapp
-description: Generic web app — a Deployment + LoadBalancer Service, parameterized by values.
-type: application
-version: 0.1.0        # chart version (bump when you change templates)
-appVersion: "0.1.0"  # version of the app being deployed (informational)

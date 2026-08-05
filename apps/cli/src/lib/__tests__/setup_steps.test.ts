@@ -14,13 +14,18 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import {
+  DEMO_SERVICES_REPO,
+  DEMO_SERVICES_REPO_URL,
   OPTIONAL_PLUGINS,
   resolveCertScript,
+  runSetup,
   syncIngressCerts,
   syncOptionalPlugin,
   syncPathDirs,
   syncRegistryConfigs,
+  syncRepo,
   syncTelepresence,
+  WORKSPACE_ROOT_REPO,
   type Runner,
   type Step,
 } from "../machine_setup.js";
@@ -107,8 +112,8 @@ describe("scaffold content", () => {
 
   it("omits per-service hostnames from the demo registry — they derive from ingress", () => {
     const text = renderServicesYaml({ demo: true });
-    expect(text).toContain("next-hello");
-    expect(text).not.toContain("hostname: next-hello");
+    expect(text).toContain("frontend");
+    expect(text).not.toContain("hostname: frontend");
   });
 
   it("emits a parseable empty skeleton with every section present", () => {
@@ -122,16 +127,16 @@ describe("scaffold content", () => {
 
 describe("requiredSecretKeys", () => {
   const servicesConfig = {
-    "rest-hello": {},
+    "backend": {},
     "auth-web": { secrets: ["AUTH0_CLIENT_SECRET", "NEXTAUTH_SECRET"] },
   };
 
   it("is empty for a workspace whose services declare no secrets", () => {
-    expect(requiredSecretKeys(servicesConfig, ["rest-hello"])).toEqual([]);
+    expect(requiredSecretKeys(servicesConfig, ["backend"])).toEqual([]);
   });
 
   it("only requires the keys declared by services actually in the workspace", () => {
-    expect(requiredSecretKeys(servicesConfig, ["rest-hello", "auth-web"])).toEqual([
+    expect(requiredSecretKeys(servicesConfig, ["backend", "auth-web"])).toEqual([
       "AUTH0_CLIENT_SECRET",
       "NEXTAUTH_SECRET",
     ]);
@@ -428,5 +433,80 @@ describe("severity", () => {
     ];
     expect(steps.filter((s) => !s.ok && !s.optional)).toHaveLength(1);
     expect(steps.filter((s) => !s.ok && s.optional)).toHaveLength(1);
+  });
+});
+
+describe("syncRepo", () => {
+  const spec = {
+    name: DEMO_SERVICES_REPO,
+    url: DEMO_SERVICES_REPO_URL,
+    missingConsequence: "The demo backend/frontend services will not start until it is cloned there.",
+  };
+
+  it("clones the spec's own url, not a hardcoded one", () => {
+    // Regression guard for the generalization: this used to be
+    // syncWorkspaceRepo with the workspace repo's URL baked into the body, so
+    // a second repo would have silently cloned the wrong thing.
+    const runner = fakeRunner({ "git clone": [0, ""] });
+    const steps = syncRepo(home.dir, spec, runner, false);
+    expect(steps[0].ok).toBe(true);
+    expect(runner.calls[0]).toEqual([
+      "git", "clone", DEMO_SERVICES_REPO_URL, path.join(home.dir, DEMO_SERVICES_REPO),
+    ]);
+  });
+
+  it("clones nothing in check mode", () => {
+    const runner = fakeRunner({ "git clone": [0, ""] });
+    const steps = syncRepo(home.dir, spec, runner, true);
+    expect(steps[0].ok).toBe(false);
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("explains an unreachable remote with this spec's consequence", () => {
+    const runner = fakeRunner({ "git clone": [128, "ERROR: Repository not found."] });
+    const steps = syncRepo(home.dir, spec, runner, false);
+    expect(steps[0].ok).toBe(false);
+    // Optional: a missing demo repo must never fail the whole setup run.
+    expect(steps[0].optional).toBe(true);
+    expect(steps[0].detail).toContain("demo backend/frontend services will not start");
+    expect(steps[0].detail).not.toContain("plain directories");
+  });
+});
+
+describe("demo-services clone gating", () => {
+  // Gated on the registry, not on this run's --demo answer: `sandbox setup
+  // --check` passes no registry options, so keying off the answer would hide
+  // the step from the one command whose whole job is reporting drift.
+  const runSetupNow = () =>
+    runSetup({
+      checkOnly: true,
+      reposRoot: home.dir,
+      runner: fakeRunner({}),
+      hostnames: [],
+      jira: null,
+      pathDirs: {},
+    });
+
+  const seedRegistry = (demo: boolean) =>
+    fs.writeFileSync(path.join(home.dir, "services.yaml"), renderServicesYaml({ demo }));
+
+  it("includes the repo when the registry names it", async () => {
+    seedRegistry(true);
+    const labels = (await runSetupNow()).map((s) => s.label);
+    expect(labels).toContain(`repo ${DEMO_SERVICES_REPO}`);
+    expect(labels).toContain(`repo ${WORKSPACE_ROOT_REPO}`);
+  });
+
+  it("skips the repo for a registry that never mentions it", async () => {
+    seedRegistry(false);
+    const labels = (await runSetupNow()).map((s) => s.label);
+    expect(labels).not.toContain(`repo ${DEMO_SERVICES_REPO}`);
+    // The workspace root repo is unconditional — it is not demo content.
+    expect(labels).toContain(`repo ${WORKSPACE_ROOT_REPO}`);
+  });
+
+  it("skips the repo on a fresh machine with no registry at all", async () => {
+    const labels = (await runSetupNow()).map((s) => s.label);
+    expect(labels).not.toContain(`repo ${DEMO_SERVICES_REPO}`);
   });
 });

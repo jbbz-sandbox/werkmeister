@@ -49,7 +49,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { expandUser, getReposRoot, getSandboxRoot } from "./config.js";
+import { expandUser, getReposRoot, getSandboxRoot, loadReposConfig } from "./config.js";
 import {
   configPath,
   loadIngress,
@@ -173,6 +173,35 @@ export const OPTIONAL_PLUGINS: readonly PluginSpec[] = [
 // clones/updates it.
 export const WORKSPACE_ROOT_REPO = "sandbox-workspace";
 export const WORKSPACE_ROOT_REPO_URL = "https://github.com/JayAndCory/sandbox-workspace.git";
+
+// The demo registry's two apps (backend, frontend) live here, checked out
+// alongside `sandbox` under repos_root so workspaces can worktree it. Cloned
+// only when setup seeds the demo registry — someone bringing their own
+// services.yaml has no use for it, and `sandbox setup` should not litter
+// repos_root with a repo they'll never open.
+export const DEMO_SERVICES_REPO = "demo-services";
+export const DEMO_SERVICES_REPO_URL = "git@github.com:jbbz-sandbox/demo-services.git";
+
+/** A repo `sandbox setup` keeps checked out under repos_root. */
+interface RepoSpec {
+  name: string;
+  url: string;
+  /** Appended to the unreachable-clone message: what breaks without it. */
+  missingConsequence: string;
+}
+
+const WORKSPACE_ROOT_SPEC: RepoSpec = {
+  name: WORKSPACE_ROOT_REPO,
+  url: WORKSPACE_ROOT_REPO_URL,
+  missingConsequence: "Workspaces will fall back to plain directories.",
+};
+
+const DEMO_SERVICES_SPEC: RepoSpec = {
+  name: DEMO_SERVICES_REPO,
+  url: DEMO_SERVICES_REPO_URL,
+  missingConsequence:
+    "The demo backend/frontend services will not start until it is cloned there.",
+};
 
 function defaultRunner(cmd: string[]): [number, string] {
   let res;
@@ -349,15 +378,23 @@ export function syncOptionalPlugin(
 }
 
 /**
- * Clone the companion sandbox-workspace repo, or refresh an existing one.
+ * Clone one of the companion repos into repos_root, or refresh an existing one.
  *
  * An existing checkout is fetched, and fast-forwarded only when it is clean
  * and on main — worktree source checkouts must never be rebased or reset
  * from here.
+ *
+ * Every failure is optional: a missing companion repo degrades the setup (see
+ * each spec's `missingConsequence`) but never blocks the rest of it.
  */
-export function syncWorkspaceRepo(reposRoot: string, runner: Runner, checkOnly: boolean): Step[] {
-  const dest = path.join(reposRoot, WORKSPACE_ROOT_REPO);
-  const label = `repo ${WORKSPACE_ROOT_REPO}`;
+export function syncRepo(
+  reposRoot: string,
+  spec: RepoSpec,
+  runner: Runner,
+  checkOnly: boolean,
+): Step[] {
+  const dest = path.join(reposRoot, spec.name);
+  const label = `repo ${spec.name}`;
 
   if (!fs.existsSync(dest)) {
     if (checkOnly) {
@@ -365,26 +402,22 @@ export function syncWorkspaceRepo(reposRoot: string, runner: Runner, checkOnly: 
         label,
         ok: false,
         optional: true,
-        detail: `missing — would clone ${WORKSPACE_ROOT_REPO_URL} into ${dest}`,
+        detail: `missing — would clone ${spec.url} into ${dest}`,
       }];
     }
-    const [rc, out] = runner(["git", "clone", WORKSPACE_ROOT_REPO_URL, dest]);
+    const [rc, out] = runner(["git", "clone", spec.url, dest]);
     if (rc === 0) {
       return [{ label, ok: true, detail: `cloned into ${dest}` }];
     }
-    // Optional: `sandbox workspace` falls back to creating each workspace root
-    // as a plain directory (with a warning) when this checkout is absent — you
-    // lose git history for workspace state, not the ability to work.
-    //
     // "Repository not found" from GitHub is deliberately ambiguous between
     // "private and you're not authenticated" and "does not exist", and both are
     // ordinary states here (the repo may simply not be created yet), so say so
     // rather than dumping git's credential-helper stack trace.
     const notFound = /Repository not found|could not read Username|Authentication failed/i.test(out);
     const detail = notFound
-      ? `${WORKSPACE_ROOT_REPO_URL} is not reachable — it may not exist yet, or ` +
+      ? `${spec.url} is not reachable — it may not exist yet, or ` +
         "you may not be authenticated to GitHub (`gh auth login`, or check your " +
-        "git credential helper). Workspaces will fall back to plain directories."
+        `git credential helper). ${spec.missingConsequence}`
       : `clone failed: ${briefOutput(out)}`;
     return [{ label, ok: false, optional: true, detail }];
   }
@@ -961,7 +994,15 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
       );
     }
   }
-  steps.push(...syncWorkspaceRepo(reposRoot, runner, checkOnly));
+  steps.push(...syncRepo(reposRoot, WORKSPACE_ROOT_SPEC, runner, checkOnly));
+  // Gated on the registry itself rather than on this run's `--demo` answer, so
+  // the step is right in all three cases: a fresh demo seed (written by
+  // syncRegistryConfigs above, hence read AFTER it), a `--check` on an existing
+  // machine (which passes no registry options at all), and a hand-rolled
+  // services.yaml that never mentions the demo apps.
+  if (DEMO_SERVICES_REPO in loadReposConfig()) {
+    steps.push(...syncRepo(reposRoot, DEMO_SERVICES_SPEC, runner, checkOnly));
+  }
   // Resolved here, not at call time — see RunSetupOptions.hostnames.
   const hostnames =
     typeof options.hostnames === "function" ? options.hostnames() : options.hostnames ?? [];

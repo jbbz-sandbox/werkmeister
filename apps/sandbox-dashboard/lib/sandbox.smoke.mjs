@@ -14,8 +14,8 @@ const psOutput = [
   "sandbox-infra\tredis\trunning\tUp 16 hours (healthy)\t",
   "sandbox-infra\tcaddy\trunning\tUp 16 hours\t", // no healthcheck declared
   "sandbox-infra\tk8s-forwards\texited\tExited (0) 2 minutes ago\t",
-  "sandbox-my-feature\tnext-hello\trunning\tUp 3 minutes (health: starting)\t2",
-  "sandbox-my-feature\trest-hello\texited\tExited (1) 1 minute ago\t2",
+  "sandbox-my-feature\tfrontend\trunning\tUp 3 minutes (health: starting)\t2",
+  "sandbox-my-feature\tbackend\texited\tExited (1) 1 minute ago\t2",
   "sandbox-my-feature\tecon-setup\texited\tExited (0) 5 minutes ago\t2",
 ].join("\n");
 
@@ -35,7 +35,7 @@ assert.deepEqual(
   "per-container name+state+health retained in project order",
 );
 assert.equal(
-  result.get("sandbox-my-feature").services.find((s) => s.name === "next-hello").health,
+  result.get("sandbox-my-feature").services.find((s) => s.name === "frontend").health,
   "starting",
   "'(health: starting)' parsed to 'starting'",
 );

@@ -63,7 +63,7 @@ Desktop.
 If the user already gave every input, skip the form:
 
 ```bash
-sandbox workspace add-pricing --jira-id PROJ-1234 --services rest-hello,next-hello
+sandbox workspace add-pricing --jira-id PROJ-1234 --services backend,frontend
 ```
 
 `feature` is positional; other form keys map 1:1 onto flags (`jira_id` → `--jira-id`,

@@ -63,7 +63,7 @@ import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
-/** {"feat-a": [3, ["next-hello"]]} → tab-separated `docker ps` rows. */
+/** {"feat-a": [3, ["frontend"]]} → tab-separated `docker ps` rows. */
 function fakeDockerRows(entries: Record<string, [number, string[]]>): string {
   const lines: string[] = [];
   for (const [feature, [slot, services]] of Object.entries(entries)) {
@@ -94,17 +94,17 @@ afterEach(() => {
 
 describe("allocateSlot", () => {
   it("is idempotent for an existing feature", () => {
-    h.dockerStdout = fakeDockerRows({ "feat-a": [3, ["next-hello"]] });
+    h.dockerStdout = fakeDockerRows({ "feat-a": [3, ["frontend"]] });
     expect(allocateSlot("feat-a")).toBe(3);
   });
 
   it("honors a free preferred slot", () => {
-    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["next-hello"]], "feat-2": [2, ["next-hello"]] });
+    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["frontend"]], "feat-2": [2, ["frontend"]] });
     expect(allocateSlot("feat-new", null, 5)).toBe(5);
   });
 
   it("falls back when preferred slot taken", () => {
-    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["next-hello"]] });
+    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["frontend"]] });
     const result = allocateSlot("feat-new", null, 1);
     expect(result).not.toBe(1);
     expect(result).toBe(2);
@@ -112,22 +112,22 @@ describe("allocateSlot", () => {
 
   it("returns lowest free slot with no preference", () => {
     h.dockerStdout = fakeDockerRows({
-      "feat-1": [1, ["next-hello"]],
-      "feat-2": [2, ["next-hello"]],
-      "feat-3": [3, ["next-hello"]],
+      "feat-1": [1, ["frontend"]],
+      "feat-2": [2, ["frontend"]],
+      "feat-3": [3, ["frontend"]],
     });
     expect(allocateSlot("feat-new")).toBe(4);
   });
 
   it("raises when all slots taken (overridden count: 2)", () => {
     h.portsOverride = { feature_slots: { count: 2, base_port: 11100, ports_per_slot: 20 } };
-    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["next-hello"]], "feat-2": [2, ["next-hello"]] });
+    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["frontend"]], "feat-2": [2, ["frontend"]] });
     expect(() => allocateSlot("feat-new")).toThrow();
   });
 
   it("raises when all 12 real slots taken", () => {
     const taken: Record<string, [number, string[]]> = {};
-    for (let n = 1; n <= 12; n++) taken[`feat-${n}`] = [n, ["next-hello"]];
+    for (let n = 1; n <= 12; n++) taken[`feat-${n}`] = [n, ["frontend"]];
     h.dockerStdout = fakeDockerRows(taken);
     expect(() => allocateSlot("feature-13")).toThrow(/slots/);
   });
@@ -168,7 +168,7 @@ describe("port math and slot lookups", () => {
   });
 
   it("getSlot returns null for unknown feature", () => {
-    h.dockerStdout = fakeDockerRows({ "other-feature": [1, ["next-hello"]] });
+    h.dockerStdout = fakeDockerRows({ "other-feature": [1, ["frontend"]] });
     expect(getSlot("unknown-feature")).toBeNull();
   });
 });

@@ -9,14 +9,14 @@ import { describe, expect, it } from "vitest";
 import { buildInterceptRows } from "../status.js";
 
 const REGISTRY = {
-  "next-hello": {
-    k8s_deployment: "next-hello",
+  "frontend": {
+    k8s_deployment: "frontend",
     k8s_namespace: "default",
     k8s_port: 8080,
     k8s_port_name: "http",
   },
-  "rest-hello": {
-    k8s_deployment: "rest-hello",
+  "backend": {
+    k8s_deployment: "backend",
     k8s_namespace: "default",
     k8s_port: 80,
     k8s_port_name: "http",
@@ -26,8 +26,8 @@ const REGISTRY = {
 };
 
 const SLOTS = {
-  "test-me": { slot: 1, services: ["next-hello"] },
-  other: { slot: 2, services: ["next-hello", "rest-hello"] },
+  "test-me": { slot: 1, services: ["frontend"] },
+  other: { slot: 2, services: ["frontend", "backend"] },
 };
 
 const none = { available: true, intercepts: new Map<string, string | null>() };
@@ -40,9 +40,9 @@ describe("buildInterceptRows", () => {
   it("emits one row per feature-service pair", () => {
     const rows = buildInterceptRows(SLOTS, REGISTRY, none);
     expect(rows.map((r) => `${r.feature}/${r.service}`)).toEqual([
-      "test-me/next-hello",
-      "other/next-hello",
-      "other/rest-hello",
+      "test-me/frontend",
+      "other/frontend",
+      "other/backend",
     ]);
   });
 
@@ -50,7 +50,7 @@ describe("buildInterceptRows", () => {
     const [row] = buildInterceptRows({ "test-me": SLOTS["test-me"] }, REGISTRY, none);
     expect(row.interceptable).toBe(true);
     expect(row.blocker).toBeNull();
-    expect(row.deployment).toBe("next-hello");
+    expect(row.deployment).toBe("frontend");
     expect(row.intercepted).toBe(false);
     expect(row.intercepted_by).toBeNull();
   });
@@ -59,7 +59,7 @@ describe("buildInterceptRows", () => {
     const [row] = buildInterceptRows(
       { "test-me": SLOTS["test-me"] },
       REGISTRY,
-      state([["next-hello", "test-me"]]),
+      state([["frontend", "test-me"]]),
     );
     expect(row.intercepted).toBe(true);
     expect(row.intercepted_by).toBe("test-me");
@@ -67,8 +67,8 @@ describe("buildInterceptRows", () => {
 
   it("names the owning feature on another feature's row for the same deployment", () => {
     // One intercept per deployment: feature `other` must not be told it owns this.
-    const rows = buildInterceptRows(SLOTS, REGISTRY, state([["next-hello", "test-me"]]));
-    const otherRow = rows.find((r) => r.feature === "other" && r.service === "next-hello")!;
+    const rows = buildInterceptRows(SLOTS, REGISTRY, state([["frontend", "test-me"]]));
+    const otherRow = rows.find((r) => r.feature === "other" && r.service === "frontend")!;
     expect(otherRow.intercepted).toBe(true);
     expect(otherRow.intercepted_by).toBe("test-me");
   });
@@ -77,7 +77,7 @@ describe("buildInterceptRows", () => {
     const [row] = buildInterceptRows(
       { "test-me": SLOTS["test-me"] },
       REGISTRY,
-      state([["next-hello", null]]),
+      state([["frontend", null]]),
     );
     expect(row.intercepted).toBe(true);
     expect(row.intercepted_by).toBeNull();

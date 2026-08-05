@@ -125,7 +125,7 @@ function slotConfig(): [number, number, number] {
  * Return service names that should appear in a feature's `services` list.
  *
  * Only services that have a `port_offset` defined in `services.yaml`
- * are user-facing (rest-hello, next-hello, ...). Scaffolding services
+ * are user-facing (backend, frontend, ...). Scaffolding services
  * such as `<repo>-setup` are excluded.
  */
 function routableServiceNames(): Set<string> {

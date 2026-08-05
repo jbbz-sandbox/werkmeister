@@ -70,7 +70,7 @@ k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052
 
 ```
 # Example generated Caddyfile snippet
-next-hello.remote.sandbox.com {
+frontend.remote.sandbox.com {
     tls internal
 
     # Feature selector UI
@@ -88,7 +88,7 @@ next-hello.remote.sandbox.com {
     # Cookie present -> copy its value into an X-Feature header, then proxy.
     @xf header_regexp xf Cookie X-Feature=([^;]+)
     handle @xf {
-        reverse_proxy k8s-next-hello:9053 {
+        reverse_proxy k8s-frontend:9053 {
             header_up X-Feature {re.xf.1}
         }
     }
@@ -117,8 +117,8 @@ Each feature slot (1–12) gets a port range. Deterministic, no collisions.
 |-------------|-------------|------------------|
 | 9050 | redis | `k8s-redis` |
 | 9051 | postgres | `k8s-postgres` |
-| 9052 | rest-hello | `k8s-rest-hello` |
-| 9053 | next-hello | `k8s-next-hello` |
+| 9052 | backend | `k8s-backend` |
+| 9053 | frontend | `k8s-frontend` |
 
 **Shared infrastructure** (not k8s -- runs locally as containers):
 
@@ -138,34 +138,34 @@ A central config maps repos → services → Docker compose files:
 ```yaml
 # ~/.sandbox/services.yaml
 repos:
-  sandbox:
-    services: [rest-hello, next-hello]
+  demo-services:
+    services: [backend, frontend]
     path_mappings:
-      apps/rest-hello: rest-hello
-      apps/next-hello: next-hello
+      apps/backend: backend
+      apps/frontend: frontend
 
 services:
-  rest-hello:
-    repo: sandbox
-    path: apps/rest-hello
+  backend:
+    repo: demo-services
+    path: apps/backend
     type: api
     internal_port: 3000
     port_offset: 0          # within the feature's port range
     health_endpoint: /health
-    k8s_deployment: rest-hello
+    k8s_deployment: backend
     k8s_namespace: default
     k8s_port: 80
     k8s_forward_port: 9052
 
-  next-hello:
-    repo: sandbox
-    path: apps/next-hello
+  frontend:
+    repo: demo-services
+    path: apps/frontend
     type: web
     internal_port: 3000
     port_offset: 1
     health_endpoint: /
     archetype: node-web
-    k8s_deployment: next-hello
+    k8s_deployment: frontend
     k8s_namespace: default
     k8s_port: 8080
     k8s_forward_port: 9053
@@ -226,7 +226,7 @@ When `sandbox up <feature>` runs, it dynamically generates a `docker-compose.fea
 
 ```yaml
 # Auto-generated for feature: payment-refactor
-# Services detected: next-hello, rest-hello
+# Services detected: frontend, backend
 
 networks:
   feature-payment-refactor:
@@ -235,31 +235,31 @@ networks:
     external: true
 
 services:
-  next-hello:
+  frontend:
     build:
-      context: /Users/dev/workspaces/payment-refactor/sandbox
-      dockerfile: apps/next-hello/Dockerfile
+      context: /Users/dev/workspaces/payment-refactor/demo-services
+      dockerfile: apps/frontend/Dockerfile
       target: development     # use dev stage for hot-reload
     ports:
       - "11101:3000"
     environment:
-      - REST_HELLO_URL=http://rest-hello:3000            # local (same feature)
+      - BACKEND_URL=http://backend:3000            # local (same feature)
       - REDIS_URL=redis://k8s-redis:9050                 # k8s baseline
       - DATABASE_URL=postgresql://postgres:5432/dev  # shared infra
     volumes:
-      - /Users/dev/workspaces/payment-refactor/sandbox/apps/next-hello/src:/app/src
+      - /Users/dev/workspaces/payment-refactor/demo-services/apps/frontend/src:/app/src
     networks:
       feature-payment-refactor:
         aliases:
-          - next-hello
+          - frontend
       sandbox-shared:
         aliases:
-          - next-hello
+          - frontend
 
-  rest-hello:
+  backend:
     build:
-      context: /Users/dev/workspaces/payment-refactor/sandbox
-      dockerfile: apps/rest-hello/Dockerfile
+      context: /Users/dev/workspaces/payment-refactor/demo-services
+      dockerfile: apps/backend/Dockerfile
       target: development
     ports:
       - "11101:4000"
@@ -268,19 +268,19 @@ services:
       - REDIS_URL=redis://redis:6379                     # shared infra
       - DATABASE_URL=postgresql://postgres:5432/dev  # shared infra
     volumes:
-      - /Users/dev/workspaces/payment-refactor/sandbox/apps/rest-hello/src:/app/src
+      - /Users/dev/workspaces/payment-refactor/demo-services/apps/backend/src:/app/src
     networks:
       feature-payment-refactor:
         aliases:
-          - rest-hello
+          - backend
       sandbox-shared:
         aliases:
-          - rest-hello
+          - backend
 ```
 
 **Key design choices**:
 - Docker DNS aliases on the `sandbox-shared` network to reach all services -- no `host.docker.internal` anywhere.
-- Local services (same feature): referenced by Docker DNS name (e.g., `http://rest-hello:3000`). The env-var name is the service name upper-cased with `-` → `_`, plus `_URL`.
+- Local services (same feature): referenced by Docker DNS name (e.g., `http://backend:3000`). The env-var name is the service name upper-cased with `-` → `_`, plus `_URL`.
 - k8s baseline services: reached via the `k8s-forwards` container (e.g., `http://k8s-forwards:9052`).
 - Shared infrastructure: Redis at `redis://k8s-redis:9050`, Postgres at `postgresql://k8s-postgres:9051/dev`.
 - Feature containers join both the per-feature network (isolation) and the `sandbox-shared` network (access to shared infra and k8s forwards).
@@ -324,7 +324,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 
 **Networking**:
 - Connected to the `sandbox-shared` Docker network.
-- Registers DNS aliases for each forwarded service (e.g., `k8s-rest-hello`, `k8s-next-hello`, `k8s-redis`, `k8s-postgres`).
+- Registers DNS aliases for each forwarded service (e.g., `k8s-backend`, `k8s-frontend`, `k8s-redis`, `k8s-postgres`).
 - The primary alias `k8s-forwards` is the canonical name used by other containers.
 - Each forward listens on `0.0.0.0:<listen_port>` so it is reachable from any container on the shared network.
 
@@ -334,8 +334,8 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 |-------------|-------------|-----------|-------------|
 | 9050 | redis | default | 6379 |
 | 9051 | postgres | default | 5432 |
-| 9052 | rest-hello | default | 80 |
-| 9053 | next-hello | default | 8080 |
+| 9052 | backend | default | 80 |
+| 9053 | frontend | default | 8080 |
 
 **Health checks**: Docker Compose healthcheck probes key ports (`nc -z localhost 9000 && nc -z localhost 9002 && nc -z localhost 9052`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
@@ -350,7 +350,7 @@ Each feature can run its full Playwright test suite against its own isolated sta
 // playwright.config.ts — generated or parameterized per feature
 export default defineConfig({
   use: {
-    baseURL: 'https://next-hello.local.sandbox.com',
+    baseURL: 'https://frontend.local.sandbox.com',
     extraHTTPHeaders: {
       'X-Feature': process.env.SANDBOX_FEATURE || 'default',
     },
@@ -396,8 +396,8 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 │   ├── k8s-port-forward/               # Containerized k8s port-forwards
 │   │   ├── Dockerfile                  # Based on alpine (kubectl only)
 │   │   └── entrypoint.sh              # Port-forward supervisor script
-│   ├── rest-hello.yml                  # Per-service compose files
-│   └── next-hello.yml
+│   ├── backend.yml                  # Per-service compose files
+│   └── frontend.yml
 ├── infra/templates/
 │   ├── docker-compose.feature.yml.j2   # nunjucks template for per-feature compose
 │   ├── Caddyfile.j2                    # Template for proxy config
@@ -439,7 +439,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
    ├── Scan ~/workspaces/payment-refactor/ for worktrees
    ├── For each worktree: git diff main..HEAD --name-only
    ├── Map changed paths → services via services.yaml
-   └── Result: [next-hello, rest-hello]
+   └── Result: [frontend, backend]
 
 2. ALLOCATE
    ├── Find next available feature slot (e.g., slot 3)
@@ -448,7 +448,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 
 3. GENERATE
    ├── Render docker-compose from template with:
-   │   ├── Local services: next-hello → 11300, rest-hello → 11301
+   │   ├── Local services: frontend → 11300, backend → 11301
    │   ├── k8s services: all others → their 9xxx ports
    │   └── Volume mounts pointing at worktree paths
    ├── Render supergraph-config.yml (if any graphql subgraph is local)
@@ -469,8 +469,8 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 
 7. REPORT
    └── Print feature URL, service endpoints, and status
-       "✓ payment-refactor ready at https://next-hello.local.sandbox.com (cookie: X-Feature=payment-refactor)"
-       "  Local:  next-hello (:11300), rest-hello (:11301)"
+       "✓ payment-refactor ready at https://frontend.local.sandbox.com (cookie: X-Feature=payment-refactor)"
+       "  Local:  frontend (:11300), backend (:11301)"
        "  k8s:    graphql-gateway (:9004), redis (:9050), ..."
 ```
 

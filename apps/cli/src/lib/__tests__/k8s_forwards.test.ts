@@ -37,18 +37,18 @@ describe("buildForwardRows — infrastructure forwards", () => {
 
   it("forwards services to their pod containerPort (internal_port), not the Service port", () => {
     const services = {
-      "rest-hello": {
+      "backend": {
         k8s_forward_port: 9052, internal_port: 3000, k8s_port: 80,
-        k8s_namespace: "default", k8s_pod_prefix: "rest-hello", health_endpoint: "/health",
+        k8s_namespace: "default", k8s_pod_prefix: "backend", health_endpoint: "/health",
       },
-      "next-hello": {
+      "frontend": {
         k8s_forward_port: 9053, internal_port: 3000, k8s_port: 8080,
-        k8s_namespace: "default", k8s_pod_prefix: "next-hello", health_endpoint: "/",
+        k8s_namespace: "default", k8s_pod_prefix: "frontend", health_endpoint: "/",
       },
     };
     expect(buildForwardRows(services, {})).toEqual([
-      "rest-hello|9052|3000|default|rest-hello|/health",
-      "next-hello|9053|3000|default|next-hello|/",
+      "backend|9052|3000|default|backend|/health",
+      "frontend|9053|3000|default|frontend|/",
     ]);
   });
 });

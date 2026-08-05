@@ -134,7 +134,7 @@ archetypes:
     test: "npm test"                     # → sb-tester-<archetype> ({service} expands)
 
 services:
-  rest-hello: { repo: sandbox, archetype: node-web, ... }
+  backend: { repo: sandbox, archetype: node-web, ... }
 ```
 
 Resolution:
@@ -311,7 +311,7 @@ note per file, `NNN-<type>-<slug>.md`, ordered by creation. Conventions in
 type: finding | decision | attempt | handoff | contract
 phase: research | implement | test | review
 author: main | <subagent name>
-refs: [src/paginate.ts, next-hello]
+refs: [src/paginate.ts, frontend]
 status: open | superseded | graduated
 ---
 ```

@@ -38,7 +38,7 @@ afterEach(() => {
 
 describe("generateWorkspaceCompose", () => {
   it("writes the expected files", () => {
-    const slot = generateWorkspaceCompose("smoke-test-feature", "next-hello", tmp);
+    const slot = generateWorkspaceCompose("smoke-test-feature", "frontend", tmp);
     expect(typeof slot).toBe("number");
     expect(fs.statSync(path.join(tmp, "docker-compose.yml")).isFile()).toBe(true);
     expect(fs.statSync(path.join(tmp, ".env")).isFile()).toBe(true);

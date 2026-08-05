@@ -100,8 +100,8 @@ test("a Jira key appears in the description and the node carries its URL", () =>
 test("an interceptable service with no intercept offers the toggle", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "next-hello", state: "healthy" }] })],
-    intercepts({ a: { "next-hello": {} } }),
+    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
+    intercepts({ a: { "frontend": {} } }),
     null,
   );
   const [svc] = node.children;
@@ -112,8 +112,8 @@ test("an interceptable service with no intercept offers the toggle", () => {
 test("an intercept owned by this feature is mine", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "next-hello", state: "healthy" }] })],
-    intercepts({ a: { "next-hello": { intercepted: true, intercepted_by: "a" } } }),
+    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
+    intercepts({ a: { "frontend": { intercepted: true, intercepted_by: "a" } } }),
     null,
   );
   assert.equal(node.children[0].contextValue, "service:intercepted-mine");
@@ -124,8 +124,8 @@ test("an intercept owned by this feature is mine", () => {
 test("an intercept owned by another feature is not offered as mine", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "next-hello", state: "healthy" }] })],
-    intercepts({ a: { "next-hello": { intercepted: true, intercepted_by: "other" } } }),
+    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
+    intercepts({ a: { "frontend": { intercepted: true, intercepted_by: "other" } } }),
     null,
   );
   const [svc] = node.children;
@@ -149,7 +149,7 @@ test("a non-interceptable service surfaces the CLI blocker on hover", () => {
 test("a null intercepts payload marks every service unavailable", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "next-hello", state: "healthy" }] })],
+    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
     null,
     null,
   );

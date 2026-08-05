@@ -152,7 +152,7 @@ Create a `.env` file in the repository root (see `.env.example`):
 
 ```bash
 # Optional — only needed by services that use them. The demo services
-# (rest-hello, next-hello) require none.
+# (backend, frontend) require none.
 GITHUB_AUTH_TOKEN=ghp_...          # npm registry access for private packages
 ```
 
@@ -193,7 +193,7 @@ When you run `sandbox up my-feature`, the CLI:
 ```bash
 sandbox init-workspace \
     --feature blog \
-    --services next-hello,rest-hello \
+    --services frontend,backend \
     --jira-id PROJ-1234
 ```
 
@@ -215,7 +215,7 @@ Each slot provides 20 ports. A service's host port is calculated as:
 host_port = base_port + (slot - 1) * 100 + port_offset
 ```
 
-Where `port_offset` is defined per service in `~/.sandbox/services.yaml` (in the demo registry: rest-hello = 0, next-hello = 1).
+Where `port_offset` is defined per service in `~/.sandbox/services.yaml` (in the demo registry: backend = 0, frontend = 1).
 
 Slot assignments are persisted in `~/.sandbox/slots.json` and survive terminal restarts.
 
@@ -229,8 +229,8 @@ k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of 
 |---|---|---|
 | 9050 | redis | default |
 | 9051 | postgres | default |
-| 9052 | rest-hello | default |
-| 9053 | next-hello | default |
+| 9052 | backend | default |
+| 9053 | frontend | default |
 
 These ports are internal to the Docker network — other containers reach them via `k8s-forwards:9xxx`. k8s forwards must be running before starting features. Start them with `sandbox connect`.
 
@@ -239,9 +239,9 @@ These ports are internal to the Docker network — other containers reach them v
 Caddy runs as a Docker container (ports 80 and 443) and provides:
 
 1. **HTTPS termination** — Caddy terminates HTTPS on port 443 using locally-trusted certificates
-2. **Feature selector UI** — a web page at `https://next-hello.local.sandbox.com/__sandbox` for setting the active feature in your browser
+2. **Feature selector UI** — a web page at `https://frontend.local.sandbox.com/__sandbox` for setting the active feature in your browser
 3. **Feature resolution** — Caddy matches the `X-Feature` cookie and reverse-proxies to that feature's local container, falling back to the k8s baseline when the service isn't running locally
-4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `next-hello.local.sandbox.com`)
+4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `frontend.local.sandbox.com`)
 
 The Caddyfile is regenerated automatically whenever you run `sandbox up`, `sandbox down`, `sandbox remove`, or `sandbox proxy-reload`.
 
@@ -255,9 +255,9 @@ When `sandbox up <feature>` or `sandbox detect <feature>` is run, the detection 
 4. Maps the repo name and changed file paths to services using the `repos` section of `infra/config/services.yaml`
 5. For monorepos, uses `path_mappings` to match specific subdirectories to specific services
 
-**Example:** If `sandbox/apps/next-hello/app/page.tsx` is changed, the detector maps:
-- Repo: `sandbox`
-- Path matches: `apps/next-hello` → service `next-hello`
+**Example:** If `demo-services/apps/frontend/app/page.tsx` is changed, the detector maps:
+- Repo: `demo-services`
+- Path matches: `apps/frontend` → service `frontend`
 
 **Skipping auto-detection:** Pass `--services` (or `-s`) to `sandbox up` to specify services explicitly instead of relying on git diff. See [sandbox up](#sandbox-up).
 
@@ -267,7 +267,7 @@ Each feature runs in an isolated environment:
 
 - **Docker networks** — each feature gets its own bridge network (`sandbox-<feature>`)
 - **Container names** — prefixed with the feature name (`<feature>-<service>`)
-- **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-next-hello_node_modules`) so concurrent features never share mutable state
+- **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-frontend_node_modules`) so concurrent features never share mutable state
 - **Port ranges** — each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
 - **Generated files** — each feature's `docker-compose.yml` and `.env` are written to its workspace root, and `supergraph-config.yml` to `<workspace>/.sandbox/`
 
@@ -296,7 +296,7 @@ Verify k8s forwards are healthy:
 Add to `/etc/hosts`:
 
 ```
-127.0.0.1 next-hello.local.sandbox.com
+127.0.0.1 frontend.local.sandbox.com
 ```
 
 ### Step 3: Start a Feature
@@ -309,8 +309,8 @@ Add to `/etc/hosts`:
 ./sandbox up my-feature --workspace /path/to/repos
 
 # Skip auto-detection — specify services explicitly
-./sandbox up my-feature --services rest-hello,next-hello
-./sandbox up my-feature -s next-hello
+./sandbox up my-feature --services backend,frontend
+./sandbox up my-feature -s frontend
 
 # Force start with no services (all traffic goes to k8s)
 ./sandbox up my-feature --force
@@ -319,12 +319,12 @@ Add to `/etc/hosts`:
 ### Step 5: Access Your Feature
 
 **Option A: Browser cookie**
-Visit `https://next-hello.local.sandbox.com/__sandbox`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
+Visit `https://frontend.local.sandbox.com/__sandbox`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
 
 **Option B: HTTP header**
 Use a browser extension or curl:
 ```bash
-curl -H "X-Feature: my-feature" https://next-hello.local.sandbox.com/
+curl -H "X-Feature: my-feature" https://frontend.local.sandbox.com/
 ```
 
 ### Step 6: View Status
@@ -368,7 +368,7 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
 | `feature` | Yes | Feature name (arbitrary label for slot allocation and proxy routing) |
 | `--force` | No | Start even if no changed services are detected |
 | `--workspace`, `-w` | No | Path to directory containing repo checkouts. Default: `~/workspace/`. Also settable via `WORKSPACE` env var. |
-| `--services`, `-s` | No | Comma-separated list of services to run locally (e.g. `rest-hello,next-hello`). Skips git diff auto-detection entirely. |
+| `--services`, `-s` | No | Comma-separated list of services to run locally (e.g. `backend,frontend`). Skips git diff auto-detection entirely. |
 
 **What it does:**
 
@@ -387,17 +387,17 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
 
 ```
 [info] Scanning workspace for feature: my-feature
-[info] Detected 2 service(s): rest-hello, next-hello
+[info] Detected 2 service(s): backend, frontend
 [ok]   Allocated slot 1 (ports 11100-11119)
 [info] Generating config files...
 [info] Starting containers...
 [ok]   Feature 'my-feature' is up!
 
-  URL:       https://next-hello.local.sandbox.com
+  URL:       https://frontend.local.sandbox.com
   Header:    X-Feature: my-feature
   Slot:      1
   Ports:     11100-11119
-  Services:  rest-hello (:11100), next-hello (:11101)
+  Services:  backend (:11100), frontend (:11101)
 ```
 
 **If no services are detected** and `--force` is not set, the command prints a warning but still proceeds — the feature is registered and routes entirely to k8s. You can add services later with `sandbox up <feature> -s <service>` (or by editing `.sandbox/workspace.yml` and rerunning `sandbox init-workspace`).
@@ -466,8 +466,8 @@ Useful after making code changes that hot-reload doesn't pick up. If the feature
 ```
   Slot  Feature         Services                          Ports          Status
   ──────────────────────────────────────────────────────────────────────────────
-  1     my-feature      rest-hello, next-hello            11100-11119    up (2/2)
-  3     other-feature   next-hello                        11300-11319    partial (0/1)
+  1     my-feature      backend, frontend            11100-11119    up (2/2)
+  3     other-feature   frontend                        11300-11319    partial (0/1)
 
   2 active feature(s), 10 slot(s) available
 ```
@@ -501,10 +501,10 @@ This command does **not** start anything. It scans the workspace, runs git diff 
 [info] Scanning workspace: ~/workspace
 
 Detected services:
-  next-hello          repo: sandbox     type: web
+  frontend          repo: sandbox     type: web
 
 Services from k8s (no local changes):
-  rest-hello
+  backend
 ```
 
 ---
@@ -526,8 +526,8 @@ Shows each service with its source (local container or k8s forward) and endpoint
 ```
   Service                Source    Endpoint              Type
   ────────────────────────────────────────────────────────────
-  rest-hello             k8s      localhost:9052         api
-  next-hello             local    localhost:11101        web
+  backend             k8s      localhost:9052         api
+  frontend             local    localhost:11101        web
 ```
 
 ---
@@ -551,8 +551,8 @@ Streams logs in real-time (equivalent to `docker compose logs -f --tail 100`). P
 # All services
 ./sandbox logs my-feature
 
-# Just next-hello
-./sandbox logs my-feature next-hello
+# Just frontend
+./sandbox logs my-feature frontend
 ```
 
 ---
@@ -587,7 +587,7 @@ Removes the service from the feature's local stack. The service will now be serv
 If removing the last service, the feature's containers are fully stopped (though the slot remains allocated — use `sandbox down` to release it).
 
 ```bash
-./sandbox remove my-feature next-hello
+./sandbox remove my-feature frontend
 ```
 
 ---
@@ -667,9 +667,9 @@ No arguments. Checks the Docker container health of `sandbox-k8s-forwards` and r
   ─────────────────────────────────────────────────────────────────────────────────
   redis                  9050   default/redis:6379                    healthy
   postgres               9051   default/postgres:5432                 healthy
-  rest-hello             9052   default/rest-hello:80                 healthy
+  backend             9052   default/backend:80                 healthy
   redis                  9050   dev:6379                              healthy
-  next-hello             9053   default/next-hello:8080               down
+  frontend             9053   default/frontend:8080               down
 
   11/12 healthy, 1 down
   Run 'sandbox k8s-connect' to restart the k8s-forwards container
@@ -745,13 +745,13 @@ Running multiple features concurrently creates per-feature Docker volumes for `n
 **Manual volume inspection:**
 ```bash
 # List all sandbox-related Docker volumes
-docker volume ls | grep -E '^\S+-(rest-hello|next-hello)'
+docker volume ls | grep -E '^\S+-(backend|frontend)'
 
 # Remove a specific volume
-docker volume rm my-feature-next-hello_node_modules
+docker volume rm my-feature-frontend_node_modules
 ```
 
-Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g., `my-feature-next-hello_node_modules`). This ensures concurrent features never share mutable Docker state.
+Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g., `my-feature-frontend_node_modules`). This ensures concurrent features never share mutable Docker state.
 
 ---
 
@@ -760,12 +760,13 @@ Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g.
 ### Application Services
 
 The registry is `~/.sandbox/services.yaml`. The shipped demo registry defines two
-services in the `sandbox` repo:
+services in the `demo-services` repo — a small turborepo cloned alongside
+`sandbox` under `paths.repos_root`:
 
 | Service | Repo | Path in Repo | Type | Internal Port | port_offset | Health Endpoint |
 |---|---|---|---|---|---|---|
-| rest-hello | sandbox | `apps/rest-hello` | api | 3000 | 0 | /health |
-| next-hello | sandbox | `apps/next-hello` | web | 3000 | 1 | / |
+| backend | demo-services | `apps/backend` | api | 3000 | 0 | /health |
+| frontend | demo-services | `apps/frontend` | web | 3000 | 1 | / |
 
 Add your own by appending to `services:` (and `repos:`) in that file — the columns above
 are the required keys. `sandbox services` lists whatever is registered.
@@ -817,7 +818,7 @@ Slot N: base = 11100 + (N-1) * 100
 | 11 | 12100 | 12100–12119 |
 | 12 | 12200 | 12200–12219 |
 
-A service's specific host port = `base_port + port_offset`. For example, `next-hello` (offset 1) in slot 3 = `11300 + 1 = 11301`.
+A service's specific host port = `base_port + port_offset`. For example, `frontend` (offset 1) in slot 3 = `11300 + 1 = 11301`.
 
 The 80-port gap between each slot's 20-port range is reserved for future expansion.
 
@@ -830,8 +831,8 @@ Fixed ports shared by all features:
 
 | 9050 | redis |
 | 9051 | postgres |
-| 9052 | rest-hello |
-| 9053 | next-hello |
+| 9052 | backend |
+| 9053 | frontend |
 
 ---
 
@@ -845,7 +846,7 @@ The central service registry. Defines all services, their repos, paths, ports, k
 
 - **`services`** — Map of service name to service definition. Each service has:
   - `repo` (string) — Repository name (directory name in workspace)
-  - `path` (string) — Path within the repo (`.` for entire repo, `apps/next-hello` for monorepo packages)
+  - `path` (string) — Path within the repo (`.` for entire repo, `apps/frontend` for monorepo packages)
   - `type` (string) — Service category: `web`, `api`, `graphql-subgraph`, `graphql-gateway`
   - `internal_port` (int) — Port the service listens on inside its container
   - `port_offset` (int) — Offset within the feature slot range (0–19)
@@ -890,17 +891,17 @@ The k8s port-forward table is not a separate file — each forwarded service in
 
 ```yaml
 services:
-  rest-hello:
+  backend:
     k8s_forward_port: 9052   # Host/container listen-port (the 9000-range)
     k8s_port: 80             # Port on the k8s Service (remote)
     k8s_namespace: default
-    k8s_pod_prefix: rest-hello
+    k8s_pod_prefix: backend
     health_endpoint: /health
-  next-hello:
+  frontend:
     k8s_forward_port: 9053
     k8s_port: 8080
     k8s_namespace: default
-    k8s_pod_prefix: next-hello
+    k8s_pod_prefix: frontend
     health_endpoint: /
 infrastructure:
   postgres:
@@ -944,7 +945,7 @@ Per-feature Docker Compose stack containing:
 Environment file loaded by Docker Compose, containing:
 - `SANDBOX_FEATURE`, `SANDBOX_SLOT`, `COMPOSE_PROJECT_NAME`
 - Node.js version and environment settings
-- Resolved URLs for every service (e.g., `NEXT_HELLO_URL=http://next-hello:3000`)
+- Resolved URLs for every service (e.g., `FRONTEND_URL=http://frontend:3000`)
 - Database connection strings pointing to shared infrastructure (e.g., `REDIS_URL=redis://redis:6379`)
 
 ### supergraph-config.yml
@@ -979,7 +980,7 @@ docker compose -f infra/compose/shared-infra.yml logs -f caddy
 
 ### Feature Selector UI
 
-Visit **`https://next-hello.local.sandbox.com/__sandbox`** in your browser to:
+Visit **`https://frontend.local.sandbox.com/__sandbox`** in your browser to:
 - See the currently active feature (from the `X-Feature` cookie)
 - Switch to a different feature by typing the name and clicking "Set Feature"
 - Clear the feature cookie to return to the k8s baseline
@@ -997,7 +998,7 @@ document.cookie = "X-Feature=my-feature; path=/; max-age=2592000";
 
 **Header (curl/API tools):**
 ```bash
-curl -H "X-Feature: my-feature" https://next-hello.local.sandbox.com/
+curl -H "X-Feature: my-feature" https://frontend.local.sandbox.com/
 ```
 
 **Browser extension:** Use a header-injection extension like ModHeader to add `X-Feature: my-feature` to all requests.
@@ -1109,7 +1110,7 @@ cd ~/workspace/sandbox
 ./sandbox up PROJ-1234
 
 # 6. Set the feature in your browser
-# Visit https://next-hello.local.sandbox.com/__sandbox and enter "PROJ-1234"
+# Visit https://frontend.local.sandbox.com/__sandbox and enter "PROJ-1234"
 
 # 7. Develop and iterate
 ./sandbox logs PROJ-1234
@@ -1121,14 +1122,14 @@ cd ~/workspace/sandbox
 
 ### Adding a Service Mid-Development
 
-If you started with just `next-hello` but now need `rest-hello` running locally:
+If you started with just `frontend` but now need `backend` running locally:
 
 ```bash
 # Check what's currently running
 ./sandbox services PROJ-1234
 
-# Add rest-hello locally
-./sandbox up PROJ-1234 -s rest-hello
+# Add backend locally
+./sandbox up PROJ-1234 -s backend
 
 # Verify
 ./sandbox services PROJ-1234
@@ -1177,16 +1178,16 @@ The test command sets `SANDBOX_FEATURE` and `SANDBOX_SLOT` in the Playwright pro
 
 ```bash
 # Tail logs for a specific service
-./sandbox logs PROJ-1234 next-hello
+./sandbox logs PROJ-1234 frontend
 
 # Check service endpoints
 ./sandbox services PROJ-1234
 
 # Access the service directly (bypassing Caddy)
-curl http://localhost:11101/  # next-hello at slot 1, offset 1
+curl http://localhost:11101/  # frontend at slot 1, offset 1
 
 # Access via Caddy with feature header
-curl -H "X-Feature: PROJ-1234" https://next-hello.local.sandbox.com/
+curl -H "X-Feature: PROJ-1234" https://frontend.local.sandbox.com/
 
 # Check container status
 ./sandbox status -v
@@ -1251,7 +1252,7 @@ cat infra/proxy/Caddyfile | grep -A 5 "PROJ-1234"
 ./sandbox proxy-reload
 
 # Test with explicit header
-curl -v -H "X-Feature: PROJ-1234" https://next-hello.local.sandbox.com/
+curl -v -H "X-Feature: PROJ-1234" https://frontend.local.sandbox.com/
 
 # Check Caddy is running
 docker compose -f infra/compose/shared-infra.yml ps caddy
@@ -1271,7 +1272,7 @@ git diff main..HEAD --name-only
 grep -A 3 "repos:" infra/config/services.yaml
 
 # Force-add a service manually
-./sandbox up PROJ-1234 -s next-hello
+./sandbox up PROJ-1234 -s frontend
 ```
 
 ### Build/Dependency Errors
@@ -1331,7 +1332,7 @@ cat ~/.sandbox/slots.json | jq .
 │                          ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │  Caddy (HTTPS :443)                                          │    │
-│  │  next-hello.local.sandbox.com                              │    │
+│  │  frontend.local.sandbox.com                              │    │
 │  │                                                               │    │
 │  │  1. Terminate HTTPS                                           │    │
 │  │  2. Serve feature selector UI (/__sandbox)                     │    │
@@ -1345,11 +1346,11 @@ cat ~/.sandbox/slots.json | jq .
 │      │  Containers  │            │  (container)   │                    │
 │      │              │            │                │                    │
 │      │  Feature A:  │            │  :9000-9008    │                    │
-│      │  next-hello, │            │  (apps)        │                    │
+│      │  frontend, │            │  (apps)        │                    │
 │      │  fed-graph   │            │                │                    │
 │      │              │            │  :9050-9052    │                    │
 │      │  Feature B:  │            │  (infra)       │                    │
-│      │  rest-hello  │            │                │                    │
+│      │  backend  │            │                │                    │
 │      │              │            │  Shared by all │                    │
 │      │  ...         │            │  features      │                    │
 │      └──────────────┘            └───────┬───────┘                    │
@@ -1378,8 +1379,8 @@ cat ~/.sandbox/slots.json | jq .
 Docker Network: sandbox-PROJ-1234 (isolated)
 
 Containers:
-├── sandbox-PROJ-1234-rest-hello     (:11100 → :3000)
-└── sandbox-PROJ-1234-next-hello     (:11101 → :3000)
+├── sandbox-PROJ-1234-backend     (:11100 → :3000)
+└── sandbox-PROJ-1234-frontend     (:11101 → :3000)
 ```
 
 ### Lifecycle Flow

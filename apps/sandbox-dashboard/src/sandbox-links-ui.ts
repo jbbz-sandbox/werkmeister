@@ -29,15 +29,15 @@ const GROUPS: LinkGroup[] = [
     note: "Open one to set the X-Feature cookie and route a hostname to a feature's containers.",
     links: [
       {
-        label: "next-hello · local",
+        label: "frontend · local",
         desc: "Routes to the local Docker feature container",
-        url: "https://next-hello.local.sandbox.com/__sandbox",
+        url: "https://frontend.local.sandbox.com/__sandbox",
         kind: "local",
       },
       {
-        label: "next-hello · remote",
+        label: "frontend · remote",
         desc: "Routes to the in-cluster deployment",
-        url: "https://next-hello.remote.sandbox.com/__sandbox",
+        url: "https://frontend.remote.sandbox.com/__sandbox",
         kind: "remote",
       },
     ],

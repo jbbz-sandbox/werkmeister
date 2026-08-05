@@ -127,20 +127,23 @@ k8s_context: ${k8sContext}
 }
 
 /**
- * The demo registry: the two self-contained apps shipped in the sandbox repo.
+ * The demo registry: the two apps in the `demo-services` repo, a small
+ * turborepo checked out alongside `sandbox` under \`paths.repos_root\`. A
+ * workspace that uses these services gets a `demo-services/` worktree next to
+ * its `sandbox/` one.
  *
  * Note what is NOT here: \`feature_router.hostname\`. Public hostnames now derive
  * from \`ingress.local_domain\` / \`ingress.remote_domain\` in ~/.sandbox/config.yaml
- * (see feature_routing.ts), so next-hello is reachable at
- * next-hello.<local_domain> without restating the host per service. A service
+ * (see feature_routing.ts), so frontend is reachable at
+ * frontend.<local_domain> without restating the host per service. A service
  * that needs a non-conforming host still sets \`hostname:\` explicitly.
  */
 function demoServices(): string {
   return `
 services:
-  rest-hello:
-    repo: sandbox
-    path: apps/rest-hello
+  backend:
+    repo: demo-services
+    path: apps/backend
     type: api
     internal_port: 3000
     port_offset: 0
@@ -151,7 +154,7 @@ services:
     # runs \`command\` from /app and does not use \`path:\` for the working dir).
     # Zero-dependency stdlib http app — no install step, just run the source.
     image: node:22-alpine
-    command: "cd apps/rest-hello && exec node server.js"
+    command: "cd apps/backend && exec node server.js"
     memory_limit: 256M
     memory_reservation: 64M
     node_modules_volume: null
@@ -161,7 +164,7 @@ services:
     # container. k8s_port is the Service port NUMBER; k8s_port_name is the named
     # Service port (charts/webapp names it \`http\`) — required by the CLI's
     # named-port precondition.
-    k8s_deployment: rest-hello
+    k8s_deployment: backend
     k8s_namespace: default
     k8s_port: 80
     k8s_port_name: http
@@ -170,11 +173,11 @@ services:
     # containers can reach the deployed app at k8s-forwards:9052. remote port is
     # the pod's containerPort (internal_port 3000), not the Service port.
     k8s_forward_port: 9052
-    k8s_pod_prefix: rest-hello
+    k8s_pod_prefix: backend
 
-  next-hello:
-    repo: sandbox
-    path: apps/next-hello
+  frontend:
+    repo: demo-services
+    path: apps/frontend
     type: web
     archetype: node-web
     test: "npm test"
@@ -183,47 +186,56 @@ services:
     health_endpoint: /
     monorepo: null
     setup_service: null
-    # cd into the app subdir (see rest-hello). Idempotent boot: install only when
-    # deps are missing, then \`next dev\` for live reload — avoids re-installing on
-    # every restart. Deps land in the bind-mounted apps/next-hello/node_modules
-    # (the template's node_modules volume mounts at /app, not this subdir).
+    # Idempotent boot: install only when deps are missing, then \`next dev\` for
+    # live reload — avoids re-installing on every restart. demo-services is an
+    # npm-workspaces turborepo, so the install runs at /app (the repo root) and
+    # deps hoist to the bind-mounted /app/node_modules, NOT apps/frontend's —
+    # hence the root-level probe. npm puts the ancestor .bin on PATH, so
+    # \`npm run dev\` still resolves \`next\` from the subdir.
     image: node:22-alpine
-    command: "cd apps/next-hello && { [ -d node_modules/next ] || npm install; } && exec npm run dev"
+    command: "{ [ -d node_modules/next ] || npm install; } && cd apps/frontend && exec npm run dev"
     memory_limit: 1G
     memory_reservation: 256M
     node_modules_volume: null
-    # Telepresence intercept coordinates (see rest-hello). Service port is 8080.
-    k8s_deployment: next-hello
+    # Telepresence intercept coordinates (see backend). Service port is 8080.
+    k8s_deployment: frontend
     k8s_namespace: default
     k8s_port: 8080
     k8s_port_name: http
-    # Also port-forwarded into the docker world (see rest-hello): reachable at
+    # Also port-forwarded into the docker world (see backend): reachable at
     # k8s-forwards:9053. remote is the pod containerPort (3000), not port 8080.
     k8s_forward_port: 9053
-    k8s_pod_prefix: next-hello
+    k8s_pod_prefix: frontend
     # Caddy feature routing (feature_routing.ts): Caddy terminates the derived
     # hostname directly and
-    # reverse-proxies to the running next-hello container (via its published
+    # reverse-proxies to the running frontend container (via its published
     # host port). When an X-Feature cookie is present, its value is copied into
     # an X-Feature header on the upstream call so the app can read the feature.
     feature_router:
       # Local host derives from ingress.local_domain; remote from
       # ingress.remote_domain. \`remote_upstream\` is what opts this service into
-      # a remote route at all — the in-cluster Service Caddy proxies to.
-      remote_upstream: next-hello.default.svc.cluster.local:8080
-    # next-hello fetches http://rest-hello/ server-side; the feature network
+      # a remote route at all — where Caddy dials the cluster deployment.
+      # NOT cluster DNS (*.svc.cluster.local): there is no Caddy in the
+      # cluster. BOTH hostnames resolve to 127.0.0.1 (/etc/hosts) and are
+      # served by the one docker Caddy, which sits on the shared network and
+      # cannot resolve CoreDNS names. Go through the k8s-forwards tunnel
+      # instead — its \`k8s-<service>\` network alias plus the
+      # \`k8s_forward_port\` above.
+      remote_upstream: k8s-frontend:9053
+    # frontend fetches http://backend/ server-side; the feature network
     # aliases each service to its name, so this dependency also guarantees
-    # rest-hello is healthy before next-hello renders.
+    # backend is healthy before frontend renders.
     depends_on:
-      - rest-hello
+      - backend
 
 # Infrastructure forwarded from the OrbStack k8s cluster into the docker world.
 # The k8s-forwards container \`kubectl port-forward\`s each Service (by deployment
 # whose name starts with \`k8s_pod_prefix\`, in \`k8s_namespace\`) to the host on
 # \`k8s_forward_port\`. Feature containers reach them at host.docker.internal:<port>
 # — the ports the generated feature .env already expects (redis 9050, postgres
-# 9051). Apply the k8s side with \`kubectl apply -f charts/redis.yaml
-# charts/postgres.yaml\`. \`health_endpoint: ""\` selects the entrypoint's TCP-only
+# 9051). Apply the k8s side from the demo-services repo (\`./bin/bootstrap-k8s-env.sh\`,
+# or \`kubectl apply -f charts/redis.yaml -f charts/postgres.yaml\` there).
+# \`health_endpoint: ""\` selects the entrypoint's TCP-only
 # probe (these aren't HTTP services).
 infrastructure:
   redis:
@@ -239,16 +251,20 @@ infrastructure:
     k8s_pod_prefix: postgres
     health_endpoint: ""
 
-# No monorepo setup containers — each app installs its own deps in-place.
+# No shared setup container — backend needs no deps at all, and frontend does
+# its own root-level install on boot (see its \`command\`). Promote to a
+# setup_service if a third app makes the duplicated install cost real.
 setup_services: {}
 
-# Repo-to-directory mapping for auto-detection. Both apps live in this repo.
+# Repo-to-directory mapping for auto-detection. Both apps live in the
+# demo-services turborepo, cloned alongside sandbox under \`paths.repos_root\`;
+# paths are relative to that checkout.
 repos:
-  sandbox:
-    services: [rest-hello, next-hello]
+  demo-services:
+    services: [backend, frontend]
     path_mappings:
-      apps/rest-hello: rest-hello
-      apps/next-hello: next-hello
+      apps/backend: backend
+      apps/frontend: frontend
 `;
 }
 

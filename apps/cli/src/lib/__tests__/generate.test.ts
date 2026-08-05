@@ -67,11 +67,11 @@ describe("worktree gitdir mounting", () => {
   it("mounts a linked worktree's admin dir", () => {
     const admin = path.join(tmp, "mainrepo", ".git", "worktrees", "wt");
     fs.mkdirSync(admin, { recursive: true });
-    // rest-hello's repo is `sandbox`; the checkout dir is {workspace}/sandbox.
-    const repoDir = path.join(tmp, "sandbox");
+    // backend's repo is `demo-services`; the checkout is {workspace}/demo-services.
+    const repoDir = path.join(tmp, "demo-services");
     fs.mkdirSync(repoDir);
     fs.writeFileSync(path.join(repoDir, ".git"), `gitdir: ${admin}\n`);
-    const outPath = generateFeatureCompose("myfeat", 1, ["rest-hello"], null, tmp);
+    const outPath = generateFeatureCompose("myfeat", 1, ["backend"], null, tmp);
     const content = fs.readFileSync(outPath, "utf8");
     expect(content).toContain(`- ${admin}:${admin}:ro`);
   });
@@ -83,24 +83,24 @@ describe("dev_links", () => {
   it("emits a dev link with ${WORKSPACE} resolved", () => {
     writeDevLinks(
       tmp,
-      "dev_links:\n  next-hello:\n" +
+      "dev_links:\n  frontend:\n" +
         '    - "${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core"\n',
     );
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
+    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(content).toContain(`- ${tmp}/shared/packages/core:/app/node_modules/@sandbox/core`);
     expect(content).not.toContain("${WORKSPACE}");
   });
 
   it("empty dev_links is byte-identical to none", () => {
-    const baseline = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
+    const baseline = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     writeDevLinks(tmp, "dev_links: {}\n");
-    const withEmpty = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
+    const withEmpty = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(withEmpty).toBe(baseline);
   });
 
   it("dev_link for another service does not leak", () => {
-    writeDevLinks(tmp, 'dev_links:\n  rest-hello:\n    - "${WORKSPACE}/shared:/app/x"\n');
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp), "utf8");
+    writeDevLinks(tmp, 'dev_links:\n  backend:\n    - "${WORKSPACE}/shared:/app/x"\n');
+    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(content).not.toContain("/app/x");
   });
 });
@@ -109,18 +109,18 @@ describe("dev_links", () => {
 
 describe("generateFeatureCompose", () => {
   it("writes header and service block", () => {
-    const outPath = generateFeatureCompose("myfeat", 1, ["next-hello"], null, tmp);
+    const outPath = generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp);
     expect(outPath).toBe(path.join(tmp, "docker-compose.yml"));
     const content = fs.readFileSync(outPath, "utf8");
     expect(content).toContain("# Sandbox docker-compose for feature: myfeat");
-    expect(content).toContain("next-hello:");
+    expect(content).toContain("frontend:");
   });
 
   it("empty local services still writes a valid file", () => {
     const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, [], null, tmp), "utf8");
     expect(content.startsWith("# Sandbox docker-compose for feature: myfeat")).toBe(true);
-    expect(content).not.toContain("rest-hello:");
-    expect(content).not.toContain("next-hello:");
+    expect(content).not.toContain("backend:");
+    expect(content).not.toContain("frontend:");
   });
 
 });
@@ -129,17 +129,17 @@ describe("generateFeatureEnv", () => {
   it("writes feature, slot, and a local service DNS URL", () => {
     // Demo services have no k8s forward, so a local service is reached over the
     // feature network by its Docker DNS alias (http://<svc>:<port>).
-    const outPath = generateFeatureEnv("myfeat", 1, ["rest-hello"], null, tmp);
+    const outPath = generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
     expect(outPath).toBe(path.join(tmp, ".env"));
     const content = fs.readFileSync(outPath, "utf8");
     expect(content).toContain("SANDBOX_FEATURE=myfeat");
     expect(content).toContain("SANDBOX_SLOT=1");
-    expect(content).toContain("http://rest-hello:3000");
+    expect(content).toContain("http://backend:3000");
   });
 
   it("preserves workspace metadata across regeneration", () => {
     fs.writeFileSync(path.join(tmp, ".env"), "FEATURE=x\n");
-    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["next-hello"], null, tmp), "utf8");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(content).toContain("Workspace metadata (preserved across regeneration)");
     expect(content).toContain("FEATURE=x");
   });
@@ -147,7 +147,7 @@ describe("generateFeatureEnv", () => {
   it("removes legacy docker-compose.env file", () => {
     const legacy = path.join(tmp, "docker-compose.env");
     fs.writeFileSync(legacy, "LEGACY=1\n");
-    generateFeatureEnv("myfeat", 1, ["next-hello"], null, tmp);
+    generateFeatureEnv("myfeat", 1, ["frontend"], null, tmp);
     expect(fs.existsSync(legacy)).toBe(false);
   });
 });
@@ -177,14 +177,14 @@ describe("generateCaddyfile", () => {
   });
 
   it("writes Caddyfile and features.json", () => {
-    const outPath = generateCaddyfile({ myfeat: { slot: 1, services: ["next-hello"] } });
+    const outPath = generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } });
     expect(outPath).toBe(path.join(tmp, "proxy", "Caddyfile"));
     expect(fs.statSync(outPath).isFile()).toBe(true);
 
     const featuresJsonPath = path.join(tmp, "proxy", "ui", "features.json");
     expect(fs.statSync(featuresJsonPath).isFile()).toBe(true);
     const features = JSON.parse(fs.readFileSync(featuresJsonPath, "utf8"));
-    expect(features).toEqual([{ name: "myfeat", slot: 1, services: ["next-hello"] }]);
+    expect(features).toEqual([{ name: "myfeat", slot: 1, services: ["frontend"] }]);
   });
 
   it("no running feature -> local host falls back to the remote upstream", () => {
@@ -192,7 +192,7 @@ describe("generateCaddyfile", () => {
     // proxies to remote_upstream (the cluster Service) instead of a container.
     const content = fs.readFileSync(generateCaddyfile({}), "utf8");
     expect(content).toContain("admin localhost:2019");
-    const rc = loadFeatureRouters()["next-hello"];
+    const rc = loadFeatureRouters()["frontend"];
     expect(rc?.hostname).toBeTruthy();
     expect(rc?.remoteUpstream).toBeTruthy();
     expect(content).toContain(`${rc!.hostname} {`);
@@ -202,7 +202,7 @@ describe("generateCaddyfile", () => {
   });
 
   it("remote (K8s) router is static — emitted with no running features", () => {
-    const rc = loadFeatureRouters()["next-hello"];
+    const rc = loadFeatureRouters()["frontend"];
     expect(rc?.remoteHostname).toBeTruthy();
     expect(rc?.remoteUpstream).toBeTruthy();
     const content = fs.readFileSync(generateCaddyfile({}), "utf8");
@@ -215,19 +215,19 @@ describe("generateCaddyfile", () => {
 
   it("terminates the hostname and routes to the running feature's container", () => {
     const content = fs.readFileSync(
-      generateCaddyfile({ myfeat: { slot: 1, services: ["next-hello"] } }),
+      generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } }),
       "utf8",
     );
     const [base] = getPortRange(1);
-    const offset = loadServices()["next-hello"]?.port_offset ?? 0;
-    const hostname = loadFeatureRouters()["next-hello"]?.hostname;
+    const offset = loadServices()["frontend"]?.port_offset ?? 0;
+    const hostname = loadFeatureRouters()["frontend"]?.hostname;
     expect(content).toContain(`${hostname} {`);
     expect(content).toContain(`host.docker.internal:${base + offset}`);
   });
 
   it("converts the X-Feature cookie to an X-Feature header", () => {
     const content = fs.readFileSync(
-      generateCaddyfile({ myfeat: { slot: 1, services: ["next-hello"] } }),
+      generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } }),
       "utf8",
     );
     // Cookie matcher captures the value; header_up copies it to the upstream.

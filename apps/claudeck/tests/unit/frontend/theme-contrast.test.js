@@ -2,7 +2,7 @@
 // This is what stops a new theme (or a tweak to an existing one) from shipping
 // text nobody can read — the failure mode that prompted the theme work.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 // Paths come from import.meta.dirname rather than new URL(..., import.meta.url):
@@ -127,18 +127,25 @@ describe("token hygiene", () => {
   it("leaves no var(--token) reference undefined", async () => {
     // An undefined custom property makes the whole declaration invalid, so the
     // rule silently does nothing and cannot respond to a theme change.
-    const { glob } = await import("node:fs/promises");
+    // readdirSync({recursive}) (node 20.1+), not fs/promises.glob (node 22+):
+    // this package declares node >=18 and CI runs 20, where glob is undefined.
+    const cssFiles = readdirSync(path.join(PUBLIC_DIR, "css"), { recursive: true })
+      .map((e) => path.join("css", e))
+      .filter((e) => e.endsWith(".css"));
     const defined = new Set([
       ...Object.keys(base),
       ...Object.values(overrides).flatMap((o) => Object.keys(o)),
-      // Aliases defined as var() pass-throughs rather than hex literals
-      ...VARIABLES.matchAll(/(--[a-z0-9-]+)\s*:\s*var\(/g).map((m) => m[1]),
+      // Aliases defined as var() pass-throughs rather than hex literals.
+      // Array.from, not .map(): matchAll returns an ITERATOR, and mapping one
+      // directly needs iterator helpers (Node 22+). This package declares
+      // node >=18 and CI runs 20, where that throws.
+      ...Array.from(VARIABLES.matchAll(/(--[a-z0-9-]+)\s*:\s*var\(/g), (m) => m[1]),
       // Non-color tokens (fonts, spacing, easing, effects)
-      ...VARIABLES.matchAll(/(--[a-z0-9-]+)\s*:/g).map((m) => m[1]),
+      ...Array.from(VARIABLES.matchAll(/(--[a-z0-9-]+)\s*:/g), (m) => m[1]),
     ]);
 
     const missing = new Map();
-    for await (const entry of glob("css/**/*.css", { cwd: PUBLIC_DIR })) {
+    for (const entry of cssFiles) {
       const text = readFileSync(path.join(PUBLIC_DIR, entry), "utf8");
       for (const [, token] of text.matchAll(/var\((--[a-z0-9-]+)/g)) {
         if (!defined.has(token)) {

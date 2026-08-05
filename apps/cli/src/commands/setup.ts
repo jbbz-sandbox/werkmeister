@@ -169,7 +169,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   } else {
     info(`No registry yet. One will be created at ${servicesYaml}.`);
     demo = await confirm(
-      "  Seed it with the demo apps (rest-hello, next-hello) instead of an empty skeleton?",
+      "  Seed it with the demo apps (backend, frontend) instead of an empty skeleton?",
       false,
       interactive,
     );
