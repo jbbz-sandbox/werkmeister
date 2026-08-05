@@ -36,10 +36,10 @@ Each service in `infra/config/services.yaml` has `memory_limit` and `memory_rese
 ```yaml
 # infra/config/services.yaml
 services:
-  next-hello:
+  frontend:
     memory_limit: 2560M
     memory_reservation: 1024M
-  rest-hello:
+  backend:
     memory_limit: 4G
     memory_reservation: 2G
   redis:
@@ -131,12 +131,12 @@ Example output:
   Service                         Max Mem     Limit   Usage  Status
   ──────────────────────────────────────────────────────────────────
   sandbox-redis                       42M       64M     66%  OK - moderate
-  feat-myfeature-next-hello-1      2.1G     2560M     84%  RISK - near limit
-  feat-myfeature-rest-hello-1       892M        4G     22%  OK
+  feat-myfeature-frontend-1      2.1G     2560M     84%  RISK - near limit
+  feat-myfeature-backend-1       892M        4G     22%  OK
 
 --- Recommendations ---
 
-  ! feat-myfeature-next-hello-1: Using 84% of memory limit. Consider increasing.
+  ! feat-myfeature-frontend-1: Using 84% of memory limit. Consider increasing.
 ```
 
 ## Step 3: Apply Changes
@@ -147,7 +147,7 @@ Edit `infra/config/services.yaml` and update the `memory_limit` and `memory_rese
 
 ```yaml
 services:
-  next-hello:
+  frontend:
     memory_limit: 4G       # was 2560M
     memory_reservation: 2G  # was 1024M
 ```
@@ -225,8 +225,8 @@ From `infra/config/services.yaml` and `infra/compose/shared-infra.yml`:
 
 | Service | Memory Limit | Memory Reservation | Type |
 |---------|-------------|-------------------|------|
-| next-hello | 2560M | 1024M | Web app (Next.js) |
-| rest-hello | 256M | 64M | API server |
+| frontend | 2560M | 1024M | Web app (Next.js) |
+| backend | 256M | 64M | API server |
 | redis | 64M | 32M | Infrastructure |
 
 | k8s-forwards | 256M | 64M | Infrastructure |

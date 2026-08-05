@@ -145,7 +145,7 @@
         }
 
         // Share the X-Feature cookie across the sandbox's faces for this host
-        // (e.g. next-hello.local.<base> and next-hello.remote.<base>) by scoping
+        // (e.g. frontend.local.<base> and frontend.remote.<base>) by scoping
         // it to the base domain — the last two labels of the current hostname.
         function cookieDomain() {
             const parts = location.hostname.split('.');

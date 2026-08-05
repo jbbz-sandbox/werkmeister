@@ -169,7 +169,7 @@ export function buildListInterceptsArgs(): string[] {
  * The single definition of "interceptable", shared by `sandbox intercept` (which
  * turns a non-null into a fatal error) and `sandbox status --intercepts` (which
  * reports it). Returns the predicate half of a sentence — callers prefix the
- * service name, e.g. `'next-hello' ${blocker}`.
+ * service name, e.g. `'frontend' ${blocker}`.
  */
 export function interceptBlocker(svcDef: unknown): string | null {
   if (typeof svcDef !== "object" || svcDef === null || Array.isArray(svcDef)) {

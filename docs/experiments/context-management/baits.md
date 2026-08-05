@@ -110,6 +110,6 @@ result is **inlined into the task**. The bait tests whether a loaded standard ma
 
 ## Reserve bait (fallback if one of the three is tainted)
 
-- **config / DNS:** inter-service URLs use Docker DNS names (`http://next-hello:3000`), never
+- **config / DNS:** inter-service URLs use Docker DNS names (`http://frontend:3000`), never
   `host.docker.internal`. harness-5 found this **backstopped on Opus** (re-derives it) but
   **never tested on Haiku** — may be a valid Haiku bait.

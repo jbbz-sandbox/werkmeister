@@ -26,7 +26,7 @@ How services find and address each other. The shared comment rubric
 
 ## Rules
 
-- **Inter-service URLs use stable Docker DNS names** — e.g. `http://next-hello:3000`,
+- **Inter-service URLs use stable Docker DNS names** — e.g. `http://frontend:3000`,
   `http://k8s-forwards:9000`. Never `host.docker.internal` from inside a
   container: it doesn't resolve there, so the URL only works on one host.
 - **No `{service-name}` placeholder syntax in new env vars** — use the Docker DNS

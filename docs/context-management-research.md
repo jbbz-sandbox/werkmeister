@@ -388,9 +388,9 @@ different context.* Two directions were decided in that session and are recorded
     it.* Generalize the planned `standards: [ui, graphql]` field (§5.2) into a service `archetype`
     that bundles the whole profile:
     ```yaml
-    next-hello:      { archetype: nextjs-ui }
+    frontend:      { archetype: nextjs-ui }
     graph-gateway:   { archetype: graphql-subgraph }
-    rest-hello:      { archetype: nest-api }
+    backend:      { archetype: nest-api }
 
     archetypes:
       graphql-subgraph:

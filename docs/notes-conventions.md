@@ -54,7 +54,7 @@ below, kebab-case slug.
 type: finding | decision | attempt | handoff | contract
 phase: research | implement | test | review
 author: main | <subagent name>          # who wrote it
-refs: [src/paginate.ts, next-hello]     # files / services it concerns
+refs: [src/paginate.ts, frontend]     # files / services it concerns
 status: open | superseded               # supersede, don't delete — attempts especially
 ---
 ```

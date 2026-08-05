@@ -55,7 +55,7 @@ declares a `feature_router:` block in `~/.sandbox/services.yaml`:
 
 ```bash
 DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.sandbox/config.yaml | head -1)
-SERVICE=next-hello   # the routed service under test; `sandbox services <feature>` lists them
+SERVICE=frontend   # the routed service under test; `sandbox services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
 curl -sk -o /dev/null -w "homepage: HTTP %{http_code} | Size: %{size_download}\n" "$BASE/"
@@ -98,8 +98,8 @@ fixed threshold; the number changes with the config. If the compiled count is
 ## Step 5: Network Connectivity from Caddy
 
 ```bash
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/health 2>&1 && echo "PASS: Caddy -> rest-hello" || echo "FAIL: Caddy -> rest-hello"
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/ 2>&1 && echo "PASS: Caddy -> next-hello" || echo "FAIL: Caddy -> next-hello"
+docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/health 2>&1 && echo "PASS: Caddy -> backend" || echo "FAIL: Caddy -> backend"
+docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/ 2>&1 && echo "PASS: Caddy -> frontend" || echo "FAIL: Caddy -> frontend"
 ```
 
 ## Step 6: k8s Port-Forward Detail
@@ -115,14 +115,14 @@ Dead entries indicate the forward is TCP-bound but the k8s service isn't respond
 application layer. The entrypoint's self-healing monitor will restart those forwards within
 ~45s — check `docker logs sandbox-k8s-forwards` to confirm restart activity.
 
-To check logs for a specific failing service (e.g. next-hello on port 9053):
+To check logs for a specific failing service (e.g. frontend on port 9053):
 
 ```bash
-docker logs sandbox-k8s-forwards 2>&1 | grep "\[next-hello\]" | tail -20
+docker logs sandbox-k8s-forwards 2>&1 | grep "\[frontend\]" | tail -20
 ```
 
 Note: the correct host port for k8s-forwarded services is the `listen_port` from `sandbox status --k8s`
-output, **not** the remote k8s pod port. For example, next-hello is at `localhost:9053`,
+output, **not** the remote k8s pod port. For example, frontend is at `localhost:9053`,
 not `localhost:4321`.
 
 ## Step 7: Docker Desktop File Sync
@@ -149,10 +149,10 @@ Present results as:
 |-------|--------|---------|
 | Container Health | PASS/FAIL | N infra healthy, M features running |
 | k8s Forwards | PASS/FAIL | N/M alive (HTTP-checked) |
-| rest-hello Direct | PASS/FAIL | HTTP xxx, size |
-| next-hello Direct | PASS/FAIL | HTTP xxx, size |
-| Caddy → rest-hello | PASS/FAIL | HTTP xxx, size |
-| Caddy → next-hello | PASS/FAIL | HTTP xxx, size |
+| backend Direct | PASS/FAIL | HTTP xxx, size |
+| frontend Direct | PASS/FAIL | HTTP xxx, size |
+| Caddy → backend | PASS/FAIL | HTTP xxx, size |
+| Caddy → frontend | PASS/FAIL | HTTP xxx, size |
 | Caddyfile Valid | PASS/FAIL | N routes compiled |
 | Caddyfile Synced | PASS/WARN | host vs container size |
 | Network Caddy→backends | PASS/FAIL | per-backend results |

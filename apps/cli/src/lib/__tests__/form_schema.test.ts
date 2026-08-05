@@ -48,7 +48,7 @@ describe("buildFormSchema", () => {
       spec([
         {
           key: "services", label: "Services", multi: true,
-          choices: ["rest-hello", "next-hello"], default: "next-hello",
+          choices: ["backend", "frontend"], default: "frontend",
           resolved: false,
         },
       ]),
@@ -56,9 +56,9 @@ describe("buildFormSchema", () => {
     const prop = out.schema.properties.services;
     expect(prop.type).toBe("array");
     expect(prop.uniqueItems).toBe(true);
-    expect(prop.items.enum).toEqual(["rest-hello", "next-hello"]);
+    expect(prop.items.enum).toEqual(["backend", "frontend"]);
     expect(out.uiSchema.services["ui:widget"]).toBe("checkboxes");
-    expect(out.formData.services).toEqual(["next-hello"]); // comma split → list
+    expect(out.formData.services).toEqual(["frontend"]); // comma split → list
   });
 
   it("multi without choices becomes plain string", () => {

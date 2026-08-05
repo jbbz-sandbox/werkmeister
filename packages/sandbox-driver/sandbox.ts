@@ -2181,7 +2181,7 @@ export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
  *
  * Runs the CLI with cwd = the workspace directory so it resolves the feature
  * name and slot from that workspace's `.env` (the directory name is NOT the
- * feature name — e.g. `proj-2044-next-hello` → FEATURE `next-hello`),
+ * feature name — e.g. `proj-2044-frontend` → FEATURE `frontend`),
  * matching how a user would run the command from inside the workspace. Returns
  * the command and its (ANSI-stripped) output; throws {@link WorkspaceError} on
  * a non-zero exit (e.g. stopping a feature that isn't running).

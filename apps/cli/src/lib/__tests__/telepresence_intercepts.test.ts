@@ -3,7 +3,7 @@
  *
  * The active-intercept fixture below is trimmed from a real
  * `telepresence list -i --format json` captured against the OrbStack cluster
- * (next-hello intercepted by feature test-me). The live payload also carries an
+ * (frontend intercepted by feature test-me). The live payload also carries an
  * `environment` block of the pod's env vars — deliberately NOT reproduced here,
  * since on a real cluster it can contain secrets.
  */
@@ -19,13 +19,13 @@ import {
 /** Shape of one intercepted deployment, trimmed to the fields we parse. */
 const ACTIVE = JSON.stringify([
   {
-    name: "next-hello",
+    name: "frontend",
     namespace: "default",
     intercept_info: [
       {
         spec: {
-          name: "next-hello",
-          agent: "next-hello",
+          name: "frontend",
+          agent: "frontend",
           workload_kind: "Deployment",
           namespace: "default",
           mechanism: "http",
@@ -33,8 +33,8 @@ const ACTIVE = JSON.stringify([
           target_port: 11101,
           header_filters: { "x-feature": "test-me" },
         },
-        id: "8c3b8989-29e2-4bfc-b18d-612e4a95fe75:next-hello",
-        pod_name: "next-hello-74cb74bb6d-dnxxt",
+        id: "8c3b8989-29e2-4bfc-b18d-612e4a95fe75:frontend",
+        pod_name: "frontend-74cb74bb6d-dnxxt",
         mechanism_args_desc: "HTTP requests with header 'X-Feature: test-me'",
       },
     ],
@@ -44,7 +44,7 @@ const ACTIVE = JSON.stringify([
 ]);
 
 const FULL_SVC = {
-  k8s_deployment: "next-hello",
+  k8s_deployment: "frontend",
   k8s_namespace: "default",
   k8s_port: 8080,
   k8s_port_name: "http",
@@ -53,7 +53,7 @@ const FULL_SVC = {
 describe("parseInterceptList", () => {
   it("maps an intercepted deployment to the feature in its x-feature header filter", () => {
     const result = parseInterceptList(ACTIVE);
-    expect(result.get("next-hello")).toBe("test-me");
+    expect(result.get("frontend")).toBe("test-me");
   });
 
   it("returns an empty map for the no-intercepts case", () => {
@@ -63,7 +63,7 @@ describe("parseInterceptList", () => {
 
   it("matches the header filter case-insensitively", () => {
     const upper = ACTIVE.replace('"x-feature"', '"X-Feature"');
-    expect(parseInterceptList(upper).get("next-hello")).toBe("test-me");
+    expect(parseInterceptList(upper).get("frontend")).toBe("test-me");
   });
 
   it("records the deployment with a null feature when no x-feature filter is present", () => {
@@ -72,12 +72,12 @@ describe("parseInterceptList", () => {
       "{}",
     );
     const result = parseInterceptList(noFilter);
-    expect(result.has("next-hello")).toBe(true);
-    expect(result.get("next-hello")).toBeNull();
+    expect(result.has("frontend")).toBe(true);
+    expect(result.get("frontend")).toBeNull();
   });
 
   it("ignores a deployment whose intercept_info is absent or empty", () => {
-    const idle = JSON.stringify([{ name: "rest-hello", namespace: "default", intercept_info: [] }]);
+    const idle = JSON.stringify([{ name: "backend", namespace: "default", intercept_info: [] }]);
     expect(parseInterceptList(idle).size).toBe(0);
   });
 
@@ -117,7 +117,7 @@ describe("interceptBlocker", () => {
   });
 
   it("rejects a non-object service definition", () => {
-    for (const bad of [null, undefined, "next-hello", []]) {
+    for (const bad of [null, undefined, "frontend", []]) {
       expect(interceptBlocker(bad)).toBeTruthy();
     }
   });
@@ -126,7 +126,7 @@ describe("interceptBlocker", () => {
 describe("listIntercepts", () => {
   it("returns the parsed map from `telepresence list -i`", () => {
     const runner: Runner = () => [0, ACTIVE];
-    expect(listIntercepts(runner).intercepts.get("next-hello")).toBe("test-me");
+    expect(listIntercepts(runner).intercepts.get("frontend")).toBe("test-me");
   });
 
   it("reports available when the command succeeds", () => {

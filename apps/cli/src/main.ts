@@ -86,7 +86,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "-s, --services <list>",
-          "Comma-separated list of services to run locally (e.g. 'rest-hello,next-hello'). " +
+          "Comma-separated list of services to run locally (e.g. 'backend,frontend'). " +
             "Skips auto-detection from git diff.",
         );
     },

@@ -72,8 +72,8 @@ const dismissed = prFromView(
 );
 assert.equal(dismissed.reviewStatus, "DISMISSED", "DISMISSED recovered from latestReviews");
 
-const stub = prFromView({ url: "https://github.com/sandbox/next-hello/pull/77", unavailable: true }, "me");
-assert.equal(stub.repo, "next-hello", "unavailable stub still knows repo from url");
+const stub = prFromView({ url: "https://github.com/sandbox/frontend/pull/77", unavailable: true }, "me");
+assert.equal(stub.repo, "frontend", "unavailable stub still knows repo from url");
 assert.equal(stub.number, 77, "unavailable stub knows number from url");
 assert.equal(stub.title, "(details unavailable)", "unavailable stub title");
 console.log("✓ prFromView");

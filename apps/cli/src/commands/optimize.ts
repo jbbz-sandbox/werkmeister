@@ -172,7 +172,7 @@ function parseConfigMem(memStr: string): number {
  *
  * Container names may be prefixed with feature/project names, e.g.:
  * - 'sandbox-redis' → 'redis'
- * - 'feat-myfeature-next-hello-1' → 'next-hello'
+ * - 'feat-myfeature-frontend-1' → 'frontend'
  * - 'sandbox-k8s-forwards' → 'k8s-forwards'
  */
 function matchService(containerName: string, configured: Record<string, any>): string | null {
