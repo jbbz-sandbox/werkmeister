@@ -6,10 +6,14 @@
 }
 
 # ---------------------------------------------------------------------------
-# Host routers. Caddy terminates each service's public hostname directly and reverse-proxies to its upstream
-# (a local feature container via host.docker.internal:<port>, or a remote K8s
-# Service). When an X-Feature cookie is present, its value is copied into an
-# X-Feature header on the upstream call so the app can read the selected feature.
+# Host routers. Caddy terminates each service's public hostname directly and
+# reverse-proxies to its upstream.
+#
+# Local hosts are multi-tenant: one `handle` per running feature, selected by the
+# X-Feature cookie's VALUE, so several workspaces share a hostname at once. The
+# final `/*` handle is the no-cookie default (the k8s tunnel where one exists).
+# Remote (K8s) hosts have a single fixed upstream and only forward the cookie as
+# a header for the cluster to read.
 # ---------------------------------------------------------------------------
 {% for r in host_routers %}
 # {{ r.service }}
@@ -30,7 +34,24 @@
         rewrite * /index.html
         file_server
     }
-
+{% if r.features %}
+{% for f in r.features %}
+    # X-Feature={{ f.name }} -> that workspace's containers.
+    @{{ f.matcher }} header_regexp Cookie {{ f.cookie_regexp }}
+    handle @{{ f.matcher }} {
+        reverse_proxy {{ f.upstream }} {
+            header_up X-Feature {{ f.name }}
+        }
+    }
+{% endfor %}
+    # No cookie, or one naming a feature that isn't serving this service.
+    # Matched on `/*` rather than left bare: the more specific `/__sandbox*`
+    # sibling still wins, and the structural lint's bare-vs-scoped route-drop
+    # guard stays meaningful instead of firing on every reload.
+    handle /* {
+        reverse_proxy {{ r.upstream }}
+    }
+{% else %}
     # Cookie present -> copy its value into an X-Feature header, then proxy.
     @xf header_regexp xf Cookie X-Feature=([^;]+)
     handle @xf {
@@ -39,8 +60,9 @@
         }
     }
     # No cookie -> route anyway, without the header.
-    handle {
+    handle /* {
         reverse_proxy {{ r.upstream }}
     }
+{% endif %}
 }
 {% endfor %}

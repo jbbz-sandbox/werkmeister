@@ -259,4 +259,48 @@ describe("generateCaddyfile", () => {
     const hostnames = Object.values(routers).map((rc) => rc.hostname).filter(Boolean);
     expect(new Set(hostnames).size).toBe(hostnames.length);
   });
+
+  // The point of the sandbox is several workstreams at once. Before this, the
+  // local host bound one winner (first by name) and the cookie was decoration,
+  // so a second feature was unreachable and a dead one could hold the hostname.
+  it("routes concurrent features on one hostname by cookie value", () => {
+    const rc = loadFeatureRouters()["frontend"];
+    const offset = loadServices()["frontend"]?.port_offset ?? 0;
+    const content = fs.readFileSync(
+      generateCaddyfile({
+        alpha: { slot: 1, services: ["frontend"] },
+        beta: { slot: 2, services: ["frontend"] },
+      }),
+      "utf8",
+    );
+
+    // Both features get their own matcher + upstream, so neither shadows the other.
+    for (const [name, slot] of [["alpha", 1], ["beta", 2]] as [string, number][]) {
+      const port = getPortRange(slot)[0] + offset;
+      expect(content).toContain(`X-Feature=${name}(?:\\s*;|\\s*$)`);
+      expect(content).toContain(`reverse_proxy host.docker.internal:${port}`);
+      expect(content).toContain(`header_up X-Feature ${name}`);
+    }
+
+    // Unmatched/absent cookie prefers the always-live remote face over guessing
+    // a local feature — that guess is what let a torn-down workspace 502 the host.
+    expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
+  });
+
+  it("anchors the cookie matcher so one feature can't match another's prefix", () => {
+    // A bare `X-Feature=web` substring also matches `X-Feature=web-v2`, which
+    // would route one workspace's traffic into another's containers.
+    const content = fs.readFileSync(
+      generateCaddyfile({
+        web: { slot: 1, services: ["frontend"] },
+        "web-v2": { slot: 2, services: ["frontend"] },
+      }),
+      "utf8",
+    );
+    expect(content).toContain("(?:^|;\\s*)X-Feature=web(?:\\s*;|\\s*$)");
+    expect(content).toContain("(?:^|;\\s*)X-Feature=web-v2(?:\\s*;|\\s*$)");
+    // Distinct matcher names, so the two handles don't collapse into one.
+    expect(content).toMatch(/@feat0_web\b/);
+    expect(content).toMatch(/@feat1_web_v2\b/);
+  });
 });
