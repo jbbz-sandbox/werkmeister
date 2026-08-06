@@ -265,6 +265,80 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, a
   return data;
 }
 
+// ---------------------------------------------------------------------------
+// Session naming
+// ---------------------------------------------------------------------------
+
+/** Read `.sandbox/workspace.yml`. Missing or malformed -> `{}`. */
+function loadWorkspaceMeta(workspaceRoot: string): Record<string, any> {
+  const configPath = path.join(workspaceRoot, ".sandbox", "workspace.yml");
+  try {
+    if (!fs.statSync(configPath).isFile()) return {};
+    const data = YAML.parse(fs.readFileSync(configPath, "utf8"));
+    return isDict(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Trim and collapse whitespace; return the first field that has content. */
+function firstNonEmpty(...values: any[]): string {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const cleaned = value.trim().replace(/\s+/g, " ");
+    if (cleaned) return cleaned;
+  }
+  return "";
+}
+
+/** Cut on a word boundary when one is reasonably close to the limit. */
+function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const cut = text.slice(0, maxLen - 1);
+  // The cut already lands between words — trimming back would drop a word that fits.
+  const clean = (s: string) => `${s.trimEnd().replace(/[,;:.\-—]+$/, "")}…`;
+  if (/\s/.test(text[maxLen - 1] ?? "")) return clean(cut);
+  const lastSpace = cut.lastIndexOf(" ");
+  return clean(lastSpace > maxLen * 0.6 ? cut.slice(0, lastSpace) : cut);
+}
+
+/**
+ * A session title for `claude --name`, derived from `.sandbox/workspace.yml`.
+ *
+ * Claude Code names a session by summarising its FIRST user message, once, and
+ * never revisits it. A session that opens with a slash command is therefore
+ * titled from that command's boilerplate: `/sb-research` in a Postgres/Redis
+ * workspace produced "Research storybook component library", because no task
+ * text ever reached the titler. The workspace already declares its intent —
+ * hand it over explicitly rather than hoping a summariser infers it.
+ *
+ * `jira_id`/`task` are the short label, `description`/`starting_prompt` the
+ * prose, and either side may be absent or uninformative (a default
+ * `task: Sandbox` says nothing). So: prefer prose, prefix the label only when
+ * it adds something. Returns null when the workspace declares neither, so
+ * callers can omit `--name` instead of passing an empty string.
+ */
+export function sessionTitle(workspaceRoot: string, maxLen = 72): string | null {
+  const config = loadWorkspaceMeta(workspaceRoot);
+  const label = firstNonEmpty(config["jira_id"], config["task"]);
+  const prose = firstNonEmpty(config["description"], config["starting_prompt"]);
+  if (!label && !prose) return null;
+  if (!prose) return truncate(label, maxLen);
+
+  // description is meant to restate task, so a naive join usually stutters.
+  const redundant = prose.toLowerCase().startsWith(label.toLowerCase());
+  return truncate(label && !redundant ? `${label} — ${prose}` : prose, maxLen);
+}
+
+/**
+ * The `claude` invocation that opens a correctly-titled session, or plain
+ * `claude` when the workspace declares no intent to name it with.
+ */
+export function claudeSessionCommand(workspaceRoot: string): string {
+  const title = sessionTitle(workspaceRoot);
+  return title ? `claude --name "${title.replace(/(["\\$`])/g, "\\$1")}"` : "claude";
+}
+
 /** Read `~/.sandbox/services.yaml` (whole document). Required — throws when absent. */
 function servicesDoc({ required = true } = {}): Record<string, any> {
   return loadYaml(servicesYamlPath(), { required });
