@@ -13,7 +13,6 @@ import * as path from "node:path";
 import { isCaddyRunning, reloadCaddy, startCaddy } from "../lib/caddy.js";
 import {
   Colors,
-  claudeSessionCommand,
   error,
   info,
   loadPorts,
@@ -272,12 +271,6 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log();
   console.log(`  ${Colors.DIM}k8s services: (everything not listed above)${Colors.RESET}`);
-  console.log();
-  // Claude Code titles a session from its first message, so one that opens with
-  // a slash command gets named after the command's boilerplate. --name carries
-  // the workspace's declared intent instead. See lib/config.ts sessionTitle().
-  console.log(`  ${Colors.DIM}Start a session (from the workspace root):${Colors.RESET}`);
-  console.log(`    ${claudeSessionCommand(workspace)}`);
   console.log();
   console.log(`  ${Colors.DIM}Useful commands:${Colors.RESET}`);
   console.log("    sandbox status            # view all features");

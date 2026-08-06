@@ -38,7 +38,6 @@ import { resolvePresentArchetypes } from "../lib/archetypes.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../lib/claude_md.js";
 import {
   Colors,
-  claudeSessionCommand,
   error,
   getReposRoot,
   info,
@@ -1460,7 +1459,6 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(
     `\n${Colors.BOLD}Workspace initialised.${Colors.RESET} ` +
-      "Open a new Claude Code session from the workspace root to pick up the context:\n\n" +
-      `    ${claudeSessionCommand(workspaceRoot)}\n`,
+      "Open a new Claude Code session from the workspace root to pick up the context.\n",
   );
 }
