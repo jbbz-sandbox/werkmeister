@@ -26,8 +26,8 @@ async function readJson(file, fallback) {
 const write = (file, data) => writeFile(file, JSON.stringify(data, null, 2) + "\n");
 
 export async function main() {
-  const { workspaces } = await listWorkspaces();
-  const nextFolders = mergeFolders(await readJson(foldersFile, []), workspaces);
+  const { root, workspaces } = await listWorkspaces();
+  const nextFolders = mergeFolders(await readJson(foldersFile, []), workspaces, root);
 
   await mkdir(configDir, { recursive: true });
   await write(foldersFile, nextFolders);

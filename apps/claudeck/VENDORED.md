@@ -50,6 +50,12 @@ upstream's numbering.
   `sandbox-driver` dependency and routes (`form-schema`, `jira-form-data`,
   `refine-prompt`, `create`). `sandbox-driver` must be built (`tsc`) before
   claudeck runs.
+- **Workspace → project-list sync**: the sandbox-workspace plugin mirrors the
+  workspaces root into `~/.claudeck/config/folders.json` (the list core's
+  `/api/projects` serves) at mount and on every `fs.watch` event for that
+  directory — `merge-folders.mjs` in the plugin dir. Entries it owns carry
+  `source: "sandbox"`; manual entries elsewhere are left alone. Writes core's
+  config file but still edits no core code.
 
 To update: re-run degit at a newer commit into a scratch dir and diff, or
 merge from a `claudeck-upstream` remote if configured.
