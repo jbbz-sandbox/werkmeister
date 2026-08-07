@@ -11,3 +11,6 @@ apps/cli/infra/proxy/ui/features.json
 
 # Per-workspace state (notes, handoffs, standards.json) — not source
 .sandbox/
+
+# Generated per-workspace env — carries merged values from ~/.sandbox/secrets.env
+.env

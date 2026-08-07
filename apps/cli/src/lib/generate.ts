@@ -30,7 +30,7 @@ import {
 } from "./config.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "./locks.js";
-import { getSecretsPath, loadSecrets } from "./secrets.js";
+import { getSecretsPath, loadSecrets, requiredSecretKeys } from "./secrets.js";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
 
 function isDict(value: unknown): value is Record<string, any> {
@@ -385,15 +385,12 @@ function resolveServiceRefs(
 // ---------------------------------------------------------------------------
 
 /**
- * Per-workspace dev-link bind mounts from `.sandbox/workspace.yml`.
+ * Read a dict-valued *field* from `.sandbox/workspace.yml` under *workspaceRoot*.
  *
- * Maps service name -> list of `"host:container[:ro]"` specs (same grammar
- * as services.yaml `extra_volumes`), letting a workspace mount a locally
- * built package over its `node_modules` copy without editing the global
- * service registry (PROJ-1897 — see .sandbox/notes/008). Absent field, missing
- * or malformed file -> `{}` so non-opted-in workspaces render identically.
+ * Absent field, missing or malformed file -> `{}` so workspaces that have not
+ * opted in render identically.
  */
-function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
+function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string, any> {
   const configPath = path.join(workspaceRoot, ".sandbox", "workspace.yml");
   let text: string;
   try {
@@ -413,8 +410,20 @@ function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
   if (!isDict(data)) {
     data = {};
   }
-  const links = "dev_links" in data ? data["dev_links"] : {};
-  return isDict(links) ? links : {};
+  const value = field in data ? data[field] : {};
+  return isDict(value) ? value : {};
+}
+
+/**
+ * Per-workspace dev-link bind mounts from `.sandbox/workspace.yml`.
+ *
+ * Maps service name -> list of `"host:container[:ro]"` specs (same grammar
+ * as services.yaml `extra_volumes`), letting a workspace mount a locally
+ * built package over its `node_modules` copy without editing the global
+ * service registry (PROJ-1897 — see .sandbox/notes/008).
+ */
+function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
+  return loadWorkspaceDict(workspaceRoot, "dev_links");
 }
 
 /**
@@ -816,7 +825,12 @@ export function generateFeatureEnv(
     const [portStart] = getPortRange(slot);
     // Build service_urls and env_vars for the template
     let serviceUrls: Record<string, string> = {};
+    // Per-workspace overrides from `.sandbox/workspace.yml` (`env_vars:`). Rendered
+    // last so a workspace can override a generated service URL or a secret value.
     const envVars: Record<string, string> = {};
+    for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
+      envVars[key] = String(value);
+    }
     for (const svcName of Object.keys(servicesConfig).sort()) {
       const svcDef = servicesConfig[svcName] ?? {};
       if (!isDict(svcDef)) {
@@ -840,8 +854,17 @@ export function generateFeatureEnv(
       }
     }
     serviceUrls = avoidComposeEnvShadowing(serviceUrls, localServices, servicesConfig);
-    // Load secrets from ~/.sandbox/secrets.env if it exists.
-    const secrets = loadSecrets(getSecretsPath());
+    // Load secrets from ~/.sandbox/secrets.env if it exists, narrowed to the keys
+    // the feature's own local services declare via services.yaml `secrets:`. The
+    // global file is shared across every workspace; only the declared subset has
+    // any business being written into this feature's .env.
+    const allSecrets = loadSecrets(getSecretsPath());
+    const secrets: Record<string, string> = {};
+    for (const key of requiredSecretKeys(servicesConfig, localServices)) {
+      if (key in allSecrets) {
+        secrets[key] = allSecrets[key];
+      }
+    }
     const rendered = template.render(
       pythonifyContext({
         feature_name: feature,

@@ -53,7 +53,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function writeDevLinks(workspace: string, mapping: string): void {
+function writeWorkspaceYml(workspace: string, mapping: string): void {
   const sandbox = path.join(workspace, ".sandbox");
   fs.mkdirSync(sandbox, { recursive: true });
   fs.writeFileSync(path.join(sandbox, "workspace.yml"), mapping);
@@ -81,7 +81,7 @@ describe("worktree gitdir mounting", () => {
 
 describe("dev_links", () => {
   it("emits a dev link with ${WORKSPACE} resolved", () => {
-    writeDevLinks(
+    writeWorkspaceYml(
       tmp,
       "dev_links:\n  frontend:\n" +
         '    - "${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core"\n',
@@ -93,13 +93,13 @@ describe("dev_links", () => {
 
   it("empty dev_links is byte-identical to none", () => {
     const baseline = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
-    writeDevLinks(tmp, "dev_links: {}\n");
+    writeWorkspaceYml(tmp, "dev_links: {}\n");
     const withEmpty = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(withEmpty).toBe(baseline);
   });
 
   it("dev_link for another service does not leak", () => {
-    writeDevLinks(tmp, 'dev_links:\n  backend:\n    - "${WORKSPACE}/shared:/app/x"\n');
+    writeWorkspaceYml(tmp, 'dev_links:\n  backend:\n    - "${WORKSPACE}/shared:/app/x"\n');
     const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(content).not.toContain("/app/x");
   });
@@ -149,6 +149,45 @@ describe("generateFeatureEnv", () => {
     fs.writeFileSync(legacy, "LEGACY=1\n");
     generateFeatureEnv("myfeat", 1, ["frontend"], null, tmp);
     expect(fs.existsSync(legacy)).toBe(false);
+  });
+
+  // Both context values were plumbed to env.j2 and never populated: `env_vars`
+  // was a `{}` literal that nothing wrote to, and `secrets` was loaded, passed,
+  // and never rendered. So the template's per-workspace section was structurally
+  // always empty and there was no config surface for workspace env vars at all.
+  it("renders env_vars from workspace.yml", () => {
+    writeWorkspaceYml(tmp, "env_vars:\n  DATABASE_URL: postgres://k8s-postgres:9051/app\n  RETRIES: 3\n");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("DATABASE_URL=postgres://k8s-postgres:9051/app");
+    expect(content).toContain("RETRIES=3");
+  });
+
+  it("env_vars is rendered after service URLs so it wins on a collision", () => {
+    writeWorkspaceYml(tmp, "env_vars:\n  BACKEND_URL: http://pinned:9999\n");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content.lastIndexOf("BACKEND_URL=http://pinned:9999")).toBeGreaterThan(
+      content.indexOf("BACKEND_URL=http://backend:3000"),
+    );
+  });
+
+  it("renders only the secrets the local services declare", () => {
+    home.write("secrets.env", "DEMO_TOKEN=shhh\nOTHER_TEAMS_KEY=nope\n");
+    const services = loadServices();
+    services.backend.secrets = ["DEMO_TOKEN"];
+    const content = fs.readFileSync(
+      generateFeatureEnv("myfeat", 1, ["backend"], { services }, tmp),
+      "utf8",
+    );
+    expect(content).toContain("DEMO_TOKEN=shhh");
+    // The global secrets file is shared across every workspace; a key no local
+    // service declares must not leak into this feature's .env.
+    expect(content).not.toContain("OTHER_TEAMS_KEY");
+  });
+
+  it("renders no secrets when the local services declare none", () => {
+    home.write("secrets.env", "DEMO_TOKEN=shhh\n");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content).not.toContain("shhh");
   });
 });
 
