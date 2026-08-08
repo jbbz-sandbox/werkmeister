@@ -7,9 +7,10 @@ description: "Begin the PR/finishing phase in a sandbox workspace. Use when impl
 
 Run these steps in order. Steps 1 and 2 are gates — a failure stops the PR.
 
-1. **Pre-PR gate — local CI checks.** Run the repo's lint, tests, type checks,
-   and build. Any failure → fix it first. Never create a PR on failing local
-   checks.
+1. **Pre-PR gate — local CI checks.** From the repo root run `npm test`,
+   `npm run typecheck`, and `npm run build` — the three the CI workflow runs.
+   Any failure → fix it first. Never create a PR on failing local checks.
+   (There is deliberately no `lint` script; typecheck is the static gate.)
 2. **Self-review.** Invoke `sb-review` on the branch diff (vs the base branch)
    and address its findings before continuing.
 3. **PR conventions:**

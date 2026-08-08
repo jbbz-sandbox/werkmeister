@@ -70,6 +70,11 @@
           "description": "A bind mount, e.g. \"${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core\"."
         }
       }
+    },
+    "env_vars": {
+      "type": "object",
+      "description": "Per-workspace environment variables merged into the generated .env. Rendered after the service URLs and secrets, so a key here overrides a generated one — the supported way to point a workspace at a datastore without hand-editing .env after every regeneration.",
+      "additionalProperties": { "type": ["string", "number", "boolean"] }
     }
   }
 }

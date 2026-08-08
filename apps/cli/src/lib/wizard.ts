@@ -110,6 +110,45 @@ export async function promptOne(
 }
 
 /**
+ * Offer a Claude rewrite for a `refinable` field; returns the text to keep.
+ *
+ * The rewrite runs through `sandbox-driver`'s `refinePrompt` — the same
+ * function behind the browser form's "Refine with Claude" button — so the
+ * terminal honours the spec's `refineInstruction` instead of restating it and
+ * drifting. The wizard's answers so far are passed as the form-state context
+ * the driver grounds the rewrite in.
+ *
+ * Every failure path (declined, driver not built, `claude` missing, empty or
+ * rejected rewrite) falls back to what the user typed — refine is an offer, so
+ * it must never cost them their text. `ask` is injected for tests.
+ */
+export async function offerRefine(
+  spec: PromptSpec,
+  value: string,
+  context: Record<string, string>,
+  ask: (label: string, defaultValue?: string) => Promise<string> = prompt,
+): Promise<string> {
+  if (!/^y(es)?$/i.test(await ask("Refine with Claude? [y/N]"))) {
+    return value;
+  }
+  info("  Refining via the claude CLI — this takes a few seconds…");
+  let refined: string;
+  try {
+    const { refinePrompt } = await import("sandbox-driver");
+    refined = (await refinePrompt(value, spec.refineInstruction ?? "", context)).trim();
+  } catch (e) {
+    warn(`Refine failed (${(e as Error).message}) — keeping what you typed.`);
+    return value;
+  }
+  if (!refined) {
+    warn("Claude returned no text — keeping what you typed.");
+    return value;
+  }
+  info(`\n${refined}\n`);
+  return /^n(o)?$/i.test(await ask("Keep this version? [Y/n]")) ? value : refined;
+}
+
+/**
  * Prompt for any input not already present in `resolved`.
  *
  * Only missing keys are prompted — anything a caller resolved earlier
@@ -141,7 +180,10 @@ export async function runWizard(
     }
 
     const defaultValue = resolveDefault(spec);
-    const value = await promptOne(spec, defaultValue, choices);
+    let value = await promptOne(spec, defaultValue, choices);
+    if (spec.refinable && value) {
+      value = await offerRefine(spec, value, resolved);
+    }
 
     // acceptEmpty=false inputs are always recorded (the default stands in
     // when the user enters nothing); empty optional inputs are dropped.

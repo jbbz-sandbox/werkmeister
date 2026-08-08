@@ -29,11 +29,12 @@ import {
   generateFeatureCompose,
   generateFeatureEnv,
   generateSupergraphConfig,
+  seedWorkspaceMetadataEnv,
 } from "../generate.js";
 import { loadFeatureRouters } from "../feature_routing.js";
 import { loadServices } from "../config.js";
 import { getPortRange } from "../slots.js";
-import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
+import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -53,7 +54,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function writeDevLinks(workspace: string, mapping: string): void {
+function writeWorkspaceYml(workspace: string, mapping: string): void {
   const sandbox = path.join(workspace, ".sandbox");
   fs.mkdirSync(sandbox, { recursive: true });
   fs.writeFileSync(path.join(sandbox, "workspace.yml"), mapping);
@@ -81,7 +82,7 @@ describe("worktree gitdir mounting", () => {
 
 describe("dev_links", () => {
   it("emits a dev link with ${WORKSPACE} resolved", () => {
-    writeDevLinks(
+    writeWorkspaceYml(
       tmp,
       "dev_links:\n  frontend:\n" +
         '    - "${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core"\n',
@@ -93,13 +94,13 @@ describe("dev_links", () => {
 
   it("empty dev_links is byte-identical to none", () => {
     const baseline = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
-    writeDevLinks(tmp, "dev_links: {}\n");
+    writeWorkspaceYml(tmp, "dev_links: {}\n");
     const withEmpty = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(withEmpty).toBe(baseline);
   });
 
   it("dev_link for another service does not leak", () => {
-    writeDevLinks(tmp, 'dev_links:\n  backend:\n    - "${WORKSPACE}/shared:/app/x"\n');
+    writeWorkspaceYml(tmp, 'dev_links:\n  backend:\n    - "${WORKSPACE}/shared:/app/x"\n');
     const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(content).not.toContain("/app/x");
   });
@@ -125,6 +126,76 @@ describe("generateFeatureCompose", () => {
 
 });
 
+// ---- setup services --------------------------------------------------------
+// `setup_services` was fully plumbed but never exercised: no entry has ever
+// been non-empty, so the template's raw dereferences went unnoticed.
+
+/** Fixture services.yaml with backend wired to a setup service. */
+function withSetupService(entry: string): void {
+  home.write(
+    "services.yaml",
+    fixtureServicesYaml()
+      .replace("    setup_service: null\n", "    setup_service: demo-install\n")
+      .replace("setup_services: {}", `setup_services:\n  demo-install:\n${entry}`),
+  );
+}
+
+const MINIMAL_SETUP = `    repo: demo-services
+    image: node:22-alpine
+    command: "npm install"
+`;
+
+describe("setup services", () => {
+  it("takes its image from config, like the app services do", () => {
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    // A setup container installs deps the app container then loads, so the two
+    // must agree on platform+libc — sharp resolves @img/sharp-linux-x64 vs
+    // -linuxmusl-x64 at install time. The image was hardcoded to node:20.16.0
+    // (glibc) while the demo apps run node:22-alpine (musl).
+    expect(content).toContain("image: node:22-alpine");
+    expect(content).not.toContain("node:20.16.0");
+  });
+
+  it("falls back to the previous hardcoded image when none is set", () => {
+    withSetupService(`    repo: demo-services\n    command: "npm install"\n`);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("image: node:20.16.0");
+  });
+
+  it("fills the fields the template dereferences unguarded", () => {
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    // Rendering these empty yields `memory:` / `test: ["CMD-SHELL", ""]`, which
+    // compose rejects — the whole file, not just the setup block.
+    expect(content).toContain("memory: 2G");
+    expect(content).toContain("memory: 512M");
+    expect(content).not.toMatch(/^\s*memory:\s*$/m);
+    expect(content).not.toContain('"CMD-SHELL", ""');
+  });
+
+  it("mounts startup.sh only when the config opts in", () => {
+    withSetupService(MINIMAL_SETUP);
+    const without = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    // No `*-startup.sh` ships in infra/compose/scripts/; bind-mounting a host
+    // path that does not exist makes Docker create an empty directory there.
+    expect(without).not.toContain("startup.sh");
+
+    withSetupService(MINIMAL_SETUP + "    startup_script: true\n");
+    const withScript = fs.readFileSync(
+      generateFeatureCompose("f", 1, ["backend"], null, tmp),
+      "utf8",
+    );
+    expect(withScript).toContain("demo-install-startup.sh:/usr/local/bin/startup.sh");
+  });
+
+  it("blocks the app service until the setup container exits", () => {
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("demo-install:\n        condition: service_completed_successfully");
+  });
+});
+
 describe("generateFeatureEnv", () => {
   it("writes feature, slot, and a local service DNS URL", () => {
     // Demo services have no k8s forward, so a local service is reached over the
@@ -144,11 +215,78 @@ describe("generateFeatureEnv", () => {
     expect(content).toContain("FEATURE=x");
   });
 
+  // init-workspace writes .env twice: the metadata seed, then the generator.
+  // The seed used to be a bare overwrite, so the generator's preservation pass
+  // only ever saw what the seed had just written — hand-added keys were gone
+  // one line earlier, in a different file.
+  it("keeps hand-added keys across the seed + regeneration pair", () => {
+    const envPath = path.join(tmp, ".env");
+    fs.writeFileSync(envPath, "DATABASE_URL=postgres://local/app\n");
+    seedWorkspaceMetadataEnv(envPath, { FEATURE: "myfeat", SERVICES: "backend" });
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("DATABASE_URL=postgres://local/app");
+    expect(content).toContain("FEATURE=myfeat");
+    // One preserved block, one copy of each key — the seed's own header must
+    // not survive into the generator's header as a second copy.
+    expect(content.match(/Workspace metadata \(preserved across regeneration\)/g)).toHaveLength(1);
+    expect(content.match(/^DATABASE_URL=/gm)).toHaveLength(1);
+    expect(content.match(/^FEATURE=/gm)).toHaveLength(1);
+  });
+
+  it("seeding overwrites a stale metadata value rather than duplicating it", () => {
+    const envPath = path.join(tmp, ".env");
+    fs.writeFileSync(envPath, "FEATURE=old\nDATABASE_URL=postgres://local/app\n");
+    seedWorkspaceMetadataEnv(envPath, { FEATURE: "new" });
+    const content = fs.readFileSync(envPath, "utf8");
+    expect(content).toContain("FEATURE=new");
+    expect(content).not.toContain("FEATURE=old");
+    expect(content).toContain("DATABASE_URL=postgres://local/app");
+  });
+
   it("removes legacy docker-compose.env file", () => {
     const legacy = path.join(tmp, "docker-compose.env");
     fs.writeFileSync(legacy, "LEGACY=1\n");
     generateFeatureEnv("myfeat", 1, ["frontend"], null, tmp);
     expect(fs.existsSync(legacy)).toBe(false);
+  });
+
+  // Both context values were plumbed to env.j2 and never populated: `env_vars`
+  // was a `{}` literal that nothing wrote to, and `secrets` was loaded, passed,
+  // and never rendered. So the template's per-workspace section was structurally
+  // always empty and there was no config surface for workspace env vars at all.
+  it("renders env_vars from workspace.yml", () => {
+    writeWorkspaceYml(tmp, "env_vars:\n  DATABASE_URL: postgres://k8s-postgres:9051/app\n  RETRIES: 3\n");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("DATABASE_URL=postgres://k8s-postgres:9051/app");
+    expect(content).toContain("RETRIES=3");
+  });
+
+  it("env_vars is rendered after service URLs so it wins on a collision", () => {
+    writeWorkspaceYml(tmp, "env_vars:\n  BACKEND_URL: http://pinned:9999\n");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content.lastIndexOf("BACKEND_URL=http://pinned:9999")).toBeGreaterThan(
+      content.indexOf("BACKEND_URL=http://backend:3000"),
+    );
+  });
+
+  it("renders only the secrets the local services declare", () => {
+    home.write("secrets.env", "DEMO_TOKEN=shhh\nOTHER_TEAMS_KEY=nope\n");
+    const services = loadServices();
+    services.backend.secrets = ["DEMO_TOKEN"];
+    const content = fs.readFileSync(
+      generateFeatureEnv("myfeat", 1, ["backend"], { services }, tmp),
+      "utf8",
+    );
+    expect(content).toContain("DEMO_TOKEN=shhh");
+    // The global secrets file is shared across every workspace; a key no local
+    // service declares must not leak into this feature's .env.
+    expect(content).not.toContain("OTHER_TEAMS_KEY");
+  });
+
+  it("renders no secrets when the local services declare none", () => {
+    home.write("secrets.env", "DEMO_TOKEN=shhh\n");
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content).not.toContain("shhh");
   });
 });
 
@@ -258,5 +396,49 @@ describe("generateCaddyfile", () => {
 
     const hostnames = Object.values(routers).map((rc) => rc.hostname).filter(Boolean);
     expect(new Set(hostnames).size).toBe(hostnames.length);
+  });
+
+  // The point of the sandbox is several workstreams at once. Before this, the
+  // local host bound one winner (first by name) and the cookie was decoration,
+  // so a second feature was unreachable and a dead one could hold the hostname.
+  it("routes concurrent features on one hostname by cookie value", () => {
+    const rc = loadFeatureRouters()["frontend"];
+    const offset = loadServices()["frontend"]?.port_offset ?? 0;
+    const content = fs.readFileSync(
+      generateCaddyfile({
+        alpha: { slot: 1, services: ["frontend"] },
+        beta: { slot: 2, services: ["frontend"] },
+      }),
+      "utf8",
+    );
+
+    // Both features get their own matcher + upstream, so neither shadows the other.
+    for (const [name, slot] of [["alpha", 1], ["beta", 2]] as [string, number][]) {
+      const port = getPortRange(slot)[0] + offset;
+      expect(content).toContain(`X-Feature=${name}(?:\\s*;|\\s*$)`);
+      expect(content).toContain(`reverse_proxy host.docker.internal:${port}`);
+      expect(content).toContain(`header_up X-Feature ${name}`);
+    }
+
+    // Unmatched/absent cookie prefers the always-live remote face over guessing
+    // a local feature — that guess is what let a torn-down workspace 502 the host.
+    expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
+  });
+
+  it("anchors the cookie matcher so one feature can't match another's prefix", () => {
+    // A bare `X-Feature=web` substring also matches `X-Feature=web-v2`, which
+    // would route one workspace's traffic into another's containers.
+    const content = fs.readFileSync(
+      generateCaddyfile({
+        web: { slot: 1, services: ["frontend"] },
+        "web-v2": { slot: 2, services: ["frontend"] },
+      }),
+      "utf8",
+    );
+    expect(content).toContain("(?:^|;\\s*)X-Feature=web(?:\\s*;|\\s*$)");
+    expect(content).toContain("(?:^|;\\s*)X-Feature=web-v2(?:\\s*;|\\s*$)");
+    // Distinct matcher names, so the two handles don't collapse into one.
+    expect(content).toMatch(/@feat0_web\b/);
+    expect(content).toMatch(/@feat1_web_v2\b/);
   });
 });

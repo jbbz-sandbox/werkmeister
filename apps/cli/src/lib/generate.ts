@@ -30,7 +30,7 @@ import {
 } from "./config.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "./locks.js";
-import { getSecretsPath, loadSecrets } from "./secrets.js";
+import { getSecretsPath, loadSecrets, requiredSecretKeys } from "./secrets.js";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
 
 function isDict(value: unknown): value is Record<string, any> {
@@ -275,6 +275,21 @@ function resolveComposeOutPath(
 }
 
 /**
+ * Seed workspace metadata into `<workspace>/.env`, keeping existing keys.
+ *
+ * `init-workspace` calls this before the generator runs. It must preserve
+ * like `writeWorkspaceEnv` does: this write lands first, so anything it
+ * drops is already gone by the time the generator reads the file back to
+ * preserve it.
+ */
+export function seedWorkspaceMetadataEnv(envPath: string, meta: Record<string, string>): void {
+  const body = Object.entries(meta)
+    .map(([k, v]) => `${k}=${v}\n`)
+    .join("");
+  fs.writeFileSync(envPath, preservedEnvMetadata(envPath, new Set(Object.keys(meta))) + body);
+}
+
+/**
  * Return a header of workspace-metadata env lines preserved across regen.
  *
  * Reads `<workspace>/.env` if it exists and returns any non-comment
@@ -385,15 +400,12 @@ function resolveServiceRefs(
 // ---------------------------------------------------------------------------
 
 /**
- * Per-workspace dev-link bind mounts from `.sandbox/workspace.yml`.
+ * Read a dict-valued *field* from `.sandbox/workspace.yml` under *workspaceRoot*.
  *
- * Maps service name -> list of `"host:container[:ro]"` specs (same grammar
- * as services.yaml `extra_volumes`), letting a workspace mount a locally
- * built package over its `node_modules` copy without editing the global
- * service registry (PROJ-1897 — see .sandbox/notes/008). Absent field, missing
- * or malformed file -> `{}` so non-opted-in workspaces render identically.
+ * Absent field, missing or malformed file -> `{}` so workspaces that have not
+ * opted in render identically.
  */
-function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
+function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string, any> {
   const configPath = path.join(workspaceRoot, ".sandbox", "workspace.yml");
   let text: string;
   try {
@@ -413,8 +425,20 @@ function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
   if (!isDict(data)) {
     data = {};
   }
-  const links = "dev_links" in data ? data["dev_links"] : {};
-  return isDict(links) ? links : {};
+  const value = field in data ? data[field] : {};
+  return isDict(value) ? value : {};
+}
+
+/**
+ * Per-workspace dev-link bind mounts from `.sandbox/workspace.yml`.
+ *
+ * Maps service name -> list of `"host:container[:ro]"` specs (same grammar
+ * as services.yaml `extra_volumes`), letting a workspace mount a locally
+ * built package over its `node_modules` copy without editing the global
+ * service registry (PROJ-1897 — see .sandbox/notes/008).
+ */
+function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
+  return loadWorkspaceDict(workspaceRoot, "dev_links");
 }
 
 /**
@@ -498,6 +522,17 @@ export function generateFeatureCompose(
       Object.entries(setupConfigs).map(([name, cfg]) => [
         name,
         {
+          // Setup configs never went through the `setdefault` pass the services
+          // above get, but the template dereferences these unguarded: a missing
+          // memory_limit renders `memory:` with no value and compose rejects the
+          // whole file. `image` is not here — the template's own `| default`
+          // covers it.
+          memory_limit: "2G",
+          memory_reservation: "512M",
+          extra_volumes: [],
+          // One-shot: dependents wait on service_completed_successfully, never
+          // on health, but the template emits the healthcheck unconditionally.
+          healthcheck: "true",
           ...(cfg as Record<string, any>),
           worktree_gitdir: resolveWorktreeGitdir(
             path.join(workspaceRoot, (cfg as Record<string, any>)["repo"] ?? ""),
@@ -816,7 +851,12 @@ export function generateFeatureEnv(
     const [portStart] = getPortRange(slot);
     // Build service_urls and env_vars for the template
     let serviceUrls: Record<string, string> = {};
+    // Per-workspace overrides from `.sandbox/workspace.yml` (`env_vars:`). Rendered
+    // last so a workspace can override a generated service URL or a secret value.
     const envVars: Record<string, string> = {};
+    for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
+      envVars[key] = String(value);
+    }
     for (const svcName of Object.keys(servicesConfig).sort()) {
       const svcDef = servicesConfig[svcName] ?? {};
       if (!isDict(svcDef)) {
@@ -840,8 +880,17 @@ export function generateFeatureEnv(
       }
     }
     serviceUrls = avoidComposeEnvShadowing(serviceUrls, localServices, servicesConfig);
-    // Load secrets from ~/.sandbox/secrets.env if it exists.
-    const secrets = loadSecrets(getSecretsPath());
+    // Load secrets from ~/.sandbox/secrets.env if it exists, narrowed to the keys
+    // the feature's own local services declare via services.yaml `secrets:`. The
+    // global file is shared across every workspace; only the declared subset has
+    // any business being written into this feature's .env.
+    const allSecrets = loadSecrets(getSecretsPath());
+    const secrets: Record<string, string> = {};
+    for (const key of requiredSecretKeys(servicesConfig, localServices)) {
+      if (key in allSecrets) {
+        secrets[key] = allSecrets[key];
+      }
+    }
     const rendered = template.render(
       pythonifyContext({
         feature_name: feature,
@@ -1123,6 +1172,19 @@ export function generateCaddyfile(
 }
 
 /**
+ * RE2 pattern matching exactly this feature's `X-Feature` cookie.
+ *
+ * Caddy has no cookie matcher, so this runs against the whole `Cookie` header.
+ * The boundaries are load-bearing: a bare `X-Feature=web` substring would also
+ * match `X-Feature=web-v2` and (via the name) `MY-X-Feature=web`, silently
+ * routing one workspace's traffic to another's containers.
+ */
+function featureCookieRegexp(name: string): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return `(?:^|;\\s*)X-Feature=${escaped}(?:\\s*;|\\s*$)`;
+}
+
+/**
  * Build the Caddy host routers.
  *
  * A routed service may expose up to two site blocks, each terminating a
@@ -1130,16 +1192,24 @@ export function generateCaddyfile(
  * any `X-Feature` cookie into an `X-Feature` header:
  *
  *  - Remote (K8s): `remote_hostname` -> `remote_upstream` (a cluster Service).
- *    Static — always emitted, independent of sandbox slots/features.
- *  - Local (docker feature): `hostname` -> `host.docker.internal:<port>`, where
- *    the port is that feature's published host port (`base_port(slot) +
- *    port_offset`). When no feature is running, falls back to `remote_upstream`
- *    (if set) so the local host always resolves to a live service.
+ *    Static — always emitted, independent of sandbox slots/features. The cookie
+ *    is only copied to a header here; the upstream is fixed.
+ *  - Local (docker feature): `hostname` -> one candidate upstream per feature
+ *    that declares this service, at `host.docker.internal:<base_port(slot) +
+ *    port_offset>`. The `X-Feature` cookie VALUE selects which one serves the
+ *    request, so any number of workspaces share the hostname concurrently.
+ *    A request with no cookie — or one naming a feature that doesn't run this
+ *    service — falls through to `upstream` (the remote tunnel when there is one,
+ *    else the first feature by name, so local-only services still resolve).
  *
- * Single-workspace model: if several features run the same service, the first
- * (sorted by name) wins — a local dev host serves one workspace at a time.
+ * Selecting on the cookie rather than picking a single winner is what makes
+ * concurrent workstreams work. It also stops a torn-down-but-still-registered
+ * feature from hijacking the hostname: a feature only ever claims its own cookie
+ * value, and the no-cookie default prefers the always-live remote face.
  *
- * Returns `[{hostname, service, upstream}, ...]`.
+ * Returns `[{hostname, service, upstream, features?}, ...]`, where `features` is
+ * `[{name, upstream, matcher, cookie_regexp}, ...]`, omitted entirely when no
+ * feature declares the service so the template renders the static form.
  */
 function buildHostRouters(
   allFeatures: Record<string, any>,
@@ -1162,26 +1232,37 @@ function buildHostRouters(
     }
     const svcDef = servicesConfig[svcName] ?? {};
     const portOffset = isDict(svcDef) ? svcDef["port_offset"] ?? 0 : 0;
-    const active = Object.entries(allFeatures)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .find(
+    const candidates = Object.entries(allFeatures)
+      .filter(
         ([, fi]) =>
           isDict(fi) &&
           fi["slot"] !== null &&
           fi["slot"] !== undefined &&
           (fi["services"] ?? []).includes(svcName),
-      );
-    const localUpstream = active
-      ? `host.docker.internal:${getPortRange(active[1]["slot"])[0] + portOffset}`
-      : rc.remoteUpstream;
-    // No running feature and no fallback -> nothing to proxy to, skip.
-    if (!localUpstream) {
+      )
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([name, fi], idx) => ({
+        name,
+        upstream: `host.docker.internal:${getPortRange(fi["slot"])[0] + portOffset}`,
+        // Index-prefixed so two feature names that differ only in characters the
+        // sanitiser collapses (`a-b` vs `a_b`) can't produce one matcher name.
+        matcher: `feat${idx}_${name.replace(/[^A-Za-z0-9_]/g, "_")}`,
+        cookie_regexp: featureCookieRegexp(name),
+      }));
+    // Prefer the remote tunnel as the no-cookie default: it is always live, and
+    // picking a local feature here is what used to let a dead workspace own the
+    // hostname. Local-only services have no remote face, so they still fall back
+    // to a feature rather than losing the site block entirely.
+    const defaultUpstream = rc.remoteUpstream ?? candidates[0]?.upstream;
+    // No feature and no fallback -> nothing to proxy to, skip.
+    if (!defaultUpstream) {
       continue;
     }
     routers.push({
       hostname: rc.hostname,
       service: svcName,
-      upstream: localUpstream,
+      upstream: defaultUpstream,
+      ...(candidates.length ? { features: candidates } : {}),
     });
   }
   return routers;
@@ -1207,14 +1288,32 @@ function hostRouterLines(routers: Record<string, any>[]): string[] {
     lines.push("        file_server");
     lines.push("    }");
     lines.push("");
-    lines.push("    # X-Feature cookie -> X-Feature header (when present), then proxy.");
-    lines.push("    @xf header_regexp xf Cookie X-Feature=([^;]+)");
-    lines.push("    handle @xf {");
-    lines.push(`        reverse_proxy ${r["upstream"]} {`);
-    lines.push("            header_up X-Feature {re.xf.1}");
-    lines.push("        }");
-    lines.push("    }");
-    lines.push("    handle {");
+    const features = (r["features"] ?? []) as Record<string, any>[];
+    if (features.length) {
+      // One handle per feature, chosen by cookie value -> concurrent workspaces.
+      for (const f of features) {
+        lines.push(`    # X-Feature=${f["name"]} -> that workspace's containers.`);
+        lines.push(`    @${f["matcher"]} header_regexp Cookie ${f["cookie_regexp"]}`);
+        lines.push(`    handle @${f["matcher"]} {`);
+        lines.push(`        reverse_proxy ${f["upstream"]} {`);
+        lines.push(`            header_up X-Feature ${f["name"]}`);
+        lines.push("        }");
+        lines.push("    }");
+      }
+      lines.push("    # No cookie, or one naming a feature not serving this service.");
+    } else {
+      lines.push("    # X-Feature cookie -> X-Feature header (when present), then proxy.");
+      lines.push("    @xf header_regexp xf Cookie X-Feature=([^;]+)");
+      lines.push("    handle @xf {");
+      lines.push(`        reverse_proxy ${r["upstream"]} {`);
+      lines.push("            header_up X-Feature {re.xf.1}");
+      lines.push("        }");
+      lines.push("    }");
+    }
+    // `/*` rather than a bare `handle`: the more specific `/__sandbox*` sibling
+    // still wins, and the structural lint's bare-vs-scoped route-drop guard stays
+    // meaningful instead of firing on every generated file.
+    lines.push("    handle /* {");
     lines.push(`        reverse_proxy ${r["upstream"]}`);
     lines.push("    }");
     lines.push("}");

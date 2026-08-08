@@ -3,18 +3,22 @@
 // (has .sandbox/workspace.yml), return its inner repo worktrees and each one's
 // git state. Best-effort: a repo whose git call fails yields nulls, never a 500.
 import { Router } from "express";
-import { readdir, readFile, access } from "fs/promises";
+import { readdir, readFile, writeFile, access } from "fs/promises";
+import { watch } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "path";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "util";
 import { parseGitStatus } from "./parse-git.mjs";
 import { parsePr } from "./parse-pr.mjs";
 import { parseComposePs } from "./parse-compose.mjs";
+import { mergeFolders } from "./merge-folders.mjs";
 import {
   getFormSchema,
   fetchJiraFormData,
   refinePrompt,
   createWorkspace,
+  listWorkspaces,
   resolveSandboxBin,
   childEnv,
 } from "sandbox-driver";
@@ -359,5 +363,44 @@ router.post("/create", async (req, res) => {
     res.end("[exit 1]\n");
   }
 });
+
+// ── Keep claudeck's project list in step with the workspaces on disk ────────
+// folders.json is what the chat project picker reads (/api/projects). Mirror
+// the workspaces root into it at startup and whenever that directory changes,
+// so a workspace created or deleted by any surface (CLI, VS Code, this plugin,
+// plain `rm -rf`) shows up on the next page load instead of going stale.
+const foldersFile = join(
+  process.env.CLAUDECK_HOME || join(homedir(), ".claudeck"),
+  "config",
+  "folders.json",
+);
+
+async function syncFolders() {
+  try {
+    const { root, workspaces } = await listWorkspaces();
+    const existing = JSON.parse(await readFile(foldersFile, "utf-8").catch(() => "[]"));
+    const next = mergeFolders(existing, workspaces, root);
+    await writeFile(foldersFile, JSON.stringify(next, null, 2) + "\n");
+    return root;
+  } catch (err) {
+    console.error(`[sandbox-workspace] folders.json sync failed: ${err.message}`);
+    return null;
+  }
+}
+
+const syncedRoot = await syncFolders();
+if (syncedRoot) {
+  let pending = null;
+  try {
+    // ponytail: coarse watch on the root — every event re-syncs the whole list;
+    // fine-grained diffing only if the workspace count ever gets large.
+    watch(syncedRoot, () => {
+      clearTimeout(pending);
+      pending = setTimeout(syncFolders, 250).unref();
+    }).unref();
+  } catch (err) {
+    console.error(`[sandbox-workspace] cannot watch ${syncedRoot}: ${err.message}`);
+  }
+}
 
 export default router;
