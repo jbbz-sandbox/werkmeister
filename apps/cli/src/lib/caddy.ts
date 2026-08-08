@@ -37,6 +37,21 @@ function _stripComment(line: string): string {
 }
 
 /**
+ * Blank out braces that delimit no block.
+ *
+ * Caddy placeholders (`{re.xf.1}`, `{args[0]}`) and quoted strings carry braces
+ * that open and close nothing. Only the `{`/`}` surviving this belong to the
+ * block-depth counter.
+ *
+ * ponytail: regex-level, so it assumes placeholders hold no whitespace and do
+ * not nest — true of every placeholder this repo's templates emit. A real
+ * tokenizer if that stops holding.
+ */
+function _stripBraceNoise(code: string): string {
+  return code.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/\{[^{}\s]*\}/g, "");
+}
+
+/**
  * Count distinct ``reverse_proxy`` leaf handlers in a ``caddy adapt`` JSON dict.
  *
  * Recursively descends through the ``routes`` of every server under
@@ -180,21 +195,24 @@ export function lintCaddyfileStructure(caddyfileText: string): string[] {
       }
     }
 
-    if (stripped.endsWith("{") && !stripped.startsWith("#")) {
+    // Count real block delimiters only. Treating every line ending in `}` as a
+    // close let a placeholder (`header_up X-Feature {re.xf.1}`) decrement depth
+    // mid-block, which split sibling `handle` groups across two depths and
+    // silently disarmed both guards above — on files with the exact defect they
+    // exist to catch.
+    const braces = _stripBraceNoise(stripped);
+    for (let c = 0; c < (braces.match(/\{/g) ?? []).length; c++) {
       depth += 1;
     }
-    if (stripped === "}" || stripped.endsWith("}")) {
-      const closes = (stripped.match(/\}/g) ?? []).length;
-      for (let c = 0; c < closes; c++) {
-        if (handleGroups.has(depth)) {
-          flushGroup(depth);
-        }
-        routeDepths.delete(depth);
-        depth = Math.max(depth - 1, 0);
-        if (depth === 0 && siteStack.length) {
-          siteStack.pop();
-          currentSite = siteStack.length ? siteStack[siteStack.length - 1] : "(global)";
-        }
+    for (let c = 0; c < (braces.match(/\}/g) ?? []).length; c++) {
+      if (handleGroups.has(depth)) {
+        flushGroup(depth);
+      }
+      routeDepths.delete(depth);
+      depth = Math.max(depth - 1, 0);
+      if (depth === 0 && siteStack.length) {
+        siteStack.pop();
+        currentSite = siteStack.length ? siteStack[siteStack.length - 1] : "(global)";
       }
     }
   }
