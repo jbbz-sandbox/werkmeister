@@ -34,7 +34,7 @@ import {
 import { loadFeatureRouters } from "../feature_routing.js";
 import { loadServices } from "../config.js";
 import { getPortRange } from "../slots.js";
-import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
+import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -124,6 +124,76 @@ describe("generateFeatureCompose", () => {
     expect(content).not.toContain("frontend:");
   });
 
+});
+
+// ---- setup services --------------------------------------------------------
+// `setup_services` was fully plumbed but never exercised: no entry has ever
+// been non-empty, so the template's raw dereferences went unnoticed.
+
+/** Fixture services.yaml with backend wired to a setup service. */
+function withSetupService(entry: string): void {
+  home.write(
+    "services.yaml",
+    fixtureServicesYaml()
+      .replace("    setup_service: null\n", "    setup_service: demo-install\n")
+      .replace("setup_services: {}", `setup_services:\n  demo-install:\n${entry}`),
+  );
+}
+
+const MINIMAL_SETUP = `    repo: demo-services
+    image: node:22-alpine
+    command: "npm install"
+`;
+
+describe("setup services", () => {
+  it("takes its image from config, like the app services do", () => {
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    // A setup container installs deps the app container then loads, so the two
+    // must agree on platform+libc — sharp resolves @img/sharp-linux-x64 vs
+    // -linuxmusl-x64 at install time. The image was hardcoded to node:20.16.0
+    // (glibc) while the demo apps run node:22-alpine (musl).
+    expect(content).toContain("image: node:22-alpine");
+    expect(content).not.toContain("node:20.16.0");
+  });
+
+  it("falls back to the previous hardcoded image when none is set", () => {
+    withSetupService(`    repo: demo-services\n    command: "npm install"\n`);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("image: node:20.16.0");
+  });
+
+  it("fills the fields the template dereferences unguarded", () => {
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    // Rendering these empty yields `memory:` / `test: ["CMD-SHELL", ""]`, which
+    // compose rejects — the whole file, not just the setup block.
+    expect(content).toContain("memory: 2G");
+    expect(content).toContain("memory: 512M");
+    expect(content).not.toMatch(/^\s*memory:\s*$/m);
+    expect(content).not.toContain('"CMD-SHELL", ""');
+  });
+
+  it("mounts startup.sh only when the config opts in", () => {
+    withSetupService(MINIMAL_SETUP);
+    const without = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    // No `*-startup.sh` ships in infra/compose/scripts/; bind-mounting a host
+    // path that does not exist makes Docker create an empty directory there.
+    expect(without).not.toContain("startup.sh");
+
+    withSetupService(MINIMAL_SETUP + "    startup_script: true\n");
+    const withScript = fs.readFileSync(
+      generateFeatureCompose("f", 1, ["backend"], null, tmp),
+      "utf8",
+    );
+    expect(withScript).toContain("demo-install-startup.sh:/usr/local/bin/startup.sh");
+  });
+
+  it("blocks the app service until the setup container exits", () => {
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("demo-install:\n        condition: service_completed_successfully");
+  });
 });
 
 describe("generateFeatureEnv", () => {

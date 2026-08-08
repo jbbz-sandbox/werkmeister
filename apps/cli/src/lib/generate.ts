@@ -522,6 +522,17 @@ export function generateFeatureCompose(
       Object.entries(setupConfigs).map(([name, cfg]) => [
         name,
         {
+          // Setup configs never went through the `setdefault` pass the services
+          // above get, but the template dereferences these unguarded: a missing
+          // memory_limit renders `memory:` with no value and compose rejects the
+          // whole file. `image` is not here — the template's own `| default`
+          // covers it.
+          memory_limit: "2G",
+          memory_reservation: "512M",
+          extra_volumes: [],
+          // One-shot: dependents wait on service_completed_successfully, never
+          // on health, but the template emits the healthcheck unconditionally.
+          healthcheck: "true",
           ...(cfg as Record<string, any>),
           worktree_gitdir: resolveWorktreeGitdir(
             path.join(workspaceRoot, (cfg as Record<string, any>)["repo"] ?? ""),

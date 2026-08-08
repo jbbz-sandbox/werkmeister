@@ -54,8 +54,12 @@ volumes:
 services:
 {% for setup_name in setup_services_needed %}
 {% set setup = setup_configs[setup_name] %}
+{# Same `image` hook the app services get below. A setup container installs deps #}
+{# that the app container then loads, so the two must agree on platform+libc:    #}
+{# sharp picks @img/sharp-linux-x64 vs -linuxmusl-x64 at install time, and a     #}
+{# glibc-built tree will not load under an alpine app image.                     #}
   {{ setup_name }}:
-    image: node:20.16.0
+    image: {{ setup.image | default('node:20.16.0') }}
     container_name: {{ feature_name }}-{{ setup_name }}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
@@ -79,7 +83,12 @@ services:
       - {{ feature_name }}-{{ vol }}
 {% endif %}
 {% endfor %}
+{# Opt-in: no `*-startup.sh` ships in infra/compose/scripts/, and bind-mounting #}
+{# a host path that does not exist makes Docker silently create an empty        #}
+{# directory at /usr/local/bin/startup.sh.                                      #}
+{% if setup.startup_script %}
       - {{ sandbox_root }}/infra/compose/scripts/{{ setup_name }}-startup.sh:/usr/local/bin/startup.sh
+{% endif %}
     command: ["/bin/sh", "-c", "{{ setup.command }}"]
     deploy:
       resources:
