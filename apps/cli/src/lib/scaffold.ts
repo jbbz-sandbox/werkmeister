@@ -145,6 +145,7 @@ services:
     repo: demo-services
     path: apps/backend
     type: api
+    test: "npm test"
     internal_port: 3000
     port_offset: 0
     health_endpoint: /health
