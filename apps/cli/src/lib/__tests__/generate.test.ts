@@ -29,6 +29,7 @@ import {
   generateFeatureCompose,
   generateFeatureEnv,
   generateSupergraphConfig,
+  seedWorkspaceMetadataEnv,
 } from "../generate.js";
 import { loadFeatureRouters } from "../feature_routing.js";
 import { loadServices } from "../config.js";
@@ -142,6 +143,34 @@ describe("generateFeatureEnv", () => {
     const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["frontend"], null, tmp), "utf8");
     expect(content).toContain("Workspace metadata (preserved across regeneration)");
     expect(content).toContain("FEATURE=x");
+  });
+
+  // init-workspace writes .env twice: the metadata seed, then the generator.
+  // The seed used to be a bare overwrite, so the generator's preservation pass
+  // only ever saw what the seed had just written — hand-added keys were gone
+  // one line earlier, in a different file.
+  it("keeps hand-added keys across the seed + regeneration pair", () => {
+    const envPath = path.join(tmp, ".env");
+    fs.writeFileSync(envPath, "DATABASE_URL=postgres://local/app\n");
+    seedWorkspaceMetadataEnv(envPath, { FEATURE: "myfeat", SERVICES: "backend" });
+    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("DATABASE_URL=postgres://local/app");
+    expect(content).toContain("FEATURE=myfeat");
+    // One preserved block, one copy of each key — the seed's own header must
+    // not survive into the generator's header as a second copy.
+    expect(content.match(/Workspace metadata \(preserved across regeneration\)/g)).toHaveLength(1);
+    expect(content.match(/^DATABASE_URL=/gm)).toHaveLength(1);
+    expect(content.match(/^FEATURE=/gm)).toHaveLength(1);
+  });
+
+  it("seeding overwrites a stale metadata value rather than duplicating it", () => {
+    const envPath = path.join(tmp, ".env");
+    fs.writeFileSync(envPath, "FEATURE=old\nDATABASE_URL=postgres://local/app\n");
+    seedWorkspaceMetadataEnv(envPath, { FEATURE: "new" });
+    const content = fs.readFileSync(envPath, "utf8");
+    expect(content).toContain("FEATURE=new");
+    expect(content).not.toContain("FEATURE=old");
+    expect(content).toContain("DATABASE_URL=postgres://local/app");
   });
 
   it("removes legacy docker-compose.env file", () => {

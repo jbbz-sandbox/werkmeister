@@ -49,7 +49,7 @@ import {
   warn,
 } from "../lib/config.js";
 import { buildFormSchema } from "../lib/form_schema.js";
-import { generateWorkspaceCompose } from "../lib/generate.js";
+import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "../lib/generate.js";
 import { loadPaths } from "../lib/global_config.js";
 import { writeWorkspaceHooks } from "../lib/hooks_gen.js";
 import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
@@ -1430,12 +1430,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // 7. Seed workspace metadata into .env.
   const envPath = path.join(workspaceRoot, ".env");
-  fs.writeFileSync(
-    envPath,
-    Object.entries(meta)
-      .map(([k, v]) => `${k}=${v}\n`)
-      .join(""),
-  );
+  seedWorkspaceMetadataEnv(envPath, meta);
   success(`Wrote ${envPath}`);
 
   // 8. Generate docker-compose.yml, allocate slot, write .sandbox/sandbox-context.md

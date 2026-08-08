@@ -275,6 +275,21 @@ function resolveComposeOutPath(
 }
 
 /**
+ * Seed workspace metadata into `<workspace>/.env`, keeping existing keys.
+ *
+ * `init-workspace` calls this before the generator runs. It must preserve
+ * like `writeWorkspaceEnv` does: this write lands first, so anything it
+ * drops is already gone by the time the generator reads the file back to
+ * preserve it.
+ */
+export function seedWorkspaceMetadataEnv(envPath: string, meta: Record<string, string>): void {
+  const body = Object.entries(meta)
+    .map(([k, v]) => `${k}=${v}\n`)
+    .join("");
+  fs.writeFileSync(envPath, preservedEnvMetadata(envPath, new Set(Object.keys(meta))) + body);
+}
+
+/**
  * Return a header of workspace-metadata env lines preserved across regen.
  *
  * Reads `<workspace>/.env` if it exists and returns any non-comment
