@@ -52,7 +52,7 @@ import {
   WORKSPACE_ROOT_REPO,
   type Step,
 } from "../lib/machine_setup.js";
-import { prompt, runWizard } from "../lib/wizard.js";
+import { confirm, prompt, runWizard } from "../lib/wizard.js";
 
 // Migration source (currently-exported env) for each path prompt, so an
 // existing machine migrates by pressing Enter through the wizard.
@@ -68,15 +68,6 @@ function builtinDefault(key: string): string {
     workspaces_root: path.join(home, "workspace", "features"),
   };
   return table[key] ?? "";
-}
-
-/** Ask a yes/no question; *fallback* is used verbatim when not interactive. */
-async function confirm(label: string, fallback: boolean, interactive: boolean): Promise<boolean> {
-  if (!interactive) {
-    return fallback;
-  }
-  const answer = await prompt(`${label} [y/n]`, fallback ? "y" : "n");
-  return /^y/i.test(answer.trim());
 }
 
 function heading(text: string): void {
@@ -255,7 +246,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       jira.base_url = await prompt("Jira base URL", jira.base_url ?? "https://your-org.atlassian.net");
       jira.email = await prompt("Atlassian login email", jira.email ?? "");
       info(`  Create a token at ${"https://id.atlassian.com/manage-profile/security/api-tokens"}`);
-      jira.api_token = await prompt("API token", jira.api_token ?? "");
+      jira.api_token = await prompt("API token", jira.api_token ?? "", { secret: true });
     }
   }
 

@@ -15,6 +15,15 @@
 
 import * as readline from "node:readline/promises";
 
+import {
+  checkbox,
+  confirm as inquirerConfirm,
+  editor,
+  input,
+  password,
+  select,
+} from "@inquirer/prompts";
+
 import { info, warn } from "./config.js";
 
 /** One interactive input a wizard collects. */
@@ -34,28 +43,100 @@ export interface PromptSpec {
   choicesFn?: (() => string[]) | null;                // enumerate valid values (services)
 }
 
+/** Ctrl-C / Ctrl-D: exit 130, never proceed to write partial state. */
+function abort(): never {
+  console.log();
+  process.exit(130);
+}
+
 /**
- * Render a prompt with an optional default in brackets; return input or default.
- *
- * Ctrl-C / Ctrl-D exit with status 130 — never proceed to write partial state.
+ * Inquirer signals Ctrl-C by rejecting with `ExitPromptError`, where readline
+ * emitted SIGINT. Anything else reaching here is a real fault, and reporting it
+ * as a clean abort would hide the bug behind an exit code the user recognises.
  */
-export async function prompt(label: string, defaultValue = ""): Promise<string> {
+function abortIfCancelled(error: unknown): never {
+  if ((error as Error)?.name !== "ExitPromptError") {
+    throw error;
+  }
+  abort();
+}
+
+/** Read one line off a piped/redirected stdin, where Inquirer can't render. */
+async function readLine(label: string, defaultValue: string): Promise<string> {
   const shown = defaultValue ? ` [${defaultValue}]` : "";
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  let value: string;
   try {
-    value = await new Promise<string>((resolve, reject) => {
+    return await new Promise<string>((resolve, reject) => {
       rl.on("SIGINT", () => reject(new Error("interrupted"))); // Ctrl-C
       rl.on("close", () => reject(new Error("eof")));          // Ctrl-D
       rl.question(`  ${label}${shown}: `).then(resolve, reject);
     });
   } catch {
-    console.log();
-    process.exit(130);
+    // Both rejections above are the user leaving; readline has no other failure
+    // mode here worth distinguishing.
+    abort();
   } finally {
     rl.close();
   }
-  return value.trim() || defaultValue;
+}
+
+/**
+ * Render a prompt with an optional default; return input or default.
+ *
+ * `secret` masks the echo — for credentials like the Jira API token, which
+ * otherwise sit in the scrollback of whoever ran `sandbox setup`.
+ *
+ * `multiline` prose (the starting prompt) opens $EDITOR, since paragraphs and
+ * an acceptance-criteria checklist don't survive a single input line. Only when
+ * the user has actually named an editor: Inquirer's fallback is bare `vim`, and
+ * dropping someone into vim they didn't ask for costs them the whole wizard.
+ */
+export async function prompt(
+  label: string,
+  defaultValue = "",
+  { secret = false, multiline = false }: { secret?: boolean; multiline?: boolean } = {},
+): Promise<string> {
+  if (!process.stdin.isTTY) {
+    return (await readLine(label, defaultValue)).trim() || defaultValue;
+  }
+  try {
+    // Inquirer hands back the raw line, so every path trims: a stray trailing
+    // space fails the anchored pattern check, or lands in config.yaml verbatim
+    // on the fields that have no pattern.
+    if (secret) {
+      return (await password({ message: label, mask: true })).trim() || defaultValue;
+    }
+    if (multiline && (process.env.VISUAL || process.env.EDITOR)) {
+      // .md so the editor highlights prose; the text lands in Markdown anyway.
+      const written = await editor({ message: label, default: defaultValue, postfix: ".md" });
+      return written.trim() || defaultValue;
+    }
+    return (await input({ message: label, default: defaultValue || undefined })).trim() || defaultValue;
+  } catch (e) {
+    abortIfCancelled(e);
+  }
+}
+
+/**
+ * Ask a yes/no question. `fallback` is both the offered default and the answer
+ * used verbatim when there's nobody to ask.
+ */
+export async function confirm(
+  label: string,
+  fallback: boolean,
+  interactive = true,
+): Promise<boolean> {
+  if (!interactive) {
+    return fallback;
+  }
+  if (!process.stdin.isTTY) {
+    return /^y/i.test((await readLine(`${label} [y/n]`, fallback ? "y" : "n")).trim());
+  }
+  try {
+    return await inquirerConfirm({ message: label, default: fallback });
+  } catch (e) {
+    abortIfCancelled(e);
+  }
 }
 
 /**
@@ -84,6 +165,47 @@ export function normalizeMulti(value: string, choices: string[] | null): string 
   return deduped.join(",");
 }
 
+/** Sentinel select entry that drops the user back to free-text entry. */
+const OTHER = Symbol("other");
+
+/**
+ * Pick from an enumerated set: an arrow-key list, or checkboxes when `multi`.
+ *
+ * Returns null when the choice can't be made this way — no TTY (piped stdin
+ * still has to answer), or the user picked "Other". The caller then falls back
+ * to typing, so a value the registry hasn't caught up with (a new GitHub org,
+ * an unlisted repo) stays reachable instead of being locked out by the list.
+ */
+async function pickFromChoices(
+  spec: PromptSpec,
+  defaultValue: string,
+  choices: string[],
+): Promise<string | null> {
+  if (!process.stdin.isTTY) {
+    return null;
+  }
+  // Multi-value defaults arrive in the same comma-separated form they're stored
+  // in, so a re-run pre-checks whatever the last run selected.
+  const preselected = new Set(defaultValue.split(",").map((s) => s.trim()).filter(Boolean));
+  try {
+    if (spec.multi) {
+      const picked = await checkbox({
+        message: spec.label,
+        choices: choices.map((c) => ({ value: c, checked: preselected.has(c) })),
+      });
+      return picked.join(",");
+    }
+    const picked = await select<string | symbol>({
+      message: spec.label,
+      choices: [...choices.map((c) => ({ name: c, value: c })), { name: "Other (type it)", value: OTHER }],
+      default: choices.includes(defaultValue) ? defaultValue : undefined,
+    });
+    return typeof picked === "string" ? picked : null;
+  } catch (e) {
+    abortIfCancelled(e);
+  }
+}
+
 /**
  * Prompt repeatedly for one input until it satisfies the prompt's pattern.
  *
@@ -96,7 +218,8 @@ export async function promptOne(
   choices: string[] | null,
 ): Promise<string> {
   while (true) {
-    let value = await prompt(spec.label, defaultValue);
+    let value = choices?.length ? await pickFromChoices(spec, defaultValue, choices) : null;
+    value ??= await prompt(spec.label, defaultValue, { multiline: spec.multiline });
     if (spec.multi && value) {
       value = normalizeMulti(value, choices);
     }
@@ -126,9 +249,9 @@ export async function offerRefine(
   spec: PromptSpec,
   value: string,
   context: Record<string, string>,
-  ask: (label: string, defaultValue?: string) => Promise<string> = prompt,
+  ask: (label: string, fallback: boolean) => Promise<boolean> = confirm,
 ): Promise<string> {
-  if (!/^y(es)?$/i.test(await ask("Refine with Claude? [y/N]"))) {
+  if (!(await ask("Refine with Claude?", false))) {
     return value;
   }
   info("  Refining via the claude CLI — this takes a few seconds…");
@@ -145,7 +268,7 @@ export async function offerRefine(
     return value;
   }
   info(`\n${refined}\n`);
-  return /^n(o)?$/i.test(await ask("Keep this version? [Y/n]")) ? value : refined;
+  return (await ask("Keep this version?", true)) ? refined : value;
 }
 
 /**
@@ -175,7 +298,9 @@ export async function runWizard(
       // No values to choose from (e.g. services.yaml unavailable) — skip.
       continue;
     }
-    if (choices && choices.length) {
+    // On a TTY the list is the picker itself; only the typed fallback needs it
+    // spelled out.
+    if (choices && choices.length && !process.stdin.isTTY) {
       info("  Choices: " + choices.join(", "));
     }
 
