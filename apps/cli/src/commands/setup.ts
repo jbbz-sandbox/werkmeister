@@ -7,7 +7,9 @@
  *
  * The wizard asks everything up front, in seven sections:
  *
- *   1. paths        — repos root and workspaces root (`paths:` in config.yaml)
+ *   1. paths        — repos root and workspaces root (`paths:`), plus the
+ *                     GitHub locations `overrides.workspace_repo` and
+ *                     `overrides.github_org`
  *   2. browser      — which browser `sandbox open` launches (`overrides.browser`)
  *   3. ingress      — base domains + cert directory (`ingress:`)
  *   4. registry     — how to create services.yaml, if it doesn't exist yet
@@ -43,7 +45,13 @@ import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { ingressHostnames } from "../lib/feature_routing.js";
 import * as gc from "../lib/global_config.js";
 import type { PromptSpec } from "../lib/global_config.js";
-import { LEGACY_CONFIG_DIR, runSetup, type Step } from "../lib/machine_setup.js";
+import {
+  githubOwners,
+  LEGACY_CONFIG_DIR,
+  runSetup,
+  WORKSPACE_ROOT_REPO,
+  type Step,
+} from "../lib/machine_setup.js";
 import { prompt, runWizard } from "../lib/wizard.js";
 
 // Migration source (currently-exported env) for each path prompt, so an
@@ -77,6 +85,7 @@ function heading(text: string): void {
 
 /** What the wizard collected, handed to `runSetup` as options. */
 interface Answers {
+  workspaceRepo: string;
   demo: boolean;
   k8sContext: string;
   installTelepresence: boolean;
@@ -96,7 +105,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   const currentIngress = gc.loadIngress(cfg);
 
   // --- 1. paths -----------------------------------------------------------
-  heading("1. Paths");
+  heading("1. Paths & the workspace repo");
   const resolvedPaths: Record<string, string> = {};
   const pathDefault = (spec: PromptSpec): string =>
     paths[spec.key] || process.env[_ENV_FOR[spec.key]] || builtinDefault(spec.key);
@@ -111,6 +120,56 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     for (const spec of gc._CONFIG_PROMPTS) {
       resolvedPaths[spec.key] = pathDefault(spec);
       info(`  ${spec.key}: ${resolvedPaths[spec.key]}`);
+    }
+  }
+
+  // Who on GitHub this machine works against: the repo whose worktrees become
+  // each workspace root (defaulting to the running user's own — a team shares
+  // workspace configs by pointing every machine at the same
+  // <org>/sandbox-workspace), and the org owning the service repos.
+  //
+  // One gh round-trip, reused for both the defaults and the offered choices.
+  const owners = githubOwners();
+  if (!owners.length) {
+    warn(
+      "  `gh` could not name your GitHub account, so these are not prefilled — " +
+        "run `gh auth login` and re-run to pick from your orgs, or type them by hand.",
+    );
+  }
+  const withChoices = (spec: PromptSpec, values: string[]): PromptSpec =>
+    values.length ? { ...spec, choicesFn: () => values } : spec;
+
+  const resolvedGh: Record<string, string> = {};
+  const ghPrompts = [
+    withChoices(gc._WORKSPACE_REPO_PROMPT, owners.map((o) => `${o}/${WORKSPACE_ROOT_REPO}`)),
+    withChoices(gc._GITHUB_ORG_PROMPT, owners),
+  ];
+  const ghDefault = (spec: PromptSpec): string => {
+    if (spec.key === "workspace_repo") {
+      // owners[0] is the personal account — the safe default; sharing with a
+      // team is the deliberate choice of picking an org from the list.
+      return gc.loadWorkspaceRepo(cfg) || (owners[0] ? `${owners[0]}/${WORKSPACE_ROOT_REPO}` : "");
+    }
+    // Read after the repo answer above (runWizard prompts in order), so
+    // answering `acme/sandbox-workspace` pre-fills the org as `acme`.
+    return (
+      ((cfg.overrides ?? {}).github_org as string) ||
+      (resolvedGh.workspace_repo ?? "").split("/")[0] ||
+      ""
+    );
+  };
+
+  if (interactive) {
+    await runWizard(ghPrompts, resolvedGh, ghDefault, {
+      intro:
+        "GitHub locations. The workspace repo hosts the per-workspace configs " +
+        "at the root of every feature workspace — enter a shared " +
+        "<org>/sandbox-workspace to share them with your team, or keep your own.",
+    });
+  } else {
+    for (const spec of ghPrompts) {
+      resolvedGh[spec.key] = ghDefault(spec);
+      info(`  ${spec.key}: ${resolvedGh[spec.key] || "(unset — `gh` named no user)"}`);
     }
   }
 
@@ -240,7 +299,14 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       remote_domain: resolvedIngress.remote_domain,
       certs_dir: resolvedIngress.certs_dir,
     },
-    overrides: { ...(cfg.overrides ?? {}), browser: resolvedBrowser.browser },
+    overrides: {
+      ...(cfg.overrides ?? {}),
+      browser: resolvedBrowser.browser,
+      // Omitted rather than written empty when unresolvable, so a later run
+      // (or `gh auth login`) can still supply them.
+      ...(resolvedGh.workspace_repo ? { workspace_repo: resolvedGh.workspace_repo } : {}),
+      ...(resolvedGh.github_org ? { github_org: resolvedGh.github_org } : {}),
+    },
     ...(jira.base_url || jira.email || jira.api_token ? { jira } : {}),
   };
 
@@ -261,6 +327,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   }
 
   return {
+    workspaceRepo: resolvedGh.workspace_repo,
     demo,
     k8sContext,
     installTelepresence,
@@ -340,6 +407,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const steps = await runSetup({
     checkOnly: false,
     registry: { demo: answers.demo, k8sContext: answers.k8sContext },
+    workspaceRepo: answers.workspaceRepo,
     // A thunk, not a list: on a first run services.yaml does not exist yet, and
     // runSetup calls this only after its registry step has seeded it.
     hostnames: resolveHostnames,

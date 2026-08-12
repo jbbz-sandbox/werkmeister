@@ -21,6 +21,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { loadGithubOrg } from "./global_config.js";
 import {
   UNIVERSAL_STANDARDS,
   loadStandardsModules,
@@ -33,9 +34,13 @@ export const GITHUB_REPO_BASE = "https://github.com/jbbz-sandbox/sandbox";
 export const GITHUB_BRANCH = "main";
 // Relative links in a standards doc resolve against docs/standards/.
 const _DOCS_STANDARDS_PREFIX = "docs/standards";
-// Canonical-example pointers name service repos; HEAD links resolve to each
-// repo's default branch without pinning one here.
-const _SERVICE_REPO_BASE = "https://github.com/JayAndCory";
+// Canonical-example pointers name service repos, which belong to whichever org
+// runs this sandbox (`overrides.github_org`) — not to sandbox itself. HEAD
+// links resolve to each repo's default branch without pinning one here.
+function serviceRepoBase(): string {
+  const org = loadGithubOrg();
+  return org ? `https://github.com/${org}` : "";
+}
 
 const _GENERATED_HEADER = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
@@ -225,7 +230,11 @@ function renderReference(filePath: string): string {
     const sep = canonical.indexOf(":");
     const repo = canonical.slice(0, sep);
     const rel = canonical.slice(sep + 1);
-    body += `\n\n---\nFull file: \`${canonical}\` — ${_SERVICE_REPO_BASE}/${repo}/blob/HEAD/${rel}\n`;
+    // No org configured: name the file and stop. A guessed owner would render
+    // a link that 404s, which is worse than no link at all.
+    const base = serviceRepoBase();
+    const link = base ? ` — ${base}/${repo}/blob/HEAD/${rel}` : "";
+    body += `\n\n---\nFull file: \`${canonical}\`${link}\n`;
   }
   return body + "\n";
 }

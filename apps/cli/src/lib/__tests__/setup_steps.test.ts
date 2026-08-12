@@ -14,8 +14,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import {
+  defaultWorkspaceRepo,
   DEMO_SERVICES_REPO,
   DEMO_SERVICES_REPO_URL,
+  githubOwners,
   OPTIONAL_PLUGINS,
   resolveCertScript,
   runSetup,
@@ -470,6 +472,68 @@ describe("syncRepo", () => {
     expect(steps[0].optional).toBe(true);
     expect(steps[0].detail).toContain("demo backend/frontend services will not start");
     expect(steps[0].detail).not.toContain("plain directories");
+  });
+});
+
+describe("workspace repo", () => {
+  const label = `repo ${WORKSPACE_ROOT_REPO}`;
+
+  it("defaults to the authenticated GitHub user's own repo", () => {
+    const runner = fakeRunner({ "gh api user": [0, "octocat\n"] });
+    expect(defaultWorkspaceRepo(runner)).toBe(`octocat/${WORKSPACE_ROOT_REPO}`);
+  });
+
+  it("resolves nothing when gh is absent or logged out", () => {
+    expect(defaultWorkspaceRepo(fakeRunner({}))).toBe("");
+    expect(defaultWorkspaceRepo(fakeRunner({ "gh api": [1, "gh: not logged in"] }))).toBe("");
+    expect(githubOwners(fakeRunner({}))).toEqual([]);
+  });
+
+  it("offers the personal account first, then the orgs gh reports", () => {
+    const runner = fakeRunner({
+      "gh api user/orgs": [0, "acme\nwidgets\nocto cat\n"], // the invalid login is dropped
+      "gh api user": [0, "octocat\n"],
+    });
+    expect(githubOwners(runner)).toEqual(["octocat", "acme", "widgets"]);
+  });
+
+  it("still offers the personal account when the org lookup fails", () => {
+    const runner = fakeRunner({
+      "gh api user/orgs": [1, "HTTP 403: missing read:org scope"],
+      "gh api user": [0, "octocat"],
+    });
+    expect(githubOwners(runner)).toEqual(["octocat"]);
+  });
+
+  it("clones the configured owner's repo", async () => {
+    const runner = fakeRunner({ "git clone": [0, ""] });
+    const steps = await runSetup({
+      reposRoot: home.dir,
+      runner,
+      workspaceRepo: "acme/sandbox-workspace",
+      hostnames: [],
+      jira: null,
+      pathDirs: {},
+    });
+    expect(steps.find((s) => s.label === label)?.ok).toBe(true);
+    expect(runner.calls).toContainEqual([
+      "git", "clone", "https://github.com/acme/sandbox-workspace.git",
+      path.join(home.dir, WORKSPACE_ROOT_REPO),
+    ]);
+  });
+
+  it("warns rather than guessing when no repo can be resolved", async () => {
+    const steps = await runSetup({
+      checkOnly: true,
+      reposRoot: home.dir,
+      runner: fakeRunner({}), // no gh, and the temp config names no repo
+      hostnames: [],
+      jira: null,
+      pathDirs: {},
+    });
+    const step = steps.find((s) => s.label === label)!;
+    expect([step.ok, step.optional]).toEqual([false, true]);
+    expect(step.detail).toContain("overrides.workspace_repo");
   });
 });
 

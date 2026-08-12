@@ -10,7 +10,7 @@
  *   1. resolves inputs (CLI switches / an existing workspace.yml / the interactive
  *      wizard) — a ``feature`` is required;
  *   2. creates the workspace directory as a git worktree of the dedicated
- *      ``sandbox-workspace`` repo (JayAndCory/sandbox-workspace) on the
+ *      ``sandbox-workspace`` repo (``overrides.workspace_repo``) on the
  *      ``<user>/<workspace>`` branch — the container the nested repo worktrees
  *      live in. Without a local ``sandbox-workspace`` checkout the root falls
  *      back to a plain directory (no history);
@@ -55,8 +55,8 @@ import {
 } from "../lib/config.js";
 import { buildFormSchema } from "../lib/form_schema.js";
 import { loadPaths } from "../lib/global_config.js";
-// The workspace ROOT is itself a worktree of the dedicated
-// JayAndCory/sandbox-workspace repo — rationale and the clone/update logic
+// The workspace ROOT is itself a worktree of the dedicated sandbox-workspace
+// repo (which one is `overrides.workspace_repo`) — rationale and the clone/update logic
 // live with the constant in machine_setup (`sandbox setup` maintains the
 // checkout this command consumes).
 import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
