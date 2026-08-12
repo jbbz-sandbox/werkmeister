@@ -269,6 +269,67 @@ export function loadIngress(cfg?: Record<string, any>): IngressSettings {
   };
 }
 
+// ---------------------------------------------------------------------------
+// GitHub owners (`overrides.workspace_repo`, `overrides.github_org`)
+// ---------------------------------------------------------------------------
+
+/**
+ * The `owner/repo` whose worktrees become each feature-workspace root.
+ *
+ * Lives in `overrides:` rather than in a section of its own so `sandbox config`
+ * — which rebuilds the YAML and preserves overrides verbatim — cannot drop it.
+ * Empty means unconfigured: `sandbox setup` derives the default from the
+ * authenticated GitHub user, and warns when it can't.
+ */
+export function loadWorkspaceRepo(cfg?: Record<string, any>): string {
+  const value = ((cfg ?? load())["overrides"] ?? {})["workspace_repo"];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** `owner/repo` — GitHub's own slug shape, no scheme and no `.git` suffix. */
+const _REPO_SLUG = "[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$";
+
+/** Workspace-repo prompt — driven by `sandbox setup`. */
+export const _WORKSPACE_REPO_PROMPT: PromptSpec = {
+  key: "workspace_repo",
+  label: "Workspace config repo (owner/repo)",
+  help: "GitHub repo cloned under the repos root and worktree'd as the root of " +
+        "every feature workspace, so .sandbox/ configs and notes get history. " +
+        "Defaults to your own; point it at a shared <org>/sandbox-workspace to " +
+        "share workspace configs with your team.",
+  acceptEmpty: false,
+  pattern: _REPO_SLUG,
+  placeholder: "your-org/sandbox-workspace",
+};
+
+/**
+ * The GitHub owner the service repos live under — nothing here is Sandbox's own.
+ *
+ * Standards docs name their canonical examples as `<repo>:<path>`; this is what
+ * turns those into links. Defaults to whoever owns the workspace repo, which is
+ * the same org for a team that configured one. Empty means unknown, and callers
+ * must degrade (name the file, link nothing) rather than guess an owner.
+ */
+export function loadGithubOrg(cfg?: Record<string, any>): string {
+  const c = cfg ?? load();
+  const explicit = (c["overrides"] ?? {})["github_org"];
+  if (typeof explicit === "string" && explicit.trim()) {
+    return explicit.trim();
+  }
+  return loadWorkspaceRepo(c).split("/")[0] ?? "";
+}
+
+/** GitHub org/user prompt — driven by `sandbox setup`. */
+export const _GITHUB_ORG_PROMPT: PromptSpec = {
+  key: "github_org",
+  label: "GitHub org for service repos",
+  help: "Owner of the repos in your services registry. Used to link the " +
+        "canonical examples that standards docs cite (github.com/<org>/<repo>).",
+  acceptEmpty: false,
+  pattern: "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$",
+  placeholder: "your-org",
+};
+
 // A DNS domain: dot-separated labels, no scheme, no path, no trailing dot.
 const _DOMAIN = "[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$";
 

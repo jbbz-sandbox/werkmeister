@@ -20,7 +20,9 @@
  *     decline is reported ok rather than as drift;
  *   * the **companion sandbox-workspace checkout** under the repos root —
  *     `sandbox workspace` creates each workspace root as a worktree of it
- *     (plain-directory fallback with a warning when it is missing);
+ *     (plain-directory fallback with a warning when it is missing). Which repo
+ *     that is comes from `overrides.workspace_repo`, defaulting to the
+ *     authenticated GitHub user's own `<user>/sandbox-workspace`;
  *   * the **Jira API token** in the `jira:` section of ~/.sandbox/config.yaml
  *     (OPTIONAL) — the sandbox-dashboard server's fast path for Jira reads;
  *     absent means it falls back to the claude CLI, so a missing/unfilled token
@@ -55,6 +57,7 @@ import {
   loadIngress,
   loadJira,
   loadPaths as loadPathsSection,
+  loadWorkspaceRepo,
   modelPricingYamlPath,
   portsYamlPath,
   secretsPath,
@@ -171,8 +174,57 @@ export const OPTIONAL_PLUGINS: readonly PluginSpec[] = [
 // .claude), so there is no unrelated content to contend with on feature
 // branches. `sandbox workspace` consumes the checkout; `sandbox setup`
 // clones/updates it.
+// WHICH repo that is, is machine config (`overrides.workspace_repo`): a solo
+// developer uses their own, a team points every machine at one shared
+// <org>/sandbox-workspace. Only the local directory name is fixed — the
+// checkout always lands at repos_root/sandbox-workspace, whatever it is named
+// on GitHub, so the consumers below can keep looking in one place.
 export const WORKSPACE_ROOT_REPO = "sandbox-workspace";
-export const WORKSPACE_ROOT_REPO_URL = "https://github.com/JayAndCory/sandbox-workspace.git";
+
+export function workspaceRepoUrl(slug: string): string {
+  return `https://github.com/${slug}.git`;
+}
+
+/** A GitHub login: alphanumerics and dashes, nothing else. */
+const isLogin = (s: string): boolean => /^[A-Za-z0-9-]+$/.test(s);
+
+/**
+ * The authenticated GitHub login, or "" when `gh` is absent or logged out.
+ *
+ * Asks `gh` rather than git config: the answer must be a real GitHub login for
+ * the clone URL to work, and `user.name` is a display name, not a login.
+ */
+export function githubUser(runner: Runner = defaultRunner): string {
+  const [rc, out] = runner(["gh", "api", "user", "-q", ".login"]);
+  const login = out.trim().split("\n").pop()?.trim() ?? "";
+  return rc === 0 && isLogin(login) ? login : "";
+}
+
+/**
+ * Every owner this user can push under: their own login first, then their orgs.
+ *
+ * The wizard offers these as choices, which is the whole point of asking gh —
+ * an org's `sandbox-workspace` is a name you have to know, and mistyping it
+ * produces a clone failure three steps later. Empty when gh can't answer, and
+ * callers must stay usable then: nothing here is a hard prerequisite.
+ */
+export function githubOwners(runner: Runner = defaultRunner): string[] {
+  const user = githubUser(runner);
+  if (!user) {
+    return [];
+  }
+  const [rc, out] = runner(["gh", "api", "user/orgs", "--paginate", "-q", ".[].login"]);
+  const orgs = rc === 0
+    ? out.split("\n").map((l) => l.trim()).filter((l) => isLogin(l) && l !== user)
+    : [];
+  return [user, ...orgs];
+}
+
+/** `<github user>/sandbox-workspace`, or "" when the login can't be resolved. */
+export function defaultWorkspaceRepo(runner: Runner = defaultRunner): string {
+  const user = githubUser(runner);
+  return user ? `${user}/${WORKSPACE_ROOT_REPO}` : "";
+}
 
 // The demo registry's two apps (backend, frontend) live here, checked out
 // alongside `sandbox` under repos_root so workspaces can worktree it. Cloned
@@ -190,11 +242,11 @@ interface RepoSpec {
   missingConsequence: string;
 }
 
-const WORKSPACE_ROOT_SPEC: RepoSpec = {
+const workspaceRootSpec = (slug: string): RepoSpec => ({
   name: WORKSPACE_ROOT_REPO,
-  url: WORKSPACE_ROOT_REPO_URL,
+  url: workspaceRepoUrl(slug),
   missingConsequence: "Workspaces will fall back to plain directories.",
-};
+});
 
 const DEMO_SERVICES_SPEC: RepoSpec = {
   name: DEMO_SERVICES_REPO,
@@ -913,6 +965,8 @@ export interface RunSetupOptions {
   pathDirs?: { repos_root?: string; workspaces_root?: string };
   /** Registry seeding (services.yaml demo content, k8s context, migration source). */
   registry?: RegistryOptions;
+  /** `owner/repo` for the workspace-root checkout; defaults to the config's. */
+  workspaceRepo?: string;
   /**
    * Ingress hostnames the certificate must cover; `[]` skips the cert step.
    *
@@ -994,7 +1048,24 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
       );
     }
   }
-  steps.push(...syncRepo(reposRoot, WORKSPACE_ROOT_SPEC, runner, checkOnly));
+  // Fall back to the gh-derived default so a machine configured before this
+  // setting existed still converges; only a machine with neither config nor a
+  // usable `gh` has no repo to clone, and that is a warning, not a failure.
+  const workspaceRepo =
+    options.workspaceRepo ?? (loadWorkspaceRepo() || defaultWorkspaceRepo(runner));
+  if (workspaceRepo) {
+    steps.push(...syncRepo(reposRoot, workspaceRootSpec(workspaceRepo), runner, checkOnly));
+  } else {
+    steps.push({
+      label: `repo ${WORKSPACE_ROOT_REPO}`,
+      ok: false,
+      optional: true,
+      detail:
+        "no workspace repo configured and `gh` could not name one — set " +
+        "overrides.workspace_repo (or run `gh auth login`, then `sandbox setup`). " +
+        "Workspaces will fall back to plain directories.",
+    });
+  }
   // Gated on the registry itself rather than on this run's `--demo` answer, so
   // the step is right in all three cases: a fresh demo seed (written by
   // syncRegistryConfigs above, hence read AFTER it), a `--check` on an existing

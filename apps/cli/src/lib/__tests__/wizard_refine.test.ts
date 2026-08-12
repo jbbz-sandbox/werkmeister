@@ -18,10 +18,10 @@ const { offerRefine } = await import("../wizard.js");
 const SPEC = { key: "starting_prompt", label: "Starting prompt", help: "h", refinable: true,
                refineInstruction: "Rewrite as a dev instruction." };
 
-/** An `ask` that replays scripted answers in order. */
-function asking(...answers: string[]) {
+/** An `ask` that replays scripted answers in order, then falls back to the default. */
+function asking(...answers: boolean[]) {
   let i = 0;
-  return async () => answers[i++] ?? "";
+  return async (_label: string, fallback: boolean) => answers[i++] ?? fallback;
 }
 
 describe("offerRefine", () => {
@@ -31,29 +31,29 @@ describe("offerRefine", () => {
   });
 
   it("declining leaves the text untouched and never calls Claude", async () => {
-    for (const answer of ["", "n", "no", "nope"]) {
-      expect(await offerRefine(SPEC, "draft", {}, asking(answer))).toBe("draft");
-    }
+    expect(await offerRefine(SPEC, "draft", {}, asking(false))).toBe("draft");
+    // No answer scripted at all: the offer defaults to no.
+    expect(await offerRefine(SPEC, "draft", {}, asking())).toBe("draft");
     expect(calls).toHaveLength(0);
   });
 
   it("accepting passes the spec's instruction and answers so far, then keeps the rewrite", async () => {
     refine = async () => "  Goal: ship it.  ";
     const context = { feature: "mdx-blog" };
-    expect(await offerRefine(SPEC, "draft", context, asking("y", ""))).toBe("Goal: ship it.");
+    expect(await offerRefine(SPEC, "draft", context, asking(true))).toBe("Goal: ship it.");
     expect(calls).toEqual([["draft", SPEC.refineInstruction, context]]);
   });
 
   it("rejecting the rewrite restores the original", async () => {
-    expect(await offerRefine(SPEC, "draft", {}, asking("yes", "n"))).toBe("draft");
+    expect(await offerRefine(SPEC, "draft", {}, asking(true, false))).toBe("draft");
   });
 
   it("an empty rewrite or a failed refine never costs the user their text", async () => {
     refine = async () => "   ";
-    expect(await offerRefine(SPEC, "draft", {}, asking("y", ""))).toBe("draft");
+    expect(await offerRefine(SPEC, "draft", {}, asking(true))).toBe("draft");
     refine = () => {
       throw new Error("claude not found");
     };
-    expect(await offerRefine(SPEC, "draft", {}, asking("y", ""))).toBe("draft");
+    expect(await offerRefine(SPEC, "draft", {}, asking(true))).toBe("draft");
   });
 });
