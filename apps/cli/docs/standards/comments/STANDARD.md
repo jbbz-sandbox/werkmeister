@@ -1,5 +1,6 @@
 ---
 domain: comments
+universal: 1
 applies_to:
   - "**/*"
 phase: [implement, review]

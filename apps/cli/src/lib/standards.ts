@@ -28,13 +28,25 @@ import { loadArchetypes } from "./config.js";
 import { standardsDirPath } from "./global_config.js";
 import { run } from "./proc.js";
 
-// Universal standards: always active, ungated by file type, re-injected on any
-// change — they never appear in a service's `standards:` list. `comments` is the
-// base rubric; `engineering` the cross-cutting architectural constraints (fit,
-// additive/reversible change, budgets, PR sizing). A *domain* standard, by
-// contrast, only activates when a workspace's archetype selects it and only
-// re-injects when its `applies_to` globs match the diff. Ordered: base first.
-export const UNIVERSAL_STANDARDS: readonly string[] = ["comments", "engineering"];
+/**
+ * Universal standards, in load order: always active, ungated by file type,
+ * re-injected on any change — they never appear in a service's `standards:`
+ * list. A *domain* standard, by contrast, only activates when a workspace's
+ * archetype selects it and only re-injects when its `applies_to` globs match
+ * the diff.
+ *
+ * Declared by the modules themselves (`universal: <n>` frontmatter), not by a
+ * list in here: which standards form an org's always-on base is that org's
+ * content, and this loader ships to orgs whose base is not ours. The number is
+ * the load order — the base rubric reads before the constraints built on it,
+ * and that ordering is deliberate rather than alphabetical luck, so it needs
+ * somewhere explicit to live.
+ */
+export function universalStandards(modules: Record<string, Record<string, any>>): string[] {
+  return Object.keys(modules)
+    .filter((k) => typeof modules[k]["universal"] === "number")
+    .sort((a, b) => modules[a]["universal"] - modules[b]["universal"] || (a < b ? -1 : 1));
+}
 
 const _GIT_TIMEOUT = 5; // seconds; this feeds a SessionStart hook — never hang a launch
 
@@ -173,9 +185,10 @@ export function standardsMatchingDiff(
   }
   if (!changed.size) return [];
 
+  const universal = universalStandards(modules);
   const matched: Array<[string, string]> = [];
   for (const domain of Object.keys(modules).sort()) {
-    if (UNIVERSAL_STANDARDS.includes(domain)) continue;
+    if (universal.includes(domain)) continue;
     const meta = modules[domain];
     const globs: string[] = meta["applies_to"] ?? [];
     // ponytail: fnmatch maps '*'/'**' to '.*' but leaves '/' literal, so a
@@ -194,11 +207,8 @@ export function standardsMatchingDiff(
     if (hit) matched.push([domain, String(meta["summary"] ?? "").trim()]);
   }
 
-  for (const uni of UNIVERSAL_STANDARDS) {
-    const meta = modules[uni];
-    if (meta !== undefined) {
-      matched.push([uni, String(meta["summary"] ?? "").trim()]);
-    }
+  for (const uni of universal) {
+    matched.push([uni, String(modules[uni]["summary"] ?? "").trim()]);
   }
   return matched;
 }
@@ -307,7 +317,9 @@ export function validateServiceStandards(
     const arch = archetypes[name];
     if (!isDict(arch)) continue;
     for (const key of arch["standards"] ?? []) {
-      if (!UNIVERSAL_STANDARDS.includes(key) && !(key in modules)) {
+      // No universal-key exemption: a universal is a module like any other, so
+      // `key in modules` already covers it.
+      if (!(key in modules)) {
         errors.push(
           `services.yaml: archetype '${name}' lists unknown standard ` +
             `'${key}' — no docs/standards/${key}.md with \`domain: ${key}\``,
@@ -319,7 +331,7 @@ export function validateServiceStandards(
   for (const [svc, svcDef] of Object.entries(servicesConfig)) {
     if (!isDict(svcDef) || svcDef["archetype"]) continue;
     for (const key of svcDef["standards"] ?? []) {
-      if (!UNIVERSAL_STANDARDS.includes(key) && !(key in modules)) {
+      if (!(key in modules)) {
         errors.push(
           `services.yaml: service '${svc}' lists unknown standard '${key}' ` +
             `— no docs/standards/${key}.md with \`domain: ${key}\``,
@@ -393,6 +405,14 @@ export function validateStandardModules(standardsDir?: string | null): string[] 
       errors.push(
         `${rel}: \`phase:\` if present must be a non-empty list of strings ` +
           `(a scalar string silently breaks skill_gen's substring gate)`,
+      );
+    }
+
+    const universal = meta["universal"];
+    if (universal !== undefined && universal !== null && !Number.isInteger(universal)) {
+      errors.push(
+        `${rel}: \`universal:\` if present must be an integer (its load order) ` +
+          `— \`universal: true\` reads as universal but silently is not`,
       );
     }
 
@@ -492,17 +512,16 @@ export function resolveActiveStandards(
   for (const key of domainsMatchingTaskText(taskText, modules)) active.add(key);
   for (const key of override["remove"] ?? []) active.delete(key);
 
-  for (const key of UNIVERSAL_STANDARDS) active.add(key);
+  const universal = universalStandards(modules);
+  for (const key of universal) active.add(key);
   for (const key of [...active]) {
     if (!(key in modules)) active.delete(key); // only keys that resolve to a real module
   }
 
-  // Universals in declared tuple order (base first) — standardsMatchingDiff
-  // already honors the tuple; alphabetical here only matched by coincidence.
+  // Universals in their declared order (base first) — standardsMatchingDiff
+  // honors the same order; alphabetical here only matched by coincidence.
   const sortKey = (k: string): [number, number, string] =>
-    UNIVERSAL_STANDARDS.includes(k)
-      ? [0, UNIVERSAL_STANDARDS.indexOf(k), ""]
-      : [1, 0, k];
+    universal.includes(k) ? [0, universal.indexOf(k), ""] : [1, 0, k];
   const ordered = [...active].sort((a, b) => {
     const ka = sortKey(a);
     const kb = sortKey(b);
@@ -528,9 +547,10 @@ export function buildStandardsManifest(
   active: string[],
   modules: Record<string, Record<string, any>>,
 ): Record<string, any> {
+  const universal = universalStandards(modules);
   const domains: Record<string, any> = {};
   for (const key of active) {
-    if (UNIVERSAL_STANDARDS.includes(key)) continue;
+    if (universal.includes(key)) continue;
     domains[key] = {
       applies_to: Array.from((modules[key] ?? {})["applies_to"] ?? []),
       summary: String((modules[key] ?? {})["summary"] ?? "").trim(),
@@ -538,7 +558,7 @@ export function buildStandardsManifest(
   }
   return {
     generated_by: "sandbox init-workspace",
-    universal: active.filter((key) => UNIVERSAL_STANDARDS.includes(key)),
+    universal: active.filter((key) => universal.includes(key)),
     domains,
   };
 }

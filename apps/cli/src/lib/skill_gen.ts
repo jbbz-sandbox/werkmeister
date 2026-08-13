@@ -23,11 +23,7 @@ import * as path from "node:path";
 
 import { loadGithubOrg, standardsDirPath } from "./global_config.js";
 import { run } from "./proc.js";
-import {
-  UNIVERSAL_STANDARDS,
-  loadStandardsModules,
-  parseFrontmatter,
-} from "./standards.js";
+import { loadStandardsModules, parseFrontmatter } from "./standards.js";
 
 const _GIT_TIMEOUT = 5; // seconds; never hang `sandbox init-workspace` on a git hiccup
 
@@ -230,7 +226,7 @@ function buildDescription(domain: string, meta: Record<string, any>): string {
   }
 
   let gate: string;
-  if (UNIVERSAL_STANDARDS.includes(domain)) {
+  if (typeof meta["universal"] === "number") {
     gate =
       `Use when ${verbClause} code of any kind — the universal base for ` +
       `every code edit, loaded by sb-implement at phase entry. ` +
