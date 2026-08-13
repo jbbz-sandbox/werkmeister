@@ -42,3 +42,8 @@ How services find and address each other. The shared comment rubric
   container mesh.
 - Don't add a `{service-name}` placeholder to a new env var — write the DNS
   alias literally.
+
+## Going deeper
+| When you're doing | Read |
+|---|---|
+| Wiring a datastore URL that differs between the sandbox mesh and the cluster | [references/connect-db-approach.md](references/connect-db-approach.md) |
