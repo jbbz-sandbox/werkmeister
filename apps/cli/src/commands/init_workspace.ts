@@ -50,7 +50,7 @@ import {
 } from "../lib/config.js";
 import { buildFormSchema } from "../lib/form_schema.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "../lib/generate.js";
-import { loadPaths } from "../lib/global_config.js";
+import { loadPaths, standardsDirPath, standardsDirProblem } from "../lib/global_config.js";
 import { writeWorkspaceHooks } from "../lib/hooks_gen.js";
 import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
 import {
@@ -1368,6 +1368,15 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
     writeStandardsManifest(workspaceRoot, buildStandardsManifest(active, modules));
+  } else {
+    // Not fatal — a workspace without standards still works — but it is a
+    // materially degraded one (no routing table, no sb-*-standard skills, no
+    // gate manifest), and it used to happen in silence.
+    warn(
+      standardsDirProblem() ||
+        `no standard modules found in ${standardsDirPath()} — this workspace gets no ` +
+          `standards routing, skills, or edit-time gate`,
+    );
   }
 
   // 6. Write CLAUDE.md. The notes directory is created; legacy free-text Handoff

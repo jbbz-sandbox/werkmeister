@@ -116,6 +116,29 @@ export function standardsDirPath(): string {
 }
 
 /**
+ * Describe why the standards tree is unusable, or "" when it is fine.
+ *
+ * The fallback above is a convention (a tree bundled beside the CLI), not a
+ * promise — this repo no longer ships one, so an unconfigured install resolves
+ * a directory that does not exist. The loader treats that as "no modules" and
+ * carries on, which is right for a hook that must never block a launch and
+ * wrong for anything a human is watching: a workspace inits with an empty
+ * routing table and no standards skills, and nothing says so. Every
+ * human-facing entry point reports this; the fail-open paths still don't.
+ */
+export function standardsDirProblem(): string {
+  const dir = standardsDirPath();
+  if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+    return "";
+  }
+  const configured = (load()["overrides"] ?? {})["standards_dir"];
+  return configured
+    ? `standards tree not found: ${dir} (overrides.standards_dir in ${configPath()})`
+    : `no standards tree: overrides.standards_dir is unset in ${configPath()} and ` +
+        `the default ${dir} does not exist`;
+}
+
+/**
  * Path to the hand-edited secrets file (sibling of the config).
  *
  * Lives in `~/.sandbox` (outside the repo) so real credentials never sit in
@@ -566,6 +589,11 @@ export function check(cfg: Record<string, any>): string[] {
         problems.push(`paths.${key} does not exist: ${value}`);
       }
     }
+  }
+
+  const standardsProblem = standardsDirProblem();
+  if (standardsProblem) {
+    problems.push(standardsProblem);
   }
 
   const envPath = envShPath();
