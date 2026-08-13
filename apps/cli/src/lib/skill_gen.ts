@@ -88,7 +88,9 @@ export function standardsUrl(
 ): string {
   if (!src) return "";
   const norm = path.posix.normalize(path.posix.join(src.prefix, relPath)).replace(/\/+$/, "");
-  return `${src.base}/${kind}/HEAD/${norm}`;
+  // A tree at its repo's root — the natural layout for a dedicated standards
+  // repo — normalizes to "."; `/tree/HEAD/.` is not the repo root URL.
+  return norm === "." ? `${src.base}/${kind}/HEAD` : `${src.base}/${kind}/HEAD/${norm}`;
 }
 // Canonical-example pointers name service repos, which belong to whichever org
 // runs this sandbox (`overrides.github_org`) — not to sandbox itself. HEAD

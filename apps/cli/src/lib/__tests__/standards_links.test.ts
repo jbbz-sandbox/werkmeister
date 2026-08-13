@@ -80,6 +80,14 @@ describe("standardsUrl", () => {
     );
   });
 
+  it("handles a tree at its repo's root — the layout a dedicated standards repo has", () => {
+    const src = { base: "https://github.com/acme/std", prefix: "" };
+    expect(standardsUrl(src, "", "tree")).toBe("https://github.com/acme/std/tree/HEAD");
+    expect(standardsUrl(src, "config/x.md")).toBe(
+      "https://github.com/acme/std/blob/HEAD/config/x.md",
+    );
+  });
+
   it("returns empty for an underivable source, so callers can drop the link", () => {
     expect(standardsUrl(null, "anything.md")).toBe("");
   });
