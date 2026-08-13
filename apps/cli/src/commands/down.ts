@@ -7,18 +7,15 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as readline from "node:readline/promises";
 
 import { isCaddyRunning, reloadCaddy } from "../lib/caddy.js";
 import { Colors, error, info, warn } from "../lib/config.js";
 import { composeDown, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";
+import { GraduationError } from "../lib/graduate.js";
 import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
 import { getAllSlots, getSlot, releaseSlot } from "../lib/slots.js";
-
-// `../commands/notes.js` (graduateOne) is ported by another agent. The `as
-// string` cast makes the dynamic import typecheck (Promise<any>) until it lands.
-const NOTES_MODULE = "./notes.js";
+import { graduateOne, input } from "./notes.js";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */
 function loadDotenv(start: string): Record<string, string> {
@@ -105,35 +102,31 @@ async function printNotes(feature: string): Promise<void> {
       return;
     }
 
-    const notesCmd = await import(NOTES_MODULE as string);
-    const { GraduationError } = await import("../lib/graduate.js");
-
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    try {
-      for (const note of decisions) {
-        printNote(note, workspace);
-        const choice = (await rl.question(`  Graduate ${path.basename(note.path)}? [g/s] > `))
-          .trim()
-          .toLowerCase();
-        if (choice !== "g") {
+    for (const note of decisions) {
+      printNote(note, workspace);
+      const choice = (await input(`  Graduate ${path.basename(note.path)}? [g/s] > `))
+        .trim()
+        .toLowerCase();
+      if (choice !== "g") {
+        continue;
+      }
+      try {
+        const result = await graduateOne(workspace, note, {
+          domain: null,
+          kind: null,
+          slug: null,
+        });
+        info(
+          `Scaffolded ${result["scaffold_path"]} — run sb-author to fill it ` +
+            "in, then `sandbox skills check`.",
+        );
+      } catch (exc) {
+        if (exc instanceof GraduationError) {
+          warn(`Could not graduate ${path.basename(note.path)}: ${exc.message}`);
           continue;
         }
-        try {
-          const result = notesCmd.graduateOne(workspace, note, null, null, null);
-          info(
-            `Scaffolded ${result.scaffold_path} — run sb-author to fill it ` +
-              "in, then `sandbox skills check`.",
-          );
-        } catch (exc) {
-          if (exc instanceof GraduationError) {
-            warn(`Could not graduate ${path.basename(note.path)}: ${exc.message}`);
-            continue;
-          }
-          throw exc;
-        }
+        throw exc;
       }
-    } finally {
-      rl.close();
     }
   } catch (exc) {
     // never block teardown on printing
