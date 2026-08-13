@@ -24,7 +24,8 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { serviceStandards, validateServiceArchetypes } from "./archetypes.js";
-import { getSandboxRoot, loadArchetypes } from "./config.js";
+import { loadArchetypes } from "./config.js";
+import { standardsDirPath } from "./global_config.js";
 import { run } from "./proc.js";
 
 // Universal standards: always active, ungated by file type, re-injected on any
@@ -240,7 +241,7 @@ export function loadStandardsModules(
   standardsDir?: string | null,
 ): Record<string, Record<string, any>> {
   if (standardsDir === undefined || standardsDir === null) {
-    standardsDir = path.join(getSandboxRoot(), "docs", "standards");
+    standardsDir = standardsDirPath();
   }
   const modules: Record<string, Record<string, any>> = {};
   if (!(fs.existsSync(standardsDir) && fs.statSync(standardsDir).isDirectory())) {
@@ -343,7 +344,7 @@ export function validateServiceStandards(
  */
 export function validateStandardModules(standardsDir?: string | null): string[] {
   if (standardsDir === undefined || standardsDir === null) {
-    standardsDir = path.join(getSandboxRoot(), "docs", "standards");
+    standardsDir = standardsDirPath();
   }
   const errors: string[] = [];
   if (!(fs.existsSync(standardsDir) && fs.statSync(standardsDir).isDirectory())) {

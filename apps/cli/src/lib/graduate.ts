@@ -12,7 +12,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { getSandboxRoot } from "./config.js";
+import { standardsDirPath } from "./global_config.js";
 import { fnmatch, loadStandardsModules } from "./standards.js";
 
 export const KINDS: readonly string[] = ["rule", "example", "anti-pattern"];
@@ -156,7 +156,7 @@ export function graduateNote(
   }
 
   if (standardsDir === undefined || standardsDir === null) {
-    standardsDir = path.join(getSandboxRoot(), "docs", "standards");
+    standardsDir = standardsDirPath();
   }
   const modules = loadStandardsModules(standardsDir);
   if (!(domain in modules)) {
