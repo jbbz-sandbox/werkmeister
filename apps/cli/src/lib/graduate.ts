@@ -28,6 +28,31 @@ export class GraduationError extends Error {
 }
 
 /**
+ * Refuse to graduate into a tree this machine can only read.
+ *
+ * `overrides.standards_dir` can point at a shared clone, a packaged tree, or
+ * someone else's repo, and graduation writes *into* it. Checked as a
+ * precondition rather than left to the write itself: `sandbox down` reports a
+ * GraduationError but swallows anything else so teardown is never blocked, so
+ * an EACCES escaping from writeFileSync would present as a graduation that
+ * quietly did nothing.
+ *
+ * Probes *target* when it exists and its parent otherwise — an in-place rewrite
+ * needs the file writable, a new reference needs the directory that will hold
+ * it. Checking the tree root instead would refuse rewrites that would succeed.
+ */
+function requireWritable(target: string, standardsDir: string): void {
+  try {
+    fs.accessSync(fs.existsSync(target) ? target : path.dirname(target), fs.constants.W_OK);
+  } catch {
+    throw new GraduationError(
+      `cannot write ${target} — graduation scaffolds into the standards tree ` +
+        `(${standardsDir}), so \`overrides.standards_dir\` must name one you can write`,
+    );
+  }
+}
+
+/**
  * Insert *line* as the last content line of the `marker` (`"## X"`) section,
  * right before the next `## ` heading or EOF.
  *
@@ -179,6 +204,7 @@ export function graduateNote(
 
   let scaffoldPath: string;
   if (kind === "rule") {
+    requireWritable(standardPath, standardsDir);
     const bullet = `- **TODO(graduate)** — ${marker}`;
     body = insertAtSectionEnd(body, "## Rules", bullet);
     fs.writeFileSync(standardPath, body);
@@ -187,6 +213,7 @@ export function graduateNote(
     const prefix = kind === "anti-pattern" ? "ap-" : "";
     const filename = `${prefix}${resolvedSlug}.md`;
     const refsDir = path.join(path.dirname(standardPath), "references");
+    requireWritable(refsDir, standardsDir);
     fs.mkdirSync(refsDir, { recursive: true });
     scaffoldPath = path.join(refsDir, filename);
     if (fs.existsSync(scaffoldPath)) {
