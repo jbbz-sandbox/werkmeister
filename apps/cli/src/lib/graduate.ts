@@ -185,7 +185,7 @@ export function graduateNote(
   }
   const modules = loadStandardsModules(standardsDir);
   if (!(domain in modules)) {
-    throw new GraduationError(`no docs/standards/${domain} module`);
+    throw new GraduationError(`no \`${domain}\` module in the standards tree`);
   }
   if (!eligibleDomains(modules).includes(domain)) {
     throw new GraduationError(

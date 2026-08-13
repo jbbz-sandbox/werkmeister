@@ -27,7 +27,7 @@ The `sb-implement` / `sb-research` entry skills and the `sb-*-standard` code
 standards are **not shipped here**. They are projected into each workspace's
 `.claude/skills/` by `sandbox init-workspace`: entry-skill sources live in
 [`apps/cli/infra/skills/`](../../apps/cli/infra/skills), and the standards are
-generated from [`apps/cli/docs/standards/`](../../apps/cli/docs/standards) by
+generated from [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards) by
 `sandbox standards build` (drift-gated by `sandbox standards check`).
 
 ## Bundled MCP server (`sandbox-workspace`)

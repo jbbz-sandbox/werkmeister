@@ -53,12 +53,16 @@ Governing principles (each anchored to a measurement in
 
 ## 3. Content model — the standards tree
 
-Single source of truth for all standards content, at `apps/cli/docs/standards/` (the CLI's
-infra root; code and generated headers refer to it as `docs/standards/`). Loader:
+Single source of truth for all standards content, in its own repo
+([jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards)), resolved through `overrides.standards_dir`
+in `~/.sandbox/config.yaml` — the CLI is the machinery, the tree is an org's content.
+Defaults to `<sandbox root>/docs/standards` when unset, which no longer exists in this
+repo, so an unconfigured install resolves zero modules. Loader:
 `apps/cli/src/lib/standards.ts::loadStandardsModules`. Two recognized shapes:
 
-- directory: `docs/standards/<domain>/STANDARD.md` (+ optional `references/*.md`)
-- flat: `docs/standards/<key>.md`
+- directory: `<domain>/STANDARD.md` (+ optional `references/*.md`)
+- flat: `<key>.md`, where `<key>` is lowercase kebab (so a `README.md` at the tree
+  root is not mistaken for a module)
 
 All nine current domains use directory form:
 
@@ -74,7 +78,7 @@ All nine current domains use directory form:
 | `data` | Airflow ordering/scheduling, epoch-ms conventions |
 | `ui` | Render/effect ordering, hydration, CDN caching |
 
-`docs/standards/repos/*.md` are per-repo quirk snippets keyed by `repo:`, referenced from
+`repos/*.md` are per-repo quirk snippets keyed by `repo:`, referenced from
 standard bodies. They are **not** loadable standards.
 
 ### 3.1 Frontmatter schema

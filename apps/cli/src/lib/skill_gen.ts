@@ -1,13 +1,13 @@
 /**
  * JIT standards skill generation — docs/jit-context-system.md §5.1.
  *
- *     docs/standards/<domain>.md  →  sb-<domain>-standard SKILL.md content
+ *     <standards tree>/<domain>.md  →  sb-<domain>-standard SKILL.md content
  *
  * The standards doc is the single source of truth: the skill's description is
  * composed from the module frontmatter (summary + applies_to + phase → the
  * trigger gate), and the skill body is the doc body with relative links
  * rewritten so they resolve from any ephemeral workspace (§5.1 —
- * a workspace almost never has the sandbox repo checked out, so doc-relative
+ * a workspace never has the standards tree checked out, so doc-relative
  * paths would dangle). Cross-module links become skill references; everything
  * else becomes the canonical GitHub URL.
  *
@@ -92,6 +92,7 @@ export function standardsUrl(
   // repo — normalizes to "."; `/tree/HEAD/.` is not the repo root URL.
   return norm === "." ? `${src.base}/${kind}/HEAD` : `${src.base}/${kind}/HEAD/${norm}`;
 }
+
 // Canonical-example pointers name service repos, which belong to whichever org
 // runs this sandbox (`overrides.github_org`) — not to sandbox itself. HEAD
 // links resolve to each repo's default branch without pinning one here.
@@ -100,9 +101,13 @@ function serviceRepoBase(): string {
   return org ? `https://github.com/${org}` : "";
 }
 
+// {source} is the URL of the module in whatever tree it came from, or its
+// tree-relative path when that is underivable. It used to read "docs/standards/
+// {source} in the sandbox repo" — a fixed location that stopped being true the
+// moment the standards moved out, while still telling every reader to edit it.
 const _GENERATED_HEADER = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
-  Source:    docs/standards/{source} in the sandbox repo (edit that file instead)
+  Source:    {source} (edit that file instead)
   Generator: sandbox init-workspace / sandbox skills sync
              (src/lib/workspace_skills.ts)
   Freshness: sandbox skills check
@@ -182,11 +187,11 @@ function renderSkill(
   src: StandardsSource | null,
 ): string {
   const description = buildDescription(domain, meta);
-  const source =
+  const relPath =
     path.basename(meta["path"]) === "STANDARD.md"
       ? `${domain}/STANDARD.md`
       : `${domain}.md`;
-  const header = _GENERATED_HEADER.replace("{source}", source);
+  const header = _GENERATED_HEADER.replace("{source}", standardsUrl(src, relPath) || relPath);
   body = rewriteLinks(body, knownDomains, src);
   // JSON.stringify gives a YAML-safe quoted scalar regardless of glob/quote chars.
   return (
@@ -324,7 +329,7 @@ export function validateModuleReferences(
     const body = moduleBody(meta["path"]);
     if (body.includes("TODO(graduate)")) {
       errors.push(
-        `docs/standards/${domain}: STANDARD.md has an unfilled ` +
+        `${domain}: STANDARD.md has an unfilled ` +
           `TODO(graduate) marker — run sb-author before committing`,
       );
     }
@@ -335,21 +340,21 @@ export function validateModuleReferences(
       const refBody = moduleBody(ref);
       if (refBody.includes("TODO(graduate)")) {
         errors.push(
-          `docs/standards/${domain}: references/${refName} has an ` +
+          `${domain}: references/${refName} has an ` +
             `unfilled TODO(graduate) marker — run sb-author before committing`,
         );
       }
       const canonical = String(parseFrontmatter(ref)["canonical"] ?? "");
       if (canonical === "TODO") {
         errors.push(
-          `docs/standards/${domain}: references/${refName} has a ` +
+          `${domain}: references/${refName} has a ` +
             `placeholder canonical: TODO — fill in the real repo:path`,
         );
       }
       const link = `(references/${refName})`;
       if (!body.includes(link)) {
         errors.push(
-          `docs/standards/${domain}: references/${refName} is not linked from STANDARD.md`,
+          `${domain}: references/${refName} is not linked from STANDARD.md`,
         );
       } else if (
         refName.startsWith("ap-") &&
@@ -359,7 +364,7 @@ export function validateModuleReferences(
         ).test(body)
       ) {
         errors.push(
-          `docs/standards/${domain}: references/${refName} needs ` +
+          `${domain}: references/${refName} needs ` +
             `an inline don't-line bullet linking to it`,
         );
       }
