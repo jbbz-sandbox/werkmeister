@@ -27,7 +27,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { expandUser, warn } from "./config.js";
+import { expandUser, getSandboxRoot, warn } from "./config.js";
 import type { PromptSpec } from "./wizard.js";
 
 export type { PromptSpec };
@@ -94,6 +94,25 @@ export function portsYamlPath(): string {
 /** Path to the model pricing table (`overrides.model_pricing_yaml` → ~/.sandbox/model-pricing.yaml). */
 export function modelPricingYamlPath(): string {
   return registryPath("model_pricing_yaml", "model-pricing.yaml");
+}
+
+/**
+ * Root of the code-standards source tree (`overrides.standards_dir` →
+ * `<sandbox root>/docs/standards`).
+ *
+ * The standards are one organization's *content*; the CLI is a reusable tool.
+ * This is the seam between them — point it at any directory laid out the way
+ * `loadStandardsModules` expects and `sandbox standards check` gates it there
+ * too. Unlike the registry files above it has no `~/.sandbox` default: the
+ * bundled tree ships with the checkout, so an unconfigured install keeps
+ * working.
+ */
+export function standardsDirPath(): string {
+  const override = (load()["overrides"] ?? {})["standards_dir"];
+  if (override) {
+    return path.resolve(expandUser(String(override)));
+  }
+  return path.join(getSandboxRoot(), "docs", "standards");
 }
 
 /**

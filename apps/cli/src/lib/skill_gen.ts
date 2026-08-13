@@ -21,19 +21,77 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { loadGithubOrg } from "./global_config.js";
-import {
-  UNIVERSAL_STANDARDS,
-  loadStandardsModules,
-  parseFrontmatter,
-} from "./standards.js";
+import { loadGithubOrg, standardsDirPath } from "./global_config.js";
+import { run } from "./proc.js";
+import { loadStandardsModules, parseFrontmatter } from "./standards.js";
 
-export const GITHUB_REPO_BASE = "https://github.com/jbbz-sandbox/sandbox";
-// Generated links target the default branch; there is no long-lived side
-// branch to pin, so anything else would dangle.
-export const GITHUB_BRANCH = "main";
-// Relative links in a standards doc resolve against docs/standards/.
-const _DOCS_STANDARDS_PREFIX = "docs/standards";
+const _GIT_TIMEOUT = 5; // seconds; never hang `sandbox init-workspace` on a git hiccup
+
+/** Where a standards tree lives on GitHub: repo URL + the tree's path inside it. */
+export interface StandardsSource {
+  /** `https://github.com/<owner>/<repo>` */
+  base: string;
+  /** The tree's path within that repo, e.g. `apps/cli/docs/standards`. */
+  prefix: string;
+}
+
+/** `git@host:o/r.git` or `https://host/o/r.git` → `https://host/o/r`; "" if neither. */
+function httpsRemote(url: string): string {
+  const trimmed = url.trim().replace(/\.git$/, "");
+  const ssh = /^(?:ssh:\/\/)?git@([^:/]+)[:/](.+)$/.exec(trimmed);
+  if (ssh) return `https://${ssh[1]}/${ssh[2]}`;
+  return /^https?:\/\//.test(trimmed) ? trimmed : "";
+}
+
+/**
+ * Resolve the standards tree's GitHub home by asking its own checkout.
+ *
+ * Generated skills are read from workspaces that have no sandbox checkout, so
+ * doc-relative links must become absolute URLs (§5.1) — and which repo they
+ * point at is a property of wherever `overrides.standards_dir` resolves to, not
+ * of this tool. Asking git is what keeps that honest: the checkout already
+ * knows its remote and `--show-prefix` already knows the tree's position inside
+ * it, so an org that brings its own standards gets correct links with nothing
+ * to configure and nothing to keep in sync. It also removes a standing bug —
+ * the prefix was hardcoded `docs/standards` while this repo's tree has always
+ * been at `apps/cli/docs/standards`, so every generated link 404'd.
+ *
+ * Returns null when the tree is not a git checkout (a package, a plain
+ * directory) or has no origin. Callers degrade to unlinked text, matching
+ * `serviceRepoBase()`: a guessed URL that 404s is worse than no link.
+ */
+export function standardsSource(): StandardsSource | null {
+  const dir = standardsDirPath();
+  const git = (...args: string[]): string => {
+    try {
+      const res = run(["git", "-C", dir, ...args], { capture: true, timeout: _GIT_TIMEOUT });
+      return res.status === 0 ? res.stdout.trim() : "";
+    } catch {
+      return "";
+    }
+  };
+  const base = httpsRemote(git("remote", "get-url", "origin"));
+  if (!base) return null;
+  return { base, prefix: git("rev-parse", "--show-prefix").replace(/\/+$/, "") };
+}
+
+/**
+ * GitHub URL for *relPath* inside the standards tree; "" when underivable.
+ *
+ * `HEAD` rather than a pinned branch — it resolves to whatever the repo calls
+ * its default, so a tree on `master` or `trunk` links correctly too.
+ */
+export function standardsUrl(
+  src: StandardsSource | null,
+  relPath: string,
+  kind: "blob" | "tree" = "blob",
+): string {
+  if (!src) return "";
+  const norm = path.posix.normalize(path.posix.join(src.prefix, relPath)).replace(/\/+$/, "");
+  // A tree at its repo's root — the natural layout for a dedicated standards
+  // repo — normalizes to "."; `/tree/HEAD/.` is not the repo root URL.
+  return norm === "." ? `${src.base}/${kind}/HEAD` : `${src.base}/${kind}/HEAD/${norm}`;
+}
 // Canonical-example pointers name service repos, which belong to whichever org
 // runs this sandbox (`overrides.github_org`) — not to sandbox itself. HEAD
 // links resolve to each repo's default branch without pinning one here.
@@ -91,12 +149,15 @@ export function generateSkills(
     modules = loadStandardsModules(standardsDir);
   }
   const knownDomains = new Set(Object.keys(modules));
+  // Resolved once, not per link: it shells out to git, and every module body
+  // carries several links.
+  const src = standardsSource();
   const rendered: Record<string, Record<string, string>> = {};
   for (const domain of Object.keys(modules).sort()) {
     const meta = modules[domain];
     const body = moduleBody(meta["path"]);
     const bundle: Record<string, string> = {
-      "SKILL.md": renderSkill(domain, meta, body, knownDomains),
+      "SKILL.md": renderSkill(domain, meta, body, knownDomains, src),
     };
     const refsDir = meta["references_dir"];
     if (refsDir) {
@@ -118,6 +179,7 @@ function renderSkill(
   meta: Record<string, any>,
   body: string,
   knownDomains: Set<string>,
+  src: StandardsSource | null,
 ): string {
   const description = buildDescription(domain, meta);
   const source =
@@ -125,7 +187,7 @@ function renderSkill(
       ? `${domain}/STANDARD.md`
       : `${domain}.md`;
   const header = _GENERATED_HEADER.replace("{source}", source);
-  body = rewriteLinks(body, knownDomains);
+  body = rewriteLinks(body, knownDomains, src);
   // JSON.stringify gives a YAML-safe quoted scalar regardless of glob/quote chars.
   return (
     `---\n` +
@@ -166,7 +228,7 @@ function buildDescription(domain: string, meta: Record<string, any>): string {
   }
 
   let gate: string;
-  if (UNIVERSAL_STANDARDS.includes(domain)) {
+  if (typeof meta["universal"] === "number") {
     gate =
       `Use when ${verbClause} code of any kind — the universal base for ` +
       `every code edit, loaded by sb-implement at phase entry. ` +
@@ -188,8 +250,16 @@ function buildDescription(domain: string, meta: Record<string, any>): string {
  * A link to a sibling module (`comments.md`) becomes its skill reference;
  * any other relative link becomes the canonical GitHub URL. Absolute URLs
  * pass through untouched.
+ *
+ * With no derivable source the link degrades to its own text — a dangling
+ * doc-relative path in a workspace that has no standards checkout is a link
+ * that silently goes nowhere.
  */
-function rewriteLinks(body: string, knownDomains: Set<string>): string {
+function rewriteLinks(
+  body: string,
+  knownDomains: Set<string>,
+  src: StandardsSource | null,
+): string {
   return body.replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (match, text, target) => {
     if (/^[a-z]+:\/\//.test(target)) return match;
     if (target.startsWith("references/")) return match;
@@ -197,11 +267,8 @@ function rewriteLinks(body: string, knownDomains: Set<string>): string {
     if (domainMatch && knownDomains.has(domainMatch[1])) {
       return `\`${skillNameFor(domainMatch[1])}\``;
     }
-    let norm = path.posix.normalize(path.posix.join(_DOCS_STANDARDS_PREFIX, target));
-    // posixpath.normpath strips a trailing slash; posix.normalize keeps it.
-    if (norm.length > 1 && norm.endsWith("/")) norm = norm.slice(0, -1);
-    const kind = target.endsWith("/") ? "tree" : "blob";
-    return `[${text}](${GITHUB_REPO_BASE}/${kind}/${GITHUB_BRANCH}/${norm})`;
+    const url = standardsUrl(src, target, target.endsWith("/") ? "tree" : "blob");
+    return url ? `[${text}](${url})` : text;
   });
 }
 
