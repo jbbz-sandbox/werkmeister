@@ -35,7 +35,7 @@ import { loadStandardsModules, standardsMatchingDiff } from "../lib/standards.js
 const _BODY_CHAR_CAP = 3500;
 
 /** Python `input(prompt)`: write *promptStr*, read one line (no trailing newline). */
-async function input(promptStr: string): Promise<string> {
+export async function input(promptStr: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     return await rl.question(promptStr);
@@ -221,7 +221,7 @@ async function resolveKind(kind: string | null): Promise<string> {
  * graduate *note*. Raises GraduationError on any failure — never prompts
  * when a value is already given.
  */
-async function graduateOne(
+export async function graduateOne(
   workspace: string,
   note: Note,
   { domain, kind, slug }: { domain: string | null; kind: string | null; slug: string | null },
