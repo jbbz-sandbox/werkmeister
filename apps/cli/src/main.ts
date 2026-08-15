@@ -372,7 +372,7 @@ const SPECS: CommandSpec[] = [
     module: "standards",
     configure: (cmd) => {
       cmd
-        .description("Validate the docs/standards/ source tree (structural regression gate)")
+        .description("Validate the configured standards tree (structural regression gate)")
         .addArgument(
           new Argument(
             "<action>",
@@ -407,17 +407,17 @@ const SPECS: CommandSpec[] = [
         .description(
           "Workspace notes (.sandbox/notes/). `context` prints the latest " +
             "handoff + open decisions for session-start injection (hook target); " +
-            "`graduate` scaffolds an open decision note into docs/standards/.",
+            "`graduate` scaffolds an open decision note into the standards tree.",
         )
         .addArgument(
           new Argument(
             "<action>",
             "context: print notes context for the enclosing workspace (silent if none); " +
-              "graduate: scaffold an open decision note into docs/standards/",
+              "graduate: scaffold an open decision note into the standards tree",
           ).choices(["context", "graduate"]),
         )
         .argument("[note_num]", "graduate: note number to graduate (omit to pick interactively)")
-        .option("--domain <domain>", "graduate: target docs/standards/<domain> (omit to infer from refs, or prompt)")
+        .option("--domain <domain>", "graduate: target <domain> in the standards tree (omit to infer from refs, or prompt)")
         .addOption(
           new Option(
             "--kind <kind>",

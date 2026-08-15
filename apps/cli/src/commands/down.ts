@@ -12,7 +12,7 @@ import { isCaddyRunning, reloadCaddy } from "../lib/caddy.js";
 import { Colors, error, info, warn } from "../lib/config.js";
 import { composeDown, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";
-import { GraduationError } from "../lib/graduate.js";
+import { GraduationError, reconcileGraduating } from "../lib/graduate.js";
 import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
 import { getAllSlots, getSlot, releaseSlot } from "../lib/slots.js";
 import { graduateOne, input } from "./notes.js";
@@ -77,6 +77,12 @@ async function printNotes(feature: string): Promise<void> {
     if (workspace === null) {
       return;
     }
+    // Close out any graduation whose scaffold has since been committed, so it
+    // stops being offered again. Free when nothing is pending.
+    for (const done of reconcileGraduating(workspace)) {
+      info(`Graduated ${path.basename(done.path)} — ${done.frontmatter["graduated_to"]} is committed.`);
+    }
+
     const handoff = latestHandoff(workspace);
     if (handoff !== null) {
       console.log(
@@ -118,7 +124,8 @@ async function printNotes(feature: string): Promise<void> {
         });
         info(
           `Scaffolded ${result["scaffold_path"]} — run sb-author to fill it ` +
-            "in, then `sandbox skills check`.",
+            "in, then `sandbox skills check`. Commit it in the standards repo; " +
+            "the note stays open until that file is tracked.",
         );
       } catch (exc) {
         if (exc instanceof GraduationError) {

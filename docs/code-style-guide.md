@@ -2,7 +2,7 @@
 
 > **Canonical, cross-repo standard — a thin index.** The rubric and per-repo notes that used
 > to live in this file are decomposed into one module per concern under
-> [apps/cli/docs/standards/](../apps/cli/docs/standards/), each carrying frontmatter
+> [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards), each carrying frontmatter
 > (`domain:`, `summary:`, `applies_to:`, `phase:`) consumed by the JIT context system —
 > see [jit-context-system.md](jit-context-system.md). Edit the modules; this index just routes.
 >
@@ -13,7 +13,8 @@
 
 ## Modules
 
-Each domain is `apps/cli/docs/standards/<domain>/STANDARD.md` (+ optional `references/*.md`).
+Each domain is `<domain>/STANDARD.md` (+ optional `references/*.md`) in
+[sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards), which the CLI resolves via `overrides.standards_dir`.
 The domain table — what each one covers — lives in
 [jit-context-system.md §3](jit-context-system.md#3-content-model--the-standards-tree); it is
 not duplicated here.
@@ -26,7 +27,7 @@ changed file matches their `applies_to` globs.
 
 The rubric is identical everywhere; what differs per repo is *which* quirks most often justify
 a comment. One snippet per repo under
-[apps/cli/docs/standards/repos/](../apps/cli/docs/standards/repos/). These are referenced from
+[repos/](https://github.com/jbbz-sandbox/sandbox-standards/tree/HEAD/repos) in that repo. These are referenced from
 standard bodies — they are not loadable standards in their own right.
 
 ## How standards reach a workspace

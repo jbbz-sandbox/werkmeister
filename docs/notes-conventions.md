@@ -28,7 +28,7 @@ Three rules keep the layer honest:
    `sb-research` / `sb-implement` skills (measured: 3/3 with an entry skill, 2/3 with a
    pointer alone).
 3. **Graduation is explicit.** Knowledge that outlives the feature moves *out*
-   deliberately: per-repo quirks → `docs/standards/repos/*`, process lessons →
+   deliberately: per-repo quirks → the standards tree's `repos/*`, process lessons →
    auto-memory, interface contracts → the PR description. `sandbox down` prints
    surviving notes so the human decides what graduates — nothing is auto-published.
 

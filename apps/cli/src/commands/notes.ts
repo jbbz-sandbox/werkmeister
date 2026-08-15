@@ -19,12 +19,14 @@ import * as readline from "node:readline/promises";
 
 import { error, info, success } from "../lib/config.js";
 import { resetSessionState } from "../lib/gate.js";
+import { standardsDirPath } from "../lib/global_config.js";
 import {
   GraduationError,
   KINDS,
   eligibleDomains,
   graduateNote,
   matchDomainsForRefs,
+  reconcileGraduating,
 } from "../lib/graduate.js";
 import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
 import { skillNameFor } from "../lib/skill_gen.js";
@@ -130,6 +132,9 @@ function renderActiveStandards(pairs: Array<[string, string]>, source: string): 
  * gets cut.
  */
 export function buildContext(workspace: string, source = ""): string {
+  // Before listing: a graduation whose scaffold has landed should not keep
+  // presenting itself as an open decision at every session start.
+  reconcileGraduating(workspace);
   const handoff = latestHandoff(workspace);
   const decisions = openDecisions(workspace);
   const standards = standardsMatchingDiff(workspace);
@@ -286,10 +291,16 @@ async function runGraduate(args: Record<string, unknown>): Promise<void> {
   }
 
   success(`Scaffolded ${result["scaffold_path"]}`);
-  info(`Note marked graduated → ${result["graduated_to"]}`);
+  info(`Note marked graduating → ${result["graduated_to"]}`);
   info(
     "Ask Claude to run the sb-author skill to fill in the placeholder, " +
-      "then `sandbox skills check` before committing.",
+      "then `sandbox skills check`.",
+  );
+  // The scaffold and the note live in different repos; saying so here is the
+  // difference between "two commits" and "one commit and a silent orphan".
+  info(
+    `Commit it in ${standardsDirPath()} — a separate repo from this workspace. ` +
+      "The note stays an open decision until that file is tracked.",
   );
 }
 

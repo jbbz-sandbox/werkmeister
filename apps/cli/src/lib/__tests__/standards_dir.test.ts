@@ -13,7 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import * as gc from "../global_config.js";
-import { loadStandardsModules } from "../standards.js";
+import { loadStandardsModules, validateStandardModules } from "../standards.js";
 
 let tmp: string;
 
@@ -39,6 +39,26 @@ describe("standardsDirPath", () => {
   it("expands a leading ~ — the override is hand-written into config.yaml", () => {
     gc.save({ overrides: { standards_dir: "~/acme-standards" } });
     expect(gc.standardsDirPath()).toBe(path.join(os.homedir(), "acme-standards"));
+  });
+});
+
+describe("non-module files at the tree root", () => {
+  it("ignores README.md and friends — a standards repo root always has them", () => {
+    const dir = path.join(tmp, "acme-standards");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, "README.md"), "# Our standards\n\nNo frontmatter here.\n");
+    fs.writeFileSync(path.join(dir, "CONTRIBUTING.md"), "# How to add one\n");
+    fs.writeFileSync(
+      path.join(dir, "widgets.md"),
+      '---\ndomain: widgets\nsummary: Widget rules\napplies_to: ["**/*.widget.ts"]\n---\n\n# Widgets\n',
+    );
+    gc.save({ overrides: { standards_dir: dir } });
+
+    // Matched on shape (a domain key is lowercase kebab), so the validator sees
+    // exactly what the loader loads — it would otherwise report the README as a
+    // module with no `domain:`.
+    expect(Object.keys(loadStandardsModules(dir))).toEqual(["widgets"]);
+    expect(validateStandardModules(dir)).toEqual([]);
   });
 });
 

@@ -224,7 +224,13 @@ export function standardsMatchingDiff(
 function iterStandardFiles(standardsDir: string): string[] {
   const entries = fs.readdirSync(standardsDir, { withFileTypes: true });
   const flat = entries
-    .filter((e) => e.name.endsWith(".md"))
+    // A flat module is named for its domain, and a domain key is lowercase
+    // kebab (`sb-<domain>-standard` is built from it). That excludes the
+    // README.md / CONTRIBUTING.md a standards repo has at its root — which
+    // otherwise parse as modules with no `domain:` and fail the structural
+    // gate. Matching on shape rather than an ignore list means there is no
+    // list to keep up to date.
+    .filter((e) => /^[a-z0-9-]+\.md$/.test(e.name))
     .map((e) => path.join(standardsDir, e.name))
     .sort();
   const nested = entries
