@@ -768,8 +768,8 @@ export const JIRA_CONFIG_SNIPPET =
   "  api_token: PASTE_TOKEN_HERE";
 
 // A token verifier: the config's jira settings in, [ok, detail] out. Injected in
-// tests; the default hits GET /rest/api/2/myself with Basic auth. Async in the
-// port — Node has no sync HTTP client (Python used urllib synchronously).
+// tests; the default hits GET /rest/api/2/myself with Basic auth. Async because
+// Node has no sync HTTP client.
 export type JiraVerifier = (
   jira: JiraSettings,
 ) => Promise<[boolean, string]> | [boolean, string];

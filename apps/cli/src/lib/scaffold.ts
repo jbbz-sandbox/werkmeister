@@ -75,7 +75,7 @@ export function renderSecretsEnv(): string {
   return [
     "# Machine-global secrets — real values, never committed.",
     "#",
-    "# Consumed by infra/templates/env.j2 when generating each feature's .env,",
+    "# Consumed by infra/templates/env.njk when generating each feature's .env,",
     "# and read directly by docker compose as an env_file. A service declares",
     "# the keys it needs via `secrets:` in its services.yaml entry; `sandbox up`",
     "# fails fast when a key a workspace's own services declare is missing or",

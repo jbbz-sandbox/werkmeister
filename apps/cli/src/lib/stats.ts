@@ -329,7 +329,7 @@ export function saveReport(
     `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}` +
     `-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
 
-  // Save raw CSV (rows terminated \r\n, like Python's csv.writer default)
+  // Save raw CSV (rows terminated \r\n)
   const csvPath = path.join(statsDir, `docker-stats-${timestamp}.csv`);
   const csvRows: string[] = [
     ["container", "avg_cpu_pct", "max_cpu_pct", "avg_mem_mib", "max_mem_mib", "samples"].join(","),

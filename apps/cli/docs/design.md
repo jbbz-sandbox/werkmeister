@@ -15,7 +15,7 @@ standalone and runnable.
 - **Node ≥20, ESM, tsc build** (`src/` → `dist/`), no bundler. `./sandbox` wrapper
   execs `node dist/main.js`.
 - **Dependencies kept to three:** commander (CLI parsing), `yaml`, nunjucks (the
-  four `infra/templates/*.j2` files use only nunjucks-compatible constructs and
+  four `infra/templates/*.njk` files use only nunjucks-compatible constructs and
   are shared verbatim with other consumers).
 - **One module per command, one per shared concern**, behavior-preserving:
   flags, help text, output, exit codes, and generated-file content are contracts.

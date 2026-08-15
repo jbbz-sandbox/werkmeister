@@ -246,7 +246,6 @@ async function checkInfraHealth(): Promise<Record<string, boolean>> {
     }
   } catch (e) {
     if (!(e instanceof ProcError && e.code === "ENOENT")) {
-      // Python only swallows FileNotFoundError/OSError here; re-raise anything else.
       if (!(e instanceof ProcError)) {
         throw e;
       }

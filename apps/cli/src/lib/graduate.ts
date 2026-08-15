@@ -147,8 +147,8 @@ export function matchDomainsForRefs(
 /** Rewrite frontmatter fields on a note file; body is preserved exactly. */
 function updateNoteStatus(notePath: string, fields: Record<string, string>): void {
   const text = fs.readFileSync(notePath, "utf8");
-  // Python str.split("---", 2): parts[1] = between the first two "---",
-  // parts[2] = everything after the second (further "---" intact).
+  // Split on the first two "---" only: the frontmatter is between them and
+  // everything after the second is body (further "---" left intact).
   const i1 = text.indexOf("---");
   const i2 = text.indexOf("---", i1 + 3);
   const fmText = text.slice(i1 + 3, i2);

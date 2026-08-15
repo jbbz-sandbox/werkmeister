@@ -399,9 +399,9 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 │   ├── backend.yml                  # Per-service compose files
 │   └── frontend.yml
 ├── infra/templates/
-│   ├── docker-compose.feature.yml.j2   # nunjucks template for per-feature compose
-│   ├── Caddyfile.j2                    # Template for proxy config
-│   └── supergraph-config.yml.j2        # Template for Apollo gateway
+│   ├── docker-compose.feature.yml.njk  # nunjucks template for per-feature compose
+│   ├── Caddyfile.njk                   # Template for proxy config
+│   └── supergraph-config.yml.njk       # Template for Apollo gateway
 ├── infra/proxy/
 │   ├── Caddyfile                       # Generated — do not edit
 │   └── ui/                             # Feature selector web UI

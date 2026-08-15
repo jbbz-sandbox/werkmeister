@@ -1,36 +1,29 @@
 /**
- * Synchronous subprocess helpers replacing Python's `subprocess.run`.
+ * Synchronous subprocess helpers over `spawnSync`.
  *
- * The Python CLI's dominant call shapes, mirrored here:
- *   subprocess.run(cmd, capture_output=True, text=True, timeout=N[, check=..])
- *       -> run(cmd, { capture: true, timeout: N[, check] })
- *   subprocess.run(cmd)                      (inherit stdio)
- *       -> run(cmd)  or  run(cmd, { stdio: "inherit" })
- *   subprocess.run(cmd, cwd=..., check=True) -> run(cmd, { cwd, check: true })
- *
- * `timeout` is in SECONDS (like Python) so call sites port verbatim.
+ * `timeout` is in SECONDS, not milliseconds.
  *
  * Errors: a `ProcError` is thrown when
- *   - the executable is missing        (err.code === "ENOENT",   FileNotFoundError)
- *   - the timeout elapsed              (err.code === "ETIMEDOUT", TimeoutExpired)
- *   - `check: true` and exit != 0      (err.code === undefined,  CalledProcessError)
+ *   - the executable is missing        (err.code === "ENOENT")
+ *   - the timeout elapsed              (err.code === "ETIMEDOUT")
+ *   - `check: true` and exit != 0      (err.code === undefined)
  * carrying `status`, `stdout`, `stderr`, and the `cmd` that ran.
  */
 
 import { spawnSync } from "node:child_process";
 
 export interface RunOptions {
-  /** Throw a ProcError when the command exits non-zero (Python check=True). */
+  /** Throw a ProcError when the command exits non-zero. */
   check?: boolean;
-  /** Capture stdout/stderr as strings (Python capture_output=True). Default: inherit. */
+  /** Capture stdout/stderr as strings. Default: inherit. */
   capture?: boolean;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  /** Text piped to stdin (Python input=...). */
+  /** Text piped to stdin. */
   input?: string;
   /** Explicit inherit — same as omitting `capture`; kept for readable call sites. */
   stdio?: "inherit";
-  /** Timeout in seconds (Python timeout=...). */
+  /** Timeout in seconds. */
   timeout?: number;
 }
 
@@ -104,7 +97,7 @@ export function run(cmd: string[], opts: RunOptions = {}): RunResult {
     );
   }
 
-  // Killed by signal -> negative status, like Python's returncode.
+  // Killed by signal -> negative status.
   const status = res.status ?? -1;
 
   if (opts.check && status !== 0) {

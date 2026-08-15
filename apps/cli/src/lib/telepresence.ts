@@ -87,7 +87,7 @@ export function parseVersion(output: string): [number, number, number] | null {
   ];
 }
 
-/** Tuple comparison (Python `version < MIN_VERSION`). */
+/** Component-wise less-than for a (major, minor, patch) triple. */
 export function versionLt(
   a: [number, number, number],
   b: [number, number, number],

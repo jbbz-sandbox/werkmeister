@@ -59,7 +59,7 @@ function escapeRegex(s: string): string {
 }
 
 /**
- * Python `fnmatch.fnmatch` semantics: `*` matches everything INCLUDING `/`
+ * Glob matching where `*` matches everything INCLUDING `/`
  * (so `**` behaves the same as `*`), `?` matches one char, `[seq]` a class.
  * The diff-matching logic deliberately depends on these semantics — see the
  * ponytail note in `standardsMatchingDiff`.

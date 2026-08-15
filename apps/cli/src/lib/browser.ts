@@ -157,12 +157,12 @@ export class WS {
 
   private rxbuf: Buffer = Buffer.alloc(0);
   private nextId = 0;
-  // Messages decoded before a handler is attached are queued, mirroring the
-  // Python client where unread bytes just sit in _rxbuf until recv_message.
+  // Messages decoded before a handler is attached are queued rather than
+  // dropped — the handler is set after the socket is already receiving.
   private pending: any[] = [];
   private handler: ((msg: any) => void) | null = null;
 
-  /** Called with each decoded CDP message (Node's async port of recv_message). */
+  /** Called with each decoded CDP message. */
   set onMessage(fn: ((msg: any) => void) | null) {
     this.handler = fn;
     if (fn) while (this.pending.length) fn(this.pending.shift());
@@ -514,7 +514,7 @@ class FeatureSession {
     this.ws.onMessage = (msg) => this.onEvent(msg);
     // Stay attached so new tabs/navigations keep getting tagged. Messages are
     // handled by the socket's data events; this loop just polls the Chrome
-    // process + stop flag ~1x/sec (same cadence as the Python select loop).
+    // process + stop flag ~1x/sec.
     while (!this.procExited() && !this.shouldStop()) {
       if (this.ws.fatalError) throw this.ws.fatalError;
       await sleep(1000);

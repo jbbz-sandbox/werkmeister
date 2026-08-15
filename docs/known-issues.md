@@ -115,7 +115,7 @@ The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in t
 
 **Severity:** Critical (causes blank pages / empty responses)
 **Status:** Resolved — documented to prevent recurrence
-**Affects:** `infra/proxy/Caddyfile`, `infra/templates/Caddyfile.j2`, `apps/cli/src/lib/generate.ts`
+**Affects:** `infra/proxy/Caddyfile`, `infra/templates/Caddyfile.njk`, `apps/cli/src/lib/generate.ts`
 
 When the Caddyfile uses multiple `handle` blocks at the same nesting level for path-based routing, Caddy groups them into a **mutual-exclusion set**. Only the first matching `handle` block executes; the remaining blocks are silently dropped from the compiled config. This results in URLs returning HTTP 200 with `content-length: 0` (empty body) for any path whose route was dropped.
 

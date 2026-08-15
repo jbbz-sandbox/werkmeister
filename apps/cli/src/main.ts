@@ -53,8 +53,8 @@ Multi-feature concurrent development orchestrator
 `;
 
 /**
- * The argparse-Namespace equivalent handed to every command module's run().
- * Keys use snake_case `dest` names so command modules read
+ * The parsed-argument bag handed to every command module's run().
+ * Keys use snake_case names so command modules read
  * `args.jira_id` etc. verbatim.
  */
 export type Namespace = Record<string, unknown>;

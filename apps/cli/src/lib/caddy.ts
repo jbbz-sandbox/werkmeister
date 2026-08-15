@@ -30,7 +30,7 @@ function _infraComposeFile(): string {
   return `${getInfraRoot()}/compose/shared-infra.yml`;
 }
 
-/** Everything before the first `#` in *line* (Python `line.split("#", 1)[0]`). */
+/** Everything before the first `#` in *line*. */
 function _stripComment(line: string): string {
   const i = line.indexOf("#");
   return i === -1 ? line : line.slice(0, i);

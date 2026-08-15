@@ -1,10 +1,8 @@
 /**
  * slot allocation, release, port math.
  *
- * The Python tests monkeypatch module-private functions (`_query_labeled_containers`,
- * `_slot_config`, `_routable_service_names`, `_ALLOCATE_LOCK_TIMEOUT`). Those are
- * not exported in the TS port, so the equivalent boundaries are mocked one level
- * down instead:
+ * The functions this exercises are module-private, so the boundaries around
+ * them are mocked one level down instead:
  *   - the Docker query boundary → mock `run` in proc.js (queryLabeledContainers
  *     shells out through it),
  *   - `_slot_config`            → override `loadPorts` in config.js,

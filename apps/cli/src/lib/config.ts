@@ -52,7 +52,7 @@ export function error(msg: string): void {
 // Path helpers
 // ---------------------------------------------------------------------------
 
-/** Expand a leading `~` to the user's home directory (Python `Path.expanduser`). */
+/** Expand a leading `~` to the user's home directory. */
 export function expandUser(p: string): string {
   if (p === "~") return os.homedir();
   if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
@@ -386,7 +386,7 @@ export function getServiceNames(): string[] {
  * Compose generation isolates these per feature by prefixing the feature
  * name (`<feature>-<base>`), so this is exactly the set of suffixes that
  * identify a per-feature sandbox volume. Mirrors the volume collection in
- * generateFeatureCompose() and docker-compose.feature.yml.j2: every
+ * generateFeatureCompose() and docker-compose.feature.yml.njk: every
  * `node_modules_volume`, plus every `extra_volumes` entry whose left side is
  * a named volume rather than a host bind mount (a "/" marks a bind mount) —
  * across both `services:` and `setup_services:`.

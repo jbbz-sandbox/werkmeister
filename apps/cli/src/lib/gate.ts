@@ -9,7 +9,7 @@
  * nothing that touches the config/YAML chain): Phase 0 measured the normal
  * `sandbox` entrypoint at 250-460ms cold, well past this design's <200ms budget
  * for a hook that fires on every Edit/Write. The hook config runs
- * `node dist/lib/gate.js` on this file directly, bypassing the argparse-heavy
+ * `node dist/lib/gate.js` on this file directly, bypassing the heavyweight
  * main import chain entirely. The normal `sandbox hooks gate` CLI path (manual
  * runs, tests) imports this same module — one implementation either way.
  */
@@ -34,8 +34,8 @@ const _PHASE_ENTRY_TEXT =
   "this edit.";
 
 // ---------------------------------------------------------------------------
-// fnmatch — minimal port of Python's fnmatch.fnmatch/translate (posix normcase
-// is the identity, so matching is case-sensitive; `*` crosses `/` like Python).
+// fnmatch — glob matching for the manifest's file globs. Case-sensitive, and
+// `*` crosses `/` (so `**` behaves the same as `*`).
 // ---------------------------------------------------------------------------
 
 function _translate(pat: string): string {
@@ -72,34 +72,6 @@ function _translate(pat: string): string {
 
 function fnmatch(name: string, pat: string): boolean {
   return new RegExp(_translate(pat), "s").test(name);
-}
-
-/**
- * `json.dumps` byte-parity: default separators `(", ", ": ")` plus
- * ensure_ascii=True (non-ASCII → \uXXXX, astral chars as surrogate pairs).
- * Used for both the printed hook decision and the persisted state file so
- * output matches the Python gate byte-for-byte.
- */
-function _pyJson(value: unknown): string {
-  if (value === null || typeof value === "boolean" || typeof value === "number") {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "string") {
-    return JSON.stringify(value).replace(
-      /[\u0080-\uffff]/g,
-      (ch) => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"),
-    );
-  }
-  if (Array.isArray(value)) {
-    return "[" + value.map(_pyJson).join(", ") + "]";
-  }
-  return (
-    "{" +
-    Object.entries(value as Record<string, unknown>)
-      .map(([k, v]) => `${_pyJson(k)}: ${_pyJson(v)}`)
-      .join(", ") +
-    "}"
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +153,7 @@ function _saveState(workspace: string, sessionId: string, state: Record<string, 
   try {
     const statePath = _statePath(workspace, sessionId);
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
-    fs.writeFileSync(statePath, _pyJson(state));
+    fs.writeFileSync(statePath, JSON.stringify(state));
     return true;
   } catch {
     return false;
@@ -200,11 +172,10 @@ export function resetSessionState(workspace: string, sessionId: string): void {
   try {
     fs.unlinkSync(_statePath(workspace, sessionId));
   } catch {
-    // missing_ok=True
+    // already gone
   }
 }
 
-/** Python-style codepoint sort (Array.sort's default string order matches for ASCII). */
 function _sorted(values: Iterable<string>): string[] {
   return [...values].sort();
 }
@@ -314,7 +285,7 @@ export function main(): void {
   }
 
   if (reason) {
-    console.log(_pyJson({
+    console.log(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
@@ -324,7 +295,7 @@ export function main(): void {
   }
 }
 
-// `if __name__ == "__main__"` guard: self-execute only when run directly.
+// Self-execute only when run directly, not when imported by the CLI or tests.
 const _isMain = (() => {
   try {
     return Boolean(

@@ -6,8 +6,8 @@
  * loadServices/loadPorts — the registry moved out of the checkout, so the
  * developer's own must never be read here. compose/env/supergraph tests pass
  * workspaceOverride=tmp so nothing lands outside the temp dir. Caddyfile tests
- * redirect generate's getInfraRoot into tmp (Python monkeypatches the same
- * reference) so the real infra/proxy/Caddyfile is never mutated.
+ * redirect generate's getInfraRoot into tmp so the real infra/proxy/Caddyfile
+ * is never mutated.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
@@ -250,7 +250,7 @@ describe("generateFeatureEnv", () => {
     expect(fs.existsSync(legacy)).toBe(false);
   });
 
-  // Both context values were plumbed to env.j2 and never populated: `env_vars`
+  // Both context values were plumbed to env.njk and never populated: `env_vars`
   // was a `{}` literal that nothing wrote to, and `secrets` was loaded, passed,
   // and never rendered. So the template's per-workspace section was structurally
   // always empty and there was no config surface for workspace env vars at all.
