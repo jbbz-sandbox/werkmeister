@@ -5,7 +5,7 @@ Setup log for direct Jira REST access from `apps/sandbox-dashboard` — replaces
 issue cards, refine briefings). Written as a log so it can become an onboarding
 doc/script; steps marked **[manual]** cannot be scripted, everything else can.
 
-First performed: 2026-07-11 (jayboyer). Verified working same day.
+First performed: 2026-07-11. Verified working same day.
 
 > **Automated:** `sandbox setup` now scaffolds `~/.sandbox/jira.env` (chmod
 > 600) and live-verifies a filled-in token against `/rest/api/2/myself`;

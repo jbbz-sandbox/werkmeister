@@ -20,28 +20,12 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import * as gc from "../lib/global_config.js";
 import type { PromptSpec } from "../lib/global_config.js";
 import { runWizard } from "../lib/wizard.js";
-
-// Migration source (env) + built-in fallback for each prompt's default.
-const _ENV_FOR: Record<string, string> = {
-  repos_root: "SANDBOX_REPOS_ROOT",
-  workspaces_root: "SANDBOX_WORKSPACES_ROOT",
-};
-
-function builtinDefault(key: string): string {
-  const home = os.homedir();
-  const table: Record<string, string> = {
-    repos_root: path.join(home, "workspace"),
-    workspaces_root: path.join(home, "workspace", "features"),
-  };
-  return table[key];
-}
 
 function show(cfg: Record<string, any>): void {
   const paths = cfg.paths || {};
@@ -53,8 +37,11 @@ function show(cfg: Record<string, any>): void {
   for (const key of ["repos_root", "workspaces_root"]) {
     const value = paths[key];
     const origin = value ? "YAML" : "default";
+    // The built-in, not the wizard's default: env is a migration seed for the
+    // prompts, never read at runtime, so showing it here would name a value no
+    // command would actually use.
     console.log(
-      `${Colors.BOLD}${key}:${Colors.RESET}      ${value || builtinDefault(key)}  ${Colors.DIM}(${origin})${Colors.RESET}`,
+      `${Colors.BOLD}${key}:${Colors.RESET}      ${value || gc.builtinPathDefault(key)}  ${Colors.DIM}(${origin})${Colors.RESET}`,
     );
   }
   // Ingress is owned by `sandbox setup`, but shown here because `--show` is
@@ -79,7 +66,6 @@ function show(cfg: Record<string, any>): void {
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const cfg = gc.load();
-  const paths = cfg.paths || {};
 
   if (args.check) {
     const problems = gc.check(cfg);
@@ -108,14 +94,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     resolved.workspaces_root = args.workspaces_root as string;
   }
 
-  const defaultFor = (spec: PromptSpec): string => {
-    // Existing YAML → currently-exported env (migration) → built-in.
-    return (
-      paths[spec.key] ||
-      process.env[_ENV_FOR[spec.key]] ||
-      builtinDefault(spec.key)
-    );
-  };
+  // `resolved` is read back as it fills, so a later prompt's default follows
+  // the answers already given.
+  const defaultFor = (spec: PromptSpec): string => gc.pathDefault(spec.key, cfg, resolved);
 
   const missing = gc._CONFIG_PROMPTS.filter((s) => !(s.key in resolved));
   if (missing.length) {

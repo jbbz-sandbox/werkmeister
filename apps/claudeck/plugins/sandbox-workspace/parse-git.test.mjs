@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { parseGitStatus } from "./parse-git.mjs";
 
 test("clean branch with upstream", () => {
-  const out = parseGitStatus("## jayboyer/test-me...origin/jayboyer/test-me\n");
+  const out = parseGitStatus("## dev/test-me...origin/dev/test-me\n");
   assert.deepEqual(out, {
-    branch: "jayboyer/test-me",
-    upstream: "origin/jayboyer/test-me",
+    branch: "dev/test-me",
+    upstream: "origin/dev/test-me",
     dirty: 0,
     ahead: 0,
     behind: 0,

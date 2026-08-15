@@ -213,6 +213,48 @@ export const _CONFIG_PROMPTS: readonly PromptSpec[] = [
   },
 ];
 
+// Migration source (currently-exported env) for each path prompt, so a machine
+// configured before the YAML existed migrates by pressing Enter through.
+const _PATH_ENV: Record<string, string> = {
+  repos_root: "SANDBOX_REPOS_ROOT",
+  workspaces_root: "SANDBOX_WORKSPACES_ROOT",
+};
+
+/**
+ * Built-in fallback for one `paths:` key — what an unconfigured machine gets.
+ *
+ * `reposRoot` overrides the home-relative base, so the workspaces root can be
+ * derived from a repos root the config or the user has already named.
+ */
+export function builtinPathDefault(key: string, reposRoot = ""): string {
+  const base = reposRoot || path.join(os.homedir(), "workspace");
+  return key === "workspaces_root" ? path.join(base, "features") : base;
+}
+
+/**
+ * The default offered for one `paths:` prompt: stored YAML → exported env →
+ * built-in.
+ *
+ * `resolved` carries the answers already given in *this* run, so on a machine
+ * with nothing stored the workspaces root follows the repos root the user just
+ * typed. Offering `~/workspace/features` one line after they said their repos
+ * live in `~/code` is the wizard talking them into a layout they didn't pick.
+ */
+export function pathDefault(
+  key: string,
+  cfg?: Record<string, any>,
+  resolved: Record<string, string> = {},
+): string {
+  const paths = (cfg ?? load())["paths"] ?? {};
+  const stored = paths[key] || process.env[_PATH_ENV[key]];
+  if (stored) {
+    return String(stored);
+  }
+  const reposRoot =
+    resolved["repos_root"] || String(paths["repos_root"] || process.env[_PATH_ENV["repos_root"]] || "");
+  return builtinPathDefault(key, reposRoot);
+}
+
 // ---------------------------------------------------------------------------
 // Load / save
 // ---------------------------------------------------------------------------

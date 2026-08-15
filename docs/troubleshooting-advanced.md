@@ -240,7 +240,7 @@ When everything is broken:
 sandbox down --all
 
 # 2. Restart shared infrastructure
-cd /Users/jayboyer/workspace/sandbox
+cd "$SANDBOX_ROOT"
 docker compose -f infra/compose/shared-infra.yml down
 docker compose -f infra/compose/shared-infra.yml up -d
 

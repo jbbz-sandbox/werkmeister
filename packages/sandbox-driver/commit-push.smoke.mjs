@@ -45,12 +45,12 @@ console.log("✓ clean checkout behind origin/main → skipped (ok), no push att
 // committed + pushed; the remote gains the branch.
 const feat = path.join(tmp, "feat");
 execFileSync("git", ["clone", origin, feat], { stdio: "pipe" });
-git(feat, "checkout", "-b", "jayboyer/feature-x");
+git(feat, "checkout", "-b", "dev/feature-x");
 fs.writeFileSync(path.join(feat, "b.txt"), "work"); // uncommitted → handoff must commit it
 const r2 = await commitAndPush(feat);
 assert.equal(r2.ok, true, `feature push must succeed, got: ${r2.message}`);
 const remoteBranches = git(origin, "branch", "--list");
-assert.match(remoteBranches, /jayboyer\/feature-x/, "feature branch reached origin");
+assert.match(remoteBranches, /dev\/feature-x/, "feature branch reached origin");
 console.log("✓ new feature branch with local work → committed + pushed to origin");
 
 fs.rmSync(tmp, { recursive: true, force: true });
