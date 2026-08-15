@@ -37,8 +37,8 @@ function isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Python truthiness: empty dicts/lists are falsy (JS objects are always truthy). */
-function pyTruthy(value: unknown): boolean {
+/** jinja truthiness: empty dicts/lists are falsy (JS objects are always truthy). */
+function jinjaTruthy(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
   if (value !== null && typeof value === "object") return Object.keys(value).length > 0;
   return Boolean(value);
@@ -100,8 +100,8 @@ function resolveServicesAndPorts(
 ): [Record<string, any>, Record<string, any>] {
   const servicesFromConfig = config ? config["services"] : null;
   const portsFromConfig = config ? config["ports"] : null;
-  const servicesConfig = pyTruthy(servicesFromConfig) ? servicesFromConfig : loadServices();
-  const portsConfig = pyTruthy(portsFromConfig) ? portsFromConfig : loadPorts();
+  const servicesConfig = jinjaTruthy(servicesFromConfig) ? servicesFromConfig : loadServices();
+  const portsConfig = jinjaTruthy(portsFromConfig) ? portsFromConfig : loadPorts();
   return [servicesConfig, portsConfig];
 }
 
@@ -109,9 +109,9 @@ function resolveServicesAndPorts(
 // nunjucks environment — jinja2 compatibility layer
 // ---------------------------------------------------------------------------
 //
-// The .j2 templates are shared unchanged with the Python CLI, so the nunjucks
-// environment replicates the jinja2 `Environment` options and papers over the
-// Python-isms the templates rely on:
+// The templates on disk are written in the jinja2 dialect, so the nunjucks
+// replicates the jinja2 `Environment` options and papers over the jinja/Python
+// idioms the templates rely on:
 //
 // - jinja2 options were `keep_trailing_newline=True` + `jinja2.ext.do`, with
 //   trim_blocks/lstrip_blocks/autoescape left at their (False) defaults.
@@ -122,10 +122,10 @@ function resolveServicesAndPorts(
 //   itself creates with `{% set x = [] %}` — provided via a non-enumerable
 //   Array.prototype.append.
 // - `dict.get(key, default)` / `dict.items()` on context data — provided by
-//   `pythonifyContext`, which stamps non-enumerable methods on plain objects.
+//   `jinjaContext`, which stamps non-enumerable methods on plain objects.
 // - jinja's `map(attribute=...)` filter has no nunjucks equivalent — added.
 // - jinja treats empty dicts/lists as falsy in `{% if %}`; JS does not. The
-//   loader rewrites every if/elif condition to `pytruth(<expr>)` (a template
+//   loader rewrites every if/elif condition to `__truthy(<expr>)` (a template
 //   global) at load time — templates on disk stay byte-identical.
 
 class DoExtension {
@@ -146,7 +146,7 @@ class DoExtension {
 
 const _IF_CONDITION_RE = /(\{%-?\s*(?:el)?if\s+)([\s\S]+?)(\s*-?%\})/g;
 
-/** FileSystemLoader that rewrites if-conditions for Python truthiness. */
+/** FileSystemLoader that rewrites if-conditions for jinja truthiness. */
 class JinjaCompatLoader extends (nunjucks.FileSystemLoader as any) {
   getSource(name: string): any {
     const source = super.getSource(name);
@@ -154,22 +154,22 @@ class JinjaCompatLoader extends (nunjucks.FileSystemLoader as any) {
       source.src = source.src.replace(
         _IF_CONDITION_RE,
         (_m: string, open: string, cond: string, close: string) =>
-          `${open}pytruth(${cond})${close}`,
+          `${open}__truthy(${cond})${close}`,
       );
     }
     return source;
   }
 }
 
-const _PY_GET = function (this: Record<string, any>, key: string, dflt?: any): any {
+const _DICT_GET = function (this: Record<string, any>, key: string, dflt?: any): any {
   return key in this ? this[key] : dflt;
 };
-const _PY_ITEMS = function (this: Record<string, any>): Array<[string, any]> {
+const _DICT_ITEMS = function (this: Record<string, any>): Array<[string, any]> {
   return Object.entries(this);
 };
 
-/** Recursively stamp Python dict methods (`get`, `items`) onto plain objects. */
-function pythonifyContext<T>(value: T, seen = new WeakSet<object>()): T {
+/** Recursively stamp the dict methods jinja templates call (`get`, `items`). */
+function jinjaContext<T>(value: T, seen = new WeakSet<object>()): T {
   if (value === null || typeof value !== "object") {
     return value;
   }
@@ -180,7 +180,7 @@ function pythonifyContext<T>(value: T, seen = new WeakSet<object>()): T {
   seen.add(obj);
   if (Array.isArray(value)) {
     for (const item of value) {
-      pythonifyContext(item, seen);
+      jinjaContext(item, seen);
     }
     return value;
   }
@@ -188,13 +188,13 @@ function pythonifyContext<T>(value: T, seen = new WeakSet<object>()): T {
   if (proto === Object.prototype || proto === null) {
     const record = value as unknown as Record<string, any>;
     if (!Object.prototype.hasOwnProperty.call(record, "get")) {
-      Object.defineProperty(record, "get", { value: _PY_GET, enumerable: false });
+      Object.defineProperty(record, "get", { value: _DICT_GET, enumerable: false });
     }
     if (!Object.prototype.hasOwnProperty.call(record, "items")) {
-      Object.defineProperty(record, "items", { value: _PY_ITEMS, enumerable: false });
+      Object.defineProperty(record, "items", { value: _DICT_ITEMS, enumerable: false });
     }
     for (const v of Object.values(record)) {
-      pythonifyContext(v, seen);
+      jinjaContext(v, seen);
     }
   }
   return value;
@@ -227,7 +227,7 @@ function getNunjucksEnv(): nunjucks.Environment {
     autoescape: false,
   });
   env.addExtension("do", new DoExtension() as any);
-  env.addGlobal("pytruth", pyTruthy);
+  env.addGlobal("__truthy", jinjaTruthy);
   // jinja `map(attribute='name')` — the only form the templates use.
   env.addFilter("map", (arr: any[], kwargs: any) => {
     const attr = kwargs && typeof kwargs === "object" ? kwargs["attribute"] : undefined;
@@ -346,8 +346,8 @@ function k8sPortForService(
   return null;
 }
 
-/** Python `repr()` for a string — used to keep error messages byte-identical. */
-function pyRepr(value: string): string {
+/** Single-quote a value for an error message. */
+function quoted(value: string): string {
   return `'${value}'`;
 }
 
@@ -373,8 +373,8 @@ function resolveServiceRefs(
     const svcDef = servicesConfig[svcName] ?? {};
     if (!isDict(svcDef)) {
       throw new Error(
-        `Cannot resolve {${svcName}} in ${pyRepr(value)}: ` +
-        `${pyRepr(svcName)} is not a known service in services.yaml`,
+        `Cannot resolve {${svcName}} in ${quoted(value)}: ` +
+        `${quoted(svcName)} is not a known service in services.yaml`,
       );
     }
 
@@ -389,8 +389,8 @@ function resolveServiceRefs(
       return `k8s-forwards:${k8sPort}`;
     }
     throw new Error(
-      `Cannot resolve {${svcName}} in ${pyRepr(value)}: ` +
-      `${pyRepr(svcName)} is not local and has no k8s_forward_port in services.yaml`,
+      `Cannot resolve {${svcName}} in ${quoted(value)}: ` +
+      `${quoted(svcName)} is not local and has no k8s_forward_port in services.yaml`,
     );
   });
 }
@@ -477,7 +477,7 @@ export function generateFeatureCompose(
 
   // Try template first
   const jinjaEnv = getNunjucksEnv();
-  const template = getTemplateOrNull(jinjaEnv, "docker-compose.feature.yml.j2");
+  const template = getTemplateOrNull(jinjaEnv, "docker-compose.feature.yml.njk");
   if (template) {
     const [portStart] = getPortRange(slot);
     // Build rich service objects for the template
@@ -541,7 +541,7 @@ export function generateFeatureCompose(
       ]),
     );
     let rendered = template.render(
-      pythonifyContext({
+      jinjaContext({
         feature_name: feature,
         slot,
         base_port: portStart,
@@ -562,7 +562,7 @@ export function generateFeatureCompose(
     return outPath;
   }
   warn(
-    "Template 'docker-compose.feature.yml.j2' not found -- " +
+    "Template 'docker-compose.feature.yml.njk' not found -- " +
     "falling back to built-in compose generation",
   );
 
@@ -748,10 +748,8 @@ export function generateFeatureCompose(
     compose["volumes"] = namedVolumes;
   }
 
-  // Write as YAML prefixed with the workspace header. (The Python original
-  // had a JSON fallback for a missing PyYAML; the yaml package is a hard
-  // dependency here, so that branch cannot occur.) indentSeq/singleQuote
-  // mirror PyYAML's default_flow_style=False output shape.
+  // Write as YAML prefixed with the workspace header. indentSeq/singleQuote
+  // keep the block-style shape the generated compose files already have.
   const body = YAML.stringify(compose, { indentSeq: false, singleQuote: true });
   fs.writeFileSync(outPath, header + body);
 
@@ -846,7 +844,7 @@ export function generateFeatureEnv(
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
-  const template = getTemplateOrNull(jinjaEnv, "env.j2");
+  const template = getTemplateOrNull(jinjaEnv, "env.njk");
   if (template) {
     const [portStart] = getPortRange(slot);
     // Build service_urls and env_vars for the template
@@ -892,7 +890,7 @@ export function generateFeatureEnv(
       }
     }
     const rendered = template.render(
-      pythonifyContext({
+      jinjaContext({
         feature_name: feature,
         slot,
         base_port: portStart,
@@ -905,7 +903,7 @@ export function generateFeatureEnv(
     success(`Generated .env (template): ${outPath}`);
     return outPath;
   }
-  warn("Template 'env.j2' not found -- " + "falling back to built-in .env generation");
+  warn("Template 'env.njk' not found -- " + "falling back to built-in .env generation");
 
   // ---- Programmatic generation -----------------------------------------
   const lines: string[] = [
@@ -1012,7 +1010,7 @@ export function generateSupergraphConfig(
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
-  const template = getTemplateOrNull(jinjaEnv, "supergraph-config.yml.j2");
+  const template = getTemplateOrNull(jinjaEnv, "supergraph-config.yml.njk");
   if (template) {
     const subgraphList: Array<{ name: string; url: string }> = [];
     for (const [svcName, svcDef] of Object.entries(servicesConfig)) {
@@ -1037,7 +1035,7 @@ export function generateSupergraphConfig(
       subgraphList.push({ name: svcName.replace(/-/g, "_"), url });
     }
     const rendered = template.render(
-      pythonifyContext({
+      jinjaContext({
         feature_name: feature,
         subgraphs: subgraphList,
       }),
@@ -1047,7 +1045,7 @@ export function generateSupergraphConfig(
     return outPath;
   }
   warn(
-    "Template 'supergraph-config.yml.j2' not found -- " +
+    "Template 'supergraph-config.yml.njk' not found -- " +
     "falling back to built-in supergraph config generation",
   );
 
@@ -1334,14 +1332,14 @@ function generateCaddyfileLocked(
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
-  const template = getTemplateOrNull(jinjaEnv, "Caddyfile.j2");
+  const template = getTemplateOrNull(jinjaEnv, "Caddyfile.njk");
   if (template) {
-    const rendered = template.render(pythonifyContext({ host_routers: hostRouters }));
+    const rendered = template.render(jinjaContext({ host_routers: hostRouters }));
     fs.writeFileSync(outPath, rendered);
     success(`Generated Caddyfile (template): ${outPath}`);
     return outPath;
   }
-  warn("Template 'Caddyfile.j2' not found -- " + "falling back to built-in Caddyfile generation");
+  warn("Template 'Caddyfile.njk' not found -- " + "falling back to built-in Caddyfile generation");
 
   // ---- Programmatic generation -----------------------------------------
   const lines: string[] = [
@@ -1436,8 +1434,7 @@ export function generateWorkspaceCompose(
   } catch (exc) {
     const msg = exc instanceof Error ? exc.message : String(exc);
     warn(`Could not allocate slot: ${msg}`);
-    // The Python original distinguished TimeoutError (lock timeout) from
-    // RuntimeError; the TS lock signals timeout via its message.
+    // The lock has no distinct timeout error type — it signals one in the message.
     if (msg.startsWith("Timed out")) {
       warn("Retry, or remove the stale lock file if no sandbox process is running.");
     } else {

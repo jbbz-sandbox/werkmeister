@@ -6,7 +6,7 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 // Stub the two side-effecting projections so the unit test never touches the
-// real ~/.zshenv or the Desktop config (Python monkeypatches the same two).
+// real ~/.zshenv or the Desktop config.
 vi.mock("../global_config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../global_config.js")>();
   return { ...actual, ensureZshenvSources: () => false, patchDesktopConfig: () => false };

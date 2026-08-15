@@ -31,7 +31,7 @@ import {
 } from "../lib/standards.js";
 import { checkWorkspaceSkills, writeWorkspaceSkills } from "../lib/workspace_skills.js";
 
-/** Recursively canonicalize for order-independent value comparison (Python dict `!=`). */
+/** Recursively canonicalize for order-independent value comparison. */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(canonical);

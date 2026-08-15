@@ -94,39 +94,6 @@ const REPOS_PROMPT: PromptSpec = {
 };
 
 // ---------------------------------------------------------------------------
-// Python-compatible JSON serialisation (json.dump(..., indent=2) parity)
-// ensure_ascii=True (non-ASCII → \uXXXX). Mirrors gate.ts `_pyJson`, with
-// indentation. Kept local — a tiny pure helper, not worth a shared module mid-port.
-// ---------------------------------------------------------------------------
-
-function _pyStr(s: string): string {
-  return JSON.stringify(s).replace(
-    /[-￿]/g,
-    (ch) => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"),
-  );
-}
-
-function pyJsonDump(value: unknown, level = 0): string {
-  const pad = "  ".repeat(level + 1);
-  const padEnd = "  ".repeat(level);
-  if (value === null || value === undefined) return "null";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number") return JSON.stringify(value);
-  if (typeof value === "string") return _pyStr(value);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "[]";
-    const items = value.map((v) => pad + pyJsonDump(v, level + 1));
-    return "[\n" + items.join(",\n") + "\n" + padEnd + "]";
-  }
-  const entries = Object.entries(value as Record<string, unknown>);
-  if (entries.length === 0) return "{}";
-  const items = entries.map(
-    ([k, v]) => pad + _pyStr(k) + ": " + pyJsonDump(v, level + 1),
-  );
-  return "{\n" + items.join(",\n") + "\n" + padEnd + "}";
-}
-
-// ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
 
@@ -350,8 +317,7 @@ function printPrompts(args: Record<string, unknown>): void {
     emitSpecError(exc);
     return;
   }
-  process.stdout.write(pyJsonDump(spec));
-  process.stdout.write("\n");
+  process.stdout.write(JSON.stringify(spec, null, 2) + "\n");
 }
 
 function printFormSchema(args: Record<string, unknown>): void {
@@ -362,11 +328,10 @@ function printFormSchema(args: Record<string, unknown>): void {
     emitSpecError(exc);
     return;
   }
-  process.stdout.write(pyJsonDump(buildFormSchema(spec)));
-  process.stdout.write("\n");
+  process.stdout.write(JSON.stringify(buildFormSchema(spec), null, 2) + "\n");
 }
 
-/** Locate an executable on PATH (Python `shutil.which`). */
+/** Locate an executable on PATH. */
 function which(cmd: string): string | null {
   const dirs = (process.env.PATH || "").split(path.delimiter);
   for (const dir of dirs) {

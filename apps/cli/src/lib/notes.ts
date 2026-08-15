@@ -62,7 +62,7 @@ export function noteFilename(number: number, noteType: string, slug: string): st
   return `${String(number).padStart(3, "0")}-${noteType}-${slug}.md`;
 }
 
-/** Python `str.split(sep, 2)` — at most 3 parts, remainder kept intact. */
+/** Split on the first two *sep* only — at most 3 parts, remainder kept intact. */
 function _split3(text: string, sep: string): string[] {
   const first = text.indexOf(sep);
   if (first === -1) return [text];

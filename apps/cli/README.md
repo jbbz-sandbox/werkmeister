@@ -27,7 +27,7 @@ npm run build
 
 ## Notes
 
-- CLI parsing is commander; templates in `infra/templates/*.j2` render through
+- CLI parsing is commander; templates in `infra/templates/*.njk` render through
   nunjucks with a small compat layer (`{% do %}`, dict truthiness,
   `map(attribute=…)`) so they stay shared verbatim with other consumers
 - `sandbox mcp` prints guidance — the MCP dashboard app lives in

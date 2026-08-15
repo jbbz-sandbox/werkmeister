@@ -214,8 +214,8 @@ function renderSkill(
  */
 function buildDescription(domain: string, meta: Record<string, any>): string {
   const summary = String(meta["summary"] || `${domain} coding standard.`).trim();
-  // Python `or` semantics: an empty list falls back to the default; a scalar
-  // string survives and `includes` does the same substring check as `in`.
+  // An empty list falls back to the default; a scalar string survives, where
+  // `includes` does a substring check instead of a membership one.
   let phases: any = meta["phase"];
   if (!phases || (Array.isArray(phases) && phases.length === 0)) {
     phases = ["implement", "review"];

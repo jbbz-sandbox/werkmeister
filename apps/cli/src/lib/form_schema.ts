@@ -59,7 +59,7 @@ function _shape(
   fieldUi: Record<string, any>,
 ): any {
   const choices = prompt["choices"];
-  // Python truthiness: an absent or EMPTY choices list falls through.
+  // An absent or EMPTY choices list falls through to the free-text shape.
   const hasChoices = Array.isArray(choices) && choices.length > 0;
   if (prompt["multi"] && hasChoices) {
     Object.assign(prop, {

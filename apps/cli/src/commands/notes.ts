@@ -36,7 +36,7 @@ import { loadStandardsModules, standardsMatchingDiff } from "../lib/standards.js
 // staying under it ourselves keeps the pointer lines from being cut off.
 const _BODY_CHAR_CAP = 3500;
 
-/** Python `input(prompt)`: write *promptStr*, read one line (no trailing newline). */
+/** Write *promptStr*, read one line (no trailing newline). */
 export async function input(promptStr: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -46,7 +46,6 @@ export async function input(promptStr: string): Promise<string> {
   }
 }
 
-/** Python `sys.stdin.isatty()`. */
 function stdinIsatty(): boolean {
   return Boolean(process.stdin.isTTY);
 }
@@ -354,19 +353,19 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 }
 
-/** Python `int(choice)` — strict base-10; returns null on ValueError. */
+/** Strict base-10 parse; returns null on anything that is not an integer. */
 function parseIntStrict(s: string): number | null {
   const t = s.trim();
   if (!/^[+-]?\d+$/.test(t)) return null;
   return Number.parseInt(t, 10);
 }
 
-/** Python `repr(list)` for a string list: ['a', 'b']. */
+/** Render a string list as `['a', 'b']`. */
 function reprList(items: string[]): string {
   return `[${items.map((i) => `'${i}'`).join(", ")}]`;
 }
 
-/** Python `repr(tuple)` for a string tuple: ('a', 'b'). */
+/** Render a string tuple as `('a', 'b')`. */
 function reprTuple(items: readonly string[]): string {
   if (items.length === 1) return `('${items[0]}',)`;
   return `(${items.map((i) => `'${i}'`).join(", ")})`;

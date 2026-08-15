@@ -121,9 +121,8 @@ async function runCollection(durationMinutes: number, interval: number, save: bo
   try {
     stats = await collectStats(durationSeconds, interval);
   } catch {
-    // ponytail: Python catches KeyboardInterrupt here; Node delivers Ctrl+C as
-    // SIGINT (process termination), so this fallback only fires for other
-    // surfaced interruptions — kept for structural parity with the Python.
+    // Node delivers Ctrl+C as SIGINT (process termination), so this fallback
+    // only fires for other surfaced interruptions.
     console.log(`\n  ${Colors.YELLOW}Collection stopped early${Colors.RESET}\n`);
     // Re-collect what we have so far (the function already has partial data)
     // We need to handle this differently - collect manually

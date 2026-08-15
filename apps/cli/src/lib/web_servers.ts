@@ -140,7 +140,7 @@ function appDir(app: WebApp): string {
   return path.join(getMonorepoRoot(), "apps", app.dir);
 }
 
-/** Match one of the fixed one-level glob patterns below (Python Path.glob subset). */
+/** Match one of the fixed one-level glob patterns below. */
 function globMatch(dir: string, pattern: string): string[] {
   const idx = pattern.lastIndexOf("/");
   const base = idx >= 0 ? path.join(dir, pattern.slice(0, idx)) : dir;

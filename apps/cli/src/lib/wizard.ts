@@ -223,7 +223,7 @@ export async function promptOne(
     if (spec.multi && value) {
       value = normalizeMulti(value, choices);
     }
-    // Python `re.match` anchors at the start only — replicate that.
+    // Patterns are start-anchored only; a trailing `$` is the author's to add.
     if (value && spec.pattern && !new RegExp(`^(?:${spec.pattern})`).test(value)) {
       warn(`'${value}' doesn't match the expected format ${spec.pattern} — try again.`);
       continue;

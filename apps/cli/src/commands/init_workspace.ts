@@ -90,7 +90,7 @@ function isDir(p: string): boolean {
   }
 }
 
-/** getpass.getuser() equivalent: env-driven with pwd fallback. */
+/** Current username: env-driven, with an os.userInfo() fallback. */
 function getuser(): string {
   for (const name of ["LOGNAME", "USER", "LNAME", "USERNAME"]) {
     const v = process.env[name];
@@ -99,43 +99,7 @@ function getuser(): string {
   return os.userInfo().username;
 }
 
-/**
- * `json.dump`/`json.dumps` byte-parity. `indent=null` mirrors the default
- * separators `(", ", ": ")`; a number mirrors `indent=N`. ensure_ascii=True in
- * both (non-ASCII → \uXXXX). Used for the two pure-output paths so stdout
- * matches the Python CLI byte-for-byte.
- */
-function pyJson(value: unknown, indent: number | null = null, level = 0): string {
-  if (value === undefined || value === null || typeof value === "boolean" || typeof value === "number") {
-    return value === undefined ? "null" : JSON.stringify(value);
-  }
-  if (typeof value === "string") {
-    return JSON.stringify(value).replace(
-      /[\u0080-\uffff]/g,
-      (ch) => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"),
-    );
-  }
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "[]";
-    if (indent === null) {
-      return "[" + value.map((v) => pyJson(v, null)).join(", ") + "]";
-    }
-    const pad = " ".repeat(indent * (level + 1));
-    const padEnd = " ".repeat(indent * level);
-    return "[\n" + value.map((v) => pad + pyJson(v, indent, level + 1)).join(",\n") + "\n" + padEnd + "]";
-  }
-  const entries = Object.entries(value as Record<string, unknown>);
-  if (entries.length === 0) return "{}";
-  if (indent === null) {
-    return "{" + entries.map(([k, v]) => `${pyJson(k, null)}: ${pyJson(v, null)}`).join(", ") + "}";
-  }
-  const pad = " ".repeat(indent * (level + 1));
-  const padEnd = " ".repeat(indent * level);
-  const items = entries.map(([k, v]) => pad + pyJson(k, indent, level + 1) + ": " + pyJson(v, indent, level + 1));
-  return "{\n" + items.join(",\n") + "\n" + padEnd + "}";
-}
-
-/** Run *fn* with stdout diagnostics rerouted to stderr (contextlib.redirect_stdout). */
+/** Run *fn* with stdout diagnostics rerouted to stderr. */
 function withStdoutToStderr<T>(fn: () => T): T {
   const orig = console.log;
   console.log = (...a: unknown[]) => console.error(...(a as []));
@@ -294,7 +258,7 @@ export function loadConfigFile(workspaceRoot: string, override: string | null): 
   return {};
 }
 
-/** Expand a leading `~`. Mirrors Path(...).expanduser() (no cwd resolution). */
+/** Expand a leading `~` (no cwd resolution). */
 function expandUserPath(p: string): string {
   if (p === "~") return os.homedir();
   if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
@@ -347,9 +311,8 @@ const _WORKSPACE_CONFIG_HEADER =
  * unmanaged keys, skips a no-op write, and migrates legacy workspace.yaml /
  * .jsonc / .json to workspace.yml.
  *
- * ponytail: PyYAML byte-parity is not contractual on this write path (only the
- * two --print-* paths are). yaml v2 block-styles multi-line strings and
- * sortMapEntries sorts keys the same as PyYAML sort_keys=True.
+ * Keys are sorted and multi-line strings are block-styled, so a rerun that
+ * changes nothing produces a byte-identical file.
  */
 export function writeWorkspaceConfig(workspaceRoot: string, resolved: Record<string, string>): void {
   if (Object.keys(resolved).length === 0) {
@@ -452,7 +415,7 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
         continue;
       }
       // A multi-value field may arrive from YAML as a list; downstream expects a
-      // comma-separated string, so join rather than str()-ing the list.
+      // comma-separated string, so join rather than stringifying the list.
       let text: string;
       if (Array.isArray(source)) {
         text = source
@@ -620,8 +583,8 @@ const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   },
 ];
 
-/** Prompt for any input `resolveInputs` didn't fill in (unused by run — the
- * wizard lives in `sandbox workspace`; kept for structural parity). */
+/** Prompt for any input `resolveInputs` didn't fill in. Driven by
+ * `sandbox workspace`, which owns the interactive path. */
 export async function runInteractiveWizard(
   workspaceRoot: string,
   resolved: Record<string, string>,
@@ -703,7 +666,7 @@ function computePromptSpec(args: Record<string, unknown>): Record<string, any> {
 export function emitSpecError(exc: unknown): void {
   const raw = exc instanceof Error ? exc.message : String(exc);
   const message = raw.replace(/\x1b\[[0-9;]*m/g, "").trim();
-  process.stdout.write(pyJson({ error: message, prompts: [] }) + "\n");
+  process.stdout.write(JSON.stringify({ error: message, prompts: [] }) + "\n");
   process.exit(1);
 }
 
@@ -719,7 +682,7 @@ function printPrompts(args: Record<string, unknown>): void {
     }
     throw exc;
   }
-  process.stdout.write(pyJson(spec, 2) + "\n");
+  process.stdout.write(JSON.stringify(spec, null, 2) + "\n");
 }
 
 /** Handle `sandbox init-workspace --print-form-schema`. */
@@ -734,7 +697,7 @@ function printFormSchema(args: Record<string, unknown>): void {
     }
     throw exc;
   }
-  process.stdout.write(pyJson(buildFormSchema(spec), 2) + "\n");
+  process.stdout.write(JSON.stringify(buildFormSchema(spec), null, 2) + "\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -936,45 +899,6 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
     success(`Worktrees reconciled (+${toCreate.length} / -${toRemove.length}).`);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Workspace metadata parser
-// ---------------------------------------------------------------------------
-
-const _META_KEY_RE = /^([A-Z][A-Z0-9_]*)=(.*)$/;
-
-/** Extract all KEY=VALUE pairs from a ```env fenced block in *description*. */
-function parseWorkspaceMeta(description: string | null | undefined): Record<string, string> {
-  if (!description) {
-    return {};
-  }
-  // Normalize markdown escape sequences: \` → ` and \_ → _
-  const normalized = description.split("\\`").join("`").split("\\_").join("_");
-  const fence = /```(?:\.?env|workspace)\s*\n([\s\S]*?)```/i.exec(normalized);
-  if (!fence) {
-    return {};
-  }
-  const meta: Record<string, string> = {};
-  for (const line of fence[1].split("\n")) {
-    const m = _META_KEY_RE.exec(line.trim());
-    if (m && !(m[1] in meta)) {
-      meta[m[1]] = m[2].trim();
-    }
-  }
-  return meta;
-}
-void parseWorkspaceMeta;
-
-/** Return the current git branch from CWD, or null. */
-function gitBranchCwd(): string | null {
-  try {
-    const result = procRun(["git", "branch", "--show-current"], { capture: true, timeout: 5 });
-    return result.stdout.trim() || null;
-  } catch {
-    return null;
-  }
-}
-void gitBranchCwd;
 
 // ---------------------------------------------------------------------------
 // Task description helpers

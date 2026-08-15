@@ -1,8 +1,7 @@
 /**
  * smoke test that the
  * moved generateWorkspaceCompose still allocates a slot and writes the expected
- * workspace artifacts. allocateSlot is stubbed to avoid shelling out to Docker
- * (Python monkeypatches the same function on the generate module).
+ * workspace artifacts. allocateSlot is stubbed to avoid shelling out to Docker.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";

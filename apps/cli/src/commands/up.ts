@@ -175,8 +175,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   try {
     slot = allocateSlot(feature, localServices, preferredSlot);
   } catch (e) {
-    // The lib collapses Python's RuntimeError/TimeoutError into a single Error;
-    // its message already carries the stale-lock recovery guidance.
+    // The lib reports every allocation failure as a plain Error; its message
+    // already carries the stale-lock recovery guidance.
     error(e instanceof Error ? e.message : String(e));
     process.exit(1);
   }
