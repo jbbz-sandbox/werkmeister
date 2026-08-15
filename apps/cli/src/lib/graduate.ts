@@ -1,10 +1,16 @@
 /**
- * Decision-note → docs/standards/ graduation
+ * Decision-note → standards-tree graduation
  * (docs/jit-context-system.md §3.2).
  *
  * Pure mechanics: scaffold placeholder content and wire the structural links a
  * domain's STANDARD.md needs. No prose judgment (that's `sb-author`, a skill)
  * and no interactive prompting (that's the CLI layer in `commands/notes`).
+ *
+ * Graduation straddles two repos — the scaffold lands in the standards tree,
+ * the note lives in the workspace — and nothing makes those one transaction.
+ * So it doesn't pretend to be one: the note is marked `graduating` and only
+ * becomes `graduated` once the scaffold is actually tracked (see
+ * `reconcileGraduating`).
  */
 
 import * as fs from "node:fs";
@@ -13,7 +19,11 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { standardsDirPath } from "./global_config.js";
+import { listNotes, type Note } from "./notes.js";
+import { run } from "./proc.js";
 import { fnmatch, loadStandardsModules } from "./standards.js";
+
+const _GIT_TIMEOUT = 5; // seconds; this can run from a SessionStart path
 
 export const KINDS: readonly string[] = ["rule", "example", "anti-pattern"];
 
@@ -149,6 +159,52 @@ function updateNoteStatus(notePath: string, fields: Record<string, string>): voi
   fs.writeFileSync(notePath, `---\n${newFm}---${rest}`);
 }
 
+/**
+ * Close out `graduating` notes whose scaffold has actually landed.
+ *
+ * "Landed" means git tracks the file in the standards tree — staged or
+ * committed, not merely written. That is the cheapest signal that the second,
+ * human half of the graduation happened, and it is the one that distinguishes
+ * "scaffold sitting untracked in someone's working copy" from "this rule is
+ * real now".
+ *
+ * Returns the notes it closed. Silent and best-effort: a standards tree that is
+ * not a git checkout leaves every note `graduating`, which is the honest answer
+ * — nothing can confirm the rule landed, so nothing claims it did.
+ */
+export function reconcileGraduating(
+  workspaceRoot: string,
+  standardsDir?: string | null,
+): Note[] {
+  const pending = listNotes(workspaceRoot).filter(
+    (n) => n.frontmatter["status"] === "graduating" && n.frontmatter["graduated_to"],
+  );
+  // The common case is no pending graduation; don't spawn git to learn that.
+  if (!pending.length) {
+    return [];
+  }
+  const dir = standardsDir ?? standardsDirPath();
+  const closed: Note[] = [];
+  for (const note of pending) {
+    const rel = String(note.frontmatter["graduated_to"]);
+    let tracked = false;
+    try {
+      tracked =
+        run(["git", "-C", dir, "ls-files", "--error-unmatch", rel], {
+          capture: true,
+          timeout: _GIT_TIMEOUT,
+        }).status === 0;
+    } catch {
+      tracked = false;
+    }
+    if (tracked) {
+      updateNoteStatus(note.path, { status: "graduated" });
+      closed.push(note);
+    }
+  }
+  return closed;
+}
+
 export interface GraduateNoteOptions {
   domain: string;
   kind: string;
@@ -255,8 +311,14 @@ export function graduateNote(
     fs.writeFileSync(standardPath, body);
   }
 
+  // `graduating`, not `graduated`: the scaffold is written but uncommitted, and
+  // since the standards tree is its own repo that commit is a separate act in a
+  // separate place. Claiming the note is done here is how a graduation
+  // half-lands — scaffold on disk, note closed, nothing ever pushed.
+  // `reconcileGraduating` closes it for real once the file is tracked; until
+  // then the note keeps surfacing as an open decision, which is the point.
   const graduatedTo = path.relative(standardsDir, scaffoldPath);
-  updateNoteStatus(note["path"], { status: "graduated", graduated_to: graduatedTo });
+  updateNoteStatus(note["path"], { status: "graduating", graduated_to: graduatedTo });
 
   return {
     standard_path: standardPath,
