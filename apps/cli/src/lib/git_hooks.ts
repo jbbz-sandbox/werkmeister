@@ -12,7 +12,7 @@
  */
 
 import { getSandboxRoot, info, success, warn } from "./config.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 export const HOOKS_PATH = ".githooks";
 

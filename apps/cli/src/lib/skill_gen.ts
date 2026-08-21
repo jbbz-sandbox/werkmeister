@@ -22,7 +22,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { loadGithubOrg, standardsDirPath } from "./global_config.js";
-import { run } from "./proc.js";
+import { run } from "sandbox-core/proc";
 import { loadStandardsModules, parseFrontmatter } from "./standards.js";
 
 const _GIT_TIMEOUT = 5; // seconds; never hang `sandbox init-workspace` on a git hiccup

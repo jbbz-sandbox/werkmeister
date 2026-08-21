@@ -7,7 +7,7 @@
 import * as path from "node:path";
 
 import { Colors, error, getInfraRoot, getSandboxRoot, info, success } from "./config.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 const CONNECT_MODULE = "../commands/connect.js";
 const WEB_SERVERS_MODULE = "./web_servers.js";

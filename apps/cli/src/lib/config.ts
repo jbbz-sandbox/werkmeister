@@ -19,34 +19,18 @@ import { fileURLToPath } from "node:url";
 
 import * as YAML from "yaml";
 
-import { Colors } from "./colors.js";
+import { Colors } from "sandbox-core/colors";
 import { loadPaths, portsYamlPath, servicesYamlPath } from "./global_config.js";
 
 export { Colors };
 
-// ---------------------------------------------------------------------------
-// ANSI colour helpers
-// ---------------------------------------------------------------------------
+// The four print helpers now emit through `sandbox-core`'s ambient reporter,
+// which main.ts installs. Re-exported from here so the ~170 call sites across
+// lib/ and commands/ keep their import, the way #11 kept the config readers'
+// call sites when they moved.
+import { error, info, success, warn } from "sandbox-core/reporter";
 
-function color(text: string, c: string): string {
-  return `${c}${text}${Colors.RESET}`;
-}
-
-export function info(msg: string): void {
-  console.log(color(`[info] ${msg}`, Colors.CYAN));
-}
-
-export function success(msg: string): void {
-  console.log(color(`[ok]   ${msg}`, Colors.GREEN));
-}
-
-export function warn(msg: string): void {
-  console.log(color(`[warn] ${msg}`, Colors.YELLOW));
-}
-
-export function error(msg: string): void {
-  console.log(color(`[err]  ${msg}`, Colors.RED));
-}
+export { error, info, success, warn };
 
 // ---------------------------------------------------------------------------
 // Path helpers

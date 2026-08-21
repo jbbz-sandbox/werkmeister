@@ -35,6 +35,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
+import { ttyReporter, withReporter } from "sandbox-core/reporter";
 
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
 // config loaders.
@@ -715,7 +716,11 @@ export async function main(): Promise<void> {
       const cmdObj = actionArgs.at(-1) as Command;
       const opts = cmdObj.opts();
       const positionals = actionArgs.slice(0, -2);
-      await dispatch(spec.module, spec.namespace(positionals, opts));
+      // One wrap per command: everything it and the library call print through
+      // this reporter, and nothing outside a command has a sink at all.
+      await withReporter(ttyReporter, () =>
+        dispatch(spec.module, spec.namespace(positionals, opts)),
+      );
     });
   }
 

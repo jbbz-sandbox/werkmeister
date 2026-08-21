@@ -20,7 +20,7 @@ import * as YAML from "yaml";
 
 import { standardsDirPath } from "./global_config.js";
 import { listNotes, type Note } from "./notes.js";
-import { run } from "./proc.js";
+import { run } from "sandbox-core/proc";
 import { fnmatch, loadStandardsModules } from "./standards.js";
 
 const _GIT_TIMEOUT = 5; // seconds; this can run from a SessionStart path

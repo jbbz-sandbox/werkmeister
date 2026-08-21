@@ -11,7 +11,7 @@ import * as path from "node:path";
 
 import { Colors, error, getInfraRoot, success, warn } from "./config.js";
 import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 // The forward table is NOT duplicated here: `forwardSpecs()` derives it from
 // ~/.sandbox/services.yaml — the same call that generates the entrypoint's

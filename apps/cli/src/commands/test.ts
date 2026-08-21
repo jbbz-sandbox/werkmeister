@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { Colors, error, getSandboxRoot, info, resolveWorkspace, success, warn } from "../lib/config.js";
-import { ProcError, run as procRun } from "../lib/proc.js";
+import { ProcError, run as procRun } from "sandbox-core/proc";
 import { getSlot } from "../lib/slots.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {

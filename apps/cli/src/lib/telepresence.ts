@@ -13,7 +13,7 @@ import * as path from "node:path";
 
 import { loadServices } from "./config.js";
 import { workspaceForFeature } from "./docker.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 export const MIN_VERSION: [number, number, number] = [2, 30, 0];
 

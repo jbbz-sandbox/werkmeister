@@ -9,7 +9,10 @@
   "exports": {
     ".": "./dist/sandbox.js",
     "./cache": "./dist/cache.js",
-    "./config": "./dist/config.js"
+    "./colors": "./dist/colors.js",
+    "./config": "./dist/config.js",
+    "./proc": "./dist/proc.js",
+    "./reporter": "./dist/reporter.js"
   },
   "scripts": {
     "build": "tsc",

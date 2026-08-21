@@ -9,7 +9,7 @@ import { isCaddyRunning, reloadCaddy } from "../lib/caddy.js";
 import { Colors, getVolumeBaseNames, info, success, warn } from "../lib/config.js";
 import { composeDown, getContainerStatus, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";
-import { ProcError, run as procRun } from "../lib/proc.js";
+import { ProcError, run as procRun } from "sandbox-core/proc";
 import { getAllSlots, releaseSlot } from "../lib/slots.js";
 
 /**

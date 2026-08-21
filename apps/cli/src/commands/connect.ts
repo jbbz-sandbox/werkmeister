@@ -28,7 +28,7 @@ import { generateK8sForwards } from "../lib/k8s_forwards.js";
 import { configureGitHooksPath } from "../lib/git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy } from "../lib/k8s.js";
 import { CLAUDECK, DASHBOARD, startAll, status as webStatus } from "../lib/web_servers.js";
-import { ProcError, run as procRun } from "../lib/proc.js";
+import { ProcError, run as procRun } from "sandbox-core/proc";
 import { sandboxHome } from "../lib/global_config.js";
 
 function isDir(p: string): boolean {

@@ -66,7 +66,7 @@ import {
   type JiraSettings,
 } from "./global_config.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 import {
   DEFAULT_MODEL_PRICING_YAML,
   DEFAULT_PORTS_YAML,
