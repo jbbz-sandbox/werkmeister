@@ -29,7 +29,7 @@ commit(src, "a.txt", "c1");
 commit(src, "a.txt", "c2");
 execFileSync("git", ["push", "origin", "main"], { cwd: src });
 
-const { commitAndPush } = await import("sandbox-driver");
+const { commitAndPush } = await import("sandbox-core");
 
 // Case 1 (the bug): a worktree on `main` reset one commit BEHIND origin/main,
 // clean tree. Nothing to hand off → must return ok WITHOUT pushing.

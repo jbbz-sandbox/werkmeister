@@ -2,10 +2,10 @@
  * Bundle the extension to a single CommonJS file.
  *
  * Two non-obvious requirements:
- *  - `sandbox-driver` is a private monorepo workspace, so a .vsix cannot resolve
+ *  - `sandbox-core` is a private monorepo workspace, so a .vsix cannot resolve
  *    it at runtime — it (and its `yaml` dependency) must be bundled in, not
  *    externalised. Only `vscode` is external; the host provides it.
- *  - The driver is ESM and uses `import.meta.dirname` for its walk-up path
+ *  - sandbox-core is ESM and uses `import.meta.dirname` for its walk-up path
  *    resolution. A CJS bundle has no import.meta, so it is defined to __dirname.
  *    That makes the walk-up search the extension's dist/ and find nothing —
  *    fine, because the config.yaml tier added in Task 1 sits above it.

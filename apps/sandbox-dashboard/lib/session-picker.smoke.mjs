@@ -41,7 +41,7 @@ write(B, userLine("do the important thing") + asstLine("on it"), 200);
 write(A, titleLine(A, "Newest Session Title") + userLine("hi") + asstLine("hello"), 300);
 
 const { listSessions, getClaudeTranscript, resolveSessionSource } =
-  await import("sandbox-driver");
+  await import("sandbox-core");
 
 // 1. listSessions: newest first, isNewest flag, three-tier title fallback.
 const sessions = await listSessions("demo");

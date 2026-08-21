@@ -21,7 +21,7 @@ import {
   listWorkspaces,
   resolveSandboxBin,
   childEnv,
-} from "sandbox-driver";
+} from "sandbox-core";
 
 const execFileP = promisify(execFile);
 const router = Router();
@@ -200,10 +200,10 @@ const WORKSPACE_ACTIONS = new Set(["up", "stop", "restart", "down"]);
 /**
  * The `sandbox` wrapper, or null when it can't be found.
  *
- * Resolution belongs to the driver (SANDBOX_BIN → SANDBOX_ROOT → walk-up →
+ * Resolution belongs to sandbox-core (SANDBOX_BIN → SANDBOX_ROOT → walk-up →
  * ~/.local/bin symlink) — this plugin used to carry its own two-step copy that
  * knew nothing about SANDBOX_ROOT, so it drove the globally-linked checkout
- * instead of the running one. The driver throws a WorkspaceError; every call
+ * instead of the running one. sandbox-core throws a WorkspaceError; every call
  * site here already branches on a falsy bin, so translate rather than spread
  * try/catch through them.
  */
@@ -308,7 +308,7 @@ router.post("/open", async (req, res) => {
 });
 
 // ── Create Workspace: schema, Jira pre-fill, prompt refine, streamed create ──
-// All driver-backed. Best-effort: driver failures degrade to an error payload
+// All core-backed. Best-effort: sandbox-core failures degrade to an error payload
 // (GET/POST JSON routes) or an [error]/[exit 1] stream tail (create).
 
 router.get("/form-schema", async (_req, res) => {

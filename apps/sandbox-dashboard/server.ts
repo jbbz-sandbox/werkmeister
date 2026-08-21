@@ -56,7 +56,7 @@ import {
   switchKubeContext,
   WORKSPACE_ACTIONS,
   WorkspaceError,
-} from "sandbox-driver";
+} from "sandbox-core";
 import { promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 // Works both from source (server.ts via tsx) and compiled (dist/server.js).

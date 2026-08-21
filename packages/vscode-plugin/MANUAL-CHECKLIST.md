@@ -43,7 +43,7 @@ obvious — what a failure looks like.
 
 7. **Inline "open workspace" icon.** Hover a workspace node; a folder icon
    appears inline. Click it. The workspace opens in a new VS Code window (via
-   native `vscode.openFolder`, not the driver's `openWorkspace()`).
+   native `vscode.openFolder`, not sandbox-core's `openWorkspace()`).
 
 8. **Open Jira Issue (context menu only).** Right-click a workspace with a Jira
    ID → "Open Jira Issue" opens the browser to that issue. Then check the
@@ -143,13 +143,13 @@ obvious — what a failure looks like.
     - **Dozens of raw repo checkouts** instead of named workspaces —
       `resolveWorkspacesRoot`'s config-file tier regressed and it fell back to
       `~/workspace`, which is the *repos* root.
-    - **The "Could not find the sandbox CLI" node** — the driver couldn't
+    - **The "Could not find the sandbox CLI" node** — sandbox-core couldn't
       resolve the binary from `~/.sandbox/config.yaml` with no env present.
 
-    Diagnose against the driver directly, bypassing the extension:
+    Diagnose against sandbox-core directly, bypassing the extension:
     ```bash
     env -u SANDBOX_WORKSPACES_ROOT -u SANDBOX_ROOT node -e '
-      const m = await import("/path/to/sandbox/packages/sandbox-driver/dist/sandbox.js");
+      const m = await import("/path/to/sandbox/packages/sandbox-core/dist/sandbox.js");
       console.log((await m.listWorkspaces()).root);
     ' --input-type=module
     ```

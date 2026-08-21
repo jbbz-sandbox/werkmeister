@@ -15,7 +15,7 @@ const INHERITED_ENV = {
 } as const;
 
 /**
- * Copy the extension's settings into process.env before any driver call.
+ * Copy the extension's settings into process.env before any sandbox-core call.
  *
  * Tier order is: VS Code setting > SANDBOX_* env > ~/.sandbox/config.yaml. A
  * GUI-launched VS Code inherits no SANDBOX_* vars (~/.zshenv is never

@@ -10,7 +10,7 @@
  * `sandbox`, which would depend on the integrated terminal's PATH.
  */
 import * as vscode from "vscode";
-import { resolveSandboxBin } from "sandbox-driver";
+import { resolveSandboxBin } from "sandbox-core";
 
 /** POSIX single-quote escaping — the integrated terminal is a shell, not execFile. */
 function shellQuote(s: string): string {

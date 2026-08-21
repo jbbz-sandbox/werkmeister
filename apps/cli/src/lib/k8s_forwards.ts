@@ -18,7 +18,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { forwardSpecs as specsFrom, type ForwardSpec } from "sandbox-driver/config";
+import { forwardSpecs as specsFrom, type ForwardSpec } from "sandbox-core/config";
 
 import { getInfraRoot, info, loadInfrastructure, loadServices } from "./config.js";
 
@@ -29,7 +29,7 @@ const _ALIASES_END = "# <<< GENERATED k8s-forward aliases";
 
 /**
  * The forward table, from the shared registry semantics in
- * `sandbox-driver/config` — the dashboard's health checks read the same table,
+ * `sandbox-core/config` — the dashboard's health checks read the same table,
  * so it is defined once. Loading the registry (and failing loud when it is
  * missing) stays here; the parse does not.
  */

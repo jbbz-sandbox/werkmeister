@@ -498,7 +498,7 @@ export function parseJiraKey(ref: string): string | null {
 
 /**
  * Narrow a resolved registry path to one that exists, so callers can degrade to
- * a null instead of throwing. Where the file *should* be is `sandbox-driver/config`'s
+ * a null instead of throwing. Where the file *should* be is `sandbox-core/config`'s
  * call (shared with the CLI); whether an absent one is fatal is each caller's.
  */
 async function existing(p: string): Promise<string | null> {

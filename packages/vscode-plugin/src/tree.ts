@@ -1,10 +1,10 @@
 /**
- * VS Code plumbing for the Workspaces view: fetch the three driver payloads,
+ * VS Code plumbing for the Workspaces view: fetch the three sandbox-core payloads,
  * hand them to the pure builder, and map WsNode → TreeItem. No display logic
  * lives here — that is all in build-tree.ts.
  */
 import * as vscode from "vscode";
-import { listWorkspaces, getWorkspaceStatuses, getIntercepts } from "sandbox-driver";
+import { listWorkspaces, getWorkspaceStatuses, getIntercepts } from "sandbox-core";
 import { buildTree, cliNotFoundNode, type WsNode } from "./build-tree.js";
 
 const POLL_MS = 5000;
