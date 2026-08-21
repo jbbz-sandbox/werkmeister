@@ -11,9 +11,12 @@
     "./cache": "./dist/cache.js",
     "./colors": "./dist/colors.js",
     "./config": "./dist/config.js",
+    "./detect": "./dist/detect.js",
     "./docker": "./dist/docker.js",
+    "./locks": "./dist/locks.js",
     "./proc": "./dist/proc.js",
-    "./reporter": "./dist/reporter.js"
+    "./reporter": "./dist/reporter.js",
+    "./worktrees": "./dist/worktrees.js"
   },
   "scripts": {
     "build": "tsc",

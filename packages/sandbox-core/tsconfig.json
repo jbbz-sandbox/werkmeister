@@ -14,5 +14,5 @@
     "noEmit": false,
     "types": ["node"]
   },
-  "include": ["sandbox.ts", "cache.ts", "colors.ts", "config.ts", "docker.ts", "jira-rest.ts", "proc.ts", "reporter.ts"]
+  "include": ["sandbox.ts", "cache.ts", "colors.ts", "config.ts", "detect.ts", "docker.ts", "jira-rest.ts", "locks.ts", "proc.ts", "reporter.ts", "worktrees.ts"]
 }

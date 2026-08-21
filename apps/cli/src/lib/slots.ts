@@ -30,7 +30,7 @@ import * as path from "node:path";
 import { slotPortRange } from "sandbox-core/config";
 
 import { error, info, loadPorts, loadServices, success, warn } from "./config.js";
-import { sandboxLock } from "./locks.js";
+import { sandboxLock } from "sandbox-core/locks";
 import { ProcError, run } from "sandbox-core/proc";
 
 export const LABEL_PREFIX = "com.sandbox.local";

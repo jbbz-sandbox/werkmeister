@@ -6,7 +6,7 @@
  */
 
 import { Colors, info, loadServices, resolveWorkspace, warn } from "../lib/config.js";
-import { detectChangedServices } from "../lib/detect.js";
+import { detectChangedServices } from "sandbox-core/detect";
 import * as fs from "node:fs";
 
 function printResults(detected: string[], servicesConfig: Record<string, any>): void {

@@ -29,7 +29,7 @@ import {
   warn,
 } from "./config.js";
 import { loadFeatureRouters } from "./feature_routing.js";
-import { sandboxLock } from "./locks.js";
+import { sandboxLock } from "sandbox-core/locks";
 import { getSecretsPath, loadSecrets, requiredSecretKeys } from "./secrets.js";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
 
