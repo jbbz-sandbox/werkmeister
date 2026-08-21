@@ -22,7 +22,9 @@
   },
   "dependencies": {
     "@types/dockerode": "^4.0.1",
+    "@types/tar-fs": "^2.0.4",
     "dockerode": "^5.0.1",
+    "tar-fs": "^2.1.5",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
