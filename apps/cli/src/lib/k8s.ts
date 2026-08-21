@@ -11,6 +11,7 @@ import * as path from "node:path";
 
 import { Colors, error, getInfraRoot, success, warn } from "./config.js";
 import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
+import { containerRunning } from "sandbox-core/docker";
 import { ProcError, run } from "sandbox-core/proc";
 
 // The forward table is NOT duplicated here: `forwardSpecs()` derives it from
@@ -110,20 +111,6 @@ export function getForwardsStatus(): string {
   return `${Colors.RED}down${Colors.RESET}`;
 }
 
-/** Return true if the sandbox-k8s-forwards container is running. */
-function isContainerRunning(): boolean {
-  try {
-    const result = run(
-      ["docker", "inspect", "--format", "{{.State.Running}}", "sandbox-k8s-forwards"],
-      { capture: true, timeout: 10 },
-    );
-    return result.status === 0 && result.stdout.trim() === "true";
-  } catch (err) {
-    if (err instanceof ProcError) return false;
-    throw err;
-  }
-}
-
 /** Return true if a TCP connection to localhost:port succeeds. */
 function portOpen(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -191,7 +178,7 @@ export interface ForwardStatus {
  * status is one of: "alive", "dead", "container_down".
  */
 export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
-  const containerRunning = isContainerRunning();
+  const forwardsUp = await containerRunning("sandbox-k8s-forwards");
 
   let specs: ForwardSpec[];
   try {
@@ -208,7 +195,7 @@ export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
       listen_port: spec.listen,
       remote_port: spec.remote,
       health_path: spec.health,
-      status: containerRunning
+      status: forwardsUp
         ? await classifyForward(spec.listen, spec.health)
         : "container_down",
     });

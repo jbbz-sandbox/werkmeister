@@ -1,7 +1,7 @@
 /**
  * Docker container resource statistics collection and analysis.
  *
- * Collects CPU/memory usage data from running containers via `docker stats`
+ * Collects CPU/memory usage data from running containers over the Engine API
  * and generates resource limit recommendations based on observed peaks.
  */
 
@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { Colors, getSandboxRoot } from "./config.js";
-import { ProcError, run } from "sandbox-core/proc";
+import { containerStats } from "sandbox-core/docker";
 
 function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -47,80 +47,6 @@ export class ContainerStats {
   }
 }
 
-export interface SnapshotEntry {
-  name: string;
-  cpu_percent: number;
-  mem_mib: number;
-  mem_limit_mib: number;
-}
-
-/**
- * Collect a single snapshot of all running container stats.
- *
- * Returns a list of dicts with keys: name, cpu_percent, mem_mib, mem_limit_mib.
- */
-export function collectSnapshot(): SnapshotEntry[] {
-  let result;
-  try {
-    result = run(
-      ["docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"],
-      { capture: true, timeout: 30 },
-    );
-  } catch (e) {
-    // FileNotFoundError / TimeoutExpired equivalents
-    if (e instanceof ProcError && (e.code === "ENOENT" || e.code === "ETIMEDOUT")) return [];
-    throw e;
-  }
-
-  if (result.status !== 0) return [];
-
-  const entries: SnapshotEntry[] = [];
-  for (const line of result.stdout.trim().split(/\r?\n/)) {
-    const parts = line.split("\t");
-    if (parts.length < 3) continue;
-
-    const name = parts[0].trim();
-    const cpuStr = parts[1].trim().replace(/%+$/, "");
-    const memStr = parts[2].trim();
-
-    let cpuPct = Number(cpuStr);
-    if (!Number.isFinite(cpuPct)) cpuPct = 0.0;
-
-    entries.push({
-      name,
-      cpu_percent: cpuPct,
-      mem_mib: parseMemUsage(memStr),
-      mem_limit_mib: parseMemLimit(memStr),
-    });
-  }
-
-  return entries;
-}
-
-/** Parse the usage portion of '123.4MiB / 2GiB' into MiB. */
-function parseMemUsage(memStr: string): number {
-  return memToMib(memStr.split("/")[0].trim());
-}
-
-/** Parse the limit portion of '123.4MiB / 2GiB' into MiB. */
-function parseMemLimit(memStr: string): number {
-  const parts = memStr.split("/");
-  if (parts.length < 2) return 0.0;
-  return memToMib(parts[1].trim());
-}
-
-/** Convert a Docker memory string (e.g., '1.23GiB', '456MiB', '789KiB') to MiB. */
-function memToMib(s: string): number {
-  s = s.trim();
-  let v: number;
-  if (s.endsWith("GiB")) v = Number(s.slice(0, -3)) * 1024;
-  else if (s.endsWith("MiB")) v = Number(s.slice(0, -3));
-  else if (s.endsWith("KiB")) v = Number(s.slice(0, -3)) / 1024;
-  else if (s.endsWith("B")) v = Number(s.slice(0, -1)) / (1024 * 1024);
-  else v = Number(s);
-  return Number.isFinite(v) ? v : 0.0;
-}
-
 /**
  * Collect container stats over a time period.
  *
@@ -139,15 +65,15 @@ export async function collectStats(
   const samplesRemaining = Math.max(1, Math.floor(durationSeconds / intervalSeconds));
 
   for (let i = 0; i < samplesRemaining; i++) {
-    const snapshot = collectSnapshot();
+    const snapshot = await containerStats();
     for (const entry of snapshot) {
       const name = entry.name;
       if (filterPrefix && !name.startsWith(filterPrefix)) continue;
       if (!(name in aggregated)) aggregated[name] = new ContainerStats(name);
       const stats = aggregated[name];
       stats.samples += 1;
-      stats.cpuSamples.push(entry.cpu_percent);
-      stats.memSamples.push(entry.mem_mib);
+      stats.cpuSamples.push(entry.cpuPercent);
+      stats.memSamples.push(entry.memMib);
     }
 
     if (i < samplesRemaining - 1) await sleep(intervalSeconds);

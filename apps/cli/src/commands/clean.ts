@@ -9,7 +9,7 @@ import { isCaddyRunning, reloadCaddy } from "../lib/caddy.js";
 import { Colors, getVolumeBaseNames, info, success, warn } from "../lib/config.js";
 import { composeDown, getContainerStatus, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";
-import { ProcError, run as procRun } from "sandbox-core/proc";
+import { listVolumeNames, removeVolume } from "sandbox-core/docker";
 import { getAllSlots, releaseSlot } from "../lib/slots.js";
 
 /**
@@ -43,27 +43,14 @@ function volumeBaseNames(): string[] {
  * We identify them by checking against the volume base names the service
  * registry declares.
  */
-function listSandboxVolumes(baseNames: string[]): string[] {
+async function listSandboxVolumes(baseNames: string[]): Promise<string[]> {
   if (!baseNames.length) {
     return [];
   }
 
-  let allVolumes: string[];
-  try {
-    const result = procRun(["docker", "volume", "ls", "--format", "{{.Name}}"], {
-      capture: true,
-      timeout: 15,
-    });
-    if (result.status !== 0) {
-      return [];
-    }
-    allVolumes = result.stdout
-      .split(/\r?\n/)
-      .map((v) => v.trim())
-      .filter(Boolean);
-  } catch (e) {
-    if (e instanceof ProcError && (e.code === "ENOENT" || e.code === "ETIMEDOUT")) return [];
-    throw e;
+  const allVolumes = await listVolumeNames();
+  if (allVolumes === null) {
+    return [];
   }
 
   const sandboxVolumes: string[] = [];
@@ -91,17 +78,6 @@ function featureFromVolume(volName: string, baseNames: string[]): string | null 
     }
   }
   return null;
-}
-
-/** Remove a single Docker volume. */
-function removeVolume(name: string): boolean {
-  try {
-    const result = procRun(["docker", "volume", "rm", name], { capture: true, timeout: 15 });
-    return result.status === 0;
-  } catch (e) {
-    if (e instanceof ProcError && (e.code === "ENOENT" || e.code === "ETIMEDOUT")) return false;
-    throw e;
-  }
 }
 
 /** Execute the ``sandbox clean`` command. */
@@ -159,7 +135,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // ------------------------------------------------------------------
   info("Scanning for per-feature Docker volumes...");
   const baseNames = volumeBaseNames();
-  const sandboxVolumes = listSandboxVolumes(baseNames);
+  const sandboxVolumes = await listSandboxVolumes(baseNames);
 
   if (!sandboxVolumes.length) {
     console.log(`  ${Colors.DIM}No per-feature Docker volumes found${Colors.RESET}`);
@@ -189,7 +165,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
         if (dryRun) {
           console.log(`    ${Colors.DIM}[dry-run] Would remove: ${vol}${Colors.RESET}`);
         } else {
-          const ok = removeVolume(vol);
+          const ok = await removeVolume(vol);
           if (ok) {
             console.log(`    ${Colors.GREEN}Removed:${Colors.RESET} ${vol}`);
             removed += 1;
