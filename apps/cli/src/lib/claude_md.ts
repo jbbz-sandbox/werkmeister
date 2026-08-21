@@ -321,7 +321,7 @@ ${contractRule}`;
       "\n\n";
   }
 
-  return `# Workspace: jayboyer/${workspaceName}
+  return `# Workspace: ${workspaceName}
 
 ${currentTaskSection}
 ## Layout

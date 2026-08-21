@@ -64,7 +64,7 @@ merge from a `claudeck-upstream` remote if configured.
 
 - **Launch:** `node cli.js --port 9009 --no-auth` — server up at http://localhost:9009,
   `better-sqlite3` native module loads, `/api/version` → 200, UI served.
-- **Chat rooted at workspace:** registered `/Users/jayboyer/workspace/features/claudeck-test`
+- **Chat rooted at workspace:** registered `<workspaces_root>/claudeck-test`
   as a project; chat confirmed rooted there (`pwd` returned the workspace dir).
 - **Billing:** subscription, not API. No `ANTHROPIC_API_KEY` in the shell or
   `~/.claudeck/.env` (injects only `PORT` + VAPID keys), so the SDK uses the

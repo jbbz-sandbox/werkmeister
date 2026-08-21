@@ -149,7 +149,7 @@ obvious — what a failure looks like.
     Diagnose against the driver directly, bypassing the extension:
     ```bash
     env -u SANDBOX_WORKSPACES_ROOT -u SANDBOX_ROOT node -e '
-      const m = await import("/Users/jayboyer/workspace/personal-work/packages/sandbox-driver/dist/sandbox.js");
+      const m = await import("/path/to/sandbox/packages/sandbox-driver/dist/sandbox.js");
       console.log((await m.listWorkspaces()).root);
     ' --input-type=module
     ```

@@ -37,7 +37,6 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "../lib/browser.js";
@@ -53,22 +52,6 @@ import {
   type Step,
 } from "../lib/machine_setup.js";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
-
-// Migration source (currently-exported env) for each path prompt, so an
-// existing machine migrates by pressing Enter through the wizard.
-const _ENV_FOR: Record<string, string> = {
-  repos_root: "SANDBOX_REPOS_ROOT",
-  workspaces_root: "SANDBOX_WORKSPACES_ROOT",
-};
-
-function builtinDefault(key: string): string {
-  const home = os.homedir();
-  const table: Record<string, string> = {
-    repos_root: path.join(home, "workspace"),
-    workspaces_root: path.join(home, "workspace", "features"),
-  };
-  return table[key] ?? "";
-}
 
 function heading(text: string): void {
   console.log(`\n${Colors.BOLD}${text}${Colors.RESET}`);
@@ -92,14 +75,15 @@ interface Answers {
  */
 async function configureMachine(interactive: boolean): Promise<Answers> {
   const cfg = gc.load();
-  const paths = cfg.paths ?? {};
   const currentIngress = gc.loadIngress(cfg);
 
   // --- 1. paths -----------------------------------------------------------
   heading("1. Paths & the workspace repo");
+  // `resolvedPaths` is read back as it fills, so the workspaces root defaults
+  // under whatever repos root was just answered.
   const resolvedPaths: Record<string, string> = {};
   const pathDefault = (spec: PromptSpec): string =>
-    paths[spec.key] || process.env[_ENV_FOR[spec.key]] || builtinDefault(spec.key);
+    gc.pathDefault(spec.key, cfg, resolvedPaths);
 
   if (interactive) {
     await runWizard(gc._CONFIG_PROMPTS, resolvedPaths, pathDefault, {
