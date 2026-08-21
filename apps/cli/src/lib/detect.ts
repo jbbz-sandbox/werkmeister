@@ -16,7 +16,7 @@ import {
   resolveWorkspace,
   warn,
 } from "./config.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 /** Run `git diff main..HEAD --name-only` in *repoPath* and return changed files. */
 function _runGitDiff(repoPath: string): string[] {

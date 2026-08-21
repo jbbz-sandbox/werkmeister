@@ -31,7 +31,7 @@ import { slotPortRange } from "sandbox-core/config";
 
 import { error, info, loadPorts, loadServices, success, warn } from "./config.js";
 import { sandboxLock } from "./locks.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 export const LABEL_PREFIX = "com.sandbox.local";
 export const LABEL_FEATURE = `${LABEL_PREFIX}.feature`;

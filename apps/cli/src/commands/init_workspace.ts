@@ -76,8 +76,8 @@ import {
   worktreeIsDirty,
   writeWorkspaceGitignore,
 } from "../lib/worktrees.js";
-import { run as procRun } from "../lib/proc.js";
-import { ProcError } from "../lib/proc.js";
+import { run as procRun } from "sandbox-core/proc";
+import { ProcError } from "sandbox-core/proc";
 
 // SystemExit raised by _findWorkspaceRoot; caught by the print paths and run().
 class WorkspaceRootError extends Error {}

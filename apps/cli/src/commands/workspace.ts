@@ -60,7 +60,7 @@ import { loadPaths } from "../lib/global_config.js";
 // live with the constant in machine_setup (`sandbox setup` maintains the
 // checkout this command consumes).
 import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
-import { run as procRun } from "../lib/proc.js";
+import { run as procRun } from "sandbox-core/proc";
 import { PromptSpec } from "../lib/wizard.js";
 // Worktree creation is shared with init-workspace (which owns the nested
 // per-repo worktrees); this command creates only the workspace ROOT.

@@ -22,8 +22,8 @@ const h = vi.hoisted(() => ({
   lastLockOpts: undefined as any,
 }));
 
-vi.mock("../proc.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../proc.js")>();
+vi.mock("sandbox-core/proc", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sandbox-core/proc")>();
   return {
     ...actual,
     run: vi.fn(() =>

@@ -12,7 +12,7 @@ import { getContainerStatus, type ContainerStatus } from "../lib/docker.js";
 import { getPerServiceStatus, type ForwardStatus } from "../lib/k8s.js";
 import { status as webStatus, type WebServerStatus } from "../lib/web_servers.js";
 import { getAllSlots, getPortRange, type SlotEntry } from "../lib/slots.js";
-import { ProcError, run as procRun } from "../lib/proc.js";
+import { ProcError, run as procRun } from "sandbox-core/proc";
 import {
   connectedNamespace,
   interceptBlocker,

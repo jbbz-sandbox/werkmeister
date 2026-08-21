@@ -13,7 +13,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { info } from "./config.js";
-import { run } from "./proc.js";
+import { run } from "sandbox-core/proc";
 
 // ---------------------------------------------------------------------------
 // Workspace .gitignore (managed section)

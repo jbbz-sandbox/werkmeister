@@ -8,7 +8,7 @@
 import * as fs from "node:fs";
 
 import { Colors, error, getInfraRoot, getSandboxRoot, info, success, warn } from "./config.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 export const CADDY_CONTAINER = "sandbox-caddy";
 export const CADDY_CONTAINER_PATH = "/tmp/Caddyfile";

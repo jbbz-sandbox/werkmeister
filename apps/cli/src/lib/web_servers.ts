@@ -27,7 +27,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { error, getMonorepoRoot, info, success, warn } from "./config.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run } from "sandbox-core/proc";
 
 /** One managed host web server. */
 export interface WebApp {
