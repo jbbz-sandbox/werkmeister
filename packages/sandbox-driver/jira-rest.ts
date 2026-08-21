@@ -12,11 +12,7 @@
  * API v2 on purpose: it returns description/comment bodies as plain
  * wiki-markup strings; v3 returns ADF JSON we'd have to walk.
  */
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-
-import * as YAML from "yaml";
+import { loadConfig } from "./config.js";
 
 export interface JiraCreds {
   baseUrl: string;
@@ -26,16 +22,6 @@ export interface JiraCreds {
 
 /** Placeholder the setup report treats as "not filled in yet". */
 const UNFILLED_TOKEN = "PASTE_TOKEN_HERE";
-
-/**
- * Which YAML holds the config — `SANDBOX_CONFIG_FILE` names a *location*, not a
- * value, matching the CLI's `lib/global_config.configPath()`. Duplicated rather
- * than imported: the dashboard and the CLI are separate workspace packages with
- * no build-time dependency between them.
- */
-export function configPath(): string {
-  return process.env.SANDBOX_CONFIG_FILE || path.join(os.homedir(), ".sandbox", "config.yaml");
-}
 
 function normalizeCreds(baseUrl: string, email: string, token: string): JiraCreds | null {
   // Linear trailing-slash strip; `/\/+$/` triggers a backtracking lint.
@@ -59,8 +45,7 @@ export async function jiraCreds(): Promise<JiraCreds | null> {
   );
   if (fromEnv) return fromEnv;
   try {
-    const cfg = YAML.parse(await fs.readFile(configPath(), "utf-8")) as Record<string, any> | null;
-    const jira = cfg?.jira ?? {};
+    const jira = loadConfig()["jira"] ?? {};
     return normalizeCreds(
       String(jira.base_url ?? ""),
       String(jira.email ?? ""),

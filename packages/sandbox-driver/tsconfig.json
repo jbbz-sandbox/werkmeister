@@ -14,5 +14,5 @@
     "noEmit": false,
     "types": ["node"]
   },
-  "include": ["sandbox.ts", "cache.ts", "jira-rest.ts"]
+  "include": ["sandbox.ts", "cache.ts", "config.ts", "jira-rest.ts"]
 }

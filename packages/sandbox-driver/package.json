@@ -8,7 +8,8 @@
   "types": "dist/sandbox.d.ts",
   "exports": {
     ".": "./dist/sandbox.js",
-    "./cache": "./dist/cache.js"
+    "./cache": "./dist/cache.js",
+    "./config": "./dist/config.js"
   },
   "scripts": {
     "build": "tsc",

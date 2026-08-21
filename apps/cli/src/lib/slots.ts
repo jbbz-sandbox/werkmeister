@@ -27,6 +27,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { slotPortRange } from "sandbox-driver/config";
+
 import { error, info, loadPorts, loadServices, success, warn } from "./config.js";
 import { sandboxLock } from "./locks.js";
 import { ProcError, run } from "./proc.js";
@@ -103,22 +105,16 @@ function queryLabeledContainers(): LabelRow[] | null {
 }
 
 /**
- * Return [count, base_port, ports_per_slot] from `ports.yaml`.
+ * Number of feature slots from `ports.yaml` (`feature_slots.count`).
  *
- * `ports.yaml` is the single source of truth (FRAG-03). The literal
- * defaults below only apply if `feature_slots` or one of its keys is
- * absent, keeping behavior stable while the config remains canonical.
+ * `ports.yaml` is the single source of truth (FRAG-03); the literal default
+ * applies only when the key is absent. The port math on the same block lives in
+ * `sandbox-driver/config` — see {@link getPortRange}.
  */
-function slotConfig(): [number, number, number] {
-  const portsConfig = loadPorts();
-  let featureSlots = portsConfig["feature_slots"] ?? {};
-  if (typeof featureSlots !== "object" || featureSlots === null || Array.isArray(featureSlots)) {
-    featureSlots = {};
-  }
-  const count = featureSlots["count"] ?? 12;
-  const basePort = featureSlots["base_port"] ?? 11100;
-  const portsPerSlot = featureSlots["ports_per_slot"] ?? 20;
-  return [count, basePort, portsPerSlot];
+function slotCount(): number {
+  const featureSlots = loadPorts()["feature_slots"];
+  const isDict = typeof featureSlots === "object" && featureSlots !== null && !Array.isArray(featureSlots);
+  return (isDict ? featureSlots["count"] : undefined) ?? 12;
 }
 
 /**
@@ -235,7 +231,7 @@ export function allocateSlot(
   _services?: string[] | null, // kept for back-compat
   preferredSlot?: number | null,
 ): number {
-  const [count] = slotConfig();
+  const count = slotCount();
   return sandboxLock(
     "allocate",
     () => {
@@ -311,20 +307,13 @@ export function getAllSlots(): Record<string, SlotEntry> {
 }
 
 /**
- * Return the [start, end] port range for *slot*.
+ * Return the [start, end] port range for *slot* — e.g. slot 1 -> [11100, 11119].
  *
- * Example: slot 1 -> [11100, 11119], slot 2 -> [11200, 11219].
- *
- * The `* 100` slot stride below is the fixed spacing between slot
- * bases and is independent of `ports_per_slot` (the number of ports
- * actually used within a slot) -- it is preserved byte-identical even
- * though both values now come from `ports.yaml`.
+ * The math lives in `sandbox-driver/config` because the dashboard renders the
+ * same range beside each workspace; this wrapper only supplies `ports.yaml`.
  */
 export function getPortRange(slot: number): [number, number] {
-  const [, basePort, portsPerSlot] = slotConfig();
-  const start = basePort + (slot - 1) * 100;
-  const end = start + portsPerSlot - 1;
-  return [start, end];
+  return slotPortRange(slot, loadPorts());
 }
 
 /**

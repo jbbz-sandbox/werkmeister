@@ -25,7 +25,15 @@ import { createReadStream } from "node:fs";
 import readline from "node:readline";
 import { parse as parseYaml } from "yaml";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
-import { briefingFromIssue, configPath, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
+import {
+  forwardSpecs,
+  modelPricingYamlPath,
+  portsYamlPath,
+  servicesYamlPath,
+  slotPortRange,
+  workspacesRoot,
+} from "./config.js";
+import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -489,28 +497,17 @@ export function parseJiraKey(ref: string): string | null {
 }
 
 /**
- * Locate a machine-global sandbox config file. Order: the `SANDBOX_*_YAML` env
- * var (exported by ~/.sandbox/env.sh from the `overrides:` block) → the default
- * location in `~/.sandbox`. Returns null when absent, so callers degrade.
- *
- * These files used to be committed under `<repo>/infra/config/` and were found
- * by walking up from this module. They now describe the MACHINE rather than the
- * checkout, live in `~/.sandbox`, and are seeded by `sandbox setup` — so there
- * is nothing left in the repo to walk up to.
+ * Narrow a resolved registry path to one that exists, so callers can degrade to
+ * a null instead of throwing. Where the file *should* be is `sandbox-driver/config`'s
+ * call (shared with the CLI); whether an absent one is fatal is each caller's.
  */
-async function resolveSandboxConfig(envVar: string, basename: string): Promise<string | null> {
-  const explicit = process.env[envVar];
-  if (explicit && (await isFile(explicit))) return explicit;
-  const home = process.env.SANDBOX_CONFIG_FILE
-    ? path.dirname(process.env.SANDBOX_CONFIG_FILE)
-    : path.join(os.homedir(), ".sandbox");
-  const cand = path.join(home, basename);
-  return (await isFile(cand)) ? cand : null;
+async function existing(p: string): Promise<string | null> {
+  return (await isFile(p)) ? p : null;
 }
 
-/** Locate `~/.sandbox/services.yaml` — the sandbox service registry. */
+/** Locate the service registry, or null when it hasn't been seeded yet. */
 async function resolveServicesYaml(): Promise<string | null> {
-  return resolveSandboxConfig("SANDBOX_SERVICES_YAML", "services.yaml");
+  return existing(servicesYamlPath());
 }
 
 /** Read the service registry YAML as raw text; null if unavailable. */
@@ -876,36 +873,6 @@ function pickValidServices(raw: unknown, known: string[]): string[] {
   return out;
 }
 
-/**
- * Resolve the workspaces root — the directory that holds one subdir per
- * workspace. Mirrors the CLI's resolution order (see
- * `apps/cli/src/lib/config.ts::resolveWorkspace`): an explicit env override,
- * then `paths.workspaces_root` from `~/.sandbox/config.yaml` — the single
- * source of truth, per `global_config.ts` — then the `~/workspace` fallback.
- *
- * `SANDBOX_WORKSPACES_ROOT` is a generated backward-compat shell export
- * (`~/.sandbox/env.sh`, sourced by `~/.zshenv`), invisible to a GUI-launched
- * process like the VS Code extension host — reading the YAML directly is what
- * keeps this correct there.
- */
-async function resolveWorkspacesRoot(): Promise<string> {
-  const env =
-    process.env.SANDBOX_WORKSPACES_ROOT ||
-    process.env.SANDBOX_WORKSPACE_ROOT ||
-    process.env.WORKSPACE;
-  if (env) return path.resolve(env.replace(/^~/, os.homedir()));
-
-  try {
-    const cfg = parseYaml(await fs.readFile(configPath(), "utf-8")) as Record<string, any> | null;
-    const configured = cfg?.paths?.workspaces_root;
-    if (configured) return path.resolve(String(configured).replace(/^~/, os.homedir()));
-  } catch {
-    // Fall through to the default below.
-  }
-
-  return path.join(os.homedir(), "workspace");
-}
-
 export interface WorkspaceEntry {
   name: string;
   path: string;
@@ -941,7 +908,7 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<{ jiraId: stri
  * dotfiles skipped.
  */
 export async function listWorkspaces(): Promise<{ root: string; workspaces: WorkspaceEntry[] }> {
-  const root = await resolveWorkspacesRoot();
+  const root = workspacesRoot();
   let entries: import("node:fs").Dirent[];
   try {
     entries = await fs.readdir(root, { withFileTypes: true });
@@ -1106,7 +1073,7 @@ async function resolveWorkspaceDir(name: string): Promise<string> {
   if (!clean || clean.includes("/") || clean.includes("\\") || clean.includes("..")) {
     throw new WorkspaceError(`Invalid workspace name: ${JSON.stringify(name)}`);
   }
-  const target = path.join(await resolveWorkspacesRoot(), clean);
+  const target = path.join(workspacesRoot(), clean);
   if (!(await isDir(target))) {
     throw new WorkspaceError(`No such workspace: ${clean}`);
   }
@@ -1360,29 +1327,23 @@ async function dockerComposeProjects(): Promise<Map<string, ComposeProjectTally>
 }
 
 /**
- * Feature-slot port math from ~/.sandbox/ports.yaml. `base_port` and
- * `ports_per_slot` come from the file; the 100-port slot stride is fixed
- * (mirrors `get_port_range` in the Python CLI). Falls back to the seeded
- * defaults (11100 / 20) when the file is unreadable.
+ * The ports.yaml document behind the slot port math, or null when it can't be
+ * read — {@link slotPortRange} then applies the seeded defaults (11100 / 20).
  */
-async function loadSlotPortConfig(): Promise<{ base: number; span: number }> {
-  const file = await resolveSandboxConfig("SANDBOX_PORTS_YAML", "ports.yaml");
-  if (!file) return { base: 11100, span: 20 };
+async function loadPortsDoc(): Promise<Record<string, any> | null> {
+  const file = await existing(portsYamlPath());
+  if (!file) return null;
   try {
-    const doc = parseYaml(await fs.readFile(file, "utf8")) as {
-      feature_slots?: { base_port?: number; ports_per_slot?: number };
-    };
-    const fslots = doc?.feature_slots ?? {};
-    return { base: fslots.base_port ?? 11100, span: fslots.ports_per_slot ?? 20 };
+    return (parseYaml(await fs.readFile(file, "utf8")) ?? null) as Record<string, any> | null;
   } catch {
-    return { base: 11100, span: 20 };
+    return null;
   }
 }
 
-/** Port range string for a slot, e.g. slot 2 → "11200-11219". Slot stride is a fixed 100. */
-function slotPortRange(slot: number, cfg: { base: number; span: number }): string {
-  const start = cfg.base + (slot - 1) * 100;
-  return `${start}-${start + cfg.span - 1}`;
+/** Port range string for a slot, e.g. slot 2 → "11200-11219". */
+function slotPortLabel(slot: number, ports: Record<string, any> | null): string {
+  const [start, end] = slotPortRange(slot, ports);
+  return `${start}-${end}`;
 }
 
 /**
@@ -1392,14 +1353,14 @@ function slotPortRange(slot: number, cfg: { base: number; span: number }): strin
  * {@link listWorkspaces}.
  */
 export async function getWorkspaceStatuses(): Promise<{ statuses: WorkspaceStatus[]; infra: InfraStatus }> {
-  const root = await resolveWorkspacesRoot();
+  const root = workspacesRoot();
   const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
   const names = entries
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))
     .map((e) => e.name)
     .sort((a, b) => a.localeCompare(b));
   const projects = await dockerComposeProjects();
-  const portCfg = await loadSlotPortConfig();
+  const portsDoc = await loadPortsDoc();
 
   const statuses = await Promise.all(
     names.map(async (name): Promise<WorkspaceStatus> => {
@@ -1419,7 +1380,7 @@ export async function getWorkspaceStatuses(): Promise<{ statuses: WorkspaceStatu
       else if (counts.running > 0) state = "partial";
       else state = "stopped";
       const slot = counts?.slot ?? null;
-      const ports = slot !== null ? slotPortRange(slot, portCfg) : null;
+      const ports = slot !== null ? slotPortLabel(slot, portsDoc) : null;
       const services = (counts?.services ?? []).map((s) => ({ name: s.name, state: serviceHealthState(s) }));
       return {
         name,
@@ -1571,7 +1532,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
  * ponytail: no concurrency cap on the gh fan-out; add one if workspace×repo count grows large.
  */
 export async function getWorkspacePRs(): Promise<WorkspacePrs[]> {
-  const root = await resolveWorkspacesRoot();
+  const root = workspacesRoot();
   const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
   const names = entries
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))
@@ -2520,7 +2481,7 @@ const DEFAULT_PRICES: Record<string, ModelRate> = {
 
 /** Locate `~/.sandbox/model-pricing.yaml`, mirroring resolveServicesYaml. */
 async function resolveModelPricingYaml(): Promise<string | null> {
-  return resolveSandboxConfig("SANDBOX_MODEL_PRICING_YAML", "model-pricing.yaml");
+  return existing(modelPricingYamlPath());
 }
 
 async function loadPriceTable(): Promise<Record<string, ModelRate>> {
@@ -2813,32 +2774,6 @@ async function findRepoFile(rel: string): Promise<string | null> {
   return null;
 }
 
-/**
- * Extract the forward table from services.yaml: every service with a
- * k8s_forward_port, plus infrastructure entries (mongodb). Forward name is the
- * service key unless k8s_forward_name overrides it (e.g. vendor →
- * an aliased name). Services without k8s_forward_port (e.g. storybook)
- * are skipped.
- */
-function parseK8sForwards(yaml: string): Array<{ name: string; port: number; healthEndpoint: string | null }> {
-  const doc = parseYaml(yaml) as {
-    services?: Record<string, Record<string, unknown>>;
-    infrastructure?: Record<string, Record<string, unknown>>;
-  };
-  const out: Array<{ name: string; port: number; healthEndpoint: string | null }> = [];
-  const collect = (entries: Record<string, Record<string, unknown>> | undefined) => {
-    for (const [key, def] of Object.entries(entries ?? {})) {
-      const port = def?.k8s_forward_port;
-      if (typeof port !== "number") continue;
-      const name = typeof def.k8s_forward_name === "string" ? def.k8s_forward_name : key;
-      const he = def.health_endpoint;
-      out.push({ name, port, healthEndpoint: typeof he === "string" ? he : null });
-    }
-  };
-  collect(doc.services);
-  collect(doc.infrastructure);
-  return out;
-}
 
 function checkHttpHealth(port: number, pathName: string, timeoutMs = 3500): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
@@ -2881,11 +2816,11 @@ export async function getK8sForwardsHealth(): Promise<{ forwards: K8sForwardHeal
       "Could not locate the service registry (~/.sandbox/services.yaml) — run `sandbox setup`.",
     );
   }
-  const defs = parseK8sForwards(await fs.readFile(file, "utf-8"));
+  const doc = (parseYaml(await fs.readFile(file, "utf-8")) ?? {}) as Record<string, any>;
   const forwards = await Promise.all(
-    defs.map(async (d): Promise<K8sForwardHealth> => {
-      const r = d.healthEndpoint ? await checkHttpHealth(d.port, d.healthEndpoint) : await checkTcpHealth(d.port);
-      return { name: d.name, port: d.port, healthy: r.ok, detail: r.detail };
+    forwardSpecs(doc.services, doc.infrastructure).map(async (d): Promise<K8sForwardHealth> => {
+      const r = d.health ? await checkHttpHealth(d.listen, d.health) : await checkTcpHealth(d.listen);
+      return { name: d.name, port: d.listen, healthy: r.ok, detail: r.detail };
     }),
   );
   return { forwards, healthy: forwards.filter((f) => f.healthy).length, total: forwards.length };
