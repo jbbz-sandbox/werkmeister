@@ -17,7 +17,7 @@
  * transcripts measurably lag.
  */
 import fs from "node:fs";
-import { parseSessionLines, resolveSessionSource, getClaudeTurnStatus, turnEvents, type ClaudeMessage } from "sandbox-driver";
+import { parseSessionLines, resolveSessionSource, getClaudeTurnStatus, turnEvents, type ClaudeMessage } from "sandbox-core";
 
 export type StreamEvent =
   | { type: "entry"; index: number; message: ClaudeMessage }

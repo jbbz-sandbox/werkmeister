@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { countFailingChecks, isWithin30Days, prFromView, assembleOpenPrs, APPROVAL_LABEL, isValidPrUrl, buildReconcileContext } =
-  await import("sandbox-driver");
+  await import("sandbox-core");
 const { renderMarkdown } = await import(path.join(pkgRoot, "dist/lib/markdown.js"));
 
 // 1. Failing-checks classifier: bad conclusions count; good/in-progress don't.

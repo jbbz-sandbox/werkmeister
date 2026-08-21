@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { listWorkspaces } from "sandbox-driver";
+import { listWorkspaces } from "sandbox-core";
 import { mergeFolders } from "./lib/merge-folders.mjs";
 
 const userDir = process.env.CLAUDECK_HOME || join(homedir(), ".claudeck");

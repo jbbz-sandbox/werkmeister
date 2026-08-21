@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import * as os from "node:os";
 import * as vscode from "vscode";
-import { listWorkspaces, resolveSandboxBin, childEnv, removeWorkspace } from "sandbox-driver";
+import { listWorkspaces, resolveSandboxBin, childEnv, removeWorkspace } from "sandbox-core";
 import { runInTerminal } from "./terminal.js";
 import type { SandboxTreeProvider } from "./tree.js";
 import type { WsNode } from "./build-tree.js";
@@ -58,7 +58,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
   return [
     vscode.commands.registerCommand("sandbox.refresh", () => provider.refresh()),
 
-    // Deliberately not the driver's openWorkspace(), which shells out to the
+    // Deliberately not sandbox-core's openWorkspace(), which shells out to the
     // `code` CLI — from inside VS Code the native command is direct and can't
     // fail on a missing `code` binary.
     vscode.commands.registerCommand("sandbox.open", async (node?: WsNode) => {
@@ -192,7 +192,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         void vscode.window.showInformationMessage(`Removed ${removed}`);
         provider.refresh();
       } catch (e) {
-        // The driver's failure message is a multi-line handoff report (which
+        // sandbox-core's failure message is a multi-line handoff report (which
         // branch failed to push, etc.) — a toast squeezes it onto one line, so
         // the full text goes to the output channel and the toast just points there.
         const channel = getOutputChannel();

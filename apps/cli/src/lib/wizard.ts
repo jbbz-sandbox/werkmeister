@@ -235,13 +235,13 @@ export async function promptOne(
 /**
  * Offer a Claude rewrite for a `refinable` field; returns the text to keep.
  *
- * The rewrite runs through `sandbox-driver`'s `refinePrompt` — the same
+ * The rewrite runs through `sandbox-core`'s `refinePrompt` — the same
  * function behind the browser form's "Refine with Claude" button — so the
  * terminal honours the spec's `refineInstruction` instead of restating it and
  * drifting. The wizard's answers so far are passed as the form-state context
- * the driver grounds the rewrite in.
+ * sandbox-core grounds the rewrite in.
  *
- * Every failure path (declined, driver not built, `claude` missing, empty or
+ * Every failure path (declined, sandbox-core not built, `claude` missing, empty or
  * rejected rewrite) falls back to what the user typed — refine is an offer, so
  * it must never cost them their text. `ask` is injected for tests.
  */
@@ -257,7 +257,7 @@ export async function offerRefine(
   info("  Refining via the claude CLI — this takes a few seconds…");
   let refined: string;
   try {
-    const { refinePrompt } = await import("sandbox-driver");
+    const { refinePrompt } = await import("sandbox-core");
     refined = (await refinePrompt(value, spec.refineInstruction ?? "", context)).trim();
   } catch (e) {
     warn(`Refine failed (${(e as Error).message}) — keeping what you typed.`);

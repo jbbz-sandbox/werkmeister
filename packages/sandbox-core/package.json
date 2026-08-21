@@ -1,9 +1,9 @@
 {
-  "name": "sandbox-driver",
+  "name": "sandbox-core",
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "Shared CLI-driving layer for the `sandbox` sandbox CLI. Shells out to the CLI and exposes typed functions (createWorkspace, listWorkspaces, …) consumed by the sandbox-dashboard and claudeck MCP servers.",
+  "description": "Shared sandbox library: config/registry resolution, workspace + Jira helpers, and typed wrappers over the `sandbox` CLI. Consumed by the CLI itself, sandbox-dashboard, claudeck, and the VS Code extension.",
   "main": "dist/sandbox.js",
   "types": "dist/sandbox.d.ts",
   "exports": {

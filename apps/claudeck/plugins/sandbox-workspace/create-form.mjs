@@ -24,7 +24,7 @@ export async function renderCreateForm(container, { onCreated } = {}) {
     bundle = await res.json();
   } catch {
     container.replaceChildren(
-      el("div", "sw-cf-error", "Enable the Sandbox Workspace plugin (and build sandbox-driver)."),
+      el("div", "sw-cf-error", "Enable the Sandbox Workspace plugin (and build sandbox-core)."),
     );
     return;
   }

@@ -47,8 +47,8 @@ upstream's numbering.
   (Open Folder | Create Workspace), with tab-switch + post-create glue in
   `public/js/features/projects.js`. The Create tab lazy-imports the
   sandbox-workspace plugin's `create-form.mjs`; the plugin gained a
-  `sandbox-driver` dependency and routes (`form-schema`, `jira-form-data`,
-  `refine-prompt`, `create`). `sandbox-driver` must be built (`tsc`) before
+  `sandbox-core` dependency and routes (`form-schema`, `jira-form-data`,
+  `refine-prompt`, `create`). `sandbox-core` must be built (`tsc`) before
   claudeck runs.
 - **Workspace → project-list sync**: the sandbox-workspace plugin mirrors the
   workspaces root into `~/.claudeck/config/folders.json` (the list core's

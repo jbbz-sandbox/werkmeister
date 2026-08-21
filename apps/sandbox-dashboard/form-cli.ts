@@ -23,7 +23,7 @@ import {
   fetchJiraFormData,
   getFormSchema,
   WorkspaceError,
-} from "sandbox-driver";
+} from "sandbox-core";
 import { promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {

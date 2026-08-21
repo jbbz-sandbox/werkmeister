@@ -4,7 +4,7 @@
 //   npm run build && node lib/sandbox.smoke.mjs
 import assert from "node:assert";
 
-const { parseComposeStatus } = await import("sandbox-driver");
+const { parseComposeStatus } = await import("sandbox-core");
 
 // Mixed running/exited containers across two projects, plus a one-shot setup
 // container that should be excluded entirely. Column 4 is `{{.Status}}` (health

@@ -71,7 +71,7 @@ The CLI owns the inputs and the create logic:
 | `lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
 | `lib/markdown.ts` · `lib/workspace-search.ts` | markdown-it config (`html:false`); workspace fuzzy match |
-| `sandbox-driver` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, Jira REST fast path, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
+| `sandbox-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, Jira REST fast path, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
 | `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
 
 ## Build & test
@@ -83,8 +83,8 @@ npm run build                    # typecheck + 5 UI bundles + server → dist/
 node lib/localhost-form.smoke.mjs   # and the other lib/*.smoke.mjs
 ```
 
-All ten `lib/*.smoke.mjs` pass. Seven of them exercise `sandbox-driver`, so
-`packages/sandbox-driver` must be built first (`npm run build` there, or at the
+All ten `lib/*.smoke.mjs` pass. Seven of them exercise `sandbox-core`, so
+`packages/sandbox-core` must be built first (`npm run build` there, or at the
 repo root) — they import the package by name, never by relative path.
 
 ## Wiring

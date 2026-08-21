@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // exactly the fallback this suite has to cover. Calls are recorded by hand.
 let refine: (...args: unknown[]) => Promise<string> | string;
 const calls: unknown[][] = [];
-vi.mock("sandbox-driver", () => ({
+vi.mock("sandbox-core", () => ({
   refinePrompt: (...args: unknown[]) => {
     calls.push(args);
     return refine(...args);

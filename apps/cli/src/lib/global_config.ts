@@ -34,7 +34,7 @@ import {
   portsYamlPath,
   sandboxHome,
   servicesYamlPath,
-} from "sandbox-driver/config";
+} from "sandbox-core/config";
 
 import { expandUser, getSandboxRoot, warn } from "./config.js";
 import type { PromptSpec } from "./wizard.js";
@@ -48,7 +48,7 @@ export type { PromptSpec };
 const _ABS_PATH = "^/\\S*$"; // absolute path (leading slash, no whitespace)
 
 // `configPath` / `sandboxHome` and the registry-path family are re-exported from
-// `sandbox-driver/config` rather than defined here: the dashboard and MCP servers
+// `sandbox-core/config` rather than defined here: the dashboard and MCP servers
 // resolve the same files out-of-process, and two implementations had already
 // drifted apart on precedence. See that module's header.
 export { configPath, sandboxHome, servicesYamlPath, portsYamlPath, modelPricingYamlPath };
@@ -63,7 +63,7 @@ export function envShPath(): string {
 // ---------------------------------------------------------------------------
 // The service registry, port map and pricing table describe THIS MACHINE's
 // services, not the checkout, so they live beside config.yaml in ~/.sandbox and
-// are seeded by `sandbox setup`. Resolution moved to `sandbox-driver/config`
+// are seeded by `sandbox setup`. Resolution moved to `sandbox-core/config`
 // (re-exported above) — out-of-process consumers now read the same YAML this
 // does, instead of relying on the SANDBOX_*_YAML exports having been sourced.
 // Those exports (see _ENV_MAP) remain as the fallback for a shell.
@@ -139,7 +139,7 @@ export function desktopConfigPath(): string {
 // YAML → env var projection map
 // ---------------------------------------------------------------------------
 // (yaml section, key, env var). Emitted to env.sh only when the value is set.
-// Consumed by shells and by compose; `sandbox-driver/config` reads the YAML.
+// Consumed by shells and by compose; `sandbox-core/config` reads the YAML.
 const _ENV_MAP: readonly [string, string, string][] = [
   ["paths", "sandbox_root", "SANDBOX_ROOT"],
   ["paths", "repos_root", "SANDBOX_REPOS_ROOT"],
@@ -260,7 +260,7 @@ export interface JiraSettings {
   /**
    * Site id for the Atlassian MCP / api.atlassian.com gateway, which addresses
    * sites by id rather than hostname. Not used by the Basic-auth REST path in
-   * `sandbox-driver/jira-rest`, so it stays optional.
+   * `sandbox-core/jira-rest`, so it stays optional.
    */
   cloud_id?: string;
 }

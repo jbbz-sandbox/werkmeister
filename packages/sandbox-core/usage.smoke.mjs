@@ -1,8 +1,8 @@
-// Smoke test for the sandbox-driver usage reducer + cost math.
+// Smoke test for the sandbox-core usage reducer + cost math.
 //   npm run build && node lib/usage.smoke.mjs
 import assert from "node:assert";
 import path from "node:path";
-const { reduceUsageLines, estimateUsd, rateFor } = await import("sandbox-driver");
+const { reduceUsageLines, estimateUsd, rateFor } = await import("sandbox-core");
 
 const line = (model, u) =>
   JSON.stringify({ type: "assistant", message: { role: "assistant", model, usage: u } }) + "\n";
@@ -63,7 +63,7 @@ const pricingPath = path.join(tmp, "model-pricing.yaml");
 fs.writeFileSync(pricingPath, "models:\n  claude-opus-4-8: { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 }\n");
 process.env.SANDBOX_MODEL_PRICING_YAML = pricingPath;
 
-const { getWorkspaceUsage } = await import("sandbox-driver");
+const { getWorkspaceUsage } = await import("sandbox-core");
 const ws = await getWorkspaceUsage("demo");
 assert.strictEqual(ws.byModel.length, 1);
 assert.strictEqual(ws.byModel[0].model, "claude-opus-4-8");

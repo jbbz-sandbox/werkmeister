@@ -25,8 +25,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
-import type { FormSchemaBundle } from "sandbox-driver";
-import { fetchJiraFormData, refinePrompt, WorkspaceError } from "sandbox-driver";
+import type { FormSchemaBundle } from "sandbox-core";
+import { fetchJiraFormData, refinePrompt, WorkspaceError } from "sandbox-core";
 
 // Works both from source (lib/localhost-form.ts via tsx) and compiled
 // (dist/lib/localhost-form.js) — the built page always lives at dist/form.html.

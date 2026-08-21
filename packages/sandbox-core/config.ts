@@ -1,12 +1,12 @@
 /**
  * Machine-config locations and the registry semantics derived from them —
- * the layer BOTH the `sandbox` CLI (in-process) and this driver (which also
+ * the layer BOTH the `sandbox` CLI (in-process) and sandbox-core (which also
  * drives the CLI as a subprocess) read.
  *
  * It exists because the two were resolving the same files independently and
  * disagreeing:
  *
- *  - the driver looked up registry files by `SANDBOX_*_YAML` env var only, so
+ *  - sandbox-core looked up registry files by `SANDBOX_*_YAML` env var only, so
  *    an `overrides.services_yaml` in config.yaml was invisible to it whenever
  *    env.sh had not been sourced — which is exactly the Claude Desktop / MCP
  *    case, since those servers get a minimal env rather than a login shell;
@@ -20,7 +20,7 @@
  *
  * Deliberately policy-free — it locates and parses, and never decides what a
  * missing file means. The CLI fails loud on a missing required registry; the
- * driver degrades to a null. That split stays with each caller.
+ * dashboard degrades to a null. That split stays with each caller.
  */
 
 import * as fs from "node:fs";

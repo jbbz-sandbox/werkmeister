@@ -27,7 +27,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { slotPortRange } from "sandbox-driver/config";
+import { slotPortRange } from "sandbox-core/config";
 
 import { error, info, loadPorts, loadServices, success, warn } from "./config.js";
 import { sandboxLock } from "./locks.js";
@@ -109,7 +109,7 @@ function queryLabeledContainers(): LabelRow[] | null {
  *
  * `ports.yaml` is the single source of truth (FRAG-03); the literal default
  * applies only when the key is absent. The port math on the same block lives in
- * `sandbox-driver/config` — see {@link getPortRange}.
+ * `sandbox-core/config` — see {@link getPortRange}.
  */
 function slotCount(): number {
   const featureSlots = loadPorts()["feature_slots"];
@@ -309,7 +309,7 @@ export function getAllSlots(): Record<string, SlotEntry> {
 /**
  * Return the [start, end] port range for *slot* — e.g. slot 1 -> [11100, 11119].
  *
- * The math lives in `sandbox-driver/config` because the dashboard renders the
+ * The math lives in `sandbox-core/config` because the dashboard renders the
  * same range beside each workspace; this wrapper only supplies `ports.yaml`.
  */
 export function getPortRange(slot: number): [number, number] {
