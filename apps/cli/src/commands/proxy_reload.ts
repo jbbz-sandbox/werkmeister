@@ -46,7 +46,7 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
   let ok: boolean;
   if (isCaddyRunning()) {
     info("Reloading Caddy...");
-    ok = reloadCaddy();
+    ok = await reloadCaddy();
   } else {
     warn("Caddy is not running -- starting it...");
     ok = startCaddy();

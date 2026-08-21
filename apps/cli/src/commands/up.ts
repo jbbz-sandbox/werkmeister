@@ -232,7 +232,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   generateCaddyfile(null, config);
 
   if (isCaddyRunning()) {
-    reloadCaddy();
+    await reloadCaddy();
   } else {
     info("Caddy not running -- starting it...");
     startCaddy();

@@ -44,11 +44,11 @@ function loadDotenv(start: string): Record<string, string> {
 }
 
 /** Regenerate the Caddyfile, then reload running services. */
-function reloadProxy(): void {
+async function reloadProxy(): Promise<void> {
   info("Updating reverse proxy configuration...");
   generateCaddyfile();
   if (isCaddyRunning()) {
-    reloadCaddy();
+    await reloadCaddy();
   } else {
     info("Caddy is not running -- skipping reload");
   }
@@ -201,7 +201,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     for (const feature of names) {
       await downOne(feature, removeVolumes);
     }
-    reloadProxy();
+    await reloadProxy();
     console.log(`\n${Colors.GREEN}${Colors.BOLD}=== All features stopped ===${Colors.RESET}\n`);
     return;
   }
@@ -219,7 +219,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   const slot = await downOne(feature, removeVolumes);
-  reloadProxy();
+  await reloadProxy();
 
   console.log(`\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' stopped ===${Colors.RESET}\n`);
   if (slot) {

@@ -8,6 +8,7 @@
 import * as fs from "node:fs";
 
 import { Colors, error, getInfraRoot, getSandboxRoot, info, success, warn } from "./config.js";
+import { copyFileToContainer, execCapture } from "sandbox-core/docker";
 import { ProcError, run } from "sandbox-core/proc";
 
 export const CADDY_CONTAINER = "sandbox-caddy";
@@ -226,39 +227,23 @@ export function lintCaddyfileStructure(caddyfileText: string): string[] {
 }
 
 /**
- * Copy the host Caddyfile into the running Caddy container via ``docker cp``.
+ * Copy the host Caddyfile into the running Caddy container.
  *
- * Returns True on success (exit code 0).
+ * Returns True on success.
  */
-export function cpCaddyfileToContainer(
+export async function cpCaddyfileToContainer(
   hostPath: string,
   container: string = CADDY_CONTAINER,
   containerPath: string = CADDY_CONTAINER_PATH,
-): boolean {
-  const cmd = ["docker", "cp", String(hostPath), `${container}:${containerPath}`];
-  info(`Copying Caddyfile into container: ${cmd.join(" ")}`);
-  let result;
+): Promise<boolean> {
+  info(`Copying Caddyfile into container: ${hostPath} -> ${container}:${containerPath}`);
   try {
-    result = run(cmd, { capture: true, timeout: 30 });
+    await copyFileToContainer(container, hostPath, containerPath);
+    return true;
   } catch (e) {
-    if (e instanceof ProcError && e.code === "ENOENT") {
-      error("docker not found. Ensure Docker Desktop is installed.");
-      return false;
-    }
-    if (e instanceof ProcError && e.code === "ETIMEDOUT") {
-      error("docker cp timed out after 30 seconds");
-      return false;
-    }
-    throw e;
-  }
-  if (result.status !== 0) {
-    error(`docker cp failed (exit ${result.status})`);
-    if (result.stderr) {
-      console.log(`${Colors.DIM}${result.stderr.trim()}${Colors.RESET}`);
-    }
+    error(`Copying the Caddyfile failed: ${(e as Error).message}`);
     return false;
   }
-  return true;
 }
 
 /**
@@ -266,25 +251,18 @@ export function cpCaddyfileToContainer(
  *
  * Returns ``[adaptSucceeded, routeCount, stderrOrEmpty]``.
  */
-export function adaptAndCountRoutes(
+export async function adaptAndCountRoutes(
   container: string = CADDY_CONTAINER,
   containerPath: string = CADDY_CONTAINER_PATH,
-): [boolean, number, string] {
-  const cmd = ["docker", "exec", container, "caddy", "adapt", "--config", containerPath];
+): Promise<[boolean, number, string]> {
   let result;
   try {
-    result = run(cmd, { capture: true, timeout: 30 });
+    result = await execCapture(container, ["caddy", "adapt", "--config", containerPath]);
   } catch (e) {
-    if (e instanceof ProcError && e.code === "ENOENT") {
-      return [false, 0, "docker not found"];
-    }
-    if (e instanceof ProcError && e.code === "ETIMEDOUT") {
-      return [false, 0, "caddy adapt timed out after 30 seconds"];
-    }
-    throw e;
+    return [false, 0, (e as Error).message];
   }
 
-  if (result.status !== 0) {
+  if (result.exitCode !== 0) {
     return [false, 0, result.stderr.trim()];
   }
 
@@ -340,11 +318,11 @@ function _runCaddyCompose(args: string[], { capture = false }: { capture?: boole
  * Runs the cp -> lint(advisory) -> adapt+count -> compare -> reload pipeline.
  * Returns True on success.
  */
-export function reloadCaddy(): boolean {
+export async function reloadCaddy(): Promise<boolean> {
   const hostCaddyfile = `${getInfraRoot()}/proxy/Caddyfile`;
 
   info("Copying Caddyfile into Caddy container...");
-  if (!cpCaddyfileToContainer(hostCaddyfile)) {
+  if (!(await cpCaddyfileToContainer(hostCaddyfile))) {
     error(`Failed to copy ${hostCaddyfile} into ${CADDY_CONTAINER}:${CADDY_CONTAINER_PATH}`);
     return false;
   }
@@ -357,7 +335,7 @@ export function reloadCaddy(): boolean {
   }
 
   info("Validating config and counting compiled routes...");
-  const [adaptOk, compiledCount, adaptErr] = adaptAndCountRoutes();
+  const [adaptOk, compiledCount, adaptErr] = await adaptAndCountRoutes();
   if (!adaptOk) {
     error(`caddy adapt failed -- not reloading: ${adaptErr}`);
     return false;
@@ -376,32 +354,23 @@ export function reloadCaddy(): boolean {
 
   info(`Route count OK: ${compiledCount} compiled routes (expected >= ${expectedCount})`);
 
-  const cmd = [
-    "docker", "exec", CADDY_CONTAINER,
-    "caddy", "reload", "--config", CADDY_CONTAINER_PATH,
-  ];
   info("Reloading Caddy configuration...");
 
   let result;
   try {
-    result = run(cmd, { capture: true, timeout: 30 });
+    result = await execCapture(CADDY_CONTAINER, [
+      "caddy", "reload", "--config", CADDY_CONTAINER_PATH,
+    ]);
   } catch (e) {
-    if (e instanceof ProcError && e.code === "ENOENT") {
-      error("docker not found");
-      return false;
-    }
-    if (e instanceof ProcError && e.code === "ETIMEDOUT") {
-      error("Caddy reload timed out");
-      return false;
-    }
-    throw e;
+    error(`Caddy reload failed: ${(e as Error).message}`);
+    return false;
   }
-  if (result.status !== 0) {
+  if (result.exitCode !== 0) {
     // Reload command itself failed (not an adapt/count failure) -- try restart instead
     warn(`Caddy reload failed: ${result.stderr.trim()}`);
     warn(
       "Falling back to restarting the Caddy container; it reads the " +
-        "bind-mounted /etc/caddy/Caddyfile which may lag behind the latest cp.",
+        "bind-mounted /etc/caddy/Caddyfile which may lag behind the latest copy.",
     );
     info("Attempting to restart Caddy container instead...");
     return _runCaddyCompose(["restart", "caddy"], { capture: true });

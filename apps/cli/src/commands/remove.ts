@@ -76,7 +76,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   info("Updating reverse proxy...");
   generateCaddyfile(null, config);
   if (isCaddyRunning()) {
-    reloadCaddy();
+    await reloadCaddy();
   }
 
   // Summary

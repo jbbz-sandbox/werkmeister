@@ -123,7 +123,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     if (!dryRun) {
       generateCaddyfile();
       if (isCaddyRunning()) {
-        reloadCaddy();
+        await reloadCaddy();
       }
     }
     console.log();
