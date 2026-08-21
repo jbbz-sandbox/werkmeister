@@ -27,6 +27,15 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
+import {
+  configPath,
+  loadConfig,
+  modelPricingYamlPath,
+  portsYamlPath,
+  sandboxHome,
+  servicesYamlPath,
+} from "sandbox-driver/config";
+
 import { expandUser, getSandboxRoot, warn } from "./config.js";
 import type { PromptSpec } from "./wizard.js";
 
@@ -38,24 +47,11 @@ export type { PromptSpec };
 
 const _ABS_PATH = "^/\\S*$"; // absolute path (leading slash, no whitespace)
 
-/** Path to the global config YAML (`SANDBOX_CONFIG_FILE` or the default). */
-export function configPath(): string {
-  const override = process.env.SANDBOX_CONFIG_FILE;
-  if (override) {
-    return expandUser(override);
-  }
-  return path.join(os.homedir(), ".sandbox", "config.yaml");
-}
-
-/**
- * The `~/.sandbox` directory — every machine-global file lives here.
- *
- * Derived from `configPath()` rather than hardcoded so `SANDBOX_CONFIG_FILE`
- * relocates the whole set together (tests point it at a temp dir).
- */
-export function sandboxHome(): string {
-  return path.dirname(configPath());
-}
+// `configPath` / `sandboxHome` and the registry-path family are re-exported from
+// `sandbox-driver/config` rather than defined here: the dashboard and MCP servers
+// resolve the same files out-of-process, and two implementations had already
+// drifted apart on precedence. See that module's header.
+export { configPath, sandboxHome, servicesYamlPath, portsYamlPath, modelPricingYamlPath };
 
 /** Path to the generated shell export file (sibling of the config). */
 export function envShPath(): string {
@@ -65,36 +61,12 @@ export function envShPath(): string {
 // ---------------------------------------------------------------------------
 // Registry config locations
 // ---------------------------------------------------------------------------
-// The service registry, port map and pricing table used to be committed under
-// `<repo>/infra/config/`. They describe THIS MACHINE's services, not the
-// checkout, so they now live beside config.yaml in ~/.sandbox and are seeded by
-// `sandbox setup`. Each resolves as: `overrides.<key>` in config.yaml →
-// ~/.sandbox/<file>. The overrides are also projected to SANDBOX_*_YAML env vars
-// (see _ENV_MAP) for the out-of-process consumers in packages/sandbox-driver.
-
-/** Resolve one registry file: `overrides.<overrideKey>` → `~/.sandbox/<basename>`. */
-function registryPath(overrideKey: string, basename: string): string {
-  const override = (load()["overrides"] ?? {})[overrideKey];
-  if (override) {
-    return path.resolve(expandUser(String(override)));
-  }
-  return path.join(sandboxHome(), basename);
-}
-
-/** Path to the service registry (`overrides.services_yaml` → ~/.sandbox/services.yaml). */
-export function servicesYamlPath(): string {
-  return registryPath("services_yaml", "services.yaml");
-}
-
-/** Path to the port allocation map (`overrides.ports_yaml` → ~/.sandbox/ports.yaml). */
-export function portsYamlPath(): string {
-  return registryPath("ports_yaml", "ports.yaml");
-}
-
-/** Path to the model pricing table (`overrides.model_pricing_yaml` → ~/.sandbox/model-pricing.yaml). */
-export function modelPricingYamlPath(): string {
-  return registryPath("model_pricing_yaml", "model-pricing.yaml");
-}
+// The service registry, port map and pricing table describe THIS MACHINE's
+// services, not the checkout, so they live beside config.yaml in ~/.sandbox and
+// are seeded by `sandbox setup`. Resolution moved to `sandbox-driver/config`
+// (re-exported above) — out-of-process consumers now read the same YAML this
+// does, instead of relying on the SANDBOX_*_YAML exports having been sourced.
+// Those exports (see _ENV_MAP) remain as the fallback for a shell.
 
 /**
  * Root of the code-standards source tree (`overrides.standards_dir` →
@@ -167,6 +139,7 @@ export function desktopConfigPath(): string {
 // YAML → env var projection map
 // ---------------------------------------------------------------------------
 // (yaml section, key, env var). Emitted to env.sh only when the value is set.
+// Consumed by shells and by compose; `sandbox-driver/config` reads the YAML.
 const _ENV_MAP: readonly [string, string, string][] = [
   ["paths", "sandbox_root", "SANDBOX_ROOT"],
   ["paths", "repos_root", "SANDBOX_REPOS_ROOT"],
@@ -265,18 +238,12 @@ function isDict(value: unknown): value is Record<string, any> {
 
 /** Load the config YAML; missing/invalid file → `{}` (callers apply defaults). */
 export function load(): Record<string, any> {
-  const p = configPath();
-  if (!fs.existsSync(p)) {
-    return {};
-  }
-  let data: unknown;
   try {
-    data = YAML.parse(fs.readFileSync(p, "utf8"));
+    return loadConfig();
   } catch (exc) {
-    warn(`Could not parse ${p}: ${exc}`);
+    warn(`Could not parse ${configPath()}: ${exc}`);
     return {};
   }
-  return isDict(data) ? data : {};
 }
 
 /** Return the `paths:` sub-dict (or `{}`). Used by `lib/config`. */

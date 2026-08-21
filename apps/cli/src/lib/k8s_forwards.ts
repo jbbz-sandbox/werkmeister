@@ -18,6 +18,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { forwardSpecs as specsFrom, type ForwardSpec } from "sandbox-driver/config";
+
 import { getInfraRoot, info, loadInfrastructure, loadServices } from "./config.js";
 
 const _PORTS_START = "# >>> GENERATED k8s-forward ports (from services.yaml — do not edit; `sandbox connect` regenerates)";
@@ -25,70 +27,20 @@ const _PORTS_END = "# <<< GENERATED k8s-forward ports";
 const _ALIASES_START = "# >>> GENERATED k8s-forward aliases (from services.yaml — do not edit; `sandbox connect` regenerates)";
 const _ALIASES_END = "# <<< GENERATED k8s-forward aliases";
 
-export interface ForwardSpec {
-  name: string;
-  listen: number;
-  remote: number;
-  ns: string;
-  prefix: string;
-  health: string;
-}
-
 /**
- * The forward table: one dict per forwarded service, in services.yaml order,
- * followed by every `infrastructure:` entry that declares `k8s_forward_port`
- * (redis, postgres, mongodb, …) in declaration order.
- *
- * A service is forwarded iff it declares `k8s_forward_port`. The forward
- * *name* is `k8s_forward_name` when set (an alias differing from the key),
- * else the service key. `remote` is the in-pod container port (`internal_port`)
- * for both services and infrastructure — `kubectl port-forward deployment/x`
- * binds a pod port, not the cluster-facing Service port (`k8s_port`).
+ * The forward table, from the shared registry semantics in
+ * `sandbox-driver/config` — the dashboard's health checks read the same table,
+ * so it is defined once. Loading the registry (and failing loud when it is
+ * missing) stays here; the parse does not.
  */
 export function forwardSpecs(
   services?: Record<string, any> | null,
   infrastructure?: Record<string, any> | null,
 ): ForwardSpec[] {
-  services = services ?? loadServices();
-  infrastructure = infrastructure ?? loadInfrastructure();
-
-  const specs: ForwardSpec[] = [];
-  for (const [key, svc] of Object.entries(services)) {
-    if (
-      typeof svc !== "object" || svc === null || Array.isArray(svc) ||
-      svc["k8s_forward_port"] === null || svc["k8s_forward_port"] === undefined
-    ) {
-      continue;
-    }
-    specs.push({
-      name: svc["k8s_forward_name"] || key,
-      listen: Number(svc["k8s_forward_port"]),
-      remote: svc["internal_port"],
-      ns: svc["k8s_namespace"] || "",
-      prefix: svc["k8s_pod_prefix"] || "",
-      health: svc["health_endpoint"] || "",
-    });
-  }
-
-  const isDict = (v: unknown): v is Record<string, any> =>
-    typeof v === "object" && v !== null && !Array.isArray(v);
-  if (isDict(infrastructure)) {
-    for (const [key, entry] of Object.entries(infrastructure)) {
-      if (!isDict(entry) || entry["k8s_forward_port"] === null || entry["k8s_forward_port"] === undefined) {
-        continue;
-      }
-      specs.push({
-        name: key,
-        listen: Number(entry["k8s_forward_port"]),
-        remote: entry["internal_port"],
-        ns: entry["k8s_namespace"] || "",
-        prefix: entry["k8s_pod_prefix"] || "",
-        health: entry["health_endpoint"] || "",
-      });
-    }
-  }
-  return specs;
+  return specsFrom(services ?? loadServices(), infrastructure ?? loadInfrastructure());
 }
+
+export type { ForwardSpec };
 
 /** Pipe-delimited rows for the entrypoint's FORWARDS array. */
 export function buildForwardRows(
