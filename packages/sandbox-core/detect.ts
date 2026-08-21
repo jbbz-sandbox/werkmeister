@@ -9,14 +9,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import {
-  Colors,
-  info,
-  loadServices,
-  resolveWorkspace,
-  warn,
-} from "./config.js";
-import { ProcError, run } from "sandbox-core/proc";
+import { Colors } from "./colors.js";
+import { loadServices, resolveWorkspace } from "./config.js";
+import { info, warn } from "./reporter.js";
+import { ProcError, run } from "./proc.js";
 
 /** Run `git diff main..HEAD --name-only` in *repoPath* and return changed files. */
 function _runGitDiff(repoPath: string): string[] {

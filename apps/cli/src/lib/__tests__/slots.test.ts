@@ -6,7 +6,7 @@
  *   - the Docker query boundary → mock `run` in proc.js (queryLabeledContainers
  *     shells out through it),
  *   - `_slot_config`            → override `loadPorts` in config.js,
- *   - the allocate lock         → mock `sandboxLock` in locks.js (also lets us
+ *   - the allocate lock         → mock `sandboxLock` in sandbox-core/locks (also lets us
  *     drive the lock-timeout path without a real 30s wait).
  * The fixture ports.yaml + services.yaml, staged in a throwaway ~/.sandbox,
  * back the un-overridden cases.
@@ -39,7 +39,7 @@ vi.mock("../config.js", async (importOriginal) => {
   return { ...actual, loadPorts: () => h.portsOverride ?? actual.loadPorts() };
 });
 
-vi.mock("../locks.js", () => ({
+vi.mock("sandbox-core/locks", () => ({
   sandboxLock: (name: string, fn: () => any, opts?: any) => {
     h.lastLockOpts = opts;
     if (h.simulateLockTimeout) {

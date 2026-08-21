@@ -75,7 +75,7 @@ import {
   resolveRepos,
   worktreeIsDirty,
   writeWorkspaceGitignore,
-} from "../lib/worktrees.js";
+} from "sandbox-core/worktrees";
 import { run as procRun } from "sandbox-core/proc";
 import { ProcError } from "sandbox-core/proc";
 

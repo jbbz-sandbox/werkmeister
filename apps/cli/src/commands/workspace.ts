@@ -64,7 +64,7 @@ import { run as procRun } from "sandbox-core/proc";
 import { PromptSpec } from "../lib/wizard.js";
 // Worktree creation is shared with init-workspace (which owns the nested
 // per-repo worktrees); this command creates only the workspace ROOT.
-import { createWorktree, resolveRepos } from "../lib/worktrees.js";
+import { createWorktree, resolveRepos } from "sandbox-core/worktrees";
 // init-workspace owns the shared prompt/wizard definitions and config writer;
 // these helpers are re-used verbatim so both commands agree on fields.
 import {
