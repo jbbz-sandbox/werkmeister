@@ -13,13 +13,13 @@
 import { Colors, info, success, warn } from "../lib/config.js";
 import {
   ContainerStats,
-  collectSnapshot,
   collectStats,
   formatRecommendations,
   formatStatsTable,
   recommendLimits,
   saveReport,
 } from "../lib/stats.js";
+import { containerStats } from "sandbox-core/docker";
 
 function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -36,13 +36,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (duration > 0) {
     await runCollection(duration, interval, save);
   } else {
-    runSnapshot(save);
+    await runSnapshot(save);
   }
 }
 
 /** Show a one-shot snapshot of current container stats. */
-function runSnapshot(_save: boolean): void {
-  const snapshot = collectSnapshot();
+async function runSnapshot(_save: boolean): Promise<void> {
+  const snapshot = await containerStats();
 
   if (!snapshot.length) {
     warn("No running containers found. Start your sandbox first.");
@@ -70,9 +70,9 @@ function runSnapshot(_save: boolean): void {
   let totalMem = 0.0;
 
   for (const e of [...sandboxEntries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    const cpu = e.cpu_percent;
-    const mem = e.mem_mib;
-    const limit = e.mem_limit_mib;
+    const cpu = e.cpuPercent;
+    const mem = e.memMib;
+    const limit = e.memLimitMib;
     totalCpu += cpu;
     totalMem += mem;
 
@@ -176,14 +176,14 @@ async function collectInterruptible(
         `(${Math.trunc(remaining)}s remaining)`,
     );
 
-    const snapshot = collectSnapshot();
+    const snapshot = await containerStats();
     for (const entry of snapshot) {
       const name = entry.name;
       if (!(name in aggregated)) aggregated[name] = new ContainerStats(name);
       const s = aggregated[name];
       s.samples += 1;
-      s.cpuSamples.push(entry.cpu_percent);
-      s.memSamples.push(entry.mem_mib);
+      s.cpuSamples.push(entry.cpuPercent);
+      s.memSamples.push(entry.memMib);
     }
 
     if (i < samplesRemaining - 1) await sleep(intervalSeconds);

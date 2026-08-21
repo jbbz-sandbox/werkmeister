@@ -11,6 +11,7 @@
     "./cache": "./dist/cache.js",
     "./colors": "./dist/colors.js",
     "./config": "./dist/config.js",
+    "./docker": "./dist/docker.js",
     "./proc": "./dist/proc.js",
     "./reporter": "./dist/reporter.js"
   },
@@ -20,6 +21,8 @@
     "test": "tsc && node --test *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
+    "@types/dockerode": "^4.0.1",
+    "dockerode": "^5.0.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
