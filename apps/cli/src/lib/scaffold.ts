@@ -153,15 +153,18 @@ services:
     setup_service: demo-install
     # The repo root is mounted at /app; cd into the app's subdir (the template
     # runs \`command\` from /app and does not use \`path:\` for the working dir).
-    # Zero-dependency stdlib http app — nothing to install in order to *run*
-    # it. It still gates on demo-install and mounts the shared tree anyway,
-    # because \`test:\` needs vitest and that tree has to be the container's own
-    # linux build (see setup_services).
     image: node:22-alpine
     command: "cd apps/backend && exec node server.js"
     memory_limit: 256M
     memory_reservation: 64M
     node_modules_volume: node-modules
+    # \`k8s-postgres\` is the k8s-forwards container's shared-network alias and
+    # 9051 its *listen* port, not Postgres' 5432 — in-cluster the same database
+    # is \`postgres:5432\` (charts/backend.values.yaml). Set here rather than in
+    # .env because compose \`environment:\` wins over \`env_file:\` anyway, and the
+    # credentials and key name are the app's knowledge, not the registry's.
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@k8s-postgres:9051/postgres
     # Telepresence intercept coordinates (\`sandbox intercept\`). The demo apps also
     # run in the OrbStack cluster as same-named Deployments in \`default\`; intercept
     # reroutes cluster traffic carrying \`x-feature: <feature>\` to the local
@@ -200,6 +203,10 @@ services:
     memory_limit: 1G
     memory_reservation: 256M
     node_modules_volume: node-modules
+    # Redis via the same forwarder alias as backend's Postgres; 9050 is the
+    # listen port, not 6379. Backs the SSR grocery-list cache.
+    environment:
+      REDIS_URL: redis://k8s-redis:9050
     # Telepresence intercept coordinates (see backend). Service port is 8080.
     k8s_deployment: frontend
     k8s_namespace: default
