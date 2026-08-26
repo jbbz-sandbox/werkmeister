@@ -194,6 +194,30 @@ describe("setup services", () => {
     const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
     expect(content).toContain("demo-install:\n        condition: service_completed_successfully");
   });
+
+  it("shares one node_modules volume across the setup container and every app", () => {
+    // Both demo apps bind-mount the *same* repo at /app, so they share a single
+    // volume rather than taking one each: two per-service volumes would be two
+    // concurrent `npm install`s against one bind-mounted package-lock.json.
+    home.write(
+      "services.yaml",
+      fixtureServicesYaml()
+        .replaceAll("    setup_service: null\n", "    setup_service: demo-install\n")
+        .replaceAll("    node_modules_volume: null\n", "    node_modules_volume: node-modules\n")
+        .replace(
+          "setup_services: {}",
+          `setup_services:\n  demo-install:\n${MINIMAL_SETUP}    node_modules_volume: node-modules\n`,
+        ),
+    );
+    const content = fs.readFileSync(
+      generateFeatureCompose("f", 1, ["backend", "frontend"], null, tmp),
+      "utf8",
+    );
+    // Declared once — a duplicate top-level key makes compose reject the file.
+    expect(content.match(/^  f-node-modules:$/gm)).toHaveLength(1);
+    // Mounted by the setup container and both apps.
+    expect(content.match(/^ +- f-node-modules:\/app\/node_modules$/gm)).toHaveLength(3);
+  });
 });
 
 describe("generateFeatureEnv", () => {

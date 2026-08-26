@@ -713,6 +713,10 @@ export function generateFeatureCompose(
     // deps must be up AND healthy. Using service_completed_successfully on a
     // server that never exits leaves the dependent stuck in `Created`.
     const allDeps: Record<string, Record<string, string>> = {};
+    // ponytail: this fallback emits the depends_on but never renders the setup
+    // container itself, so a config using setup_service only generates correctly
+    // through the template (which ships with the CLI, so this path is a broken-
+    // install warning). Render setup services here too if it becomes reachable.
     if (svcDef["setup_service"]) {
       allDeps[svcDef["setup_service"]] = { condition: "service_completed_successfully" };
     }
