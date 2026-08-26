@@ -150,15 +150,18 @@ services:
     port_offset: 0
     health_endpoint: /health
     monorepo: null
-    setup_service: null
+    setup_service: demo-install
     # The repo root is mounted at /app; cd into the app's subdir (the template
     # runs \`command\` from /app and does not use \`path:\` for the working dir).
-    # Zero-dependency stdlib http app — no install step, just run the source.
+    # Zero-dependency stdlib http app — nothing to install in order to *run*
+    # it. It still gates on demo-install and mounts the shared tree anyway,
+    # because \`test:\` needs vitest and that tree has to be the container's own
+    # linux build (see setup_services).
     image: node:22-alpine
     command: "cd apps/backend && exec node server.js"
     memory_limit: 256M
     memory_reservation: 64M
-    node_modules_volume: null
+    node_modules_volume: node-modules
     # Telepresence intercept coordinates (\`sandbox intercept\`). The demo apps also
     # run in the OrbStack cluster as same-named Deployments in \`default\`; intercept
     # reroutes cluster traffic carrying \`x-feature: <feature>\` to the local
@@ -186,18 +189,17 @@ services:
     port_offset: 1
     health_endpoint: /
     monorepo: null
-    setup_service: null
-    # Idempotent boot: install only when deps are missing, then \`next dev\` for
-    # live reload — avoids re-installing on every restart. demo-services is an
-    # npm-workspaces turborepo, so the install runs at /app (the repo root) and
-    # deps hoist to the bind-mounted /app/node_modules, NOT apps/frontend's —
-    # hence the root-level probe. npm puts the ancestor .bin on PATH, so
-    # \`npm run dev\` still resolves \`next\` from the subdir.
+    setup_service: demo-install
+    # demo-services is an npm-workspaces turborepo: the install runs at /app (the
+    # repo root) and deps hoist to /app/node_modules, NOT apps/frontend's.
+    # demo-install has already populated that tree before this container starts,
+    # so there is no boot-time install or probe here. npm puts the ancestor .bin
+    # on PATH, so \`npm run dev\` still resolves \`next\` from the subdir.
     image: node:22-alpine
-    command: "{ [ -d node_modules/next ] || npm install; } && cd apps/frontend && exec npm run dev"
+    command: "cd apps/frontend && exec npm run dev"
     memory_limit: 1G
     memory_reservation: 256M
-    node_modules_volume: null
+    node_modules_volume: node-modules
     # Telepresence intercept coordinates (see backend). Service port is 8080.
     k8s_deployment: frontend
     k8s_namespace: default
@@ -252,10 +254,20 @@ infrastructure:
     k8s_pod_prefix: postgres
     health_endpoint: ""
 
-# No shared setup container — backend needs no deps at all, and frontend does
-# its own root-level install on boot (see its \`command\`). Promote to a
-# setup_service if a third app makes the duplicated install cost real.
-setup_services: {}
+# One shared install container. Both apps bind-mount the *same* repo at /app, so
+# per-service volumes would mean two concurrent \`npm install\`s against one
+# package-lock.json; this runs once and both apps gate on it
+# (\`service_completed_successfully\`). The volume is per-feature, which is the
+# point: npm installs optional native binaries (swc, esbuild, rollup, sharp) for
+# the current platform+libc only, so a tree shared with the macOS host had each
+# side silently overwriting the other's. \`image\` must match the apps' — a
+# glibc-built tree will not load under alpine.
+setup_services:
+  demo-install:
+    repo: demo-services
+    image: node:22-alpine
+    command: "npm install"
+    node_modules_volume: node-modules
 
 # Repo-to-directory mapping for auto-detection. Both apps live in the
 # demo-services turborepo, cloned alongside sandbox under \`paths.repos_root\`;
