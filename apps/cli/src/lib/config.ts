@@ -3,7 +3,7 @@
  *
  * Everything here is a re-export: the registry loaders, the print helpers and
  * — since the modules that needed them moved too — the checkout-root helpers
- * all live in `sandbox-core` now. The file survives so its ~47 importers keep
+ * all live in `sandbox-core` now. The file survives so its 43 importers keep
  * their specifier. `getMonorepoRoot()` is the one body left, and only because
  * nothing outside the CLI asks where the sibling apps are.
  */
@@ -31,9 +31,11 @@ export { error, info, success, warn };
 /**
  * Return the root of the sandbox CLI package.
  *
- * Kept as a named export because 40-odd modules call it; the derivation itself
+ * Kept as a named export because 15 modules call it; the derivation itself
  * lives in `sandbox-core/config` now, so the library modules that moved there
- * resolve `infra/` the same way the CLI does.
+ * resolve `infra/` the same way the CLI does. It throws rather than guessing
+ * when neither `SANDBOX_ROOT` nor a walk-up finds the checkout — reading the
+ * wrong `infra/` is worse than failing.
  */
 export const getSandboxRoot = sandboxRoot;
 
