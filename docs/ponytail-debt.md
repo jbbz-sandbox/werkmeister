@@ -4,7 +4,7 @@ Every deliberate shortcut in this tree carries a `ponytail:` comment naming its 
 and the trigger to revisit. This file is the harvested list, so a deferral can't quietly
 become permanent.
 
-**Scanned 2026-08-27 — 29 markers, 9 with no trigger.**
+**Scanned 2026-08-27 — 27 markers, 6 with no trigger.**
 
 Regenerate the raw list with:
 
@@ -32,12 +32,12 @@ Those are the ones that rot — they are listed first.
 | [gate.ts:254](../apps/cli/src/lib/gate.ts#L254) | unwritable state dir → allow, not deny | a persistence failure silently stops gating instead of failing loudly |
 | [workspace.ts:150](../apps/cli/src/commands/workspace.ts#L150) | `mkdir -p` on a dir the caller already checked | none stated — the marker records intent, not a limit |
 | [connect.ts:64](../apps/cli/src/commands/connect.ts#L64) | corp CA extracted via macOS `security` only | Linux/WSL devs must drop the cert at `~/.sandbox/corp-ca.crt` by hand |
-| [chat-panel.ts:13](../apps/sandbox-dashboard/src/chat-panel.ts#L13) | dependency-free, no React/JSX | a constraint to preserve, not deferred work — the Cowork artifact's CSP budget depends on it |
-| [workspace-ui.ts:16](../apps/sandbox-dashboard/src/workspace-ui.ts#L16) | dependency-free, no React/JSX | same: React here lands in `workspace-list.artifact.html` (~33KB, strict CSP) |
-| [SKILL.md:65](../apps/cli/infra/skills/sb-implement/SKILL.md#L65) | the redirect-verbose-output rule sits at phase entry | drifts to low-attention context by mid-session; no command-time hook exists to re-inject it |
 
-The last three are arguably not debt at all — they are invariants wearing a `ponytail:`
-prefix. Either restate them as plain comments or give them a real trigger.
+Three rows left this section rather than sitting in it unresolved. `chat-panel.ts` and
+`workspace-ui.ts` were invariants wearing a `ponytail:` prefix — "no React/JSX here" is a
+constraint to preserve, not a shortcut to upgrade, and a marker that can never be paid off
+teaches readers to skim the prefix. Both keep the reasoning as plain comments and are no
+longer markers. `sb-implement/SKILL.md` is genuine debt and moved down to a named trigger.
 
 ## Ripe now
 
@@ -57,6 +57,7 @@ previous command finished, and its engine floor moved to VS Code 1.93.
 | [locks.ts:21](../packages/sandbox-core/locks.ts#L21) | O_EXCL PID-stamped lock file (Node has no `fcntl.flock`) | a crashed holder leaves the file behind; compensated by probing the recorded PID | the PID probe proves insufficient → real flock binding |
 | [sandbox.ts:1532](../packages/sandbox-core/sandbox.ts#L1532) | no concurrency cap on the `gh` fan-out | unbounded parallel `gh` calls | workspace × repo count grows large |
 | [sandbox.ts:1812](../packages/sandbox-core/sandbox.ts#L1812) | no concurrency cap on the fan-out (matches the row above) | bounded in practice by my-open-PRs + the approval queue | either grows large |
+| [SKILL.md:65](../apps/cli/infra/skills/sb-implement/SKILL.md#L65) | the redirect-verbose-output rule is stated once, at phase entry | drifts into low-attention context by mid-session, which is exactly when a session starts dumping full test output | the edit gate ([gate.ts](../apps/cli/src/lib/gate.ts)) already intercepts governed edits — extend it to re-inject on Bash once a session is seen drifting |
 | [standards.ts:194](../apps/cli/src/lib/standards.ts#L194) | fnmatch leaves `/` literal | repo-root files under-match a `**/*.service.ts` glob; worst case one standard not re-injected | root-level matching ever matters → real glob matcher |
 | [generate.ts:204](../apps/cli/src/lib/generate.ts#L204) | non-enumerable `Array.prototype.append` patch for Nunjucks `{% do %}` | global prototype patch | it collides with another `append` → template preprocessor |
 | [caddy.ts:47](../apps/cli/src/lib/caddy.ts#L47) | regex-level brace stripping | assumes placeholders hold no whitespace and don't nest | that stops holding → a real tokenizer |

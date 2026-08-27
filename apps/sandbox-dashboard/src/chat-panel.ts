@@ -10,7 +10,7 @@
  * that leave it undefined (Desktop-inline, Cowork artifact) fall back to
  * `claude-transcript` / `claude-turn-status` polling.
  *
- * ponytail: DEPENDENCY-FREE (no React/JSX) and self-contained — it injects its
+ * DEPENDENCY-FREE (no React/JSX) and self-contained — it injects its
  * own `.claude-chat`-scoped CSS and full button styles so it renders identically
  * no matter which page hosts it. It owns its per-panel state in a closure (the
  * host caches the returned element, so state survives re-renders). The one link

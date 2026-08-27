@@ -13,7 +13,7 @@
  * live-streams via SSE — the other two poll `claude-transcript` /
  * `claude-turn-status`).
  *
- * ponytail: deliberately DEPENDENCY-FREE of npm packages and uses no
+ * Deliberately DEPENDENCY-FREE of npm packages and uses no
  * React/JSX. It's the shared UI for all three surfaces, and one of them is
  * the Cowork artifact (dist/workspace-list.artifact.html, ~33KB, strict CSP);
  * importing React here would drag it into that bundle. The RJSF *form*
