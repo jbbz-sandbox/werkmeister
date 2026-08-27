@@ -113,7 +113,7 @@ function ensureCorpCa(): void {
 }
 
 /** Generate proxy/Caddyfile and refresh the k8s kubeconfig. */
-function ensureProxyFiles(): void {
+async function ensureProxyFiles(): Promise<void> {
   const root = getInfraRoot();
 
   // Always regenerate: the Caddyfile must carry the host routers (and any
@@ -123,7 +123,7 @@ function ensureProxyFiles(): void {
     fs.rmSync(caddyfile, { recursive: true, force: true });
   }
   info("Generating proxy/Caddyfile...");
-  generateCaddyfile();
+  await generateCaddyfile();
 
   // Generate the k8s forward table from services.yaml into the file the
   // k8s-forwards container reads (tmp/forwards) and refresh the ports/aliases
@@ -323,7 +323,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   configureGitHooksPath();
 
   // Ensure proxy files exist before docker compose tries to read them
-  ensureProxyFiles();
+  await ensureProxyFiles();
 
   // Extract corporate TLS-proxy root(s) so the k8s-forwards image build can
   // validate outbound HTTPS. Must run before `docker compose up` — the

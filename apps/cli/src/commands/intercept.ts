@@ -161,7 +161,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   const svcDef = resolveServiceDef(service, workspace);
 
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
   if (slot === null) {
     fail(`Feature '${feature}' has no allocated slot — run \`sandbox up ${feature}\` first.`);
   }

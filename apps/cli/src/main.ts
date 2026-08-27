@@ -669,7 +669,7 @@ async function dispatch(moduleName: string, args: Namespace): Promise<void> {
   // after the labels refactor. Idempotent; no-op once the file is gone.
   try {
     const { migrateSlotsJson } = await import("sandbox-core/slots");
-    migrateSlotsJson();
+    await migrateSlotsJson();
   } catch {
     // migration must never block the CLI
   }

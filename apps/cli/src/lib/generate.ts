@@ -1173,10 +1173,10 @@ export function generateSupergraphConfig(
  *
  * Returns the path to the generated Caddyfile.
  */
-export function generateCaddyfile(
+export async function generateCaddyfile(
   allFeatures: Record<string, any> | null = null,
   config: Record<string, any> | null = null,
-): string {
+): Promise<string> {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
   const proxyDir = path.join(getInfraRoot(), "proxy");
   fs.mkdirSync(proxyDir, { recursive: true });
@@ -1184,9 +1184,9 @@ export function generateCaddyfile(
 
   // Acquire lock BEFORE reading slots / writing the Caddyfile.  Re-read
   // slots inside the lock so we always see the latest committed state.
-  return sandboxLock("caddyfile", () => {
+  return sandboxLock("caddyfile", async () => {
     if (allFeatures === null || allFeatures === undefined) {
-      allFeatures = getAllSlots();
+      allFeatures = await getAllSlots();
     }
 
     // Write features.json for the feature selector UI
@@ -1420,12 +1420,12 @@ function generateCaddyfileLocked(
  *     could inject a stub slot-allocation function; kept for TEST-01
  *     coverage in the sibling plan.
  */
-export function generateWorkspaceCompose(
+export async function generateWorkspaceCompose(
   feature: string,
   servicesStr: string,
   workspaceRoot: string,
   _allocateSlotFn?: unknown,
-): number | null {
+): Promise<number | null> {
   info("Generating docker-compose.yml...");
   const servicesConfig = loadServices();
   const portsConfig = loadPorts();
@@ -1476,7 +1476,7 @@ export function generateWorkspaceCompose(
 
   let slot: number;
   try {
-    slot = allocateSlot(feature, localServices);
+    slot = await allocateSlot(feature, localServices);
   } catch (exc) {
     const msg = exc instanceof Error ? exc.message : String(exc);
     warn(`Could not allocate slot: ${msg}`);

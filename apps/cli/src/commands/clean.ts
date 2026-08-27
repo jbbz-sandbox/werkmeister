@@ -94,7 +94,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // ------------------------------------------------------------------
   // Step 1: Identify active features
   // ------------------------------------------------------------------
-  const activeSlots = getAllSlots();
+  const activeSlots = await getAllSlots();
   let activeFeatures = new Set(Object.keys(activeSlots));
 
   if (activeFeatures.size) {
@@ -121,7 +121,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       }
     }
     if (!dryRun) {
-      generateCaddyfile();
+      await generateCaddyfile();
       if (isCaddyRunning()) {
         await reloadCaddy();
       }
@@ -185,7 +185,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // ------------------------------------------------------------------
   // Step 4: Clean stale slot entries
   // ------------------------------------------------------------------
-  const staleSlots = getAllSlots();
+  const staleSlots = await getAllSlots();
   // Re-read in case --all already cleaned them
   if (!cleanAll) {
     const staleFeatures: string[] = [];

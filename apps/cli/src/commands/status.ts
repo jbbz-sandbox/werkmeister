@@ -270,9 +270,9 @@ export function buildInterceptRows(
 }
 
 /** Handle `sandbox status --intercepts`: focused Telepresence intercept view. */
-function runInterceptsOnly(asJson: boolean): void {
+async function runInterceptsOnly(asJson: boolean): Promise<void> {
   const state = listIntercepts();
-  const rows = buildInterceptRows(getAllSlots(), loadServices(), state);
+  const rows = buildInterceptRows(await getAllSlots(), loadServices(), state);
   const namespace = state.available ? connectedNamespace() : null;
 
   if (asJson) {
@@ -474,13 +474,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (args.intercepts) {
-    runInterceptsOnly(Boolean(args.json));
+    await runInterceptsOnly(Boolean(args.json));
     return;
   }
 
   const infra = getInfraStatus();
   const k8s = await getPerServiceStatus();
-  const allSlots = getAllSlots();
+  const allSlots = await getAllSlots();
   const mcp = await webStatus();
 
   if (args.json) {

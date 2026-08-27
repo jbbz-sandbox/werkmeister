@@ -14,7 +14,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== Services for: ${feature} ===${Colors.RESET}\n`);
 
   const servicesConfig = loadServices();
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
 
   if (slot === null) {
     warn(`Feature '${feature}' is not running (no slot allocated)`);
@@ -24,7 +24,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   // Get the feature's local services from Docker container labels
-  const allSlots = getAllSlots();
+  const allSlots = await getAllSlots();
   const featureInfo = allSlots[feature] as any;
   const localServices =
     featureInfo && typeof featureInfo === "object" && !Array.isArray(featureInfo)

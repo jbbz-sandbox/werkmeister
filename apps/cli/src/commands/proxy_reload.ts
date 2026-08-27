@@ -20,10 +20,10 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
 
   // Regenerate Caddyfile (re-reads slots under lock)
   info("Regenerating Caddyfile...");
-  generateCaddyfile(null, config);
+  await generateCaddyfile(null, config);
 
   // List active features in the generated config
-  const allFeatures = getAllSlots();
+  const allFeatures = await getAllSlots();
   if (!Object.keys(allFeatures).length) {
     info("No active features in Caddyfile");
   }

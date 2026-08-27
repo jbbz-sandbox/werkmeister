@@ -174,7 +174,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const preferredSlot = readSlotFromWorkspace(workspace);
   let slot: number;
   try {
-    slot = allocateSlot(feature, localServices, preferredSlot);
+    slot = await allocateSlot(feature, localServices, preferredSlot);
   } catch (e) {
     // The lib reports every allocation failure as a plain Error; its message
     // already carries the stale-lock recovery guidance.
@@ -237,7 +237,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // Step 6: Regenerate Caddyfile and worker endpoints, reload proxy
   // ------------------------------------------------------------------
   info("Configuring reverse proxy...");
-  generateCaddyfile(null, config);
+  await generateCaddyfile(null, config);
 
   if (isCaddyRunning()) {
     await reloadCaddy();

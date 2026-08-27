@@ -140,6 +140,12 @@ export function sandboxLock<T>(
     throw err;
   }
   if (result instanceof Promise) {
+    // ponytail: an async `fn` holds the lock across its awaits, and the acquire
+    // loop above blocks the event loop (Atomics.wait). So a second acquisition
+    // *in the same process*, while an async holder is suspended, deadlocks —
+    // the holder can never resume to release. Unreachable today: the CLI runs
+    // one command at a time and fans out nowhere (no Promise.all over slot or
+    // Caddyfile work). Make the wait await a timer if that ever stops being true.
     return result.finally(release) as T;
   }
   release();

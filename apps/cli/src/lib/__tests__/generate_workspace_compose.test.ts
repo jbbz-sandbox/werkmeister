@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 vi.mock("sandbox-core/slots", async (importOriginal) => {
   const actual = await importOriginal<typeof import("sandbox-core/slots")>();
-  return { ...actual, allocateSlot: () => 1 };
+  return { ...actual, allocateSlot: async () => 1 };
 });
 
 import { generateWorkspaceCompose } from "../generate.js";
@@ -36,8 +36,8 @@ afterEach(() => {
 });
 
 describe("generateWorkspaceCompose", () => {
-  it("writes the expected files", () => {
-    const slot = generateWorkspaceCompose("smoke-test-feature", "frontend", tmp);
+  it("writes the expected files", async () => {
+    const slot = await generateWorkspaceCompose("smoke-test-feature", "frontend", tmp);
     expect(typeof slot).toBe("number");
     expect(fs.statSync(path.join(tmp, "docker-compose.yml")).isFile()).toBe(true);
     expect(fs.statSync(path.join(tmp, ".env")).isFile()).toBe(true);

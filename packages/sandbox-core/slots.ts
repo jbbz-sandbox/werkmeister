@@ -28,8 +28,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { loadPorts, loadServices, slotPortRange } from "./config.js";
+import { docker } from "./docker.js";
 import { sandboxLock } from "./locks.js";
-import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
 
 export const LABEL_PREFIX = "com.sandbox.local";
@@ -50,6 +50,9 @@ export interface SlotEntry {
 // allocation forever (DEBT-02).
 const _ALLOCATE_LOCK_TIMEOUT = 30.0;
 
+/** Matches the `timeout: 10` the shelled `docker ps` carried before dockerode. */
+const QUERY_TIMEOUT_MS = 10_000;
+
 interface LabelRow {
   name: string;
   feature: string;
@@ -58,49 +61,40 @@ interface LabelRow {
 }
 
 /**
- * Shell out to `docker ps -a` and return per-container label rows.
+ * Per-container label rows for every sandbox feature container.
  *
- * Returns `null` if the docker daemon is unreachable; `[]` if reachable
- * but no labeled containers exist.
+ * The daemon already holds these as fields; `docker ps --format` only
+ * flattened them to tabs for us to split back apart, and charged ~45ms of CLI
+ * startup to do it (66ms shelled vs 21ms here, warmed). `sandbox status`,
+ * `down` and `clean` each query twice, so each pays that twice.
+ *
+ * Returns `null` if the daemon is unreachable; `[]` if reachable but no
+ * labelled containers exist. Callers depend on that distinction: `null` means
+ * "unknown", and `allocateSlot` must not read it as "every slot is free".
  */
-function queryLabeledContainers(): LabelRow[] | null {
-  const fmt =
-    "{{.Names}}\t" +
-    `{{.Label "${LABEL_FEATURE}"}}\t` +
-    `{{.Label "${LABEL_SLOT}"}}\t` +
-    `{{.Label "${LABEL_SERVICE}"}}`;
-  let result;
+async function queryLabeledContainers(): Promise<LabelRow[] | null> {
+  let containers;
   try {
-    result = run(
-      [
-        "docker", "ps", "-a",
-        "--format", fmt,
-        "--filter", `label=${LABEL_FEATURE}`,
-      ],
-      { capture: true, timeout: 10 },
-    );
-  } catch (err) {
-    if (err instanceof ProcError) {
-      return null; // missing docker binary, OS error, or timeout
-    }
-    throw err;
+    containers = await docker().listContainers({
+      all: true,
+      filters: { label: [LABEL_FEATURE] },
+      // The shelled path had `timeout: 10`, and a daemon that accepts the
+      // connection but never replies is a failure mode this repo has already
+      // been bitten by (docs/known-issues.md, the dead k8s forward). Aborting
+      // surfaces it as "unreachable" instead of hanging the CLI forever.
+      abortSignal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
+    });
+  } catch {
+    return null; // unreachable daemon, or one that stopped answering
   }
-  if (result.status !== 0) {
-    return null;
-  }
-  const rows: LabelRow[] = [];
-  for (const line of result.stdout.split("\n")) {
-    if (!line.trim()) {
-      continue;
-    }
-    const parts = line.split("\t");
-    if (parts.length < 4) {
-      continue;
-    }
-    const [name, feature, slotStr, service] = parts;
-    rows.push({ name, feature, slot: slotStr, service });
-  }
-  return rows;
+  return containers.map((c) => ({
+    // dockerode reports every alias the container answers to, each with the
+    // API's leading slash. `docker ps` printed the first one, unslashed.
+    name: (c.Names[0] ?? "").replace(/^\//, ""),
+    feature: c.Labels[LABEL_FEATURE] ?? "",
+    slot: c.Labels[LABEL_SLOT] ?? "",
+    service: c.Labels[LABEL_SERVICE] ?? "",
+  }));
 }
 
 /**
@@ -144,16 +138,16 @@ function routableServiceNames(): Set<string> {
 /**
  * Build the slot registry by querying Docker container labels.
  *
- * Always performs a fresh `docker ps` query -- there is no
- * cross-operation cache (FRAG-04). Callers that need the result more
- * than once within a single operation should query it once and reuse
- * the returned dict rather than calling this repeatedly.
+ * Always performs a fresh daemon query -- there is no cross-operation cache
+ * (FRAG-04). Callers that need the result more than once within a single
+ * operation should query it once and reuse the returned dict rather than
+ * calling this repeatedly.
  *
  * Returns `{featureName: {slot, services}}` on success, or `null` if
  * the Docker daemon is unreachable.
  */
-export function getAllSlotsFromDocker(): Record<string, SlotEntry> | null {
-  const rows = queryLabeledContainers();
+export async function getAllSlotsFromDocker(): Promise<Record<string, SlotEntry> | null> {
+  const rows = await queryLabeledContainers();
   if (rows === null) {
     return null;
   }
@@ -225,19 +219,19 @@ function takenSlots(dockerSlots: Record<string, SlotEntry> | null): Set<number> 
  *
  * Throws if all slots are occupied.
  */
-export function allocateSlot(
+export async function allocateSlot(
   feature: string,
   _services?: string[] | null, // kept for back-compat
   preferredSlot?: number | null,
-): number {
+): Promise<number> {
   const count = slotCount();
   return sandboxLock(
     "allocate",
-    () => {
+    async () => {
       // Query Docker labels exactly once for this operation and derive
       // both "does this feature already have a slot" and "which slots
       // are taken" from that single result -- no stale cross-call reads.
-      const dockerSlots = getAllSlotsFromDocker();
+      const dockerSlots = await getAllSlotsFromDocker();
       const existingEntry = (dockerSlots ?? {})[feature];
       if (existingEntry) {
         return existingEntry.slot;
@@ -283,8 +277,8 @@ export function allocateSlot(
 export function releaseSlot(_feature: string): void {}
 
 /** Return the slot number for *feature*, or `null` if not allocated. */
-export function getSlot(feature: string): number | null {
-  const entry = getAllSlots()[feature];
+export async function getSlot(feature: string): Promise<number | null> {
+  const entry = (await getAllSlots())[feature];
   if (entry) {
     return entry.slot;
   }
@@ -297,8 +291,8 @@ export function getSlot(feature: string): number | null {
  * Built entirely from Docker container labels. Returns an empty dict
  * if the docker daemon is unreachable.
  */
-export function getAllSlots(): Record<string, SlotEntry> {
-  const dockerSlots = getAllSlotsFromDocker();
+export async function getAllSlots(): Promise<Record<string, SlotEntry>> {
+  const dockerSlots = await getAllSlotsFromDocker();
   if (dockerSlots === null) {
     return {};
   }
@@ -336,7 +330,7 @@ export function getServicePort(slot: number, portOffset: number): number {
  * Any features in slots.json that have no labeled containers are logged
  * as forgotten -- they have no live state to migrate.
  */
-export function migrateSlotsJson(): void {
+export async function migrateSlotsJson(): Promise<void> {
   const legacy = path.join(os.homedir(), ".sandbox", "slots.json");
   if (!fs.existsSync(legacy)) {
     return;
@@ -350,7 +344,7 @@ export function migrateSlotsJson(): void {
     data = {};
   }
 
-  const live = getAllSlotsFromDocker() ?? {};
+  const live = (await getAllSlotsFromDocker()) ?? {};
   const orphans = Object.keys(data).filter(
     (f) =>
       typeof data[f] === "object" && data[f] !== null && !Array.isArray(data[f]) &&

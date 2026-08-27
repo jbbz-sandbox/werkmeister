@@ -118,7 +118,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     url = base + p;
   }
 
-  if (getSlot(feature) === null) {
+  if ((await getSlot(feature)) === null) {
     warn(`Feature '${feature}' has no running slot — the cookie will be set, but`);
     warn(`traffic falls through to the k8s baseline. Start it with: sandbox up ${feature}`);
   }

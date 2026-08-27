@@ -55,7 +55,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.BOLD}=== sandbox stop: ${feature} ===${Colors.RESET}\n`);
 
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
   if (slot === null) {
     error(`Feature '${feature}' is not running (no slot allocated)`);
     info(`Start it with: sandbox up ${feature}`);

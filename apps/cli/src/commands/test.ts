@@ -18,7 +18,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.BOLD}=== sandbox test: ${feature} ===${Colors.RESET}\n`);
 
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
   if (slot === null) {
     warn(`Feature '${feature}' does not have an allocated slot`);
     warn("Start it first with: sandbox up " + feature);

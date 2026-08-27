@@ -26,14 +26,14 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const portsConfig = loadPorts();
   const config = { services: servicesConfig, ports: portsConfig };
 
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
   if (slot === null) {
     error(`Feature '${feature}' is not running (no slot allocated)`);
     process.exit(1);
   }
 
   // Get current services
-  const allSlots = getAllSlots();
+  const allSlots = await getAllSlots();
   const featureInfo = allSlots[feature] as any;
   const currentServices: string[] =
     featureInfo && typeof featureInfo === "object" && !Array.isArray(featureInfo)
@@ -74,7 +74,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // Update proxy
   info("Updating reverse proxy...");
-  generateCaddyfile(null, config);
+  await generateCaddyfile(null, config);
   if (isCaddyRunning()) {
     await reloadCaddy();
   }

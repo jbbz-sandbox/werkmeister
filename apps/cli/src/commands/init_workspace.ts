@@ -1369,7 +1369,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // 8. Generate docker-compose.yml, allocate slot, write .sandbox/sandbox-context.md
   const feature = (meta["FEATURE"] ?? "").trim();
   if (feature) {
-    const slot = generateWorkspaceCompose(feature, meta["SERVICES"] ?? "", workspaceRoot);
+    const slot = await generateWorkspaceCompose(feature, meta["SERVICES"] ?? "", workspaceRoot);
     if (slot !== null) {
       // 9. Build images (without starting containers)
       info("Building Docker images (--no-start)...");
