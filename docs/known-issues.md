@@ -75,6 +75,40 @@ These are rendered verbatim into Docker Compose environment blocks. The literal 
 
 The legacy in-process fallback and bash script PID management are no longer used. k8s port-forwards now run inside a Docker container (`k8s-forwards`) managed by Docker Compose with built-in health checks and auto-restart, eliminating the PID tracking problem entirely.
 
+This resolves *PID tracking*, not *liveness* — the container's healthcheck cannot tell a live forward from a dead one. See the next section.
+
+---
+
+## k8s Port-Forwards Report Healthy While Dead
+
+**Severity:** Moderate (has cost more than one debugging session)
+**Status:** Open
+**Affects:** `sandbox-k8s-forwards`; anything reaching Redis/Postgres through it, host tests included
+
+The healthcheck is TCP-only — `nc -z localhost 9050 && nc -z localhost 9051`
+([shared-infra.yml:82](../apps/cli/infra/compose/shared-infra.yml#L82)). A stale
+`kubectl port-forward` still accepts the connection and then never replies, so the check
+passes while the datastore is unreachable, and `sandbox up` will restart the container and
+report it healthy. The healthcheck is not useless — it does catch a container that died —
+it just cannot see this failure.
+
+The symptom is misleading: every frontend test hangs ~50s in `beforeEach` **with no mention
+of Redis at all**. demo-services' suite names this exact case ("Redis accepts the connection
+but never replies") and still cannot distinguish it from a working forward.
+
+**Workaround:** probe with a real request rather than a connect, before trusting a green
+suite:
+
+```bash
+(printf 'PING\r\n'; sleep 1) | nc -w 3 localhost 9050    # want +PONG, not silence
+docker restart sandbox-k8s-forwards                      # healthy again in ~12s
+```
+
+**Fix:** have the healthcheck speak the protocol (`redis-cli ping`, `pg_isready`) instead of
+`nc -z`. The same line is a tracked [ponytail row](ponytail-debt.md) for a second reason —
+its port list is hand-mirrored from the generated forwards — so both are worth fixing in one
+pass.
+
 ---
 
 ## Standalone Mode Source Code Sharing
