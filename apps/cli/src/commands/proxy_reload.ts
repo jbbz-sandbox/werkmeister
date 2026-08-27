@@ -7,7 +7,7 @@
 
 import { isCaddyRunning, reloadCaddy, startCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, loadPorts, loadServices, success, warn } from "../lib/config.js";
-import { generateCaddyfile } from "../lib/generate.js";
+import { generateCaddyfile } from "sandbox-core/generate";
 import { getAllSlots } from "sandbox-core/slots";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {

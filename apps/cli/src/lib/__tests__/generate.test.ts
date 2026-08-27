@@ -1,13 +1,14 @@
 /**
  * the four HIGH-priority generators.
  *
- * SANDBOX_ROOT points at this repo so getInfraRoot finds the real templates,
+ * SANDBOX_ROOT points at this repo so infraRoot finds the real templates,
  * while a throwaway ~/.sandbox (seeded from __tests__/fixtures) backs
  * loadServices/loadPorts — the registry moved out of the checkout, so the
  * developer's own must never be read here. compose/env/supergraph tests pass
  * workspaceOverride=tmp so nothing lands outside the temp dir. Caddyfile tests
- * redirect generate's getInfraRoot into tmp so the real infra/proxy/Caddyfile
- * is never mutated.
+ * redirect infraRoot into tmp so the real infra/proxy/Caddyfile is never
+ * mutated — and assert the redirect took hold before writing anything, because
+ * a redirect that silently fails writes into the developer's live infra tree.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
@@ -17,11 +18,12 @@ import { fileURLToPath } from "node:url";
 
 const h = vi.hoisted(() => ({ infraRoot: null as string | null }));
 
-vi.mock("../config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config.js")>();
-  // Only generate.ts's imported getInfraRoot is redirected; config.ts's own
-  // loadServices/loadPorts keep using their internal (real) getInfraRoot.
-  return { ...actual, getInfraRoot: () => h.infraRoot ?? actual.getInfraRoot() };
+vi.mock("sandbox-core/config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sandbox-core/config")>();
+  // Redirects only what importers see. config.ts's own loadServices/loadPorts
+  // call infraRoot internally, and intra-module calls are not intercepted, so
+  // they keep resolving against the real tree.
+  return { ...actual, infraRoot: () => h.infraRoot ?? actual.infraRoot() };
 });
 
 import {
@@ -31,9 +33,9 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
   seedWorkspaceMetadataEnv,
-} from "../generate.js";
+} from "sandbox-core/generate";
 import { loadFeatureRouters } from "sandbox-core/feature_routing";
-import { loadServices } from "../config.js";
+import { infraRoot, loadServices } from "sandbox-core/config";
 import { getPortRange } from "sandbox-core/slots";
 import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
@@ -332,11 +334,16 @@ describe("generateSupergraphConfig", () => {
   });
 });
 
-// ---- generateCaddyfile (getInfraRoot redirected into tmp) ------------------
+// ---- generateCaddyfile (infraRoot redirected into tmp) --------------------
 
 describe("generateCaddyfile", () => {
   beforeEach(() => {
     h.infraRoot = tmp;
+    // Fail here, not after writing. When generate.ts moved into sandbox-core
+    // this mock's target moved with it; until it was retargeted every test in
+    // this block wrote a Caddyfile full of fixture features straight into the
+    // developer's real apps/cli/infra/proxy/.
+    expect(infraRoot()).toBe(tmp);
   });
 
   it("writes Caddyfile and features.json", async () => {

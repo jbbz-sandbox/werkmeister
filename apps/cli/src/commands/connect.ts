@@ -23,7 +23,7 @@ import {
   success,
   warn,
 } from "../lib/config.js";
-import { generateCaddyfile } from "../lib/generate.js";
+import { generateCaddyfile } from "sandbox-core/generate";
 import { generateK8sForwards } from "sandbox-core/k8s_forwards";
 import { configureGitHooksPath } from "../lib/git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy } from "sandbox-core/k8s";

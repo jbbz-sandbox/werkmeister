@@ -8,7 +8,7 @@
 import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
 import { Colors, getVolumeBaseNames, info, success, warn } from "../lib/config.js";
 import { composeDown, getContainerStatus, workspaceForFeature } from "../lib/docker.js";
-import { generateCaddyfile } from "../lib/generate.js";
+import { generateCaddyfile } from "sandbox-core/generate";
 import { listVolumeNames, removeVolume } from "sandbox-core/docker";
 import { getAllSlots, releaseSlot } from "sandbox-core/slots";
 

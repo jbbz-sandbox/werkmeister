@@ -14,7 +14,7 @@ vi.mock("sandbox-core/slots", async (importOriginal) => {
   return { ...actual, allocateSlot: async () => 1 };
 });
 
-import { generateWorkspaceCompose } from "../generate.js";
+import { generateWorkspaceCompose } from "sandbox-core/generate";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");

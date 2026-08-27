@@ -27,7 +27,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { getInfraRoot } from "./config.js";
-import { generateSkills } from "./skill_gen.js";
+import { generateSkills } from "sandbox-core/skill_gen";
 
 // sb-*-prefixed skill dirs under a workspace's .claude/skills/ are managed by
 // this module: written on init/sync, pruned when their source disappears.

@@ -13,7 +13,7 @@ import {
   generateFeatureCompose,
   generateFeatureEnv,
   generateSupergraphConfig,
-} from "../lib/generate.js";
+} from "sandbox-core/generate";
 import { getAllSlots, getSlot } from "sandbox-core/slots";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
