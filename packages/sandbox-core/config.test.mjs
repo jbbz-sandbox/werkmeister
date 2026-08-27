@@ -11,13 +11,20 @@ import path from "node:path";
 import {
   configPath,
   forwardSpecs,
+  infraRoot,
   sandboxHome,
+  sandboxRoot,
   servicesYamlPath,
   slotPortRange,
   workspacesRoot,
 } from "./dist/config.js";
 
-const VARS = ["SANDBOX_CONFIG_FILE", "SANDBOX_SERVICES_YAML", "SANDBOX_WORKSPACES_ROOT"];
+const VARS = [
+  "SANDBOX_CONFIG_FILE",
+  "SANDBOX_SERVICES_YAML",
+  "SANDBOX_WORKSPACES_ROOT",
+  "SANDBOX_ROOT",
+];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 
 /** Point SANDBOX_CONFIG_FILE at a temp config.yaml holding *body*. */
@@ -97,4 +104,17 @@ test("slotPortRange: 100-port stride, span from ports.yaml", () => {
   assert.deepEqual(slotPortRange(1, ports), [11100, 11119]);
   assert.deepEqual(slotPortRange(3, ports), [11300, 11319]);
   assert.deepEqual(slotPortRange(2, null), [11200, 11219]); // seeded defaults
+});
+
+// The two answers must agree, because `infra/` is reached one way from the CLI
+// (which always has SANDBOX_ROOT, exported by the wrapper) and the other way
+// from a bare import (the dashboard, a script), and they read the same files.
+test("sandboxRoot: SANDBOX_ROOT wins, else a walk-up finds the checkout's apps/cli", () => {
+  const walked = sandboxRoot();
+  assert.equal(path.basename(walked), "cli");
+  assert.equal(path.basename(path.dirname(walked)), "apps");
+  assert.equal(infraRoot(), path.join(walked, "infra"));
+
+  process.env.SANDBOX_ROOT = "~/elsewhere/apps/cli";
+  assert.equal(sandboxRoot(), path.join(homedir(), "elsewhere", "apps", "cli"));
 });

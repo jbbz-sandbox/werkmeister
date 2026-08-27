@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildForwardRows } from "../k8s_forwards.js";
+import { buildForwardRows } from "sandbox-core/k8s_forwards";
 
 describe("buildForwardRows — infrastructure forwards", () => {
   it("emits a pipe-delimited row per infra entry that declares k8s_forward_port", () => {

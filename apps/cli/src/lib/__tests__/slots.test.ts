@@ -34,8 +34,8 @@ vi.mock("sandbox-core/proc", async (importOriginal) => {
   };
 });
 
-vi.mock("../config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config.js")>();
+vi.mock("sandbox-core/config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sandbox-core/config")>();
   return { ...actual, loadPorts: () => h.portsOverride ?? actual.loadPorts() };
 });
 
@@ -56,7 +56,7 @@ import {
   getServicePort,
   getSlot,
   releaseSlot,
-} from "../slots.js";
+} from "sandbox-core/slots";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");

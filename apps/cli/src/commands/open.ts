@@ -18,7 +18,7 @@ import { parse as yamlParse } from "yaml";
 import { openFeatureBrowser } from "../lib/browser.js";
 import { ingressHostnames } from "../lib/feature_routing.js";
 import { error, warn } from "../lib/config.js";
-import { getSlot } from "../lib/slots.js";
+import { getSlot } from "sandbox-core/slots";
 
 /**
  * Base URL for `--path`, from the registry rather than a literal.

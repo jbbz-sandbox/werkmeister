@@ -27,11 +27,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { slotPortRange } from "sandbox-core/config";
-
-import { error, info, loadPorts, loadServices, success, warn } from "./config.js";
-import { sandboxLock } from "sandbox-core/locks";
-import { ProcError, run } from "sandbox-core/proc";
+import { loadPorts, loadServices, slotPortRange } from "./config.js";
+import { sandboxLock } from "./locks.js";
+import { ProcError, run } from "./proc.js";
+import { error, info, success, warn } from "./reporter.js";
 
 export const LABEL_PREFIX = "com.sandbox.local";
 export const LABEL_FEATURE = `${LABEL_PREFIX}.feature`;

@@ -18,7 +18,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { standardsDirPath } from "./global_config.js";
+import { standardsDirPath } from "sandbox-core/global_config";
 import { listNotes, type Note } from "./notes.js";
 import { run } from "sandbox-core/proc";
 import { fnmatch, loadStandardsModules } from "./standards.js";

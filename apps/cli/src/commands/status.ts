@@ -9,9 +9,9 @@ import * as path from "node:path";
 
 import { Colors, getInfraRoot, loadServices } from "../lib/config.js";
 import { getContainerStatus, type ContainerStatus } from "../lib/docker.js";
-import { getPerServiceStatus, type ForwardStatus } from "../lib/k8s.js";
+import { getPerServiceStatus, type ForwardStatus } from "sandbox-core/k8s";
 import { status as webStatus, type WebServerStatus } from "../lib/web_servers.js";
-import { getAllSlots, getPortRange, type SlotEntry } from "../lib/slots.js";
+import { getAllSlots, getPortRange, type SlotEntry } from "sandbox-core/slots";
 import { ProcError, run as procRun } from "sandbox-core/proc";
 import {
   connectedNamespace,

@@ -50,7 +50,7 @@ import {
 } from "../lib/config.js";
 import { buildFormSchema } from "../lib/form_schema.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "../lib/generate.js";
-import { loadPaths, standardsDirPath, standardsDirProblem } from "../lib/global_config.js";
+import { loadPaths, standardsDirPath, standardsDirProblem } from "sandbox-core/global_config";
 import { writeWorkspaceHooks } from "../lib/hooks_gen.js";
 import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
 import {

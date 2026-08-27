@@ -14,9 +14,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
-import { loadIngress } from "./global_config.js";
+import { loadIngress } from "sandbox-core/global_config";
 import { standardsSource, standardsUrl } from "./skill_gen.js";
-import { getServicePort } from "./slots.js";
+import { getServicePort } from "sandbox-core/slots";
 import { universalStandards } from "./standards.js";
 
 /**

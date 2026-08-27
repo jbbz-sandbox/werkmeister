@@ -11,7 +11,7 @@ import * as path from "node:path";
 
 import { Colors, error, getSandboxRoot, info, resolveWorkspace, success, warn } from "../lib/config.js";
 import { ProcError, run as procRun } from "sandbox-core/proc";
-import { getSlot } from "../lib/slots.js";
+import { getSlot } from "sandbox-core/slots";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;

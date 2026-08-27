@@ -13,8 +13,8 @@ import * as path from "node:path";
 
 import { Colors, error, info } from "../lib/config.js";
 import { composeStop } from "../lib/docker.js";
-import { stop as infraStop } from "../lib/infra.js";
-import { getSlot } from "../lib/slots.js";
+import { stop as infraStop } from "sandbox-core/infra";
+import { getSlot } from "sandbox-core/slots";
 
 function loadDotenv(start: string): Record<string, string> {
   let dir = start;

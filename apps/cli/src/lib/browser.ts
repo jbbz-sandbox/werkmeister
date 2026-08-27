@@ -29,7 +29,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { Colors, error, info } from "./config.js";
-import * as gc from "./global_config.js";
+import * as gc from "sandbox-core/global_config";
 import type { PromptSpec } from "./wizard.js";
 
 export const COOKIE_DOMAIN = ".local.sandbox.com";

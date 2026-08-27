@@ -19,7 +19,7 @@ import * as readline from "node:readline/promises";
 
 import { error, info, success } from "../lib/config.js";
 import { resetSessionState } from "../lib/gate.js";
-import { standardsDirPath } from "../lib/global_config.js";
+import { standardsDirPath } from "sandbox-core/global_config";
 import {
   GraduationError,
   KINDS,

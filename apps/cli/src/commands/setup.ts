@@ -42,8 +42,8 @@ import * as path from "node:path";
 import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "../lib/browser.js";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { ingressHostnames } from "../lib/feature_routing.js";
-import * as gc from "../lib/global_config.js";
-import type { PromptSpec } from "../lib/global_config.js";
+import * as gc from "sandbox-core/global_config";
+import type { PromptSpec } from "sandbox-core/global_config";
 import {
   githubOwners,
   LEGACY_CONFIG_DIR,

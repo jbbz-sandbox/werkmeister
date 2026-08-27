@@ -29,17 +29,38 @@ import * as YAML from "yaml";
 
 import {
   configPath,
+  expandUser,
   loadConfig,
   modelPricingYamlPath,
   portsYamlPath,
   sandboxHome,
+  sandboxRoot,
   servicesYamlPath,
-} from "sandbox-core/config";
+} from "./config.js";
+import { warn } from "./reporter.js";
 
-import { expandUser, getSandboxRoot, warn } from "./config.js";
-import type { PromptSpec } from "./wizard.js";
-
-export type { PromptSpec };
+/**
+ * One input a command collects. Pure data: it declares what to ask and how to
+ * validate, never how to render — the CLI's `wizard.ts` drives these as
+ * terminal prompts, the dashboard projects the same specs into a web form.
+ * It lives here rather than in the wizard because the specs do, and the wizard
+ * is the one module that cannot leave the CLI.
+ */
+export interface PromptSpec {
+  key: string;                                        // config-field name (feature, repos_root, …)
+  label: string;                                      // prompt text shown to the user
+  help: string;                                       // one-line "why it matters"
+  acceptEmpty?: boolean;                              // may the user submit nothing? (default true)
+  multi?: boolean;                                    // comma-separated multi-value (services)
+  multiline?: boolean;                                // free-form prose (form: textarea widget)
+  refinable?: boolean;                                // form: offer a "Refine with Claude" button
+  refineInstruction?: string | null;                  // how Claude should rewrite the field
+  recommended?: boolean;                              // strongly-recommended input (feature)
+  pattern?: string | null;                            // anchored regex a non-empty value must match
+  placeholder?: string | null;                        // example value (UI hint; not a default)
+  defaultFn?: ((workspace: string) => string) | null; // derive a default from the workspace
+  choicesFn?: (() => string[]) | null;                // enumerate valid values (services)
+}
 
 // ---------------------------------------------------------------------------
 // Locations
@@ -84,7 +105,7 @@ export function standardsDirPath(): string {
   if (override) {
     return path.resolve(expandUser(String(override)));
   }
-  return path.join(getSandboxRoot(), "docs", "standards");
+  return path.join(sandboxRoot(), "docs", "standards");
 }
 
 /**

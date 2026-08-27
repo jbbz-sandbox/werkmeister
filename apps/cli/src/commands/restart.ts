@@ -9,8 +9,8 @@ import * as path from "node:path";
 
 import { Colors, error, info } from "../lib/config.js";
 import { composeRestart } from "../lib/docker.js";
-import { restart as infraRestart } from "../lib/infra.js";
-import { getSlot } from "../lib/slots.js";
+import { restart as infraRestart } from "sandbox-core/infra";
+import { getSlot } from "sandbox-core/slots";
 
 function loadDotenv(start: string): Record<string, string> {
   let dir = start;

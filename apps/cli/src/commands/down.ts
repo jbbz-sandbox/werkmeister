@@ -14,7 +14,7 @@ import { composeDown, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";
 import { GraduationError, reconcileGraduating } from "../lib/graduate.js";
 import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
-import { getAllSlots, getSlot, releaseSlot } from "../lib/slots.js";
+import { getAllSlots, getSlot, releaseSlot } from "sandbox-core/slots";
 import { graduateOne, input } from "./notes.js";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */
@@ -213,7 +213,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
-    const infra = await import("../lib/infra.js");
+    const infra = await import("sandbox-core/infra");
     await infra.down(removeVolumes);
     return;
   }

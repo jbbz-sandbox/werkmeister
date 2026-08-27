@@ -28,10 +28,10 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
 } from "../lib/generate.js";
-import { ensurePortForwardsHealthy } from "../lib/k8s.js";
-import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "../lib/secrets.js";
+import { ensurePortForwardsHealthy } from "sandbox-core/k8s";
+import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
 import { loadFeatureRouters } from "../lib/feature_routing.js";
-import { allocateSlot, getPortRange, getServicePort } from "../lib/slots.js";
+import { allocateSlot, getPortRange, getServicePort } from "sandbox-core/slots";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */
 function loadDotenv(start: string): Record<string, string> {
@@ -132,7 +132,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
-    const infra = await import("../lib/infra.js");
+    const infra = await import("sandbox-core/infra");
     await infra.up();
     return;
   }

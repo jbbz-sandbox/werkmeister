@@ -25,23 +25,11 @@ import {
 } from "@inquirer/prompts";
 
 import { info, warn } from "./config.js";
+import type { PromptSpec } from "sandbox-core/global_config";
 
-/** One interactive input a wizard collects. */
-export interface PromptSpec {
-  key: string;                                        // config-field name (feature, repos_root, …)
-  label: string;                                      // prompt text shown to the user
-  help: string;                                       // one-line "why it matters"
-  acceptEmpty?: boolean;                              // may the user submit nothing? (default true)
-  multi?: boolean;                                    // comma-separated multi-value (services)
-  multiline?: boolean;                                // free-form prose (form: textarea widget)
-  refinable?: boolean;                                // form: offer a "Refine with Claude" button
-  refineInstruction?: string | null;                  // how Claude should rewrite the field
-  recommended?: boolean;                              // strongly-recommended input (feature)
-  pattern?: string | null;                            // anchored regex a non-empty value must match
-  placeholder?: string | null;                        // example value (UI hint; not a default)
-  defaultFn?: ((workspace: string) => string) | null; // derive a default from the workspace
-  choicesFn?: (() => string[]) | null;                // enumerate valid values (services)
-}
+// Re-exported so the commands and `browser.ts` that drive a wizard keep naming
+// one module for the runner and the shape it runs.
+export type { PromptSpec };
 
 /** Ctrl-C / Ctrl-D: exit 130, never proceed to write partial state. */
 function abort(): never {

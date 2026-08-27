@@ -32,7 +32,7 @@ import {
   type Step,
 } from "../machine_setup.js";
 import { renderSecretsEnv, renderServicesYaml } from "../scaffold.js";
-import { requiredSecretKeys, validateRequiredSecrets } from "../secrets.js";
+import { requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 let home: SandboxHome;

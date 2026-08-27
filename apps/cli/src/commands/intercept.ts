@@ -23,7 +23,7 @@ import {
   success,
 } from "../lib/config.js";
 import { loadFeatureRouters } from "../lib/feature_routing.js";
-import { getServicePort, getSlot } from "../lib/slots.js";
+import { getServicePort, getSlot } from "sandbox-core/slots";
 import * as tp from "../lib/telepresence.js";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */

@@ -10,7 +10,7 @@ import { Colors, getVolumeBaseNames, info, success, warn } from "../lib/config.j
 import { composeDown, getContainerStatus, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";
 import { listVolumeNames, removeVolume } from "sandbox-core/docker";
-import { getAllSlots, releaseSlot } from "../lib/slots.js";
+import { getAllSlots, releaseSlot } from "sandbox-core/slots";
 
 /**
  * Volume base names declared by the service registry, longest first.

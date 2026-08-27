@@ -1,7 +1,7 @@
 # Design — move the sandbox logic into `sandbox-core`
 
 **Date:** 2026-08-20
-**Status:** approved, not started
+**Status:** approved; steps 0–3 shipped (see §8), 4–6 open
 **Author:** Jay Boyer (decisions), Claude (drafting)
 
 This document is written to be read cold. A session that has never seen the

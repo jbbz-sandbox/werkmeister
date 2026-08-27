@@ -23,8 +23,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
-import * as gc from "../lib/global_config.js";
-import type { PromptSpec } from "../lib/global_config.js";
+import * as gc from "sandbox-core/global_config";
+import type { PromptSpec } from "sandbox-core/global_config";
 import { runWizard } from "../lib/wizard.js";
 
 function show(cfg: Record<string, any>): void {

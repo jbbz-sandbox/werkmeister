@@ -18,9 +18,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { forwardSpecs as specsFrom, type ForwardSpec } from "sandbox-core/config";
-
-import { getInfraRoot, info, loadInfrastructure, loadServices } from "./config.js";
+import {
+  forwardSpecs as specsFrom,
+  type ForwardSpec,
+  infraRoot,
+  loadInfrastructure,
+  loadServices,
+} from "./config.js";
+import { info } from "./reporter.js";
 
 const _PORTS_START = "# >>> GENERATED k8s-forward ports (from services.yaml — do not edit; `sandbox connect` regenerates)";
 const _PORTS_END = "# <<< GENERATED k8s-forward ports";
@@ -54,7 +59,7 @@ export function buildForwardRows(
 }
 
 function forwardsFilePath(): string {
-  return path.join(getInfraRoot(), "compose", "k8s-port-forward", "tmp", "forwards");
+  return path.join(infraRoot(), "compose", "k8s-port-forward", "tmp", "forwards");
 }
 
 /** Write the entrypoint's forward data file. Returns the path written. */
@@ -93,7 +98,7 @@ function replaceBetween(text: string, start: string, end: string, newLines: stri
 }
 
 function sharedInfraPath(): string {
-  return path.join(getInfraRoot(), "compose", "shared-infra.yml");
+  return path.join(infraRoot(), "compose", "shared-infra.yml");
 }
 
 /**

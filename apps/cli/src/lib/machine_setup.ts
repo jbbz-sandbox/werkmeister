@@ -64,7 +64,7 @@ import {
   servicesYamlPath,
   type IngressSettings,
   type JiraSettings,
-} from "./global_config.js";
+} from "sandbox-core/global_config";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { ProcError, run } from "sandbox-core/proc";
 import {

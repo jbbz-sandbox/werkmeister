@@ -30,8 +30,8 @@ import {
 } from "./config.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "sandbox-core/locks";
-import { getSecretsPath, loadSecrets, requiredSecretKeys } from "./secrets.js";
-import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
+import { getSecretsPath, loadSecrets, requiredSecretKeys } from "sandbox-core/secrets";
+import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "sandbox-core/slots";
 
 function isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

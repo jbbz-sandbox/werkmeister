@@ -8,7 +8,7 @@
 import { isCaddyRunning, reloadCaddy, startCaddy } from "../lib/caddy.js";
 import { Colors, error, info, loadPorts, loadServices, success, warn } from "../lib/config.js";
 import { generateCaddyfile } from "../lib/generate.js";
-import { getAllSlots } from "../lib/slots.js";
+import { getAllSlots } from "sandbox-core/slots";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== Proxy Reload ===${Colors.RESET}\n`);

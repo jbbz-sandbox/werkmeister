@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { BROWSERS, resolveBrowserBinary } from "../browser.js";
-import * as gc from "../global_config.js";
+import * as gc from "sandbox-core/global_config";
 
 let tmp: string;
 
