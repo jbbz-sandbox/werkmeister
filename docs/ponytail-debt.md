@@ -4,7 +4,7 @@ Every deliberate shortcut in this tree carries a `ponytail:` comment naming its 
 and the trigger to revisit. This file is the harvested list, so a deferral can't quietly
 become permanent.
 
-**Scanned 2026-08-27 — 27 markers, 6 with no trigger.**
+**Scanned 2026-08-27 — 26 markers, 6 with no trigger.**
 
 Regenerate the raw list with:
 
@@ -41,15 +41,25 @@ longer markers. `sb-implement/SKILL.md` is genuine debt and moved down to a name
 
 ## Ripe now
 
-None. `terminal.ts`'s one-terminal-per-invocation row was the only fired trigger and is
-paid: the extension now reuses a terminal once `onDidEndTerminalShellExecution` reports the
-previous command finished, and its engine floor moved to VS Code 1.93.
+None. Two rows were paid since the last scan.
+
+`terminal.ts`'s one-terminal-per-invocation row: the extension now reuses a terminal once
+`onDidEndTerminalShellExecution` reports the previous command finished, and its engine floor
+moved to VS Code 1.93.
+
+`shared-infra.yml`'s hand-mirrored `nc -z localhost 9050 && 9051` healthcheck: the trigger
+was "generate it like ports/aliases", but the ceiling it also carried — a stale
+`kubectl port-forward` accepts TCP and never replies, so `nc -z` passed while Redis was dead
+— had been paid for in debugging sessions twice. Both are gone at once:
+[probe.sh](../apps/cli/infra/compose/k8s-port-forward/probe.sh) reads the *generated* forward
+table, so nothing is mirrored, and each forward gets the probe its `health_endpoint` names
+(`redis-cli ping`, `pg_isready`, HTTP GET, or a bare connect). The entrypoint's 45s monitor
+calls the same file, so a dead forward is now restarted rather than merely reported.
 
 ## Waiting on a named trigger
 
 | Location | Simplification | Ceiling | Upgrade trigger |
 |---|---|---|---|
-| [shared-infra.yml:82](../apps/cli/infra/compose/shared-infra.yml#L82) | healthcheck hardcodes `nc -z localhost 9050 && 9051` | mirrors the generated forward `ports:` by hand — change the forward set and it silently probes the wrong ports. It also cannot detect a *dead* forward: a stale `kubectl port-forward` accepts the TCP connection and never replies, so `nc -z` passes while Redis is dead — cost one debugging session, symptom is every frontend test hanging 50s in `beforeEach` with no mention of Redis | generate it like ports/aliases |
 | [worktrees.ts:184](../packages/sandbox-core/worktrees.ts#L184) | "has edits" = working-tree dirtiness only | a worktree whose sole divergence is **committed but unpushed** counts as safe to remove (the branch survives, so nothing is truly lost) | losing committed-but-unpushed work becomes a real risk → check ahead/behind |
 | [generate.ts:701](../apps/cli/src/lib/generate.ts#L701) | programmatic compose fallback emits `depends_on` but never renders the setup container | a `setup_service:` config only generates correctly through the template | the fallback path becomes reachable |
 | [docker.ts:111](../packages/sandbox-core/docker.ts#L111) | unix and tcp endpoints only | an `ssh://` context needs dockerode's ssh2 transport, which the VS Code single-file bundle can't carry | a machine actually runs an `ssh://` context |

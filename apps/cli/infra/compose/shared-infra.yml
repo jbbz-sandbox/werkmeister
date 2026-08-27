@@ -79,11 +79,11 @@ services:
         reservations:
           cpus: "0.2"
           memory: 1024M
-    # ponytail: probes the two forwarded ports (redis 9050, postgres 9051). These
-    # mirror the generated forward `ports:` above; if the forward set in
-    # services.yaml changes, update this line too (or make it generated like ports/aliases).
+    # probe.sh reads the same generated forward table the entrypoint does, so
+    # the forward set can change without this line changing, and each forward
+    # gets the probe its protocol needs (a dead forward still accepts TCP).
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9050 && nc -z localhost 9051"]
+      test: ["CMD", "/usr/local/bin/probe.sh"]
       interval: 15s
       timeout: 10s
       retries: 10

@@ -2741,11 +2741,12 @@ export async function sendToClaudeSession(
 // k8s port-forward health
 //
 // The k8s-forwards container publishes each forward's port to the host
-// (see infra/compose/shared-infra.yml), so health is checked directly:
-// HTTP GET on the forward's health_endpoint, or a TCP connect when it has
-// none (e.g. mongodb). Definitions come from ~/.sandbox/services.yaml
-// (each service's k8s_forward_port + health_endpoint; the single source of
-// truth for the forward table).
+// (see infra/compose/shared-infra.yml), so health is checked directly, by the
+// probe its health_endpoint names: HTTP GET on a path, a protocol exchange for
+// `redis`/`postgres`, or a bare TCP connect when it names nothing. Definitions
+// come from ~/.sandbox/services.yaml (each service's k8s_forward_port +
+// health_endpoint; the single source of truth for the forward table). The
+// container's own probe.sh reads the same field and must agree with this.
 // ---------------------------------------------------------------------------
 
 export interface K8sForwardHealth {
@@ -2790,6 +2791,46 @@ function checkHttpHealth(port: number, pathName: string, timeoutMs = 3500): Prom
   });
 }
 
+/**
+ * Probes for forwards that speak a protocol rather than HTTP. A TCP connect
+ * proves nothing about them: a stale `kubectl port-forward` accepts the
+ * connection and never replies, which is exactly the failure that reads as
+ * healthy while every query hangs (docs/known-issues.md). Both exchanges are
+ * pre-authentication, so neither needs credentials.
+ */
+export const WIRE_PROBES: Record<string, { send: Buffer; ok: (reply: Buffer) => boolean }> = {
+  redis: { send: Buffer.from("PING\r\n"), ok: (r) => r.toString("latin1").startsWith("+PONG") },
+  // SSLRequest: length 8, code 80877103. Answered with a single 'S' or 'N'
+  // byte — either one proves a live server on the other end.
+  postgres: {
+    send: Buffer.from([0, 0, 0, 8, 0x04, 0xd2, 0x16, 0x2f]),
+    ok: (r) => r[0] === 0x53 || r[0] === 0x4e,
+  },
+};
+
+/** Send a {@link WIRE_PROBES} probe and wait for the answer. */
+export function checkWireHealth(
+  port: number,
+  kind: string,
+  timeoutMs = 3500,
+): Promise<{ ok: boolean; detail: string }> {
+  return new Promise((resolve) => {
+    const probe = WIRE_PROBES[kind];
+    const sock = net.connect({ host: "127.0.0.1", port, timeout: timeoutMs });
+    sock.on("connect", () => sock.write(probe.send));
+    sock.once("data", (reply: Buffer) => {
+      sock.destroy();
+      const ok = probe.ok(reply);
+      resolve({ ok, detail: ok ? `${kind} ok` : `${kind} bad reply` });
+    });
+    sock.on("timeout", () => {
+      sock.destroy();
+      resolve({ ok: false, detail: "timeout (connected, no reply)" });
+    });
+    sock.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
+  });
+}
+
 function checkTcpHealth(port: number, timeoutMs = 2500): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
     const sock = net.connect({ host: "127.0.0.1", port, timeout: timeoutMs });
@@ -2806,8 +2847,20 @@ function checkTcpHealth(port: number, timeoutMs = 2500): Promise<{ ok: boolean; 
 }
 
 /**
- * Check every default k8s forward in parallel: HTTP GET on its
- * health_endpoint (2xx/3xx = healthy), TCP connect when it has none.
+ * Run the probe a forward's health_endpoint names. An unrecognised name fails
+ * rather than falling back to TCP — silently downgrading to the probe that
+ * can't see a dead forward is the bug this file already had once.
+ */
+function checkForwardHealth(port: number, health: string): Promise<{ ok: boolean; detail: string }> {
+  if (health.startsWith("/")) return checkHttpHealth(port, health);
+  if (WIRE_PROBES[health]) return checkWireHealth(port, health);
+  if (health) return Promise.resolve({ ok: false, detail: `unknown probe "${health}"` });
+  return checkTcpHealth(port);
+}
+
+/**
+ * Check every default k8s forward in parallel, each with the probe its
+ * health_endpoint names (see {@link WIRE_PROBES}).
  */
 export async function getK8sForwardsHealth(): Promise<{ forwards: K8sForwardHealth[]; healthy: number; total: number }> {
   const file = await resolveServicesYaml();
@@ -2819,7 +2872,7 @@ export async function getK8sForwardsHealth(): Promise<{ forwards: K8sForwardHeal
   const doc = (parseYaml(await fs.readFile(file, "utf-8")) ?? {}) as Record<string, any>;
   const forwards = await Promise.all(
     forwardSpecs(doc.services, doc.infrastructure).map(async (d): Promise<K8sForwardHealth> => {
-      const r = d.health ? await checkHttpHealth(d.listen, d.health) : await checkTcpHealth(d.listen);
+      const r = await checkForwardHealth(d.listen, d.health);
       return { name: d.name, port: d.listen, healthy: r.ok, detail: r.detail };
     }),
   );
