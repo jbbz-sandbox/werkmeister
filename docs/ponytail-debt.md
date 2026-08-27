@@ -4,7 +4,7 @@ Every deliberate shortcut in this tree carries a `ponytail:` comment naming its 
 and the trigger to revisit. This file is the harvested list, so a deferral can't quietly
 become permanent.
 
-**Scanned 2026-08-27 — 30 markers, 9 with no trigger.**
+**Scanned 2026-08-27 — 29 markers, 9 with no trigger.**
 
 Regenerate the raw list with:
 
@@ -41,9 +41,9 @@ prefix. Either restate them as plain comments or give them a real trigger.
 
 ## Ripe now
 
-| Location | Simplification | Upgrade trigger | Status |
-|---|---|---|---|
-| [terminal.ts:31](../packages/vscode-plugin/src/terminal.ts#L31) | a new terminal per invocation, so the user accumulates one per command | `onDidEndTerminalShellExecution`, VS Code **1.93+** | **available** — the named API shipped; this is the one row whose trigger has actually fired |
+None. `terminal.ts`'s one-terminal-per-invocation row was the only fired trigger and is
+paid: the extension now reuses a terminal once `onDidEndTerminalShellExecution` reports the
+previous command finished, and its engine floor moved to VS Code 1.93.
 
 ## Waiting on a named trigger
 

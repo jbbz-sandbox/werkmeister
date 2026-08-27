@@ -11,16 +11,53 @@
  */
 import * as vscode from "vscode";
 import { resolveSandboxBin } from "sandbox-core";
+import { claim, release, forget, type Slot } from "./terminal-pool.js";
 
 /** POSIX single-quote escaping — the integrated terminal is a shell, not execFile. */
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-const terminals: vscode.Terminal[] = [];
+const terminals: Slot<vscode.Terminal>[] = [];
+
+/**
+ * Shell integration is what makes reuse safe: the execution events fire only in
+ * terminals where it activated. Where it never does, no end event arrives, the
+ * slot stays busy, and each command gets its own terminal exactly as before.
+ */
+const listeners = [
+  vscode.window.onDidEndTerminalShellExecution((e) => release(terminals, e.terminal)),
+  vscode.window.onDidCloseTerminal((t) => forget(terminals, t)),
+];
 
 export function disposeTerminals(): void {
-  for (const t of terminals.splice(0)) t.dispose();
+  for (const d of listeners.splice(0)) d.dispose();
+  for (const s of terminals.splice(0)) s.term.dispose();
+}
+
+/** VS Code's own documented window for shell integration to activate in a new terminal. */
+const SHELL_INTEGRATION_MS = 3_000;
+
+/**
+ * Wait for a new terminal's shell integration, since it activates a beat after
+ * creation and the execution events only start firing then. Sending sooner
+ * loses that command's end event and would strand the slot as busy forever.
+ * Resolves immediately for a terminal that already has it, and gives up rather
+ * than blocking a shell that will never report.
+ */
+function whenReady(term: vscode.Terminal): Promise<void> {
+  if (term.shellIntegration) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      sub.dispose();
+      resolve();
+    };
+    const timer = setTimeout(finish, SHELL_INTEGRATION_MS);
+    const sub = vscode.window.onDidChangeTerminalShellIntegration((e) => {
+      if (e.terminal === term) finish();
+    });
+  });
 }
 
 /**
@@ -28,14 +65,12 @@ export function disposeTerminals(): void {
  * terminal. Resolves once the command has been sent — not when it finishes;
  * the tree's poll picks up the result.
  *
- * ponytail: a new terminal per invocation, not a reused one. `sandbox logs`
- * runs `docker compose logs -f`, which never exits, and `sandbox up` runs for
- * 30-60s — reusing a terminal whose foreground process is still alive means
- * the next command's text gets typed into that process's STDIN and silently
- * swallowed. VS Code 1.90 has no "did the foreground process finish" signal
- * to guard against that, so this leaves one terminal per command for the user
- * to close. Upgrade to a busy-flag once onDidEndTerminalShellExecution
- * (1.93+) is available.
+ * Reuses a terminal only once its foreground command has ended: `sandbox logs`
+ * runs `docker compose logs -f` and never exits, and `sandbox up` runs for
+ * 30-60s — text sent while that process is alive is swallowed by its STDIN
+ * instead of running. Reuse is keyed on cwd because the CLI resolves
+ * FEATURE/slot from the .env there; a reused terminal keeps the name of the
+ * command that first created it.
  */
 export async function runInTerminal(args: string[], cwd: string, label?: string): Promise<void> {
   let bin: string;
@@ -45,8 +80,10 @@ export async function runInTerminal(args: string[], cwd: string, label?: string)
     void vscode.window.showErrorMessage((e as Error).message);
     return;
   }
-  const term = vscode.window.createTerminal({ name: `sandbox ${label ?? args[0]}`, cwd });
-  terminals.push(term);
+  const term = claim(terminals, cwd, () =>
+    vscode.window.createTerminal({ name: `sandbox ${label ?? args[0]}`, cwd }),
+  );
+  await whenReady(term);
   term.sendText([shellQuote(bin), ...args.map(shellQuote)].join(" "), true);
   term.show(true);
 }
