@@ -8,6 +8,9 @@
  * BuildKit, `.env` interpolation — is a project to reimplement, not a refactor.
  */
 
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { PassThrough } from "node:stream";
 
@@ -23,15 +26,61 @@ import { ProcError, run } from "./proc.js";
  * knows nothing about `docker context`. On a machine whose active context is
  * not symlinked to the default socket — OrbStack, Colima, a remote context —
  * that silently addresses a *different daemon* than the `docker` CLI does, so
- * the CLI is asked instead. `docker context inspect` already reports
- * `DOCKER_HOST` when it is set (as a synthetic `default` context), so one call
- * covers both; the env var is only consulted when the CLI is missing entirely.
+ * the active context has to be resolved first.
+ *
+ * The CLI is the fallback rather than the first choice: spawning it costs ~50ms
+ * of Go startup, which a short-lived `sandbox` command pays on every run to
+ * learn something two file reads already know.
  */
 export function resolveEndpoint(): DockerOptions {
-  return endpointOptions(contextHost() ?? process.env.DOCKER_HOST ?? "");
+  return endpointOptions(storeContextHost() ?? cliContextHost() ?? "");
 }
 
-function contextHost(): string | null {
+/** The built-in `default` context: no meta.json on disk, it *is* the local socket. */
+const DEFAULT_CONTEXT_HOST = "unix:///var/run/docker.sock";
+
+/**
+ * The active context's endpoint, read from the files the CLI itself reads.
+ *
+ * `docker context inspect` is a JSON dump of two files, so reading them
+ * directly gets the same answer without the spawn — and without a cache, so
+ * `docker context use` takes effect on the next call instead of whenever a TTL
+ * happens to expire. The layout: `config.json` names the active context, and
+ * each context's endpoint lives at `contexts/meta/<sha256(name)>/meta.json`.
+ *
+ * Anything unexpected — missing file, unfamiliar shape — returns null so the
+ * caller falls back to asking the CLI. Addressing the *wrong* daemon is the
+ * failure this resolution exists to prevent, and 50ms is the cheaper mistake.
+ */
+function storeContextHost(): string | null {
+  // Docker's own precedence: DOCKER_HOST overrides context selection entirely.
+  if (process.env.DOCKER_HOST) return process.env.DOCKER_HOST;
+  try {
+    const configDir = process.env.DOCKER_CONFIG || path.join(os.homedir(), ".docker");
+    const name = process.env.DOCKER_CONTEXT || currentContextName(configDir);
+    if (name === "default") return DEFAULT_CONTEXT_HOST;
+    const digest = createHash("sha256").update(name).digest("hex");
+    const meta = JSON.parse(
+      readFileSync(path.join(configDir, "contexts", "meta", digest, "meta.json"), "utf8"),
+    );
+    const host = meta?.Endpoints?.docker?.Host;
+    return typeof host === "string" && host ? host : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A missing config and an absent key both mean the `default` context, as they do for the CLI. */
+function currentContextName(configDir: string): string {
+  try {
+    const config = JSON.parse(readFileSync(path.join(configDir, "config.json"), "utf8"));
+    return config?.currentContext || "default";
+  } catch {
+    return "default";
+  }
+}
+
+function cliContextHost(): string | null {
   try {
     const result = run(
       ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
