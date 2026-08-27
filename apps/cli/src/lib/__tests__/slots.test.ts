@@ -3,8 +3,8 @@
  *
  * The functions this exercises are module-private, so the boundaries around
  * them are mocked one level down instead:
- *   - the Docker query boundary → mock `run` in proc.js (queryLabeledContainers
- *     shells out through it),
+ *   - the Docker query boundary → mock `docker()` in sandbox-core/docker
+ *     (queryLabeledContainers asks it for `listContainers`),
  *   - `_slot_config`            → override `loadPorts` in config.js,
  *   - the allocate lock         → mock `sandboxLock` in sandbox-core/locks (also lets us
  *     drive the lock-timeout path without a real 30s wait).
@@ -16,21 +16,26 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const h = vi.hoisted(() => ({
-  dockerStdout: "" as string | null, // null → simulate an unreachable daemon
+  containers: [] as any[] | null, // null → simulate an unreachable daemon
   portsOverride: null as Record<string, any> | null,
   simulateLockTimeout: false,
   lastLockOpts: undefined as any,
+  lastListOpts: undefined as any,
 }));
 
-vi.mock("sandbox-core/proc", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/proc")>();
+vi.mock("sandbox-core/docker", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sandbox-core/docker")>();
   return {
     ...actual,
-    run: vi.fn(() =>
-      h.dockerStdout === null
-        ? { status: 1, stdout: "", stderr: "" }
-        : { status: 0, stdout: h.dockerStdout, stderr: "" },
-    ),
+    docker: () => ({
+      listContainers: async (opts: any) => {
+        h.lastListOpts = opts;
+        // dockerode rejects when it cannot reach the daemon; slots.ts turns
+        // that into the `null` that means "occupancy unknown".
+        if (h.containers === null) throw new Error("connect ENOENT /var/run/docker.sock");
+        return h.containers;
+      },
+    }),
   };
 });
 
@@ -57,19 +62,28 @@ import {
   getSlot,
   releaseSlot,
 } from "sandbox-core/slots";
+import { withReporter, type Reporter } from "sandbox-core/reporter";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
-/** {"feat-a": [3, ["frontend"]]} → tab-separated `docker ps` rows. */
-function fakeDockerRows(entries: Record<string, [number, string[]]>): string {
-  const lines: string[] = [];
+/** {"feat-a": [3, ["frontend"]]} → the `listContainers` rows the daemon returns. */
+function fakeContainers(entries: Record<string, [number, string[]]>): any[] {
+  const rows: any[] = [];
   for (const [feature, [slot, services]] of Object.entries(entries)) {
     for (const service of services) {
-      lines.push([`${feature}-${service}`, feature, String(slot), service].join("\t"));
+      rows.push({
+        // The API always slash-prefixes names; slots.ts strips it back off.
+        Names: [`/${feature}-${service}`],
+        Labels: {
+          "com.sandbox.local.feature": feature,
+          "com.sandbox.local.slot": String(slot),
+          "com.sandbox.local.service": service,
+        },
+      });
     }
   }
-  return lines.join("\n");
+  return rows;
 }
 
 let home: SandboxHome;
@@ -77,10 +91,11 @@ let home: SandboxHome;
 beforeEach(() => {
   process.env.SANDBOX_ROOT = repoRoot;
   home = useSandboxHome();
-  h.dockerStdout = "";
+  h.containers = [];
   h.portsOverride = null;
   h.simulateLockTimeout = false;
   h.lastLockOpts = undefined;
+  h.lastListOpts = undefined;
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
 afterEach(() => {
@@ -91,48 +106,48 @@ afterEach(() => {
 // ---- allocateSlot: idempotency, selection order, exhaustion ---------------
 
 describe("allocateSlot", () => {
-  it("is idempotent for an existing feature", () => {
-    h.dockerStdout = fakeDockerRows({ "feat-a": [3, ["frontend"]] });
-    expect(allocateSlot("feat-a")).toBe(3);
+  it("is idempotent for an existing feature", async () => {
+    h.containers = fakeContainers({ "feat-a": [3, ["frontend"]] });
+    expect(await allocateSlot("feat-a")).toBe(3);
   });
 
-  it("honors a free preferred slot", () => {
-    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["frontend"]], "feat-2": [2, ["frontend"]] });
-    expect(allocateSlot("feat-new", null, 5)).toBe(5);
+  it("honors a free preferred slot", async () => {
+    h.containers = fakeContainers({ "feat-1": [1, ["frontend"]], "feat-2": [2, ["frontend"]] });
+    expect(await allocateSlot("feat-new", null, 5)).toBe(5);
   });
 
-  it("falls back when preferred slot taken", () => {
-    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["frontend"]] });
-    const result = allocateSlot("feat-new", null, 1);
+  it("falls back when preferred slot taken", async () => {
+    h.containers = fakeContainers({ "feat-1": [1, ["frontend"]] });
+    const result = await allocateSlot("feat-new", null, 1);
     expect(result).not.toBe(1);
     expect(result).toBe(2);
   });
 
-  it("returns lowest free slot with no preference", () => {
-    h.dockerStdout = fakeDockerRows({
+  it("returns lowest free slot with no preference", async () => {
+    h.containers = fakeContainers({
       "feat-1": [1, ["frontend"]],
       "feat-2": [2, ["frontend"]],
       "feat-3": [3, ["frontend"]],
     });
-    expect(allocateSlot("feat-new")).toBe(4);
+    expect(await allocateSlot("feat-new")).toBe(4);
   });
 
-  it("raises when all slots taken (overridden count: 2)", () => {
+  it("raises when all slots taken (overridden count: 2)", async () => {
     h.portsOverride = { feature_slots: { count: 2, base_port: 11100, ports_per_slot: 20 } };
-    h.dockerStdout = fakeDockerRows({ "feat-1": [1, ["frontend"]], "feat-2": [2, ["frontend"]] });
-    expect(() => allocateSlot("feat-new")).toThrow();
+    h.containers = fakeContainers({ "feat-1": [1, ["frontend"]], "feat-2": [2, ["frontend"]] });
+    await expect(allocateSlot("feat-new")).rejects.toThrow();
   });
 
-  it("raises when all 12 real slots taken", () => {
+  it("raises when all 12 real slots taken", async () => {
     const taken: Record<string, [number, string[]]> = {};
     for (let n = 1; n <= 12; n++) taken[`feat-${n}`] = [n, ["frontend"]];
-    h.dockerStdout = fakeDockerRows(taken);
-    expect(() => allocateSlot("feature-13")).toThrow(/slots/);
+    h.containers = fakeContainers(taken);
+    await expect(allocateSlot("feature-13")).rejects.toThrow(/slots/);
   });
 
-  it("surfaces a lock timeout instead of hanging forever", () => {
+  it("surfaces a lock timeout instead of hanging forever", async () => {
     h.simulateLockTimeout = true;
-    expect(() => allocateSlot("feat-x")).toThrow(/Timed out/);
+    await expect(allocateSlot("feat-x")).rejects.toThrow(/Timed out/);
     // allocate wires a finite timeout into the lock (the anti-hang guard).
     expect(typeof h.lastLockOpts?.timeout).toBe("number");
     expect(Number.isFinite(h.lastLockOpts.timeout)).toBe(true);
@@ -141,7 +156,7 @@ describe("allocateSlot", () => {
 
 describe("releaseSlot", () => {
   it("is a no-op and never touches docker", () => {
-    // No dockerStdout dependence: release must not query Docker at all.
+    // No container fixture: release must not query Docker at all.
     expect(releaseSlot("any-feature")).toBeUndefined();
   });
 });
@@ -160,13 +175,37 @@ describe("port math and slot lookups", () => {
     expect(getServicePort(3, 2)).toBe(11302);
   });
 
-  it("getAllSlots returns empty dict when docker unreachable", () => {
-    h.dockerStdout = null;
-    expect(getAllSlots()).toEqual({});
+  it("getAllSlots returns empty dict when docker unreachable", async () => {
+    h.containers = null;
+    expect(await getAllSlots()).toEqual({});
   });
 
-  it("getSlot returns null for unknown feature", () => {
-    h.dockerStdout = fakeDockerRows({ "other-feature": [1, ["frontend"]] });
-    expect(getSlot("unknown-feature")).toBeNull();
+  it("getSlot returns null for unknown feature", async () => {
+    h.containers = fakeContainers({ "other-feature": [1, ["frontend"]] });
+    expect(await getSlot("unknown-feature")).toBeNull();
+  });
+
+  it("asks the daemon for stopped containers too, and bounds the wait", async () => {
+    await getAllSlots();
+    // `all` matters: a stopped container still owns its slot label, and
+    // dropping it would hand a live feature's slot to the next allocation.
+    expect(h.lastListOpts.all).toBe(true);
+    expect(h.lastListOpts.filters).toEqual({ label: ["com.sandbox.local.feature"] });
+    // A daemon that accepts and never replies must not hang the CLI — the
+    // shelled path carried `timeout: 10` and this has to keep it.
+    expect(h.lastListOpts.abortSignal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("strips the API's leading slash from container names", async () => {
+    // The unparseable-slot warning prints the name; a stray `/` would leak.
+    h.containers = fakeContainers({ feat: [1, ["frontend"]] });
+    h.containers[0].Labels["com.sandbox.local.slot"] = "not-a-number";
+    const messages: string[] = [];
+    const recorder: Reporter = {
+      emit: (e) => { if (e.level !== "raw") messages.push(e.msg); },
+      passthrough: false,
+    };
+    await withReporter(recorder, () => getAllSlots());
+    expect(messages.join(" ")).toContain("'feat-frontend'");
   });
 });

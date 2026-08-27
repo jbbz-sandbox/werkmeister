@@ -13,7 +13,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
+import { ingressHostnames, loadFeatureRouters } from "sandbox-core/feature_routing";
 import { loadIngress } from "sandbox-core/global_config";
 import { standardsSource, standardsUrl } from "./skill_gen.js";
 import { getServicePort } from "sandbox-core/slots";

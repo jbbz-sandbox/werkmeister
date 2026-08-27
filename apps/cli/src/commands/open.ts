@@ -16,7 +16,7 @@ import * as path from "node:path";
 import { parse as yamlParse } from "yaml";
 
 import { openFeatureBrowser } from "../lib/browser.js";
-import { ingressHostnames } from "../lib/feature_routing.js";
+import { ingressHostnames } from "sandbox-core/feature_routing";
 import { error, warn } from "../lib/config.js";
 import { getSlot } from "sandbox-core/slots";
 
@@ -118,7 +118,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     url = base + p;
   }
 
-  if (getSlot(feature) === null) {
+  if ((await getSlot(feature)) === null) {
     warn(`Feature '${feature}' has no running slot — the cookie will be set, but`);
     warn(`traffic falls through to the k8s baseline. Start it with: sandbox up ${feature}`);
   }

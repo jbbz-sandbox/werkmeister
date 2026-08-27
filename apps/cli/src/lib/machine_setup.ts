@@ -74,7 +74,7 @@ import {
   renderServicesYaml,
   seedFile,
   type SeedResult,
-} from "./scaffold.js";
+} from "sandbox-core/scaffold";
 import {
   BREW_FORMULA,
   DOWNLOAD_HINT,

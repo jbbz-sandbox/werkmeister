@@ -22,7 +22,7 @@ import {
   resolveWorkspace,
   success,
 } from "../lib/config.js";
-import { loadFeatureRouters } from "../lib/feature_routing.js";
+import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { getServicePort, getSlot } from "sandbox-core/slots";
 import * as tp from "../lib/telepresence.js";
 
@@ -161,7 +161,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   const svcDef = resolveServiceDef(service, workspace);
 
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
   if (slot === null) {
     fail(`Feature '${feature}' has no allocated slot — run \`sandbox up ${feature}\` first.`);
   }

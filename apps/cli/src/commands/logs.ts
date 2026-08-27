@@ -13,7 +13,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;
   const service = (args.service as string | null) ?? null;
 
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
   if (slot === null) {
     warn(`Feature '${feature}' is not running (no slot allocated)`);
     warn(`Start it with: sandbox up ${feature}`);

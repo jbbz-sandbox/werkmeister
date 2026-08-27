@@ -32,7 +32,7 @@ import {
   isFeatureComposeStale,
   seedWorkspaceMetadataEnv,
 } from "../generate.js";
-import { loadFeatureRouters } from "../feature_routing.js";
+import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { loadServices } from "../config.js";
 import { getPortRange } from "sandbox-core/slots";
 import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
@@ -339,8 +339,8 @@ describe("generateCaddyfile", () => {
     h.infraRoot = tmp;
   });
 
-  it("writes Caddyfile and features.json", () => {
-    const outPath = generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } });
+  it("writes Caddyfile and features.json", async () => {
+    const outPath = await generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } });
     expect(outPath).toBe(path.join(tmp, "proxy", "Caddyfile"));
     expect(fs.statSync(outPath).isFile()).toBe(true);
 
@@ -350,10 +350,10 @@ describe("generateCaddyfile", () => {
     expect(features).toEqual([{ name: "myfeat", slot: 1, services: ["frontend"] }]);
   });
 
-  it("no running feature -> local host falls back to the remote upstream", () => {
+  it("no running feature -> local host falls back to the remote upstream", async () => {
     // With no feature running, the local hostname block still renders but
     // proxies to remote_upstream (the cluster Service) instead of a container.
-    const content = fs.readFileSync(generateCaddyfile({}), "utf8");
+    const content = fs.readFileSync(await generateCaddyfile({}), "utf8");
     expect(content).toContain("admin localhost:2019");
     const rc = loadFeatureRouters()["frontend"];
     expect(rc?.hostname).toBeTruthy();
@@ -364,11 +364,11 @@ describe("generateCaddyfile", () => {
     expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
   });
 
-  it("remote (K8s) router is static — emitted with no running features", () => {
+  it("remote (K8s) router is static — emitted with no running features", async () => {
     const rc = loadFeatureRouters()["frontend"];
     expect(rc?.remoteHostname).toBeTruthy();
     expect(rc?.remoteUpstream).toBeTruthy();
-    const content = fs.readFileSync(generateCaddyfile({}), "utf8");
+    const content = fs.readFileSync(await generateCaddyfile({}), "utf8");
     // Terminates the remote host and proxies to the cluster Service upstream...
     expect(content).toContain(`${rc!.remoteHostname} {`);
     expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
@@ -376,9 +376,9 @@ describe("generateCaddyfile", () => {
     expect(content).toContain("header_up X-Feature {re.xf.1}");
   });
 
-  it("terminates the hostname and routes to the running feature's container", () => {
+  it("terminates the hostname and routes to the running feature's container", async () => {
     const content = fs.readFileSync(
-      generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } }),
+      await generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } }),
       "utf8",
     );
     const [base] = getPortRange(1);
@@ -388,9 +388,9 @@ describe("generateCaddyfile", () => {
     expect(content).toContain(`host.docker.internal:${base + offset}`);
   });
 
-  it("converts the X-Feature cookie to an X-Feature header", () => {
+  it("converts the X-Feature cookie to an X-Feature header", async () => {
     const content = fs.readFileSync(
-      generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } }),
+      await generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } }),
       "utf8",
     );
     // Cookie matcher captures the value; header_up copies it to the upstream.
@@ -398,12 +398,12 @@ describe("generateCaddyfile", () => {
     expect(content).toContain("header_up X-Feature {re.xf.1}");
   });
 
-  it("emits one site block per routed service that has a running feature", () => {
+  it("emits one site block per routed service that has a running feature", async () => {
     const svcCfg = loadServices();
     const routers = loadFeatureRouters();
     const services = Object.keys(routers);
     const content = fs.readFileSync(
-      generateCaddyfile({ allsvc: { slot: 1, services } }),
+      await generateCaddyfile({ allsvc: { slot: 1, services } }),
       "utf8",
     );
     const [base] = getPortRange(1);
@@ -426,11 +426,11 @@ describe("generateCaddyfile", () => {
   // The point of the sandbox is several workstreams at once. Before this, the
   // local host bound one winner (first by name) and the cookie was decoration,
   // so a second feature was unreachable and a dead one could hold the hostname.
-  it("routes concurrent features on one hostname by cookie value", () => {
+  it("routes concurrent features on one hostname by cookie value", async () => {
     const rc = loadFeatureRouters()["frontend"];
     const offset = loadServices()["frontend"]?.port_offset ?? 0;
     const content = fs.readFileSync(
-      generateCaddyfile({
+      await generateCaddyfile({
         alpha: { slot: 1, services: ["frontend"] },
         beta: { slot: 2, services: ["frontend"] },
       }),
@@ -450,11 +450,11 @@ describe("generateCaddyfile", () => {
     expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
   });
 
-  it("anchors the cookie matcher so one feature can't match another's prefix", () => {
+  it("anchors the cookie matcher so one feature can't match another's prefix", async () => {
     // A bare `X-Feature=web` substring also matches `X-Feature=web-v2`, which
     // would route one workspace's traffic into another's containers.
     const content = fs.readFileSync(
-      generateCaddyfile({
+      await generateCaddyfile({
         web: { slot: 1, services: ["frontend"] },
         "web-v2": { slot: 2, services: ["frontend"] },
       }),

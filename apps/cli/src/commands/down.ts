@@ -8,7 +8,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { isCaddyRunning, reloadCaddy } from "../lib/caddy.js";
+import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, warn } from "../lib/config.js";
 import { composeDown, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";
@@ -46,7 +46,7 @@ function loadDotenv(start: string): Record<string, string> {
 /** Regenerate the Caddyfile, then reload running services. */
 async function reloadProxy(): Promise<void> {
   info("Updating reverse proxy configuration...");
-  generateCaddyfile();
+  await generateCaddyfile();
   if (isCaddyRunning()) {
     await reloadCaddy();
   } else {
@@ -165,7 +165,7 @@ async function downOne(feature: string, removeVolumes: boolean): Promise<number 
     warn(`Could not clean up k8s intercepts: ${exc instanceof Error ? exc.message : String(exc)}`);
   }
 
-  const slot = getSlot(feature);
+  const slot = await getSlot(feature);
   if (slot === null) {
     warn(`Feature '${feature}' does not have an allocated slot`);
     warn("It may already be stopped. Cleaning up anyway...");
@@ -190,7 +190,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const allFeatures = Boolean(args.all_features);
 
   if (allFeatures) {
-    const slots = getAllSlots();
+    const slots = await getAllSlots();
     const names = Object.keys(slots);
     if (!names.length) {
       info("No active features to stop.");

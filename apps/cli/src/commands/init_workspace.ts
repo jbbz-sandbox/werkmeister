@@ -34,7 +34,7 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { buildTesterSpecs, writeWorkspaceAgents } from "../lib/agent_gen.js";
-import { resolvePresentArchetypes } from "../lib/archetypes.js";
+import { resolvePresentArchetypes } from "sandbox-core/archetypes";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../lib/claude_md.js";
 import {
   Colors,
@@ -48,7 +48,7 @@ import {
   success,
   warn,
 } from "../lib/config.js";
-import { buildFormSchema } from "../lib/form_schema.js";
+import { buildFormSchema } from "sandbox-core/form_schema";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "../lib/generate.js";
 import { loadPaths, standardsDirPath, standardsDirProblem } from "sandbox-core/global_config";
 import { writeWorkspaceHooks } from "../lib/hooks_gen.js";
@@ -1369,7 +1369,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // 8. Generate docker-compose.yml, allocate slot, write .sandbox/sandbox-context.md
   const feature = (meta["FEATURE"] ?? "").trim();
   if (feature) {
-    const slot = generateWorkspaceCompose(feature, meta["SERVICES"] ?? "", workspaceRoot);
+    const slot = await generateWorkspaceCompose(feature, meta["SERVICES"] ?? "", workspaceRoot);
     if (slot !== null) {
       // 9. Build images (without starting containers)
       info("Building Docker images (--no-start)...");

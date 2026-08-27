@@ -10,7 +10,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { isCaddyRunning, reloadCaddy, startCaddy } from "../lib/caddy.js";
+import { isCaddyRunning, reloadCaddy, startCaddy } from "sandbox-core/caddy";
 import {
   Colors,
   error,
@@ -30,7 +30,7 @@ import {
 } from "../lib/generate.js";
 import { ensurePortForwardsHealthy } from "sandbox-core/k8s";
 import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
-import { loadFeatureRouters } from "../lib/feature_routing.js";
+import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { allocateSlot, getPortRange, getServicePort } from "sandbox-core/slots";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */
@@ -174,7 +174,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const preferredSlot = readSlotFromWorkspace(workspace);
   let slot: number;
   try {
-    slot = allocateSlot(feature, localServices, preferredSlot);
+    slot = await allocateSlot(feature, localServices, preferredSlot);
   } catch (e) {
     // The lib reports every allocation failure as a plain Error; its message
     // already carries the stale-lock recovery guidance.
@@ -237,7 +237,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // Step 6: Regenerate Caddyfile and worker endpoints, reload proxy
   // ------------------------------------------------------------------
   info("Configuring reverse proxy...");
-  generateCaddyfile(null, config);
+  await generateCaddyfile(null, config);
 
   if (isCaddyRunning()) {
     await reloadCaddy();

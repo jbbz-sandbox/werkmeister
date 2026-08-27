@@ -5,7 +5,7 @@
  * Caddy reverse proxy container.
  */
 
-import { isCaddyRunning, reloadCaddy, startCaddy } from "../lib/caddy.js";
+import { isCaddyRunning, reloadCaddy, startCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, loadPorts, loadServices, success, warn } from "../lib/config.js";
 import { generateCaddyfile } from "../lib/generate.js";
 import { getAllSlots } from "sandbox-core/slots";
@@ -20,10 +20,10 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
 
   // Regenerate Caddyfile (re-reads slots under lock)
   info("Regenerating Caddyfile...");
-  generateCaddyfile(null, config);
+  await generateCaddyfile(null, config);
 
   // List active features in the generated config
-  const allFeatures = getAllSlots();
+  const allFeatures = await getAllSlots();
   if (!Object.keys(allFeatures).length) {
     info("No active features in Caddyfile");
   }
