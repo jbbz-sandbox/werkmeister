@@ -245,21 +245,22 @@ services:
 # — the ports the generated feature .env already expects (redis 9050, postgres
 # 9051). Apply the k8s side from the demo-services repo (\`./bin/bootstrap-k8s-env.sh\`,
 # or \`kubectl apply -f charts/redis.yaml -f charts/postgres.yaml\` there).
-# \`health_endpoint: ""\` selects the entrypoint's TCP-only
-# probe (these aren't HTTP services).
+# \`health_endpoint\` names the probe that proves a forward alive: an HTTP path
+# for HTTP services, \`redis\` or \`postgres\` for these (a dead forward still
+# accepts TCP, so a connect proves nothing), "" for TCP-only.
 infrastructure:
   redis:
     k8s_forward_port: 9050
     internal_port: 6379
     k8s_namespace: default
     k8s_pod_prefix: redis
-    health_endpoint: ""
+    health_endpoint: redis
   postgres:
     k8s_forward_port: 9051
     internal_port: 5432
     k8s_namespace: default
     k8s_pod_prefix: postgres
-    health_endpoint: ""
+    health_endpoint: postgres
 
 # One shared install container. Both apps bind-mount the *same* repo at /app, so
 # per-service volumes would mean two concurrent \`npm install\`s against one
@@ -309,7 +310,7 @@ function emptyServices(): string {
 #     archetype: node-web           # optional; key in \`archetypes:\` above
 #     internal_port: 3000           # port the process listens on in-container
 #     port_offset: 0                # slot-relative host port (unique per service)
-#     health_endpoint: /health      # "" for a TCP-only probe
+#     health_endpoint: /health      # or redis | postgres | "" (TCP-only)
 #     image: node:22-alpine
 #     command: "cd services/my-api && exec npm start"
 #     memory_limit: 1G
@@ -334,7 +335,7 @@ services: {}
 #     internal_port: 6379
 #     k8s_namespace: default
 #     k8s_pod_prefix: redis
-#     health_endpoint: ""
+#     health_endpoint: redis
 infrastructure: {}
 
 # Shared setup containers (e.g. a monorepo-wide \`npm install\`) that services

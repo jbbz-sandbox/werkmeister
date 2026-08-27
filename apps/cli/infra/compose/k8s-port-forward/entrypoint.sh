@@ -17,7 +17,8 @@ NC='\033[0m'
 # listen_port = unique port inside this container (avoids conflicts when
 #   multiple k8s services use the same remote_port, e.g. 3001)
 # remote_port = the port inside the k8s pod
-# health_path = HTTP path for end-to-end health check (empty = nc -z only, e.g. mongodb)
+# health_path = which probe proves the forward alive: an HTTP path, `redis`,
+#   `postgres`, or empty for TCP-only (see probe.sh)
 #
 # Other containers reach these via: k8s-forwards:<listen_port>
 # Feature containers reference these ports through environment variable
@@ -57,39 +58,9 @@ log() {
     printf '%s  %-24s  %s\n' "$ts" "[$name]" "$msg"
 }
 
-# check_health PORT [HEALTH_PATH]
-# Prints a result detail string to stdout.
-# With HEALTH_PATH: sends a real HTTP GET via nc and checks the response status.
-#   Accepts 2xx/3xx/4xx (service alive); rejects 5xx or no response.
-# Without HEALTH_PATH: TCP-only probe (used for mongodb and similar).
-# Returns 0 if healthy, 1 otherwise.
-check_health() {
-    local port="$1"
-    local health_path="${2:-}"
-
-    if [ -z "$health_path" ]; then
-        if nc -z 127.0.0.1 "$port" 2>/dev/null; then
-            echo "tcp:ok"
-            return 0
-        else
-            echo "tcp:fail"
-            return 1
-        fi
-    fi
-
-    # HTTP check via nc — no curl dependency needed
-    local response status_code
-    response=$(printf "GET %s HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n" "$health_path" | \
-        nc -w5 127.0.0.1 "$port" 2>/dev/null | head -1)
-    status_code=$(echo "$response" | awk '{print $2}')
-    if [[ "$status_code" =~ ^[2-4][0-9][0-9]$ ]]; then
-        echo "http:${status_code}"
-        return 0
-    else
-        echo "http:fail(${status_code:-no-response})"
-        return 1
-    fi
-}
+# check_health lives in probe.sh, which the compose healthcheck also runs
+# directly — the two must not drift, so there is one copy.
+source /usr/local/bin/probe.sh
 
 # Find the MongoDB primary pod by querying the replica set
 find_mongo_primary() {
@@ -248,8 +219,9 @@ start_forward() {
             last_failed_resource=""
             fail_count=0
 
-            # Monitor: every 45s verify the tunnel is still healthy.
-            # HTTP check when health_path is set; TCP-only for services like mongodb.
+            # Monitor: every 45s verify the tunnel is still healthy. This is
+            # what restarts a forward that went dead under us; probe.sh picks
+            # the probe from health_path.
             # Log a heartbeat every 4 checks (~3 min) so the log confirms the tunnel is alive.
             local check_count=0
             while kill -0 "$kube_pid" 2>/dev/null; do

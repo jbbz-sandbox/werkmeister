@@ -81,33 +81,34 @@ This resolves *PID tracking*, not *liveness* — the container's healthcheck can
 
 ## k8s Port-Forwards Report Healthy While Dead
 
-**Severity:** Moderate (has cost more than one debugging session)
-**Status:** Open
+**Severity:** Moderate (cost more than one debugging session)
+**Status:** Fixed — the probes speak the protocol
 **Affects:** `sandbox-k8s-forwards`; anything reaching Redis/Postgres through it, host tests included
 
-The healthcheck is TCP-only — `nc -z localhost 9050 && nc -z localhost 9051`
-([shared-infra.yml:82](../apps/cli/infra/compose/shared-infra.yml#L82)). A stale
-`kubectl port-forward` still accepts the connection and then never replies, so the check
-passes while the datastore is unreachable, and `sandbox up` will restart the container and
-report it healthy. The healthcheck is not useless — it does catch a container that died —
-it just cannot see this failure.
+A stale `kubectl port-forward` accepts the TCP connection and then never replies, so anything
+that stops at "connected" reports a dead datastore as healthy. Both checks used to stop
+there: the compose healthcheck (`nc -z localhost 9050 && 9051`) and the entrypoint's own
+45s monitor, which is what restarts a broken forward — so nothing noticed, and nothing
+self-healed.
 
 The symptom is misleading: every frontend test hangs ~50s in `beforeEach` **with no mention
 of Redis at all**. demo-services' suite names this exact case ("Redis accepts the connection
-but never replies") and still cannot distinguish it from a working forward.
+but never replies").
 
-**Workaround:** probe with a real request rather than a connect, before trusting a green
-suite:
+Each forward now gets the probe its `health_endpoint` names — `redis-cli ping`, `pg_isready`,
+an HTTP GET, or a bare connect for anything that names nothing
+([probe.sh](../apps/cli/infra/compose/k8s-port-forward/probe.sh)). The entrypoint's monitor
+and the compose healthcheck both call it, so a dead forward is restarted within ~45s and
+reads unhealthy until it is. `sandbox status` and the dashboard use the matching
+`checkWireHealth` in sandbox-core.
+
+**If it hangs anyway** (a forward wedged inside that 45s window, or a datastore that names
+no probe):
 
 ```bash
-(printf 'PING\r\n'; sleep 1) | nc -w 3 localhost 9050    # want +PONG, not silence
-docker restart sandbox-k8s-forwards                      # healthy again in ~12s
+docker exec sandbox-k8s-forwards /usr/local/bin/probe.sh   # per-forward verdicts
+docker restart sandbox-k8s-forwards                        # healthy again in ~12s
 ```
-
-**Fix:** have the healthcheck speak the protocol (`redis-cli ping`, `pg_isready`) instead of
-`nc -z`. The same line is a tracked [ponytail row](ponytail-debt.md) for a second reason —
-its port list is hand-mirrored from the generated forwards — so both are worth fixing in one
-pass.
 
 ---
 
