@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { lintCaddyfileStructure } from "../caddy.js";
+import { lintCaddyfileStructure } from "sandbox-core/caddy";
 
 /** A bare `handle {` next to a path-scoped sibling — the route-drop shape. */
 const BARE_PLUS_SCOPED = `sandbox.local {

@@ -16,7 +16,7 @@ import * as path from "node:path";
 import { parse as yamlParse } from "yaml";
 
 import { openFeatureBrowser } from "../lib/browser.js";
-import { ingressHostnames } from "../lib/feature_routing.js";
+import { ingressHostnames } from "sandbox-core/feature_routing";
 import { error, warn } from "../lib/config.js";
 import { getSlot } from "sandbox-core/slots";
 

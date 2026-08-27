@@ -1,7 +1,7 @@
 /** buildFormSchema (RJSF bundle). */
 import { describe, expect, it } from "vitest";
 
-import { buildFormSchema } from "../form_schema.js";
+import { buildFormSchema } from "sandbox-core/form_schema";
 
 function spec(prompts: Record<string, any>[], name = "demo"): Record<string, any> {
   return { workspace_name: name, workspace_root: `/ws/${name}`, prompts };

@@ -32,7 +32,7 @@ import {
   isFeatureComposeStale,
   seedWorkspaceMetadataEnv,
 } from "../generate.js";
-import { loadFeatureRouters } from "../feature_routing.js";
+import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { loadServices } from "../config.js";
 import { getPortRange } from "sandbox-core/slots";
 import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";

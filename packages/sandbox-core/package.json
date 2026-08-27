@@ -8,11 +8,15 @@
   "types": "dist/sandbox.d.ts",
   "exports": {
     ".": "./dist/sandbox.js",
+    "./archetypes": "./dist/archetypes.js",
     "./cache": "./dist/cache.js",
+    "./caddy": "./dist/caddy.js",
     "./colors": "./dist/colors.js",
     "./config": "./dist/config.js",
     "./detect": "./dist/detect.js",
     "./docker": "./dist/docker.js",
+    "./feature_routing": "./dist/feature_routing.js",
+    "./form_schema": "./dist/form_schema.js",
     "./global_config": "./dist/global_config.js",
     "./infra": "./dist/infra.js",
     "./k8s": "./dist/k8s.js",
@@ -20,6 +24,7 @@
     "./locks": "./dist/locks.js",
     "./proc": "./dist/proc.js",
     "./reporter": "./dist/reporter.js",
+    "./scaffold": "./dist/scaffold.js",
     "./secrets": "./dist/secrets.js",
     "./slots": "./dist/slots.js",
     "./worktrees": "./dist/worktrees.js"

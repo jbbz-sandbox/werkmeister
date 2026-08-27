@@ -14,7 +14,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { serviceTestCommand } from "./archetypes.js";
+import { serviceTestCommand } from "sandbox-core/archetypes";
 
 // Agent files must open with the frontmatter block, so the do-not-hand-edit
 // notice goes in the body (it becomes part of the agent's prompt — kept to

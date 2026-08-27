@@ -53,7 +53,7 @@ import {
   success,
   warn,
 } from "../lib/config.js";
-import { buildFormSchema } from "../lib/form_schema.js";
+import { buildFormSchema } from "sandbox-core/form_schema";
 import { loadPaths } from "sandbox-core/global_config";
 // The workspace ROOT is itself a worktree of the dedicated sandbox-workspace
 // repo (which one is `overrides.workspace_repo`) — rationale and the clone/update logic

@@ -23,7 +23,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { serviceStandards, validateServiceArchetypes } from "./archetypes.js";
+import { serviceStandards, validateServiceArchetypes } from "sandbox-core/archetypes";
 import { loadArchetypes } from "./config.js";
 import { standardsDirPath } from "sandbox-core/global_config";
 import { run } from "sandbox-core/proc";

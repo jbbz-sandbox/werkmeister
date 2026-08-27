@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ingressHostnames, loadFeatureRouters } from "../feature_routing.js";
+import { ingressHostnames, loadFeatureRouters } from "sandbox-core/feature_routing";
 import { INGRESS_DEFAULTS, loadIngress } from "sandbox-core/global_config";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
