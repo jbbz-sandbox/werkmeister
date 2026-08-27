@@ -14,34 +14,8 @@
     "noEmit": false,
     "types": ["node"]
   },
-  // Explicit, not a glob: a module missing from this list is silently not
-  // emitted, and `npm run build` still exits 0 — the failure only surfaces as
-  // TS2307 in a consumer. Every migration step that moves a file here must add
-  // it. (tsc reads JSONC, so this comment is fine.)
-  "include": [
-    "sandbox.ts",
-    "archetypes.ts",
-    "cache.ts",
-    "caddy.ts",
-    "claude_md.ts",
-    "colors.ts",
-    "config.ts",
-    "detect.ts",
-    "docker.ts",
-    "feature_routing.ts",
-    "form_schema.ts",
-    "generate.ts",
-    "global_config.ts",
-    "infra.ts",
-    "jira-rest.ts",
-    "locks.ts",
-    "proc.ts",
-    "reporter.ts",
-    "scaffold.ts",
-    "secrets.ts",
-    "skill_gen.ts",
-    "slots.ts",
-    "standards.ts",
-    "worktrees.ts"
-  ]
+  // A glob, not a list: an explicit one silently dropped `k8s.ts` and
+  // `k8s_forwards.ts` from a build that still exited 0. Every .ts here is a
+  // source file — the tests are .mjs and dist/ is the outDir.
+  "include": ["*.ts"]
 }
