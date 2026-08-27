@@ -5,7 +5,7 @@
  * Caddy reverse proxy container.
  */
 
-import { isCaddyRunning, reloadCaddy, startCaddy } from "../lib/caddy.js";
+import { isCaddyRunning, reloadCaddy, startCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, loadPorts, loadServices, success, warn } from "../lib/config.js";
 import { generateCaddyfile } from "../lib/generate.js";
 import { getAllSlots } from "sandbox-core/slots";

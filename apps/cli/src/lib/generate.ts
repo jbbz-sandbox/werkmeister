@@ -28,7 +28,7 @@ import {
   success,
   warn,
 } from "./config.js";
-import { loadFeatureRouters } from "./feature_routing.js";
+import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { sandboxLock } from "sandbox-core/locks";
 import { getSecretsPath, loadSecrets, requiredSecretKeys } from "sandbox-core/secrets";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "sandbox-core/slots";

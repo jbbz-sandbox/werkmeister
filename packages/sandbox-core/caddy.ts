@@ -7,9 +7,11 @@
 
 import * as fs from "node:fs";
 
-import { Colors, error, getInfraRoot, getSandboxRoot, info, success, warn } from "./config.js";
-import { copyFileToContainer, execCapture } from "sandbox-core/docker";
-import { ProcError, run } from "sandbox-core/proc";
+import { Colors } from "./colors.js";
+import { infraRoot, sandboxRoot } from "./config.js";
+import { copyFileToContainer, execCapture } from "./docker.js";
+import { ProcError, run } from "./proc.js";
+import { error, info, success, warn } from "./reporter.js";
 
 export const CADDY_CONTAINER = "sandbox-caddy";
 export const CADDY_CONTAINER_PATH = "/tmp/Caddyfile";
@@ -28,7 +30,7 @@ const _HANDLE_OPEN_RE = /^\s*(handle(?:_path)?)\b\s*([^{]*)\{\s*$/;
 const _HANDLE_INLINE_RE = /^\s*(handle(?:_path)?)\b\s*([^{]*)\{.*\}\s*$/;
 
 function _infraComposeFile(): string {
-  return `${getInfraRoot()}/compose/shared-infra.yml`;
+  return `${infraRoot()}/compose/shared-infra.yml`;
 }
 
 /** Everything before the first `#` in *line*. */
@@ -283,7 +285,7 @@ export async function adaptAndCountRoutes(
  */
 function _runCaddyCompose(args: string[], { capture = false }: { capture?: boolean } = {}): boolean {
   const composeFile = _infraComposeFile();
-  const envFile = `${getSandboxRoot()}/.env`;
+  const envFile = `${sandboxRoot()}/.env`;
   const cmd = ["docker", "compose", "--env-file", envFile, "-f", composeFile, ...args];
   info(`Running: ${cmd.join(" ")}`);
 
@@ -319,7 +321,7 @@ function _runCaddyCompose(args: string[], { capture = false }: { capture?: boole
  * Returns True on success.
  */
 export async function reloadCaddy(): Promise<boolean> {
-  const hostCaddyfile = `${getInfraRoot()}/proxy/Caddyfile`;
+  const hostCaddyfile = `${infraRoot()}/proxy/Caddyfile`;
 
   info("Copying Caddyfile into Caddy container...");
   if (!(await cpCaddyfileToContainer(hostCaddyfile))) {

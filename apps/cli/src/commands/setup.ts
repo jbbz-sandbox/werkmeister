@@ -41,7 +41,7 @@ import * as path from "node:path";
 
 import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "../lib/browser.js";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
-import { ingressHostnames } from "../lib/feature_routing.js";
+import { ingressHostnames } from "sandbox-core/feature_routing";
 import * as gc from "sandbox-core/global_config";
 import type { PromptSpec } from "sandbox-core/global_config";
 import {

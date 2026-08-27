@@ -10,7 +10,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { isCaddyRunning, reloadCaddy, startCaddy } from "../lib/caddy.js";
+import { isCaddyRunning, reloadCaddy, startCaddy } from "sandbox-core/caddy";
 import {
   Colors,
   error,
@@ -30,7 +30,7 @@ import {
 } from "../lib/generate.js";
 import { ensurePortForwardsHealthy } from "sandbox-core/k8s";
 import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
-import { loadFeatureRouters } from "../lib/feature_routing.js";
+import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { allocateSlot, getPortRange, getServicePort } from "sandbox-core/slots";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */

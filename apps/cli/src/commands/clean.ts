@@ -5,7 +5,7 @@
  * features. With --all, also tears down active features first.
  */
 
-import { isCaddyRunning, reloadCaddy } from "../lib/caddy.js";
+import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
 import { Colors, getVolumeBaseNames, info, success, warn } from "../lib/config.js";
 import { composeDown, getContainerStatus, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "../lib/generate.js";

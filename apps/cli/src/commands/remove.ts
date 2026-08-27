@@ -5,7 +5,7 @@
  * service. Re-generates compose and proxy configuration.
  */
 
-import { isCaddyRunning, reloadCaddy } from "../lib/caddy.js";
+import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, loadPorts, loadServices, warn } from "../lib/config.js";
 import { composeDown, composeUp } from "../lib/docker.js";
 import {
