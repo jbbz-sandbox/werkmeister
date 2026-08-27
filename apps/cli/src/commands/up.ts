@@ -26,6 +26,7 @@ import {
   generateFeatureCompose,
   generateFeatureEnv,
   generateSupergraphConfig,
+  isFeatureComposeStale,
 } from "../lib/generate.js";
 import { ensurePortForwardsHealthy } from "../lib/k8s.js";
 import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "../lib/secrets.js";
@@ -197,6 +198,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     );
     generateFeatureEnv(feature, slot, localServices, config, workspace);
     generateSupergraphConfig(feature, slot, localServices, config, workspace);
+  } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
+    // Warn rather than regenerate: `up` starting to rewrite workspace files
+    // would silently discard hand-edits to the generated compose.
+    warn(
+      "docker-compose.yml predates the current service registry — " +
+        "run 'sandbox init-workspace' in the workspace to regenerate it.",
+    );
   }
 
   console.log(

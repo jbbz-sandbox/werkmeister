@@ -29,6 +29,7 @@ import {
   generateFeatureCompose,
   generateFeatureEnv,
   generateSupergraphConfig,
+  isFeatureComposeStale,
   seedWorkspaceMetadataEnv,
 } from "../generate.js";
 import { loadFeatureRouters } from "../feature_routing.js";
@@ -464,5 +465,34 @@ describe("generateCaddyfile", () => {
     // Distinct matcher names, so the two handles don't collapse into one.
     expect(content).toMatch(/@feat0_web\b/);
     expect(content).toMatch(/@feat1_web_v2\b/);
+  });
+});
+
+// ---- compose staleness -----------------------------------------------------
+// `sandbox up` only reads the compose file, so a registry edit made after
+// init-workspace ran was invisible until a container failed on config that no
+// longer existed — a feature booted with a deleted install probe and no setup
+// container, and the error named neither.
+
+describe("compose staleness", () => {
+  it("is not stale immediately after generation", () => {
+    generateFeatureCompose("f", 1, ["backend"], null, tmp);
+    expect(isFeatureComposeStale("f", 1, ["backend"], null, tmp)).toBe(false);
+  });
+
+  it("ignores the command name recorded in the header", () => {
+    generateFeatureCompose("f", 1, ["backend"], null, tmp, "sandbox init-workspace");
+    expect(isFeatureComposeStale("f", 1, ["backend"], null, tmp)).toBe(false);
+  });
+
+  it("is stale once the registry changes under it", () => {
+    generateFeatureCompose("f", 1, ["backend"], null, tmp);
+    home.write("services.yaml", fixtureServicesYaml().replace("memory_limit: 256M", "memory_limit: 512M"));
+    expect(isFeatureComposeStale("f", 1, ["backend"], null, tmp)).toBe(true);
+  });
+
+  it("reports a missing compose as not stale, leaving that error to the caller", () => {
+    // `up` already fails with its own 'run init-workspace first' message.
+    expect(isFeatureComposeStale("f", 1, ["backend"], null, tmp)).toBe(false);
   });
 });
