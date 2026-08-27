@@ -1,21 +1,18 @@
 /**
- * Where this CLI is installed, and a door onto the shared config layer.
+ * A door onto the shared config layer.
  *
- * The registry loaders themselves live in `sandbox-core/config` and are
- * re-exported at the foot of this file. What stays here is the one question
- * that cannot move: `getSandboxRoot()` derives the repo root from this file's
- * own compiled location, so it would answer differently from inside another
- * package. `getInfraRoot()` builds on it and points at the things that ARE
- * code — compose files, templates, the proxy UI, schemas and skills — while
- * the machine-global registry files live in `~/.sandbox`.
+ * Everything here is a re-export: the registry loaders, the print helpers and
+ * — since the modules that needed them moved too — the checkout-root helpers
+ * all live in `sandbox-core` now. The file survives so its 43 importers keep
+ * their specifier. `getMonorepoRoot()` is the one body left, and only because
+ * nothing outside the CLI asks where the sibling apps are.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { Colors } from "sandbox-core/colors";
-import { expandUser } from "sandbox-core/config";
+import { expandUser, infraRoot, sandboxRoot } from "sandbox-core/config";
 
 export { Colors, expandUser };
 
@@ -32,16 +29,15 @@ export { error, info, success, warn };
 // ---------------------------------------------------------------------------
 
 /**
- * Return the root of the sandbox repo.
+ * Return the root of the sandbox CLI package.
  *
- * `SANDBOX_ROOT` env var when set, else self-derived from this file's
- * compiled location (`<root>/dist/lib/config.js` -> two levels up).
+ * Kept as a named export because 15 modules call it; the derivation itself
+ * lives in `sandbox-core/config` now, so the library modules that moved there
+ * resolve `infra/` the same way the CLI does. It throws rather than guessing
+ * when neither `SANDBOX_ROOT` nor a walk-up finds the checkout — reading the
+ * wrong `infra/` is worse than failing.
  */
-export function getSandboxRoot(): string {
-  const override = process.env.SANDBOX_ROOT;
-  if (override) return path.resolve(expandUser(override));
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-}
+export const getSandboxRoot = sandboxRoot;
 
 /**
  * Return the root of the MONOREPO containing the CLI.
@@ -67,17 +63,8 @@ export function getMonorepoRoot(): string {
   return getSandboxRoot();
 }
 
-/**
- * Return the infra/ dir holding compose, templates, proxy, schemas and skills.
- *
- * These are grouped under <repo>/infra/ (see the monorepo layout) and are all
- * CODE — versioned with the checkout. The machine-specific registry files that
- * used to sit in `infra/config/` now live in `~/.sandbox` instead; reach them
- * via `servicesYamlPath()` / `portsYamlPath()`, not this helper.
- */
-export function getInfraRoot(): string {
-  return path.join(getSandboxRoot(), "infra");
-}
+/** The `infra/` tree — compose files, templates, proxy UI, schemas, skills. */
+export const getInfraRoot = infraRoot;
 
 
 // The registry loaders and the workspace resolution live in

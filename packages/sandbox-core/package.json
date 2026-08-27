@@ -13,9 +13,15 @@
     "./config": "./dist/config.js",
     "./detect": "./dist/detect.js",
     "./docker": "./dist/docker.js",
+    "./global_config": "./dist/global_config.js",
+    "./infra": "./dist/infra.js",
+    "./k8s": "./dist/k8s.js",
+    "./k8s_forwards": "./dist/k8s_forwards.js",
     "./locks": "./dist/locks.js",
     "./proc": "./dist/proc.js",
     "./reporter": "./dist/reporter.js",
+    "./secrets": "./dist/secrets.js",
+    "./slots": "./dist/slots.js",
     "./worktrees": "./dist/worktrees.js"
   },
   "scripts": {

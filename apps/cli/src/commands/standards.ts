@@ -11,7 +11,7 @@
  */
 
 import { error, info, loadServices, success } from "../lib/config.js";
-import { standardsDirPath, standardsDirProblem } from "../lib/global_config.js";
+import { standardsDirPath, standardsDirProblem } from "sandbox-core/global_config";
 import { validateModuleReferences } from "../lib/skill_gen.js";
 import {
   loadStandardsModules,

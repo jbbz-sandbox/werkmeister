@@ -14,5 +14,5 @@
     "noEmit": false,
     "types": ["node"]
   },
-  "include": ["sandbox.ts", "cache.ts", "colors.ts", "config.ts", "detect.ts", "docker.ts", "jira-rest.ts", "locks.ts", "proc.ts", "reporter.ts", "worktrees.ts"]
+  "include": ["sandbox.ts", "cache.ts", "colors.ts", "config.ts", "detect.ts", "docker.ts", "global_config.ts", "infra.ts", "jira-rest.ts", "k8s.ts", "k8s_forwards.ts", "locks.ts", "proc.ts", "reporter.ts", "secrets.ts", "slots.ts", "worktrees.ts"]
 }

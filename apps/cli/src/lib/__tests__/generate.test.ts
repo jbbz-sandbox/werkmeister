@@ -34,7 +34,7 @@ import {
 } from "../generate.js";
 import { loadFeatureRouters } from "../feature_routing.js";
 import { loadServices } from "../config.js";
-import { getPortRange } from "../slots.js";
+import { getPortRange } from "sandbox-core/slots";
 import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");

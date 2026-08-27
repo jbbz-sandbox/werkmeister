@@ -21,7 +21,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { loadGithubOrg, standardsDirPath } from "./global_config.js";
+import { loadGithubOrg, standardsDirPath } from "sandbox-core/global_config";
 import { run } from "sandbox-core/proc";
 import { loadStandardsModules, parseFrontmatter } from "./standards.js";
 

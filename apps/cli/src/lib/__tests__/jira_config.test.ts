@@ -7,13 +7,13 @@ import * as YAML from "yaml";
 
 // The config command projects onto ~/.zshenv and the Claude Desktop config;
 // stub both so this unit test never touches the real ones.
-vi.mock("../global_config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../global_config.js")>();
+vi.mock("sandbox-core/global_config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sandbox-core/global_config")>();
   return { ...actual, ensureZshenvSources: () => false, patchDesktopConfig: () => false };
 });
 
 import { run as runConfig } from "../../commands/config.js";
-import * as gc from "../global_config.js";
+import * as gc from "sandbox-core/global_config";
 import { syncJiraToken } from "../machine_setup.js";
 
 const FILLED = {

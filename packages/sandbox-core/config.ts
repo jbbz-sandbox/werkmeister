@@ -208,10 +208,9 @@ function asDict(value: unknown): Record<string, string> {
 // Moved out of the CLI so the dashboard and the extension read the same
 // registry through the same precedence, rather than shelling out for it.
 //
-// `getSandboxRoot` / `getInfraRoot` deliberately did NOT come along: they
-// answer "where is this CLI installed", derived from the calling file's own
-// location, which is the one question that changes meaning when the file moves
-// packages.
+// `sandboxRoot` / `infraRoot` came along later, at the foot of this file: the
+// modules that need them moved here too, and a walk-up anchored on `apps/cli`
+// answers the same question from either package.
 
 /**
  * Directory holding the canonical source-repo checkouts (and the
@@ -522,4 +521,48 @@ export function getVolumeBaseNames(): string[] {
   collect(loadServices());
   collect(loadSetupServices());
   return [...bases].sort();
+}
+
+// ---------------------------------------------------------------------------
+// Where the CLI checkout is
+// ---------------------------------------------------------------------------
+
+/**
+ * The CLI package directory (`<checkout>/apps/cli`) — the root of everything
+ * that ships as CODE: `infra/`, `dist/`, the `sandbox` wrapper.
+ *
+ * Resolution mirrors `resolveSandboxBin` in sandbox.ts because it answers the
+ * same question: `SANDBOX_ROOT` first (the wrapper re-derives and exports it from
+ * the *running* checkout, so it is authoritative and beats a nearer one on
+ * disk), then a walk up from this module looking for the checkout that owns
+ * `apps/cli`.
+ *
+ * The walk-up is what a bundled consumer cannot do — a `.vsix` has no monorepo
+ * around it — which is why `SANDBOX_ROOT` ranks first rather than as a fallback.
+ */
+export function sandboxRoot(): string {
+  const override = process.env.SANDBOX_ROOT;
+  if (override) return path.resolve(expandUser(override));
+
+  let dir = import.meta.dirname;
+  for (let i = 0; i < 8; i++) {
+    const cli = path.join(dir, "apps", "cli");
+    if (fs.existsSync(cli)) return cli;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error(
+    "Could not locate the sandbox CLI package. Set SANDBOX_ROOT to your " +
+      "sandbox checkout's apps/cli directory.",
+  );
+}
+
+/**
+ * The `infra/` dir holding compose files, templates, the proxy UI, schemas and
+ * skills. All versioned code — the machine-specific registry files live in
+ * `~/.sandbox` instead, reached via {@link servicesYamlPath} and friends.
+ */
+export function infraRoot(): string {
+  return path.join(sandboxRoot(), "infra");
 }

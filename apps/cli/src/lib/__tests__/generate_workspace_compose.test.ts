@@ -9,8 +9,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-vi.mock("../slots.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../slots.js")>();
+vi.mock("sandbox-core/slots", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sandbox-core/slots")>();
   return { ...actual, allocateSlot: () => 1 };
 });
 

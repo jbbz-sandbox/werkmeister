@@ -9,10 +9,12 @@
 import * as net from "node:net";
 import * as path from "node:path";
 
-import { Colors, error, getInfraRoot, success, warn } from "./config.js";
+import { Colors } from "./colors.js";
+import { infraRoot } from "./config.js";
+import { containerRunning } from "./docker.js";
 import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
-import { containerRunning } from "sandbox-core/docker";
-import { ProcError, run } from "sandbox-core/proc";
+import { ProcError, run } from "./proc.js";
+import { error, success, warn } from "./reporter.js";
 
 // The forward table is NOT duplicated here: `forwardSpecs()` derives it from
 // ~/.sandbox/services.yaml — the same call that generates the entrypoint's
@@ -20,7 +22,7 @@ import { ProcError, run } from "sandbox-core/proc";
 // probe a service the container isn't actually forwarding.
 
 function infraComposeFile(): string {
-  return path.join(getInfraRoot(), "compose", "shared-infra.yml");
+  return path.join(infraRoot(), "compose", "shared-infra.yml");
 }
 
 /**

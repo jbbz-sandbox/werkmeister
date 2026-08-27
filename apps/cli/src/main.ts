@@ -668,7 +668,7 @@ async function dispatch(moduleName: string, args: Namespace): Promise<void> {
   // One-shot migration: remove legacy ~/.sandbox/slots.json on first run
   // after the labels refactor. Idempotent; no-op once the file is gone.
   try {
-    const { migrateSlotsJson } = await import("./lib/slots.js");
+    const { migrateSlotsJson } = await import("sandbox-core/slots");
     migrateSlotsJson();
   } catch {
     // migration must never block the CLI

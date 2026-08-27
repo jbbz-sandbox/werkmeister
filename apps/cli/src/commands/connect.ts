@@ -24,12 +24,12 @@ import {
   warn,
 } from "../lib/config.js";
 import { generateCaddyfile } from "../lib/generate.js";
-import { generateK8sForwards } from "../lib/k8s_forwards.js";
+import { generateK8sForwards } from "sandbox-core/k8s_forwards";
 import { configureGitHooksPath } from "../lib/git_hooks.js";
-import { checkPortForwardHealth, ensurePortForwardsHealthy } from "../lib/k8s.js";
+import { checkPortForwardHealth, ensurePortForwardsHealthy } from "sandbox-core/k8s";
 import { CLAUDECK, DASHBOARD, startAll, status as webStatus } from "../lib/web_servers.js";
 import { ProcError, run as procRun } from "sandbox-core/proc";
-import { sandboxHome } from "../lib/global_config.js";
+import { sandboxHome } from "sandbox-core/global_config";
 
 function isDir(p: string): boolean {
   return fs.existsSync(p) && fs.statSync(p).isDirectory();

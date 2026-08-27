@@ -14,7 +14,7 @@ import {
   generateFeatureEnv,
   generateSupergraphConfig,
 } from "../lib/generate.js";
-import { getAllSlots, getSlot } from "../lib/slots.js";
+import { getAllSlots, getSlot } from "sandbox-core/slots";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;

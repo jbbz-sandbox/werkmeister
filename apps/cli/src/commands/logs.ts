@@ -7,7 +7,7 @@
 
 import { Colors, warn } from "../lib/config.js";
 import { composeLogs } from "../lib/docker.js";
-import { getSlot } from "../lib/slots.js";
+import { getSlot } from "sandbox-core/slots";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;

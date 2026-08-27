@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { pathDefault } from "../global_config.js";
+import { pathDefault } from "sandbox-core/global_config";
 
 const saved = { ...process.env };
 

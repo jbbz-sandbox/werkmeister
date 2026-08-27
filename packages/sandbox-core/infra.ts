@@ -6,15 +6,17 @@
 
 import * as path from "node:path";
 
-import { Colors, error, getInfraRoot, getSandboxRoot, info, success } from "./config.js";
-import { ProcError, run } from "sandbox-core/proc";
+import { Colors } from "./colors.js";
+import { infraRoot, sandboxRoot } from "./config.js";
+import { ProcError, run } from "./proc.js";
+import { error, info, success } from "./reporter.js";
 
 const CONNECT_MODULE = "../commands/connect.js";
 const WEB_SERVERS_MODULE = "./web_servers.js";
 
 function composeCmd(subcommand: string[]): boolean {
-  const root = getSandboxRoot();
-  const composeFile = path.join(getInfraRoot(), "compose", "shared-infra.yml");
+  const root = sandboxRoot();
+  const composeFile = path.join(infraRoot(), "compose", "shared-infra.yml");
   const envFile = path.join(root, ".env");
   const cmd = ["docker", "compose", "--env-file", envFile, "-f", composeFile, ...subcommand];
   info(`Running: ${cmd.join(" ")}`);

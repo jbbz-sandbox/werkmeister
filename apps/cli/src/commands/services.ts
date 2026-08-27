@@ -6,7 +6,7 @@
  */
 
 import { Colors, info, loadServices, warn } from "../lib/config.js";
-import { getAllSlots, getServicePort, getSlot } from "../lib/slots.js";
+import { getAllSlots, getServicePort, getSlot } from "sandbox-core/slots";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;

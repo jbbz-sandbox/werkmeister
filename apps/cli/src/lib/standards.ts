@@ -25,7 +25,7 @@ import * as YAML from "yaml";
 
 import { serviceStandards, validateServiceArchetypes } from "./archetypes.js";
 import { loadArchetypes } from "./config.js";
-import { standardsDirPath } from "./global_config.js";
+import { standardsDirPath } from "sandbox-core/global_config";
 import { run } from "sandbox-core/proc";
 
 /**
