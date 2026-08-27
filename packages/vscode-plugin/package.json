@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "vscode": "^1.90.0",
+    "vscode": "^1.93.0",
     "node": ">=20"
   },
   "categories": ["Other"],
@@ -115,7 +115,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.93.0",
     "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.9.3"
