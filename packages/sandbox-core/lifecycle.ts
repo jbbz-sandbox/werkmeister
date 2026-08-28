@@ -17,6 +17,10 @@
  * - the return value is a plain object the caller can branch on.
  *
  * `up` and `down` still live in their commands; they land here in later PRs.
+ *
+ * *feature* is a real feature throughout. `infra` is a CLI-level target that
+ * routes to `sandbox-core/infra` before reaching any of this — passing it here
+ * finds no slot and fails as `NOT_RUNNING`.
  */
 
 import { composeRestart, composeStop } from "./compose.js";
