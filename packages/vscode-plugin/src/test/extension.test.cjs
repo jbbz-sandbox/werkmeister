@@ -71,3 +71,68 @@ suite("Sandbox Workspaces", () => {
     );
   });
 });
+
+/**
+ * Write a `sandbox.*` setting and wait for the extension to have applied it to
+ * `process.env`. The extension registered its `onDidChangeConfiguration`
+ * listener at activation — before this one — so by the time this resolves,
+ * `applySettingsToEnv()` has already run.
+ */
+async function setSetting(key, value) {
+  const cfg = vscode.workspace.getConfiguration("sandbox");
+  // An update that changes nothing fires no event; awaiting one would hang.
+  if ((cfg.get(key) ?? "") === (value ?? "")) return;
+  const applied = new Promise((resolve) => {
+    const sub = vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration("sandbox")) return;
+      sub.dispose();
+      resolve();
+    });
+  });
+  await cfg.update(key, value, vscode.ConfigurationTarget.Global);
+  await applied;
+}
+
+async function clearSettings() {
+  await setSetting("root", undefined);
+  await setSetting("binPath", undefined);
+}
+
+/**
+ * The documented tier order: setting > SANDBOX_* env > ~/.sandbox/config.yaml.
+ * The harness launches the host with SANDBOX_ROOT set and SANDBOX_BIN unset
+ * (.vscode-test.mjs), standing in for the shell-launched editor this used to
+ * take a quit-and-relaunch to check by hand (the retired checklist step 22).
+ */
+suite("Sandbox settings", () => {
+  let inherited;
+
+  suiteSetup(async () => {
+    // Settings are written to the test instance's user-data dir and outlive the
+    // run, so a crashed run can leave one behind.
+    await clearSettings();
+    inherited = process.env.SANDBOX_ROOT;
+    assert.ok(inherited, "the host must launch with SANDBOX_ROOT set — see .vscode-test.mjs");
+  });
+
+  suiteTeardown(clearSettings);
+
+  test("a setting overrides the inherited env, and clearing it restores it", async () => {
+    await setSetting("root", "/tmp/sandbox-setting-wins");
+    assert.equal(process.env.SANDBOX_ROOT, "/tmp/sandbox-setting-wins");
+
+    // b175d8b: clearing used to delete the variable, silently dropping a
+    // shell-launched window from the inherited checkout to whatever
+    // ~/.sandbox/config.yaml named — the wrong-checkout bug.
+    await setSetting("root", undefined);
+    assert.equal(process.env.SANDBOX_ROOT, inherited);
+  });
+
+  test("clearing a setting with nothing inherited deletes the variable", async () => {
+    await setSetting("binPath", "/tmp/sandbox-bin-wins");
+    assert.equal(process.env.SANDBOX_BIN, "/tmp/sandbox-bin-wins");
+
+    await setSetting("binPath", undefined);
+    assert.equal(process.env.SANDBOX_BIN, undefined);
+  });
+});
