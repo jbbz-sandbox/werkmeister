@@ -26,3 +26,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+      # The extension host is an Electron app: it needs a display even headless,
+      # and it downloads its own VS Code build on first run.
+      - run: xvfb-run -a npm run test:integration --workspace vscode-plugin

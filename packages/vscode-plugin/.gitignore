@@ -1,3 +1,5 @@
 dist/
 out/
 *.vsix
+# Downloaded VS Code builds for the integration tests
+.vscode-test/

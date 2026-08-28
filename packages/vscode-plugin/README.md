@@ -37,6 +37,18 @@ to `~/.sandbox/config.yaml`, which `sandbox config` maintains.
 | `sandbox.binPath` | You have a non-standard checkout and want to name the `sandbox` wrapper directly |
 | `sandbox.root` | Same, but naming the checkout directory that contains it |
 
+## Tests
+
+```bash
+npm test              # pure logic + the package.json menu clauses, ~100ms, no VS Code
+npm run test:integration   # a real extension host (downloads a VS Code build on first run)
+```
+
+`src/menus.test.mjs` feeds real `buildTree` nodes into the real `when` clauses
+from `package.json`, which is the one place the two can drift apart silently.
+The integration suite covers what only a host can answer — command registration
+and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](MANUAL-CHECKLIST.md).
+
 ## Install
 
 ```bash
