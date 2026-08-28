@@ -29,3 +29,6 @@ jobs:
       # The extension host is an Electron app: it needs a display even headless,
       # and it downloads its own VS Code build on first run.
       - run: xvfb-run -a npm run test:integration --workspace vscode-plugin
+      # `vsce package` fails on a README link it can't rewrite, and is the only
+      # check on .vscodeignore — #38 broke packaging and nothing caught it.
+      - run: npm run package --workspace vscode-plugin
