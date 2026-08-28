@@ -11,7 +11,7 @@ import { Colors } from "./colors.js";
 import { infraRoot, sandboxRoot } from "./config.js";
 import { copyFileToContainer, execCapture } from "./docker.js";
 import { ProcError, run } from "./proc.js";
-import { error, info, success, warn } from "./reporter.js";
+import { error, info, raw, success, warn } from "./reporter.js";
 
 export const CADDY_CONTAINER = "sandbox-caddy";
 export const CADDY_CONTAINER_PATH = "/tmp/Caddyfile";
@@ -307,7 +307,7 @@ function _runCaddyCompose(args: string[], { capture = false }: { capture?: boole
     const stderrText = capture ? result.stderr : "";
     error(`Proxy command failed (exit ${result.status})`);
     if (stderrText) {
-      console.log(`${Colors.DIM}${stderrText.trim()}${Colors.RESET}`);
+      raw(`${Colors.DIM}${stderrText.trim()}${Colors.RESET}\n`);
     }
     return false;
   }

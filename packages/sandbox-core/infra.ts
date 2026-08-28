@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { Colors } from "./colors.js";
 import { infraRoot, sandboxRoot } from "./config.js";
 import { ProcError, run } from "./proc.js";
-import { error, info, success } from "./reporter.js";
+import { error, info, raw, success } from "./reporter.js";
 
 const CONNECT_MODULE = "../commands/connect.js";
 const WEB_SERVERS_MODULE = "./web_servers.js";
@@ -48,7 +48,7 @@ export async function up(): Promise<void> {
 
 /** Stop and remove shared infrastructure containers. */
 export async function down(volumes = false): Promise<void> {
-  console.log(`\n${Colors.BOLD}=== sandbox down: infra ===${Colors.RESET}\n`);
+  raw(`\n${Colors.BOLD}=== sandbox down: infra ===${Colors.RESET}\n\n`);
   const webServers = await import(WEB_SERVERS_MODULE);
   await webServers.stopAll();
   const args = ["down"];
@@ -62,27 +62,27 @@ export async function down(volumes = false): Promise<void> {
     }
     success(msg);
   }
-  console.log();
+  raw("\n");
 }
 
 /** Stop shared infrastructure containers without removing them. */
 export async function stop(): Promise<void> {
-  console.log(`\n${Colors.BOLD}=== sandbox stop: infra ===${Colors.RESET}\n`);
+  raw(`\n${Colors.BOLD}=== sandbox stop: infra ===${Colors.RESET}\n\n`);
   const webServers = await import(WEB_SERVERS_MODULE);
   await webServers.stopAll();
   if (composeCmd(["stop"])) {
     success("Shared infrastructure stopped (containers preserved, resumable with 'sandbox up infra')");
   }
-  console.log();
+  raw("\n");
 }
 
 /** Restart shared infrastructure containers. */
 export async function restart(): Promise<void> {
-  console.log(`\n${Colors.BOLD}=== sandbox restart: infra ===${Colors.RESET}\n`);
+  raw(`\n${Colors.BOLD}=== sandbox restart: infra ===${Colors.RESET}\n\n`);
   if (composeCmd(["restart"])) {
     success("Shared infrastructure restarted");
   }
   const webServers = await import(WEB_SERVERS_MODULE);
   await webServers.restartAll();
-  console.log();
+  raw("\n");
 }

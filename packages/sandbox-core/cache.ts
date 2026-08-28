@@ -71,6 +71,11 @@ export function cacheSet<T>(key: string, v: T): Promise<void> {
       await fs.rename(tmp, file);
     } catch (e) {
       // Best-effort cache — a write miss only costs a future re-fetch.
+      //
+      // Deliberately still console, not the reporter: this module is reached
+      // only through sandbox.ts, whose consumers (the dashboard, the VS Code
+      // extension) install no reporter, so an emitted event would go nowhere
+      // and these diagnostics would vanish. See note 033.
       console.error(`[sandbox-workspace] cache write failed for ${key}:`, (e as Error).message);
     }
   });
