@@ -34,6 +34,7 @@
     "commands": [
       { "command": "sandbox.refresh", "title": "Refresh", "category": "Sandbox", "icon": "$(refresh)" },
       { "command": "sandbox.open", "title": "Open Workspace", "category": "Sandbox", "icon": "$(folder-opened)" },
+      { "command": "sandbox.switch", "title": "Switch to Workspace", "category": "Sandbox", "icon": "$(arrow-right)" },
       { "command": "sandbox.openJira", "title": "Open Jira Issue", "category": "Sandbox", "icon": "$(link-external)" },
       { "command": "sandbox.configure", "title": "Configure Sandbox CLI Path", "category": "Sandbox", "icon": "$(gear)" },
       { "command": "sandbox.up", "title": "Start", "category": "Sandbox", "icon": "$(play)" },
@@ -54,18 +55,23 @@
       "view/item/context": [
         {
           "command": "sandbox.up",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(down|stopped|partial)$/",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(down|stopped|partial)(:|$)/",
           "group": "inline@1"
         },
         {
           "command": "sandbox.stop",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)$/",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)(:|$)/",
           "group": "inline@1"
         },
         {
           "command": "sandbox.open",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
           "group": "inline@2"
+        },
+        {
+          "command": "sandbox.switch",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:[^:]+$/",
+          "group": "inline@3"
         },
         {
           "command": "sandbox.toggleIntercept",

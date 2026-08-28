@@ -66,7 +66,7 @@ test("a null feature with an intercepted row from an unknown source is not mine"
 });
 
 test("a fully running workspace reads as up", () => {
-  const [node] = buildTree([ws("a")], [st("a", { state: "up", running: 6, total: 6, slot: 2 })], null, null);
+  const [node] = buildTree([ws("a")], [st("a", { state: "up", running: 6, total: 6, slot: 2 })], null, []);
   assert.equal(node.kind, "workspace");
   assert.equal(node.icon.id, "circle-filled");
   assert.match(node.description, /6\/6/);
@@ -75,13 +75,13 @@ test("a fully running workspace reads as up", () => {
 });
 
 test("a partially running workspace reads as partial", () => {
-  const [node] = buildTree([ws("a")], [st("a", { state: "partial", running: 2, total: 5 })], null, null);
+  const [node] = buildTree([ws("a")], [st("a", { state: "partial", running: 2, total: 5 })], null, []);
   assert.equal(node.contextValue, "workspace:partial");
   assert.match(node.description, /2\/5/);
 });
 
 test("a down workspace shows no ratio", () => {
-  const [node] = buildTree([ws("a")], [st("a")], null, null);
+  const [node] = buildTree([ws("a")], [st("a")], null, []);
   assert.equal(node.contextValue, "workspace:down");
   assert.match(node.description, /down/);
 });
@@ -91,7 +91,7 @@ test("a Jira key appears in the description and the node carries its URL", () =>
     [ws("a", { jiraId: "TRE-1125", jiraUrl: "https://x/browse/TRE-1125" })],
     [st("a")],
     null,
-    null,
+    [],
   );
   assert.match(node.description, /TRE-1125/);
   assert.equal(node.workspace.jiraUrl, "https://x/browse/TRE-1125");
@@ -102,7 +102,7 @@ test("an interceptable service with no intercept offers the toggle", () => {
     [ws("a")],
     [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
     intercepts({ a: { "frontend": {} } }),
-    null,
+    [],
   );
   const [svc] = node.children;
   assert.equal(svc.kind, "service");
@@ -114,7 +114,7 @@ test("an intercept owned by this feature is mine", () => {
     [ws("a")],
     [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
     intercepts({ a: { "frontend": { intercepted: true, intercepted_by: "a" } } }),
-    null,
+    [],
   );
   assert.equal(node.children[0].contextValue, "service:intercepted-mine");
   assert.equal(node.children[0].service.leave, true);
@@ -126,7 +126,7 @@ test("an intercept owned by another feature is not offered as mine", () => {
     [ws("a")],
     [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
     intercepts({ a: { "frontend": { intercepted: true, intercepted_by: "other" } } }),
-    null,
+    [],
   );
   const [svc] = node.children;
   assert.equal(svc.contextValue, "service:intercepted-other");
@@ -139,7 +139,7 @@ test("a non-interceptable service surfaces the CLI blocker on hover", () => {
     [ws("a")],
     [st("a", { state: "up", running: 1, total: 1, services: [{ name: "postgres", state: "healthy" }] })],
     intercepts({ a: { postgres: { interceptable: false, blocker: "no k8s deployment" } } }),
-    null,
+    [],
   );
   assert.equal(node.children[0].contextValue, "service");
   assert.match(node.children[0].tooltip, /no k8s deployment/);
@@ -151,17 +151,20 @@ test("a null intercepts payload marks every service unavailable", () => {
     [ws("a")],
     [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
     null,
-    null,
+    [],
   );
   assert.equal(node.children[0].contextValue, "service");
   assert.match(node.children[0].tooltip, /intercept state unavailable/);
 });
 
 test("the workspace containing the open folder is marked current and expanded", () => {
-  const nodes = buildTree([ws("a"), ws("b")], [st("a"), st("b")], null, "/ws/b/trustradius");
+  const nodes = buildTree([ws("a"), ws("b")], [st("a"), st("b")], null, ["/ws/b/trustradius"]);
   const b = nodes.find((n) => n.label === "b");
   assert.match(b.description, /current/);
   assert.equal(b.expanded, true);
+  // The suffix is what hides the switch button on the window's own workspace.
+  assert.equal(b.contextValue, "workspace:down:current");
+  assert.equal(nodes.find((n) => n.label === "a").contextValue, "workspace:down");
   assert.equal(nodes.find((n) => n.label === "a").expanded, false);
 });
 
@@ -171,26 +174,51 @@ test("when several workspaces match the open folder, the deepest wins", () => {
     [ws("outer", { path: "/ws" }), ws("inner", { path: "/ws/inner" })],
     [st("outer"), st("inner")],
     null,
-    "/ws/inner/repo",
+    ["/ws/inner/repo"],
   );
   assert.match(nodes.find((n) => n.label === "inner").description, /current/);
   assert.doesNotMatch(nodes.find((n) => n.label === "outer").description, /current/);
 });
 
+test("the current workspace sorts to the top, the rest keep their order", () => {
+  const nodes = buildTree(
+    [ws("a"), ws("b"), ws("c")],
+    [st("a"), st("b"), st("c")],
+    null,
+    ["/ws/c"],
+  );
+  assert.deepEqual(
+    nodes.map((n) => n.label),
+    ["c", "a", "b"],
+  );
+});
+
+// A multi-root .code-workspace often lists a tooling checkout first; the feature
+// workspace is some later folder, and used to go unmarked.
+test("any open folder, not just the first, marks its workspace current", () => {
+  const nodes = buildTree(
+    [ws("b", { path: "/ws/b" })],
+    [st("b")],
+    null,
+    ["/repos/sandbox", "/ws/b"],
+  );
+  assert.match(nodes[0].description, /current/);
+});
+
 // A path prefix is not an ancestor: /ws/abc must not match workspace /ws/ab.
 test("a sibling with a shared name prefix is not treated as the current workspace", () => {
-  const nodes = buildTree([ws("ab", { path: "/ws/ab" })], [st("ab")], null, "/ws/abc");
+  const nodes = buildTree([ws("ab", { path: "/ws/ab" })], [st("ab")], null, ["/ws/abc"]);
   assert.doesNotMatch(nodes[0].description, /current/);
 });
 
 test("a workspace missing from the status sweep renders as unknown", () => {
-  const [node] = buildTree([ws("a")], [], null, null);
+  const [node] = buildTree([ws("a")], [], null, []);
   assert.equal(node.contextValue, "workspace:unknown");
   assert.equal(node.icon.id, "question");
 });
 
 test("services are only listed when the status sweep found containers", () => {
-  const [node] = buildTree([ws("a")], [st("a")], null, null);
+  const [node] = buildTree([ws("a")], [st("a")], null, []);
   assert.deepEqual(node.children, []);
 });
 
@@ -202,7 +230,7 @@ test("node ids are stable and unique", () => {
       st("b", { state: "up", running: 1, total: 1, services: [{ name: "svc", state: "healthy" }] }),
     ],
     null,
-    null,
+    [],
   );
   const ids = nodes.flatMap((n) => [n.id, ...n.children.map((c) => c.id)]);
   assert.equal(new Set(ids).size, ids.length);

@@ -60,7 +60,7 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
         workspaces.workspaces,
         statuses.statuses,
         intercepts,
-        currentFolderPath(),
+        currentFolderPaths(),
       );
     } catch (e) {
       this.roots = [cliNotFoundNode((e as Error).message)];
@@ -98,7 +98,7 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
   }
 }
 
-/** The first open folder's path, or null when no folder is open. */
-function currentFolderPath(): string | null {
-  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+/** Every folder open in this window — a multi-root workspace has more than one. */
+function currentFolderPaths(): string[] {
+  return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
 }

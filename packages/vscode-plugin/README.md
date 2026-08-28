@@ -21,8 +21,9 @@ HTTP or stdio hop.
 
 Polled every 5s **only while the view is visible**.
 
-**Writes** — every mutating command opens a `vscode.Terminal` with `cwd` set to
-the workspace directory and runs the CLI there. The extension never spawns
+**Writes** — every mutating command runs the CLI in a `vscode.Terminal` with
+`cwd` set to the workspace directory. One terminal per directory, named
+`sandbox <workspace>` and reused once its previous command has ended. The extension never spawns
 `sandbox` itself except for `sandbox open`, which blocks for the lifetime of the
 browser window it launches.
 

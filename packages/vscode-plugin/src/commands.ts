@@ -55,6 +55,17 @@ export function disposeOutputChannel(): void {
   outputChannel = undefined;
 }
 
+/** Open a workspace's folder — in a new window (`sandbox.open`) or this one (`sandbox.switch`). */
+function openWorkspace(forceNewWindow: boolean) {
+  return async (node?: WsNode): Promise<void> => {
+    const ws = await pickWorkspace(node);
+    if (!ws) return;
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(ws.path), {
+      forceNewWindow,
+    });
+  };
+}
+
 export function registerCommands(provider: SandboxTreeProvider): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("sandbox.refresh", () => provider.refresh()),
@@ -62,13 +73,8 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     // Deliberately not sandbox-core's openWorkspace(), which shells out to the
     // `code` CLI — from inside VS Code the native command is direct and can't
     // fail on a missing `code` binary.
-    vscode.commands.registerCommand("sandbox.open", async (node?: WsNode) => {
-      const ws = await pickWorkspace(node);
-      if (!ws) return;
-      await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(ws.path), {
-        forceNewWindow: true,
-      });
-    }),
+    vscode.commands.registerCommand("sandbox.open", openWorkspace(true)),
+    vscode.commands.registerCommand("sandbox.switch", openWorkspace(false)),
 
     vscode.commands.registerCommand("sandbox.openJira", async (node?: WsNode) => {
       const url = node?.workspace?.jiraUrl;
@@ -87,7 +93,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       vscode.commands.registerCommand(`sandbox.${action}`, async (node?: WsNode) => {
         const ws = await pickWorkspace(node);
         if (!ws) return;
-        await runInTerminal([action], ws.path, `${action} ${ws.name}`);
+        await runInTerminal([action], ws.path);
       }),
     ),
 
@@ -96,7 +102,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       if (!svc) return;
       const args = ["intercept", "-s", svc.name];
       if (svc.leave) args.push("--leave");
-      await runInTerminal(args, svc.workspacePath, `intercept ${svc.name}`);
+      await runInTerminal(args, svc.workspacePath);
     }),
 
     // Menu-only (see commandPalette below): the feature is only known from a
