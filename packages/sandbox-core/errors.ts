@@ -10,6 +10,13 @@
  * *code* exists for the in-process caller to branch on, not for the CLI: every
  * code maps to exit 1.
  */
+/**
+ * `WorkspaceError`'s code. Named because `main.ts` matches on it to keep those
+ * messages printing as `Error: …`, and a literal in each package would let the
+ * two drift silently — the CLI would just start formatting them differently.
+ */
+export const WORKSPACE_ERROR_CODE = "WORKSPACE";
+
 export class SandboxError extends Error {
   constructor(
     message: string,

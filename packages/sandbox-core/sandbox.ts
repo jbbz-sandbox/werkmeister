@@ -33,7 +33,7 @@ import {
   slotPortRange,
   workspacesRoot,
 } from "./config.js";
-import { SandboxError } from "./errors.js";
+import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
 
 const execFileAsync = promisify(execFile);
@@ -47,7 +47,7 @@ const execFileAsync = promisify(execFile);
  */
 export class WorkspaceError extends SandboxError {
   constructor(message: string) {
-    super(message, "WORKSPACE");
+    super(message, WORKSPACE_ERROR_CODE);
     this.name = "WorkspaceError";
   }
 }
