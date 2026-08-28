@@ -5,7 +5,7 @@
  */
 
 import { Colors, error, info } from "../lib/config.js";
-import { composeRestart } from "../lib/docker.js";
+import { composeRestart } from "sandbox-core/compose";
 import { loadDotenv } from "../lib/dotenv.js";
 import { restart as infraRestart } from "sandbox-core/infra";
 import { getSlot } from "sandbox-core/slots";

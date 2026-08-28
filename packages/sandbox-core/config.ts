@@ -566,3 +566,26 @@ export function sandboxRoot(): string {
 export function infraRoot(): string {
   return path.join(sandboxRoot(), "infra");
 }
+
+/**
+ * The monorepo root containing the CLI, not the CLI package itself.
+ *
+ * {@link sandboxRoot} returns `<repo>/apps/cli` — right for `infra/`, wrong for
+ * resolving the sibling apps under `<repo>/apps/`. Walks up looking for `apps/`
+ * rather than assuming a fixed depth, so a checkout laid out differently (or a
+ * `SANDBOX_ROOT` already pointing at the repo root) still resolves.
+ */
+export function monorepoRoot(): string {
+  let dir = sandboxRoot();
+  for (let i = 0; i < 4; i++) {
+    if (fs.existsSync(path.join(dir, "apps"))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return sandboxRoot();
+}

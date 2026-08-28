@@ -7,7 +7,7 @@
 
 import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, loadPorts, loadServices, warn } from "../lib/config.js";
-import { composeDown, composeUp } from "../lib/docker.js";
+import { composeDown, composeUp } from "sandbox-core/compose";
 import {
   generateCaddyfile,
   generateFeatureCompose,

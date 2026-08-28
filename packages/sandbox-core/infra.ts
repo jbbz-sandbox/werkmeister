@@ -10,9 +10,14 @@ import { Colors } from "./colors.js";
 import { infraRoot, sandboxRoot } from "./config.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, raw, success } from "./reporter.js";
+import { restartAll, stopAll } from "./web_servers.js";
 
+// `connect` is a CLI command, not a library module, so this stays a hoisted
+// string the compiler can't resolve — and is therefore unchecked. It is broken
+// today: after step 3 moved this file the path resolves against
+// `sandbox-core/dist/`, where no `commands/` exists. `up()` is the last caller;
+// the seam gets fixed when `connect` becomes a library function (step 5).
 const CONNECT_MODULE = "../commands/connect.js";
-const WEB_SERVERS_MODULE = "./web_servers.js";
 
 function composeCmd(subcommand: string[]): boolean {
   const root = sandboxRoot();
@@ -49,8 +54,7 @@ export async function up(): Promise<void> {
 /** Stop and remove shared infrastructure containers. */
 export async function down(volumes = false): Promise<void> {
   raw(`\n${Colors.BOLD}=== sandbox down: infra ===${Colors.RESET}\n\n`);
-  const webServers = await import(WEB_SERVERS_MODULE);
-  await webServers.stopAll();
+  await stopAll();
   const args = ["down"];
   if (volumes) {
     args.push("--volumes");
@@ -68,8 +72,7 @@ export async function down(volumes = false): Promise<void> {
 /** Stop shared infrastructure containers without removing them. */
 export async function stop(): Promise<void> {
   raw(`\n${Colors.BOLD}=== sandbox stop: infra ===${Colors.RESET}\n\n`);
-  const webServers = await import(WEB_SERVERS_MODULE);
-  await webServers.stopAll();
+  await stopAll();
   if (composeCmd(["stop"])) {
     success("Shared infrastructure stopped (containers preserved, resumable with 'sandbox up infra')");
   }
@@ -82,7 +85,6 @@ export async function restart(): Promise<void> {
   if (composeCmd(["restart"])) {
     success("Shared infrastructure restarted");
   }
-  const webServers = await import(WEB_SERVERS_MODULE);
-  await webServers.restartAll();
+  await restartAll();
   raw("\n");
 }

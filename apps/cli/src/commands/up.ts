@@ -20,7 +20,7 @@ import {
   resolveWorkspace,
   warn,
 } from "../lib/config.js";
-import { composeUp } from "../lib/docker.js";
+import { composeUp } from "sandbox-core/compose";
 import { loadDotenv } from "../lib/dotenv.js";
 import {
   generateCaddyfile,

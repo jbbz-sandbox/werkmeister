@@ -27,8 +27,8 @@ import {
   graduateNote,
   matchDomainsForRefs,
   reconcileGraduating,
-} from "../lib/graduate.js";
-import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
+} from "sandbox-core/graduate";
+import { latestHandoff, openDecisions, type Note } from "sandbox-core/notes";
 import { skillNameFor } from "sandbox-core/skill_gen";
 import { loadStandardsModules, standardsMatchingDiff } from "sandbox-core/standards";
 

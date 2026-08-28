@@ -26,8 +26,9 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { error, getMonorepoRoot, info, success, warn } from "./config.js";
-import { ProcError, run } from "sandbox-core/proc";
+import { monorepoRoot } from "./config.js";
+import { ProcError, run } from "./proc.js";
+import { error, info, success, warn } from "./reporter.js";
 
 /** One managed host web server. */
 export interface WebApp {
@@ -137,7 +138,7 @@ function logFile(app: WebApp): string {
 }
 
 function appDir(app: WebApp): string {
-  return path.join(getMonorepoRoot(), "apps", app.dir);
+  return path.join(monorepoRoot(), "apps", app.dir);
 }
 
 /** Match one of the fixed one-level glob patterns below. */

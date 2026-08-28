@@ -11,21 +11,22 @@
  * is warned that the sandbox secret-commit guard was not installed (D-12).
  */
 
-import { getSandboxRoot, info, success, warn } from "./config.js";
-import { ProcError, run } from "sandbox-core/proc";
+import { sandboxRoot } from "./config.js";
+import { ProcError, run } from "./proc.js";
+import { info, success, warn } from "./reporter.js";
 
 export const HOOKS_PATH = ".githooks";
 
 /**
  * Idempotently point `core.hooksPath` at `.githooks`.
  *
- * @param repoRoot Repo root to configure. Defaults to `getSandboxRoot()`.
+ * @param repoRoot Repo root to configure. Defaults to `sandboxRoot()`.
  * @returns True if `core.hooksPath` is (now, or already) `.githooks`.
  *   False if a pre-existing, different, non-default hooksPath was left
  *   untouched (non-clobber behavior).
  */
 export function configureGitHooksPath(repoRoot?: string | null): boolean {
-  const root = repoRoot ?? getSandboxRoot();
+  const root = repoRoot ?? sandboxRoot();
 
   let result;
   try {

@@ -22,7 +22,7 @@ import {
 } from "../lib/config.js";
 import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { getServicePort, getSlot } from "sandbox-core/slots";
-import * as tp from "../lib/telepresence.js";
+import * as tp from "sandbox-core/telepresence";
 import { loadDotenv } from "../lib/dotenv.js";
 
 function portOpen(port: number): Promise<boolean> {

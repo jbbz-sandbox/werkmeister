@@ -8,10 +8,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { Colors, getInfraRoot, loadServices } from "../lib/config.js";
-import { getContainerStatus, type ContainerStatus } from "../lib/docker.js";
+import { getContainerStatus, type ContainerStatus } from "sandbox-core/compose";
 import { isOneShotService } from "sandbox-core";
 import { getPerServiceStatus, type ForwardStatus } from "sandbox-core/k8s";
-import { status as webStatus, type WebServerStatus } from "../lib/web_servers.js";
+import { status as webStatus, type WebServerStatus } from "sandbox-core/web_servers";
 import { getAllSlots, getPortRange, type SlotEntry } from "sandbox-core/slots";
 import { ProcError, run as procRun } from "sandbox-core/proc";
 import {
@@ -19,7 +19,7 @@ import {
   interceptBlocker,
   listIntercepts,
   type InterceptState,
-} from "../lib/telepresence.js";
+} from "sandbox-core/telepresence";
 
 interface InfraContainer {
   service: string;

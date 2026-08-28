@@ -82,7 +82,7 @@ import {
   MIN_VERSION,
   parseVersion,
   versionLt,
-} from "./telepresence.js";
+} from "sandbox-core/telepresence";
 
 // A command runner: argv in, [returncode, combined-output] out. Injected in
 // tests; the default shells out with a timeout and never throws.
