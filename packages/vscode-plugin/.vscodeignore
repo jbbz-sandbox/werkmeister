@@ -14,3 +14,4 @@ tsconfig.json
 MANUAL-CHECKLIST.md
 .vscode-test.mjs
 .vscode-test/**
+.gitignore
