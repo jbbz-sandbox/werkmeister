@@ -145,7 +145,7 @@ render, or a live editor.
 
 20. **Install into the real VS Code.**
     ```bash
-    cd apps/vscode-sandbox && code --install-extension sandbox-workspaces-0.1.0.vsix
+    cd packages/vscode-plugin && npm run package && code --install-extension vscode-plugin-0.1.0.vsix
     ```
     Deliberately not run during implementation — it modifies your live editor.
 
