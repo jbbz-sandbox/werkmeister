@@ -6,6 +6,7 @@
  * `<workspace>/docker-compose.yml` (the canonical location).
  */
 
+import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -281,6 +282,44 @@ export function composeLogs(feature: string, service?: string | null): void {
   info(`Tailing logs for '${feature}'` + (service ? ` (${service})` : ""));
   console.log(`${Colors.DIM}Press Ctrl+C to stop${Colors.RESET}`);
   runCompose(feature, args, { stream: true });
+}
+
+/**
+ * Spawn `docker compose logs -f` for *feature*, streaming stdout and stderr to
+ * *onData* and returning the child so the caller can kill it. `null` when the
+ * feature has no compose file.
+ *
+ * The async sibling of {@link composeLogs}, which cannot be reused: it goes
+ * through `proc.run` (spawnSync, `stdio: "inherit"`), so its output only ever
+ * reaches the parent's own stdio and there is no stream to pipe elsewhere.
+ *
+ * `--ansi always` because compose prints ANSI only onto a TTY, and a piped
+ * stream is not one — without it the per-service prefix colour that tells a
+ * six-service tail apart is silently dropped. *env* exists for callers whose
+ * PATH cannot find `docker`: a GUI-launched VS Code inherits none.
+ */
+export function composeLogsStream(
+  feature: string,
+  service: string | null,
+  onData: (chunk: string) => void,
+  env?: NodeJS.ProcessEnv,
+): ChildProcess | null {
+  const composePath = composeFile(feature);
+  if (composePath === null || !isFile(composePath)) {
+    return null;
+  }
+
+  const args = ["compose", "--ansi", "always", "-f", composePath, "logs", "-f", "--tail", "100"];
+  if (service) {
+    args.push(service);
+  }
+
+  const child = spawn("docker", args, { env });
+  // Compose writes its own diagnostics ("no such service") to stderr; a caller
+  // rendering one log surface wants those inline, not discarded.
+  child.stdout.on("data", (d) => onData(d.toString()));
+  child.stderr.on("data", (d) => onData(d.toString()));
+  return child;
 }
 
 /**

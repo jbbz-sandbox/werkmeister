@@ -6,3 +6,9 @@ esbuild.mjs
 tsconfig.json
 **/*.map
 **/*.ts
+
+# Local tooling artefacts, not extension content — .remember/logs even carried a
+# developer's absolute paths into the packaged VSIX.
+.remember/**
+.turbo/**
+MANUAL-CHECKLIST.md

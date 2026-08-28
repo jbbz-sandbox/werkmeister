@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as vscode from "vscode";
 import { listWorkspaces, resolveSandboxBin, childEnv, removeWorkspace } from "sandbox-core";
 import { runInTerminal } from "./terminal.js";
+import { showLogs } from "./logs.js";
 import type { SandboxTreeProvider } from "./tree.js";
 import type { WsNode } from "./build-tree.js";
 
@@ -98,22 +99,22 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       await runInTerminal(args, svc.workspacePath, `intercept ${svc.name}`);
     }),
 
-    // Menu-only (see commandPalette below): `sandbox logs` takes the feature as
-    // a positional argument, and the feature is only known from a tree node —
-    // there is nothing for a bare palette invocation to pass.
-    vscode.commands.registerCommand("sandbox.logs", async (node?: WsNode) => {
+    // Menu-only (see commandPalette below): the feature is only known from a
+    // tree node — there is nothing for a bare palette invocation to pass.
+    //
+    // Unlike its siblings this does not shell out to `sandbox logs`. That
+    // command ends in `proc.run` (spawnSync, `stdio: "inherit"`), so nothing
+    // here could read its output, and killing it would leave its `docker
+    // compose` grandchild tailing. See logs.ts.
+    vscode.commands.registerCommand("sandbox.logs", (node?: WsNode) => {
       if (!node) return;
       // A service node scopes the logs to itself; a workspace node tails them all.
       if (node.service?.feature) {
-        await runInTerminal(
-          ["logs", node.service.feature, node.service.name],
-          node.service.workspacePath,
-          `logs ${node.service.feature}`,
-        );
+        showLogs(node.service.feature, node.service.name);
         return;
       }
       if (node.workspace?.feature) {
-        await runInTerminal(["logs", node.workspace.feature], node.workspace.path, `logs ${node.workspace.feature}`);
+        showLogs(node.workspace.feature, null);
         return;
       }
       const name = node.workspace?.name ?? node.service?.name ?? "this workspace";
