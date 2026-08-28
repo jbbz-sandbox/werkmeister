@@ -21,6 +21,7 @@ import {
   warn,
 } from "../lib/config.js";
 import { composeUp } from "../lib/docker.js";
+import { loadDotenv } from "../lib/dotenv.js";
 import {
   generateCaddyfile,
   generateFeatureCompose,
@@ -34,31 +35,6 @@ import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { allocateSlot, getPortRange, getServicePort } from "sandbox-core/slots";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */
-function loadDotenv(start: string): Record<string, string> {
-  let directory = start;
-  for (;;) {
-    const envFile = path.join(directory, ".env");
-    if (fs.existsSync(envFile) && fs.statSync(envFile).isFile()) {
-      const result: Record<string, string> = {};
-      for (const rawLine of fs.readFileSync(envFile, "utf8").split("\n")) {
-        const line = rawLine.trim();
-        if (!line || line.startsWith("#") || !line.includes("=")) {
-          continue;
-        }
-        const eq = line.indexOf("=");
-        result[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
-      }
-      return result;
-    }
-    const parent = path.dirname(directory);
-    if (parent === directory) {
-      break;
-    }
-    directory = parent;
-  }
-  return {};
-}
-
 /** Read SANDBOX_SLOT from <workspace>/.env. */
 function readSlotFromWorkspace(workspace: string): number | null {
   const envFile = path.join(workspace, ".env");

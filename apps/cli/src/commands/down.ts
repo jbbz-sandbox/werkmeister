@@ -5,7 +5,6 @@
  * configuration, and clean up generated files.
  */
 
-import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
@@ -14,35 +13,11 @@ import { composeDown, workspaceForFeature } from "../lib/docker.js";
 import { generateCaddyfile } from "sandbox-core/generate";
 import { GraduationError, reconcileGraduating } from "../lib/graduate.js";
 import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
+import { loadDotenv } from "../lib/dotenv.js";
 import { getAllSlots, getSlot, releaseSlot } from "sandbox-core/slots";
 import { graduateOne, input } from "./notes.js";
 
 /** Walk up from *start* looking for a .env file; return its key=value pairs. */
-function loadDotenv(start: string): Record<string, string> {
-  let directory = start;
-  for (;;) {
-    const envFile = path.join(directory, ".env");
-    if (fs.existsSync(envFile) && fs.statSync(envFile).isFile()) {
-      const result: Record<string, string> = {};
-      for (const rawLine of fs.readFileSync(envFile, "utf8").split("\n")) {
-        const line = rawLine.trim();
-        if (!line || line.startsWith("#") || !line.includes("=")) {
-          continue;
-        }
-        const eq = line.indexOf("=");
-        result[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
-      }
-      return result;
-    }
-    const parent = path.dirname(directory);
-    if (parent === directory) {
-      break;
-    }
-    directory = parent;
-  }
-  return {};
-}
-
 /** Regenerate the Caddyfile, then reload running services. */
 async function reloadProxy(): Promise<void> {
   info("Updating reverse proxy configuration...");
