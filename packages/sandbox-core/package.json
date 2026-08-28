@@ -16,6 +16,7 @@
     "./compose": "./dist/compose.js",
     "./config": "./dist/config.js",
     "./detect": "./dist/detect.js",
+    "./errors": "./dist/errors.js",
     "./docker": "./dist/docker.js",
     "./feature_routing": "./dist/feature_routing.js",
     "./form_schema": "./dist/form_schema.js",
