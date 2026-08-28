@@ -82,6 +82,32 @@ test("ttyReporter reproduces the CLI's lines byte for byte", async () => {
 // The console-write conversion in infra/detect/caddy replaced `console.log(s)`
 // with `raw(s + "\n")`. This asserts those are the same bytes on the wire, which
 // is the whole safety claim behind that change.
+// infra.ts's headers are `console.log(`\n...\n`)` — the leading and trailing
+// newlines are part of the string AND console.log adds its own, so the
+// replacement needs two trailing. That off-by-one is the whole risk.
+test("raw() reproduces a header that already ends in a newline", async () => {
+  const header = `\n\x1b[1m=== sandbox down: infra ===\x1b[0m\n`;
+  const realWrite = process.stdout.write.bind(process.stdout);
+
+  const viaConsole = [];
+  process.stdout.write = (c) => (viaConsole.push(c), true);
+  try {
+    console.log(header);
+  } finally {
+    process.stdout.write = realWrite;
+  }
+
+  const viaRaw = [];
+  process.stdout.write = (c) => (viaRaw.push(c), true);
+  try {
+    await withReporter(ttyReporter, async () => raw(`${header}\n`));
+  } finally {
+    process.stdout.write = realWrite;
+  }
+
+  assert.equal(viaRaw.join(""), viaConsole.join(""));
+});
+
 test("raw() through ttyReporter is byte-identical to console.log", async () => {
   const line = `\x1b[1m=== sandbox down: infra ===\x1b[0m`;
   const realWrite = process.stdout.write.bind(process.stdout);
