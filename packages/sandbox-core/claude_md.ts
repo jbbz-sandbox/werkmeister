@@ -482,7 +482,7 @@ docker compose restart ${sampleSvc}
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
   Source:    ~/.sandbox/services.yaml + ports.yaml
              + .sandbox/workspace.yml (feature, services, slot)
-  Generator: src/commands/init_workspace.ts :: _build_sandbox_context_md
+  Generator: packages/sandbox-core/claude_md.ts :: buildSandboxContextMd
   Regen:     sandbox init-workspace  (or \`sandbox up\` after slot changes)
   To change ports/health endpoints/services, edit services.yaml / ports.yaml.
   To change which services run locally, edit .sandbox/workspace.yml and rerun.
