@@ -14,7 +14,7 @@ obvious — what a failure looks like.
 | `npm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), and that `Logs` / `Open Jira` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
 | `npm test` → `src/build-tree.test.mjs` | State icons, service health, the `current` marker (multi-root included), top-sorting, node id stability. |
 | `npm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
-| `npm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, and a lifecycle command names its terminal `sandbox <workspace>`. |
+| `npm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `sandbox <workspace>`, and the config tier order — a `sandbox.*` setting overrides the inherited `SANDBOX_*`, and clearing it restores that value instead of deleting it. |
 
 What is left below needs a human: real container/Telepresence state, the visual
 render, or a live editor.
@@ -174,26 +174,7 @@ render, or a live editor.
     The printed `root` should be your `paths.workspaces_root`, not your
     monorepo checkout.
 
-22. **Shell-launched, env present — the other half of the tier order.** Quit
-    VS Code, then launch it with `code .` from a shell where `~/.zshenv` has
-    sourced `~/.sandbox/env.sh` (check with `echo $SANDBOX_ROOT` first — it
-    must be non-empty). Leave `sandbox.binPath` and `sandbox.root` **empty** in
-    Settings.
-
-    Expected: the tree still lists the correct workspaces, driven by the
-    inherited `SANDBOX_ROOT` rather than the config file.
-
-    Failure looks like: the tree works but drives the *wrong checkout* — e.g.
-    lifecycle commands run against a different repo than the one your shell
-    pointed at. The extension writes settings into `process.env` at activation,
-    and a blank setting must **restore** the inherited value, never delete it.
-    Verify with:
-    ```
-    Command Palette → Developer: Toggle Developer Tools → Console
-    ```
-    then check that `SANDBOX_ROOT` still matches your shell's value.
-
 ---
 
-**Total: 24 checks** (21 in Phase A, 3 in Phase B) — the rest are automated;
+**Total: 23 checks** (21 in Phase A, 2 in Phase B) — the rest are automated;
 see the table at the top.

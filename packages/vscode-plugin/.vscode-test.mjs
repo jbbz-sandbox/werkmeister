@@ -15,6 +15,14 @@ export default defineConfig({
   // No folder open: the tree's 5s poll only runs while the view is visible, and
   // nothing here opens it, so no `docker ps` sweep fires during the run.
   launchArgs: ["--disable-extensions", "--disable-workspace-trust"],
+  // Pin what the host inherits, so the config-tier test asserts against a fixed
+  // tier 2 instead of the developer's own shell: SANDBOX_ROOT is the value a
+  // cleared setting must restore, and SANDBOX_BIN is the one with nothing to
+  // restore — `undefined` unsets it, since spawn drops undefined env values.
+  env: {
+    SANDBOX_ROOT: "/tmp/sandbox-inherited-root",
+    SANDBOX_BIN: undefined,
+  },
   mocha: {
     ui: "tdd",
     // runInTerminal waits up to 3s for shell integration before sending text.
