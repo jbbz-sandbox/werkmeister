@@ -9,6 +9,7 @@ import * as path from "node:path";
 
 import { Colors, getInfraRoot, loadServices } from "../lib/config.js";
 import { getContainerStatus, type ContainerStatus } from "../lib/docker.js";
+import { isOneShotService } from "sandbox-core";
 import { getPerServiceStatus, type ForwardStatus } from "sandbox-core/k8s";
 import { status as webStatus, type WebServerStatus } from "../lib/web_servers.js";
 import { getAllSlots, getPortRange, type SlotEntry } from "sandbox-core/slots";
@@ -115,8 +116,24 @@ function featurePortRange(slot: number | string): string {
   return "?";
 }
 
+/**
+ * A one-shot setup container that ran to completion. Its dependents wait on
+ * `service_completed_successfully`, so exiting 0 is the success case — counting
+ * it as a stopped service would make a fully healthy feature read as `partial`
+ * now that stopped containers are listed at all. A non-zero exit is a real
+ * failure and stays in the tally.
+ */
+function finishedSetup(c: ContainerStatus): boolean {
+  return isOneShotService(c.service, c.role) && c.status === "exited" && c.exitCode === 0;
+}
+
+/** The containers a feature's up/down verdict is counted over. */
+export function tallied(containers: ContainerStatus[]): ContainerStatus[] {
+  return containers.filter((c) => !finishedSetup(c));
+}
+
 function featureStatus(featureName: string): string {
-  const containers = getContainerStatus(featureName);
+  const containers = tallied(getContainerStatus(featureName));
   if (!containers.length) {
     return `${Colors.DIM}no containers${Colors.RESET}`;
   }
@@ -137,7 +154,7 @@ function printVerboseContainers(featureName: string): void {
     const cName = c.name || "?";
     const cStatus = c.status || "?";
     const cPorts = c.ports || "";
-    const color = cStatus === "running" ? Colors.GREEN : Colors.RED;
+    const color = cStatus === "running" ? Colors.GREEN : finishedSetup(c) ? Colors.DIM : Colors.RED;
     console.log(
       `         ${color}  -> ${cName}: ${cStatus}${Colors.RESET}` +
         (cPorts ? `  [${cPorts}]` : ""),
@@ -399,7 +416,7 @@ function runJson(
     } else {
       portRange = "?";
     }
-    const containers: ContainerStatus[] = getContainerStatus(featureName) ?? [];
+    const containers: ContainerStatus[] = tallied(getContainerStatus(featureName) ?? []);
     const running = containers.filter((c) => c.status === "running").length;
     features.push({
       name: featureName,
