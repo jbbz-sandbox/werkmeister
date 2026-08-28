@@ -1243,7 +1243,7 @@ const INFRA_PROJECT = "sandbox-infra";
  * and workspaces that are already up must keep reading correctly until their
  * next recreate.
  */
-function isOneShotService(service: string, role: string | undefined): boolean {
+export function isOneShotService(service: string, role: string | undefined): boolean {
   return role === "setup" || service.endsWith("-setup");
 }
 

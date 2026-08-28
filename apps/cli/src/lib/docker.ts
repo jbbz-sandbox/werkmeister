@@ -18,6 +18,20 @@ export interface ContainerStatus {
   health: string;
   ports: string;
   service: string;
+  /** `com.sandbox.local.role` — `"setup"` marks a one-shot container. Empty when unlabelled. */
+  role: string;
+  /** Meaningful only once `status` is `exited`; compose reports 0 for live containers too. */
+  exitCode: number;
+}
+
+/**
+ * One label out of compose's `Labels` field, which flattens every label into a
+ * single `k=v,k=v` string rather than an object.
+ */
+function labelValue(labels: unknown, key: string): string {
+  if (typeof labels !== "string") return "";
+  const m = new RegExp(`(?:^|,)${key.replace(/\./g, "\\.")}=([^,]*)`).exec(labels);
+  return m ? m[1] : "";
 }
 
 /**
@@ -268,13 +282,15 @@ export function composeLogs(feature: string, service?: string | null): void {
 }
 
 /**
- * Return the status of all containers for *feature*.
- *
- * Returns a list of dicts:
- *     [{"name": "...", "status": "running", "ports": "0.0.0.0:11100->3060/tcp"}, ...]
+ * Every container belonging to *feature*, stopped ones included. Empty when the
+ * feature has no compose file or the `ps` call fails — indistinguishable from a
+ * feature that has never been brought up, which is why callers treat both as
+ * "nothing to report" rather than as an error.
  */
 export function getContainerStatus(feature: string): ContainerStatus[] {
-  const result = runCompose(feature, ["ps", "--format", "json"], { capture: true });
+  // `-a`: without it compose lists only running containers, so a crashed service
+  // silently vanishes and every caller's running/total tally reads as complete.
+  const result = runCompose(feature, ["ps", "-a", "--format", "json"], { capture: true });
   if (!result || result.status !== 0) {
     return [];
   }
@@ -293,6 +309,8 @@ export function getContainerStatus(feature: string): ContainerStatus[] {
         health: data["Health"] ?? data["health"] ?? "",
         ports: data["Ports"] ?? data["ports"] ?? "",
         service: data["Service"] ?? data["service"] ?? "",
+        role: labelValue(data["Labels"] ?? data["labels"], "com.sandbox.local.role"),
+        exitCode: data["ExitCode"] ?? data["exitCode"] ?? 0,
       });
     } catch {
       // Fallback: treat the line as plain text
@@ -302,6 +320,8 @@ export function getContainerStatus(feature: string): ContainerStatus[] {
         health: "",
         ports: "",
         service: "",
+        role: "",
+        exitCode: 0,
       });
     }
   }
