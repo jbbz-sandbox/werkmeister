@@ -1133,7 +1133,7 @@ export function generateSupergraphConfig(
     "# Source:    sandbox/config/services.yaml (type: graphql-subgraph,\n" +
     "#            k8s_forward_port)\n" +
     "#            + .sandbox/workspace.yml (feature local_services)\n" +
-    "# Generator: src/lib/generate.ts :: generate_supergraph_config\n" +
+    "# Generator: packages/sandbox-core/generate.ts :: generateSupergraphConfig\n" +
     "# Regen:     sandbox up  (or `sandbox init-workspace`)\n" +
     "# To add a subgraph: set its `type: graphql-subgraph` in services.yaml and rerun.\n" +
     "# To change endpoint path, set `graphql_path: /<path>` on the service (default /graphql).\n" +

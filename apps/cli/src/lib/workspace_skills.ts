@@ -11,7 +11,7 @@
  *
  * Two source kinds, one output:
  * - the five sb-*-standard skills render on the fly from docs/standards/*.md
- *   (lib/skill_gen — no committed generated copies anywhere anymore) as
+ *   (sandbox-core/skill_gen — no committed generated copies anywhere anymore) as
  *   file bundles: SKILL.md plus, for directory-form modules, references/*.md;
  * - the seven hand-authored entry skills (sb-implement, sb-research, sb-test,
  *   sb-handoff, sb-review, sb-pr, sb-author) are read verbatim from
