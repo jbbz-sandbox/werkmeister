@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { SandboxTreeProvider } from "./tree.js";
 import { disposeTerminals } from "./terminal.js";
+import { disposeLogTerminals } from "./logs.js";
 import { registerCommands, disposeOutputChannel } from "./commands.js";
 
 /**
@@ -63,5 +64,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   disposeTerminals();
+  disposeLogTerminals();
   disposeOutputChannel();
 }
