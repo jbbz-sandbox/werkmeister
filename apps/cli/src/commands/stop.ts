@@ -9,10 +9,10 @@
  */
 
 import { Colors, error, info } from "../lib/config.js";
-import { composeStop } from "sandbox-core/compose";
+import { SandboxError } from "sandbox-core/errors";
 import { loadDotenv } from "../lib/dotenv.js";
 import { stop as infraStop } from "sandbox-core/infra";
-import { getSlot } from "sandbox-core/slots";
+import { stop as stopFeature } from "sandbox-core/lifecycle";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());
@@ -30,27 +30,27 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.BOLD}=== sandbox stop: ${feature} ===${Colors.RESET}\n`);
 
-  const slot = await getSlot(feature);
-  if (slot === null) {
-    error(`Feature '${feature}' is not running (no slot allocated)`);
-    info(`Start it with: sandbox up ${feature}`);
-    process.exit(1);
+  let slot: number;
+  try {
+    ({ slot } = await stopFeature(feature));
+  } catch (e) {
+    // Reported here rather than by main.ts's handler because the hint has to
+    // land *between* the error line and the exit, and the handler only knows
+    // how to print the message. Every other code propagates.
+    if (e instanceof SandboxError && e.code === "NOT_RUNNING") {
+      error(e.message);
+      info(`Start it with: sandbox up ${feature}`);
+      process.exit(1);
+    }
+    throw e;
   }
 
-  info(`Stopping containers for '${feature}' (slot ${slot})...`);
-  const ok = composeStop(feature);
-
-  if (ok) {
-    console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' stopped${Colors.RESET}\n`);
-    console.log(
-      `  ${Colors.DIM}Slot ${slot} preserved — resume with: sandbox restart ${feature}${Colors.RESET}`,
-    );
-    console.log(
-      `  ${Colors.DIM}To fully tear down:              sandbox down ${feature}${Colors.RESET}`,
-    );
-    console.log();
-  } else {
-    error(`Failed to stop containers for '${feature}'`);
-    process.exit(1);
-  }
+  console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' stopped${Colors.RESET}\n`);
+  console.log(
+    `  ${Colors.DIM}Slot ${slot} preserved — resume with: sandbox restart ${feature}${Colors.RESET}`,
+  );
+  console.log(
+    `  ${Colors.DIM}To fully tear down:              sandbox down ${feature}${Colors.RESET}`,
+  );
+  console.log();
 }

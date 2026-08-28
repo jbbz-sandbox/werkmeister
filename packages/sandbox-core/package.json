@@ -27,6 +27,7 @@
     "./infra": "./dist/infra.js",
     "./k8s": "./dist/k8s.js",
     "./k8s_forwards": "./dist/k8s_forwards.js",
+    "./lifecycle": "./dist/lifecycle.js",
     "./locks": "./dist/locks.js",
     "./notes": "./dist/notes.js",
     "./proc": "./dist/proc.js",

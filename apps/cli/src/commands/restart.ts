@@ -5,10 +5,10 @@
  */
 
 import { Colors, error, info } from "../lib/config.js";
-import { composeRestart } from "sandbox-core/compose";
+import { SandboxError } from "sandbox-core/errors";
 import { loadDotenv } from "../lib/dotenv.js";
 import { restart as infraRestart } from "sandbox-core/infra";
-import { getSlot } from "sandbox-core/slots";
+import { restart as restartFeature } from "sandbox-core/lifecycle";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());
@@ -26,21 +26,24 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.BOLD}=== sandbox restart: ${feature} ===${Colors.RESET}\n`);
 
-  const slot = await getSlot(feature);
-  if (slot === null) {
-    error(`Feature '${feature}' is not running (no slot allocated)`);
-    info(`Start it with: sandbox up ${feature}`);
-    process.exit(1);
+  // Both hints land *between* the error line and the exit, which main.ts's
+  // handler cannot reproduce — it only knows how to print the message. So the
+  // codes that carry one report themselves; anything else propagates.
+  const hints: Record<string, string> = {
+    NOT_RUNNING: `Start it with: sandbox up ${feature}`,
+    COMPOSE_RESTART_FAILED: `Check with: sandbox logs ${feature}`,
+  };
+
+  try {
+    await restartFeature(feature);
+  } catch (e) {
+    if (e instanceof SandboxError && hints[e.code]) {
+      error(e.message);
+      info(hints[e.code]);
+      process.exit(1);
+    }
+    throw e;
   }
 
-  info(`Restarting containers for '${feature}' (slot ${slot})...`);
-  const ok = composeRestart(feature);
-
-  if (ok) {
-    console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' restarted${Colors.RESET}\n`);
-  } else {
-    error(`Failed to restart containers for '${feature}'`);
-    info("Check with: sandbox logs " + feature);
-    process.exit(1);
-  }
+  console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' restarted${Colors.RESET}\n`);
 }
