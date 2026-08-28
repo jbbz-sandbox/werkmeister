@@ -261,13 +261,30 @@ gate green (§10).
 | 1 | Reporter + proc | New `reporter.ts` (ALS, `withReporter`, four helpers). **Moves:** `proc.ts`, `colors.ts`, and the four print helpers lifted out of `config.ts` (the loaders in that file stay until step 3). `main.ts` wraps dispatch. | Every existing CLI output byte-identical; recording-reporter test |
 | 2 | Docker layer | New `docker.ts` (dockerode + context resolution) and `compose.ts` (shelled, passthrough wrapper). **Moves:** `docker.ts`. Also *re-points* the Engine-API call sites in `stats.ts`, `caddy.ts`, `k8s.ts`, `slots.ts`, `commands/clean.ts` — those files stay where they are for now and move in their own step. | `sandbox status`, `stats`, `clean`, `proxy-reload` unchanged in behaviour |
 | 3 | State layer | **Moves:** `config.ts` (loaders), `global_config.ts`, `slots.ts`, `locks.ts`, `secrets.ts`, `worktrees.ts`, `detect.ts`, `k8s.ts`, `k8s_forwards.ts`, `infra.ts`. | Gate green |
-| 4 | Generation | **Moves:** `generate.ts` (1,474), `scaffold.ts`, `caddy.ts`, `feature_routing.ts`, `archetypes.ts`, `claude_md.ts`, `form_schema.ts`. | `generate.test.ts` (29 tests) still passes unmodified |
+| 4a | Generation — leaves | **Moves:** `scaffold.ts`, `form_schema.ts`, `archetypes.ts`, `feature_routing.ts`, `caddy.ts`. Nothing here depends on a module still in `apps/cli`. | Gate green; output byte-identical |
+| 4b | Generation — the generate chain | **Moves:** `generate.ts` (1,520), `claude_md.ts`, `standards.ts`, `skill_gen.ts`. The last two are pulled forward from row 6: `generate.ts → claude_md.ts → skill_gen.ts → standards.ts`, and `sandbox-core` cannot import from `apps/cli`, so the chain moves as a unit. `nunjucks` moves with `generate.ts`, its only consumer. | `generate.test.ts` still passes; only its mock target changes |
 | 5 | Command sequences | `up`/`down`/`stop`/`restart`/`connect`/`status` become library functions returning typed results; `process.exit` → `SandboxError`; commands go thin. No `lib/` files move. **Decision point for the VS Code bundling risk (§9).** | Dashboard calls `up()` in-process; commands are argv + render only |
-| 6 | Remainder | **Moves:** `standards.ts`, `notes.ts`, `gate.ts`, `graduate.ts`, `skill_gen.ts`, `agent_gen.ts`, `hooks_gen.ts`, `mcp_gen.ts`, `workspace_skills.ts`, `machine_setup.ts`, `web_servers.ts`, `telepresence.ts`, `browser.ts`, `safari.ts`, `stats.ts`, `plugin_check.ts`, `git_hooks.ts`. | `apps/cli/src/lib` contains only `wizard.ts` |
+| 6 | Remainder | **Moves:** `docker.ts` (the compose wrapper — see note below), `notes.ts`, `gate.ts`, `graduate.ts`, `agent_gen.ts`, `hooks_gen.ts`, `mcp_gen.ts`, `workspace_skills.ts`, `machine_setup.ts`, `web_servers.ts`, `telepresence.ts`, `browser.ts`, `safari.ts`, `stats.ts`, `plugin_check.ts`, `git_hooks.ts`. | `apps/cli/src/lib` contains only `wizard.ts` |
 
 Every one of the 38 modules in `apps/cli/src/lib` appears exactly once above or
 in "stays" (§3). If a step leaves one behind, the boundary claim in §3 is false —
-check before opening the PR.
+check before opening the PR. Row 4 shipped as two PRs and `standards.ts` /
+`skill_gen.ts` moved up from row 6 with it; the table is amended rather than
+annotated, so this check still reads straight off it.
+
+Two amendments the check itself turned up, recorded so the next reader does not
+re-derive them:
+
+- **`docker.ts` was orphaned between rows.** Row 2 claimed it, then
+  `016` pulled it back out ("compose moves *with* config, not before it") and
+  nothing re-assigned it once config moved in step 3. It is now compose top to
+  bottom — `017` settled that compose stays shelled — so it lands in row 6 as
+  the `compose.ts` §3's package layout already names. **Assigned here on the
+  authority of the check, not of a fresh decision:** if it belongs in its own
+  step, move it.
+- **`config.ts` is not one of the 38.** The 89 lines left in `apps/cli/src/lib`
+  are a re-export door that step 3 *created*; the module the table counted is
+  the loaders, and those moved. It is deliberately absent from every row.
 
 Steps 2–6 may reorder if a dependency forces it, but 0 and 1 come first: the
 rename before any import churn, the reporter before any module that prints

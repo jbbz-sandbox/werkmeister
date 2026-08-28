@@ -12,12 +12,12 @@
 
 import { error, info, loadServices, success } from "../lib/config.js";
 import { standardsDirPath, standardsDirProblem } from "sandbox-core/global_config";
-import { validateModuleReferences } from "../lib/skill_gen.js";
+import { validateModuleReferences } from "sandbox-core/skill_gen";
 import {
   loadStandardsModules,
   validateServiceStandards,
   validateStandardModules,
-} from "../lib/standards.js";
+} from "sandbox-core/standards";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {
   // A missing tree used to report "0 module(s) checked" and exit 0 — the worst

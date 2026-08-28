@@ -16,7 +16,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import * as gc from "sandbox-core/global_config";
-import { generateSkills, standardsSource, standardsUrl } from "../skill_gen.js";
+import { generateSkills, standardsSource, standardsUrl } from "sandbox-core/skill_gen";
 
 let tmp: string;
 

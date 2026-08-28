@@ -35,7 +35,7 @@ import * as YAML from "yaml";
 
 import { buildTesterSpecs, writeWorkspaceAgents } from "../lib/agent_gen.js";
 import { resolvePresentArchetypes } from "sandbox-core/archetypes";
-import { buildClaudeMd, buildStandardsRoutingSection } from "../lib/claude_md.js";
+import { buildClaudeMd, buildStandardsRoutingSection } from "sandbox-core/claude_md";
 import {
   Colors,
   error,
@@ -49,7 +49,7 @@ import {
   warn,
 } from "../lib/config.js";
 import { buildFormSchema } from "sandbox-core/form_schema";
-import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "../lib/generate.js";
+import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "sandbox-core/generate";
 import { loadPaths, standardsDirPath, standardsDirProblem } from "sandbox-core/global_config";
 import { writeWorkspaceHooks } from "../lib/hooks_gen.js";
 import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
@@ -66,7 +66,7 @@ import {
   resolveActiveStandards,
   validateServiceStandards,
   writeStandardsManifest,
-} from "../lib/standards.js";
+} from "sandbox-core/standards";
 import { PromptSpec, runWizard } from "../lib/wizard.js";
 import { writeWorkspaceSkills } from "../lib/workspace_skills.js";
 import {

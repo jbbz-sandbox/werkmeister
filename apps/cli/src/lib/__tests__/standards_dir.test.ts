@@ -13,7 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import * as gc from "sandbox-core/global_config";
-import { loadStandardsModules, validateStandardModules } from "../standards.js";
+import { loadStandardsModules, validateStandardModules } from "sandbox-core/standards";
 
 let tmp: string;
 

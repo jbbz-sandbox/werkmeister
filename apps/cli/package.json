@@ -15,13 +15,11 @@
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
     "commander": "^13.1.0",
-    "nunjucks": "^3.2.4",
     "sandbox-core": "^0.1.0",
     "yaml": "^2.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
-    "@types/nunjucks": "^3.2.6",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"

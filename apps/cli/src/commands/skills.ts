@@ -21,14 +21,14 @@ import * as path from "node:path";
 import { loadConfigFile, loadSandboxServiceConfigs } from "./init_workspace.js";
 import { findWorkspaceRoot } from "./notes.js";
 import { Colors, error, info, success } from "../lib/config.js";
-import { validateModuleReferences } from "../lib/skill_gen.js";
+import { validateModuleReferences } from "sandbox-core/skill_gen";
 import {
   buildStandardsManifest,
   loadStandardsModules,
   repoDirs,
   resolveActiveStandards,
   writeStandardsManifest,
-} from "../lib/standards.js";
+} from "sandbox-core/standards";
 import { checkWorkspaceSkills, writeWorkspaceSkills } from "../lib/workspace_skills.js";
 
 /** Recursively canonicalize for order-independent value comparison. */

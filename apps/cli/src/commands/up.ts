@@ -27,7 +27,7 @@ import {
   generateFeatureEnv,
   generateSupergraphConfig,
   isFeatureComposeStale,
-} from "../lib/generate.js";
+} from "sandbox-core/generate";
 import { ensurePortForwardsHealthy } from "sandbox-core/k8s";
 import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
 import { loadFeatureRouters } from "sandbox-core/feature_routing";

@@ -11,12 +11,14 @@
     "./archetypes": "./dist/archetypes.js",
     "./cache": "./dist/cache.js",
     "./caddy": "./dist/caddy.js",
+    "./claude_md": "./dist/claude_md.js",
     "./colors": "./dist/colors.js",
     "./config": "./dist/config.js",
     "./detect": "./dist/detect.js",
     "./docker": "./dist/docker.js",
     "./feature_routing": "./dist/feature_routing.js",
     "./form_schema": "./dist/form_schema.js",
+    "./generate": "./dist/generate.js",
     "./global_config": "./dist/global_config.js",
     "./infra": "./dist/infra.js",
     "./k8s": "./dist/k8s.js",
@@ -26,7 +28,9 @@
     "./reporter": "./dist/reporter.js",
     "./scaffold": "./dist/scaffold.js",
     "./secrets": "./dist/secrets.js",
+    "./skill_gen": "./dist/skill_gen.js",
     "./slots": "./dist/slots.js",
+    "./standards": "./dist/standards.js",
     "./worktrees": "./dist/worktrees.js"
   },
   "scripts": {
@@ -38,11 +42,13 @@
     "@types/dockerode": "^4.0.1",
     "@types/tar-fs": "^2.0.4",
     "dockerode": "^5.0.1",
+    "nunjucks": "^3.2.4",
     "tar-fs": "^2.1.5",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/nunjucks": "^3.2.6",
     "typescript": "^5.9.3"
   }
 }

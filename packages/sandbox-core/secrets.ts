@@ -42,7 +42,7 @@ export function getSecretsPath(): string {
 /**
  * Parse a secrets.env-format file into a dict.
  *
- * Mirrors the inline parsing in `lib/generate` (skip blank lines and
+ * Mirrors the inline parsing in `generate.ts` (skip blank lines and
  * lines starting with `#`, split on the first `=`). Returns an empty
  * dict if *path* does not exist.
  */

@@ -18,20 +18,18 @@ import * as YAML from "yaml";
 
 import { buildSandboxContextMd } from "./claude_md.js";
 import {
-  getInfraRoot,
-  getSandboxRoot,
-  info,
+  infraRoot,
   loadPorts,
   loadServices,
   loadSetupServices,
   resolveWorkspace,
-  success,
-  warn,
+  sandboxRoot,
 } from "./config.js";
-import { loadFeatureRouters } from "sandbox-core/feature_routing";
-import { sandboxLock } from "sandbox-core/locks";
-import { getSecretsPath, loadSecrets, requiredSecretKeys } from "sandbox-core/secrets";
-import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "sandbox-core/slots";
+import { info, success, warn } from "./reporter.js";
+import { loadFeatureRouters } from "./feature_routing.js";
+import { sandboxLock } from "./locks.js";
+import { getSecretsPath, loadSecrets, requiredSecretKeys } from "./secrets.js";
+import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
 
 function isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -219,7 +217,7 @@ function installArrayAppend(): void {
 /** Create and return a nunjucks `Environment` (jinja2-parity settings). */
 function getNunjucksEnv(): nunjucks.Environment {
   installArrayAppend();
-  const templatesDir = path.join(getInfraRoot(), "templates");
+  const templatesDir = path.join(infraRoot(), "templates");
   if (!fs.existsSync(templatesDir) || !fs.statSync(templatesDir).isDirectory()) {
     fs.mkdirSync(templatesDir, { recursive: true });
   }
@@ -537,7 +535,7 @@ function renderFeatureCompose(
         setup_configs: setupConfigs,
         ports_config: portsConfig,
         workspace_path: workspaceRoot,
-        sandbox_root: getSandboxRoot(),
+        sandbox_root: sandboxRoot(),
         get_service_port: getServicePort,
         k8s_port_for_service: (s: string) => k8sPortForService(s, servicesConfig, portsConfig),
       }),
@@ -659,7 +657,7 @@ function renderFeatureCompose(
         // Host bind mount (e.g., "${REPO}/.git:/app/.git:ro") — resolve variables
         let resolved = (volSpec as string).split("${WORKSPACE}").join(workspaceRoot);
         resolved = resolved.split("${REPO}").join(path.join(workspaceRoot, repo));
-        resolved = resolved.split("${SANDBOX_ROOT}").join(getSandboxRoot());
+        resolved = resolved.split("${SANDBOX_ROOT}").join(sandboxRoot());
         volumes.push(resolved);
       } else {
         // Named volume — prefix with feature name
@@ -676,7 +674,7 @@ function renderFeatureCompose(
     for (const volSpec of devLinks[svcName] ?? []) {
       let resolved = volSpec.split("${WORKSPACE}").join(workspaceRoot);
       resolved = resolved.split("${REPO}").join(path.join(workspaceRoot, repo));
-      resolved = resolved.split("${SANDBOX_ROOT}").join(getSandboxRoot());
+      resolved = resolved.split("${SANDBOX_ROOT}").join(sandboxRoot());
       volumes.push(resolved);
     }
 
@@ -1135,7 +1133,7 @@ export function generateSupergraphConfig(
     "# Source:    sandbox/config/services.yaml (type: graphql-subgraph,\n" +
     "#            k8s_forward_port)\n" +
     "#            + .sandbox/workspace.yml (feature local_services)\n" +
-    "# Generator: src/lib/generate.ts :: generate_supergraph_config\n" +
+    "# Generator: packages/sandbox-core/generate.ts :: generateSupergraphConfig\n" +
     "# Regen:     sandbox up  (or `sandbox init-workspace`)\n" +
     "# To add a subgraph: set its `type: graphql-subgraph` in services.yaml and rerun.\n" +
     "# To change endpoint path, set `graphql_path: /<path>` on the service (default /graphql).\n" +
@@ -1178,7 +1176,7 @@ export async function generateCaddyfile(
   config: Record<string, any> | null = null,
 ): Promise<string> {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
-  const proxyDir = path.join(getInfraRoot(), "proxy");
+  const proxyDir = path.join(infraRoot(), "proxy");
   fs.mkdirSync(proxyDir, { recursive: true });
   const outPath = path.join(proxyDir, "Caddyfile");
 
@@ -1209,7 +1207,7 @@ export async function generateCaddyfile(
       allFeatures,
       servicesConfig,
       portsConfig,
-      getSandboxRoot(),
+      sandboxRoot(),
       outPath,
     );
   });

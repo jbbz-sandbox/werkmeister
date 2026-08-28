@@ -11,7 +11,7 @@
  *
  * Two source kinds, one output:
  * - the five sb-*-standard skills render on the fly from docs/standards/*.md
- *   (lib/skill_gen — no committed generated copies anywhere anymore) as
+ *   (sandbox-core/skill_gen — no committed generated copies anywhere anymore) as
  *   file bundles: SKILL.md plus, for directory-form modules, references/*.md;
  * - the seven hand-authored entry skills (sb-implement, sb-research, sb-test,
  *   sb-handoff, sb-review, sb-pr, sb-author) are read verbatim from
@@ -27,7 +27,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { getInfraRoot } from "./config.js";
-import { generateSkills } from "./skill_gen.js";
+import { generateSkills } from "sandbox-core/skill_gen";
 
 // sb-*-prefixed skill dirs under a workspace's .claude/skills/ are managed by
 // this module: written on init/sync, pruned when their source disappears.

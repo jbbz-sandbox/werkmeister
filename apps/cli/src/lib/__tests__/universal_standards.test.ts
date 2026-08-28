@@ -18,7 +18,7 @@ import {
   resolveActiveStandards,
   universalStandards,
   validateStandardModules,
-} from "../standards.js";
+} from "sandbox-core/standards";
 
 /** `zebra` sorts after `alpha` alphabetically but is declared to load first. */
 const MODULES = {

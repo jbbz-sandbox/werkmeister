@@ -14,7 +14,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import * as gc from "sandbox-core/global_config";
-import { loadStandardsModules } from "../standards.js";
+import { loadStandardsModules } from "sandbox-core/standards";
 
 let tmp: string;
 

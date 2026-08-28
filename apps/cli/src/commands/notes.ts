@@ -29,8 +29,8 @@ import {
   reconcileGraduating,
 } from "../lib/graduate.js";
 import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
-import { skillNameFor } from "../lib/skill_gen.js";
-import { loadStandardsModules, standardsMatchingDiff } from "../lib/standards.js";
+import { skillNameFor } from "sandbox-core/skill_gen";
+import { loadStandardsModules, standardsMatchingDiff } from "sandbox-core/standards";
 
 // Per-note body cap. The hook harness truncates combined output at 10k chars;
 // staying under it ourselves keeps the pointer lines from being cut off.
