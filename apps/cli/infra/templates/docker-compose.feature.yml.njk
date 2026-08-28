@@ -65,7 +65,9 @@ services:
       com.sandbox.local.feature: "{{ feature_name }}"
       com.sandbox.local.slot: "{{ slot }}"
       com.sandbox.local.service: "{{ setup_name }}"
-      com.sandbox.local.role: "app"
+      {#- One-shot: `sandbox status` and the VS Code tree read this to keep a
+          finished setup container out of the running/total tally. #}
+      com.sandbox.local.role: "setup"
     working_dir: /app
     volumes:
       - {{ workspace_path }}/{{ setup.repo }}:/app

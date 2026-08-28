@@ -1233,14 +1233,23 @@ export interface InfraStatus {
 const INFRA_PROJECT = "sandbox-infra";
 
 /**
- * One-shot setup containers (`<repo>-setup`) run once and exit by
- * design — they have no `restart` policy, unlike real services. Counting them
- * would make a healthy feature read as "partial", so they're excluded from the
- * up/down tally. Matched by the `-setup` service-name convention (the only
- * `setup_services` in ~/.sandbox/services.yaml).
+ * One-shot setup containers run once and exit by design — they have no
+ * `restart` policy, unlike real services. Counting a finished one would make a
+ * healthy feature read as "partial".
+ *
+ * Identified by the `com.sandbox.local.role=setup` label the compose template
+ * stamps on every `setup_services` entry; the `-setup` suffix is the pre-label
+ * fallback, since the label only lands on containers created after it was added
+ * and workspaces that are already up must keep reading correctly until their
+ * next recreate.
  */
-function isOneShotService(service: string): boolean {
-  return service.endsWith("-setup");
+function isOneShotService(service: string, role: string | undefined): boolean {
+  return role === "setup" || service.endsWith("-setup");
+}
+
+/** A one-shot container that finished its job — `docker ps` `{{.Status}}` of `Exited (0) …`. */
+function exitedCleanly(status: string): boolean {
+  return status.trimStart().startsWith("Exited (0)");
 }
 
 export interface ComposeProjectTally {
@@ -1279,8 +1288,8 @@ function serviceHealthState(s: { state: string; health: string }): ServiceHealth
 }
 
 /**
- * Pure parse of `docker ps -a --format '{{.Label ...project}}\t{{.Label ...service}}\t{{.State}}\t{{.Status}}\t{{.Label ...slot}}'`
- * output into a per-project tally, excluding one-shot setup containers. Split out
+ * Pure parse of `docker ps -a --format '{{.Label ...project}}\t{{.Label ...service}}\t{{.State}}\t{{.Status}}\t{{.Label ...slot}}\t{{.Label ...role}}'`
+ * output into a per-project tally, excluding completed one-shot setup containers. Split out
  * from {@link dockerComposeProjects} so it's unit-testable without shelling out.
  */
 export function parseComposeStatus(stdout: string): Map<string, ComposeProjectTally> {
@@ -1289,7 +1298,9 @@ export function parseComposeStatus(stdout: string): Map<string, ComposeProjectTa
     const parts = line.split("\t");
     if (parts.length < 3 || !parts[0]) continue; // no project label → not a compose container
     const [project, service, state] = parts;
-    if (isOneShotService(service)) continue; // setup jobs are meant to exit
+    // A setup job that finished is not a missing service. One that failed or has
+    // not finished yet is, and stays in the tally so the workspace reads degraded.
+    if (isOneShotService(service, parts[5]) && exitedCleanly(parts[3] ?? "")) continue;
     const trimmed = state.trim();
     const e = out.get(project) ?? { running: 0, total: 0, services: [], slot: null };
     e.total++;
@@ -1306,7 +1317,7 @@ export function parseComposeStatus(stdout: string): Map<string, ComposeProjectTa
 
 /**
  * One `docker ps -a` sweep, grouped by Compose project → {running, total, services},
- * excluding one-shot setup containers. Returns null when docker is unavailable
+ * excluding completed one-shot setup containers. Returns null when docker is unavailable
  * (not installed / daemon down), so callers can report "unknown" rather than a
  * misleading "down".
  */
@@ -1317,7 +1328,7 @@ async function dockerComposeProjects(): Promise<Map<string, ComposeProjectTally>
       "ps",
       "-a",
       "--format",
-      '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.service"}}\t{{.State}}\t{{.Status}}\t{{.Label "com.sandbox.local.slot"}}',
+      '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.service"}}\t{{.State}}\t{{.Status}}\t{{.Label "com.sandbox.local.slot"}}\t{{.Label "com.sandbox.local.role"}}',
     ]);
   } catch {
     return null; // docker missing / not on PATH

@@ -198,6 +198,19 @@ describe("setup services", () => {
     expect(content).toContain("demo-install:\n        condition: service_completed_successfully");
   });
 
+  it("labels the setup container role=setup so status readers can exclude it", () => {
+    // A finished one-shot container is not a stopped service. Without this label
+    // `sandbox status` and the VS Code tree count it in running/total and report
+    // a fully healthy feature as `partial` — the app services carry role=app.
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain('com.sandbox.local.service: "demo-install"');
+    expect(content).toMatch(/com\.sandbox\.local\.service: "demo-install"\n\s*com\.sandbox\.local\.role: "setup"/);
+    // A `{# #}` comment inside the labels block renders as an indented blank
+    // line; trim it, or every generated compose carries trailing whitespace.
+    expect(content).not.toMatch(/^[ \t]+$/m);
+  });
+
   it("shares one node_modules volume across the setup container and every app", () => {
     // Both demo apps bind-mount the *same* repo at /app, so they share a single
     // volume rather than taking one each: two per-service volumes would be two
