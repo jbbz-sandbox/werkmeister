@@ -45,6 +45,19 @@ obvious — what a failure looks like.
    appears inline. Click it. The workspace opens in a new VS Code window (via
    native `vscode.openFolder`, not sandbox-core's `openWorkspace()`).
 
+7a. **Inline "switch workspace" icon.** Hover the same node; a → icon appears
+    next to the folder icon. Click it. The workspace replaces the *current*
+    window instead of opening a new one.
+
+7b. **Current workspace marker.** The workspace whose folder is open in this
+    window shows `current` first in its description, starts expanded, and is the
+    **top row** whatever its alphabetical position. Open a multi-root
+    `.code-workspace` where the sandbox workspace is *not* the first folder and
+    confirm it is still marked.
+
+7c. **No switch icon on the current workspace.** That same top row shows the
+    folder icon but *no* → icon — switching to where you already are is a no-op.
+
 8. **Open Jira Issue (context menu only).** Right-click a workspace with a Jira
    ID → "Open Jira Issue" opens the browser to that issue. Then check the
    Command Palette for "Open Jira" — it must **NOT** appear (needs a tree node).
@@ -57,14 +70,15 @@ obvious — what a failure looks like.
     Opens Settings filtered to `sandbox.*`.
 
 11. **Lifecycle: Start.** Inline ▶ on a down workspace. A terminal named
-    **`sandbox up <workspace>`** opens running `sandbox up` in that workspace's
+    **`sandbox <workspace>`** opens running `sandbox up` in that workspace's
     directory; within ~5s (next poll) the icon turns green.
 
-12. **Lifecycle: Stop.** Inline ⏸ on a running workspace. Terminal
-    `sandbox stop <workspace>`; icon goes grey.
+12. **Lifecycle: Stop.** Inline ⏸ on a running workspace. It reuses the same
+    **`sandbox <workspace>`** terminal — named for the workspace, not for
+    whichever command happened to open it; icon goes grey.
 
 13. **Lifecycle: Restart / Down.** Right-click → **Restart**, then → **Down**.
-    Each opens its own named terminal running the matching subcommand.
+    Each runs in that workspace's terminal, still named `sandbox <workspace>`.
 
 14. **One terminal per command — the fix for a real bug.** With a `logs`
     terminal still tailing (see step 15), click ▶ Start on any workspace.

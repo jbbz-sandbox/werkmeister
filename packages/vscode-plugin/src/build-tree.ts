@@ -96,18 +96,19 @@ function contains(parent: string, child: string): boolean {
 }
 
 /**
- * The workspace whose directory is, or contains, the open folder. When several
- * match (one workspace nested inside another) the deepest wins, since that is
- * the one the user is actually in.
+ * The workspace whose directory is, or contains, one of the window's open
+ * folders. Every folder is considered, not just the first: a multi-root
+ * `.code-workspace` commonly lists a tooling checkout ahead of the feature
+ * workspace. When several match (one workspace nested inside another) the
+ * deepest wins, since that is the one the user is actually in.
  */
 function currentWorkspaceName(
   workspaces: WorkspaceEntryLike[],
-  currentPath: string | null,
+  currentPaths: string[],
 ): string | null {
-  if (!currentPath) return null;
   let best: WorkspaceEntryLike | null = null;
   for (const w of workspaces) {
-    if (!contains(w.path, currentPath)) continue;
+    if (!currentPaths.some((p) => contains(w.path, p))) continue;
     if (!best || w.path.length > best.path.length) best = w;
   }
   return best?.name ?? null;
@@ -211,7 +212,9 @@ function workspaceNode(
     description: bits.join(" · "),
     tooltip: tip.join("\n"),
     icon: WORKSPACE_ICONS[state],
-    contextValue: `workspace:${state}`,
+    // The `:current` suffix is how the menus hide "switch to workspace" on the
+    // window's own workspace; every workspace `when` regex tolerates it.
+    contextValue: `workspace:${state}${isCurrent ? ":current" : ""}`,
     expanded: isCurrent,
     workspace: { name: ws.name, path: ws.path, feature, jiraUrl: ws.jiraUrl },
     children: (status?.services ?? []).map((s) => serviceNode(s, ws, feature, intercepts)),
@@ -229,11 +232,17 @@ export function buildTree(
   workspaces: WorkspaceEntryLike[],
   statuses: WorkspaceStatusLike[],
   intercepts: InterceptsLike | null,
-  currentPath: string | null,
+  currentPaths: string[],
 ): WsNode[] {
   const byName = new Map(statuses.map((s) => [s.name, s]));
-  const current = currentWorkspaceName(workspaces, currentPath);
-  return workspaces.map((w) => workspaceNode(w, byName.get(w.name), intercepts, w.name === current));
+  const current = currentWorkspaceName(workspaces, currentPaths);
+  const nodes = workspaces.map((w) =>
+    workspaceNode(w, byName.get(w.name), intercepts, w.name === current),
+  );
+  // The window's own workspace first; the rest keep sandbox-core's name order.
+  const i = nodes.findIndex((n) => n.id === current);
+  if (i > 0) nodes.unshift(...nodes.splice(i, 1));
+  return nodes;
 }
 
 /** The single node shown when the CLI can't be located — never an empty view. */

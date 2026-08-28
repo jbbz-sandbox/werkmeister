@@ -9,6 +9,7 @@
  * The binary is the absolute path from resolveSandboxBin() — never a bare
  * `sandbox`, which would depend on the integrated terminal's PATH.
  */
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { resolveSandboxBin } from "sandbox-core";
 import { claim, release, forget, type Slot } from "./terminal-pool.js";
@@ -69,10 +70,12 @@ function whenReady(term: vscode.Terminal): Promise<void> {
  * runs `docker compose logs -f` and never exits, and `sandbox up` runs for
  * 30-60s — text sent while that process is alive is swallowed by its STDIN
  * instead of running. Reuse is keyed on cwd because the CLI resolves
- * FEATURE/slot from the .env there; a reused terminal keeps the name of the
- * command that first created it.
+ * FEATURE/slot from the .env there, so the name is derived from cwd too: a
+ * reused terminal keeps the name it was created with, and naming it after the
+ * first command would leave `sandbox stop foo` running every later up/down.
+ * `name` is for the one caller whose cwd says nothing useful (the `~` wizard).
  */
-export async function runInTerminal(args: string[], cwd: string, label?: string): Promise<void> {
+export async function runInTerminal(args: string[], cwd: string, name?: string): Promise<void> {
   let bin: string;
   try {
     bin = await resolveSandboxBin();
@@ -81,7 +84,7 @@ export async function runInTerminal(args: string[], cwd: string, label?: string)
     return;
   }
   const term = claim(terminals, cwd, () =>
-    vscode.window.createTerminal({ name: `sandbox ${label ?? args[0]}`, cwd }),
+    vscode.window.createTerminal({ name: `sandbox ${name ?? path.basename(cwd)}`, cwd }),
   );
   await whenReady(term);
   term.sendText([shellQuote(bin), ...args.map(shellQuote)].join(" "), true);
