@@ -1,7 +1,10 @@
 /**
  * Shared infrastructure management (compose/shared-infra.yml).
  *
- * Used by sandbox up/down/stop/restart when the target is "infra".
+ * Used by sandbox down/stop/restart when the target is "infra". Bringing infra
+ * *up* is `sandbox connect`, which is a command: `up.ts` calls it directly
+ * rather than routing through here, because a library reaching back into
+ * `apps/cli/src/commands` is the inversion this package exists to undo.
  */
 
 import * as fs from "node:fs";
@@ -12,13 +15,6 @@ import { infraRoot, sandboxRoot } from "./config.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, raw, success } from "./reporter.js";
 import { restartAll, stopAll } from "./web_servers.js";
-
-// `connect` is a CLI command, not a library module, so this stays a hoisted
-// string the compiler can't resolve — and is therefore unchecked. It is broken
-// today: after step 3 moved this file the path resolves against
-// `sandbox-core/dist/`, where no `commands/` exists. `up()` is the last caller;
-// the seam gets fixed when `connect` becomes a library function (step 5).
-const CONNECT_MODULE = "../commands/connect.js";
 
 function composeCmd(subcommand: string[]): boolean {
   const root = sandboxRoot();
@@ -51,12 +47,6 @@ function composeCmd(subcommand: string[]): boolean {
     }
     throw err;
   }
-}
-
-/** Start shared infrastructure (delegates to sandbox connect logic). */
-export async function up(): Promise<void> {
-  const connect = await import(CONNECT_MODULE);
-  await connect.run({});
 }
 
 /** Stop and remove shared infrastructure containers. */
