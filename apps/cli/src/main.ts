@@ -35,7 +35,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
-import { ttyReporter, withReporter } from "sandbox-core/reporter";
+import { SandboxError } from "sandbox-core/errors";
+import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
 
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
 // config loaders.
@@ -688,7 +689,22 @@ async function dispatch(moduleName: string, args: Namespace): Promise<void> {
   try {
     await mod.run(args);
   } catch (e) {
-    console.log(`${_RED}Error: ${(e as Error).message}${_RESET}`);
+    // A library `SandboxError` replaces a site that used to print `[err] <msg>`
+    // through the reporter and exit — so route it back through the reporter, or
+    // the message it already formatted would come out as `Error: <msg>`.
+    //
+    // `WorkspaceError` is the exception, and only because it predates all of
+    // this: it extends `SandboxError` now, but its ~45 sites have always
+    // surfaced as `Error: <msg>`, so it keeps that shape. Ordering the checks
+    // is the whole fix.
+    //
+    // ponytail: every code exits 1, so there is no code → status table. Add one
+    // when a code first needs a different status.
+    if (e instanceof SandboxError && e.code !== "WORKSPACE") {
+      error(e.message);
+    } else {
+      console.log(`${_RED}Error: ${(e as Error).message}${_RESET}`);
+    }
     if (process.env.SANDBOX_DEBUG) {
       throw e;
     }
