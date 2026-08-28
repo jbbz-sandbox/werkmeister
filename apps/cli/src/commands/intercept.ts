@@ -9,9 +9,7 @@
  * baseline dev traffic are untouched.
  */
 
-import * as fs from "node:fs";
 import * as net from "node:net";
-import * as path from "node:path";
 
 import {
   Colors,
@@ -25,38 +23,7 @@ import {
 import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import { getServicePort, getSlot } from "sandbox-core/slots";
 import * as tp from "../lib/telepresence.js";
-
-/** Walk up from *start* looking for a .env file; return its key=value pairs. */
-function loadDotenv(start: string): Record<string, string> {
-  let dir = path.resolve(start);
-  for (;;) {
-    const envFile = path.join(dir, ".env");
-    let isFile = false;
-    try {
-      isFile = fs.statSync(envFile).isFile();
-    } catch {
-      isFile = false;
-    }
-    if (isFile) {
-      const result: Record<string, string> = {};
-      for (let line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
-        line = line.trim();
-        if (!line || line.startsWith("#") || !line.includes("=")) {
-          continue;
-        }
-        const eq = line.indexOf("=");
-        const key = line.slice(0, eq);
-        const value = line.slice(eq + 1);
-        result[key.trim()] = value.trim();
-      }
-      return result;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return {};
-}
+import { loadDotenv } from "../lib/dotenv.js";
 
 function portOpen(port: number): Promise<boolean> {
   return new Promise((resolve) => {

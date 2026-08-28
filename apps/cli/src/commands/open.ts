@@ -18,6 +18,7 @@ import { parse as yamlParse } from "yaml";
 import { openFeatureBrowser } from "../lib/browser.js";
 import { ingressHostnames } from "sandbox-core/feature_routing";
 import { error, warn } from "../lib/config.js";
+import { loadDotenv } from "../lib/dotenv.js";
 import { getSlot } from "sandbox-core/slots";
 
 /**
@@ -34,29 +35,6 @@ function defaultBase(): string | null {
   } catch {
     return null;
   }
-}
-
-function loadDotenv(start: string): Record<string, string> {
-  let dir = start;
-  while (true) {
-    const envFile = path.join(dir, ".env");
-    if (fs.existsSync(envFile) && fs.statSync(envFile).isFile()) {
-      const result: Record<string, string> = {};
-      for (let raw of fs.readFileSync(envFile, "utf8").split("\n")) {
-        const line = raw.trim();
-        if (!line || line.startsWith("#") || !line.includes("=")) {
-          continue;
-        }
-        const i = line.indexOf("=");
-        result[line.slice(0, i).trim()] = line.slice(i + 1).trim();
-      }
-      return result;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return {};
 }
 
 function loadWorkspaceYaml(start: string): Record<string, any> {
