@@ -4,6 +4,7 @@
  * Used by sandbox up/down/stop/restart when the target is "infra".
  */
 
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { Colors } from "./colors.js";
@@ -22,8 +23,15 @@ const CONNECT_MODULE = "../commands/connect.js";
 function composeCmd(subcommand: string[]): boolean {
   const root = sandboxRoot();
   const composeFile = path.join(infraRoot(), "compose", "shared-infra.yml");
+  // --env-file only if a root .env exists — shared-infra.yml interpolates only
+  // ${HOME} (from the process env), so the file is optional. Passing a missing
+  // path makes `docker compose` hard-error. `connect`'s startSharedInfra has
+  // guarded this since it was written; this side never did, so every teardown
+  // hard-errored on a machine with no apps/cli/.env — which is all of them,
+  // since nothing creates that file.
   const envFile = path.join(root, ".env");
-  const cmd = ["docker", "compose", "--env-file", envFile, "-f", composeFile, ...subcommand];
+  const envArgs = fs.existsSync(envFile) ? ["--env-file", envFile] : [];
+  const cmd = ["docker", "compose", ...envArgs, "-f", composeFile, ...subcommand];
   info(`Running: ${cmd.join(" ")}`);
   try {
     const result = run(cmd, { capture: true, timeout: 120 });
