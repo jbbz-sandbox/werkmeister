@@ -11,7 +11,7 @@ import * as path from "node:path";
 
 import { Colors } from "./colors.js";
 import { loadServices, resolveWorkspace } from "./config.js";
-import { info, warn } from "./reporter.js";
+import { info, raw, warn } from "./reporter.js";
 import { ProcError, run } from "./proc.js";
 
 /** Run `git diff main..HEAD --name-only` in *repoPath* and return changed files. */
@@ -174,14 +174,14 @@ export function detectChangedServices(
       continue;
     }
 
-    console.log(
+    raw(
       `  ${Colors.DIM}${repoName}: ` +
-      `${changed.length} changed file(s)${Colors.RESET}`,
+      `${changed.length} changed file(s)${Colors.RESET}\n`,
     );
 
     const matched = _mapFilesToServices(repoName, changed, servicesConfig);
     for (const svc of matched) {
-      console.log(`    -> ${Colors.GREEN}${svc}${Colors.RESET}`);
+      raw(`    -> ${Colors.GREEN}${svc}${Colors.RESET}\n`);
       detected.add(svc);
     }
   }

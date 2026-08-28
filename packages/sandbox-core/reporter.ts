@@ -56,6 +56,17 @@ export function error(msg: string): void {
   emit({ level: "error", msg });
 }
 
+/**
+ * Emit bytes with no level prefix — section headers, blank spacers, and echoed
+ * child-process output, which the four helpers above would tag with `[info]`.
+ *
+ * *chunk* is written verbatim, so a caller replacing a `console.log` supplies
+ * the trailing newline that `console.log` used to add.
+ */
+export function raw(chunk: string, stream: "stdout" | "stderr" = "stdout"): void {
+  emit({ level: "raw", chunk, stream });
+}
+
 // Padded so the messages after the tag line up.
 const PREFIX = {
   info: `${CYAN}[info] `,
