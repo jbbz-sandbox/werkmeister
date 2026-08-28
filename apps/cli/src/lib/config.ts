@@ -4,15 +4,11 @@
  * Everything here is a re-export: the registry loaders, the print helpers and
  * — since the modules that needed them moved too — the checkout-root helpers
  * all live in `sandbox-core` now. The file survives so its 43 importers keep
- * their specifier. `getMonorepoRoot()` is the one body left, and only because
- * nothing outside the CLI asks where the sibling apps are.
+ * their specifier — every export below is a re-export, no bodies left.
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
-
 import { Colors } from "sandbox-core/colors";
-import { expandUser, infraRoot, sandboxRoot } from "sandbox-core/config";
+import { expandUser, infraRoot, monorepoRoot, sandboxRoot } from "sandbox-core/config";
 
 export { Colors, expandUser };
 
@@ -42,26 +38,10 @@ export const getSandboxRoot = sandboxRoot;
 /**
  * Return the root of the MONOREPO containing the CLI.
  *
- * `getSandboxRoot()` is the CLI package (`<repo>/apps/cli`) — right for
- * `infra/`, wrong for the sibling apps under `<repo>/apps/`. Walks up looking
- * for the `apps/` directory rather than assuming a fixed depth, so a checkout
- * laid out differently (or an `SANDBOX_ROOT` already pointing at the repo root)
- * still resolves.
+ * Moved to `sandbox-core/config` when `web_servers.ts` did — a library module
+ * asking where the sibling apps live is exactly what kept it here before.
  */
-export function getMonorepoRoot(): string {
-  let dir = getSandboxRoot();
-  for (let i = 0; i < 4; i++) {
-    if (fs.existsSync(path.join(dir, "apps"))) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      break;
-    }
-    dir = parent;
-  }
-  return getSandboxRoot();
-}
+export const getMonorepoRoot = monorepoRoot;
 
 /** The `infra/` tree — compose files, templates, proxy UI, schemas, skills. */
 export const getInfraRoot = infraRoot;

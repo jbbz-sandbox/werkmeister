@@ -9,8 +9,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { Colors, error, info, resolveWorkspace, success } from "./config.js";
-import { ProcError, run, RunResult } from "sandbox-core/proc";
+import { Colors } from "./colors.js";
+import { resolveWorkspace } from "./config.js";
+import { ProcError, run, RunResult } from "./proc.js";
+import { error, info, success } from "./reporter.js";
 
 export interface ContainerStatus {
   name: string;

@@ -58,7 +58,7 @@ import {
   validateArchetypeMcpServers,
   writeWorkspaceMcp,
 } from "../lib/mcp_gen.js";
-import { listNotes, nextNoteNumber, noteFilename, notesDir } from "../lib/notes.js";
+import { listNotes, nextNoteNumber, noteFilename, notesDir } from "sandbox-core/notes";
 import { pluginDriftWarnings } from "../lib/plugin_check.js";
 import {
   buildStandardsManifest,

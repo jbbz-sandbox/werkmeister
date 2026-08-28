@@ -9,10 +9,10 @@ import * as path from "node:path";
 
 import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, warn } from "../lib/config.js";
-import { composeDown, workspaceForFeature } from "../lib/docker.js";
+import { composeDown, workspaceForFeature } from "sandbox-core/compose";
 import { generateCaddyfile } from "sandbox-core/generate";
-import { GraduationError, reconcileGraduating } from "../lib/graduate.js";
-import { latestHandoff, openDecisions, type Note } from "../lib/notes.js";
+import { GraduationError, reconcileGraduating } from "sandbox-core/graduate";
+import { latestHandoff, openDecisions, type Note } from "sandbox-core/notes";
 import { loadDotenv } from "../lib/dotenv.js";
 import { getAllSlots, getSlot, releaseSlot } from "sandbox-core/slots";
 import { graduateOne, input } from "./notes.js";
@@ -130,7 +130,7 @@ async function downOne(feature: string, removeVolumes: boolean): Promise<number 
   // composeDown — leaveFeatureIntercepts resolves the workspace from compose
   // labels on the still-running containers.
   try {
-    const { leaveFeatureIntercepts } = await import("../lib/telepresence.js");
+    const { leaveFeatureIntercepts } = await import("sandbox-core/telepresence");
     const left = leaveFeatureIntercepts(feature);
     if (left.length) {
       info(`Left k8s intercept(s): ${left.join(", ")}`);

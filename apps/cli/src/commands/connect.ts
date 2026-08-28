@@ -25,9 +25,9 @@ import {
 } from "../lib/config.js";
 import { generateCaddyfile } from "sandbox-core/generate";
 import { generateK8sForwards } from "sandbox-core/k8s_forwards";
-import { configureGitHooksPath } from "../lib/git_hooks.js";
+import { configureGitHooksPath } from "sandbox-core/git_hooks";
 import { checkPortForwardHealth, ensurePortForwardsHealthy } from "sandbox-core/k8s";
-import { CLAUDECK, DASHBOARD, startAll, status as webStatus } from "../lib/web_servers.js";
+import { CLAUDECK, DASHBOARD, startAll, status as webStatus } from "sandbox-core/web_servers";
 import { ProcError, run as procRun } from "sandbox-core/proc";
 import { sandboxHome } from "sandbox-core/global_config";
 

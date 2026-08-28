@@ -6,7 +6,7 @@
  */
 
 import { Colors, warn } from "../lib/config.js";
-import { composeLogs } from "../lib/docker.js";
+import { composeLogs } from "sandbox-core/compose";
 import { getSlot } from "sandbox-core/slots";
 
 export async function run(args: Record<string, unknown>): Promise<void> {

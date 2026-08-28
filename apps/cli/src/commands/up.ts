@@ -20,7 +20,7 @@ import {
   resolveWorkspace,
   warn,
 } from "../lib/config.js";
-import { composeUp } from "../lib/docker.js";
+import { composeUp } from "sandbox-core/compose";
 import { loadDotenv } from "../lib/dotenv.js";
 import {
   generateCaddyfile,
@@ -108,8 +108,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
-    const infra = await import("sandbox-core/infra");
-    await infra.up();
+    // `sandbox up infra` is `sandbox connect`. Imported as a literal so tsc
+    // resolves it — the same call went through a hoisted string constant in
+    // sandbox-core/infra until now, which is exactly why nothing noticed when
+    // step 3 moved that file and the path stopped resolving (note 038).
+    const connect = await import("./connect.js");
+    await connect.run({});
     return;
   }
 

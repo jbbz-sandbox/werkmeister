@@ -14,7 +14,7 @@ import {
   listIntercepts,
   parseInterceptList,
   type Runner,
-} from "../telepresence.js";
+} from "sandbox-core/telepresence";
 
 /** Shape of one intercepted deployment, trimmed to the fields we parse. */
 const ACTIVE = JSON.stringify([

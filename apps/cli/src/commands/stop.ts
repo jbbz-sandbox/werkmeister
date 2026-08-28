@@ -9,7 +9,7 @@
  */
 
 import { Colors, error, info } from "../lib/config.js";
-import { composeStop } from "../lib/docker.js";
+import { composeStop } from "sandbox-core/compose";
 import { loadDotenv } from "../lib/dotenv.js";
 import { stop as infraStop } from "sandbox-core/infra";
 import { getSlot } from "sandbox-core/slots";

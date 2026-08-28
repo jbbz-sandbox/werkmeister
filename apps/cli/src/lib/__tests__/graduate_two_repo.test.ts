@@ -13,8 +13,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { graduateNote, reconcileGraduating } from "../graduate.js";
-import { openDecisions, parseNote } from "../notes.js";
+import { graduateNote, reconcileGraduating } from "sandbox-core/graduate";
+import { openDecisions, parseNote } from "sandbox-core/notes";
 
 let tmp: string;
 let workspace: string;
