@@ -47,7 +47,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build --workspace vscode-plugin
+      # Root build, not --workspace: esbuild cannot resolve sandbox-core
+      # unless turbo builds it first.
+      - run: npm run build
       # --package_options replaces the --no-dependencies that ExTester's own
       # vsce call drops; without it packaging walks the monorepo and dies.
       - name: ExTester spike
