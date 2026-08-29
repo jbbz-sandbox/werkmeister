@@ -23,7 +23,7 @@ render, or a live editor.
 
 ## Phase A — Extension Development Host (F5)
 
-1. **Launch the dev host.** Open `apps/vscode-sandbox` in VS Code and press
+1. **Launch the dev host.** Open `packages/vscode-plugin` in VS Code and press
    **F5**. A second VS Code window ("Extension Development Host") opens.
 
 2. **Open the view.** Click the Sandbox icon in the activity bar to open the
