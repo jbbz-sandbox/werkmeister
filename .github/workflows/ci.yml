@@ -32,3 +32,38 @@ jobs:
       # `vsce package` fails on a README link it can't rewrite, and is the only
       # check on .vscodeignore — #38 broke packaging and nothing caught it.
       - run: npm run package --workspace vscode-plugin
+
+  # SPIKE ONLY — never merge this job to main. It exists to answer one question:
+  # ExTester cannot launch VS Code on the developer's macOS machine (every
+  # Chromium flag is rejected by Contents/MacOS/Code — see .sandbox/notes/053),
+  # and this checks whether Linux behaves the same. It gates nothing.
+  extester-spike:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace vscode-plugin
+      # --package_options replaces the --no-dependencies that ExTester's own
+      # vsce call drops; without it packaging walks the monorepo and dies.
+      - name: ExTester spike
+        working-directory: packages/vscode-plugin
+        run: |
+          xvfb-run -a npx extest setup-and-run 'src/test/ui/*.spike.cjs' \
+            --package_options '{"dependencies":false}' 2>&1 | tee extest-ci.log
+      - name: Report whether the browser launched
+        if: always()
+        working-directory: packages/vscode-plugin
+        run: |
+          echo "### ExTester on Linux" >> "$GITHUB_STEP_SUMMARY"
+          if grep -q "SessionNotCreatedError" extest-ci.log; then
+            echo "Same launch failure as macOS — not platform-specific." >> "$GITHUB_STEP_SUMMARY"
+            grep -m5 "bad option" extest-ci.log >> "$GITHUB_STEP_SUMMARY" || true
+          else
+            echo "Browser launched. The macOS failure IS platform-specific." >> "$GITHUB_STEP_SUMMARY"
+            grep -E "passing|failing" extest-ci.log >> "$GITHUB_STEP_SUMMARY" || true
+          fi
