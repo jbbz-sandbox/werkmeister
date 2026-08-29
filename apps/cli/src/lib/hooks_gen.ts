@@ -25,10 +25,22 @@ import * as path from "node:path";
 const _HOOK_MARKER = "sandbox notes context";
 const _GATE_MARKER = "sandbox hooks gate";
 
+// Projections lag whenever the standards tree moves on after a workspace was
+// inited, and nothing else re-runs the writer — so the session that would read a
+// stale skill is the one that repairs it. `check` first because it is read-only:
+// a current workspace pays 0.4s and no rewritten files, and only a drifted one
+// takes the `sync` branch. Both are silenced — SessionStart stdout is injected
+// into the context window, and only `notes context` has earned that space.
+const _SKILLS_SELF_HEAL =
+  "sandbox skills check >/dev/null 2>&1 || sandbox skills sync >/dev/null 2>&1";
+
 // `sandbox` resolves via PATH; if this machine doesn't expose it (or the
 // workspace is driven by a harness with a stripped env), the hook must no-op
 // silently rather than surface a warning on every session start / edit.
-export const SESSION_START_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_HOOK_MARKER} || true`;
+// `_HOOK_MARKER` must survive any rewording of SessionStart's command: it is how
+// `_isManaged` recognises the entry to replace, so losing it leaves every
+// existing workspace with two SessionStart hooks instead of one updated one.
+export const SESSION_START_COMMAND = `command -v sandbox >/dev/null 2>&1 && { ${_SKILLS_SELF_HEAL}; ${_HOOK_MARKER}; } || true`;
 export const PRE_TOOL_USE_GATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_GATE_MARKER} || true`;
 
 /** The managed SessionStart matcher-group (matcher-less: all sources). */
