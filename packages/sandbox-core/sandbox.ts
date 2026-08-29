@@ -33,6 +33,9 @@ import {
   slotPortRange,
   workspacesRoot,
 } from "./config.js";
+// Type-only: erased at build, so this adds nothing to the bundle.
+import type Dockerode from "dockerode";
+import { docker } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
 
@@ -1300,26 +1303,38 @@ function serviceHealthState(s: { state: string; health: string }): ServiceHealth
 }
 
 /**
- * Pure parse of `docker ps -a --format '{{.Label ...project}}\t{{.Label ...service}}\t{{.State}}\t{{.Status}}\t{{.Label ...slot}}\t{{.Label ...role}}'`
- * output into a per-project tally, excluding completed one-shot setup containers. Split out
- * from {@link dockerComposeProjects} so it's unit-testable without shelling out.
+ * One container's Compose identity and state, built from the Engine API's `Labels`,
+ * `State` and `Status`. `status` stays the raw string ("Up 16 hours (healthy)")
+ * because both the healthcheck verdict and the clean-exit check are parsed out of it.
  */
-export function parseComposeStatus(stdout: string): Map<string, ComposeProjectTally> {
+export interface ComposeContainerRow {
+  project: string;
+  service: string;
+  state: string;
+  status: string;
+  slot: string;
+  role: string;
+}
+
+/**
+ * Pure tally of container rows by Compose project, excluding completed one-shot setup
+ * containers. Split out from {@link dockerComposeProjects} so it's unit-testable without
+ * touching the daemon.
+ */
+export function tallyComposeContainers(rows: ComposeContainerRow[]): Map<string, ComposeProjectTally> {
   const out = new Map<string, ComposeProjectTally>();
-  for (const line of stripAnsi(stdout).split(/\r?\n/)) {
-    const parts = line.split("\t");
-    if (parts.length < 3 || !parts[0]) continue; // no project label → not a compose container
-    const [project, service, state] = parts;
+  for (const { project, service, state, status, slot, role } of rows) {
+    if (!project) continue; // no project label → not a compose container
     // A setup job that finished is not a missing service. One that failed or has
     // not finished yet is, and stays in the tally so the workspace reads degraded.
-    if (isOneShotService(service, parts[5]) && exitedCleanly(parts[3] ?? "")) continue;
+    if (isOneShotService(service, role) && exitedCleanly(status)) continue;
     const trimmed = state.trim();
     const e = out.get(project) ?? { running: 0, total: 0, services: [], slot: null };
     e.total++;
     if (trimmed === "running") e.running++;
-    e.services.push({ name: service, state: trimmed, health: parseHealth(parts[3] ?? "") });
-    if (e.slot === null && parts[4]) {
-      const n = Number.parseInt(parts[4], 10);
+    e.services.push({ name: service, state: trimmed, health: parseHealth(status) });
+    if (e.slot === null && slot) {
+      const n = Number.parseInt(slot, 10);
       if (Number.isInteger(n)) e.slot = n;
     }
     out.set(project, e);
@@ -1328,25 +1343,28 @@ export function parseComposeStatus(stdout: string): Map<string, ComposeProjectTa
 }
 
 /**
- * One `docker ps -a` sweep, grouped by Compose project → {running, total, services},
- * excluding completed one-shot setup containers. Returns null when docker is unavailable
- * (not installed / daemon down), so callers can report "unknown" rather than a
- * misleading "down".
+ * One `listContainers({all: true})` sweep, grouped by Compose project →
+ * {running, total, services}, excluding completed one-shot setup containers. Returns
+ * null when docker is unavailable (not installed / daemon down), so callers can report
+ * "unknown" rather than a misleading "down".
  */
 async function dockerComposeProjects(): Promise<Map<string, ComposeProjectTally> | null> {
-  let res: { stdout: string; stderr: string; code: number | null };
+  let containers: Dockerode.ContainerInfo[];
   try {
-    res = await runCapture("docker", [
-      "ps",
-      "-a",
-      "--format",
-      '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.service"}}\t{{.State}}\t{{.Status}}\t{{.Label "com.sandbox.local.slot"}}\t{{.Label "com.sandbox.local.role"}}',
-    ]);
+    containers = await docker().listContainers({ all: true });
   } catch {
-    return null; // docker missing / not on PATH
+    return null; // daemon unreachable — the caller reports "unknown"
   }
-  if (res.code !== 0) return null; // daemon down
-  return parseComposeStatus(res.stdout);
+  return tallyComposeContainers(
+    containers.map((c) => ({
+      project: c.Labels?.["com.docker.compose.project"] ?? "",
+      service: c.Labels?.["com.docker.compose.service"] ?? "",
+      state: c.State ?? "",
+      status: c.Status ?? "",
+      slot: c.Labels?.["com.sandbox.local.slot"] ?? "",
+      role: c.Labels?.["com.sandbox.local.role"] ?? "",
+    })),
+  );
 }
 
 /**

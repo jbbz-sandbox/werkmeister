@@ -1,27 +1,35 @@
-// Smoke test for parseComposeStatus: groups docker-ps lines by Compose project,
+// Smoke test for tallyComposeContainers: groups containers by Compose project,
 // tallies running/total, retains per-container name+state, and excludes one-shot
 // setup services that have finished (they're expected to exit).
 //   npm run build && node lib/sandbox.smoke.mjs
 import assert from "node:assert";
 
-const { parseComposeStatus } = await import("sandbox-core");
+const { tallyComposeContainers } = await import("sandbox-core");
 
-// Mixed running/exited containers across two projects, plus a one-shot setup
-// container that should be excluded entirely. Column 4 is `{{.Status}}` (health
-// verdict), column 5 the `com.sandbox.local.slot` label and column 6 the
-// `com.sandbox.local.role` label. Infra containers carry no slot label, and the
+// Rows as the Engine API reports them: `state` is `State` ("running"/"exited"),
+// `status` is `Status` ("Up 16 hours (healthy)") and carries both the health
+// verdict and the clean-exit check. Infra containers carry no slot label, and the
 // `-setup` rows deliberately carry no role label — that is what a container
 // created before the label was added looks like.
-const psOutput = [
-  "sandbox-infra\tredis\trunning\tUp 16 hours (healthy)\t",
-  "sandbox-infra\tcaddy\trunning\tUp 16 hours\t", // no healthcheck declared
-  "sandbox-infra\tk8s-forwards\texited\tExited (0) 2 minutes ago\t",
-  "sandbox-my-feature\tfrontend\trunning\tUp 3 minutes (health: starting)\t2",
-  "sandbox-my-feature\tbackend\texited\tExited (1) 1 minute ago\t2",
-  "sandbox-my-feature\tecon-setup\texited\tExited (0) 5 minutes ago\t2",
-].join("\n");
+const row = (project, service, state, status, slot = "", role = "") => ({
+  project,
+  service,
+  state,
+  status,
+  slot,
+  role,
+});
 
-const result = parseComposeStatus(psOutput);
+const containers = [
+  row("sandbox-infra", "redis", "running", "Up 16 hours (healthy)"),
+  row("sandbox-infra", "caddy", "running", "Up 16 hours"), // no healthcheck declared
+  row("sandbox-infra", "k8s-forwards", "exited", "Exited (0) 2 minutes ago"),
+  row("sandbox-my-feature", "frontend", "running", "Up 3 minutes (health: starting)", "2"),
+  row("sandbox-my-feature", "backend", "exited", "Exited (1) 1 minute ago", "2"),
+  row("sandbox-my-feature", "econ-setup", "exited", "Exited (0) 5 minutes ago", "2"),
+];
+
+const result = tallyComposeContainers(containers);
 
 const infra = result.get("sandbox-infra");
 assert.equal(infra.running, 2, "2 of 3 sandbox-infra containers running");
@@ -55,32 +63,30 @@ assert.equal(
 // The bug this label fixes: a setup container whose name does not end in
 // `-setup` (the scaffold ships `demo-install`) was counted as a failed service,
 // turning a fully healthy workspace yellow. The role label identifies it.
-const labelled = parseComposeStatus(
-  [
-    "sandbox-foo-bar\tfrontend\trunning\tUp 2 hours (healthy)\t1\tapp",
-    "sandbox-foo-bar\tbackend\trunning\tUp 2 hours (healthy)\t1\tapp",
-    "sandbox-foo-bar\tdemo-install\texited\tExited (0) 2 hours ago\t1\tsetup",
-  ].join("\n"),
-).get("sandbox-foo-bar");
+const labelled = tallyComposeContainers([
+  row("sandbox-foo-bar", "frontend", "running", "Up 2 hours (healthy)", "1", "app"),
+  row("sandbox-foo-bar", "backend", "running", "Up 2 hours (healthy)", "1", "app"),
+  row("sandbox-foo-bar", "demo-install", "exited", "Exited (0) 2 hours ago", "1", "setup"),
+]).get("sandbox-foo-bar");
 assert.equal(labelled.total, 2, "completed role=setup container excluded from the tally");
 assert.equal(labelled.running, 2, "workspace reads fully up, not 2/3");
 
 // A setup container that failed is a real failure — it stays in the tally so the
 // workspace reads degraded and its row (and logs) stay visible.
-const failed = parseComposeStatus(
-  [
-    "sandbox-foo-bar\tfrontend\trunning\tUp 2 hours (healthy)\t1\tapp",
-    "sandbox-foo-bar\tdemo-install\texited\tExited (1) 2 hours ago\t1\tsetup",
-  ].join("\n"),
-).get("sandbox-foo-bar");
+const failed = tallyComposeContainers([
+  row("sandbox-foo-bar", "frontend", "running", "Up 2 hours (healthy)", "1", "app"),
+  row("sandbox-foo-bar", "demo-install", "exited", "Exited (1) 2 hours ago", "1", "setup"),
+]).get("sandbox-foo-bar");
 assert.equal(failed.total, 2, "failed setup container stays in the tally");
 assert.equal(failed.running, 1, "...and drags the workspace to partial");
 
-// Blank lines and rows with no compose-project label are ignored, not counted.
-const withNoise = parseComposeStatus("\n\t\tno-project-label\n" + psOutput);
-assert.equal(withNoise.get("sandbox-infra").total, 3, "noise lines don't affect real tallies");
+// Containers with no compose-project label (anything not started by compose) are
+// ignored, not counted. The shelled `docker ps` produced these as blank columns;
+// the Engine API produces them as a missing label, mapped to "".
+const withNoise = tallyComposeContainers([row("", "", "running", "Up 1 hour"), ...containers]);
+assert.equal(withNoise.get("sandbox-infra").total, 3, "unlabelled containers don't affect real tallies");
 
 console.log(
-  "✓ parseComposeStatus: grouping, running/total tally, per-container detail, setup exclusion (role label + -setup fallback), failed-setup retention, noise lines",
+  "✓ tallyComposeContainers: grouping, running/total tally, per-container detail, setup exclusion (role label + -setup fallback), failed-setup retention, unlabelled containers",
 );
 process.exit(0);
