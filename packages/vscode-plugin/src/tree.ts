@@ -6,6 +6,7 @@
 import * as vscode from "vscode";
 import { listWorkspaces, getWorkspaceStatuses, getIntercepts } from "sandbox-core";
 import { buildTree, cliNotFoundNode, type WsNode } from "./build-tree.js";
+import { pollWhileVisible } from "./poll.js";
 
 const POLL_MS = 5000;
 
@@ -15,7 +16,6 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
 
   private roots: WsNode[] = [];
   private loading = false;
-  private timer: ReturnType<typeof setInterval> | undefined;
 
   refresh(): void {
     void this.load();
@@ -24,24 +24,10 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
   /**
    * Poll only while the view is visible. A hidden view costs nothing, and the
    * claudeck equivalent froze its indicator dots by fetching once on open.
+   * The scheduling itself lives in poll.ts so it can be unit-tested.
    */
   bind(view: vscode.TreeView<WsNode>): vscode.Disposable {
-    const sync = (visible: boolean) => {
-      if (visible && !this.timer) {
-        this.refresh();
-        this.timer = setInterval(() => this.refresh(), POLL_MS);
-      } else if (!visible && this.timer) {
-        clearInterval(this.timer);
-        this.timer = undefined;
-      }
-    };
-    sync(view.visible);
-    const sub = view.onDidChangeVisibility((e) => sync(e.visible));
-    return new vscode.Disposable(() => {
-      sub.dispose();
-      if (this.timer) clearInterval(this.timer);
-      this.timer = undefined;
-    });
+    return new vscode.Disposable(pollWhileVisible(view, () => this.refresh(), POLL_MS));
   }
 
   private async load(): Promise<void> {
