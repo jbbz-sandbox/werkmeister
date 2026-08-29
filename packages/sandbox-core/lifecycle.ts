@@ -16,17 +16,255 @@
  *   in the CLI,
  * - the return value is a plain object the caller can branch on.
  *
- * `up` and `down` still live in their commands; they land here in later PRs.
+ * `down` still lives in its command; it lands here in a later PR.
  *
  * *feature* is a real feature throughout. `infra` is a CLI-level target that
  * routes to `sandbox-core/infra` before reaching any of this — passing it here
- * finds no slot and fails as `NOT_RUNNING`.
+ * finds no slot and fails as `NOT_RUNNING`. `sandbox up infra` is the one that
+ * does not even reach `infra`: it means `sandbox connect`, which is still a
+ * command module, so that branch stays in the CLI until row 5g moves it.
  */
 
-import { composeRestart, composeStop } from "./compose.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+import { isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
+import { Colors } from "./colors.js";
+import { composeRestart, composeStop, composeUp } from "./compose.js";
+import { loadPorts, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
-import { info } from "./reporter.js";
-import { getSlot } from "./slots.js";
+import { loadFeatureRouters } from "./feature_routing.js";
+import {
+  generateCaddyfile,
+  generateFeatureCompose,
+  generateFeatureEnv,
+  generateSupergraphConfig,
+  isFeatureComposeStale,
+} from "./generate.js";
+import { ensurePortForwardsHealthy } from "./k8s.js";
+import { info, raw, warn } from "./reporter.js";
+import {
+  getSecretsPath,
+  loadSecrets,
+  requiredSecretKeys,
+  validateRequiredSecrets,
+} from "./secrets.js";
+import { allocateSlot, getPortRange, getServicePort, getSlot } from "./slots.js";
+
+/** Everything `sandbox up` computed, separated from how the CLI renders it. */
+export interface UpResult {
+  feature: string;
+  slot: number;
+  portRange: [number, number];
+  /** The services this workspace runs locally; empty means all traffic goes to k8s. */
+  localServices: string[];
+  /** `https://<hostname>` for each local service Caddy terminates directly. */
+  urls: string[];
+  servicePorts: { service: string; port: number }[];
+  /** The reserved slot was taken, so the compose files were rewritten for a new one. */
+  regenerated: boolean;
+  /** The compose file predates the service registry — warned about, not rewritten. */
+  staleCompose: boolean;
+  containersStarted: boolean;
+  caddy: "reloaded" | "started";
+}
+
+/**
+ * Bring *feature* up: allocate its slot, start its containers, and point the
+ * proxy at them.
+ *
+ * *workspace* is passed in rather than resolved here: `resolveWorkspace` falls
+ * back to the current directory, which is the caller's for an in-process caller
+ * and so would silently point the dashboard at whatever it happened to be
+ * running from. The CLI resolves it from argv and hands it over.
+ *
+ * Throws `NO_COMPOSE` when the workspace has no generated `docker-compose.yml`,
+ * `MISSING_SECRETS` when a secret this workspace's own services require is
+ * absent, `SLOT_ALLOC` when no slot can be allocated, and `COMPOSE_UP_FAILED`
+ * when `docker compose up` reports failure.
+ */
+export async function up(feature: string, workspace: string): Promise<UpResult> {
+  const workspaceCompose = path.join(workspace, "docker-compose.yml");
+  if (!fs.existsSync(workspaceCompose)) {
+    throw new SandboxError(
+      `No docker-compose.yml found in workspace: ${workspace}\n` +
+        "       Run 'sandbox init-workspace' first to generate it.",
+      "NO_COMPOSE",
+    );
+  }
+
+  // Config first because the proxy generation needs it, then fail on a missing
+  // secret before any slot state is mutated or any container starts.
+  info("Loading configuration...");
+  const servicesConfig = loadServices();
+  const config = { services: servicesConfig, ports: loadPorts() };
+  const localServices = readServicesFromWorkspace(workspace);
+  requireSecrets(servicesConfig, localServices);
+
+  info("Allocating feature slot...");
+  const preferredSlot = readSlotFromWorkspace(workspace);
+  let slot: number;
+  try {
+    slot = await allocateSlot(feature, localServices, preferredSlot);
+  } catch (e) {
+    // Rewrapped rather than left to propagate: allocation reports failure as a
+    // plain Error, whose message already carries the stale-lock recovery
+    // guidance, and `main.ts` prints a bare Error as `Error: <msg>` instead of
+    // the `[err] <msg>` this site has always produced.
+    throw new SandboxError(e instanceof Error ? e.message : String(e), "SLOT_ALLOC");
+  }
+
+  const [portStart, portEnd] = getPortRange(slot);
+  info(`Slot ${slot} -> port range ${portStart}-${portEnd}`);
+
+  const regenerated = preferredSlot !== null && slot !== preferredSlot;
+  let staleCompose = false;
+  if (regenerated) {
+    warn(`Slot changed (${preferredSlot} → ${slot}) — regenerating compose...`);
+    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
+    generateFeatureEnv(feature, slot, localServices, config, workspace);
+    generateSupergraphConfig(feature, slot, localServices, config, workspace);
+  } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
+    // Warn rather than regenerate: `up` starting to rewrite workspace files
+    // would silently discard hand-edits to the generated compose.
+    staleCompose = true;
+    warn(
+      "docker-compose.yml predates the current service registry — " +
+        "run 'sandbox init-workspace' in the workspace to regenerate it.",
+    );
+  }
+
+  // Unprefixed because it always has been — `raw` is what keeps the CLI's bytes
+  // identical for a line that sits mid-sequence and so cannot move to the
+  // command's summary block.
+  raw(
+    `\n  ${Colors.CYAN}Local services: ` +
+      `${Colors.BOLD}${localServices.length ? localServices.join(", ") : "(none -- all via k8s)"}` +
+      `${Colors.RESET}\n\n`,
+  );
+
+  info("Checking k8s port-forwards...");
+  ensurePortForwardsHealthy();
+
+  let containersStarted = false;
+  if (localServices.length) {
+    info("Starting containers...");
+    if (!composeUp(feature)) {
+      throw new SandboxError(
+        "Failed to start containers. Check docker compose output above.",
+        "COMPOSE_UP_FAILED",
+      );
+    }
+    containersStarted = true;
+  } else {
+    info("No local services to start -- routing entirely to k8s");
+  }
+
+  info("Configuring reverse proxy...");
+  await generateCaddyfile(null, config);
+
+  let caddy: "reloaded" | "started";
+  if (isCaddyRunning()) {
+    await reloadCaddy();
+    caddy = "reloaded";
+  } else {
+    info("Caddy not running -- starting it...");
+    startCaddy();
+    caddy = "started";
+  }
+
+  // Derivations, not rendering: they exist only inside the summary's
+  // `console.log` today, which is why an in-process caller could never get at
+  // the URL a feature is reachable on.
+  const routers = loadFeatureRouters(servicesConfig);
+  const urls = localServices
+    .map((s) => routers[s]?.hostname)
+    .filter((h): h is string => Boolean(h))
+    .map((h) => `https://${h}`);
+  const servicePorts = [...localServices].sort().map((service) => {
+    const svcDef = servicesConfig[service] ?? {};
+    const offset = typeof svcDef === "object" && svcDef !== null ? svcDef["port_offset"] ?? 0 : 0;
+    return { service, port: getServicePort(slot, offset) };
+  });
+
+  return {
+    feature,
+    slot,
+    portRange: [portStart, portEnd],
+    localServices,
+    urls,
+    servicePorts,
+    regenerated,
+    staleCompose,
+    containersStarted,
+    caddy,
+  };
+}
+
+// ponytail: two hand-rolled parsers over the same file, because `loadDotenv`
+// walks up from a start directory and these must read exactly this workspace's
+// .env. Collapse them into one read if a third key is ever needed.
+
+/** Read SANDBOX_SLOT from <workspace>/.env. */
+function readSlotFromWorkspace(workspace: string): number | null {
+  const envFile = path.join(workspace, ".env");
+  if (!fs.existsSync(envFile) || !fs.statSync(envFile).isFile()) {
+    return null;
+  }
+  for (const rawLine of fs.readFileSync(envFile, "utf8").split("\n")) {
+    const line = rawLine.trim();
+    if (line.startsWith("SANDBOX_SLOT=")) {
+      const value = line.slice("SANDBOX_SLOT=".length).trim();
+      const n = Number(value);
+      if (value !== "" && Number.isInteger(n)) {
+        return n;
+      }
+    }
+  }
+  return null;
+}
+
+/** Read the SERVICES list from <workspace>/.env (written by init-workspace). */
+function readServicesFromWorkspace(workspace: string): string[] {
+  const envFile = path.join(workspace, ".env");
+  if (!fs.existsSync(envFile) || !fs.statSync(envFile).isFile()) {
+    return [];
+  }
+  for (const rawLine of fs.readFileSync(envFile, "utf8").split("\n")) {
+    const line = rawLine.trim();
+    if (line.startsWith("SERVICES=")) {
+      return line
+        .slice("SERVICES=".length)
+        .trim()
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s);
+    }
+  }
+  return [];
+}
+
+/**
+ * Fail before slot allocation or `composeUp` when a secret key required by this
+ * workspace's own services is missing or empty, so it surfaces as a clear,
+ * value-free message instead of an opaque runtime error deep in container logs.
+ */
+function requireSecrets(servicesConfig: Record<string, any>, localServices: string[]): void {
+  const secretsPath = getSecretsPath();
+  const missing = validateRequiredSecrets(
+    loadSecrets(secretsPath),
+    requiredSecretKeys(servicesConfig, localServices),
+  );
+  if (missing.length) {
+    throw new SandboxError(
+      `Missing required secret(s) in ${secretsPath}: ` +
+        `${missing.join(", ")}\n` +
+        `       Run \`sandbox setup\` to write a template to ${secretsPath}, ` +
+        "then fill in the missing values.",
+      "MISSING_SECRETS",
+    );
+  }
+}
 
 /** A feature that was running, and the slot it keeps while stopped. */
 export interface StopResult {

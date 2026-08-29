@@ -13,6 +13,8 @@ import { SandboxError } from "sandbox-core/errors";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
 
+import { makeRecorder } from "./helpers/recorder.js";
+
 vi.mock("sandbox-core/lifecycle", () => ({ stop: vi.fn(), restart: vi.fn() }));
 vi.mock("../../lib/dotenv.js", () => ({ loadDotenv: () => ({}) }));
 
@@ -22,14 +24,7 @@ import { run as runStop } from "../stop.js";
 
 /** Everything the command emitted, in order, whichever helper produced it. */
 let lines: string[];
-
-/** Third copy of the three-line recorder; a shared helper can wait for a fourth. */
-const recorder: Reporter = {
-  passthrough: false,
-  emit: (e) => {
-    lines.push(e.level === "raw" ? e.chunk : `[${e.level}] ${e.msg}`);
-  },
-};
+let recorder: Reporter;
 
 /** `process.exit` cannot return, so make it unwind like the real one ends the run. */
 class Exited extends Error {
@@ -39,7 +34,7 @@ class Exited extends Error {
 }
 
 beforeEach(() => {
-  lines = [];
+  ({ lines, reporter: recorder } = makeRecorder());
   vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
     throw new Exited(code ?? 0);
   }) as never);
