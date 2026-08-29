@@ -23,7 +23,7 @@ render, or a live editor.
 
 ## Phase A — Extension Development Host (F5)
 
-1. **Launch the dev host.** Open `apps/vscode-sandbox` in VS Code and press
+1. **Launch the dev host.** Open `packages/vscode-plugin` in VS Code and press
    **F5**. A second VS Code window ("Extension Development Host") opens.
 
 2. **Open the view.** Click the Sandbox icon in the activity bar to open the
@@ -58,14 +58,17 @@ render, or a live editor.
    native `vscode.openFolder`, not sandbox-core's `openWorkspace()`).
 
 7a. **Inline "switch workspace" icon.** Hover the same node; a → icon appears
-    next to the folder icon. Click it. The workspace replaces the *current*
-    window instead of opening a new one.
+    next to the folder icon. Click it. The workspace is added to *this* window as
+    the **first** folder rather than opening a new window — folder 0 is what the
+    Claude Code extension reads CLAUDE.md from. Click it on a workspace already
+    open further down the folder list: it moves to the top, it is not duplicated.
 
-7b. **Current workspace marker.** The workspace whose folder is open in this
-    window shows `current` first in its description, starts expanded, and is the
+7b. **Current workspace marker.** The workspace of this window's **first** open
+    folder shows `current` first in its description, starts expanded, and is the
     **top row** whatever its alphabetical position. Open a multi-root
     `.code-workspace` where the sandbox workspace is *not* the first folder and
-    confirm it is still marked.
+    confirm it is still marked — later folders count when the first matches no
+    workspace.
 
 
 8. **Open Jira Issue.** Right-click a workspace with a Jira ID → "Open Jira
