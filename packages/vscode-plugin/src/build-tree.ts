@@ -97,21 +97,25 @@ function contains(parent: string, child: string): boolean {
 
 /**
  * The workspace whose directory is, or contains, one of the window's open
- * folders. Every folder is considered, not just the first: a multi-root
- * `.code-workspace` commonly lists a tooling checkout ahead of the feature
- * workspace. When several match (one workspace nested inside another) the
- * deepest wins, since that is the one the user is actually in.
+ * folders. Folders are searched in order, because `sandbox.switch` puts the
+ * workspace you switched to first and that is the one Claude Code reads
+ * CLAUDE.md from — but later folders still count, since a multi-root
+ * `.code-workspace` can list a tooling checkout ahead of the feature workspace.
+ * Within one folder, the deepest match wins (one workspace nested in another).
  */
 function currentWorkspaceName(
   workspaces: WorkspaceEntryLike[],
   currentPaths: string[],
 ): string | null {
-  let best: WorkspaceEntryLike | null = null;
-  for (const w of workspaces) {
-    if (!currentPaths.some((p) => contains(w.path, p))) continue;
-    if (!best || w.path.length > best.path.length) best = w;
+  for (const p of currentPaths) {
+    let best: WorkspaceEntryLike | null = null;
+    for (const w of workspaces) {
+      if (!contains(w.path, p)) continue;
+      if (!best || w.path.length > best.path.length) best = w;
+    }
+    if (best) return best.name;
   }
-  return best?.name ?? null;
+  return null;
 }
 
 /**

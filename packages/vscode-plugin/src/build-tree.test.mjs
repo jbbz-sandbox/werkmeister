@@ -235,3 +235,16 @@ test("node ids are stable and unique", () => {
   const ids = nodes.flatMap((n) => [n.id, ...n.children.map((c) => c.id)]);
   assert.equal(new Set(ids).size, ids.length);
 });
+
+// sandbox.switch puts the switched-to workspace first, so folder order — not
+// path depth across folders — decides which one is marked current.
+test("the first open folder's workspace wins over a deeper one further down", () => {
+  const nodes = buildTree(
+    [ws("a", { path: "/ws/a" }), ws("b", { path: "/ws/b/deeper" })],
+    [st("a"), st("b")],
+    null,
+    ["/ws/a", "/ws/b/deeper"],
+  );
+  assert.match(nodes.find((n) => n.label === "a").description, /current/);
+  assert.doesNotMatch(nodes.find((n) => n.label === "b").description, /current/);
+});
