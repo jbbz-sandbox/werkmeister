@@ -209,7 +209,8 @@ reaches new workspaces with no marketplace step. The `sandbox-tools` plugin keep
 globally useful `sandbox-*` ops skills.
 
 Consequence: **sessions must start at the workspace root** — project skills and hooks resolve
-from the session's project directory. Freshness mid-feature: `sandbox skills check|sync`.
+from the session's project directory. Freshness mid-feature is self-healing: the SessionStart
+hook runs `sandbox skills check` and, only when it reports drift, `sandbox skills sync`.
 
 ### 5.1 Generated domain skills — `.claude/skills/sb-<domain>-standard/`
 
@@ -405,7 +406,8 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
   of the forgiving loader, so silent-drop breakage is caught. Exits 1 on any malformed
   standard.
 - **`sandbox skills check` / `sync`** — per-workspace projection freshness: missing, stale, or
-  orphaned `sb-*` skills.
+  orphaned `sb-*` skills. Also run from the SessionStart hook, so a workspace repairs its own
+  projection before the session reads it.
 
 **Automated test coverage is thin.** `src/lib/__tests__/gate.test.ts` (22 tests) is the only
 suite covering a JIT subsystem. Standards resolution, skill generation, agent generation,
@@ -455,7 +457,9 @@ deny-retry compliance at scale.
 3. **The gate fires after drafting.** It can only trigger a revision pass, never prevent the
    first draft. `task_signatures` (§4.3) covers the pre-authoring window; phase entry remains
    the preventive path.
-4. **Projection staleness in long-lived workspaces is manual** (`sandbox skills sync`).
+4. **Projection staleness is repaired one session late.** The SessionStart hook syncs a
+   drifted workspace, but a workspace nobody opens stays stale, and the repair lands as the
+   window opens rather than the moment the standards tree moves.
 5. **fnmatch root-level under-match** (§4.2) — accepted, documented inline.
 6. **10k hook-output cap** bounds how much note context re-injection can carry.
 7. **Deferred:** review agents and a plan agent (the built-in Plan agent may suffice).
