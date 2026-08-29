@@ -10,9 +10,13 @@
     "vscode": "^1.93.0",
     "node": ">=20"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "main": "./dist/extension.cjs",
-  "activationEvents": ["onView:sandboxWorkspaces"],
+  "activationEvents": [
+    "onView:sandboxWorkspaces"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -33,25 +37,103 @@
       ]
     },
     "commands": [
-      { "command": "sandbox.refresh", "title": "Refresh", "category": "Sandbox", "icon": "$(refresh)" },
-      { "command": "sandbox.open", "title": "Open Workspace", "category": "Sandbox", "icon": "$(folder-opened)" },
-      { "command": "sandbox.switch", "title": "Switch to Workspace", "category": "Sandbox", "icon": "$(arrow-right)" },
-      { "command": "sandbox.openJira", "title": "Open Jira Issue", "category": "Sandbox", "icon": "$(link-external)" },
-      { "command": "sandbox.configure", "title": "Configure Sandbox CLI Path", "category": "Sandbox", "icon": "$(gear)" },
-      { "command": "sandbox.up", "title": "Start", "category": "Sandbox", "icon": "$(play)" },
-      { "command": "sandbox.stop", "title": "Stop", "category": "Sandbox", "icon": "$(debug-pause)" },
-      { "command": "sandbox.restart", "title": "Restart", "category": "Sandbox", "icon": "$(debug-restart)" },
-      { "command": "sandbox.down", "title": "Down", "category": "Sandbox", "icon": "$(debug-stop)" },
-      { "command": "sandbox.toggleIntercept", "title": "Toggle Intercept", "category": "Sandbox", "icon": "$(arrow-swap)" },
-      { "command": "sandbox.logs", "title": "Logs", "category": "Sandbox", "icon": "$(output)" },
-      { "command": "sandbox.newWorkspace", "title": "New Workspace", "category": "Sandbox", "icon": "$(add)" },
-      { "command": "sandbox.openFeature", "title": "Open in Browser", "category": "Sandbox", "icon": "$(globe)" },
-      { "command": "sandbox.remove", "title": "Remove Workspace...", "category": "Sandbox", "icon": "$(trash)" }
+      {
+        "command": "sandbox.refresh",
+        "title": "Refresh",
+        "category": "Sandbox",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sandbox.open",
+        "title": "Open Workspace",
+        "category": "Sandbox",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "sandbox.switch",
+        "title": "Switch to Workspace",
+        "category": "Sandbox",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "sandbox.openJira",
+        "title": "Open Jira Issue",
+        "category": "Sandbox",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "sandbox.configure",
+        "title": "Configure Sandbox CLI Path",
+        "category": "Sandbox",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "sandbox.up",
+        "title": "Start",
+        "category": "Sandbox",
+        "icon": "$(play)"
+      },
+      {
+        "command": "sandbox.stop",
+        "title": "Stop",
+        "category": "Sandbox",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "sandbox.restart",
+        "title": "Restart",
+        "category": "Sandbox",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "sandbox.down",
+        "title": "Down",
+        "category": "Sandbox",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "sandbox.toggleIntercept",
+        "title": "Toggle Intercept",
+        "category": "Sandbox",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "sandbox.logs",
+        "title": "Logs",
+        "category": "Sandbox",
+        "icon": "$(output)"
+      },
+      {
+        "command": "sandbox.newWorkspace",
+        "title": "New Workspace",
+        "category": "Sandbox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sandbox.openFeature",
+        "title": "Open in Browser",
+        "category": "Sandbox",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "sandbox.remove",
+        "title": "Remove Workspace...",
+        "category": "Sandbox",
+        "icon": "$(trash)"
+      }
     ],
     "menus": {
       "view/title": [
-        { "command": "sandbox.newWorkspace", "when": "view == sandboxWorkspaces", "group": "navigation@1" },
-        { "command": "sandbox.refresh", "when": "view == sandboxWorkspaces", "group": "navigation@2" }
+        {
+          "command": "sandbox.newWorkspace",
+          "when": "view == sandboxWorkspaces",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sandbox.refresh",
+          "when": "view == sandboxWorkspaces",
+          "group": "navigation@2"
+        }
       ],
       "view/item/context": [
         {
@@ -79,19 +161,60 @@
           "when": "view == sandboxWorkspaces && viewItem =~ /^service:(interceptable|intercepted-mine)$/",
           "group": "inline@1"
         },
-        { "command": "sandbox.up", "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/", "group": "1_lifecycle@1" },
-        { "command": "sandbox.stop", "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/", "group": "1_lifecycle@2" },
-        { "command": "sandbox.restart", "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/", "group": "1_lifecycle@3" },
-        { "command": "sandbox.down", "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/", "group": "1_lifecycle@4" },
-        { "command": "sandbox.logs", "when": "view == sandboxWorkspaces && viewItem =~ /^(workspace|service)/", "group": "2_inspect@1" },
-        { "command": "sandbox.openFeature", "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/", "group": "2_inspect@2" },
-        { "command": "sandbox.openJira", "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/", "group": "2_inspect@3" },
-        { "command": "sandbox.remove", "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/", "group": "9_danger@1" }
+        {
+          "command": "sandbox.up",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@1"
+        },
+        {
+          "command": "sandbox.stop",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@2"
+        },
+        {
+          "command": "sandbox.restart",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@3"
+        },
+        {
+          "command": "sandbox.down",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@4"
+        },
+        {
+          "command": "sandbox.logs",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^(workspace|service)/",
+          "group": "2_inspect@1"
+        },
+        {
+          "command": "sandbox.openFeature",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "2_inspect@2"
+        },
+        {
+          "command": "sandbox.openJira",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "2_inspect@3"
+        },
+        {
+          "command": "sandbox.remove",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "9_danger@1"
+        }
       ],
       "commandPalette": [
-        { "command": "sandbox.openJira", "when": "false" },
-        { "command": "sandbox.toggleIntercept", "when": "false" },
-        { "command": "sandbox.logs", "when": "false" }
+        {
+          "command": "sandbox.openJira",
+          "when": "false"
+        },
+        {
+          "command": "sandbox.toggleIntercept",
+          "when": "false"
+        },
+        {
+          "command": "sandbox.logs",
+          "when": "false"
+        }
       ]
     },
     "configuration": {
@@ -128,6 +251,7 @@
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.24.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vscode-extension-tester": "^8.24.0"
   }
 }
