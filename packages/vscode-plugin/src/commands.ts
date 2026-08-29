@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import * as os from "node:os";
+import { basename } from "node:path";
 import * as vscode from "vscode";
 import { listWorkspaces, resolveSandboxBin, childEnv, removeWorkspace } from "sandbox-core";
 import { runInTerminal } from "./terminal.js";
@@ -55,15 +56,37 @@ export function disposeOutputChannel(): void {
   outputChannel = undefined;
 }
 
-/** Open a workspace's folder — in a new window (`sandbox.open`) or this one (`sandbox.switch`). */
-function openWorkspace(forceNewWindow: boolean) {
-  return async (node?: WsNode): Promise<void> => {
-    const ws = await pickWorkspace(node);
-    if (!ws) return;
-    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(ws.path), {
-      forceNewWindow,
-    });
-  };
+/** Open a workspace's folder in a new window. */
+async function openWorkspace(node?: WsNode): Promise<void> {
+  const ws = await pickWorkspace(node);
+  if (!ws) return;
+  await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(ws.path), {
+    forceNewWindow: true,
+  });
+}
+
+/**
+ * Make a workspace this window's *first* folder, adding it if it isn't open yet
+ * and moving it up if it is. First place is load-bearing, not cosmetic: the
+ * Claude Code extension reads CLAUDE.md from folder 0, so switching without
+ * reordering leaves it reading the wrong workspace's instructions.
+ */
+async function switchWorkspace(node?: WsNode): Promise<void> {
+  const ws = await pickWorkspace(node);
+  if (!ws) return;
+  const uri = vscode.Uri.file(ws.path);
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders[0]?.uri.fsPath === uri.fsPath) return;
+
+  // One splice over the whole list: updateWorkspaceFolders may only be called
+  // once per event loop turn, so add-and-reorder has to be a single call.
+  // A name survives only if passed back, so custom-labelled folders of a
+  // multi-root `.code-workspace` would be renamed by every switch.
+  const rest = folders
+    .filter((f) => f.uri.fsPath !== uri.fsPath)
+    .map((f) => (f.name === basename(f.uri.fsPath) ? { uri: f.uri } : { uri: f.uri, name: f.name }));
+  const ok = vscode.workspace.updateWorkspaceFolders(0, folders.length, { uri }, ...rest);
+  if (!ok) void vscode.window.showErrorMessage(`Could not open ${ws.name} in this window.`);
 }
 
 export function registerCommands(provider: SandboxTreeProvider): vscode.Disposable[] {
@@ -73,8 +96,8 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     // Deliberately not sandbox-core's openWorkspace(), which shells out to the
     // `code` CLI — from inside VS Code the native command is direct and can't
     // fail on a missing `code` binary.
-    vscode.commands.registerCommand("sandbox.open", openWorkspace(true)),
-    vscode.commands.registerCommand("sandbox.switch", openWorkspace(false)),
+    vscode.commands.registerCommand("sandbox.open", openWorkspace),
+    vscode.commands.registerCommand("sandbox.switch", switchWorkspace),
 
     vscode.commands.registerCommand("sandbox.openJira", async (node?: WsNode) => {
       const url = node?.workspace?.jiraUrl;
