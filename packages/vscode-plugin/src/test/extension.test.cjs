@@ -70,7 +70,30 @@ suite("Sandbox Workspaces", () => {
       ["sandbox demo-feature"],
     );
   });
+
+  // sandbox.configure is a passthrough to a built-in, so what can break is the
+  // passthrough: a renamed built-in or a typo'd id, which registration alone
+  // would not catch. The `sandbox.` filter it passes is not readable back
+  // through the API — checklist 10 still eyeballs that half.
+  test("Configure opens the settings editor", async () => {
+    await vscode.commands.executeCommand("sandbox.configure");
+
+    const opened = await waitFor(() => vscode.window.tabGroups.activeTabGroup.activeTab);
+    assert.equal(opened?.label, "Settings");
+
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+  });
 });
+
+/** Poll `read` until it returns something truthy; the editor opens async. */
+async function waitFor(read, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = read();
+    if (value || Date.now() > deadline) return value;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
 
 /**
  * Write a `sandbox.*` setting and wait for the extension to have applied it to

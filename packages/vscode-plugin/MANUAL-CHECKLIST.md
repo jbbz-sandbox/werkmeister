@@ -14,7 +14,8 @@ obvious — what a failure looks like.
 | `npm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), and that `Logs` / `Open Jira` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
 | `npm test` → `src/build-tree.test.mjs` | State icons, service health, the `current` marker (multi-root included), top-sorting, node id stability. |
 | `npm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
-| `npm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `sandbox <workspace>`, and the config tier order — a `sandbox.*` setting overrides the inherited `SANDBOX_*`, and clearing it restores that value instead of deleting it. |
+| `npm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
+| `npm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `sandbox <workspace>`, the config tier order — a `sandbox.*` setting overrides the inherited `SANDBOX_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. |
 
 What is left below needs a human: real container/Telepresence state, the visual
 render, or a live editor.
@@ -47,11 +48,8 @@ render, or a live editor.
 5. **Refresh button.** Click `⟳` in the view's title bar. Confirm it re-fetches
    without error (no visible change is expected if nothing changed underneath).
 
-6. **Visibility-gated polling.** Switch to another activity-bar icon, wait a few
-   seconds, switch back. There's no direct UI signal — eyeball it with a
-   temporary `console.log` in `bind()` (`src/tree.ts`) if you want proof. The
-   behaviour: the 5s poll stops while hidden and resumes when shown, rather
-   than running unconditionally in the background.
+6. *Retired — visibility-gated polling is asserted in `src/poll.test.mjs`. The
+   number is not reused: the notes cite these as stable ids.*
 
 7. **Inline "open workspace" icon.** Hover a workspace node; a folder icon
    appears inline. Click it. The workspace opens in a new VS Code window (via
@@ -78,8 +76,10 @@ render, or a live editor.
    Workspace", with no tree node focused. It falls back to a QuickPick listing
    all workspaces (name, Jira ID, path).
 
-10. **Configure command.** Palette → "Sandbox: Configure Sandbox CLI Path".
-    Opens Settings filtered to `sandbox.*`.
+10. **Configure command — the filter only.** Palette → "Sandbox: Configure
+    Sandbox CLI Path". That Settings *opens* is asserted in the host suite; what
+    still needs eyes is that it is filtered to `sandbox.*` rather than opening
+    the whole settings tree, which no API reports back.
 
 11. **Lifecycle: Start.** Inline ▶ on a down workspace. A terminal named
     **`sandbox <workspace>`** opens running `sandbox up` in that workspace's
@@ -179,5 +179,5 @@ render, or a live editor.
 
 ---
 
-**Total: 23 checks** (21 in Phase A, 2 in Phase B) — the rest are automated;
+**Total: 22 checks** (20 in Phase A, 2 in Phase B) — the rest are automated;
 see the table at the top.
