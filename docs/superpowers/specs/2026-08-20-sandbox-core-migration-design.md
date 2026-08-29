@@ -1,7 +1,7 @@
 # Design — move the sandbox logic into `sandbox-core`
 
 **Date:** 2026-08-20
-**Status:** approved; steps 0–3 shipped (see §8), 4–6 open
+**Status:** approved; rows 0–4 shipped, 5 and 6 part-shipped (see §8)
 **Author:** Jay Boyer (decisions), Claude (drafting)
 
 This document is written to be read cold. A session that has never seen the
@@ -254,6 +254,22 @@ option, so this is a branch in the wrapper, not new spawn machinery.
 
 Bottom-up by dependency. Each row is one PR, independently mergeable, with the
 gate green (§10).
+
+**Where this stands, 2026-08-29.** Rows 0–4 are complete. Row 5 shipped its first three
+PRs and row 6 six of its sixteen modules, so `apps/cli/src/lib` still holds thirteen files
+against §3's claim of one.
+
+| Row | Shipped | Left |
+|---|---|---|
+| 0–3 | #12, #13, #14/#15/#19/#26/#41, #16/#25 | — |
+| 4a/4b | #27, #28 | — |
+| 5 | #33 (5a blockers), #34 (5b `SandboxError`), #35 (5c `stop`/`restart`) | 5d `up`, 5e `down`, 5f `status`, 5g `connect` — the split is [037](../../../.sandbox/notes/037-finding-step-5-api-shape-and-split.md) |
+| 6 | `docker`, `notes`, `graduate`, `web_servers`, `telepresence`, `git_hooks` | `agent_gen`, `browser`, `gate`, `hooks_gen`, `machine_setup`, `mcp_gen`, `plugin_check`, `safari`, `stats`, `workspace_skills` |
+
+`dotenv.ts` is a **third** module the table never counted: #29 created it after this
+document was written, collapsing six `loadDotenv` copies. It resolves a feature from the
+nearest `.env` for six commands, which reads as argv resolution — decide whether it moves
+with row 6 or is declared CLI-side alongside `wizard.ts`.
 
 | # | PR | Contents | Done when |
 |---|---|---|---|
