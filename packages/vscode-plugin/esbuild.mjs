@@ -1,10 +1,14 @@
 /**
  * Bundle the extension to a single CommonJS file.
  *
- * Two non-obvious requirements:
+ * Three non-obvious requirements:
  *  - `sandbox-core` is a private monorepo workspace, so a .vsix cannot resolve
  *    it at runtime — it (and its `yaml` dependency) must be bundled in, not
- *    externalised. Only `vscode` is external; the host provides it.
+ *    externalised. `vscode` is external; the host provides it.
+ *  - `getWorkspaceStatuses` now reaches dockerode, which pulls in optional native
+ *    binaries (`ssh2` -> `cpu-features`). esbuild has no loader for `.node`, so they
+ *    are externalised: their `require`s sit inside `try {} catch {}`, so the .vsix
+ *    ships without them and dockerode falls back to its pure-JS paths.
  *  - sandbox-core is ESM and uses `import.meta.dirname` for its walk-up path
  *    resolution. A CJS bundle has no import.meta, so it is defined to __dirname.
  *    That makes the walk-up search the extension's dist/ and find nothing —
@@ -18,7 +22,7 @@ const options = {
   entryPoints: ["src/extension.ts"],
   bundle: true,
   outfile: "dist/extension.cjs",
-  external: ["vscode"],
+  external: ["vscode", "*.node"],
   format: "cjs",
   platform: "node",
   target: "node20",
