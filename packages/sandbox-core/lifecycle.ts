@@ -41,7 +41,7 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
 } from "./generate.js";
-import { ensurePortForwardsHealthy } from "./k8s.js";
+import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { info, raw, warn } from "./reporter.js";
 import {
   getSecretsPath,
@@ -80,8 +80,9 @@ export interface UpResult {
  *
  * Throws `NO_COMPOSE` when the workspace has no generated `docker-compose.yml`,
  * `MISSING_SECRETS` when a secret this workspace's own services require is
- * absent, `SLOT_ALLOC` when no slot can be allocated, and `COMPOSE_UP_FAILED`
- * when `docker compose up` reports failure.
+ * absent, `SLOT_ALLOC` when no slot can be allocated, `FORWARDS_NEVER_READY`
+ * when the forwards are restarted and their tunnels never reconnect, and
+ * `COMPOSE_UP_FAILED` when `docker compose up` reports failure.
  */
 export async function up(feature: string, workspace: string): Promise<UpResult> {
   const workspaceCompose = path.join(workspace, "docker-compose.yml");
@@ -144,7 +145,20 @@ export async function up(feature: string, workspace: string): Promise<UpResult> 
   );
 
   info("Checking k8s port-forwards...");
-  ensurePortForwardsHealthy();
+  // A restart returns when the container runs, not when its tunnels carry
+  // traffic. Starting containers in that window is what produces a compose
+  // dependency failure that never mentions a port-forward — so wait, and only
+  // after a restart, leaving the healthy path costing exactly what it did.
+  //
+  // The two failures are deliberately not the same. A restart that *fails* may
+  // just mean this machine runs no cluster, and a feature needing nothing from
+  // one has always come up regardless, so it stays non-fatal and already
+  // reported itself. Tunnels that never return after a successful restart mean
+  // forwards this machine does run are broken; `waitForForwards` throws, which
+  // says so far better than the compose error it replaces.
+  if (ensurePortForwardsHealthy() === "restarted") {
+    await waitForForwards();
+  }
 
   let containersStarted = false;
   if (localServices.length) {

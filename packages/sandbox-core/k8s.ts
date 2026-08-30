@@ -9,13 +9,15 @@
 import * as http from "node:http";
 import * as net from "node:net";
 import * as path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { Colors } from "./colors.js";
 import { infraRoot } from "./config.js";
 import { containerRunning } from "./docker.js";
+import { SandboxError } from "./errors.js";
 import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
 import { ProcError, run } from "./proc.js";
-import { error, success, warn } from "./reporter.js";
+import { error, info, success, warn } from "./reporter.js";
 
 // The forward table is NOT duplicated here: `forwardSpecs()` derives it from
 // ~/.sandbox/services.yaml — the same call that generates the entrypoint's
@@ -69,17 +71,22 @@ export function checkPortForwardHealth(): Record<string, boolean> {
 }
 
 /**
- * Verify the k8s-forwards container is healthy.
+ * What `ensurePortForwardsHealthy` did.
  *
- * If unhealthy, attempts to restart it via docker compose.
- *
- * Returns true if the container is healthy (or was successfully restarted).
+ * `restarted` is distinct from `healthy` because a restart returns as soon as
+ * the *container* runs, which is not when its tunnels carry traffic — the
+ * caller has to wait, and only then. See {@link waitForForwards}.
  */
-export function ensurePortForwardsHealthy(): boolean {
+export type ForwardsOutcome = "healthy" | "restarted" | "failed";
+
+/**
+ * Verify the k8s-forwards container is healthy, restarting it if not.
+ */
+export function ensurePortForwardsHealthy(): ForwardsOutcome {
   const health = checkPortForwardHealth();
   if (health["k8s-forwards"] ?? false) {
     success("k8s port-forwards container is healthy");
-    return true;
+    return "healthy";
   }
 
   warn("k8s port-forwards container is unhealthy — restarting...");
@@ -92,16 +99,64 @@ export function ensurePortForwardsHealthy(): boolean {
     );
     if (result.status !== 0) {
       error(`Failed to restart k8s-forwards: ${result.stderr.trim()}`);
-      return false;
+      return "failed";
     }
     success("k8s port-forwards container restarted");
-    return true;
+    return "restarted";
   } catch (err) {
     if (err instanceof ProcError) {
       error(`Failed to restart k8s-forwards: ${err.message}`);
-      return false;
+      return "failed";
     }
     throw err;
+  }
+}
+
+/**
+ * Poll every forward until all of them answer their probe, or *timeoutMs*
+ * elapses.
+ *
+ * `docker compose up -d` returns when the container is running, but the
+ * `kubectl port-forward` processes inside it reconnect asynchronously — in the
+ * observed case a second later. Anything started in that window that needs a
+ * datastore gets ECONNREFUSED, exhausts its retries and fails its healthcheck,
+ * and the caller sees a compose dependency error that never mentions a
+ * port-forward.
+ *
+ * Throws `FORWARDS_NEVER_READY` naming the forwards that never came back, so
+ * the failure says what actually went wrong.
+ */
+export async function waitForForwards(timeoutMs = 30_000, pollMs = 500): Promise<void> {
+  let pending = forwardSpecs();
+  if (!pending.length) {
+    return;
+  }
+
+  info("Waiting for port-forwards to reconnect...");
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const checked = await Promise.all(
+      pending.map(async (spec) => ({
+        spec,
+        ok: (await checkForwardHealth(spec.listen, spec.health)).ok,
+      })),
+    );
+    // Only the ones still down are re-probed: a forward that has answered once
+    // is up, and re-checking it would let a slow probe hold the whole poll.
+    pending = checked.filter((c) => !c.ok).map((c) => c.spec);
+    if (!pending.length) {
+      success("k8s port-forwards are carrying traffic");
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new SandboxError(
+        `k8s port-forwards did not come back within ${Math.round(timeoutMs / 1000)}s: ` +
+          `${pending.map((s) => `${s.name}:${s.listen}`).join(", ")}\n` +
+          "       Check `docker logs sandbox-k8s-forwards` and your kubeconfig.",
+        "FORWARDS_NEVER_READY",
+      );
+    }
+    await sleep(pollMs);
   }
 }
 
