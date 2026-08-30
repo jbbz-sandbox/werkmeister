@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildInterceptRows } from "../status.js";
+import { buildInterceptRows } from "sandbox-core/status";
 
 const REGISTRY = {
   "frontend": {
