@@ -5,96 +5,47 @@
  * have been generated in the workspace root by 'sandbox init-workspace'. If the
  * slot assigned at init time was released and is now taken by another feature,
  * the compose file is regenerated with a new slot before starting.
- */
-
-import * as fs from "node:fs";
-import * as path from "node:path";
-
-import { isCaddyRunning, reloadCaddy, startCaddy } from "sandbox-core/caddy";
-import {
-  Colors,
-  error,
-  info,
-  loadPorts,
-  loadServices,
-  resolveWorkspace,
-  warn,
-} from "../lib/config.js";
-import { composeUp } from "sandbox-core/compose";
-import { loadDotenv } from "../lib/dotenv.js";
-import {
-  generateCaddyfile,
-  generateFeatureCompose,
-  generateFeatureEnv,
-  generateSupergraphConfig,
-  isFeatureComposeStale,
-} from "sandbox-core/generate";
-import { ensurePortForwardsHealthy } from "sandbox-core/k8s";
-import { getSecretsPath, loadSecrets, requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
-import { loadFeatureRouters } from "sandbox-core/feature_routing";
-import { allocateSlot, getPortRange, getServicePort } from "sandbox-core/slots";
-
-/** Walk up from *start* looking for a .env file; return its key=value pairs. */
-/** Read SANDBOX_SLOT from <workspace>/.env. */
-function readSlotFromWorkspace(workspace: string): number | null {
-  const envFile = path.join(workspace, ".env");
-  if (!fs.existsSync(envFile) || !fs.statSync(envFile).isFile()) {
-    return null;
-  }
-  for (const rawLine of fs.readFileSync(envFile, "utf8").split("\n")) {
-    const line = rawLine.trim();
-    if (line.startsWith("SANDBOX_SLOT=")) {
-      const raw = line.slice("SANDBOX_SLOT=".length).trim();
-      const n = Number(raw);
-      if (raw !== "" && Number.isInteger(n)) {
-        return n;
-      }
-    }
-  }
-  return null;
-}
-
-/** Read the SERVICES list from <workspace>/.env (written by init-workspace). */
-function readServicesFromWorkspace(workspace: string): string[] {
-  const envFile = path.join(workspace, ".env");
-  if (!fs.existsSync(envFile) || !fs.statSync(envFile).isFile()) {
-    return [];
-  }
-  for (const rawLine of fs.readFileSync(envFile, "utf8").split("\n")) {
-    const line = rawLine.trim();
-    if (line.startsWith("SERVICES=")) {
-      const value = line.slice("SERVICES=".length).trim();
-      return value
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s);
-    }
-  }
-  return [];
-}
-
-/**
- * Fail fast if a secret key required by this workspace's own services is
- * missing or empty.
  *
- * Called before slot allocation / composeUp so a missing secret aborts with a
- * clear, value-free message instead of surfacing as an opaque runtime error
- * deep in container logs.
+ * The sequence itself is `sandbox-core/lifecycle`; what is left here is argv,
+ * the workspace resolution that depends on cwd, and the summary block.
  */
-function checkRequiredSecrets(servicesConfig: Record<string, any>, localServices: string[]): void {
-  const secretsPath = getSecretsPath();
-  const secrets = loadSecrets(secretsPath);
-  const required = requiredSecretKeys(servicesConfig, localServices);
-  const missing = validateRequiredSecrets(secrets, required);
-  if (missing.length) {
-    error(
-      `Missing required secret(s) in ${secretsPath}: ` +
-        `${missing.join(", ")}\n` +
-        `       Run \`sandbox setup\` to write a template to ${secretsPath}, ` +
-        "then fill in the missing values.",
-    );
-    process.exit(1);
+
+import { Colors, error, resolveWorkspace } from "../lib/config.js";
+import { loadDotenv } from "../lib/dotenv.js";
+import { up as upFeature } from "sandbox-core/lifecycle";
+import type { UpResult } from "sandbox-core/lifecycle";
+
+/** The "Feature 'x' is ready" block — rendering, so it stays in the CLI. */
+function printSummary(result: UpResult): void {
+  const { feature, slot, portRange, localServices, urls, servicePorts } = result;
+  const [portStart, portEnd] = portRange;
+
+  console.log(`\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' is ready ===${Colors.RESET}\n`);
+  console.log(
+    `  ${Colors.CYAN}URL:${Colors.RESET}     ${urls.length ? urls.join(", ") : "(no routed hostname for these services)"}`,
+  );
+  console.log(`  ${Colors.CYAN}Cookie:${Colors.RESET}  X-Feature=${feature}`);
+  console.log(`  ${Colors.CYAN}Slot:${Colors.RESET}    ${slot} (ports ${portStart}-${portEnd})`);
+  console.log();
+
+  if (localServices.length) {
+    console.log(`  ${Colors.GREEN}Local services:${Colors.RESET}`);
+    for (const { service, port } of servicePorts) {
+      console.log(`    ${Colors.GREEN}*${Colors.RESET} ${service} -> localhost:${port}`);
+    }
+  } else {
+    console.log(`  ${Colors.DIM}No local services (all traffic goes to k8s)${Colors.RESET}`);
   }
+
+  console.log();
+  console.log(`  ${Colors.DIM}k8s services: (everything not listed above)${Colors.RESET}`);
+  console.log();
+  console.log(`  ${Colors.DIM}Useful commands:${Colors.RESET}`);
+  console.log("    sandbox status            # view all features");
+  console.log(`    sandbox logs ${feature}    # tail logs`);
+  console.log(`    sandbox test ${feature}    # run Playwright tests`);
+  console.log(`    sandbox down ${feature}    # tear down`);
+  console.log();
 }
 
 /** Execute the `sandbox up <feature>` command. */
@@ -117,153 +68,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  const workspaceOverride = (args.workspace as string | null) ?? null;
-  const workspace = resolveWorkspace(feature, workspaceOverride);
+  const workspace = resolveWorkspace(feature, (args.workspace as string | null) ?? null);
 
   console.log(`\n${Colors.BOLD}=== sandbox up: ${feature} ===${Colors.RESET}\n`);
 
-  // Require workspace compose generated by 'sandbox init-workspace'
-  const workspaceCompose = path.join(workspace, "docker-compose.yml");
-  if (!fs.existsSync(workspaceCompose)) {
-    error(
-      `No docker-compose.yml found in workspace: ${workspace}\n` +
-        "       Run 'sandbox init-workspace' first to generate it.",
-    );
-    process.exit(1);
-  }
-
-  // ------------------------------------------------------------------
-  // Step 0: Load configuration (needed for proxy generation), then fail
-  // fast if a secret this workspace's own services require is missing,
-  // before mutating any slot state or starting containers.
-  // ------------------------------------------------------------------
-  info("Loading configuration...");
-  const servicesConfig = loadServices();
-  const portsConfig = loadPorts();
-  const config = {
-    services: servicesConfig,
-    ports: portsConfig,
-  };
-  const localServices = readServicesFromWorkspace(workspace);
-  checkRequiredSecrets(servicesConfig, localServices);
-
-  // ------------------------------------------------------------------
-  // Step 2: Re-register slot (may have been released by 'sandbox down')
-  // ------------------------------------------------------------------
-  info("Allocating feature slot...");
-  const preferredSlot = readSlotFromWorkspace(workspace);
-  let slot: number;
-  try {
-    slot = await allocateSlot(feature, localServices, preferredSlot);
-  } catch (e) {
-    // The lib reports every allocation failure as a plain Error; its message
-    // already carries the stale-lock recovery guidance.
-    error(e instanceof Error ? e.message : String(e));
-    process.exit(1);
-  }
-
-  const [portStart, portEnd] = getPortRange(slot);
-  info(`Slot ${slot} -> port range ${portStart}-${portEnd}`);
-
-  // If the previously-reserved slot was taken, regenerate with the new one
-  if (preferredSlot !== null && slot !== preferredSlot) {
-    warn(`Slot changed (${preferredSlot} → ${slot}) — regenerating compose...`);
-    generateFeatureCompose(
-      feature,
-      slot,
-      localServices,
-      config,
-      workspace,
-      "sandbox up",
-    );
-    generateFeatureEnv(feature, slot, localServices, config, workspace);
-    generateSupergraphConfig(feature, slot, localServices, config, workspace);
-  } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
-    // Warn rather than regenerate: `up` starting to rewrite workspace files
-    // would silently discard hand-edits to the generated compose.
-    warn(
-      "docker-compose.yml predates the current service registry — " +
-        "run 'sandbox init-workspace' in the workspace to regenerate it.",
-    );
-  }
-
-  console.log(
-    `\n  ${Colors.CYAN}Local services: ` +
-      `${Colors.BOLD}${localServices.length ? localServices.join(", ") : "(none -- all via k8s)"}` +
-      `${Colors.RESET}\n`,
-  );
-
-  // ------------------------------------------------------------------
-  // Step 4: Verify k8s port-forwards are healthy
-  // ------------------------------------------------------------------
-  info("Checking k8s port-forwards...");
-  ensurePortForwardsHealthy();
-
-  // ------------------------------------------------------------------
-  // Step 5: Start containers
-  // ------------------------------------------------------------------
-  if (localServices.length) {
-    info("Starting containers...");
-    const ok = composeUp(feature);
-    if (!ok) {
-      error("Failed to start containers. Check docker compose output above.");
-      process.exit(1);
-    }
-  } else {
-    info("No local services to start -- routing entirely to k8s");
-  }
-
-  // ------------------------------------------------------------------
-  // Step 6: Regenerate Caddyfile and worker endpoints, reload proxy
-  // ------------------------------------------------------------------
-  info("Configuring reverse proxy...");
-  await generateCaddyfile(null, config);
-
-  if (isCaddyRunning()) {
-    await reloadCaddy();
-  } else {
-    info("Caddy not running -- starting it...");
-    startCaddy();
-  }
-
-  // ------------------------------------------------------------------
-  // Step 7: Print summary
-  // ------------------------------------------------------------------
-  console.log(`\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' is ready ===${Colors.RESET}\n`);
-  // URL(s) come from the routed services' feature_router hostname (Caddy
-  // terminates them directly). Fall back to a note when none are routed.
-  const routers = loadFeatureRouters(servicesConfig);
-  const urls = [...localServices]
-    .map((s) => routers[s]?.hostname)
-    .filter((h): h is string => Boolean(h))
-    .map((h) => `https://${h}`);
-  console.log(
-    `  ${Colors.CYAN}URL:${Colors.RESET}     ${urls.length ? urls.join(", ") : "(no routed hostname for these services)"}`,
-  );
-  console.log(`  ${Colors.CYAN}Cookie:${Colors.RESET}  X-Feature=${feature}`);
-  console.log(`  ${Colors.CYAN}Slot:${Colors.RESET}    ${slot} (ports ${portStart}-${portEnd})`);
-  console.log();
-
-  if (localServices.length) {
-    console.log(`  ${Colors.GREEN}Local services:${Colors.RESET}`);
-    for (const svc of [...localServices].sort()) {
-      const svcDef = servicesConfig[svc] ?? {};
-      const offset =
-        typeof svcDef === "object" && svcDef !== null ? svcDef["port_offset"] ?? 0 : 0;
-      const port = getServicePort(slot, offset);
-      console.log(`    ${Colors.GREEN}*${Colors.RESET} ${svc} -> localhost:${port}`);
-    }
-  } else {
-    console.log(`  ${Colors.DIM}No local services (all traffic goes to k8s)${Colors.RESET}`);
-  }
-
-  console.log();
-  console.log(`  ${Colors.DIM}k8s services: (everything not listed above)${Colors.RESET}`);
-  console.log();
-  console.log(`  ${Colors.DIM}Useful commands:${Colors.RESET}`);
-  console.log("    sandbox status            # view all features");
-  console.log(`    sandbox logs ${feature}    # tail logs`);
-  console.log(`    sandbox test ${feature}    # run Playwright tests`);
-  console.log(`    sandbox down ${feature}    # tear down`);
-  console.log();
+  // Every failure propagates: none of up's four codes carries a hint that has
+  // to print between the error line and the exit, so main.ts's handler renders
+  // them all as the `[err]` line these sites always produced.
+  printSummary(await upFeature(feature, workspace));
 }
