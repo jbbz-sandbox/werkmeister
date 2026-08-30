@@ -12,6 +12,37 @@ set -euo pipefail
 SANDBOX_ROOT="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 export SANDBOX_ROOT
 
+# Running out of npx's cache (`npx @jbbz-sandbox/sandbox-cli setup`) — install
+# globally and hand off, rather than running from here.
+#
+# SANDBOX_ROOT above resolved to ~/.npm/_npx/<hash>/..., which npm garbage-
+# collects and re-hashes on every version change. `setup` and `config` persist
+# that path into ~/.sandbox/config.yaml and env.sh, and the compose generator
+# bakes it into every workspace's docker-compose.yml as a bind mount, so running
+# from the cache pins permanent state to a directory that is going to vanish.
+# Bootstrapping is the one thing npx is right for here: install, then exec the
+# stable copy. The re-exec cannot loop — the global path has no _npx in it.
+case "$SANDBOX_ROOT" in
+  */_npx/*)
+    # Install the exact version npx resolved, not @latest: `npx pkg@1.2.3 setup`
+    # must not silently onboard the machine onto a different release.
+    pkg="$(node -p "const p=require('$SANDBOX_ROOT/package.json'); p.name + '@' + p.version" 2>/dev/null || echo "@jbbz-sandbox/sandbox-cli")"
+    echo "Bootstrapping: installing $pkg globally (npx's cache is not a stable install location)..." >&2
+    if ! npm install -g "$pkg" >&2; then
+        echo "Error: global install failed. Install it yourself, then re-run:" >&2
+        echo "  npm install -g $pkg && sandbox $*" >&2
+        exit 1
+    fi
+    global_bin="$(npm prefix -g)/bin/sandbox"
+    if [ ! -x "$global_bin" ]; then
+        echo "Error: installed $pkg but found no sandbox binary at $global_bin." >&2
+        exit 1
+    fi
+    echo "Installed. Continuing as $global_bin" >&2
+    exec "$global_bin" "$@"
+    ;;
+esac
+
 entry="$SANDBOX_ROOT/dist/main.js"
 if [ ! -f "$entry" ]; then
     echo "Error: CLI not built — missing $entry (run 'npm install && npm run build')." >&2

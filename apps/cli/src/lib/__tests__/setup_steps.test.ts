@@ -180,9 +180,24 @@ describe("syncPathDirs", () => {
 });
 
 describe("resolveCertScript", () => {
-  it("walks up to the monorepo root — bin/ is not under the CLI package", () => {
-    // Regression: getSandboxRoot() is <monorepo>/apps/cli, so joining it with
-    // "bin/generate-certs.sh" misses by two levels.
+  it("finds the script inside the CLI package — the layout an npm install has", () => {
+    // The published package is apps/cli alone: there is no monorepo above it to
+    // walk up into, so bin/ has to resolve at the package root or `sandbox
+    // setup` cannot issue a certificate on an installed CLI.
+    const pkg = fs.mkdtempSync(path.join(os.tmpdir(), "pkg-"));
+    try {
+      fs.mkdirSync(path.join(pkg, "bin"), { recursive: true });
+      const script = path.join(pkg, "bin", "generate-certs.sh");
+      fs.writeFileSync(script, "#!/bin/bash\n");
+      expect(resolveCertScript(pkg)).toBe(script);
+    } finally {
+      fs.rmSync(pkg, { recursive: true, force: true });
+    }
+  });
+
+  it("still walks up when bin/ sits above the CLI package", () => {
+    // Kept from when bin/ lived at the monorepo root: the walk-up is what makes
+    // the move above backward-compatible with an older checkout.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "monorepo-"));
     try {
       fs.mkdirSync(path.join(root, "bin"), { recursive: true });

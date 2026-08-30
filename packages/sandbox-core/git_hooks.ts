@@ -11,6 +11,9 @@
  * is warned that the sandbox secret-commit guard was not installed (D-12).
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+
 import { sandboxRoot } from "./config.js";
 import { ProcError, run } from "./proc.js";
 import { info, success, warn } from "./reporter.js";
@@ -27,6 +30,14 @@ export const HOOKS_PATH = ".githooks";
  */
 export function configureGitHooksPath(repoRoot?: string | null): boolean {
   const root = repoRoot ?? sandboxRoot();
+
+  // Installed from npm rather than run from a checkout: there is no repo to
+  // guard, and git would answer `fatal: not in a git directory` — a warning on
+  // every `sandbox connect` about a hook nobody wanted. `.git` is a file in a
+  // worktree and a directory in a clone; existsSync accepts both.
+  if (!fs.existsSync(path.join(root, ".git"))) {
+    return false;
+  }
 
   let result;
   try {

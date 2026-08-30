@@ -9,6 +9,49 @@ Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 | `sandbox` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI (TypeScript port). |
 | `sandbox-workspace-mcp-app` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | MCP App + dashboard UI for creating/managing sandbox workspaces. |
 
+## Install the CLI without a clone
+
+`@jbbz-sandbox/sandbox-cli` publishes to GitHub Packages, so a machine that only
+needs to *run* the CLI never has to clone this repo. Point npm at the registry
+with a `read:packages` token, then install:
+
+```bash
+cat >> ~/.npmrc <<'EOF'
+@jbbz-sandbox:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+EOF
+
+npx @jbbz-sandbox/sandbox-cli setup    # installs globally, then runs the wizard
+```
+
+That one command is the whole onboarding. npx only bootstraps: the wrapper sees
+it is running from `~/.npm/_npx/<hash>/`, installs itself globally, and re-execs
+the stable copy before doing any work. It has to — npm re-hashes and garbage-
+collects that cache, while `setup` persists `sandbox_root` into
+`~/.sandbox/config.yaml` and the compose generator bakes it into every
+workspace's `docker-compose.yml` as a bind mount. Running for real from the
+cache would pin permanent state to a directory that is going to vanish.
+
+`npm install -g @jbbz-sandbox/sandbox-cli && sandbox setup` is the same thing
+spelled out, if you would rather see the install happen.
+
+The package is a single esbuild bundle plus `infra/` — the templates, compose
+files, proxy UI and skills the CLI reads at runtime. `sandbox-core` and the
+CLI's other libraries are bundled in, so the only dependency npm resolves is
+`dockerode`. `sandbox setup` still seeds `~/.sandbox` exactly as it does from a
+checkout, which is what makes the two installs interchangeable.
+
+One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins
+in `~/.sandbox/env.sh`, so whichever CLI you last ran `sandbox config` from owns
+that pointer. Pick one per machine.
+
+To publish a new version (needs `write:packages`):
+
+```bash
+npm version patch -w @jbbz-sandbox/sandbox-cli
+npm run build && npm publish -w @jbbz-sandbox/sandbox-cli
+```
+
 ## First-time setup
 
 The CLI's machine configuration lives in `~/.sandbox`, not in this checkout —

@@ -112,6 +112,12 @@ function ensureCorpCa(): void {
   }
 }
 
+// ponytail: these all write into the CLI's own directory, which for an
+// `npm i -g` install is inside node_modules. Harmless on an nvm or Homebrew
+// prefix (user-owned, and every file here is regenerated on each connect, so
+// `npm update -g` discarding them costs nothing) but it would fail EACCES on a
+// root-owned prefix. Move the generated set to ~/.sandbox/infra/ if anyone hits
+// that.
 /** Generate proxy/Caddyfile and refresh the k8s kubeconfig. */
 async function ensureProxyFiles(): Promise<void> {
   const root = getInfraRoot();
