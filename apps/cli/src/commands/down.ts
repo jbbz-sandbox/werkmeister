@@ -3,31 +3,23 @@
  *
  * Stop containers, release the feature's slot, update the reverse proxy
  * configuration, and clean up generated files.
+ *
+ * The teardown itself is `sandbox-core/lifecycle`; what is left here is argv,
+ * the workspace notes (a TTY prompt loop, so it stays CLI-side), and the
+ * banners and summary block.
  */
 
 import * as path from "node:path";
 
-import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
 import { Colors, error, info, warn } from "../lib/config.js";
-import { composeDown, workspaceForFeature } from "sandbox-core/compose";
-import { generateCaddyfile } from "sandbox-core/generate";
+import { workspaceForFeature } from "sandbox-core/compose";
 import { GraduationError, reconcileGraduating } from "sandbox-core/graduate";
+import { down as downFeature, reloadProxy } from "sandbox-core/lifecycle";
+import type { DownResult } from "sandbox-core/lifecycle";
 import { latestHandoff, openDecisions, type Note } from "sandbox-core/notes";
 import { loadDotenv } from "../lib/dotenv.js";
-import { getAllSlots, getSlot, releaseSlot } from "sandbox-core/slots";
+import { getAllSlots } from "sandbox-core/slots";
 import { graduateOne, input } from "./notes.js";
-
-/** Walk up from *start* looking for a .env file; return its key=value pairs. */
-/** Regenerate the Caddyfile, then reload running services. */
-async function reloadProxy(): Promise<void> {
-  info("Updating reverse proxy configuration...");
-  await generateCaddyfile();
-  if (isCaddyRunning()) {
-    await reloadCaddy();
-  } else {
-    info("Caddy is not running -- skipping reload");
-  }
-}
 
 function printNote(note: Note, workspace: string): void {
   const rel = path.relative(workspace, note.path);
@@ -117,45 +109,16 @@ async function printNotes(feature: string): Promise<void> {
 }
 
 /**
- * Stop containers and release the slot for *feature*.
+ * Print what the library deliberately does not, then tear *feature* down.
  *
- * Returns the released slot number, or null if the feature had no slot.
+ * The statement order is the constraint: both the notes and the intercept
+ * cleanup inside `down` resolve the workspace from compose labels on the
+ * still-running containers, so they must precede the teardown.
  */
-async function downOne(feature: string, removeVolumes: boolean): Promise<number | null> {
+async function teardown(feature: string, removeVolumes: boolean): Promise<DownResult> {
   console.log(`\n${Colors.BOLD}=== sandbox down: ${feature} ===${Colors.RESET}\n`);
-
   await printNotes(feature);
-
-  // k8s intercept cleanup: best-effort, never blocks teardown. Must run before
-  // composeDown — leaveFeatureIntercepts resolves the workspace from compose
-  // labels on the still-running containers.
-  try {
-    const { leaveFeatureIntercepts } = await import("sandbox-core/telepresence");
-    const left = leaveFeatureIntercepts(feature);
-    if (left.length) {
-      info(`Left k8s intercept(s): ${left.join(", ")}`);
-    }
-  } catch (exc) {
-    // teardown must never block on telepresence
-    warn(`Could not clean up k8s intercepts: ${exc instanceof Error ? exc.message : String(exc)}`);
-  }
-
-  const slot = await getSlot(feature);
-  if (slot === null) {
-    warn(`Feature '${feature}' does not have an allocated slot`);
-    warn("It may already be stopped. Cleaning up anyway...");
-  }
-
-  info("Stopping containers...");
-  if (removeVolumes) {
-    info("--volumes: per-feature Docker volumes will be removed");
-  }
-  composeDown(feature, { removeVolumes });
-
-  info("Releasing feature slot...");
-  releaseSlot(feature);
-
-  return slot;
+  return downFeature(feature, { removeVolumes });
 }
 
 /** Execute the `sandbox down` command. */
@@ -174,7 +137,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     console.log(`\n${Colors.BOLD}=== sandbox down --all-features ===${Colors.RESET}\n`);
     info(`Stopping ${names.length} feature(s): ${names.join(", ")}`);
     for (const feature of names) {
-      await downOne(feature, removeVolumes);
+      await teardown(feature, removeVolumes);
     }
     await reloadProxy();
     console.log(`\n${Colors.GREEN}${Colors.BOLD}=== All features stopped ===${Colors.RESET}\n`);
@@ -193,7 +156,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  const slot = await downOne(feature, removeVolumes);
+  const { slot } = await teardown(feature, removeVolumes);
   await reloadProxy();
 
   console.log(`\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' stopped ===${Colors.RESET}\n`);

@@ -255,7 +255,7 @@ option, so this is a branch in the wrapper, not new spawn machinery.
 Bottom-up by dependency. Each row is one PR, independently mergeable, with the
 gate green (§10).
 
-**Where this stands, 2026-08-29.** Rows 0–4 are complete. Row 5 shipped its first three
+**Where this stands, 2026-08-30.** Rows 0–4 are complete. Row 5 shipped five of its seven
 PRs and row 6 six of its sixteen modules, so `apps/cli/src/lib` still holds thirteen files
 against §3's claim of one.
 
@@ -263,7 +263,7 @@ against §3's claim of one.
 |---|---|---|
 | 0–3 | #12, #13, #14/#15/#19/#26/#41, #16/#25 | — |
 | 4a/4b | #27, #28 | — |
-| 5 | #33 (5a blockers), #34 (5b `SandboxError`), #35 (5c `stop`/`restart`) | 5d `up`, 5e `down`, 5f `status`, 5g `connect` — the split is [037](../../../.sandbox/notes/037-finding-step-5-api-shape-and-split.md) |
+| 5 | #33 (5a blockers), #34 (5b `SandboxError`), #35 (5c `stop`/`restart`), #48 (5d `up`), 5e `down` | 5f `status`, 5g `connect` — the split is [037](../../../.sandbox/notes/037-finding-step-5-api-shape-and-split.md), amended for `down` by [063](../../../.sandbox/notes/063-finding-row-5e-down-the-seam-is-smaller-than-037-proposed.md) |
 | 6 | `docker`, `notes`, `graduate`, `web_servers`, `telepresence`, `git_hooks` | `agent_gen`, `browser`, `gate`, `hooks_gen`, `machine_setup`, `mcp_gen`, `plugin_check`, `safari`, `stats`, `workspace_skills` |
 
 `dotenv.ts` is a **third** module the table never counted: #29 created it after this

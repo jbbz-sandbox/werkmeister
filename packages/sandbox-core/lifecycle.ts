@@ -16,11 +16,10 @@
  *   in the CLI,
  * - the return value is a plain object the caller can branch on.
  *
- * `down` still lives in its command; it lands here in a later PR.
- *
  * *feature* is a real feature throughout. `infra` is a CLI-level target that
  * routes to `sandbox-core/infra` before reaching any of this — passing it here
- * finds no slot and fails as `NOT_RUNNING`. `sandbox up infra` is the one that
+ * finds no slot, which `stop`/`restart` reject as `NOT_RUNNING` and `down`
+ * merely warns about. `sandbox up infra` is the one that
  * does not even reach `infra`: it means `sandbox connect`, which is still a
  * command module, so that branch stays in the CLI until row 5g moves it.
  */
@@ -30,7 +29,7 @@ import * as path from "node:path";
 
 import { isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
-import { composeRestart, composeStop, composeUp } from "./compose.js";
+import { composeDown, composeRestart, composeStop, composeUp } from "./compose.js";
 import { loadPorts, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
@@ -49,7 +48,7 @@ import {
   requiredSecretKeys,
   validateRequiredSecrets,
 } from "./secrets.js";
-import { allocateSlot, getPortRange, getServicePort, getSlot } from "./slots.js";
+import { allocateSlot, getPortRange, getServicePort, getSlot, releaseSlot } from "./slots.js";
 
 /** Everything `sandbox up` computed, separated from how the CLI renders it. */
 export interface UpResult {
@@ -328,6 +327,80 @@ export async function restart(feature: string): Promise<RestartResult> {
   }
 
   return { feature, slot };
+}
+
+/** A feature that has been torn down, and the slot it gave back. */
+export interface DownResult {
+  feature: string;
+  /** null when the feature held no slot — torn down anyway; see `down`. */
+  slot: number | null;
+}
+
+/**
+ * Tear *feature* down: leave its k8s intercepts, remove its containers, and
+ * release its slot.
+ *
+ * Unlike `stop`/`restart`, a missing slot is not an error — a half-torn-down
+ * feature still has containers and generated files worth removing, so this
+ * warns and cleans up anyway, and reports the slot as null.
+ *
+ * Does not touch the reverse proxy: `sandbox down --all-features` tears down N
+ * features and reloads once, so the reload is `reloadProxy`, sequenced by the
+ * caller. Does not read or print workspace notes either — that is a TTY prompt
+ * loop, which §11 of the migration design keeps out of the library.
+ */
+export async function down(
+  feature: string,
+  { removeVolumes = false }: { removeVolumes?: boolean } = {},
+): Promise<DownResult> {
+  // Best-effort, and before composeDown: leaveFeatureIntercepts resolves the
+  // workspace from compose labels on the still-running containers.
+  try {
+    const { leaveFeatureIntercepts } = await import("./telepresence.js");
+    const left = leaveFeatureIntercepts(feature);
+    if (left.length) {
+      info(`Left k8s intercept(s): ${left.join(", ")}`);
+    }
+  } catch (exc) {
+    // teardown must never block on telepresence
+    warn(`Could not clean up k8s intercepts: ${exc instanceof Error ? exc.message : String(exc)}`);
+  }
+
+  const slot = await getSlot(feature);
+  if (slot === null) {
+    warn(`Feature '${feature}' does not have an allocated slot`);
+    warn("It may already be stopped. Cleaning up anyway...");
+  }
+
+  info("Stopping containers...");
+  if (removeVolumes) {
+    info("--volumes: per-feature Docker volumes will be removed");
+  }
+  // composeDown's boolean is ignored, as it always has been here: a failed
+  // teardown still releases the slot rather than stranding it.
+  composeDown(feature, { removeVolumes });
+
+  info("Releasing feature slot...");
+  releaseSlot(feature);
+
+  return { feature, slot };
+}
+
+/**
+ * Regenerate the Caddyfile from the surviving features and reload Caddy.
+ *
+ * Separate from `down` so a multi-feature teardown pays for one reload rather
+ * than one per feature. `up` reloads inline instead because it may also have to
+ * *start* Caddy, which is part of bringing a feature up.
+ */
+export async function reloadProxy(): Promise<void> {
+  info("Updating reverse proxy configuration...");
+  await generateCaddyfile();
+  if (isCaddyRunning()) {
+    await reloadCaddy();
+  } else {
+    info("Caddy is not running -- skipping reload");
+  }
 }
 
 /**
