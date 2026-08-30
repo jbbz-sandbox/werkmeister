@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
 
-import { checkWireHealth } from "./dist/sandbox.js";
+import { checkForwardHealth, checkWireHealth } from "./dist/k8s.js";
 
 /** Listen on an ephemeral port. `reply` of null = accept and stay silent. */
 function fakeForward(reply) {
@@ -56,4 +56,40 @@ test("nothing listening is unhealthy", async () => {
   const srv = await fakeForward("+PONG\r\n");
   srv.close();
   assert.equal((await checkWireHealth(srv.port, "redis", 300)).ok, false);
+});
+
+// The bug these cover: `sandbox status` had its own probe that treated any
+// non-empty health_endpoint as a URL path, so `redis` became an HTTP GET
+// /redis at a Redis port and every healthy datastore forward read dead — for
+// the whole time #24's protocol probes were supposedly in place. Selection is
+// the part that was wrong, not the probes, so selection is what is asserted.
+test("a wire-probe name selects the wire probe, not an HTTP path", async () => {
+  const srv = await fakeForward("+PONG\r\n");
+  try {
+    assert.equal((await checkForwardHealth(srv.port, "redis")).ok, true);
+  } finally {
+    srv.close();
+  }
+});
+
+test("an unknown probe name fails instead of falling back to a connect", async () => {
+  // A connect-only fallback is what cannot see a dead forward, so an
+  // unrecognised name must not quietly get one.
+  const srv = await fakeForward(null);
+  try {
+    const r = await checkForwardHealth(srv.port, "mongodb");
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /unknown probe/);
+  } finally {
+    srv.close();
+  }
+});
+
+test("a blank health_endpoint is TCP-only", async () => {
+  const srv = await fakeForward(null);
+  try {
+    assert.equal((await checkForwardHealth(srv.port, "")).ok, true);
+  } finally {
+    srv.close();
+  }
 });
