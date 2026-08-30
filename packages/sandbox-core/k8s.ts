@@ -6,6 +6,7 @@
  * health-check and status utilities for that container.
  */
 
+import * as http from "node:http";
 import * as net from "node:net";
 import * as path from "node:path";
 
@@ -113,51 +114,109 @@ export function getForwardsStatus(): string {
   return `${Colors.RED}down${Colors.RESET}`;
 }
 
-/** Return true if a TCP connection to localhost:port succeeds. */
-function portOpen(port: number): Promise<boolean> {
+/**
+ * Return true if HTTP GET to 127.0.0.1:port+path answers below 500.
+ *
+ * A 4xx counts as alive: it means the service answered and rejected the
+ * request (`/graphql` without a query body, say), which still proves the
+ * forward carries traffic — the only thing this probe is asked.
+ */
+function checkHttpHealth(
+  port: number,
+  pathName: string,
+  timeoutMs = 3500,
+): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
-    const sock = net.connect({ host: "localhost", port });
-    const done = (ok: boolean) => {
-      sock.destroy();
-      resolve(ok);
-    };
-    sock.setTimeout(1000, () => done(false));
-    sock.once("connect", () => done(true));
-    sock.once("error", () => done(false));
+    const req = http.get({ host: "127.0.0.1", port, path: pathName, timeout: timeoutMs }, (res) => {
+      res.resume();
+      const code = res.statusCode ?? 0;
+      resolve({ ok: code < 500, detail: `HTTP ${code}` });
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ ok: false, detail: "timeout" });
+    });
+    req.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
   });
 }
 
 /**
- * Return true if HTTP GET to localhost:port+path returns 2xx-4xx.
- *
- * Accepts any non-5xx response — 4xx means the service is alive but rejected
- * the request (e.g. /graphql without a query body), which is fine.
+ * Probes for forwards that speak a protocol rather than HTTP. A TCP connect
+ * proves nothing about them: a stale `kubectl port-forward` accepts the
+ * connection and never replies, which is exactly the failure that reads as
+ * healthy while every query hangs (docs/known-issues.md). Both exchanges are
+ * pre-authentication, so neither needs credentials.
  */
-async function httpCheck(port: number, healthPath: string): Promise<boolean> {
-  try {
-    const resp = await fetch(`http://localhost:${port}${healthPath}`, {
-      signal: AbortSignal.timeout(3000),
+export const WIRE_PROBES: Record<string, { send: Buffer; ok: (reply: Buffer) => boolean }> = {
+  redis: { send: Buffer.from("PING\r\n"), ok: (r) => r.toString("latin1").startsWith("+PONG") },
+  // SSLRequest: length 8, code 80877103. Answered with a single 'S' or 'N'
+  // byte — either one proves a live server on the other end.
+  postgres: {
+    send: Buffer.from([0, 0, 0, 8, 0x04, 0xd2, 0x16, 0x2f]),
+    ok: (r) => r[0] === 0x53 || r[0] === 0x4e,
+  },
+};
+
+/** Send a {@link WIRE_PROBES} probe and wait for the answer. */
+export function checkWireHealth(
+  port: number,
+  kind: string,
+  timeoutMs = 3500,
+): Promise<{ ok: boolean; detail: string }> {
+  return new Promise((resolve) => {
+    const probe = WIRE_PROBES[kind];
+    const sock = net.connect({ host: "127.0.0.1", port, timeout: timeoutMs });
+    sock.on("connect", () => sock.write(probe.send));
+    sock.once("data", (reply: Buffer) => {
+      sock.destroy();
+      const ok = probe.ok(reply);
+      resolve({ ok, detail: ok ? `${kind} ok` : `${kind} bad reply` });
     });
-    return resp.status < 500;
-  } catch {
-    return false;
-  }
+    sock.on("timeout", () => {
+      sock.destroy();
+      resolve({ ok: false, detail: "timeout (connected, no reply)" });
+    });
+    sock.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
+  });
+}
+
+function checkTcpHealth(port: number, timeoutMs = 2500): Promise<{ ok: boolean; detail: string }> {
+  return new Promise((resolve) => {
+    const sock = net.connect({ host: "127.0.0.1", port, timeout: timeoutMs });
+    sock.on("connect", () => {
+      sock.destroy();
+      resolve({ ok: true, detail: "tcp open" });
+    });
+    sock.on("timeout", () => {
+      sock.destroy();
+      resolve({ ok: false, detail: "timeout" });
+    });
+    sock.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
+  });
 }
 
 /**
- * Return status string for a single forward.
+ * Run the probe a forward's `health_endpoint` names: an HTTP path, a
+ * {@link WIRE_PROBES} name, or blank for TCP-only.
  *
- * Uses HTTP GET via health_path when available (accepts 2xx-4xx);
- * falls back to TCP-only for services with no health_path (e.g. mongodb).
+ * An unrecognised name fails rather than falling back to TCP — silently
+ * downgrading to the probe that cannot see a dead forward is the bug this
+ * question has already had twice, once as that fallback and once as
+ * `classifyForward` reading a probe name as a URL path.
  */
+export function checkForwardHealth(
+  port: number,
+  health: string,
+): Promise<{ ok: boolean; detail: string }> {
+  if (health.startsWith("/")) return checkHttpHealth(port, health);
+  if (WIRE_PROBES[health]) return checkWireHealth(port, health);
+  if (health) return Promise.resolve({ ok: false, detail: `unknown probe "${health}"` });
+  return checkTcpHealth(port);
+}
+
+/** Return status string for a single forward. */
 async function classifyForward(listenPort: number, healthPath: string): Promise<string> {
-  if (!(await portOpen(listenPort))) {
-    return "dead";
-  }
-  if (healthPath) {
-    return (await httpCheck(listenPort, healthPath)) ? "alive" : "dead";
-  }
-  return "alive";
+  return (await checkForwardHealth(listenPort, healthPath)).ok ? "alive" : "dead";
 }
 
 export interface ForwardStatus {
