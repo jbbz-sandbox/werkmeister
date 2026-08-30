@@ -19,9 +19,9 @@
  * *feature* is a real feature throughout. `infra` is a CLI-level target that
  * routes to `sandbox-core/infra` before reaching any of this — passing it here
  * finds no slot, which `stop`/`restart` reject as `NOT_RUNNING` and `down`
- * merely warns about. `sandbox up infra` is the one that
- * does not even reach `infra`: it means `sandbox connect`, which is still a
- * command module, so that branch stays in the CLI until row 5g moves it.
+ * merely warns about. `sandbox up infra` is the one that does not even reach
+ * `infra`: it means `sandbox connect`, which is still a command module, so that
+ * branch stays in the CLI until row 5g moves it.
  */
 
 import * as fs from "node:fs";
