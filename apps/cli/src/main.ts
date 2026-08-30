@@ -63,7 +63,14 @@ export type Namespace = Record<string, unknown>;
 
 type CommandSpec = {
   name: string;
-  module: string; // ./commands/<module>.js
+  /**
+   * Import the command module. A thunk around a *literal* specifier, not a
+   * `./commands/${name}.js` built from a string field: only the literal form is
+   * resolved by tsc and by the esbuild bundle the published package ships
+   * (note 038 — a computed specifier compiles and bundles clean while resolving
+   * nowhere, which is how the same class of bug survived three PRs).
+   */
+  load: () => Promise<{ run: (args: Namespace) => void | Promise<void> }>;
   configure: (cmd: Command) => void;
   // Map commander (positionals, opts) → the args namespace.
   namespace: (args: unknown[], opts: Record<string, unknown>) => Namespace;
@@ -72,7 +79,7 @@ type CommandSpec = {
 const SPECS: CommandSpec[] = [
   {
     name: "up",
-    module: "up",
+    load: () => import("./commands/up.js"),
     configure: (cmd) => {
       cmd
         .description("Detect services, allocate slot, generate config, start containers")
@@ -101,7 +108,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "down",
-    module: "down",
+    load: () => import("./commands/down.js"),
     configure: (cmd) => {
       cmd
         .description("Stop containers, release slot, update proxy (use 'infra' for shared infra)")
@@ -117,7 +124,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "intercept",
-    module: "intercept",
+    load: () => import("./commands/intercept.js"),
     configure: (cmd) => {
       cmd
         .description("Route header-scoped k8s dev traffic to a local service (Telepresence OSS).")
@@ -146,7 +153,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "restart",
-    module: "restart",
+    load: () => import("./commands/restart.js"),
     configure: (cmd) => {
       cmd
         .description("Restart containers (use 'infra' for shared infra)")
@@ -156,7 +163,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "stop",
-    module: "stop",
+    load: () => import("./commands/stop.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -168,7 +175,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "status",
-    module: "status",
+    load: () => import("./commands/status.js"),
     configure: (cmd) => {
       cmd
         .description("Show all features, services, resource usage")
@@ -189,7 +196,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "detect",
-    module: "detect",
+    load: () => import("./commands/detect.js"),
     configure: (cmd) => {
       cmd
         .description("Analyse worktrees, show which services would run locally")
@@ -203,7 +210,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "services",
-    module: "services",
+    load: () => import("./commands/services.js"),
     configure: (cmd) => {
       cmd
         .description("List services and their endpoints for a feature")
@@ -213,7 +220,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "logs",
-    module: "logs",
+    load: () => import("./commands/logs.js"),
     configure: (cmd) => {
       cmd
         .description("Tail docker compose logs for a feature")
@@ -224,7 +231,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "remove",
-    module: "remove",
+    load: () => import("./commands/remove.js"),
     configure: (cmd) => {
       cmd
         .description("Stop a local service, fall back to k8s")
@@ -235,7 +242,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "test",
-    module: "test",
+    load: () => import("./commands/test.js"),
     configure: (cmd) => {
       cmd
         .description("Run Playwright tests against a feature's stack")
@@ -246,7 +253,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "open",
-    module: "open",
+    load: () => import("./commands/open.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -275,7 +282,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "connect",
-    module: "connect",
+    load: () => import("./commands/connect.js"),
     configure: (cmd) => {
       cmd
         .description("Start all shared infrastructure (local + k8s port-forwards)")
@@ -288,7 +295,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "proxy-reload",
-    module: "proxy_reload",
+    load: () => import("./commands/proxy_reload.js"),
     configure: (cmd) => {
       cmd.description("Regenerate Caddyfile and reload Caddy");
     },
@@ -296,7 +303,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "clean",
-    module: "clean",
+    load: () => import("./commands/clean.js"),
     configure: (cmd) => {
       cmd
         .description("Remove orphaned volumes and generated files from stopped features")
@@ -310,7 +317,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "stats",
-    module: "stats",
+    load: () => import("./commands/stats.js"),
     configure: (cmd) => {
       cmd
         .description("Show Docker container resource usage (CPU, memory)")
@@ -332,7 +339,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "optimize",
-    module: "optimize",
+    load: () => import("./commands/optimize.js"),
     configure: (cmd) => {
       cmd
         .description("Analyze resource usage vs configured limits, recommend changes")
@@ -353,7 +360,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "skills",
-    module: "skills",
+    load: () => import("./commands/skills.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -371,7 +378,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "standards",
-    module: "standards",
+    load: () => import("./commands/standards.js"),
     configure: (cmd) => {
       cmd
         .description("Validate the configured standards tree (structural regression gate)")
@@ -386,7 +393,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "hooks",
-    module: "hooks",
+    load: () => import("./commands/hooks.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -403,7 +410,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "notes",
-    module: "notes",
+    load: () => import("./commands/notes.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -438,7 +445,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "workspace",
-    module: "workspace",
+    load: () => import("./commands/workspace.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -524,7 +531,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "setup",
-    module: "setup",
+    load: () => import("./commands/setup.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -540,7 +547,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "config",
-    module: "config",
+    load: () => import("./commands/config.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -568,7 +575,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "init-workspace",
-    module: "init_workspace",
+    load: () => import("./commands/init_workspace.js"),
     configure: (cmd) => {
       cmd
         .description(
@@ -665,7 +672,7 @@ const SPECS: CommandSpec[] = [
   },
 ];
 
-async function dispatch(moduleName: string, args: Namespace): Promise<void> {
+async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
   // One-shot migration: remove legacy ~/.sandbox/slots.json on first run
   // after the labels refactor. Idempotent; no-op once the file is gone.
   try {
@@ -677,10 +684,10 @@ async function dispatch(moduleName: string, args: Namespace): Promise<void> {
 
   let mod: { run: (args: Namespace) => void | Promise<void> };
   try {
-    mod = await import(`./commands/${moduleName}.js`);
+    mod = await spec.load();
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ERR_MODULE_NOT_FOUND") {
-      console.log(`${_RED}Failed to load command '${moduleName}': ${(e as Error).message}${_RESET}`);
+      console.log(`${_RED}Failed to load command '${spec.name}': ${(e as Error).message}${_RESET}`);
       process.exit(1);
     }
     throw e;
@@ -731,7 +738,7 @@ export async function main(): Promise<void> {
       // One wrap per command: everything it and the library call print through
       // this reporter, and nothing outside a command has a sink at all.
       await withReporter(ttyReporter, () =>
-        dispatch(spec.module, spec.namespace(positionals, opts)),
+        dispatch(spec, spec.namespace(positionals, opts)),
       );
     });
   }

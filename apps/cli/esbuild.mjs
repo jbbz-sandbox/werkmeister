@@ -1,0 +1,58 @@
+/**
+ * Bundle the CLI to self-contained ESM, so the published package installs
+ * without resolving a private workspace.
+ *
+ * `sandbox-core` is a private monorepo workspace: an `npm i -g` of this package
+ * could never resolve it, so it (and `commander`/`yaml`/`nunjucks`/`@inquirer`)
+ * are bundled in rather than declared as runtime dependencies. That is what
+ * makes the tarball installable from a checkout-free machine.
+ *
+ * Two entry points, because the wrapper has two: `hooks gate` execs
+ * `dist/lib/gate.js` directly to skip the commander/yaml import chain (<200ms
+ * budget — see gate.ts). Bundling would otherwise collapse them into one file
+ * and hand the gate the whole CLI's import cost on every Edit/Write.
+ *
+ * `dockerode` is the one exception, left external and declared as a real
+ * dependency. 046 bundled it into the .vsix by externalising `*.node`, but that
+ * bundle is CJS; this one is ESM, where esbuild rewrites an unresolved `require`
+ * into a shim that throws rather than the guarded miss dockerode's ssh2 ->
+ * cpu-features path relies on. Letting npm install it keeps the native
+ * resolution npm-shaped. `*.node` stays listed so anything else reaching a
+ * binding fails at build, not at a user's first `sandbox up`.
+ *
+ * Output stays ESM (the extension's bundle is CJS and has to `define`
+ * import.meta away): sandbox-core resolves paths through `import.meta.dirname`,
+ * which is native here.
+ */
+import * as esbuild from "esbuild";
+
+const watch = process.argv.includes("--watch");
+
+const options = {
+  entryPoints: ["src/main.ts", "src/lib/gate.ts"],
+  bundle: true,
+  outdir: "dist",
+  outbase: "src",
+  external: ["dockerode", "*.node"],
+  format: "esm",
+  platform: "node",
+  target: "node20",
+  sourcemap: true,
+  minify: false,
+  // commander and nunjucks are CJS, and ESM output has no `require` for their
+  // internal `require("node:events")` calls — esbuild's shim throws "Dynamic
+  // require ... is not supported". Its shim delegates to a real `require` when
+  // one is in scope, so defining one is the whole fix.
+  banner: {
+    js: 'import { createRequire as __sandboxCreateRequire } from "node:module";\n' +
+      "const require = __sandboxCreateRequire(import.meta.url);",
+  },
+  logLevel: "info",
+};
+
+if (watch) {
+  const ctx = await esbuild.context(options);
+  await ctx.watch();
+} else {
+  await esbuild.build(options);
+}
