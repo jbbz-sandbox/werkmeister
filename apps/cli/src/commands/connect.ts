@@ -282,8 +282,7 @@ function runK8sOnly(): void {
     success("k8s port-forwards container is already healthy");
   } else {
     info("Attempting to start/restart k8s-forwards container...");
-    const ok = ensurePortForwardsHealthy();
-    if (ok) {
+    if (ensurePortForwardsHealthy() !== "failed") {
       success("k8s port-forwards started");
     } else {
       console.log(`\n  ${Colors.RED}Failed to start k8s port-forwards.${Colors.RESET}`);
