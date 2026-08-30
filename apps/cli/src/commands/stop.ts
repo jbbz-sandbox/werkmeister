@@ -23,12 +23,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     process.exit(1);
   }
 
+  console.log(`\n${Colors.BOLD}=== sandbox stop: ${feature} ===${Colors.RESET}\n`);
+
   if (feature === "infra") {
     await infraStop();
+    console.log();
     return;
   }
-
-  console.log(`\n${Colors.BOLD}=== sandbox stop: ${feature} ===${Colors.RESET}\n`);
 
   let slot: number;
   try {

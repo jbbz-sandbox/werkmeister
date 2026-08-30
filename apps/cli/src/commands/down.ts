@@ -151,8 +151,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
+    console.log(`\n${Colors.BOLD}=== sandbox down: ${feature} ===${Colors.RESET}\n`);
     const infra = await import("sandbox-core/infra");
     await infra.down(removeVolumes);
+    console.log();
     return;
   }
 

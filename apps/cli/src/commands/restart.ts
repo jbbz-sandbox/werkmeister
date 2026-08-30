@@ -19,12 +19,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     process.exit(1);
   }
 
+  console.log(`\n${Colors.BOLD}=== sandbox restart: ${feature} ===${Colors.RESET}\n`);
+
   if (feature === "infra") {
     await infraRestart();
+    console.log();
     return;
   }
-
-  console.log(`\n${Colors.BOLD}=== sandbox restart: ${feature} ===${Colors.RESET}\n`);
 
   // Both hints land *between* the error line and the exit, which main.ts's
   // handler cannot reproduce — it only knows how to print the message. So the
