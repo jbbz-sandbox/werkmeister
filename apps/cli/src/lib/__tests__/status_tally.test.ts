@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { tallied } from "../status.js";
+import { tallied } from "sandbox-core/status";
 import type { ContainerStatus } from "sandbox-core/compose";
 
 const c = (over: Partial<ContainerStatus>): ContainerStatus => ({

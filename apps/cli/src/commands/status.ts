@@ -4,74 +4,24 @@
  * Show shared infra, active features, and k8s port-forward health in one view.
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
-
-import { Colors, getInfraRoot, loadServices } from "../lib/config.js";
-import { getContainerStatus, type ContainerStatus } from "sandbox-core/compose";
-import { isOneShotService } from "sandbox-core";
+import { Colors, loadServices } from "../lib/config.js";
+import { getContainerStatus } from "sandbox-core/compose";
 import { getPerServiceStatus, type ForwardStatus } from "sandbox-core/k8s";
 import { status as webStatus, type WebServerStatus } from "sandbox-core/web_servers";
-import { getAllSlots, getPortRange, type SlotEntry } from "sandbox-core/slots";
-import { ProcError, run as procRun } from "sandbox-core/proc";
+import { getAllSlots, slotCount, type SlotEntry } from "sandbox-core/slots";
 import {
-  connectedNamespace,
-  interceptBlocker,
-  listIntercepts,
-  type InterceptState,
-} from "sandbox-core/telepresence";
-
-interface InfraContainer {
-  service: string;
-  display: string;
-}
-
-/** Return status of shared-infra containers without noisy logging. */
-function getInfraStatus(): InfraContainer[] {
-  const composeFile = path.join(getInfraRoot(), "compose", "shared-infra.yml");
-  if (!fs.existsSync(composeFile)) {
-    return [];
-  }
-  try {
-    const result = procRun(
-      ["docker", "compose", "-f", composeFile, "ps", "--format", "json"],
-      { capture: true, timeout: 10 },
-    );
-    if (result.status !== 0 || !result.stdout.trim()) {
-      return [];
-    }
-    const containers: InfraContainer[] = [];
-    for (const line of result.stdout.trim().split("\n")) {
-      try {
-        const data = JSON.parse(line);
-        const state = data["State"] ?? "";
-        const health = data["Health"] ?? "";
-        let display: string;
-        if (health === "healthy") {
-          display = "healthy";
-        } else if (health === "starting") {
-          display = "starting";
-        } else if (state === "running") {
-          display = "running";
-        } else {
-          display = state || "down";
-        }
-        containers.push({
-          service: data["Service"] ?? "unknown",
-          display,
-        });
-      } catch {
-        continue;
-      }
-    }
-    return containers;
-  } catch (e) {
-    if (e instanceof ProcError && (e.code === "ETIMEDOUT" || e.code === "ENOENT")) {
-      return [];
-    }
-    throw e;
-  }
-}
+  buildInterceptRows,
+  featurePortRange,
+  finishedSetup,
+  getInfraStatus,
+  interceptsSnapshot,
+  sortedSlots,
+  statusSnapshot,
+  tallied,
+  type InfraContainer,
+  type InterceptRow,
+} from "sandbox-core/status";
+import { listIntercepts } from "sandbox-core/telepresence";
 
 function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): void {
   console.log(`  ${Colors.BOLD}Infrastructure${Colors.RESET}`);
@@ -108,30 +58,6 @@ function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): 
   console.log();
 }
 
-function featurePortRange(slot: number | string): string {
-  if (typeof slot === "number") {
-    const [portStart, portEnd] = getPortRange(slot);
-    return `${portStart}-${portEnd}`;
-  }
-  return "?";
-}
-
-/**
- * A one-shot setup container that ran to completion. Its dependents wait on
- * `service_completed_successfully`, so exiting 0 is the success case — counting
- * it as a stopped service would make a fully healthy feature read as `partial`
- * now that stopped containers are listed at all. A non-zero exit is a real
- * failure and stays in the tally.
- */
-function finishedSetup(c: ContainerStatus): boolean {
-  return isOneShotService(c.service, c.role) && c.status === "exited" && c.exitCode === 0;
-}
-
-/** The containers a feature's up/down verdict is counted over. */
-export function tallied(containers: ContainerStatus[]): ContainerStatus[] {
-  return containers.filter((c) => !finishedSetup(c));
-}
-
 function featureStatus(featureName: string): string {
   const containers = tallied(getContainerStatus(featureName));
   if (!containers.length) {
@@ -160,15 +86,6 @@ function printVerboseContainers(featureName: string): void {
         (cPorts ? `  [${cPorts}]` : ""),
     );
   }
-}
-
-/** Sort feature entries by slot (missing/non-numeric slots sort last, as 99). */
-function sortedSlots(allSlots: Record<string, SlotEntry>): [string, SlotEntry][] {
-  return Object.entries(allSlots).sort((a, b) => {
-    const sa = typeof a[1].slot === "number" ? a[1].slot : 99;
-    const sb = typeof b[1].slot === "number" ? b[1].slot : 99;
-    return sa - sb;
-  });
 }
 
 /**
@@ -235,83 +152,24 @@ function printFeaturesSection(
 // Intercepts (`--intercepts`)
 // ---------------------------------------------------------------------------
 
-export interface InterceptRow {
-  feature: string;
-  service: string;
-  /** The k8s Deployment this service maps to, or null if it has none. */
-  deployment: string | null;
-  interceptable: boolean;
-  /** Why not, when `interceptable` is false. */
-  blocker: string | null;
-  intercepted: boolean;
-  /**
-   * The feature owning the intercept — from its `x-feature` header filter.
-   * Null when unreadable: telepresence allows one intercept per deployment, so
-   * a consumer must not assume an intercept of unknown ownership is its own.
-   */
-  intercepted_by: string | null;
-}
-
-/**
- * Join every active feature's services against the registry and the set of
- * intercepted deployments.
- *
- * Pure — the caller supplies all three inputs. `intercepted` is gated on
- * `interceptable` so a deployment-name collision can never mark a service with
- * no k8s coordinates as intercepted.
- */
-export function buildInterceptRows(
-  allSlots: Record<string, SlotEntry>,
-  registry: Record<string, any>,
-  state: InterceptState,
-): InterceptRow[] {
-  const rows: InterceptRow[] = [];
-  for (const [feature, info] of sortedSlots(allSlots)) {
-    for (const service of info.services ?? []) {
-      const svcDef = registry[service];
-      const blocker = interceptBlocker(svcDef);
-      const deployment = blocker === null ? String(svcDef["k8s_deployment"]) : null;
-      const owner = deployment !== null ? state.intercepts.get(deployment) : undefined;
-      rows.push({
-        feature,
-        service,
-        deployment,
-        interceptable: blocker === null,
-        blocker,
-        intercepted: owner !== undefined,
-        intercepted_by: owner ?? null,
-      });
-    }
-  }
-  return rows;
-}
-
 /** Handle `sandbox status --intercepts`: focused Telepresence intercept view. */
 async function runInterceptsOnly(asJson: boolean): Promise<void> {
-  const state = listIntercepts();
-  const rows = buildInterceptRows(await getAllSlots(), loadServices(), state);
-  const namespace = state.available ? connectedNamespace() : null;
+  const snapshot = await interceptsSnapshot();
 
   if (asJson) {
-    process.stdout.write(
-      JSON.stringify(
-        { available: state.available, connected_namespace: namespace, intercepts: rows },
-        null,
-        2,
-      ),
-    );
+    process.stdout.write(JSON.stringify(snapshot, null, 2));
     console.log();
     return;
   }
 
   console.log(`\n${Colors.BOLD}=== Telepresence Intercepts ===${Colors.RESET}\n`);
-  if (!state.available) {
+  if (!snapshot.available) {
     console.log(`  ${Colors.DIM}telepresence unavailable — nothing can be intercepted.${Colors.RESET}`);
     console.log();
     return;
   }
-  console.log(`  ${Colors.CYAN}Connected namespace:${Colors.RESET} ${namespace ?? "(none)"}\n`);
-  printInterceptRows(rows);
+  console.log(`  ${Colors.CYAN}Connected namespace:${Colors.RESET} ${snapshot.connected_namespace ?? "(none)"}\n`);
+  printInterceptRows(snapshot.intercepts);
 }
 
 function printInterceptRows(rows: InterceptRow[]): void {
@@ -393,66 +251,6 @@ function printK8sSection(services: ForwardStatus[]): number {
   return alive;
 }
 
-/** Emit a machine-readable JSON snapshot for agent-driven diagnosis. */
-function runJson(
-  infra: InfraContainer[],
-  k8s: ForwardStatus[],
-  allSlots: Record<string, SlotEntry>,
-  mcp: WebServerStatus,
-): void {
-  // Same intercept data as `--intercepts`, grouped per feature so this stays the
-  // one place system state is described.
-  const interceptState = listIntercepts();
-  const interceptRows = buildInterceptRows(allSlots, loadServices(), interceptState);
-
-  const features: Record<string, unknown>[] = [];
-  for (const [featureName, featureInfo] of sortedSlots(allSlots)) {
-    const slot = featureInfo.slot;
-    const services = featureInfo.services ?? [];
-    let portRange: string;
-    if (typeof slot === "number") {
-      const [portStart, portEnd] = getPortRange(slot);
-      portRange = `${portStart}-${portEnd}`;
-    } else {
-      portRange = "?";
-    }
-    const containers: ContainerStatus[] = tallied(getContainerStatus(featureName) ?? []);
-    const running = containers.filter((c) => c.status === "running").length;
-    features.push({
-      name: featureName,
-      slot,
-      services,
-      port_range: portRange,
-      containers,
-      containers_running: running,
-      containers_total: containers.length,
-      intercepts: interceptRows.filter((r) => r.feature === featureName),
-    });
-  }
-
-  const k8sAlive = k8s.filter((s) => s.status === "alive").length;
-  const infraHealthy =
-    infra.length > 0 && infra.every((c) => c.display === "healthy" || c.display === "running");
-
-  const output = {
-    infrastructure: infra,
-    mcp_web_server: mcp,
-    k8s_forwards: k8s,
-    features,
-    summary: {
-      total_features: features.length,
-      available_slots: 12 - features.length,
-      infra_healthy: infraHealthy,
-      k8s_alive: k8sAlive,
-      k8s_total: k8s.length,
-      telepresence_available: interceptState.available,
-      intercepts_active: interceptRows.filter((r) => r.intercepted).length,
-    },
-  };
-  process.stdout.write(JSON.stringify(output, null, 2));
-  console.log();
-}
-
 /** Handle `sandbox status --k8s`: focused k8s port-forward view. */
 function runK8sOnly(k8s: ForwardStatus[], asJson: boolean): void {
   if (asJson) {
@@ -495,15 +293,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
+  if (args.json) {
+    process.stdout.write(JSON.stringify(await statusSnapshot(), null, 2));
+    console.log();
+    return;
+  }
+
   const infra = getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = await getAllSlots();
   const mcp = await webStatus();
-
-  if (args.json) {
-    runJson(infra, k8s, allSlots, mcp);
-    return;
-  }
 
   console.log(`\n${Colors.BOLD}=== Developer Sandbox Status ===${Colors.RESET}\n`);
 
@@ -517,7 +316,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // Summary
   const totalFeatures = Object.keys(allSlots).length;
-  const available = 12 - totalFeatures;
+  const available = slotCount() - totalFeatures;
   const k8sTotal = k8s.length;
   let k8sColor: string;
   if (alive === k8sTotal) {

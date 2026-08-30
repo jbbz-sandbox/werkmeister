@@ -104,7 +104,7 @@ async function queryLabeledContainers(): Promise<LabelRow[] | null> {
  * applies only when the key is absent. The port math on the same block lives in
  * `sandbox-core/config` — see {@link getPortRange}.
  */
-function slotCount(): number {
+export function slotCount(): number {
   const featureSlots = loadPorts()["feature_slots"];
   const isDict = typeof featureSlots === "object" && featureSlots !== null && !Array.isArray(featureSlots);
   return (isDict ? featureSlots["count"] : undefined) ?? 12;
