@@ -59,10 +59,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
-    // `sandbox up infra` is `sandbox connect`. Imported as a literal so tsc
-    // resolves it — the same call went through a hoisted string constant in
-    // sandbox-core/infra until now, which is exactly why nothing noticed when
-    // step 3 moved that file and the path stopped resolving (note 038).
+    // `sandbox up infra` is `sandbox connect` — the command, not
+    // `sandbox-core/infra`'s `up()`, because this path prints connect's whole
+    // rendering (banner, health table, tools block) and `up()` returns before
+    // any of it. Imported as a literal so tsc resolves it: this call lived in
+    // `infra.up()` behind a hoisted string constant until 353984e, which is
+    // exactly why nothing noticed when step 3 moved that file and the path
+    // stopped resolving (note 038).
     const connect = await import("./connect.js");
     await connect.run({});
     return;
