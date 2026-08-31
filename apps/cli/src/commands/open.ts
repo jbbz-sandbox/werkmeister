@@ -15,7 +15,7 @@ import * as path from "node:path";
 
 import { parse as yamlParse } from "yaml";
 
-import { openFeatureBrowser } from "../lib/browser.js";
+import { openFeatureBrowser } from "sandbox-core/browser";
 import { ingressHostnames } from "sandbox-core/feature_routing";
 import { error, warn } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";

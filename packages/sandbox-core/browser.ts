@@ -28,9 +28,10 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { Colors, error, info } from "./config.js";
-import * as gc from "sandbox-core/global_config";
-import type { PromptSpec } from "./wizard.js";
+import { Colors } from "./colors.js";
+import { error, info } from "./reporter.js";
+import * as gc from "./global_config.js";
+import type { PromptSpec } from "./global_config.js";
 
 export const COOKIE_DOMAIN = ".local.sandbox.com";
 

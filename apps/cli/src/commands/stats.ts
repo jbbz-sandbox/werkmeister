@@ -11,15 +11,93 @@
  */
 
 import { Colors, info, success, warn } from "../lib/config.js";
+import { containerStats } from "sandbox-core/docker";
 import {
   ContainerStats,
   collectStats,
-  formatRecommendations,
-  formatStatsTable,
+  formatMem,
+  halveCpu,
   recommendLimits,
   saveReport,
-} from "../lib/stats.js";
-import { containerStats } from "sandbox-core/docker";
+  type Recommendation,
+} from "sandbox-core/stats";
+
+// The two table renderers live here rather than in `sandbox-core/stats`:
+// §3 keeps table rendering CLI-side, and 066 split `status` the same way.
+// `formatMem` stays in the library — `saveReport` writes it into the report
+// file, and `commands/optimize.ts` reads it too.
+
+/** Format stats as a human-readable table. */
+function formatStatsTable(stats: Record<string, ContainerStats>): string {
+  if (Object.keys(stats).length === 0) return "  No container data collected.";
+
+  const lines: string[] = [];
+  const header =
+    `  ${Colors.BOLD}${"Container".padEnd(35)}  ` +
+    `${"Avg CPU".padStart(8)}  ${"Max CPU".padStart(8)}  ` +
+    `${"Avg Mem".padStart(8)}  ${"Max Mem".padStart(8)}  ` +
+    `${"Samples".padStart(7)}${Colors.RESET}`;
+  lines.push(header);
+  lines.push(`  ${"─".repeat(85)}`);
+
+  for (const name of Object.keys(stats).sort()) {
+    const s = stats[name];
+    lines.push(
+      `  ${name.padEnd(35)}  ` +
+        `${s.avgCpu.toFixed(1).padStart(7)}%  ${s.maxCpu.toFixed(1).padStart(7)}%  ` +
+        `${formatMem(s.avgMem).padStart(8)}  ${formatMem(s.maxMem).padStart(8)}  ` +
+        `${String(s.samples).padStart(7)}`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
+/** Format recommendations as a human-readable report. */
+function formatRecommendations(recommendations: Recommendation[]): string {
+  if (recommendations.length === 0) {
+    return "  No recommendations available (no data collected).";
+  }
+
+  const lines: string[] = [];
+
+  // Summary table
+  const header =
+    `  ${Colors.BOLD}${"Container".padEnd(35)}  ` +
+    `${"Max CPU".padStart(8)}  ${"Max Mem".padStart(8)}  ` +
+    `${"Rec. CPU".padStart(9)}  ${"Rec. Mem".padStart(9)}  ` +
+    `${"Rec. Rsrv".padStart(9)}${Colors.RESET}`;
+  lines.push(header);
+  lines.push(`  ${"─".repeat(90)}`);
+
+  for (const r of recommendations) {
+    lines.push(
+      `  ${r.name.padEnd(35)}  ` +
+        `${r.max_cpu_pct.toFixed(1).padStart(7)}%  ${formatMem(r.max_mem_mib).padStart(8)}  ` +
+        `${r.recommended_cpus.padStart(9)}  ${r.recommended_memory.padStart(9)}  ` +
+        `${r.recommended_reservation.padStart(9)}`,
+    );
+  }
+
+  lines.push("");
+  lines.push(`  ${Colors.BOLD}YAML Snippets:${Colors.RESET}`);
+  lines.push("");
+
+  for (const r of recommendations) {
+    lines.push(`  # ${r.name}`);
+    lines.push("  deploy:");
+    lines.push("    resources:");
+    lines.push("      limits:");
+    lines.push(`        cpus: "${r.recommended_cpus}"`);
+    lines.push(`        memory: ${r.recommended_memory}`);
+    lines.push("      reservations:");
+    lines.push(`        cpus: "${halveCpu(r.recommended_cpus)}"`);
+    lines.push(`        memory: ${r.recommended_reservation}`);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
 
 function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));

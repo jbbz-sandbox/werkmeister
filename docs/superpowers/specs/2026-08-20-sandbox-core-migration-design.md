@@ -1,7 +1,7 @@
 # Design — move the sandbox logic into `sandbox-core`
 
 **Date:** 2026-08-20
-**Status:** approved; rows 0–4 shipped, 5 and 6 part-shipped (see §8)
+**Status:** approved; all rows shipped (see §8)
 **Author:** Jay Boyer (decisions), Claude (drafting)
 
 This document is written to be read cold. A session that has never seen the
@@ -259,20 +259,31 @@ option, so this is a branch in the wrapper, not new spawn machinery.
 Bottom-up by dependency. Each row is one PR, independently mergeable, with the
 gate green (§10).
 
-**Where this stands, 2026-08-31.** Rows 0–5 are complete — 5g was the last of row 5's seven
-PRs. Row 6 is shipping in three PRs rather than one ([074](../../../.sandbox/notes/074-decision-row-6-ships-in-three-prs-and-gate-keeps-its-entry-path.md)):
-6a (#57) took five modules, 6b takes `machine_setup`, and 6c takes the three that need
-judgment. `apps/cli/src/lib` holds seven files as of 6b — `browser`, `dotenv`, `gate`,
-`safari`, `stats`, `wizard`, and the `config` re-export door — of which
-[076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md)
-settles that two stay for good.
+**Where this stands, 2026-08-31. The migration is complete.** Row 6 shipped in three PRs
+rather than one ([074](../../../.sandbox/notes/074-decision-row-6-ships-in-three-prs-and-gate-keeps-its-entry-path.md)):
+6a (#57) took five modules, 6b (#59) `machine_setup`, and 6c the three that needed judgment.
+
+`apps/cli/src/lib` now holds exactly four things, and §3's boundary claim is true as
+amended: `wizard.ts` (the TTY), `dotenv.ts` (a `process.cwd()` contract —
+[076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md) §1),
+`gate.ts` (a 13-line esbuild entry calling `sandbox-core/gate`), and `config.ts` (the
+re-export door step 3 created, deliberately absent from every row).
+
+**Known debt, tracked not folded:** ten direct `console.*` writes in `sandbox-core` —
+`compose.ts` ×2, `browser.ts` ×4, `safari.ts` ×4, the last eight arriving with 6c's move.
+They are the same latent bug [030](../../../.sandbox/notes/030-decision-console-writes-in-core-are-tracked-not-fixed-here.md)
+tabulated: `sandbox mcp --stdio` uses stdout as the JSON-RPC transport. It has not fired
+because `sandbox.ts` — what the MCP server imports — does not reach them, and
+`runWorkspaceAction` still shells out rather than calling `lifecycle` in-process. Converting
+them is a print-path rewrite, which 030 says not to fold into a move PR; they go in one
+dedicated pass.
 
 | Row | Shipped | Left |
 |---|---|---|
 | 0–3 | #12, #13, #14/#15/#19/#26/#41, #16/#25 | — |
 | 4a/4b | #27, #28 | — |
 | 5 | #33 (5a blockers), #34 (5b `SandboxError`), #35 (5c `stop`/`restart`), #48 (5d `up`), #52 (5e `down`), #53 (5f `status`), 5g `connect` | — the split was [037](../../../.sandbox/notes/037-finding-step-5-api-shape-and-split.md), amended for `down` by [063](../../../.sandbox/notes/063-finding-row-5e-down-the-seam-is-smaller-than-037-proposed.md), for `status` by [066](../../../.sandbox/notes/066-finding-row-5f-status-is-a-pure-collector-move.md) and for `connect` by [069](../../../.sandbox/notes/069-finding-row-5g-connect-has-a-home-already.md)/[070](../../../.sandbox/notes/070-decision-row-5g-completes-infra-and-the-banner-rule.md) |
-| 6 | `docker`, `notes`, `graduate`, `web_servers`, `telepresence`, `git_hooks`; #57 (6a) `agent_gen`, `hooks_gen`, `mcp_gen`, `plugin_check`, `workspace_skills`; 6b `machine_setup` | 6c: `browser`, `safari`, `stats` (collectors only — [076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md) §2), `gate` (behind an entry shim — [074](../../../.sandbox/notes/074-decision-row-6-ships-in-three-prs-and-gate-keeps-its-entry-path.md) §2). `dotenv` stays in `apps/cli` |
+| 6 | `docker`, `notes`, `graduate`, `web_servers`, `telepresence`, `git_hooks`; #57 (6a) `agent_gen`, `hooks_gen`, `mcp_gen`, `plugin_check`, `workspace_skills`; #59 (6b) `machine_setup`; 6c `browser`, `safari`, `gate`, `stats` (collectors + `formatMem` + `halveCpu`; the two table renderers went to `commands/stats.ts`) | — `dotenv` stays in `apps/cli` by [076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md) §1 |
 
 `dotenv.ts` is a **third** module the table never counted: #29 created it after this
 document was written, collapsing six `loadDotenv` copies. It resolves a feature from the
@@ -290,7 +301,7 @@ rather than walk-ups ([076](../../../.sandbox/notes/076-decision-dotenv-stays-cl
 | 4a | Generation — leaves | **Moves:** `scaffold.ts`, `form_schema.ts`, `archetypes.ts`, `feature_routing.ts`, `caddy.ts`. Nothing here depends on a module still in `apps/cli`. | Gate green; output byte-identical |
 | 4b | Generation — the generate chain | **Moves:** `generate.ts` (1,520), `claude_md.ts`, `standards.ts`, `skill_gen.ts`. The last two are pulled forward from row 6: `generate.ts → claude_md.ts → skill_gen.ts → standards.ts`, and `sandbox-core` cannot import from `apps/cli`, so the chain moves as a unit. `nunjucks` moves with `generate.ts`, its only consumer. | `generate.test.ts` still passes; only its mock target changes |
 | 5 | Command sequences | `up`/`down`/`stop`/`restart`/`connect`/`status` become library functions returning typed results; `process.exit` → `SandboxError`; commands go thin. No `lib/` files move. **Decision point for the VS Code bundling risk (§9).** | Dashboard calls `up()` in-process; commands are argv + render only |
-| 6 | Remainder | **Moves:** `docker.ts` (the compose wrapper — see note below), `notes.ts`, `gate.ts`, `graduate.ts`, `agent_gen.ts`, `hooks_gen.ts`, `mcp_gen.ts`, `workspace_skills.ts`, `machine_setup.ts`, `web_servers.ts`, `telepresence.ts`, `browser.ts`, `safari.ts`, `stats.ts`, `plugin_check.ts`, `git_hooks.ts`. | `apps/cli/src/lib` contains only `wizard.ts` |
+| 6 | Remainder | **Moves:** `docker.ts` (the compose wrapper — see note below), `notes.ts`, `gate.ts`, `graduate.ts`, `agent_gen.ts`, `hooks_gen.ts`, `mcp_gen.ts`, `workspace_skills.ts`, `machine_setup.ts`, `web_servers.ts`, `telepresence.ts`, `browser.ts`, `safari.ts`, `stats.ts`, `plugin_check.ts`, `git_hooks.ts`. | `apps/cli/src/lib` contains `wizard.ts`, `dotenv.ts`, the `gate.ts` build entry and the `config.ts` door |
 
 Every one of the 38 modules in `apps/cli/src/lib` appears exactly once above or
 in "stays" (§3). If a step leaves one behind, the boundary claim in §3 is false —
