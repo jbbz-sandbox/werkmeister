@@ -65,7 +65,7 @@ import {
   type IngressSettings,
   type JiraSettings,
 } from "sandbox-core/global_config";
-import { pluginDriftWarnings } from "./plugin_check.js";
+import { pluginDriftWarnings } from "sandbox-core/plugin_check";
 import { ProcError, run } from "sandbox-core/proc";
 import {
   DEFAULT_MODEL_PRICING_YAML,

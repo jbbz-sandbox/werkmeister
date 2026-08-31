@@ -33,7 +33,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { buildTesterSpecs, writeWorkspaceAgents } from "../lib/agent_gen.js";
+import { buildTesterSpecs, writeWorkspaceAgents } from "sandbox-core/agent_gen";
 import { resolvePresentArchetypes } from "sandbox-core/archetypes";
 import { buildClaudeMd, buildStandardsRoutingSection } from "sandbox-core/claude_md";
 import {
@@ -51,15 +51,15 @@ import {
 import { buildFormSchema } from "sandbox-core/form_schema";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "sandbox-core/generate";
 import { loadPaths, standardsDirPath, standardsDirProblem } from "sandbox-core/global_config";
-import { writeWorkspaceHooks } from "../lib/hooks_gen.js";
+import { writeWorkspaceHooks } from "sandbox-core/hooks_gen";
 import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
   validateArchetypeMcpServers,
   writeWorkspaceMcp,
-} from "../lib/mcp_gen.js";
+} from "sandbox-core/mcp_gen";
 import { listNotes, nextNoteNumber, noteFilename, notesDir } from "sandbox-core/notes";
-import { pluginDriftWarnings } from "../lib/plugin_check.js";
+import { pluginDriftWarnings } from "sandbox-core/plugin_check";
 import {
   buildStandardsManifest,
   loadStandardsModules,
@@ -68,7 +68,7 @@ import {
   writeStandardsManifest,
 } from "sandbox-core/standards";
 import { PromptSpec, runWizard } from "../lib/wizard.js";
-import { writeWorkspaceSkills } from "../lib/workspace_skills.js";
+import { writeWorkspaceSkills } from "sandbox-core/workspace_skills";
 import {
   createWorktree,
   removeWorktree,

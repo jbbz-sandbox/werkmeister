@@ -26,8 +26,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { getInfraRoot } from "./config.js";
-import { generateSkills } from "sandbox-core/skill_gen";
+import { infraRoot } from "./config.js";
+import { generateSkills } from "./skill_gen.js";
 
 // sb-*-prefixed skill dirs under a workspace's .claude/skills/ are managed by
 // this module: written on init/sync, pruned when their source disappears.
@@ -35,7 +35,7 @@ const _MANAGED_PREFIX = "sb-";
 
 /** The hand-authored entry-skill sources: infra/skills/<name>/SKILL.md. */
 export function skillsSourceDir(): string {
-  return path.join(getInfraRoot(), "skills");
+  return path.join(infraRoot(), "skills");
 }
 
 function isDir(p: string): boolean {
