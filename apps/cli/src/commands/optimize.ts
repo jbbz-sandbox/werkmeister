@@ -10,7 +10,7 @@
  */
 
 import { Colors, info, loadServices, warn } from "../lib/config.js";
-import { collectStats, formatMem, recommendLimits } from "../lib/stats.js";
+import { collectStats, formatMem, recommendLimits } from "sandbox-core/stats";
 
 /** Execute the ``sandbox optimize`` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {

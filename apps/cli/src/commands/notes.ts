@@ -18,7 +18,7 @@ import * as path from "node:path";
 import * as readline from "node:readline/promises";
 
 import { error, info, success } from "../lib/config.js";
-import { resetSessionState } from "../lib/gate.js";
+import { resetSessionState } from "sandbox-core/gate";
 import { standardsDirPath } from "sandbox-core/global_config";
 import {
   GraduationError,

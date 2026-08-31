@@ -17,7 +17,7 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import * as fs from "node:fs";
-import * as gate from "../gate.js";
+import * as gate from "sandbox-core/gate";
 
 let tmp: string;
 

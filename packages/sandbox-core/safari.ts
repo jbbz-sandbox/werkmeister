@@ -20,7 +20,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as net from "node:net";
 
-import { error, info } from "./config.js";
+import { error, info } from "./reporter.js";
 import { badgeScript, COOKIE_DOMAIN, featureColor, findFreePort, sleep } from "./browser.js";
 
 const SAFARIDRIVER = "/usr/bin/safaridriver";
@@ -41,7 +41,10 @@ async function wdFetch(port: number, path: string, method: string, body?: unknow
     headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  const data = await r.json().catch(() => ({}) as any);
+  // Annotated because this package pins `lib: ["ES2022"]` + `types: ["node"]`,
+  // where undici's `json()` is `Promise<unknown>` — the CLI's unpinned config
+  // resolved a looser `fetch` and let the property access through.
+  const data: any = await r.json().catch(() => ({}));
   if (!r.ok || data?.value?.error) {
     const msg = data?.value?.message || data?.value?.error || `HTTP ${r.status}`;
     throw new Error(`safaridriver ${method} ${path} failed: ${msg}`);

@@ -9,7 +9,7 @@
  * both paths run the identical logic.
  */
 
-import { main as gateMain } from "../lib/gate.js";
+import { main as gateMain } from "sandbox-core/gate";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.action === "gate") {
