@@ -21,8 +21,17 @@ cat >> ~/.npmrc <<'EOF'
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 EOF
 
+export GITHUB_TOKEN=...                # see below — npm reads it from the env
 npx @jbbz-sandbox/sandbox-cli setup    # installs globally, then runs the wizard
 ```
+
+**`GITHUB_TOKEN` has to be set in the shell npm runs in.** npm expands it out of
+the environment when it reads `~/.npmrc`; it does not consult the `gh` keyring,
+so a machine where `gh auth login` works can still 404 on the install. Either
+`export GITHUB_TOKEN=$(gh auth token)` (needs `read:packages` on that token —
+`gh auth refresh -h github.com -s read:packages` adds it), or paste a classic PAT
+with `read:packages`. The failure is a plain 404 that reads like the package does
+not exist, not a permission error, so it is worth ruling out first.
 
 That one command is the whole onboarding. npx only bootstraps: the wrapper sees
 it is running from `~/.npm/_npx/<hash>/`, installs itself globally, and re-execs
@@ -45,12 +54,17 @@ One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins
 in `~/.sandbox/env.sh`, so whichever CLI you last ran `sandbox config` from owns
 that pointer. Pick one per machine.
 
-To publish a new version (needs `write:packages`):
+To publish a new version (needs `write:packages`, and the same `GITHUB_TOKEN`
+rule as above — `export GITHUB_TOKEN=$(gh auth token)`):
 
 ```bash
 npm version patch -w @jbbz-sandbox/sandbox-cli
 npm run build && npm publish -w @jbbz-sandbox/sandbox-cli
 ```
+
+`0.1.0` was the first release, published from `main` at `7d77cf6`. Publish from
+`main` on a clean build: GitHub Packages will not accept a re-publish of a
+version, so a release cut from a feature branch is permanent.
 
 ## First-time setup
 
