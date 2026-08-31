@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# GitHub Packages refuses a re-publish of a version, so two overlapping runs
+# would not race harmlessly — the loser fails the whole workflow.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write        # push the version branch and the release tag
+  pull-requests: write   # open and update the "version packages" PR
+  packages: write        # publish to npm.pkg.github.com
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Same reason as ci.yml: the dashboard smoke tests drive the real
+      # `commitAndPush`, which commits with the ambient git identity, and a
+      # runner has none. changesets/action's own commit needs one too.
+      - name: Configure a git identity
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@users.noreply.github.com"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          # Writes the .npmrc the publish authenticates through; NODE_AUTH_TOKEN
+          # below fills its placeholder. The ~/.npmrc a developer writes by hand
+          # (README) does not exist on a runner.
+          registry-url: https://npm.pkg.github.com
+          scope: '@jbbz-sandbox'
+      - run: npm ci
+      # This workflow races ci.yml rather than following it — both trigger on the
+      # same push — so the gate has to be here. A publish cannot be taken back,
+      # which is worth ~3 minutes of duplicated checks.
+      - run: npm run typecheck
+      - run: npm test
+      # With changesets pending: opens/updates the version PR. With none pending
+      # (i.e. that PR just merged): publishes and tags.
+      - uses: changesets/action@v1
+        with:
+          version: npm run changeset:version
+          publish: npm run release
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

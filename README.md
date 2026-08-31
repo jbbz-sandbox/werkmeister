@@ -54,17 +54,31 @@ One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins
 in `~/.sandbox/env.sh`, so whichever CLI you last ran `sandbox config` from owns
 that pointer. Pick one per machine.
 
-To publish a new version (needs `write:packages`, and the same `GITHUB_TOKEN`
-rule as above — `export GITHUB_TOKEN=$(gh auth token)`):
+### Releasing
+
+Releases run on [Changesets](https://github.com/changesets/changesets); nobody
+runs `npm publish` by hand. In a PR that changes anything user-visible:
 
 ```bash
-npm version patch -w @jbbz-sandbox/sandbox-cli
-npm run build && npm publish -w @jbbz-sandbox/sandbox-cli
+npx changeset          # pick a bump, write a one-line description
 ```
 
-`0.1.0` was the first release, published from `main` at `7d77cf6`. Publish from
-`main` on a clean build: GitHub Packages will not accept a re-publish of a
-version, so a release cut from a feature branch is permanent.
+That writes `.changeset/<name>.md` — commit it with the PR. **Name
+`@jbbz-sandbox/sandbox-cli`, even for work that lives in `sandbox-core`:** the
+description lands in the changelog of whichever package the changeset names, and
+the CLI is the one anyone reads. `sandbox-core` is `fixed` to the CLI, so its
+version follows either way.
+
+On merge to `main`, `.github/workflows/release.yml` opens (or updates) a **"chore:
+version packages"** PR carrying the version bumps and `CHANGELOG.md`. Merging
+*that* PR publishes to GitHub Packages and tags the release. So a release is one
+reviewable merge, and `main` never publishes by accident.
+
+The workflow re-runs `typecheck` and `test` before publishing. It duplicates CI on
+purpose — both trigger on the same push, so CI is a race, not a gate, and GitHub
+Packages will not accept a re-publish of a version.
+
+`0.1.0` predates this and was published by hand from `main` at `7d77cf6`.
 
 ## First-time setup
 
