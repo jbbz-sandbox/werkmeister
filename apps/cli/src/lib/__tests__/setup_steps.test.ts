@@ -30,7 +30,7 @@ import {
   WORKSPACE_ROOT_REPO,
   type Runner,
   type Step,
-} from "../machine_setup.js";
+} from "sandbox-core/machine_setup";
 import { renderSecretsEnv, renderServicesYaml } from "sandbox-core/scaffold";
 import { requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";

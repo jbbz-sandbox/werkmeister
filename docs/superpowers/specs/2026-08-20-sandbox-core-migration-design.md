@@ -66,7 +66,10 @@ All five were made by the user on 2026-08-20 and are binding.
 ## 3. The boundary
 
 The test for whether something moves: **does it read a TTY?** Only
-`apps/cli/src/lib/wizard.ts` does.
+`apps/cli/src/lib/wizard.ts` does. Row 6 found a second question the test does
+not ask — *does its contract depend on `process.cwd()`?* — and `dotenv.ts` is
+the one module that answers yes; see the table below and
+[076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md).
 
 ### Stays in `apps/cli`
 
@@ -74,6 +77,7 @@ The test for whether something moves: **does it read a TTY?** Only
 |---|---|---|
 | `src/commands/*` | 6,038 | argv parsing, table rendering, exit-code mapping |
 | `src/lib/wizard.ts` | 321 | the `@inquirer/prompts` runner — the only interactive code |
+| `src/lib/dotenv.ts` | 53 | walks up from `process.cwd()` to default a feature — argv resolution, and a contract only a CLI standing in the workspace satisfies ([076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md)) |
 | `src/main.ts` | — | commander wiring; gains the reporter wrap and the error handler |
 
 ### Moves to `sandbox-core`
@@ -255,21 +259,27 @@ option, so this is a branch in the wrapper, not new spawn machinery.
 Bottom-up by dependency. Each row is one PR, independently mergeable, with the
 gate green (§10).
 
-**Where this stands, 2026-08-30.** Rows 0–5 are complete — 5g was the last of row 5's seven
-PRs. Row 6 has six of its sixteen modules, so `apps/cli/src/lib` still holds thirteen files
-against §3's claim of one.
+**Where this stands, 2026-08-31.** Rows 0–5 are complete — 5g was the last of row 5's seven
+PRs. Row 6 is shipping in three PRs rather than one ([074](../../../.sandbox/notes/074-decision-row-6-ships-in-three-prs-and-gate-keeps-its-entry-path.md)):
+6a (#57) took five modules, 6b takes `machine_setup`, and 6c takes the three that need
+judgment. `apps/cli/src/lib` holds seven files as of 6b — `browser`, `dotenv`, `gate`,
+`safari`, `stats`, `wizard`, and the `config` re-export door — of which
+[076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md)
+settles that two stay for good.
 
 | Row | Shipped | Left |
 |---|---|---|
 | 0–3 | #12, #13, #14/#15/#19/#26/#41, #16/#25 | — |
 | 4a/4b | #27, #28 | — |
 | 5 | #33 (5a blockers), #34 (5b `SandboxError`), #35 (5c `stop`/`restart`), #48 (5d `up`), #52 (5e `down`), #53 (5f `status`), 5g `connect` | — the split was [037](../../../.sandbox/notes/037-finding-step-5-api-shape-and-split.md), amended for `down` by [063](../../../.sandbox/notes/063-finding-row-5e-down-the-seam-is-smaller-than-037-proposed.md), for `status` by [066](../../../.sandbox/notes/066-finding-row-5f-status-is-a-pure-collector-move.md) and for `connect` by [069](../../../.sandbox/notes/069-finding-row-5g-connect-has-a-home-already.md)/[070](../../../.sandbox/notes/070-decision-row-5g-completes-infra-and-the-banner-rule.md) |
-| 6 | `docker`, `notes`, `graduate`, `web_servers`, `telepresence`, `git_hooks` | `agent_gen`, `browser`, `gate`, `hooks_gen`, `machine_setup`, `mcp_gen`, `plugin_check`, `safari`, `stats`, `workspace_skills` |
+| 6 | `docker`, `notes`, `graduate`, `web_servers`, `telepresence`, `git_hooks`; #57 (6a) `agent_gen`, `hooks_gen`, `mcp_gen`, `plugin_check`, `workspace_skills`; 6b `machine_setup` | 6c: `browser`, `safari`, `stats` (collectors only — [076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md) §2), `gate` (behind an entry shim — [074](../../../.sandbox/notes/074-decision-row-6-ships-in-three-prs-and-gate-keeps-its-entry-path.md) §2). `dotenv` stays in `apps/cli` |
 
 `dotenv.ts` is a **third** module the table never counted: #29 created it after this
 document was written, collapsing six `loadDotenv` copies. It resolves a feature from the
-nearest `.env` for six commands, which reads as argv resolution — decide whether it moves
-with row 6 or is declared CLI-side alongside `wizard.ts`.
+nearest `.env` for six commands, which reads as argv resolution. **Settled in row 6: it
+stays in `apps/cli`** — its contract depends on `process.cwd()`, which is only meaningful
+for a CLI standing in the workspace, and core's own `.env` reads are workspace-path-anchored
+rather than walk-ups ([076](../../../.sandbox/notes/076-decision-dotenv-stays-cli-side-stats-splits-compose-converts-in-6c.md) §1).
 
 | # | PR | Contents | Done when |
 |---|---|---|---|

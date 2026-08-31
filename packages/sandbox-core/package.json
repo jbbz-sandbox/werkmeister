@@ -31,6 +31,7 @@
     "./k8s_forwards": "./dist/k8s_forwards.js",
     "./lifecycle": "./dist/lifecycle.js",
     "./locks": "./dist/locks.js",
+    "./machine_setup": "./dist/machine_setup.js",
     "./mcp_gen": "./dist/mcp_gen.js",
     "./notes": "./dist/notes.js",
     "./plugin_check": "./dist/plugin_check.js",
