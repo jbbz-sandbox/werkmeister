@@ -14,7 +14,7 @@ vi.mock("sandbox-core/global_config", async (importOriginal) => {
 
 import { run as runConfig } from "../../commands/config.js";
 import * as gc from "sandbox-core/global_config";
-import { syncJiraToken } from "../machine_setup.js";
+import { syncJiraToken } from "sandbox-core/machine_setup";
 
 const FILLED = {
   base_url: "https://hgdata.atlassian.net/",

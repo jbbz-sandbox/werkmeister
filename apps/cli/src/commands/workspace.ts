@@ -59,7 +59,7 @@ import { loadPaths } from "sandbox-core/global_config";
 // repo (which one is `overrides.workspace_repo`) — rationale and the clone/update logic
 // live with the constant in machine_setup (`sandbox setup` maintains the
 // checkout this command consumes).
-import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
+import { WORKSPACE_ROOT_REPO } from "sandbox-core/machine_setup";
 import { run as procRun } from "sandbox-core/proc";
 import { PromptSpec } from "../lib/wizard.js";
 // Worktree creation is shared with init-workspace (which owns the nested

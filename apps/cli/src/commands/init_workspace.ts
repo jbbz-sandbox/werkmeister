@@ -52,7 +52,7 @@ import { buildFormSchema } from "sandbox-core/form_schema";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "sandbox-core/generate";
 import { loadPaths, standardsDirPath, standardsDirProblem } from "sandbox-core/global_config";
 import { writeWorkspaceHooks } from "sandbox-core/hooks_gen";
-import { WORKSPACE_ROOT_REPO } from "../lib/machine_setup.js";
+import { WORKSPACE_ROOT_REPO } from "sandbox-core/machine_setup";
 import {
   resolveWorkspaceMcpServers,
   validateArchetypeMcpServers,

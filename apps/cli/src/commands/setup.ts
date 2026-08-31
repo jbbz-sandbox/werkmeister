@@ -17,7 +17,7 @@
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
  *
- * then writes the config and converges the machine (lib/machine_setup):
+ * then writes the config and converges the machine (sandbox-core/machine_setup):
  * seeding the `~/.sandbox` registry files (or migrating them up from a legacy
  * `infra/config/` checkout), the sandbox-tools and ponytail plugins, the
  * companion sandbox-workspace checkout, the TLS certificate covering every
@@ -50,7 +50,7 @@ import {
   runSetup,
   WORKSPACE_ROOT_REPO,
   type Step,
-} from "../lib/machine_setup.js";
+} from "sandbox-core/machine_setup";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
 
 function heading(text: string): void {

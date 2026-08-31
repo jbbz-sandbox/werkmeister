@@ -51,7 +51,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { expandUser, getReposRoot, getSandboxRoot, loadReposConfig } from "./config.js";
+import { expandUser, getReposRoot, loadReposConfig, sandboxRoot } from "./config.js";
 import {
   configPath,
   loadIngress,
@@ -64,9 +64,9 @@ import {
   servicesYamlPath,
   type IngressSettings,
   type JiraSettings,
-} from "sandbox-core/global_config";
-import { pluginDriftWarnings } from "sandbox-core/plugin_check";
-import { ProcError, run } from "sandbox-core/proc";
+} from "./global_config.js";
+import { pluginDriftWarnings } from "./plugin_check.js";
+import { ProcError, run } from "./proc.js";
 import {
   DEFAULT_MODEL_PRICING_YAML,
   DEFAULT_PORTS_YAML,
@@ -74,7 +74,7 @@ import {
   renderServicesYaml,
   seedFile,
   type SeedResult,
-} from "sandbox-core/scaffold";
+} from "./scaffold.js";
 import {
   BREW_FORMULA,
   DOWNLOAD_HINT,
@@ -82,7 +82,7 @@ import {
   MIN_VERSION,
   parseVersion,
   versionLt,
-} from "sandbox-core/telepresence";
+} from "./telepresence.js";
 
 // A command runner: argv in, [returncode, combined-output] out. Injected in
 // tests; the default shells out with a timeout and never throws.
@@ -580,7 +580,7 @@ export function syncRegistryConfigs(
 ): Step[] {
   const legacyDir =
     options.legacyDir === undefined
-      ? path.join(getSandboxRoot(), LEGACY_CONFIG_DIR)
+      ? path.join(sandboxRoot(), LEGACY_CONFIG_DIR)
       : options.legacyDir;
 
   // [label, destination, legacy basename, content factory]
@@ -657,13 +657,13 @@ export function syncRegistryConfigs(
 /**
  * Locate `bin/generate-certs.sh`, walking up from the CLI package root.
  *
- * `getSandboxRoot()` resolves to the CLI package (`<monorepo>/apps/cli`, from
- * the compiled dist location), but `bin/` sits at the MONOREPO root — so
- * joining the two misses by two levels. Walk instead of hardcoding `../..`, so
- * this keeps working if the CLI is relocated within the monorepo.
+ * `sandboxRoot()` resolves to the CLI package (`<monorepo>/apps/cli`), but
+ * `bin/` sits at the MONOREPO root — so joining the two misses by two levels.
+ * Walk instead of hardcoding `../..`, so this keeps working if the CLI is
+ * relocated within the monorepo.
  */
 export function resolveCertScript(startDir?: string): string | null {
-  let dir = startDir ?? getSandboxRoot();
+  let dir = startDir ?? sandboxRoot();
   for (let i = 0; i < 5; i++) {
     const candidate = path.join(dir, "bin", "generate-certs.sh");
     if (fs.existsSync(candidate)) {
@@ -998,7 +998,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   const claudePluginsDir =
     options.claudePluginsDir ?? path.join(os.homedir(), ".claude", "plugins");
   const repoPluginDir =
-    options.repoPluginDir ?? path.join(getSandboxRoot(), "plugins", "sandbox-tools");
+    options.repoPluginDir ?? path.join(sandboxRoot(), "plugins", "sandbox-tools");
   const runner = options.runner ?? defaultRunner;
   const jira = options.jira ?? loadJira();
 
