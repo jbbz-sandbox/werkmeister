@@ -18,7 +18,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { getSandboxRoot } from "./config.js";
+import { sandboxRoot } from "./config.js";
 
 export const PLUGIN_NAME = "sandbox-tools";
 
@@ -27,7 +27,7 @@ export const REFRESH_HINT =
   "sandbox-* ops skills";
 
 function defaultRepoPluginDir(): string {
-  return path.join(getSandboxRoot(), "plugins", PLUGIN_NAME);
+  return path.join(sandboxRoot(), "plugins", PLUGIN_NAME);
 }
 
 function defaultClaudePluginsDir(): string {

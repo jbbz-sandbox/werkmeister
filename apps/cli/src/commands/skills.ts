@@ -29,7 +29,7 @@ import {
   resolveActiveStandards,
   writeStandardsManifest,
 } from "sandbox-core/standards";
-import { checkWorkspaceSkills, writeWorkspaceSkills } from "../lib/workspace_skills.js";
+import { checkWorkspaceSkills, writeWorkspaceSkills } from "sandbox-core/workspace_skills";
 
 /** Recursively canonicalize for order-independent value comparison. */
 function canonical(value: unknown): unknown {

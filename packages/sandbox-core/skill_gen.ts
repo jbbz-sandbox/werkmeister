@@ -109,7 +109,7 @@ const _GENERATED_HEADER = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
   Source:    {source} (edit that file instead)
   Generator: sandbox init-workspace / sandbox skills sync
-             (src/lib/workspace_skills.ts)
+             (packages/sandbox-core/workspace_skills.ts)
   Freshness: sandbox skills check
 -->
 `;

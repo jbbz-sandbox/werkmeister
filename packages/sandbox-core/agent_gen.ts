@@ -14,14 +14,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { serviceTestCommand } from "sandbox-core/archetypes";
+import { serviceTestCommand } from "./archetypes.js";
 
 // Agent files must open with the frontmatter block, so the do-not-hand-edit
 // notice goes in the body (it becomes part of the agent's prompt — kept to
 // one screen line beyond the marker comment for that reason).
 const _GENERATED_NOTICE = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
-  Generator: sandbox init-workspace  (src/lib/agent_gen.ts)
+  Generator: sandbox init-workspace  (packages/sandbox-core/agent_gen.ts)
   Regenerated on every init-workspace run; edits will be clobbered.
 -->
 `;

@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { SESSION_START_COMMAND, writeWorkspaceHooks } from "../hooks_gen.js";
+import { SESSION_START_COMMAND, writeWorkspaceHooks } from "sandbox-core/hooks_gen";
 
 /** The shape shipped before skills self-healing — what real workspaces hold. */
 const PRIOR_COMMAND = "command -v sandbox >/dev/null 2>&1 && sandbox notes context || true";
