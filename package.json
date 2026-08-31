@@ -13,10 +13,13 @@
     "dev": "turbo run dev",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "claudeck:sync": "node scripts/sync-workspaces-to-claudeck.mjs"
+    "claudeck:sync": "node scripts/sync-workspaces-to-claudeck.mjs",
+    "changeset:version": "changeset version && npm install --package-lock-only",
+    "release": "npm run build && changeset publish"
   },
   "devDependencies": {
-    "turbo": "^2.5.0"
+    "turbo": "^2.5.0",
+    "@changesets/cli": "^2.27.0"
   },
   "engines": {
     "node": ">=20"
