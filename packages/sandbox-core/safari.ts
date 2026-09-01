@@ -20,7 +20,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as net from "node:net";
 
-import { error, info } from "./reporter.js";
+import { error, info, raw } from "./reporter.js";
 import { badgeScript, COOKIE_DOMAIN, featureColor, findFreePort, sleep } from "./browser.js";
 
 const SAFARIDRIVER = "/usr/bin/safaridriver";
@@ -122,14 +122,14 @@ export async function openSafariBrowser(
       return 1;
     }
 
-    console.log();
+    raw("\n");
     info(`Feature : ${feature}`);
     info(`Cookie  : X-Feature=${feature}  (domain ${COOKIE_DOMAIN})`);
     info(`Badge   : ${color}`);
     info(`URL     : ${url}`);
     info("Profile : Safari's normal profile (safaridriver has no throwaway-profile option)");
-    console.log(`\n  Window is tagged [${feature}] in the title bar + corner badge.`);
-    console.log("  Ctrl-C to close the window and clean up.\n");
+    raw(`\n  Window is tagged [${feature}] in the title bar + corner badge.\n`);
+    raw("  Ctrl-C to close the window and clean up.\n\n");
 
     await wdFetch(port, `/session/${sessionId}/window/rect`, "POST", rect);
 
@@ -186,7 +186,7 @@ export async function openSafariBrowser(
     }
 
     if (stop) {
-      console.log();
+      raw("\n");
       info("Closing feature window…");
       return 130;
     }

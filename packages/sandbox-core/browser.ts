@@ -29,7 +29,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { Colors } from "./colors.js";
-import { error, info } from "./reporter.js";
+import { error, info, raw } from "./reporter.js";
 import * as gc from "./global_config.js";
 import type { PromptSpec } from "./global_config.js";
 
@@ -644,20 +644,20 @@ async function openChromiumBrowser(
   let ws: WS | null = null;
   try {
     ws = await WS.connect(await waitForBrowserWs(port));
-    console.log();
+    raw("\n");
     info(`Feature : ${feature}`);
     info(`Cookie  : X-Feature=${feature}  (domain ${COOKIE_DOMAIN})`);
     info(`Badge   : ${color}`);
     info(`URL     : ${url}`);
     info(`Profile : ${profile}  (throwaway)`);
-    console.log(
+    raw(
       `\n  Window is tagged ${Colors.BOLD}[${feature}]${Colors.RESET} ` +
-        "in the title bar + corner badge.",
+        "in the title bar + corner badge.\n",
     );
-    console.log(`  ${Colors.CYAN}Ctrl-C${Colors.RESET} to close the window and clean up.\n`);
+    raw(`  ${Colors.CYAN}Ctrl-C${Colors.RESET} to close the window and clean up.\n\n`);
     await new FeatureSession(ws, feature, color, url, () => procExited, () => stop).run();
     if (stop) {
-      console.log();
+      raw("\n");
       info("Closing feature window…");
       return 130;
     }
