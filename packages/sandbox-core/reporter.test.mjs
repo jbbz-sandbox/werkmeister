@@ -6,7 +6,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { info, success, warn, error, raw, withReporter, ttyReporter } from "./dist/reporter.js";
+import {
+  info,
+  success,
+  warn,
+  error,
+  raw,
+  withReporter,
+  ttyReporter,
+  collectingReporter,
+} from "./dist/reporter.js";
 
 const recorder = () => {
   const events = [];
@@ -141,4 +150,44 @@ test("raw() carries no level prefix and can target stderr", async () => {
     { level: "raw", chunk: "plain\n", stream: "stdout" },
     { level: "raw", chunk: "oops\n", stream: "stderr" },
   ]);
+});
+
+// `runWorkspaceAction` stopped shelling out to the CLI and now collects this
+// transcript instead, so "what the dashboard shows" is only still "what the CLI
+// printed" for as long as these two renderings agree. Compared against
+// ttyReporter's real stdout writes rather than a hand-written expectation,
+// because a hand-written one would drift with the same edit that breaks this.
+test("collectingReporter is byte-identical to what ttyReporter prints", async () => {
+  const emitAll = async () => {
+    info("hello");
+    success("hello");
+    warn("hello");
+    error("hello");
+    raw("  a bare line\n");
+    raw("\n");
+  };
+
+  const realWrite = process.stdout.write.bind(process.stdout);
+  const realLog = console.log;
+  const printed = [];
+  process.stdout.write = (c) => (printed.push(c), true);
+  console.log = (line) => printed.push(`${line}\n`);
+  try {
+    await withReporter(ttyReporter, emitAll);
+  } finally {
+    process.stdout.write = realWrite;
+    console.log = realLog;
+  }
+
+  const collector = collectingReporter();
+  await withReporter(collector, emitAll);
+
+  assert.equal(collector.text(), printed.join(""));
+});
+
+// The dashboard's stdout is its MCP JSON-RPC channel: a child process that
+// inherited it would corrupt the protocol, which is the whole reason this
+// reporter exists rather than the tty one.
+test("collectingReporter never lets a child inherit stdio", () => {
+  assert.equal(collectingReporter().passthrough, false);
 });
