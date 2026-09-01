@@ -13,6 +13,12 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# How long to wait for the cluster at startup before giving up and letting the
+# restart policy try again. Overridable because the boot race this covers is a
+# property of the host, not of this script.
+CLUSTER_WAIT_ATTEMPTS="${CLUSTER_WAIT_ATTEMPTS:-30}"
+CLUSTER_WAIT_INTERVAL="${CLUSTER_WAIT_INTERVAL:-10}"
+
 # Service definitions: name|listen_port|remote_port|namespace|pod_prefix|health_path
 # listen_port = unique port inside this container (avoids conflicts when
 #   multiple k8s services use the same remote_port, e.g. 3001)
@@ -247,12 +253,29 @@ start_forward() {
     echo -e "  ${GREEN}+${NC} $name: 0.0.0.0:${listen_port} -> ${namespace}:${remote_port}"
 }
 
-# Verify kubectl can reach the cluster
+# Verify kubectl can reach the cluster.
+#
+# Retried, then fatal — never `sleep infinity`. This container starts with
+# Docker, which on a host reboot races the cluster's own startup, so the first
+# check losing that race is routine. Sleeping on failure kept the container Up
+# and idle forever: a happily-sleeping process is not a failure, so
+# `restart: unless-stopped` never fired and every forward stayed dead until
+# someone restarted it by hand (observed: 30 hours, against a cluster that was
+# healthy the whole time). Exiting non-zero hands the retry to the restart
+# policy, which is what makes this self-healing.
 echo -e "${CYAN}Verifying cluster access...${NC}"
-if ! kubectl cluster-info --request-timeout=10s > /dev/null 2>&1; then
-    echo -e "${RED}Cannot reach Kubernetes cluster. Check kubeconfig and credentials.${NC}"
-    echo "Sleeping to keep container alive for debugging..."
-    sleep infinity
+cluster_reachable=""
+for attempt in $(seq 1 "$CLUSTER_WAIT_ATTEMPTS"); do
+    if kubectl cluster-info --request-timeout=10s > /dev/null 2>&1; then
+        cluster_reachable=1
+        break
+    fi
+    echo -e "${YELLOW}Cluster not reachable (attempt ${attempt}/${CLUSTER_WAIT_ATTEMPTS}) — retrying in ${CLUSTER_WAIT_INTERVAL}s...${NC}"
+    sleep "$CLUSTER_WAIT_INTERVAL"
+done
+if [ -z "$cluster_reachable" ]; then
+    echo -e "${RED}Cannot reach Kubernetes cluster after $((CLUSTER_WAIT_ATTEMPTS * CLUSTER_WAIT_INTERVAL))s. Check kubeconfig and credentials.${NC}"
+    exit 1
 fi
 echo -e "${GREEN}Cluster access verified.${NC}"
 echo ""
