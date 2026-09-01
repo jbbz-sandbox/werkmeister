@@ -36,6 +36,8 @@ import type Dockerode from "dockerode";
 import { docker } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { checkForwardHealth } from "./k8s.js";
+import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
+import { collectingReporter, info, withReporter } from "./reporter.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
 
 const execFileAsync = promisify(execFile);
@@ -2178,14 +2180,21 @@ export const WORKSPACE_ACTIONS = ["up", "stop", "restart", "down"] as const;
 export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
 
 /**
- * Run a `sandbox` lifecycle command (up/stop/restart/down) against a workspace.
+ * Run a lifecycle action (up/stop/restart/down) against a workspace.
  *
- * Runs the CLI with cwd = the workspace directory so it resolves the feature
- * name and slot from that workspace's `.env` (the directory name is NOT the
- * feature name — e.g. `proj-2044-frontend` → FEATURE `frontend`),
- * matching how a user would run the command from inside the workspace. Returns
- * the command and its (ANSI-stripped) output; throws {@link WorkspaceError} on
- * a non-zero exit (e.g. stopping a feature that isn't running).
+ * Calls `sandbox-core/lifecycle` in-process — the payoff step 5 built the API
+ * for (note 079) — rather than spawning the CLI. The transcript the CLI would
+ * have printed is collected through a reporter and returned as `output`, so the
+ * `{ command, output, path }` contract the MCP tool renders is unchanged.
+ *
+ * The feature name comes from the workspace's own `.env`, because the directory
+ * name is NOT the feature name (e.g. `proj-2044-frontend` → FEATURE
+ * `frontend`); `up` additionally needs the directory, which it is handed rather
+ * than left to resolve from a cwd that belongs to the caller.
+ *
+ * Throws {@link WorkspaceError} on failure (e.g. stopping a feature that isn't
+ * running), with the transcript attached — the shape the CLI's non-zero exit
+ * used to produce.
  */
 export async function runWorkspaceAction(
   name: string,
@@ -2195,9 +2204,59 @@ export async function runWorkspaceAction(
     throw new WorkspaceError(`Invalid action: ${JSON.stringify(action)}`);
   }
   const target = await resolveWorkspaceDir(name);
-  const { stdout, stderr } = await runSandbox([action], target);
-  const output = stripAnsi(`${stdout}${stderr ? `\n${stderr}` : ""}`.trim());
-  return { command: `sandbox ${action} (in ${name})`, output, path: target };
+  const feature = await readEnvValue(target, "FEATURE");
+  if (!feature) {
+    throw new WorkspaceError(
+      `Workspace '${name}' has no FEATURE in its .env — run 'sandbox init-workspace' there first.`,
+    );
+  }
+  if (feature === "infra") {
+    // `sandbox up/down infra` means the shared infra stack, which the CLI routes
+    // to `connect`/`sandbox-core/infra` — a different code path entirely. Refuse
+    // rather than quietly running a feature lifecycle against it.
+    throw new WorkspaceError(
+      `Workspace '${name}' declares FEATURE=infra; manage the infra stack with the connect tool.`,
+    );
+  }
+
+  const collector = collectingReporter();
+  try {
+    await withReporter(collector, async () => {
+      switch (action) {
+        case "up": {
+          const result = await up(feature, target);
+          // The only fact the CLI's summary block carried that the transcript
+          // does not: `up()` reports the slot and ports, never the hostnames.
+          if (result.urls.length) {
+            info(`URL: ${result.urls.join(", ")}`);
+          }
+          break;
+        }
+        case "stop":
+          await stop(feature);
+          break;
+        case "restart":
+          await restart(feature);
+          break;
+        case "down":
+          await down(feature);
+          // Not part of `down()` -- the CLI reloads separately (note 063), and
+          // skipping it leaves Caddy routing to containers that no longer exist.
+          await reloadProxy();
+          break;
+      }
+    });
+  } catch (e) {
+    const detail = stripAnsi(
+      `${collector.text()}\n${e instanceof Error ? e.message : String(e)}`.trim(),
+    );
+    throw new WorkspaceError(`sandbox ${action} failed:\n${detail}`);
+  }
+  return {
+    command: `sandbox ${action} (in ${name})`,
+    output: stripAnsi(collector.text().trim()),
+    path: target,
+  };
 }
 
 // ---------------------------------------------------------------------------

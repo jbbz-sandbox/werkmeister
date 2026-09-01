@@ -81,6 +81,10 @@ const PREFIX = {
  * a message embeds resets to plain, not back to the level colour), and
  * `error` goes to stdout like the rest.
  */
+function renderLine(event: Exclude<LogEvent, { level: "raw" }>): string {
+  return `${PREFIX[event.level]}${event.msg}${RESET}`;
+}
+
 export const ttyReporter: Reporter = {
   passthrough: true,
   emit(event) {
@@ -88,6 +92,32 @@ export const ttyReporter: Reporter = {
       process[event.stream].write(event.chunk);
       return;
     }
-    console.log(`${PREFIX[event.level]}${event.msg}${RESET}`);
+    console.log(renderLine(event));
   },
 };
+
+/**
+ * A reporter that accumulates instead of printing, for callers that need a
+ * transcript rather than a terminal — the dashboard's MCP tools, which hand the
+ * text to a model and whose own stdout is the JSON-RPC channel.
+ *
+ * Shares {@link renderLine} with {@link ttyReporter} so the transcript is what
+ * the CLI would have printed, character for character, rather than a second
+ * rendering that drifts. It still carries the level colours; a caller wanting
+ * plain text strips them (`stripAnsi`), exactly as it did when it was reading
+ * the CLI's captured stdout.
+ *
+ * `passthrough: false` because such a caller owns no TTY: a child process must
+ * never inherit its stdio.
+ */
+export function collectingReporter(): Reporter & { text(): string } {
+  const chunks: string[] = [];
+  return {
+    passthrough: false,
+    // The `\n` is the one `console.log` appends for ttyReporter; raw chunks
+    // already carry their own, which is why they pass through untouched.
+    emit: (event) =>
+      void chunks.push(event.level === "raw" ? event.chunk : `${renderLine(event)}\n`),
+    text: () => chunks.join(""),
+  };
+}
