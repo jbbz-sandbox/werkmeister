@@ -79,6 +79,24 @@ because…") and keep it out of the main recommendation. The human decides wheth
 to reopen it. (A workspace `decision` note is such a given, and it is binding —
 raise the conflict, don't silently override it.)
 
+### Delegate fan-out, read what you reason against
+
+Delegation is not free: it buys window space with a layer of indirection between
+you and the evidence. The dividing question is **do I need the evidence, or just
+the answer?**
+
+- **Delegate** broad searches whose file dumps are throwaway — "who imports X",
+  "does any test cover Y", "every file matching this convention".
+- **Read inline** anything a correctness claim will rest on: `decision` notes
+  (binding, and precedence turns on exact wording), the body of a function whose
+  behaviour is your safety argument, a rule you are about to apply.
+- **Verify the pivot point firsthand** when a delegated conclusion becomes
+  load-bearing for shipped code. A summary is not evidence.
+
+Delegation pays on investigations with genuine fan-out and an unknown answer. It
+does not pay on a known, mechanical change — there the reads are few and each one
+is reasoned against.
+
 ### Bound the investigation
 
 Prefer the smallest investigation that answers the question with adequate

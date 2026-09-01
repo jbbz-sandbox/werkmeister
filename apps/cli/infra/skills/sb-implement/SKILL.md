@@ -55,12 +55,24 @@ When you run a check that dumps a lot of output — a test suite, a build, a typ
 redirect it to a file and read back only the slice you need (the failures), rather than
 letting the whole dump land in this conversation:
 
-    npm test > /tmp/check.log 2>&1; grep -nE -i 'fail|error' /tmp/check.log
+    npm test > /tmp/check.log 2>&1; echo "exit=$?"
+    grep -nE '✖|✗|×|npm error|Tests.*failed' /tmp/check.log   # only if exit was non-zero
 
 A full green-and-red dump buries the domain standards you loaded at phase entry under
 thousands of low-signal tokens (context-optimization: tool outputs dominate trajectories).
 Reading only the failing slice keeps the rules you're coding against near the top of
 attention.
+
+**Trust the exit code, and keep the pattern specific.** A zero exit needs no grep at
+all. Measured on this monorepo's own suite: a loose `-i 'fail|error'` returns **158
+matches on a passing run** — assertion names like "records cost with isError: 1",
+logged sample payloads — manufacturing exactly the noise it was meant to remove. The
+pattern above returns **0 on that passing run and 10 on a failing one**, naming the
+failing test.
+
+Match the runners, not the word "fail": node:test marks failures with `✖`, vitest with
+`✗`/`×`, and npm adds `npm error`. A pattern built from the wrong glyph silently
+reports a clean run on a suite that failed — worse than the noise it replaced.
 
 <!-- ponytail: phase-entry placement means this rule also drifts to the low-attention
      middle by mid-session; there's no command-time harness hook to re-inject it.
