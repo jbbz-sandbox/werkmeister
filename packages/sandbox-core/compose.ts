@@ -13,7 +13,7 @@ import * as path from "node:path";
 import { Colors } from "./colors.js";
 import { resolveWorkspace } from "./config.js";
 import { ProcError, run, RunResult } from "./proc.js";
-import { error, info, success } from "./reporter.js";
+import { error, info, raw, success } from "./reporter.js";
 
 export interface ContainerStatus {
   name: string;
@@ -157,7 +157,7 @@ function runCompose(
       const stderrText = capture ? result.stderr : "";
       error(`docker compose failed (exit ${result.status})`);
       if (stderrText) {
-        console.log(`${Colors.DIM}${stderrText.trim()}${Colors.RESET}`);
+        raw(`${Colors.DIM}${stderrText.trim()}${Colors.RESET}\n`);
       }
     } else {
       if (capture) {
@@ -280,7 +280,7 @@ export function composeLogs(feature: string, service?: string | null): void {
   }
 
   info(`Tailing logs for '${feature}'` + (service ? ` (${service})` : ""));
-  console.log(`${Colors.DIM}Press Ctrl+C to stop${Colors.RESET}`);
+  raw(`${Colors.DIM}Press Ctrl+C to stop${Colors.RESET}\n`);
   runCompose(feature, args, { stream: true });
 }
 
