@@ -93,8 +93,15 @@ export function ensurePortForwardsHealthy(): ForwardsOutcome {
   const composeFile = infraComposeFile();
 
   try {
+    // --force-recreate, because plain `up -d` cannot repair the case this
+    // function exists for. For a container that is already running with
+    // unchanged config, compose reports "Running", does nothing, and exits 0 —
+    // so an Up-but-unhealthy forwarder was reported "restarted" while nothing
+    // had happened, and `up` then waited out its timeout for tunnels that were
+    // never coming back. Recreating also re-reads the mounted kubeconfig and
+    // forwards table, which a bare restart would not.
     const result = run(
-      ["docker", "compose", "-f", composeFile, "up", "-d", "k8s-forwards"],
+      ["docker", "compose", "-f", composeFile, "up", "-d", "--force-recreate", "k8s-forwards"],
       { capture: true, timeout: 60 },
     );
     if (result.status !== 0) {
