@@ -2,12 +2,22 @@
 
 Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 
-## Apps
+## Workspaces
 
 | App | Path | What |
 | --- | --- | --- |
-| `sandbox` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI (TypeScript port). |
+| `@jbbz-sandbox/sandbox-cli` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI. |
 | `sandbox-workspace-mcp-app` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | MCP App + dashboard UI for creating/managing sandbox workspaces. |
+| `claudeck` | [apps/claudeck](apps/claudeck) | Vendored fork of the browser UI for Claude Code, with a workspace plugin over `sandbox-core`. Private — it shares upstream's package name. |
+
+| Package | Path | What |
+| --- | --- | --- |
+| `sandbox-core` | [packages/sandbox-core](packages/sandbox-core) | Shared library: config/registry resolution, workspace + Jira helpers, typed wrappers over the CLI. |
+| `vscode-plugin` | [packages/vscode-plugin](packages/vscode-plugin) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
+
+`sandbox-core` is the one shared dependency — the CLI, the dashboard, claudeck's
+workspace plugin and the VS Code extension all read the same machine config
+through it. Only the CLI publishes; everything else is private.
 
 ## Install the CLI without a clone
 
@@ -155,6 +165,8 @@ npm run build      # turbo run build
 npm run typecheck  # turbo run typecheck
 npm run test       # turbo run test
 npm run dev        # turbo run dev (dashboard watch/serve)
+
+npm run claudeck:sync   # register every feature workspace as a claudeck project
 ```
 
 The `sandbox` CLI launcher lives at [apps/cli/sandbox](apps/cli/sandbox) (symlinked at the repo root as `./sandbox` for convenience).
