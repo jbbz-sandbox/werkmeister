@@ -819,13 +819,22 @@ the pieces that are not obvious from the demo services:
   registry sets `HOST=0.0.0.0` because the container network is the isolation boundary and
   Docker's published port is the only way in.
 - **New hostnames need `/etc/hosts` entries.** The wildcard certificate already covers
-  `*.local.sandbox.com`, but `dashboard.` and `claudeck.` only resolve after `sandbox setup`
-  (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
+  `*.local.sandbox.com`, but `sandbox-dashboard.local.sandbox.com` and
+  `claudeck.local.sandbox.com` only resolve after `sandbox setup` (run from the main
+  checkout) reconciles `/etc/hosts`, which needs sudo. Caddy emits their site blocks only
+  once a running feature declares the service.
 - **Claudeck chat needs an Anthropic key.** Add `ANTHROPIC_API_KEY` to
   `~/.sandbox/secrets.env` *and* `secrets: [ANTHROPIC_API_KEY]` to the `claudeck` entry
   together: a declared-but-missing secret makes `sandbox up` refuse the whole workspace.
+- **The container's npm rewrites `package-lock.json`.** `node:22` ships npm 10.9.x, which
+  strips the `libc` fields a newer host npm writes. Discard that diff in the worktree unless
+  you actually changed dependencies.
+- **Inside the container, `sandbox status` shows every k8s forward as dead** and `kubectl`
+  cannot reach OrbStack's API server: both probe `127.0.0.1`, which is the container's own
+  loopback. The forwards are fine; read their state from the host. `sandbox up`, `down`,
+  `status` (for features) and `workspace` all work from inside.
 - **Not covered:** Telepresence intercepts (need a root daemon on the host), and the `gh` and
-  `claude` binaries. Run `sandbox intercept` from the host.
+  `claude` binaries. Run `sandbox intercept` and `sandbox connect` from the host.
 
 ---
 
