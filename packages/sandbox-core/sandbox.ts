@@ -190,36 +190,6 @@ export function childEnv(): NodeJS.ProcessEnv {
 }
 
 /**
- * Spawn `bin args`, streaming each stdout/stderr chunk to `onData` (if given)
- * while accumulating them. Resolves with the full output and exit code; never
- * rejects on a non-zero exit (callers decide what a non-zero code means).
- * Rejects only on a spawn error (e.g. bin not found).
- */
-export function spawnCapture(
-  bin: string,
-  args: string[],
-  opts: { cwd?: string; env?: NodeJS.ProcessEnv; onData?: (chunk: string) => void } = {},
-): Promise<{ stdout: string; stderr: string; code: number | null }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { cwd: opts.cwd, env: opts.env });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => {
-      const s = d.toString();
-      stdout += s;
-      opts.onData?.(s);
-    });
-    child.stderr.on("data", (d) => {
-      const s = d.toString();
-      stderr += s;
-      opts.onData?.(s);
-    });
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ stdout, stderr, code }));
-  });
-}
-
-/**
  * Locate the `claude` CLI, robust to Claude Desktop's minimal PATH. Order:
  * $CLAUDE_BIN → the usual install locations → bare `claude` (resolved against
  * the augmented PATH in {@link childEnv}).

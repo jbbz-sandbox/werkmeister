@@ -7,8 +7,15 @@ Tracked concurrency and isolation issues in the sandbox.
 ## Sandbox Env Vars in `.zshrc` Are Invisible to Non-Interactive Shells
 
 **Severity:** Moderate (breaks tooling, easy to misdiagnose)
-**Status:** Open — install-time gap
+**Status:** Resolved by tooling — `sandbox config` writes `~/.zshenv` for you
 **Affects:** Shell setup / installation (`SANDBOX_WORKSPACES_ROOT`, `SANDBOX_ROOT`)
+
+`sandbox config` now manages a marked block in `~/.zshenv` that sources
+`~/.sandbox/env.sh` (`zshenvPath()` / the managed-block markers in
+`packages/sandbox-core/global_config.ts`), and strips the old hardcoded exports it
+finds there. So a fresh install no longer hits this. The rest of the entry is kept
+because the failure is still the first thing to check when a *hand-configured*
+machine behaves differently under an agent than in your terminal.
 
 The common install instruction is to `export SANDBOX_WORKSPACES_ROOT=...` (and
 `SANDBOX_ROOT=...`) from `~/.zshrc`. But `~/.zshrc` is sourced **only by
@@ -49,22 +56,20 @@ and `docker compose` interpolation may rely on the exported value, so set it in
 ## Environment Placeholder Syntax in services.yaml
 
 **Severity:** Moderate (functional bug)
-**Status:** Open
-**Affects:** `infra/config/services.yaml` environment blocks
+**Status:** Resolved — the file that carried them no longer ships
+**Affects:** the service registry (now `~/.sandbox/services.yaml`)
 
-Several service environment variables use `{service-name}` placeholders:
+Several service environment variables in the repo's shipped `infra/config/services.yaml` used `{service-name}` placeholders:
 
 ```yaml
 BACKEND_URL: "http://{backend}/api"
 ```
 
-These are rendered verbatim into Docker Compose environment blocks. The literal curly braces are not valid hostnames and are not Docker Compose variable syntax (`${...}`). The intent is for these to resolve to Docker network aliases, but the braces need to be stripped.
+Those rendered verbatim into Docker Compose environment blocks — literal curly braces are neither valid hostnames nor Compose variable syntax (`${...}`).
 
-**Workaround:** The programmatic compose generator (`apps/cli/src/lib/generate.ts`) builds its own `*_URL` environment variables using Docker DNS names (e.g., `http://frontend:3000` for local services, `http://k8s-forwards:9053` for k8s services), bypassing these placeholders entirely. The `_resolve_service_refs()` function in `generate.ts` also resolves `{service-name}` placeholders in the nunjucks template path to Docker DNS aliases.
+**Why it is closed:** the registry is machine-global and user-owned now (`~/.sandbox/services.yaml`, seeded by `sandbox setup` from `renderServicesYaml`), and the seed contains no such placeholders — verified against the rendered output. `infra/config/services.yaml` no longer exists.
 
-**Fix:** Either:
-1. Strip braces at template render time and resolve to the Docker network alias (the service name)
-2. Replace `{service-name}` with the correct Docker DNS alias (e.g., `k8s-forwards:9000`)
+A hand-written placeholder in a user's own registry is still handled: `resolveServiceRefs()` in `packages/sandbox-core/generate.ts` resolves `{service-name}` to the Docker DNS alias, and the compose generator builds its own `*_URL` variables from those aliases rather than from the registry string.
 
 ---
 
@@ -128,7 +133,7 @@ In standalone mode, all features share the same source code checkout. Two featur
 
 **Severity:** Low (by design)
 **Status:** Won't fix — documented behavior
-**Affects:** `infra/proxy/ui/index.html`
+**Affects:** `apps/cli/infra/proxy/ui/index.html`
 
 The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in the same browser. Users testing multiple features simultaneously need separate browser profiles or use the `X-Feature` HTTP header directly (e.g., via ModHeader browser extension).
 
@@ -140,7 +145,7 @@ The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in t
 
 **Severity:** Low
 **Status:** Resolved
-**Affects:** `apps/cli/src/lib/docker.ts` — `compose_down()`
+**Affects:** `packages/sandbox-core/compose.ts` — `composeDown()`
 
 `sandbox down` preserves per-feature Docker volumes by default (for faster subsequent startups). Use `sandbox down --volumes` to remove them, or `sandbox clean` to bulk-remove orphaned volumes from stopped features.
 
@@ -150,7 +155,7 @@ The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in t
 
 **Severity:** Critical (causes blank pages / empty responses)
 **Status:** Resolved — documented to prevent recurrence
-**Affects:** `infra/proxy/Caddyfile`, `infra/templates/Caddyfile.njk`, `apps/cli/src/lib/generate.ts`
+**Affects:** `apps/cli/infra/proxy/Caddyfile`, `apps/cli/infra/templates/Caddyfile.njk`, `packages/sandbox-core/generate.ts`
 
 When the Caddyfile uses multiple `handle` blocks at the same nesting level for path-based routing, Caddy groups them into a **mutual-exclusion set**. Only the first matching `handle` block executes; the remaining blocks are silently dropped from the compiled config. This results in URLs returning HTTP 200 with `content-length: 0` (empty body) for any path whose route was dropped.
 
@@ -187,9 +192,9 @@ route {
 
 **Severity:** Moderate (causes stale configs)
 **Status:** Open — inherent to Docker Desktop
-**Affects:** `infra/proxy/Caddyfile` (bind-mounted into `sandbox-caddy` container)
+**Affects:** `apps/cli/infra/proxy/Caddyfile` (bind-mounted into `sandbox-caddy` container)
 
-Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediately after writes on the host. The `infra/proxy/Caddyfile` file may show different sizes when compared between host and container, causing Caddy to use stale or truncated config.
+Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediately after writes on the host. The `apps/cli/infra/proxy/Caddyfile` file may show different sizes when compared between host and container, causing Caddy to use stale or truncated config.
 
 **Symptoms:**
 - `caddy adapt` reports `unexpected EOF` after editing Caddyfile
@@ -199,7 +204,7 @@ Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediate
 **Workaround:** Always use `docker cp` to push the file, then reload from the copied path:
 
 ```bash
-docker cp infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp apps/cli/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
 ```
 
@@ -210,8 +215,14 @@ Do not rely on the bind mount at `/etc/caddy/Caddyfile` syncing in real-time for
 ## Workspace-Create Form Duplicated Across Desktop and Browser Surfaces
 
 **Severity:** Low (deliberate; tech debt)
-**Status:** Open — deferred optimization pass
+**Status:** Resolved — the two surfaces share one form
 **Affects:** `apps/sandbox-dashboard/src/mcp-app.ts` (Desktop MCP App), `apps/sandbox-dashboard/src/create-form.ts` (browser dashboard "New workspace" tab)
+
+`mcp-app.ts` imports `initCreateForm` from `create-form.ts` — the optimization pass below happened, and the ~120 duplicated lines are gone. The history is kept because the *reasoning* about why a naive share was not free still applies to the next surface that wants this form (claudeck's `create-form.mjs` is a third, independent one; see "Claudeck's Streaming Routes Still Spawn the CLI" below for the general shape of that problem).
+
+<details>
+<summary>The duplication as it stood, and the pass that removed it</summary>
+
 
 The RJSF workspace-create form is implemented twice — `WorkspaceForm`, `TextareaWidget`, `validateRepoSelection`, and `transformErrors` are duplicated (~120 lines, mostly identical) between the two surfaces. This is intentional for now: the browser dashboard is under active construction, and sharing would couple a churning surface to the shipping Desktop one, so an experiment on the browser form could regress Desktop.
 
@@ -220,3 +231,180 @@ The four genuine differences (why a naive share isn't free) are all host-level: 
 **Optimization pass (do after the browser dashboard stabilizes):**
 1. `validateRepoSelection` and `transformErrors` are **byte-identical and host-agnostic** (pure, no `app`/`bridge`) — lift them into `lib/` and import in both. Zero regression risk; safe to do even before the browser surface settles.
 2. Once the browser form stops moving, extract a shared `<WorkspaceForm callTool={…} />` component, threading the four host differences above as props/config, and have both entrypoints render it.
+</details>
+
+---
+
+## Claudeck's Streaming Routes Still Spawn the CLI
+
+**Severity:** Low (works; costs a process launch per action and diverges from the other consumers)
+**Status:** Open — deferred, blocked on two decisions rather than on effort
+**Affects:** `apps/claudeck/plugins/sandbox-workspace/server.js` — `POST /action`, `POST /intercept`
+
+`sandbox-core` never spawns the `sandbox` CLI (note 087), but a **consumer** may, and claudeck
+still does for two of its routes. The dashboard and the VS Code tree call core in-process for
+the same data, so the surfaces disagree about how they reach the same work.
+
+Two of claudeck's four spawns are already gone (note 093): the intercept read became
+`getIntercepts()` — `GET /docker` went from ~5.5s to ~230ms, since the CLI boot was the whole
+cost — and `POST /open` became `openFeatureBrowser()`, which also made launch failures visible
+instead of answering `200 {"ok":true}` and doing nothing.
+
+The two that remain both **stream** the child's output to a chunked response, ending on
+`[exit N]`:
+
+| Route | Spawns | Core equivalent |
+|---|---|---|
+| `POST /action` | `sandbox up\|stop\|restart\|down` | `runWorkspaceAction(name, action)` |
+| `POST /intercept` | `sandbox intercept -s <svc> [--leave]` | none yet |
+
+**What blocks `/action`** — two things, only one of which is code:
+
+1. `runWorkspaceAction` collects a transcript rather than streaming one. The seam exists —
+   `collectingReporter(onChunk)` in `packages/sandbox-core/reporter.ts`, which `POST /create` in
+   this same file already uses through `createWorkspace`'s `onData` — so this is roughly three
+   lines.
+2. **Cancellation, which is a decision, not a task.** The child process gives claudeck a
+   10-minute `SIGKILL` timer and abort-on-disconnect (`res.on("close")` kills it). An in-process
+   run has neither: a wedged `docker compose up` would hold a server request with no way to end
+   it. Either the lifecycle functions grow an `AbortSignal`, or that behaviour is knowingly
+   dropped.
+
+**What blocks `/intercept`:** there is no core entry point at all. `packages/sandbox-core/telepresence.ts`
+has the pieces (`buildInterceptArgs`, `ensureConnected`, `leaveFeatureIntercepts`) but
+`apps/cli/src/commands/intercept.ts` still owns the command body — 180 lines whose `fail()` ends
+in `process.exit(1)`. In-process that would **take the claudeck server down**, so the command
+needs the same treatment `workspace`/`init-workspace` got (throw a reported error, leave an argv
+adapter) before the route can move.
+
+**Also worth knowing when this is picked up:** the telepresence reads behind `getIntercepts()`
+are `spawnSync`, so they block the caller's event loop — the whole express server, not just the
+waiting request. They run under a 15s cap (`STATUS_READ` in `packages/sandbox-core/status.ts`)
+for exactly that reason. Anything else moved in-process should be checked the same way.
+
+---
+
+## `getFormSchema()` Scans Your Home Directory for a Jira ID It Discards
+
+**Severity:** Low (wasted work and a surprising `git` call, not a wrong result)
+**Status:** Open
+**Affects:** `packages/sandbox-core/sandbox.ts` — `getFormSchema()`, via `scrapeJiraId` in `workspace_prompts.ts`
+
+The workspace-create form is built against `os.homedir()`, deliberately: a stray
+`./.sandbox/workspace.yml` under the caller's cwd must not pre-resolve fields for a
+brand-new workspace. But building the prompt spec evaluates every prompt's `defaultFn`, and
+`jira_id`'s is `scrapeJiraId(workspaceRoot)` — which lists that root and runs
+`git branch --show-current` in **every non-dot subdirectory**, looking for a ticket key.
+
+The result is then thrown away: `formData` starts blank on purpose, so a derived value can't
+be submitted by accident.
+
+**Cost:** ~343ms per call on a home directory with 18 non-dot entries, most of it those `git`
+invocations — paid every time a surface loads the create form (Desktop MCP app, browser
+dashboard, claudeck).
+
+This behaviour predates the migration — the spawned CLI did exactly the same thing with the
+same cwd — but it is core's now, and visible.
+
+**Fix:** skip the `defaultFn` evaluation for a root that is not itself a workspace, or let
+`buildPromptSpec` take a "defaults not wanted" flag for the create-form path. Either removes
+the scan without changing what the form shows.
+
+---
+
+## Session-Start Notes Context Is Unbounded Against a 10k Truncation
+
+**Severity:** Moderate (silently drops the newest decisions, which is the opposite of what you want)
+**Status:** Open
+**Affects:** `apps/cli/src/commands/notes.ts` — `buildContext()`, via the SessionStart hook
+
+`buildContext()` renders the latest handoff plus **every** open `decision` note. The hook
+harness truncates its combined output at ~10k characters — the function's own docstring says
+so, and orders standards first to protect them — but nothing bounds the decision list. A
+workspace that accumulates decisions therefore pushes its newest ones past the cutoff.
+
+**Symptom:** a decision recorded in one session is not in the next session's context, so the
+same ground gets re-litigated. Observed directly: a SessionStart hook in this repo emitted
+**110.8KB**, eleven times the budget, with 57 notes marked `status: open`.
+
+**Why it bites the wrong end:** decisions render after the handoff, so the ones cut are the
+most recently written — exactly the ones a fresh session needs.
+
+**Fix options:** cap the number of decisions rendered (newest first) and say how many were
+elided; or make `status:` retirement real so "open" means "still binding" rather than "not
+superseded"; or render decision *titles* with paths, and let the session read the ones it
+needs.
+
+---
+
+## One Machine-Global `sandbox_root`, and Generated State Inside the Package
+
+**Severity:** Moderate (two checkouts silently fight; an upgrade can discard local state)
+**Status:** Open
+**Affects:** `~/.sandbox/config.yaml` `paths.sandbox_root`, `apps/cli/infra/`
+
+`sandbox_root` is a single machine-global pointer at one CLI checkout (here,
+`/Users/jayboyer/repos/sandbox/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
+and is what `infraRoot()` resolves from — so **whichever install ran `sandbox config` last
+wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
+serving `infra/` out of the other one.
+
+Compounding it, generated state lives *inside* that package tree rather than beside the
+user's config: `apps/cli/infra/proxy/Caddyfile` and `apps/cli/infra/proxy/ui/features.json`
+are both gitignored build products under a directory that ships in the published package.
+Reinstalling or upgrading `@jbbz-sandbox/sandbox-cli` can therefore discard or stale them.
+
+**Fix direction:** generated artifacts belong under `~/.sandbox/` (like `services.yaml` and
+`ports.yaml` already do), leaving the package tree read-only; `sandbox_root` then only has to
+locate templates, not mutable state.
+
+---
+
+## Library Rough Edges Left by the CLI-to-Core Migration
+
+**Severity:** Low (each is small; they share a cause)
+**Status:** Open
+**Affects:** `packages/sandbox-core/{compose,lifecycle,hooks_gen}.ts`
+
+Code that used to be a CLI command and is now a library function still reads like a command
+in three places:
+
+| Where | What |
+|---|---|
+| `compose.ts` — `composeDown()` | Returns a success `boolean` that **all three callers discard** (`lifecycle.ts:381`, `commands/remove.ts:72`, `commands/clean.ts:119`). A teardown that failed is indistinguishable from one that worked. |
+| `lifecycle.ts:377` | Emits `info("--volumes: per-feature Docker volumes will be removed")` — a **CLI flag name** in library output, so the dashboard and claudeck show a flag their user never typed. |
+| `hooks_gen.ts` — `writeWorkspaceHooks()` | Called only from `initWorkspace`. A workspace created before a hook-template change keeps the stale hook until someone re-runs `sandbox init-workspace` there by hand; nothing reconciles it. |
+
+---
+
+## A Feature Browser Window Outlives Its Launcher, and Its Profile Leaks
+
+**Severity:** Low (a directory in `$TMPDIR`, swept by the OS)
+**Status:** Open — inherent to launching in-process
+**Affects:** `packages/sandbox-core/browser.ts` — `FeatureWindow.supervise()`
+
+`launchFeatureWindow` spawns the browser `detached`, so the window survives its caller — the
+point, for the MCP server's open-feature tool, which returns while a human keeps the window.
+Cleanup (kill the browser, remove the throwaway `--user-data-dir`) lives in `supervise()`'s
+`finally`, which only runs if the caller is still alive when the window closes.
+
+So a long-lived caller that exits first — an MCP server restart, say — leaves the profile
+directory behind. The spawned `sandbox open` child this replaced owned its own cleanup and
+did it regardless.
+
+**Not a leak of anything sensitive:** the profile is a throwaway created per launch under
+`$TMPDIR`. **Fix direction:** sweep stale `chrome-<feature>-*` directories on the next launch,
+which is cheap and needs no supervisor.
+
+---
+
+## VS Code Extension Manifest Is Missing `repository` and `license`
+
+**Severity:** Low (blocks a clean Marketplace publish)
+**Status:** Open
+**Affects:** `packages/vscode-plugin/package.json`
+
+Neither `repository` nor `license` is set, and there is no `LICENSE` file in the package.
+`vsce package` warns on both, and the Marketplace listing renders without a source link.
+
+**Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/sandbox.git", "directory": "packages/vscode-plugin" }`, set `"license"`, and add the LICENSE file.
