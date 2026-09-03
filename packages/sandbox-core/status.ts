@@ -24,6 +24,7 @@ import { ProcError, run as procRun } from "./proc.js";
 
 import { getAllSlots, getPortRange, slotCount, type SlotEntry } from "./slots.js";
 import {
+  _run,
   connectedNamespace,
   interceptBlocker,
   listIntercepts,
@@ -172,6 +173,22 @@ export function buildInterceptRows(
   return rows;
 }
 
+/**
+ * Runner for the telepresence reads below, capped well under `_run`'s 120s
+ * default.
+ *
+ * They are `spawnSync`, so an in-process caller — the VS Code extension, the
+ * claudeck server — has its whole event loop blocked for however long a wedged
+ * daemon takes to answer, not just the one request waiting on it. 120s of that
+ * is a hung app; 15s is a slow refresh. The cap lives here rather than at the
+ * call sites because every reader of a *status view* wants it, `sandbox status`
+ * included — and because claudeck used to get it for free from the 15s timeout
+ * on the CLI child it no longer spawns.
+ *
+ * ponytail: one number for every read. Split it if they ever need to differ.
+ */
+const STATUS_READ = (cmd: string[]) => _run(cmd, 15);
+
 /** What `sandbox status --intercepts --json` prints. */
 export interface InterceptsSnapshot {
   available: boolean;
@@ -180,13 +197,13 @@ export interface InterceptsSnapshot {
 }
 
 export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
-  const state = listIntercepts();
+  const state = listIntercepts(STATUS_READ);
   // Rows before the namespace probe: `--intercepts` has always shelled out in
   // that order, and both are reads of the same live telepresence state.
   const intercepts = buildInterceptRows(await getAllSlots(), loadServices(), state);
   return {
     available: state.available,
-    connected_namespace: state.available ? connectedNamespace() : null,
+    connected_namespace: state.available ? connectedNamespace(STATUS_READ) : null,
     intercepts,
   };
 }
@@ -236,7 +253,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
 
   // Same intercept data as `--intercepts`, grouped per feature so this stays the
   // one place system state is described.
-  const interceptState = listIntercepts();
+  const interceptState = listIntercepts(STATUS_READ);
   const interceptRows = buildInterceptRows(allSlots, loadServices(), interceptState);
 
   const features: FeatureSnapshot[] = [];

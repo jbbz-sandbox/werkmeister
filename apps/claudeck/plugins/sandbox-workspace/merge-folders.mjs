@@ -38,3 +38,22 @@ export function mergeFolders(existing, workspaces, root) {
 
   return [...nonManaged, ...managed];
 }
+
+/**
+ * The workspace name for one of claudeck's project paths, or null when the path
+ * is not a workspace.
+ *
+ * Lives next to `mergeFolders` because it is the reverse lookup of what that
+ * writes: the routes are keyed on a project path, while sandbox-core's
+ * workspace calls are keyed on the name it resolves under the workspaces root.
+ * Taking `basename(path)` instead would turn a project outside that root into a
+ * confusing "No such workspace" rather than a clear "not a workspace".
+ *
+ * ponytail: compares resolved paths, not realpaths — a symlinked workspaces
+ * root would miss. Add `realpath` on both sides if anyone hits it.
+ */
+export function workspaceNameForPath(workspaces, project) {
+  if (!project) return null;
+  const target = resolve(project);
+  return (workspaces || []).find((w) => w && w.path && resolve(w.path) === target)?.name ?? null;
+}

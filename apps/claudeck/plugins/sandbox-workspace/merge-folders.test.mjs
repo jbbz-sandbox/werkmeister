@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mergeFolders } from "./merge-folders.mjs";
+import { mergeFolders, workspaceNameForPath } from "./merge-folders.mjs";
 
 const ROOT = "/ws";
 const existing = [
@@ -53,4 +53,33 @@ test("is idempotent", () => {
 
 test("defaults to [] on non-array input", () => {
   assert.deepEqual(mergeFolders(undefined, [], ROOT), []);
+});
+
+// The reverse lookup the /open route uses: claudeck holds a project path,
+// sandbox-core's workspace calls are keyed on a name.
+test("finds the workspace name for a project path", () => {
+  assert.equal(workspaceNameForPath(workspaces, "/ws/test-me"), "test-me");
+});
+
+test("normalises the path it is given", () => {
+  assert.equal(workspaceNameForPath(workspaces, "/ws/test-me/"), "test-me");
+  assert.equal(workspaceNameForPath(workspaces, "/ws/other/../test-me"), "test-me");
+});
+
+test("is null for a project that is not a workspace", () => {
+  // A manual claudeck entry outside the workspaces root — the case that made
+  // basename() the wrong answer.
+  assert.equal(workspaceNameForPath(workspaces, "/repo/sandbox"), null);
+  // Same basename, different place.
+  assert.equal(workspaceNameForPath(workspaces, "/elsewhere/test-me"), null);
+  assert.equal(workspaceNameForPath(workspaces, ""), null);
+  assert.equal(workspaceNameForPath(undefined, "/ws/test-me"), null);
+});
+
+// The two halves have to agree, or /open 400s on a project the picker offered.
+test("resolves every path mergeFolders writes as managed", () => {
+  for (const entry of mergeFolders(existing, workspaces, ROOT)) {
+    if (entry.source !== "sandbox") continue;
+    assert.equal(workspaceNameForPath(workspaces, entry.path), entry.name);
+  }
 });
