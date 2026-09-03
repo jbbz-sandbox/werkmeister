@@ -14,14 +14,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { getContainerStatus, type ContainerStatus } from "./compose.js";
+import { getContainerStatus, isOneShotService, type ContainerStatus } from "./compose.js";
 import { infraRoot, loadServices } from "./config.js";
 import { getPerServiceStatus, type ForwardStatus } from "./k8s.js";
 import { ProcError, run as procRun } from "./proc.js";
 // The only core module that reaches into `sandbox.ts`, for a one-line predicate
 // whose other caller already lives there. Splitting it out would touch a second
 // module for no gain.
-import { isOneShotService } from "./sandbox.js";
+
 import { getAllSlots, getPortRange, slotCount, type SlotEntry } from "./slots.js";
 import {
   connectedNamespace,

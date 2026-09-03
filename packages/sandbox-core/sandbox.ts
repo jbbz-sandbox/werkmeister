@@ -31,14 +31,18 @@ import {
   slotPortRange,
   workspacesRoot,
 } from "./config.js";
+import { isOneShotService } from "./compose.js";
 // Type-only: erased at build, so this adds nothing to the bundle.
 import type Dockerode from "dockerode";
 import { docker } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
+import { infraHealth, up as infraUp } from "./infra.js";
 import { checkForwardHealth } from "./k8s.js";
+import { interceptsSnapshot, type InterceptRow } from "./status.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { collectingReporter, info, withReporter } from "./reporter.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
+import { CLAUDECK, DASHBOARD, status as webStatus } from "./web_servers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -1248,21 +1252,6 @@ export interface InfraStatus {
 /** The Compose project name for shared infra (see infra/compose/shared-infra.yml `name:`). */
 const INFRA_PROJECT = "sandbox-infra";
 
-/**
- * One-shot setup containers run once and exit by design — they have no
- * `restart` policy, unlike real services. Counting a finished one would make a
- * healthy feature read as "partial".
- *
- * Identified by the `com.sandbox.local.role=setup` label the compose template
- * stamps on every `setup_services` entry; the `-setup` suffix is the pre-label
- * fallback, since the label only lands on containers created after it was added
- * and workspaces that are already up must keep reading correctly until their
- * next recreate.
- */
-export function isOneShotService(service: string, role: string | undefined): boolean {
-  return role === "setup" || service.endsWith("-setup");
-}
-
 /** A one-shot container that finished its job — `docker ps` `{{.Status}}` of `Exited (0) …`. */
 function exitedCleanly(status: string): boolean {
   return status.trimStart().startsWith("Exited (0)");
@@ -1456,15 +1445,8 @@ export async function getWorkspaceStatuses(): Promise<{ statuses: WorkspaceStatu
   return { statuses, infra };
 }
 
-export interface InterceptRow {
-  feature: string;
-  service: string;
-  deployment: string | null;
-  interceptable: boolean;
-  blocker: string | null;
-  intercepted: boolean;
-  intercepted_by: string | null;
-}
+// `InterceptRow` is declared once, in status.ts, next to the code that builds it.
+export type { InterceptRow };
 
 export interface InterceptsResult {
   available: boolean;
@@ -1472,14 +1454,15 @@ export interface InterceptsResult {
   byFeature: Map<string, Map<string, InterceptRow>>;
 }
 
-/** Telepresence intercept state for every active feature, from `sandbox status --intercepts --json`. */
+/**
+ * Telepresence intercept state for every active feature, grouped feature → service.
+ *
+ * Calls {@link interceptsSnapshot} directly — the same function `sandbox status
+ * --intercepts --json` serialises, so this used to spawn the CLI to JSON-encode
+ * a core object and parse it straight back (note 086 row 2, note 087).
+ */
 export async function getIntercepts(): Promise<InterceptsResult> {
-  const { stdout } = await runSandbox(["status", "--intercepts", "--json"]);
-  const parsed = JSON.parse(stdout) as {
-    available: boolean;
-    connected_namespace: string | null;
-    intercepts: InterceptRow[];
-  };
+  const parsed = await interceptsSnapshot();
   const byFeature = new Map<string, Map<string, InterceptRow>>();
   for (const row of parsed.intercepts) {
     let svcs = byFeature.get(row.feature);
@@ -2056,11 +2039,31 @@ export async function removeWorkspace(name: string): Promise<{ command: string; 
 
   // 2. Tear down containers + release the slot (best-effort — a workspace that
   //    was never `up` has nothing to tear down, so don't abort the delete).
-  try {
-    const { stdout, stderr } = await runSandbox(["down"], target);
-    parts.push(stripAnsi([stdout, stderr].filter(Boolean).join("\n").trim()));
-  } catch (e) {
-    parts.push(`(sandbox down skipped: ${(e as Error).message.split("\n")[0]})`);
+  //    In-process via `lifecycle` rather than spawning the CLI (note 087); the
+  //    feature comes from the workspace's own .env because the directory name is
+  //    not the feature name.
+  const feature = await readEnvValue(target, "FEATURE");
+  if (!feature || feature === "infra") {
+    // No FEATURE: never initialised, so nothing was ever brought up. FEATURE=infra:
+    // the shared stack, which `runConnect` owns — deleting a workspace must not
+    // tear it down for everyone.
+    parts.push(`(teardown skipped: ${feature ? "workspace declares FEATURE=infra" : "no FEATURE in .env"})`);
+  } else {
+    const collector = collectingReporter();
+    try {
+      await withReporter(collector, async () => {
+        await down(feature);
+        // Not part of `down()` — the CLI reloads separately (note 063), and
+        // skipping it leaves Caddy routing to containers that no longer exist.
+        await reloadProxy();
+      });
+      parts.push(stripAnsi(collector.text().trim()));
+    } catch (e) {
+      // Still best-effort: report what got as far as printing, then delete anyway.
+      const detail = stripAnsi(collector.text().trim());
+      parts.push(`(teardown skipped: ${(e as Error).message.split("\n")[0]})`);
+      if (detail) parts.push(detail);
+    }
   }
 
   // 3. Delete the directory, then prune the now-dangling worktree registrations.
@@ -2145,15 +2148,52 @@ export async function openFeatureBrowser(name: string): Promise<{ path: string }
 }
 
 /**
- * Start shared infrastructure via `sandbox connect` (local services + k8s
- * port-forwards). Runs `docker compose up -d`
- * under the hood, so it returns once infra is up rather than tailing. Returns
- * the (ANSI-stripped) output; throws {@link WorkspaceError} on failure.
+ * Start shared infrastructure (local services + k8s port-forwards). Runs
+ * `docker compose up -d` under the hood, so it returns once infra is up rather
+ * than tailing. Returns the (ANSI-stripped) transcript; throws
+ * {@link WorkspaceError} on failure.
+ *
+ * Calls `sandbox-core/infra` in-process rather than spawning the CLI (note 087).
+ * Health is a second call by design — `infra.up()`'s docstring explains why the
+ * split exists — and the summary below is this function's own rendering, since
+ * the library emits progress but never lays out a command's output (note 070 §3).
+ *
+ * **The three `tools.local.sandbox.com` links are absent, deliberately.** They are
+ * hardcoded in the CLI's renderer and note 070 §2 accepted that an in-process
+ * caller cannot reach them; moving them is a "where do tool URLs live" question,
+ * not this one. The dashboard and Claudeck URLs *are* included — those come from
+ * `web_servers` in core, not from the renderer.
  */
 export async function runConnect(): Promise<{ command: string; output: string }> {
-  const { stdout, stderr } = await runSandbox(["connect"]);
-  const output = stripAnsi(`${stdout}${stderr ? `\n${stderr}` : ""}`.trim());
-  return { command: "sandbox connect", output };
+  const collector = collectingReporter();
+  try {
+    await withReporter(collector, async () => {
+      const infraOk = await infraUp();
+      // k8s-forwards' start_period is 60s; give recreated containers time to
+      // converge before reporting, or the summary is a premature snapshot.
+      const health = await infraHealth(90);
+      const names = Object.keys(health).sort();
+      for (const name of names) info(`${name.padEnd(30)} ${health[name] ? "healthy" : "down"}`);
+
+      const healthy = names.filter((n) => health[n]).length;
+      if (names.length && healthy === names.length) {
+        info(`All ${names.length} services healthy`);
+      } else {
+        info(`${healthy}/${names.length} healthy, ${names.length - healthy} down`);
+        if (!infraOk) info("Check docker and your kubeconfig.");
+      }
+
+      const [mcp, claudeck] = await Promise.all([webStatus(DASHBOARD), webStatus(CLAUDECK)]);
+      info(`Sandbox MCP:   ${mcp.url}  (workspaces dashboard; MCP at /mcp)`);
+      info(`Claudeck:      ${claudeck.url}`);
+    });
+  } catch (e) {
+    const detail = stripAnsi(
+      `${collector.text()}\n${e instanceof Error ? e.message : String(e)}`.trim(),
+    );
+    throw new WorkspaceError(`sandbox connect failed:\n${detail}`);
+  }
+  return { command: "sandbox connect", output: stripAnsi(collector.text().trim()) };
 }
 
 /**
