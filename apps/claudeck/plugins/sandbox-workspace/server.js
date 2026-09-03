@@ -12,10 +12,12 @@ import { promisify } from "util";
 import { parseGitStatus } from "./parse-git.mjs";
 import { parsePr } from "./parse-pr.mjs";
 import { parseComposePs } from "./parse-compose.mjs";
-import { mergeFolders } from "./merge-folders.mjs";
+import { mergeFolders, workspaceNameForPath } from "./merge-folders.mjs";
 import {
   getFormSchema,
   fetchJiraFormData,
+  getIntercepts,
+  openFeatureBrowser,
   refinePrompt,
   createWorkspace,
   listWorkspaces,
@@ -113,27 +115,23 @@ router.get("/", async (req, res) => {
 
 /**
  * This workspace feature's intercept rows keyed by service, or null when the
- * state couldn't be read at all (no CLI, no feature, command failed).
+ * state couldn't be read at all (no feature, or the read failed).
  *
- * All telepresence/services.yaml knowledge stays in the CLI — this is a
- * pass-through of `sandbox status --intercepts`, which is the cheap subview
- * (~200ms) rather than the full `status --json` system scan (~670ms).
+ * All telepresence/services.yaml knowledge stays in sandbox-core. This used to
+ * spawn `sandbox status --intercepts --json` and parse the result back into the
+ * object core had just serialised; `getIntercepts()` is that object, already
+ * grouped feature → service (note 087 — the CLI is not a data source for code
+ * that can import the library).
  */
 async function interceptsByService(project) {
-  const bin = await sandboxBin();
   const feature = await readFeature(project);
-  if (!bin || !feature) return null;
+  if (!feature) return null;
   try {
-    const { stdout } = await execFileP(bin, ["status", "--intercepts", "--json"], {
-      timeout: 15000,
-      env: childEnv(),
-    });
-    const rows = JSON.parse(stdout).intercepts;
-    if (!Array.isArray(rows)) return null;
-    const byService = new Map(
-      rows.filter((r) => r.feature === feature).map((r) => [r.service, r]),
-    );
-    return { feature, byService };
+    const { byFeature } = await getIntercepts();
+    // Telepresence down / not installed yields no rows rather than an error, and
+    // an empty map is the same "no intercept for this service" every row already
+    // renders — distinct from the null above, which means the lookup itself failed.
+    return { feature, byService: byFeature.get(feature) ?? new Map() };
   } catch {
     return null;
   }
@@ -282,29 +280,36 @@ router.post("/intercept", async (req, res) => {
   streamSandbox(res, bin, args, project);
 });
 
-// POST { project } → launch the feature's tagged Chrome window via
-// `sandbox open`. That command blocks for the whole lifetime of the window
-// (Ctrl-C is how you close it), so it can't be streamed like /action: it is
-// spawned detached + unref'd and the request returns immediately. The CLI
-// removes its throwaway Chrome profile when the window closes.
-// ponytail: fire-and-forget — a launch failure after spawn is invisible to the
-// UI. Add a status route if that ever matters.
+/** The workspace name for a project path, or null when it isn't a workspace. */
+async function workspaceNameFor(project) {
+  try {
+    const { workspaces } = await listWorkspaces();
+    return workspaceNameForPath(workspaces, project);
+  } catch {
+    return null;
+  }
+}
+
+// POST { project } → launch the feature's tagged browser window (X-Feature
+// cookie + title/badge tag). In-process via sandbox-core, which returns as soon
+// as the window is up and supervises it in the background for the window's
+// life; it used to spawn `sandbox open` detached, whose failures were invisible
+// behind `stdio: "ignore"`.
 router.post("/open", async (req, res) => {
   const { project } = req.body || {};
   if (!project || typeof project !== "string") return res.status(400).json({ error: "missing project" });
 
-  const bin = await sandboxBin();
-  if (!bin) return res.status(500).json({ error: NOT_FOUND });
+  const name = await workspaceNameFor(project);
+  if (!name) {
+    return res.status(400).json({ error: `Not a sandbox workspace: ${project}` });
+  }
 
-  const child = spawn(bin, ["open"], {
-    cwd: project,
-    detached: true,
-    stdio: "ignore",
-    env: childEnv(),
-  });
-  child.on("error", () => {}); // detached: nobody left to report to, but don't crash the server
-  child.unref();
-  res.json({ ok: true });
+  try {
+    await openFeatureBrowser(name);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Create Workspace: schema, Jira pre-fill, prompt refine, streamed create ──
