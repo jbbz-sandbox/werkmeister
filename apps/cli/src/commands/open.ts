@@ -15,27 +15,12 @@ import * as path from "node:path";
 
 import { parse as yamlParse } from "yaml";
 
-import { openFeatureBrowser } from "sandbox-core/browser";
-import { ingressHostnames } from "sandbox-core/feature_routing";
-import { error, warn } from "../lib/config.js";
+import { launchFeatureWindow } from "sandbox-core/browser";
+import { featureUrl } from "sandbox-core/feature_routing";
+import { Colors, error, warn } from "../lib/config.js";
+import { raw } from "sandbox-core/reporter";
 import { loadDotenv } from "../lib/dotenv.js";
 import { getSlot } from "sandbox-core/slots";
-
-/**
- * Base URL for `--path`, from the registry rather than a literal.
- *
- * The routed host set is per-machine (ingress config + `feature_router:`
- * blocks), so a hardcoded host would open a page that may not exist. Returns
- * null when nothing is routed, letting the caller require an explicit `--url`.
- */
-function defaultBase(): string | null {
-  try {
-    const hosts = ingressHostnames();
-    return hosts.length > 0 ? `https://${hosts[0]}` : null;
-  } catch {
-    return null;
-  }
-}
 
 function loadWorkspaceYaml(start: string): Record<string, any> {
   let dir = start;
@@ -77,23 +62,17 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.url) {
     url = args.url as string;
   } else {
-    let p =
-      (args.path as string | null) ||
-      workspaceYaml["test_path"] ||
-      dotenv["TEST_PATH"] ||
-      "/";
-    if (!p.startsWith("/")) {
-      p = "/" + p;
-    }
-    const base = defaultBase();
-    if (base === null) {
+    const resolved = featureUrl(
+      (args.path as string | null) || workspaceYaml["test_path"] || dotenv["TEST_PATH"] || "/",
+    );
+    if (resolved === null) {
       error(
         "No routed hosts in services.yaml (no service declares `feature_router:`) — " +
           "pass an explicit --url.",
       );
       return;
     }
-    url = base + p;
+    url = resolved;
   }
 
   if ((await getSlot(feature)) === null) {
@@ -101,11 +80,29 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     warn(`traffic falls through to the k8s baseline. Start it with: sandbox up ${feature}`);
   }
 
-  const code = await openFeatureBrowser(feature, url, {
+  const window = await launchFeatureWindow(feature, url, {
     size: args.size as string,
     position: args.position as string | null,
   });
-  if (code !== 0 && code !== 130) {
-    process.exit(code);
+  if (!window) {
+    process.exit(1);
+  }
+
+  // Ctrl-C closes the window and cleans up. The handler lives here rather than
+  // in the launcher because installing process-wide signal handlers is not
+  // something a library may do to whoever imported it — the MCP server's
+  // open-feature tool calls the same launcher and must keep its own shutdown.
+  raw(`  ${Colors.CYAN}Ctrl-C${Colors.RESET} to close the window and clean up.\n\n`);
+  const onSignal = () => window.stop();
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  try {
+    const code = await window.supervise();
+    if (code !== 0 && code !== 130) {
+      process.exit(code);
+    }
+  } finally {
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
   }
 }

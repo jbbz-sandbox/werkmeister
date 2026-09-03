@@ -42,9 +42,11 @@ import { interceptsSnapshot, type InterceptRow } from "./status.js";
 import { buildFormSchema } from "./form_schema.js";
 import { computePromptSpec } from "./workspace_prompts.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
+import { featureUrl } from "./feature_routing.js";
+import { launchFeatureWindow } from "./browser.js";
 import { collectingReporter, info, withReporter } from "./reporter.js";
 import { provisionWorkspace } from "./workspace_init.js";
-import { resolveInputs } from "./workspace_prompts.js";
+import { loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
 import { CLAUDECK, DASHBOARD, status as webStatus } from "./web_servers.js";
 
@@ -2106,25 +2108,58 @@ export async function switchKubeContext(env: KubeSwitchEnv): Promise<{ context: 
 
 
 /**
- * Launch a feature-tagged incognito Chrome window for a workspace via
- * `sandbox open` (sets the `X-Feature` routing cookie + tags the window).
+ * Launch a feature-tagged incognito Chrome window for a workspace: sets the
+ * `X-Feature` routing cookie and tags the window (title prefix + corner badge).
  *
- * `sandbox open` BLOCKS until the browser window is closed, so it's spawned
- * detached and unwaited — the window stays open and outlives this call (and the
- * MCP server). Feature name resolves from the workspace's `.env` (cwd), like the
- * lifecycle actions. Fire-and-forget: routing only resolves if the feature is
- * `up`; otherwise the cookie is set and traffic falls through to k8s.
+ * This used to spawn `sandbox open` detached, because that command blocks for
+ * the window's lifetime and the window has to outlive the call — the last place
+ * core drove the CLI it depends on (note 087). `launchFeatureWindow` now
+ * returns as soon as the window is up and tagged, and `supervise()` — which
+ * keeps tabs opened later tagged, and owns the cleanup — runs unawaited. The
+ * browser itself is spawned detached, so the window survives this process.
+ *
+ * Feature name and start path come from the workspace, the way `sandbox open`
+ * reads them from its cwd. Routing only *resolves* if the feature is `up`;
+ * otherwise the cookie is set and traffic falls through to k8s.
  */
 export async function openFeatureBrowser(name: string): Promise<{ path: string }> {
   const target = await resolveWorkspaceDir(name);
-  const bin = await resolveSandboxBin();
-  const child = spawn(bin, ["open"], {
-    cwd: target,
-    env: childEnv(),
-    detached: true,
-    stdio: "ignore",
-  });
-  child.unref();
+
+  const feature = await readEnvValue(target, "FEATURE");
+  if (!feature) {
+    throw new WorkspaceError(
+      `Workspace '${name}' has no FEATURE in its .env — run \`sandbox init-workspace\` there first.`,
+    );
+  }
+  const testPath =
+    (loadConfigFile(target, null)["test_path"] as string | undefined) ??
+    (await readEnvValue(target, "TEST_PATH")) ??
+    "/";
+  const url = featureUrl(testPath);
+  if (url === null) {
+    throw new WorkspaceError(
+      "No routed hosts in services.yaml (no service declares `feature_router:`), " +
+        "so there is no URL to open.",
+    );
+  }
+
+  // The launch reports its own failures through the reporter; collect them so a
+  // null comes back to the caller as a message rather than as silence — which
+  // is what the detached spawn gave, `stdio: "ignore"` and all.
+  const reporter = collectingReporter();
+  const window = await withReporter(reporter, () => launchFeatureWindow(feature, url));
+  if (!window) {
+    // Every collected line is an error here, so the `[err]` tags that make a
+    // mixed transcript readable are just noise in a thrown message.
+    const detail = stripAnsi(reporter.text().trim()).replace(/^\[err\] +/gm, "");
+    throw new WorkspaceError(detail || "Could not launch a feature browser window.");
+  }
+
+  // Deliberately not awaited: the window belongs to a human now and this call
+  // returns. The catch is not optional — an unhandled rejection here would take
+  // the MCP server down, and `supervise()` has already run its cleanup by then.
+  void window.supervise().catch(() => {});
+
   return { path: target };
 }
 

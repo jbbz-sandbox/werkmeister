@@ -21,7 +21,14 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 
 import { error, info, raw } from "./reporter.js";
-import { badgeScript, COOKIE_DOMAIN, featureColor, findFreePort, sleep } from "./browser.js";
+import {
+  badgeScript,
+  COOKIE_DOMAIN,
+  featureColor,
+  findFreePort,
+  sleep,
+  type FeatureWindow,
+} from "./browser.js";
 
 const SAFARIDRIVER = "/usr/bin/safaridriver";
 
@@ -71,18 +78,24 @@ async function waitForPort(port: number, timeoutMs = 10_000): Promise<void> {
 }
 
 /**
- * Launch a feature-tagged Safari window via safaridriver. Blocks until closed.
+ * Launch a feature-tagged Safari window via safaridriver, returning once it is
+ * up and tagged.
  *
- * Returns a process exit code (0 on clean exit).
+ * Mirrors `launchChromiumWindow`: the caller decides whether to await
+ * {@link FeatureWindow.supervise} (`sandbox open`) or leave it running in the
+ * background (the MCP server's open-feature tool). Signal handling belongs to
+ * the caller — see the `FeatureWindow` docstring.
+ *
+ * Returns null when the launch failed for a reason already reported.
  */
-export async function openSafariBrowser(
+export async function launchSafariWindow(
   feature: string,
   url: string,
   opts: { size?: string; position?: string | null } = {},
-): Promise<number> {
+): Promise<FeatureWindow | null> {
   if (!fs.existsSync(SAFARIDRIVER)) {
     error(`safaridriver not found at ${SAFARIDRIVER} -- this needs macOS with Safari installed.`);
-    return 1;
+    return null;
   }
 
   const rect = parseRect(opts.size ?? "1440,900", opts.position ?? null);
@@ -90,20 +103,43 @@ export async function openSafariBrowser(
   const port = await findFreePort();
   const script = badgeScript(feature, color);
 
-  const driver: ChildProcess = spawn(SAFARIDRIVER, [`--port=${port}`], { stdio: "ignore" });
+  // Detached for the same reason as the Chromium path: the window outlives an
+  // in-process caller, and `cleanup()` ends the session and the driver by pid.
+  const driver: ChildProcess = spawn(SAFARIDRIVER, [`--port=${port}`], {
+    stdio: "ignore",
+    detached: true,
+  });
+  driver.unref();
   let driverExited = false;
   driver.on("exit", () => {
     driverExited = true;
   });
 
-  let stop = false;
-  const onSignal = () => {
-    stop = true;
-  };
-  process.on("SIGINT", onSignal);
-  process.on("SIGTERM", onSignal);
-
   let sessionId: string | null = null;
+
+  async function cleanup(): Promise<void> {
+    if (sessionId) {
+      try {
+        await wdFetch(port, `/session/${sessionId}`, "DELETE");
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      driver.kill();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const taggedUrl = new Map<string, string>(); // handle -> last-tagged URL
+  async function tagHandle(handle: string): Promise<void> {
+    await wdFetch(port, `/session/${sessionId}/window`, "POST", { handle });
+    const curUrl = await wdFetch(port, `/session/${sessionId}/url`, "GET");
+    await wdFetch(port, `/session/${sessionId}/execute/sync`, "POST", { script, args: [] });
+    taggedUrl.set(handle, curUrl);
+  }
+
   try {
     await waitForPort(port);
 
@@ -119,7 +155,8 @@ export async function openSafariBrowser(
           'Settings > Advanced > "Show features for web developers", and ' +
           'Develop > "Allow Remote Automation".',
       );
-      return 1;
+      await cleanup();
+      return null;
     }
 
     raw("\n");
@@ -129,7 +166,6 @@ export async function openSafariBrowser(
     info(`URL     : ${url}`);
     info("Profile : Safari's normal profile (safaridriver has no throwaway-profile option)");
     raw(`\n  Window is tagged [${feature}] in the title bar + corner badge.\n`);
-    raw("  Ctrl-C to close the window and clean up.\n\n");
 
     await wdFetch(port, `/session/${sessionId}/window/rect`, "POST", rect);
 
@@ -151,60 +187,53 @@ export async function openSafariBrowser(
     });
     await wdFetch(port, `/session/${sessionId}/url`, "POST", { url });
 
-    const taggedUrl = new Map<string, string>(); // handle -> last-tagged URL
-    async function tagHandle(handle: string): Promise<void> {
-      await wdFetch(port, `/session/${sessionId}/window`, "POST", { handle });
-      const curUrl = await wdFetch(port, `/session/${sessionId}/url`, "GET");
-      await wdFetch(port, `/session/${sessionId}/execute/sync`, "POST", { script, args: [] });
-      taggedUrl.set(handle, curUrl);
-    }
-
     const initialHandles: string[] = await wdFetch(port, `/session/${sessionId}/window/handles`, "GET");
     for (const h of initialHandles) await tagHandle(h);
-
-    // Poll every tab; tag anything new or that navigated to a fresh document
-    // (a new document has no injected script -- in-page SPA routing does,
-    // via the script's own self-heal interval, so it's left alone).
-    while (!driverExited && !stop) {
-      await sleep(1000);
-      let handles: string[];
-      try {
-        handles = await wdFetch(port, `/session/${sessionId}/window/handles`, "GET");
-      } catch {
-        break; // session/driver gone
-      }
-      if (!Array.isArray(handles)) continue; // transient malformed response -- try again next tick
-      for (const h of handles) {
-        try {
-          await wdFetch(port, `/session/${sessionId}/window`, "POST", { handle: h });
-          const curUrl = await wdFetch(port, `/session/${sessionId}/url`, "GET");
-          if (taggedUrl.get(h) !== curUrl) await tagHandle(h);
-        } catch {
-          continue; // tab closed mid-poll
-        }
-      }
-    }
-
-    if (stop) {
-      raw("\n");
-      info("Closing feature window…");
-      return 130;
-    }
-    return 0;
-  } finally {
-    if (sessionId) {
-      try {
-        await wdFetch(port, `/session/${sessionId}`, "DELETE");
-      } catch {
-        /* ignore */
-      }
-    }
-    try {
-      driver.kill();
-    } catch {
-      /* ignore */
-    }
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
+  } catch (e) {
+    // Nobody will call supervise(), so this is the last chance to clean up.
+    await cleanup();
+    throw e;
   }
+
+  let stop = false;
+  return {
+    stop: () => {
+      stop = true;
+    },
+    async supervise(): Promise<number> {
+      try {
+        // Poll every tab; tag anything new or that navigated to a fresh document
+        // (a new document has no injected script -- in-page SPA routing does,
+        // via the script's own self-heal interval, so it's left alone).
+        while (!driverExited && !stop) {
+          await sleep(1000);
+          let handles: string[];
+          try {
+            handles = await wdFetch(port, `/session/${sessionId}/window/handles`, "GET");
+          } catch {
+            break; // session/driver gone
+          }
+          if (!Array.isArray(handles)) continue; // transient malformed response -- try again next tick
+          for (const h of handles) {
+            try {
+              await wdFetch(port, `/session/${sessionId}/window`, "POST", { handle: h });
+              const curUrl = await wdFetch(port, `/session/${sessionId}/url`, "GET");
+              if (taggedUrl.get(h) !== curUrl) await tagHandle(h);
+            } catch {
+              continue; // tab closed mid-poll
+            }
+          }
+        }
+
+        if (stop) {
+          raw("\n");
+          info("Closing feature window…");
+          return 130;
+        }
+        return 0;
+      } finally {
+        await cleanup();
+      }
+    },
+  };
 }

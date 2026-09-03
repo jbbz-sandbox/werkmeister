@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ingressHostnames, loadFeatureRouters } from "sandbox-core/feature_routing";
+import { featureUrl, ingressHostnames, loadFeatureRouters } from "sandbox-core/feature_routing";
 import { INGRESS_DEFAULTS, loadIngress } from "sandbox-core/global_config";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
@@ -112,5 +112,34 @@ describe("ingressHostnames", () => {
   it("is empty when nothing is routed — a machine with no ingress needs no cert", () => {
     home.write("services.yaml", "services:\n  worker:\n    internal_port: 3000\n");
     expect(ingressHostnames()).toEqual([]);
+  });
+});
+
+// `sandbox open` and the MCP server's open-feature tool both resolve their
+// start URL through this, so the two land on the same page. It used to live in
+// `open.ts` as `defaultBase`, where the second caller could not reach it.
+describe("featureUrl", () => {
+  const routed = () => {
+    home.writeConfig(CUSTOM_DOMAINS);
+    home.write(
+      "services.yaml",
+      "services:\n  web:\n    feature_router: {}\n  api:\n    feature_router: {}\n",
+    );
+  };
+
+  it("puts the path on the first routed host", () => {
+    routed();
+    // First of the sorted set, so the two callers agree on which host.
+    expect(featureUrl("/orders")).toBe("https://api.local.example.test/orders");
+  });
+
+  it("adds the leading slash a `--path` or `test_path` may omit", () => {
+    routed();
+    expect(featureUrl("orders")).toBe("https://api.local.example.test/orders");
+  });
+
+  it("is null when nothing is routed, rather than inventing a host", () => {
+    home.write("services.yaml", "services:\n  worker:\n    internal_port: 3000\n");
+    expect(featureUrl("/")).toBeNull();
   });
 });

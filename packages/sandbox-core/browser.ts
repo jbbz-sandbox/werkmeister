@@ -505,17 +505,35 @@ class FeatureSession {
     }
   }
 
-  async run(): Promise<void> {
-    // Auto-attach to every page target (existing + future tabs). Fire-and-
-    // forget; the message handler reacts to the resulting attachedToTarget
-    // events as they arrive on the socket.
+  /**
+   * Auto-attach to every page target (existing + future tabs) and wait for the
+   * first one to be configured — cookie set, badge installed, navigation sent.
+   *
+   * The attach itself is fire-and-forget; the message handler reacts to the
+   * resulting `attachedToTarget` events as they arrive on the socket. Returning
+   * only once `navigated` flips is what lets a caller distinguish "the window
+   * is up and tagged" from "we spawned something".
+   */
+  async start(timeoutMs = 15_000): Promise<boolean> {
     this.ws.send("Target.setAutoAttach", {
       autoAttach: true, waitForDebuggerOnStart: false, flatten: true,
     });
     this.ws.onMessage = (msg) => this.onEvent(msg);
-    // Stay attached so new tabs/navigations keep getting tagged. Messages are
-    // handled by the socket's data events; this loop just polls the Chrome
-    // process + stop flag ~1x/sec.
+    const deadline = Date.now() + timeoutMs;
+    while (!this.navigated) {
+      if (this.ws.fatalError) throw this.ws.fatalError;
+      if (this.procExited() || Date.now() > deadline) return false;
+      await sleep(50);
+    }
+    return true;
+  }
+
+  /**
+   * Stay attached so new tabs and navigations keep getting tagged. Messages are
+   * handled by the socket's data events; this loop just polls the Chrome
+   * process + stop flag ~1x/sec.
+   */
+  async poll(): Promise<void> {
     while (!this.procExited() && !this.shouldStop()) {
       if (this.ws.fatalError) throw this.ws.fatalError;
       await sleep(1000);
@@ -540,42 +558,73 @@ function wantsSafari(): boolean {
 }
 
 /**
- * Launch a feature-tagged browser window. Blocks until closed.
+ * A launched, tagged browser window, handed back once it is up.
  *
- * Dispatches to Safari's WebDriver client (`lib/safari.ts`) when configured,
+ * The split exists because the two callers want opposite things from the same
+ * window: `sandbox open` blocks on it and cleans up on Ctrl-C, while an
+ * in-process caller (the MCP server's open-feature tool) must return
+ * immediately and let the window outlive the call. Both still need
+ * {@link supervise} to run for the window's life — that is what keeps tabs
+ * opened later tagged — so the difference is only whether it is awaited.
+ *
+ * Signal handling is deliberately NOT in here. It used to be, which meant a
+ * library call installed process-wide SIGINT/SIGTERM handlers on whoever
+ * imported it; a caller that wants Ctrl-C to close the window wires its own
+ * handler to {@link stop}.
+ */
+export interface FeatureWindow {
+  /**
+   * Keep tagging new tabs and navigations until the window closes or
+   * {@link stop} is called, then close the browser and remove the throwaway
+   * profile. Resolves 0 when the window closed on its own, 130 when stopped.
+   *
+   * Must be called (awaited or not) — it owns the cleanup.
+   */
+  supervise(): Promise<number>;
+  /** Wind {@link supervise} down. Safe to call from a signal handler. */
+  stop(): void;
+}
+
+/**
+ * Launch a feature-tagged browser window, returning once it is up and tagged.
+ *
+ * Dispatches to Safari's WebDriver client (`safari.ts`) when configured,
  * otherwise the Chromium/CDP client below. Firefox and non-Safari WebKit
  * browsers (DuckDuckGo) aren't wired up to either protocol yet --
  * `resolveBrowserBinary` reports that clearly instead of hanging.
+ *
+ * Returns null when the launch failed for a reason already reported through the
+ * reporter (no usable browser binary, no safaridriver, no WebDriver session).
  */
-export async function openFeatureBrowser(
+export async function launchFeatureWindow(
   feature: string,
   url: string,
   opts: { size?: string; position?: string | null } = {},
-): Promise<number> {
+): Promise<FeatureWindow | null> {
   if (wantsSafari()) {
-    const { openSafariBrowser } = await import("./safari.js");
-    return openSafariBrowser(feature, url, opts);
+    const { launchSafariWindow } = await import("./safari.js");
+    return launchSafariWindow(feature, url, opts);
   }
-  return openChromiumBrowser(feature, url, opts);
+  return launchChromiumWindow(feature, url, opts);
 }
 
 /** Chromium/CDP launcher -- see the module header for how it works. */
-async function openChromiumBrowser(
+async function launchChromiumWindow(
   feature: string,
   url: string,
   opts: { size?: string; position?: string | null } = {},
-): Promise<number> {
+): Promise<FeatureWindow | null> {
   const size = opts.size ?? "1440,900";
   let position = opts.position ?? null;
 
   const CHROME = resolveBrowserBinary();
-  if (!CHROME) return 1; // resolveBrowserBinary already printed why
+  if (!CHROME) return null; // resolveBrowserBinary already printed why
   if (!fs.existsSync(CHROME)) {
     error(
       `Browser not found at ${CHROME} (set CHROME_BIN, or overrides.browser_path in ` +
         "config.yaml, to override -- or run `sandbox setup` to pick an installed browser)",
     );
-    return 1;
+    return null;
   }
 
   const color = featureColor(feature);
@@ -598,13 +647,21 @@ async function openChromiumBrowser(
     `--window-position=${position}`,
     "about:blank",
   ];
-  const proc: ChildProcess = spawn(CHROME, chromeArgs, { stdio: "ignore" });
+  // Detached so the window survives the launcher: an in-process caller (the MCP
+  // server) hands the window to a human and then returns, and a SIGTERM to that
+  // server's process group must not take the browser with it. `cleanup()` kills
+  // the pid explicitly, so `sandbox open`'s Ctrl-C still closes it.
+  const proc: ChildProcess = spawn(CHROME, chromeArgs, { stdio: "ignore", detached: true });
+  proc.unref();
   let procExited = false;
   proc.on("exit", () => {
     procExited = true;
   });
 
+  let ws: WS | null = null;
+
   async function cleanup(): Promise<void> {
+    ws?.close();
     try {
       proc.kill();
     } catch {
@@ -630,42 +687,49 @@ async function openChromiumBrowser(
     fs.rmSync(profile, { recursive: true, force: true });
   }
 
-  // A signal sets a stop flag that the run loop polls. We DON'T throw from the
-  // handler: the flag + 1s-poll loop is what makes shutdown reliable even when
-  // SIGINT arrives while the loop is between polls. Installing our own handlers
-  // also stops Node's default terminate-on-SIGINT from skipping cleanup.
+  let session: FeatureSession;
   let stop = false;
-  const onSignal = () => {
-    stop = true;
-  };
-  process.on("SIGINT", onSignal);
-  process.on("SIGTERM", onSignal);
-
-  let ws: WS | null = null;
   try {
     ws = await WS.connect(await waitForBrowserWs(port));
-    raw("\n");
-    info(`Feature : ${feature}`);
-    info(`Cookie  : X-Feature=${feature}  (domain ${COOKIE_DOMAIN})`);
-    info(`Badge   : ${color}`);
-    info(`URL     : ${url}`);
-    info(`Profile : ${profile}  (throwaway)`);
-    raw(
-      `\n  Window is tagged ${Colors.BOLD}[${feature}]${Colors.RESET} ` +
-        "in the title bar + corner badge.\n",
-    );
-    raw(`  ${Colors.CYAN}Ctrl-C${Colors.RESET} to close the window and clean up.\n\n`);
-    await new FeatureSession(ws, feature, color, url, () => procExited, () => stop).run();
-    if (stop) {
-      raw("\n");
-      info("Closing feature window…");
-      return 130;
+    session = new FeatureSession(ws, feature, color, url, () => procExited, () => stop);
+    if (!(await session.start())) {
+      error("The browser window never came up — nothing was tagged.");
+      await cleanup();
+      return null;
     }
-    return 0;
-  } finally {
-    ws?.close();
+  } catch (e) {
+    // Nobody will call supervise(), so this is the last chance to clean up.
     await cleanup();
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
+    throw e;
   }
+
+  raw("\n");
+  info(`Feature : ${feature}`);
+  info(`Cookie  : X-Feature=${feature}  (domain ${COOKIE_DOMAIN})`);
+  info(`Badge   : ${color}`);
+  info(`URL     : ${url}`);
+  info(`Profile : ${profile}  (throwaway)`);
+  raw(
+    `\n  Window is tagged ${Colors.BOLD}[${feature}]${Colors.RESET} ` +
+      "in the title bar + corner badge.\n",
+  );
+
+  return {
+    stop: () => {
+      stop = true;
+    },
+    async supervise(): Promise<number> {
+      try {
+        await session.poll();
+        if (stop) {
+          raw("\n");
+          info("Closing feature window…");
+          return 130;
+        }
+        return 0;
+      } finally {
+        await cleanup();
+      }
+    },
+  };
 }
