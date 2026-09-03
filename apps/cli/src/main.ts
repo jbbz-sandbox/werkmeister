@@ -36,6 +36,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
+import { installDefaultInterrupt } from "./lib/interrupt.js";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
 
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
@@ -716,10 +717,9 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
 }
 
 export async function main(): Promise<void> {
-  process.on("SIGINT", () => {
-    console.log(`\n${_RED}Interrupted${_RESET}`);
-    process.exit(130);
-  });
+  // Stands aside for a command that claims SIGINT to run its own cleanup first
+  // — see lib/interrupt.ts for why this handler being registered first was a bug.
+  installDefaultInterrupt(process, () => console.log(`\n${_RED}Interrupted${_RESET}`));
 
   const program = new Command();
   program
