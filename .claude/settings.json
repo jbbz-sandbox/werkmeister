@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v sandbox >/dev/null 2>&1 && sandbox notes context || true"
+          }
+        ]
+      }
+    ]
+  }
+}
