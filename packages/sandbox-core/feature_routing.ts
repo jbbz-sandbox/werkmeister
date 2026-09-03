@@ -109,3 +109,23 @@ export function ingressHostnames(
   }
   return [...hosts].sort();
 }
+
+/**
+ * Absolute URL for a path on the feature ingress, e.g. `/orders` →
+ * `https://frontend.local.sandbox.com/orders`. Null when nothing is routed.
+ *
+ * Shared by `sandbox open` and the MCP server's open-feature tool so the two
+ * land on the same page: the routed host set is per-machine (ingress config +
+ * `feature_router:` blocks), so a hardcoded host opens a page that may not
+ * exist, and a second copy of this would drift from the first.
+ */
+export function featureUrl(urlPath: string): string | null {
+  let hosts: string[];
+  try {
+    hosts = ingressHostnames();
+  } catch {
+    return null;
+  }
+  if (!hosts.length) return null;
+  return `https://${hosts[0]}${urlPath.startsWith("/") ? urlPath : `/${urlPath}`}`;
+}

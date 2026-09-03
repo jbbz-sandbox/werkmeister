@@ -67,6 +67,18 @@ export function raw(chunk: string, stream: "stdout" | "stderr" = "stdout"): void
   emit({ level: "raw", chunk, stream });
 }
 
+/**
+ * True when the installed reporter owns a TTY, so a child process may inherit
+ * this process's stdio instead of being captured and replayed through `raw()`.
+ *
+ * False with no reporter installed: inheriting stdio nobody claimed is how a
+ * chatty child ends up corrupting an MCP transport, which is the failure this
+ * whole indirection exists to prevent.
+ */
+export function passthrough(): boolean {
+  return storage.getStore()?.passthrough ?? false;
+}
+
 // Padded so the messages after the tag line up.
 const PREFIX = {
   info: `${CYAN}[info] `,
@@ -109,15 +121,22 @@ export const ttyReporter: Reporter = {
  *
  * `passthrough: false` because such a caller owns no TTY: a child process must
  * never inherit its stdio.
+ *
+ * *onChunk*, when given, receives each rendered chunk as it is emitted — the
+ * live half of the same transcript, for a caller streaming progress somewhere
+ * (`createWorkspace`'s `onData`) while still wanting the whole text at the end.
  */
-export function collectingReporter(): Reporter & { text(): string } {
+export function collectingReporter(onChunk?: (chunk: string) => void): Reporter & { text(): string } {
   const chunks: string[] = [];
   return {
     passthrough: false,
-    // The `\n` is the one `console.log` appends for ttyReporter; raw chunks
-    // already carry their own, which is why they pass through untouched.
-    emit: (event) =>
-      void chunks.push(event.level === "raw" ? event.chunk : `${renderLine(event)}\n`),
+    emit(event) {
+      // The `\n` is the one `console.log` appends for ttyReporter; raw chunks
+      // already carry their own, which is why they pass through untouched.
+      const text = event.level === "raw" ? event.chunk : `${renderLine(event)}\n`;
+      chunks.push(text);
+      onChunk?.(text);
+    },
     text: () => chunks.join(""),
   };
 }
