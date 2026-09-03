@@ -186,6 +186,12 @@ route {
 
 **Verification:** After any Caddyfile change, validate with `caddy adapt` and count compiled routes. If the count is lower than expected, routes were dropped.
 
+**What ships today** is not the `route { }` form above: the generator emits path-scoped `handle`
+blocks (`handle @<feature>`, `handle /*`, `apps/cli/infra/templates/Caddyfile.njk`), which do
+not collide the way a bare `handle` beside scoped ones does. Two guards hold that shape:
+`reloadCaddy` counts the compiled routes before switching (`packages/sandbox-core/caddy.ts`),
+and `apps/cli/src/lib/__tests__/caddy_lint.test.ts` pins the bare-vs-scoped structure.
+
 ---
 
 ## Docker Desktop VirtioFS File Sync Lag
@@ -349,7 +355,7 @@ needs.
 ## One Machine-Global `sandbox_root`, and Generated State Inside the Package
 
 **Severity:** Moderate (two checkouts silently fight; an upgrade can discard local state)
-**Status:** Open
+**Status:** Open — deferred, blocked on a decision about where generated state lives rather than on effort
 **Affects:** `~/.sandbox/config.yaml` `paths.sandbox_root`, `apps/cli/infra/`
 
 `sandbox_root` is a single machine-global pointer at one CLI checkout (here,
@@ -423,3 +429,28 @@ Neither `repository` nor `license` is set, and there is no `LICENSE` file in the
 `vsce package` warns on both, and the Marketplace listing renders without a source link.
 
 **Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/sandbox.git", "directory": "packages/vscode-plugin" }`, set `"license"`, and add the LICENSE file.
+
+---
+
+## `compose-logs.smoke.mjs` Fails When Run From Inside a Workspace
+
+**Severity:** Low (a false red on `npm test`; CI's clean checkout never hits it)
+**Status:** Open
+**Affects:** `packages/sandbox-core/compose-logs.smoke.mjs`; `workspaceForFeature()` in `packages/sandbox-core/compose.ts`, via `resolveWorkspace()` in `config.ts`
+
+The smoke's last assertion is that `composeLogsStream("no-such-feature-hopefully")` returns
+`null`. It does not when the test runs from a checkout that sits under `paths.workspaces_root`
+(a feature worktree, say): `composeFile()` finds no container for that feature and falls back
+to `resolveWorkspace()`, whose cwd branch returns `<workspaces_root>/<first path segment>`
+**regardless of the feature name** (`config.ts:295-306`). That workspace has a
+`docker-compose.yml`, so a child is spawned and the assertion fails.
+
+**Symptom:** `npm test` at the repo root ends with `sandbox-core#test` failed and
+`expected null rather than a doomed child when the feature has no compose file`, while the
+`node --test` suite before it reports `fail 0`. The same script passes from a neutral cwd.
+
+**Workaround:** run the smoke (or `npm test`) from a directory outside `workspaces_root`.
+
+**Fix direction:** have the smoke `chdir` somewhere neutral before the negative case, or make
+`workspaceForFeature`'s fallback confirm the resolved directory actually belongs to *feature*
+before trusting it.
