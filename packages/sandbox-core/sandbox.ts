@@ -32,10 +32,12 @@ import {
   workspacesRoot,
 } from "./config.js";
 // Type-only: erased at build, so this adds nothing to the bundle.
+import { isOneShotService } from "./compose.js";
 import type Dockerode from "dockerode";
 import { docker } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { checkForwardHealth } from "./k8s.js";
+import { interceptsSnapshot, type InterceptRow } from "./status.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { collectingReporter, info, withReporter } from "./reporter.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
@@ -1248,21 +1250,6 @@ export interface InfraStatus {
 /** The Compose project name for shared infra (see infra/compose/shared-infra.yml `name:`). */
 const INFRA_PROJECT = "sandbox-infra";
 
-/**
- * One-shot setup containers run once and exit by design — they have no
- * `restart` policy, unlike real services. Counting a finished one would make a
- * healthy feature read as "partial".
- *
- * Identified by the `com.sandbox.local.role=setup` label the compose template
- * stamps on every `setup_services` entry; the `-setup` suffix is the pre-label
- * fallback, since the label only lands on containers created after it was added
- * and workspaces that are already up must keep reading correctly until their
- * next recreate.
- */
-export function isOneShotService(service: string, role: string | undefined): boolean {
-  return role === "setup" || service.endsWith("-setup");
-}
-
 /** A one-shot container that finished its job — `docker ps` `{{.Status}}` of `Exited (0) …`. */
 function exitedCleanly(status: string): boolean {
   return status.trimStart().startsWith("Exited (0)");
@@ -1456,15 +1443,8 @@ export async function getWorkspaceStatuses(): Promise<{ statuses: WorkspaceStatu
   return { statuses, infra };
 }
 
-export interface InterceptRow {
-  feature: string;
-  service: string;
-  deployment: string | null;
-  interceptable: boolean;
-  blocker: string | null;
-  intercepted: boolean;
-  intercepted_by: string | null;
-}
+// `InterceptRow` is declared once, in status.ts, next to the code that builds it.
+export type { InterceptRow };
 
 export interface InterceptsResult {
   available: boolean;
@@ -1472,14 +1452,15 @@ export interface InterceptsResult {
   byFeature: Map<string, Map<string, InterceptRow>>;
 }
 
-/** Telepresence intercept state for every active feature, from `sandbox status --intercepts --json`. */
+/**
+ * Telepresence intercept state for every active feature, grouped feature → service.
+ *
+ * Calls {@link interceptsSnapshot} directly — the same function `sandbox status
+ * --intercepts --json` serialises, so this used to spawn the CLI to JSON-encode
+ * a core object and parse it straight back (note 086 row 2, note 087).
+ */
 export async function getIntercepts(): Promise<InterceptsResult> {
-  const { stdout } = await runSandbox(["status", "--intercepts", "--json"]);
-  const parsed = JSON.parse(stdout) as {
-    available: boolean;
-    connected_namespace: string | null;
-    intercepts: InterceptRow[];
-  };
+  const parsed = await interceptsSnapshot();
   const byFeature = new Map<string, Map<string, InterceptRow>>();
   for (const row of parsed.intercepts) {
     let svcs = byFeature.get(row.feature);

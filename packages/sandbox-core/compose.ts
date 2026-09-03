@@ -369,3 +369,18 @@ export function getContainerStatus(feature: string): ContainerStatus[] {
 
   return containers;
 }
+
+/**
+ * One-shot setup containers run once and exit by design — they have no
+ * `restart` policy, unlike real services. Counting a finished one would make a
+ * healthy feature read as "partial".
+ *
+ * Identified by the `com.sandbox.local.role=setup` label the compose template
+ * stamps on every `setup_services` entry; the `-setup` suffix is the pre-label
+ * fallback, since the label only lands on containers created after it was added
+ * and workspaces that are already up must keep reading correctly until their
+ * next recreate.
+ */
+export function isOneShotService(service: string, role: string | undefined): boolean {
+  return role === "setup" || service.endsWith("-setup");
+}
