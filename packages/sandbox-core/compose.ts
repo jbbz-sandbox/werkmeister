@@ -129,9 +129,14 @@ function workspaceFromContainerLabel(feature: string): string | null {
 function runCompose(
   feature: string,
   args: string[],
-  { capture = false, stream = false }: { capture?: boolean; stream?: boolean } = {},
+  {
+    capture = false,
+    stream = false,
+    composePath = null,
+  }: { capture?: boolean; stream?: boolean; composePath?: string | null } = {},
 ): RunResult | null {
-  const composePath = composeFile(feature);
+  // Resolving costs a `docker ps`; a caller that already did it passes the path.
+  composePath ??= composeFile(feature);
   if (composePath === null || !isFile(composePath)) {
     error(
       `No docker-compose.yml found for feature '${feature}'.\n` +
@@ -219,20 +224,26 @@ export function composeDown(
   feature: string,
   { removeVolumes = false }: { removeVolumes?: boolean } = {},
 ): boolean {
+  // Checked here rather than left to runCompose's null: that null also covers
+  // a missing docker binary and a timeout, which are failures, not "down".
+  const composePath = composeFile(feature);
+  if (composePath === null || !isFile(composePath)) {
+    info(`No docker-compose.yml for '${feature}' -- nothing to tear down`);
+    return true;
+  }
   const args = ["down", "--remove-orphans"];
   if (removeVolumes) {
     args.push("--volumes");
   }
-  const result = runCompose(feature, args, { capture: true });
-  if (result && result.status === 0) {
-    let msg = `Containers for '${feature}' are down`;
-    if (removeVolumes) {
-      msg += " (volumes removed)";
-    }
-    success(msg);
-    return true;
+  const result = runCompose(feature, args, { capture: true, composePath });
+  if (result === null || result.status !== 0) {
+    return false;
   }
-  // Even if the compose file is missing, we consider it "down"
+  let msg = `Containers for '${feature}' are down`;
+  if (removeVolumes) {
+    msg += " (volumes removed)";
+  }
+  success(msg);
   return true;
 }
 

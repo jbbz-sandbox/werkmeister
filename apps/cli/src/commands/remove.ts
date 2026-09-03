@@ -69,7 +69,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     composeUp(feature);
   } else {
     info("No local services remaining -- containers will be stopped");
-    composeDown(feature);
+    if (!composeDown(feature)) {
+      warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
+    }
   }
 
   // Update proxy

@@ -287,8 +287,13 @@ for exactly that reason. Anything else moved in-process should be checked the sa
 ## `getFormSchema()` Scans Your Home Directory for a Jira ID It Discards
 
 **Severity:** Low (wasted work and a surprising `git` call, not a wrong result)
-**Status:** Open
+**Status:** Resolved — the create form opts out of defaults
 **Affects:** `packages/sandbox-core/sandbox.ts` — `getFormSchema()`, via `scrapeJiraId` in `workspace_prompts.ts`
+
+`getFormSchema()` now calls `computePromptSpec({}, os.homedir(), { defaults: false })`, and
+`promptEntry` in `workspace_prompts.ts` skips every prompt's `defaultFn` under that flag, so the
+scan never runs. `sandbox workspace --print-prompts` is unchanged: it runs against the cwd and
+still wants the defaults.
 
 The workspace-create form is built against `os.homedir()`, deliberately: a stray
 `./.sandbox/workspace.yml` under the caller's cwd must not pre-resolve fields for a
@@ -315,8 +320,12 @@ the scan without changing what the form shows.
 ## Session-Start Notes Context Is Unbounded Against a 10k Truncation
 
 **Severity:** Moderate (silently drops the newest decisions, which is the opposite of what you want)
-**Status:** Open
+**Status:** Resolved — the decision list is budgeted, newest first
 **Affects:** `apps/cli/src/commands/notes.ts` — `buildContext()`, via the SessionStart hook
+
+`buildContext()` now renders decisions into a `_CONTEXT_CHAR_CAP` (9000 chars) budget, keeping
+the newest and listing the elided older ones by path so a session can still read them
+(`renderDecisions` in `apps/cli/src/commands/notes.ts`). Standards and the handoff always print.
 
 `buildContext()` renders the latest handoff plus **every** open `decision` note. The hook
 harness truncates its combined output at ~10k characters — the function's own docstring says
@@ -363,8 +372,14 @@ locate templates, not mutable state.
 ## Library Rough Edges Left by the CLI-to-Core Migration
 
 **Severity:** Low (each is small; they share a cause)
-**Status:** Open
+**Status:** Resolved — the library reports failure, drops the flag name, and reconciles hooks on `up`
 **Affects:** `packages/sandbox-core/{compose,lifecycle,hooks_gen}.ts`
+
+`composeDown()` returns false when `docker compose down` fails (true only for a feature with no
+compose file, which it now checks itself), and `lifecycle.down`, `sandbox remove`, and
+`sandbox clean` warn on it. The volumes line reads "Per-feature Docker volumes will be removed".
+`lifecycle.up` calls `writeWorkspaceHooks(workspace)` on every `sandbox up`, so a stale hook is
+reconciled the next time the feature starts.
 
 Code that used to be a CLI command and is now a library function still reads like a command
 in three places:
