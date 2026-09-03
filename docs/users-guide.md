@@ -790,6 +790,43 @@ Monorepo services require initialization before the application services can sta
 
 Setup services are automatically included in generated Docker Compose files when a feature uses services from the corresponding monorepo.
 
+### Self-hosting the sandbox repo
+
+The five workspaces of this repo (`apps/cli`, `apps/claudeck`, `apps/sandbox-dashboard`,
+`packages/sandbox-core`, `packages/vscode-plugin`) can be registered as services so a
+feature workspace develops the sandbox itself, each package in its own container. The
+registry shape lives in `docs/superpowers/specs/2026-09-03-self-host-services-design.md`;
+the pieces that are not obvious from the demo services:
+
+- **One `node:22` image everywhere.** `better-sqlite3`, `keytar`, `sharp` and the
+  esbuild/rollup/swc binaries ship glibc prebuilds only; alpine will not load them.
+- **Watch loops need no listener.** The compose template always publishes a port and its
+  healthcheck is `curl … || exit 0`, so `tsc --watch` containers read healthy with a
+  placeholder `internal_port`.
+- **Host access for `cli`, `sandbox-dashboard` and `claudeck`.** Those three drive the host:
+  they get `/var/run/docker.sock` plus `~/.sandbox`, `~/repos`, `~/features` and `~/.kube`
+  bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
+  kubectl binaries from the per-feature `tools` volume that
+  `infra/compose/scripts/sandbox-install-startup.sh` fills. The generated compose files carry
+  host bind-mount paths and the daemon is the host's, so the paths must be identical on both
+  sides.
+- **`sandbox` inside the container is the worktree's own build.** `PATH` puts
+  `/app/apps/cli` first. `sandbox_root` in `~/.sandbox/config.yaml` still points at the main
+  checkout, so templates and `infra/` come from there (see the known issue on machine-global
+  `sandbox_root`). **Never run `sandbox config` or `sandbox setup` from a worktree**, on the
+  host or in the container: it silently repoints the whole machine.
+- **The dashboard binds `HOST`.** It defaults to loopback for the reasons in `main.ts`; the
+  registry sets `HOST=0.0.0.0` because the container network is the isolation boundary and
+  Docker's published port is the only way in.
+- **New hostnames need `/etc/hosts` entries.** The wildcard certificate already covers
+  `*.local.sandbox.com`, but `dashboard.` and `claudeck.` only resolve after `sandbox setup`
+  (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
+- **Claudeck chat needs an Anthropic key.** Add `ANTHROPIC_API_KEY` to
+  `~/.sandbox/secrets.env` *and* `secrets: [ANTHROPIC_API_KEY]` to the `claudeck` entry
+  together: a declared-but-missing secret makes `sandbox up` refuse the whole workspace.
+- **Not covered:** Telepresence intercepts (need a root daemon on the host), and the `gh` and
+  `claude` binaries. Run `sandbox intercept` from the host.
+
 ---
 
 ## Port Allocation

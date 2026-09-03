@@ -19,6 +19,10 @@ Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 workspace plugin and the VS Code extension all read the same machine config
 through it. Only the CLI publishes; everything else is private.
 
+Every workspace here can also be run as a sandbox service of its own, so a feature
+workspace can develop the sandbox inside the sandbox — see "Self-hosting the sandbox repo"
+in [docs/users-guide.md](docs/users-guide.md).
+
 ## Install the CLI without a clone
 
 `@jbbz-sandbox/sandbox-cli` publishes to GitHub Packages, so a machine that only
