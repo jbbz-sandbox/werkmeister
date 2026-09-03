@@ -309,3 +309,102 @@ same cwd — but it is core's now, and visible.
 **Fix:** skip the `defaultFn` evaluation for a root that is not itself a workspace, or let
 `buildPromptSpec` take a "defaults not wanted" flag for the create-form path. Either removes
 the scan without changing what the form shows.
+
+---
+
+## Session-Start Notes Context Is Unbounded Against a 10k Truncation
+
+**Severity:** Moderate (silently drops the newest decisions, which is the opposite of what you want)
+**Status:** Open
+**Affects:** `apps/cli/src/commands/notes.ts` — `buildContext()`, via the SessionStart hook
+
+`buildContext()` renders the latest handoff plus **every** open `decision` note. The hook
+harness truncates its combined output at ~10k characters — the function's own docstring says
+so, and orders standards first to protect them — but nothing bounds the decision list. A
+workspace that accumulates decisions therefore pushes its newest ones past the cutoff.
+
+**Symptom:** a decision recorded in one session is not in the next session's context, so the
+same ground gets re-litigated. Observed directly: a SessionStart hook in this repo emitted
+**110.8KB**, eleven times the budget, with 57 notes marked `status: open`.
+
+**Why it bites the wrong end:** decisions render after the handoff, so the ones cut are the
+most recently written — exactly the ones a fresh session needs.
+
+**Fix options:** cap the number of decisions rendered (newest first) and say how many were
+elided; or make `status:` retirement real so "open" means "still binding" rather than "not
+superseded"; or render decision *titles* with paths, and let the session read the ones it
+needs.
+
+---
+
+## One Machine-Global `sandbox_root`, and Generated State Inside the Package
+
+**Severity:** Moderate (two checkouts silently fight; an upgrade can discard local state)
+**Status:** Open
+**Affects:** `~/.sandbox/config.yaml` `paths.sandbox_root`, `apps/cli/infra/`
+
+`sandbox_root` is a single machine-global pointer at one CLI checkout (here,
+`/Users/jayboyer/repos/sandbox/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
+and is what `infraRoot()` resolves from — so **whichever install ran `sandbox config` last
+wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
+serving `infra/` out of the other one.
+
+Compounding it, generated state lives *inside* that package tree rather than beside the
+user's config: `apps/cli/infra/proxy/Caddyfile` and `apps/cli/infra/proxy/ui/features.json`
+are both gitignored build products under a directory that ships in the published package.
+Reinstalling or upgrading `@jbbz-sandbox/sandbox-cli` can therefore discard or stale them.
+
+**Fix direction:** generated artifacts belong under `~/.sandbox/` (like `services.yaml` and
+`ports.yaml` already do), leaving the package tree read-only; `sandbox_root` then only has to
+locate templates, not mutable state.
+
+---
+
+## Library Rough Edges Left by the CLI-to-Core Migration
+
+**Severity:** Low (each is small; they share a cause)
+**Status:** Open
+**Affects:** `packages/sandbox-core/{compose,lifecycle,hooks_gen}.ts`
+
+Code that used to be a CLI command and is now a library function still reads like a command
+in three places:
+
+| Where | What |
+|---|---|
+| `compose.ts` — `composeDown()` | Returns a success `boolean` that **all three callers discard** (`lifecycle.ts:381`, `commands/remove.ts:72`, `commands/clean.ts:119`). A teardown that failed is indistinguishable from one that worked. |
+| `lifecycle.ts:377` | Emits `info("--volumes: per-feature Docker volumes will be removed")` — a **CLI flag name** in library output, so the dashboard and claudeck show a flag their user never typed. |
+| `hooks_gen.ts` — `writeWorkspaceHooks()` | Called only from `initWorkspace`. A workspace created before a hook-template change keeps the stale hook until someone re-runs `sandbox init-workspace` there by hand; nothing reconciles it. |
+
+---
+
+## A Feature Browser Window Outlives Its Launcher, and Its Profile Leaks
+
+**Severity:** Low (a directory in `$TMPDIR`, swept by the OS)
+**Status:** Open — inherent to launching in-process
+**Affects:** `packages/sandbox-core/browser.ts` — `FeatureWindow.supervise()`
+
+`launchFeatureWindow` spawns the browser `detached`, so the window survives its caller — the
+point, for the MCP server's open-feature tool, which returns while a human keeps the window.
+Cleanup (kill the browser, remove the throwaway `--user-data-dir`) lives in `supervise()`'s
+`finally`, which only runs if the caller is still alive when the window closes.
+
+So a long-lived caller that exits first — an MCP server restart, say — leaves the profile
+directory behind. The spawned `sandbox open` child this replaced owned its own cleanup and
+did it regardless.
+
+**Not a leak of anything sensitive:** the profile is a throwaway created per launch under
+`$TMPDIR`. **Fix direction:** sweep stale `chrome-<feature>-*` directories on the next launch,
+which is cheap and needs no supervisor.
+
+---
+
+## VS Code Extension Manifest Is Missing `repository` and `license`
+
+**Severity:** Low (blocks a clean Marketplace publish)
+**Status:** Open
+**Affects:** `packages/vscode-plugin/package.json`
+
+Neither `repository` nor `license` is set, and there is no `LICENSE` file in the package.
+`vsce package` warns on both, and the Marketplace listing renders without a source link.
+
+**Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/sandbox.git", "directory": "packages/vscode-plugin" }`, set `"license"`, and add the LICENSE file.
