@@ -1,8 +1,7 @@
 /**
  * `apps/cli` depends on `sandbox-core`, so core must never spawn the `sandbox`
  * binary back — note 087 (.sandbox/notes/087-decision-core-never-drives-the-cli.md).
- * Two edges of that cycle are still open (note 086's rows 1 and 5, which share the
- * CLI-side `computePromptSpec` chain); this is a
+ * One edge of that cycle is still open (note 086's row 5); this is a
  * ratchet, not a clean bill of health. Every conversion PR deletes its line from
  * REMAINING, and nothing may ever add one.
  *
@@ -19,8 +18,7 @@ const CORE = path.resolve(fileURLToPath(import.meta.url), "../../../../../../pac
 
 /** The argv of each `runSandbox` call still left in core, as written in the source. */
 const REMAINING = [
-  '["workspace", "--print-form-schema"]', // 086 row 1 — needs computePromptSpec moved into core
-  "args", //                                 086 row 5 — createWorkspace, the CLI-side wizard
+  "args", // 086 row 5 — createWorkspace, whose CLI self-spawn has to be untangled first
 ];
 
 describe("sandbox-core does not drive the CLI", () => {

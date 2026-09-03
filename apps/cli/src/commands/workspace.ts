@@ -46,9 +46,7 @@ import {
   expandUser,
   getMonorepoRoot,
   getReposRoot,
-  getSandboxRoot,
   info,
-  loadReposConfig,
   loadServices,
   success,
   warn,
@@ -61,37 +59,26 @@ import { loadPaths } from "sandbox-core/global_config";
 // checkout this command consumes).
 import { WORKSPACE_ROOT_REPO } from "sandbox-core/machine_setup";
 import { run as procRun } from "sandbox-core/proc";
-import { PromptSpec } from "../lib/wizard.js";
 // Worktree creation is shared with init-workspace (which owns the nested
 // per-repo worktrees); this command creates only the workspace ROOT.
 import { createWorktree, resolveRepos } from "sandbox-core/worktrees";
-// init-workspace owns the shared prompt/wizard definitions and config writer;
-// these helpers are re-used verbatim so both commands agree on fields.
+// init-workspace owns the interactive wizard driver and the config writer; the
+// prompt definitions themselves live in core, where the dashboard reaches them
+// without spawning this CLI (note 087).
 import {
-  buildPromptSpec,
   emitSpecError,
-  promptEntry,
-  resolveInputs,
+  run as initWorkspace,
   runInteractiveWizard,
   writeWorkspaceConfig,
 } from "./init_workspace.js";
+import {
+  REPOS_PROMPT,
+  computePromptSpec as coreComputePromptSpec,
+  resolveInputs,
+} from "sandbox-core/workspace_prompts";
 
 // A workspace directory / feature slug: lowercase, hyphen-separated.
 const _SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
-// The single definition of the workspace-only "additional repos" prompt. Both
-// the interactive wizard (spliced in after `services`) and the `--print-prompts`
-// / browser-form exports (serialised via `promptEntry`) render from this one
-// spec, so the two paths can't drift apart again.
-const REPOS_PROMPT: PromptSpec = {
-  key: "repos",
-  label: "Additional repos (optional)",
-  help:
-    "Extra repos to create worktrees for. The final set is the union of " +
-    "these and the repos owning the services selected above.",
-  multi: true,
-  choicesFn: () => Object.keys(loadReposConfig()).sort(),
-};
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -179,24 +166,25 @@ function commitWorkspaceState(workspaceDir: string, workspaceName: string): void
 // init-workspace hand-off
 // ---------------------------------------------------------------------------
 
-function runInitWorkspace(
+async function runInitWorkspace(
   workspaceDir: string,
   featureSlug: string,
   resolved: Record<string, string>,
-): number {
-  // Invoke the CLI entry by path so init-workspace's CWD-based detection
-  // resolves the new workspace.
-  const sandboxRoot = String(getSandboxRoot());
-  const mainJs = path.join(getSandboxRoot(), "dist", "main.js");
-  const flags = initWorkspaceFlags(featureSlug, resolved);
-  const cmd = [process.execPath, mainJs, "init-workspace", ...flags];
-
-  const env = { ...process.env };
-  env.SANDBOX_ROOT = sandboxRoot;
-
-  info("Running: sandbox init-workspace " + flags.join(" "));
-  const result = procRun(cmd, { cwd: workspaceDir, env });
-  return result.status;
+): Promise<number> {
+  // In-process, with the workspace dir handed over explicitly. This used to
+  // re-exec `node dist/main.js init-workspace` in `workspaceDir` for no reason
+  // but that directory — the CLI spawning itself so the child's cwd-based
+  // detection would land on the new workspace. init-workspace's two
+  // `process.exit(1)` paths (no workspace root, no feature) are both unreachable
+  // from here — we supply both — so a failure arrives as a throw, not an exit.
+  info(`Running: sandbox init-workspace (feature: ${featureSlug})`);
+  try {
+    await initWorkspace({ ...resolved, feature: featureSlug }, workspaceDir);
+    return 0;
+  } catch (exc) {
+    error(`init-workspace failed: ${(exc as Error).message}`);
+    return 1;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -249,64 +237,19 @@ async function selectRepos(
   return resolvedRepos;
 }
 
-function initWorkspaceFlags(featureSlug: string, resolved: Record<string, string>): string[] {
-  const flags = ["--feature", featureSlug];
-  const mapping: [string, string][] = [
-    ["jira_id", "--jira-id"],
-    ["repos", "--repos"],
-    ["services", "--services"],
-    ["test_path", "--test-path"],
-    ["description", "--description"],
-    ["task", "--task"],
-    ["starting_prompt", "--starting-prompt"],
-    ["work_type", "--work-type"],
-    ["labels", "--labels"],
-  ];
-  for (const [key, flag] of mapping) {
-    const value = resolved[key];
-    if (value) {
-      flags.push(flag, value);
-    }
-  }
-  return flags;
-}
-
 // ---------------------------------------------------------------------------
 // Prompt / form-schema export (delegated to init-workspace's definitions)
 // ---------------------------------------------------------------------------
 
-function reposPromptEntry(resolved: Record<string, string>): Record<string, unknown> {
-  // workspaceRoot is only consulted for a spec's defaultFn; REPOS_PROMPT has
-  // none, so the value is irrelevant. Serialising the shared spec keeps this
-  // export byte-identical to what the wizard now presents.
-  return promptEntry(REPOS_PROMPT, "", resolved);
-}
-
 function computePromptSpec(args: Record<string, unknown>): Record<string, unknown> {
   // Diagnostics go to stderr so stdout stays a clean JSON document.
-  const base = process.cwd();
-  let resolved: Record<string, string>;
-  let spec: Record<string, unknown>;
   const origLog = console.log;
   try {
     console.log = ((...a: unknown[]) => console.error(...a)) as typeof console.log;
-    resolved = resolveInputs(args, base);
-    spec = buildPromptSpec(base, resolved);
+    return coreComputePromptSpec(args, process.cwd());
   } finally {
     console.log = origLog;
   }
-
-  const reposEntry = reposPromptEntry(resolved);
-  if ((reposEntry.choices as string[]).length) {
-    const prompts = (spec.prompts as Record<string, unknown>[]) ?? [];
-    let servicesIdx = prompts.findIndex((p) => p.key === "services");
-    if (servicesIdx === -1) {
-      servicesIdx = prompts.length - 1;
-    }
-    prompts.splice(servicesIdx + 1, 0, reposEntry);
-    spec.prompts = prompts;
-  }
-  return spec;
 }
 
 function printPrompts(args: Record<string, unknown>): void {
@@ -431,7 +374,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   // 3. init-workspace inside the workspace.
-  const rc = runInitWorkspace(workspaceDir, featureSlug, resolved);
+  const rc = await runInitWorkspace(workspaceDir, featureSlug, resolved);
   if (rc !== 0) {
     warn(
       `sandbox init-workspace exited with status ${rc}. ` +

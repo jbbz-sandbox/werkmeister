@@ -39,6 +39,8 @@ import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { infraHealth, up as infraUp } from "./infra.js";
 import { checkForwardHealth } from "./k8s.js";
 import { interceptsSnapshot, type InterceptRow } from "./status.js";
+import { buildFormSchema } from "./form_schema.js";
+import { computePromptSpec } from "./workspace_prompts.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { collectingReporter, info, withReporter } from "./reporter.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
@@ -957,27 +959,26 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
   return { root, workspaces };
 }
 
-/** Fetch the RJSF form bundle straight from the CLI — the single source of truth. */
+/** Build the RJSF form bundle from core's own prompt definitions. */
 export async function getFormSchema(): Promise<FormSchemaBundle> {
-  const { stdout } = await runSandbox(["workspace", "--print-form-schema"]);
-  let parsed: unknown;
+  let bundle: Record<string, unknown>;
   try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    throw new WorkspaceError(`Could not parse --print-form-schema output:\n${stdout.slice(0, 500)}`);
+    // Homedir, not the caller's cwd: a stray `./.sandbox/workspace.yml` must not
+    // pre-resolve fields for a brand-new workspace. This is the cwd the CLI was
+    // spawned with when this ran out-of-process.
+    bundle = buildFormSchema(computePromptSpec({}, os.homedir()));
+  } catch (e) {
+    throw new WorkspaceError(`Could not build the workspace form: ${(e as Error).message}`);
   }
-  const bundle = parsed as Partial<FormSchemaBundle> & { error?: string };
-  if (bundle.error) throw new WorkspaceError(bundle.error);
-  if (!bundle.schema) throw new WorkspaceError("--print-form-schema returned no schema.");
-  // The CLI derives `formData` defaults from its CWD (e.g. the feature name from
-  // the current dir). For a brand-new workspace there's no meaningful pre-fill,
-  // and a stray CWD-derived value could be submitted by accident — so start
-  // blank and let the schema's placeholders/labels guide the user.
+  // Defaults derived from that root (e.g. a scraped Jira id) reach `formData`
+  // only. For a brand-new workspace there's no meaningful pre-fill, and a stray
+  // derived value could be submitted by accident — so start blank and let the
+  // schema's placeholders/labels guide the user.
   return {
-    schema: bundle.schema,
-    uiSchema: bundle.uiSchema ?? {},
+    schema: bundle.schema as FormSchemaBundle["schema"],
+    uiSchema: (bundle.uiSchema ?? {}) as FormSchemaBundle["uiSchema"],
     formData: {},
-    title: bundle.title ?? "Initialize workspace",
+    title: (bundle.title as string) ?? "Initialize workspace",
   };
 }
 
