@@ -96,13 +96,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const onSignal = () => window.stop();
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
+  let code: number;
   try {
-    const code = await window.supervise();
-    if (code !== 0 && code !== 130) {
-      process.exit(code);
-    }
+    code = await window.supervise();
   } finally {
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
+  }
+  // 130 means the window was closed by Ctrl-C. This was dead code until the
+  // default handler stopped exiting out from under the listener above.
+  if (code !== 0) {
+    process.exit(code);
   }
 }
