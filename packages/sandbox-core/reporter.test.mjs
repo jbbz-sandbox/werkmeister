@@ -11,6 +11,7 @@ import {
   success,
   warn,
   error,
+  passthrough,
   raw,
   withReporter,
   ttyReporter,
@@ -190,4 +191,30 @@ test("collectingReporter is byte-identical to what ttyReporter prints", async ()
 // reporter exists rather than the tty one.
 test("collectingReporter never lets a child inherit stdio", () => {
   assert.equal(collectingReporter().passthrough, false);
+});
+
+// `createWorkspace` streams progress to a caller's `onData` while still
+// returning the whole transcript, so the live half and the collected half must
+// be the same bytes in the same order — a difference between them is a
+// difference between what the dashboard shows during a run and after it.
+test("collectingReporter's live callback matches the text it collects", async () => {
+  const live = [];
+  const collector = collectingReporter((chunk) => live.push(chunk));
+  await withReporter(collector, async () => {
+    info("one");
+    raw("bare\n");
+    warn("two");
+    raw("to stderr\n", "stderr");
+  });
+  assert.equal(live.join(""), collector.text());
+  assert.equal(live.length, 4);
+});
+
+// The docker build in `initWorkspace` asks this before choosing between
+// inherited stdio and capture-and-replay. Answering `true` where no reporter
+// owns a TTY is how a chatty child ends up in an MCP transport.
+test("passthrough() is false unless a TTY-owning reporter is installed", async () => {
+  assert.equal(passthrough(), false);
+  await withReporter(collectingReporter(), async () => assert.equal(passthrough(), false));
+  await withReporter(ttyReporter, async () => assert.equal(passthrough(), true));
 });

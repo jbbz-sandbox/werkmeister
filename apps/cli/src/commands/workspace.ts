@@ -37,158 +37,27 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
-import {
-  Colors,
-  error,
-  expandUser,
-  getMonorepoRoot,
-  getReposRoot,
-  info,
-  loadServices,
-  success,
-  warn,
-} from "../lib/config.js";
+import { error, getMonorepoRoot } from "../lib/config.js";
 import { buildFormSchema } from "sandbox-core/form_schema";
-import { loadPaths } from "sandbox-core/global_config";
-// The workspace ROOT is itself a worktree of the dedicated sandbox-workspace
-// repo (which one is `overrides.workspace_repo`) — rationale and the clone/update logic
-// live with the constant in machine_setup (`sandbox setup` maintains the
-// checkout this command consumes).
-import { WORKSPACE_ROOT_REPO } from "sandbox-core/machine_setup";
 import { run as procRun } from "sandbox-core/proc";
-// Worktree creation is shared with init-workspace (which owns the nested
-// per-repo worktrees); this command creates only the workspace ROOT.
-import { createWorktree, resolveRepos } from "sandbox-core/worktrees";
-// init-workspace owns the interactive wizard driver and the config writer; the
-// prompt definitions themselves live in core, where the dashboard reaches them
-// without spawning this CLI (note 087).
-import {
-  emitSpecError,
-  run as initWorkspace,
-  runInteractiveWizard,
-  writeWorkspaceConfig,
-} from "./init_workspace.js";
+// The work itself lives in core (note 086 row 5), which is how `createWorkspace`
+// runs it without spawning this CLI. What stays here is the wizard, the
+// prompt-spec exports, the browser-form launcher, and exit codes.
+import { WorkspaceInitError, provisionWorkspace } from "sandbox-core/workspace_init";
+// init-workspace owns the interactive wizard driver and the piped-stdin reader;
+// the prompt definitions themselves live in core, where the dashboard reaches
+// them without spawning this CLI (note 087).
+import { emitSpecError, readStdinTask, runInteractiveWizard } from "./init_workspace.js";
 import {
   REPOS_PROMPT,
   computePromptSpec as coreComputePromptSpec,
   resolveInputs,
 } from "sandbox-core/workspace_prompts";
 
-// A workspace directory / feature slug: lowercase, hyphen-separated.
-const _SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
 // ---------------------------------------------------------------------------
-// Pure helpers
-// ---------------------------------------------------------------------------
-
-export function buildWorkspaceName(feature: string, jiraId: string | null): string {
-  const featureSlug = (feature || "").trim().toLowerCase();
-  const jiraSlug = (jiraId || "").trim().toLowerCase();
-  return jiraSlug ? `${jiraSlug}-${featureSlug}` : featureSlug;
-}
-
-export function buildBranchName(username: string, workspaceName: string): string {
-  return `${username}/${workspaceName}`;
-}
-
-// ---------------------------------------------------------------------------
-// Path resolution
-// ---------------------------------------------------------------------------
-
-function resolveReposRoot(): string {
-  return getReposRoot();
-}
-
-function resolveWorkspacesRoot(): string {
-  const configured = loadPaths()["workspaces_root"];
-  if (configured) {
-    return path.resolve(expandUser(configured));
-  }
-  return path.resolve(path.join(os.homedir(), "workspace"));
-}
-
-// ---------------------------------------------------------------------------
-// Git worktree creation
-// ---------------------------------------------------------------------------
-
-function createWorkspaceRoot(workspaceDir: string, branch: string): void {
-  const reposRoot = resolveReposRoot();
-  const rootRepoSrc = path.join(reposRoot, WORKSPACE_ROOT_REPO);
-
-  info(`Workspace:  ${workspaceDir}`);
-  info(`Branch:     ${branch}`);
-
-  if (fs.existsSync(path.join(rootRepoSrc, ".git"))) {
-    try {
-      createWorktree(rootRepoSrc, workspaceDir, branch);
-    } catch (exc) {
-      error(`Failed to create workspace root worktree: ${(exc as Error).message}`);
-      process.exit(1);
-    }
-    success(`Created workspace root (worktree of ${WORKSPACE_ROOT_REPO}) at ${workspaceDir}`);
-  } else {
-    warn(
-      `No '${WORKSPACE_ROOT_REPO}' repo at ${rootRepoSrc} — workspace root ` +
-        "will be a plain directory (no git history for notes/config).",
-    );
-    // ponytail: parents=True; caller has already verified the dir doesn't exist.
-    fs.mkdirSync(workspaceDir, { recursive: true });
-  }
-}
-
-function commitWorkspaceState(workspaceDir: string, workspaceName: string): void {
-  if (!fs.existsSync(path.join(workspaceDir, ".git"))) {
-    return;
-  }
-  try {
-    procRun(["git", "-C", workspaceDir, "add", "-A"], { capture: true, check: true });
-    const staged = procRun(
-      ["git", "-C", workspaceDir, "diff", "--cached", "--quiet"],
-      { capture: true },
-    );
-    if (staged.status === 0) {
-      return; // nothing to commit
-    }
-    procRun(
-      ["git", "-C", workspaceDir, "commit", "-q", "-m", `chore: initialize workspace ${workspaceName}`],
-      { capture: true, check: true },
-    );
-    success("Committed initial workspace state (branch not pushed — push when ready).");
-  } catch (exc) {
-    warn(`Could not commit initial workspace state: ${(exc as Error).message}`);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// init-workspace hand-off
-// ---------------------------------------------------------------------------
-
-async function runInitWorkspace(
-  workspaceDir: string,
-  featureSlug: string,
-  resolved: Record<string, string>,
-): Promise<number> {
-  // In-process, with the workspace dir handed over explicitly. This used to
-  // re-exec `node dist/main.js init-workspace` in `workspaceDir` for no reason
-  // but that directory — the CLI spawning itself so the child's cwd-based
-  // detection would land on the new workspace. init-workspace's two
-  // `process.exit(1)` paths (no workspace root, no feature) are both unreachable
-  // from here — we supply both — so a failure arrives as a throw, not an exit.
-  info(`Running: sandbox init-workspace (feature: ${featureSlug})`);
-  try {
-    await initWorkspace({ ...resolved, feature: featureSlug }, workspaceDir);
-    return 0;
-  } catch (exc) {
-    error(`init-workspace failed: ${(exc as Error).message}`);
-    return 1;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Entry point helpers
+// Input resolution
 // ---------------------------------------------------------------------------
 
 async function resolveWorkspaceInputs(args: Record<string, unknown>): Promise<Record<string, string>> {
@@ -202,39 +71,6 @@ async function resolveWorkspaceInputs(args: Record<string, unknown>): Promise<Re
     resolved = await runInteractiveWizard(base, resolved, [REPOS_PROMPT]);
   }
   return resolved;
-}
-
-async function selectRepos(
-  reposValue: string | null | undefined,
-  servicesValue: string | null | undefined,
-): Promise<string[]> {
-  const servicesConfig = loadServices();
-  // `reposValue` already reflects CLI/env/config *and* any wizard answer (both
-  // land in the resolved inputs), so repos chosen interactively take effect.
-  const [resolvedRepos, , unknown] = resolveRepos(
-    reposValue ?? null,
-    servicesValue ?? null,
-    servicesConfig,
-  );
-  if (unknown.length) {
-    error(
-      `Unknown service(s): ${unknown.join(", ")}. ` +
-        "See `sandbox services` / config/services.yaml.",
-    );
-    process.exit(1);
-  }
-
-  if (!resolvedRepos.length) {
-    // On a TTY the wizard already offered services + repos; a non-TTY run had
-    // only flags/config. Either way, nothing selected means nothing to create.
-    error(
-      "No repos selected. Choose at least one service or repo in the wizard, " +
-        "or pass --services svc1,svc2 / --repos r1,r2.",
-    );
-    process.exit(1);
-  }
-
-  return resolvedRepos;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,59 +172,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  // 1. Resolve inputs (CLI > ./.sandbox/workspace.yml > interactive).
-  const resolved = await resolveWorkspaceInputs(args);
-  const feature = (resolved.feature ?? "").trim();
-  if (!feature) {
-    error(
-      "A feature name is required (pass it as an argument, set it in " +
-        "./.sandbox/workspace.yml, or run interactively).",
-    );
-    process.exit(1);
+  // 1. Resolve inputs (CLI > ./.sandbox/workspace.yml > interactive), then hand
+  //    the whole creation to core.
+  try {
+    await provisionWorkspace(await resolveWorkspaceInputs(args), { readStdinTask });
+  } catch (exc) {
+    // Its `[err]`/`[warn]` line is already out; restating it is all main.ts's
+    // handler would do.
+    if (exc instanceof WorkspaceInitError) {
+      process.exit(1);
+    }
+    throw exc;
   }
-
-  const featureSlug = feature.toLowerCase();
-  const jiraId = (resolved.jira_id ?? "").trim() || null;
-  const workspaceName = buildWorkspaceName(feature, jiraId);
-  if (!_SLUG_RE.test(workspaceName)) {
-    error(
-      `Workspace name '${workspaceName}' is not a valid slug ` +
-        "(expected lowercase letters, digits, and single hyphens).",
-    );
-    process.exit(1);
-  }
-
-  const branch = buildBranchName(os.userInfo().username, workspaceName);
-  const workspacesRoot = resolveWorkspacesRoot();
-  const workspaceDir = path.join(workspacesRoot, workspaceName);
-
-  // 2. Create the workspace ROOT (a sandbox-workspace worktree) and record the
-  //    resolved inputs — including the repo set — in .sandbox/workspace.yml.
-  if (fs.existsSync(workspaceDir)) {
-    info(`Workspace already exists: ${workspaceDir} — re-running init-workspace.`);
-  } else {
-    const repos = await selectRepos(resolved.repos, resolved.services);
-    resolved.repos = repos.join(",");
-    createWorkspaceRoot(workspaceDir, branch);
-    writeWorkspaceConfig(workspaceDir, resolved);
-  }
-
-  // 3. init-workspace inside the workspace.
-  const rc = await runInitWorkspace(workspaceDir, featureSlug, resolved);
-  if (rc !== 0) {
-    warn(
-      `sandbox init-workspace exited with status ${rc}. ` +
-        `The workspace root exists at ${workspaceDir}; ` +
-        "re-run `sandbox init-workspace` from there once resolved.",
-    );
-    process.exit(rc);
-  }
-
-  // 4. First commit of the workspace state (repo-rooted workspaces only).
-  commitWorkspaceState(workspaceDir, workspaceName);
-
-  console.log(
-    `\n${Colors.BOLD}Workspace ready.${Colors.RESET} ` +
-      `cd ${workspaceDir} and open a Claude Code session from there.\n`,
-  );
 }

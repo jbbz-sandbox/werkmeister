@@ -43,6 +43,8 @@ import { buildFormSchema } from "./form_schema.js";
 import { computePromptSpec } from "./workspace_prompts.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { collectingReporter, info, withReporter } from "./reporter.js";
+import { provisionWorkspace } from "./workspace_init.js";
+import { resolveInputs } from "./workspace_prompts.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
 import { CLAUDECK, DASHBOARD, status as webStatus } from "./web_servers.js";
 
@@ -213,41 +215,6 @@ export function spawnCapture(
     child.on("error", reject);
     child.on("close", (code) => resolve({ stdout, stderr, code }));
   });
-}
-
-/**
- * Run the `sandbox` CLI. Defaults to a neutral cwd (home) so the CLI doesn't
- * pick up a stray `./.sandbox/workspace.yml` — every input the create path cares
- * about is passed explicitly as a flag. Lifecycle commands (up/stop/…) instead
- * pass `cwd` = the workspace dir so the CLI resolves FEATURE/slot from that
- * workspace's `.env`, exactly as a user running the command there would.
- */
-async function runSandbox(
-  args: string[],
-  cwd: string = os.homedir(),
-  onData?: (chunk: string) => void,
-): Promise<{ stdout: string; stderr: string }> {
-  const bin = await resolveSandboxBin();
-  if (onData) {
-    const { stdout, stderr, code } = await spawnCapture(bin, args, { cwd, env: childEnv(), onData });
-    if (code !== 0) {
-      const detail = stripAnsi((stderr || stdout || "").trim());
-      throw new WorkspaceError(`sandbox ${args.join(" ")} failed:\n${detail}`);
-    }
-    return { stdout, stderr };
-  }
-  try {
-    const { stdout, stderr } = await execFileAsync(bin, args, {
-      cwd,
-      env: childEnv(),
-      maxBuffer: 16 * 1024 * 1024,
-    });
-    return { stdout, stderr };
-  } catch (e) {
-    const err = e as { stdout?: string; stderr?: string; message?: string };
-    const detail = stripAnsi((err.stderr || err.stdout || err.message || "").trim());
-    throw new WorkspaceError(`sandbox ${args.join(" ")} failed:\n${detail}`);
-  }
 }
 
 /**
@@ -1017,15 +984,6 @@ export function buildWorkspaceArgs(formData: Record<string, unknown>): string[] 
   return args;
 }
 
-/** Parse the workspace directory out of the CLI's (ANSI-stripped) stdout. */
-function parseWorkspacePath(output: string): string | null {
-  const ready = output.match(/cd\s+(.+?)\s+and open a Claude Code session/);
-  if (ready) return ready[1].trim();
-  const line = output.match(/Workspace(?: already exists)?:\s*(\S+)/);
-  if (line) return line[1].trim();
-  return null;
-}
-
 /** Known absolute locations of the VS Code CLI, robust to Desktop's minimal PATH. */
 const VSCODE_CANDIDATES = [
   process.env.VSCODE_BIN,
@@ -1060,18 +1018,40 @@ async function openInVscode(target: string): Promise<{ opened: boolean; note?: s
 }
 
 /**
- * Create a workspace by delegating to `sandbox workspace`, then (optionally)
- * open it in VS Code.
+ * Create a workspace, then (optionally) open it in VS Code.
+ *
+ * The creation itself is `workspace_init`'s, called in this process — it used
+ * to be a `sandbox workspace` child, which made this package depend on the CLI
+ * that depends on it (note 087). `command` still names that invocation because
+ * it is what a caller shows the user, and `output` is still the transcript the
+ * CLI would have printed: the reporter renders the same lines, and `onData`
+ * receives each as it is emitted rather than as a chunk of a pipe.
+ *
+ * `resolveInputs` runs against the home directory for the same reason the child
+ * was spawned there — so a stray `./.sandbox/workspace.yml` under the caller's
+ * cwd can't override the submitted form.
  */
 export async function createWorkspace(
   formData: Record<string, unknown>,
   opts: { open?: boolean; onData?: (chunk: string) => void } = {},
 ): Promise<CreateResult> {
+  // Still built (and still validating that a feature was supplied) because it
+  // is what `command` reports.
   const args = buildWorkspaceArgs(formData);
   const command = `sandbox ${args.join(" ")}`;
-  const { stdout, stderr } = await runSandbox(args, os.homedir(), opts.onData);
-  const output = stripAnsi(`${stdout}${stderr ? `\n${stderr}` : ""}`.trim());
-  const workspacePath = parseWorkspacePath(output);
+
+  const reporter = collectingReporter(opts.onData);
+  let workspacePath: string | null;
+  try {
+    workspacePath = await withReporter(reporter, () =>
+      provisionWorkspace(resolveInputs(formData, os.homedir())),
+    );
+  } catch (e) {
+    // The transcript is the detail, exactly as the child's captured output was.
+    const detail = stripAnsi(reporter.text().trim()) || (e as Error).message;
+    throw new WorkspaceError(`${command} failed:\n${detail}`);
+  }
+  const output = stripAnsi(reporter.text().trim());
 
   let opened = false;
   let openNote: string | undefined;
