@@ -22,10 +22,13 @@ async function startStdio(): Promise<void> {
 
 async function startHttp(): Promise<void> {
   const port = parseInt(process.env.PORT ?? "3001", 10);
-  // Bind loopback only: the tools this server exposes (Docker, VS Code, kubectl,
-  // claude, workspace create/remove) are unauthenticated, so it must never be
-  // reachable from the network.
-  const app = createMcpExpressApp({ host: "127.0.0.1" });
+  // Bind loopback by default: the tools this server exposes (Docker, VS Code,
+  // kubectl, claude, workspace create/remove) are unauthenticated, so it must
+  // never be reachable from the network. HOST=0.0.0.0 exists for one case: a
+  // sandbox container, where the listener has to be reachable through Docker's
+  // published port and the container network is the isolation boundary.
+  const host = process.env.HOST ?? "127.0.0.1";
+  const app = createMcpExpressApp({ host });
   // Restrict CORS to localhost origins so a website the user visits can't invoke
   // tools cross-origin. Same-origin (no Origin header) and other localhost dev
   // ports (e.g. the ext-apps basic-host) still work; real sites are refused.
@@ -33,13 +36,13 @@ async function startHttp(): Promise<void> {
     cors({
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);
-        let host: string | null = null;
+        let originHost: string | null = null;
         try {
-          host = new URL(origin).hostname;
+          originHost = new URL(origin).hostname;
         } catch {
           /* malformed Origin → untrusted */
         }
-        cb(null, host === "localhost" || host === "127.0.0.1" || host === "::1");
+        cb(null, originHost === "localhost" || originHost === "127.0.0.1" || originHost === "::1");
       },
     }),
   );
@@ -70,7 +73,7 @@ async function startHttp(): Promise<void> {
     }
   });
 
-  const httpServer = app.listen(port, "127.0.0.1", (err?: Error) => {
+  const httpServer = app.listen(port, host, (err?: Error) => {
     if (err) {
       console.error("Failed to start server:", err);
       process.exit(1);
