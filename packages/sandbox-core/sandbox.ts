@@ -904,8 +904,9 @@ export async function getFormSchema(): Promise<FormSchemaBundle> {
   try {
     // Homedir, not the caller's cwd: a stray `./.sandbox/workspace.yml` must not
     // pre-resolve fields for a brand-new workspace. This is the cwd the CLI was
-    // spawned with when this ran out-of-process.
-    bundle = buildFormSchema(computePromptSpec({}, os.homedir()));
+    // spawned with when this ran out-of-process. Defaults are skipped because
+    // `formData` below discards them — computing them would `git`-scan $HOME.
+    bundle = buildFormSchema(computePromptSpec({}, os.homedir(), { defaults: false }));
   } catch (e) {
     throw new WorkspaceError(`Could not build the workspace form: ${(e as Error).message}`);
   }

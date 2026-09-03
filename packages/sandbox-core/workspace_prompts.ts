@@ -389,11 +389,21 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   },
 ];
 
+export interface PromptSpecOptions {
+  /**
+   * `false` skips every prompt's `defaultFn`. The Jira default scans
+   * *workspaceRoot*'s subdirectories with `git`, so a caller that discards
+   * defaults anyway (the create form, built against `$HOME`) opts out.
+   */
+  defaults?: boolean;
+}
+
 /** Serialise one PromptSpec to a JSON-ready entry, resolved against the workspace. */
 export function promptEntry(
   spec: PromptSpec,
   workspaceRoot: string,
   resolved: Record<string, string>,
+  opts: PromptSpecOptions = {},
 ): Record<string, any> {
   const entry: Record<string, any> = {
     key: spec.key,
@@ -402,7 +412,7 @@ export function promptEntry(
     accept_empty: spec.acceptEmpty ?? true,
     multi: spec.multi ?? false,
     recommended: spec.recommended ?? false,
-    default: spec.defaultFn ? spec.defaultFn(workspaceRoot) : "",
+    default: spec.defaultFn && opts.defaults !== false ? spec.defaultFn(workspaceRoot) : "",
     resolved: spec.key in resolved,
     resolved_value: spec.key in resolved ? resolved[spec.key] : null,
   };
@@ -428,11 +438,15 @@ export function promptEntry(
 }
 
 /** Serialise `_WIZARD_PROMPTS` to JSON-ready data for external drivers. */
-export function buildPromptSpec(workspaceRoot: string, resolved: Record<string, string>): Record<string, any> {
+export function buildPromptSpec(
+  workspaceRoot: string,
+  resolved: Record<string, string>,
+  opts: PromptSpecOptions = {},
+): Record<string, any> {
   return {
     workspace_root: workspaceRoot,
     workspace_name: path.basename(workspaceRoot),
-    prompts: _WIZARD_PROMPTS.map((spec) => promptEntry(spec, workspaceRoot, resolved)),
+    prompts: _WIZARD_PROMPTS.map((spec) => promptEntry(spec, workspaceRoot, resolved, opts)),
   };
 }
 
@@ -487,9 +501,10 @@ export const REPOS_PROMPT: PromptSpec = {
 export function computePromptSpec(
   args: Record<string, unknown>,
   workspaceRoot: string,
+  opts: PromptSpecOptions = {},
 ): Record<string, any> {
   const resolved = resolveInputs(args, workspaceRoot);
-  const spec = buildPromptSpec(workspaceRoot, resolved);
+  const spec = buildPromptSpec(workspaceRoot, resolved, opts);
 
   // workspaceRoot is only consulted for a spec's defaultFn; REPOS_PROMPT has
   // none, so the value passed here is irrelevant.

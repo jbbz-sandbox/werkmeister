@@ -186,6 +186,12 @@ route {
 
 **Verification:** After any Caddyfile change, validate with `caddy adapt` and count compiled routes. If the count is lower than expected, routes were dropped.
 
+**What ships today** is not the `route { }` form above: the generator emits path-scoped `handle`
+blocks (`handle @<feature>`, `handle /*`, `apps/cli/infra/templates/Caddyfile.njk`), which do
+not collide the way a bare `handle` beside scoped ones does. Two guards hold that shape:
+`reloadCaddy` counts the compiled routes before switching (`packages/sandbox-core/caddy.ts`),
+and `apps/cli/src/lib/__tests__/caddy_lint.test.ts` pins the bare-vs-scoped structure.
+
 ---
 
 ## Docker Desktop VirtioFS File Sync Lag
@@ -287,8 +293,13 @@ for exactly that reason. Anything else moved in-process should be checked the sa
 ## `getFormSchema()` Scans Your Home Directory for a Jira ID It Discards
 
 **Severity:** Low (wasted work and a surprising `git` call, not a wrong result)
-**Status:** Open
+**Status:** Resolved — the create form opts out of defaults
 **Affects:** `packages/sandbox-core/sandbox.ts` — `getFormSchema()`, via `scrapeJiraId` in `workspace_prompts.ts`
+
+`getFormSchema()` now calls `computePromptSpec({}, os.homedir(), { defaults: false })`, and
+`promptEntry` in `workspace_prompts.ts` skips every prompt's `defaultFn` under that flag, so the
+scan never runs. `sandbox workspace --print-prompts` is unchanged: it runs against the cwd and
+still wants the defaults.
 
 The workspace-create form is built against `os.homedir()`, deliberately: a stray
 `./.sandbox/workspace.yml` under the caller's cwd must not pre-resolve fields for a
@@ -315,8 +326,12 @@ the scan without changing what the form shows.
 ## Session-Start Notes Context Is Unbounded Against a 10k Truncation
 
 **Severity:** Moderate (silently drops the newest decisions, which is the opposite of what you want)
-**Status:** Open
+**Status:** Resolved — the decision list is budgeted, newest first
 **Affects:** `apps/cli/src/commands/notes.ts` — `buildContext()`, via the SessionStart hook
+
+`buildContext()` now renders decisions into a `_CONTEXT_CHAR_CAP` (9000 chars) budget, keeping
+the newest and listing the elided older ones by path so a session can still read them
+(`renderDecisions` in `apps/cli/src/commands/notes.ts`). Standards and the handoff always print.
 
 `buildContext()` renders the latest handoff plus **every** open `decision` note. The hook
 harness truncates its combined output at ~10k characters — the function's own docstring says
@@ -340,7 +355,7 @@ needs.
 ## One Machine-Global `sandbox_root`, and Generated State Inside the Package
 
 **Severity:** Moderate (two checkouts silently fight; an upgrade can discard local state)
-**Status:** Open
+**Status:** Open — deferred, blocked on a decision about where generated state lives rather than on effort
 **Affects:** `~/.sandbox/config.yaml` `paths.sandbox_root`, `apps/cli/infra/`
 
 `sandbox_root` is a single machine-global pointer at one CLI checkout (here,
@@ -363,8 +378,14 @@ locate templates, not mutable state.
 ## Library Rough Edges Left by the CLI-to-Core Migration
 
 **Severity:** Low (each is small; they share a cause)
-**Status:** Open
+**Status:** Resolved — the library reports failure, drops the flag name, and reconciles hooks on `up`
 **Affects:** `packages/sandbox-core/{compose,lifecycle,hooks_gen}.ts`
+
+`composeDown()` returns false when `docker compose down` fails (true only for a feature with no
+compose file, which it now checks itself), and `lifecycle.down`, `sandbox remove`, and
+`sandbox clean` warn on it. The volumes line reads "Per-feature Docker volumes will be removed".
+`lifecycle.up` calls `writeWorkspaceHooks(workspace)` on every `sandbox up`, so a stale hook is
+reconciled the next time the feature starts.
 
 Code that used to be a CLI command and is now a library function still reads like a command
 in three places:
@@ -408,3 +429,28 @@ Neither `repository` nor `license` is set, and there is no `LICENSE` file in the
 `vsce package` warns on both, and the Marketplace listing renders without a source link.
 
 **Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/sandbox.git", "directory": "packages/vscode-plugin" }`, set `"license"`, and add the LICENSE file.
+
+---
+
+## `compose-logs.smoke.mjs` Fails When Run From Inside a Workspace
+
+**Severity:** Low (a false red on `npm test`; CI's clean checkout never hits it)
+**Status:** Open
+**Affects:** `packages/sandbox-core/compose-logs.smoke.mjs`; `workspaceForFeature()` in `packages/sandbox-core/compose.ts`, via `resolveWorkspace()` in `config.ts`
+
+The smoke's last assertion is that `composeLogsStream("no-such-feature-hopefully")` returns
+`null`. It does not when the test runs from a checkout that sits under `paths.workspaces_root`
+(a feature worktree, say): `composeFile()` finds no container for that feature and falls back
+to `resolveWorkspace()`, whose cwd branch returns `<workspaces_root>/<first path segment>`
+**regardless of the feature name** (`config.ts:295-306`). That workspace has a
+`docker-compose.yml`, so a child is spawned and the assertion fails.
+
+**Symptom:** `npm test` at the repo root ends with `sandbox-core#test` failed and
+`expected null rather than a doomed child when the feature has no compose file`, while the
+`node --test` suite before it reports `fail 0`. The same script passes from a neutral cwd.
+
+**Workaround:** run the smoke (or `npm test`) from a directory outside `workspaces_root`.
+
+**Fix direction:** have the smoke `chdir` somewhere neutral before the negative case, or make
+`workspaceForFeature`'s fallback confirm the resolved directory actually belongs to *feature*
+before trusting it.

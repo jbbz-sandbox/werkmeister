@@ -5,6 +5,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
+import { mkdirSync, mkdtempSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -47,4 +49,20 @@ test("the spec converts to a form schema", () => {
   assert.equal(schema.properties.work_type.enum.includes("bugfix"), true);
   assert.equal(uiSchema.starting_prompt["ui:widget"], "textarea");
   assert.deepEqual(schema.required, ["feature", "work_type"]);
+});
+
+// `getFormSchema` builds the spec against $HOME and discards every default, so
+// the Jira default's `git` scan of each subdirectory was pure cost
+// (known-issues.md, "getFormSchema() Scans Your Home Directory").
+test("defaults: false skips the Jira scan of the root's repos", () => {
+  const scanned = mkdtempSync(path.join(tmpdir(), "prompt-defaults-"));
+  const repo = path.join(scanned, "repo");
+  mkdirSync(repo);
+  spawnSync("git", ["init", "-q"], { cwd: repo });
+  spawnSync("git", ["symbolic-ref", "HEAD", "refs/heads/PROJ-7-thing"], { cwd: repo });
+
+  const jiraDefault = (opts) =>
+    computePromptSpec({}, scanned, opts).prompts.find((p) => p.key === "jira_id").default;
+  assert.equal(jiraDefault(undefined), "PROJ-7");
+  assert.equal(jiraDefault({ defaults: false }), "");
 });

@@ -40,6 +40,7 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
 } from "./generate.js";
+import { writeWorkspaceHooks } from "./hooks_gen.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { info, raw, warn } from "./reporter.js";
 import {
@@ -100,6 +101,11 @@ export async function up(feature: string, workspace: string): Promise<UpResult> 
   const config = { services: servicesConfig, ports: loadPorts() };
   const localServices = readServicesFromWorkspace(workspace);
   requireSecrets(servicesConfig, localServices);
+
+  // init-workspace is otherwise the only writer, so a workspace created before
+  // a hook-template change kept the stale hook until someone re-ran it by hand.
+  // The merge is idempotent and never clobbers a hand-added entry.
+  writeWorkspaceHooks(workspace);
 
   info("Allocating feature slot...");
   const preferredSlot = readSlotFromWorkspace(workspace);
@@ -374,11 +380,13 @@ export async function down(
 
   info("Stopping containers...");
   if (removeVolumes) {
-    info("--volumes: per-feature Docker volumes will be removed");
+    info("Per-feature Docker volumes will be removed");
   }
-  // composeDown's boolean is ignored, as it always has been here: a failed
-  // teardown still releases the slot rather than stranding it.
-  composeDown(feature, { removeVolumes });
+  // A failed teardown still releases the slot rather than stranding it, but
+  // it is said out loud: the caller's summary otherwise reads as success.
+  if (!composeDown(feature, { removeVolumes })) {
+    warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
+  }
 
   info("Releasing feature slot...");
   releaseSlot(feature);

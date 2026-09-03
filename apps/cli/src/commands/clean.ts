@@ -116,7 +116,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
         console.log(`  ${Colors.DIM}[dry-run] Would stop: ${feature}${Colors.RESET}`);
       } else {
         info(`Stopping ${feature}...`);
-        composeDown(feature, { removeVolumes: true });
+        if (!composeDown(feature, { removeVolumes: true })) {
+          warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
+        }
         releaseSlot(feature);
       }
     }

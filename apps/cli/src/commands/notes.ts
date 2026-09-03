@@ -35,6 +35,13 @@ import { loadStandardsModules, standardsMatchingDiff } from "sandbox-core/standa
 // Per-note body cap. The hook harness truncates combined output at 10k chars;
 // staying under it ourselves keeps the pointer lines from being cut off.
 const _BODY_CHAR_CAP = 3500;
+// Total cap on what `buildContext` prints, under the same 10k truncation.
+// Standards and the handoff are charged against it first and always print;
+// the decision list takes what is left. The slack below 10k covers section
+// separators and the "~" in the harness's ~10k.
+const _CONTEXT_CHAR_CAP = 9000;
+// Elided decisions named on the elision line; the rest are a count.
+const _ELIDED_NAMES_SHOWN = 20;
 
 /** Write *promptStr*, read one line (no trailing newline). */
 export async function input(promptStr: string): Promise<string> {
@@ -82,6 +89,45 @@ function renderNote(header: string, note: Note, workspace: string): string {
     body = body.slice(0, _BODY_CHAR_CAP) + "\n…(truncated — read the full note)";
   }
   return `── ${header}: ${rel} ──\n${body}\n`;
+}
+
+/**
+ * Render open decisions into *budget* chars, keeping the newest.
+ *
+ * Decisions print after the handoff, so an unbounded list lost its newest
+ * entries to the harness truncation — the ones a fresh session needs most.
+ * Kept notes stay in sequence order; elided ones are listed by path so the
+ * session can still read them.
+ */
+function renderDecisions(decisions: Note[], workspace: string, budget: number): string[] {
+  const rendered = decisions.map((d) => renderNote("Open decision", d, workspace));
+  // The elision line counts against the budget too — otherwise it is exactly
+  // what the truncation cuts — and names only the newest few dropped notes so
+  // its own length stays bounded however many there are.
+  const elision = (count: number): string => {
+    if (count === 0) return "";
+    const names = decisions.slice(0, count).map((d) => path.basename(d.path));
+    const shown = names.slice(-_ELIDED_NAMES_SHOWN);
+    const older = names.length - shown.length;
+    return (
+      `── ${count} older open decision note(s) not shown (context budget) — read them ` +
+      `in .sandbox/notes/: ${shown.join(", ")}${older ? ` (and ${older} older)` : ""} ──\n`
+    );
+  };
+  let keepFrom = rendered.length;
+  let used = 0;
+  while (
+    keepFrom > 0 &&
+    used + rendered[keepFrom - 1].length + elision(keepFrom - 1).length <= budget
+  ) {
+    used += rendered[keepFrom - 1].length;
+    keepFrom -= 1;
+  }
+  const sections = rendered.slice(keepFrom);
+  if (keepFrom > 0) {
+    sections.push(elision(keepFrom));
+  }
+  return sections;
 }
 
 /**
@@ -157,9 +203,8 @@ export function buildContext(workspace: string, source = ""): string {
     if (handoff !== null) {
       sections.push(renderNote("Latest handoff", handoff, workspace));
     }
-    for (const d of decisions) {
-      sections.push(renderNote("Open decision", d, workspace));
-    }
+    const used = sections.join("\n").length;
+    sections.push(...renderDecisions(decisions, workspace, _CONTEXT_CHAR_CAP - used));
   }
 
   return sections.join("\n");
