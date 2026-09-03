@@ -18,7 +18,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { loadConfigFile, loadSandboxServiceConfigs } from "./init_workspace.js";
+import { loadConfigFile, loadSandboxServiceConfigs } from "sandbox-core/workspace_prompts";
 import { findWorkspaceRoot } from "./notes.js";
 import { Colors, error, info, success } from "../lib/config.js";
 import { validateModuleReferences } from "sandbox-core/skill_gen";

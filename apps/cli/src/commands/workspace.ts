@@ -48,7 +48,6 @@ import {
   getReposRoot,
   getSandboxRoot,
   info,
-  loadReposConfig,
   loadServices,
   success,
   warn,
@@ -61,37 +60,21 @@ import { loadPaths } from "sandbox-core/global_config";
 // checkout this command consumes).
 import { WORKSPACE_ROOT_REPO } from "sandbox-core/machine_setup";
 import { run as procRun } from "sandbox-core/proc";
-import { PromptSpec } from "../lib/wizard.js";
 // Worktree creation is shared with init-workspace (which owns the nested
 // per-repo worktrees); this command creates only the workspace ROOT.
 import { createWorktree, resolveRepos } from "sandbox-core/worktrees";
-// init-workspace owns the shared prompt/wizard definitions and config writer;
-// these helpers are re-used verbatim so both commands agree on fields.
+// init-workspace owns the interactive wizard driver and the config writer; the
+// prompt definitions themselves live in core, where the dashboard reaches them
+// without spawning this CLI (note 087).
+import { emitSpecError, runInteractiveWizard, writeWorkspaceConfig } from "./init_workspace.js";
 import {
-  buildPromptSpec,
-  emitSpecError,
-  promptEntry,
+  REPOS_PROMPT,
+  computePromptSpec as coreComputePromptSpec,
   resolveInputs,
-  runInteractiveWizard,
-  writeWorkspaceConfig,
-} from "./init_workspace.js";
+} from "sandbox-core/workspace_prompts";
 
 // A workspace directory / feature slug: lowercase, hyphen-separated.
 const _SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
-// The single definition of the workspace-only "additional repos" prompt. Both
-// the interactive wizard (spliced in after `services`) and the `--print-prompts`
-// / browser-form exports (serialised via `promptEntry`) render from this one
-// spec, so the two paths can't drift apart again.
-const REPOS_PROMPT: PromptSpec = {
-  key: "repos",
-  label: "Additional repos (optional)",
-  help:
-    "Extra repos to create worktrees for. The final set is the union of " +
-    "these and the repos owning the services selected above.",
-  multi: true,
-  choicesFn: () => Object.keys(loadReposConfig()).sort(),
-};
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -275,38 +258,15 @@ function initWorkspaceFlags(featureSlug: string, resolved: Record<string, string
 // Prompt / form-schema export (delegated to init-workspace's definitions)
 // ---------------------------------------------------------------------------
 
-function reposPromptEntry(resolved: Record<string, string>): Record<string, unknown> {
-  // workspaceRoot is only consulted for a spec's defaultFn; REPOS_PROMPT has
-  // none, so the value is irrelevant. Serialising the shared spec keeps this
-  // export byte-identical to what the wizard now presents.
-  return promptEntry(REPOS_PROMPT, "", resolved);
-}
-
 function computePromptSpec(args: Record<string, unknown>): Record<string, unknown> {
   // Diagnostics go to stderr so stdout stays a clean JSON document.
-  const base = process.cwd();
-  let resolved: Record<string, string>;
-  let spec: Record<string, unknown>;
   const origLog = console.log;
   try {
     console.log = ((...a: unknown[]) => console.error(...a)) as typeof console.log;
-    resolved = resolveInputs(args, base);
-    spec = buildPromptSpec(base, resolved);
+    return coreComputePromptSpec(args, process.cwd());
   } finally {
     console.log = origLog;
   }
-
-  const reposEntry = reposPromptEntry(resolved);
-  if ((reposEntry.choices as string[]).length) {
-    const prompts = (spec.prompts as Record<string, unknown>[]) ?? [];
-    let servicesIdx = prompts.findIndex((p) => p.key === "services");
-    if (servicesIdx === -1) {
-      servicesIdx = prompts.length - 1;
-    }
-    prompts.splice(servicesIdx + 1, 0, reposEntry);
-    spec.prompts = prompts;
-  }
-  return spec;
 }
 
 function printPrompts(args: Record<string, unknown>): void {

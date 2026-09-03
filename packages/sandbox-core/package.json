@@ -49,6 +49,7 @@
     "./status": "./dist/status.js",
     "./telepresence": "./dist/telepresence.js",
     "./web_servers": "./dist/web_servers.js",
+    "./workspace_prompts": "./dist/workspace_prompts.js",
     "./workspace_skills": "./dist/workspace_skills.js",
     "./worktrees": "./dist/worktrees.js"
   },
