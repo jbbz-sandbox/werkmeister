@@ -746,8 +746,19 @@ function logMeta(task: string, meta: Record<string, string>): void {
   }
 }
 
-/** Execute `sandbox init-workspace`. */
-export async function run(args: Record<string, unknown>): Promise<void> {
+/**
+ * Execute `sandbox init-workspace`.
+ *
+ * `workspaceRootOverride` is how `sandbox workspace` hands over the directory it
+ * just created: everything below resolves paths from the root rather than the
+ * cwd, so with it supplied this runs in-process instead of `workspace` having to
+ * re-exec the CLI in the new directory just to move `findWorkspaceRoot`'s
+ * starting point.
+ */
+export async function run(
+  args: Record<string, unknown>,
+  workspaceRootOverride?: string,
+): Promise<void> {
   // 0. Prompt-spec export — emit wizard definitions as JSON and exit without
   //    touching the workspace.
   if (args["print_prompts"]) {
@@ -763,7 +774,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // 1. Find workspace root
   let workspaceRoot: string;
   try {
-    workspaceRoot = findWorkspaceRoot();
+    workspaceRoot = workspaceRootOverride ?? findWorkspaceRoot();
   } catch (exc) {
     if (exc instanceof WorkspaceRootError) {
       console.log(exc.message);

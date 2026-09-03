@@ -46,7 +46,6 @@ import {
   expandUser,
   getMonorepoRoot,
   getReposRoot,
-  getSandboxRoot,
   info,
   loadServices,
   success,
@@ -66,7 +65,12 @@ import { createWorktree, resolveRepos } from "sandbox-core/worktrees";
 // init-workspace owns the interactive wizard driver and the config writer; the
 // prompt definitions themselves live in core, where the dashboard reaches them
 // without spawning this CLI (note 087).
-import { emitSpecError, runInteractiveWizard, writeWorkspaceConfig } from "./init_workspace.js";
+import {
+  emitSpecError,
+  run as initWorkspace,
+  runInteractiveWizard,
+  writeWorkspaceConfig,
+} from "./init_workspace.js";
 import {
   REPOS_PROMPT,
   computePromptSpec as coreComputePromptSpec,
@@ -162,24 +166,25 @@ function commitWorkspaceState(workspaceDir: string, workspaceName: string): void
 // init-workspace hand-off
 // ---------------------------------------------------------------------------
 
-function runInitWorkspace(
+async function runInitWorkspace(
   workspaceDir: string,
   featureSlug: string,
   resolved: Record<string, string>,
-): number {
-  // Invoke the CLI entry by path so init-workspace's CWD-based detection
-  // resolves the new workspace.
-  const sandboxRoot = String(getSandboxRoot());
-  const mainJs = path.join(getSandboxRoot(), "dist", "main.js");
-  const flags = initWorkspaceFlags(featureSlug, resolved);
-  const cmd = [process.execPath, mainJs, "init-workspace", ...flags];
-
-  const env = { ...process.env };
-  env.SANDBOX_ROOT = sandboxRoot;
-
-  info("Running: sandbox init-workspace " + flags.join(" "));
-  const result = procRun(cmd, { cwd: workspaceDir, env });
-  return result.status;
+): Promise<number> {
+  // In-process, with the workspace dir handed over explicitly. This used to
+  // re-exec `node dist/main.js init-workspace` in `workspaceDir` for no reason
+  // but that directory — the CLI spawning itself so the child's cwd-based
+  // detection would land on the new workspace. init-workspace's two
+  // `process.exit(1)` paths (no workspace root, no feature) are both unreachable
+  // from here — we supply both — so a failure arrives as a throw, not an exit.
+  info(`Running: sandbox init-workspace (feature: ${featureSlug})`);
+  try {
+    await initWorkspace({ ...resolved, feature: featureSlug }, workspaceDir);
+    return 0;
+  } catch (exc) {
+    error(`init-workspace failed: ${(exc as Error).message}`);
+    return 1;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -230,28 +235,6 @@ async function selectRepos(
   }
 
   return resolvedRepos;
-}
-
-function initWorkspaceFlags(featureSlug: string, resolved: Record<string, string>): string[] {
-  const flags = ["--feature", featureSlug];
-  const mapping: [string, string][] = [
-    ["jira_id", "--jira-id"],
-    ["repos", "--repos"],
-    ["services", "--services"],
-    ["test_path", "--test-path"],
-    ["description", "--description"],
-    ["task", "--task"],
-    ["starting_prompt", "--starting-prompt"],
-    ["work_type", "--work-type"],
-    ["labels", "--labels"],
-  ];
-  for (const [key, flag] of mapping) {
-    const value = resolved[key];
-    if (value) {
-      flags.push(flag, value);
-    }
-  }
-  return flags;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,7 +374,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   // 3. init-workspace inside the workspace.
-  const rc = runInitWorkspace(workspaceDir, featureSlug, resolved);
+  const rc = await runInitWorkspace(workspaceDir, featureSlug, resolved);
   if (rc !== 0) {
     warn(
       `sandbox init-workspace exited with status ${rc}. ` +
