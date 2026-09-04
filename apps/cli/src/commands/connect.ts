@@ -11,6 +11,7 @@
  */
 
 import { Colors } from "../lib/config.js";
+import { interruptSignal } from "../lib/interrupt.js";
 import { connectK8s, infraHealth, up as infraUp } from "sandbox-core/infra";
 import { CLAUDECK, DASHBOARD, status as webStatus } from "sandbox-core/web_servers";
 
@@ -38,7 +39,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.BOLD}=== Sandbox Connect ===${Colors.RESET}\n`);
 
-  const infraOk = await infraUp();
+  const infraOk = await infraUp({ signal: interruptSignal() });
 
   console.log(`\n${Colors.BOLD}--- Health Summary ---${Colors.RESET}\n`);
 
