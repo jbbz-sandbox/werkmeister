@@ -155,6 +155,17 @@ was a second copy of the walk-up already in sandbox-core/gate."
 event loop for its whole duration, so `AbortSignal` support is a new code path,
 not a new parameter. This task adds the sibling; Task 3 uses it.
 
+**Status: done** (commit follows). Two corrections found while implementing, both
+now in the shipped test file:
+
+- The four tests below **pass even when `signal` is never handed to `spawn`** —
+  they just take 60s, because the abort verdict is derived from
+  `opts.signal.aborted` and the child exits on its own. Promptness is the actual
+  contract, so the shipped tests assert an elapsed bound. Verified by mutation.
+- The orphan test raced the child's stdout flush against a fixed sleep and failed
+  under turbo's concurrency. The shipped version passes the pid through a file
+  and polls, so there is no race to lose.
+
 **Files:**
 - Modify: `packages/sandbox-core/proc.ts`
 - Test: `packages/sandbox-core/proc.test.mjs` (create)
@@ -167,7 +178,7 @@ not a new parameter. This task adds the sibling; Task 3 uses it.
   rejects with a `ProcError` whose `code` is `"ABORT_ERR"`. Task 3 and plans 2
   and 3 depend on exactly these names.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `packages/sandbox-core/proc.test.mjs`:
 
@@ -217,12 +228,12 @@ test("runAsync throws on non-zero status only when check is set", async () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch them fail**
+- [x] **Step 2: Run and watch them fail**
 
 Run: `cd packages/sandbox-core && npx tsc && node --test proc.test.mjs`
 Expected: FAIL — `runAsync` is not exported from `./dist/proc.js`.
 
-- [ ] **Step 3: Implement `runAsync`**
+- [x] **Step 3: Implement `runAsync`**
 
 Append to `packages/sandbox-core/proc.ts`, and add `spawn` to the existing
 `node:child_process` import so the first line reads
@@ -306,7 +317,7 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd packages/sandbox-core && npx tsc && node --test proc.test.mjs`
 Expected: PASS, 4 tests.
@@ -316,12 +327,12 @@ event, and both `error` and `close` can fire. The promise settles once, so the
 second call is a no-op — but confirm the child is actually gone with
 `ps aux | grep 'setTimeout'` before assuming the test is wrong.
 
-- [ ] **Step 5: Full verification**
+- [x] **Step 5: Full verification**
 
 Run: `npx turbo run typecheck build test`
 Expected: all pass. `run` is untouched, so nothing else can regress.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/sandbox-core/proc.ts packages/sandbox-core/proc.test.mjs
