@@ -262,7 +262,7 @@ The two that remain both **stream** the child's output to a chunked response, en
 | Route | Spawns | Core equivalent |
 |---|---|---|
 | `POST /action` | `sandbox up\|stop\|restart\|down` | `runWorkspaceAction(name, action)` |
-| `POST /intercept` | `sandbox intercept -s <svc> [--leave]` | none yet |
+| `POST /intercept` | `sandbox intercept -s <svc> [--leave]` | `startIntercept(...)` / `leaveIntercept(...)` |
 
 **What blocks `/action`** — two things, only one of which is code:
 
@@ -276,17 +276,26 @@ The two that remain both **stream** the child's output to a chunked response, en
    it. Either the lifecycle functions grow an `AbortSignal`, or that behaviour is knowingly
    dropped.
 
-**What blocks `/intercept`:** there is no core entry point at all. `packages/sandbox-core/telepresence.ts`
-has the pieces (`buildInterceptArgs`, `ensureConnected`, `leaveFeatureIntercepts`) but
-`apps/cli/src/commands/intercept.ts` still owns the command body — 180 lines whose `fail()` ends
-in `process.exit(1)`. In-process that would **take the claudeck server down**, so the command
-needs the same treatment `workspace`/`init-workspace` got (throw a reported error, leave an argv
-adapter) before the route can move.
+**`/intercept` is no longer blocked.** `startIntercept` and `leaveIntercept` in
+`packages/sandbox-core/telepresence.ts` are the command body, callable in-process: every failure is
+a coded `SandboxError` (`NOT_LOCAL`, `NOT_INTERCEPTABLE`, `TELEPRESENCE_VERSION`, `NOT_RUNNING`,
+`PORT_CLOSED`, `INTERCEPT_FAILED`) rather than the `process.exit(1)` that would have taken the
+express server down, and both spawn through `runAsyncRunner` (`runAsync`) instead of `spawnSync`,
+so a slow `telepresence connect` holds one request rather than the whole event loop. Both take
+`localServices: string[]` — the caller reads the workspace `.env`, since a `.env` walk-up is a cwd
+concern core will not have.
+
+**Actually moving the route is a claudeck change and out of the core migration's scope.** What it
+still needs on claudeck's side: the reporter's `info` progress lines (`Connecting to …`,
+`Intercepting …`) come back through `collectingReporter(onChunk)`, exactly as `POST /create`
+already does; the "Intercept active" block is CLI rendering that the route would replace with
+`InterceptResult` fields; and `signal` is available for abort-on-disconnect, unlike `/action`.
 
 **Also worth knowing when this is picked up:** the telepresence reads behind `getIntercepts()`
-are `spawnSync`, so they block the caller's event loop — the whole express server, not just the
-waiting request. They run under a 15s cap (`STATUS_READ` in `packages/sandbox-core/status.ts`)
-for exactly that reason. Anything else moved in-process should be checked the same way.
+are still `spawnSync`, so they block the caller's event loop — the whole express server, not just
+the waiting request. They run under a 15s cap (`STATUS_READ` in `packages/sandbox-core/status.ts`)
+for exactly that reason; `listIntercepts`, `connectedNamespace` and `leaveFeatureIntercepts` were
+deliberately left synchronous. Anything else moved in-process should be checked the same way.
 
 ---
 
