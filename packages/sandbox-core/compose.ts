@@ -14,6 +14,7 @@ import { Colors } from "./colors.js";
 import { resolveWorkspace } from "./config.js";
 import { ProcError, run, runAsync, RunResult } from "./proc.js";
 import { error, info, raw, success, warn } from "./reporter.js";
+import { getSlot } from "./slots.js";
 
 export interface ContainerStatus {
   name: string;
@@ -387,10 +388,25 @@ export function composeRestart(feature: string): boolean {
 /**
  * Tail docker compose logs for *feature*.
  *
- * If *service* is given, only show logs for that container.
- * Streams output until interrupted with Ctrl+C.
+ * If *service* is given, only show logs for that container. Streams until
+ * *signal* aborts (Ctrl+C, for the CLI) or the child exits.
+ *
+ * The slot guard lives here rather than in the caller so every consumer gets
+ * told *why* a tail produced nothing. Without it a feature that was never
+ * brought up reports a bare "no docker-compose.yml", which is true but not the
+ * useful half of the answer.
  */
-export function composeLogs(feature: string, service?: string | null): void {
+export async function composeLogs(
+  feature: string,
+  service?: string | null,
+  signal?: AbortSignal,
+): Promise<void> {
+  if ((await getSlot(feature)) === null) {
+    warn(`Feature '${feature}' is not running (no slot allocated)`);
+    warn(`Start it with: sandbox up ${feature}`);
+    return;
+  }
+
   const args = ["logs", "-f", "--tail", "100"];
   if (service) {
     args.push(service);
@@ -398,7 +414,18 @@ export function composeLogs(feature: string, service?: string | null): void {
 
   info(`Tailing logs for '${feature}'` + (service ? ` (${service})` : ""));
   raw(`${Colors.DIM}Press Ctrl+C to stop${Colors.RESET}\n`);
-  runCompose(feature, args, { stream: true });
+
+  const cmd = composeCommand(feature, args, null);
+  if (cmd === null) {
+    return;
+  }
+  try {
+    // No timeout: a tail is meant to run until the reader stops it. The signal
+    // is the only way out, which is why it is not optional in practice.
+    await runAsync(cmd, { signal });
+  } catch (err) {
+    reportComposeFailure(err);
+  }
 }
 
 /**
