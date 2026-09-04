@@ -57,7 +57,11 @@ describe("sandbox down", () => {
   it("passes --volumes through and renders the slot the library released", async () => {
     await go({ feature: "demo", volumes: true });
 
-    expect(downFeature).toHaveBeenCalledWith("demo", { removeVolumes: true });
+    expect(downFeature).toHaveBeenCalledWith("demo", {
+      removeVolumes: true,
+      // The CLI is where a Ctrl-C becomes a cancellation the library can act on.
+      signal: expect.any(AbortSignal),
+    });
     const out = lines.join("\n");
     expect(out).toContain("Slot 3 released");
     expect(out).toContain("Per-feature Docker volumes removed");

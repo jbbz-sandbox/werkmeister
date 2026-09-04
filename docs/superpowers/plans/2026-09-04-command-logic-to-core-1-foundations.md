@@ -552,6 +552,19 @@ forward it to an async compose spawn; the sync spellings stay."
 `AbortController`. This gives it one and hands the signal to `main.ts`'s dispatch,
 so the CLI is the first consumer of what Task 3 built.
 
+**Status: done** (commit follows). Two corrections to the sketch below:
+
+- A module-level `AbortController` created once at import leaks abort state
+  between tests, because `installDefaultInterrupt` is called fresh per test. The
+  controller is replaced *per install* instead; the CLI installs once, so the two
+  agree in practice. A test pins that.
+- `up.test.ts` and `down.test.ts` used exact-argument matches. Rather than
+  loosening them to `objectContaining`, both now assert
+  `signal: expect.any(AbortSignal)` -- the added argument is pinned, not tolerated.
+
+**Outstanding:** the interactive Ctrl-C smoke (Step 7 of Task 3) has not been
+run. It needs a terminal and a real feature with containers building.
+
 **Files:**
 - Modify: `apps/cli/src/lib/interrupt.ts`
 - Modify: `apps/cli/src/main.ts` (the `withReporter(ttyReporter, …)` dispatch wrap)
@@ -564,7 +577,7 @@ so the CLI is the first consumer of what Task 3 built.
   `apps/cli/src/lib/interrupt.ts`, aborted on the first SIGINT. Plans 2 and 3
   pass this into `test`, `logs`, `intercept` and `connect`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `apps/cli/src/lib/__tests__/interrupt.test.ts`:
 
@@ -588,12 +601,12 @@ describe("interruptSignal", () => {
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 Run: `cd apps/cli && npx vitest run src/lib/__tests__/interrupt.test.ts`
 Expected: FAIL — `interruptSignal` is not exported.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 In `apps/cli/src/lib/interrupt.ts`, add a module-level controller and abort it
 from inside `installDefaultInterrupt`'s SIGINT listener, **before** the existing
@@ -619,12 +632,12 @@ based on `claimed(proc)`. The `controller.abort()` call goes **outside** that
 check — a command that claims the interrupt still wants its core call cancelled,
 it just wants to do its own cleanup and exit.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd apps/cli && npx vitest run src/lib/__tests__/interrupt.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Pass the signal from the two commands that can use it now**
+- [x] **Step 5: Pass the signal from the two commands that can use it now**
 
 In `apps/cli/src/commands/up.ts`, change the final call:
 
@@ -637,7 +650,7 @@ In `apps/cli/src/commands/down.ts`, find the `downFeature(...)` call inside
 the existing `removeVolumes` key. Add
 `import { interruptSignal } from "../lib/interrupt.js";` to both files.
 
-- [ ] **Step 6: Full verification**
+- [x] **Step 6: Full verification**
 
 Run: `npx turbo run typecheck build test`
 Expected: all pass. `down.test.ts` asserts `down` is called with
@@ -646,7 +659,7 @@ is an exact-object match it needs
 `expect.objectContaining({ removeVolumes: true })`. Update the assertion; do not
 weaken what it checks about `removeVolumes`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/cli/src/lib/interrupt.ts apps/cli/src/lib/__tests__/interrupt.test.ts apps/cli/src/main.ts apps/cli/src/commands/up.ts apps/cli/src/commands/down.ts

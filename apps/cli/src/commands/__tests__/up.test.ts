@@ -112,6 +112,8 @@ describe("sandbox up", () => {
 
     await go({ feature: "demo", workspace: "/tmp/explicit" });
 
-    expect(vi.mocked(upFeature)).toHaveBeenCalledWith("demo", "/tmp/explicit");
+    expect(vi.mocked(upFeature)).toHaveBeenCalledWith("demo", "/tmp/explicit", {
+      signal: expect.any(AbortSignal),
+    });
   });
 });

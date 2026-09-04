@@ -18,6 +18,7 @@ import { down as downFeature, reloadProxy } from "sandbox-core/lifecycle";
 import type { DownResult } from "sandbox-core/lifecycle";
 import { latestHandoff, openDecisions, type Note } from "sandbox-core/notes";
 import { loadDotenv } from "../lib/dotenv.js";
+import { interruptSignal } from "../lib/interrupt.js";
 import { getAllSlots } from "sandbox-core/slots";
 import { graduateOne, input } from "./notes.js";
 
@@ -118,7 +119,7 @@ async function printNotes(feature: string): Promise<void> {
 async function teardown(feature: string, removeVolumes: boolean): Promise<DownResult> {
   console.log(`\n${Colors.BOLD}=== sandbox down: ${feature} ===${Colors.RESET}\n`);
   await printNotes(feature);
-  return downFeature(feature, { removeVolumes });
+  return downFeature(feature, { removeVolumes, signal: interruptSignal() });
 }
 
 /** Execute the `sandbox down` command. */

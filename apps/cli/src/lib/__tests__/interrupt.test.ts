@@ -9,7 +9,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 
-import { installDefaultInterrupt } from "../interrupt.js";
+import { installDefaultInterrupt, interruptSignal } from "../interrupt.js";
 
 /** A stand-in for `process`, recording what the handler would have done. */
 function harness() {
@@ -21,7 +21,7 @@ function harness() {
     () => renders.push(1),
     (code) => exits.push(code),
   );
-  return { proc, exits, renders };
+  return { proc, exits, renders, signal: interruptSignal() };
 }
 
 describe("installDefaultInterrupt", () => {
@@ -65,5 +65,39 @@ describe("installDefaultInterrupt", () => {
 
     proc.emit("SIGINT");
     expect(exits).toEqual([130]);
+  });
+});
+
+describe("interruptSignal", () => {
+  it("is unaborted until a signal arrives, then aborted", () => {
+    const { proc, signal } = harness();
+    expect(signal.aborted).toBe(false);
+
+    proc.emit("SIGINT");
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("aborts even when a command claimed the signal for its own cleanup", () => {
+    const { proc, signal, exits } = harness();
+    proc.on("SIGINT", () => {
+      /* a command doing its own teardown */
+    });
+
+    proc.emit("SIGINT");
+
+    // Standing aside is about who exits, not about whether the work stops: the
+    // command still wants the core call it is awaiting to be cancelled.
+    expect(exits).toEqual([]);
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("gives each install its own signal, so one interrupt cannot poison the next", () => {
+    const first = harness();
+    first.proc.emit("SIGINT");
+    expect(first.signal.aborted).toBe(true);
+
+    const second = harness();
+    expect(second.signal.aborted).toBe(false);
   });
 });
