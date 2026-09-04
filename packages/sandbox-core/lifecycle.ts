@@ -30,12 +30,19 @@ import * as path from "node:path";
 import { isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
 import {
+  // Both spellings: `up`/`down` take an AbortSignal and use the async pair;
+  // `remove`/`clean` are not signal verbs (spec D4) and keep the sync ones.
+  composeDown,
   composeDownAsync,
   composeRestart,
   composeStop,
+  composeUp,
   composeUpAsync,
+  getContainerStatus,
+  workspaceForFeature,
 } from "./compose.js";
-import { loadPorts, loadServices } from "./config.js";
+import { getVolumeBaseNames, loadPorts, loadServices } from "./config.js";
+import { listVolumeNames, removeVolume } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import {
@@ -47,14 +54,21 @@ import {
 } from "./generate.js";
 import { writeWorkspaceHooks } from "./hooks_gen.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
-import { info, raw, warn } from "./reporter.js";
+import { info, raw, success, warn } from "./reporter.js";
 import {
   getSecretsPath,
   loadSecrets,
   requiredSecretKeys,
   validateRequiredSecrets,
 } from "./secrets.js";
-import { allocateSlot, getPortRange, getServicePort, getSlot, releaseSlot } from "./slots.js";
+import {
+  allocateSlot,
+  getAllSlots,
+  getPortRange,
+  getServicePort,
+  getSlot,
+  releaseSlot,
+} from "./slots.js";
 
 /** Everything `sandbox up` computed, separated from how the CLI renders it. */
 export interface UpResult {
@@ -403,21 +417,377 @@ export async function down(
   return { feature, slot };
 }
 
+/** A service dropped back to k8s, and what the feature still runs locally. */
+export interface RemoveResult {
+  feature: string;
+  removed: string;
+  /** The feature's surviving local services, sorted. */
+  remaining: string[];
+  /** True when nothing local was left, so the containers were stopped rather than restarted. */
+  containersStopped: boolean;
+  proxyReloaded: boolean;
+}
+
 /**
- * Regenerate the Caddyfile from the surviving features and reload Caddy.
+ * Drop *service* from *feature*'s local services so it falls back to k8s:
+ * regenerate the three generated workspace files, restart (or stop) the
+ * containers, and re-point the proxy.
+ *
+ * Throws `NOT_RUNNING` when the feature holds no slot, and `NOT_LOCAL` when
+ * *service* is not one it runs locally. The second replaces an early return, so
+ * the CLI catches it to print the same warning and local-services line it
+ * always did — which is why the message carries no list: that line is layout.
+ */
+export async function removeService(feature: string, service: string): Promise<RemoveResult> {
+  const config = { services: loadServices(), ports: loadPorts() };
+
+  const slot = await requireSlot(feature);
+  const remaining = [...((await getAllSlots())[feature]?.services ?? [])];
+
+  if (!remaining.includes(service)) {
+    throw new SandboxError(
+      `Service '${service}' is not running locally for '${feature}'`,
+      "NOT_LOCAL",
+    );
+  }
+
+  remaining.splice(remaining.indexOf(service), 1);
+  info(`Removed '${service}' from local services -- will fall back to k8s`);
+
+  info("Regenerating configuration files...");
+  generateFeatureCompose(feature, slot, remaining, config);
+  generateFeatureEnv(feature, slot, remaining, config);
+  generateSupergraphConfig(feature, slot, remaining, config);
+
+  // Restarting is what removes the departing service's container; with nothing
+  // left to run there is no container to keep, so the whole project goes down.
+  let containersStopped = false;
+  if (remaining.length) {
+    info("Restarting containers...");
+    composeUp(feature);
+  } else {
+    info("No local services remaining -- containers will be stopped");
+    containersStopped = true;
+    if (!composeDown(feature)) {
+      warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
+    }
+  }
+
+  info("Updating reverse proxy...");
+  await generateCaddyfile(null, config);
+  let proxyReloaded = false;
+  if (isCaddyRunning()) {
+    await reloadCaddy();
+    proxyReloaded = true;
+  }
+
+  return {
+    feature,
+    removed: service,
+    remaining: [...remaining].sort(),
+    containersStopped,
+    proxyReloaded,
+  };
+}
+
+/** What the regenerated Caddyfile now routes, and whether Caddy took it. */
+export interface ProxyReloadResult {
+  /** The features written into the Caddyfile, sorted by name. */
+  features: { feature: string; slot: number; services: string[] }[];
+  /** Caddy was down and `start` was asked for, so it was started rather than reloaded. */
+  started: boolean;
+  /** False when Caddy rejected the config, or failed to start. */
+  ok: boolean;
+}
+
+/**
+ * Regenerate the Caddyfile from the active features and hand it to Caddy.
  *
  * Separate from `down` so a multi-feature teardown pays for one reload rather
  * than one per feature. `up` reloads inline instead because it may also have to
  * *start* Caddy, which is part of bringing a feature up.
+ *
+ * `start` selects the whole `sandbox proxy-reload` spelling, not just the
+ * start-if-down fallback: that command has always used different progress
+ * wording and listed the features it wrote, and teardown's three callers
+ * (`commands/down.ts` twice, `sandbox.ts` twice) print neither. Defaulting it
+ * to false is what keeps their output where it was — and stops a teardown
+ * starting a proxy nobody asked for.
  */
-export async function reloadProxy(): Promise<void> {
-  info("Updating reverse proxy configuration...");
+export async function reloadProxy({
+  start = false,
+}: { start?: boolean } = {}): Promise<ProxyReloadResult> {
+  info(start ? "Regenerating Caddyfile..." : "Updating reverse proxy configuration...");
   await generateCaddyfile();
+
+  const allFeatures = await getAllSlots();
+  const features = Object.keys(allFeatures)
+    .sort()
+    .map((feature) => ({
+      feature,
+      slot: allFeatures[feature]!.slot,
+      services: allFeatures[feature]!.services,
+    }));
+
+  // Emitted here rather than returned-and-rendered because the block sits
+  // between the generate and the reload, so it cannot move to the command's
+  // summary block — the same reason `up`'s "Local services" line uses `raw`.
+  if (start) {
+    if (!features.length) {
+      info("No active features in Caddyfile");
+    } else {
+      raw(`\n  ${Colors.CYAN}Features in Caddyfile:${Colors.RESET}\n`);
+      for (const { feature, slot, services } of features) {
+        const svcStr = services.length ? services.join(", ") : "(no local services)";
+        raw(`    ${Colors.GREEN}*${Colors.RESET} ${feature} (slot ${slot}): ${svcStr}\n`);
+      }
+      raw("\n");
+    }
+  }
+
+  let started = false;
+  let ok = true;
   if (isCaddyRunning()) {
-    await reloadCaddy();
+    if (start) {
+      info("Reloading Caddy...");
+    }
+    ok = await reloadCaddy();
+  } else if (start) {
+    warn("Caddy is not running -- starting it...");
+    ok = startCaddy();
+    started = true;
   } else {
     info("Caddy is not running -- skipping reload");
   }
+
+  return { features, started, ok };
+}
+
+/**
+ * Volume base names declared by the service registry, longest first.
+ *
+ * Longest-first matters for {@link featureFromVolume}: a per-feature volume is
+ * named `<feature>-<base>` with no prefix to anchor on, so when one base name
+ * ends with another ("cache" and "turbo-cache") the shorter one would otherwise
+ * match first and leave part of the base in the extracted feature name.
+ *
+ * A registry that cannot be read yields `[]`, which classifies nothing as a
+ * sandbox volume — volume cleanup is skipped rather than guessing at names.
+ */
+export function volumeBaseNames(): string[] {
+  let bases: string[];
+  try {
+    bases = getVolumeBaseNames();
+  } catch (e) {
+    warn(
+      `Could not read the service registry (${e instanceof Error ? e.message : String(e)}) -- ` +
+        "skipping Docker volume cleanup",
+    );
+    return [];
+  }
+  return bases.sort((a, b) => b.length - a.length || a.localeCompare(b));
+}
+
+/**
+ * Every Docker volume name that looks like a sandbox per-feature volume.
+ *
+ * They follow `<feature>-<volume_base_name>`, identified by checking against the
+ * base names the service registry declares.
+ */
+async function listSandboxVolumes(baseNames: string[]): Promise<string[]> {
+  if (!baseNames.length) {
+    return [];
+  }
+
+  const allVolumes = await listVolumeNames();
+  if (allVolumes === null) {
+    return [];
+  }
+
+  const sandboxVolumes: string[] = [];
+  for (const vol of allVolumes) {
+    for (const base of baseNames) {
+      if (vol.endsWith(`-${base}`)) {
+        sandboxVolumes.push(vol);
+        break;
+      }
+    }
+  }
+  return sandboxVolumes.sort();
+}
+
+/**
+ * The feature name prefix of a per-feature volume, or null if it is not one.
+ *
+ * *baseNames* must be longest-first — see {@link volumeBaseNames}.
+ */
+export function featureFromVolume(volName: string, baseNames: string[]): string | null {
+  for (const base of baseNames) {
+    const suffix = `-${base}`;
+    if (volName.endsWith(suffix)) {
+      return volName.slice(0, volName.length - suffix.length);
+    }
+  }
+  return null;
+}
+
+/** What a sweep found: the state it read, before anything it did about it. */
+export interface CleanPlan {
+  /** Features holding a slot when the sweep started, sorted. */
+  activeFeatures: string[];
+  /** Per-feature volumes kept because their feature is still up, sorted. */
+  activeVolumes: string[];
+  /** Per-feature volumes whose feature is gone, sorted. */
+  orphanedVolumes: string[];
+  /** Features holding a slot with neither a running container nor a compose file. */
+  staleSlots: string[];
+}
+
+/** What a sweep found, and what it then actually removed. */
+export interface CleanResult extends CleanPlan {
+  removedVolumes: string[];
+  releasedSlots: string[];
+}
+
+/**
+ * What `runClean` would remove, without removing it.
+ *
+ * A dry run *is* the plan — the two share one traversal because the ordering of
+ * the progress they report is the CLI's output contract — so this is the safe
+ * spelling of {@link runClean}, not a second implementation of it.
+ */
+export async function planClean(opts: { all?: boolean } = {}): Promise<CleanPlan> {
+  return runClean({ ...opts, dryRun: true });
+}
+
+/**
+ * Sweep orphaned per-feature Docker volumes and stale slot entries.
+ *
+ * With *all*, active features are torn down first (volumes included) and the
+ * proxy re-pointed, after which every per-feature volume is orphaned.
+ *
+ * The layout this emits — the volume lists, the `[dry-run] Would …` lines —
+ * would normally be the CLI's, but it interleaves with the progress of the work
+ * itself: the stale-slot scan shells out to `docker compose ps` *after* the
+ * volumes are removed. Returning it all to be rendered at the end would reorder
+ * the output, so it goes out through `raw` as it happens, as `up`'s
+ * "Local services" line does.
+ */
+export async function runClean({
+  all = false,
+  dryRun = false,
+}: { all?: boolean; dryRun?: boolean } = {}): Promise<CleanResult> {
+  if (dryRun) {
+    info("Dry run -- nothing will be removed\n");
+  }
+
+  const activeFeatures = Object.keys(await getAllSlots()).sort();
+  // Emptied by an `--all` teardown: everything it stopped is orphaned after it.
+  let live = new Set(activeFeatures);
+
+  if (live.size) {
+    raw(`  ${Colors.CYAN}Active features:${Colors.RESET} ${activeFeatures.join(", ")}\n`);
+  } else {
+    raw(`  ${Colors.DIM}No active features${Colors.RESET}\n`);
+  }
+  raw("\n");
+
+  if (all && live.size) {
+    info("--all: tearing down active features...");
+    for (const feature of activeFeatures) {
+      if (dryRun) {
+        raw(`  ${Colors.DIM}[dry-run] Would stop: ${feature}${Colors.RESET}\n`);
+        continue;
+      }
+      info(`Stopping ${feature}...`);
+      if (!composeDown(feature, { removeVolumes: true })) {
+        warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
+      }
+      releaseSlot(feature);
+    }
+    if (!dryRun) {
+      await generateCaddyfile();
+      if (isCaddyRunning()) {
+        await reloadCaddy();
+      }
+    }
+    raw("\n");
+    live = new Set();
+  }
+
+  info("Scanning for per-feature Docker volumes...");
+  const baseNames = volumeBaseNames();
+  const sandboxVolumes = await listSandboxVolumes(baseNames);
+
+  const activeVolumes: string[] = [];
+  const orphanedVolumes: string[] = [];
+  const removedVolumes: string[] = [];
+
+  if (!sandboxVolumes.length) {
+    raw(`  ${Colors.DIM}No per-feature Docker volumes found${Colors.RESET}\n`);
+  } else {
+    for (const vol of sandboxVolumes) {
+      const feature = featureFromVolume(vol, baseNames);
+      (feature && live.has(feature) ? activeVolumes : orphanedVolumes).push(vol);
+    }
+
+    if (activeVolumes.length) {
+      raw(`\n  ${Colors.CYAN}Active feature volumes (kept):${Colors.RESET}\n`);
+      for (const vol of activeVolumes) {
+        raw(`    ${Colors.DIM}${vol}${Colors.RESET}\n`);
+      }
+    }
+
+    if (orphanedVolumes.length) {
+      raw(`\n  ${Colors.YELLOW}Orphaned volumes to remove:${Colors.RESET}\n`);
+      for (const vol of orphanedVolumes) {
+        if (dryRun) {
+          raw(`    ${Colors.DIM}[dry-run] Would remove: ${vol}${Colors.RESET}\n`);
+        } else if (await removeVolume(vol)) {
+          raw(`    ${Colors.GREEN}Removed:${Colors.RESET} ${vol}\n`);
+          removedVolumes.push(vol);
+        } else {
+          raw(`    ${Colors.RED}Failed:${Colors.RESET} ${vol} (may be in use)\n`);
+        }
+      }
+      if (!dryRun) {
+        success(`Removed ${removedVolumes.length}/${orphanedVolumes.length} orphaned volume(s)`);
+      }
+    } else {
+      raw(`\n  ${Colors.DIM}No orphaned volumes found${Colors.RESET}\n`);
+    }
+  }
+
+  // Re-read: an `--all` teardown has already released these.
+  const remaining = Object.keys(await getAllSlots());
+  const staleSlots: string[] = [];
+  const releasedSlots: string[] = [];
+  if (!all) {
+    for (const feature of remaining) {
+      const running = getContainerStatus(feature).filter((c) => c.status === "running");
+      if (!running.length && workspaceForFeature(feature) === null) {
+        staleSlots.push(feature);
+      }
+    }
+
+    if (staleSlots.length) {
+      raw(
+        `\n  ${Colors.YELLOW}Stale slot entries ` +
+          `(no running containers or compose file):${Colors.RESET}\n`,
+      );
+      for (const feature of staleSlots) {
+        if (dryRun) {
+          raw(`    ${Colors.DIM}[dry-run] Would release slot: ${feature}${Colors.RESET}\n`);
+        } else {
+          releaseSlot(feature);
+          releasedSlots.push(feature);
+          raw(`    ${Colors.GREEN}Released:${Colors.RESET} ${feature}\n`);
+        }
+      }
+    }
+  }
+
+  return { activeFeatures, activeVolumes, orphanedVolumes, staleSlots, removedVolumes, releasedSlots };
 }
 
 /**

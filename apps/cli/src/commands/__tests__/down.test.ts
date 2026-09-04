@@ -46,6 +46,7 @@ beforeEach(() => {
   });
   vi.mocked(reloadProxy).mockImplementation(async () => {
     lines.push("<reloadProxy>");
+    return { features: [], started: false, ok: true };
   });
 });
 
