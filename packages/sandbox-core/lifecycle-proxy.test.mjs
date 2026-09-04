@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
+import { machineConfigured } from "./fixtures.mjs";
 
 // Pinned to this checkout before `lifecycle` is imported: a shell that exports
 // SANDBOX_ROOT (`~/.sandbox/env.sh` does) would otherwise have the test write
@@ -32,7 +33,7 @@ async function transcript(opts) {
   return { result, text: reporter.text() };
 }
 
-test("reloadProxy reports the active features it wrote into the Caddyfile", async () => {
+test("reloadProxy reports the active features it wrote into the Caddyfile", { skip: machineConfigured() ? false : "no ~/.sandbox registry (CI)" }, async () => {
   const { result } = await transcript();
   assert.ok(Array.isArray(result.features));
   assert.equal(typeof result.ok, "boolean");
@@ -46,7 +47,7 @@ test("reloadProxy reports the active features it wrote into the Caddyfile", asyn
   assert.deepEqual(names, [...names].sort());
 });
 
-test("the default is the teardown spelling: no feature list, no start", async () => {
+test("the default is the teardown spelling: no feature list, no start", { skip: machineConfigured() ? false : "no ~/.sandbox registry (CI)" }, async () => {
   const { result, text } = await transcript();
   assert.match(text, /Updating reverse proxy configuration/);
   assert.doesNotMatch(text, /Regenerating Caddyfile/);
@@ -54,7 +55,7 @@ test("the default is the teardown spelling: no feature list, no start", async ()
   assert.equal(result.started, false);
 });
 
-test("start: true is the proxy-reload spelling, and lists what it wrote", async () => {
+test("start: true is the proxy-reload spelling, and lists what it wrote", { skip: machineConfigured() ? false : "no ~/.sandbox registry (CI)" }, async () => {
   const { result, text } = await transcript({ start: true });
   assert.match(text, /Regenerating Caddyfile/);
   assert.doesNotMatch(text, /Updating reverse proxy configuration/);

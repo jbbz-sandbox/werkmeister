@@ -471,25 +471,58 @@ before trusting it.
 ## `npm test` Regenerates the Caddyfile and Reloads a Running Caddy
 
 **Severity:** Low (idempotent, but a unit-test run should not touch live infrastructure)
-**Status:** Open
+**Status:** Open — contained, not fixed
 **Affects:** `packages/sandbox-core/lifecycle-proxy.test.mjs`, `packages/sandbox-core/lifecycle-clean.test.mjs`
 
-Both call the real `reloadProxy()` / `planClean()` rather than a seam. So running the core
-suite regenerates `infra/proxy/Caddyfile` from whatever features happen to be up, and — if
-Caddy is running — reloads it. The reload is idempotent and the Caddyfile is gitignored, so
-nothing is lost; but a `npm test` that briefly bounces your proxy is a surprise, and it cuts
-against this package's own line that real API calls are integration rather than unit territory
-(`docker.test.mjs` says so explicitly).
+Both call the real `reloadProxy()` / `planClean()` rather than a seam. On a configured
+machine, running the core suite regenerates `infra/proxy/Caddyfile` from whatever features
+happen to be up and — if Caddy is running — reloads it. Idempotent, and the file is
+gitignored, so nothing is lost; but a `npm test` that briefly bounces your proxy is a
+surprise, and it cuts against this package's own line that real API calls are integration
+rather than unit territory (`docker.test.mjs` says so explicitly).
 
-It was written this way because the migration design's §8 says to test the pure parts and not
-to invent a mock layer — and for `reloadProxy` the interesting behaviour (which of the two
-progress spellings `start` selects) is only observable by calling it.
+**Contained** by skipping both on a machine with no `~/.sandbox/services.yaml`
+(`machineConfigured()` in `fixtures.mjs`), which is how CI stays green. Fixturing them
+instead would be *worse*: they would generate a Caddyfile from fake services into the
+checkout and reload a developer's live Caddy with it.
 
-**A related trap, already fixed, worth knowing:** both files now pin `process.env.SANDBOX_ROOT`
-to their own checkout. Without that, a shell exporting `SANDBOX_ROOT` (which `~/.sandbox/env.sh`
-does) made the tests write **the shared checkout's** `infra/proxy/Caddyfile` when run from a
-git worktree — an isolated agent silently mutating the main working tree.
+**A related trap, already fixed:** both files pin `process.env.SANDBOX_ROOT` to their own
+checkout. Without that, a shell exporting `SANDBOX_ROOT` (which `~/.sandbox/env.sh` does)
+made the tests write **the shared checkout's** `infra/proxy/Caddyfile` when run from a git
+worktree — an isolated agent silently mutating the main working tree.
 
 **Fix direction:** give `reloadProxy` an injectable caddy runner the way `telepresence.ts`
-takes a `Runner`, and assert on the transcript instead of the side effect.
+takes a `Runner`, and assert on the transcript instead of the side effect. Then they can run
+everywhere.
 
+---
+
+## Core Tests Must Be Hermetic: CI Has No `~/.sandbox`
+
+**Severity:** Moderate (nine tests merged green locally and red on CI)
+**Status:** Resolved — `fixtures.mjs` provides the seam
+**Affects:** `packages/sandbox-core/*.test.mjs`
+
+`loadServices()` / `loadPorts()` **throw** `Required config file not found` on a machine with
+no `~/.sandbox/{services,ports}.yaml` rather than returning empty. A CI runner is exactly that
+machine. So any core test that reaches the registry — directly, or through `getSlot`,
+`classifyEndpoint`, `detectReport`, `removeService`, `checkStandards` — passes on a developer
+box and fails on CI.
+
+Nine did, in one PR. Every one of them was written against "run
+`npx turbo run typecheck build test`", which is green locally and proves nothing about a clean
+machine. The pre-existing core tests were all hermetic, which is why this had never bitten.
+
+**The seam:** `SANDBOX_CONFIG_FILE` relocates the whole `~/.sandbox` set (see `configPath` in
+`config.ts`). `withSandboxHome(fn)` in `packages/sandbox-core/fixtures.mjs` seeds a temp home
+with a minimal `config.yaml`, `services.yaml` and `ports.yaml`, runs `fn`, and restores.
+
+**Before merging a core test, run it against an unconfigured machine:**
+
+```sh
+cd packages/sandbox-core
+EMPTY=$(mktemp -d) SANDBOX_CONFIG_FILE="$EMPTY/.sandbox/config.yaml" node --test *.test.mjs
+```
+
+A test that genuinely needs a live stack should skip on `machineConfigured()` rather than
+borrow the developer's registry.

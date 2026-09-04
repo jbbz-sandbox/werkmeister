@@ -4,9 +4,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { classifyEndpoint } from "./dist/slots.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
-test("a locally-running service reports its slot port", () => {
-  const e = classifyEndpoint("backend", { port_offset: 2, type: "api" }, ["backend"], 3);
+// Hermetic: the local branch resolves a slot port through ports.yaml, which a
+// clean machine does not have.
+test("a locally-running service reports its slot port", async () => {
+  const e = await withSandboxHome(async () =>
+    classifyEndpoint("backend", { port_offset: 2, type: "api" }, ["backend"], 3));
   assert.equal(e.source, "local");
   assert.equal(e.type, "api");
   assert.match(e.endpoint, /^localhost:\d+$/);

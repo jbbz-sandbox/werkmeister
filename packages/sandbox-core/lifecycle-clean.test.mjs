@@ -7,6 +7,8 @@
 // the base names is load-bearing rather than a tidiness rule.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+
+import { machineConfigured } from "./fixtures.mjs";
 import path from "node:path";
 
 // Pinned before `lifecycle` loads: planClean reads this checkout's registry,
@@ -33,7 +35,7 @@ test("longest-first base names keep the shorter suffix from eating the feature",
   assert.deepEqual(bases, [...bases].sort((a, b) => b.length - a.length || a.localeCompare(b)));
 });
 
-test("planClean never proposes removing a volume for a feature holding a slot", async () => {
+test("planClean never proposes removing a volume for a feature holding a slot", { skip: machineConfigured() ? false : "no ~/.sandbox registry (CI)" }, async () => {
   const plan = await planClean();
   const { getAllSlots } = await import("./dist/slots.js");
   const live = Object.keys(await getAllSlots());

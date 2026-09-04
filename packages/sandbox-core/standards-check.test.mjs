@@ -45,10 +45,16 @@ test("checkStandards returns errors as data and never exits", () => {
 });
 
 test("a well-formed tree reports no errors and a non-zero module count", () => {
-  const result = checkStandards();
-  if (result.errors.length) {
-    assert.fail(`this repo's standards tree should be clean: ${result.errors.join("; ")}`);
-  }
+  // Against a fixture tree, not the developer's: this used to assert that
+  // whoever ran it happened to have a configured machine, which is why it
+  // failed on CI and passed everywhere else.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-tree-"));
+  fs.writeFileSync(
+    path.join(dir, "demo.md"),
+    "---\ndomain: demo\nsummary: a well-formed module\napplies_to:\n  - '**/*.ts'\n---\n\n# Demo\n",
+  );
+  const result = withStandardsDir(dir, () => checkStandards());
+  assert.deepEqual(result.errors, []);
   assert.ok(result.moduleCount > 0, "an empty tree must not read as success");
 });
 
