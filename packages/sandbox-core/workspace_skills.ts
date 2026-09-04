@@ -17,8 +17,8 @@
  *   sb-handoff, sb-review, sb-pr, sb-author) are read verbatim from
  *   infra/skills/ as one-file {"SKILL.md": content} bundles.
  *
- * Mid-feature staleness is handled by `sandbox skills check|sync`
- * (commands/skills.ts). Sessions must start at the workspace root —
+ * Mid-feature staleness is handled by {@link checkSkills} / {@link syncSkills}
+ * below (`sandbox skills check|sync`). Sessions must start at the workspace root —
  * project skills (like the workspace hooks) resolve from the session's
  * project directory.
  */
@@ -27,7 +27,16 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { infraRoot } from "./config.js";
-import { generateSkills } from "./skill_gen.js";
+import { info, success } from "./reporter.js";
+import { generateSkills, validateModuleReferences } from "./skill_gen.js";
+import {
+  buildStandardsManifest,
+  loadStandardsModules,
+  repoDirs,
+  resolveActiveStandards,
+  writeStandardsManifest,
+} from "./standards.js";
+import { loadConfigFile, loadSandboxServiceConfigs } from "./workspace_prompts.js";
 
 // sb-*-prefixed skill dirs under a workspace's .claude/skills/ are managed by
 // this module: written on init/sync, pruned when their source disappears.
@@ -194,4 +203,126 @@ export function checkWorkspaceSkills(
     }
   }
   return errors;
+}
+
+// ---------------------------------------------------------------------------
+// The `sandbox skills check|sync` verbs
+// ---------------------------------------------------------------------------
+
+/** Recursively canonicalize for order-independent value comparison. */
+export function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonical);
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      out[key] = canonical((value as Record<string, unknown>)[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Recompute the gate manifest for an already-initialized workspace.
+ *
+ * Reconstructs init-workspace's resolution inputs from what the workspace
+ * already persisted (repo worktrees on disk + `.sandbox/workspace.yml`) —
+ * `sandbox skills sync`/`check` run standalone, without init's original
+ * CLI args. Returns null when no standards modules exist (nothing to check).
+ */
+export function resolveWorkspaceManifest(workspace: string): Record<string, any> | null {
+  const modules = loadStandardsModules();
+  if (!Object.keys(modules).length) {
+    return null;
+  }
+  const repoNames = repoDirs(workspace).map((p) => path.basename(p));
+  const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
+  const workspaceConfig = loadConfigFile(workspace, null);
+  let localServices = workspaceConfig["services"] || [];
+  if (typeof localServices === "string") {
+    localServices = localServices
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter((s: string) => s);
+  }
+  const [active] = resolveActiveStandards(
+    repoNames,
+    servicesConfig,
+    reposConfig,
+    workspaceConfig,
+    modules,
+    localServices,
+  );
+  return buildStandardsManifest(active, modules);
+}
+
+export interface SkillsCheck {
+  /** Bad module references in this repo's standards — a source problem, not the workspace's. */
+  authoring: string[];
+  /** Missing / stale / orphaned projected skills in the workspace. */
+  drift: string[];
+}
+
+/** The two drift sources that read only this repo and the workspace's `.claude/skills/`. */
+export function checkSkills(workspace: string): SkillsCheck {
+  return {
+    authoring: validateModuleReferences(),
+    drift: checkWorkspaceSkills(workspace),
+  };
+}
+
+/**
+ * The third drift source: `.sandbox/standards.json` no longer matching a fresh
+ * resolution. Returns the drift entry, or null when current (or when the repo
+ * has no standards modules to resolve).
+ *
+ * Kept out of {@link checkSkills} rather than folded into its `drift` because
+ * resolving the manifest reads `.sandbox/workspace.yml`, which reports through
+ * the reporter — folding it in would move that `[info]` line ahead of the drift
+ * lines the caller prints, and the CLI's output is a fixed contract.
+ */
+export function checkStandardsManifest(workspace: string): string | null {
+  const manifest = resolveWorkspaceManifest(workspace);
+  if (manifest === null) {
+    return null;
+  }
+  const manifestPath = path.join(workspace, ".sandbox", "standards.json");
+  let onDisk: unknown = null;
+  if (fs.existsSync(manifestPath) && fs.statSync(manifestPath).isFile()) {
+    try {
+      onDisk = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    } catch {
+      onDisk = null;
+    }
+  }
+  if (JSON.stringify(canonical(onDisk)) === JSON.stringify(canonical(manifest))) {
+    return null;
+  }
+  return "stale: .sandbox/standards.json";
+}
+
+export interface SkillsSync {
+  /** Every projected file, whether or not its content changed. */
+  written: string[];
+  /** Null when the repo has no standards modules, so no manifest was written. */
+  manifestPath: string | null;
+}
+
+/** `sandbox skills sync`: reproject the skills and refresh the gate manifest. */
+export function syncSkills(workspace: string): SkillsSync {
+  const written = writeWorkspaceSkills(workspace);
+  for (const p of written) {
+    info(`wrote ${p}`);
+  }
+  success(`Projected ${written.length} sb-* skill(s) into ${workspaceSkillsDir(workspace)}`);
+
+  const manifest = resolveWorkspaceManifest(workspace);
+  if (manifest === null) {
+    return { written, manifestPath: null };
+  }
+  const manifestPath = writeStandardsManifest(workspace, manifest);
+  info(`wrote ${manifestPath}`);
+  return { written, manifestPath };
 }
