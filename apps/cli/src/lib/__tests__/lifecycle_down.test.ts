@@ -11,11 +11,11 @@ import { withReporter } from "sandbox-core/reporter";
 
 import { makeRecorder } from "../../commands/__tests__/helpers/recorder.js";
 
-vi.mock("sandbox-core/compose", () => ({ composeDown: vi.fn() }));
+vi.mock("sandbox-core/compose", () => ({ composeDownAsync: vi.fn() }));
 vi.mock("sandbox-core/slots", () => ({ getSlot: async () => 3, releaseSlot: vi.fn() }));
 vi.mock("sandbox-core/telepresence", () => ({ leaveFeatureIntercepts: () => [] }));
 
-import { composeDown } from "sandbox-core/compose";
+import { composeDownAsync } from "sandbox-core/compose";
 import { down } from "sandbox-core/lifecycle";
 
 let lines: string[];
@@ -23,7 +23,7 @@ let recorder: Reporter;
 
 beforeEach(() => {
   ({ lines, reporter: recorder } = makeRecorder());
-  vi.mocked(composeDown).mockReturnValue(true);
+  vi.mocked(composeDownAsync).mockResolvedValue(true);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -36,7 +36,7 @@ describe("lifecycle.down", () => {
   });
 
   it("warns when the teardown fails, and still releases the slot", async () => {
-    vi.mocked(composeDown).mockReturnValue(false);
+    vi.mocked(composeDownAsync).mockResolvedValue(false);
 
     const result = await withReporter(recorder, () => down("demo"));
 

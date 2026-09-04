@@ -35,6 +35,12 @@ Same as Plan 2, plus:
   `intercept` is a build rather than a lift.
 - Verification for every task: `npx turbo run typecheck build test` and
   `./sandbox standards check`.
+- **Two pre-existing flakes will bite a full `turbo run … test` under load.**
+  Neither is caused by this work; do not chase them. `wrapper_npx.test.ts` shells
+  out to a real `npm install -g` under a 5s vitest budget (1.6s standalone, >5s
+  under twelve concurrent turbo tasks), and `cache.smoke.mjs:43` waits a fixed
+  `sleep(50)` for a background refresh. Re-run, or run the failing package alone,
+  before believing a red.
 
 **Ordering:** Task 1 (`notes`) must land before Task 2 (`down`) —
 `apps/cli/src/commands/down.ts:22` imports `graduateOne` and `input` from

@@ -45,6 +45,12 @@ from it.
 - Verification for every task: `npx turbo run typecheck build test` and
   `./sandbox standards check`.
 - Conventional commits. Never commit to `main`.
+- **Two pre-existing flakes will bite a full `turbo run … test` under load.**
+  Neither is caused by this work; do not chase them. `wrapper_npx.test.ts` shells
+  out to a real `npm install -g` under a 5s vitest budget (1.6s standalone, >5s
+  under twelve concurrent turbo tasks), and `cache.smoke.mjs:43` waits a fixed
+  `sleep(50)` for a background refresh. Re-run, or run the failing package alone,
+  before believing a red.
 
 **Tasks are independent.** There is no ordering constraint among the ten; do them
 in any order, or in parallel across agents.

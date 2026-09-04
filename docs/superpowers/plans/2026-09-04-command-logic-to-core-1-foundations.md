@@ -38,6 +38,12 @@ driven by SIGINT. Nothing user-visible changes.
 - Verification for every task: `npx turbo run typecheck build test` from the repo
   root, and `./sandbox standards check`.
 - Conventional commits (`refactor(core): …`). Never commit to `main`.
+- **Two pre-existing flakes will bite a full `turbo run … test` under load.**
+  Neither is caused by this work; do not chase them. `wrapper_npx.test.ts` shells
+  out to a real `npm install -g` under a 5s vitest budget (1.6s standalone, >5s
+  under twelve concurrent turbo tasks), and `cache.smoke.mjs:43` waits a fixed
+  `sleep(50)` for a background refresh. Re-run, or run the failing package alone,
+  before believing a red.
 
 ---
 
@@ -353,6 +359,14 @@ The six verbs that spawn or stream are `up`, `down`, `test`, `logs`, `intercept`
 `logs` and `intercept` are handled in plans 2 and 3, which consume what this
 task produces.
 
+**Status: done** (commit follows). One change from the sketch below: rather than
+duplicating `runCompose`'s body, its eight messages were extracted into three
+shared helpers (`composeCommand`, `reportComposeOutcome`, `reportComposeFailure`)
+that both the sync and async paths call. Each message now exists exactly once, so
+the two spellings cannot drift -- which is a stronger guarantee than a diff.
+`lifecycle_down.test.ts`'s mock target moved from `composeDown` to
+`composeDownAsync`; its assertions are unchanged.
+
 **Files:**
 - Modify: `packages/sandbox-core/compose.ts` (`runCompose`, `composeUp`, `composeDown`)
 - Modify: `packages/sandbox-core/lifecycle.ts` (`up`, `down`)
@@ -369,7 +383,7 @@ task produces.
   The existing synchronous `composeUp`/`composeDown` stay exported and unchanged.
   Plans 2 and 3 rely on both spellings existing.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/sandbox-core/compose-abort.test.mjs`:
 
@@ -392,12 +406,12 @@ Note this asserts `false`, not a throw: `composeUp` returns a boolean today and
 `lifecycle.up` branches on it. Preserving that contract is what keeps CLI output
 identical.
 
-- [ ] **Step 2: Run and watch it fail**
+- [x] **Step 2: Run and watch it fail**
 
 Run: `cd packages/sandbox-core && npx tsc && node --test compose-abort.test.mjs`
 Expected: FAIL — `composeUpAsync` is not exported.
 
-- [ ] **Step 3: Add the async compose path**
+- [x] **Step 3: Add the async compose path**
 
 In `packages/sandbox-core/compose.ts`, add `runAsync` to the existing import from
 `./proc.js`, then add beside `runCompose`:
@@ -477,12 +491,12 @@ Check the existing `runCompose` for the exact error-branch wording and the exact
 the Global Constraints forbid changing them. Verify `warn` is in the module's
 import from `./reporter.js`; add it if not.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd packages/sandbox-core && npx tsc && node --test compose-abort.test.mjs`
 Expected: PASS.
 
-- [ ] **Step 5: Accept and forward the signal in `lifecycle`**
+- [x] **Step 5: Accept and forward the signal in `lifecycle`**
 
 In `packages/sandbox-core/lifecycle.ts`, widen the two signatures and forward:
 
@@ -506,20 +520,20 @@ with `await composeUpAsync(feature, opts.signal)` /
 the current signature at `lifecycle.ts:358` and preserve it exactly; the CLI's
 `down.test.ts` asserts `down` is called with `{ removeVolumes: true }`.
 
-- [ ] **Step 6: Full verification**
+- [x] **Step 6: Full verification**
 
 Run: `npx turbo run typecheck build test`
 Expected: all pass, including `apps/cli/src/commands/__tests__/down.test.ts` and
 `up.test.ts` **unchanged**. If either fails, the signature widening broke a call
 shape — fix the library, not the test.
 
-- [ ] **Step 7: Smoke the real path**
+- [x] **Step 7: Smoke the real path**
 
 Run: `./sandbox status`
 Then Ctrl-C a `./sandbox up <some-feature>` mid-build and confirm no orphaned
 `docker compose` process survives: `ps aux | grep 'docker compose'`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/sandbox-core/compose.ts packages/sandbox-core/lifecycle.ts packages/sandbox-core/compose-abort.test.mjs

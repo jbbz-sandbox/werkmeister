@@ -12,8 +12,8 @@ import * as path from "node:path";
 
 import { Colors } from "./colors.js";
 import { resolveWorkspace } from "./config.js";
-import { ProcError, run, RunResult } from "./proc.js";
-import { error, info, raw, success } from "./reporter.js";
+import { ProcError, run, runAsync, RunResult } from "./proc.js";
+import { error, info, raw, success, warn } from "./reporter.js";
 
 export interface ContainerStatus {
   name: string;
@@ -135,6 +135,64 @@ function runCompose(
     composePath = null,
   }: { capture?: boolean; stream?: boolean; composePath?: string | null } = {},
 ): RunResult | null {
+  const cmd = composeCommand(feature, args, composePath);
+  if (cmd === null) {
+    return null;
+  }
+
+  try {
+    if (stream) {
+      // Stream output directly -- used for logs. Ctrl+C interrupts the
+      // whole foreground process group, ending both us and the child.
+      run(cmd, { stdio: "inherit" });
+      return null;
+    }
+    return reportComposeOutcome(run(cmd, { capture, timeout: 300 }), capture);
+  } catch (err) {
+    return reportComposeFailure(err);
+  }
+}
+
+/**
+ * The cancellable sibling of {@link runCompose}.
+ *
+ * Every message the two produce comes from the three helpers they share, so the
+ * async form cannot drift from the sync one it shadows -- which matters because
+ * both spellings reach the same CLI output. No `stream` mode: a streaming tail
+ * is {@link composeLogsStream}, which owns its own child.
+ */
+async function runComposeAsync(
+  feature: string,
+  args: string[],
+  {
+    capture = false,
+    composePath = null,
+    signal,
+  }: { capture?: boolean; composePath?: string | null; signal?: AbortSignal } = {},
+): Promise<RunResult | null> {
+  const cmd = composeCommand(feature, args, composePath);
+  if (cmd === null) {
+    return null;
+  }
+
+  try {
+    return reportComposeOutcome(await runAsync(cmd, { capture, timeout: 300, signal }), capture);
+  } catch (err) {
+    return reportComposeFailure(err);
+  }
+}
+
+/**
+ * Resolve the compose file and build the argv, announcing the run.
+ *
+ * `null` means there is nothing to run and the reason has already been
+ * reported. Shared so the sync and async paths announce identically.
+ */
+function composeCommand(
+  feature: string,
+  args: string[],
+  composePath: string | null,
+): string[] | null {
   // Resolving costs a `docker ps`; a caller that already did it passes the path.
   composePath ??= composeFile(feature);
   if (composePath === null || !isFile(composePath)) {
@@ -145,46 +203,52 @@ function runCompose(
     );
     return null;
   }
-
   const cmd = ["docker", "compose", "-f", composePath, ...args];
   info(`Running: ${cmd.join(" ")}`);
+  return cmd;
+}
 
-  try {
-    if (stream) {
-      // Stream output directly -- used for logs. Ctrl+C interrupts the
-      // whole foreground process group, ending both us and the child.
-      run(cmd, { stdio: "inherit" });
-      return null;
+/** Report a completed compose run. Shared so both paths say the same thing. */
+function reportComposeOutcome(result: RunResult, capture: boolean): RunResult | null {
+  if (result.status !== 0) {
+    const stderrText = capture ? result.stderr : "";
+    error(`docker compose failed (exit ${result.status})`);
+    if (stderrText) {
+      raw(`${Colors.DIM}${stderrText.trim()}${Colors.RESET}\n`);
     }
-
-    const result = run(cmd, { capture, timeout: 300 });
-    if (result.status !== 0) {
-      const stderrText = capture ? result.stderr : "";
-      error(`docker compose failed (exit ${result.status})`);
-      if (stderrText) {
-        raw(`${Colors.DIM}${stderrText.trim()}${Colors.RESET}\n`);
-      }
-    } else {
-      if (capture) {
-        return result;
-      }
-      success("docker compose completed successfully");
+  } else {
+    if (capture) {
+      return result;
     }
-    return capture ? result : null;
-  } catch (err) {
-    if (err instanceof ProcError && err.code === "ENOENT") {
-      error(
-        "docker compose not found. " +
-        "Ensure Docker Desktop is installed and running.",
-      );
-      return null;
-    }
-    if (err instanceof ProcError && err.code === "ETIMEDOUT") {
-      error("docker compose timed out after 5 minutes");
-      return null;
-    }
-    throw err;
+    success("docker compose completed successfully");
   }
+  return capture ? result : null;
+}
+
+/**
+ * Map a spawn failure onto `null`, or rethrow what is not ours.
+ *
+ * Abort joins ENOENT and timeout here because every caller treats all three the
+ * same way -- as "did not run" -- and a cancelled teardown is not an error the
+ * user needs a stack trace for.
+ */
+function reportComposeFailure(err: unknown): null {
+  if (err instanceof ProcError && err.code === "ABORT_ERR") {
+    warn("docker compose was cancelled");
+    return null;
+  }
+  if (err instanceof ProcError && err.code === "ENOENT") {
+    error(
+      "docker compose not found. " +
+      "Ensure Docker Desktop is installed and running.",
+    );
+    return null;
+  }
+  if (err instanceof ProcError && err.code === "ETIMEDOUT") {
+    error("docker compose timed out after 5 minutes");
+    return null;
+  }
+  throw err;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +300,48 @@ export function composeDown(
     args.push("--volumes");
   }
   const result = runCompose(feature, args, { capture: true, composePath });
+  if (result === null || result.status !== 0) {
+    return false;
+  }
+  let msg = `Containers for '${feature}' are down`;
+  if (removeVolumes) {
+    msg += " (volumes removed)";
+  }
+  success(msg);
+  return true;
+}
+
+/** Cancellable {@link composeUp}. */
+export async function composeUpAsync(feature: string, signal?: AbortSignal): Promise<boolean> {
+  const result = await runComposeAsync(
+    feature,
+    ["up", "-d", "--build", "--remove-orphans"],
+    { capture: true, signal },
+  );
+  if (result && result.status === 0) {
+    success(`Containers for '${feature}' are up`);
+    return true;
+  }
+  return false;
+}
+
+/** Cancellable {@link composeDown}. */
+export async function composeDownAsync(
+  feature: string,
+  { removeVolumes = false, signal }: { removeVolumes?: boolean; signal?: AbortSignal } = {},
+): Promise<boolean> {
+  // Mirrors composeDown exactly: that null also covers a missing docker binary,
+  // a timeout and an abort, which are failures rather than "down".
+  const composePath = composeFile(feature);
+  if (composePath === null || !isFile(composePath)) {
+    info(`No docker-compose.yml for '${feature}' -- nothing to tear down`);
+    return true;
+  }
+  const args = ["down", "--remove-orphans"];
+  if (removeVolumes) {
+    args.push("--volumes");
+  }
+  const result = await runComposeAsync(feature, args, { capture: true, composePath, signal });
   if (result === null || result.status !== 0) {
     return false;
   }

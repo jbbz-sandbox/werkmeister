@@ -29,7 +29,12 @@ import * as path from "node:path";
 
 import { isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
-import { composeDown, composeRestart, composeStop, composeUp } from "./compose.js";
+import {
+  composeDownAsync,
+  composeRestart,
+  composeStop,
+  composeUpAsync,
+} from "./compose.js";
 import { loadPorts, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
@@ -84,7 +89,11 @@ export interface UpResult {
  * when the forwards are restarted and their tunnels never reconnect, and
  * `COMPOSE_UP_FAILED` when `docker compose up` reports failure.
  */
-export async function up(feature: string, workspace: string): Promise<UpResult> {
+export async function up(
+  feature: string,
+  workspace: string,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<UpResult> {
   const workspaceCompose = path.join(workspace, "docker-compose.yml");
   if (!fs.existsSync(workspaceCompose)) {
     throw new SandboxError(
@@ -168,7 +177,7 @@ export async function up(feature: string, workspace: string): Promise<UpResult> 
   let containersStarted = false;
   if (localServices.length) {
     info("Starting containers...");
-    if (!composeUp(feature)) {
+    if (!(await composeUpAsync(feature, signal))) {
       throw new SandboxError(
         "Failed to start containers. Check docker compose output above.",
         "COMPOSE_UP_FAILED",
@@ -357,7 +366,7 @@ export interface DownResult {
  */
 export async function down(
   feature: string,
-  { removeVolumes = false }: { removeVolumes?: boolean } = {},
+  { removeVolumes = false, signal }: { removeVolumes?: boolean; signal?: AbortSignal } = {},
 ): Promise<DownResult> {
   // Best-effort, and before composeDown: leaveFeatureIntercepts resolves the
   // workspace from compose labels on the still-running containers.
@@ -384,7 +393,7 @@ export async function down(
   }
   // A failed teardown still releases the slot rather than stranding it, but
   // it is said out loud: the caller's summary otherwise reads as success.
-  if (!composeDown(feature, { removeVolumes })) {
+  if (!(await composeDownAsync(feature, { removeVolumes, signal }))) {
     warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
   }
 
