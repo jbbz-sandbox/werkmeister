@@ -1,7 +1,7 @@
 # Design — move the command logic into `sandbox-core`
 
 **Date:** 2026-09-04
-**Status:** approved; not yet started
+**Status:** approved; all tiers shipped 2026-09-04
 **Author:** Jay Boyer (decisions), Claude (drafting)
 **Supersedes:** `2026-08-20-sandbox-core-migration-design.md` (deleted in this
 change; recoverable from git history). That document moved `apps/cli/src/lib`
@@ -39,6 +39,21 @@ CLI becomes a consumer of `sandbox-core` rather than its owner.
 verbs, and `up.ts` (82 lines: argv, cwd resolution, one `printSummary`) is the
 shape every other command is being moved toward. The work is finishing a
 migration, not starting one.
+
+### Where this stands, 2026-09-04: done
+
+All 23 verbs shipped. `packages/sandbox-core` holds no `process.exit`, and its
+seven `process.cwd()` / `readline` / `isTTY` references are byte-for-byte the
+ones that were already there before this work — the migration added none. The
+two `console.*` exceptions of §3 rule 4 are intact.
+
+Both blockers the "Claudeck's Streaming Routes Still Spawn the CLI" entry in
+`docs/known-issues.md` named are gone: `/action`'s was the `AbortSignal`
+decision, `/intercept`'s was the missing core entry point. Rewiring those two
+routes is a claudeck change and stays out of scope, as §9 said.
+
+One wart the work introduced is recorded in that same file: two core tests call
+the real `reloadProxy`/`planClean`, so `npm test` reloads a running Caddy.
 
 ---
 

@@ -244,7 +244,7 @@ The four genuine differences (why a naive share isn't free) are all host-level: 
 ## Claudeck's Streaming Routes Still Spawn the CLI
 
 **Severity:** Low (works; costs a process launch per action and diverges from the other consumers)
-**Status:** Open — deferred, blocked on two decisions rather than on effort
+**Status:** Open — unblocked; the claudeck routes have not been moved yet
 **Affects:** `apps/claudeck/plugins/sandbox-workspace/server.js` — `POST /action`, `POST /intercept`
 
 `sandbox-core` never spawns the `sandbox` CLI (note 087), but a **consumer** may, and claudeck
@@ -264,17 +264,19 @@ The two that remain both **stream** the child's output to a chunked response, en
 | `POST /action` | `sandbox up\|stop\|restart\|down` | `runWorkspaceAction(name, action)` |
 | `POST /intercept` | `sandbox intercept -s <svc> [--leave]` | `startIntercept(...)` / `leaveIntercept(...)` |
 
-**What blocks `/action`** — two things, only one of which is code:
+**`/action` is no longer blocked either.** Both of its stated blockers are gone:
 
-1. `runWorkspaceAction` collects a transcript rather than streaming one. The seam exists —
-   `collectingReporter(onChunk)` in `packages/sandbox-core/reporter.ts`, which `POST /create` in
-   this same file already uses through `createWorkspace`'s `onData` — so this is roughly three
-   lines.
-2. **Cancellation, which is a decision, not a task.** The child process gives claudeck a
-   10-minute `SIGKILL` timer and abort-on-disconnect (`res.on("close")` kills it). An in-process
-   run has neither: a wedged `docker compose up` would hold a server request with no way to end
-   it. Either the lifecycle functions grow an `AbortSignal`, or that behaviour is knowingly
-   dropped.
+1. `runWorkspaceAction` still collects a transcript rather than streaming one, but the seam was
+   always there — `collectingReporter(onChunk)` in `packages/sandbox-core/reporter.ts`, which
+   `POST /create` in this same file already uses through `createWorkspace`'s `onData`. Roughly
+   three lines.
+2. **Cancellation was the decision, and it was made.** `up`, `down`, `connect`, `logs`, `test`
+   and the intercept pair now take an optional `AbortSignal`, forwarded to an async spawn
+   (`runAsync` in `packages/sandbox-core/proc.ts`). `res.on("close")` can abort one, which is
+   what the killed child used to provide.
+
+**What is left is a claudeck change, deliberately out of the migration's scope:** rewiring the
+two routes to call core in-process instead of spawning. Nobody has done it.
 
 **`/intercept` is no longer blocked.** `startIntercept` and `leaveIntercept` in
 `packages/sandbox-core/telepresence.ts` are the command body, callable in-process: every failure is
@@ -463,3 +465,31 @@ to `resolveWorkspace()`, whose cwd branch returns `<workspaces_root>/<first path
 **Fix direction:** have the smoke `chdir` somewhere neutral before the negative case, or make
 `workspaceForFeature`'s fallback confirm the resolved directory actually belongs to *feature*
 before trusting it.
+
+---
+
+## `npm test` Regenerates the Caddyfile and Reloads a Running Caddy
+
+**Severity:** Low (idempotent, but a unit-test run should not touch live infrastructure)
+**Status:** Open
+**Affects:** `packages/sandbox-core/lifecycle-proxy.test.mjs`, `packages/sandbox-core/lifecycle-clean.test.mjs`
+
+Both call the real `reloadProxy()` / `planClean()` rather than a seam. So running the core
+suite regenerates `infra/proxy/Caddyfile` from whatever features happen to be up, and — if
+Caddy is running — reloads it. The reload is idempotent and the Caddyfile is gitignored, so
+nothing is lost; but a `npm test` that briefly bounces your proxy is a surprise, and it cuts
+against this package's own line that real API calls are integration rather than unit territory
+(`docker.test.mjs` says so explicitly).
+
+It was written this way because the migration design's §8 says to test the pure parts and not
+to invent a mock layer — and for `reloadProxy` the interesting behaviour (which of the two
+progress spellings `start` selects) is only observable by calling it.
+
+**A related trap, already fixed, worth knowing:** both files now pin `process.env.SANDBOX_ROOT`
+to their own checkout. Without that, a shell exporting `SANDBOX_ROOT` (which `~/.sandbox/env.sh`
+does) made the tests write **the shared checkout's** `infra/proxy/Caddyfile` when run from a
+git worktree — an isolated agent silently mutating the main working tree.
+
+**Fix direction:** give `reloadProxy` an injectable caddy runner the way `telepresence.ts`
+takes a `Runner`, and assert on the transcript instead of the side effect.
+
