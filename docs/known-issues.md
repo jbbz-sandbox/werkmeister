@@ -471,29 +471,43 @@ before trusting it.
 ## `npm test` Regenerates the Caddyfile and Reloads a Running Caddy
 
 **Severity:** Low (idempotent, but a unit-test run should not touch live infrastructure)
-**Status:** Open — contained, not fixed
+**Status:** Fixed 2026-09-04 — both tests are hermetic and no longer skip
 **Affects:** `packages/sandbox-core/lifecycle-proxy.test.mjs`, `packages/sandbox-core/lifecycle-clean.test.mjs`
 
-Both call the real `reloadProxy()` / `planClean()` rather than a seam. On a configured
-machine, running the core suite regenerates `infra/proxy/Caddyfile` from whatever features
-happen to be up and — if Caddy is running — reloads it. Idempotent, and the file is
-gitignored, so nothing is lost; but a `npm test` that briefly bounces your proxy is a
-surprise, and it cuts against this package's own line that real API calls are integration
+Both called the real `reloadProxy()` / `planClean()` rather than a seam. On a configured
+machine, running the core suite regenerated `infra/proxy/Caddyfile` from whatever features
+happened to be up and — if Caddy was running — reloaded it. Idempotent, and the file is
+gitignored, so nothing was lost; but a `npm test` that briefly bounces your proxy is a
+surprise, and it cut against this package's own line that real API calls are integration
 rather than unit territory (`docker.test.mjs` says so explicitly).
 
-**Contained** by skipping both on a machine with no `~/.sandbox/services.yaml`
-(`machineConfigured()` in `fixtures.mjs`), which is how CI stays green. Fixturing them
-instead would be *worse*: they would generate a Caddyfile from fake services into the
-checkout and reload a developer's live Caddy with it.
+**The fix**, along the direction this entry named. `reloadProxy` takes a trailing
+`ops: ProxyOps = REAL_PROXY_OPS` — the same shape and reason as `telepresence.ts`'s
+`runner: Runner = _run`, so no caller passes it. It is the whole boundary rather than a
+caddy runner alone because `getAllSlots` reads Docker container labels: faking the proxy
+half and not the slot half would still have needed a live daemon.
 
-**A related trap, already fixed:** both files pin `process.env.SANDBOX_ROOT` to their own
-checkout. Without that, a shell exporting `SANDBOX_ROOT` (which `~/.sandbox/env.sh` does)
+`planClean` needed no seam. In dry-run it removes nothing — it never reaches the
+`generateCaddyfile`/`reloadCaddy` branch, which is guarded by `!dryRun` — so its only
+problem was reading the developer's real Docker state. Its one real decision, the
+kept-vs-orphaned split, is now `classifyVolumes` in `lifecycle.ts`, tested directly the way
+`featureFromVolume` beside it already was.
+
+**What this bought.** The two files went from 6 tests, 4 of them skipped on any machine
+without `~/.sandbox` (which is every CI run), to 15 tests that always run. Several assert
+branches a real machine reached only by luck: `started` can only be true with Caddy down, so
+on a developer box running Caddy the old test passed either way, and the "no live feature's
+volume is proposed for removal" property asserted nothing at all on a machine with no
+features up. `machineConfigured()` in `fixtures.mjs` had no callers left and is gone.
+
+**Verified:** `md5` of `apps/cli/infra/proxy/Caddyfile` is unchanged across a full
+`packages/sandbox-core` run, and both files pass under an empty `HOME`.
+
+**A related trap, already fixed:** both files used to pin `process.env.SANDBOX_ROOT` to their
+own checkout. Without that, a shell exporting `SANDBOX_ROOT` (which `~/.sandbox/env.sh` does)
 made the tests write **the shared checkout's** `infra/proxy/Caddyfile` when run from a git
-worktree — an isolated agent silently mutating the main working tree.
-
-**Fix direction:** give `reloadProxy` an injectable caddy runner the way `telepresence.ts`
-takes a `Runner`, and assert on the transcript instead of the side effect. Then they can run
-everywhere.
+worktree — an isolated agent silently mutating the main working tree. Neither file resolves a
+path any more, so both pins are gone with the hazard.
 
 ---
 
