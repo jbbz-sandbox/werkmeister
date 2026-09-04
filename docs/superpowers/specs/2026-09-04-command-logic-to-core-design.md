@@ -77,7 +77,15 @@ export async function removeService(a: RemoveArgs): Promise<RemoveResult>;
    *between* the error line and the exit, the command catches its own code and
    reports — `commands/restart.ts` shows the pattern and it stays legal.
 4. **Progress goes through the reporter** — `info`/`success`/`warn`/`error`/`raw`
-   from `sandbox-core/reporter`, never `console.*`. See §6 for the exception.
+   from `sandbox-core/reporter`, never `console.*`.
+
+   Two standing exceptions, both already in the tree, neither to be "cleaned up":
+   `gate.ts:292` writes the PreToolUse hook's JSON verdict to stdout, which is a
+   *protocol* write of the same kind as the MCP transport; and `cache.ts:79,96`
+   write diagnostics to stderr deliberately, because that module is reached only
+   through `sandbox.ts`, whose consumers install no reporter — an emitted event
+   would go nowhere. The rule is **protocol and unreachable-reporter writes stay,
+   progress writes convert.**
 5. **`signal?: AbortSignal`** on exactly `up`, `down`, `test`, `logs`,
    `intercept`, `connect`. A remote caller aborts on client disconnect. The CLI
    derives its signal from SIGINT: `apps/cli/src/lib/interrupt.ts` already owns
@@ -177,38 +185,30 @@ exclusion costs almost nothing in coverage.
 
 ---
 
-## 6. Three folds
+## 6. Two folds
 
 Each was optional debt before D1's rationale and is load-bearing after it.
 
-**1. The reporter conversion.** The predecessor's §8 tracked ten direct
-`console.*` writes in core — `compose.ts` ×2, `browser.ts` ×4, `safari.ts` ×4 —
-and deferred them to "one dedicated pass". `sandbox mcp --stdio` uses stdout as
-the MCP JSON-RPC transport; once core is what a surface calls, these stop being
-latent. They convert here.
-
-**The pass is not mechanical.** `packages/sandbox-core/gate.ts:292` is an
-eleventh `console.log` the tally of ten missed, and it must stay: it writes the
-PreToolUse hook's JSON verdict to stdout, which is a *protocol* write of exactly
-the same kind as MCP's transport. A blanket "convert every `console.*` in core"
-silently breaks the standards gate. The rule is **protocol writes stay, progress
-writes convert**, and all ten named above are progress.
-
-**2. `process.cwd()` resolution moves to the caller.** `intercept`, `open`,
+**1. `process.cwd()` resolution moves to the caller.** `intercept`, `open`,
 `skills` and `notes` each resolve a feature or workspace by walking up from the
 current directory. Every core function takes an explicit feature/workspace and
 the CLI does the walk-up. This is consistent with the predecessor's decision to
 keep `lib/dotenv.ts` CLI-side, and it is the only way these functions mean
 anything to a caller that has no meaningful cwd.
 
-**3. `findWorkspaceRoot` is duplicated.** `apps/cli/src/commands/notes.ts:67`
+**2. `findWorkspaceRoot` is duplicated.** `apps/cli/src/commands/notes.ts:67`
 and `packages/sandbox-core/gate.ts:85` are the same walk-up written twice, and
 `commands/skills.ts:22` imports it from the *command module* — the only
 command-to-command import edge in the tree, and the one thing here that is
 unambiguously wrong today. Delete the CLI copy; point both callers at
 `sandbox-core/gate`.
 
----
+**Not a fold: the reporter conversion.** The predecessor's §8 tracked ten direct
+`console.*` writes in `compose.ts`, `browser.ts` and `safari.ts` and deferred them
+to "one dedicated pass". That pass has since shipped — commit `64237bb`, "route
+the last ten console writes through the reporter" — and core now holds no progress
+`console.*` at all. What survives is the *rule*, recorded in §3 rule 4, so that a
+future mechanical sweep does not break the two deliberate exceptions.
 
 ## 7. What stays in `apps/cli`
 
@@ -293,7 +293,7 @@ whole point of the migration.
 **Sequencing.** Tier 1 is ten independent lifts with no ordering constraint
 between them; tier 2 has one real dependency — `notes`' split must land before
 `down`'s, since `commands/down.ts` imports `graduateOne` and `input` from
-`commands/notes.ts`. Fold 3 (`findWorkspaceRoot`) is a standalone two-file change
+`commands/notes.ts`. Fold 2 (`findWorkspaceRoot`) is a standalone two-file change
 that can go first and unblocks nothing, but removes the one wrong import edge
 early. The detailed increments are the implementation plan's job, not this
 document's.
@@ -303,4 +303,3 @@ document's.
 - "Claudeck's Streaming Routes Still Spawn the CLI" — `POST /intercept`'s stated
   blocker is exactly tier 2's `intercept` build. `POST /action`'s stated blocker
   is D4's `AbortSignal`. Both close.
-- The predecessor's tracked ten `console.*` writes — fold 1.
