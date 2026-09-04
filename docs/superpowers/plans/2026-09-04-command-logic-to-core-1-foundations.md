@@ -678,6 +678,11 @@ of the cancellation path."
 predecessor's row 5. This task proves they obey §3 of the spec rather than
 assuming it, and records anything they don't.
 
+**Status: done.** All six clean; nothing carries over to plans 2 or 3. Findings in
+`docs/superpowers/plans/2026-09-04-tier-0-audit.md`. `infra.up`'s guard landed
+ahead of *all* of up()'s setup work rather than just ahead of the compose spawn --
+it writes proxy files, extracts a CA and configures a git hooks path first.
+
 **Files:**
 - Read: `apps/cli/src/commands/{up,stop,restart,status,connect,hooks}.ts`
 - Modify: `apps/cli/src/commands/connect.ts` (signal only)
@@ -688,7 +693,7 @@ assuming it, and records anything they don't.
 - Produces: an audit note listing any tier-0 verb that violates the contract, for
   plans 2 and 3 to absorb. No new API.
 
-- [ ] **Step 1: Check each of the six for contract violations**
+- [x] **Step 1: Check each of the six for contract violations**
 
 For each file, answer in writing:
 1. Does it hold any logic beyond argv mapping, rendering, exit-code mapping, TTY
@@ -702,26 +707,26 @@ Expected, from the spec's §5: all six are clean. `connect.ts` keeps its three
 hardcoded `tools.local.sandbox.com` URLs deliberately — that is rendering, not a
 violation. If you find anything else, do not fix it here; record it.
 
-- [ ] **Step 2: Add the signal to `connect`**
+- [x] **Step 2: Add the signal to `connect`**
 
 In `apps/cli/src/commands/connect.ts`, pass `interruptSignal()` into `infraUp()`.
 This requires widening `up()` in `packages/sandbox-core/infra.ts` to take
 `opts: { signal?: AbortSignal } = {}` and forwarding it the same way Task 3 did
 for `lifecycle.up`. Read `infra.ts`'s `up()` first to find its compose calls.
 
-- [ ] **Step 3: Write the audit note**
+- [x] **Step 3: Write the audit note**
 
 Create `docs/superpowers/plans/2026-09-04-tier-0-audit.md` with one section per
 verb, each recording the three answers from Step 1. Where a verb is clean, say so
 in one line. Where it is not, state the violation and which of plans 2 or 3 should
 absorb it.
 
-- [ ] **Step 4: Full verification**
+- [x] **Step 4: Full verification**
 
 Run: `npx turbo run typecheck build test` and `./sandbox standards check`
 Expected: all pass.
 
-- [ ] **Step 5: Smoke both paths and confirm they agree**
+- [x] **Step 5: Smoke both paths and confirm they agree**
 
 ```bash
 ./sandbox status
@@ -738,7 +743,7 @@ node --input-type=module -e '
 Expected: the forward counts and workspace names match between the two. That
 agreement is the whole point of the migration.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/superpowers/plans/2026-09-04-tier-0-audit.md packages/sandbox-core/infra.ts apps/cli/src/commands/connect.ts
