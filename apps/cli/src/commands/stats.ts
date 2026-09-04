@@ -12,6 +12,7 @@
 
 import { Colors, info, success, warn } from "../lib/config.js";
 import { containerStats } from "sandbox-core/docker";
+import { interruptSignal } from "../lib/interrupt.js";
 import {
   ContainerStats,
   formatMem,
@@ -199,9 +200,10 @@ async function renderCollection(
   );
   console.log(`  ${Colors.DIM}Press Ctrl+C to stop early${Colors.RESET}\n`);
 
-  // No signal to pass yet: Ctrl-C still ends this process outright (see
-  // lib/interrupt.ts), exactly as it did before the loop moved into core.
-  const collected = await runCollection(durationMinutes, interval, save);
+  // "Press Ctrl+C to stop early" is now literally true: the signal breaks the
+  // sampling loop and cuts the sleep short, so a partial aggregate is still
+  // rendered rather than thrown away with the process.
+  const collected = await runCollection(durationMinutes, interval, save, interruptSignal());
   if (!Object.keys(collected.stats).length) return; // runCollection warned
 
   // Show stats
