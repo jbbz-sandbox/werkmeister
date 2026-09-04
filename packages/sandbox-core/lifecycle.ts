@@ -45,6 +45,8 @@ import { getVolumeBaseNames, loadPorts, loadServices } from "./config.js";
 import { listVolumeNames, removeVolume } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
+import { reconcileGraduating } from "./graduate.js";
+import { latestHandoff, openDecisions, type Note } from "./notes.js";
 import {
   generateCaddyfile,
   generateFeatureCompose,
@@ -804,4 +806,38 @@ async function requireSlot(feature: string): Promise<number> {
     );
   }
   return slot;
+}
+
+
+export interface TeardownNotes {
+  workspace: string | null;
+  handoff: Note | null;
+  decisions: Note[];
+  /** Graduations whose scaffold has since been committed, closed out by this read. */
+  graduated: Note[];
+}
+
+/**
+ * The workspace notes a teardown wants to show, read before anything is removed.
+ *
+ * Ordering is the contract, not a detail: `workspaceForFeature` resolves through
+ * compose labels on the feature's *still-running* containers, so this must be
+ * called before `down`. Reconciling graduations here is what stops a decision
+ * whose scaffold already landed from being offered again.
+ *
+ * Reading is all this does. Deciding whether to prompt about what comes back is
+ * a TTY question, and stays with the caller.
+ */
+export async function teardownNotes(feature: string): Promise<TeardownNotes> {
+  const workspace = workspaceForFeature(feature);
+  if (workspace === null) {
+    return { workspace: null, handoff: null, decisions: [], graduated: [] };
+  }
+  const graduated = reconcileGraduating(workspace);
+  return {
+    workspace,
+    handoff: latestHandoff(workspace),
+    decisions: openDecisions(workspace),
+    graduated,
+  };
 }

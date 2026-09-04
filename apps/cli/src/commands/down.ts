@@ -12,11 +12,10 @@
 import * as path from "node:path";
 
 import { Colors, error, info, warn } from "../lib/config.js";
-import { workspaceForFeature } from "sandbox-core/compose";
-import { GraduationError, reconcileGraduating } from "sandbox-core/graduate";
-import { down as downFeature, reloadProxy } from "sandbox-core/lifecycle";
+import { GraduationError } from "sandbox-core/graduate";
+import { down as downFeature, reloadProxy, teardownNotes } from "sandbox-core/lifecycle";
 import type { DownResult } from "sandbox-core/lifecycle";
-import { latestHandoff, openDecisions, type Note } from "sandbox-core/notes";
+import { type Note } from "sandbox-core/notes";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
 import { getAllSlots } from "sandbox-core/slots";
@@ -41,17 +40,16 @@ function printNote(note: Note, workspace: string): void {
  */
 async function printNotes(feature: string): Promise<void> {
   try {
-    const workspace = workspaceForFeature(feature);
+    // The read is `teardownNotes`; what is left here is the printing and the
+    // TTY question of whether to offer graduation, which a library may not ask.
+    const { workspace, handoff, decisions, graduated } = await teardownNotes(feature);
     if (workspace === null) {
       return;
     }
-    // Close out any graduation whose scaffold has since been committed, so it
-    // stops being offered again. Free when nothing is pending.
-    for (const done of reconcileGraduating(workspace)) {
+    for (const done of graduated) {
       info(`Graduated ${path.basename(done.path)} — ${done.frontmatter["graduated_to"]} is committed.`);
     }
 
-    const handoff = latestHandoff(workspace);
     if (handoff !== null) {
       console.log(
         `${Colors.BOLD}Latest handoff${Colors.RESET} — review before this context is gone:\n`,
@@ -59,7 +57,6 @@ async function printNotes(feature: string): Promise<void> {
       printNote(handoff, workspace);
     }
 
-    const decisions = openDecisions(workspace);
     if (!decisions.length) {
       return;
     }
