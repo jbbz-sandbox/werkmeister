@@ -516,13 +516,45 @@ export interface ProxyReloadResult {
  * to false is what keeps their output where it was — and stops a teardown
  * starting a proxy nobody asked for.
  */
-export async function reloadProxy({
-  start = false,
-}: { start?: boolean } = {}): Promise<ProxyReloadResult> {
-  info(start ? "Regenerating Caddyfile..." : "Updating reverse proxy configuration...");
-  await generateCaddyfile();
+/**
+ * The four side effects `reloadProxy` performs, injectable so a test can assert
+ * the sequence without writing a real Caddyfile or bouncing a live Caddy.
+ *
+ * Same shape and reason as `telepresence.ts`'s `Runner`: a trailing parameter
+ * defaulted to the real thing, so no caller passes it and none has to know it
+ * exists. It is deliberately the *whole* boundary rather than a caddy runner
+ * alone — `getAllSlots` reads Docker container labels, so faking the proxy half
+ * and not the slot half would leave the test needing a real daemon anyway.
+ */
+export interface ProxyOps {
+  /** Returns the written path; `reloadProxy` ignores it. */
+  generate: () => Promise<unknown>;
+  slots: () => Promise<Record<string, { slot: number; services: string[] }>>;
+  running: () => boolean;
+  reload: () => Promise<boolean>;
+  start: () => boolean;
+}
 
-  const allFeatures = await getAllSlots();
+// Wrapped rather than referenced: a bare `slots: getAllSlots` reads the imported
+// binding when this module is evaluated, which throws under a partial `vi.mock`
+// of `sandbox-core/slots` that does not name `getAllSlots` — two CLI tests do
+// exactly that, and would fail to load. The arrows resolve at call time.
+const REAL_PROXY_OPS: ProxyOps = {
+  generate: () => generateCaddyfile(),
+  slots: () => getAllSlots(),
+  running: () => isCaddyRunning(),
+  reload: () => reloadCaddy(),
+  start: () => startCaddy(),
+};
+
+export async function reloadProxy(
+  { start = false }: { start?: boolean } = {},
+  ops: ProxyOps = REAL_PROXY_OPS,
+): Promise<ProxyReloadResult> {
+  info(start ? "Regenerating Caddyfile..." : "Updating reverse proxy configuration...");
+  await ops.generate();
+
+  const allFeatures = await ops.slots();
   const features = Object.keys(allFeatures)
     .sort()
     .map((feature) => ({
@@ -549,14 +581,14 @@ export async function reloadProxy({
 
   let started = false;
   let ok = true;
-  if (isCaddyRunning()) {
+  if (ops.running()) {
     if (start) {
       info("Reloading Caddy...");
     }
-    ok = await reloadCaddy();
+    ok = await ops.reload();
   } else if (start) {
     warn("Caddy is not running -- starting it...");
-    ok = startCaddy();
+    ok = ops.start();
     started = true;
   } else {
     info("Caddy is not running -- skipping reload");
@@ -652,6 +684,31 @@ export interface CleanResult extends CleanPlan {
 }
 
 /**
+ * Split *volumes* into the ones whose feature still holds a slot and the ones
+ * whose feature is gone — the single decision that separates "kept" from
+ * "deleted" in a sweep.
+ *
+ * Pulled out of {@link runClean} because it is the only part of that traversal
+ * worth asserting and the only part that can be asserted without a Docker
+ * daemon: everything around it is reads and progress output. A volume whose
+ * name matches no base name has no feature, so it is not ours and is never
+ * classified active.
+ */
+export function classifyVolumes(
+  volumes: string[],
+  baseNames: string[],
+  live: Set<string>,
+): { activeVolumes: string[]; orphanedVolumes: string[] } {
+  const activeVolumes: string[] = [];
+  const orphanedVolumes: string[] = [];
+  for (const vol of volumes) {
+    const feature = featureFromVolume(vol, baseNames);
+    (feature && live.has(feature) ? activeVolumes : orphanedVolumes).push(vol);
+  }
+  return { activeVolumes, orphanedVolumes };
+}
+
+/**
  * What `runClean` would remove, without removing it.
  *
  * A dry run *is* the plan — the two share one traversal because the ordering of
@@ -721,17 +778,12 @@ export async function runClean({
   const baseNames = volumeBaseNames();
   const sandboxVolumes = await listSandboxVolumes(baseNames);
 
-  const activeVolumes: string[] = [];
-  const orphanedVolumes: string[] = [];
   const removedVolumes: string[] = [];
+  const { activeVolumes, orphanedVolumes } = classifyVolumes(sandboxVolumes, baseNames, live);
 
   if (!sandboxVolumes.length) {
     raw(`  ${Colors.DIM}No per-feature Docker volumes found${Colors.RESET}\n`);
   } else {
-    for (const vol of sandboxVolumes) {
-      const feature = featureFromVolume(vol, baseNames);
-      (feature && live.has(feature) ? activeVolumes : orphanedVolumes).push(vol);
-    }
 
     if (activeVolumes.length) {
       raw(`\n  ${Colors.CYAN}Active feature volumes (kept):${Colors.RESET}\n`);

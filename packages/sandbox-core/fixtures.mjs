@@ -77,22 +77,3 @@ export async function dockerAvailable() {
     return false;
   }
 }
-
-/**
- * True when this machine has a seeded `~/.sandbox` registry.
- *
- * The two proxy/clean tests are integration tests against the real Caddyfile
- * and the real slot table -- their own headers say so. Fixturing them would be
- * worse than skipping: they would generate a Caddyfile from fake services into
- * the checkout and, on a developer machine, reload a live Caddy with it. So on
- * an unconfigured machine (CI) they skip, and on a configured one they run
- * against the real thing, which is the only place they mean anything.
- */
-export function machineConfigured() {
-  return fs.existsSync(path.join(sandboxHomeDir(), "services.yaml"));
-}
-
-function sandboxHomeDir() {
-  const override = process.env.SANDBOX_CONFIG_FILE;
-  return override ? path.dirname(override) : path.join(os.homedir(), ".sandbox");
-}
