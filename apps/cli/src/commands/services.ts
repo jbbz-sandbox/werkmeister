@@ -5,31 +5,41 @@
  * are running locally (with port) or via k8s port-forward.
  */
 
-import { Colors, info, loadServices, warn } from "../lib/config.js";
-import { getAllSlots, getServicePort, getSlot } from "sandbox-core/slots";
+import { Colors, info, warn } from "../lib/config.js";
+import { SandboxError } from "sandbox-core/errors";
+import { featureServices, type FeatureServices, type ServiceEndpoint } from "sandbox-core/slots";
+
+/**
+ * The Source column, colour and all.
+ *
+ * The trailing spaces are part of each literal because `padEnd` counts the
+ * escape sequences; they are what make the column line up on screen.
+ */
+const SOURCE_CELL: Record<ServiceEndpoint["source"], string> = {
+  local: `${Colors.GREEN}local${Colors.RESET}  `,
+  k8s: `${Colors.CYAN}k8s${Colors.RESET}    `,
+  none: `${Colors.DIM}N/A${Colors.RESET}    `,
+};
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;
 
   console.log(`\n${Colors.BOLD}=== Services for: ${feature} ===${Colors.RESET}\n`);
 
-  const servicesConfig = loadServices();
-  const slot = await getSlot(feature);
-
-  if (slot === null) {
-    warn(`Feature '${feature}' is not running (no slot allocated)`);
-    info("Start it with: sandbox up " + feature);
-    console.log();
-    return;
+  let services: FeatureServices;
+  try {
+    services = await featureServices(feature);
+  } catch (e) {
+    // Not an error for this verb: asking what a stopped feature exposes is a
+    // fair question, and the answer is "start it". Every other code propagates.
+    if (e instanceof SandboxError && e.code === "NOT_RUNNING") {
+      warn(e.message);
+      info("Start it with: sandbox up " + feature);
+      console.log();
+      return;
+    }
+    throw e;
   }
-
-  // Get the feature's local services from Docker container labels
-  const allSlots = await getAllSlots();
-  const featureInfo = allSlots[feature] as any;
-  const localServices =
-    featureInfo && typeof featureInfo === "object" && !Array.isArray(featureInfo)
-      ? featureInfo.services ?? []
-      : [];
 
   // Table header
   console.log(
@@ -40,37 +50,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   );
   console.log(`  ${"─".repeat(82)}`);
 
-  for (const svcName of Object.keys(servicesConfig).sort()) {
-    const svcDef = servicesConfig[svcName] ?? {};
-    if (!(typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef))) {
-      continue;
-    }
-
-    const svcType = svcDef["type"] ?? "unknown";
-
-    let source: string;
-    let endpoint: string;
-    if (localServices.includes(svcName)) {
-      const portOffset = svcDef["port_offset"] ?? 0;
-      const port = getServicePort(slot, portOffset);
-      source = `${Colors.GREEN}local${Colors.RESET}  `;
-      endpoint = `localhost:${port}`;
-    } else {
-      const k8sPort = svcDef["k8s_forward_port"];
-      if (k8sPort) {
-        source = `${Colors.CYAN}k8s${Colors.RESET}    `;
-        endpoint = `localhost:${k8sPort}`;
-      } else {
-        source = `${Colors.DIM}N/A${Colors.RESET}    `;
-        endpoint = "(not configured)";
-      }
-    }
-
+  for (const { service, source, endpoint, type } of services.endpoints) {
     console.log(
-      `  ${svcName.padEnd(25)}  ` +
-        `${source}  ` +
-        `${endpoint.padEnd(30)}  ` +
-        `${Colors.DIM}${svcType}${Colors.RESET}`,
+      `  ${service.padEnd(25)}  ` +
+        `${SOURCE_CELL[source]}  ` +
+        `${(endpoint ?? "(not configured)").padEnd(30)}  ` +
+        `${Colors.DIM}${type}${Colors.RESET}`,
     );
   }
 
