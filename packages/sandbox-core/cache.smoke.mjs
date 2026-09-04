@@ -14,6 +14,22 @@ process.env.SANDBOX_CACHE_FILE = cacheFile;
 const { cacheGet, cacheSet, withCache, runBatchOnce } = await import("sandbox-core/cache");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Wait for `predicate` rather than for a fixed delay.
+ *
+ * Both places this replaces slept 50-60ms for a background job to land, which
+ * is ample on an idle machine and not ample under a full `turbo run test`.
+ * Polling makes the wait as long as it needs to be and no longer.
+ */
+async function waitFor(predicate, what, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await sleep(5);
+  }
+  throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`);
+}
+
 // 1. cold miss → fetcher runs, value stored + returned
 let calls = 0;
 let v = await withCache("status:A", 1000, async () => { calls++; return "up"; });
@@ -38,7 +54,7 @@ fs.writeFileSync(cacheFile, JSON.stringify(raw));
 let bgCalls = 0;
 v = await withCache("status:B", 1000, async () => { bgCalls++; return "new"; });
 assert.equal(v, "old"); // served stale immediately
-await sleep(50);
+await waitFor(async () => (await cacheGet("status:B")).v === "new", "the background refresh");
 assert.equal(bgCalls, 1);
 assert.equal((await cacheGet("status:B")).v, "new"); // background updated the store
 
@@ -66,7 +82,8 @@ assert.ok(merged["status:D"] && merged["status:E"]);
 let batch = 0;
 runBatchOnce(["k1", "k2"], async () => { batch++; await sleep(30); });
 runBatchOnce(["k1"], async () => { batch++; await sleep(30); }); // k1 in-flight → skipped
-await sleep(60);
+await waitFor(() => batch > 0, "the batch job to start");
+await sleep(60); // and then long enough that a second, wrongly-admitted job would have run too
 assert.equal(batch, 1);
 
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -81,6 +81,11 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+// Each case drives the real bash wrapper through spawnSync, which forks bash,
+// an npm stub and an exec'd stand-in binary. ~1.6s idle, but >5s under a full
+// `turbo run test` -- so vitest's 5s default fails these on load, not on merit.
+const SPAWNS_BASH = 30_000;
+
 describe("sandbox wrapper: npx bootstrap", () => {
   it("installs globally and execs the installed binary when run from npx's cache", () => {
     const prefix = path.join(tmp, "prefix");
@@ -104,7 +109,7 @@ describe("sandbox wrapper: npx bootstrap", () => {
     // `npx pkg@1.2.3 setup` would onboard the machine onto a different release.
     expect(out).toContain("STUB-INSTALL install -g @jbbz-sandbox/sandbox-cli@9.9.9");
     expect(out).toContain("GLOBAL-RAN setup --check");
-  });
+  }, SPAWNS_BASH);
 
   it("does not bootstrap from a normal install path", () => {
     const stubs = path.join(tmp, "stubs");
