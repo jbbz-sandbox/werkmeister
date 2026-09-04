@@ -28,6 +28,7 @@ import {
   matchDomainsForRefs,
   reconcileGraduating,
 } from "sandbox-core/graduate";
+import { findWorkspaceRoot } from "sandbox-core/gate";
 import { latestHandoff, openDecisions, type Note } from "sandbox-core/notes";
 import { skillNameFor } from "sandbox-core/skill_gen";
 import { loadStandardsModules, standardsMatchingDiff } from "sandbox-core/standards";
@@ -55,31 +56,6 @@ export async function input(promptStr: string): Promise<string> {
 
 function stdinIsatty(): boolean {
   return Boolean(process.stdin.isTTY);
-}
-
-/**
- * Walk up from *start* to the nearest directory containing `.sandbox/`.
- *
- * Sessions launch from the workspace root or inside one of its repo
- * worktrees; either way the workspace is the closest ancestor with a
- * `.sandbox` directory.
- */
-export function findWorkspaceRoot(start: string): string | null {
-  let dir = path.resolve(start);
-  for (;;) {
-    const candidate = path.join(dir, ".sandbox");
-    try {
-      if (fs.statSync(candidate).isDirectory()) {
-        return dir;
-      }
-    } catch {
-      // not present here
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
 }
 
 function renderNote(header: string, note: Note, workspace: string): string {
