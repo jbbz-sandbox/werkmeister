@@ -8,9 +8,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { sandboxRoot } from "./config.js";
+import { loadServices, sandboxRoot } from "./config.js";
 import { containerStats } from "./docker.js";
-import { warn } from "./reporter.js";
+import { info, warn } from "./reporter.js";
 
 /** Sleep, cut short by *signal* — the whole point of an abortable collection. */
 function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
@@ -318,4 +318,158 @@ export async function runCollection(
     saved: reportPath !== null,
     reportPath,
   };
+}
+
+/**
+ * Parse a memory string from services.yaml (e.g., '2G', '512M', '2560M') to MiB.
+ *
+ * Suffixes are case-sensitive, which is what services.yaml writes; anything
+ * unreadable is 0 rather than NaN, so one bad value cannot poison a whole table.
+ */
+export function parseConfigMem(memStr: string): number {
+  if (!memStr) return 0.0;
+  memStr = memStr.trim();
+  let v: number;
+  if (memStr.endsWith("G")) v = Number(memStr.slice(0, -1)) * 1024;
+  else if (memStr.endsWith("M")) v = Number(memStr.slice(0, -1));
+  else if (memStr.endsWith("K")) v = Number(memStr.slice(0, -1)) / 1024;
+  else v = Number(memStr);
+  return Number.isFinite(v) ? v : 0.0;
+}
+
+/**
+ * Try to match a Docker container name to a service in config.
+ *
+ * Container names may be prefixed with feature/project names, e.g.:
+ * - 'sandbox-redis' → 'redis'
+ * - 'feat-myfeature-frontend-1' → 'frontend'
+ * - 'sandbox-k8s-forwards' → 'k8s-forwards'
+ */
+export function matchService(containerName: string, configured: Record<string, any>): string | null {
+  // Direct match
+  if (containerName in configured) {
+    return containerName;
+  }
+
+  // Strip common prefixes
+  let stripped = containerName;
+  for (const prefix of ["sandbox-", "feat-"]) {
+    if (stripped.startsWith(prefix)) {
+      stripped = stripped.slice(prefix.length);
+    }
+  }
+
+  // Try stripping feature name (feat-<feature>-<service>-<N>)
+  // and trailing container number
+  const lastDash = stripped.lastIndexOf("-");
+  const parts = lastDash === -1 ? [stripped] : [stripped.slice(0, lastDash), stripped.slice(lastDash + 1)];
+  if (/^\d+$/.test(parts[parts.length - 1])) {
+    stripped = parts[0];
+  }
+
+  // Check against configured services
+  if (stripped in configured) {
+    return stripped;
+  }
+
+  // Try matching by suffix
+  for (const svcName of Object.keys(configured)) {
+    if (stripped.endsWith(svcName)) {
+      return svcName;
+    }
+    if (containerName.endsWith(svcName)) {
+      return svcName;
+    }
+  }
+
+  return null;
+}
+
+/** How one container's observed peak compares to the limit it was given. */
+export type UsageStatus = "risk" | "moderate" | "over_provisioned" | "ok" | "no_limit";
+
+export interface ServiceUsage {
+  container: string;
+  /** The services.yaml key this container matched, or null when none did. */
+  service: string | null;
+  maxMemMib: number;
+  /** The configured `memory_limit`, verbatim; null when the container has none. */
+  limit: string | null;
+  limitMib: number;
+  /** Peak as a percentage of the limit; 0 when there is no limit to compare to. */
+  usagePct: number;
+  status: UsageStatus;
+}
+
+export interface OptimizeReport {
+  usage: ServiceUsage[];
+  recommendations: Recommendation[];
+}
+
+/** Where the observed peak sits against the configured limit. */
+function classifyUsage(limitMib: number, usagePct: number): UsageStatus {
+  if (limitMib <= 0) return "no_limit";
+  if (usagePct > 85) return "risk";
+  if (usagePct > 60) return "moderate";
+  // A small limit being underused is not worth reporting — there is nothing
+  // meaningful to reclaim below 256M.
+  if (usagePct < 20 && limitMib > 256) return "over_provisioned";
+  return "ok";
+}
+
+/**
+ * Sample running containers and compare each one's peak against its configured
+ * memory limit.
+ *
+ * *collectMinutes* of 0 takes a quick 15-second snapshot instead, which is what
+ * `sandbox optimize` does with no `--collect`.
+ *
+ * Only `memory_limit` is read from services.yaml: `memory_reservation` sits
+ * beside it in the config but no comparison here uses it.
+ */
+export async function optimizeReport(
+  collectMinutes = 0,
+  intervalSeconds = 10,
+): Promise<OptimizeReport> {
+  const limits: Record<string, { limit: string; limitMib: number }> = {};
+  for (const [svcName, svcCfg] of Object.entries(loadServices())) {
+    const memLimit = (svcCfg as Record<string, any>)?.["memory_limit"];
+    if (memLimit) limits[svcName] = { limit: memLimit, limitMib: parseConfigMem(memLimit) };
+  }
+
+  let stats: Record<string, ContainerStats>;
+  if (collectMinutes > 0) {
+    info(`Collecting stats for ${collectMinutes} minute(s)...`);
+    stats = await collectStats(collectMinutes * 60, intervalSeconds);
+  } else {
+    info("Taking a snapshot of current resource usage...");
+    // A few quick samples for better accuracy than a single reading.
+    stats = await collectStats(15, 5);
+  }
+
+  if (!Object.keys(stats).length) {
+    warn("No running containers found. Start your sandbox first.");
+    return { usage: [], recommendations: [] };
+  }
+
+  const usage = Object.keys(stats)
+    .sort()
+    .map((container): ServiceUsage => {
+      const service = matchService(container, limits);
+      const configured = service ? limits[service] : undefined;
+      const limitMib = configured?.limitMib ?? 0;
+      const maxMemMib = stats[container].maxMem;
+      const usagePct = limitMib > 0 ? (maxMemMib / limitMib) * 100 : 0;
+      return {
+        container,
+        service,
+        maxMemMib,
+        limit: configured?.limit ?? null,
+        limitMib,
+        usagePct,
+        status: classifyUsage(limitMib, usagePct),
+      };
+    });
+
+  return { usage, recommendations: recommendLimits(stats) };
 }
