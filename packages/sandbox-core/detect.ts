@@ -188,3 +188,67 @@ export function detectChangedServices(
 
   return [...detected].sort();
 }
+
+/** One row of `DetectReport.detected`: the service joined to its registry entry. */
+export interface DetectedService {
+  service: string;
+  repo: string;
+  type: string;
+}
+
+export interface DetectReport {
+  workspace: string;
+  workspaceExists: boolean;
+  /** Registry size, so `serviceCount === 0` is the nothing-configured case. */
+  serviceCount: number;
+  detected: DetectedService[];
+  /** Registry entries with no detected change, sorted. */
+  nonLocal: string[];
+}
+
+/**
+ * Everything `sandbox detect` needs to render, as data.
+ *
+ * The two "nothing to do" paths -- no workspace directory, empty registry --
+ * come back as `workspaceExists`/`serviceCount` rather than as a thrown
+ * `SandboxError`: neither exits non-zero today, and the command prints a
+ * different hint for each.
+ */
+export function detectReport(
+  feature: string,
+  workspaceOverride?: string | null,
+): DetectReport {
+  const workspace = resolveWorkspace(feature, workspaceOverride);
+
+  if (!(fs.existsSync(workspace) && fs.statSync(workspace).isDirectory())) {
+    return { workspace, workspaceExists: false, serviceCount: 0, detected: [], nonLocal: [] };
+  }
+
+  const servicesConfig = loadServices();
+  const names = Object.keys(servicesConfig);
+  if (!names.length) {
+    return { workspace, workspaceExists: true, serviceCount: 0, detected: [], nonLocal: [] };
+  }
+
+  info(`Workspace: ${workspace}`);
+  info(`Service registry: ${names.length} service(s) defined\n`);
+
+  const detected = detectChangedServices(feature, servicesConfig, workspaceOverride);
+  const detectedSet = new Set(detected);
+
+  return {
+    workspace,
+    workspaceExists: true,
+    serviceCount: names.length,
+    detected: detected.map((service) => {
+      const svcDef = servicesConfig[service] ?? {};
+      const isDict = typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef);
+      return {
+        service,
+        repo: isDict ? (svcDef["repo"] ?? "?") : "?",
+        type: isDict ? (svcDef["type"] ?? "?") : "?",
+      };
+    }),
+    nonLocal: names.filter((name) => !detectedSet.has(name)).sort(),
+  };
+}
