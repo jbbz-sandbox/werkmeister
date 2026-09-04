@@ -49,7 +49,14 @@ import {
   requiredSecretKeys,
   validateRequiredSecrets,
 } from "./secrets.js";
-import { allocateSlot, getPortRange, getServicePort, getSlot, releaseSlot } from "./slots.js";
+import {
+  allocateSlot,
+  getAllSlots,
+  getPortRange,
+  getServicePort,
+  getSlot,
+  releaseSlot,
+} from "./slots.js";
 
 /** Everything `sandbox up` computed, separated from how the CLI renders it. */
 export interface UpResult {
@@ -392,6 +399,79 @@ export async function down(
   releaseSlot(feature);
 
   return { feature, slot };
+}
+
+/** A service dropped back to k8s, and what the feature still runs locally. */
+export interface RemoveResult {
+  feature: string;
+  removed: string;
+  /** The feature's surviving local services, sorted. */
+  remaining: string[];
+  /** True when nothing local was left, so the containers were stopped rather than restarted. */
+  containersStopped: boolean;
+  proxyReloaded: boolean;
+}
+
+/**
+ * Drop *service* from *feature*'s local services so it falls back to k8s:
+ * regenerate the three generated workspace files, restart (or stop) the
+ * containers, and re-point the proxy.
+ *
+ * Throws `NOT_RUNNING` when the feature holds no slot, and `NOT_LOCAL` when
+ * *service* is not one it runs locally. The second replaces an early return, so
+ * the CLI catches it to print the same warning and local-services line it
+ * always did — which is why the message carries no list: that line is layout.
+ */
+export async function removeService(feature: string, service: string): Promise<RemoveResult> {
+  const config = { services: loadServices(), ports: loadPorts() };
+
+  const slot = await requireSlot(feature);
+  const remaining = [...((await getAllSlots())[feature]?.services ?? [])];
+
+  if (!remaining.includes(service)) {
+    throw new SandboxError(
+      `Service '${service}' is not running locally for '${feature}'`,
+      "NOT_LOCAL",
+    );
+  }
+
+  remaining.splice(remaining.indexOf(service), 1);
+  info(`Removed '${service}' from local services -- will fall back to k8s`);
+
+  info("Regenerating configuration files...");
+  generateFeatureCompose(feature, slot, remaining, config);
+  generateFeatureEnv(feature, slot, remaining, config);
+  generateSupergraphConfig(feature, slot, remaining, config);
+
+  // Restarting is what removes the departing service's container; with nothing
+  // left to run there is no container to keep, so the whole project goes down.
+  let containersStopped = false;
+  if (remaining.length) {
+    info("Restarting containers...");
+    composeUp(feature);
+  } else {
+    info("No local services remaining -- containers will be stopped");
+    containersStopped = true;
+    if (!composeDown(feature)) {
+      warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
+    }
+  }
+
+  info("Updating reverse proxy...");
+  await generateCaddyfile(null, config);
+  let proxyReloaded = false;
+  if (isCaddyRunning()) {
+    await reloadCaddy();
+    proxyReloaded = true;
+  }
+
+  return {
+    feature,
+    removed: service,
+    remaining: [...remaining].sort(),
+    containersStopped,
+    proxyReloaded,
+  };
 }
 
 /**
