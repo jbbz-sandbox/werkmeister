@@ -474,21 +474,77 @@ export async function removeService(feature: string, service: string): Promise<R
   };
 }
 
+/** What the regenerated Caddyfile now routes, and whether Caddy took it. */
+export interface ProxyReloadResult {
+  /** The features written into the Caddyfile, sorted by name. */
+  features: { feature: string; slot: number; services: string[] }[];
+  /** Caddy was down and `start` was asked for, so it was started rather than reloaded. */
+  started: boolean;
+  /** False when Caddy rejected the config, or failed to start. */
+  ok: boolean;
+}
+
 /**
- * Regenerate the Caddyfile from the surviving features and reload Caddy.
+ * Regenerate the Caddyfile from the active features and hand it to Caddy.
  *
  * Separate from `down` so a multi-feature teardown pays for one reload rather
  * than one per feature. `up` reloads inline instead because it may also have to
  * *start* Caddy, which is part of bringing a feature up.
+ *
+ * `start` selects the whole `sandbox proxy-reload` spelling, not just the
+ * start-if-down fallback: that command has always used different progress
+ * wording and listed the features it wrote, and teardown's three callers
+ * (`commands/down.ts` twice, `sandbox.ts` twice) print neither. Defaulting it
+ * to false is what keeps their output where it was — and stops a teardown
+ * starting a proxy nobody asked for.
  */
-export async function reloadProxy(): Promise<void> {
-  info("Updating reverse proxy configuration...");
+export async function reloadProxy({
+  start = false,
+}: { start?: boolean } = {}): Promise<ProxyReloadResult> {
+  info(start ? "Regenerating Caddyfile..." : "Updating reverse proxy configuration...");
   await generateCaddyfile();
+
+  const allFeatures = await getAllSlots();
+  const features = Object.keys(allFeatures)
+    .sort()
+    .map((feature) => ({
+      feature,
+      slot: allFeatures[feature]!.slot,
+      services: allFeatures[feature]!.services,
+    }));
+
+  // Emitted here rather than returned-and-rendered because the block sits
+  // between the generate and the reload, so it cannot move to the command's
+  // summary block — the same reason `up`'s "Local services" line uses `raw`.
+  if (start) {
+    if (!features.length) {
+      info("No active features in Caddyfile");
+    } else {
+      raw(`\n  ${Colors.CYAN}Features in Caddyfile:${Colors.RESET}\n`);
+      for (const { feature, slot, services } of features) {
+        const svcStr = services.length ? services.join(", ") : "(no local services)";
+        raw(`    ${Colors.GREEN}*${Colors.RESET} ${feature} (slot ${slot}): ${svcStr}\n`);
+      }
+      raw("\n");
+    }
+  }
+
+  let started = false;
+  let ok = true;
   if (isCaddyRunning()) {
-    await reloadCaddy();
+    if (start) {
+      info("Reloading Caddy...");
+    }
+    ok = await reloadCaddy();
+  } else if (start) {
+    warn("Caddy is not running -- starting it...");
+    ok = startCaddy();
+    started = true;
   } else {
     info("Caddy is not running -- skipping reload");
   }
+
+  return { features, started, ok };
 }
 
 /**
