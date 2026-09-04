@@ -18,7 +18,7 @@ vi.mock("sandbox-core/graduate", async (importOriginal) => {
   return { ...actual, reconcileGraduating: () => [] };
 });
 
-import { buildContext } from "../notes.js";
+import { buildContext } from "sandbox-core/notes";
 
 let root: string;
 
