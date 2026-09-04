@@ -10,9 +10,20 @@ import * as path from "node:path";
 
 import { sandboxRoot } from "./config.js";
 import { containerStats } from "./docker.js";
+import { warn } from "./reporter.js";
 
-function sleep(seconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+/** Sleep, cut short by *signal* — the whole point of an abortable collection. */
+function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, seconds * 1000);
+    signal?.addEventListener("abort", done, { once: true });
+  });
 }
 
 /** Aggregated resource stats for a single container. */
@@ -53,6 +64,7 @@ export class ContainerStats {
  * durationSeconds — how long to collect in seconds.
  * intervalSeconds — time between samples.
  * filterPrefix    — only include containers whose name starts with this prefix.
+ * signal          — abort to stop sampling and return what has been collected.
  *
  * Returns a mapping of container name to aggregated stats.
  */
@@ -60,11 +72,15 @@ export async function collectStats(
   durationSeconds = 60,
   intervalSeconds = 10,
   filterPrefix = "",
+  signal?: AbortSignal,
 ): Promise<Record<string, ContainerStats>> {
   const aggregated: Record<string, ContainerStats> = {};
   const samplesRemaining = Math.max(1, Math.floor(durationSeconds / intervalSeconds));
 
   for (let i = 0; i < samplesRemaining; i++) {
+    // Aborting keeps the partial aggregate: a half-finished collection is still
+    // the answer to "what was it using before I stopped it".
+    if (signal?.aborted) break;
     const snapshot = await containerStats();
     for (const entry of snapshot) {
       const name = entry.name;
@@ -76,7 +92,7 @@ export async function collectStats(
       stats.memSamples.push(entry.memMib);
     }
 
-    if (i < samplesRemaining - 1) await sleep(intervalSeconds);
+    if (i < samplesRemaining - 1) await sleep(intervalSeconds, signal);
   }
 
   return aggregated;
@@ -239,4 +255,67 @@ export function saveReport(
   fs.writeFileSync(summaryPath, out);
 
   return summaryPath;
+}
+
+/**
+ * What one `--collect` run produced.
+ *
+ * `stats` and `recommendations` are the data the caller renders; the other four
+ * describe the run itself, which is the part an aborted collection has to be
+ * honest about — `durationMinutes` is what elapsed, not what was asked for.
+ */
+export interface CollectionRun {
+  stats: Record<string, ContainerStats>;
+  recommendations: Recommendation[];
+  samples: number;
+  durationMinutes: number;
+  saved: boolean;
+  reportPath: string | null;
+}
+
+/**
+ * Collect over a period, recommend limits from it, and optionally write a report.
+ *
+ * *signal* aborts the sampling loop and returns the partial aggregate. The CLI
+ * has no signal to give yet — its Ctrl-C still ends the process outright (see
+ * `apps/cli/src/lib/interrupt.ts`) — so it passes none and behaves exactly as
+ * before; a remote caller can already abort.
+ *
+ * The report path comes back rather than being announced here: the CLI prints
+ * "Report saved to: …" *after* its tables, and a `success()` from in here would
+ * jump the queue.
+ */
+export async function runCollection(
+  durationMinutes: number,
+  intervalSeconds: number,
+  save: boolean,
+  signal?: AbortSignal,
+): Promise<CollectionRun> {
+  const started = Date.now();
+  const stats = await collectStats(durationMinutes * 60, intervalSeconds, "", signal);
+  const elapsedMinutes = (Date.now() - started) / 60_000;
+
+  if (!Object.keys(stats).length) {
+    warn("No container data collected.");
+    return {
+      stats,
+      recommendations: [],
+      samples: 0,
+      durationMinutes: elapsedMinutes,
+      saved: false,
+      reportPath: null,
+    };
+  }
+
+  const recommendations = recommendLimits(stats);
+  const reportPath = save ? saveReport(stats, recommendations) : null;
+
+  return {
+    stats,
+    recommendations,
+    samples: Math.max(0, ...Object.values(stats).map((s) => s.samples)),
+    durationMinutes: elapsedMinutes,
+    saved: reportPath !== null,
+    reportPath,
+  };
 }
