@@ -45,6 +45,7 @@
     "./skill_gen": "./dist/skill_gen.js",
     "./slots": "./dist/slots.js",
     "./stats": "./dist/stats.js",
+    "./test_run": "./dist/test_run.js",
     "./standards": "./dist/standards.js",
     "./status": "./dist/status.js",
     "./telepresence": "./dist/telepresence.js",

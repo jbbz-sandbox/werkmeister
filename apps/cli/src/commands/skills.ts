@@ -11,73 +11,24 @@
  * sync:  rewrite the projection (same writer init-workspace uses) and prune
  *       orphaned sb-* skills.
  *
+ * The verbs themselves live in sandbox-core/workspace_skills; what is left here
+ * is the cwd walk-up, the red ✗ rendering, and the exit code.
+ *
  * Run from anywhere inside a workspace — the workspace root is resolved by
  * walking up to the nearest `.sandbox/` directory.
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
-
-import { loadConfigFile, loadSandboxServiceConfigs } from "sandbox-core/workspace_prompts";
-import { findWorkspaceRoot } from "./notes.js";
-import { Colors, error, info, success } from "../lib/config.js";
-import { validateModuleReferences } from "sandbox-core/skill_gen";
+import { findWorkspaceRoot } from "sandbox-core/gate";
 import {
-  buildStandardsManifest,
-  loadStandardsModules,
-  repoDirs,
-  resolveActiveStandards,
-  writeStandardsManifest,
-} from "sandbox-core/standards";
-import { checkWorkspaceSkills, writeWorkspaceSkills } from "sandbox-core/workspace_skills";
+  checkSkills,
+  checkStandardsManifest,
+  syncSkills,
+} from "sandbox-core/workspace_skills";
 
-/** Recursively canonicalize for order-independent value comparison. */
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(canonical);
-  }
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      out[key] = canonical((value as Record<string, unknown>)[key]);
-    }
-    return out;
-  }
-  return value;
-}
+import { Colors, error, success } from "../lib/config.js";
 
-/**
- * Recompute the gate manifest for an already-initialized workspace.
- *
- * Reconstructs init-workspace's resolution inputs from what the workspace
- * already persisted (repo worktrees on disk + `.sandbox/workspace.yml`) —
- * `sandbox skills sync`/`check` run standalone, without init's original
- * CLI args. Returns null when no standards modules exist (nothing to check).
- */
-function resolveWorkspaceManifest(workspace: string): Record<string, any> | null {
-  const modules = loadStandardsModules();
-  if (!Object.keys(modules).length) {
-    return null;
-  }
-  const repoNames = repoDirs(workspace).map((p) => path.basename(p));
-  const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
-  const workspaceConfig = loadConfigFile(workspace, null);
-  let localServices = workspaceConfig["services"] || [];
-  if (typeof localServices === "string") {
-    localServices = localServices
-      .split(",")
-      .map((s: string) => s.trim())
-      .filter((s: string) => s);
-  }
-  const [active] = resolveActiveStandards(
-    repoNames,
-    servicesConfig,
-    reposConfig,
-    workspaceConfig,
-    modules,
-    localServices,
-  );
-  return buildStandardsManifest(active, modules);
+function printDrift(entry: string): void {
+  console.log(`${Colors.RED}✗ ${entry}${Colors.RESET}`);
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
@@ -88,48 +39,23 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (args.action === "sync") {
-    const written = writeWorkspaceSkills(workspace);
-    for (const p of written) {
-      info(`wrote ${p}`);
-    }
-    success(
-      `Projected ${written.length} sb-* skill(s) into ${path.join(workspace, ".claude", "skills")}`,
-    );
-
-    const manifest = resolveWorkspaceManifest(workspace);
-    if (manifest !== null) {
-      const manifestPath = writeStandardsManifest(workspace, manifest);
-      info(`wrote ${manifestPath}`);
-    }
+    syncSkills(workspace);
     return;
   }
 
-  const authoring = validateModuleReferences();
+  const { authoring, drift } = checkSkills(workspace);
   for (const entry of authoring) {
-    console.log(`${Colors.RED}✗ ${entry}${Colors.RESET}`);
+    printDrift(entry);
   }
-
-  const drift = checkWorkspaceSkills(workspace);
   for (const entry of drift) {
-    console.log(`${Colors.RED}✗ ${entry}${Colors.RESET}`);
+    printDrift(entry);
   }
 
-  const manifest = resolveWorkspaceManifest(workspace);
-  if (manifest !== null) {
-    const manifestPath = path.join(workspace, ".sandbox", "standards.json");
-    let onDisk: unknown = null;
-    if (fs.existsSync(manifestPath) && fs.statSync(manifestPath).isFile()) {
-      try {
-        onDisk = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-      } catch {
-        onDisk = null;
-      }
-    }
-    if (JSON.stringify(canonical(onDisk)) !== JSON.stringify(canonical(manifest))) {
-      const entry = "stale: .sandbox/standards.json";
-      console.log(`${Colors.RED}✗ ${entry}${Colors.RESET}`);
-      drift.push(entry);
-    }
+  // After the projected-skill report, because resolving the manifest logs.
+  const manifestDrift = checkStandardsManifest(workspace);
+  if (manifestDrift !== null) {
+    printDrift(manifestDrift);
+    drift.push(manifestDrift);
   }
 
   if (drift.length) {

@@ -28,6 +28,8 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { parse as yamlParse } from "yaml";
+
 import { Colors } from "./colors.js";
 import { error, info, raw } from "./reporter.js";
 import * as gc from "./global_config.js";
@@ -732,4 +734,33 @@ async function launchChromiumWindow(
       }
     },
   };
+}
+
+
+/**
+ * Read `<workspace>/.sandbox/workspace.yml` (or `.yaml`).
+ *
+ * Takes a resolved workspace rather than a directory to walk up from: the
+ * walk-up is cwd resolution, which stays with the caller standing in the
+ * workspace. A missing, unparseable or non-mapping file is `{}` -- a broken
+ * workspace.yml must not take down a browser launch, it just means the caller
+ * falls back to its own defaults.
+ */
+export function readWorkspaceYaml(workspace: string): Record<string, any> {
+  for (const name of ["workspace.yml", "workspace.yaml"]) {
+    const p = path.join(workspace, ".sandbox", name);
+    if (!(fs.existsSync(p) && fs.statSync(p).isFile())) {
+      continue;
+    }
+    let data: unknown;
+    try {
+      data = yamlParse(fs.readFileSync(p, "utf8"));
+    } catch {
+      return {};
+    }
+    return data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, any>)
+      : {};
+  }
+  return {};
 }

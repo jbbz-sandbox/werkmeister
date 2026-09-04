@@ -24,9 +24,10 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { serviceStandards, validateServiceArchetypes } from "./archetypes.js";
-import { loadArchetypes } from "./config.js";
-import { standardsDirPath } from "./global_config.js";
+import { loadArchetypes, loadServices } from "./config.js";
+import { standardsDirPath, standardsDirProblem } from "./global_config.js";
 import { run } from "./proc.js";
+import { validateModuleReferences } from "./skill_gen.js";
 
 /**
  * Universal standards, in load order: always active, ungated by file type,
@@ -436,6 +437,53 @@ export function validateStandardModules(standardsDir?: string | null): string[] 
   }
 
   return errors;
+}
+
+/** Result of {@link checkStandards}: facts, not a rendered report. */
+export interface StandardsCheck {
+  /** The tree that was checked (resolved even when it does not exist). */
+  dir: string;
+  /** Loadable modules found. Zero means the tree itself is unusable. */
+  moduleCount: number;
+  /** Empty means well-formed. */
+  errors: string[];
+}
+
+/**
+ * Run every structural validator over the configured standards tree.
+ *
+ * Returns errors as data — the caller decides the exit code, because a hook
+ * that must never block a launch and a CI gate that must fail loudly both call
+ * this and disagree about what a problem is worth.
+ *
+ * A missing or empty tree is itself an error rather than a clean zero-module
+ * pass: reporting "0 module(s) checked" and succeeding would go green exactly
+ * when there is nothing to check. Those two cases are also the only ones that
+ * leave `moduleCount` at zero, which is what lets a renderer tell "the tree is
+ * unusable" (one bare message) from "the modules are malformed" (a list) with
+ * no extra discriminator.
+ */
+export function checkStandards(): StandardsCheck {
+  const dir = standardsDirPath();
+
+  const problem = standardsDirProblem();
+  if (problem) return { dir, moduleCount: 0, errors: [problem] };
+
+  const modules = loadStandardsModules();
+  const moduleCount = Object.keys(modules).length;
+  if (!moduleCount) {
+    return { dir, moduleCount, errors: [`no standard modules found in ${dir}`] };
+  }
+
+  return {
+    dir,
+    moduleCount,
+    errors: [
+      ...validateStandardModules(),
+      ...validateModuleReferences(modules),
+      ...validateServiceStandards(loadServices(), modules),
+    ],
+  };
 }
 
 /**

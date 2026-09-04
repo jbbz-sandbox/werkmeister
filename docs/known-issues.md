@@ -244,7 +244,7 @@ The four genuine differences (why a naive share isn't free) are all host-level: 
 ## Claudeck's Streaming Routes Still Spawn the CLI
 
 **Severity:** Low (works; costs a process launch per action and diverges from the other consumers)
-**Status:** Open — deferred, blocked on two decisions rather than on effort
+**Status:** Open — unblocked; the claudeck routes have not been moved yet
 **Affects:** `apps/claudeck/plugins/sandbox-workspace/server.js` — `POST /action`, `POST /intercept`
 
 `sandbox-core` never spawns the `sandbox` CLI (note 087), but a **consumer** may, and claudeck
@@ -262,31 +262,42 @@ The two that remain both **stream** the child's output to a chunked response, en
 | Route | Spawns | Core equivalent |
 |---|---|---|
 | `POST /action` | `sandbox up\|stop\|restart\|down` | `runWorkspaceAction(name, action)` |
-| `POST /intercept` | `sandbox intercept -s <svc> [--leave]` | none yet |
+| `POST /intercept` | `sandbox intercept -s <svc> [--leave]` | `startIntercept(...)` / `leaveIntercept(...)` |
 
-**What blocks `/action`** — two things, only one of which is code:
+**`/action` is no longer blocked either.** Both of its stated blockers are gone:
 
-1. `runWorkspaceAction` collects a transcript rather than streaming one. The seam exists —
-   `collectingReporter(onChunk)` in `packages/sandbox-core/reporter.ts`, which `POST /create` in
-   this same file already uses through `createWorkspace`'s `onData` — so this is roughly three
-   lines.
-2. **Cancellation, which is a decision, not a task.** The child process gives claudeck a
-   10-minute `SIGKILL` timer and abort-on-disconnect (`res.on("close")` kills it). An in-process
-   run has neither: a wedged `docker compose up` would hold a server request with no way to end
-   it. Either the lifecycle functions grow an `AbortSignal`, or that behaviour is knowingly
-   dropped.
+1. `runWorkspaceAction` still collects a transcript rather than streaming one, but the seam was
+   always there — `collectingReporter(onChunk)` in `packages/sandbox-core/reporter.ts`, which
+   `POST /create` in this same file already uses through `createWorkspace`'s `onData`. Roughly
+   three lines.
+2. **Cancellation was the decision, and it was made.** `up`, `down`, `connect`, `logs`, `test`
+   and the intercept pair now take an optional `AbortSignal`, forwarded to an async spawn
+   (`runAsync` in `packages/sandbox-core/proc.ts`). `res.on("close")` can abort one, which is
+   what the killed child used to provide.
 
-**What blocks `/intercept`:** there is no core entry point at all. `packages/sandbox-core/telepresence.ts`
-has the pieces (`buildInterceptArgs`, `ensureConnected`, `leaveFeatureIntercepts`) but
-`apps/cli/src/commands/intercept.ts` still owns the command body — 180 lines whose `fail()` ends
-in `process.exit(1)`. In-process that would **take the claudeck server down**, so the command
-needs the same treatment `workspace`/`init-workspace` got (throw a reported error, leave an argv
-adapter) before the route can move.
+**What is left is a claudeck change, deliberately out of the migration's scope:** rewiring the
+two routes to call core in-process instead of spawning. Nobody has done it.
+
+**`/intercept` is no longer blocked.** `startIntercept` and `leaveIntercept` in
+`packages/sandbox-core/telepresence.ts` are the command body, callable in-process: every failure is
+a coded `SandboxError` (`NOT_LOCAL`, `NOT_INTERCEPTABLE`, `TELEPRESENCE_VERSION`, `NOT_RUNNING`,
+`PORT_CLOSED`, `INTERCEPT_FAILED`) rather than the `process.exit(1)` that would have taken the
+express server down, and both spawn through `runAsyncRunner` (`runAsync`) instead of `spawnSync`,
+so a slow `telepresence connect` holds one request rather than the whole event loop. Both take
+`localServices: string[]` — the caller reads the workspace `.env`, since a `.env` walk-up is a cwd
+concern core will not have.
+
+**Actually moving the route is a claudeck change and out of the core migration's scope.** What it
+still needs on claudeck's side: the reporter's `info` progress lines (`Connecting to …`,
+`Intercepting …`) come back through `collectingReporter(onChunk)`, exactly as `POST /create`
+already does; the "Intercept active" block is CLI rendering that the route would replace with
+`InterceptResult` fields; and `signal` is available for abort-on-disconnect, unlike `/action`.
 
 **Also worth knowing when this is picked up:** the telepresence reads behind `getIntercepts()`
-are `spawnSync`, so they block the caller's event loop — the whole express server, not just the
-waiting request. They run under a 15s cap (`STATUS_READ` in `packages/sandbox-core/status.ts`)
-for exactly that reason. Anything else moved in-process should be checked the same way.
+are still `spawnSync`, so they block the caller's event loop — the whole express server, not just
+the waiting request. They run under a 15s cap (`STATUS_READ` in `packages/sandbox-core/status.ts`)
+for exactly that reason; `listIntercepts`, `connectedNamespace` and `leaveFeatureIntercepts` were
+deliberately left synchronous. Anything else moved in-process should be checked the same way.
 
 ---
 
@@ -454,3 +465,64 @@ to `resolveWorkspace()`, whose cwd branch returns `<workspaces_root>/<first path
 **Fix direction:** have the smoke `chdir` somewhere neutral before the negative case, or make
 `workspaceForFeature`'s fallback confirm the resolved directory actually belongs to *feature*
 before trusting it.
+
+---
+
+## `npm test` Regenerates the Caddyfile and Reloads a Running Caddy
+
+**Severity:** Low (idempotent, but a unit-test run should not touch live infrastructure)
+**Status:** Open — contained, not fixed
+**Affects:** `packages/sandbox-core/lifecycle-proxy.test.mjs`, `packages/sandbox-core/lifecycle-clean.test.mjs`
+
+Both call the real `reloadProxy()` / `planClean()` rather than a seam. On a configured
+machine, running the core suite regenerates `infra/proxy/Caddyfile` from whatever features
+happen to be up and — if Caddy is running — reloads it. Idempotent, and the file is
+gitignored, so nothing is lost; but a `npm test` that briefly bounces your proxy is a
+surprise, and it cuts against this package's own line that real API calls are integration
+rather than unit territory (`docker.test.mjs` says so explicitly).
+
+**Contained** by skipping both on a machine with no `~/.sandbox/services.yaml`
+(`machineConfigured()` in `fixtures.mjs`), which is how CI stays green. Fixturing them
+instead would be *worse*: they would generate a Caddyfile from fake services into the
+checkout and reload a developer's live Caddy with it.
+
+**A related trap, already fixed:** both files pin `process.env.SANDBOX_ROOT` to their own
+checkout. Without that, a shell exporting `SANDBOX_ROOT` (which `~/.sandbox/env.sh` does)
+made the tests write **the shared checkout's** `infra/proxy/Caddyfile` when run from a git
+worktree — an isolated agent silently mutating the main working tree.
+
+**Fix direction:** give `reloadProxy` an injectable caddy runner the way `telepresence.ts`
+takes a `Runner`, and assert on the transcript instead of the side effect. Then they can run
+everywhere.
+
+---
+
+## Core Tests Must Be Hermetic: CI Has No `~/.sandbox`
+
+**Severity:** Moderate (nine tests merged green locally and red on CI)
+**Status:** Resolved — `fixtures.mjs` provides the seam
+**Affects:** `packages/sandbox-core/*.test.mjs`
+
+`loadServices()` / `loadPorts()` **throw** `Required config file not found` on a machine with
+no `~/.sandbox/{services,ports}.yaml` rather than returning empty. A CI runner is exactly that
+machine. So any core test that reaches the registry — directly, or through `getSlot`,
+`classifyEndpoint`, `detectReport`, `removeService`, `checkStandards` — passes on a developer
+box and fails on CI.
+
+Nine did, in one PR. Every one of them was written against "run
+`npx turbo run typecheck build test`", which is green locally and proves nothing about a clean
+machine. The pre-existing core tests were all hermetic, which is why this had never bitten.
+
+**The seam:** `SANDBOX_CONFIG_FILE` relocates the whole `~/.sandbox` set (see `configPath` in
+`config.ts`). `withSandboxHome(fn)` in `packages/sandbox-core/fixtures.mjs` seeds a temp home
+with a minimal `config.yaml`, `services.yaml` and `ports.yaml`, runs `fn`, and restores.
+
+**Before merging a core test, run it against an unconfigured machine:**
+
+```sh
+cd packages/sandbox-core
+EMPTY=$(mktemp -d) SANDBOX_CONFIG_FILE="$EMPTY/.sandbox/config.yaml" node --test *.test.mjs
+```
+
+A test that genuinely needs a live stack should skip on `machineConfigured()` rather than
+borrow the developer's registry.

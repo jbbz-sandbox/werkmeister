@@ -29,6 +29,7 @@ import * as path from "node:path";
 
 import { loadPorts, loadServices, slotPortRange } from "./config.js";
 import { docker } from "./docker.js";
+import { SandboxError } from "./errors.js";
 import { sandboxLock } from "./locks.js";
 import { error, info, success, warn } from "./reporter.js";
 
@@ -317,6 +318,85 @@ export function getPortRange(slot: number): [number, number] {
 export function getServicePort(slot: number, portOffset: number): number {
   const [base] = getPortRange(slot);
   return base + portOffset;
+}
+
+// ---------------------------------------------------------------------------
+// Where a feature's services actually answer
+// ---------------------------------------------------------------------------
+
+export interface ServiceEndpoint {
+  service: string;
+  source: "local" | "k8s" | "none";
+  /** `null` when *source* is `"none"` — the CLI renders that as "(not configured)". */
+  endpoint: string | null;
+  type: string;
+}
+
+export interface FeatureServices {
+  feature: string;
+  slot: number;
+  endpoints: ServiceEndpoint[];
+}
+
+/**
+ * Decide where *service* answers for a feature holding *slot*.
+ *
+ * A container running locally wins: its host port is the slot's base plus the
+ * service's `port_offset`. Otherwise a `k8s_forward_port` means the k8s-forwards
+ * container tunnels it to the host. Neither means the registry says nothing
+ * about how to reach it.
+ */
+export function classifyEndpoint(
+  service: string,
+  svcDef: Record<string, unknown>,
+  localServices: string[],
+  slot: number,
+): ServiceEndpoint {
+  const type = (svcDef["type"] as string | undefined) ?? "unknown";
+
+  if (localServices.includes(service)) {
+    const portOffset = (svcDef["port_offset"] as number | undefined) ?? 0;
+    return { service, source: "local", endpoint: `localhost:${getServicePort(slot, portOffset)}`, type };
+  }
+
+  const k8sPort = svcDef["k8s_forward_port"];
+  if (k8sPort) {
+    return { service, source: "k8s", endpoint: `localhost:${k8sPort}`, type };
+  }
+
+  return { service, source: "none", endpoint: null, type };
+}
+
+/**
+ * Every registered service and where it answers for *feature*, sorted by name.
+ *
+ * Throws `SandboxError(…, "NOT_RUNNING")` when the feature holds no slot —
+ * there are no endpoints to report, only advice the caller renders.
+ */
+export async function featureServices(feature: string): Promise<FeatureServices> {
+  const slot = await getSlot(feature);
+  if (slot === null) {
+    throw new SandboxError(
+      `Feature '${feature}' is not running (no slot allocated)`,
+      "NOT_RUNNING",
+    );
+  }
+
+  const localServices = (await getAllSlots())[feature]?.services ?? [];
+  const servicesConfig = loadServices();
+
+  const endpoints: ServiceEndpoint[] = [];
+  for (const service of Object.keys(servicesConfig).sort()) {
+    const svcDef = servicesConfig[service] ?? {};
+    // A scalar or list under a service key is malformed registry data; the
+    // command has always skipped it rather than rendering a half row.
+    if (typeof svcDef !== "object" || svcDef === null || Array.isArray(svcDef)) {
+      continue;
+    }
+    endpoints.push(classifyEndpoint(service, svcDef, localServices, slot));
+  }
+
+  return { feature, slot, endpoints };
 }
 
 // ---------------------------------------------------------------------------

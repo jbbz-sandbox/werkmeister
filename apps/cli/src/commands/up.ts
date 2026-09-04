@@ -12,6 +12,7 @@
 
 import { Colors, error, resolveWorkspace } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
+import { interruptSignal } from "../lib/interrupt.js";
 import { up as upFeature } from "sandbox-core/lifecycle";
 import type { UpResult } from "sandbox-core/lifecycle";
 
@@ -78,5 +79,5 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // Every failure propagates: none of up's four codes carries a hint that has
   // to print between the error line and the exit, so main.ts's handler renders
   // them all as the `[err]` line these sites always produced.
-  printSummary(await upFeature(feature, workspace));
+  printSummary(await upFeature(feature, workspace, { signal: interruptSignal() }));
 }

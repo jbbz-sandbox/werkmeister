@@ -10,7 +10,7 @@
  * carrying `status`, `stdout`, `stderr`, and the `cmd` that ran.
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 export interface RunOptions {
   /** Throw a ProcError when the command exits non-zero. */
@@ -112,4 +112,96 @@ export function run(cmd: string[], opts: RunOptions = {}): RunResult {
 /** Run with capture + check semantics and return trimmed stdout. */
 export function capture(cmd: string[], opts: RunOptions = {}): string {
   return run(cmd, { ...opts, capture: true, check: true }).stdout.trim();
+}
+
+export interface AsyncRunOptions extends RunOptions {
+  /**
+   * Aborting kills the child and rejects with a ProcError whose `code` is
+   * "ABORT_ERR". A synchronous `run` has no equivalent, which is the whole
+   * reason this function exists.
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * The async, cancellable sibling of {@link run}.
+ *
+ * Same options and the same ProcError contract, plus `signal`. Use it for
+ * anything that can run for more than a moment -- compose, playwright,
+ * telepresence -- so a caller that is not a dying CLI process can still stop it.
+ *
+ * An abort and a timeout both kill the child with a signal and leave a null
+ * exit status, so the two are told apart by asking the AbortSignal rather than
+ * by which event arrives first: Node emits "error" for an abort and only
+ * "close" for a timeout, but nothing orders them against each other.
+ */
+export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<RunResult> {
+  return new Promise((resolve, reject) => {
+    const stdio: ("pipe" | "inherit")[] = opts.capture
+      ? ["pipe", "pipe", "pipe"]
+      : ["inherit", "inherit", "inherit"];
+    if (opts.input !== undefined) stdio[0] = "pipe";
+
+    const child = spawn(cmd[0], cmd.slice(1), {
+      cwd: opts.cwd,
+      env: opts.env,
+      stdio,
+      signal: opts.signal,
+      timeout: opts.timeout !== undefined ? opts.timeout * 1000 : undefined,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (d) => (stdout += d.toString()));
+    child.stderr?.on("data", (d) => (stderr += d.toString()));
+    if (opts.input !== undefined) {
+      child.stdin?.end(opts.input);
+    }
+
+    // Both "error" and "close" can fire for one child; the first verdict wins.
+    let settled = false;
+    const fail = (message: string, status: number, code?: string): void => {
+      if (settled) return;
+      settled = true;
+      reject(new ProcError(message, cmd, status, stdout, stderr, code));
+    };
+    const done = (status: number): void => {
+      if (settled) return;
+      settled = true;
+      resolve({ status, stdout, stderr });
+    };
+    const aborted = (): boolean => opts.signal?.aborted === true;
+
+    child.on("error", (e) => {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (aborted()) {
+        fail(`Command aborted: ${cmd.join(" ")}`, -1, "ABORT_ERR");
+        return;
+      }
+      if (code === "ENOENT") {
+        fail(`Command not found: ${cmd[0]}`, -1, "ENOENT");
+        return;
+      }
+      fail(`Command failed to start: ${cmd.join(" ")} (${e.message})`, -1, code);
+    });
+
+    child.on("close", (status, signal) => {
+      if (aborted()) {
+        fail(`Command aborted: ${cmd.join(" ")}`, -1, "ABORT_ERR");
+        return;
+      }
+      // Killed by a signal with no exit status, and not by us: the only other
+      // thing that kills this child is the timeout we passed to spawn.
+      if (status === null && signal !== null && opts.timeout !== undefined) {
+        fail(`Command timed out after ${opts.timeout}s: ${cmd.join(" ")}`, -1, "ETIMEDOUT");
+        return;
+      }
+      const code = status ?? -1;
+      if (opts.check && code !== 0) {
+        fail(`Command failed with exit code ${code}: ${cmd.join(" ")}`, code);
+        return;
+      }
+      done(code);
+    });
+  });
 }

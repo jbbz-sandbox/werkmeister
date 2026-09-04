@@ -14,19 +14,21 @@ import { withReporter } from "sandbox-core/reporter";
 
 import { makeRecorder } from "./helpers/recorder.js";
 
-vi.mock("sandbox-core/lifecycle", () => ({ down: vi.fn(), reloadProxy: vi.fn() }));
+vi.mock("sandbox-core/lifecycle", () => ({
+  down: vi.fn(),
+  reloadProxy: vi.fn(),
+  teardownNotes: vi.fn(),
+}));
 vi.mock("sandbox-core/slots", () => ({ getAllSlots: vi.fn() }));
 vi.mock("sandbox-core/compose", () => ({ workspaceForFeature: vi.fn(() => "/ws") }));
 vi.mock("sandbox-core/graduate", () => ({
   GraduationError: class extends Error {},
   reconcileGraduating: () => [],
 }));
-vi.mock("sandbox-core/notes", () => ({ latestHandoff: vi.fn(), openDecisions: () => [] }));
 vi.mock("../notes.js", () => ({ graduateOne: vi.fn(), input: vi.fn() }));
 vi.mock("../../lib/dotenv.js", () => ({ loadDotenv: () => ({}) }));
 
-import { down as downFeature, reloadProxy } from "sandbox-core/lifecycle";
-import { latestHandoff } from "sandbox-core/notes";
+import { down as downFeature, reloadProxy, teardownNotes } from "sandbox-core/lifecycle";
 import { getAllSlots } from "sandbox-core/slots";
 import { run as runDown } from "../down.js";
 
@@ -39,13 +41,19 @@ beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
     lines.push(String(a[0] ?? ""));
   });
-  vi.mocked(latestHandoff).mockReturnValue(null);
+  vi.mocked(teardownNotes).mockResolvedValue({
+    workspace: "/ws",
+    handoff: null,
+    decisions: [],
+    graduated: [],
+  });
   vi.mocked(downFeature).mockImplementation(async (feature: string) => {
     lines.push(`<down ${feature}>`);
     return { feature, slot: 3 };
   });
   vi.mocked(reloadProxy).mockImplementation(async () => {
     lines.push("<reloadProxy>");
+    return { features: [], started: false, ok: true };
   });
 });
 
@@ -57,7 +65,11 @@ describe("sandbox down", () => {
   it("passes --volumes through and renders the slot the library released", async () => {
     await go({ feature: "demo", volumes: true });
 
-    expect(downFeature).toHaveBeenCalledWith("demo", { removeVolumes: true });
+    expect(downFeature).toHaveBeenCalledWith("demo", {
+      removeVolumes: true,
+      // The CLI is where a Ctrl-C becomes a cancellation the library can act on.
+      signal: expect.any(AbortSignal),
+    });
     const out = lines.join("\n");
     expect(out).toContain("Slot 3 released");
     expect(out).toContain("Per-feature Docker volumes removed");
@@ -72,16 +84,28 @@ describe("sandbox down", () => {
   });
 
   it("reads the workspace notes before the teardown removes the containers", async () => {
-    vi.mocked(latestHandoff).mockReturnValue({
-      path: "/ws/.sandbox/notes/001-handoff-x.md",
-      number: 1,
-      type: "handoff",
-      slug: "x",
-      frontmatter: {},
-      body: "the handoff body",
+    vi.mocked(teardownNotes).mockImplementation(async () => {
+      lines.push("<teardownNotes demo>");
+      return {
+        workspace: "/ws",
+        handoff: {
+          path: "/ws/.sandbox/notes/001-handoff-x.md",
+          number: 1,
+          type: "handoff",
+          slug: "x",
+          frontmatter: {},
+          body: "the handoff body",
+        },
+        decisions: [],
+        graduated: [],
+      };
     });
 
     await go({ feature: "demo" });
+
+    // The read must precede the teardown: teardownNotes resolves the workspace
+    // through compose labels on the feature's still-running containers.
+    expect(lines.indexOf("<teardownNotes demo>")).toBeLessThan(lines.indexOf("<down demo>"));
 
     const handoff = lines.findIndex((l) => l.includes("the handoff body"));
     expect(handoff).toBeGreaterThan(-1);

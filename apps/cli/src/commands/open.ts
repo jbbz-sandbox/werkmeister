@@ -13,37 +13,34 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { parse as yamlParse } from "yaml";
-
-import { launchFeatureWindow } from "sandbox-core/browser";
+import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
 import { featureUrl } from "sandbox-core/feature_routing";
 import { Colors, error, warn } from "../lib/config.js";
 import { raw } from "sandbox-core/reporter";
 import { loadDotenv } from "../lib/dotenv.js";
 import { getSlot } from "sandbox-core/slots";
 
+/**
+ * The nearest workspace.yml at or above *start*.
+ *
+ * The walk-up stays here because it is cwd resolution; the read and parse are
+ * `readWorkspaceYaml`, so a consumer holding an explicit workspace path gets
+ * the same behaviour without a cwd. Stops at the first level where the file
+ * exists, even if it is malformed -- which is what this has always done.
+ */
 function loadWorkspaceYaml(start: string): Record<string, any> {
-  let dir = start;
-  while (true) {
+  let dir = path.resolve(start);
+  for (;;) {
     for (const name of ["workspace.yml", "workspace.yaml"]) {
       const p = path.join(dir, ".sandbox", name);
       if (fs.existsSync(p) && fs.statSync(p).isFile()) {
-        let data: unknown;
-        try {
-          data = yamlParse(fs.readFileSync(p, "utf8"));
-        } catch {
-          return {};
-        }
-        return data && typeof data === "object" && !Array.isArray(data)
-          ? (data as Record<string, any>)
-          : {};
+        return readWorkspaceYaml(dir);
       }
     }
     const parent = path.dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) return {};
     dir = parent;
   }
-  return {};
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {

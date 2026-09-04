@@ -27,7 +27,7 @@ import { generateCaddyfile } from "./generate.js";
 import { configureGitHooksPath } from "./git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy } from "./k8s.js";
 import { generateK8sForwards } from "./k8s_forwards.js";
-import { ProcError, run } from "./proc.js";
+import { ProcError, run, runAsync } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
 import { restartAll, startAll, stopAll } from "./web_servers.js";
 
@@ -210,7 +210,7 @@ async function ensureProxyFiles(): Promise<void> {
  * runs and caps it at 120s, and this path both stays quiet and rebuilds the
  * k8s-forwards image, which routinely outlasts the cap.
  */
-function startSharedInfra(): boolean {
+async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
   const root = sandboxRoot();
   const composeFile = path.join(infraRoot(), "compose", "shared-infra.yml");
 
@@ -225,9 +225,9 @@ function startSharedInfra(): boolean {
   try {
     const envFile = path.join(root, ".env");
     const envArgs = fs.existsSync(envFile) ? ["--env-file", envFile] : [];
-    const result = run(
+    const result = await runAsync(
       ["docker", "compose", ...envArgs, "-f", composeFile, "up", "-d", "--build"],
-      { capture: true },
+      { capture: true, signal },
     );
     if (result.status !== 0) {
       error(`docker compose failed:\n${result.stderr.trim()}`);
@@ -236,6 +236,10 @@ function startSharedInfra(): boolean {
     success("Shared infrastructure started");
     return true;
   } catch (e) {
+    if (e instanceof ProcError && e.code === "ABORT_ERR") {
+      warn("Shared infrastructure start was cancelled");
+      return false;
+    }
     if (e instanceof ProcError && e.code === "ENOENT") {
       error("docker not found");
       return false;
@@ -325,7 +329,15 @@ async function checkInfraHealth(): Promise<Record<string, boolean>> {
  * call (`infraHealth`), because the CLI prints its section header between the
  * two and a library that owned both would have to print that header itself.
  */
-export async function up(): Promise<boolean> {
+export async function up({ signal }: { signal?: AbortSignal } = {}): Promise<boolean> {
+  // Ahead of everything, not just of the compose spawn: the setup below writes
+  // proxy files, extracts a CA and configures a git hooks path. A caller that
+  // has already cancelled should get none of it.
+  if (signal?.aborted) {
+    warn("Infrastructure start was cancelled before it began");
+    return false;
+  }
+
   // Auto-configure the secret-commit guard hook (idempotent, never clobbers
   // a pre-existing custom core.hooksPath). Informational only — a
   // hooksPath conflict should warn, not block `sandbox connect`.
@@ -340,7 +352,7 @@ export async function up(): Promise<boolean> {
   // will hard-fail if the path doesn't exist.
   ensureCorpCa();
 
-  const infraOk = startSharedInfra();
+  const infraOk = await startSharedInfra(signal);
 
   // Build + start the host web servers (the workspaces dashboard and Claudeck
   // — node processes, not containers, since their tools drive host-local

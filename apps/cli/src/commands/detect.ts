@@ -5,22 +5,19 @@
  * services would run locally based on changed files.
  */
 
-import { Colors, info, loadServices, resolveWorkspace, warn } from "../lib/config.js";
-import { detectChangedServices } from "sandbox-core/detect";
-import * as fs from "node:fs";
+import { Colors, warn } from "../lib/config.js";
+import { detectReport, type DetectedService } from "sandbox-core/detect";
 
-function printResults(detected: string[], servicesConfig: Record<string, any>): void {
+function printResults(detected: DetectedService[], nonLocal: string[]): void {
   console.log();
   if (detected.length) {
     console.log(
       `  ${Colors.GREEN}${Colors.BOLD}Detected ${detected.length} service(s) with changes:${Colors.RESET}`,
     );
     for (const svc of detected) {
-      const svcDef = servicesConfig[svc] ?? {};
-      const isDict = typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef);
-      const repo = isDict ? (svcDef["repo"] ?? "?") : "?";
-      const svcType = isDict ? (svcDef["type"] ?? "?") : "?";
-      console.log(`    ${Colors.GREEN}*${Colors.RESET} ${svc}  (${repo}, type=${svcType})`);
+      console.log(
+        `    ${Colors.GREEN}*${Colors.RESET} ${svc.service}  (${svc.repo}, type=${svc.type})`,
+      );
     }
   } else {
     console.log(`  ${Colors.YELLOW}No services detected with changes.${Colors.RESET}`);
@@ -30,10 +27,6 @@ function printResults(detected: string[], servicesConfig: Record<string, any>): 
     );
   }
 
-  const detectedSet = new Set(detected);
-  const nonLocal = Object.keys(servicesConfig)
-    .filter((k) => !detectedSet.has(k))
-    .sort();
   if (nonLocal.length) {
     console.log(`\n  ${Colors.DIM}k8s (unchanged): ${nonLocal.join(", ")}${Colors.RESET}`);
   }
@@ -47,10 +40,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const label = feature ? `: ${feature}` : "";
   console.log(`\n${Colors.BOLD}=== sandbox detect${label} ===${Colors.RESET}\n`);
 
-  const workspace = resolveWorkspace(feature, workspaceOverride);
-  if (!(fs.existsSync(workspace) && fs.statSync(workspace).isDirectory())) {
-    warn(`Workspace not found: ${workspace}`);
-    console.log(`\n  ${Colors.DIM}Expected workspace at: ${workspace}${Colors.RESET}`);
+  // The two "nothing to do" cases come back as fields rather than as throws,
+  // because each prints its own hint and neither is a failure exit.
+  const report = detectReport(feature, workspaceOverride);
+
+  if (!report.workspaceExists) {
+    warn(`Workspace not found: ${report.workspace}`);
+    console.log(`\n  ${Colors.DIM}Expected workspace at: ${report.workspace}${Colors.RESET}`);
     if (!workspaceOverride) {
       console.log(
         `  ${Colors.DIM}Create worktrees there, use --workspace to point to your repos, or check the feature name.${Colors.RESET}`,
@@ -60,17 +56,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  const servicesConfig = loadServices();
-  if (!Object.keys(servicesConfig).length) {
+  if (!report.serviceCount) {
     warn("No services configured in config/services.yaml");
     console.log(`  ${Colors.DIM}Create config/services.yaml with service definitions.${Colors.RESET}`);
     console.log();
     return;
   }
 
-  info(`Workspace: ${workspace}`);
-  info(`Service registry: ${Object.keys(servicesConfig).length} service(s) defined\n`);
-
-  const detected = detectChangedServices(feature, servicesConfig, workspaceOverride);
-  printResults(detected, servicesConfig);
+  printResults(report.detected, report.nonLocal);
 }

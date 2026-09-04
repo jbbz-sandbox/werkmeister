@@ -9,11 +9,16 @@
  */
 
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 
 import { workspaceForFeature } from "./compose.js";
-import { loadServices } from "./config.js";
-import { ProcError, run } from "./proc.js";
+import { getK8sContext, loadServices } from "./config.js";
+import { SandboxError } from "./errors.js";
+import { loadFeatureRouters } from "./feature_routing.js";
+import { ProcError, run, runAsync } from "./proc.js";
+import { info } from "./reporter.js";
+import { getServicePort, getSlot } from "./slots.js";
 
 export const MIN_VERSION: [number, number, number] = [2, 30, 0];
 
@@ -74,6 +79,65 @@ export function _run(cmd: string[], timeout = 120): [number, string] {
   return [res.status, ((res.stdout || "") + (res.stderr || "")).trim()];
 }
 
+/**
+ * The async sibling of {@link Runner}. `_run` is `spawnSync`, which blocks the
+ * whole event loop of whatever imported this library -- fine for a CLI that is
+ * about to exit, fatal for a server serving other requests meanwhile.
+ */
+export type AsyncRunner = (cmd: string[]) => Promise<[number, string]>;
+
+/**
+ * {@link _run}'s contract -- [returncode, combined output], no throw for a
+ * missing binary or a timeout -- on top of {@link runAsync}.
+ *
+ * An abort is NOT flattened into a returncode: the caller asked for the work to
+ * stop, so the ProcError propagates rather than being reported as a
+ * telepresence failure.
+ */
+export async function runAsyncRunner(
+  cmd: string[],
+  signal?: AbortSignal,
+  timeout = 120,
+): Promise<[number, string]> {
+  let res;
+  try {
+    res = await runAsync(cmd, { capture: true, timeout, signal });
+  } catch (e) {
+    if (e instanceof ProcError && e.code === "ENOENT") {
+      return [127, `${cmd[0]}: command not found`];
+    }
+    if (e instanceof ProcError && e.code === "ETIMEDOUT") {
+      return [124, `${cmd.join(" ")}: timed out after ${timeout}s`];
+    }
+    throw e;
+  }
+  return [res.status, ((res.stdout || "") + (res.stderr || "")).trim()];
+}
+
+/**
+ * Whether something accepts connections on localhost:*port* within *timeoutMs*.
+ *
+ * Resolves false rather than rejecting or hanging: every caller only wants the
+ * boolean, and a closed port is the expected answer, not an error.
+ */
+export function portOpen(port: number, timeoutMs = 1000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let done = false;
+    const finish = (ok: boolean): void => {
+      if (done) return;
+      done = true;
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+    socket.connect(port, "localhost");
+  });
+}
+
 /** Extract the first vX.Y.Z in *output* as an int tuple, or null. */
 export function parseVersion(output: string): [number, number, number] | null {
   const match = /v(\d+)\.(\d+)\.(\d+)/.exec(output);
@@ -99,11 +163,13 @@ export function versionLt(
 }
 
 /** Return a human-readable problem with the telepresence client, or null if OK. */
-export function versionError(runner: Runner = _run): string | null {
+export async function versionError(
+  runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
+): Promise<string | null> {
   if (which("telepresence") === null) {
     return `telepresence not found on PATH. ${INSTALL_HINT}`;
   }
-  const [rc, out] = runner(["telepresence", "version"]);
+  const [rc, out] = await runner(["telepresence", "version"]);
   const version = parseVersion(out);
   if (rc !== 0 || version === null) {
     const first = out ? out.split("\n")[0] : "no output";
@@ -277,7 +343,13 @@ export function listIntercepts(runner: Runner = _run): InterceptState {
  * only costs a redundant reconnect, never correctness.
  */
 export function connectedNamespace(runner: Runner = _run): string | null {
-  const [rc, out] = runner(["telepresence", "status", "--format", "json"]);
+  return parseConnectedNamespace(...runner(STATUS_ARGS));
+}
+
+const STATUS_ARGS = ["telepresence", "status", "--format", "json"];
+
+/** The parse half of {@link connectedNamespace}, shared with the async path. */
+function parseConnectedNamespace(rc: number, out: string): string | null {
   if (rc !== 0) {
     return null;
   }
@@ -300,13 +372,13 @@ export function connectedNamespace(runner: Runner = _run): string | null {
  * A session bound to a different namespace is quit first — telepresence
  * binds one namespace per connect, and a stale binding intercepts nothing.
  */
-export function ensureConnected(
+export async function ensureConnected(
   context: string,
   namespace: string,
   docker = false,
-  runner: Runner = _run,
-): void {
-  const current = connectedNamespace(runner);
+  runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
+): Promise<void> {
+  const current = parseConnectedNamespace(...(await runner(STATUS_ARGS)));
   if (current === namespace) {
     return;
   }
@@ -314,8 +386,8 @@ export function ensureConnected(
   // daemon is bound elsewhere OR status couldn't be read (rc!=0 → null). In
   // both cases a stale/uncertain session must be cleared first; `quit -s` is
   // idempotent and harmless when nothing is connected.
-  runner(["telepresence", "quit", "-s"]);
-  const [rc, out] = runner(buildConnectArgs(context, namespace, docker));
+  await runner(["telepresence", "quit", "-s"]);
+  const [rc, out] = await runner(buildConnectArgs(context, namespace, docker));
   if (rc !== 0) {
     throw new Error(`telepresence connect failed: ${out || "no output"}`);
   }
@@ -362,15 +434,181 @@ export function leaveFeatureIntercepts(feature: string, runner: Runner = _run): 
   const registry = loadServices();
   const left: string[] = [];
   for (const svc of services) {
-    const svcDef = registry[svc];
-    const deployment =
-      typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef)
-        ? svcDef["k8s_deployment"]
-        : undefined;
+    const deployment = deploymentOf(registry[svc]);
     if (!deployment) {
       continue;
     }
     const [rc] = runner(buildLeaveArgs(deployment));
+    if (rc === 0) {
+      left.push(deployment);
+    }
+  }
+  return left;
+}
+
+/** The k8s deployment behind a services.yaml entry, or undefined. */
+function deploymentOf(svcDef: unknown): string | undefined {
+  return typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef)
+    ? (svcDef as Record<string, any>)["k8s_deployment"]
+    : undefined;
+}
+
+/**
+ * Validate *service* is one of *localServices* with full k8s coordinates, and
+ * return its services.yaml definition.
+ *
+ * *localServices* is the caller's `SERVICES` list. It is passed in rather than
+ * read from a workspace `.env` here because a `.env` is a cwd-shaped CLI
+ * concern; a server calling this has already resolved which services it runs.
+ */
+function resolveServiceDef(service: string, localServices: string[]): Record<string, any> {
+  if (!localServices.includes(service)) {
+    throw new SandboxError(
+      `'${service}' is not a local service of this workspace ` +
+        `(SERVICES=${localServices.join(",") || "(none)"}). Add it to ` +
+        "workspace.yml services and rerun `sandbox init-workspace`.",
+      "NOT_LOCAL",
+    );
+  }
+  // Interceptability is defined once, in interceptBlocker, so `sandbox status
+  // --intercepts` reports exactly what this function enforces.
+  const svcDef = loadServices()[service];
+  const blocker = interceptBlocker(svcDef);
+  if (blocker) {
+    throw new SandboxError(`'${service}' ${blocker}`, "NOT_INTERCEPTABLE");
+  }
+  return svcDef;
+}
+
+export interface InterceptArgs {
+  feature: string;
+  service: string;
+  /** The workspace's SERVICES list — the caller reads it, never this module. */
+  localServices: string[];
+  dockerDaemon?: boolean;
+  signal?: AbortSignal;
+}
+
+export interface InterceptResult {
+  service: string;
+  context: string;
+  namespace: string;
+  deployment: string;
+  localPort: number;
+  /** The request header the intercept filters on (see buildInterceptArgs). */
+  header: string;
+  /** The service's cluster hostname, or null if it routes no ingress. */
+  remoteHost: string | null;
+}
+
+/**
+ * Start a header-scoped intercept of *service* pointing at the feature's local
+ * container, and return the facts a caller needs to render or use it.
+ *
+ * Callable in-process: every failure is a coded {@link SandboxError} and every
+ * subprocess goes through {@link runAsyncRunner}, so neither a bad request nor a
+ * slow `telepresence connect` can take down a host that is serving other work.
+ *
+ * Argument validation runs BEFORE the version probe, unlike the command this
+ * replaces. A caller that asked for a service it does not run should hear that,
+ * not "install telepresence" — and the reordering means the cheap check never
+ * spawns anything.
+ */
+export async function startIntercept(a: InterceptArgs): Promise<InterceptResult> {
+  const svcDef = resolveServiceDef(a.service, a.localServices);
+  const runner: AsyncRunner = (cmd) => runAsyncRunner(cmd, a.signal);
+
+  const problem = await versionError(runner);
+  if (problem) {
+    throw new SandboxError(problem, "TELEPRESENCE_VERSION");
+  }
+
+  const slot = await getSlot(a.feature);
+  if (slot === null) {
+    throw new SandboxError(
+      `Feature '${a.feature}' has no allocated slot — run \`sandbox up ${a.feature}\` first.`,
+      "NOT_RUNNING",
+    );
+  }
+  const localPort = getServicePort(slot, svcDef["port_offset"] ?? 0);
+  if (!(await portOpen(localPort))) {
+    throw new SandboxError(
+      `${a.service} is not listening on localhost:${localPort} — ` +
+        `run \`sandbox up ${a.feature}\` first (the local container is the intercept target).`,
+      "PORT_CLOSED",
+    );
+  }
+
+  const context = getK8sContext();
+  const namespace = svcDef["k8s_namespace"];
+  const deployment = svcDef["k8s_deployment"];
+
+  info(`Connecting to ${namespace} on ${context}...`);
+  await ensureConnected(context, namespace, Boolean(a.dockerDaemon), runner);
+
+  info(`Intercepting ${deployment} → localhost:${localPort} (x-feature=${a.feature})...`);
+  const [rc, out] = await runner(
+    buildInterceptArgs(deployment, localPort, svcDef["k8s_port"], a.feature),
+  );
+  if (rc !== 0) {
+    throw new SandboxError(
+      `telepresence intercept failed: ${out || "no output"}`,
+      "INTERCEPT_FAILED",
+    );
+  }
+
+  return {
+    service: a.service,
+    context,
+    namespace,
+    deployment,
+    localPort,
+    header: FEATURE_HEADER,
+    // The service's remote (cluster) hostname is where Caddy sends cluster-bound
+    // traffic; a request there carrying the header (or the X-Feature cookie,
+    // which Caddy copies into the header) is what the intercept reroutes to
+    // your laptop.
+    remoteHost: loadFeatureRouters()[a.service]?.remoteHostname ?? null,
+  };
+}
+
+export interface LeaveInterceptArgs {
+  feature: string;
+  /** One service, or null/absent for every local service of the feature. */
+  service?: string | null;
+  localServices: string[];
+  signal?: AbortSignal;
+}
+
+/**
+ * End intercepts and return the deployments actually left.
+ *
+ * With *service* set this is strict — an unknown service or a failed detach
+ * throws, because the caller named one thing and it did not happen. Without it
+ * the sweep is best-effort, matching {@link leaveFeatureIntercepts}, which
+ * `sandbox down` calls where a failure must never block teardown.
+ */
+export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
+  const runner: AsyncRunner = (cmd) => runAsyncRunner(cmd, a.signal);
+  if (a.service) {
+    const deployment = resolveServiceDef(a.service, a.localServices)["k8s_deployment"];
+    const [rc, out] = await runner(buildLeaveArgs(deployment));
+    if (rc !== 0) {
+      throw new SandboxError(
+        `Could not leave intercept: ${out || "no output"}`,
+        "INTERCEPT_FAILED",
+      );
+    }
+    return [deployment];
+  }
+  const registry = loadServices();
+  const left: string[] = [];
+  for (const svc of a.localServices) {
+    const deployment = deploymentOf(registry[svc]);
+    if (!deployment) {
+      continue;
+    }
+    const [rc] = await runner(buildLeaveArgs(deployment));
     if (rc === 0) {
       left.push(deployment);
     }

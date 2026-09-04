@@ -3,18 +3,45 @@
  *
  * Remove a local service from a feature, falling back to k8s for that
  * service. Re-generates compose and proxy configuration.
+ *
+ * The sequence itself is `sandbox-core/lifecycle`; what is left here is the
+ * banner, the two error renderings, and the summary block.
  */
 
-import { isCaddyRunning, reloadCaddy } from "sandbox-core/caddy";
-import { Colors, error, info, loadPorts, loadServices, warn } from "../lib/config.js";
-import { composeDown, composeUp } from "sandbox-core/compose";
-import {
-  generateCaddyfile,
-  generateFeatureCompose,
-  generateFeatureEnv,
-  generateSupergraphConfig,
-} from "sandbox-core/generate";
-import { getAllSlots, getSlot } from "sandbox-core/slots";
+import { Colors, warn } from "../lib/config.js";
+import { SandboxError } from "sandbox-core/errors";
+import { removeService } from "sandbox-core/lifecycle";
+import type { RemoveResult } from "sandbox-core/lifecycle";
+import { getAllSlots } from "sandbox-core/slots";
+
+/**
+ * The "not running locally" branch: a warning plus the feature's actual local
+ * services, re-read here because the list is layout, not part of the failure.
+ */
+async function printNotLocal(feature: string, message: string): Promise<void> {
+  warn(message);
+  const local = (await getAllSlots())[feature]?.services ?? [];
+  if (local.length) {
+    console.log(`  ${Colors.DIM}Local services: ${[...local].sort().join(", ")}${Colors.RESET}`);
+  } else {
+    console.log(`  ${Colors.DIM}No local services running${Colors.RESET}`);
+  }
+  console.log();
+}
+
+/** The "Service 'x' removed" block — rendering, so it stays in the CLI. */
+function printSummary(result: RemoveResult): void {
+  const { feature, removed, remaining } = result;
+
+  console.log(`\n${Colors.GREEN}${Colors.BOLD}Service '${removed}' removed from '${feature}'${Colors.RESET}`);
+  console.log(`  ${Colors.CYAN}'${removed}' now served via k8s port-forward${Colors.RESET}`);
+  if (remaining.length) {
+    console.log(`  ${Colors.DIM}Remaining local services: ${remaining.join(", ")}${Colors.RESET}`);
+  } else {
+    console.log(`  ${Colors.DIM}No local services -- all traffic goes to k8s${Colors.RESET}`);
+  }
+  console.log();
+}
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;
@@ -22,74 +49,19 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.BOLD}=== sandbox remove: ${service} from ${feature} ===${Colors.RESET}\n`);
 
-  const servicesConfig = loadServices();
-  const portsConfig = loadPorts();
-  const config = { services: servicesConfig, ports: portsConfig };
-
-  const slot = await getSlot(feature);
-  if (slot === null) {
-    error(`Feature '${feature}' is not running (no slot allocated)`);
-    process.exit(1);
-  }
-
-  // Get current services
-  const allSlots = await getAllSlots();
-  const featureInfo = allSlots[feature] as any;
-  const currentServices: string[] =
-    featureInfo && typeof featureInfo === "object" && !Array.isArray(featureInfo)
-      ? [...(featureInfo.services ?? [])]
-      : [];
-
-  if (!currentServices.includes(service)) {
-    warn(`Service '${service}' is not running locally for '${feature}'`);
-    if (currentServices.length) {
-      console.log(
-        `  ${Colors.DIM}Local services: ${[...currentServices].sort().join(", ")}${Colors.RESET}`,
-      );
-    } else {
-      console.log(`  ${Colors.DIM}No local services running${Colors.RESET}`);
+  let result: RemoveResult;
+  try {
+    result = await removeService(feature, service);
+  } catch (e) {
+    // NOT_LOCAL is caught because it is not a failure the user has to act on —
+    // it prints its warning and exits 0, as the early `return` it replaced did.
+    // NOT_RUNNING propagates: main.ts renders the same `[err]` line and exit 1.
+    if (e instanceof SandboxError && e.code === "NOT_LOCAL") {
+      await printNotLocal(feature, e.message);
+      return;
     }
-    console.log();
-    return;
+    throw e;
   }
 
-  // Remove the service
-  currentServices.splice(currentServices.indexOf(service), 1);
-  info(`Removed '${service}' from local services -- will fall back to k8s`);
-
-  // Re-generate config
-  info("Regenerating configuration files...");
-  generateFeatureCompose(feature, slot, currentServices, config);
-  generateFeatureEnv(feature, slot, currentServices, config);
-  generateSupergraphConfig(feature, slot, currentServices, config);
-
-  // Restart containers (this will remove the service's container)
-  if (currentServices.length) {
-    info("Restarting containers...");
-    composeUp(feature);
-  } else {
-    info("No local services remaining -- containers will be stopped");
-    if (!composeDown(feature)) {
-      warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
-    }
-  }
-
-  // Update proxy
-  info("Updating reverse proxy...");
-  await generateCaddyfile(null, config);
-  if (isCaddyRunning()) {
-    await reloadCaddy();
-  }
-
-  // Summary
-  console.log(`\n${Colors.GREEN}${Colors.BOLD}Service '${service}' removed from '${feature}'${Colors.RESET}`);
-  console.log(`  ${Colors.CYAN}'${service}' now served via k8s port-forward${Colors.RESET}`);
-  if (currentServices.length) {
-    console.log(
-      `  ${Colors.DIM}Remaining local services: ${[...currentServices].sort().join(", ")}${Colors.RESET}`,
-    );
-  } else {
-    console.log(`  ${Colors.DIM}No local services -- all traffic goes to k8s${Colors.RESET}`);
-  }
-  console.log();
+  printSummary(result);
 }
