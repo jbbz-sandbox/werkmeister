@@ -31,7 +31,7 @@
 
 ## Deviations from the spec, and why
 
-Four places where the code found during planning makes the spec's letter more expensive than its intent. All four keep the intent exactly.
+Five places where the code found during planning makes the spec's letter more expensive than its intent. All five keep the intent exactly.
 
 **A. No per-request `AbortController`.** Spec §4 says `main.ts` creates one per request and wires `res.on("close")` to `abort()`. The SDK already does this: `Protocol._onclose()` aborts every in-flight request handler's controller (`node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js:259`), and the handler receives that controller's signal as `extra.signal`. Keeping the dashboard's `res.on("close", () => { transport.close(); server.close(); })` wiring therefore gives a disconnecting client exactly the Ctrl-C semantics D4 existed for, with no controller of our own. The six signal-taking tools pass `extra.signal` straight through.
 
