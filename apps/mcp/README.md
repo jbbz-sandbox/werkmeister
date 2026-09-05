@@ -7,16 +7,22 @@ host-side: it holds the Docker privilege so a container agent does not have to.
 
 Self-hosting the sandbox gave a container the host's Docker socket, and the
 daemon is root on the host. This server is the same capability with that mount
-removed — twenty verbs over HTTP instead of a socket.
+removed — the verbs over HTTP instead of a socket.
 
 ## Running it
 
 `sandbox connect` starts it, like the dashboard and claudeck: it is a `WebApp`
 in `packages/sandbox-core/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID
-and log under `~/.sandbox`). By hand:
+and log under `~/.sandbox`). A host-local MCP client gets it over stdio instead:
+
+    sandbox mcp                            # stdio -- no token, no port
+
+There is no transport flag on that verb: stdio is the only thing a client
+launching a subprocess can use, and the HTTP mode is `sandbox connect`'s job.
+`sandbox dashboard` is the same arrangement for the other app. By hand:
 
     npm run build && npm run serve:http    # Streamable HTTP on :3002
-    npm run serve:stdio                    # stdio, for a host-local client
+    npm run serve:stdio                    # what `sandbox mcp` execs
 
 **It binds `0.0.0.0`, deliberately and uniquely.** `WebApp` carries an optional
 per-app `env`, and only this app sets `HOST=0.0.0.0` — a container reaches the
@@ -29,7 +35,7 @@ environment to all three apps and the dashboard is unauthenticated.
 
 32 random bytes of hex in `~/.sandbox/mcp-token`, mode 0600, created on first
 start. A bearer token is required whenever the bind is not loopback — which,
-under `sandbox connect`, is always. A host-local client should use `--stdio`,
+under `sandbox connect`, is always. A host-local client should use `sandbox mcp`,
 which needs no token. Any request carrying an `Origin` header is refused: this
 server has no browser UI, so an `Origin` means a browser found something that
 was not meant for it.

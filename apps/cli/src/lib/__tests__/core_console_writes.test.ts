@@ -1,5 +1,5 @@
 /**
- * `sandbox mcp --stdio` uses stdout as its JSON-RPC transport, so one stray
+ * The stdio MCP servers use stdout as their JSON-RPC transport, so one stray
  * `console.log` from an imported library module corrupts the protocol stream —
  * the hazard `reporter.ts` exists to remove. The bug is latent (it fires only
  * when the MCP import graph first reaches the offending module) and has been

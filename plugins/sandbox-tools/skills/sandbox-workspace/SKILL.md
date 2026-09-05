@@ -54,7 +54,7 @@ Desktop.
 ### Prerequisites
 - The `sandbox` CLI on `PATH` (e.g. `~/.local/bin/sandbox`) and `node`.
 - The app built once: `npm --prefix apps/sandbox-dashboard run build` (produces `dist/form-cli.js`
-  for `--browser-form` and `dist/main.js` for `sandbox mcp`). Running `sandbox mcp` once also
+  for `--browser-form` and `dist/main.js` for `sandbox dashboard`). Running `sandbox dashboard` once also
   builds it. Without the build, `--browser-form` errors with a clear message.
   The form page (`dist/form.html`) is fully self-contained — no internet needed.
 

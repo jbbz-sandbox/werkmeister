@@ -1,4 +1,4 @@
-// The reporter is what lets `sandbox mcp --stdio` import this library at all,
+// The reporter is what lets the stdio MCP servers import this library at all,
 // so the two properties that make that safe are pinned here: nothing prints
 // without an installed reporter, and concurrent scopes never see each other's
 // events. The fourth test pins the CLI's own lines byte for byte — the

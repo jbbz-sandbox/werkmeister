@@ -32,7 +32,7 @@ generated from [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/
 
 ## Bundled MCP server (`sandbox-workspace`)
 
-The plugin's [`.mcp.json`](./.mcp.json) auto-wires an MCP server (`sandbox mcp --stdio`,
+The plugin's [`.mcp.json`](./.mcp.json) auto-wires an MCP server (`sandbox dashboard`,
 source in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard)) exposing ~26 tools —
 workspace create/manage, PR review, Jira lookups, k8s/kube health, and a Claude
 session bridge — with **one form definition and graceful UI degradation per client**:
@@ -54,12 +54,12 @@ Plugins don't install in Desktop, so add the same server to
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
-{ "mcpServers": { "sandbox-workspace": { "command": "sandbox", "args": ["mcp", "--stdio"] } } }
+{ "mcpServers": { "sandbox-workspace": { "command": "sandbox", "args": ["dashboard"] } } }
 ```
 
 ## Dependencies
 
-- **MCP server build:** run `cd apps/sandbox-dashboard && npm run build` once — `sandbox mcp`
+- **MCP server build:** run `cd apps/sandbox-dashboard && npm run build` once — `sandbox dashboard`
   runs the compiled `dist/main.js`. Without it, the server won't start.
 - The `sandbox` CLI must be on `PATH` (e.g. `~/.local/bin/sandbox`), and Docker running.
 - **Self-contained:** the workspace form and its "Refine with Claude" / Jira-fetch logic

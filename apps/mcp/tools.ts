@@ -1,5 +1,5 @@
 /**
- * The twenty tool registrations.
+ * The twenty-two tool registrations.
  *
  * Every one is a thin adapter: validate with zod, call the core function inside
  * a collecting reporter, return the transcript as `content` and the typed
@@ -39,7 +39,7 @@ import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
 import { writeWorkspaceHooks } from "sandbox-core/hooks_gen";
 import { buildContext, listNotes, parseNote } from "sandbox-core/notes";
 import { graduateNote } from "sandbox-core/graduate";
-import { createWorkspace } from "sandbox-core";
+import { createWorkspace, listWorkspaces, removeWorkspace } from "sandbox-core";
 import { checkStandards } from "sandbox-core/standards";
 import { checkSkills, syncSkills } from "sandbox-core/workspace_skills";
 import { initWorkspace } from "sandbox-core/workspace_init";
@@ -388,6 +388,59 @@ function registerAuthoringTools(server: McpServer): void {
         // adapt() installed — so nothing it emits during provisioning reaches
         // our transcript. Re-emit the transcript it captured, or `content`
         // comes back empty for the one tool that does the most work.
+        if (result.output) {
+          raw(`${result.output}\n`);
+        }
+        return { ...result };
+      }),
+  );
+
+  server.registerTool(
+    "sandbox-list-workspaces",
+    {
+      title: "List sandbox workspaces",
+      description:
+        "Every workspace directory under the workspaces root, with its path, Jira ticket, " +
+        "labels and VS Code URI. Not scoped to a feature — this is the whole root, and it " +
+        "lists workspaces that were never brought up.",
+      inputSchema: {},
+    },
+    async (): Promise<CallToolResult> =>
+      adapt(async () => {
+        const result = await listWorkspaces();
+        // listWorkspaces is a directory scan and reports nothing through the
+        // reporter, so `content` would be empty without this. The names and
+        // tickets are the transcript; structuredContent carries the rest.
+        raw(
+          `${
+            result.workspaces.map((w) => `${w.name}${w.jiraId ? `  ${w.jiraId}` : ""}`).join("\n") ||
+            "(no workspaces)"
+          }\n`,
+        );
+        return { ...result };
+      }),
+  );
+
+  server.registerTool(
+    "sandbox-remove-workspace",
+    {
+      title: "Hand off and delete a workspace",
+      description:
+        "Commit and push every worktree branch, tear the feature down, delete the workspace " +
+        "directory and prune the source repos. Destructive, and NOT scoped to your feature — it " +
+        "names a workspace. Nothing is deleted if any branch cannot be pushed.",
+      inputSchema: {
+        name: z
+          .string()
+          .describe("Workspace directory name, as sandbox-list-workspaces reports it."),
+      },
+    },
+    async (args): Promise<CallToolResult> =>
+      adapt(async () => {
+        const result = await removeWorkspace(args.name);
+        // Same shadowing as sandbox-workspace: removeWorkspace installs its own
+        // collecting reporter for the teardown, so re-emit what it captured or
+        // the transcript loses the push and down output.
         if (result.output) {
           raw(`${result.output}\n`);
         }

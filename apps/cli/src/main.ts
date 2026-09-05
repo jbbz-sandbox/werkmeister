@@ -25,8 +25,11 @@
  *     sandbox stats [--collect N]              Show container resource usage
  *     sandbox optimize [--collect N]           Analyze usage vs limits, recommend changes
  *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
+ *     sandbox list-workspaces                  List workspaces under the workspaces root
+ *     sandbox remove-workspace <name>          Hand off and delete a workspace (push, down, rm)
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
- *     sandbox mcp [--stdio]                    Launch the MCP workspace App (for MCP clients, e.g. Claude Desktop)
+ *     sandbox dashboard                        Launch the workspace dashboard's MCP server (stdio)
+ *     sandbox mcp                              Launch the headless remote MCP surface (stdio)
  *
  *     Feature name can be omitted if FEATURE is set in a .env file in the cwd.
  *     Use "infra" as the feature name to target shared infrastructure.
@@ -531,6 +534,25 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
+    name: "list-workspaces",
+    load: () => import("./commands/list_workspaces.js"),
+    configure: (cmd) => {
+      cmd.description("List the workspaces under the workspaces root with their Jira ticket and labels");
+    },
+    namespace: () => ({}),
+  },
+  {
+    name: "remove-workspace",
+    load: () => import("./commands/remove_workspace.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Hand off (commit + push) and delete a workspace, its containers and its worktrees")
+        .argument("<name>", "Workspace directory name, as `sandbox list-workspaces` reports it")
+        .option("-y, --yes", "Skip the confirmation prompt");
+    },
+    namespace: ([name], o) => ({ name, yes: Boolean(o.yes) }),
+  },
+  {
     name: "setup",
     load: () => import("./commands/setup.js"),
     configure: (cmd) => {
@@ -743,22 +765,30 @@ export async function main(): Promise<void> {
     });
   }
 
-  // `mcp` is handled by the bash launcher in the original repo (node-runtime
-  // resolution + exec of the dashboard app). Registered purely for --help parity.
-  program
-    .command("mcp")
-    .description("Launch the MCP workspace App over stdio (for MCP clients, e.g. Claude Desktop)")
-    .option(
-      "--stdio",
-      "Serve over stdio (required by MCP clients). Without it the App starts a local HTTP server.",
-    )
-    .action(() => {
-      console.log(
-        "`sandbox mcp` launches the node MCP App and must be run through the " +
-          "./sandbox wrapper, which locates a node runtime. Run: ./sandbox mcp --stdio",
-      );
-      process.exit(0);
-    });
+  // `dashboard` and `mcp` name the two sibling apps, each with its own
+  // dist/main.js. The ./sandbox wrapper intercepts both before this file loads
+  // (it is the only place that can resolve a node runtime), so these two
+  // registrations exist for --help parity and to give a useful message to
+  // anyone running dist/main.js directly. Neither takes a transport flag: the
+  // wrapper always launches stdio, and `sandbox connect` starts the HTTP modes.
+  for (const [name, description] of [
+    ["dashboard", "Launch the workspace dashboard's MCP server over stdio (Claude Desktop, the sandbox-tools plugin)"],
+    ["mcp", "Launch the headless remote MCP surface over stdio (host-local clients; no token needed)"],
+  ] as const) {
+    program
+      .command(name)
+      .description(description)
+      .action(() => {
+        // stderr, not stdout: an MCP client that got this far is reading stdout
+        // as JSON-RPC, and printing English onto that channel is what made the
+        // previous version of this stub look like a crashed server.
+        console.error(
+          `\`sandbox ${name}\` launches a sibling app and must be run through the ` +
+            "./sandbox wrapper, which locates a node runtime and the app's entrypoint.",
+        );
+        process.exit(1);
+      });
+  }
 
   if (process.argv.length <= 2) {
     program.outputHelp();

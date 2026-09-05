@@ -30,7 +30,7 @@ npm run build
 - CLI parsing is commander; templates in `infra/templates/*.njk` render through
   nunjucks with a small compat layer (`{% do %}`, dict truthiness,
   `map(attribute=…)`) so they stay shared verbatim with other consumers
-- `sandbox mcp` prints guidance — the MCP dashboard app lives in
+- `sandbox dashboard` launches the dashboard's MCP server over stdio; it lives in
   `apps/sandbox-dashboard` and is not duplicated here
 - interactive prompts and process-spawn edges are async (`run()` is
   `async` throughout); core logic stays synchronous

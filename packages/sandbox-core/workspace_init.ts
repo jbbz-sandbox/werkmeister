@@ -563,7 +563,7 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
  *
  * Reading fd 0 is the CLI's affordance (`echo "…" | sandbox init-workspace`),
  * so only the CLI supplies a reader. In-process fd 0 belongs to the host — for
- * `sandbox mcp --stdio` it is the JSON-RPC channel — and must not be read.
+ * `sandbox dashboard` it is the JSON-RPC channel — and must not be read.
  */
 function resolveTask(
   argsTask: string | null | undefined,

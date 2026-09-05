@@ -131,7 +131,7 @@ function runBrowserForm(args: Record<string, unknown>): void {
   if (!(fs.existsSync(cliJs) && fs.statSync(cliJs).isFile())) {
     error(
       `Browser form not built: ${cliJs} is missing. ` +
-        "Run `npm --prefix apps/sandbox-dashboard run build` (or `sandbox mcp` once) first.",
+        "Run `npm --prefix apps/sandbox-dashboard run build` (or `sandbox dashboard` once) first.",
     );
     process.exit(1);
   }

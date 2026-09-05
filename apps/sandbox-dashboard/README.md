@@ -1,6 +1,6 @@
 # sandbox-workspace MCP server
 
-The sandbox **MCP server** (`sandbox mcp`): ~26 tools for creating and
+The sandbox **workspace dashboard** (`sandbox dashboard`): ~29 tools for creating and
 operating sandbox workspaces — worktree creation, container lifecycle, PR review,
 Jira lookups, k8s/kube health, and an embedded Claude Code session bridge — plus
 interactive UIs for every kind of MCP host. It delegates all real work to the
@@ -90,11 +90,11 @@ repo root) — they import the package by name, never by relative path.
 ## Wiring
 
 - **Claude Code (CLI / VS Code):** installed automatically by the
-  `sandbox-tools` plugin's `.mcp.json` (`sandbox mcp --stdio`).
+  `sandbox-tools` plugin's `.mcp.json` (`sandbox dashboard`).
 - **Claude Desktop** (plugins don't install there):
 
 ```json
-{ "mcpServers": { "sandbox-workspace": { "command": "sandbox", "args": ["mcp", "--stdio"] } } }
+{ "mcpServers": { "sandbox-workspace": { "command": "sandbox", "args": ["dashboard"] } } }
 ```
 
 Fully quit and reopen Desktop after changes; rebuild first. The server finds the
