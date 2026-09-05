@@ -832,9 +832,24 @@ the pieces that are not obvious from the demo services:
 - **Inside the container, `sandbox status` shows every k8s forward as dead** and `kubectl`
   cannot reach OrbStack's API server: both probe `127.0.0.1`, which is the container's own
   loopback. The forwards are fine; read their state from the host. `sandbox up`, `down`,
-  `status` (for features) and `workspace` all work from inside.
-- **Not covered:** Telepresence intercepts (need a root daemon on the host), and the `gh` and
-  `claude` binaries. Run `sandbox intercept` and `sandbox connect` from the host.
+  `status` (for features) and `workspace` all work from inside. This applies to a container
+  running the CLI *directly*. A container that calls the host MCP surface (`apps/mcp`)
+  instead is unaffected: `sandbox-status` runs on the host, so the forward health it reports
+  is the real one.
+- **Not covered:** the `gh` and `claude` binaries. Telepresence intercepts need a root daemon
+  on the host, so `sandbox intercept` and `sandbox connect` must run there — either from a
+  host terminal, or through the `sandbox-intercept` and `sandbox-connect` tools on
+  `apps/mcp`, which run host-side with exactly the authority a host terminal has.
+- **A container can instead hold no daemon at all.** `apps/mcp` (port 3002, started by
+  `sandbox connect`) exposes twenty sandbox verbs over authenticated HTTP, so a container
+  needs only `~/repos`, `~/features` and `SANDBOX_MCP_TOKEN` — no docker socket, no docker
+  CLI, no kubectl, no `sandbox` binary. It is the only managed web server that binds
+  `0.0.0.0`, via a per-app `env` on its `WebApp` entry; never arrange that by exporting
+  `HOST` before `sandbox connect`, which would also expose the unauthenticated dashboard.
+  Its `mcp_servers.sandbox` registry entry is deliberately in no archetype — `.mcp.json` is
+  shared with host sessions, where `host.docker.internal` does not resolve — so add it to a
+  workspace only when that workspace is actually driven from a container. See
+  `apps/mcp/README.md`.
 
 ---
 
