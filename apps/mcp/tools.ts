@@ -12,14 +12,26 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
 import { composeLogs } from "sandbox-core/compose";
 import { sandboxRoot } from "sandbox-core/config";
 import { detectReport } from "sandbox-core/detect";
 import { SandboxError } from "sandbox-core/errors";
-import { down, removeService, reloadProxy, restart, stop, up } from "sandbox-core/lifecycle";
+import { featureUrl } from "sandbox-core/feature_routing";
+import { connectK8s, up as infraUp } from "sandbox-core/infra";
+import {
+  down,
+  readServicesFromWorkspace,
+  removeService,
+  reloadProxy,
+  restart,
+  stop,
+  up,
+} from "sandbox-core/lifecycle";
 import { collectingReporter, raw, withReporter } from "sandbox-core/reporter";
 import { featureServices } from "sandbox-core/slots";
 import { interceptsSnapshot, statusSnapshot } from "sandbox-core/status";
+import { leaveIntercept, startIntercept } from "sandbox-core/telepresence";
 import { runFeatureTests } from "sandbox-core/test_run";
 
 import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
@@ -93,6 +105,7 @@ const FEATURE_ARG = {
 export function registerTools(server: McpServer): void {
   registerLifecycleTools(server);
   registerAuthoringTools(server);
+  registerHostTools(server);
 }
 
 // ---------------------------------------------------------------------------
@@ -495,6 +508,139 @@ function registerAuthoringTools(server: McpServer): void {
             kind: args.kind,
             slug: args.slug ?? null,
           }),
+        };
+      }),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Host-side
+//
+// These three reach beyond the caller's own feature and have host-desktop side
+// effects. They are the widest blast radius on this surface: the first thing to
+// gate if the token's authority is ever narrowed.
+// ---------------------------------------------------------------------------
+
+function registerHostTools(server: McpServer): void {
+  server.registerTool(
+    "sandbox-connect",
+    {
+      title: "Start shared infrastructure",
+      description:
+        "Bring up the shared infra every feature depends on: generated proxy files, the " +
+        "corporate CA, the compose stack (caddy, k8s forwards, jaeger) and the host web " +
+        "servers. Host-wide, not scoped to your feature.",
+      inputSchema: {
+        k8sOnly: z
+          .boolean()
+          .optional()
+          .describe("Start/restart only the k8s port-forwards container. Default false."),
+      },
+    },
+    async (args, extra): Promise<CallToolResult> =>
+      adapt(async () => {
+        if (args.k8sOnly) {
+          return { k8s: connectK8s() };
+        }
+        // Health is deliberately not awaited here: infraHealth() waits up to 90
+        // seconds for the forwards to converge, which is a `sandbox-status`
+        // call away and should not be inside this one.
+        return { infraOk: await infraUp({ signal: extra.signal }) };
+      }),
+  );
+
+  server.registerTool(
+    "sandbox-open",
+    {
+      title: "Open a feature-tagged browser window",
+      description:
+        "Launch a browser window on the HOST, pre-configured with the feature's X-Feature " +
+        "routing cookie and tagged so it is unmistakably this feature's window. The window " +
+        "outlives this call; it closes when the user closes it.",
+      inputSchema: {
+        ...FEATURE_ARG,
+        url: z.string().optional().describe("Explicit URL. Wins over `path`."),
+        path: z
+          .string()
+          .optional()
+          .describe("Path on the feature's routed host. Defaults to workspace.yml test_path, else /."),
+        size: z.string().optional().describe("Window size as W,H."),
+        position: z.string().optional().describe("Window position as X,Y."),
+      },
+    },
+    async (args, extra): Promise<CallToolResult> =>
+      adapt(async () => {
+        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
+        const workspace = resolveWorkspaceDir(feature);
+        const url =
+          args.url ??
+          featureUrl(args.path ?? readWorkspaceYaml(workspace)["test_path"] ?? "/");
+        if (url === null) {
+          throw new SandboxError(
+            "No routed hosts in services.yaml (no service declares `feature_router:`) — " +
+              "pass an explicit `url`.",
+            "NO_ROUTE",
+          );
+        }
+        const window = await launchFeatureWindow(feature, url, {
+          size: args.size,
+          position: args.position ?? null,
+        });
+        if (window === null) {
+          throw new SandboxError(
+            "Could not launch a browser window — see the transcript for why.",
+            "BROWSER",
+          );
+        }
+        // supervise() owns the cleanup and resolves only when the window
+        // closes, so it is started and NOT awaited: this tool returns once the
+        // window is up and tagged.
+        void window.supervise();
+        return { feature, url };
+      }),
+  );
+
+  server.registerTool(
+    "sandbox-intercept",
+    {
+      title: "Start or leave a k8s traffic intercept",
+      description:
+        "Route the slice of live k8s dev traffic carrying `x-feature: <feature>` to this " +
+        "feature's local container, or stop doing so. Runs host-side, where the telepresence " +
+        "root daemon lives — with exactly the authority a host terminal has.",
+      inputSchema: {
+        ...FEATURE_ARG,
+        action: z.enum(["start", "leave"]),
+        service: z
+          .string()
+          .optional()
+          .describe("Required to start. On leave, omit to leave every intercept of the feature."),
+      },
+    },
+    async (args, extra): Promise<CallToolResult> =>
+      adapt(async () => {
+        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
+        const localServices = readServicesFromWorkspace(resolveWorkspaceDir(feature));
+        if (args.action === "leave") {
+          return {
+            left: await leaveIntercept({
+              feature,
+              service: args.service ?? null,
+              localServices,
+              signal: extra.signal,
+            }),
+          };
+        }
+        if (!args.service) {
+          throw new SandboxError("`service` is required to start an intercept.", "ARGS");
+        }
+        return {
+          ...(await startIntercept({
+            feature,
+            service: args.service,
+            localServices,
+            signal: extra.signal,
+          })),
         };
       }),
   );
