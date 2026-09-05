@@ -17,7 +17,7 @@ import { sandboxRoot } from "sandbox-core/config";
 import { detectReport } from "sandbox-core/detect";
 import { SandboxError } from "sandbox-core/errors";
 import { down, removeService, reloadProxy, restart, stop, up } from "sandbox-core/lifecycle";
-import { collectingReporter, withReporter } from "sandbox-core/reporter";
+import { collectingReporter, raw, withReporter } from "sandbox-core/reporter";
 import { featureServices } from "sandbox-core/slots";
 import { interceptsSnapshot, statusSnapshot } from "sandbox-core/status";
 import { runFeatureTests } from "sandbox-core/test_run";
@@ -360,11 +360,20 @@ function registerAuthoringTools(server: McpServer): void {
       },
     },
     async (args): Promise<CallToolResult> =>
-      adapt(async () => ({
+      adapt(async () => {
         // open: false — a container agent has no desktop, and launching an
         // editor is sandbox-open's job, asked for explicitly.
-        ...(await createWorkspace({ ...args }, { open: false })),
-      })),
+        const result = await createWorkspace({ ...args }, { open: false });
+        // createWorkspace installs its OWN collecting reporter internally, and
+        // AsyncLocalStorage nesting means that inner scope shadows the one
+        // adapt() installed — so nothing it emits during provisioning reaches
+        // our transcript. Re-emit the transcript it captured, or `content`
+        // comes back empty for the one tool that does the most work.
+        if (result.output) {
+          raw(`${result.output}\n`);
+        }
+        return { ...result };
+      }),
   );
 
   server.registerTool(
