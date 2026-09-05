@@ -183,6 +183,13 @@ export async function versionError(
   return null;
 }
 
+/**
+ * No `--server` override for docker mode: 2.31 rewrites a loopback API server
+ * address for the containerized daemon on its own (verified against OrbStack's
+ * `https://127.0.0.1:26443`, which the daemon reports back as
+ * `https://host.docker.internal:26443`). The intercept side is NOT symmetrical —
+ * see {@link DAEMON_HOST_ADDRESS}.
+ */
 export function buildConnectArgs(context: string, namespace: string, docker = false): string[] {
   const args = ["telepresence", "connect"];
   if (docker) {
@@ -192,11 +199,24 @@ export function buildConnectArgs(context: string, namespace: string, docker = fa
   return args;
 }
 
+/**
+ * Where a containerized daemon reaches the intercept target.
+ *
+ * `--address` defaults to 127.0.0.1, which for `connect --docker` is the DAEMON
+ * CONTAINER's loopback — nothing listens there, and the cluster sees the
+ * intercept answer `{"error":"EOF"}` while the local container sits untouched on
+ * the host. Verified live against OrbStack's k8s: with this address the
+ * header-scoped request reaches the local port and unheadered traffic still
+ * reaches the cluster workload.
+ */
+export const DAEMON_HOST_ADDRESS = "host.docker.internal";
+
 export function buildInterceptArgs(
   deployment: string,
   localPort: number,
   portId: number,
   feature: string,
+  docker = false,
 ): string[] {
   // --port <local>:<identifier>. *portId* is the Service port NUMBER (k8s_port),
   // NOT the port name: a Service commonly names its `targetPort` (the
@@ -209,6 +229,8 @@ export function buildInterceptArgs(
     "--port", `${localPort}:${portId}`,
     "--http-header", `x-feature=${feature}`,
     "--mount", "false",
+    // Host mode leaves this alone: 127.0.0.1 is already the right laptop.
+    ...(docker ? ["--address", DAEMON_HOST_ADDRESS] : []),
   ];
 }
 
@@ -548,7 +570,7 @@ export async function startIntercept(a: InterceptArgs): Promise<InterceptResult>
 
   info(`Intercepting ${deployment} → localhost:${localPort} (x-feature=${a.feature})...`);
   const [rc, out] = await runner(
-    buildInterceptArgs(deployment, localPort, svcDef["k8s_port"], a.feature),
+    buildInterceptArgs(deployment, localPort, svcDef["k8s_port"], a.feature, Boolean(a.dockerDaemon)),
   );
   if (rc !== 0) {
     throw new SandboxError(

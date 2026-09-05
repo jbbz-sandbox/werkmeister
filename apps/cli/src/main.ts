@@ -142,7 +142,9 @@ const SPECS: CommandSpec[] = [
         .option(
           "--docker-daemon",
           "Run the telepresence daemon in a container (connect --docker) — " +
-            "avoids the host TUN device and VPN routing conflicts.",
+            "avoids the host TUN device, its sudo prompt, and VPN routing conflicts. " +
+            "In exchange the host loses cluster DNS: nothing on your laptop resolves " +
+            "<svc>.<ns> while connected this way.",
         )
         .option("--workspace <path>", "Explicit workspace path (default: resolve from the feature name).");
     },
