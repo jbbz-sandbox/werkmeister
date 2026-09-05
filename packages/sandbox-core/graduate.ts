@@ -18,6 +18,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
+import { SandboxError } from "./errors.js";
 import { standardsDirPath } from "./global_config.js";
 import { listNotes, type Note } from "./notes.js";
 import { run } from "./proc.js";
@@ -30,9 +31,9 @@ export const KINDS: readonly string[] = ["rule", "example", "anti-pattern"];
 const _GOING_DEEPER_HEADER = "## Going deeper\n| When you're doing | Read |\n|---|---|\n";
 
 /** Raised for any graduateNote() precondition failure. */
-export class GraduationError extends Error {
+export class GraduationError extends SandboxError {
   constructor(message: string) {
-    super(message);
+    super(message, "GRADUATION");
     this.name = "GraduationError";
   }
 }

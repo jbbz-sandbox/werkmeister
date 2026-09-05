@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { SandboxError } from "./dist/errors.js";
+import { GraduationError } from "./dist/graduate.js";
 import { WorkspaceError } from "./dist/sandbox.js";
 
 test("SandboxError carries its code and message", () => {
@@ -27,4 +28,12 @@ test("WorkspaceError folds in under the WORKSPACE code", () => {
   const e = new WorkspaceError("boom");
   assert.ok(e instanceof SandboxError);
   assert.equal(e.code, "WORKSPACE");
+});
+
+// So sandbox-notes's graduate failures get the coded `structuredContent.code`
+// adapt() promises instead of falling through the generic-error path.
+test("GraduationError folds in under the GRADUATION code", () => {
+  const e = new GraduationError("boom");
+  assert.ok(e instanceof SandboxError);
+  assert.equal(e.code, "GRADUATION");
 });
