@@ -11,7 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { ALL, DASHBOARD, MCP, start } from "./dist/web_servers.js";
+import { ALL, CLAUDECK, DASHBOARD, MCP, start } from "./dist/web_servers.js";
 
 test("MCP is one of the servers `sandbox connect` brings up, on its own stem", () => {
   assert.ok(ALL.includes(MCP));
@@ -20,6 +20,15 @@ test("MCP is one of the servers `sandbox connect` brings up, on its own stem", (
   // share a PID file and reap each other.
   assert.notEqual(MCP.stem, DASHBOARD.stem);
   assert.equal(MCP.stem, "sandbox-mcp");
+});
+
+test("only MCP binds wide -- DASHBOARD and CLAUDECK stay loopback-only", () => {
+  // A container has no loopback route to the host, so apps/mcp must bind
+  // 0.0.0.0. DASHBOARD/CLAUDECK are unauthenticated and must never inherit
+  // that env var, or their tools become reachable from the network.
+  assert.deepEqual(MCP.env, { HOST: "0.0.0.0" });
+  assert.equal(DASHBOARD.env?.HOST, undefined);
+  assert.equal(CLAUDECK.env?.HOST, undefined);
 });
 
 test("start() leaves a server alone when the PID file is this very process", async () => {

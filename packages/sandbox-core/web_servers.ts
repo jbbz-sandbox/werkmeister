@@ -48,6 +48,16 @@ export interface WebApp {
    * build step (Claudeck serves its sources directly).
    */
   buildRef: string | null;
+  /**
+   * Extra environment variables for this app's process, merged over
+   * `process.env` last (see `start()`). Per-app rather than inherited by
+   * every managed app: `apps/mcp` is the one server a container must reach
+   * over the network, so it alone needs a wide (`0.0.0.0`) bind. DASHBOARD
+   * and CLAUDECK are host-only and unauthenticated — binding them to every
+   * interface would expose unauthenticated tools to the network, so they
+   * must not inherit this.
+   */
+  env?: Record<string, string>;
 }
 
 export const DASHBOARD: WebApp = {
@@ -82,6 +92,15 @@ export const MCP: WebApp = {
   stem: "sandbox-mcp",
   entry: "dist/main.js",
   buildRef: "dist/main.js",
+  // Must be reachable from a container with no Docker socket (that's the
+  // whole point of this app), and a container's requests arrive over the
+  // bridge network, not loopback — so this is the one managed app that
+  // needs a wide bind. On a 0.0.0.0 bind, apps/mcp/lib/token.ts's
+  // authorized() makes the bearer token mandatory (it only accepts a
+  // missing header on loopback), so this does not open the surface up —
+  // it just makes auth non-optional. DASHBOARD/CLAUDECK deliberately don't
+  // set this: they're unauthenticated and must stay loopback-only.
+  env: { HOST: "0.0.0.0" },
 };
 
 /** Every app `sandbox connect` brings up (and `down`/`stop`/`restart` manage). */
@@ -392,7 +411,7 @@ export async function start(app: WebApp = DASHBOARD, build = true, force = false
   // start below always binds cleanly and we never leak a second server.
   await freePort(app.port);
   const log = logFile(app);
-  const env = { ...process.env, PORT: String(app.port) };
+  const env = { ...process.env, PORT: String(app.port), ...(app.env ?? {}) };
   info(`Starting ${app.label} on http://localhost:${app.port}/ ...`);
   // Detached (own session) so it outlives this CLI invocation; logs to a
   // fresh file each start to stay bounded.
