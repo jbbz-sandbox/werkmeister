@@ -653,7 +653,8 @@ traffic reach the cluster workload untouched. The intercept target is the contai
 `sandbox up` already published on the feature's slot port, so hot reload keeps working.
 
 **Two daemon modes.** Telepresence has to get cluster traffic onto your laptop, and there
-are two places its daemon can live.
+are two places its daemon can live. [docs/topology.md](topology.md) draws the whole picture,
+including what changes when the cluster is a managed one in the cloud.
 
 | | host mode (default) | `--docker-daemon` |
 |---|---|---|
