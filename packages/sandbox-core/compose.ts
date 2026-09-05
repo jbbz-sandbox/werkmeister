@@ -13,7 +13,7 @@ import * as path from "node:path";
 import { Colors } from "./colors.js";
 import { resolveWorkspace } from "./config.js";
 import { ProcError, run, runAsync, RunResult } from "./proc.js";
-import { error, info, raw, success, warn } from "./reporter.js";
+import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
 
 export interface ContainerStatus {
@@ -396,10 +396,54 @@ export function composeRestart(feature: string): boolean {
  * brought up reports a bare "no docker-compose.yml", which is true but not the
  * useful half of the answer.
  */
+/**
+ * The `docker compose logs` argv tail.
+ *
+ * Exported for its own test: the follow/tail pair is the only behavioural
+ * difference between a CLI tail and a bounded remote read, and inside
+ * `composeLogs` it is unobservable without a live daemon.
+ */
+export function composeLogsArgs(
+  service: string | null | undefined,
+  follow: boolean,
+  tail: number,
+): string[] {
+  const args = ["logs"];
+  if (follow) {
+    args.push("-f");
+  }
+  args.push("--tail", String(tail));
+  if (service) {
+    args.push(service);
+  }
+  return args;
+}
+
+export interface ComposeLogsOptions {
+  /** Stream until *signal* aborts (`-f`). Default true — the CLI's behaviour. */
+  follow?: boolean;
+  /** Lines of history to show. Default 100. */
+  tail?: number;
+  signal?: AbortSignal;
+}
+
+/**
+ * Tail docker compose logs for *feature*.
+ *
+ * If *service* is given, only show logs for that container. With `follow`
+ * (the default) this streams until *signal* aborts (Ctrl+C, for the CLI); with
+ * `follow: false` it returns when the child exits, which is what makes it
+ * usable as a request/response tool rather than a subscription.
+ *
+ * The slot guard lives here rather than in the caller so every consumer gets
+ * told *why* a tail produced nothing. Without it a feature that was never
+ * brought up reports a bare "no docker-compose.yml", which is true but not the
+ * useful half of the answer.
+ */
 export async function composeLogs(
   feature: string,
   service?: string | null,
-  signal?: AbortSignal,
+  { follow = true, tail = 100, signal }: ComposeLogsOptions = {},
 ): Promise<void> {
   if ((await getSlot(feature)) === null) {
     warn(`Feature '${feature}' is not running (no slot allocated)`);
@@ -407,22 +451,27 @@ export async function composeLogs(
     return;
   }
 
-  const args = ["logs", "-f", "--tail", "100"];
-  if (service) {
-    args.push(service);
+  info(`Tailing logs for '${feature}'` + (service ? ` (${service})` : ""));
+  if (follow) {
+    raw(`${Colors.DIM}Press Ctrl+C to stop${Colors.RESET}\n`);
   }
 
-  info(`Tailing logs for '${feature}'` + (service ? ` (${service})` : ""));
-  raw(`${Colors.DIM}Press Ctrl+C to stop${Colors.RESET}\n`);
-
-  const cmd = composeCommand(feature, args, null);
+  const cmd = composeCommand(feature, composeLogsArgs(service, follow, tail), null);
   if (cmd === null) {
     return;
   }
+  // A TTY caller watches the tail live through inherited stdio. An in-process
+  // one owns no TTY -- its stdout may be an MCP transport -- so capture and
+  // replay through the reporter instead (the workspace_init.ts:1003 rule).
+  const live = passthrough();
   try {
-    // No timeout: a tail is meant to run until the reader stops it. The signal
-    // is the only way out, which is why it is not optional in practice.
-    await runAsync(cmd, { signal });
+    // No timeout: a followed tail runs until the reader stops it, and a bounded
+    // one is already bounded by the child's own exit.
+    const result = await runAsync(cmd, { signal, ...(live ? {} : { capture: true }) });
+    if (!live) {
+      if (result.stdout) raw(result.stdout);
+      if (result.stderr) raw(result.stderr, "stderr");
+    }
   } catch (err) {
     reportComposeFailure(err);
   }

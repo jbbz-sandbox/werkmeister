@@ -27,5 +27,5 @@ export async function run(args: Record<string, unknown>): Promise<void> {
         ` ===${Colors.RESET}\n`,
     );
   }
-  await composeLogs(feature, service, interruptSignal());
+  await composeLogs(feature, service, { signal: interruptSignal() });
 }
