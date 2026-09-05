@@ -592,10 +592,11 @@ function registerHostTools(server: McpServer): void {
             "BROWSER",
           );
         }
-        // supervise() owns the cleanup and resolves only when the window
-        // closes, so it is started and NOT awaited: this tool returns once the
-        // window is up and tagged.
-        void window.supervise();
+        // Deliberately not awaited: the window belongs to a human now and this
+        // call returns. The catch is not optional — supervise() rejects when
+        // the browser dies (browser.ts:540), long after this tool replied, and
+        // an unhandled rejection would take the whole server down with it.
+        void window.supervise().catch(() => {});
         return { feature, url };
       }),
   );
