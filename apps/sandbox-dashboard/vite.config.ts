@@ -32,10 +32,11 @@ const isDevelopment = process.env.NODE_ENV === "development";
 // that the MCP server serves as a `ui://` resource.
 export default defineConfig({
   plugins: [coworkArtifactMeta(), viteSingleFile()],
-  // npm workspaces hoist @rjsf/* to the repo root, where `react` resolves to
-  // frontend's 19.x while our own imports resolve to this app's 18.x. Two
-  // Reacts in one bundle means RJSF's elements fail the host React's element
-  // check ("Objects are not valid as a React child") and the form never renders.
+  // Guard, not a fix for a live problem: npm workspaces hoist @rjsf/* to the
+  // repo root, so whenever the root ends up with a different `react` than this
+  // app's, RJSF resolves to that one and we ship two Reacts. RJSF's elements
+  // then fail the host React's element check ("Objects are not valid as a React
+  // child") and the form never renders. The tree is single-React today.
   resolve: { dedupe: ["react", "react-dom"] },
   build: {
     // The UI runs only in the host's modern Chromium webview (Claude Desktop),
