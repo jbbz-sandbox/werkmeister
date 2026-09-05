@@ -146,6 +146,17 @@ export function zshenvPath(): string {
   return path.join(os.homedir(), ".zshenv");
 }
 
+/**
+ * The interactive rc file, where tab completion is installed.
+ *
+ * Not `.zshenv`: that one is sourced by every zsh, scripts included, and
+ * `compinit`/`bashcompinit` are interactive-shell machinery it has no business
+ * paying for.
+ */
+export function zshrcPath(): string {
+  return path.join(os.homedir(), ".zshrc");
+}
+
 export function desktopConfigPath(): string {
   return path.join(
     os.homedir(),
@@ -179,6 +190,10 @@ const _ENV_MAP: readonly [string, string, string][] = [
 // Managed-block markers for ~/.zshenv (idempotent replace).
 const _ZSH_BEGIN = "# >>> sandbox config >>>";
 const _ZSH_END = "# <<< sandbox config <<<";
+
+// Managed-block markers for ~/.zshrc (tab completion; idempotent replace).
+const _COMPLETION_BEGIN = "# >>> sandbox completion >>>";
+const _COMPLETION_END = "# <<< sandbox completion <<<";
 
 // Old hardcoded exports we migrate away from (stripped from ~/.zshenv on write).
 const _LEGACY_EXPORT_VARS = ["SANDBOX_ROOT", "SANDBOX_REPOS_ROOT", "SANDBOX_WORKSPACES_ROOT"];
@@ -504,32 +519,50 @@ function managedBlock(): string {
   );
 }
 
-/** Remove any prior managed block and the legacy hardcoded SANDBOX_* exports. */
-function stripManagedAndLegacy(text: string): string {
+/** Remove the block delimited by *begin* and *end*, plus any line matching *drop*. */
+function stripBlock(
+  text: string,
+  begin: string,
+  end: string,
+  drop: (line: string) => boolean = () => false,
+): string {
   const out: string[] = [];
   let inBlock = false;
   for (const line of text.split("\n")) {
-    if (line.trim() === _ZSH_BEGIN) {
+    if (line.trim() === begin) {
       inBlock = true;
       continue;
     }
-    if (line.trim() === _ZSH_END) {
+    if (line.trim() === end) {
       inBlock = false;
       continue;
     }
-    if (inBlock) {
+    if (inBlock || drop(line)) {
       continue;
-    }
-    const stripped = line.trim();
-    if (
-      stripped.startsWith("export ") &&
-      _LEGACY_EXPORT_VARS.some((v) => stripped.slice("export ".length).startsWith(`${v}=`))
-    ) {
-      continue; // drop legacy hardcoded export — env.sh owns it now
     }
     out.push(line);
   }
   return out.join("\n");
+}
+
+/** A legacy hardcoded SANDBOX_* export, which env.sh now owns. */
+function isLegacyExport(line: string): boolean {
+  const stripped = line.trim();
+  return (
+    stripped.startsWith("export ") &&
+    _LEGACY_EXPORT_VARS.some((v) => stripped.slice("export ".length).startsWith(`${v}=`))
+  );
+}
+
+/** Re-append *block* at the end of *target*, replacing any prior copy. Changed? */
+function installBlock(target: string, body: string, block: string, original: string): boolean {
+  const updated = (body ? body.replace(/\n+$/, "") + "\n\n" : "") + block;
+  if (updated === original) {
+    return false;
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, updated);
+  return true;
 }
 
 /**
@@ -541,14 +574,40 @@ function stripManagedAndLegacy(text: string): string {
 export function ensureZshenvSources(p?: string): boolean {
   const target = p ?? zshenvPath();
   const original = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
-  const body = stripManagedAndLegacy(original).replace(/\n+$/, "");
-  const updated = (body ? body + "\n\n" : "") + managedBlock();
-  if (updated === original) {
-    return false;
-  }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, updated);
-  return true;
+  const body = stripBlock(original, _ZSH_BEGIN, _ZSH_END, isLegacyExport);
+  return installBlock(target, body, managedBlock(), original);
+}
+
+/**
+ * Idempotently install `sandbox` tab completion in ~/.zshrc.
+ *
+ * `complete -C` is bash's protocol, reached in zsh through bashcompinit — one
+ * `sandbox __complete` callback then serves both shells, with no generated
+ * completion script to go stale. Appended last so an rc that runs `compinit`
+ * itself (oh-my-zsh and friends) has already done so. The guards cover the rc
+ * that never does — bashcompinit would fail with "compdef: not found" — and the
+ * shell where even our own `compinit` cannot run (a non-interactive zsh sourcing
+ * the rc), where the block must stay silent rather than spill errors.
+ *
+ * Returns true if the file content changed. zsh only — bash users have the
+ * two-line snippet in the README.
+ */
+export function ensureZshrcCompletion(p?: string): boolean {
+  const target = p ?? zshrcPath();
+  const original = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
+  const body = stripBlock(original, _COMPLETION_BEGIN, _COMPLETION_END);
+  const block =
+    `${_COMPLETION_BEGIN}\n` +
+    "# Managed by `sandbox setup` — do not edit; regenerated on `sandbox setup`.\n" +
+    "if (( $+commands[sandbox] )); then\n" +
+    "  (( $+functions[compdef] )) || { autoload -Uz compinit && compinit }\n" +
+    "  if (( $+functions[compdef] )); then\n" +
+    "    autoload -Uz +X bashcompinit && bashcompinit\n" +
+    "    complete -C 'sandbox __complete' sandbox\n" +
+    "  fi\n" +
+    "fi\n" +
+    `${_COMPLETION_END}\n`;
+  return installBlock(target, body, block, original);
 }
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,26 @@ npm run build
 `dist/main.js`. `sandbox hooks gate` bypasses the CLI import chain via
 `dist/lib/gate.js` for a fast PreToolUse cold start.
 
+## Tab completion
+
+`sandbox __complete` answers bash's `complete -C` protocol (COMP_LINE/COMP_POINT
+in, candidates on stdout), so both shells share one code path and there is no
+generated completion script to keep in sync — candidates come off the commander
+program itself.
+
+`sandbox setup` installs it into `~/.zshrc` as a managed block (idempotent;
+re-running replaces its own block and nothing else). To wire it up by hand, or
+in bash, which setup does not touch:
+
+```sh
+autoload -Uz compinit && compinit          # zsh only; skip if your rc runs it
+autoload -Uz +X bashcompinit && bashcompinit
+complete -C 'sandbox __complete' sandbox
+```
+
+Completes subcommand names, a command's long flags, and any positional as a
+feature name (`infra` plus the workspaces under the workspaces root).
+
 ## Layout
 
 - `src/main.ts` — commander program (subcommand registry + dispatch)

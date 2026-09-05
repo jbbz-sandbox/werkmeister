@@ -17,7 +17,8 @@
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
  *
- * then writes the config and converges the machine (sandbox-core/machine_setup):
+ * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
+ * converges the machine (sandbox-core/machine_setup):
  * seeding the `~/.sandbox` registry files (or migrating them up from a legacy
  * `infra/config/` checkout), the sandbox-tools and ponytail plugins, the
  * companion sandbox-workspace checkout, the TLS certificate covering every
@@ -288,12 +289,17 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   const saved = gc.save(newCfg);
   const envSh = gc.writeEnvSh(newCfg);
   const zshChanged = gc.ensureZshenvSources();
+  const completionChanged = gc.ensureZshrcCompletion();
   const desktopChanged = gc.patchDesktopConfig();
 
   heading("Writing config");
   success(`Wrote ${saved}`);
   info(`Regenerated ${envSh}`);
   info(`${gc.zshenvPath()}: ${zshChanged ? "updated" : "already sources env.sh"}`);
+  info(
+    `${gc.zshrcPath()}: ` +
+      `${completionChanged ? "installed tab completion" : "tab completion already installed"}`,
+  );
   if (fs.existsSync(gc.desktopConfigPath())) {
     info(
       `${path.basename(gc.desktopConfigPath())}: ` +

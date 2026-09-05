@@ -738,6 +738,50 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
   }
 }
 
+/**
+ * `sandbox __complete` — the callback behind bash's `complete -C`, which hands
+ * us the line in COMP_LINE/COMP_POINT and reads newline-separated candidates
+ * back off stdout. One code path covers bash and zsh (via bashcompinit), which
+ * is why there is no generated per-shell completion script to keep in sync:
+ * the candidates come straight off the commander program built above, so a new
+ * entry in SPECS completes without touching anything here.
+ *
+ * Hook it up with (zsh needs the first line, bash does not):
+ *     autoload -Uz +X bashcompinit && bashcompinit
+ *     complete -C 'sandbox __complete' sandbox
+ */
+async function completeLine(program: Command): Promise<void> {
+  const line = (process.env.COMP_LINE ?? "").slice(0, Number(process.env.COMP_POINT ?? 0));
+  const words = line.split(/\s+/);
+  // A line ending in a space is starting a fresh word, not extending the last one.
+  const current = line.endsWith(" ") ? "" : (words.pop() ?? "");
+  const cmd = program.commands.find((c) => c.name() === words[1]);
+
+  let candidates: string[] = [];
+  if (!cmd) {
+    candidates = program.commands.map((c) => c.name());
+  } else if (current.startsWith("-")) {
+    candidates = cmd.options.flatMap((o) => (o.long ? [o.long] : []));
+  } else if (cmd.registeredArguments.length) {
+    // ponytail: every positional completes as a feature name, so `logs
+    // <feature> [service]` offers features in the service slot too, and the
+    // list is the workspaces on disk rather than the features actually up
+    // (that would be getAllSlots(), i.e. docker on every TAB). Split per
+    // argument, or add the slot lookup, if either ever grates.
+    candidates = ["infra"];
+    try {
+      const { listWorkspaces } = await import("sandbox-core");
+      const { workspaces } = await listWorkspaces();
+      candidates.push(...workspaces.map((w) => w.name));
+    } catch {
+      // An unreadable workspaces root is not worth spilling an error message
+      // into the user's completion buffer over.
+    }
+  }
+
+  console.log(candidates.filter((c) => c.startsWith(current)).join("\n"));
+}
+
 export async function main(): Promise<void> {
   // Stands aside for a command that claims SIGINT to run its own cleanup first
   // — see lib/interrupt.ts for why this handler being registered first was a bug.
@@ -788,6 +832,10 @@ export async function main(): Promise<void> {
         );
         process.exit(1);
       });
+  }
+
+  if (process.argv[2] === "__complete") {
+    return completeLine(program);
   }
 
   if (process.argv.length <= 2) {
