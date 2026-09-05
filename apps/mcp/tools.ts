@@ -78,7 +78,7 @@ async function adapt(fn: () => Promise<Record<string, unknown>>): Promise<CallTo
       // CLI's exit codes: something for the caller to branch on.
       return {
         isError: true,
-        content: [{ type: "text", text: e.message }],
+        content: [{ type: "text", text: `${e.message}\n\n${reporter.text()}` }],
         structuredContent: { code: e.code },
       };
     }
@@ -214,12 +214,18 @@ function registerLifecycleTools(server: McpServer): void {
       },
     },
     async (args, extra): Promise<CallToolResult> =>
-      adapt(async () => ({
-        ...detectReport(
-          resolveFeature(args.feature, (extra as Extra).requestInfo?.headers),
-          args.workspace ?? null,
-        ),
-      })),
+      adapt(async () => {
+        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
+        // detectReport calls resolveWorkspace() directly, which has no
+        // docker-compose.yml guard and, unconfigured, falls back to a path
+        // derived from process.cwd() — meaningless for this server. Route
+        // through the same guarded resolution every other tool uses so a bad
+        // resolution throws WORKSPACE instead of silently reporting on the
+        // wrong directory. An explicit `workspace` argument still wins.
+        return {
+          ...detectReport(feature, args.workspace ?? resolveWorkspaceDir(feature)),
+        };
+      }),
   );
 
   server.registerTool(
