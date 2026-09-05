@@ -22,6 +22,9 @@ A system that enables up to 12 Claude Code agents to concurrently develop featur
 
 ## System Architecture
 
+For which *machine* each of these runs on — laptop, container runtime, or a cloud
+cluster — see [docs/topology.md](topology.md). This section is the request path.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Browser / Playwright                                               │
