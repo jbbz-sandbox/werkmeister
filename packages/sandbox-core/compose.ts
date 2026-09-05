@@ -232,8 +232,20 @@ function reportComposeOutcome(result: RunResult, capture: boolean): RunResult | 
  * Abort joins ENOENT and timeout here because every caller treats all three the
  * same way -- as "did not run" -- and a cancelled teardown is not an error the
  * user needs a stack trace for.
+ *
+ * Every caller passes `capture: true` (or, for composeLogs's non-TTY path,
+ * conditionally captures) rather than inheriting stdio, so whatever the child
+ * printed before dying only ever lives on the ProcError -- replay it here
+ * before reporting the failure, or a timeout/cancel on a long-running compose
+ * (e.g. a `logs -f` or a slow `up --build`) reports with no transcript at all.
+ * `e.stdout`/`e.stderr` are empty when nothing was captured (ENOENT, or a
+ * stream-mode caller with inherited stdio), so this is a no-op there.
  */
 function reportComposeFailure(err: unknown): null {
+  if (err instanceof ProcError) {
+    if (err.stdout) raw(err.stdout);
+    if (err.stderr) raw(err.stderr, "stderr");
+  }
   if (err instanceof ProcError && err.code === "ABORT_ERR") {
     warn("docker compose was cancelled");
     return null;

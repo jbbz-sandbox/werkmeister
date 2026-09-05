@@ -110,6 +110,16 @@ export async function runFeatureTests({
     }
     return { status: result.status, cwd, slot };
   } catch (e) {
+    // A timeout or abort makes runAsync reject instead of resolve, so the
+    // output captured above never runs -- but it still lives on the
+    // ProcError. Replay it here, or a 10-minute run that times out reports
+    // an empty transcript on exactly the failure where it matters most. The
+    // TTY path (`live`) already streamed to the inherited stdio, so skip it
+    // there to avoid printing the output twice.
+    if (!live && e instanceof ProcError) {
+      if (e.stdout) raw(e.stdout);
+      if (e.stderr) raw(e.stderr, "stderr");
+    }
     if (e instanceof ProcError && e.code === "ENOENT") {
       throw new SandboxError(
         "npx not found. Ensure Node.js is installed and npx is on your PATH.\n" +
