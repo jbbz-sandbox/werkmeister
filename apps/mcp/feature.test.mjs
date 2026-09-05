@@ -3,6 +3,9 @@
 // one agent, one container, occasionally two features.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 import { SandboxError } from "sandbox-core/errors";
 import { withSandboxHome } from "../../packages/sandbox-core/fixtures.mjs";
@@ -38,18 +41,27 @@ test("a repeated header takes the first value", () => {
 });
 
 test("a feature no workspace or container can match is a coded WORKSPACE error", async () => {
-  // withSandboxHome seeds a config.yaml with no `paths.workspaces_root`, so
-  // resolveWorkspace() falls through to cwd detection instead of a real
-  // developer's ~/.sandbox — the same isolation compose-logs-guard.test.mjs
-  // uses for the machine-global registry.
-  await withSandboxHome(async () => {
-    assert.throws(
-      () => resolveWorkspaceDir("no-such-feature-mcp-task6-zzz"),
-      (e) => {
-        assert.ok(e instanceof SandboxError);
-        assert.equal(e.code, "WORKSPACE");
-        return true;
+  // Pinning `paths.workspaces_root` to an empty temp dir forces
+  // resolveWorkspace() into its "configured" branch instead of falling
+  // through to detectWorkspaceFromCwd(), which walks up from process.cwd()
+  // for a .git boundary and would otherwise make this test depend on
+  // whatever sits above this checkout on the machine that runs it.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-task6-workspaces-"));
+  try {
+    await withSandboxHome(
+      async () => {
+        assert.throws(
+          () => resolveWorkspaceDir("no-such-feature-mcp-task6-zzz"),
+          (e) => {
+            assert.ok(e instanceof SandboxError);
+            assert.equal(e.code, "WORKSPACE");
+            return true;
+          },
+        );
       },
+      { config: `paths:\n  workspaces_root: ${root}\n` },
     );
-  });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
