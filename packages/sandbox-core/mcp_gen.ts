@@ -75,7 +75,7 @@ export function validateArchetypeMcpServers(
 function substituteVars(value: unknown, vars: Record<string, string>): unknown {
   if (typeof value === "string") {
     return value.replace(/\$\{(\w+)\}/g, (match, name: string) =>
-      name in vars ? vars[name] : match,
+      Object.hasOwn(vars, name) ? vars[name] : match,
     );
   }
   if (Array.isArray(value)) {
