@@ -1256,41 +1256,54 @@ Every check below runs in ONE shell invocation: a background server started in
 one shell is not reachable from the next, and `kill %1` in a later shell has no
 job to kill.
 
+Cleanup tracks the PID it started. Do **not** reach for `pkill -f`: the server's
+cmdline is `node dist/main.js` (cwd-relative), so a pattern narrow enough to be
+safe never matches, and one broad enough to match also matches
+`apps/sandbox-dashboard`, whose entry is the identical `dist/main.js`. Killing
+by pattern here either does nothing — silently leaving a stale server that makes
+the next probe pass for the wrong reason — or kills the dashboard.
+
 Run:
 
 ```bash
 cd apps/mcp && npm run build && bash -c '
-set -e
-cleanup() { pkill -f "apps/mcp/dist/main.js" 2>/dev/null || true; }
-trap cleanup EXIT
-
-echo "--- loopback bind ---"
-node dist/main.js & sleep 1
-ls -l ~/.sandbox/mcp-token
+srv=""
+start() { node dist/main.js & srv=$!; sleep 1; }
+stop() { [ -n "$srv" ] && kill "$srv" 2>/dev/null; wait "$srv" 2>/dev/null; srv=""; }
+trap stop EXIT
 
 probe() { curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/mcp   -H "Content-Type: application/json" "$@" -d "{}"; echo; }
-echo -n "no header (expect NOT 401): "; probe
-echo -n "any Origin (expect 403):    "; probe -H "Origin: https://evil.example"
-echo -n "wrong token (expect 401):   "; probe -H "Authorization: Bearer wrong"
 
-cleanup; sleep 1
+echo "--- loopback bind ---"
+start
+ls -l ~/.sandbox/mcp-token
+echo -n "no header (expect NOT 401):   "; probe
+echo -n "any Origin (expect 403):      "; probe -H "Origin: https://evil.example"
+echo -n "wrong token (expect 401):     "; probe -H "Authorization: Bearer wrong"
+stop
+
 echo "--- 0.0.0.0 bind ---"
-HOST=0.0.0.0 node dist/main.js & sleep 1
-echo -n "no header (expect 401):     "; probe
+HOST=0.0.0.0 node dist/main.js & srv=$!; sleep 1
+echo -n "no header (expect 401):       "; probe
 echo -n "right token (expect NOT 401): "; probe -H "Authorization: Bearer $(cat ~/.sandbox/mcp-token)"
 '
 ```
 
 Expected, in order: the token file is `-rw-------`; then on loopback a
-non-401 (a 400-family protocol error from the SDK is the pass — the point is
-that the request *reached the route*), `403`, `401`; then on `0.0.0.0` a `401`
-and a non-401.
+non-401 (the SDK answers `406 Not Acceptable` to a POST without its required
+`Accept` header — that is the pass, because the request *reached the route*),
+`403`, `401`; then on `0.0.0.0` a `401` and a non-401.
 
-- [ ] **Step 4: Confirm the process is gone**
+**A 406 where you expected a 401 on the `0.0.0.0` bind means the loopback
+server never died** and your probes are hitting it. Check for a survivor before
+believing any of these numbers.
 
-Run: `pgrep -fl 'apps/mcp/dist/main.js' || echo "clean"`
-Expected: `clean` — Step 3's trap reaped both servers. Kill any survivor before
-moving on; a stray listener on 3002 will confuse every later task.
+- [ ] **Step 4: Confirm nothing survived**
+
+Run: `lsof -ti tcp:3002 -sTCP:LISTEN || echo "port 3002 free"`
+Expected: `port 3002 free`. A stray listener on 3002 makes every later task's
+probe answer for the wrong server; kill it by the PID `lsof` reports before
+moving on.
 
 - [ ] **Step 5: Commit**
 
@@ -2429,10 +2442,12 @@ Expected: the token is `-rw-------`; the PID file exists and names a live proces
 
 - [ ] **Step 3: Authentication and CORS (§10.3)**
 
-Re-run the four curls from Task 6 Step 4 against the running server (loopback:
-no header works, wrong token 401, any Origin 403; then `HOST=0.0.0.0`: no header
-401, right token works).
-Expected: as stated there.
+Re-run the probe sequence from Task 6 Step 3 (loopback: no header reaches the
+route, any Origin 403, wrong token 401; then `HOST=0.0.0.0`: no header 401,
+right token reaches the route). Against the server `sandbox connect` started,
+not one of your own — check `lsof -ti tcp:3002 -sTCP:LISTEN` first and probe
+that PID's server.
+Expected: as stated in Task 6 Step 3.
 
 - [ ] **Step 4: The whole point — a container with no socket (§10.4)**
 
