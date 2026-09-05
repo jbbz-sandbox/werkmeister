@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "declaration": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "noEmit": false,
+    "types": ["node"]
+  },
+  // A glob, not a list: `tsc` errors TS6053 on a named file that does not
+  // exist, and main.ts/tools.ts arrive a task later than this file does.
+  // Same reasoning as packages/sandbox-core/tsconfig.json.
+  "include": ["*.ts", "lib/*.ts"]
+}

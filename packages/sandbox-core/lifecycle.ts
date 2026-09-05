@@ -269,7 +269,7 @@ function readSlotFromWorkspace(workspace: string): number | null {
 }
 
 /** Read the SERVICES list from <workspace>/.env (written by init-workspace). */
-function readServicesFromWorkspace(workspace: string): string[] {
+export function readServicesFromWorkspace(workspace: string): string[] {
   const envFile = path.join(workspace, ".env");
   if (!fs.existsSync(envFile) || !fs.statSync(envFile).isFile()) {
     return [];

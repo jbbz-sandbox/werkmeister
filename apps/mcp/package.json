@@ -1,0 +1,26 @@
+{
+  "name": "sandbox-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Headless, authenticated MCP server exposing the sandbox verbs to a container agent with no Docker access.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "serve:stdio": "node dist/main.js --stdio",
+    "serve:http": "node dist/main.js",
+    "test": "tsc && node --test *.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.1.0",
+    "sandbox-core": "^0.1.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3"
+  }
+}
