@@ -1,5 +1,13 @@
 # `apps/mcp` — Remaining Work Handoff
 
+> **DONE — 2026-09-04.** All three tasks executed; spec §10.4 **PASSES**. The
+> result, the four defects found in *this* document, and the closed firewall
+> unknown are recorded in `2026-09-04-mcp-surface.md`'s **Execution record**;
+> the reusable recipe is in `docs/users-guide.md` (self-hosting section). Read
+> those, not the task steps below — Tasks 2 and 3 here are wrong in four ways.
+> Kept for the reasoning in "Decisions already made" and "Traps that already
+> cost time", both of which held up.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Written 2026-09-04, to be read cold.** A session that has never seen the work

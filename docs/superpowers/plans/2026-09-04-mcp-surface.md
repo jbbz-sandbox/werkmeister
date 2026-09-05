@@ -2588,7 +2588,7 @@ run interactively because they mutate machine-global state.
 | §10.1 gates | **PASS** — `turbo run typecheck build test` 15/15, `standards check` ok |
 | §10.2 lifecycle + token | **PASS** — started via `start(MCP)`; token 0600, 64 hex |
 | §10.3 auth / CORS | **PASS** — no header 401, wrong token 401, `Origin` 403, right token 406 (reached the route) |
-| §10.4 container, no socket | **NOT RUN** — needs §4's block fixed and a container rebuild. The branch's central claim is therefore *unproven*. |
+| §10.4 container, no socket | **PASS** (2026-09-04, second session) — `selfhost-vscode-plugin`: no `/var/run/docker.sock`, no `docker` CLI, `SANDBOX_MCP_TOKEN` 64 chars. `initialize` 200 over `host.docker.internal:3002`, `tools/list` 20 tools, then `sandbox-down health` → `sandbox-status` (health absent) → `sandbox-up health` (slot 2, 11200-11219, caddy reloaded) → `sandbox-logs health` (real container lines) → `sandbox-status` (health back, 1/1). |
 | §10.5 per-workspace projection | **PASS** — two workspaces, two features, no literal token; absent `FEATURE` leaves `${FEATURE}` visible |
 | §10.6 feature resolution | **PASS** — `NO_FEATURE` names both ways; explicit argument overrides |
 | §10.7 abort mid-`up` | **PASS** — compose child present mid-flight, gone 4s after client disconnect, server unharmed |
@@ -2604,3 +2604,41 @@ prior slot and ports.
 **Known instrument gap:** `statusSnapshot`'s `mcp_web_server` still reports the
 dashboard, so neither `sandbox status` nor `sandbox-status` shows this server.
 Use `lsof -nP -iTCP:3002 -sTCP:LISTEN` and `~/.sandbox/sandbox-mcp.{pid,log}`.
+
+### §10.4 follow-up session — what was actually built, and four more plan defects
+
+The handoff (`2026-09-04-mcp-surface-remaining.md`) got §10.4 run. Its Task 1
+was right; Tasks 2 and 3 were wrong in four ways, each corrected:
+
+- **`services:` entries are machine-global, not per-workspace.** The handoff says
+  to change "that workspace's service entry", and offers a fresh workspace as a
+  way to leave `selfhost` alone. There is no such thing: a fresh workspace runs
+  the same global entries. `vscode-plugin` was chosen as the socket-free bed
+  because it is the one sandbox service that never had the socket; `cli` keeps
+  its socket and its dogfood role.
+- **Hand-adding `sandbox` to `.mcp.json` does not survive.** `writeWorkspaceMcp`
+  prunes any *registry-known* server not wanted by the present archetypes, so the
+  next `init-workspace` deletes it. The durable form is a `mcp-client` archetype
+  carrying `mcp_servers: [sandbox]`, worn only by `vscode-plugin` — per-service
+  is the real granularity D1 was reaching for.
+- **`${SANDBOX_MCP_TOKEN}` in a service's `environment:` cannot work.** It renders
+  as `- "SANDBOX_MCP_TOKEN=${SANDBOX_MCP_TOKEN}"` and is expanded by whichever
+  shell ran compose — for `sandbox-up` that is the MCP server's own env, where it
+  is unset — and compose `environment:` beats `env_file:`, so it would shadow a
+  correct value with an empty one. The token goes through
+  `~/.sandbox/secrets.env` + `secrets: [SANDBOX_MCP_TOKEN]` instead, landing in
+  the feature `.env`; a missing one makes `sandbox up` refuse the workspace.
+- **"Drive the container's own feature" is self-decapitation.** `sandbox-down
+  selfhost` kills the caller mid-call. `health` (1 container) was driven instead.
+
+No container here runs an MCP client, so the verbs were driven by curl
+JSON-RPC — which is the stricter test anyway: it exercises the bind, the
+gateway route, the `Host` header and bearer auth without an SDK smoothing
+anything over.
+
+**The handoff's one open unknown is now closed:** the macOS application firewall
+does **not** block Docker's `host.docker.internal` gateway route. A LAN probe to
+en0 still times out; the gateway path is unaffected.
+
+The server answers in **stateless** mode — no `Mcp-Session-Id` on the
+`initialize` response, and `tools/call` works without one.

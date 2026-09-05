@@ -847,9 +847,35 @@ the pieces that are not obvious from the demo services:
   `0.0.0.0`, via a per-app `env` on its `WebApp` entry; never arrange that by exporting
   `HOST` before `sandbox connect`, which would also expose the unauthenticated dashboard.
   Its `mcp_servers.sandbox` registry entry is deliberately in no archetype — `.mcp.json` is
-  shared with host sessions, where `host.docker.internal` does not resolve — so add it to a
-  workspace only when that workspace is actually driven from a container. See
+  shared with host sessions, where `host.docker.internal` does not resolve. See
   `apps/mcp/README.md`.
+- **Wiring a service to drive the sandbox that way** takes four edits to
+  `~/.sandbox/services.yaml`, and the granularity is the *service*, not the workspace —
+  `services:` entries are machine-global, so a fresh workspace does not isolate a change.
+  1. A top-level `x-mcp-client:` block **above** `services:` (YAML resolves anchors in
+     document order) holding `mounts: &mcp_client_mounts` — `~/repos` and `~/features` at
+     identical host paths — and `env: &mcp_client_env` — `HOME` and the `GIT_CONFIG_*`
+     `safe.directory` trio. Loaders read seven top-level keys, so `x-`-prefixed ones are
+     ignored. No socket, no `~/.sandbox`, no `~/.kube`, no tools volume: the host server
+     holds all of that.
+  2. `extra_volumes: *mcp_client_mounts` and `environment: *mcp_client_env` on the service.
+  3. An archetype of its own carrying `mcp_servers: [sandbox]`, worn only by that service.
+     Hand-adding `sandbox` to a workspace's `.mcp.json` does **not** stick — the projection
+     prunes any registry-known server the present archetypes don't want, so the next
+     `init-workspace` deletes it.
+  4. `SANDBOX_MCP_TOKEN` in `~/.sandbox/secrets.env` (copy `~/.sandbox/mcp-token`) *and*
+     `secrets: [SANDBOX_MCP_TOKEN]` on the service entry, which routes it through the
+     feature `.env`. Never put `${SANDBOX_MCP_TOKEN}` in the service's `environment:`:
+     compose expands it from whichever shell ran it — for the `sandbox-up` tool, the MCP
+     server's own env, where it is unset — and `environment:` beats `env_file:`, so it
+     would shadow the real value with an empty string.
+
+  Then `sandbox init-workspace` and `sandbox down <feature> && sandbox up <feature>`. To
+  check it, `docker exec` into the container and POST an MCP `initialize` to
+  `http://host.docker.internal:3002/mcp` with `Authorization: Bearer $SANDBOX_MCP_TOKEN`
+  and `Accept: application/json, text/event-stream` — and no `Origin` header, which the
+  server rejects with 403. Drive a *different* feature than the container's own: tearing
+  down its own feature kills the caller mid-call.
 
 ---
 
