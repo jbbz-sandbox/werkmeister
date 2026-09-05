@@ -386,17 +386,6 @@ export function composeRestart(feature: string): boolean {
 }
 
 /**
- * Tail docker compose logs for *feature*.
- *
- * If *service* is given, only show logs for that container. Streams until
- * *signal* aborts (Ctrl+C, for the CLI) or the child exits.
- *
- * The slot guard lives here rather than in the caller so every consumer gets
- * told *why* a tail produced nothing. Without it a feature that was never
- * brought up reports a bare "no docker-compose.yml", which is true but not the
- * useful half of the answer.
- */
-/**
  * The `docker compose logs` argv tail.
  *
  * Exported for its own test: the follow/tail pair is the only behavioural
