@@ -36,6 +36,11 @@ test("a loopback bind accepts a missing header, so host clients need no config",
   assert.equal(isLoopback("::1"), true);
 });
 
+test("the localhost spelling of loopback is recognized too", () => {
+  assert.equal(isLoopback("localhost"), true);
+  assert.equal(authorized(undefined, "abc", "localhost"), true);
+});
+
 test("a non-loopback bind refuses a missing header", () => {
   assert.equal(authorized(undefined, "abc", "0.0.0.0"), false);
 });

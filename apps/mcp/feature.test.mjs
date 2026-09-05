@@ -5,7 +5,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { SandboxError } from "sandbox-core/errors";
-import { FEATURE_HEADER, resolveFeature } from "./dist/lib/feature.js";
+import { withSandboxHome } from "../../packages/sandbox-core/fixtures.mjs";
+import { FEATURE_HEADER, resolveFeature, resolveWorkspaceDir } from "./dist/lib/feature.js";
 
 test("the header supplies the feature when no argument does", () => {
   assert.equal(resolveFeature(undefined, { [FEATURE_HEADER]: "frontend" }), "frontend");
@@ -34,4 +35,21 @@ test("blank values on either side count as absent", () => {
 
 test("a repeated header takes the first value", () => {
   assert.equal(resolveFeature(undefined, { [FEATURE_HEADER]: ["alpha", "beta"] }), "alpha");
+});
+
+test("a feature no workspace or container can match is a coded WORKSPACE error", async () => {
+  // withSandboxHome seeds a config.yaml with no `paths.workspaces_root`, so
+  // resolveWorkspace() falls through to cwd detection instead of a real
+  // developer's ~/.sandbox — the same isolation compose-logs-guard.test.mjs
+  // uses for the machine-global registry.
+  await withSandboxHome(async () => {
+    assert.throws(
+      () => resolveWorkspaceDir("no-such-feature-mcp-task6-zzz"),
+      (e) => {
+        assert.ok(e instanceof SandboxError);
+        assert.equal(e.code, "WORKSPACE");
+        return true;
+      },
+    );
+  });
 });
