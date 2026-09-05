@@ -804,7 +804,10 @@ Create `apps/mcp/tsconfig.json`:
     "noEmit": false,
     "types": ["node"]
   },
-  "include": ["main.ts", "tools.ts", "lib/*.ts"]
+  // A glob, not a list: `tsc` errors TS6053 on a named file that does not
+  // exist, and main.ts/tools.ts arrive a task later than this file does.
+  // Same reasoning as packages/sandbox-core/tsconfig.json.
+  "include": ["*.ts", "lib/*.ts"]
 }
 ```
 
@@ -1247,47 +1250,47 @@ main().catch((e) => {
 });
 ```
 
-- [ ] **Step 3: Build and start it by hand**
+- [ ] **Step 3: Build, then check the bind, the token, and the three refusals**
 
-Run: `cd apps/mcp && npm run build && node dist/main.js &`
-Expected: `[sandbox-mcp] listening on http://127.0.0.1:3002/mcp` on stderr, and `~/.sandbox/mcp-token` created.
+Every check below runs in ONE shell invocation: a background server started in
+one shell is not reachable from the next, and `kill %1` in a later shell has no
+job to kill.
 
-Run: `ls -l ~/.sandbox/mcp-token`
-Expected: mode `-rw-------`.
-
-- [ ] **Step 4: Check the three security behaviours by hand**
+Run:
 
 ```bash
-# Loopback + no Authorization: reaches the route (an empty POST is a protocol
-# error from the SDK, NOT a 401 — that is the point).
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:3002/mcp \
-  -H 'Content-Type: application/json' -d '{}'
+cd apps/mcp && npm run build && bash -c '
+set -e
+cleanup() { pkill -f "apps/mcp/dist/main.js" 2>/dev/null || true; }
+trap cleanup EXIT
 
-# Any Origin at all: refused.
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:3002/mcp \
-  -H 'Origin: https://evil.example' -H 'Content-Type: application/json' -d '{}'
+echo "--- loopback bind ---"
+node dist/main.js & sleep 1
+ls -l ~/.sandbox/mcp-token
 
-# A wrong token is refused even on loopback.
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:3002/mcp \
-  -H 'Authorization: Bearer wrong' -H 'Content-Type: application/json' -d '{}'
+probe() { curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/mcp   -H "Content-Type: application/json" "$@" -d "{}"; echo; }
+echo -n "no header (expect NOT 401): "; probe
+echo -n "any Origin (expect 403):    "; probe -H "Origin: https://evil.example"
+echo -n "wrong token (expect 401):   "; probe -H "Authorization: Bearer wrong"
+
+cleanup; sleep 1
+echo "--- 0.0.0.0 bind ---"
+HOST=0.0.0.0 node dist/main.js & sleep 1
+echo -n "no header (expect 401):     "; probe
+echo -n "right token (expect NOT 401): "; probe -H "Authorization: Bearer $(cat ~/.sandbox/mcp-token)"
+'
 ```
 
-Expected: not `401` (a 400-family protocol error is fine); then `403`; then `401`.
+Expected, in order: the token file is `-rw-------`; then on loopback a
+non-401 (a 400-family protocol error from the SDK is the pass — the point is
+that the request *reached the route*), `403`, `401`; then on `0.0.0.0` a `401`
+and a non-401.
 
-Now restart bound to all interfaces and confirm the token becomes mandatory:
+- [ ] **Step 4: Confirm the process is gone**
 
-```bash
-kill %1
-HOST=0.0.0.0 node dist/main.js &
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:3002/mcp \
-  -H 'Content-Type: application/json' -d '{}'
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:3002/mcp \
-  -H "Authorization: Bearer $(cat ~/.sandbox/mcp-token)" \
-  -H 'Content-Type: application/json' -d '{}'
-kill %1
-```
-
-Expected: `401`, then not `401`.
+Run: `pgrep -fl 'apps/mcp/dist/main.js' || echo "clean"`
+Expected: `clean` — Step 3's trap reaped both servers. Kill any survivor before
+moving on; a stray listener on 3002 will confuse every later task.
 
 - [ ] **Step 5: Commit**
 
