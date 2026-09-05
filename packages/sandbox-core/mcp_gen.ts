@@ -60,6 +60,36 @@ export function validateArchetypeMcpServers(
 }
 
 /**
+ * Replace `${NAME}` in every string of *value* for each name in *vars*.
+ *
+ * A dumb recursive string substitution over the definition body rather than a
+ * field the registry schema knows about: the registry stays free-form JSON, and
+ * any future server that wants the feature gets it the same way. An unmatched
+ * `${...}` — `${SANDBOX_MCP_TOKEN}`, expanded by the MCP client from the
+ * container's environment — is written through untouched, which is what keeps
+ * the token out of a file that lives inside a git worktree.
+ *
+ * Returns new values throughout: the caller's `definitions` is the shared
+ * registry, reused for every workspace in the same process.
+ */
+function substituteVars(value: unknown, vars: Record<string, string>): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\$\{(\w+)\}/g, (match, name: string) =>
+      name in vars ? vars[name] : match,
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => substituteVars(item, vars));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, substituteVars(v, vars)]),
+    );
+  }
+  return value;
+}
+
+/**
  * Merge the wanted server definitions into `.mcp.json`.
  *
  * Managed namespace = the definition registry's keys: wanted ones are written
@@ -73,6 +103,7 @@ export function writeWorkspaceMcp(
   workspaceRoot: string,
   serverNames: string[],
   definitions: Record<string, any>,
+  vars: Record<string, string> = {},
 ): string | null {
   const mcpPath = path.join(workspaceRoot, ".mcp.json");
   const isFile = fs.existsSync(mcpPath) && fs.statSync(mcpPath).isFile();
@@ -92,7 +123,7 @@ export function writeWorkspaceMcp(
 
   const wanted: Record<string, any> = {};
   for (const name of serverNames) {
-    if (name in definitions) wanted[name] = definitions[name];
+    if (name in definitions) wanted[name] = substituteVars(definitions[name], vars);
   }
   if (Object.keys(wanted).length === 0 && !isFile) {
     return null;

@@ -975,7 +975,16 @@ export async function initWorkspace(
   for (const err of validateArchetypeMcpServers(archetypes, mcpDefinitions)) {
     warn(err);
   }
-  const mcpPath = writeWorkspaceMcp(workspaceRoot, resolveWorkspaceMcpServers(present, archetypes), mcpDefinitions);
+  // Only when non-empty: substituting "" would write an X-Sandbox-Feature header
+  // that silently resolves to no feature, where a literal `${FEATURE}` left in
+  // the file makes the misconfiguration visible.
+  const mcpFeature = (meta["FEATURE"] ?? "").trim();
+  const mcpPath = writeWorkspaceMcp(
+    workspaceRoot,
+    resolveWorkspaceMcpServers(present, archetypes),
+    mcpDefinitions,
+    mcpFeature ? { FEATURE: mcpFeature } : {},
+  );
   if (mcpPath) {
     success(`Wrote ${mcpPath}`);
   }
