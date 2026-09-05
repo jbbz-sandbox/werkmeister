@@ -1,8 +1,9 @@
 /**
  * Lifecycle for the sandbox's host web servers — the workspaces dashboard /
- * MCP app (apps/sandbox-dashboard) and Claudeck (apps/claudeck).
+ * MCP app (apps/sandbox-dashboard), Claudeck (apps/claudeck), and the remote
+ * MCP surface (apps/mcp).
  *
- * Both run as plain host `node` processes — NOT containers — because their
+ * All run as plain host `node` processes — NOT containers — because their
  * tools drive host-local things (Docker, VS Code, Terminal, kubectl, the
  * `sandbox` and `claude` CLIs) that a container can't reach. `sandbox connect`
  * builds and starts them alongside the shared-infra containers; `sandbox
@@ -67,8 +68,24 @@ export const CLAUDECK: WebApp = {
   buildRef: null,
 };
 
+/**
+ * The remote MCP surface (`apps/mcp`) — the authenticated, headless sibling of
+ * DASHBOARD. Its stem is `sandbox-mcp` and not `mcp-server`, which DASHBOARD
+ * already holds: a shared stem means a shared PID file and two apps reaping
+ * each other. Port 3002 is free — dashboard 3001, claudeck 9009, feature slots
+ * from 11100 (`getPortRange`).
+ */
+export const MCP: WebApp = {
+  label: "Sandbox MCP server",
+  dir: "mcp",
+  port: 3002,
+  stem: "sandbox-mcp",
+  entry: "dist/main.js",
+  buildRef: "dist/main.js",
+};
+
 /** Every app `sandbox connect` brings up (and `down`/`stop`/`restart` manage). */
-export const ALL: readonly WebApp[] = [DASHBOARD, CLAUDECK];
+export const ALL: readonly WebApp[] = [DASHBOARD, CLAUDECK, MCP];
 
 function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -308,6 +325,14 @@ export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> 
  */
 export async function start(app: WebApp = DASHBOARD, build = true, force = false): Promise<boolean> {
   const [running, pid] = isRunning(app);
+
+  // Never bounce ourselves. `sandbox connect` is a tool on apps/mcp, and it
+  // reaches infra.up() -> startAll(): a stale dist/ would otherwise make this
+  // call SIGTERM the pid in the file, which is the process serving the request.
+  if (running && pid === process.pid) {
+    success(`${app.label} is this process (pid ${pid}); leaving it running`);
+    return true;
+  }
 
   const dir = appDir(app);
   if (!fs.existsSync(path.join(dir, "package.json"))) {
