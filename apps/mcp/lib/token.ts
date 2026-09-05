@@ -22,6 +22,17 @@ export function readOrCreateToken(): string {
   try {
     const existing = fs.readFileSync(file, "utf8").trim();
     if (existing) {
+      // `mode` on writeFileSync only applies at creation, so a file that
+      // somehow ended up group/world-readable (a permissive umask, a manual
+      // edit) would stay that way silently. Re-assert it on every read.
+      // Best-effort: a chmod failure (e.g. read-only filesystem) shouldn't
+      // take the whole server down over a permission bit it can't fix
+      // either way — the token check itself is unaffected.
+      try {
+        fs.chmodSync(file, 0o600);
+      } catch {
+        // best-effort — see comment above
+      }
       return existing;
     }
   } catch {
