@@ -86,12 +86,16 @@ async function startHttp(): Promise<void> {
     }
   });
 
-  const httpServer = app.listen(port, host, (err?: Error) => {
-    if (err) {
-      console.error("Failed to start server:", err);
-      process.exit(1);
-    }
+  // Node's listening callback takes no arguments -- a bind failure
+  // (EADDRINUSE, etc.) arrives as an "error" event on the server instead, so
+  // that's where the failure has to be handled. stdout is the JSON-RPC
+  // transport on --stdio, so diagnostics still go to stderr here too.
+  const httpServer = app.listen(port, host, () => {
     console.error(`[sandbox-mcp] listening on http://${host}:${port}/mcp`);
+  });
+  httpServer.on("error", (err: Error) => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
   });
 
   const shutdown = () => httpServer.close(() => process.exit(0));
