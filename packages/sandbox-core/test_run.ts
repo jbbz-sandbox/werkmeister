@@ -13,7 +13,7 @@ import * as path from "node:path";
 
 import { SandboxError } from "./errors.js";
 import { ProcError, runAsync } from "./proc.js";
-import { info, raw, warn } from "./reporter.js";
+import { info, passthrough, raw, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
 
 /** Ten minutes, matching what the CLI has always allowed a suite. */
@@ -91,8 +91,23 @@ export async function runFeatureTests({
   info(`Running: ${cmd.join(" ")}`);
   raw("\n");
 
+  // A terminal caller watches Playwright live through inherited stdio. An
+  // in-process one owns no TTY -- its stdout may be an MCP transport -- so
+  // capture and replay through the reporter instead, which is also the only
+  // way the output reaches a tool result at all.
+  const live = passthrough();
   try {
-    const result = await runAsync(cmd, { env, cwd, timeout: TEST_TIMEOUT_SECONDS, signal });
+    const result = await runAsync(cmd, {
+      env,
+      cwd,
+      timeout: TEST_TIMEOUT_SECONDS,
+      signal,
+      ...(live ? {} : { capture: true }),
+    });
+    if (!live) {
+      if (result.stdout) raw(result.stdout);
+      if (result.stderr) raw(result.stderr, "stderr");
+    }
     return { status: result.status, cwd, slot };
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
