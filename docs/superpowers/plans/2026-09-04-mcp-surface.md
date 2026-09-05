@@ -2548,3 +2548,59 @@ Carried from spec §11, restated so no task drifts into them:
 - Per-feature token scoping. The container holds all of `~/features`, so a
   feature-scoped token would be fiction.
 - Reimplementing `docker compose`.
+
+---
+
+## Execution record — 2026-09-04
+
+Executed subagent-driven. Nine code tasks landed and reviewed; Tasks 10-11 were
+run interactively because they mutate machine-global state.
+
+### Departures from this plan, and why
+
+- **Task 10 §3 (archetype wiring): not done, by decision.** `.mcp.json` lives in
+  the worktree, shared by host and container sessions. On the host
+  `host.docker.internal` does not resolve and `SANDBOX_MCP_TOKEN` is unset, and
+  `frontend` is `archetype: node-web` — so wiring `sandbox` into the archetypes
+  would have written a permanently failing server entry into four of six existing
+  workspaces on their next `init-workspace`. The registry *definition* is in
+  place; add `sandbox` to a workspace when that workspace is actually driven
+  from a container.
+- **Task 10 §4 (container block): not done — this plan's text is wrong.** It says
+  to add `extra_volumes: &mcp_client_mounts` / `environment: &mcp_client_env`
+  "next to the existing anchors on the `cli:` entry", but `cli:` already has both
+  keys; that is a duplicate key in one YAML mapping. The anchors need their own
+  home — a top-level `x-mcp-client:` key, following the `x-host-access:`
+  precedent in the self-host design — and nothing references them until a
+  container workspace exists. Fix this before attempting §10.4.
+- **Four defects in this plan were found and fixed during execution:** a
+  `tsconfig` `include` naming files that arrive a task later (TS6053); a
+  `pkill -f` cleanup that could never match (and whose broader form kills the
+  dashboard, which shares the `dist/main.js` entry path — this actually happened);
+  a `void window.supervise()` missing the `.catch()` its own in-repo precedent
+  carries, which would crash the server minutes after a tool replied; and the
+  duplicate-key block above. The first three are corrected in the text above.
+
+### Verification results (spec §10)
+
+| Item | Result |
+|---|---|
+| §10.1 gates | **PASS** — `turbo run typecheck build test` 15/15, `standards check` ok |
+| §10.2 lifecycle + token | **PASS** — started via `start(MCP)`; token 0600, 64 hex |
+| §10.3 auth / CORS | **PASS** — no header 401, wrong token 401, `Origin` 403, right token 406 (reached the route) |
+| §10.4 container, no socket | **NOT RUN** — needs §4's block fixed and a container rebuild. The branch's central claim is therefore *unproven*. |
+| §10.5 per-workspace projection | **PASS** — two workspaces, two features, no literal token; absent `FEATURE` leaves `${FEATURE}` visible |
+| §10.6 feature resolution | **PASS** — `NO_FEATURE` names both ways; explicit argument overrides |
+| §10.7 abort mid-`up` | **PASS** — compose child present mid-flight, gone 4s after client disconnect, server unharmed |
+| §10.8 stdio purity | **PASS** — both halves. Playwright's 35k chars (incl. npm warnings and a Vitest dump) all landed in the tool result; stdout stayed pure JSON-RPC |
+| §10.9 agreement smoke | **PASS** — infra rows and all six features/slots/counts identical to `sandbox status` |
+
+Also proven live, which the reviews could only argue from code: `lsof` shows
+`apps/mcp` on `*:3002` and the dashboard on `127.0.0.1:3001` — the wide bind is
+per-app and did not widen the unauthenticated dashboard. `sandbox-up` and
+`sandbox-down` were exercised against a real feature and restored it to its
+prior slot and ports.
+
+**Known instrument gap:** `statusSnapshot`'s `mcp_web_server` still reports the
+dashboard, so neither `sandbox status` nor `sandbox-status` shows this server.
+Use `lsof -nP -iTCP:3002 -sTCP:LISTEN` and `~/.sandbox/sandbox-mcp.{pid,log}`.
