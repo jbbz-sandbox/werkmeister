@@ -516,7 +516,13 @@ const SPECS: CommandSpec[] = [
             "form the Desktop MCP App renders), then create the workspace. Opens a " +
             "localhost page in the default browser and blocks until submit/cancel.",
         )
-        .option("--open", "With --browser-form: launch VS Code on the new workspace after creating.");
+        .option("--open", "With --browser-form: launch VS Code on the new workspace after creating.")
+        .option(
+          "--force",
+          "Delete a <user>/<workspace> branch an earlier workspace of the same name left on " +
+            "origin, instead of aborting (that branch's work is gone; see the abort message " +
+            "for how to continue it instead).",
+        );
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
@@ -533,6 +539,7 @@ const SPECS: CommandSpec[] = [
       print_form_schema: Boolean(o.printFormSchema),
       browser_form: Boolean(o.browserForm),
       open_vscode: Boolean(o.open),
+      force: Boolean(o.force),
     }),
   },
   {
@@ -628,7 +635,8 @@ const SPECS: CommandSpec[] = [
         .option(
           "--force",
           "When reconciling, delete repo worktrees dropped from workspace.yml even if " +
-            "they have uncommitted changes (default: abort without changes if any are dirty).",
+            "they have uncommitted changes, and delete a <user>/<workspace> branch an earlier " +
+            "workspace left on origin instead of aborting (default: abort without changes).",
         )
         .option("--jira-id <id>", "Jira ticket ID (env: SANDBOX_JIRA_ID; config: jira_id).")
         .option(

@@ -112,7 +112,7 @@ export function resolveRepos(
  * Falls back to `origin/main` / `origin/master` if `origin/HEAD` is unset.
  */
 export function defaultBaseRef(src: string): string {
-  run(["git", "-C", src, "fetch", "origin", "--quiet"], { capture: true });
+  run(["git", "-C", src, "fetch", "origin", "--prune", "--quiet"], { capture: true });
 
   const originHead = (): string | null => {
     const result = run(
@@ -157,24 +157,55 @@ export function defaultBaseRef(src: string): string {
  * Reuses *branch* if it already exists in *src* (a prior worktree in this
  * workspace created it) so a repo added to an existing workspace lands on the
  * same `<user>/<workspace>` branch as its siblings.
+ *
+ * A *branch* that exists only on origin was left by an earlier workspace of the
+ * same name (remove-workspace keeps the pushed branch). Cutting a fresh one
+ * from main would diverge from it and the eventual handoff push would be
+ * rejected, so this aborts with the two ways out — unless `force`, which
+ * deletes the remote branch first.
  */
-export function createWorktree(src: string, dest: string, branch: string): void {
+export function createWorktree(
+  src: string,
+  dest: string,
+  branch: string,
+  { force = false }: { force?: boolean } = {},
+): void {
+  const repo = path.basename(src);
   const exists = run(
     ["git", "-C", src, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`],
     { capture: true },
   );
   let cmd: string[];
   if (exists.status === 0) {
-    info(`  ${path.basename(src)}: worktree → ${branch} (existing branch)`);
+    info(`  ${repo}: worktree → ${branch} (existing branch)`);
     cmd = ["git", "-C", src, "worktree", "add", dest, branch];
   } else {
     const base = defaultBaseRef(src);
-    info(`  ${path.basename(src)}: worktree → ${branch} (from ${base})`);
+    const remote = `origin/${branch}`;
+    const onOrigin = run(["git", "-C", src, "rev-parse", "--verify", "--quiet", remote], { capture: true });
+    if (onOrigin.status === 0 && force) {
+      const del = run(["git", "-C", src, "push", "origin", "--delete", branch], { capture: true });
+      if (del.status !== 0) {
+        throw new Error(`${repo}: could not delete ${remote}: ${del.stderr.trim()}`);
+      }
+      info(`  ${repo}: deleted ${remote} (--force)`);
+    } else if (onOrigin.status === 0) {
+      const tip = run(["git", "-C", src, "log", "-1", "--format=%cs %s", remote], { capture: true }).stdout.trim();
+      throw new Error(
+        `${repo}: branch '${branch}' already exists on origin (last commit: ${tip}), ` +
+          "left by an earlier workspace of the same name.\n" +
+          `  Continue that work (nothing lost):  git -C ${src} branch ${branch} ${remote}\n` +
+          "                                      then rerun; the worktree lands on that branch.\n" +
+          "  Start over (deletes the remote branch): rerun with --force\n" +
+          "  Keep both: pick a different feature name.",
+      );
+    }
+    info(`  ${repo}: worktree → ${branch} (from ${base})`);
     cmd = ["git", "-C", src, "worktree", "add", "-b", branch, dest, base];
   }
   const result = run(cmd, { capture: true });
   if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `git worktree add failed for ${path.basename(src)}`);
+    throw new Error(result.stderr.trim() || `git worktree add failed for ${repo}`);
   }
 }
 
