@@ -1922,6 +1922,16 @@ async function worktreeSources(worktrees: string[]): Promise<string[]> {
  * push nothing is lost when the local workspace is deleted. Returns whether the
  * branch is safely on the remote plus a one-line status.
  */
+/**
+ * The line of git output that names the problem. `git push` prints the remote
+ * URL first, and the `! [rejected] ... (non-fast-forward)` line after it, so
+ * the first line alone is useless. Prefer a `!`, `error:` or `fatal:` line.
+ */
+function gitErrorLine(text: string): string {
+  const lines = stripAnsi(text).trim().split("\n");
+  return (lines.find((l) => /^\s*!\s|^(error|fatal):/.test(l)) ?? lines[0]).trim().replace(/\s+/g, " ");
+}
+
 export async function commitAndPush(dir: string): Promise<{ ok: boolean; message: string }> {
   const label = path.basename(dir);
   const br = await runCapture("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"]).catch(() => null);
@@ -1937,7 +1947,7 @@ export async function commitAndPush(dir: string): Promise<{ ok: boolean; message
       () => null,
     );
     if (!c || c.code !== 0) {
-      return { ok: false, message: `${label}: commit failed — ${c ? stripAnsi(c.stderr || c.stdout).trim().split("\n")[0] : "spawn error"}` };
+      return { ok: false, message: `${label}: commit failed — ${c ? gitErrorLine(c.stderr || c.stdout) : "spawn error"}` };
     }
   }
 
@@ -1957,7 +1967,7 @@ export async function commitAndPush(dir: string): Promise<{ ok: boolean; message
 
   const p = await runCapture("git", ["-C", dir, "push", "-u", "origin", branch]).catch(() => null);
   if (!p || p.code !== 0) {
-    return { ok: false, message: `${label}: push failed — ${p ? stripAnsi(p.stderr || p.stdout).trim().split("\n")[0] : "spawn error"}` };
+    return { ok: false, message: `${label}: push failed — ${p ? gitErrorLine(p.stderr || p.stdout) : "spawn error"}` };
   }
   return { ok: true, message: `${label}: pushed ${branch}` };
 }

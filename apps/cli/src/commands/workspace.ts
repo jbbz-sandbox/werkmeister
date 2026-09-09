@@ -175,7 +175,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // 1. Resolve inputs (CLI > ./.sandbox/workspace.yml > interactive), then hand
   //    the whole creation to core.
   try {
-    await provisionWorkspace(await resolveWorkspaceInputs(args), { readStdinTask });
+    await provisionWorkspace(await resolveWorkspaceInputs(args), { readStdinTask, force: Boolean(args.force) });
   } catch (exc) {
     // Its `[err]`/`[warn]` line is already out; restating it is all main.ts's
     // handler would do.

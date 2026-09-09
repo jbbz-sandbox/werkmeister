@@ -106,6 +106,12 @@ export interface InitWorkspaceOptions {
    * — which may be an MCP transport — is never touched.
    */
   readStdinTask?: () => string;
+  /**
+   * Discard rather than abort: repo worktrees dropped from workspace.yml go
+   * even when dirty, and a `<user>/<workspace>` branch already on origin is
+   * deleted instead of blocking creation.
+   */
+  force?: boolean;
 }
 /** Thrown by {@link findWorkspaceRoot}; the CLI's print paths and
  *  `init-workspace` adapter catch it and print the (pre-rendered) message. */
@@ -277,7 +283,7 @@ function resolveWorkspacesRoot(): string {
 // Git worktree creation
 // ---------------------------------------------------------------------------
 
-function createWorkspaceRoot(workspaceDir: string, branch: string): void {
+function createWorkspaceRoot(workspaceDir: string, branch: string, force: boolean): void {
   const reposRoot = resolveReposRoot();
   const rootRepoSrc = path.join(reposRoot, WORKSPACE_ROOT_REPO);
 
@@ -286,7 +292,7 @@ function createWorkspaceRoot(workspaceDir: string, branch: string): void {
 
   if (fs.existsSync(path.join(rootRepoSrc, ".git"))) {
     try {
-      createWorktree(rootRepoSrc, workspaceDir, branch);
+      createWorktree(rootRepoSrc, workspaceDir, branch, { force });
     } catch (exc) {
       fail(`Failed to create workspace root worktree: ${(exc as Error).message}`);
     }
@@ -533,7 +539,7 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
     for (const repo of toCreate) {
       const src = path.join(reposRoot, repo);
       const dest = path.join(workspaceRoot, repo);
-      createWorktree(src, dest, branch);
+      createWorktree(src, dest, branch, { force });
       created.push([dest, src]);
     }
   } catch (exc) {
@@ -1051,7 +1057,7 @@ async function runInitWorkspace(
 ): Promise<number> {
   info(`Running: sandbox init-workspace (feature: ${featureSlug})`);
   try {
-    await initWorkspace({ ...resolved, feature: featureSlug }, workspaceDir, opts);
+    await initWorkspace({ ...resolved, feature: featureSlug, force: opts.force }, workspaceDir, opts);
     return 0;
   } catch (exc) {
     // A WorkspaceInitError has already emitted its own `[err]` line — the
@@ -1109,7 +1115,7 @@ export async function provisionWorkspace(
   } else {
     const repos = await selectRepos(resolved.repos, resolved.services);
     resolved.repos = repos.join(",");
-    createWorkspaceRoot(workspaceDir, branch);
+    createWorkspaceRoot(workspaceDir, branch, Boolean(opts.force));
     writeWorkspaceConfig(workspaceDir, resolved);
   }
 
