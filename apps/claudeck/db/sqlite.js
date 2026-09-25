@@ -59,31 +59,47 @@ db.exec(`
   );
 `);
 
+/**
+ * Idempotent column add. SQLite reports a re-added column as
+ * "duplicate column name: X"; every other error (disk full, locked database,
+ * malformed schema) means the migration genuinely did not apply, and booting on
+ * a half-migrated schema only moves the failure somewhere less obvious.
+ *
+ * `db` is a parameter rather than the module-level handle so this is testable.
+ */
+export function addColumn(db, sql) {
+  try {
+    db.exec(sql);
+  } catch (e) {
+    if (!/duplicate column name/i.test(e?.message)) throw e;
+  }
+}
+
 // Migrations
-try { db.exec(`ALTER TABLE messages ADD COLUMN chat_id TEXT DEFAULT NULL`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT DEFAULT NULL`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE sessions ADD COLUMN pinned INTEGER DEFAULT 0`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE costs ADD COLUMN input_tokens INTEGER DEFAULT 0`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE costs ADD COLUMN output_tokens INTEGER DEFAULT 0`); } catch { /* exists */ }
+addColumn(db, `ALTER TABLE messages ADD COLUMN chat_id TEXT DEFAULT NULL`);
+addColumn(db, `ALTER TABLE sessions ADD COLUMN title TEXT DEFAULT NULL`);
+addColumn(db, `ALTER TABLE sessions ADD COLUMN pinned INTEGER DEFAULT 0`);
+addColumn(db, `ALTER TABLE costs ADD COLUMN input_tokens INTEGER DEFAULT 0`);
+addColumn(db, `ALTER TABLE costs ADD COLUMN output_tokens INTEGER DEFAULT 0`);
 // New columns for costs table
-try { db.exec(`ALTER TABLE costs ADD COLUMN model TEXT DEFAULT NULL`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE costs ADD COLUMN stop_reason TEXT DEFAULT NULL`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE costs ADD COLUMN is_error INTEGER DEFAULT 0`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE costs ADD COLUMN cache_read_tokens INTEGER DEFAULT 0`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE costs ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0`); } catch { /* exists */ }
+addColumn(db, `ALTER TABLE costs ADD COLUMN model TEXT DEFAULT NULL`);
+addColumn(db, `ALTER TABLE costs ADD COLUMN stop_reason TEXT DEFAULT NULL`);
+addColumn(db, `ALTER TABLE costs ADD COLUMN is_error INTEGER DEFAULT 0`);
+addColumn(db, `ALTER TABLE costs ADD COLUMN cache_read_tokens INTEGER DEFAULT 0`);
+addColumn(db, `ALTER TABLE costs ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0`);
 // New columns for messages table (workflow metadata)
-try { db.exec(`ALTER TABLE messages ADD COLUMN workflow_id TEXT DEFAULT NULL`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE messages ADD COLUMN workflow_step_index INTEGER DEFAULT NULL`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE messages ADD COLUMN workflow_step_label TEXT DEFAULT NULL`); } catch { /* exists */ }
+addColumn(db, `ALTER TABLE messages ADD COLUMN workflow_id TEXT DEFAULT NULL`);
+addColumn(db, `ALTER TABLE messages ADD COLUMN workflow_step_index INTEGER DEFAULT NULL`);
+addColumn(db, `ALTER TABLE messages ADD COLUMN workflow_step_label TEXT DEFAULT NULL`);
 // AI-generated session summary
-try { db.exec(`ALTER TABLE sessions ADD COLUMN summary TEXT DEFAULT NULL`); } catch { /* exists */ }
+addColumn(db, `ALTER TABLE sessions ADD COLUMN summary TEXT DEFAULT NULL`);
 // Todo archive
-try { db.exec(`ALTER TABLE todos ADD COLUMN archived INTEGER DEFAULT 0`); } catch { /* exists */ }
+addColumn(db, `ALTER TABLE todos ADD COLUMN archived INTEGER DEFAULT 0`);
 // Todo priority (0=none, 1=low, 2=medium, 3=high)
-try { db.exec(`ALTER TABLE todos ADD COLUMN priority INTEGER DEFAULT 0`); } catch { /* exists */ }
+addColumn(db, `ALTER TABLE todos ADD COLUMN priority INTEGER DEFAULT 0`);
 // Session branching / conversation forking
-try { db.exec(`ALTER TABLE sessions ADD COLUMN parent_session_id TEXT DEFAULT NULL`); } catch { /* exists */ }
-try { db.exec(`ALTER TABLE sessions ADD COLUMN fork_message_id INTEGER DEFAULT NULL`); } catch { /* exists */ }
+addColumn(db, `ALTER TABLE sessions ADD COLUMN parent_session_id TEXT DEFAULT NULL`);
+addColumn(db, `ALTER TABLE sessions ADD COLUMN fork_message_id INTEGER DEFAULT NULL`);
 
 // Agent context (shared memory between agents in a chain/orchestration run)
 db.exec(`
@@ -144,8 +160,8 @@ db.exec(`
 `);
 
 // Migration: add content_hash column if missing (existing DBs)
-try { db.exec(`ALTER TABLE memories ADD COLUMN content_hash TEXT`); } catch { /* already exists */ }
-try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_hash ON memories(project_path, content_hash)`); } catch { /* already exists */ }
+addColumn(db, `ALTER TABLE memories ADD COLUMN content_hash TEXT`);
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_hash ON memories(project_path, content_hash)`);
 
 // FTS5 full-text search for memories
 db.exec(`
@@ -1281,6 +1297,7 @@ const pushStmts = {
   ),
   delete: db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ?`),
   getAll: db.prepare(`SELECT * FROM push_subscriptions`),
+  count: db.prepare(`SELECT COUNT(*) AS n FROM push_subscriptions`),
 };
 
 export async function upsertPushSubscription(endpoint, p256dh, auth) {
@@ -1293,6 +1310,12 @@ export async function deletePushSubscription(endpoint) {
 
 export async function getAllPushSubscriptions() {
   return pushStmts.getAll.all();
+}
+
+// Sync, unlike its async neighbours above: VAPID setup runs before the server
+// listens and has no await to give it.
+export function countPushSubscriptions() {
+  return pushStmts.count.get().n;
 }
 
 // ── Agent context (shared memory) ─────────────────────────

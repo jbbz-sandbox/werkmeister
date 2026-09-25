@@ -432,7 +432,7 @@ All MCP endpoints accept an optional `?project=<path>` query parameter. Without 
 | GET    | /api/stats/analytics | Analytics with error patterns, tool usage, trends |
 | GET    | /api/stats/home      | Home page data (yearly activity + overview) |
 | GET    | /api/account         | Cached account info (email, plan)        |
-| POST   | /api/exec            | Execute shell command (30s timeout)      |
+| POST   | /api/exec            | Run a command: `argv` (no shell) or `shellCommand` (shell, constant commands only — /run or an app-hardcoded command). 30s timeout |
 
 ### Plugins
 | Method | Path                 | Description                              |
@@ -830,7 +830,9 @@ Lazy-loaded tree view in the Files tab:
 - Resets on project switch; skips .git, node_modules, dist, build, etc.
 
 ### 28. Git Integration
-Git panel in the Git tab — all operations via `POST /api/exec`:
+Git panel in the Git tab — all operations via `POST /api/exec` in `argv` form,
+so branch names, paths and commit messages are passed as literal arguments and
+never parsed by a shell.
 - **Branch selector** — dropdown lists all branches, current branch pre-selected, change triggers `git checkout`
 - **Status groups** — "Staged Changes", "Changes", "Untracked" with color-coded badges (M/A/D/R/?)
 - **Stage/unstage** — click +/- buttons to `git add` or `git reset HEAD` individual files

@@ -480,15 +480,31 @@ export async function saveSystemPromptApi(path, systemPrompt) {
   });
 }
 
-export async function execCommand(command, cwd) {
+// Shell form: runs through a shell on the server. Every caller must pass a
+// constant command — either the user's own typed input (the /run slash
+// command) or a command the app hardcodes (e.g. "code ."). Anything the UI
+// assembles from a branch name, path or message must use execArgv instead.
+// shell-safe: this is the function definition, not a call site — every call site is the guarded surface, and they're covered above
+export async function execShell(command, cwd) {
   const res = await fetch("/api/exec", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ command, cwd }),
+    // shell-safe: this is the shell entry point itself — callers are the guarded surface
+    body: JSON.stringify({ shellCommand: command, cwd }),
   });
   return res.json();
 }
 
+// argv form: no shell on the server. Use this for every command the UI builds
+// itself — anything containing a branch name, path or commit message.
+export async function execArgv(argv, cwd) {
+  const res = await fetch("/api/exec", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ argv, cwd }),
+  });
+  return res.json();
+}
 
 // Tips
 export async function fetchTips() {

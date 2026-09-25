@@ -985,7 +985,8 @@ registerCommand("run", {
     const cwd = $.projectSelect.value || undefined;
     addStatus("Running: " + args, false, pane);
     try {
-      const data = await api.execCommand(args, cwd);
+      // shell-safe: args is exactly what the user typed after /run — the one place a shell command is meant to carry user-authored data
+      const data = await api.execShell(args, cwd);
       // Inline CLI output rendering
       const { appendCliOutput } = await import('../ui/messages.js');
       appendCliOutput(data, pane);

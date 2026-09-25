@@ -75,7 +75,7 @@ async function fetchBranch() {
     return;
   }
   try {
-    const data = await api.execCommand("git rev-parse --abbrev-ref HEAD", cwd);
+    const data = await api.execArgv(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd);
     const branch = (data.stdout || data.output || "").trim();
     sbBranchName.textContent = branch || "--";
   } catch {

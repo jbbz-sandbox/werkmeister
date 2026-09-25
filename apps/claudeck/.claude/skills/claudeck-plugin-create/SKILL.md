@@ -171,7 +171,7 @@ From `/js/core/`:
 - `events.js` — `on(event, fn)` (returns unsub), `off(event, fn)`, `emit(event, data)`
 - `dom.js` — `$` (cached DOM query map)
 - `constants.js` — `CHAT_IDS`, `BOT_CHAT_ID`
-- `api.js` — all fetch helpers (`fetchSessions`, `fetchFileTree`, `execCommand`, etc.)
+- `api.js` — all fetch helpers (`fetchSessions`, `fetchFileTree`, `execShell`, etc.)
 - `utils.js` — `escapeHtml()`, `getToolDetail()`, `formatBytes()`, etc.
 
 From `/js/ui/`:

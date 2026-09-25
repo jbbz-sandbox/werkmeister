@@ -449,7 +449,7 @@ $.openVscodeBtn.addEventListener("click", async () => {
     await fetch("/api/exec", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: "code .", cwd: path }),
+      body: JSON.stringify({ shellCommand: "code .", cwd: path }),
     });
   } catch { /* ignore */ }
 });

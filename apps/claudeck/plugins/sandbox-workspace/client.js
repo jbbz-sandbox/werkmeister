@@ -2,11 +2,11 @@
 // Project-scoped view of the selected sandbox feature workspace. Lists the
 // workspace's inner repo worktrees (which the core Git tab ignores) and gives
 // each one a full git panel — branch switch, status/stage/unstage/discard,
-// file diff, commit, and log — scoped to that worktree's dir via execCommand.
+// file diff, commit, and log — scoped to that worktree's dir via execArgv.
 // All server/git output is untrusted → DOM built with textContent, never
 // innerHTML interpolation.
 import { registerTab } from "/js/ui/tab-sdk.js";
-import { execCommand } from "/js/core/api.js";
+import { execShell, execArgv } from "/js/core/api.js";
 import { parsePorcelain } from "./parse-status.mjs";
 
 const ICON =
@@ -18,10 +18,6 @@ function el(tag, className, text) {
   if (text != null) n.textContent = String(text);
   return n;
 }
-
-// Quote a path for a shell command run via execCommand (same approach as the
-// core Git panel). Local single-user tool; args are the user's own files.
-const q = (s) => `"${String(s).replace(/(["\\$`])/g, "\\$1")}"`;
 
 // Strip ANSI SGR color codes so streamed CLI output renders cleanly as text.
 // ponytail: only SGR (\x1b[…m) — the sandbox CLI emits nothing else; widen if it does.
@@ -84,7 +80,7 @@ registerTab({
       // Always available — the worktrees exist whether or not containers run.
       const code = el("button", "sw-action sw-action-code", "Open in VS Code");
       code.addEventListener("click", async () => {
-        const res = await execCommand("code .", project);
+        const res = await execShell("code .", project);
         if (res.error || res.exitCode) ctx.toast("Could not launch VS Code", { type: "error" });
       });
       actions.appendChild(code);
@@ -378,7 +374,7 @@ registerTab({
       body.appendChild(logEl);
 
       async function refreshStatus() {
-        const res = await execCommand("git status --porcelain=v1", dir);
+        const res = await execArgv(["git", "status", "--porcelain=v1"], dir);
         statusEl.replaceChildren();
         if (res.error) {
           statusEl.appendChild(el("div", "sw-empty", "Not a git repository"));
@@ -397,7 +393,7 @@ registerTab({
       }
 
       async function refreshBranches() {
-        const res = await execCommand("git branch --no-color", dir);
+        const res = await execArgv(["git", "branch", "--no-color"], dir);
         select.replaceChildren();
         if (res.error) return;
         for (const line of res.stdout.split("\n").filter(Boolean)) {
@@ -411,7 +407,16 @@ registerTab({
         }
       }
       select.addEventListener("change", async () => {
-        const res = await execCommand(`git checkout ${q(select.value)}`, dir);
+        // With argv there is no quoting, so a branch name beginning with "-"
+        // (e.g. "-f", a valid ref name) is read as an OPTION by git, not a
+        // revision — `git checkout -f` force-discards uncommitted changes.
+        // `--` cannot disambiguate this; it would reinterpret the name as a
+        // pathspec instead.
+        if (select.value.startsWith("-")) {
+          ctx.toast(`Refusing to check out "${select.value}" — branch names starting with "-" can be read as command options`, { type: "error" });
+          return;
+        }
+        const res = await execArgv(["git", "checkout", select.value], dir);
         if (res.error) {
           ctx.toast(`Cannot switch branch: ${res.stderr || "uncommitted changes?"}`, { type: "error" });
           await refreshBranches();
@@ -421,7 +426,7 @@ registerTab({
       });
 
       async function refreshLog() {
-        const res = await execCommand('git log --oneline --no-color -10 --format="%h|%s|%ar"', dir);
+        const res = await execArgv(["git", "log", "--oneline", "--no-color", "-10", "--format=%h|%s|%ar"], dir);
         logEl.replaceChildren(el("div", "sw-log-title", "Recent commits"));
         if (res.error || !res.stdout.trim()) return;
         for (const line of res.stdout.split("\n").filter(Boolean)) {
@@ -439,7 +444,7 @@ registerTab({
           return;
         }
         commitBtn.disabled = true;
-        const res = await execCommand(`git commit -m ${q(text)}`, dir);
+        const res = await execArgv(["git", "commit", "-m", text], dir);
         commitBtn.disabled = false;
         if (res.error) {
           ctx.toast(`Commit failed: ${res.stderr || "nothing staged?"}`, { type: "error" });
@@ -462,9 +467,11 @@ registerTab({
       gh.append(el("span", "sw-group-title", `${title} (${files.length})`));
       const bulk = el("button", "sw-bulk", action === "stage" ? "Stage all" : "Unstage all");
       bulk.addEventListener("click", async () => {
-        const args = files.map((f) => q(f.file)).join(" ");
-        const cmd = action === "stage" ? `git add ${args}` : `git reset HEAD ${args}`;
-        await execCommand(cmd, dir);
+        const paths = files.map((f) => f.file);
+        const argv = action === "stage"
+          ? ["git", "add", "--", ...paths]
+          : ["git", "reset", "HEAD", "--", ...paths];
+        await execArgv(argv, dir);
         await refresh();
       });
       gh.appendChild(bulk);
@@ -481,8 +488,10 @@ registerTab({
         const act = el("button", "sw-file-act", action === "stage" ? "+" : "−");
         act.title = action === "stage" ? "Stage" : "Unstage";
         act.addEventListener("click", async () => {
-          const cmd = action === "stage" ? `git add ${q(f.file)}` : `git reset HEAD ${q(f.file)}`;
-          await execCommand(cmd, dir);
+          const argv = action === "stage"
+            ? ["git", "add", "--", f.file]
+            : ["git", "reset", "HEAD", "--", f.file];
+          await execArgv(argv, dir);
           await refresh();
         });
         row.appendChild(act);
@@ -493,7 +502,7 @@ registerTab({
           disc.title = "Discard changes";
           disc.addEventListener("click", async () => {
             if (!confirm(`Discard changes to ${f.file}?`)) return;
-            await execCommand(`git checkout -- ${q(f.file)}`, dir);
+            await execArgv(["git", "checkout", "--", f.file], dir);
             await refresh();
           });
           row.appendChild(disc);
@@ -514,8 +523,10 @@ registerTab({
       if (f.badge === "?") {
         pre.textContent = "(untracked — new file)";
       } else {
-        const cmd = isStaged ? `git diff --cached -- ${q(f.file)}` : `git diff -- ${q(f.file)}`;
-        const res = await execCommand(cmd, dir);
+        const argv = isStaged
+          ? ["git", "diff", "--cached", "--", f.file]
+          : ["git", "diff", "--", f.file];
+        const res = await execArgv(argv, dir);
         pre.textContent = res.error ? "(failed to load diff)" : res.stdout || "(no diff)";
       }
       row.after(pre);

@@ -54,223 +54,167 @@ describe("exec routes", () => {
     app = buildApp();
   });
 
-  // ── POST / ───────────────────────────────────────────────────────────────
-  describe("POST /", () => {
-    it("returns 400 when command is missing", async () => {
-      const res = await request(app).post("/").send({});
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe("command is required");
-    });
-
-    it("returns 400 when command is empty string", async () => {
-      const res = await request(app).post("/").send({ command: "" });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe("command is required");
-    });
-
-    it("executes a simple one-word command via execFile on non-Windows", async () => {
-      const { restore } = withPlatform("linux");
-
-      mockExecFile.mockImplementation((cmd, args, opts, cb) => {
-        cb(null, "hello world\n", "");
-      });
-
-      const res = await request(app).post("/").send({ command: "ls" });
-      restore();
-
-      expect(res.status).toBe(200);
-      expect(res.body.command).toBe("ls");
-      expect(res.body.stdout).toBe("hello world\n");
-      expect(res.body.stderr).toBe("");
-      expect(res.body.exitCode).toBe(0);
-      expect(mockExecFile).toHaveBeenCalledWith(
-        "ls",
-        [],
-        expect.any(Object),
-        expect.any(Function),
-      );
-    });
-
-    it("executes a simple two-part command via execFile on non-Windows", async () => {
-      const { restore } = withPlatform("linux");
-
-      mockExecFile.mockImplementation((cmd, args, opts, cb) => {
-        cb(null, "output", "");
-      });
-
-      const res = await request(app).post("/").send({ command: "ls -la" });
-      restore();
-
-      expect(res.status).toBe(200);
-      expect(res.body.stdout).toBe("output");
-      expect(mockExecFile).toHaveBeenCalledWith(
-        "ls",
-        ["-la"],
-        expect.any(Object),
-        expect.any(Function),
-      );
-    });
-
-    it("uses exec for commands with more than 2 parts (not simple)", async () => {
-      const { restore } = withPlatform("linux");
-
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "output", "");
-      });
+  // ── POST / — shellCommand mode ───────────────────────────────────────────
+  describe("POST / — shellCommand mode", () => {
+    it("runs shellCommand through a shell, pipes and all", async () => {
+      mockExec.mockImplementation((cmd, opts, cb) => cb(null, "result", ""));
 
       const res = await request(app)
         .post("/")
-        .send({ command: "ls -la /tmp" });
-      restore();
-
-      expect(res.status).toBe(200);
-      expect(mockExec).toHaveBeenCalled();
-      expect(mockExecFile).not.toHaveBeenCalled();
-    });
-
-    it("uses exec for commands containing pipes", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "result", "");
-      });
-
-      const res = await request(app)
-        .post("/")
-        .send({ command: "cat file.txt | grep pattern" });
+        .send({ shellCommand: "cat file.txt | grep pattern" });
 
       expect(res.status).toBe(200);
       expect(res.body.stdout).toBe("result");
-      expect(res.body.exitCode).toBe(0);
-      expect(mockExec).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalledWith(
+        "cat file.txt | grep pattern",
+        expect.objectContaining({ cwd: "/mock/home", timeout: 30000, maxBuffer: 512 * 1024 }),
+        expect.any(Function),
+      );
     });
 
-    it("uses exec for commands containing redirect (>)", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "", "");
-      });
+    it("uses a shell even for a one-word command — no heuristic remains", async () => {
+      const { restore } = withPlatform("linux");
+      mockExec.mockImplementation((cmd, opts, cb) => cb(null, "", ""));
 
-      const res = await request(app)
-        .post("/")
-        .send({ command: "echo hello > out.txt" });
-
-      expect(res.status).toBe(200);
-      expect(mockExec).toHaveBeenCalled();
-    });
-
-    it("uses exec for commands containing ampersand (&)", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "", "");
-      });
-
-      const res = await request(app)
-        .post("/")
-        .send({ command: "sleep 1 & echo done" });
-
-      expect(res.status).toBe(200);
-      expect(mockExec).toHaveBeenCalled();
-    });
-
-    it("always uses exec on Windows regardless of command simplicity", async () => {
-      const { restore } = withPlatform("win32");
-
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "win output", "");
-      });
-
-      const res = await request(app).post("/").send({ command: "dir" });
+      await request(app).post("/").send({ shellCommand: "ls" });
       restore();
 
-      expect(res.status).toBe(200);
-      expect(res.body.stdout).toBe("win output");
       expect(mockExec).toHaveBeenCalled();
       expect(mockExecFile).not.toHaveBeenCalled();
     });
 
-    it("handles command errors and returns the exit code", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb({ code: 127 }, "", "command not found");
-      });
+    it("rejects the removed `command` field rather than shelling out", async () => {
+      const res = await request(app).post("/").send({ command: "ls -la /tmp" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("argv or shellCommand is required");
+      expect(mockExec).not.toHaveBeenCalled();
+      expect(mockExecFile).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when neither field is present", async () => {
+      const res = await request(app).post("/").send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("argv or shellCommand is required");
+    });
+
+    it("returns 400 for an empty shellCommand", async () => {
+      const res = await request(app).post("/").send({ shellCommand: "" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("argv or shellCommand is required");
+    });
+
+    it("returns 400 for a non-string shellCommand instead of reaching the shell", async () => {
+      const res = await request(app).post("/").send({ shellCommand: 123 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("argv or shellCommand is required");
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── POST / — argv mode ───────────────────────────────────────────────────
+  describe("POST / — argv mode", () => {
+    it("runs argv via execFile and never through a shell", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "ok", ""));
 
       const res = await request(app)
         .post("/")
-        .send({ command: "nonexistent | grep foo" });
+        .send({ argv: ["git", "status", "--porcelain=v1"] });
 
       expect(res.status).toBe(200);
-      expect(res.body.exitCode).toBe(127);
-      expect(res.body.stderr).toBe("command not found");
+      expect(res.body.stdout).toBe("ok");
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "git",
+        ["status", "--porcelain=v1"],
+        expect.any(Object),
+        expect.any(Function),
+      );
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
-    it("defaults exitCode to 1 when err.code is undefined", async () => {
-      const { restore } = withPlatform("linux");
+    it("passes a command-substitution branch name as one literal argument", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "", ""));
 
-      mockExecFile.mockImplementation((cmd, args, opts, cb) => {
-        cb({ code: undefined }, "", "unknown error");
-      });
+      await request(app)
+        .post("/")
+        .send({ argv: ["git", "checkout", "main$(echo INJECTED)"] });
 
-      const res = await request(app).post("/").send({ command: "badcmd" });
+      expect(mockExec).not.toHaveBeenCalled();
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "git",
+        ["checkout", "main$(echo INJECTED)"],
+        expect.any(Object),
+        expect.any(Function),
+      );
+    });
+
+    it("keeps a path containing spaces as a single argument", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "", ""));
+
+      await request(app)
+        .post("/")
+        .send({ argv: ["git", "add", "--", "my notes/todo list.md"] });
+
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "git",
+        ["add", "--", "my notes/todo list.md"],
+        expect.any(Object),
+        expect.any(Function),
+      );
+    });
+
+    it("passes a leading-dash path through untouched (callers add --)", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "", ""));
+
+      await request(app)
+        .post("/")
+        .send({ argv: ["git", "add", "--", "-rf"] });
+
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "git",
+        ["add", "--", "-rf"],
+        expect.any(Object),
+        expect.any(Function),
+      );
+    });
+
+    it("uses execFile on Windows too — argv has no platform heuristic", async () => {
+      const { restore } = withPlatform("win32");
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "out", ""));
+
+      const res = await request(app).post("/").send({ argv: ["dir"] });
       restore();
 
       expect(res.status).toBe(200);
-      expect(res.body.exitCode).toBe(1);
+      expect(mockExecFile).toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
-    it("defaults exitCode to 1 when err.code is null", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb({ code: null }, "", "some error");
-      });
+    it("echoes a display string built from argv", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "", ""));
 
       const res = await request(app)
         .post("/")
-        .send({ command: "bad | cmd" });
+        .send({ argv: ["git", "log", "--format=%h|%s"] });
 
-      expect(res.status).toBe(200);
-      // err.code ?? 1 => null ?? 1 => null (null is not undefined/null for ??)
-      // Actually: null ?? 1 => 1 (nullish coalescing treats null as nullish)
-      expect(res.body.exitCode).toBe(1);
+      expect(res.body.command).toBe("git log --format=%h|%s");
     });
 
-    it("uses custom cwd when provided", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "", "");
-      });
+    it("honours cwd and the standard exec options", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "", ""));
 
-      const res = await request(app)
+      await request(app)
         .post("/")
-        .send({ command: "ls | cat", cwd: "/custom/dir" });
+        .send({ argv: ["ls"], cwd: "/custom/dir" });
 
-      expect(res.status).toBe(200);
-      expect(mockExec).toHaveBeenCalledWith(
-        "ls | cat",
-        expect.objectContaining({ cwd: "/custom/dir" }),
-        expect.any(Function),
-      );
-    });
-
-    it("defaults cwd to homedir when not provided", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "", "");
-      });
-
-      await request(app).post("/").send({ command: "echo hi | cat" });
-
-      expect(mockExec).toHaveBeenCalledWith(
-        "echo hi | cat",
-        expect.objectContaining({ cwd: "/mock/home" }),
-        expect.any(Function),
-      );
-    });
-
-    it("sets timeout and maxBuffer execution options", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "", "");
-      });
-
-      await request(app).post("/").send({ command: "echo hi | cat" });
-
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.any(String),
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "ls",
+        [],
         expect.objectContaining({
+          cwd: "/custom/dir",
           timeout: 30000,
           maxBuffer: 512 * 1024,
         }),
@@ -278,31 +222,67 @@ describe("exec routes", () => {
       );
     });
 
-    it("returns empty strings for null stdout/stderr", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, null, null);
-      });
+    it("defaults cwd to homedir", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "", ""));
 
-      const res = await request(app)
-        .post("/")
-        .send({ command: "true | cat" });
+      await request(app).post("/").send({ argv: ["ls"] });
+
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "ls",
+        [],
+        expect.objectContaining({ cwd: "/mock/home" }),
+        expect.any(Function),
+      );
+    });
+
+    it("reports the exit code on failure", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) =>
+        cb({ code: 128 }, "", "fatal: not a git repository"),
+      );
+
+      const res = await request(app).post("/").send({ argv: ["git", "status"] });
 
       expect(res.status).toBe(200);
+      expect(res.body.exitCode).toBe(128);
+      expect(res.body.stderr).toBe("fatal: not a git repository");
+    });
+
+    // reply() (server/routes/exec.js:10-19) is shared by both branches — these
+    // exercised the `err.code ?? 1` and `stdout/stderr || ""` normalization
+    // via the deleted legacy string-mode tests. Restored here on argv so the
+    // shared helper stays covered now that only argv and shellCommand remain.
+    it.each([[undefined], [null]])(
+      "defaults exitCode to 1 when err.code is %s",
+      async (code) => {
+        mockExecFile.mockImplementation((cmd, args, opts, cb) => cb({ code }, "", "boom"));
+
+        const res = await request(app).post("/").send({ argv: ["git", "status"] });
+
+        expect(res.body.exitCode).toBe(1);
+      },
+    );
+
+    it("normalizes null stdout and stderr to empty strings", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, null, null));
+
+      const res = await request(app).post("/").send({ argv: ["true"] });
+
       expect(res.body.stdout).toBe("");
       expect(res.body.stderr).toBe("");
     });
 
-    it("includes the original command in the response", async () => {
-      mockExec.mockImplementation((cmd, opts, cb) => {
-        cb(null, "ok", "");
-      });
+    it.each([
+      ["a string", { argv: "git status" }],
+      ["an empty array", { argv: [] }],
+      ["non-string elements", { argv: ["git", 7] }],
+      ["a nested array", { argv: ["git", ["status"]] }],
+    ])("rejects argv that is %s", async (_label, body) => {
+      const res = await request(app).post("/").send(body);
 
-      const res = await request(app)
-        .post("/")
-        .send({ command: "echo hello | cat" });
-
-      expect(res.status).toBe(200);
-      expect(res.body.command).toBe("echo hello | cat");
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("argv must be a non-empty array of strings");
+      expect(mockExec).not.toHaveBeenCalled();
+      expect(mockExecFile).not.toHaveBeenCalled();
     });
   });
 });

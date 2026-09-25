@@ -2,7 +2,7 @@
 import { $ } from "../core/dom.js";
 import { on } from "../core/events.js";
 import { on as onState } from "../core/store.js";
-import { execCommand } from "../core/api.js";
+import { execArgv } from "../core/api.js";
 
 let currentCwd = null;
 
@@ -23,7 +23,7 @@ async function loadBranches() {
   if (!cwd) return;
 
   try {
-    const result = await execCommand("git branch --no-color", cwd);
+    const result = await execArgv(["git", "branch", "--no-color"], cwd);
     if (result.error) return;
 
     const lines = result.stdout.split("\n").filter(Boolean);
@@ -46,8 +46,17 @@ async function switchBranch(branch) {
   const cwd = getCwd();
   if (!cwd || !branch) return;
 
+  // With argv there is no quoting, so a branch name beginning with "-"
+  // (e.g. "-f", a valid ref name) is read as an OPTION by git, not a
+  // revision — `git checkout -f` force-discards uncommitted changes. `--`
+  // cannot disambiguate this; it would reinterpret the name as a pathspec.
+  if (branch.startsWith("-")) {
+    showBranchError(`Refusing to check out "${branch}" — branch names starting with "-" can be read as command options`);
+    return;
+  }
+
   try {
-    const result = await execCommand(`git checkout "${branch}"`, cwd);
+    const result = await execArgv(["git", "checkout", branch], cwd);
     if (result.exitCode !== 0 || (result.error && result.stderr)) {
       // Show error to the user — typically "uncommitted changes" blocking the switch
       const errMsg = (result.stderr || result.stdout || "").trim();
@@ -101,7 +110,7 @@ async function loadStatus() {
   }
 
   try {
-    const result = await execCommand("git status --porcelain=v1", cwd);
+    const result = await execArgv(["git", "status", "--porcelain=v1"], cwd);
     if (result.error) {
       $.gitStatusList.innerHTML = `
         <div class="git-empty">
@@ -169,11 +178,11 @@ function renderGroup(title, files, action) {
   group.querySelector(".git-bulk-action").addEventListener("click", async () => {
     const cwd = getCwd();
     if (!cwd) return;
-    const fileArgs = files.map((f) => `"${f.file}"`).join(" ");
-    const cmd = action === "stage"
-      ? `git add ${fileArgs}`
-      : `git reset HEAD ${fileArgs}`;
-    await execCommand(cmd, cwd);
+    const paths = files.map((f) => f.file);
+    const argv = action === "stage"
+      ? ["git", "add", "--", ...paths]
+      : ["git", "reset", "HEAD", "--", ...paths];
+    await execArgv(argv, cwd);
     await loadStatus();
   });
 
@@ -195,10 +204,10 @@ function renderGroup(title, files, action) {
     row.querySelector(".git-stage-btn").addEventListener("click", async () => {
       const cwd = getCwd();
       if (!cwd) return;
-      const cmd = action === "stage"
-        ? `git add "${f.file}"`
-        : `git reset HEAD "${f.file}"`;
-      await execCommand(cmd, cwd);
+      const argv = action === "stage"
+        ? ["git", "add", "--", f.file]
+        : ["git", "reset", "HEAD", "--", f.file];
+      await execArgv(argv, cwd);
       await loadStatus();
     });
 
@@ -211,7 +220,7 @@ function renderGroup(title, files, action) {
       discardBtn.addEventListener("click", async () => {
         const cwd = getCwd();
         if (!cwd) return;
-        await execCommand(`git checkout -- "${f.file}"`, cwd);
+        await execArgv(["git", "checkout", "--", f.file], cwd);
         await loadStatus();
       });
       row.appendChild(discardBtn);
@@ -232,15 +241,15 @@ async function showFileDiff(file, isStaged, isUntracked) {
   let diffText = "";
   if (isUntracked) {
     // Untracked file — show full content as additions
-    const result = await execCommand(`cat "${file}"`, cwd);
+    const result = await execArgv(["cat", "--", file], cwd);
     if (!result.error && result.stdout) {
       diffText = result.stdout.split("\n").map((l) => "+" + l).join("\n");
     }
   } else if (isStaged) {
-    const result = await execCommand(`git diff --cached -- "${file}"`, cwd);
+    const result = await execArgv(["git", "diff", "--cached", "--", file], cwd);
     diffText = result.stdout || "";
   } else {
-    const result = await execCommand(`git diff -- "${file}"`, cwd);
+    const result = await execArgv(["git", "diff", "--", file], cwd);
     diffText = result.stdout || "";
   }
 
@@ -262,8 +271,7 @@ async function handleCommit() {
   if (oldErr) oldErr.remove();
 
   try {
-    const escaped = msg.replace(/"/g, '\\"');
-    const result = await execCommand(`git commit -m "${escaped}"`, cwd);
+    const result = await execArgv(["git", "commit", "-m", msg], cwd);
     if (result.error || (result.stderr && result.stderr.includes("nothing to commit"))) {
       showCommitError(result.stderr || result.stdout || "Nothing to commit");
     } else {
@@ -295,7 +303,7 @@ async function loadLog() {
   if (!cwd) return;
 
   try {
-    const result = await execCommand('git log --oneline --no-color -10 --format="%h|%s|%ar"', cwd);
+    const result = await execArgv(["git", "log", "--oneline", "--no-color", "-10", "--format=%h|%s|%ar"], cwd);
     if (result.error) {
       $.gitLogList.innerHTML = "";
       return;
@@ -326,7 +334,7 @@ async function loadLog() {
 async function showCommitDiff(hash) {
   const cwd = getCwd();
   if (!cwd) return;
-  const result = await execCommand(`git show "${hash}" --stat --patch`, cwd);
+  const result = await execArgv(["git", "show", hash, "--stat", "--patch"], cwd);
   if (!result.error) showDiffModal(result.stdout, `Commit ${hash}`);
 }
 
@@ -337,7 +345,7 @@ async function loadBranchInfo() {
   if (!cwd || !$.gitBranchInfo) return;
 
   try {
-    const branchResult = await execCommand("git rev-parse --abbrev-ref HEAD", cwd);
+    const branchResult = await execArgv(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd);
     const branch = branchResult.stdout?.trim();
     if (!branch || branchResult.error) {
       $.gitBranchInfo.classList.add("hidden");
@@ -345,8 +353,8 @@ async function loadBranchInfo() {
     }
 
     // Get ahead/behind tracking info
-    const trackResult = await execCommand(
-      "git rev-list --left-right --count HEAD...@{upstream}",
+    const trackResult = await execArgv(
+      ["git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
       cwd
     );
 
