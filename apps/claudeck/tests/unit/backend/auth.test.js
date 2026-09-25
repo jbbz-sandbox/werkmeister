@@ -537,6 +537,66 @@ describe("loginHandler", () => {
   });
 });
 
+describe("loginHandler rate limiting", () => {
+  beforeEach(() => {
+    process.env.CLAUDECK_AUTH = "true";
+    process.env.CLAUDECK_TOKEN = "correcttoken123";
+    auth.__resetLoginAttempts();
+  });
+
+  it("returns 429 after 10 failed attempts", () => {
+    for (let i = 0; i < 10; i++) {
+      const res = mockRes();
+      auth.loginHandler(mockReq({ body: { token: "wrong" } }), res);
+      expect(res._status).toBe(401);
+    }
+    const res = mockRes();
+    auth.loginHandler(mockReq({ body: { token: "wrong" } }), res);
+    expect(res._status).toBe(429);
+  });
+
+  it("blocks a correct token once the limit is hit", () => {
+    for (let i = 0; i < 11; i++) {
+      auth.loginHandler(mockReq({ body: { token: "wrong" } }), mockRes());
+    }
+    const res = mockRes();
+    auth.loginHandler(mockReq({ body: { token: "correcttoken123" } }), res);
+    expect(res._status).toBe(429);
+  });
+
+  it("does not count successful logins", () => {
+    for (let i = 0; i < 20; i++) {
+      const res = mockRes();
+      auth.loginHandler(mockReq({ body: { token: "correcttoken123" } }), res);
+      expect(res._status).toBe(200);
+    }
+  });
+
+  it("counts each remote address separately", () => {
+    for (let i = 0; i < 11; i++) {
+      auth.loginHandler(mockReq({ body: { token: "wrong" }, ip: "10.0.0.1" }), mockRes());
+    }
+    const res = mockRes();
+    auth.loginHandler(mockReq({ body: { token: "correcttoken123" }, ip: "10.0.0.2" }), res);
+    expect(res._status).toBe(200);
+  });
+
+  it("forgets attempts once the window expires", () => {
+    vi.useFakeTimers();
+    try {
+      for (let i = 0; i < 11; i++) {
+        auth.loginHandler(mockReq({ body: { token: "wrong" } }), mockRes());
+      }
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+      const res = mockRes();
+      auth.loginHandler(mockReq({ body: { token: "correcttoken123" } }), res);
+      expect(res._status).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 // ── statusHandler ────────────────────────────────────────────────────────
 
 describe("statusHandler", () => {

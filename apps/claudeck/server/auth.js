@@ -206,12 +206,56 @@ function wsToken(req) {
   }
 }
 
+// ── Login rate limiting ─────────────────────────────────────
+// A 32-byte token is not guessable; this exists so a local process cannot sit
+// and grind, and so repeated failures are visible. Only FAILED attempts count,
+// so the legitimate user can never lock themselves out by logging in.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 10;
+const loginAttempts = new Map(); // address → { count, windowStart }
+
+function clientAddress(req) {
+  return req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "unknown";
+}
+
+function loginRateLimited(address) {
+  const entry = loginAttempts.get(address);
+  if (!entry) return false;
+  if (Date.now() - entry.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(address);
+    return false;
+  }
+  return entry.count >= LOGIN_MAX_FAILURES;
+}
+
+function recordLoginFailure(address) {
+  const entry = loginAttempts.get(address);
+  if (!entry || Date.now() - entry.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.set(address, { count: 1, windowStart: Date.now() });
+    return;
+  }
+  entry.count += 1;
+}
+
+/** Test seam — the limiter is module-level state. */
+export function __resetLoginAttempts() {
+  loginAttempts.clear();
+}
+
 export function loginHandler(req, res) {
   if (!isAuthEnabled()) return res.json({ ok: true });
+
+  const address = clientAddress(req);
+  if (loginRateLimited(address)) {
+    return res.status(429).json({ error: "Too many attempts — try again later" });
+  }
+
   const { token } = req.body || {};
   if (!validateToken(token)) {
+    recordLoginFailure(address);
     return res.status(401).json({ error: "Invalid token" });
   }
+  loginAttempts.delete(address);
   res.cookie("claudeck_token", token, {
     httpOnly: true,
     sameSite: "strict",
