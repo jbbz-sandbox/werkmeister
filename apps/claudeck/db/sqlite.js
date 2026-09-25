@@ -71,7 +71,7 @@ export function addColumn(db, sql) {
   try {
     db.exec(sql);
   } catch (e) {
-    if (!/duplicate column name/i.test(e.message)) throw e;
+    if (!/duplicate column name/i.test(e?.message)) throw e;
   }
 }
 

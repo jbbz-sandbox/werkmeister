@@ -484,6 +484,7 @@ export async function saveSystemPromptApi(path, systemPrompt) {
 // constant command — either the user's own typed input (the /run slash
 // command) or a command the app hardcodes (e.g. "code ."). Anything the UI
 // assembles from a branch name, path or message must use execArgv instead.
+// shell-safe: this is the function definition, not a call site — every call site is the guarded surface, and they're covered above
 export async function execShell(command, cwd) {
   const res = await fetch("/api/exec", {
     method: "POST",
@@ -504,7 +505,6 @@ export async function execArgv(argv, cwd) {
   });
   return res.json();
 }
-
 
 // Tips
 export async function fetchTips() {

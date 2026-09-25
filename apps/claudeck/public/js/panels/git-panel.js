@@ -46,6 +46,15 @@ async function switchBranch(branch) {
   const cwd = getCwd();
   if (!cwd || !branch) return;
 
+  // With argv there is no quoting, so a branch name beginning with "-"
+  // (e.g. "-f", a valid ref name) is read as an OPTION by git, not a
+  // revision — `git checkout -f` force-discards uncommitted changes. `--`
+  // cannot disambiguate this; it would reinterpret the name as a pathspec.
+  if (branch.startsWith("-")) {
+    showBranchError(`Refusing to check out "${branch}" — branch names starting with "-" can be read as command options`);
+    return;
+  }
+
   try {
     const result = await execArgv(["git", "checkout", branch], cwd);
     if (result.exitCode !== 0 || (result.error && result.stderr)) {

@@ -2163,6 +2163,22 @@ describe("addColumn migration helper", () => {
       /disk is full/,
     );
   });
+
+  it("rethrows a non-Error throw (e.g. null) instead of masking it with a TypeError", async () => {
+    const { addColumn } = await import("../../../db/sqlite.js");
+    const db = {
+      exec: () => {
+        throw null;
+      },
+    };
+    let caught;
+    try {
+      addColumn(db, "ALTER TABLE messages ADD COLUMN chat_id TEXT");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeNull();
+  });
 });
 
 describe("getDb", () => {

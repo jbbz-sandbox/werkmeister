@@ -65,12 +65,20 @@ const PLUGIN_CLIENTS = readdirSync(pluginsDir, { withFileTypes: true })
 
 const PUBLIC_JS_FILES = walkJsFiles(join(root, "public/js")).map((f) => relative(root, f));
 
+// Both scanners check the SAME rule in two different shapes (a call-form
+// execShell/execCommand, or a raw-fetch shellCommand: property). A plugin
+// could use either shape, and so could a public/js file — so both scanners
+// must run over the union of every file either one used to check alone.
+// Checking only half would let a hostile branch name reach a shell again via
+// whichever shape/location combination nobody was scanning.
+const ALL_FILES = Array.from(new Set([...PLUGIN_CLIENTS, ...PUBLIC_JS_FILES]));
+
 describe("bundled plugins", () => {
   it("found at least one plugin client to check — a bad glob must fail loudly", () => {
     expect(PLUGIN_CLIENTS.length).toBeGreaterThan(0);
   });
 
-  it.each(PLUGIN_CLIENTS)("%s builds no shell command from data", (rel) => {
+  it.each(ALL_FILES)("%s builds no shell command from data", (rel) => {
     const source = readFileSync(join(root, rel), "utf-8");
     expect(offendingShellCalls(source)).toEqual([]);
   });
@@ -97,8 +105,8 @@ describe("public/js raw-fetch shellCommand bodies", () => {
     expect(PUBLIC_JS_FILES.length).toBeGreaterThan(0);
   });
 
-  it("builds no shellCommand body from data anywhere under public/js", () => {
-    const offenders = PUBLIC_JS_FILES.flatMap((rel) => {
+  it("builds no shellCommand body from data anywhere in a plugin client or public/js", () => {
+    const offenders = ALL_FILES.flatMap((rel) => {
       const source = readFileSync(join(root, rel), "utf-8");
       return offendingShellCommandProps(source).map(([line, value]) => `${rel}:${line} ${value}`);
     });
@@ -109,5 +117,21 @@ describe("public/js raw-fetch shellCommand bodies", () => {
     expect(
       offendingShellCommandProps("body: JSON.stringify({ shellCommand: `code ${dir}`, cwd }),"),
     ).not.toEqual([]);
+  });
+});
+
+describe("scanners are reachable from either file set (regression for the union fix)", () => {
+  it("the call-shape checker flags an interpolated execShell wherever it appears", () => {
+    // Shape historically only checked in plugins/*/client.js — must also be
+    // caught if it shows up under public/js (e.g. a new panel).
+    const sample = "await execShell(`git worktree add ${name}`, cwd);";
+    expect(offendingShellCalls(sample)).not.toEqual([]);
+  });
+
+  it("the prop-shape checker flags an interpolated shellCommand wherever it appears", () => {
+    // Shape historically only checked under public/js — must also be caught
+    // if a plugin uses a raw fetch instead of execCommand/execShell.
+    const sample = "fetch('/api/exec', { body: JSON.stringify({ shellCommand: `git checkout ${branch}`, cwd }) });";
+    expect(offendingShellCommandProps(sample)).not.toEqual([]);
   });
 });

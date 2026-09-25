@@ -221,6 +221,12 @@ function wsToken(req) {
 // a fetch racing a logout), and counting those would lock the user out of their
 // own machine over an expired cookie. Revisit only if claudeck is ever exposed
 // beyond loopback by default.
+//
+// ponytail: the limiter is keyed on remote address, and every local client is
+// 127.0.0.1 — so the limiter is itself a lockout lever: any local process, or
+// a page open in the browser, can burn the failure budget on purpose and deny
+// the real user their own login for the window. Acceptable on loopback,
+// revisit alongside the note above if claudeck is ever exposed.
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 10;
 const loginAttempts = new Map(); // address → { count, windowStart }

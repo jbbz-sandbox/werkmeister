@@ -127,9 +127,16 @@ POST /api/exec { shellCommand: string, cwd? }    → exec, shell, /run only
 
 - `argv` is the only mode the UI uses. No quoting, no splitting, no heuristic.
 - `shellCommand` is named so that every call site reads as a deliberate choice
-  and `grep shellCommand` finds all of them. Today there is exactly one:
-  `registerCommand("run", …)` in `public/js/features/chat.js`, where the user
-  literally typed a shell command and pipes are the point.
+  and `grep shellCommand` finds all of them. The rule is "nothing built from
+  data", not "one caller": there are five call sites today. `/run`
+  (`registerCommand("run", …)` in `public/js/features/chat.js`) is the only
+  one that carries data — the user literally typed the command and pipes are
+  the point. The other four pass string constants that still need a shell:
+  `"code ."` in `features/projects.js`, `plugins/sandbox-workspace/client.js`,
+  and `plugins/repos/client.js` (twice), plus the per-platform terminal
+  launcher in `plugins/repos/client.js`. They need `exec`, not `execFile`,
+  because `execFile` does no PATHEXT resolution and so cannot launch
+  `code.cmd` on Windows, and because the Linux terminal launcher uses `||`.
 - The `command` field and the `isSimple` heuristic are **removed**. No silent
   fallback: a stale caller gets a 400, not a shell.
 
@@ -146,8 +153,16 @@ site. argv removes the obligation instead of restating it.
 
 **Breaking change.** Accepted. `private: true`, single user, and every caller is
 in this repo: `core/api.js`, `panels/git-panel.js`, `ui/status-bar.js`,
-`features/projects.js`, `features/chat.js`. No plugin calls `/api/exec` —
-verified by search across `apps/claudeck/plugins/`.
+`features/projects.js`, `features/chat.js`. Plugins DO reach `/api/exec` — two
+paths: `execCommand`/`execShell` imported directly from `/js/core/api.js`
+(`plugins/sandbox-workspace/client.js`), and `ctx.api`, which
+`public/js/ui/tab-sdk.js:263` sets to the entire api module, giving every
+plugin the same access (`plugins/repos/client.js`). The original check missed
+both because it grepped for the literal string `"api/exec"`, which appears
+nowhere in a plugin — the plugins call the wrapper functions, not the
+endpoint URL. `plugins/sandbox-workspace/client.js` was a second Git panel
+carrying the same interpolation as `panels/git-panel.js` and was converted
+alongside it.
 
 ## Item B — Token accepted in query parameters
 

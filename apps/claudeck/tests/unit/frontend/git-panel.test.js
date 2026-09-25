@@ -167,6 +167,19 @@ describe("git-panel", () => {
     );
   });
 
+  it("refuses to check out a branch name beginning with a dash", async () => {
+    // git check-ref-format allows a branch named -f. With argv there is no
+    // quoting, so execArgv(["git","checkout","-f"]) reads -f as the OPTION,
+    // force-discarding uncommitted changes. Must never reach execArgv.
+    const select = document.getElementById("git-branch-select");
+    select.innerHTML = '<option value="-f">-f</option>';
+    select.value = "-f";
+    select.dispatchEvent(new Event("change"));
+    await Promise.resolve();
+
+    expect(mockExecArgv).not.toHaveBeenCalled();
+  });
+
   it("projectSelect change handler clears status, log, and branch lists", () => {
     domElements.gitStatusList.innerHTML = "<div>status</div>";
     domElements.gitLogList.innerHTML = "<div>log</div>";

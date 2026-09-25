@@ -407,6 +407,15 @@ registerTab({
         }
       }
       select.addEventListener("change", async () => {
+        // With argv there is no quoting, so a branch name beginning with "-"
+        // (e.g. "-f", a valid ref name) is read as an OPTION by git, not a
+        // revision — `git checkout -f` force-discards uncommitted changes.
+        // `--` cannot disambiguate this; it would reinterpret the name as a
+        // pathspec instead.
+        if (select.value.startsWith("-")) {
+          ctx.toast(`Refusing to check out "${select.value}" — branch names starting with "-" can be read as command options`, { type: "error" });
+          return;
+        }
         const res = await execArgv(["git", "checkout", select.value], dir);
         if (res.error) {
           ctx.toast(`Cannot switch branch: ${res.stderr || "uncommitted changes?"}`, { type: "error" });
