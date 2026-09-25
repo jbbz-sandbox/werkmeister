@@ -13,7 +13,8 @@ async function loadAuth() {
 
 function mockReq(overrides = {}) {
   return {
-    headers: {},
+    headers: { host: "localhost:9009" },
+    method: "GET",
     url: "/",
     ip: "192.168.1.100",
     connection: { remoteAddress: "192.168.1.100" },
@@ -45,6 +46,7 @@ beforeEach(async () => {
   delete process.env.CLAUDECK_AUTH;
   delete process.env.CLAUDECK_TOKEN;
   delete process.env.CLAUDECK_AUTH_LOCALHOST;
+  delete process.env.CLAUDECK_ALLOWED_HOSTS;
   auth = await loadAuth();
 });
 
@@ -363,12 +365,14 @@ describe("authMiddleware", () => {
 
 describe("verifyWsClient", () => {
   function wsInfo(overrides = {}) {
+    const { headers = {}, ...rest } = overrides;
     return {
       req: {
-        headers: {},
+        headers: { host: "localhost:9009", ...headers },
+        method: "GET",
         url: "/ws",
         socket: { remoteAddress: "192.168.1.100" },
-        ...overrides,
+        ...rest,
       },
     };
   }
@@ -517,5 +521,196 @@ describe("statusHandler", () => {
     const res = mockRes();
     auth.statusHandler(mockReq(), res);
     expect(res._json).toEqual({ authEnabled: true });
+  });
+});
+
+// ── hostGuard ────────────────────────────────────────────────────────────
+// Regression tests for DNS rebinding and cross-site requests. These must hold
+// with auth disabled, which is the default configuration.
+
+function localSocket(overrides = {}) {
+  const { headers = {}, ...rest } = overrides;
+  return mockReq({
+    ip: "127.0.0.1",
+    connection: { remoteAddress: "127.0.0.1" },
+    socket: { remoteAddress: "127.0.0.1" },
+    headers: { host: "localhost:9009", ...headers },
+    ...rest,
+  });
+}
+
+describe("hostGuard", () => {
+  it("passes an ordinary local request", () => {
+    const next = vi.fn();
+    auth.hostGuard(localSocket(), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it.each(["127.0.0.1:9009", "[::1]:9009", "localhost", "0.0.0.0:9009"])(
+    "accepts local host header %s",
+    (host) => {
+      const next = vi.fn();
+      auth.hostGuard(localSocket({ headers: { host } }), mockRes(), next);
+      expect(next).toHaveBeenCalled();
+    },
+  );
+
+  it("blocks a rebound request: local socket, foreign Host, no auth", () => {
+    const req = localSocket({ headers: { host: "evil.com:9009" } });
+    const res = mockRes();
+    const next = vi.fn();
+    auth.hostGuard(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res._status).toBe(403);
+  });
+
+  it("lets a rebound request through only with a valid token", () => {
+    process.env.CLAUDECK_TOKEN = "correcttoken123";
+    const headers = { host: "evil.com:9009", authorization: "Bearer correcttoken123" };
+    const next = vi.fn();
+    auth.hostGuard(localSocket({ headers }), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("401s a foreign Host when auth is on and the token is wrong", () => {
+    process.env.CLAUDECK_TOKEN = "correcttoken123";
+    const headers = { host: "evil.com:9009", authorization: "Bearer wrong" };
+    const res = mockRes();
+    const next = vi.fn();
+    auth.hostGuard(localSocket({ headers }), res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res._status).toBe(401);
+  });
+
+  it("serves a host listed in CLAUDECK_ALLOWED_HOSTS", () => {
+    process.env.CLAUDECK_ALLOWED_HOSTS = "box.tail1234.ts.net, 192.168.1.50";
+    const next = vi.fn();
+    auth.hostGuard(localSocket({ headers: { host: "192.168.1.50:9009" } }), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("blocks a cross-site POST (Sec-Fetch-Site)", () => {
+    const req = localSocket({
+      method: "POST",
+      headers: { host: "localhost:9009", "sec-fetch-site": "cross-site" },
+    });
+    const res = mockRes();
+    const next = vi.fn();
+    auth.hostGuard(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res._status).toBe(403);
+  });
+
+  it("blocks a cross-origin POST on the Origin header alone", () => {
+    const req = localSocket({
+      method: "POST",
+      headers: { host: "localhost:9009", origin: "http://evil.com" },
+    });
+    const res = mockRes();
+    const next = vi.fn();
+    auth.hostGuard(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res._status).toBe(403);
+  });
+
+  it("allows a top-level navigation arriving from another site", () => {
+    const req = localSocket({
+      headers: {
+        host: "localhost:9009",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "navigate",
+      },
+    });
+    const next = vi.fn();
+    auth.hostGuard(req, mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("allows same-origin requests from our own page", () => {
+    const req = localSocket({
+      method: "POST",
+      headers: {
+        host: "localhost:9009",
+        origin: "http://localhost:9009",
+        "sec-fetch-site": "same-origin",
+      },
+    });
+    const next = vi.fn();
+    auth.hostGuard(req, mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("trusts Sec-Fetch-Site over a textually different Origin", () => {
+    // Browsing 127.0.0.1 while the page's Origin says localhost is same-origin
+    // to the browser; the guard must not read the mismatch as cross-site.
+    const req = localSocket({
+      method: "POST",
+      headers: {
+        host: "127.0.0.1:9009",
+        origin: "http://localhost:9009",
+        "sec-fetch-site": "same-origin",
+      },
+    });
+    const next = vi.fn();
+    auth.hostGuard(req, mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("allows non-browser clients that send neither header", () => {
+    const next = vi.fn();
+    auth.hostGuard(localSocket({ method: "POST" }), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+});
+
+describe("authMiddleware localhost bypass", () => {
+  it("does not bypass for a rebound request", () => {
+    process.env.CLAUDECK_TOKEN = "correcttoken123";
+    const req = localSocket({ headers: { host: "evil.com:9009" } });
+    const res = mockRes();
+    const next = vi.fn();
+    auth.authMiddleware(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res._status).toBe(401);
+  });
+});
+
+describe("verifyWsClient host checks", () => {
+  it("rejects a cross-site upgrade", () => {
+    const cb = vi.fn();
+    auth.verifyWsClient(
+      { req: localSocket({ headers: { host: "localhost:9009", origin: "http://evil.com" } }) },
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(false, 403, expect.any(String));
+  });
+
+  it("rejects an untokened upgrade on a foreign Host", () => {
+    const cb = vi.fn();
+    auth.verifyWsClient({ req: localSocket({ headers: { host: "evil.com:9009" } }) }, cb);
+    expect(cb).toHaveBeenCalledWith(false, 401, expect.any(String));
+  });
+
+  it("still accepts a plain local upgrade", () => {
+    const cb = vi.fn();
+    auth.verifyWsClient({ req: localSocket() }, cb);
+    expect(cb).toHaveBeenCalledWith(true);
+  });
+});
+
+// ── loginHandler cookie over a TLS-terminating proxy ──────────────────────
+
+describe("loginHandler secure flag behind a proxy", () => {
+  it("sets secure when the browser hop was https", () => {
+    process.env.CLAUDECK_AUTH = "true";
+    process.env.CLAUDECK_TOKEN = "secret";
+    const req = mockReq({
+      body: { token: "secret" },
+      protocol: "http",
+      headers: { host: "tunnel.example:443", "x-forwarded-proto": "https,http" },
+    });
+    const res = mockRes();
+    auth.loginHandler(req, res);
+    expect(res._cookie.opts.secure).toBe(true);
   });
 });

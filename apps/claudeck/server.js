@@ -35,7 +35,7 @@ import skillsRouter from "./server/routes/skills.js";
 import marketplaceRouter, { setApp as setMarketplaceApp } from "./server/routes/marketplace.js";
 import { setupWebSocket } from "./server/ws-handler.js";
 import { setWss } from "./server/notification-logger.js";
-import { authMiddleware, verifyWsClient, isAuthEnabled, getToken, loginHandler, statusHandler } from "./server/auth.js";
+import { authMiddleware, hostGuard, verifyWsClient, isAuthEnabled, getToken, loginHandler, statusHandler } from "./server/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -51,6 +51,9 @@ app.use(express.json());
 app.post("/api/auth/login", loginHandler);
 app.get("/api/auth/status", statusHandler);
 app.get("/login", (_req, res) => res.sendFile(join(__dirname, "public", "login.html")));
+
+// Host/origin guard — runs even when auth is disabled (DNS rebinding, CSRF)
+app.use(hostGuard);
 
 // Auth middleware — everything below is protected when auth is enabled
 app.use(authMiddleware);
@@ -208,7 +211,10 @@ app.get("/api/plugins", (req, res) => {
 setWss(wss);
 setupWebSocket(wss, sessionIds);
 
-const PORT = process.env.PORT || 9009;
+const PORT = Number(process.env.PORT ?? 9009);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error(`Invalid PORT: ${process.env.PORT}`);
+}
 
 // Mount full-stack plugin routes, then start server
 mountPluginRoutes(app, fullStackPluginsDir).then(() => {
@@ -235,11 +241,10 @@ ${isAuthEnabled() ? `  \x1b[2m➜  Auth:\x1b[0m    \x1b[33menabled\x1b[0m\n  \x1
 setInterval(async () => { try { await purgeOldNotifications(90); } catch {} }, 24 * 60 * 60 * 1000);
 
 // Graceful shutdown
-process.on("SIGINT", () => {
+function shutdown() {
   stopTelegramPoller();
+  try { getDb().close(); } catch { /* already closed */ }
   process.exit(0);
-});
-process.on("SIGTERM", () => {
-  stopTelegramPoller();
-  process.exit(0);
-});
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
