@@ -7,9 +7,10 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { appendFileSync, readdirSync, existsSync, statSync } from "fs";
+import { readdirSync, existsSync, statSync } from "fs";
 import webpush from "web-push";
 import { getDb, allClaudeSessions, purgeOldNotifications } from "./db.js";
+import { resolveVapidKeys } from "./server/vapid.js";
 import { initPushSender } from "./server/push-sender.js";
 import { initTelegramSender } from "./server/telegram-sender.js";
 import { startTelegramPoller, stopTelegramPoller } from "./server/telegram-poller.js";
@@ -62,20 +63,9 @@ app.use(express.static(join(__dirname, "public")));
 
 // ── Web Push (VAPID) setup ──────────────────────────────────
 {
-  let vapidPublic = process.env.VAPID_PUBLIC_KEY;
-  let vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-
-  if (!vapidPublic || !vapidPrivate) {
-    const generated = webpush.generateVAPIDKeys();
-    vapidPublic = generated.publicKey;
-    vapidPrivate = generated.privateKey;
-    // Persist to .env so keys survive restarts
-    appendFileSync(join(userDir, ".env"), `\nVAPID_PUBLIC_KEY="${vapidPublic}"\nVAPID_PRIVATE_KEY="${vapidPrivate}"\n`);
-    console.log("Generated and saved VAPID keys to ~/.claudeck/.env");
-  }
-
-  webpush.setVapidDetails("mailto:push@claudeck.local", vapidPublic, vapidPrivate);
-  setVapidPublicKey(vapidPublic);
+  const { publicKey, privateKey } = resolveVapidKeys(webpush);
+  webpush.setVapidDetails("mailto:push@claudeck.local", publicKey, privateKey);
+  setVapidPublicKey(publicKey);
   initPushSender(webpush);
 }
 

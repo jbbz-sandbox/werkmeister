@@ -1297,6 +1297,7 @@ const pushStmts = {
   ),
   delete: db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = ?`),
   getAll: db.prepare(`SELECT * FROM push_subscriptions`),
+  count: db.prepare(`SELECT COUNT(*) AS n FROM push_subscriptions`),
 };
 
 export async function upsertPushSubscription(endpoint, p256dh, auth) {
@@ -1309,6 +1310,12 @@ export async function deletePushSubscription(endpoint) {
 
 export async function getAllPushSubscriptions() {
   return pushStmts.getAll.all();
+}
+
+// Sync, unlike its async neighbours above: VAPID setup runs before the server
+// listens and has no await to give it.
+export function countPushSubscriptions() {
+  return pushStmts.count.get().n;
 }
 
 // ── Agent context (shared memory) ─────────────────────────
