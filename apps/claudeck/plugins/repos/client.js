@@ -246,7 +246,7 @@ registerTab({
       row.addEventListener('contextmenu', (e) => showRepoContextMenu(e, repo));
 
       if (repo.path) {
-        row.addEventListener('dblclick', () => ctx.api.execCommand('code .', repo.path));
+        row.addEventListener('dblclick', () => ctx.api.execShell('code .', repo.path));
       } else if (repo.url) {
         row.addEventListener('dblclick', () => window.open(repo.url, '_blank'));
       }
@@ -574,13 +574,13 @@ registerTab({
       }
 
       if (repo.path) {
-        ctxMenu.appendChild(createMenuItem('Open in VS Code', () => ctx.api.execCommand('code .', repo.path)));
+        ctxMenu.appendChild(createMenuItem('Open in VS Code', () => ctx.api.execShell('code .', repo.path)));
         ctxMenu.appendChild(createMenuItem('Open in Terminal', () => {
           const isWin = navigator.platform.startsWith('Win');
           const isMac = navigator.platform.startsWith('Mac');
           const cmd = isWin ? 'start cmd /k' : isMac ? 'open -a Terminal .' : 'x-terminal-emulator || xterm';
           // shell-safe: constant per-platform launcher, no repository data
-          ctx.api.execCommand(cmd, repo.path);
+          ctx.api.execShell(cmd, repo.path);
         }));
         ctxMenu.appendChild(createMenuItem('Copy Path', () => navigator.clipboard.writeText(repo.path)));
       }
@@ -651,7 +651,7 @@ registerTab({
       const paths = collectPathsInGroup(group.id);
       if (paths.length > 0) {
         ctxMenu.appendChild(createMenuItem('Open All in VS Code', () => {
-          for (const p of paths) ctx.api.execCommand('code .', p);
+          for (const p of paths) ctx.api.execShell('code .', p);
         }));
       }
 

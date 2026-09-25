@@ -59,7 +59,7 @@ import {
   toggleSessionPin,
   generateSummary,
   saveSystemPromptApi,
-  execCommand,
+  execShell,
   execArgv,
   fetchTips,
   fetchRssFeed,
@@ -783,12 +783,12 @@ describe("MCP", () => {
 // ─── Exec ───────────────────────────────────────────────────────────
 
 describe("Exec", () => {
-  it("execCommand sends POST with command and cwd", async () => {
-    await execCommand("ls -la", "/home");
+  it("execShell sends POST with shellCommand and cwd", async () => {
+    await execShell("ls -la | head", "/home");
     expect(mockFetch).toHaveBeenCalledWith("/api/exec", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: "ls -la", cwd: "/home" }),
+      body: JSON.stringify({ shellCommand: "ls -la | head", cwd: "/home" }),
     });
   });
 

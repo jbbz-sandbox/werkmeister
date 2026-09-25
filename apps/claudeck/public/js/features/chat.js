@@ -985,7 +985,7 @@ registerCommand("run", {
     const cwd = $.projectSelect.value || undefined;
     addStatus("Running: " + args, false, pane);
     try {
-      const data = await api.execCommand(args, cwd);
+      const data = await api.execShell(args, cwd);
       // Inline CLI output rendering
       const { appendCliOutput } = await import('../ui/messages.js');
       appendCliOutput(data, pane);

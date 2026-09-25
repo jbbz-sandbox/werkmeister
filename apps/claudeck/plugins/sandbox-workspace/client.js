@@ -2,11 +2,11 @@
 // Project-scoped view of the selected sandbox feature workspace. Lists the
 // workspace's inner repo worktrees (which the core Git tab ignores) and gives
 // each one a full git panel — branch switch, status/stage/unstage/discard,
-// file diff, commit, and log — scoped to that worktree's dir via execCommand.
+// file diff, commit, and log — scoped to that worktree's dir via execArgv.
 // All server/git output is untrusted → DOM built with textContent, never
 // innerHTML interpolation.
 import { registerTab } from "/js/ui/tab-sdk.js";
-import { execCommand, execArgv } from "/js/core/api.js";
+import { execShell, execArgv } from "/js/core/api.js";
 import { parsePorcelain } from "./parse-status.mjs";
 
 const ICON =
@@ -80,7 +80,7 @@ registerTab({
       // Always available — the worktrees exist whether or not containers run.
       const code = el("button", "sw-action sw-action-code", "Open in VS Code");
       code.addEventListener("click", async () => {
-        const res = await execCommand("code .", project);
+        const res = await execShell("code .", project);
         if (res.error || res.exitCode) ctx.toast("Could not launch VS Code", { type: "error" });
       });
       actions.appendChild(code);

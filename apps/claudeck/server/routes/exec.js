@@ -19,7 +19,7 @@ function reply(res, display) {
 }
 
 router.post("/", (req, res) => {
-  const { command, argv, cwd } = req.body;
+  const { shellCommand, argv, cwd } = req.body;
   const opts = { ...EXEC_OPTS, cwd: cwd || homedir() };
 
   // argv mode: no shell, ever. Arguments reach the program exactly as given,
@@ -36,20 +36,15 @@ router.post("/", (req, res) => {
     return execFile(argv[0], argv.slice(1), opts, reply(res, argv.join(" ")));
   }
 
-  if (!command) return res.status(400).json({ error: "command is required" });
-
-  // Legacy string mode — removed in Task 3 once every caller uses argv.
-  const parts = command.split(/\s+/);
-  const isSimple =
-    parts.length <= 2 &&
-    !command.includes("|") &&
-    !command.includes(">") &&
-    !command.includes("&");
-  if (isSimple && process.platform !== "win32") {
-    execFile(parts[0], parts.slice(1), opts, reply(res, command));
-  } else {
-    exec(command, opts, reply(res, command));
+  // The only shell in the application. Reachable only from callers that pass a
+  // constant command — one the user typed themselves (the `/run` slash
+  // command) or one the app hardcodes (e.g. "code ."). Named so that
+  // `grep shellCommand` finds every caller. Nothing built from data belongs
+  // here — use argv.
+  if (!shellCommand) {
+    return res.status(400).json({ error: "argv or shellCommand is required" });
   }
+  exec(shellCommand, opts, reply(res, shellCommand));
 });
 
 export default router;
