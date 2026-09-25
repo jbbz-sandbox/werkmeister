@@ -54,11 +54,9 @@ export function extractToken(req) {
   if (cookies.claudeck_token) {
     return cookies.claudeck_token;
   }
-  // 3. Query parameter (for edge cases)
-  const url = new URL(req.url, "http://localhost");
-  const qToken = url.searchParams.get("token");
-  if (qToken) return qToken;
-
+  // Deliberately no query-parameter fallback: URLs reach access logs, browser
+  // history and Referer headers. The WebSocket upgrade is the one exception
+  // (see wsToken) because a browser cannot set headers on that handshake.
   return null;
 }
 

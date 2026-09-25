@@ -198,9 +198,19 @@ describe("extractToken", () => {
     expect(auth.extractToken(req)).toBe("cookietoken");
   });
 
-  it("extracts from query parameter", () => {
-    const req = mockReq({ url: "/ws?token=querytoken" });
-    expect(auth.extractToken(req)).toBe("querytoken");
+  it("ignores a token in the query string", () => {
+    const req = mockReq({ url: "/api/sessions?token=secret123" });
+    expect(auth.extractToken(req)).toBe(null);
+  });
+
+  it("still reads the Authorization header", () => {
+    const req = mockReq({ headers: { host: "localhost:9009", authorization: "Bearer secret123" } });
+    expect(auth.extractToken(req)).toBe("secret123");
+  });
+
+  it("still reads the cookie", () => {
+    const req = mockReq({ headers: { host: "localhost:9009", cookie: "claudeck_token=secret123" } });
+    expect(auth.extractToken(req)).toBe("secret123");
   });
 
   it("prefers Bearer header over cookie", () => {
@@ -441,6 +451,26 @@ describe("verifyWsClient", () => {
       headers: { "x-forwarded-for": "203.0.113.50" },
     }), cb);
     expect(cb).toHaveBeenCalledWith(false, 401, "Unauthorized");
+  });
+});
+
+describe("verifyWsClient query token", () => {
+  it("still accepts ?token= on the upgrade — browsers cannot set WS headers", () => {
+    process.env.CLAUDECK_TOKEN = "correcttoken123";
+    process.env.CLAUDECK_AUTH_LOCALHOST = "true";
+    const cb = vi.fn();
+    auth.verifyWsClient(
+      {
+        req: {
+          headers: { host: "localhost:9009" },
+          method: "GET",
+          url: "/ws?token=correcttoken123",
+          socket: { remoteAddress: "192.168.1.100" },
+        },
+      },
+      cb,
+    );
+    expect(cb).toHaveBeenCalledWith(true);
   });
 });
 
