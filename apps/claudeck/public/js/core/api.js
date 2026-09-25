@@ -480,13 +480,15 @@ export async function saveSystemPromptApi(path, systemPrompt) {
   });
 }
 
-// Shell form: runs through a shell on the server. ONLY for commands the user
-// typed themselves (the /run slash command). Anything the UI assembles from a
-// branch name, path or message must use execArgv instead.
+// Shell form: runs through a shell on the server. Every caller must pass a
+// constant command — either the user's own typed input (the /run slash
+// command) or a command the app hardcodes (e.g. "code ."). Anything the UI
+// assembles from a branch name, path or message must use execArgv instead.
 export async function execShell(command, cwd) {
   const res = await fetch("/api/exec", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    // shell-safe: this is the shell entry point itself — callers are the guarded surface
     body: JSON.stringify({ shellCommand: command, cwd }),
   });
   return res.json();

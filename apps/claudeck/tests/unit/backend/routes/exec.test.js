@@ -105,6 +105,14 @@ describe("exec routes", () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("argv or shellCommand is required");
     });
+
+    it("returns 400 for a non-string shellCommand instead of reaching the shell", async () => {
+      const res = await request(app).post("/").send({ shellCommand: 123 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("argv or shellCommand is required");
+      expect(mockExec).not.toHaveBeenCalled();
+    });
   });
 
   // ── POST / — argv mode ───────────────────────────────────────────────────
@@ -237,6 +245,30 @@ describe("exec routes", () => {
       expect(res.status).toBe(200);
       expect(res.body.exitCode).toBe(128);
       expect(res.body.stderr).toBe("fatal: not a git repository");
+    });
+
+    // reply() (server/routes/exec.js:10-19) is shared by both branches — these
+    // exercised the `err.code ?? 1` and `stdout/stderr || ""` normalization
+    // via the deleted legacy string-mode tests. Restored here on argv so the
+    // shared helper stays covered now that only argv and shellCommand remain.
+    it.each([[undefined], [null]])(
+      "defaults exitCode to 1 when err.code is %s",
+      async (code) => {
+        mockExecFile.mockImplementation((cmd, args, opts, cb) => cb({ code }, "", "boom"));
+
+        const res = await request(app).post("/").send({ argv: ["git", "status"] });
+
+        expect(res.body.exitCode).toBe(1);
+      },
+    );
+
+    it("normalizes null stdout and stderr to empty strings", async () => {
+      mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, null, null));
+
+      const res = await request(app).post("/").send({ argv: ["true"] });
+
+      expect(res.body.stdout).toBe("");
+      expect(res.body.stderr).toBe("");
     });
 
     it.each([

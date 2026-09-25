@@ -432,7 +432,7 @@ All MCP endpoints accept an optional `?project=<path>` query parameter. Without 
 | GET    | /api/stats/analytics | Analytics with error patterns, tool usage, trends |
 | GET    | /api/stats/home      | Home page data (yearly activity + overview) |
 | GET    | /api/account         | Cached account info (email, plan)        |
-| POST   | /api/exec            | Run a command: `argv` (no shell) or `shellCommand` (shell, /run only). 30s timeout |
+| POST   | /api/exec            | Run a command: `argv` (no shell) or `shellCommand` (shell, constant commands only — /run or an app-hardcoded command). 30s timeout |
 
 ### Plugins
 | Method | Path                 | Description                              |

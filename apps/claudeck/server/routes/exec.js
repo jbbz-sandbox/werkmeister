@@ -41,7 +41,7 @@ router.post("/", (req, res) => {
   // command) or one the app hardcodes (e.g. "code ."). Named so that
   // `grep shellCommand` finds every caller. Nothing built from data belongs
   // here — use argv.
-  if (!shellCommand) {
+  if (typeof shellCommand !== "string" || !shellCommand) {
     return res.status(400).json({ error: "argv or shellCommand is required" });
   }
   exec(shellCommand, opts, reply(res, shellCommand));
