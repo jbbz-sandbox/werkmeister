@@ -2141,6 +2141,30 @@ describe("Worktrees", () => {
   });
 });
 
+describe("addColumn migration helper", () => {
+  it("swallows a duplicate-column error", async () => {
+    const { addColumn } = await import("../../../db/sqlite.js");
+    const db = {
+      exec: () => {
+        throw new Error("duplicate column name: chat_id");
+      },
+    };
+    expect(() => addColumn(db, "ALTER TABLE messages ADD COLUMN chat_id TEXT")).not.toThrow();
+  });
+
+  it("rethrows anything else", async () => {
+    const { addColumn } = await import("../../../db/sqlite.js");
+    const db = {
+      exec: () => {
+        throw new Error("database or disk is full");
+      },
+    };
+    expect(() => addColumn(db, "ALTER TABLE messages ADD COLUMN chat_id TEXT")).toThrow(
+      /disk is full/,
+    );
+  });
+});
+
 describe("getDb", () => {
   it("returns a Database instance", async () => {
     const db = getDb();
