@@ -207,9 +207,20 @@ function wsToken(req) {
 }
 
 // ── Login rate limiting ─────────────────────────────────────
-// A 32-byte token is not guessable; this exists so a local process cannot sit
-// and grind, and so repeated failures are visible. Only FAILED attempts count,
-// so the legitimate user can never lock themselves out by logging in.
+// Scope is deliberately just this endpoint. A 32-byte token is not guessable,
+// so this is not the thing standing between an attacker and the app; it is a
+// cheap brake on a local process grinding the login form, and it makes
+// repeated failures visible in one place.
+//
+// Only FAILED attempts count, so the legitimate user can never lock themselves
+// out by logging in.
+//
+// ponytail: authMiddleware and verifyWsClient validate tokens on every request
+// without passing through here, so a Bearer-header grind is unmetered. Not
+// closed deliberately: those paths reject during ordinary use (a stale cookie,
+// a fetch racing a logout), and counting those would lock the user out of their
+// own machine over an expired cookie. Revisit only if claudeck is ever exposed
+// beyond loopback by default.
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 10;
 const loginAttempts = new Map(); // address → { count, windowStart }
