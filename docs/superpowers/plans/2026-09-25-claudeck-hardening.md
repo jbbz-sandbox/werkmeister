@@ -1068,7 +1068,7 @@ Expected: PASS.
 - [ ] **Step 5: Verify a real database still opens**
 
 Run: `node -e 'import("./db.js").then(() => console.log("schema ok"))'`
-Expected: `schema ok` — this runs every migration against your actual `~/.claudeck/claudeck.db`, which already has all the columns, so it exercises the duplicate-column path 20 times.
+Expected: `schema ok` — this runs every migration against your actual database (`~/.claudeck/data.db`; `CLAUDECK_HOME` overrides the directory), which already has all the columns, so it exercises the duplicate-column path 20 times.
 
 - [ ] **Step 6: Run the full suite and commit**
 
