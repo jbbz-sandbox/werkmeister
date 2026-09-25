@@ -579,6 +579,7 @@ registerTab({
           const isWin = navigator.platform.startsWith('Win');
           const isMac = navigator.platform.startsWith('Mac');
           const cmd = isWin ? 'start cmd /k' : isMac ? 'open -a Terminal .' : 'x-terminal-emulator || xterm';
+          // shell-safe: constant per-platform launcher, no repository data
           ctx.api.execCommand(cmd, repo.path);
         }));
         ctxMenu.appendChild(createMenuItem('Copy Path', () => navigator.clipboard.writeText(repo.path)));
