@@ -60,6 +60,7 @@ import {
   generateSummary,
   saveSystemPromptApi,
   execCommand,
+  execArgv,
   fetchTips,
   fetchRssFeed,
   fetchTodoCounts,
@@ -788,6 +789,15 @@ describe("Exec", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ command: "ls -la", cwd: "/home" }),
+    });
+  });
+
+  it("execArgv sends POST with an argv array and cwd", async () => {
+    await execArgv(["git", "checkout", "my branch"], "/home");
+    expect(mockFetch).toHaveBeenCalledWith("/api/exec", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ argv: ["git", "checkout", "my branch"], cwd: "/home" }),
     });
   });
 });

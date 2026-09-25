@@ -489,6 +489,17 @@ export async function execCommand(command, cwd) {
   return res.json();
 }
 
+// argv form: no shell on the server. Use this for every command the UI builds
+// itself — anything containing a branch name, path or commit message.
+export async function execArgv(argv, cwd) {
+  const res = await fetch("/api/exec", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ argv, cwd }),
+  });
+  return res.json();
+}
+
 
 // Tips
 export async function fetchTips() {

@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // ── Shared spies ────────────────────────────────────────
 const mockOn = vi.fn();
 const mockOnState = vi.fn();
-const mockExecCommand = vi.fn(() =>
+const mockExecArgv = vi.fn(() =>
   Promise.resolve({ stdout: "", stderr: "", exitCode: 0, error: false })
 );
 
@@ -18,7 +18,7 @@ vi.mock("../../../public/js/core/store.js", () => ({
 }));
 
 vi.mock("../../../public/js/core/api.js", () => ({
-  execCommand: (...args) => mockExecCommand(...args),
+  execArgv: (...args) => mockExecArgv(...args),
 }));
 
 // DOM element references that the module needs
@@ -63,7 +63,7 @@ beforeEach(async () => {
   vi.resetModules();
   mockOn.mockClear();
   mockOnState.mockClear();
-  mockExecCommand.mockClear();
+  mockExecArgv.mockClear();
 
   // Mock fetch for worktree API calls
   globalThis.fetch = vi.fn(() =>
@@ -82,7 +82,7 @@ beforeEach(async () => {
     on: (...args) => mockOnState(...args),
   }));
   vi.doMock("../../../public/js/core/api.js", () => ({
-    execCommand: (...args) => mockExecCommand(...args),
+    execArgv: (...args) => mockExecArgv(...args),
   }));
 
   await import("../../../public/js/panels/git-panel.js");
@@ -110,25 +110,25 @@ describe("git-panel", () => {
     expect(mockOnState).toHaveBeenCalledWith("projectsData", expect.any(Function));
   });
 
-  it("gitRefreshBtn has click handler that calls execCommand", () => {
+  it("gitRefreshBtn has click handler that calls execArgv", () => {
     domElements.gitRefreshBtn.click();
     // refreshAll calls loadBranches, loadStatus, loadLog, loadBranchInfo, loadWorktrees
-    // which all call execCommand with various git commands
-    expect(mockExecCommand).toHaveBeenCalled();
+    // which all call execArgv with various git argv arrays
+    expect(mockExecArgv).toHaveBeenCalled();
   });
 
   it("gitCommitBtn has click handler", () => {
-    // Set a commit message and click — handleCommit should call execCommand with git commit
+    // Set a commit message and click — handleCommit should call execArgv with git commit
     domElements.gitCommitMsg.value = "test commit message";
     domElements.gitCommitBtn.click();
-    // handleCommit calls execCommand('git commit -m "test commit message"', cwd)
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      expect.stringContaining("git commit"),
+    // handleCommit calls execArgv(["git", "commit", "-m", "test commit message"], cwd)
+    expect(mockExecArgv).toHaveBeenCalledWith(
+      expect.arrayContaining(["git", "commit"]),
       expect.any(String)
     );
   });
 
-  it("gitBranchSelect has change handler that calls execCommand", () => {
+  it("gitBranchSelect has change handler that calls execArgv", () => {
     // Add an option and trigger change
     const opt = document.createElement("option");
     opt.value = "feature-branch";
@@ -136,10 +136,34 @@ describe("git-panel", () => {
     domElements.gitBranchSelect.appendChild(opt);
     domElements.gitBranchSelect.value = "feature-branch";
     domElements.gitBranchSelect.dispatchEvent(new Event("change"));
-    // switchBranch calls execCommand('git checkout "feature-branch"', cwd)
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      expect.stringContaining("git checkout"),
+    // switchBranch calls execArgv(["git", "checkout", "feature-branch"], cwd)
+    expect(mockExecArgv).toHaveBeenCalledWith(
+      expect.arrayContaining(["git", "checkout"]),
       expect.any(String)
+    );
+  });
+
+  it("gitCommitBtn click passes the message as one argv element", async () => {
+    document.getElementById("git-commit-msg").value = 'fix: a "quoted" $(echo x)\nsecond line';
+    document.getElementById("git-commit-btn").click();
+    await Promise.resolve();
+
+    expect(mockExecArgv).toHaveBeenCalledWith(
+      ["git", "commit", "-m", 'fix: a "quoted" $(echo x)\nsecond line'],
+      "/tmp/project",
+    );
+  });
+
+  it("gitBranchSelect change checks out the branch as one argv element", async () => {
+    const select = document.getElementById("git-branch-select");
+    select.innerHTML = '<option value="feature/$(echo x)">feature</option>';
+    select.value = "feature/$(echo x)";
+    select.dispatchEvent(new Event("change"));
+    await Promise.resolve();
+
+    expect(mockExecArgv).toHaveBeenCalledWith(
+      ["git", "checkout", "feature/$(echo x)"],
+      "/tmp/project",
     );
   });
 
@@ -158,16 +182,16 @@ describe("git-panel", () => {
   // ── loadStatus via refresh ──────────────────────────────
 
   it("renders staged files in status list", async () => {
-    mockExecCommand.mockImplementation((cmd) => {
-      if (cmd.includes("git status"))
+    mockExecArgv.mockImplementation((cmd) => {
+      if (cmd.includes("status"))
         return Promise.resolve({ stdout: "A  newfile.js\n", error: false });
-      if (cmd.includes("git branch"))
+      if (cmd.includes("branch"))
         return Promise.resolve({ stdout: "* main\n", error: false });
-      if (cmd.includes("git log"))
+      if (cmd.includes("log"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git rev-parse"))
+      if (cmd.includes("rev-parse"))
         return Promise.resolve({ stdout: "main\n", error: false });
-      if (cmd.includes("git rev-list"))
+      if (cmd.includes("rev-list"))
         return Promise.resolve({ stdout: "", error: true });
       return Promise.resolve({ stdout: "", error: false });
     });
@@ -186,16 +210,16 @@ describe("git-panel", () => {
   });
 
   it("renders changed files in status list", async () => {
-    mockExecCommand.mockImplementation((cmd) => {
-      if (cmd.includes("git status"))
+    mockExecArgv.mockImplementation((cmd) => {
+      if (cmd.includes("status"))
         return Promise.resolve({ stdout: " M changed.js\n", error: false });
-      if (cmd.includes("git branch"))
+      if (cmd.includes("branch"))
         return Promise.resolve({ stdout: "* main\n", error: false });
-      if (cmd.includes("git log"))
+      if (cmd.includes("log"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git rev-parse"))
+      if (cmd.includes("rev-parse"))
         return Promise.resolve({ stdout: "main\n", error: false });
-      if (cmd.includes("git rev-list"))
+      if (cmd.includes("rev-list"))
         return Promise.resolve({ stdout: "", error: true });
       return Promise.resolve({ stdout: "", error: false });
     });
@@ -214,16 +238,16 @@ describe("git-panel", () => {
   });
 
   it("renders untracked files", async () => {
-    mockExecCommand.mockImplementation((cmd) => {
-      if (cmd.includes("git status"))
+    mockExecArgv.mockImplementation((cmd) => {
+      if (cmd.includes("status"))
         return Promise.resolve({ stdout: "?? untracked.txt\n", error: false });
-      if (cmd.includes("git branch"))
+      if (cmd.includes("branch"))
         return Promise.resolve({ stdout: "* main\n", error: false });
-      if (cmd.includes("git log"))
+      if (cmd.includes("log"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git rev-parse"))
+      if (cmd.includes("rev-parse"))
         return Promise.resolve({ stdout: "main\n", error: false });
-      if (cmd.includes("git rev-list"))
+      if (cmd.includes("rev-list"))
         return Promise.resolve({ stdout: "", error: true });
       return Promise.resolve({ stdout: "", error: false });
     });
@@ -242,16 +266,16 @@ describe("git-panel", () => {
   });
 
   it("renders clean working tree message", async () => {
-    mockExecCommand.mockImplementation((cmd) => {
-      if (cmd.includes("git status"))
+    mockExecArgv.mockImplementation((cmd) => {
+      if (cmd.includes("status"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git branch"))
+      if (cmd.includes("branch"))
         return Promise.resolve({ stdout: "* main\n", error: false });
-      if (cmd.includes("git log"))
+      if (cmd.includes("log"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git rev-parse"))
+      if (cmd.includes("rev-parse"))
         return Promise.resolve({ stdout: "main\n", error: false });
-      if (cmd.includes("git rev-list"))
+      if (cmd.includes("rev-list"))
         return Promise.resolve({ stdout: "", error: true });
       return Promise.resolve({ stdout: "", error: false });
     });
@@ -266,19 +290,19 @@ describe("git-panel", () => {
   });
 
   it("renders commit log entries", async () => {
-    mockExecCommand.mockImplementation((cmd) => {
-      if (cmd.includes("git status"))
+    mockExecArgv.mockImplementation((cmd) => {
+      if (cmd.includes("status"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git branch"))
+      if (cmd.includes("branch"))
         return Promise.resolve({ stdout: "* main\n", error: false });
-      if (cmd.includes("git log"))
+      if (cmd.includes("log"))
         return Promise.resolve({
           stdout: "abc1234|Fix bug|2h ago\ndef5678|Add feature|1d ago\n",
           error: false,
         });
-      if (cmd.includes("git rev-parse"))
+      if (cmd.includes("rev-parse"))
         return Promise.resolve({ stdout: "main\n", error: false });
-      if (cmd.includes("git rev-list"))
+      if (cmd.includes("rev-list"))
         return Promise.resolve({ stdout: "", error: true });
       return Promise.resolve({ stdout: "", error: false });
     });
@@ -292,19 +316,19 @@ describe("git-panel", () => {
   });
 
   it("populates branch select with branches", async () => {
-    mockExecCommand.mockImplementation((cmd) => {
-      if (cmd.includes("git status"))
+    mockExecArgv.mockImplementation((cmd) => {
+      if (cmd.includes("status"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git branch"))
+      if (cmd.includes("branch"))
         return Promise.resolve({
           stdout: "  main\n* feature\n  dev\n",
           error: false,
         });
-      if (cmd.includes("git log"))
+      if (cmd.includes("log"))
         return Promise.resolve({ stdout: "", error: false });
-      if (cmd.includes("git rev-parse"))
+      if (cmd.includes("rev-parse"))
         return Promise.resolve({ stdout: "feature\n", error: false });
-      if (cmd.includes("git rev-list"))
+      if (cmd.includes("rev-list"))
         return Promise.resolve({ stdout: "", error: true });
       return Promise.resolve({ stdout: "", error: false });
     });

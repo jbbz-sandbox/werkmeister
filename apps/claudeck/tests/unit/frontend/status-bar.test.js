@@ -39,7 +39,7 @@ vi.mock("../../../public/js/core/events.js", () => {
 });
 
 vi.mock("../../../public/js/core/api.js", () => ({
-  execCommand: vi.fn().mockResolvedValue({ stdout: "main" }),
+  execArgv: vi.fn().mockResolvedValue({ stdout: "main" }),
 }));
 
 vi.mock("../../../public/js/features/cost-dashboard.js", () => ({
@@ -89,7 +89,7 @@ beforeEach(async () => {
     }),
   }));
   vi.doMock("../../../public/js/core/api.js", () => ({
-    execCommand: vi.fn().mockResolvedValue({ stdout: "main" }),
+    execArgv: vi.fn().mockResolvedValue({ stdout: "main" }),
   }));
   vi.doMock("../../../public/js/features/cost-dashboard.js", () => ({
     openCostDashboard: vi.fn(),
