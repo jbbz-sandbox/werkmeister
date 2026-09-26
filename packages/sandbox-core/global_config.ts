@@ -410,8 +410,10 @@ export function loadGithubOrg(cfg?: Record<string, any>): string {
 export const _GITHUB_ORG_PROMPT: PromptSpec = {
   key: "github_org",
   label: "GitHub org for service repos",
-  help: "Owner of the repos in your services registry. Used to link the " +
-        "canonical examples that standards docs cite (github.com/<org>/<repo>).",
+  help: "Only used to build links: standards references that cite a canonical " +
+        "example as `<repo>:<path>` render as github.com/<org>/<repo>/... " +
+        "Nothing is cloned or run from it. Defaults to the workspace repo's " +
+        "owner. Repos in other orgs still work — cite them as `<owner>/<repo>:<path>`.",
   acceptEmpty: false,
   pattern: "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$",
   placeholder: "your-org",

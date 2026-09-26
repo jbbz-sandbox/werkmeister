@@ -94,7 +94,8 @@ export function standardsUrl(
 }
 
 // Canonical-example pointers name service repos, which belong to whichever org
-// runs this sandbox (`overrides.github_org`) — not to sandbox itself. HEAD
+// runs this sandbox (`overrides.github_org`) — not to sandbox itself. A pointer
+// may also spell its own `owner/repo` to reach a repo outside that org. HEAD
 // links resolve to each repo's default branch without pinning one here.
 function serviceRepoBase(): string {
   const org = loadGithubOrg();
@@ -302,9 +303,11 @@ function renderReference(filePath: string): string {
     const sep = canonical.indexOf(":");
     const repo = canonical.slice(0, sep);
     const rel = canonical.slice(sep + 1);
-    // No org configured: name the file and stop. A guessed owner would render
-    // a link that 404s, which is worse than no link at all.
-    const base = serviceRepoBase();
+    // `owner/repo:path` carries its own owner, for a repo outside the configured
+    // org. A bare `repo:path` needs `github_org`; with none configured, name
+    // the file and stop. A guessed owner would render a link that 404s, which
+    // is worse than no link at all.
+    const base = repo.includes("/") ? "https://github.com" : serviceRepoBase();
     const link = base ? ` — ${base}/${repo}/blob/HEAD/${rel}` : "";
     body += `\n\n---\nFull file: \`${canonical}\`${link}\n`;
   }

@@ -117,3 +117,42 @@ describe("generateSkills link rewriting", () => {
     expect(skill).not.toContain("(repos/widgets.md)");
   });
 });
+
+describe("canonical footer links", () => {
+  /** Directory-form module with one reference carrying *canonical*. */
+  function writeRef(dir: string, canonical: string): void {
+    const mod = path.join(dir, "widgets");
+    fs.mkdirSync(path.join(mod, "references"), { recursive: true });
+    fs.writeFileSync(
+      path.join(mod, "STANDARD.md"),
+      `---\ndomain: widgets\nsummary: Widget rules\napplies_to: ["**/*.widget.ts"]\nphase: implement\n---\n\nBody.\n`,
+    );
+    fs.writeFileSync(
+      path.join(mod, "references", "ex.md"),
+      `---\ncanonical: ${canonical}\n---\n\nExample.\n`,
+    );
+  }
+  const footer = () => generateSkills()["sb-widgets-standard"]["references/ex.md"];
+
+  it("links a bare repo under the configured github_org", () => {
+    const dir = makeTree(null);
+    writeRef(dir, "billing:src/index.ts");
+    gc.save({ overrides: { standards_dir: dir, github_org: "acme" } });
+    expect(footer()).toContain("https://github.com/acme/billing/blob/HEAD/src/index.ts");
+  });
+
+  it("links owner/repo verbatim — a repo outside the configured org", () => {
+    const dir = makeTree(null);
+    writeRef(dir, "other-org/billing:src/index.ts");
+    gc.save({ overrides: { standards_dir: dir, github_org: "acme" } });
+    expect(footer()).toContain("https://github.com/other-org/billing/blob/HEAD/src/index.ts");
+    expect(footer()).not.toContain("acme");
+  });
+
+  it("names the file and links nothing when a bare repo has no org to resolve against", () => {
+    writeRef(makeTree(null), "billing:src/index.ts");
+    const out = footer();
+    expect(out).toContain("Full file: `billing:src/index.ts`");
+    expect(out).not.toContain("github.com");
+  });
+});

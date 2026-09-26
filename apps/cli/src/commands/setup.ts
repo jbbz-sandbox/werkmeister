@@ -140,7 +140,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       intro:
         "GitHub locations. The workspace repo hosts the per-workspace configs " +
         "at the root of every feature workspace — enter a shared " +
-        "<org>/sandbox-workspace to share them with your team, or keep your own.",
+        "<org>/sandbox-workspace to share them with your team, or keep your own. " +
+        "The GitHub org is only used to link canonical examples cited by standards " +
+        "docs (github.com/<org>/<repo>/...); nothing is cloned from it. Service " +
+        "repos may live in any org — clone them under the repos root by hand, and " +
+        "cite one outside this org as <owner>/<repo>:<path>.",
     });
   } else {
     for (const spec of ghPrompts) {

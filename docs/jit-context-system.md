@@ -107,7 +107,8 @@ task_signatures:           # optional; case-insensitive substrings matched again
   must be linked from its STANDARD.md index, and each `ap-*.md` (anti-pattern) reference must
   additionally have an inline don't-line bullet linking to it — enforced by
   `validateModuleReferences`. A reference may carry a `canonical: <repo>:<path>` frontmatter
-  pointer to an exemplar file; when present it renders as a "Full file" link footer, and the
+  pointer to an exemplar file; when present it renders as a "Full file" link footer under
+  `overrides.github_org` (or `<owner>/<repo>:<path>` for a repo in another org), and the
   literal placeholder `canonical: TODO` is rejected.
 - **Authoring / graduation flow:** review findings become `decision` notes; `sandbox notes
   graduate` scaffolds a standard entry with `TODO(graduate)` markers; the `sb-author` skill
