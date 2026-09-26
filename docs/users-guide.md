@@ -924,7 +924,7 @@ the pieces that are not obvious from the demo services:
   needs only `~/repos`, `~/features` and `SANDBOX_MCP_TOKEN` — no docker socket, no docker
   CLI, no kubectl, no `sandbox` binary. It is the only managed web server that binds
   `0.0.0.0`, via a per-app `env` on its `WebApp` entry; never arrange that by exporting
-  `HOST` before `sandbox connect`, which would also expose the unauthenticated dashboard.
+  `HOST` before `sandbox connect`, which would also apply to any other managed app.
   Its `mcp_servers.sandbox` registry entry is deliberately in no archetype — `.mcp.json` is
   shared with host sessions, where `host.docker.internal` does not resolve. See
   `apps/mcp/README.md`.

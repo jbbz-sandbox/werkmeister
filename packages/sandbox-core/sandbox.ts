@@ -48,7 +48,6 @@ import { collectingReporter, info, withReporter } from "./reporter.js";
 import { provisionWorkspace } from "./workspace_init.js";
 import { loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
-import { CLAUDECK, DASHBOARD, status as webStatus } from "./web_servers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -2158,8 +2157,8 @@ export async function openFeatureBrowser(name: string): Promise<{ path: string }
  * **The three `tools.local.sandbox.com` links are absent, deliberately.** They are
  * hardcoded in the CLI's renderer and note 070 §2 accepted that an in-process
  * caller cannot reach them; moving them is a "where do tool URLs live" question,
- * not this one. The dashboard and Claudeck URLs *are* included — those come from
- * `web_servers` in core, not from the renderer.
+ * not this one. The workspace dashboard is launched by its MCP host rather
+ * than by `sandbox connect`.
  */
 export async function runConnect(): Promise<{ command: string; output: string }> {
   const collector = collectingReporter();
@@ -2179,10 +2178,6 @@ export async function runConnect(): Promise<{ command: string; output: string }>
         info(`${healthy}/${names.length} healthy, ${names.length - healthy} down`);
         if (!infraOk) info("Check docker and your kubeconfig.");
       }
-
-      const [mcp, claudeck] = await Promise.all([webStatus(DASHBOARD), webStatus(CLAUDECK)]);
-      info(`Sandbox MCP:   ${mcp.url}  (workspaces dashboard; MCP at /mcp)`);
-      info(`Claudeck:      ${claudeck.url}`);
     });
   } catch (e) {
     const detail = stripAnsi(

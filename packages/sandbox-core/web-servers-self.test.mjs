@@ -11,10 +11,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { ALL, CLAUDECK, DASHBOARD, MCP, start } from "./dist/web_servers.js";
+import { ALL, DASHBOARD, MCP, start } from "./dist/web_servers.js";
 
 test("MCP is one of the servers `sandbox connect` brings up, on its own stem", () => {
   assert.ok(ALL.includes(MCP));
+  assert.ok(!ALL.includes(DASHBOARD));
+  assert.ok(!ALL.some((app) => app.dir === "claudeck"));
   assert.equal(MCP.port, 3002);
   // DASHBOARD already holds "mcp-server"; a collision would make the two apps
   // share a PID file and reap each other.
@@ -22,13 +24,12 @@ test("MCP is one of the servers `sandbox connect` brings up, on its own stem", (
   assert.equal(MCP.stem, "sandbox-mcp");
 });
 
-test("only MCP binds wide -- DASHBOARD and CLAUDECK stay loopback-only", () => {
+test("only MCP binds wide -- DASHBOARD stays loopback-only", () => {
   // A container has no loopback route to the host, so apps/mcp must bind
-  // 0.0.0.0. DASHBOARD/CLAUDECK are unauthenticated and must never inherit
-  // that env var, or their tools become reachable from the network.
+  // 0.0.0.0. DASHBOARD is unauthenticated and must never inherit that env
+  // var, or its tools become reachable from the network.
   assert.deepEqual(MCP.env, { HOST: "0.0.0.0" });
   assert.equal(DASHBOARD.env?.HOST, undefined);
-  assert.equal(CLAUDECK.env?.HOST, undefined);
 });
 
 test("start() leaves a server alone when the PID file is this very process", async () => {

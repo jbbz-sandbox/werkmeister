@@ -354,11 +354,12 @@ export async function up({ signal }: { signal?: AbortSignal } = {}): Promise<boo
 
   const infraOk = await startSharedInfra(signal);
 
-  // Build + start the host web servers (the workspaces dashboard and Claudeck
-  // — node processes, not containers, since their tools drive host-local
-  // Docker/VS Code/kubectl/claude). Rebuilds only when a source is newer than
-  // the last build, and bounces a running server only when it actually
-  // rebuilt — a no-change re-run leaves them untouched.
+  // Build + start the managed host web servers (the remote MCP surface — a
+  // node process, not a container, since its tools drive host-local
+  // Docker/VS Code/kubectl). The workspace dashboard is launched independently
+  // by its MCP host. Rebuilds only when a source is newer than the last build,
+  // and bounces a running server only when it actually rebuilt — a no-change
+  // re-run leaves it untouched.
   await startAll(true);
 
   return infraOk;

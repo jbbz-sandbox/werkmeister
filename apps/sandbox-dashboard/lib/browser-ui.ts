@@ -138,10 +138,9 @@ export async function createBrowserUiRouter(): Promise<Router> {
 let launched: { url: string; close: () => void } | undefined;
 
 // The one canonical dashboard URL. Matches the durable standalone server's port
-// (main.ts `PORT`, default 3001, which `sandbox connect` starts) so the dashboard
-// always lives at the SAME address no matter which surface opens it — never a
-// random per-session port. Overridable via PORT only to track a non-default
-// standalone server.
+// (main.ts `PORT`, default 3001) so the dashboard always lives at the SAME
+// address no matter which surface opens it — never a random per-session port.
+// Overridable via PORT only to track a non-default standalone server.
 const DASHBOARD_PORT = Number(process.env.PORT) || 3001;
 
 /**

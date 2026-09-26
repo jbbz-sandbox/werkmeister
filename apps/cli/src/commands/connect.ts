@@ -13,7 +13,6 @@
 import { Colors } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
 import { connectK8s, infraHealth, up as infraUp } from "sandbox-core/infra";
-import { CLAUDECK, DASHBOARD, status as webStatus } from "sandbox-core/web_servers";
 
 /** Handle `sandbox connect --k8s`: start/restart the k8s port-forwards container only. */
 function runK8sOnly(): void {
@@ -72,9 +71,5 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`    ${Colors.CYAN}RedisInsight:${Colors.RESET}  https://tools.local.sandbox.com/redisinsight`);
   console.log(`    ${Colors.CYAN}Jaeger:${Colors.RESET}        https://tools.local.sandbox.com/jaeger`);
   console.log(`    ${Colors.CYAN}GraphQL:${Colors.RESET}       https://tools.local.sandbox.com/graphql`);
-  const mcp = await webStatus(DASHBOARD);
-  console.log(`    ${Colors.CYAN}Sandbox MCP:${Colors.RESET}   ${mcp.url}  (workspaces dashboard; MCP at /mcp)`);
-  const claudeck = await webStatus(CLAUDECK);
-  console.log(`    ${Colors.CYAN}Claudeck:${Colors.RESET}      ${claudeck.url}`);
   console.log();
 }
