@@ -21,6 +21,7 @@
     "./docker": "./dist/docker.js",
     "./errors": "./dist/errors.js",
     "./feature_routing": "./dist/feature_routing.js",
+    "./folders": "./dist/folders.js",
     "./form_schema": "./dist/form_schema.js",
     "./generate": "./dist/generate.js",
     "./gate": "./dist/gate.js",

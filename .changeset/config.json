@@ -8,5 +8,5 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "privatePackages": { "version": true, "tag": false },
-  "ignore": ["claudeck", "sandbox-workspace-mcp-app", "vscode-plugin"]
+  "ignore": ["sandbox-workspace-mcp-app", "vscode-plugin"]
 }

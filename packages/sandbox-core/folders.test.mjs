@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mergeFolders, workspaceNameForPath } from "./merge-folders.mjs";
+import { mergeFolders, workspaceNameForPath } from "./dist/folders.js";
 
 const ROOT = "/ws";
 const existing = [
