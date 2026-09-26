@@ -8,8 +8,8 @@
 
 **Tech Stack:** TypeScript (ES2022, `moduleResolution: bundler`), `@modelcontextprotocol/sdk` ^1.30.0, `express` ^5, `zod` ^4, `sandbox-core`. Tests are `node --test` over `*.test.mjs` against `dist/`.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-mcp-surface-design.md`
-**Prerequisite read:** `docs/superpowers/specs/2026-09-04-command-logic-to-core-design.md`
+**Spec:** `docs/superpowers/archive/specs/2026-09-04-mcp-surface-design.md`
+**Prerequisite read:** `docs/superpowers/archive/specs/2026-09-04-command-logic-to-core-design.md`
 
 ---
 
@@ -2337,7 +2337,7 @@ remote client cannot repair a broken `~/.zshenv` by calling an API. `clean`,
 which is the wrong blast radius for a container-held token, and the other two
 are simply not needed yet.
 
-Design: `docs/superpowers/specs/2026-09-04-mcp-surface-design.md`.
+Design: `docs/superpowers/archive/specs/2026-09-04-mcp-surface-design.md`.
 ```
 
 - [ ] **Step 7: Correct the users guide**
@@ -2523,8 +2523,8 @@ Two renderings of one set of facts.
 If everything passes, note it in the spec's status line:
 
 ```bash
-sed -i '' 's/^\*\*Status:\*\* approved in chat; not started$/**Status:** implemented — see docs\/superpowers\/plans\/2026-09-04-mcp-surface.md/' docs/superpowers/specs/2026-09-04-mcp-surface-design.md
-git add docs/superpowers/specs/2026-09-04-mcp-surface-design.md
+sed -i '' 's/^\*\*Status:\*\* approved in chat; not started$/**Status:** implemented — see docs\/superpowers\/plans\/2026-09-04-mcp-surface.md/' docs/superpowers/archive/specs/2026-09-04-mcp-surface-design.md
+git add docs/superpowers/archive/specs/2026-09-04-mcp-surface-design.md
 git commit -m "$(cat <<'MSG'
 docs: mark the mcp-surface design implemented
 

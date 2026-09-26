@@ -15,7 +15,7 @@ driven by SIGINT. Nothing user-visible changes.
 **Tech Stack:** TypeScript, Node ≥20 (`node:child_process`, `node:async_hooks`),
 `node:test` + `assert/strict` for core, vitest for the CLI, turbo for the workspace.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-command-logic-to-core-design.md`
+**Spec:** `docs/superpowers/archive/specs/2026-09-04-command-logic-to-core-design.md`
 
 ## Global Constraints
 
@@ -673,14 +673,14 @@ predecessor's row 5. This task proves they obey §3 of the spec rather than
 assuming it, and records anything they don't.
 
 **Status: done.** All six clean; nothing carries over to plans 2 or 3. Findings in
-`docs/superpowers/plans/2026-09-04-tier-0-audit.md`. `infra.up`'s guard landed
+`docs/superpowers/archive/plans/2026-09-04-tier-0-audit.md`. `infra.up`'s guard landed
 ahead of *all* of up()'s setup work rather than just ahead of the compose spawn --
 it writes proxy files, extracts a CA and configures a git hooks path first.
 
 **Files:**
 - Read: `apps/cli/src/commands/{up,stop,restart,status,connect,hooks}.ts`
 - Modify: `apps/cli/src/commands/connect.ts` (signal only)
-- Create: `docs/superpowers/plans/2026-09-04-tier-0-audit.md`
+- Create: `docs/superpowers/archive/plans/2026-09-04-tier-0-audit.md`
 
 **Interfaces:**
 - Consumes: `interruptSignal()` (Task 4), `infra.up` from `sandbox-core/infra`.
@@ -710,7 +710,7 @@ for `lifecycle.up`. Read `infra.ts`'s `up()` first to find its compose calls.
 
 - [x] **Step 3: Write the audit note**
 
-Create `docs/superpowers/plans/2026-09-04-tier-0-audit.md` with one section per
+Create `docs/superpowers/archive/plans/2026-09-04-tier-0-audit.md` with one section per
 verb, each recording the three answers from Step 1. Where a verb is clean, say so
 in one line. Where it is not, state the violation and which of plans 2 or 3 should
 absorb it.
@@ -740,7 +740,7 @@ agreement is the whole point of the migration.
 - [x] **Step 6: Commit**
 
 ```bash
-git add docs/superpowers/plans/2026-09-04-tier-0-audit.md packages/sandbox-core/infra.ts apps/cli/src/commands/connect.ts
+git add docs/superpowers/archive/plans/2026-09-04-tier-0-audit.md packages/sandbox-core/infra.ts apps/cli/src/commands/connect.ts
 git commit -m "refactor(core): make connect cancellable, audit the tier-0 verbs
 
 The six verbs row 5 migrated are checked against the contract rather

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node ≥18 ESM, Express 4, better-sqlite3, vitest + supertest, happy-dom for frontend tests. No new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-09-25-claudeck-hardening-design.md`
+**Spec:** `docs/superpowers/archive/specs/2026-09-25-claudeck-hardening-design.md`
 
 ## Global Constraints
 

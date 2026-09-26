@@ -8,7 +8,7 @@
 
 **Tech Stack:** services.yaml (YAML anchors), docker compose via the existing nunjucks template, static docker/compose/kubectl binaries, TypeScript (one line).
 
-**Spec:** `docs/superpowers/specs/2026-09-03-self-host-services-design.md`
+**Spec:** `docs/superpowers/archive/specs/2026-09-03-self-host-services-design.md`
 
 ## Global Constraints
 
@@ -471,7 +471,7 @@ Insert before `## Port Allocation`:
 The five workspaces of this repo (`apps/cli`, `apps/claudeck`, `apps/sandbox-dashboard`,
 `packages/sandbox-core`, `packages/vscode-plugin`) can be registered as services so a
 feature workspace develops the sandbox itself, each package in its own container. The
-registry shape lives in `docs/superpowers/specs/2026-09-03-self-host-services-design.md`;
+registry shape lives in `docs/superpowers/archive/specs/2026-09-03-self-host-services-design.md`;
 the pieces that are not obvious from the demo services:
 
 - **One `node:22` image everywhere.** `better-sqlite3`, `keytar`, `sharp` and the
@@ -525,6 +525,6 @@ CS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docs/users-guide.md README.md .changeset/self-host-services.md docs/superpowers/plans/2026-09-03-self-host-services.md
+git add docs/users-guide.md README.md .changeset/self-host-services.md docs/superpowers/archive/plans/2026-09-03-self-host-services.md
 git commit -m "docs: self-hosting the sandbox repo as sandbox services"
 ```

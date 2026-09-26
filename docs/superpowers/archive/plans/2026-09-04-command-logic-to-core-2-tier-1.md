@@ -14,7 +14,7 @@ needs a new dependency or an unresolved decision.
 **Tech Stack:** TypeScript, `node:test` + `assert/strict` for core, vitest for the
 CLI, turbo for the workspace.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-command-logic-to-core-design.md` (§5, tier 1)
+**Spec:** `docs/superpowers/archive/specs/2026-09-04-command-logic-to-core-design.md` (§5, tier 1)
 
 **Depends on:** Plan 1 (`…-1-foundations.md`). Tasks 8 (`logs`) and 9 (`stats`)
 both need `interruptSignal()` from Plan 1 Task 4; the other eight need nothing

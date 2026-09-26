@@ -14,7 +14,7 @@ stay in `apps/cli`; everything else moves. Two tasks are ordered (`notes` before
 **Tech Stack:** TypeScript, `node:test` + `assert/strict` for core, vitest for the
 CLI, turbo for the workspace.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-command-logic-to-core-design.md` (§5, tier 2)
+**Spec:** `docs/superpowers/archive/specs/2026-09-04-command-logic-to-core-design.md` (§5, tier 2)
 
 **Depends on:** Plan 1 (`runAsync`, `interruptSignal`). Plan 2 is independent of
 this one and can run in parallel.
@@ -623,7 +623,7 @@ they meet the contract rather than assuming it.
 
 **Files:**
 - Read: `apps/cli/src/commands/workspace.ts`, `apps/cli/src/commands/init_workspace.ts`
-- Create: `docs/superpowers/plans/2026-09-04-workspace-verbs-audit.md`
+- Create: `docs/superpowers/archive/plans/2026-09-04-workspace-verbs-audit.md`
 
 **Interfaces:**
 - Consumes: `provisionWorkspace`, `WorkspaceInitError` (`sandbox-core/workspace_init`),
@@ -653,7 +653,7 @@ plan's scope either way.
 
 - [ ] **Step 3: Write the audit note**
 
-Create `docs/superpowers/plans/2026-09-04-workspace-verbs-audit.md` with the
+Create `docs/superpowers/archive/plans/2026-09-04-workspace-verbs-audit.md` with the
 answers, one short section per file, plus the `runBrowserForm` decision and its
 reasoning.
 
@@ -668,7 +668,7 @@ larger, record it in the note and stop.
 ```bash
 npx turbo run typecheck build test && ./sandbox standards check
 ./sandbox workspace --print-form-schema | head -3   # still clean JSON on stdout
-git add docs/superpowers/plans/2026-09-04-workspace-verbs-audit.md
+git add docs/superpowers/archive/plans/2026-09-04-workspace-verbs-audit.md
 git commit -m "docs: audit the workspace verbs against the core contract"
 ```
 
@@ -678,7 +678,7 @@ git commit -m "docs: audit the workspace verbs against the core contract"
 
 **Files:**
 - Modify: `docs/known-issues.md`
-- Modify: `docs/superpowers/specs/2026-09-04-command-logic-to-core-design.md` (status line)
+- Modify: `docs/superpowers/archive/specs/2026-09-04-command-logic-to-core-design.md` (status line)
 
 - [ ] **Step 1: Prove the boundary claim**
 
@@ -735,7 +735,7 @@ Expected: everything green, and the CLI and library agree.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add docs/known-issues.md docs/superpowers/specs/2026-09-04-command-logic-to-core-design.md
+git add docs/known-issues.md docs/superpowers/archive/specs/2026-09-04-command-logic-to-core-design.md
 git commit -m "docs: record the command migration as shipped
 
 Both claudeck blockers are gone: /action's was the AbortSignal

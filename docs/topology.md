@@ -72,7 +72,7 @@ Linux behaves like Docker Desktop or OrbStack on a Mac.
 
 A registry whose services declare no `k8s_forward_port` yields an empty forward
 table rather than an error — the shape
-[docs/superpowers/specs/2026-09-03-self-host-services-design.md](superpowers/specs/2026-09-03-self-host-services-design.md)
+[docs/superpowers/archive/specs/2026-09-03-self-host-services-design.md](superpowers/archive/specs/2026-09-03-self-host-services-design.md)
 assumes, where nothing runs in a cluster at all and telepresence never enters the
 picture.
 

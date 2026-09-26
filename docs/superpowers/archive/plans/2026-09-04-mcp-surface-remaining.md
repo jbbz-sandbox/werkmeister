@@ -16,8 +16,8 @@ behind it should be able to execute from here.
 **Goal:** Prove the `apps/mcp` surface actually does what it was built for — let
 an agent in a container with **no Docker socket** drive the sandbox verbs.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-mcp-surface-design.md`
-**Completed plan:** `docs/superpowers/plans/2026-09-04-mcp-surface.md` — read its
+**Spec:** `docs/superpowers/archive/specs/2026-09-04-mcp-surface-design.md`
+**Completed plan:** `docs/superpowers/archive/plans/2026-09-04-mcp-surface.md` — read its
 **Execution record** section first; it lists what was verified and what was not.
 
 ---

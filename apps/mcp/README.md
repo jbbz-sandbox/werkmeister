@@ -76,4 +76,4 @@ remote client cannot repair a broken `~/.zshenv` by calling an API. `clean`,
 which is the wrong blast radius for a container-held token, and the other two
 are simply not needed yet.
 
-Design: `docs/superpowers/specs/2026-09-04-mcp-surface-design.md`.
+Design: `docs/superpowers/archive/specs/2026-09-04-mcp-surface-design.md`.
