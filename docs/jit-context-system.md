@@ -206,7 +206,9 @@ Everything below is **generated or copied into the workspace** at `sandbox init-
 nothing is distributed through a plugin. Projection scopes the skills to the sessions they
 apply to and kills plugin-refresh lag: init renders fresh from this repo, so a standards edit
 reaches new workspaces with no marketplace step. The `sandbox-tools` plugin keeps only the
-globally useful `sandbox-*` ops skills.
+globally useful `sandbox-*` ops skills. Standards skills are projected only for the workspace's
+active set (§4.1): a skill that is not there cannot be loaded, so the routing table carries no
+"do not load" list.
 
 Consequence: **sessions must start at the workspace root** — project skills and hooks resolve
 from the session's project directory. Freshness mid-feature is self-healing: the SessionStart
@@ -233,9 +235,9 @@ Rendered on the fly from the standards tree by `apps/cli/src/lib/skill_gen.ts`:
 
 | Skill | Phase | What it loads / does |
 |-------|-------|----------------------|
-| `sb-research` | research/planning | loads nothing; spawns the read-only `sb-researcher` agent |
+| `sb-research` | research/planning | loads nothing; establishes scope, givens and deliverable shape with the user; spawns the read-only `sb-researcher` agent, which carries the investigation method |
 | `sb-implement` | coding | universal base (`ponytail` plugin + comments + engineering) at entry; reads routing table + notes; loads Active-row standards matching files about to be edited; re-checks per new file type; recitation rule (restate the governing rule at the edit); output-redirect rule (pipe verbose check output to a file, read back only failures); capture-as-you-go notes contract; precedence tiers |
-| `sb-test` | testing | loads nothing; spawns `sb-tester-<archetype>` agent(s) |
+| `sb-test` | testing | loads nothing; spawns `sb-tester-<archetype>` agent(s), which run the unit tests and a guarded proxy smoke check; names the plugin's `sandbox-feature-test` skill for headed browser runs |
 | `sb-review` | review | universal base + standards covering files in the diff; inline anti-pattern one-liners are the checklist; decision-note violations are findings; precedence tiers as severity ladder |
 | `sb-pr` | finishing | pre-PR gate, then `sb-review` |
 | `sb-handoff` | any boundary | writes the structured handoff note |
@@ -245,9 +247,14 @@ Rendered on the fly from the standards tree by `apps/cli/src/lib/skill_gen.ts`:
 
 `apps/cli/src/lib/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
 contains the Active table (`| Standard | Skill | Loads on |`, where "Loads on" = `applies_to`
-globs or "any code edit"), an explicit "Not active … — do not load" line, the phase-entry
-paragraph naming each entry skill, and the by-phase table. Plus a Context Budget rule (load
-only what the routing table points to, ≤3 files/step).
+globs or "any code edit") and the by-phase table (`| Phase | Invoke first | Loads |`), which is
+the only statement of the phase chain. The rest of the file is Current Task, Layout, the
+two-column Routing table (a repo's own `CLAUDE.md` when it exists; `.sandbox/sandbox-context.md`
+for everything about the running feature — URL, `X-Feature` cookie, ports, lifecycle, health
+checks; `contract` notes for multi-repo workspaces), the Context Budget rule (≤3 files/step), and
+the Notes pointer. `.sandbox/sandbox-context.md` is written by the compose generator and is
+scoped to the workspace: through-Caddy health checks only for its local services' hosts, the
+feature URL and browser cookie, and a Services table carrying each service's path in its repo.
 
 The `CLAUDE.md` is a **compiled projection — never hand-edited**, and it holds no durable
 state: it *points* at `.sandbox/notes/` rather than containing handoff content, so
@@ -261,10 +268,17 @@ never cross-producted, so a 2-archetype workspace generates ~5–7 agent definit
 - `sb-researcher`: `tools: Read, Grep, Glob, Write` (Write solely for the finding note).
   Return contract: write `.sandbox/notes/NNN-finding-<slug>.md`, return a 2–3 sentence summary
   + note path + open questions.
+  Its body carries the investigation method (present options, tag claims
+  verified/inferred/assumed, hold givens, bound the investigation, validate against named
+  standards, deliverable shape): the method loads in the subagent that investigates, not in
+  the main agent that dispatches.
 - `sb-tester-<archetype>` (one per archetype present): `tools: Read, Grep, Glob, Bash, Edit`;
   Edit restricted to test files by role. The definition embeds only that archetype's services,
-  their resolved test commands, and pointers to its standards. Stale tester agents are pruned
-  on re-init.
+  their resolved test commands, and pointers to its standards.
+  For each service with a `feature_router:` host it also carries a guarded proxy smoke
+  check — a `docker ps` guard, then `curl` through Caddy with the `X-Feature` cookie —
+  reported SKIPPED when the container is not running; the tester never starts containers.
+  Stale tester agents are pruned on re-init.
 
 Every agent is **role-framed *and* tool-gated**: framing does the everyday work, the `tools:`
 line makes misbehavior impossible (harness-3).
@@ -334,7 +348,9 @@ list the directory, which is always fresh and needs zero machinery.
 A workspace's `starting_prompt` **is** a handoff — from the workspace creator to the first
 session — so `init-workspace` seeds it as the first `handoff` note. It then flows through every
 existing mechanism with no special casing, and the first real `sb-handoff` supersedes it
-naturally. Seeding is write-once: only while the workspace has no handoff note of any status.
+naturally. Seeding happens only when a prompt exists; a placeholder handoff written by an
+older CLI (author `workspace-creation`, no prompt) is superseded by the next init that has
+one. Any other handoff note blocks re-seeding.
 
 `sandbox down` prints the latest `handoff` and all open `decision` notes to the terminal
 before removing the workspace, and offers graduation of decision notes into the standards
@@ -420,6 +436,7 @@ the standards tree or the generators.
 
 - Standing cost: ~3–7 tokens per projected skill (headless-measured; TUI unverified).
 - `sb-implement` entry: ~3.1k tokens (entry skill + comments + engineering).
+- `sb-research` entry: ~0.7k tokens (thin dispatcher; the method lives in the subagent).
 - Incremental per domain touched: ui ~340, service ~1,270, config ~330, auth ~440, testing
   ~240, observability ~260 tokens; references ~230–390 each, on suspicion only.
 - `sb-review` entry: ~2.6k + diff-matched domains.
