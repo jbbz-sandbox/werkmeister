@@ -1413,16 +1413,16 @@ function generateCaddyfileLocked(
  *
  * Parameters
  * ----------
- * allocateSlotFn
- *     Unused for now (accepted and ignored). Exists only so a future caller
- *     could inject a stub slot-allocation function; kept for TEST-01
- *     coverage in the sibling plan.
+ * testPath
+ *     Path under the feature host that `.sandbox/sandbox-context.md`'s
+ *     Feature URL should point at (e.g. the route a starting-prompt exercises).
+ *     Empty means the host root.
  */
 export async function generateWorkspaceCompose(
   feature: string,
   servicesStr: string,
   workspaceRoot: string,
-  _allocateSlotFn?: unknown,
+  testPath = "",
 ): Promise<number | null> {
   info("Generating docker-compose.yml...");
   const servicesConfig = loadServices();
@@ -1508,6 +1508,7 @@ export async function generateWorkspaceCompose(
     portEnd,
     localServices,
     servicesConfig,
+    testPath,
   );
   const sandboxDir = path.join(workspaceRoot, ".sandbox");
   fs.mkdirSync(sandboxDir, { recursive: true });

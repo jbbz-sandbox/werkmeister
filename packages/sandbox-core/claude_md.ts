@@ -268,6 +268,7 @@ export function buildSandboxContextMd(
   portEnd: number,
   localServices: string[],
   servicesConfig: Record<string, any>,
+  testPath = "",
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the
   // same source Caddy's site blocks are generated from — so this file can never
@@ -282,6 +283,20 @@ export function buildSandboxContextMd(
     ? `These hosts are routed through Caddy:\n\n` +
       routedHosts.map((host) => `- \`https://${host}\``).join("\n")
     : "No services declare a `feature_router:` block, so Caddy terminates no public hosts for this workspace.";
+
+  // Health checks are per workspace: only the hosts of services this feature
+  // runs locally. The routed-host list below stays machine-wide — it describes
+  // what Caddy terminates, which is a fact about the proxy, not the feature.
+  let localHosts: string[] = [];
+  try {
+    const routers = loadFeatureRouters(servicesConfig);
+    localHosts = localServices
+      .map((svc) => routers[svc]?.hostname)
+      .filter((h): h is string => Boolean(h))
+      .sort();
+  } catch {
+    localHosts = [];
+  }
 
   const k8sPort = (svc: string): number | null => {
     // k8s-forwards container listen-port; single source is services.yaml.
@@ -310,7 +325,7 @@ export function buildSandboxContextMd(
     const internalPort = svcDef["internal_port"] ?? 3000;
     const envVar = `${svc.toUpperCase().replace(/-/g, "_")}_URL`;
     serviceRows.push(
-      `| \`${svc}\` | local | \`${feature}-${svc}\` | ${hostPort} | \`${envVar}=http://${svc}:${internalPort}\` |`,
+      `| \`${svc}\` | local | \`${svcDef["path"] ?? "."}\` | \`${feature}-${svc}\` | ${hostPort} | \`${envVar}=http://${svc}:${internalPort}\` |`,
     );
   }
   for (const svc of Object.keys(servicesConfig).sort()) {
@@ -326,14 +341,16 @@ export function buildSandboxContextMd(
       continue;
     }
     const envVar = `${svc.toUpperCase().replace(/-/g, "_")}_URL`;
-    serviceRows.push(`| \`${svc}\` | k8s | — | — | \`${envVar}=http://k8s-forwards:${port}\` |`);
+    serviceRows.push(
+      `| \`${svc}\` | k8s | \`${svcDef["path"] ?? "."}\` | — | — | \`${envVar}=http://k8s-forwards:${port}\` |`,
+    );
   }
 
   let servicesTable: string;
   if (serviceRows.length > 0) {
     servicesTable =
-      "| Service | Location | Container | Host Port | In-cluster URL (env var) |\n" +
-      "|---------|----------|-----------|-----------|--------------------------|\n" +
+      "| Service | Location | Path in repo | Container | Host Port | In-cluster URL (env var) |\n" +
+      "|---------|----------|--------------|-----------|-----------|--------------------------|\n" +
       serviceRows.join("\n");
   } else {
     servicesTable = "_No services configured._";
@@ -374,16 +391,17 @@ docker compose restart ${sampleSvc}
       "# Direct to a local service (bypass Caddy — isolates routing vs app issues):\n" +
       'curl -s -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
       `"http://localhost:${firstLocalHostPort}/"\n\n`;
-    const proxyCheck =
-      "# Through Caddy (verifies full proxy routing):\n" +
-      routedHosts
-        .map(
-          (host) =>
-            `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
-            `"https://${host}/"\n`,
-        )
-        .join("") +
-      "\n";
+    const proxyCheck = localHosts.length
+      ? "# Through Caddy (verifies full proxy routing):\n" +
+        localHosts
+          .map(
+            (host) =>
+              `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
+              `"https://${host}/"\n`,
+          )
+          .join("") +
+        "\n"
+      : "";
     const statusCheck =
       "# Container status:\n" +
       `docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" | grep ${feature}`;
@@ -400,6 +418,23 @@ docker compose restart ${sampleSvc}
         .join("")
         .trimEnd();
   }
+
+  // The feature URL + routing cookie snippet CLAUDE.md used to carry — scoped
+  // to a host this feature actually runs, so it's never a link to nowhere.
+  const proxy = resolveProxyHost(localServices);
+  const featureBlock = proxy
+    ? `
+**Feature URL:** https://${proxy.host}/${testPath.replace(/^\/+/, "")}
+
+Set the routing cookie in the browser (DevTools console):
+
+\`\`\`js
+document.cookie = "X-Feature=${feature}; domain=.${proxy.domain}; path=/; SameSite=Lax";
+\`\`\`
+
+or visit https://${proxy.host}/__sandbox and select \`${feature}\` — the selector is served on every routed host and the cookie applies to each host sharing the base domain.
+`
+    : "";
 
   return `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
@@ -438,15 +473,7 @@ Every container gets each service's URL injected as an env var (the last column)
 
 ${servicesTable}
 
-${containerCommandsBlock}## Infrastructure
-
-| Service | Host | Port | Notes |
-|---------|------|------|-------|
-| MongoDB | \`host.docker.internal\` | \`9052\` | k8s port-forward |
-| PostgreSQL | \`host.docker.internal\` | \`9051\` | k8s-forward (k8s) |
-| Redis | \`host.docker.internal\` | \`9050\` | k8s-forward (k8s) |
-
-## Quick Health Checks
+${containerCommandsBlock}## Quick Health Checks
 
 \`\`\`bash
 ${healthChecks}
@@ -458,8 +485,7 @@ ${routingHostList}
 
 Set \`X-Feature=${feature}\` (cookie or header) to route to this workspace's local containers; otherwise traffic falls through to the k8s port-forwards.
 
-**Sandbox selector UI (\`/__sandbox\`):** served on every routed host above. Setting the cookie there applies to each host sharing the base domain.
-
+${featureBlock}
 ## Troubleshooting
 
 ### Feature missing from \`/__sandbox\` selector
