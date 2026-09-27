@@ -41,7 +41,7 @@ import { buildContext, listNotes, parseNote } from "sandbox-core/notes";
 import { graduateNote } from "sandbox-core/graduate";
 import { createWorkspace, listWorkspaces, removeWorkspace } from "sandbox-core";
 import { checkStandards } from "sandbox-core/standards";
-import { checkSkills, syncSkills } from "sandbox-core/workspace_skills";
+import { checkSkills, resolveWorkspaceActive, syncSkills } from "sandbox-core/workspace_skills";
 import { initWorkspace } from "sandbox-core/workspace_init";
 
 /**
@@ -487,7 +487,7 @@ function registerAuthoringTools(server: McpServer): void {
         const workspace = resolveWorkspaceDir(feature);
         return args.action === "sync"
           ? { ...syncSkills(workspace) }
-          : { ...checkSkills(workspace) };
+          : { ...checkSkills(workspace, resolveWorkspaceActive(workspace)?.active ?? null) };
       }),
   );
 
