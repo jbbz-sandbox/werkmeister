@@ -9,7 +9,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The dashboard smoke tests drive the real `commitAndPush`, which commits
       # with the ambient git identity by design (the handoff commit belongs to
       # the developer, not to a hardcoded bot). Runners have no identity
@@ -18,9 +18,9 @@ jobs:
         run: |
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run typecheck
