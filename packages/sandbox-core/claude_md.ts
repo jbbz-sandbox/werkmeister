@@ -207,9 +207,9 @@ export function buildClaudeMd(
       : "";
   const notesSection = `## Notes
 
-Working notes for this feature live in [.sandbox/notes/](.sandbox/notes/) — one note per file, \`NNN-<type>-<slug>.md\`. Types: \`finding\` (research output), \`decision\` (settled choices — binding), \`attempt\` (tried-and-failed approaches), \`handoff\` (session/phase transition state), \`contract\` (cross-repo interface changes). Conventions: docs/notes-conventions.md in the sandbox repo.
+Working notes live in [.sandbox/notes/](.sandbox/notes/) — \`NNN-<type>-<slug>.md\`. Types and rules: docs/notes-conventions.md in the sandbox repo.
 
-List and read the relevant notes before starting work; skip \`status: superseded\` notes. \`decision\` notes override task-level instincts (minimal-change, "the prompt didn't mention it") — if one conflicts with the task as given, raise the conflict to the user instead of silently picking a side.
+Read relevant notes first; skip \`status: superseded\`. \`decision\` notes are binding and override task-level instincts — on conflict, raise it to the user rather than picking a side.
 ${contractRule}`;
 
   // Current Task — Jira inlined when available. The task description, when

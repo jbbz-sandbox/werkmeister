@@ -67,5 +67,7 @@ test("CLAUDE.md carries no Feature Testing section", () => {
     assert.match(out, /Running the feature — URL, X-Feature cookie/, "the routing row still points at it");
     assert.match(out, /## Notes/);
     assert.match(out, /## Standards routing/);
+    assert.doesNotMatch(out, /`finding`.*`decision`/s, "the Notes section no longer enumerates the types inline");
+    assert.match(out, /notes-conventions\.md/, "the Notes section still points at the conventions doc");
   });
 });
