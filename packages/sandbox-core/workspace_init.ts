@@ -45,7 +45,7 @@ import {
   validateArchetypeMcpServers,
   writeWorkspaceMcp,
 } from "./mcp_gen.js";
-import { listNotes, nextNoteNumber, noteFilename, notesDir } from "./notes.js";
+import { listNotes, nextNoteNumber, noteFilename, notesDir, type Note } from "./notes.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
@@ -733,19 +733,46 @@ function salvageLegacyHandoffNotes(workspaceRoot: string, claudeMdPath: string):
   }
 }
 
-/** Seed the workspace's first handoff note from creation-time inputs. */
-function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string): void {
+/**
+ * A handoff seeded by an older CLI that had no prompt to carry. It blocks
+ * nothing: the next init that has a prompt supersedes it (notes-conventions.md
+ * rule 1).
+ */
+function isPlaceholderHandoff(note: Note): boolean {
+  return (
+    note.type === "handoff" &&
+    note.frontmatter["author"] === "workspace-creation" &&
+    !note.body.includes("Seeded from `starting_prompt`")
+  );
+}
+
+function supersedeNote(note: Note): void {
+  const text = fs.readFileSync(note.path, "utf8");
+  fs.writeFileSync(note.path, text.replace(/^status:.*$/m, "status: superseded"));
+}
+
+/**
+ * Seed the workspace's first handoff note from `starting_prompt`.
+ *
+ * Writes nothing without a prompt — the work-type line alone is already in
+ * CLAUDE.md's by-phase table, and a placeholder used to block the real prompt
+ * forever. Exported for its tests.
+ */
+export function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string): void {
   const prompt = startingPrompt.trim();
-  const wt = workType.trim().toLowerCase();
-  if (!prompt && !wt) {
+  if (!prompt) {
     return;
   }
+  const wt = workType.trim().toLowerCase();
   const [phase, firstSkill] = WORK_TYPE_PHASES[wt] ?? ["research", "invoke `sb-research` first"];
   try {
     const directory = notesDir(workspaceRoot);
-    const existing = listNotes(workspaceRoot, true);
-    if (existing.some((note) => note.type === "handoff")) {
+    const handoffs = listNotes(workspaceRoot, true).filter((note) => note.type === "handoff");
+    if (handoffs.some((note) => !isPlaceholderHandoff(note))) {
       return;
+    }
+    for (const placeholder of handoffs) {
+      supersedeNote(placeholder);
     }
     fs.mkdirSync(directory, { recursive: true });
     const filename = noteFilename(nextNoteNumber(directory), "handoff", "starting-prompt");
@@ -764,17 +791,13 @@ function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, work
     if (wt) {
       lines.push(`This workspace is a ${wt} — ${firstSkill}.`, "");
     }
-    if (prompt) {
-      lines.push(
-        "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
-        "workspace was created. The task below has not begun — confirm",
-        "direction with the user before executing it.",
-        "",
-        prompt,
-      );
-    } else {
-      lines.push("Seeded at workspace creation (no starting prompt was provided).");
-    }
+    lines.push(
+      "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
+      "workspace was created. The task below has not begun — confirm",
+      "direction with the user before executing it.",
+      "",
+      prompt,
+    );
     fs.writeFileSync(path.join(directory, filename), lines.join("\n") + "\n");
     success(`Seeded starting handoff → .sandbox/notes/${filename}`);
   } catch (exc) {

@@ -19,9 +19,10 @@ Three rules keep the layer honest:
    `sandbox up`) never write into the notes directory — with two one-time, write-once
    exceptions in init-workspace: the salvage of a legacy CLAUDE.md `## Handoff Notes`
    section into a `contract` note, and seeding the workspace's `starting_prompt` as its
-   first `handoff` note (`author: workspace-creation`; skipped if any handoff note
-   exists, so it never duplicates or resurrects; a later edit to `workspace.yml`'s
-   `starting_prompt` does not update the note).
+   first `handoff` note (`author: workspace-creation`; written only when a prompt
+   exists; skipped if a real handoff note exists, so it never duplicates or
+   resurrects; a placeholder seeded by an older CLI is superseded when the prompt
+   arrives).
 2. **Writes are contracted; reads are phase-entry.** Notes never emerge spontaneously
    (measured: 0/3 uncontracted) — they are written by return contracts, the `sb-handoff`
    skill, and the `sb-implement` capture rule. They are read at phase entry by the
