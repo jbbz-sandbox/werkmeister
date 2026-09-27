@@ -22,7 +22,8 @@ Three rules keep the layer honest:
    first `handoff` note (`author: workspace-creation`; written only when a prompt
    exists; skipped if a real handoff note exists, so it never duplicates or
    resurrects; a placeholder seeded by an older CLI is superseded when the prompt
-   arrives).
+   arrives). This is one-time: once a prompt has been seeded, a later edit to
+   `starting_prompt` does not update the note — the earlier seed blocks re-seeding.
 2. **Writes are contracted; reads are phase-entry.** Notes never emerge spontaneously
    (measured: 0/3 uncontracted) — they are written by return contracts, the `sb-handoff`
    skill, and the `sb-implement` capture rule. They are read at phase entry by the

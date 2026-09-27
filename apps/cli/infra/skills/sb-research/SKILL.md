@@ -10,7 +10,8 @@ description: "Begin the research/planning phase in a sandbox workspace. Use when
   questions or re-try failed approaches. Continue if empty.
 - Do **not** load code standards (`sb-*-standard` skills, `ponytail`) — they govern
   writing, not read-only work.
-- **Establish scope before spawning.** Ask the user (AskUserQuestion) to settle:
+- **Establish scope before spawning.** Settle these — ask the user (AskUserQuestion)
+  for any the task leaves ambiguous:
   - **In scope vs. out** — which repos/services may be touched.
   - **Spike or ship-ready** — feasibility spike vs. buildable design.
   - **The givens** — assumptions held constant. Workspace `decision` notes are binding.

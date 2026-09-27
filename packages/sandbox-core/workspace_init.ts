@@ -816,7 +816,7 @@ export async function initWorkspace(
 
   logMeta(task, meta);
 
-  // 5. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
+  // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
   let standardsSection: string | null = null;
   let activeStandards: string[] | null = null;
   const modules = loadStandardsModules();

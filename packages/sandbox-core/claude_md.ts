@@ -419,8 +419,8 @@ docker compose restart ${sampleSvc}
         .trimEnd();
   }
 
-  // The feature URL + routing cookie snippet CLAUDE.md used to carry — scoped
-  // to a host this feature actually runs, so it's never a link to nowhere.
+  // The feature URL + routing cookie snippet CLAUDE.md used to carry — prefers
+  // a host this feature actually runs, else falls back to any routed host.
   const proxy = resolveProxyHost(localServices);
   const featureBlock = proxy
     ? `
@@ -484,7 +484,6 @@ ${healthChecks}
 ${routingHostList}
 
 Set \`X-Feature=${feature}\` (cookie or header) to route to this workspace's local containers; otherwise traffic falls through to the k8s port-forwards.
-
 ${featureBlock}
 ## Troubleshooting
 
