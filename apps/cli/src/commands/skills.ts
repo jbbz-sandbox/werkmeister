@@ -22,6 +22,7 @@ import { findWorkspaceRoot } from "sandbox-core/gate";
 import {
   checkSkills,
   checkStandardsManifest,
+  resolveWorkspaceActive,
   syncSkills,
 } from "sandbox-core/workspace_skills";
 
@@ -43,7 +44,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  const { authoring, drift } = checkSkills(workspace);
+  // Resolved once, up front: it reads .sandbox/workspace.yml (one [info] line)
+  // and both drift sources below take the result.
+  const resolved = resolveWorkspaceActive(workspace);
+  const { authoring, drift } = checkSkills(workspace, resolved?.active ?? null);
   for (const entry of authoring) {
     printDrift(entry);
   }
@@ -51,8 +55,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     printDrift(entry);
   }
 
-  // After the projected-skill report, because resolving the manifest logs.
-  const manifestDrift = checkStandardsManifest(workspace);
+  const manifestDrift = checkStandardsManifest(workspace, resolved);
   if (manifestDrift !== null) {
     printDrift(manifestDrift);
     drift.push(manifestDrift);

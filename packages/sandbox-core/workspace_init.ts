@@ -36,6 +36,7 @@ import { buildClaudeMd, buildStandardsRoutingSection } from "./claude_md.js";
 import { Colors } from "./colors.js";
 import { expandUser, getReposRoot, loadArchetypes, loadMcpServers, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
+import { loadFeatureRouters, type FeatureRouter } from "./feature_routing.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { loadPaths, standardsDirPath, standardsDirProblem } from "./global_config.js";
 import { writeWorkspaceHooks } from "./hooks_gen.js";
@@ -45,7 +46,7 @@ import {
   validateArchetypeMcpServers,
   writeWorkspaceMcp,
 } from "./mcp_gen.js";
-import { listNotes, nextNoteNumber, noteFilename, notesDir } from "./notes.js";
+import { listNotes, nextNoteNumber, noteFilename, notesDir, type Note } from "./notes.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
@@ -363,9 +364,6 @@ async function selectRepos(
 // Workspace detection
 // ---------------------------------------------------------------------------
 
-// Infrastructure service names that are not interesting as app-level dependencies.
-const _INFRA_DEPS = new Set<string>(["redis", "postgres", "mongodb"]);
-
 /** Build the search order for the sandbox workspaces-container directory. */
 function candidateWorkspaceRoots(): string[] {
   const roots: string[] = [];
@@ -593,91 +591,6 @@ function resolveTask(
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Service map generation  (.sandbox/service-map.md)
-// ---------------------------------------------------------------------------
-
-/** Generate .sandbox/service-map.md — repos → services → package paths. */
-function buildServiceMapMd(
-  repos: Array<[string, string]>,
-  servicesConfig: Record<string, any>,
-  reposConfig: Record<string, any>,
-  localServices: string[] | null = null,
-): string {
-  const localSet = new Set(localServices ?? []);
-  const repoNames = new Set(repos.map(([name]) => name));
-  const sections: string[] = [];
-
-  for (const repoName of [...repoNames].sort()) {
-    // Prefer the ordered list from reposConfig; fall back to scanning servicesConfig.
-    let svcNames: string[] = (reposConfig[repoName] ?? {})["services"] ?? [];
-    if (!svcNames.length) {
-      svcNames = Object.entries(servicesConfig)
-        .filter(([, cfg]) => typeof cfg === "object" && cfg !== null && !Array.isArray(cfg) && cfg["repo"] === repoName)
-        .map(([svc]) => svc)
-        .sort();
-    }
-    if (!svcNames.length) {
-      continue;
-    }
-
-    // Local services first (preserve repo order within each group).
-    if (localSet.size) {
-      svcNames = [...svcNames.filter((s) => localSet.has(s)), ...svcNames.filter((s) => !localSet.has(s))];
-    }
-
-    const rows: string[] = [];
-    for (const svc of svcNames) {
-      const svcDef = servicesConfig[svc];
-      if (!svcDef || typeof svcDef !== "object" || Array.isArray(svcDef)) {
-        continue;
-      }
-      const p = svcDef["path"] ?? ".";
-      const svcType = svcDef["type"] ?? "";
-      const port = svcDef["internal_port"] ?? "";
-      const rawDeps: string[] = svcDef["depends_on"] ?? [];
-      const appDeps = (rawDeps || []).filter((d) => !_INFRA_DEPS.has(d));
-      const depsStr = appDeps.length ? appDeps.map((d) => `\`${d}\``).join(", ") : "—";
-      const mode = localSet.has(svc) ? "local" : "k8s";
-      rows.push(`| \`${svc}\` | ${mode} | \`${p}\` | ${svcType} | ${port} | ${depsStr} |`);
-    }
-
-    if (!rows.length) {
-      continue;
-    }
-
-    const table =
-      "| Service | Mode | Path in repo | Type | Port | App dependencies |\n" +
-      "|---------|------|-------------|------|------|------------------|\n" +
-      rows.join("\n");
-    sections.push(`## ${repoName}\n\n${table}`);
-  }
-
-  if (!sections.length) {
-    return "";
-  }
-
-  const header =
-    "<!--\n" +
-    "  AUTO-GENERATED FILE — DO NOT EDIT BY HAND.\n" +
-    "  Source:    ~/.sandbox/services.yaml (service registry)\n" +
-    "             + .sandbox/workspace.yml (feature local_services)\n" +
-    "  Generator: src/commands/init_workspace.ts :: _build_service_map_md\n" +
-    "  Regen:     sandbox init-workspace\n" +
-    "  To change a service's type/port/path/deps, edit services.yaml and rerun.\n" +
-    "  To change which services run locally for this feature, edit\n" +
-    "  .sandbox/workspace.yml (services field) and rerun.\n" +
-    "-->\n\n";
-
-  const intro =
-    "> Generated from `~/.sandbox/services.yaml`. " +
-    "Maps service names to package paths within each repo. " +
-    "**Mode** indicates whether the service runs locally for this feature " +
-    "or falls through to a k8s port-forward (kept for completeness).\n\n";
-
-  return header + "# Service Map\n\n" + intro + sections.join("\n\n") + "\n";
-}
-
-// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -733,19 +646,46 @@ function salvageLegacyHandoffNotes(workspaceRoot: string, claudeMdPath: string):
   }
 }
 
-/** Seed the workspace's first handoff note from creation-time inputs. */
-function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string): void {
+/**
+ * A handoff seeded by an older CLI that had no prompt to carry. It blocks
+ * nothing: the next init that has a prompt supersedes it (notes-conventions.md
+ * rule 1).
+ */
+function isPlaceholderHandoff(note: Note): boolean {
+  return (
+    note.type === "handoff" &&
+    note.frontmatter["author"] === "workspace-creation" &&
+    !note.body.includes("Seeded from `starting_prompt`")
+  );
+}
+
+function supersedeNote(note: Note): void {
+  const text = fs.readFileSync(note.path, "utf8");
+  fs.writeFileSync(note.path, text.replace(/^status:.*$/m, "status: superseded"));
+}
+
+/**
+ * Seed the workspace's first handoff note from `starting_prompt`.
+ *
+ * Writes nothing without a prompt — the work-type line alone is already in
+ * CLAUDE.md's by-phase table, and a placeholder used to block the real prompt
+ * forever. Exported for its tests.
+ */
+export function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string): void {
   const prompt = startingPrompt.trim();
-  const wt = workType.trim().toLowerCase();
-  if (!prompt && !wt) {
+  if (!prompt) {
     return;
   }
+  const wt = workType.trim().toLowerCase();
   const [phase, firstSkill] = WORK_TYPE_PHASES[wt] ?? ["research", "invoke `sb-research` first"];
   try {
     const directory = notesDir(workspaceRoot);
-    const existing = listNotes(workspaceRoot, true);
-    if (existing.some((note) => note.type === "handoff")) {
+    const handoffs = listNotes(workspaceRoot, true).filter((note) => note.type === "handoff");
+    if (handoffs.some((note) => !isPlaceholderHandoff(note))) {
       return;
+    }
+    for (const placeholder of handoffs) {
+      supersedeNote(placeholder);
     }
     fs.mkdirSync(directory, { recursive: true });
     const filename = noteFilename(nextNoteNumber(directory), "handoff", "starting-prompt");
@@ -764,17 +704,13 @@ function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, work
     if (wt) {
       lines.push(`This workspace is a ${wt} — ${firstSkill}.`, "");
     }
-    if (prompt) {
-      lines.push(
-        "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
-        "workspace was created. The task below has not begun — confirm",
-        "direction with the user before executing it.",
-        "",
-        prompt,
-      );
-    } else {
-      lines.push("Seeded at workspace creation (no starting prompt was provided).");
-    }
+    lines.push(
+      "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
+      "workspace was created. The task below has not begun — confirm",
+      "direction with the user before executing it.",
+      "",
+      prompt,
+    );
     fs.writeFileSync(path.join(directory, filename), lines.join("\n") + "\n");
     success(`Seeded starting handoff → .sandbox/notes/${filename}`);
   } catch (exc) {
@@ -880,27 +816,9 @@ export async function initWorkspace(
 
   logMeta(task, meta);
 
-  // 5. Generate .sandbox/service-map.md from services.yaml
-  let hasServiceMap = false;
-  if (repos.length) {
-    const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
-    if (Object.keys(servicesConfig).length) {
-      const localServicesForMap = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
-      const serviceMapContent = buildServiceMapMd(repos, servicesConfig, reposConfig, localServicesForMap);
-      if (serviceMapContent) {
-        const sandboxDir = path.join(workspaceRoot, ".sandbox");
-        fs.mkdirSync(sandboxDir, { recursive: true });
-        fs.writeFileSync(path.join(sandboxDir, "service-map.md"), serviceMapContent);
-        success("Wrote .sandbox/service-map.md");
-        hasServiceMap = true;
-      } else {
-        info("No mapped services for discovered repos — skipping .sandbox/service-map.md");
-      }
-    }
-  }
-
   // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
   let standardsSection: string | null = null;
+  let activeStandards: string[] | null = null;
   const modules = loadStandardsModules();
   if (Object.keys(modules).length) {
     const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
@@ -910,7 +828,7 @@ export async function initWorkspace(
     const workspaceConfig = loadConfigFile(workspaceRoot, (args["config"] as string | null) ?? null);
     const repoNames = repos.map(([name]) => name);
     const localServices = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
-    const [active, notActive] = resolveActiveStandards(
+    const [active] = resolveActiveStandards(
       repoNames,
       servicesConfig,
       reposConfig,
@@ -918,7 +836,8 @@ export async function initWorkspace(
       modules,
       localServices,
     );
-    standardsSection = buildStandardsRoutingSection(active, notActive, modules, repoNames);
+    activeStandards = active;
+    standardsSection = buildStandardsRoutingSection(active, modules, repoNames);
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
     writeStandardsManifest(workspaceRoot, buildStandardsManifest(active, modules));
@@ -945,19 +864,19 @@ export async function initWorkspace(
     repos,
     task,
     meta,
-    hasServiceMap,
     standardsSection,
   );
   fs.writeFileSync(claudeMdPath, content);
   success(`Wrote ${claudeMdPath}`);
 
   // 6a. Projected sb-* skills into .claude/skills/.
-  for (const skillPath of writeWorkspaceSkills(workspaceRoot)) {
+  for (const skillPath of writeWorkspaceSkills(workspaceRoot, null, null, activeStandards)) {
     success(`Wrote ${skillPath}`);
   }
 
   // 6b. Generated subagents: sb-researcher plus one sb-tester-<archetype> per
-  // archetype present.
+  // archetype present. Routers feed the tester's proxy smoke check; a machine
+  // with no ingress config gets testers without one, never a failed init.
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
   const archetypes = loadArchetypes();
   const present = resolvePresentArchetypes(
@@ -967,7 +886,20 @@ export async function initWorkspace(
     (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s),
     archetypes,
   );
-  const testerSpecs = buildTesterSpecs(present, servicesConfig, archetypes);
+  let routers: Record<string, FeatureRouter> = {};
+  try {
+    routers = loadFeatureRouters(servicesConfig);
+  } catch {
+    routers = {};
+  }
+  const testerSpecs = buildTesterSpecs(
+    present,
+    servicesConfig,
+    archetypes,
+    (meta["FEATURE"] ?? "").trim(),
+    routers,
+    (meta["TEST_PATH"] ?? "").trim(),
+  );
   for (const agentPath of writeWorkspaceAgents(workspaceRoot, testerSpecs)) {
     success(`Wrote ${agentPath}`);
   }
@@ -1008,7 +940,12 @@ export async function initWorkspace(
   // 8. Generate docker-compose.yml, allocate slot, write .sandbox/sandbox-context.md
   const feature = (meta["FEATURE"] ?? "").trim();
   if (feature) {
-    const slot = await generateWorkspaceCompose(feature, meta["SERVICES"] ?? "", workspaceRoot);
+    const slot = await generateWorkspaceCompose(
+      feature,
+      meta["SERVICES"] ?? "",
+      workspaceRoot,
+      (meta["TEST_PATH"] ?? "").trim(),
+    );
     if (slot !== null) {
       // 9. Build images (without starting containers)
       info("Building Docker images (--no-start)...");
