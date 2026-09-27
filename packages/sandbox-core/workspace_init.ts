@@ -924,6 +924,7 @@ export async function initWorkspace(
 
   // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
   let standardsSection: string | null = null;
+  let activeStandards: string[] | null = null;
   const modules = loadStandardsModules();
   if (Object.keys(modules).length) {
     const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
@@ -941,6 +942,7 @@ export async function initWorkspace(
       modules,
       localServices,
     );
+    activeStandards = active;
     standardsSection = buildStandardsRoutingSection(active, notActive, modules, repoNames);
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
@@ -975,7 +977,7 @@ export async function initWorkspace(
   success(`Wrote ${claudeMdPath}`);
 
   // 6a. Projected sb-* skills into .claude/skills/.
-  for (const skillPath of writeWorkspaceSkills(workspaceRoot)) {
+  for (const skillPath of writeWorkspaceSkills(workspaceRoot, null, null, activeStandards)) {
     success(`Wrote ${skillPath}`);
   }
 
