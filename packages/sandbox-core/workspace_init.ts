@@ -36,6 +36,7 @@ import { buildClaudeMd, buildStandardsRoutingSection } from "./claude_md.js";
 import { Colors } from "./colors.js";
 import { expandUser, getReposRoot, loadArchetypes, loadMcpServers, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
+import { loadFeatureRouters, type FeatureRouter } from "./feature_routing.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { loadPaths, standardsDirPath, standardsDirProblem } from "./global_config.js";
 import { writeWorkspaceHooks } from "./hooks_gen.js";
@@ -874,7 +875,8 @@ export async function initWorkspace(
   }
 
   // 6b. Generated subagents: sb-researcher plus one sb-tester-<archetype> per
-  // archetype present.
+  // archetype present. Routers feed the tester's proxy smoke check; a machine
+  // with no ingress config gets testers without one, never a failed init.
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
   const archetypes = loadArchetypes();
   const present = resolvePresentArchetypes(
@@ -884,7 +886,20 @@ export async function initWorkspace(
     (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s),
     archetypes,
   );
-  const testerSpecs = buildTesterSpecs(present, servicesConfig, archetypes);
+  let routers: Record<string, FeatureRouter> = {};
+  try {
+    routers = loadFeatureRouters(servicesConfig);
+  } catch {
+    routers = {};
+  }
+  const testerSpecs = buildTesterSpecs(
+    present,
+    servicesConfig,
+    archetypes,
+    (meta["FEATURE"] ?? "").trim(),
+    routers,
+    (meta["TEST_PATH"] ?? "").trim(),
+  );
   for (const agentPath of writeWorkspaceAgents(workspaceRoot, testerSpecs)) {
     success(`Wrote ${agentPath}`);
   }
