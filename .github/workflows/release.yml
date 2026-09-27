@@ -39,6 +39,9 @@ jobs:
       # same push — so the gate has to be here. A publish cannot be taken back,
       # which is worth ~3 minutes of duplicated checks.
       - run: npm run typecheck
+      # Before test, as in ci.yml: the dashboard's form smoke test serves
+      # dist/form.html, which only the full build (build:ui) produces.
+      - run: npm run build
       - run: npm test
       # With changesets pending: opens/updates the version PR. With none pending
       # (i.e. that PR just merged): publishes and tags.
