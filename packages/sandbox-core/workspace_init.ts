@@ -363,9 +363,6 @@ async function selectRepos(
 // Workspace detection
 // ---------------------------------------------------------------------------
 
-// Infrastructure service names that are not interesting as app-level dependencies.
-const _INFRA_DEPS = new Set<string>(["redis", "postgres", "mongodb"]);
-
 /** Build the search order for the sandbox workspaces-container directory. */
 function candidateWorkspaceRoots(): string[] {
   const roots: string[] = [];
@@ -593,91 +590,6 @@ function resolveTask(
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Service map generation  (.sandbox/service-map.md)
-// ---------------------------------------------------------------------------
-
-/** Generate .sandbox/service-map.md — repos → services → package paths. */
-function buildServiceMapMd(
-  repos: Array<[string, string]>,
-  servicesConfig: Record<string, any>,
-  reposConfig: Record<string, any>,
-  localServices: string[] | null = null,
-): string {
-  const localSet = new Set(localServices ?? []);
-  const repoNames = new Set(repos.map(([name]) => name));
-  const sections: string[] = [];
-
-  for (const repoName of [...repoNames].sort()) {
-    // Prefer the ordered list from reposConfig; fall back to scanning servicesConfig.
-    let svcNames: string[] = (reposConfig[repoName] ?? {})["services"] ?? [];
-    if (!svcNames.length) {
-      svcNames = Object.entries(servicesConfig)
-        .filter(([, cfg]) => typeof cfg === "object" && cfg !== null && !Array.isArray(cfg) && cfg["repo"] === repoName)
-        .map(([svc]) => svc)
-        .sort();
-    }
-    if (!svcNames.length) {
-      continue;
-    }
-
-    // Local services first (preserve repo order within each group).
-    if (localSet.size) {
-      svcNames = [...svcNames.filter((s) => localSet.has(s)), ...svcNames.filter((s) => !localSet.has(s))];
-    }
-
-    const rows: string[] = [];
-    for (const svc of svcNames) {
-      const svcDef = servicesConfig[svc];
-      if (!svcDef || typeof svcDef !== "object" || Array.isArray(svcDef)) {
-        continue;
-      }
-      const p = svcDef["path"] ?? ".";
-      const svcType = svcDef["type"] ?? "";
-      const port = svcDef["internal_port"] ?? "";
-      const rawDeps: string[] = svcDef["depends_on"] ?? [];
-      const appDeps = (rawDeps || []).filter((d) => !_INFRA_DEPS.has(d));
-      const depsStr = appDeps.length ? appDeps.map((d) => `\`${d}\``).join(", ") : "—";
-      const mode = localSet.has(svc) ? "local" : "k8s";
-      rows.push(`| \`${svc}\` | ${mode} | \`${p}\` | ${svcType} | ${port} | ${depsStr} |`);
-    }
-
-    if (!rows.length) {
-      continue;
-    }
-
-    const table =
-      "| Service | Mode | Path in repo | Type | Port | App dependencies |\n" +
-      "|---------|------|-------------|------|------|------------------|\n" +
-      rows.join("\n");
-    sections.push(`## ${repoName}\n\n${table}`);
-  }
-
-  if (!sections.length) {
-    return "";
-  }
-
-  const header =
-    "<!--\n" +
-    "  AUTO-GENERATED FILE — DO NOT EDIT BY HAND.\n" +
-    "  Source:    ~/.sandbox/services.yaml (service registry)\n" +
-    "             + .sandbox/workspace.yml (feature local_services)\n" +
-    "  Generator: src/commands/init_workspace.ts :: _build_service_map_md\n" +
-    "  Regen:     sandbox init-workspace\n" +
-    "  To change a service's type/port/path/deps, edit services.yaml and rerun.\n" +
-    "  To change which services run locally for this feature, edit\n" +
-    "  .sandbox/workspace.yml (services field) and rerun.\n" +
-    "-->\n\n";
-
-  const intro =
-    "> Generated from `~/.sandbox/services.yaml`. " +
-    "Maps service names to package paths within each repo. " +
-    "**Mode** indicates whether the service runs locally for this feature " +
-    "or falls through to a k8s port-forward (kept for completeness).\n\n";
-
-  return header + "# Service Map\n\n" + intro + sections.join("\n\n") + "\n";
-}
-
-// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -903,26 +815,7 @@ export async function initWorkspace(
 
   logMeta(task, meta);
 
-  // 5. Generate .sandbox/service-map.md from services.yaml
-  let hasServiceMap = false;
-  if (repos.length) {
-    const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
-    if (Object.keys(servicesConfig).length) {
-      const localServicesForMap = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
-      const serviceMapContent = buildServiceMapMd(repos, servicesConfig, reposConfig, localServicesForMap);
-      if (serviceMapContent) {
-        const sandboxDir = path.join(workspaceRoot, ".sandbox");
-        fs.mkdirSync(sandboxDir, { recursive: true });
-        fs.writeFileSync(path.join(sandboxDir, "service-map.md"), serviceMapContent);
-        success("Wrote .sandbox/service-map.md");
-        hasServiceMap = true;
-      } else {
-        info("No mapped services for discovered repos — skipping .sandbox/service-map.md");
-      }
-    }
-  }
-
-  // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
+  // 5. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
   let standardsSection: string | null = null;
   let activeStandards: string[] | null = null;
   const modules = loadStandardsModules();
@@ -934,7 +827,7 @@ export async function initWorkspace(
     const workspaceConfig = loadConfigFile(workspaceRoot, (args["config"] as string | null) ?? null);
     const repoNames = repos.map(([name]) => name);
     const localServices = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
-    const [active, notActive] = resolveActiveStandards(
+    const [active] = resolveActiveStandards(
       repoNames,
       servicesConfig,
       reposConfig,
@@ -943,7 +836,7 @@ export async function initWorkspace(
       localServices,
     );
     activeStandards = active;
-    standardsSection = buildStandardsRoutingSection(active, notActive, modules, repoNames);
+    standardsSection = buildStandardsRoutingSection(active, modules, repoNames);
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
     writeStandardsManifest(workspaceRoot, buildStandardsManifest(active, modules));
@@ -970,7 +863,6 @@ export async function initWorkspace(
     repos,
     task,
     meta,
-    hasServiceMap,
     standardsSection,
   );
   fs.writeFileSync(claudeMdPath, content);

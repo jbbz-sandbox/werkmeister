@@ -6,8 +6,8 @@
  * orchestration).
  *
  * This module owns pure string-rendering logic for the workspace-facing
- * markdown artifacts: the workspace `CLAUDE.md`, its routing table and
- * Feature Testing section, and `.sandbox/sandbox-context.md`.
+ * markdown artifacts: the workspace `CLAUDE.md`, its routing table, and
+ * `.sandbox/sandbox-context.md`.
  */
 
 import * as fs from "node:fs";
@@ -28,7 +28,7 @@ import { universalStandards } from "./standards.js";
  * actually runs, else any routed service. Returns null when nothing is routed
  * (or the config can't be read) so callers omit the URL instead of inventing one.
  */
-function resolveProxyHost(serviceNames: string[]): { host: string; domain: string } | null {
+export function resolveProxyHost(serviceNames: string[]): { host: string; domain: string } | null {
   try {
     const ingress = loadIngress();
     const routers = loadFeatureRouters(undefined, ingress);
@@ -55,82 +55,18 @@ function isDict(value: unknown): value is Record<string, any> {
 // ---------------------------------------------------------------------------
 
 /**
- * Render the ## Feature Testing section — identity, URL, and X-Feature cookie only.
- *
- * Lifecycle commands (sandbox up/down, docker compose) live in .sandbox/sandbox-context.md.
- * Returns an empty string if FEATURE is not set.
- */
-export function buildFeatureTestingSection(meta: Record<string, string>): string {
-  const feature = (meta["FEATURE"] ?? "").trim();
-  if (!feature) {
-    return "";
-  }
-
-  const jiraId = (meta["JIRA_ID"] ?? "").trim();
-  const testPath = (meta["TEST_PATH"] ?? "").trim();
-  const serviceNames = (meta["SERVICES"] ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s);
-
-  const metaParts = [`**Feature:** \`${feature}\``];
-  if (jiraId) {
-    metaParts.push(`**Jira:** [${jiraId}](https://hgdata.atlassian.net/browse/${jiraId})`);
-  }
-  if (serviceNames.length > 0) {
-    metaParts.push(`**Services:** ${serviceNames.join(", ")}`);
-  }
-  const metaLine = metaParts.join(" | ");
-
-  const proxy = resolveProxyHost(serviceNames);
-  const proxyBase = proxy ? `https://${proxy.host}` : null;
-  const proxyUrl =
-    proxyBase && testPath ? `${proxyBase}/${testPath.replace(/^\/+/, "")}` : proxyBase;
-
-  const urlSection = proxyUrl
-    ? `### URL
-
-- ${proxyUrl}
-
-`
-    : "";
-  const uiLine = proxyBase
-    ? `\n**Sandbox UI:** Visit ${proxyBase}/__sandbox and select \`${feature}\`\n`
-    : "";
-
-  return `
-## Feature Testing
-
-${metaLine}
-
-${urlSection}### X-Feature Cookie
-
-Set the routing cookie so the sandbox proxy directs requests to your local containers:
-
-**Browser DevTools console:**
-\`\`\`js
-document.cookie = "X-Feature=${feature}; domain=.${proxy?.domain ?? "local"}; path=/; SameSite=Lax";
-\`\`\`
-${uiLine}
-
-For ports, health checks, and lifecycle commands → [.sandbox/sandbox-context.md](./.sandbox/sandbox-context.md)
-
-`;
-}
-
-/**
  * Build the routing table for CLAUDE.md.
  *
  * Per-repo routing rows are only emitted when `{repo}/CLAUDE.md` actually
  * exists — pointing at a file that isn't there is worse than no row at all.
+ * Everything about the running feature (URL, cookie, ports, lifecycle, health
+ * checks) is one row: it all lives in sandbox-context.md.
  */
 export function buildRoutingTable(
   repos: Array<[string, string]>,
   workspaceRoot: string,
   hasFeature: boolean,
-  hasServiceMap: boolean,
 ): string {
-  const alsoCol = hasServiceMap ? ".sandbox/service-map.md" : "—";
   const rows: string[] = [];
 
   for (const [name] of repos) {
@@ -141,26 +77,25 @@ export function buildRoutingTable(
       /* missing — no row */
     }
     if (isFile) {
-      rows.push(`| Working in ${name} | ${name}/CLAUDE.md | ${alsoCol} |`);
+      rows.push(`| Working in ${name} | ${name}/CLAUDE.md |`);
     }
   }
 
   if (hasFeature) {
-    rows.push("| Debugging routing / ports | .sandbox/sandbox-context.md | — |");
-    rows.push("| Container lifecycle | .sandbox/sandbox-context.md | — |");
+    rows.push(
+      "| Running the feature — URL, X-Feature cookie, ports, lifecycle, health checks | .sandbox/sandbox-context.md |",
+    );
   }
 
   if (repos.length > 1) {
-    rows.push(
-      `| Cross-repo contract change | .sandbox/notes/ (\`contract\` notes) | ${alsoCol} |`,
-    );
+    rows.push("| Cross-repo contract change | .sandbox/notes/ (`contract` notes) |");
   }
 
   if (rows.length === 0) {
     return "";
   }
 
-  return "| Task | Read first | Also read |\n|------|-----------|----------|\n" + rows.join("\n");
+  return "| Task | Read |\n|------|------|\n" + rows.join("\n");
 }
 
 /**
@@ -173,11 +108,10 @@ export function buildRoutingTable(
  * init-workspace (`workspace_skills.ts`); `sb-implement`/`sb-research`/
  * `sb-test`/`sb-review` are the phase-entry skills that read this table (docs/jit-context-system.md §5.2 — the
  * CLAUDE.md-table → entry-skill chain is the measured 15/15 PREVENTIVE
- * mechanism, so the table must name them).
+ * mechanism).
  */
 export function buildStandardsRoutingSection(
   active: string[],
-  notActive: string[],
   modules: Record<string, Record<string, any>>,
   repoNames: string[],
 ): string {
@@ -196,10 +130,6 @@ export function buildStandardsRoutingSection(
   }
 
   const reposLabel = repoNames.length > 0 ? repoNames.join(", ") : "none discovered";
-  const notActiveLine =
-    notActive.length > 0
-      ? `Not active (no matching repo): ${notActive.join(", ")} — do not load.\n\n`
-      : "";
 
   // Points at the standards tree itself, wherever `overrides.standards_dir`
   // resolves to — the old link named this repo's code-style-guide.md, a thin
@@ -226,18 +156,14 @@ export function buildStandardsRoutingSection(
 |----------|-------|----------|
 ${rows.join("\n")}
 
-${notActiveLine}**Phase entry:** invoke \`sb-research\` when exploring or planning; invoke \`sb-implement\` BEFORE your first code edit — it loads the universal base (${universalSkills}) and the Active rows matching the files you edit; invoke \`sb-test\` to run or write tests; invoke \`sb-review\` BEFORE reviewing any diff or PR; invoke \`sb-pr\` to finish the branch and create the PR.
+**By phase** — invoke the entry skill before starting the phase:
 
-> Sessions must start at the **workspace root** (this directory) — the sb-* skills, agents, and hooks live in \`.claude/\` here and are not found from inside a repo worktree. \`sandbox skills check\` verifies the skills are current with the sandbox repo.
-
-**By phase:**
-
-| Phase | Entry skill | Load |
-|-------|-------------|------|
+| Phase | Invoke first | Loads |
+|-------|--------------|-------|
 | research / planning | \`sb-research\` | nothing — spawns the read-only \`sb-researcher\` agent |
-| implementing | \`sb-implement\` | universal base + rows matching the files you edit |
+| implementing (before the first code edit) | \`sb-implement\` | universal base (${universalSkills}) + rows matching the files you edit |
 | testing | \`sb-test\` | nothing — spawns the matching \`sb-tester-<archetype>\` agent(s) |
-| review | \`sb-review\` | the standards covering files in the diff |
+| review (before reading any diff or PR) | \`sb-review\` | the standards covering files in the diff |
 | PR / finishing | \`sb-pr\` | nothing — runs the pre-PR gate, then \`sb-review\` |
 
 `;
@@ -250,13 +176,12 @@ export function buildClaudeMd(
   repos: Array<[string, string]>,
   task: string,
   meta: Record<string, string>,
-  hasServiceMap = false,
   standardsSection: string | null = null,
 ): string {
   const layoutLines = repos.map(([name, branch]) => `- ${name}/ — branch: ${branch}`).join("\n");
 
   const hasFeature = Boolean((meta["FEATURE"] ?? "").trim());
-  const routingTable = buildRoutingTable(repos, workspaceRoot, hasFeature, hasServiceMap);
+  const routingTable = buildRoutingTable(repos, workspaceRoot, hasFeature);
   const routingSection = routingTable
     ? `\n## Routing\n\n${routingTable}\n\n## Context Budget\n\n` +
       "Load only what the routing table points to for your current task. " +
@@ -302,8 +227,6 @@ ${contractRule}`;
       "feature does and the user-visible outcome. -->";
   const currentTaskSection = `## Current Task\n\n${currentTaskLine}\n\n${taskBody}\n`;
 
-  const featureTesting = buildFeatureTestingSection(meta);
-
   // Code Standards — the compiled "Standards routing" block when the caller
   // resolved one (repo-scoped JIT loading, docs/jit-context-system.md §5.3);
   // otherwise point at the standards tree itself. No tree URL means no
@@ -330,7 +253,7 @@ ${layoutHeader}
 
 ${layoutLines}
 ${routingSection}
-${codeStandardsSection}${featureTesting}${notesSection}`;
+${codeStandardsSection}${notesSection}`;
 }
 
 // ---------------------------------------------------------------------------
