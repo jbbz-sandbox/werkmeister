@@ -1,5 +1,7 @@
 # Workspace Context Trim Implementation Plan
 
+**Status: done**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Every generated workspace artifact carries only the context its sessions and phases use; the starting prompt reaches the session; the proxy smoke check has an owner.
