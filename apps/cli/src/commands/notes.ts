@@ -3,10 +3,10 @@
  *
  * `context`: print the workspace's notes context for injection into a fresh
  * Claude Code window — the SessionStart hook target
- * (jit-context-system.md §5.8). The text is built by `buildContext` in
- * `sandbox-core/notes`; this module resolves the workspace from CWD, reads the
- * hook's stdin payload, and writes the result to stdout — plain text, hook-safe
- * (never raises, always exits 0).
+ * (jit-context-system.md §5.8). The text is built by the workspace strategy's
+ * `sessionContext` (jit: `buildContext`); this module resolves the workspace
+ * from CWD, reads the hook's stdin payload, and writes the result to stdout —
+ * plain text, hook-safe (never raises, always exits 0).
  *
  * `graduate`: scaffold an open `decision` note into `docs/standards/`
  * (docs/jit-context-system.md §3.2). Mechanical scaffolding is
@@ -20,7 +20,6 @@ import * as path from "node:path";
 import * as readline from "node:readline/promises";
 
 import { error, info, success } from "../lib/config.js";
-import { resetSessionState } from "sandbox-core/gate";
 import { standardsDirPath } from "sandbox-core/global_config";
 import {
   GraduationError,
@@ -30,8 +29,9 @@ import {
   matchDomainsForRefs,
 } from "sandbox-core/graduate";
 import { findWorkspaceRoot } from "sandbox-core/gate";
-import { buildContext, openDecisions, type Note } from "sandbox-core/notes";
+import { openDecisions, type Note } from "sandbox-core/notes";
 import { loadStandardsModules } from "sandbox-core/standards";
+import { strategyFor } from "sandbox-core/strategies";
 
 /** Write *promptStr*, read one line (no trailing newline). */
 export async function input(promptStr: string): Promise<string> {
@@ -218,14 +218,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     if (workspace === null) {
       return;
     }
-    const payload = hookPayload();
-    const source = String(payload["source"] || "");
-    // Standards gate (docs/jit-context-system.md §6):
-    // compact/clear wipe the context, so delivered standards must re-gate.
-    if (source === "compact" || source === "clear") {
-      resetSessionState(workspace, String(payload["session_id"] || ""));
-    }
-    const context = buildContext(workspace, source);
+    const context = strategyFor(workspace).sessionContext(workspace, hookPayload());
     if (context) {
       process.stdout.write(context);
     }

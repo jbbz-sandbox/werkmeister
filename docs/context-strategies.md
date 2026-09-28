@@ -1,6 +1,6 @@
 # Context strategies: making JIT and ICM selectable
 
-Status: exploration, 2026-09-27. Input: the `jit-ws2` / `icm-ws2` comparison (`~/features/COMPARISON.md`) and a read of the generator (`packages/sandbox-core/workspace_init.ts`, `claude_md.ts`, `lifecycle.ts`).
+Status: option B implemented — spec docs/superpowers/specs/2026-09-27-context-strategy-interface.md. The rest of this page is the exploration that chose it.
 
 ## What the generator does today
 

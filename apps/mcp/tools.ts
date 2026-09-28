@@ -36,12 +36,11 @@ import { runFeatureTests } from "sandbox-core/test_run";
 
 import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
 
-import { writeWorkspaceHooks } from "sandbox-core/hooks_gen";
 import { buildContext, listNotes, parseNote } from "sandbox-core/notes";
 import { graduateNote } from "sandbox-core/graduate";
 import { createWorkspace, listWorkspaces, removeWorkspace } from "sandbox-core";
 import { checkStandards } from "sandbox-core/standards";
-import { checkSkills, syncSkills } from "sandbox-core/workspace_skills";
+import { STRATEGY_IDS, strategyFor } from "sandbox-core/strategies";
 import { initWorkspace } from "sandbox-core/workspace_init";
 
 /**
@@ -362,6 +361,10 @@ const WORKSPACE_FIELDS = {
   labels: z.string().optional().describe("Comma-separated labels."),
   test_path: z.string().optional().describe("Default path for `sandbox open` and the suite."),
   starting_prompt: z.string().optional().describe("Prompt the workspace's first session starts from."),
+  context_strategy: z
+    .string()
+    .optional()
+    .describe(`Context layer strategy (one of: ${STRATEGY_IDS.join(", ")}).`),
 };
 
 function registerAuthoringTools(server: McpServer): void {
@@ -471,11 +474,11 @@ function registerAuthoringTools(server: McpServer): void {
   server.registerTool(
     "sandbox-skills",
     {
-      title: "Check or sync a workspace's projected skills",
+      title: "Check or sync a workspace's context layer",
       description:
-        "`check` reports authoring problems in this repo's standards and drift in the " +
-        "workspace's .claude/skills/. `sync` reprojects the skills and refreshes the gate " +
-        "manifest.",
+        "`check` reports drift between the workspace's context layer and a fresh rendering; " +
+        "`sync` rewrites what drifted. The layer is the workspace's `context_strategy` (jit: " +
+        "sb-* skills and gate manifest; icm: standards and stage contracts).",
       inputSchema: {
         ...FEATURE_ARG,
         action: z.enum(["check", "sync"]).describe("check reports drift; sync fixes it."),
@@ -485,9 +488,10 @@ function registerAuthoringTools(server: McpServer): void {
       adapt(async () => {
         const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
         const workspace = resolveWorkspaceDir(feature);
+        const strategy = strategyFor(workspace);
         return args.action === "sync"
-          ? { ...syncSkills(workspace) }
-          : { ...checkSkills(workspace) };
+          ? { ...strategy.sync(workspace) }
+          : { drift: strategy.check(workspace) };
       }),
   );
 
@@ -506,16 +510,20 @@ function registerAuthoringTools(server: McpServer): void {
   server.registerTool(
     "sandbox-hooks",
     {
-      title: "Write a workspace's Claude Code hooks",
+      title: "Refresh a workspace's context layer",
       description:
-        "Merge the SessionStart and PreToolUse gate entries into the workspace's " +
-        ".claude/settings.json. Never clobbers hooks it does not own.",
+        "Refresh the workspace's context layer the way `sandbox up` does: jit re-merges its " +
+        "SessionStart and PreToolUse hooks into .claude/settings.json; icm removes any " +
+        "sandbox-managed hooks. Never touches hooks it does not own.",
       inputSchema: { ...FEATURE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
         const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        return { path: writeWorkspaceHooks(resolveWorkspaceDir(feature)) };
+        const workspace = resolveWorkspaceDir(feature);
+        const strategy = strategyFor(workspace);
+        strategy.refresh(workspace);
+        return { strategy: strategy.id };
       }),
   );
 
