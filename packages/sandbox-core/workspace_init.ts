@@ -946,6 +946,10 @@ export async function provisionWorkspace(
     );
   }
 
+  // Validate before creating the worktree or writing workspace.yml below — an
+  // unknown value should fail fast rather than leave a half-made workspace.
+  parseStrategyId(resolved.context_strategy);
+
   const featureSlug = feature.toLowerCase();
   const jiraId = (resolved.jira_id ?? "").trim() || null;
   const workspaceName = buildWorkspaceName(feature, jiraId);

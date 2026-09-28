@@ -36,7 +36,7 @@ import { runFeatureTests } from "sandbox-core/test_run";
 
 import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
 
-import { buildContext, listNotes, parseNote } from "sandbox-core/notes";
+import { listNotes, parseNote } from "sandbox-core/notes";
 import { graduateNote } from "sandbox-core/graduate";
 import { createWorkspace, listWorkspaces, removeWorkspace } from "sandbox-core";
 import { checkStandards } from "sandbox-core/standards";
@@ -362,7 +362,7 @@ const WORKSPACE_FIELDS = {
   test_path: z.string().optional().describe("Default path for `sandbox open` and the suite."),
   starting_prompt: z.string().optional().describe("Prompt the workspace's first session starts from."),
   context_strategy: z
-    .string()
+    .enum(STRATEGY_IDS)
     .optional()
     .describe(`Context layer strategy (one of: ${STRATEGY_IDS.join(", ")}).`),
 };
@@ -553,7 +553,7 @@ function registerAuthoringTools(server: McpServer): void {
         const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
         const workspace = resolveWorkspaceDir(feature);
         if (args.action === "context") {
-          return { context: buildContext(workspace, "mcp") };
+          return { context: strategyFor(workspace).sessionContext(workspace, { source: "mcp" }) ?? "" };
         }
         if (args.action === "list") {
           return { notes: listNotes(workspace, args.includeSuperseded ?? false) };
