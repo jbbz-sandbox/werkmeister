@@ -386,6 +386,51 @@ locate templates, not mutable state.
 
 ---
 
+## Generated CLAUDE.md Task Title Competes With the Starting Prompt
+
+**Severity:** Moderate (wastes the first agent turn on every workspace)
+**Status:** Open
+**Affects:** `sandbox workspace` / `sandbox init-workspace` (`--task`, `--description`, `--starting-prompt`), the CLAUDE.md template, `sb-research`
+
+Observed in the JIT-vs-ICM comparison run of 2026-09-27 (`jit-ws2`, claude-sonnet-5, headless `claude -p`; per-turn JSON in `~/features/runs/jit-ws2/`, write-up in `~/features/COMPARISON.md`).
+
+The workspace was created with `--task "JIT workspace test (run 2)"`, `--description "Test the JIT context management system for this workspace."` and a 700-word `--starting-prompt` describing the real job (OpenAPI docs for `apps/backend`). The generated CLAUDE.md renders task + description under "Current Task"; the starting prompt lands only in `.sandbox/notes/001-handoff-starting-prompt.md`. On the first message ("Start the task in this workspace.") the agent read both, treated them as two different tasks, and stopped to ask which one to do:
+
+> CLAUDE.md's "Current Task" says this is `jit-ws2` — "JIT workspace test (run 2)…". The handoff note describes a different, more substantial task… Which do you want me to do right now?
+
+One full human round-trip before any work, on a workspace with no ambiguity from the operator's point of view. The ICM sibling (`icm-ws2`), whose entry file points at a single `BRIEF.md`, did not ask.
+
+**Likely fix:** treat `--task` as a title for the starting prompt, not a peer of it — render the handoff note's goal (or its first heading) as the Current Task, and drop `--description` from the agent-facing CLAUDE.md (it is dashboard metadata). Alternatively, have `sb-research` step 0 state that the handoff note *is* the task and the CLAUDE.md line is its label.
+
+**Fix (partial):** `docs/superpowers/specs/2026-09-27-work-type-phases.md`. The seeded handoff
+and CLAUDE.md now name the phase and artifact to start with, which is what the run-2 model
+asked about. The task-title-vs-prompt conflict itself is unchanged; this entry stays open.
+
+---
+
+## Answers Given in Chat Are Not Persisted, So Later Phases Re-Ask
+
+**Severity:** Moderate (duplicate human round-trips; a gate that cannot see its own inputs)
+**Status:** Open
+**Affects:** `sb-research`, `sb-implement`, `sb-pr` (pre-PR gate), the notes ledger conventions
+
+Same run as above. Turn 2 answered all six open questions from the handoff note in chat, including "Jira key: none — there is no ticket". `sb-research` then wrote `002-finding-openapi-docs-research.md` (routes, tooling, frontend cross-check) but recorded none of the answers. `sb-implement` wrote `003-decision-openapi-implementation-choices.md` for its own four follow-up questions, again without the Jira answer. Two turns later, `sb-pr`'s gate read handoff note 001 ("Jira key was not provided — ask before doing anything"), found no note contradicting it, and asked again:
+
+> Do you have a Jira ticket key for this work? … that question was never answered in this session either.
+
+The answer existed in the same session's context but not in the ledger, and the ledger is what the phase skills consult. Cost: one extra human turn and a third `sb-pr` pass (~32 API turns, ~1.4M input tokens).
+
+**Likely fix:** `sb-research` (or whichever phase asks the handoff's open questions) must write a `decision` note with the answers as soon as they arrive — the handoff note's "Open questions" block is the natural source, its answers the natural `decision`. `sb-pr` should read `decision` notes before re-asking anything the handoff marked open.
+
+**Related:** `sb-implement` asked four more design questions (validator dependency, drift-test style, `/health` method, Dockerfile COPY) after research had already gathered every fact needed to decide them. Not a bug, but it doubled the human turns relative to the ICM sibling, which proposed answers with evidence in a file for the human to flip to `decided`.
+
+**Fix:** `docs/superpowers/specs/2026-09-27-work-type-phases.md`. `sb-research` now ends a
+`feature` in a `decision` note with `status: decided` recording the answers, `sandbox notes
+context` re-injects it every session, and the phase gate blocks source edits until it exists.
+Confirm with a jit-ws2 rerun before closing.
+
+---
+
 ## Library Rough Edges Left by the CLI-to-Core Migration
 
 **Severity:** Low (each is small; they share a cause)
