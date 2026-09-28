@@ -1,6 +1,6 @@
 {
   "name": "sandbox-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "private": true,
   "description": "Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and Jira helpers. Consumed by the `sandbox` CLI itself, sandbox-dashboard, claudeck, and the VS Code extension.",
