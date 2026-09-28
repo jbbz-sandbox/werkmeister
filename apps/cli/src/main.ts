@@ -41,6 +41,11 @@ import { Argument, Command, Option } from "commander";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
+// `./strategies/types` isn't its own package export, and `./strategies`
+// pulls in the registry (fs/proc/reporter/jit/icm) — accepted here since
+// sandbox-core is already this CLI's core dependency and every command
+// module loads far more of it on demand.
+import { STRATEGY_IDS } from "sandbox-core/strategies";
 
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
 // config loaders.
@@ -505,7 +510,7 @@ const SPECS: CommandSpec[] = [
             "--context-strategy <id>",
             "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
               "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
-          ).choices(["jit", "icm"]),
+          ).choices([...STRATEGY_IDS]),
         )
         .option(
           "--print-prompts",
@@ -677,7 +682,7 @@ const SPECS: CommandSpec[] = [
             "--context-strategy <id>",
             "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
               "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
-          ).choices(["jit", "icm"]),
+          ).choices([...STRATEGY_IDS]),
         )
         .option(
           "--config <path>",
