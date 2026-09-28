@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (ESM, ES2022), `node:test`, `tsc`. Tests are `.mjs` files in `packages/sandbox-core/` that import from `./dist/`. Run `npm test` inside `packages/sandbox-core` (it compiles first). For a single file: `cd packages/sandbox-core && npx tsc && node --test <file>.test.mjs`.
 
-**Spec:** `docs/superpowers/specs/2026-09-27-work-type-phases.md`
+**Spec:** `docs/superpowers/archive/specs/2026-09-27-work-type-phases.md`
 
 ## Before you start
 
@@ -901,7 +901,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 In "Answers Given in Chat Are Not Persisted, So Later Phases Re-Ask", under the `**Likely fix:**` paragraph, add:
 
 ```markdown
-**Fix:** `docs/superpowers/specs/2026-09-27-work-type-phases.md`. `sb-research` now ends a
+**Fix:** `docs/superpowers/archive/specs/2026-09-27-work-type-phases.md`. `sb-research` now ends a
 `feature` in a `decision` note with `status: decided` recording the answers, `sandbox notes
 context` re-injects it every session, and the phase gate blocks source edits until it exists.
 Confirm with a jit-ws2 rerun before closing.
@@ -910,7 +910,7 @@ Confirm with a jit-ws2 rerun before closing.
 In "Generated CLAUDE.md Task Title Competes With the Starting Prompt", add:
 
 ```markdown
-**Fix (partial):** `docs/superpowers/specs/2026-09-27-work-type-phases.md`. The seeded handoff
+**Fix (partial):** `docs/superpowers/archive/specs/2026-09-27-work-type-phases.md`. The seeded handoff
 and CLAUDE.md now name the phase and artifact to start with, which is what the run-2 model
 asked about. The task-title-vs-prompt conflict itself is unchanged; this entry stays open.
 ```
