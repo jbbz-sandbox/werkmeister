@@ -45,7 +45,7 @@ import {
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
-import { parseStrategyId, strategyById } from "./strategies/index.js";
+import { STRATEGY_IDS, parseStrategyId, reportLeftovers, strategyById } from "./strategies/index.js";
 import {
   _INPUT_FIELDS,
   _WORKSPACE_CONFIG_NAMES,
@@ -812,6 +812,15 @@ export async function initWorkspace(
     hasServiceMap,
     configOverride: (args["config"] as string | null) ?? null,
   });
+
+  // The config field read at the top of this run is already the new value when
+  // the user just edited workspace.yml — there is no reliable "previous
+  // strategy" to compare against. Instead, check every OTHER registered
+  // strategy for paths it left behind that the active one does not also own.
+  for (const id of STRATEGY_IDS) {
+    if (id === strategy.id) continue;
+    reportLeftovers(workspaceRoot, strategyById(id), strategy, Boolean(args["prune_context"]));
+  }
 
   // 6d needs the present archetypes whichever strategy ran.
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();

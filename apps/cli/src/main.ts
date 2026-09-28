@@ -687,6 +687,11 @@ const SPECS: CommandSpec[] = [
             "SANDBOX_WORKSPACE_CONFIG).",
         )
         .option(
+          "--prune-context",
+          "After a context_strategy change, delete the previous strategy's files that git " +
+            "tracks unmodified (anything else is kept and reported).",
+        )
+        .option(
           "--print-prompts",
           "Emit the interactive wizard's prompt definitions as JSON on stdout " +
             "(labels, defaults, service choices, and which inputs are already " +
@@ -715,6 +720,7 @@ const SPECS: CommandSpec[] = [
       work_type: o.workType ?? null,
       context_strategy: o.contextStrategy ?? null,
       config_file: o.config ?? null,
+      prune_context: Boolean(o.pruneContext),
       print_prompts: Boolean(o.printPrompts),
       print_form_schema: Boolean(o.printFormSchema),
     }),
