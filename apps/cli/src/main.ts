@@ -27,6 +27,7 @@
  *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
  *     sandbox list-workspaces                  List workspaces under the workspaces root
  *     sandbox remove-workspace <name>          Hand off and delete a workspace (push, down, rm)
+ *     sandbox code [feature]                   Open a workspace in VS Code
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
  *     sandbox dashboard                        Launch the workspace dashboard's MCP server (stdio)
  *     sandbox mcp                              Launch the headless remote MCP surface (stdio)
@@ -560,6 +561,19 @@ const SPECS: CommandSpec[] = [
         .option("-y, --yes", "Skip the confirmation prompt");
     },
     namespace: ([name], o) => ({ name, yes: Boolean(o.yes) }),
+  },
+  {
+    name: "code",
+    load: () => import("./commands/code.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Open a workspace in VS Code")
+        .argument(
+          "[feature]",
+          "Workspace name, as `sandbox list-workspaces` reports it. If omitted, read from FEATURE in a .env file.",
+        );
+    },
+    namespace: ([feature]) => ({ feature: feature ?? null }),
   },
   {
     name: "setup",
