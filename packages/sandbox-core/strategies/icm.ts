@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
+import { removeWorkspaceHooks } from "../hooks_gen.js";
 import { info, success, warn } from "../reporter.js";
 import {
   loadStandardsModules,
@@ -304,7 +305,18 @@ function init(ctx: InitContext): void {
 export const icm: ContextStrategy = {
   id: "icm",
   init,
-  refresh() {},
+  // The repair path for a workspace whose pre-strategy `up` installed the JIT
+  // hooks. `_isManaged` is exact, so hand-added hooks survive.
+  refresh(root) {
+    for (const command of removeWorkspaceHooks(root)) {
+      info(`Removed JIT hook from .claude/settings.json: ${command}`);
+    }
+    const gateDir = path.join(root, ".sandbox", ".gate");
+    if (fs.existsSync(gateDir)) {
+      fs.rmSync(gateDir, { recursive: true, force: true });
+      info("Removed .sandbox/.gate/");
+    }
+  },
   check: (root) => drifted(root).map(([rel]) => rel),
   sync(root) {
     const wrote: string[] = [];
