@@ -394,23 +394,36 @@ Decision table (`decide`):
 
 1. Resolve the workspace root; load the manifest `.sandbox/standards.json`; load session state
    `.sandbox/.gate/<sessionId>.json`.
-2. Find the first not-yet-delivered domain whose `applies_to` globs fnmatch the edited path.
-3. If phase entry was already delivered and no domain matched → allow.
-4. Otherwise emit a **coalesced** deny: the phase-entry instruction (if undelivered) + the
+2. **Phase gate.** If the manifest carries `phase_gate` (compiled from the work type,
+   `workspace_prompts.ts::WORK_TYPE_PHASES`) and the edited path is inside the workspace and
+   not under `.sandbox/`: scan `.sandbox/notes/NNN-<note>-*.md`. A note satisfies the gate when
+   its `status` is not `superseded`/`graduated` and, if the gate names a status (`decided` for
+   `feature`), equals it. No satisfying note → deny with the phase-gate text.
+3. Find the first not-yet-delivered domain whose `applies_to` globs fnmatch the edited path.
+4. If phase entry was already delivered and no domain matched → allow.
+5. Otherwise emit a **coalesced** deny: the phase-entry instruction (if undelivered) + the
    domain-skill instruction with the standard's summary (if matched) + the precedence text —
    one deny, never two.
-5. Record delivery and allow the retry.
+6. Record delivery and allow the retry.
 
 **Fail-open throughout.** Every failure mode — no workspace, no manifest, corrupt or
 unwritable state, malformed input — resolves to *allow*. A broken gate must never tax every
 edit, and an unwritable state dir must never become a deny-every-edit loop. The hook always
 exits 0.
 
+**Two deliberate departures for the phase gate.** It is *deny-until*, not deny-once: it is an
+approval gate, and a once-only deny would mean "acknowledge you skipped approval, then
+proceed". The note is the only key. And it keeps *no state* in `.sandbox/.gate/`. A missing
+notes directory counts as "no notes" and denies; every other read failure, and a note with no
+frontmatter block, fails open. Status is read with a regex, not YAML, to keep the module
+builtins-only.
+
 **The manifest is a compilation, not a second source of truth.**
 `buildStandardsManifest`/`writeStandardsManifest` emit `.sandbox/standards.json` (`domain →
-{applies_to, summary}` for every active non-universal standard, plus the active universal
-keys) from the same `resolveActiveStandards` output that produces the CLAUDE.md routing table.
-It cannot diverge from the table.
+{applies_to, summary}` for every active non-universal standard, the active universal keys, and
+`phase_gate` when the work type has one) from the same `resolveActiveStandards` output that
+produces the CLAUDE.md routing table. It cannot diverge from the table. `sandbox skills sync`
+recompiles it from `.sandbox/workspace.yml`'s `work_type`.
 
 **Latency.** The gate fires on every `Edit`/`Write`, so the module is deliberately
 dependency-light — node builtins only, no commander/yaml/nunjucks, nothing touching the

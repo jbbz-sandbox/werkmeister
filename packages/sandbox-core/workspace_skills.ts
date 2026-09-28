@@ -265,9 +265,6 @@ export function resolveWorkspaceActive(
     modules,
     localServices,
   );
-  // ponytail: reads workspace.yml only — a work type passed solely as an
-  // init-workspace flag or env var is not persisted, so sync falls back to
-  // no gate. Persist it in init if that turns out to matter.
   return { active, modules, workType: String(workspaceConfig["work_type"] ?? "") };
 }
 

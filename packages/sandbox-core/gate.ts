@@ -5,6 +5,11 @@
  * loading instructions in the deny reason, then allows everything after
  * (fail-open, deny-once-with-payload — §2).
  *
+ * When the manifest carries `phase_gate` (the work type's pre-implementation
+ * gate), source edits are denied *until* a matching note exists in
+ * `.sandbox/notes/`. That deny repeats and records no state, because it is
+ * an approval gate, not a delivery gate.
+ *
  * Deliberately dependency-light (node builtins only — no commander/yaml/nunjucks,
  * nothing that touches the config/YAML chain): Phase 0 measured the normal
  * `sandbox` entrypoint at 250-460ms cold, well past this design's <200ms budget
@@ -184,6 +189,83 @@ function _sorted(values: Iterable<string>): string[] {
   return [...values].sort();
 }
 
+// ---------------------------------------------------------------------------
+// Phase gate (docs/jit-context-system.md §6) — deny-until, no state.
+// ---------------------------------------------------------------------------
+
+/**
+ * The frontmatter `status:` of a note: the value, null when there is no
+ * status line, or undefined when there is no `---` block (unparseable — the
+ * caller fails open). A regex, not YAML: this module stays builtins-only.
+ */
+function _noteStatus(text: string): string | null | undefined {
+  const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  if (!block) {
+    return undefined;
+  }
+  const status = /^status:\s*["']?([^\s"'#]+)/m.exec(block[1]);
+  return status ? status[1].toLowerCase() : null;
+}
+
+/** True when a live note satisfies *gate*, or when the check cannot be made (fail-open). */
+function _phaseGateSatisfied(workspace: string, gate: Record<string, any>): boolean {
+  const note = String(gate["note"] ?? "");
+  if (!/^[a-z]+$/.test(note)) {
+    return true;
+  }
+  const want = gate["status"] ? String(gate["status"]).toLowerCase() : null;
+  const dir = path.join(workspace, ".sandbox", "notes");
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch (exc) {
+    // No notes dir yet means no notes — deny. Anything else is unreadable — allow.
+    return (exc as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+  const pattern = new RegExp(`^\\d{3}-${note}-.+\\.md$`);
+  for (const name of names) {
+    if (!pattern.test(name)) {
+      continue;
+    }
+    let text: string;
+    try {
+      text = fs.readFileSync(path.join(dir, name), "utf8");
+    } catch {
+      return true;
+    }
+    const status = _noteStatus(text);
+    if (status === undefined) {
+      return true;
+    }
+    if (status === "superseded" || status === "graduated") {
+      continue;
+    }
+    if (want === null || status === want) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function _phaseGateText(gate: Record<string, any>): string {
+  const note = String(gate["note"]);
+  if (gate["status"]) {
+    const status = String(gate["status"]);
+    return (
+      `Phase gate: no \`${note}\` note in \`.sandbox/notes/\` has \`status: ${status}\`, so ` +
+      "source edits wait for an approved design. Invoke `sb-research`, present the design to " +
+      `the user, and when they approve write \`NNN-${note}-<slug>.md\` with ` +
+      `\`status: ${status}\` recording what was approved. Then retry this edit. Edits under ` +
+      "`.sandbox/` are not gated."
+    );
+  }
+  return (
+    `Phase gate: no \`${note}\` note in \`.sandbox/notes/\` names the root cause yet. Invoke ` +
+    `\`sb-research\`, reproduce the problem, and write \`NNN-${note}-<slug>.md\` stating the ` +
+    "root cause. Then retry this edit. Edits under `.sandbox/` are not gated."
+  );
+}
+
 /**
  * The gate decision table (docs/jit-context-system.md §6). Returns a deny reason, or null to allow.
  *
@@ -210,6 +292,22 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
   }
 
   const relPath = filePath ? path.relative(workspace, filePath) : "";
+
+  // 2a. Phase gate (§6): deny-until the work type's note exists. Before the
+  // standards logic, records nothing, and never gates `.sandbox/` — the note
+  // that satisfies it must be writable.
+  const phaseGate = manifest["phase_gate"];
+  if (
+    _isDict(phaseGate) &&
+    relPath &&
+    !relPath.startsWith("..") &&
+    !path.isAbsolute(relPath) &&
+    !relPath.startsWith(".sandbox" + path.sep) &&
+    !_phaseGateSatisfied(workspace, phaseGate)
+  ) {
+    return _phaseGateText(phaseGate);
+  }
+
   const delivered = new Set<string>(state["delivered"] || []);
   const needsPhaseEntry = !state["phase_entry_delivered"];
 
