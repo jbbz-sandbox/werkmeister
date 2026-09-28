@@ -2,18 +2,24 @@
 
 Status: option B implemented — spec docs/superpowers/specs/2026-09-27-context-strategy-interface.md. The rest of this page is the exploration that chose it.
 
+## Using it
+
+Set `context_strategy: jit | icm` in `.sandbox/workspace.yml` (absent = `jit`), or pass `--context-strategy <id>` / `SANDBOX_CONTEXT_STRATEGY` to `sandbox workspace` / `sandbox init-workspace`. `jit` generates the sb-* skills, generated agents, gate manifest and SessionStart/PreToolUse hooks described below; `icm` instead writes a staged-folder pipeline — `CLAUDE.md`, `CONTEXT.md`, `BRIEF.md`, `_shared/standards.md` and `stages/NN_*/CONTEXT.md` — with no hooks, no notes and no gate.
+
+Switching an existing workspace's `context_strategy` and rerunning `init-workspace` writes the new layer but leaves the old one's files in place, with a warning naming them; pass `--prune-context` to delete them too. Only paths that are git-tracked and clean are deleted — untracked, ignored or modified paths are kept and reported instead, since git is the only way to get them back.
+
 ## What the generator does today
 
-The "context layer" is four of `initWorkspace`'s steps plus one refresh in `up`:
+The "context layer" is four of `initWorkspace`'s steps plus one refresh in `up`, now behind the strategy interface (`strategies/index.ts`) — `strategies/jit.ts` for the steps below, `strategies/icm.ts` for the ICM renderer:
 
 | Step | Writes | Code |
 |---|---|---|
-| 5b active standards | `.sandbox/standards.json` | `workspace_init.ts:902-934`, `standards.ts:531` |
-| 6 notes + CLAUDE.md | `.sandbox/notes/001-handoff-*`, `CLAUDE.md` | `:936-952`, `claude_md.ts:247` |
-| 6a skills | `.claude/skills/sb-*` | `:954-957`, `workspace_skills.ts:118` |
-| 6b agents | `.claude/agents/sb-researcher.md`, `sb-tester-*` | `:959-973`, `agent_gen.ts:177` |
-| 6c hooks | `.claude/settings.json` | `:975-977`, `hooks_gen.ts:107` |
-| `up` refresh | `.claude/settings.json` again | `lifecycle.ts:133` |
+| 5b active standards | `.sandbox/standards.json` | `strategies/jit.ts:130`, `standards.ts:531` |
+| 6 notes + CLAUDE.md | `.sandbox/notes/001-handoff-*`, `CLAUDE.md` | `strategies/jit.ts:164`, `claude_md.ts:247` |
+| 6a skills | `.claude/skills/sb-*` | `strategies/jit.ts:182`, `workspace_skills.ts:118` |
+| 6b agents | `.claude/agents/sb-researcher.md`, `sb-tester-*` | `strategies/jit.ts:187`, `agent_gen.ts:177` |
+| 6c hooks | `.claude/settings.json` | `strategies/jit.ts:197`, `hooks_gen.ts:107` |
+| `up` refresh | `.claude/settings.json` again (jit); removes it (icm) | `lifecycle.ts:133` |
 
 The same writers are reachable from `sandbox skills sync`, the SessionStart self-heal, and the MCP tools (`apps/mcp/tools.ts:489`, `:518`). `buildContext` (`notes.ts:282`) and `down` (`teardownNotes`) rewrite note frontmatter regardless. Everything else `initWorkspace` produces (worktrees, `.env`, compose, slot, `sandbox-context.md`, service map) is strategy-neutral and both experiments used it unchanged.
 
