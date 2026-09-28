@@ -235,7 +235,7 @@ Rendered on the fly from the standards tree by `packages/sandbox-core/skill_gen.
 
 | Skill | Phase | What it loads / does |
 |-------|-------|----------------------|
-| `sb-research` | research/planning | loads nothing; establishes scope, givens and deliverable shape with the user; spawns the read-only `sb-researcher` agent, which carries the investigation method |
+| `sb-research` | research/planning | loads nothing; establishes scope, givens and deliverable shape with the user; spawns the read-only `sb-researcher` agent, which carries the investigation method. `sb-research` ends by work type: architectural work ends in a `decision` note with `status: decided` written only on the user's explicit approval, bounded work in a `finding` naming the root cause, a spike in findings only. |
 | `sb-implement` | coding | universal base (`ponytail` plugin + comments + engineering) at entry; reads routing table + notes; loads Active-row standards matching files about to be edited; re-checks per new file type; recitation rule (restate the governing rule at the edit); output-redirect rule (pipe verbose check output to a file, read back only failures); capture-as-you-go notes contract; precedence tiers |
 | `sb-test` | testing | loads nothing; spawns `sb-tester-<archetype>` agent(s), which run the unit tests and a guarded proxy smoke check; names the plugin's `sandbox-feature-test` skill for headed browser runs |
 | `sb-review` | review | universal base + standards covering files in the diff; inline anti-pattern one-liners are the checklist; decision-note violations are findings; precedence tiers as severity ladder |
@@ -248,7 +248,12 @@ Rendered on the fly from the standards tree by `packages/sandbox-core/skill_gen.
 `packages/sandbox-core/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
 contains the Active table (`| Standard | Skill | Loads on |`, where "Loads on" = `applies_to`
 globs or "any code edit") and the by-phase table (`| Phase | Invoke first | Loads |`), which is
-the only statement of the phase chain. The rest of the file is Current Task, Layout, the
+the only statement of the phase chain. The table's rows come from the workspace's `work_type` (`workspace_prompts.ts::WORK_TYPE_PHASES`,
+read through `planFor`): a `refactor` has no research row, a `spike` has only research, and
+`bugfix`/`incident` skip review. A known work type also gets a **Work type** line naming its
+path (spike / bounded / architectural) and phase sequence, and a **Gate** line naming the note
+that must exist before the first source edit (§6). An empty or unknown work type renders all
+five rows and no gate. The rest of the file is Current Task, Layout, the
 two-column Routing table (a repo's own `CLAUDE.md` when it exists; `.sandbox/sandbox-context.md`
 for everything about the running feature — URL, `X-Feature` cookie, ports, lifecycle, health
 checks; `contract` notes for multi-repo workspaces), the Context Budget rule (≤3 files/step), and
@@ -331,9 +336,12 @@ type: finding | decision | attempt | handoff | contract
 phase: research | implement | test | review
 author: main | <subagent name>
 refs: [src/paginate.ts, frontend]
-status: open | superseded | graduated
+status: open | decided | superseded | graduated
 ---
 ```
+
+`decided` marks a `decision` note as user-approved. `openDecisions()` keeps decided notes, so
+`sandbox notes context` re-injects the approved spec every session.
 
 - **finding** — research output: root cause, evidence with `file:line` refs, proposed fix.
 - **decision** — settled choices + why. Workspace-scoped "don't re-litigate." Binding.

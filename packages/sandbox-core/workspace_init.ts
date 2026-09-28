@@ -60,7 +60,7 @@ import {
 import {
   _INPUT_FIELDS,
   _WORKSPACE_CONFIG_NAMES,
-  WORK_TYPE_PHASES,
+  planFor,
   expandUserPath,
   loadConfigFile,
   loadSandboxServiceConfigs,
@@ -677,7 +677,7 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
     return;
   }
   const wt = workType.trim().toLowerCase();
-  const [phase, firstSkill] = WORK_TYPE_PHASES[wt] ?? ["research", "invoke `sb-research` first"];
+  const plan = planFor(wt);
   try {
     const directory = notesDir(workspaceRoot);
     const handoffs = listNotes(workspaceRoot, true).filter((note) => note.type === "handoff");
@@ -692,7 +692,7 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
     const lines = [
       "---",
       "type: handoff",
-      `phase: ${phase}`,
+      `phase: ${plan.phases[0]}`,
       "author: workspace-creation",
       "refs: []",
       "status: open",
@@ -702,7 +702,7 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
       "",
     ];
     if (wt) {
-      lines.push(`This workspace is a ${wt} — ${firstSkill}.`, "");
+      lines.push(`This workspace is a ${wt} — ${plan.hint}.`, "");
     }
     lines.push(
       "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
@@ -837,7 +837,7 @@ export async function initWorkspace(
       localServices,
     );
     activeStandards = active;
-    standardsSection = buildStandardsRoutingSection(active, modules, repoNames);
+    standardsSection = buildStandardsRoutingSection(active, modules, repoNames, inputs["work_type"] ?? "");
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
     writeStandardsManifest(workspaceRoot, buildStandardsManifest(active, modules));

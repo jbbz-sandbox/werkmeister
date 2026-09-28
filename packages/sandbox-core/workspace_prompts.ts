@@ -286,20 +286,69 @@ function scrapeJiraId(workspaceRoot: string): string {
   return "";
 }
 
-// Work type → (seeded note phase, first entry-skill sentence).
-export const WORK_TYPE_PHASES: Record<string, [string, string]> = {
-  feature: ["research", "invoke `sb-research` first to explore and spec the work"],
-  bugfix: [
-    "research",
-    "invoke `sb-research` first to reproduce and locate the root cause before changing code",
-  ],
-  refactor: [
-    "implement",
-    "invoke `sb-implement` first — the scope is known and standards matter most",
-  ],
-  spike: ["research", "invoke `sb-research` first to frame the questions this spike must answer"],
-  incident: ["research", "invoke `sb-research` first to diagnose before changing anything"],
+export type Phase = "research" | "implement" | "test" | "review" | "pr";
+export type PhasePath = "spike" | "bounded" | "architectural";
+
+/** What must exist in .sandbox/notes/ before the first source edit. */
+export interface PhaseGate {
+  note: "decision" | "finding";
+  status?: "decided"; // absent = any non-superseded note of that type
+}
+
+export interface WorkTypePlan {
+  path: PhasePath;
+  phases: Phase[]; // rendered in this order
+  gate: PhaseGate | null; // null = no phase gate (standards gate still applies)
+  hint: string; // one sentence for the seeded handoff
+}
+
+// Work type → the JIT phases, the first phase's exit artifact, and the gate
+// that artifact satisfies (docs/jit-context-system.md §5.3, §6).
+export const WORK_TYPE_PHASES: Record<string, WorkTypePlan> = {
+  feature: {
+    path: "architectural",
+    phases: ["research", "implement", "test", "review", "pr"],
+    gate: { note: "decision", status: "decided" },
+    hint: "invoke `sb-research` first — it ends in a `decision` note the user approves before any code",
+  },
+  bugfix: {
+    path: "bounded",
+    phases: ["research", "implement", "test", "pr"],
+    gate: { note: "finding" },
+    hint: "invoke `sb-research` first to reproduce and write the root cause to a `finding` note before changing code",
+  },
+  incident: {
+    path: "bounded",
+    phases: ["research", "implement", "test", "pr"],
+    gate: { note: "finding" },
+    hint: "invoke `sb-research` first to diagnose; the `finding` note is the incident record",
+  },
+  refactor: {
+    path: "bounded",
+    phases: ["implement", "test", "review", "pr"],
+    gate: null,
+    hint: "invoke `sb-implement` first — the scope is known and standards matter most",
+  },
+  spike: {
+    path: "spike",
+    phases: ["research"],
+    gate: null,
+    hint: "invoke `sb-research` first to frame the questions; anything built is throwaway and there is no PR",
+  },
 };
+
+export const DEFAULT_PLAN: WorkTypePlan = {
+  path: "architectural",
+  phases: ["research", "implement", "test", "review", "pr"],
+  gate: null,
+  hint: "invoke `sb-research` first",
+};
+
+/** The plan for a free-text work type; unknown (or "Other") → {@link DEFAULT_PLAN}. */
+export function planFor(workType: string): WorkTypePlan {
+  const key = workType.trim().toLowerCase();
+  return Object.hasOwn(WORK_TYPE_PHASES, key) ? WORK_TYPE_PHASES[key] : DEFAULT_PLAN;
+}
 const WORK_TYPES: string[] = Object.keys(WORK_TYPE_PHASES);
 
 export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
@@ -329,8 +378,8 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "work_type",
     label: "Work type",
     help:
-      "What kind of work this is; seeds the first-phase handoff note " +
-      "(research vs implement) for the workspace's first session.",
+      "What kind of work this is; selects the phase sequence and the " +
+      "pre-implementation gate in CLAUDE.md.",
     acceptEmpty: false,
     pattern: "^(" + Object.keys(WORK_TYPE_PHASES).join("|") + ")$",
     defaultFn: () => "feature",

@@ -71,3 +71,42 @@ test("CLAUDE.md carries no Feature Testing section", () => {
     assert.match(out, /notes-conventions\.md/, "the Notes section still points at the conventions doc");
   });
 });
+
+const ACTIVE = ["comments", "engineering", "ui"];
+const section = (workType) => buildStandardsRoutingSection(ACTIVE, MODULES, ["demo"], workType);
+const byPhase = (out) => out.slice(out.indexOf("**By phase**"));
+
+test("refactor has no research row and no note gate", () => {
+  const out = section("refactor");
+  assert.doesNotMatch(byPhase(out), /`sb-research`/);
+  assert.match(out, /\*\*Work type:\*\* refactor \(bounded path\) — phases: implement → test → review → pr\./);
+  assert.doesNotMatch(out, /Gate:[^\n]*note/);
+});
+
+test("spike has no implement, review, or PR row", () => {
+  const out = byPhase(section("spike"));
+  assert.doesNotMatch(out, /`sb-implement`|`sb-review`|`sb-pr`/);
+  assert.match(section("spike"), /Anything built is throwaway/);
+});
+
+test("feature names the decided gate; bugfix names the root cause", () => {
+  assert.match(section("feature"), /`decision` note in `\.sandbox\/notes\/` reads `status: decided`/);
+  assert.match(section("bugfix"), /`finding` note in `\.sandbox\/notes\/` names the root cause/);
+  assert.doesNotMatch(byPhase(section("bugfix")), /^\| review \(/m, "the pr row still names sb-review; the review row is gone");
+});
+
+test("the active table is identical across work types", () => {
+  const active = (out) => out.slice(0, out.indexOf("**By phase**"));
+  const strip = (out) => active(out).replace(/\*\*Work type:\*\*[^\n]*\n[^\n]*\n\n/, "");
+  for (const wt of ["feature", "bugfix", "refactor", "spike", "incident"]) {
+    assert.equal(strip(section(wt)), active(section("")), wt);
+  }
+});
+
+test("an empty or unknown work type renders today's section exactly", () => {
+  const today = buildStandardsRoutingSection(ACTIVE, MODULES, ["demo"]);
+  assert.equal(section(""), today);
+  assert.equal(section("chore"), today);
+  assert.doesNotMatch(today, /Work type/);
+  assert.equal((byPhase(today).match(/^\| [^|]+ \| `sb-/gm) ?? []).length, 5);
+});
