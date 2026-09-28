@@ -49,6 +49,7 @@
     "./test_run": "./dist/test_run.js",
     "./standards": "./dist/standards.js",
     "./status": "./dist/status.js",
+    "./strategies": "./dist/strategies/index.js",
     "./telepresence": "./dist/telepresence.js",
     "./web_servers": "./dist/web_servers.js",
     "./workspace_init": "./dist/workspace_init.js",

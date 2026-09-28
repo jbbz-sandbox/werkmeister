@@ -15,6 +15,7 @@
  */
 
 import { loadArchetypes } from "./config.js";
+import { loadSandboxServiceConfigs } from "./workspace_prompts.js";
 
 function isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -122,6 +123,29 @@ export function resolvePresentArchetypes(
     result[name] = [...new Set(present[name])].sort();
   }
   return result;
+}
+
+/**
+ * The archetypes present in a workspace, resolved from its repos and meta.
+ *
+ * Loads services.yaml/repos config and the archetype registry itself — the
+ * one place that does, so `jit.init` and `initWorkspace`'s post-strategy 6d
+ * step both call this instead of each re-running the resolve-present block
+ * (docs/context-strategies.md).
+ */
+export function presentArchetypes(
+  repos: Array<[string, string]>,
+  meta: Record<string, string>,
+): Record<string, string[]> {
+  const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
+  const localServices = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
+  return resolvePresentArchetypes(
+    repos.map(([name]) => name),
+    servicesConfig,
+    reposConfig,
+    localServices,
+    loadArchetypes(),
+  );
 }
 
 /**
