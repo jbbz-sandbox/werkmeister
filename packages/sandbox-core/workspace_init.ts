@@ -30,45 +30,31 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { buildTesterSpecs, writeWorkspaceAgents } from "./agent_gen.js";
-import { resolvePresentArchetypes } from "./archetypes.js";
-import { buildClaudeMd, buildStandardsRoutingSection } from "./claude_md.js";
+import { presentArchetypes } from "./archetypes.js";
 import { Colors } from "./colors.js";
 import { expandUser, getReposRoot, loadArchetypes, loadMcpServers, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
-import { loadFeatureRouters, type FeatureRouter } from "./feature_routing.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
-import { loadPaths, standardsDirPath, standardsDirProblem } from "./global_config.js";
-import { writeWorkspaceHooks } from "./hooks_gen.js";
+import { loadPaths } from "./global_config.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
   validateArchetypeMcpServers,
   writeWorkspaceMcp,
 } from "./mcp_gen.js";
-import { listNotes, nextNoteNumber, noteFilename, notesDir, type Note } from "./notes.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
-import {
-  buildStandardsManifest,
-  loadStandardsModules,
-  resolveActiveStandards,
-  validateServiceStandards,
-  writeStandardsManifest,
-} from "./standards.js";
+import { STRATEGY_IDS, parseStrategyId, reportLeftovers, strategyById } from "./strategies/index.js";
 import {
   _INPUT_FIELDS,
   _WORKSPACE_CONFIG_NAMES,
-  planFor,
   expandUserPath,
-  loadConfigFile,
   loadSandboxServiceConfigs,
   loadWorkspaceConfig,
   resolveInputs,
   slugToTask,
 } from "./workspace_prompts.js";
-import { writeWorkspaceSkills } from "./workspace_skills.js";
 import {
   createWorktree,
   removeWorktree,
@@ -607,117 +593,6 @@ function warnIfExisting(claudeMdPath: string): void {
   }
 }
 
-const _LEGACY_HANDOFF_PLACEHOLDER = "*No handoff notes yet.*";
-
-/** Rescue a filled-in legacy `## Handoff Notes` section into a note. */
-function salvageLegacyHandoffNotes(workspaceRoot: string, claudeMdPath: string): void {
-  if (!fs.existsSync(claudeMdPath)) {
-    return;
-  }
-  try {
-    const existing = fs.readFileSync(claudeMdPath, "utf8");
-    const match = /^## Handoff Notes\n(?<body>[\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(existing);
-    if (!match) {
-      return;
-    }
-    const body = (match.groups!["body"] ?? "").trim();
-    if (!body || body.includes(_LEGACY_HANDOFF_PLACEHOLDER)) {
-      return;
-    }
-
-    const directory = notesDir(workspaceRoot);
-    fs.mkdirSync(directory, { recursive: true });
-    const filename = noteFilename(nextNoteNumber(directory), "contract", "migrated-handoff-notes");
-    fs.writeFileSync(
-      path.join(directory, filename),
-      "---\n" +
-        "type: contract\n" +
-        "phase: implement\n" +
-        "author: main\n" +
-        "refs: []\n" +
-        "status: open\n" +
-        "---\n\n" +
-        "Salvaged from the legacy CLAUDE.md `## Handoff Notes` section on regen.\n\n" +
-        `${body}\n`,
-    );
-    success(`Salvaged legacy Handoff Notes → .sandbox/notes/${filename}`);
-  } catch (exc) {
-    warn(`Could not salvage legacy Handoff Notes: ${(exc as Error).message}`);
-  }
-}
-
-/**
- * A handoff seeded by an older CLI that had no prompt to carry. It blocks
- * nothing: the next init that has a prompt supersedes it (notes-conventions.md
- * rule 1).
- */
-function isPlaceholderHandoff(note: Note): boolean {
-  return (
-    note.type === "handoff" &&
-    note.frontmatter["author"] === "workspace-creation" &&
-    !note.body.includes("Seeded from `starting_prompt`")
-  );
-}
-
-function supersedeNote(note: Note): void {
-  const text = fs.readFileSync(note.path, "utf8");
-  fs.writeFileSync(note.path, text.replace(/^status:.*$/m, "status: superseded"));
-}
-
-/**
- * Seed the workspace's first handoff note from `starting_prompt`.
- *
- * Writes nothing without a prompt — the work-type line alone is already in
- * CLAUDE.md's by-phase table, and a placeholder used to block the real prompt
- * forever. Exported for its tests.
- */
-export function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string): void {
-  const prompt = startingPrompt.trim();
-  if (!prompt) {
-    return;
-  }
-  const wt = workType.trim().toLowerCase();
-  const plan = planFor(wt);
-  try {
-    const directory = notesDir(workspaceRoot);
-    const handoffs = listNotes(workspaceRoot, true).filter((note) => note.type === "handoff");
-    if (handoffs.some((note) => !isPlaceholderHandoff(note))) {
-      return;
-    }
-    for (const placeholder of handoffs) {
-      supersedeNote(placeholder);
-    }
-    fs.mkdirSync(directory, { recursive: true });
-    const filename = noteFilename(nextNoteNumber(directory), "handoff", "starting-prompt");
-    const lines = [
-      "---",
-      "type: handoff",
-      `phase: ${plan.phases[0]}`,
-      "author: workspace-creation",
-      "refs: []",
-      "status: open",
-      "---",
-      "",
-      "# Handoff: workspace creation",
-      "",
-    ];
-    if (wt) {
-      lines.push(`This workspace is a ${wt} — ${plan.hint}.`, "");
-    }
-    lines.push(
-      "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
-      "workspace was created. The task below has not begun — confirm",
-      "direction with the user before executing it.",
-      "",
-      prompt,
-    );
-    fs.writeFileSync(path.join(directory, filename), lines.join("\n") + "\n");
-    success(`Seeded starting handoff → .sandbox/notes/${filename}`);
-  } catch (exc) {
-    warn(`Could not seed starting handoff: ${(exc as Error).message}`);
-  }
-}
-
 /** Log the resolved task title and any parsed workspace metadata. */
 function logMeta(task: string, meta: Record<string, string>): void {
   info(`Task: ${task}`);
@@ -758,6 +633,8 @@ export async function initWorkspace(
   // 2. Resolve generic inputs from the config file (CLI flag > SANDBOX_* env >
   //    .sandbox/workspace.yml > existing .env).
   const inputs = resolveInputs(args, workspaceRoot);
+  // The layer this run writes, validated before 2a persists it.
+  const strategy = strategyById(parseStrategyId(inputs["context_strategy"]));
   const hasConfig = hasWorkspaceConfig(workspaceRoot, (args["config_file"] as string | null) ?? null);
   if (!hasConfig && !inputs["feature"]) {
     fail(
@@ -816,100 +693,31 @@ export async function initWorkspace(
 
   logMeta(task, meta);
 
-  // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
-  let standardsSection: string | null = null;
-  let activeStandards: string[] | null = null;
-  const modules = loadStandardsModules();
-  if (Object.keys(modules).length) {
-    const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
-    for (const err of validateServiceStandards(servicesConfig, modules)) {
-      warn(err);
-    }
-    const workspaceConfig = loadConfigFile(workspaceRoot, (args["config"] as string | null) ?? null);
-    const repoNames = repos.map(([name]) => name);
-    const localServices = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
-    const [active] = resolveActiveStandards(
-      repoNames,
-      servicesConfig,
-      reposConfig,
-      workspaceConfig,
-      modules,
-      localServices,
-    );
-    activeStandards = active;
-    standardsSection = buildStandardsRoutingSection(active, modules, repoNames, inputs["work_type"] ?? "");
-    info(`Standards routing: active = ${active.join(", ")}`);
-    // PreToolUse standards gate manifest.
-    writeStandardsManifest(
-      workspaceRoot,
-      buildStandardsManifest(active, modules, planFor(inputs["work_type"] ?? "").gate),
-    );
-  } else {
-    // Not fatal — a workspace without standards still works — but it is a
-    // materially degraded one (no routing table, no sb-*-standard skills, no
-    // gate manifest), and it used to happen in silence.
-    warn(
-      standardsDirProblem() ||
-        `no standard modules found in ${standardsDirPath()} — this workspace gets no ` +
-          `standards routing, skills, or edit-time gate`,
-    );
-  }
-
-  // 6. Write CLAUDE.md. The notes directory is created; legacy free-text Handoff
-  // Notes content is salvaged first, then the starting prompt / work type is
-  // seeded as the first handoff note if the workspace has none yet.
-  fs.mkdirSync(notesDir(workspaceRoot), { recursive: true });
-  salvageLegacyHandoffNotes(workspaceRoot, claudeMdPath);
-  seedStartingHandoff(workspaceRoot, inputs["starting_prompt"] ?? "", inputs["work_type"] ?? "");
-  const content = buildClaudeMd(
-    workspaceName,
+  // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
+  // beside it — belongs to the workspace's strategy (docs/context-strategies.md).
+  strategy.init({
     workspaceRoot,
+    workspaceName,
     repos,
     task,
     meta,
-    standardsSection,
-  );
-  fs.writeFileSync(claudeMdPath, content);
-  success(`Wrote ${claudeMdPath}`);
+    inputs,
+    configOverride: (args["config"] as string | null) ?? null,
+  });
 
-  // 6a. Projected sb-* skills into .claude/skills/.
-  for (const skillPath of writeWorkspaceSkills(workspaceRoot, null, null, activeStandards)) {
-    success(`Wrote ${skillPath}`);
+  // The config field read at the top of this run is already the new value when
+  // the user just edited workspace.yml — there is no reliable "previous
+  // strategy" to compare against. Instead, check every OTHER registered
+  // strategy for paths it left behind that the active one does not also own.
+  for (const id of STRATEGY_IDS) {
+    if (id === strategy.id) continue;
+    reportLeftovers(workspaceRoot, strategyById(id), strategy, Boolean(args["prune_context"]));
   }
 
-  // 6b. Generated subagents: sb-researcher plus one sb-tester-<archetype> per
-  // archetype present. Routers feed the tester's proxy smoke check; a machine
-  // with no ingress config gets testers without one, never a failed init.
+  // 6d needs the present archetypes whichever strategy ran.
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
   const archetypes = loadArchetypes();
-  const present = resolvePresentArchetypes(
-    repos.map(([name]) => name),
-    servicesConfig,
-    reposConfig,
-    (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s),
-    archetypes,
-  );
-  let routers: Record<string, FeatureRouter> = {};
-  try {
-    routers = loadFeatureRouters(servicesConfig);
-  } catch {
-    routers = {};
-  }
-  const testerSpecs = buildTesterSpecs(
-    present,
-    servicesConfig,
-    archetypes,
-    (meta["FEATURE"] ?? "").trim(),
-    routers,
-    (meta["TEST_PATH"] ?? "").trim(),
-  );
-  for (const agentPath of writeWorkspaceAgents(workspaceRoot, testerSpecs)) {
-    success(`Wrote ${agentPath}`);
-  }
-
-  // 6c. SessionStart hook. Merges into settings.json, never clobbers.
-  const hooksPath = writeWorkspaceHooks(workspaceRoot);
-  success(`Wrote ${hooksPath}`);
+  const present = presentArchetypes(repos, meta, servicesConfig, reposConfig, archetypes);
 
   // 6d. MCP enablement: union the present archetypes' mcp_servers into .mcp.json.
   const mcpDefinitions = loadMcpServers();
@@ -1034,6 +842,10 @@ export async function provisionWorkspace(
         "./.sandbox/workspace.yml, or run interactively).",
     );
   }
+
+  // Validate before creating the worktree or writing workspace.yml below — an
+  // unknown value should fail fast rather than leave a half-made workspace.
+  parseStrategyId(resolved.context_strategy);
 
   const featureSlug = feature.toLowerCase();
   const jiraId = (resolved.jira_id ?? "").trim() || null;

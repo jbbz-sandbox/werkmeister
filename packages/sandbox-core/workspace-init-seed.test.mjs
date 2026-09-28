@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { listNotes } from "./dist/notes.js";
-import { seedStartingHandoff } from "./dist/workspace_init.js";
+import { seedStartingHandoff } from "./dist/strategies/jit.js";
 
 const PLACEHOLDER = `---
 type: handoff

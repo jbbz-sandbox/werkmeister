@@ -1,18 +1,24 @@
 /**
- * sandbox hooks gate — PreToolUse standards gate
- * (docs/jit-context-system.md §6).
+ * sandbox hooks gate — PreToolUse gate (docs/jit-context-system.md §6).
  *
- * CLI-registered path (`sandbox hooks gate`; manual runs, tests). The actual
- * per-edit hook installed in a workspace's `.claude/settings.json` is
- * special-cased by the `./sandbox` wrapper to exec the gate module directly,
- * bypassing the normal entrypoint — the gate module is dependency-light so
- * both paths run the identical logic.
+ * CLI-registered path (`sandbox hooks gate`; manual runs, tests), dispatched to
+ * the workspace's strategy. The per-edit hook jit installs is special-cased by
+ * the `./sandbox` wrapper to exec the gate module directly, bypassing this —
+ * only jit installs that hook, so the fast path stays jit's.
  */
 
-import { main as gateMain } from "sandbox-core/gate";
+import { findWorkspaceRoot } from "sandbox-core/gate";
+import { strategyFor } from "sandbox-core/strategies";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
-  if (args.action === "gate") {
-    gateMain();
+  if (args.action !== "gate") {
+    return;
   }
+  let strategy;
+  try {
+    strategy = strategyFor(findWorkspaceRoot(process.cwd()) ?? process.cwd());
+  } catch {
+    return; // a hook must never block the tool call
+  }
+  strategy.gate();
 }

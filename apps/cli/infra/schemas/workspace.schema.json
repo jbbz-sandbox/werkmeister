@@ -18,6 +18,11 @@
       "type": "string",
       "description": "Kind of work (e.g. feature, bugfix). Drives workspace scaffolding."
     },
+    "context_strategy": {
+      "type": "string",
+      "enum": ["jit", "icm"],
+      "description": "Which context layer init-workspace generates and up refreshes."
+    },
     "repos": {
       "type": "string",
       "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `sandbox init-workspace` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."

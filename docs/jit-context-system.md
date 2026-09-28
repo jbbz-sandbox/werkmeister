@@ -202,6 +202,8 @@ the task as given is raised to the user, never silently resolved.
 
 ## 5. Delivery artifacts
 
+These artifacts are written by the `jit` context strategy (`packages/sandbox-core/strategies/jit.ts`); `context_strategy` in `workspace.yml` selects it, and it is the default.
+
 Everything below is **generated or copied into the workspace** at `sandbox init-workspace` —
 nothing is distributed through a plugin. Projection scopes the skills to the sessions they
 apply to and kills plugin-refresh lag: init renders fresh from this repo, so a standards edit
@@ -531,6 +533,8 @@ locations; (2) re-express the SessionStart and PreToolUse hooks in the target's 
 the target — behavioral results are harness-specific and must be re-earned, not assumed. If
 the target supports R7, deliver each rule with the precedence directive embedded (harness-7:
 content without precedence does not produce compliance).
+
+`packages/sandbox-core/strategies/icm.ts` is a worked example of R2/R3 with no hooks at all: the `icm` strategy delivers the same standards through a staged-folder pipeline the agent walks by itself.
 
 ## 12. Conventions when extending
 

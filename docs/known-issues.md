@@ -460,8 +460,8 @@ Left over from the final review of the work-type phase gate
 `composeDown()` returns false when `docker compose down` fails (true only for a feature with no
 compose file, which it now checks itself), and `lifecycle.down`, `sandbox remove`, and
 `sandbox clean` warn on it. The volumes line reads "Per-feature Docker volumes will be removed".
-`lifecycle.up` calls `writeWorkspaceHooks(workspace)` on every `sandbox up`, so a stale hook is
-reconciled the next time the feature starts.
+`lifecycle.up` calls the workspace strategy's `refresh` on every `sandbox up` (which for `jit`
+re-merges the hooks), so a stale hook is reconciled the next time the feature starts.
 
 Code that used to be a CLI command and is now a library function still reads like a command
 in three places:

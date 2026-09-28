@@ -32,3 +32,13 @@ test("a feature that is not a slug aborts with the name it rejected", async () =
   assert.match(text, /Workspace name 'not a slug' is not a valid slug/);
   assert.equal(text.trimEnd().split("\n").length, 1);
 });
+
+test("an unknown context_strategy aborts before the workspace dir is created", async () => {
+  const { err, text } = await abort(() =>
+    provisionWorkspace({ feature: "demo", context_strategy: "bogus" }),
+  );
+  assert.equal(err.code, "UNKNOWN_CONTEXT_STRATEGY");
+  assert.match(err.message, /'bogus'.*jit, icm/);
+  // Rejected before touching the filesystem — nothing to print.
+  assert.equal(text, "");
+});

@@ -54,9 +54,9 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
 } from "./generate.js";
-import { writeWorkspaceHooks } from "./hooks_gen.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { info, raw, success, warn } from "./reporter.js";
+import { strategyFor } from "./strategies/index.js";
 import {
   getSecretsPath,
   loadSecrets,
@@ -127,10 +127,10 @@ export async function up(
   const localServices = readServicesFromWorkspace(workspace);
   requireSecrets(servicesConfig, localServices);
 
-  // init-workspace is otherwise the only writer, so a workspace created before
-  // a hook-template change kept the stale hook until someone re-ran it by hand.
-  // The merge is idempotent and never clobbers a hand-added entry.
-  writeWorkspaceHooks(workspace);
+  // Each strategy repairs its own layer: jit re-merges its hooks (a workspace
+  // created before a hook-template change otherwise keeps the stale one), icm
+  // strips any a pre-strategy `up` installed.
+  strategyFor(workspace).refresh(workspace);
 
   info("Allocating feature slot...");
   const preferredSlot = readSlotFromWorkspace(workspace);

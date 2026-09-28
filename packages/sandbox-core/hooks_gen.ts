@@ -138,3 +138,52 @@ export function writeWorkspaceHooks(workspaceRoot: string): string {
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
   return settingsPath;
 }
+
+/**
+ * Remove every sandbox-managed hook entry from `.claude/settings.json`,
+ * keeping hand-added ones. When nothing else is left, the file goes too, and
+ * `.claude/` if that empties it. Returns the removed commands. Unparseable
+ * JSON or an unexpected shape is left untouched — the writer's doctrine.
+ */
+export function removeWorkspaceHooks(workspaceRoot: string): string[] {
+  const settingsPath = path.join(workspaceRoot, ".claude", "settings.json");
+  let settings: any;
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  } catch {
+    return [];
+  }
+  const hooks = settings?.["hooks"];
+  if (typeof hooks !== "object" || hooks === null || Array.isArray(hooks)) {
+    return [];
+  }
+  const removed: string[] = [];
+  for (const [event, marker] of [
+    ["SessionStart", _HOOK_MARKER],
+    ["PreToolUse", _GATE_MARKER],
+  ] as const) {
+    const entries = hooks[event];
+    if (!Array.isArray(entries)) continue;
+    const kept = entries.filter((entry) => !_isManaged(entry, marker));
+    for (const entry of entries) {
+      if (!kept.includes(entry)) removed.push(...entry["hooks"].map((h: any) => String(h["command"])));
+    }
+    if (kept.length) hooks[event] = kept;
+    else delete hooks[event];
+  }
+  if (!removed.length) {
+    return [];
+  }
+  if (!Object.keys(hooks).length) delete settings["hooks"];
+  if (Object.keys(settings).length) {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+  } else {
+    fs.rmSync(settingsPath);
+    try {
+      fs.rmdirSync(path.dirname(settingsPath));
+    } catch {
+      // .claude/ holds something else — keep it
+    }
+  }
+  return removed;
+}

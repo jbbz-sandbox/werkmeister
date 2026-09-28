@@ -42,6 +42,11 @@ import { Argument, Command, Option } from "commander";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
+// `./strategies/types` isn't its own package export, and `./strategies`
+// pulls in the registry (fs/proc/reporter/jit/icm) — accepted here since
+// sandbox-core is already this CLI's core dependency and every command
+// module loads far more of it on demand.
+import { STRATEGY_IDS } from "sandbox-core/strategies";
 
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
 // config loaders.
@@ -501,6 +506,13 @@ const SPECS: CommandSpec[] = [
             "Kind of work; seeds the first-phase handoff note. Passed through to init-workspace.",
           ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
         )
+        .addOption(
+          new Option(
+            "--context-strategy <id>",
+            "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
+              "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
+          ).choices([...STRATEGY_IDS]),
+        )
         .option(
           "--print-prompts",
           "Emit the interactive prompt definitions as JSON on stdout (shared " +
@@ -536,6 +548,7 @@ const SPECS: CommandSpec[] = [
       description: o.description ?? null,
       starting_prompt: o.startingPrompt ?? null,
       work_type: o.workType ?? null,
+      context_strategy: o.contextStrategy ?? null,
       print_prompts: Boolean(o.printPrompts),
       print_form_schema: Boolean(o.printFormSchema),
       browser_form: Boolean(o.browserForm),
@@ -678,12 +691,24 @@ const SPECS: CommandSpec[] = [
               "(env: SANDBOX_WORK_TYPE; config: work_type).",
           ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
         )
+        .addOption(
+          new Option(
+            "--context-strategy <id>",
+            "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
+              "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
+          ).choices([...STRATEGY_IDS]),
+        )
         .option(
           "--config <path>",
           "Path to a YAML config file (JSONC/JSON also accepted). Defaults " +
             "to <workspace>/.sandbox/workspace.yml; legacy workspace.yaml / " +
             "workspace.jsonc / workspace.json are migrated on next write (env: " +
             "SANDBOX_WORKSPACE_CONFIG).",
+        )
+        .option(
+          "--prune-context",
+          "After a context_strategy change, delete the previous strategy's files that git " +
+            "tracks unmodified (anything else is kept and reported).",
         )
         .option(
           "--print-prompts",
@@ -712,7 +737,9 @@ const SPECS: CommandSpec[] = [
       description: o.description ?? null,
       starting_prompt: o.startingPrompt ?? null,
       work_type: o.workType ?? null,
+      context_strategy: o.contextStrategy ?? null,
       config_file: o.config ?? null,
+      prune_context: Boolean(o.pruneContext),
       print_prompts: Boolean(o.printPrompts),
       print_form_schema: Boolean(o.printFormSchema),
     }),

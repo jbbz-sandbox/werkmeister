@@ -125,6 +125,33 @@ export function resolvePresentArchetypes(
 }
 
 /**
+ * The archetypes present in a workspace, resolved from its repos and meta.
+ *
+ * Takes the already-loaded config rather than reading it itself — `jit.init`
+ * and `initWorkspace`'s post-strategy 6d step each load services.yaml/repos
+ * config and the archetype registry once (for their own other needs) and
+ * pass those same values in, so the resolve-present block exists once
+ * without either caller's config load happening twice
+ * (docs/context-strategies.md).
+ */
+export function presentArchetypes(
+  repos: Array<[string, string]>,
+  meta: Record<string, string>,
+  servicesConfig: Record<string, any>,
+  reposConfig: Record<string, any>,
+  archetypes: Record<string, any>,
+): Record<string, string[]> {
+  const localServices = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
+  return resolvePresentArchetypes(
+    repos.map(([name]) => name),
+    servicesConfig,
+    reposConfig,
+    localServices,
+    archetypes,
+  );
+}
+
+/**
  * Return error strings for archetype drift in services.yaml.
  *
  * An unknown reference means the registry and a service entry have
