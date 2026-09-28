@@ -23,6 +23,7 @@ import { loadReposConfig, loadServices } from "./config.js";
 import type { PromptSpec } from "./global_config.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { info, warn } from "./reporter.js";
+import { STRATEGY_IDS } from "./strategies/types.js";
 
 function isDir(p: string): boolean {
   try {
@@ -107,6 +108,7 @@ export function loadWorkspaceConfig(p: string): any {
 export const _INPUT_FIELDS: ReadonlyArray<[string, string, string]> = [
   ["feature", "SANDBOX_FEATURE", "feature"],
   ["work_type", "SANDBOX_WORK_TYPE", "work_type"],
+  ["context_strategy", "SANDBOX_CONTEXT_STRATEGY", "context_strategy"],
   ["repos", "SANDBOX_REPOS", "repos"],
   ["services", "SANDBOX_SERVICES", "services"],
   ["jira_id", "SANDBOX_JIRA_ID", "jira_id"],
@@ -335,6 +337,16 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     pattern: "^(" + Object.keys(WORK_TYPE_PHASES).join("|") + ")$",
     defaultFn: () => "feature",
     choicesFn: () => [...WORK_TYPES],
+  },
+  {
+    key: "context_strategy",
+    label: "Context strategy",
+    help:
+      "Which context layer init-workspace generates: jit (sb-* skills, hooks, notes) " +
+      "or icm (staged folders the agent walks by itself).",
+    pattern: "^(" + STRATEGY_IDS.join("|") + ")$",
+    defaultFn: () => STRATEGY_IDS[0],
+    choicesFn: () => [...STRATEGY_IDS],
   },
   {
     key: "services",

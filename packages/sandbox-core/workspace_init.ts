@@ -45,7 +45,7 @@ import {
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
-import { strategyFor } from "./strategies/index.js";
+import { parseStrategyId, strategyById } from "./strategies/index.js";
 import {
   _INPUT_FIELDS,
   _WORKSPACE_CONFIG_NAMES,
@@ -721,6 +721,8 @@ export async function initWorkspace(
   // 2. Resolve generic inputs from the config file (CLI flag > SANDBOX_* env >
   //    .sandbox/workspace.yml > existing .env).
   const inputs = resolveInputs(args, workspaceRoot);
+  // The layer this run writes, validated before 2a persists it.
+  const strategy = strategyById(parseStrategyId(inputs["context_strategy"]));
   const hasConfig = hasWorkspaceConfig(workspaceRoot, (args["config_file"] as string | null) ?? null);
   if (!hasConfig && !inputs["feature"]) {
     fail(
@@ -800,7 +802,7 @@ export async function initWorkspace(
 
   // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
   // beside it — belongs to the workspace's strategy (docs/context-strategies.md).
-  strategyFor(workspaceRoot).init({
+  strategy.init({
     workspaceRoot,
     workspaceName,
     repos,

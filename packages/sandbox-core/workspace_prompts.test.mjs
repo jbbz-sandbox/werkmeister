@@ -23,6 +23,7 @@ test("the spec carries the wizard prompts, with repos spliced after services", (
     "jira_id",
     "feature",
     "work_type",
+    "context_strategy",
     "services",
     "labels",
     "test_path",
@@ -49,6 +50,15 @@ test("the spec converts to a form schema", () => {
   assert.equal(schema.properties.work_type.enum.includes("bugfix"), true);
   assert.equal(uiSchema.starting_prompt["ui:widget"], "textarea");
   assert.deepEqual(schema.required, ["feature", "work_type"]);
+});
+
+test("context_strategy is an optional select defaulting to jit", () => {
+  const spec = computePromptSpec({}, root);
+  const prompt = spec.prompts.find((p) => p.key === "context_strategy");
+  assert.equal(prompt.default, "jit");
+  assert.equal(prompt.accept_empty, true);
+  const { schema } = buildFormSchema(spec);
+  assert.ok(!schema.required.includes("context_strategy"));
 });
 
 // `getFormSchema` builds the spec against $HOME and discards every default, so

@@ -500,6 +500,13 @@ const SPECS: CommandSpec[] = [
             "Kind of work; seeds the first-phase handoff note. Passed through to init-workspace.",
           ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
         )
+        .addOption(
+          new Option(
+            "--context-strategy <id>",
+            "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
+              "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
+          ).choices(["jit", "icm"]),
+        )
         .option(
           "--print-prompts",
           "Emit the interactive prompt definitions as JSON on stdout (shared " +
@@ -535,6 +542,7 @@ const SPECS: CommandSpec[] = [
       description: o.description ?? null,
       starting_prompt: o.startingPrompt ?? null,
       work_type: o.workType ?? null,
+      context_strategy: o.contextStrategy ?? null,
       print_prompts: Boolean(o.printPrompts),
       print_form_schema: Boolean(o.printFormSchema),
       browser_form: Boolean(o.browserForm),
@@ -664,6 +672,13 @@ const SPECS: CommandSpec[] = [
               "(env: SANDBOX_WORK_TYPE; config: work_type).",
           ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
         )
+        .addOption(
+          new Option(
+            "--context-strategy <id>",
+            "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
+              "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
+          ).choices(["jit", "icm"]),
+        )
         .option(
           "--config <path>",
           "Path to a YAML config file (JSONC/JSON also accepted). Defaults " +
@@ -698,6 +713,7 @@ const SPECS: CommandSpec[] = [
       description: o.description ?? null,
       starting_prompt: o.startingPrompt ?? null,
       work_type: o.workType ?? null,
+      context_strategy: o.contextStrategy ?? null,
       config_file: o.config ?? null,
       print_prompts: Boolean(o.printPrompts),
       print_form_schema: Boolean(o.printFormSchema),
