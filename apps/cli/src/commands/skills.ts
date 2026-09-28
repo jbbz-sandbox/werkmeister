@@ -6,10 +6,10 @@
  * sb-* skills projected into `.claude/skills/` plus the gate manifest; for
  * icm, `_shared/standards.md` and the stage contracts.
  *
- * check: compare the workspace's projected skills against a fresh rendering
- *       from this repo; exit 1 with a per-skill report when stale.
- * sync:  rewrite the projection (same writer init-workspace uses) and prune
- *       orphaned sb-* skills.
+ * check: run the workspace strategy's check — a fresh rendering diffed against
+ *       what's on disk; exit 1 with a per-entry report when stale.
+ * sync:  run the workspace strategy's sync — rewrite whatever check reported
+ *       as drifted.
  *
  * Run from anywhere inside a workspace — the workspace root is resolved by
  * walking up to the nearest `.sandbox/` directory.

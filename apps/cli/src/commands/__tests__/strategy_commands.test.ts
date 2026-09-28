@@ -9,7 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { collectingReporter, withReporter } from "sandbox-core/reporter";
-import { strategyById, strategyFor } from "sandbox-core/strategies";
+import { STRATEGY_IDS, strategyById, strategyFor } from "sandbox-core/strategies";
 import type { StrategyId } from "sandbox-core/strategies";
 
 import { run as hooks } from "../hooks.js";
@@ -34,6 +34,10 @@ beforeEach(() => {
   fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), "context_strategy: icm\nwork_type: feature\n");
   const strategy = strategyFor(root);
   strategyId = strategy.id;
+  // Pin what this fixture actually resolved to — otherwise a regression in
+  // readContextStrategy (falling back to jit) would make every assertion
+  // below silently test jit and still pass.
+  expect(strategyId).toBe(STRATEGY_IDS[1]);
   strategy.init({
     workspaceRoot: root,
     workspaceName: path.basename(root),
@@ -84,7 +88,9 @@ describe("JIT commands in an icm workspace", () => {
       "---\ntype: handoff\nstatus: open\n---\n# Handoff\nstart here\n",
     );
     const write = vi.spyOn(process.stdout, "write");
+    const log = vi.spyOn(console, "log");
     await notes({ action: "context" });
     expect(write).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
   });
 });
