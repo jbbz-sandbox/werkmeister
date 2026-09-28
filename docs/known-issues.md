@@ -431,6 +431,18 @@ Confirm with a jit-ws2 rerun before closing.
 
 ---
 
+## Host-Side `npm test` Needs Setup the Generated Context Never Mentions
+
+**Severity:** Low (infra friction, but it hit both strategies identically)
+**Status:** Open
+**Affects:** `.sandbox/sandbox-context.md` generator, `demo-services` compose template (`demo-install` + `<ws>-node-modules` volume)
+
+Both run-1 agents (`jit-ws`, `icm-ws`) spent roughly 15 tool calls each discovering that (a) the host checkout of `demo-services` has no dev dependencies — `node_modules` is a named Docker volume populated inside the `demo-install` container, so `vitest`/`turbo` are absent on the host — and (b) `apps/backend/db.test.js` needs `DATABASE_URL=postgres://postgres:postgres@localhost:9051/postgres` for the shared k8s postgres. Both runs needed a "now fix `npm test`" nudge from the operator. `sandbox-context.md` documents the curl checks and ports but not how to run the test suite on the host. The rerun worked around it by pre-running `npm install` and putting the exact command in the starting prompt.
+
+**Likely fix:** either run `npm install` on the host as part of `init-workspace` for repos that have a `package.json`, or add a "Running tests" block to `sandbox-context.md` with the `DATABASE_URL`/`REDIS_URL` values already rendered for the workspace's slot.
+
+---
+
 ## Phase Gate Rough Edges
 
 **Severity:** Low (each fails open or is cosmetic; none blocks a correct workspace)
