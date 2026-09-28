@@ -812,8 +812,9 @@ export async function initWorkspace(
   });
 
   // 6d needs the present archetypes whichever strategy ran.
+  const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
   const archetypes = loadArchetypes();
-  const present = presentArchetypes(repos, meta);
+  const present = presentArchetypes(repos, meta, servicesConfig, reposConfig, archetypes);
 
   // 6d. MCP enablement: union the present archetypes' mcp_servers into .mcp.json.
   const mcpDefinitions = loadMcpServers();

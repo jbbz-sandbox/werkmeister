@@ -1,7 +1,10 @@
 /**
  * The `jit` context strategy — docs/jit-context-system.md §5–6. What was
- * initWorkspace steps 5b–6c, moved verbatim: active standards + gate
- * manifest, notes + CLAUDE.md, sb-* skills, generated agents, hooks.
+ * initWorkspace steps 5b–6c: active standards + gate manifest, notes +
+ * CLAUDE.md, sb-* skills, generated agents, hooks. 5b, 6, 6a and 6c moved
+ * verbatim; 6b's present-archetype resolution now goes through the shared
+ * `presentArchetypes` helper (archetypes.ts) instead of calling
+ * `resolvePresentArchetypes` inline.
  */
 
 import * as fs from "node:fs";
@@ -183,9 +186,9 @@ function init(ctx: InitContext): void {
 
   // 6b. Generated subagents: sb-researcher plus one sb-tester-<archetype> per
   // archetype present.
-  const [servicesConfig] = loadSandboxServiceConfigs();
+  const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
   const archetypes = loadArchetypes();
-  const present = presentArchetypes(repos, meta);
+  const present = presentArchetypes(repos, meta, servicesConfig, reposConfig, archetypes);
   const testerSpecs = buildTesterSpecs(present, servicesConfig, archetypes);
   for (const agentPath of writeWorkspaceAgents(workspaceRoot, testerSpecs)) {
     success(`Wrote ${agentPath}`);
