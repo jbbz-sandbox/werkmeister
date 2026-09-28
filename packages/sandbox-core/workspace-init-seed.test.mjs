@@ -76,3 +76,18 @@ test("a real handoff still blocks re-seeding", () => {
     assert.match(all[0].body, /first/);
   });
 });
+
+test("the seeded handoff starts at the work type's first phase", () => {
+  withWorkspace((ws) => {
+    seedStartingHandoff(ws, "Tidy the module", "refactor");
+    const [note] = listNotes(ws, true);
+    assert.equal(note.frontmatter.phase, "implement");
+    assert.match(note.body, /invoke `sb-implement` first/);
+  });
+  withWorkspace((ws) => {
+    seedStartingHandoff(ws, "Ship it", "feature");
+    const [note] = listNotes(ws, true);
+    assert.equal(note.frontmatter.phase, "research");
+    assert.match(note.body, /`decision` note/);
+  });
+});
