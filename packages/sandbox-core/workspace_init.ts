@@ -836,7 +836,7 @@ export async function initWorkspace(
       localServices,
     );
     activeStandards = active;
-    standardsSection = buildStandardsRoutingSection(active, modules, repoNames);
+    standardsSection = buildStandardsRoutingSection(active, modules, repoNames, inputs["work_type"] ?? "");
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
     writeStandardsManifest(workspaceRoot, buildStandardsManifest(active, modules));

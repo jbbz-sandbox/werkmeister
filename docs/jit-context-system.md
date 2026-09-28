@@ -248,7 +248,12 @@ Rendered on the fly from the standards tree by `packages/sandbox-core/skill_gen.
 `packages/sandbox-core/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
 contains the Active table (`| Standard | Skill | Loads on |`, where "Loads on" = `applies_to`
 globs or "any code edit") and the by-phase table (`| Phase | Invoke first | Loads |`), which is
-the only statement of the phase chain. The rest of the file is Current Task, Layout, the
+the only statement of the phase chain. The table's rows come from the workspace's `work_type` (`workspace_prompts.ts::WORK_TYPE_PHASES`,
+read through `planFor`): a `refactor` has no research row, a `spike` has only research, and
+`bugfix`/`incident` skip review. A known work type also gets a **Work type** line naming its
+path (spike / bounded / architectural) and phase sequence, and a **Gate** line naming the note
+that must exist before the first source edit (§6). An empty or unknown work type renders all
+five rows and no gate. The rest of the file is Current Task, Layout, the
 two-column Routing table (a repo's own `CLAUDE.md` when it exists; `.sandbox/sandbox-context.md`
 for everything about the running feature — URL, `X-Feature` cookie, ports, lifecycle, health
 checks; `contract` notes for multi-repo workspaces), the Context Budget rule (≤3 files/step), and
