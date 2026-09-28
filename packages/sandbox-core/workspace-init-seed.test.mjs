@@ -90,4 +90,9 @@ test("the seeded handoff starts at the work type's first phase", () => {
     assert.equal(note.frontmatter.phase, "research");
     assert.match(note.body, /`decision` note/);
   });
+  withWorkspace((ws) => {
+    seedStartingHandoff(ws, "Ship it", "   ");
+    const [note] = listNotes(ws, true);
+    assert.doesNotMatch(note.body, /This workspace is a/);
+  });
 });

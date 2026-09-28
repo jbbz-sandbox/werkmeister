@@ -676,7 +676,8 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
   if (!prompt) {
     return;
   }
-  const plan = planFor(workType);
+  const wt = workType.trim().toLowerCase();
+  const plan = planFor(wt);
   try {
     const directory = notesDir(workspaceRoot);
     const handoffs = listNotes(workspaceRoot, true).filter((note) => note.type === "handoff");
@@ -700,8 +701,8 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
       "# Handoff: workspace creation",
       "",
     ];
-    if (workType) {
-      lines.push(`This workspace is a ${workType} — ${plan.hint}.`, "");
+    if (wt) {
+      lines.push(`This workspace is a ${wt} — ${plan.hint}.`, "");
     }
     lines.push(
       "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
