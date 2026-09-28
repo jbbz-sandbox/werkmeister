@@ -431,6 +431,26 @@ Confirm with a jit-ws2 rerun before closing.
 
 ---
 
+## Phase Gate Rough Edges
+
+**Severity:** Low (each fails open or is cosmetic; none blocks a correct workspace)
+**Status:** Open
+**Affects:** `packages/sandbox-core/gate.ts` (`decide`, `_noteStatus`), `packages/sandbox-core/workspace_skills.ts` (`checkStandardsManifest`), `docs/jit-context-system.md`, `docs/known-issues.md`
+
+Left over from the final review of the work-type phase gate
+(`docs/superpowers/specs/2026-09-27-work-type-phases.md`):
+
+| Where | What |
+|---|---|
+| `gate.ts:290` — `decide()` | The phase-gate step runs after `_loadState`, so an unreadable `.sandbox/.gate/<session>.json` returns null and **silently disables the phase gate** too, although the phase gate uses no state. Fix: move the phase-gate block above `_loadState`. |
+| `gate.ts:207` — `_noteStatus()` | `status:\s*` can run past the newline, so an empty `status:` line captures the next line's first token as the status. The result matches "no status" today (that token is never `decided`/`superseded`), but `[ \t]*` would be exact. |
+| `gate.ts:203` — `_noteStatus()` | A note whose frontmatter is an empty `---`/`---` block does not match the block regex, counts as unparseable, and fails open, so it satisfies a `decided` gate. Fail-open is deliberate for unparseable notes; an empty block is arguably "no status" instead. |
+| `workspace_skills.ts:324` — `checkStandardsManifest()` | Reads `.sandbox/standards.json` twice per call: once in `resolveWorkspaceManifest` to see whether a gate exists, and once for `onDisk`. CLI path only, not the per-edit gate. |
+| Gate latency | The 79ms measurement (50 notes) exited on the first matching note. The worst case, a `decided` gate with many `open` decision notes that reads every file, was not timed. |
+| Cosmetic | `gate.ts:297` labels the step "2a" while `jit-context-system.md` §6 numbers it 2; the §5.3 work-type paragraph is wrapped wider than its neighbours; in "Answers Given in Chat" above, the **Fix:** paragraph follows **Related:** rather than **Likely fix:**. |
+
+---
+
 ## Library Rough Edges Left by the CLI-to-Core Migration
 
 **Severity:** Low (each is small; they share a cause)
