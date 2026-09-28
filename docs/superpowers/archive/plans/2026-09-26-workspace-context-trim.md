@@ -10,7 +10,7 @@
 
 **Tech Stack:** TypeScript (ESM), `node:test`, `tsc`. Run tests with `npm test` inside `packages/sandbox-core` (it compiles first).
 
-**Spec:** `docs/superpowers/specs/2026-09-26-workspace-context-trim.md`
+**Spec:** `docs/superpowers/archive/specs/2026-09-26-workspace-context-trim.md`
 
 ## Global Constraints
 

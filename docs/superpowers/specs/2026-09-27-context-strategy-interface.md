@@ -2,7 +2,7 @@
 
 **Status:** proposed
 **Scope:** `packages/sandbox-core` (`workspace_init.ts`, `lifecycle.ts`, `workspace_prompts.ts`, new `strategies/`), `apps/cli/src/commands/{skills,notes,hooks}.ts`, `apps/mcp/tools.ts`, `apps/cli/infra/schemas/workspace.schema.json`, `docs/jit-context-system.md`, `docs/context-strategies.md`.
-**Related:** `2026-09-27-work-type-phases.md` — work type selects the JIT phase sequence and pre-implementation gate; the ICM stage templates in §3.5 should read the same `WORK_TYPE_PHASES` table.
+**Related:** `../archive/specs/2026-09-27-work-type-phases.md` — work type selects the JIT phase sequence and pre-implementation gate; the ICM stage templates in §3.5 should read the same `WORK_TYPE_PHASES` table.
 **Precedes:** `docs/context-strategies.md` (option B). Evidence: `~/features/COMPARISON.md`, known-issues "`sandbox up` Re-Installs the Session Hooks Unconditionally".
 
 ## 1. Problem

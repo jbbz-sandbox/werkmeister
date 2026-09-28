@@ -34,3 +34,13 @@ no longer lives in this repo — claudeck was extracted to a sibling repo
 (`../claudeck`) on 2026-09-25, so every `apps/claudeck/…` path in those two
 documents now resolves there instead. They were kept here because they are the
 record of work done while it was part of this monorepo.
+
+## Archived 2026-09-28
+
+| Document | Evidence it is done |
+| --- | --- |
+| `plans/2026-09-26-workspace-context-trim.md` | Carries `**Status: done**` at the top; merged at `df0f966` (PR #82). |
+| `plans/2026-09-27-work-type-phases.md` | Merged in two PRs: the per-work-type phases at `5019abf` (#85) and the phase gate at `9973603` (#86). The gate is `phase_gate` in `packages/sandbox-core/gate.ts`. |
+
+Their two specs still say `**Status:** proposed`; that line was never updated
+after the design was built, so ignore it the same way you ignore the checkboxes.
