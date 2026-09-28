@@ -32,12 +32,13 @@ description: "Begin the research/planning phase in a sandbox workspace. Use when
 
 Read Work type in CLAUDE.md; none → architectural.
 
-- **architectural**: spec deliverable. Ask questions one at a time, present
-  design, stop. Explicit yes → `NNN-decision-<slug>.md`, `status: decided`.
-  Never without yes; never re-ask; unsure → ask.
-- **bounded**: root cause in a `finding` note; confirm fix direction
-- **spike**: findings only, nothing kept, no `sb-implement`
-- **Ratchets up, never down**: design-changing bugfix → architectural;
-  write a decision note.
+- **architectural**: spec deliverable. Present the design in chat (scope,
+  approach, what's out); explicit yes → write `NNN-decision-<slug>.md`,
+  `status: decided`, recording the answers and approved design. Never
+  without yes; never re-ask; unsure → ask.
+- **bounded**: root cause in a `finding` note
+- **spike**: findings only, no `sb-implement`
+- **Ratchets up, never down**: design change → architectural; decision
+  note first
 
-Invoke `sb-implement` before editing; not spikes.
+Invoke `sb-implement` first; skip spikes
