@@ -57,9 +57,12 @@ type: finding | decision | attempt | handoff | contract
 phase: research | implement | test | review
 author: main | <subagent name>          # who wrote it
 refs: [src/paginate.ts, frontend]     # files / services it concerns
-status: open | superseded               # supersede, don't delete — attempts especially
+status: open | decided | superseded | graduated   # supersede, don't delete — attempts especially
 ---
 ```
+
+`decided` is the approved state of a `decision` note; the JIT phase gate and the ICM stage
+gate both read it. Only write it after the user has approved in their own words.
 
 ## Types
 

@@ -28,7 +28,16 @@ description: "Begin the research/planning phase in a sandbox workspace. Use when
 - Relay the researcher's summary **and note path**, then ask the user (AskUserQuestion)
   to resolve OPEN QUESTIONS / AMBIGUITIES **before** the next phase.
 
-## Exit
+## Exit by work type
 
-When turning to code, invoke `sb-implement` first — it loads the universal base and
-domain standards before the first edit.
+Read Work type in CLAUDE.md; none → architectural.
+
+- **architectural**: spec deliverable. Ask questions one at a time, present
+  design, stop. Explicit yes → `NNN-decision-<slug>.md`, `status: decided`.
+  Never without yes; never re-ask; unsure → ask.
+- **bounded**: root cause in a `finding` note; confirm fix direction
+- **spike**: findings only, nothing kept, no `sb-implement`
+- **Ratchets up, never down**: design-changing bugfix → architectural;
+  write a decision note.
+
+Invoke `sb-implement` before editing; not spikes.
