@@ -13,6 +13,9 @@ import { initWorkspace } from "./dist/workspace_init.js";
 
 const SNAPSHOT = path.join(import.meta.dirname, "strategy-jit.snapshot.json");
 const REPO = path.resolve(import.meta.dirname, "..", "..");
+// Skill templates come from $SANDBOX_ROOT/infra/skills; a developer's shell
+// often points it at another checkout. Pin it to this one.
+process.env.SANDBOX_ROOT = path.join(REPO, "apps", "cli");
 
 function walk(root, rel = "") {
   const out = [];
