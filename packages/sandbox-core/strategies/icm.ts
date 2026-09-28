@@ -300,6 +300,11 @@ function init(ctx: InitContext): void {
       fs.writeFileSync(path.join(out, ".gitkeep"), "");
     }
   }
+  // Switching from jit without --prune-context leaves its SessionStart/gate
+  // hooks live until the next `up` — and SessionStart's `skills check ||
+  // skills sync` would then hit icm's own sync and overwrite hand-edited
+  // stage contracts. refresh() is idempotent and silent on a clean workspace.
+  icm.refresh(root);
 }
 
 export const icm: ContextStrategy = {

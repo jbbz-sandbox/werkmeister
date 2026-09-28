@@ -76,3 +76,17 @@ test("a workspace with no .claude/ stays without one", async () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// icm.init now calls refresh() itself at the end (a jit->icm switch without
+// --prune-context otherwise leaves jit's hooks live until the next `up`,
+// which would then run icm's sync over hand-edited stage contracts). That
+// must stay silent on a clean workspace, or every icm init would print noise.
+test("refresh on a clean workspace (no .claude, no .gate) logs nothing", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-refresh-clean-"));
+  try {
+    const log = await refresh(root);
+    assert.equal(log, "");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

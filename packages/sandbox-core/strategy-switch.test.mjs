@@ -173,6 +173,36 @@ test("initWorkspace warns about jit leftovers after a workspace.yml switch to ic
   }
 });
 
+// icm.init ends by calling its own refresh(), so a jit->icm switch removes
+// jit's SessionStart/PreToolUse hooks immediately, without --prune-context.
+// Otherwise those hooks stay live until the next `up`, and SessionStart's
+// `skills check || skills sync` would then run icm's sync over hand-edited
+// stage contracts.
+test("initWorkspace after a switch to icm removes jit's managed hooks even without prune", async () => {
+  const std = fs.mkdtempSync(path.join(os.tmpdir(), "switch-init-std3-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "switch-init-ws3-"));
+  try {
+    await jitThenSwitchToIcm(root, std);
+
+    const settingsPath = path.join(root, ".claude", "settings.json");
+    const before = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    assert.ok(before.hooks?.SessionStart || before.hooks?.PreToolUse, "jit hooks present before the switch");
+
+    await withSandboxHome(
+      async () => withReporter(collectingReporter(), () => initWorkspace({}, root)),
+      { config: `overrides:\n  standards_dir: ${std}\n` },
+    );
+
+    // Only the managed hooks existed, so removeWorkspaceHooks takes the whole
+    // file with them — the leftover skills/agents (not pruned) stay untouched.
+    assert.ok(!fs.existsSync(settingsPath), "jit's managed hooks (and the file) are gone");
+    assert.ok(fs.existsSync(path.join(root, ".claude", "skills")), "unrelated jit leftovers untouched");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(std, { recursive: true, force: true });
+  }
+});
+
 test("initWorkspace --prune-context removes tracked jit leftovers after a switch to icm", async () => {
   const std = fs.mkdtempSync(path.join(os.tmpdir(), "switch-init-std2-"));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "switch-init-ws2-"));

@@ -105,7 +105,7 @@ function restorable(root: string, rel: string): boolean {
   return status.status === 0 && !status.stdout.trim();
 }
 
-/** docs/context-strategies.md §3.6: warn about the old layer, or prune it. */
+/** docs/superpowers/specs/2026-09-27-context-strategy-interface.md §3.6: warn about the old layer, or prune it. */
 export function reportLeftovers(root: string, from: ContextStrategy, to: ContextStrategy, prune: boolean): void {
   const left = leftoverPaths(root, from, to);
   if (!left.length) return;

@@ -210,7 +210,6 @@ export const jit: ContextStrategy = {
   },
   check(workspaceRoot) {
     const { authoring, drift } = checkSkills(workspaceRoot);
-    // After the projected-skill report, because resolving the manifest logs.
     const manifestDrift = checkStandardsManifest(workspaceRoot);
     return [...authoring, ...drift, ...(manifestDrift === null ? [] : [manifestDrift])];
   },
