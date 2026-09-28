@@ -36,7 +36,7 @@ import {
   resolveActiveStandards,
   writeStandardsManifest,
 } from "./standards.js";
-import { loadConfigFile, loadSandboxServiceConfigs } from "./workspace_prompts.js";
+import { loadConfigFile, loadSandboxServiceConfigs, planFor } from "./workspace_prompts.js";
 
 // sb-*-prefixed skill dirs under a workspace's .claude/skills/ are managed by
 // this module: written on init/sync, pruned when their source disappears.
@@ -242,7 +242,7 @@ export function canonical(value: unknown): unknown {
  */
 export function resolveWorkspaceActive(
   workspace: string,
-): { active: string[]; modules: Record<string, Record<string, any>> } | null {
+): { active: string[]; modules: Record<string, Record<string, any>>; workType: string } | null {
   const modules = loadStandardsModules();
   if (!Object.keys(modules).length) {
     return null;
@@ -265,7 +265,10 @@ export function resolveWorkspaceActive(
     modules,
     localServices,
   );
-  return { active, modules };
+  // ponytail: reads workspace.yml only — a work type passed solely as an
+  // init-workspace flag or env var is not persisted, so sync falls back to
+  // no gate. Persist it in init if that turns out to matter.
+  return { active, modules, workType: String(workspaceConfig["work_type"] ?? "") };
 }
 
 /** Recompute the gate manifest for an already-initialized workspace. */
@@ -276,7 +279,7 @@ export function resolveWorkspaceManifest(
   if (resolved === null) {
     return null;
   }
-  return buildStandardsManifest(resolved.active, resolved.modules);
+  return buildStandardsManifest(resolved.active, resolved.modules, planFor(resolved.workType).gate);
 }
 
 export interface SkillsCheck {

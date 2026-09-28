@@ -12,7 +12,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { checkStandards } from "./dist/standards.js";
+import { buildStandardsManifest, checkStandards } from "./dist/standards.js";
 
 /**
  * Run `fn` with the standards tree pointed at `standardsDir`.
@@ -92,4 +92,12 @@ test("a malformed module is reported alongside a non-zero module count", () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the manifest compiles the phase gate, and omits it when there is none", () => {
+  const modules = { ui: { summary: "ui", applies_to: ["**/*.tsx"] } };
+  const gated = buildStandardsManifest(["ui"], modules, { note: "decision", status: "decided" });
+  assert.deepEqual(gated.phase_gate, { note: "decision", status: "decided" });
+  assert.ok(!("phase_gate" in buildStandardsManifest(["ui"], modules, null)));
+  assert.ok(!("phase_gate" in buildStandardsManifest(["ui"], modules)));
 });

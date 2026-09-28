@@ -840,7 +840,10 @@ export async function initWorkspace(
     standardsSection = buildStandardsRoutingSection(active, modules, repoNames, inputs["work_type"] ?? "");
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
-    writeStandardsManifest(workspaceRoot, buildStandardsManifest(active, modules));
+    writeStandardsManifest(
+      workspaceRoot,
+      buildStandardsManifest(active, modules, planFor(inputs["work_type"] ?? "").gate),
+    );
   } else {
     // Not fatal — a workspace without standards still works — but it is a
     // materially degraded one (no routing table, no sb-*-standard skills, no
