@@ -1,0 +1,61 @@
+// sandbox-context.md is loaded on demand, but when it loads it should describe
+// this workspace — not every host on the machine and a hardcoded infra table
+// whose ports had already drifted from the registry.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { buildSandboxContextMd } from "./dist/claude_md.js";
+import { loadServices } from "./dist/config.js";
+import { withSandboxHome } from "./fixtures.mjs";
+
+const SERVICES = `services:
+  frontend:
+    type: web
+    repo: demo-repo
+    path: apps/frontend
+    port_offset: 1
+    feature_router: {}
+  backend:
+    type: api
+    repo: demo-repo
+    path: apps/backend
+    port_offset: 2
+    k8s_forward_port: 9052
+    feature_router: {}
+  dashboard:
+    type: web
+    repo: other
+    port_offset: 3
+    k8s_forward_port: 9060
+    feature_router: {}
+`;
+
+test("health checks and the feature URL are scoped to the local services", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices(), "/");
+      const curls = out.match(/curl -sk -b "X-Feature=test"[^\n]*/g) ?? [];
+      assert.equal(curls.length, 1, curls.join("\n"));
+      assert.match(curls[0], /frontend\.local\.sandbox\.com/);
+      assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.sandbox\.com\//);
+      assert.match(out, /document\.cookie = "X-Feature=test; domain=\.local\.sandbox\.com; path=\/; SameSite=Lax"/);
+      assert.match(out, /frontend\.local\.sandbox\.com\/__sandbox/);
+      assert.match(out, /\| `frontend` \| local \| `apps\/frontend` \| `test-frontend` \| 11101 \|/);
+      assert.match(out, /\| `backend` \| k8s \| `apps\/backend` \| — \| — \|/);
+      assert.match(out, /\| `dashboard` \| k8s \| `\.` \|/, "a service without path: renders '.'");
+      assert.doesNotMatch(out, /## Infrastructure/);
+      assert.match(out, /- `https:\/\/dashboard\.local\.sandbox\.com`/, "the routed-host list stays machine-wide");
+    },
+    { services: SERVICES },
+  );
+});
+
+test("no test path means the feature URL is the host root", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices());
+      assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.sandbox\.com\/\n/);
+    },
+    { services: SERVICES },
+  );
+});

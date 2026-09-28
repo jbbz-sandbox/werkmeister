@@ -28,6 +28,7 @@ import { loadArchetypes, loadServices } from "./config.js";
 import { standardsDirPath, standardsDirProblem } from "./global_config.js";
 import { run } from "./proc.js";
 import { validateModuleReferences } from "./skill_gen.js";
+import type { PhaseGate } from "./workspace_prompts.js";
 
 /**
  * Universal standards, in load order: always active, ungated by file type,
@@ -592,14 +593,16 @@ export function resolveActiveStandards(
 /**
  * The PreToolUse gate's manifest (`.sandbox/standards.json`, gate design
  * §2.2): domain -> {applies_to, summary} for every active non-universal
- * standard, plus the active universal keys. Built from
- * `resolveActiveStandards` output so it can never diverge from the CLAUDE.md
- * routing table — one compilation of the same resolution, not a second
- * source of truth.
+ * standard, plus the active universal keys, plus `phase_gate` (the work
+ * type's pre-implementation gate, `gate.ts`) when the plan has one. Built
+ * from `resolveActiveStandards` output so it can never diverge from the
+ * CLAUDE.md routing table — one compilation of the same resolution, not a
+ * second source of truth.
  */
 export function buildStandardsManifest(
   active: string[],
   modules: Record<string, Record<string, any>>,
+  phaseGate: PhaseGate | null = null,
 ): Record<string, any> {
   const universal = universalStandards(modules);
   const domains: Record<string, any> = {};
@@ -610,11 +613,17 @@ export function buildStandardsManifest(
       summary: String((modules[key] ?? {})["summary"] ?? "").trim(),
     };
   }
-  return {
+  const manifest: Record<string, any> = {
     generated_by: "sandbox init-workspace",
     universal: active.filter((key) => universal.includes(key)),
     domains,
   };
+  // Omitted rather than null so a workspace with no gate keeps a byte-identical
+  // manifest and `sandbox skills check` does not flag it stale.
+  if (phaseGate) {
+    manifest["phase_gate"] = { ...phaseGate };
+  }
+  return manifest;
 }
 
 /**

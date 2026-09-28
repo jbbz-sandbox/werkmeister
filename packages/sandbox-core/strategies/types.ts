@@ -24,7 +24,6 @@ export interface InitContext {
   meta: Record<string, string>;
   /** Resolved workspace.yml inputs: starting_prompt, work_type, ... */
   inputs: Record<string, string>;
-  hasServiceMap: boolean;
   /** `args["config"]` — a workspace config path overriding .sandbox/workspace.yml. */
   configOverride: string | null;
 }

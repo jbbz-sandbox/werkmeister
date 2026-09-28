@@ -45,7 +45,6 @@ beforeEach(() => {
     task: "demo",
     meta: { FEATURE: "", SERVICES: "" },
     inputs: { context_strategy: strategyId, work_type: "feature" },
-    hasServiceMap: false,
     configOverride: null,
   });
   vi.spyOn(process, "cwd").mockReturnValue(root);

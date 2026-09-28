@@ -19,9 +19,11 @@ Three rules keep the layer honest:
    `sandbox up`) never write into the notes directory — with two one-time, write-once
    exceptions in init-workspace: the salvage of a legacy CLAUDE.md `## Handoff Notes`
    section into a `contract` note, and seeding the workspace's `starting_prompt` as its
-   first `handoff` note (`author: workspace-creation`; skipped if any handoff note
-   exists, so it never duplicates or resurrects; a later edit to `workspace.yml`'s
-   `starting_prompt` does not update the note).
+   first `handoff` note (`author: workspace-creation`; written only when a prompt
+   exists; skipped if a real handoff note exists, so it never duplicates or
+   resurrects; a placeholder seeded by an older CLI is superseded when the prompt
+   arrives). This is one-time: once a prompt has been seeded, a later edit to
+   `starting_prompt` does not update the note — the earlier seed blocks re-seeding.
 2. **Writes are contracted; reads are phase-entry.** Notes never emerge spontaneously
    (measured: 0/3 uncontracted) — they are written by return contracts, the `sb-handoff`
    skill, and the `sb-implement` capture rule. They are read at phase entry by the
@@ -55,9 +57,12 @@ type: finding | decision | attempt | handoff | contract
 phase: research | implement | test | review
 author: main | <subagent name>          # who wrote it
 refs: [src/paginate.ts, frontend]     # files / services it concerns
-status: open | superseded               # supersede, don't delete — attempts especially
+status: open | decided | superseded | graduated   # supersede, don't delete — attempts especially
 ---
 ```
+
+`decided` is the approved state of a `decision` note; the JIT phase gate and the ICM stage
+gate both read it. Only write it after the user has approved in their own words.
 
 ## Types
 

@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { serviceTestCommand } from "./archetypes.js";
+import type { FeatureRouter } from "./feature_routing.js";
 
 // Agent files must open with the frontmatter block, so the do-not-hand-edit
 // notice goes in the body (it becomes part of the agent's prompt — kept to
@@ -43,6 +44,44 @@ You investigate code in this workspace and report findings. Do not modify
 source files — the implement phase is a separate, user-invoked step. Your
 Write tool exists solely for the note below.
 
+HOW TO INVESTIGATE — the prompt you were given names the scope (in vs. out),
+whether this is a spike or ship-ready, the givens to hold constant, and the
+deliverable shape. If any is missing, state the assumption you made and record
+it under OPEN QUESTIONS; do not silently expand your own mandate.
+
+- Present options, don't pick. Default to 2–3 viable approaches with explicit
+  tradeoffs; recommend only if the prompt asks. Silently converging on one
+  option and designing only that is the single most common research over-reach.
+- Check whether it already exists first. Before proposing anything new, search
+  for an existing pattern, resolver, service, or utility that already solves
+  this. State what you looked for and what you found — or didn't.
+- Tag every non-trivial claim by how you know it: Verified (read the actual
+  code/config/schema — cite the file:line), Inferred (reasoned from adjacent
+  evidence — say what it rests on), Assumed (a given or a default —
+  unconfirmed, flagged so a reviewer can challenge it). Never present inferred
+  or assumed as verified; an honest "I couldn't confirm X" beats a confident
+  guess.
+- Anti-relitigation. Hold the listed givens constant. A workspace \`decision\`
+  note is a given and is binding. If a given genuinely looks wrong, flag it as
+  a separate finding ("this assumption may not hold, because…") and keep it out
+  of the main recommendation.
+- Bound the investigation. Prefer the smallest investigation that answers the
+  question with adequate confidence — don't read every file in a repo when
+  three answer it. If it balloons, stop and report what you have plus what is
+  still open.
+- Validate against the code standards — named, not loaded. Check each option
+  against \`sb-engineering-standard\` (architectural fit, additive/reversible
+  change, performance budgets, PR sizing) and any domain standard the change
+  would touch. Do not load those skills — this phase is read-only; name them
+  as the validation target. An option that violates a standard is not viable:
+  fix it or record the violation as a tradeoff.
+- Deliverable shape — converge on something a human can act on. Options
+  analysis (default): scope & givens · existing prior art · options (approach,
+  tradeoffs, standards fit, evidence tags) · recommendation if requested · open
+  questions. ADR: context, decision, alternatives, both directions of
+  consequence. Research story: problem statement, findings, proposed approach,
+  acceptance criteria, links to verified sources.
+
 RETURN CONTRACT — before returning, persist your full findings as a
 workspace note:
 1. List \`.sandbox/notes/\` and take the next free NNN sequence number
@@ -63,8 +102,6 @@ workspace note:
 3. Return only a 2-3 sentence summary, the note's path, and the OPEN
    QUESTIONS / AMBIGUITIES list. The note is the durable record; your reply
    is just the pointer.
-
-Workspace context: read CLAUDE.md first (routing + standards tables).
 `;
 }
 
@@ -74,14 +111,17 @@ export const TESTER_AGENT_PREFIX = "sb-tester-";
  * Assemble one tester-agent spec per archetype present in the workspace.
  *
  * Input is `resolvePresentArchetypes` output. Each spec carries what
- * `buildTesterAgent` renders: the archetype's services with their repo +
- * resolved test command, and the archetype's standards keys (the standard the
- * tester applies to test code it writes).
+ * `buildTesterAgent` renders: the archetype's services with their repo,
+ * resolved test command and through-Caddy URL, the archetype's standards
+ * keys, and the feature name.
  */
 export function buildTesterSpecs(
   presentArchetypes: Record<string, string[]>,
   servicesConfig: Record<string, any>,
   archetypes: Record<string, any>,
+  feature = "",
+  routers: Record<string, FeatureRouter> = {},
+  testPath = "",
 ): Array<Record<string, any>> {
   const specs: Array<Record<string, any>> = [];
   for (const [archName, svcNames] of Object.entries(presentArchetypes)) {
@@ -89,16 +129,21 @@ export function buildTesterSpecs(
     const services: Array<Record<string, any>> = [];
     for (const svc of svcNames) {
       const svcDef = servicesConfig[svc] ?? {};
+      const host = routers[svc]?.hostname;
       services.push({
         name: svc,
         repo: svcDef["repo"],
         command: serviceTestCommand(svc, svcDef, archetypes),
+        // The through-Caddy URL for the smoke check; null when the service has
+        // no feature_router host (nothing to curl) or no feature is known.
+        url: feature && host ? `https://${host}/${testPath.replace(/^\/+/, "")}` : null,
       });
     }
     specs.push({
       archetype: archName,
       services,
       standards: [...(arch["standards"] ?? [])],
+      feature,
     });
   }
   return specs;
@@ -125,6 +170,25 @@ export function buildTesterAgent(spec: Record<string, any>): string {
   }
   const commands = commandLines.join("\n");
 
+  const feature = spec["feature"] ?? "";
+  const smokeLines = services
+    .filter((s) => s["url"])
+    .map(
+      (s) =>
+        `- ${s["name"]} — guard: \`docker ps --format '{{.Names}}' | grep -x ${feature}-${s["name"]}\`\n` +
+        `  check: \`curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code}\\n" "${s["url"]}"\``,
+    );
+  const smokeBlock = smokeLines.length
+    ? `
+PROXY SMOKE CHECK — after the unit tests. For each service below run the
+guard first; if it prints nothing, report the check SKIPPED (container not
+running) — never start containers yourself. Otherwise run the check and
+report the HTTP code; anything other than 2xx/3xx is a failing result with
+the code as the assertion.
+${smokeLines.join("\n")}
+`
+    : "";
+
   let standardsLine = "";
   if (spec["standards"] && spec["standards"].length) {
     const skills = (spec["standards"] as string[])
@@ -150,7 +214,7 @@ You run and interpret tests for this workspace's ${archName} services.
 TEST COMMANDS — each runs from the named repo directory at the workspace
 root:
 ${commands}
-
+${smokeBlock}
 Edit only test files. Never modify application source — fixes belong to the
 implement phase, a separate user-invoked step in the main conversation.
 ${standardsLine}
@@ -162,8 +226,6 @@ RETURN CONTRACT — report, per service tested:
   bootstrapped) reported as BLOCKED with the error — do not "fix" the
   environment beyond running the tests;
 - OPEN QUESTIONS / AMBIGUITIES for the human to resolve.
-
-Workspace context: read CLAUDE.md first (routing + standards tables).
 `;
 }
 

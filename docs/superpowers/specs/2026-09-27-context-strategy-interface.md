@@ -43,7 +43,6 @@ export interface InitContext {
   task: string;
   meta: Record<string, string>;             // FEATURE, SERVICES, ... (the .env metadata map)
   inputs: Record<string, string>;           // resolved starting_prompt, work_type, ...
-  hasServiceMap: boolean;
   configOverride: string | null;            // args["config"]
   report: Reporter;                         // info/warn/success, already threaded through init
 }

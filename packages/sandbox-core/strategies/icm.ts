@@ -255,7 +255,6 @@ function contextFromDisk(root: string): InitContext {
     task: inputs["task"] ?? "",
     meta: { FEATURE: inputs["feature"] ?? "", SERVICES: inputs["services"] ?? "" },
     inputs,
-    hasServiceMap: false,
     configOverride: null,
   };
 }

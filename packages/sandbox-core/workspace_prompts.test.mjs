@@ -11,7 +11,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { buildFormSchema } from "./dist/form_schema.js";
-import { computePromptSpec } from "./dist/workspace_prompts.js";
+import {
+  computePromptSpec,
+  DEFAULT_PLAN,
+  WORK_TYPE_PHASES,
+  planFor,
+} from "./dist/workspace_prompts.js";
 
 // An empty dir: no workspace.yml to pre-resolve fields, no repos to scrape.
 const root = await mkdtemp(path.join(tmpdir(), "prompt-spec-"));
@@ -75,4 +80,25 @@ test("defaults: false skips the Jira scan of the root's repos", () => {
     computePromptSpec({}, scanned, opts).prompts.find((p) => p.key === "jira_id").default;
   assert.equal(jiraDefault(undefined), "PROJ-7");
   assert.equal(jiraDefault({ defaults: false }), "");
+});
+
+const PHASES = ["research", "implement", "test", "review", "pr"];
+
+test("every work type has phases, all drawn from the five", () => {
+  for (const [type, plan] of Object.entries(WORK_TYPE_PHASES)) {
+    assert.ok(plan.phases.length > 0, type);
+    for (const phase of plan.phases) assert.ok(PHASES.includes(phase), `${type}: ${phase}`);
+  }
+});
+
+test("refactor skips research; spike is research only", () => {
+  assert.ok(!WORK_TYPE_PHASES.refactor.phases.includes("research"));
+  assert.deepEqual(WORK_TYPE_PHASES.spike.phases, ["research"]);
+});
+
+test("planFor normalises the type and never returns a prototype member", () => {
+  assert.equal(planFor(" Feature "), WORK_TYPE_PHASES.feature);
+  assert.equal(planFor("nonsense"), DEFAULT_PLAN);
+  assert.equal(planFor(""), DEFAULT_PLAN);
+  assert.equal(planFor("constructor"), DEFAULT_PLAN);
 });

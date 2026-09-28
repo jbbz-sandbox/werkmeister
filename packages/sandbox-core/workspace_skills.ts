@@ -27,8 +27,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { infraRoot } from "./config.js";
+import { loadManifest } from "./gate.js";
 import { info, success } from "./reporter.js";
-import { generateSkills, validateModuleReferences } from "./skill_gen.js";
+import { generateSkills, skillNameFor, validateModuleReferences } from "./skill_gen.js";
 import {
   buildStandardsManifest,
   loadStandardsModules,
@@ -36,7 +37,7 @@ import {
   resolveActiveStandards,
   writeStandardsManifest,
 } from "./standards.js";
-import { loadConfigFile, loadSandboxServiceConfigs } from "./workspace_prompts.js";
+import { loadConfigFile, loadSandboxServiceConfigs, planFor } from "./workspace_prompts.js";
 
 // sb-*-prefixed skill dirs under a workspace's .claude/skills/ are managed by
 // this module: written on init/sync, pruned when their source disappears.
@@ -76,10 +77,18 @@ function rglobMd(dir: string): string[] {
 export function renderWorkspaceSkills(
   standardsDir?: string | null,
   entrySkillsDir?: string | null,
+  active?: string[] | null,
 ): Record<string, Record<string, string>> {
   const skills: Record<string, Record<string, string>> = {};
   try {
-    Object.assign(skills, generateSkills(standardsDir));
+    // Scoped to the workspace's active standards when the caller resolved
+    // them: a skill that is not there cannot be loaded, which beats a "do not
+    // load" line in the routing table (jit-context-system.md §2). Null means
+    // no filter — the fallback when nothing about the workspace is known.
+    const keep = active ? new Set(active.map(skillNameFor)) : null;
+    for (const [name, bundle] of Object.entries(generateSkills(standardsDir))) {
+      if (!keep || keep.has(name)) skills[name] = bundle;
+    }
   } catch {
     // OSError equivalent — a stripped checkout yields no standards skills.
   }
@@ -119,8 +128,9 @@ export function writeWorkspaceSkills(
   workspaceRoot: string,
   standardsDir?: string | null,
   entrySkillsDir?: string | null,
+  active?: string[] | null,
 ): string[] {
-  const rendered = renderWorkspaceSkills(standardsDir, entrySkillsDir);
+  const rendered = renderWorkspaceSkills(standardsDir, entrySkillsDir, active);
   const target = workspaceSkillsDir(workspaceRoot);
   const written: string[] = [];
   for (const name of Object.keys(rendered).sort()) {
@@ -168,8 +178,9 @@ export function checkWorkspaceSkills(
   workspaceRoot: string,
   standardsDir?: string | null,
   entrySkillsDir?: string | null,
+  active?: string[] | null,
 ): string[] {
-  const rendered = renderWorkspaceSkills(standardsDir, entrySkillsDir);
+  const rendered = renderWorkspaceSkills(standardsDir, entrySkillsDir, active);
   const target = workspaceSkillsDir(workspaceRoot);
   const errors: string[] = [];
 
@@ -225,14 +236,14 @@ export function canonical(value: unknown): unknown {
 }
 
 /**
- * Recompute the gate manifest for an already-initialized workspace.
- *
- * Reconstructs init-workspace's resolution inputs from what the workspace
- * already persisted (repo worktrees on disk + `.sandbox/workspace.yml`) —
- * `sandbox skills sync`/`check` run standalone, without init's original
- * CLI args. Returns null when no standards modules exist (nothing to check).
+ * The workspace's active standard keys, re-resolved from what it persisted
+ * (repo worktrees on disk + `.sandbox/workspace.yml`) — `sandbox skills
+ * sync`/`check` run standalone, without init's original CLI args. Null when
+ * no standards modules exist (nothing to scope or check).
  */
-export function resolveWorkspaceManifest(workspace: string): Record<string, any> | null {
+export function resolveWorkspaceActive(
+  workspace: string,
+): { active: string[]; modules: Record<string, Record<string, any>>; workType: string } | null {
   const modules = loadStandardsModules();
   if (!Object.keys(modules).length) {
     return null;
@@ -255,7 +266,26 @@ export function resolveWorkspaceManifest(workspace: string): Record<string, any>
     modules,
     localServices,
   );
-  return buildStandardsManifest(active, modules);
+  return { active, modules, workType: String(workspaceConfig["work_type"] ?? "") };
+}
+
+/**
+ * Recompute the gate manifest for an already-initialized workspace. The phase
+ * gate is recompiled from the work type only when the on-disk manifest already
+ * carries one: init-workspace is the only place that introduces the gate (its
+ * CLAUDE.md explains it), so the every-session `skills check || sync` never
+ * adds one mid-work to a workspace created before gates existed.
+ */
+export function resolveWorkspaceManifest(
+  workspace: string,
+  resolved: ReturnType<typeof resolveWorkspaceActive> = resolveWorkspaceActive(workspace),
+): Record<string, any> | null {
+  if (resolved === null) {
+    return null;
+  }
+  const gated = (loadManifest(workspace)?.["phase_gate"] ?? null) !== null;
+  const gate = gated ? planFor(resolved.workType).gate : null;
+  return buildStandardsManifest(resolved.active, resolved.modules, gate);
 }
 
 export interface SkillsCheck {
@@ -265,38 +295,33 @@ export interface SkillsCheck {
   drift: string[];
 }
 
-/** The two drift sources that read only this repo and the workspace's `.claude/skills/`. */
-export function checkSkills(workspace: string): SkillsCheck {
+/**
+ * The two drift sources that read only this repo and the workspace's
+ * `.claude/skills/`. `active` scopes the expected projection; pass the result
+ * of {@link resolveWorkspaceActive} (its `.active`, or null).
+ */
+export function checkSkills(workspace: string, active: string[] | null = null): SkillsCheck {
   return {
     authoring: validateModuleReferences(),
-    drift: checkWorkspaceSkills(workspace),
+    drift: checkWorkspaceSkills(workspace, null, null, active),
   };
 }
 
 /**
  * The third drift source: `.sandbox/standards.json` no longer matching a fresh
  * resolution. Returns the drift entry, or null when current (or when the repo
- * has no standards modules to resolve).
- *
- * Kept out of {@link checkSkills} rather than folded into its `drift` because
- * resolving the manifest reads `.sandbox/workspace.yml`, which reports through
- * the reporter — folding it in would move that `[info]` line ahead of the drift
- * lines the caller prints, and the CLI's output is a fixed contract.
+ * has no standards modules to resolve). Takes the caller's resolution so the
+ * workspace config is read — and logged — once per command.
  */
-export function checkStandardsManifest(workspace: string): string | null {
-  const manifest = resolveWorkspaceManifest(workspace);
+export function checkStandardsManifest(
+  workspace: string,
+  resolved: ReturnType<typeof resolveWorkspaceActive> = resolveWorkspaceActive(workspace),
+): string | null {
+  const manifest = resolveWorkspaceManifest(workspace, resolved);
   if (manifest === null) {
     return null;
   }
-  const manifestPath = path.join(workspace, ".sandbox", "standards.json");
-  let onDisk: unknown = null;
-  if (fs.existsSync(manifestPath) && fs.statSync(manifestPath).isFile()) {
-    try {
-      onDisk = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    } catch {
-      onDisk = null;
-    }
-  }
+  const onDisk = loadManifest(workspace);
   if (JSON.stringify(canonical(onDisk)) === JSON.stringify(canonical(manifest))) {
     return null;
   }
@@ -312,13 +337,14 @@ export interface SkillsSync {
 
 /** `sandbox skills sync`: reproject the skills and refresh the gate manifest. */
 export function syncSkills(workspace: string): SkillsSync {
-  const written = writeWorkspaceSkills(workspace);
+  const resolved = resolveWorkspaceActive(workspace);
+  const written = writeWorkspaceSkills(workspace, null, null, resolved?.active ?? null);
   for (const p of written) {
     info(`wrote ${p}`);
   }
   success(`Projected ${written.length} sb-* skill(s) into ${workspaceSkillsDir(workspace)}`);
 
-  const manifest = resolveWorkspaceManifest(workspace);
+  const manifest = resolveWorkspaceManifest(workspace, resolved);
   if (manifest === null) {
     return { written, manifestPath: null };
   }
