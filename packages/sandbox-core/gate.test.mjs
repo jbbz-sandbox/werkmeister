@@ -129,6 +129,12 @@ test("phase gate: a path outside the workspace is not gated", () => {
   });
 });
 
+test("phase gate: a dot-dot-prefixed name inside the workspace is gated", () => {
+  withGatedWorkspace(DECIDED, (ws) => {
+    assert.match(decide(ws, "s1", path.join(ws, "..env.ts")) ?? "", /^Phase gate:/);
+  });
+});
+
 test("phase gate: a note with no frontmatter fails open", () => {
   withGatedWorkspace(DECIDED, (ws) => {
     fs.writeFileSync(path.join(ws, ".sandbox", "notes", "001-decision-x.md"), "no frontmatter\n");

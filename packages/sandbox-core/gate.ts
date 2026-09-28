@@ -122,7 +122,8 @@ function _isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function _loadManifest(workspace: string): Record<string, any> | null {
+/** `.sandbox/standards.json` as a dict, or null when missing/unreadable — never throws. */
+export function loadManifest(workspace: string): Record<string, any> | null {
   const manifestPath = path.join(workspace, ".sandbox", "standards.json");
   if (!_isFile(manifestPath)) {
     return null;
@@ -281,7 +282,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
   if (workspace === null) {
     return null;
   }
-  const manifest = _loadManifest(workspace);
+  const manifest = loadManifest(workspace);
   if (manifest === null) {
     return null;
   }
@@ -300,7 +301,8 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
   if (
     _isDict(phaseGate) &&
     relPath &&
-    !relPath.startsWith("..") &&
+    relPath !== ".." &&
+    !relPath.startsWith(".." + path.sep) &&
     !path.isAbsolute(relPath) &&
     !relPath.startsWith(".sandbox" + path.sep) &&
     !_phaseGateSatisfied(workspace, phaseGate)

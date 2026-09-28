@@ -27,6 +27,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { infraRoot } from "./config.js";
+import { loadManifest } from "./gate.js";
 import { info, success } from "./reporter.js";
 import { generateSkills, skillNameFor, validateModuleReferences } from "./skill_gen.js";
 import {
@@ -268,7 +269,13 @@ export function resolveWorkspaceActive(
   return { active, modules, workType: String(workspaceConfig["work_type"] ?? "") };
 }
 
-/** Recompute the gate manifest for an already-initialized workspace. */
+/**
+ * Recompute the gate manifest for an already-initialized workspace. The phase
+ * gate is recompiled from the work type only when the on-disk manifest already
+ * carries one: init-workspace is the only place that introduces the gate (its
+ * CLAUDE.md explains it), so the every-session `skills check || sync` never
+ * adds one mid-work to a workspace created before gates existed.
+ */
 export function resolveWorkspaceManifest(
   workspace: string,
   resolved: ReturnType<typeof resolveWorkspaceActive> = resolveWorkspaceActive(workspace),
@@ -276,7 +283,9 @@ export function resolveWorkspaceManifest(
   if (resolved === null) {
     return null;
   }
-  return buildStandardsManifest(resolved.active, resolved.modules, planFor(resolved.workType).gate);
+  const gated = (loadManifest(workspace)?.["phase_gate"] ?? null) !== null;
+  const gate = gated ? planFor(resolved.workType).gate : null;
+  return buildStandardsManifest(resolved.active, resolved.modules, gate);
 }
 
 export interface SkillsCheck {
@@ -312,15 +321,7 @@ export function checkStandardsManifest(
   if (manifest === null) {
     return null;
   }
-  const manifestPath = path.join(workspace, ".sandbox", "standards.json");
-  let onDisk: unknown = null;
-  if (fs.existsSync(manifestPath) && fs.statSync(manifestPath).isFile()) {
-    try {
-      onDisk = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    } catch {
-      onDisk = null;
-    }
-  }
+  const onDisk = loadManifest(workspace);
   if (JSON.stringify(canonical(onDisk)) === JSON.stringify(canonical(manifest))) {
     return null;
   }

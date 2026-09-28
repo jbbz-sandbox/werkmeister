@@ -394,7 +394,7 @@ Decision table (`decide`):
 
 1. Resolve the workspace root; load the manifest `.sandbox/standards.json`; load session state
    `.sandbox/.gate/<sessionId>.json`.
-2. **Phase gate.** If the manifest carries `phase_gate` (compiled from the work type,
+2. **Phase gate.** If the manifest carries `phase_gate` (compiled at init from the work type,
    `workspace_prompts.ts::WORK_TYPE_PHASES`) and the edited path is inside the workspace and
    not under `.sandbox/`: scan `.sandbox/notes/NNN-<note>-*.md`. A note satisfies the gate when
    its `status` is not `superseded`/`graduated` and, if the gate names a status (`decided` for
@@ -422,8 +422,12 @@ builtins-only.
 `buildStandardsManifest`/`writeStandardsManifest` emit `.sandbox/standards.json` (`domain →
 {applies_to, summary}` for every active non-universal standard, the active universal keys, and
 `phase_gate` when the work type has one) from the same `resolveActiveStandards` output that
-produces the CLAUDE.md routing table. It cannot diverge from the table. `sandbox skills sync`
-recompiles it from `.sandbox/workspace.yml`'s `work_type`.
+produces the CLAUDE.md routing table. It cannot diverge from the table. The one exception is
+`phase_gate`: only `sandbox init-workspace` introduces it, alongside the CLAUDE.md that explains
+it. `sandbox skills sync` recompiles `phase_gate` from `.sandbox/workspace.yml`'s `work_type`
+only when the on-disk manifest already carries one — so a gate survives sync, and a work type
+without a gate (`refactor`) drops it — and never adds one to a workspace whose manifest has
+none; `sandbox skills check` does not call such a workspace stale.
 
 **Latency.** The gate fires on every `Edit`/`Write`, so the module is deliberately
 dependency-light — node builtins only, no commander/yaml/nunjucks, nothing touching the
