@@ -1,0 +1,172 @@
+/**
+ * ICM stage templates, keyed by work_type. Each stage is a contract the agent
+ * reads by itself — the pipeline carries sequencing, not a hook. Generalised
+ * from the hand-built ~/features/icm-ws2 after its run-2 fixes: a `decided`
+ * status is the approval, reloads use `docker restart`, and the test command is
+ * quoted from sandbox-context.md rather than restated.
+ */
+
+export interface IcmVars {
+  /** Path from one stage dir to another stage's dir, by stage name: `../01_research`. */
+  at(name: string): string;
+  /** The code worktrees, as paths from a stage dir. */
+  repos: string;
+  /** How to reload running code without `sandbox`. */
+  restart: string;
+  /** This stage's standards Reference line, or "" — the renderer fills it. */
+  standards: string;
+}
+
+export interface Contract {
+  oneJob: string;
+  inputs: string[];
+  doNotLoad: string;
+  process: string[];
+  outputs: string[];
+  humanCheck: string;
+}
+
+export interface Stage {
+  name: string;
+  /** Heading and CONTEXT.md "Job" cell. */
+  job: string;
+  /** CONTEXT.md "Output" cell. */
+  writes: string;
+  /** CONTEXT.md "Human check" cell. */
+  check: string;
+  /** CLAUDE.md route-table "If" cell; default "`<previous dir>` output approved". */
+  enter?: string;
+  /** Which _shared/standards.md rows the contract names. */
+  standards: "none" | "universal" | "all";
+  contract(v: IcmVars): Contract;
+}
+
+const RELOAD_RULE =
+  "Never run `sandbox up`, `sandbox restart`, or `sandbox init-workspace` to reload — " +
+  "they are slower, and init rewrites the stage contracts.";
+
+const IMPLEMENT_STEPS = [
+  "Confirm ponytail is active (see `_shared/standards.md`; invoke the skill only if it is not), then read the standards rows above. Restate the rule you are applying beside each edit.",
+];
+
+const TEST_STEP =
+  "Run the test command exactly as `../../.sandbox/sandbox-context.md` states it. Redirect output to a file, trust the exit code, read back only the failing slice.";
+
+const ship: Stage = {
+  name: "ship",
+  job: "acceptance walk and PR description",
+  writes: "one commit per repo touched, `output/pr.md`",
+  check: "approve, then open the PR",
+  standards: "none",
+  contract: () => ({
+    oneJob:
+      "One job: prove each acceptance criterion with a pointer to evidence, commit, and write the PR description. Opening the PR is the person's act.",
+    inputs: [
+      "Working (this run): `../../BRIEF.md` § Acceptance criteria",
+      "Working (this run): `../*/output/` — every prior stage's artifacts",
+      "Working (this run): `git status` and `git diff --stat` in each repo you touched",
+    ],
+    doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.sandbox/`.",
+    process: [
+      "Walk every acceptance criterion in `BRIEF.md`. For each, write PASS or FAIL with the file and line in a prior `output/` that proves it. A FAIL routes back to the owning stage — do not fix it here.",
+      "Commit the changes on the workspace branch with a message that names the change, not the stage.",
+      "Write `output/pr.md`: title, summary, the test summary and proof from the previous stage's output, a one-line justification for any added dependency, and the acceptance table from step 1.",
+    ],
+    outputs: ["One commit per repo touched, on the workspace branch", "`output/pr.md`"],
+    humanCheck:
+      "Read `pr.md`. If every row is PASS, push and open the PR with `pr.md` as the body. If a row is FAIL, send the run back to the stage it names.",
+  }),
+};
+
+const feature: Stage[] = [
+  {
+    name: "research",
+    job: "inventory the code, surface decisions",
+    writes: "`output/inventory.md`, `output/decisions.md`",
+    check: "answer every open question in `decisions.md`",
+    standards: "none",
+    contract: (v) => ({
+      oneJob:
+        "One job: establish what the code the brief touches does today, and turn the brief's open questions into an editable decision sheet. No code is written in this stage.",
+      inputs: [
+        "Working (this run): `../../BRIEF.md`",
+        `Working (this run): the files in ${v.repos} that \`BRIEF.md\` names — grep for call sites, don't read whole trees`,
+      ],
+      doNotLoad:
+        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`, `docker-compose.yml`.",
+      process: [
+        "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them.",
+        "Find the test command in `../../.sandbox/sandbox-context.md` and copy it verbatim — do not restate it from memory.",
+        "Check what is already installed that could do the job before recommending anything new.",
+        "Write `output/inventory.md`: steps 1–3.",
+        "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3. Leave the answer blank when only a person can give it (a ticket key, a preference).",
+      ],
+      outputs: ["`output/inventory.md`", "`output/decisions.md`"],
+      humanCheck:
+        "Open `output/decisions.md`. Edit each answer as needed and change its `status: proposed` to `status: decided`. The next stage must not start while any question is still `proposed`. When every question reads `decided`, that is the approval — the next session starts the next stage without asking for confirmation.",
+    }),
+  },
+  {
+    name: "spec",
+    job: "write the spec for the change",
+    writes: "`output/spec.md`, any checkable artifact in the repo",
+    check: "the spec covers every acceptance criterion",
+    enter:
+      "every question in `stages/01_research/output/decisions.md` reads `status: decided` — the flip *is* the approval, do not ask again",
+    standards: "universal",
+    contract: (v) => ({
+      oneJob:
+        "One job: turn the settled decisions into a spec precise enough that the next stage needs no judgment calls, and prove any machine-checkable part of it.",
+      inputs: [
+        `Working (this run): \`${v.at("research")}/output/inventory.md\``,
+        `Working (this run): \`${v.at("research")}/output/decisions.md\` — every entry must read \`status: decided\`; if not, stop and route back to that stage's human check`,
+        "Reference (every run): `../../BRIEF.md` § Acceptance criteria",
+      ],
+      doNotLoad:
+        "source files already summarised in `inventory.md` (if it looks wrong, fix `inventory.md` and tell the person), `.sandbox/*.yml`, other stages.",
+      process: [
+        "Write `output/spec.md`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.",
+        "If the change has a machine-checkable artifact (a schema, an API document, a migration), write it in the repo and validate it with a command that needs no new dependency. Record the exact command in `spec.md`.",
+        "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
+      ],
+      outputs: ["`output/spec.md`", "Any artifact from step 2, in the repo"],
+      humanCheck: "Read `output/spec.md` against the brief. Edit it directly — the next stage builds whatever is on disk.",
+    }),
+  },
+  {
+    name: "implement",
+    job: "build it and prove it",
+    writes: "code diff, `output/verify.md`",
+    check: "read the diff; tests green",
+    standards: "all",
+    contract: (v) => ({
+      oneJob: "One job: make the changes `spec.md` lists, add the tests it names, and prove them against the running service.",
+      inputs: [
+        `Working (this run): \`${v.at("spec")}/output/spec.md\` and the files it names`,
+        `Working (this run): \`${v.at("research")}/output/decisions.md\``,
+        "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports, test command",
+      ],
+      doNotLoad:
+        "`BRIEF.md` (`decisions.md` and `spec.md` carry the settled scope), `inventory.md`, `.sandbox/*.yml`, `docker-compose.yml`, other stages.",
+      process: [
+        ...IMPLEMENT_STEPS,
+        "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
+        "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
+        TEST_STEP,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change against the published port from \`sandbox-context.md\` and capture the response.`,
+        "Write `output/verify.md`: `git diff --stat` for each repo you touched, the test exit code and summary line, the reload-and-exercise output, and any deviation from `spec.md` with its reason.",
+      ],
+      outputs: ["Code changes, uncommitted — the next stage commits after the person reads the diff", "`output/verify.md`"],
+      humanCheck: "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
+    }),
+  },
+  ship,
+];
+
+export const ICM_TEMPLATES: Record<string, Stage[]> = { feature };
+
+/** The stage list for *workType*; free text and unknown types get `feature`. */
+export function templateFor(workType: string): Stage[] {
+  const wt = workType.trim().toLowerCase();
+  return Object.hasOwn(ICM_TEMPLATES, wt) ? ICM_TEMPLATES[wt] : ICM_TEMPLATES["feature"];
+}

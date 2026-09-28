@@ -10,7 +10,7 @@
  * anything heavier here would close an import cycle through `jit.ts`.
  */
 
-export const STRATEGY_IDS = ["jit"] as const;
+export const STRATEGY_IDS = ["jit", "icm"] as const;
 export type StrategyId = (typeof STRATEGY_IDS)[number];
 
 /** Everything init has resolved before the context layer is written. */
