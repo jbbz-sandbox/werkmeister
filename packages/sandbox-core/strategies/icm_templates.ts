@@ -163,7 +163,191 @@ const feature: Stage[] = [
   ship,
 ];
 
-export const ICM_TEMPLATES: Record<string, Stage[]> = { feature };
+const bugfix: Stage[] = [
+  {
+    name: "reproduce",
+    job: "reproduce and locate the root cause",
+    writes: "`output/repro.md`",
+    check: "agree the root cause",
+    standards: "none",
+    contract: (v) => ({
+      oneJob:
+        "One job: make the failure happen on demand and name its root cause. No fix is written in this stage.",
+      inputs: [
+        "Working (this run): `../../BRIEF.md`",
+        `Working (this run): the files in ${v.repos} on the failing path — follow the call chain, don't read whole trees`,
+        "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports, logs, test command",
+      ],
+      doNotLoad: "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
+      process: [
+        "Reproduce the failure against the running service or with a test. Record the exact command and its output.",
+        "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
+        "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
+        "List every other caller of the function at the root cause — a fix there reaches them too.",
+        "Write `output/repro.md`: steps 1–4, and a proposed fix in one paragraph under a `status: proposed` line.",
+      ],
+      outputs: ["`output/repro.md`", "One failing test, uncommitted"],
+      humanCheck:
+        "Read `output/repro.md`. Correct the root cause or the proposed fix if needed, then change `status: proposed` to `status: decided`. That is the approval — the next session starts the fix without asking again.",
+    }),
+  },
+  {
+    name: "fix",
+    job: "fix it at the root cause",
+    writes: "code diff, `output/fix.md`",
+    check: "read the diff; the failing test now passes",
+    enter:
+      "`stages/01_reproduce/output/repro.md` reads `status: decided` — the flip *is* the approval, do not ask again",
+    standards: "all",
+    contract: (v) => ({
+      oneJob: "One job: make the failing test pass by changing the code at the root cause, and nothing else.",
+      inputs: [
+        `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — must read \`status: decided\`; if not, stop and route back`,
+        "Working (this run): the failing test and the files at the root cause",
+        "Reference (every run): `../../.sandbox/sandbox-context.md` — test command",
+      ],
+      doNotLoad: "`BRIEF.md` (`repro.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
+      process: [
+        ...IMPLEMENT_STEPS,
+        "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
+        TEST_STEP,
+        "Write `output/fix.md`: `git diff --stat` per repo, the failing test's name, and the test exit code and summary line.",
+      ],
+      outputs: ["Code changes plus the test, uncommitted", "`output/fix.md`"],
+      humanCheck: "Read the diff. Confirm the fix sits where `repro.md` put the root cause. Edit in place if not.",
+    }),
+  },
+  {
+    name: "verify",
+    job: "prove it against the running service",
+    writes: "`output/verify.md`",
+    check: "the original reproduction no longer fails",
+    standards: "none",
+    contract: (v) => ({
+      oneJob: "One job: show the original failure is gone in the running service, not just in the test.",
+      inputs: [
+        `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — the reproduction steps`,
+        `Working (this run): \`${v.at("fix")}/output/fix.md\``,
+        "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports",
+      ],
+      doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.sandbox/*.yml`.",
+      process: [
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE}`,
+        "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
+        "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
+        "Write `output/verify.md`: steps 2–3 with their output, and PASS or FAIL for each.",
+      ],
+      outputs: ["`output/verify.md`"],
+      humanCheck: "Read `verify.md`. A FAIL sends the run back to the fix stage.",
+    }),
+  },
+  ship,
+];
+
+const refactor: Stage[] = [
+  {
+    name: "scope",
+    job: "fix the boundary and the invariants",
+    writes: "`output/scope.md`",
+    check: "agree what must not change",
+    standards: "none",
+    contract: (v) => ({
+      oneJob: "One job: pin down what the refactor may touch and what behaviour must not change. No code is written in this stage.",
+      inputs: [
+        "Working (this run): `../../BRIEF.md`",
+        `Working (this run): the files in ${v.repos} that \`BRIEF.md\` names, and their callers`,
+      ],
+      doNotLoad: "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
+      process: [
+        "List the files in scope and every caller outside it.",
+        "State the invariants: observable behaviour that must be identical after the refactor.",
+        "Name the existing tests that pin each invariant, and the gaps no test covers.",
+        "Write `output/scope.md`: steps 1–3, the sequence of small steps you propose, and a `status: proposed` line.",
+      ],
+      outputs: ["`output/scope.md`"],
+      humanCheck:
+        "Read `output/scope.md`. Correct the scope or invariants, then change `status: proposed` to `status: decided`. That is the approval — the next session starts without asking again.",
+    }),
+  },
+  {
+    name: "implement",
+    job: "refactor in green steps",
+    writes: "code diff, `output/verify.md`",
+    check: "read the diff; tests green at every step",
+    enter:
+      "`stages/01_scope/output/scope.md` reads `status: decided` — the flip *is* the approval, do not ask again",
+    standards: "all",
+    contract: (v) => ({
+      oneJob: "One job: carry out the steps `scope.md` settled, keeping every invariant true after each one.",
+      inputs: [
+        `Working (this run): \`${v.at("scope")}/output/scope.md\` — must read \`status: decided\``,
+        "Working (this run): the files in scope",
+        "Reference (every run): `../../.sandbox/sandbox-context.md` — test command",
+      ],
+      doNotLoad: "`BRIEF.md` (`scope.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
+      process: [
+        ...IMPLEMENT_STEPS,
+        "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
+        `Take the steps in order. After each one: ${TEST_STEP}`,
+        `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE}`,
+        "Write `output/verify.md`: `git diff --stat` per repo, the test result after each step, and the final exercise output.",
+      ],
+      outputs: ["Code changes, uncommitted", "`output/verify.md`"],
+      humanCheck: "Read the diff against `scope.md`. Anything outside scope goes back.",
+    }),
+  },
+  ship,
+];
+
+const spike: Stage[] = [
+  {
+    name: "questions",
+    job: "frame what the spike must answer",
+    writes: "`output/questions.md`",
+    check: "agree the questions and what settles them",
+    standards: "none",
+    contract: () => ({
+      oneJob: "One job: turn the brief into questions, each with the evidence that would settle it. No code is written in this stage.",
+      inputs: ["Working (this run): `../../BRIEF.md`"],
+      doNotLoad: "source trees, `_shared/standards.md`, `.sandbox/*.yml`.",
+      process: [
+        "List the questions the brief asks or implies, most decision-relevant first.",
+        "For each: how it will be answered (read code, measure, prototype) and what result settles it.",
+        "Write `output/questions.md`: steps 1–2 and a `status: proposed` line.",
+      ],
+      outputs: ["`output/questions.md`"],
+      humanCheck:
+        "Edit the questions, then change `status: proposed` to `status: decided`. That is the approval — the next session starts without asking again.",
+    }),
+  },
+  {
+    name: "findings",
+    job: "answer them with evidence",
+    writes: "`output/findings.md`",
+    check: "decide the next piece of work",
+    enter:
+      "`stages/01_questions/output/questions.md` reads `status: decided` — the flip *is* the approval, do not ask again",
+    standards: "none",
+    contract: (v) => ({
+      oneJob: "One job: answer each settled question with evidence, and recommend what to build next.",
+      inputs: [
+        `Working (this run): \`${v.at("questions")}/output/questions.md\` — must read \`status: decided\``,
+        `Working (this run): whatever each question's method names, in ${v.repos}`,
+        "Reference (every run): `../../.sandbox/sandbox-context.md` — ports, containers",
+      ],
+      doNotLoad: "`_shared/standards.md` (prototype code is throwaway), `.sandbox/*.yml`.",
+      process: [
+        "Answer each question by its method. Prototype code lives in `output/` or on a scratch branch, never on the workspace branch.",
+        "Write `output/findings.md`: per question, the answer, the evidence (commands and output), and confidence.",
+        "End `findings.md` with a recommendation: the next work item and its work type.",
+      ],
+      outputs: ["`output/findings.md`"],
+      humanCheck: "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here.",
+    }),
+  },
+];
+
+export const ICM_TEMPLATES: Record<string, Stage[]> = { feature, bugfix, incident: bugfix, refactor, spike };
 
 /** The stage list for *workType*; free text and unknown types get `feature`. */
 export function templateFor(workType: string): Stage[] {
