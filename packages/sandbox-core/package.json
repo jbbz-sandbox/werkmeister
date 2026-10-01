@@ -39,6 +39,7 @@
     "./notes": "./dist/notes.js",
     "./plugin_check": "./dist/plugin_check.js",
     "./proc": "./dist/proc.js",
+    "./registry_sync": "./dist/registry_sync.js",
     "./reporter": "./dist/reporter.js",
     "./safari": "./dist/safari.js",
     "./scaffold": "./dist/scaffold.js",

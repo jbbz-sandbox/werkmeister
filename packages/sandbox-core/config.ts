@@ -99,6 +99,11 @@ export function servicesYamlPath(): string {
   return registryPath("services_yaml", "SANDBOX_SERVICES_YAML", "services.yaml");
 }
 
+/** Per-machine overrides merged LAST into the generated registry — sits beside services.yaml wherever that is. */
+export function servicesLocalYamlPath(): string {
+  return path.join(path.dirname(servicesYamlPath()), "services.local.yaml");
+}
+
 /** Path to the port allocation map (`overrides.ports_yaml` → `$SANDBOX_PORTS_YAML` → ~/.sandbox/ports.yaml). */
 export function portsYamlPath(): string {
   return registryPath("ports_yaml", "SANDBOX_PORTS_YAML", "ports.yaml");

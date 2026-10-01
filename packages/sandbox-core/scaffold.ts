@@ -388,3 +388,38 @@ export function seedFile(target: string, content: string, mode = 0o644): SeedRes
   fs.chmodSync(target, mode);
   return { path: target, status: "created" };
 }
+
+// ---------------------------------------------------------------------------
+// Registry defaults (sandbox-owned; merged under every repo's fragment)
+// ---------------------------------------------------------------------------
+
+/**
+ * The `archetypes:` and `mcp_servers:` registries. Owned by the sandbox, not
+ * by any app repo: `standards:` keys must match a docs/standards/<key>.md
+ * module and the MCP bodies are projected verbatim into .mcp.json, so a
+ * fragment references these by name and never redefines them.
+ *
+ * `${VAR:-}` strings are expanded by the MCP client at session start, not by
+ * the registry merge — they are deliberately plain strings here.
+ */
+export const REGISTRY_DEFAULTS: Record<string, any> = {
+  archetypes: {
+    "node-web": { standards: ["ui", "config", "testing"], mcp_servers: ["context7"], test: "npm test" },
+    "node-service": { standards: ["service", "testing"], test: "npm test" },
+    "node-tool": { standards: ["engineering", "testing"] },
+    "mcp-client": { standards: ["engineering", "testing"], mcp_servers: ["sandbox"] },
+  },
+  mcp_servers: {
+    context7: {
+      type: "stdio",
+      command: "npx",
+      args: ["-y", "@upstash/context7-mcp"],
+      env: { CONTEXT7_API_KEY: "${CONTEXT7_API_KEY:-}" },
+    },
+    sandbox: {
+      type: "http",
+      url: "http://host.docker.internal:3002/mcp",
+      headers: { Authorization: "Bearer ${SANDBOX_MCP_TOKEN}", "X-Sandbox-Feature": "${FEATURE}" },
+    },
+  },
+};
