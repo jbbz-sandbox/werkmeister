@@ -113,7 +113,8 @@ npm install && npm run build
 ```
 
 The wizard walks through your repo/workspace paths, the ingress base domains,
-and the service registry, then converges the rest: the `sandbox-tools` and
+and the service registry (generated from each repo's `.sandbox/services.yaml`),
+then converges the rest: the `sandbox-tools` and
 `ponytail` plugins, the companion `sandbox-workspace` checkout, a TLS
 certificate covering every routed hostname, and the optional Jira and
 Telepresence prerequisites. It is safe to re-run — nothing already configured
@@ -130,7 +131,8 @@ you to run `sandbox setup`.
 | File | What |
 | --- | --- |
 | `~/.sandbox/config.yaml` | Paths, ingress domains, optional Jira credentials — the single source of truth. |
-| `~/.sandbox/services.yaml` | Service registry: repos, ports, k8s coordinates, ingress opt-in. |
+| `~/.sandbox/services.yaml` | Service registry — GENERATED from each repo's `.sandbox/services.yaml`; do not edit. |
+| `~/.sandbox/services.local.yaml` | Per-machine registry overrides (`k8s_context`, …), merged last. |
 | `~/.sandbox/ports.yaml` | Feature-slot port allocation. |
 | `~/.sandbox/secrets.env` | Real credentials, injected into each feature's `.env`. Never committed. |
 | `~/.sandbox/env.sh` | Generated `SANDBOX_*` exports, sourced by `~/.zshenv` and the CLI wrapper. |

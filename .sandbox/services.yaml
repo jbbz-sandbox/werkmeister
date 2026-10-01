@@ -1,0 +1,175 @@
+# Sandbox service-registry fragment for this repo.
+#
+# `sandbox registry sync` (run by `sandbox setup`) merges every
+# <repo>/.sandbox/services.yaml under paths.repos_root into
+# ~/.sandbox/services.yaml. Only `services:`, `setup_services:` and
+# `infrastructure:` may appear here; `repo:` is the checkout's directory name
+# and `repos:` is derived. {{home}}, {{repos_root}} and {{workspaces_root}}
+# expand from the developer's config.yaml at merge time. `x-` keys hold YAML
+# anchors and are dropped from the output.
+
+# A container that drives the sandbox through the host MCP surface (apps/mcp)
+# instead of the daemon. The difference from the `cli:` entry's &host_mounts is
+# the whole point of that surface: no /var/run/docker.sock, which is root on the
+# host for anything that gets code execution in the container. Anchors must be
+# defined before they are aliased, hence a top-level block above `services:`;
+# `x-`-prefixed keys are ignored by every loader in sandbox-core/config.ts.
+x-mcp-client:
+  mounts: &mcp_client_mounts
+    # Identical host paths: the agent edits code here, and generated compose
+    # files on the host carry host paths.
+    - "{{repos_root}}:{{repos_root}}"
+    - "{{workspaces_root}}:{{workspaces_root}}"
+  env: &mcp_client_env
+    HOME: "{{home}}"
+    GIT_CONFIG_COUNT: "1"
+    GIT_CONFIG_KEY_0: safe.directory
+    GIT_CONFIG_VALUE_0: "*"
+    # SANDBOX_MCP_TOKEN is deliberately NOT here. It arrives through
+    # `secrets: [SANDBOX_MCP_TOKEN]` on the service entry, which puts it in the
+    # feature's generated .env (env_file). A `${SANDBOX_MCP_TOKEN}` value in
+    # this block would be expanded by whichever shell ran `docker compose` --
+    # for `sandbox-up` that is the MCP server's own process env, where it is
+    # unset -- and compose `environment:` beats `env_file:`, so it would then
+    # shadow the real value with an empty string.
+
+services:
+  # --- The sandbox repo's own workspaces (self-hosting) -----------------------
+  # All five share one repo bind mount at /app and one per-feature node_modules
+  # volume; sandbox-install populates it and builds sandbox-core/dist first.
+  # The three watchers have no listener: the template still publishes a port
+  # and its healthcheck is `curl … || exit 0`, so they read healthy anyway.
+  # See docs/users-guide.md "Self-hosting the sandbox repo" in the sandbox repo.
+  sandbox-core:
+    path: packages/sandbox-core
+    type: library
+    archetype: node-tool
+    test: "npx turbo run test --filter=sandbox-core"
+    internal_port: 3999
+    port_offset: 2
+    health_endpoint: /
+    setup_service: sandbox-install
+    image: node:22
+    command: "cd packages/sandbox-core && exec npx tsc --watch --preserveWatchOutput"
+    memory_limit: 512M
+    memory_reservation: 128M
+    node_modules_volume: node-modules
+
+  # Fully functional CLI: the host's docker socket plus ~/.sandbox, ~/repos,
+  # ~/features and ~/.kube mounted at their host paths, because the compose
+  # files it generates carry host bind-mount paths and the daemon is the
+  # host's. HOME matches so `~` expands the same way; PATH puts the worktree's
+  # own `sandbox` wrapper first (the dogfood point) and the tools volume next.
+  # GIT_CONFIG_* marks every directory safe: the worktrees belong to the host
+  # uid, and git refuses "dubious ownership" otherwise. The anchors below are
+  # reused by sandbox-dashboard and claudeck, so this entry must stay above them.
+  cli:
+    path: apps/cli
+    type: cli
+    archetype: node-tool
+    test: "npx turbo run test --filter=@jbbz-sandbox/sandbox-cli"
+    internal_port: 3998
+    port_offset: 3
+    health_endpoint: /
+    setup_service: sandbox-install
+    image: node:22
+    command: "cd apps/cli && exec npm run watch"
+    memory_limit: 512M
+    memory_reservation: 128M
+    node_modules_volume: node-modules
+    extra_volumes: &host_mounts
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "{{home}}/.sandbox:{{home}}/.sandbox"
+      - "{{repos_root}}:{{repos_root}}"
+      - "{{workspaces_root}}:{{workspaces_root}}"
+      - "{{home}}/.kube:{{home}}/.kube:ro"
+      - tools:/opt/sandbox-tools
+    environment: &host_env
+      HOME: "{{home}}"
+      PATH: /app/apps/cli:/opt/sandbox-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      DOCKER_CONFIG: /opt/sandbox-tools/docker
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+      # Read by sandbox-dashboard; harmless for the others.
+      HOST: 0.0.0.0
+
+  # Doubles as the socket-free MCP client bed (spec 10.4): it is the one
+  # sandbox service with no docker socket, so it is where an agent that drives
+  # the sandbox through apps/mcp instead of the daemon is proven to work. The
+  # repo mounts let it edit code at host paths; SANDBOX_MCP_TOKEN arrives via
+  # the feature .env, and a missing one makes `sandbox up` refuse the workspace.
+  vscode-plugin:
+    path: packages/vscode-plugin
+    type: library
+    archetype: mcp-client
+    test: "npx turbo run test --filter=vscode-plugin"
+    internal_port: 3997
+    port_offset: 4
+    health_endpoint: /
+    setup_service: sandbox-install
+    image: node:22
+    command: "cd packages/vscode-plugin && exec npm run watch"
+    memory_limit: 512M
+    memory_reservation: 128M
+    node_modules_volume: node-modules
+    extra_volumes: *mcp_client_mounts
+    environment: *mcp_client_env
+    secrets: [SANDBOX_MCP_TOKEN]
+
+  # Serves the workspace dashboard + MCP endpoint; its tools shell out to the
+  # CLI, docker and kubectl, so it gets the same host access as `cli`.
+  sandbox-dashboard:
+    path: apps/sandbox-dashboard
+    type: web
+    archetype: node-web
+    test: "npx turbo run test --filter=sandbox-workspace-mcp-app"
+    internal_port: 3001
+    port_offset: 5
+    health_endpoint: /
+    setup_service: sandbox-install
+    image: node:22
+    command: "cd apps/sandbox-dashboard && exec npm run dev"
+    memory_limit: 1G
+    memory_reservation: 256M
+    node_modules_volume: node-modules
+    extra_volumes: *host_mounts
+    environment: *host_env
+    # dashboard.local.sandbox.com — local only; nothing runs in the cluster.
+    feature_router: {}
+
+  # Claude Code web UI; the workspace plugin needs the same host access as
+  # `cli`. Chat needs an Anthropic key: add ANTHROPIC_API_KEY to
+  # ~/.sandbox/secrets.env and `secrets: [ANTHROPIC_API_KEY]` here — a
+  # declared-but-missing secret makes `sandbox up` refuse the workspace.
+  claudeck:
+    path: apps/claudeck
+    type: web
+    archetype: node-web
+    test: "npx turbo run test --filter=claudeck"
+    internal_port: 9009
+    port_offset: 6
+    health_endpoint: /
+    setup_service: sandbox-install
+    image: node:22
+    command: "cd apps/claudeck && exec node server.js"
+    memory_limit: 1G
+    memory_reservation: 256M
+    node_modules_volume: node-modules
+    extra_volumes: *host_mounts
+    environment: *host_env
+    # claudeck.local.sandbox.com — local only.
+    feature_router: {}
+
+setup_services:
+  # The sandbox repo's install + build + tools download. `npm run build` runs
+  # so sandbox-core/dist exists before the five services start; startup.sh
+  # (infra/compose/scripts/sandbox-install-startup.sh) fills the `tools`
+  # volume with docker/compose/kubectl for the host-access services.
+  sandbox-install:
+    image: node:22
+    command: "npm install && npm run build && sh /usr/local/bin/startup.sh"
+    node_modules_volume: node-modules
+    startup_script: true
+    extra_volumes:
+      - tools:/opt/sandbox-tools
