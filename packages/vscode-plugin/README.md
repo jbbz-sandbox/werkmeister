@@ -4,10 +4,9 @@ A tree view over the developer-sandbox: every workspace under
 `paths.workspaces_root`, its container state, its Telepresence intercepts, and
 the `sandbox` CLI lifecycle — without leaving the editor.
 
-The fourth consumer of `packages/sandbox-core`, after the
-`sandbox-dashboard` MCP server and claudeck's workspace plugin. Unlike those two
-it imports sandbox-core directly: the extension host is plain Node, so there is no
-HTTP or stdio hop.
+A consumer of `packages/sandbox-core`, alongside the `sandbox-dashboard` MCP
+server. Unlike the dashboard it imports sandbox-core directly: the extension host
+is plain Node, so there is no HTTP or stdio hop.
 
 ## How it works
 

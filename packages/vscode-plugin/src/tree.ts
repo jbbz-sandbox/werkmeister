@@ -22,8 +22,8 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
   }
 
   /**
-   * Poll only while the view is visible. A hidden view costs nothing, and the
-   * claudeck equivalent froze its indicator dots by fetching once on open.
+   * Poll only while the view is visible. A hidden view costs nothing, and a
+   * fetch-once-on-open design freezes the indicator dots.
    * The scheduling itself lives in poll.ts so it can be unit-tested.
    */
   bind(view: vscode.TreeView<WsNode>): vscode.Disposable {

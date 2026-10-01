@@ -74,10 +74,6 @@ calls the same file, so a dead forward is now restarted rather than merely repor
 | [intercept.ts:211](../apps/cli/src/commands/intercept.ts#L211) | no long-running supervision of an intercept | lives in the telepresence daemon until `--leave`/`sandbox down` | dangling intercepts become a real problem → `--watch` |
 | [commands.ts:145](../packages/vscode-plugin/src/commands.ts#L145) | fire-and-forget launch | a failure after spawn is invisible | it ever matters → status check |
 | [build-tree.ts:67](../packages/vscode-plugin/src/build-tree.ts#L67) | strip the `sandbox-` prefix instead of reading `workspace.yml` per workspace | breaks if a hand-edited `.env` violates the convention | that happens → read the yml |
-| [client.js:27](../apps/claudeck/plugins/sandbox-workspace/client.js#L27) | strips SGR escapes only | the sandbox CLI emits nothing else | it emits more → widen |
-| [server.js:290](../apps/claudeck/plugins/sandbox-workspace/server.js#L290) | fire-and-forget launch | a failure after spawn is invisible to the UI | it ever matters → status route |
-| [server.js:395](../apps/claudeck/plugins/sandbox-workspace/server.js#L395) | coarse watch on the root — every event re-syncs the whole list | O(workspaces) per filesystem event | workspace count gets large → fine-grained diffing |
-| [variables.css:73](../apps/claudeck/public/css/core/variables.css#L73) | alias shim over a 90-site rename | two names for the same token indefinitely | someone is already touching those panels → finish the rename |
 | [session-stream.ts:13](../apps/sandbox-dashboard/lib/session-stream.ts#L13) | re-read and re-parse the whole transcript on every change | same cost the 3s poller already paid, but push-triggered | large transcripts measurably lag → byte-offset tailing |
 | [server.ts:840](../apps/sandbox-dashboard/server.ts#L840) | error logging on `remove-workspace` only | other tools fail without the same diagnosis trail | other tools need the visibility → shared handler wrapper |
 

@@ -224,7 +224,7 @@ Do not rely on the bind mount at `/etc/caddy/Caddyfile` syncing in real-time for
 **Status:** Resolved — the two surfaces share one form
 **Affects:** `apps/sandbox-dashboard/src/mcp-app.ts` (Desktop MCP App), `apps/sandbox-dashboard/src/create-form.ts` (browser dashboard "New workspace" tab)
 
-`mcp-app.ts` imports `initCreateForm` from `create-form.ts` — the optimization pass below happened, and the ~120 duplicated lines are gone. The history is kept because the *reasoning* about why a naive share was not free still applies to the next surface that wants this form (claudeck's `create-form.mjs` is a third, independent one; see "Claudeck's Streaming Routes Still Spawn the CLI" below for the general shape of that problem).
+`mcp-app.ts` imports `initCreateForm` from `create-form.ts` — the optimization pass below happened, and the ~120 duplicated lines are gone. The history is kept because the *reasoning* about why a naive share was not free still applies to the next surface that wants this form.
 
 <details>
 <summary>The duplication as it stood, and the pass that removed it</summary>
@@ -238,66 +238,6 @@ The four genuine differences (why a naive share isn't free) are all host-level: 
 1. `validateRepoSelection` and `transformErrors` are **byte-identical and host-agnostic** (pure, no `app`/`bridge`) — lift them into `lib/` and import in both. Zero regression risk; safe to do even before the browser surface settles.
 2. Once the browser form stops moving, extract a shared `<WorkspaceForm callTool={…} />` component, threading the four host differences above as props/config, and have both entrypoints render it.
 </details>
-
----
-
-## Claudeck's Streaming Routes Still Spawn the CLI
-
-**Severity:** Low (works; costs a process launch per action and diverges from the other consumers)
-**Status:** Open — unblocked; the claudeck routes have not been moved yet
-**Affects:** `apps/claudeck/plugins/sandbox-workspace/server.js` — `POST /action`, `POST /intercept`
-
-`sandbox-core` never spawns the `sandbox` CLI (note 087), but a **consumer** may, and claudeck
-still does for two of its routes. The dashboard and the VS Code tree call core in-process for
-the same data, so the surfaces disagree about how they reach the same work.
-
-Two of claudeck's four spawns are already gone (note 093): the intercept read became
-`getIntercepts()` — `GET /docker` went from ~5.5s to ~230ms, since the CLI boot was the whole
-cost — and `POST /open` became `openFeatureBrowser()`, which also made launch failures visible
-instead of answering `200 {"ok":true}` and doing nothing.
-
-The two that remain both **stream** the child's output to a chunked response, ending on
-`[exit N]`:
-
-| Route | Spawns | Core equivalent |
-|---|---|---|
-| `POST /action` | `sandbox up\|stop\|restart\|down` | `runWorkspaceAction(name, action)` |
-| `POST /intercept` | `sandbox intercept -s <svc> [--leave]` | `startIntercept(...)` / `leaveIntercept(...)` |
-
-**`/action` is no longer blocked either.** Both of its stated blockers are gone:
-
-1. `runWorkspaceAction` still collects a transcript rather than streaming one, but the seam was
-   always there — `collectingReporter(onChunk)` in `packages/sandbox-core/reporter.ts`, which
-   `POST /create` in this same file already uses through `createWorkspace`'s `onData`. Roughly
-   three lines.
-2. **Cancellation was the decision, and it was made.** `up`, `down`, `connect`, `logs`, `test`
-   and the intercept pair now take an optional `AbortSignal`, forwarded to an async spawn
-   (`runAsync` in `packages/sandbox-core/proc.ts`). `res.on("close")` can abort one, which is
-   what the killed child used to provide.
-
-**What is left is a claudeck change, deliberately out of the migration's scope:** rewiring the
-two routes to call core in-process instead of spawning. Nobody has done it.
-
-**`/intercept` is no longer blocked.** `startIntercept` and `leaveIntercept` in
-`packages/sandbox-core/telepresence.ts` are the command body, callable in-process: every failure is
-a coded `SandboxError` (`NOT_LOCAL`, `NOT_INTERCEPTABLE`, `TELEPRESENCE_VERSION`, `NOT_RUNNING`,
-`PORT_CLOSED`, `INTERCEPT_FAILED`) rather than the `process.exit(1)` that would have taken the
-express server down, and both spawn through `runAsyncRunner` (`runAsync`) instead of `spawnSync`,
-so a slow `telepresence connect` holds one request rather than the whole event loop. Both take
-`localServices: string[]` — the caller reads the workspace `.env`, since a `.env` walk-up is a cwd
-concern core will not have.
-
-**Actually moving the route is a claudeck change and out of the core migration's scope.** What it
-still needs on claudeck's side: the reporter's `info` progress lines (`Connecting to …`,
-`Intercepting …`) come back through `collectingReporter(onChunk)`, exactly as `POST /create`
-already does; the "Intercept active" block is CLI rendering that the route would replace with
-`InterceptResult` fields; and `signal` is available for abort-on-disconnect, unlike `/action`.
-
-**Also worth knowing when this is picked up:** the telepresence reads behind `getIntercepts()`
-are still `spawnSync`, so they block the caller's event loop — the whole express server, not just
-the waiting request. They run under a 15s cap (`STATUS_READ` in `packages/sandbox-core/status.ts`)
-for exactly that reason; `listIntercepts`, `connectedNamespace` and `leaveFeatureIntercepts` were
-deliberately left synchronous. Anything else moved in-process should be checked the same way.
 
 ---
 
@@ -323,7 +263,7 @@ be submitted by accident.
 
 **Cost:** ~343ms per call on a home directory with 18 non-dot entries, most of it those `git`
 invocations — paid every time a surface loads the create form (Desktop MCP app, browser
-dashboard, claudeck).
+dashboard).
 
 This behaviour predates the migration — the spawned CLI did exactly the same thing with the
 same cwd — but it is core's now, and visible.
@@ -481,7 +421,7 @@ in three places:
 | Where | What |
 |---|---|
 | `compose.ts` — `composeDown()` | Returns a success `boolean` that **all three callers discard** (`lifecycle.ts:381`, `commands/remove.ts:72`, `commands/clean.ts:119`). A teardown that failed is indistinguishable from one that worked. |
-| `lifecycle.ts:377` | Emits `info("--volumes: per-feature Docker volumes will be removed")` — a **CLI flag name** in library output, so the dashboard and claudeck show a flag their user never typed. |
+| `lifecycle.ts:377` | Emits `info("--volumes: per-feature Docker volumes will be removed")` — a **CLI flag name** in library output, so the dashboard shows a flag its user never typed. |
 | `hooks_gen.ts` — `writeWorkspaceHooks()` | Called only from `initWorkspace`. A workspace created before a hook-template change keeps the stale hook until someone re-runs `sandbox init-workspace` there by hand; nothing reconciles it. |
 
 ---

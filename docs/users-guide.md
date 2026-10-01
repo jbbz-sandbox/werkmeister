@@ -916,7 +916,7 @@ Setup services are automatically included in generated Docker Compose files when
 
 ### Self-hosting the sandbox repo
 
-The five workspaces of this repo (`apps/cli`, `apps/claudeck`, `apps/sandbox-dashboard`,
+The four workspaces of this repo (`apps/cli`, `apps/sandbox-dashboard`,
 `packages/sandbox-core`, `packages/vscode-plugin`) can be registered as services so a
 feature workspace develops the sandbox itself, each package in its own container. The
 registry shape lives in `docs/superpowers/archive/specs/2026-09-03-self-host-services-design.md`;
@@ -927,7 +927,7 @@ the pieces that are not obvious from the demo services:
 - **Watch loops need no listener.** The compose template always publishes a port and its
   healthcheck is `curl … || exit 0`, so `tsc --watch` containers read healthy with a
   placeholder `internal_port`.
-- **Host access for `cli`, `sandbox-dashboard` and `claudeck`.** Those three drive the host:
+- **Host access for `cli` and `sandbox-dashboard`.** Those two drive the host:
   they get `/var/run/docker.sock` plus `~/.sandbox`, `~/repos`, `~/features` and `~/.kube`
   bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
   kubectl binaries from the per-feature `tools` volume that
@@ -943,13 +943,9 @@ the pieces that are not obvious from the demo services:
   registry sets `HOST=0.0.0.0` because the container network is the isolation boundary and
   Docker's published port is the only way in.
 - **New hostnames need `/etc/hosts` entries.** The wildcard certificate already covers
-  `*.local.sandbox.com`, but `sandbox-dashboard.local.sandbox.com` and
-  `claudeck.local.sandbox.com` only resolve after `sandbox setup` (run from the main
-  checkout) reconciles `/etc/hosts`, which needs sudo. Caddy emits their site blocks only
-  once a running feature declares the service.
-- **Claudeck chat needs an Anthropic key.** Add `ANTHROPIC_API_KEY` to
-  `~/.sandbox/secrets.env` *and* `secrets: [ANTHROPIC_API_KEY]` to the `claudeck` entry
-  together: a declared-but-missing secret makes `sandbox up` refuse the whole workspace.
+  `*.local.sandbox.com`, but `sandbox-dashboard.local.sandbox.com` only resolves after
+  `sandbox setup` (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
+  Caddy emits its site block only once a running feature declares the service.
 - **The container's npm rewrites `package-lock.json`.** `node:22` ships npm 10.9.x, which
   strips the `libc` fields a newer host npm writes. Discard that diff in the worktree unless
   you actually changed dependencies.

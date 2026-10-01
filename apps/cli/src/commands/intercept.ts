@@ -9,8 +9,8 @@
  * baseline dev traffic are untouched.
  *
  * Everything below the argv line lives in `sandbox-core/telepresence` —
- * `startIntercept`/`leaveIntercept` are callable in-process, which is what lets
- * claudeck's `POST /intercept` stop spawning this CLI. What stays here is the
+ * `startIntercept`/`leaveIntercept` are callable in-process, so a host server
+ * never has to spawn this CLI. What stays here is the
  * five things a remote caller cannot have: argv, the cwd walk-up, the `.env`
  * read, TTY rendering, and the exit code.
  */

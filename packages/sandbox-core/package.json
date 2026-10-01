@@ -3,7 +3,7 @@
   "version": "0.1.3",
   "type": "module",
   "private": true,
-  "description": "Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and Jira helpers. Consumed by the `sandbox` CLI itself, sandbox-dashboard, claudeck, and the VS Code extension.",
+  "description": "Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and Jira helpers. Consumed by the `sandbox` CLI itself, sandbox-dashboard, and the VS Code extension.",
   "main": "dist/sandbox.js",
   "types": "dist/sandbox.d.ts",
   "exports": {
@@ -21,7 +21,6 @@
     "./docker": "./dist/docker.js",
     "./errors": "./dist/errors.js",
     "./feature_routing": "./dist/feature_routing.js",
-    "./folders": "./dist/folders.js",
     "./form_schema": "./dist/form_schema.js",
     "./generate": "./dist/generate.js",
     "./gate": "./dist/gate.js",

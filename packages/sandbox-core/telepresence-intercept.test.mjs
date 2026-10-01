@@ -1,5 +1,5 @@
 // The command's fail() called process.exit(1). In-process that kills the host
-// server, which is exactly why claudeck still spawns the CLI for this route.
+// server, which is why no server could call this route without spawning the CLI.
 // Every rejection is now a coded SandboxError.
 import { test } from "node:test";
 import assert from "node:assert/strict";

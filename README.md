@@ -18,13 +18,6 @@ Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 Code extension all read the same machine config through it. Only the CLI
 publishes; everything else is private.
 
-It has one consumer outside this repo: the vendored **claudeck** fork, which
-lives in a sibling repo (`../claudeck`) and depends on `sandbox-core` by
-relative path. `sandbox-core` is unpublished, so that link is a plain
-`file:../sandbox/packages/sandbox-core` — meaning a breaking change here breaks
-claudeck's Workspace tab with no version gate to catch it, and `sandbox-core`
-must be built (`npm run build`) before claudeck will start.
-
 Every workspace here can also be run as a sandbox service of its own, so a feature
 workspace can develop the sandbox inside the sandbox — see "Self-hosting the sandbox repo"
 in [docs/users-guide.md](docs/users-guide.md).
@@ -177,10 +170,6 @@ npm run build      # turbo run build
 npm run typecheck  # turbo run typecheck
 npm run test       # turbo run test
 npm run dev        # turbo run dev (dashboard watch/serve)
-
-npm run claudeck:sync   # register every feature workspace as a claudeck project
-                        # (writes ~/.claudeck/config/folders.json; claudeck itself
-                        #  lives in the sibling ../claudeck repo)
 ```
 
 The `sandbox` CLI launcher lives at [apps/cli/sandbox](apps/cli/sandbox) (symlinked at the repo root as `./sandbox` for convenience).

@@ -48,7 +48,7 @@ import { collectingReporter, info, withReporter } from "./reporter.js";
 import { provisionWorkspace } from "./workspace_init.js";
 import { loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { briefingFromIssue, fetchIssueRest, fetchStatusesRest } from "./jira-rest.js";
-import { CLAUDECK, DASHBOARD, status as webStatus } from "./web_servers.js";
+import { DASHBOARD, status as webStatus } from "./web_servers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -119,8 +119,7 @@ async function isFile(p: string): Promise<boolean> {
 
 /**
  * Locate the `sandbox` CLI wrapper. This is the single resolver — every process
- * that shells out to the CLI (dashboard, claudeck's workspace plugin, MCP
- * servers) must come through here rather than hand-rolling its own order.
+ * that shells out to the CLI (dashboard, MCP servers) must come through here rather than hand-rolling its own order.
  *
  * Order: $SANDBOX_BIN → $SANDBOX_ROOT/sandbox → walk up from this module to the
  * checkout root that owns the CLI package → the `~/.local/bin/sandbox` symlink.
@@ -2158,8 +2157,8 @@ export async function openFeatureBrowser(name: string): Promise<{ path: string }
  * **The three `tools.local.sandbox.com` links are absent, deliberately.** They are
  * hardcoded in the CLI's renderer and note 070 §2 accepted that an in-process
  * caller cannot reach them; moving them is a "where do tool URLs live" question,
- * not this one. The dashboard and Claudeck URLs *are* included — those come from
- * `web_servers` in core, not from the renderer.
+ * not this one. The dashboard URL *is* included — it comes from `web_servers`
+ * in core, not from the renderer.
  */
 export async function runConnect(): Promise<{ command: string; output: string }> {
   const collector = collectingReporter();
@@ -2180,9 +2179,8 @@ export async function runConnect(): Promise<{ command: string; output: string }>
         if (!infraOk) info("Check docker and your kubeconfig.");
       }
 
-      const [mcp, claudeck] = await Promise.all([webStatus(DASHBOARD), webStatus(CLAUDECK)]);
+      const mcp = await webStatus(DASHBOARD);
       info(`Sandbox MCP:   ${mcp.url}  (workspaces dashboard; MCP at /mcp)`);
-      info(`Claudeck:      ${claudeck.url}`);
     });
   } catch (e) {
     const detail = stripAnsi(

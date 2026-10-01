@@ -178,12 +178,12 @@ export function buildInterceptRows(
  * default.
  *
  * They are `spawnSync`, so an in-process caller — the VS Code extension, the
- * claudeck server — has its whole event loop blocked for however long a wedged
+ * dashboard server — has its whole event loop blocked for however long a wedged
  * daemon takes to answer, not just the one request waiting on it. 120s of that
  * is a hung app; 15s is a slow refresh. The cap lives here rather than at the
  * call sites because every reader of a *status view* wants it, `sandbox status`
- * included — and because claudeck used to get it for free from the 15s timeout
- * on the CLI child it no longer spawns.
+ * included — and because an in-process caller no longer gets it for free from
+ * the 15s timeout on a CLI child.
  *
  * ponytail: one number for every read. Split it if they ever need to differ.
  */

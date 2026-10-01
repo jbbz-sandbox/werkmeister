@@ -8,8 +8,8 @@
  * — launches the browser in-process now. This is a flat assertion, not a
  * ratchet: nothing may be added.
  *
- * `resolveSandboxBin`/`childEnv` stay exported for *consumers* (claudeck, the
- * VS Code extension) that spawn the CLI themselves, which is core serving a
+ * `resolveSandboxBin`/`childEnv` stay exported for *consumers* (the VS Code
+ * extension, external plugins) that spawn the CLI themselves, which is core serving a
  * caller rather than core depending on the CLI. What this test forbids is core
  * doing the spawning, which is why it checks call sites rather than exports.
  */

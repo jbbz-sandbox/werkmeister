@@ -62,7 +62,7 @@ services:
   # own `sandbox` wrapper first (the dogfood point) and the tools volume next.
   # GIT_CONFIG_* marks every directory safe: the worktrees belong to the host
   # uid, and git refuses "dubious ownership" otherwise. The anchors below are
-  # reused by sandbox-dashboard and claudeck, so this entry must stay above them.
+  # reused by sandbox-dashboard, so this entry must stay above it.
   cli:
     path: apps/cli
     type: cli
@@ -138,32 +138,9 @@ services:
     # dashboard.local.sandbox.com — local only; nothing runs in the cluster.
     feature_router: {}
 
-  # Claude Code web UI; the workspace plugin needs the same host access as
-  # `cli`. Chat needs an Anthropic key: add ANTHROPIC_API_KEY to
-  # ~/.sandbox/secrets.env and `secrets: [ANTHROPIC_API_KEY]` here — a
-  # declared-but-missing secret makes `sandbox up` refuse the workspace.
-  claudeck:
-    path: apps/claudeck
-    type: web
-    archetype: node-web
-    test: "npx turbo run test --filter=claudeck"
-    internal_port: 9009
-    port_offset: 6
-    health_endpoint: /
-    setup_service: sandbox-install
-    image: node:22
-    command: "cd apps/claudeck && exec node server.js"
-    memory_limit: 1G
-    memory_reservation: 256M
-    node_modules_volume: node-modules
-    extra_volumes: *host_mounts
-    environment: *host_env
-    # claudeck.local.sandbox.com — local only.
-    feature_router: {}
-
 setup_services:
   # The sandbox repo's install + build + tools download. `npm run build` runs
-  # so sandbox-core/dist exists before the five services start; startup.sh
+  # so sandbox-core/dist exists before the four services start; startup.sh
   # (infra/compose/scripts/sandbox-install-startup.sh) fills the `tools`
   # volume with docker/compose/kubectl for the host-access services.
   sandbox-install:

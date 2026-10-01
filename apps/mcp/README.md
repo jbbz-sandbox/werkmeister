@@ -11,7 +11,7 @@ removed — the verbs over HTTP instead of a socket.
 
 ## Running it
 
-`sandbox connect` starts it, like the dashboard and claudeck: it is a `WebApp`
+`sandbox connect` starts it, like the dashboard: it is a `WebApp`
 in `packages/sandbox-core/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID
 and log under `~/.sandbox`). A host-local MCP client gets it over stdio instead:
 
@@ -27,9 +27,9 @@ launching a subprocess can use, and the HTTP mode is `sandbox connect`'s job.
 **It binds `0.0.0.0`, deliberately and uniquely.** `WebApp` carries an optional
 per-app `env`, and only this app sets `HOST=0.0.0.0` — a container reaches the
 host through `host.docker.internal`, and a loopback listener is unreachable that
-way. The dashboard and claudeck still bind loopback; do **not** try to arrange
-this by exporting `HOST` before `sandbox connect`, because `start()` passes the
-environment to all three apps and the dashboard is unauthenticated.
+way. The dashboard still binds loopback; do **not** try to arrange this by
+exporting `HOST` before `sandbox connect`, because `start()` passes the
+environment to both apps and the dashboard is unauthenticated.
 
 ## Authentication
 

@@ -1,7 +1,6 @@
 /**
  * Lifecycle for the sandbox's host web servers — the workspaces dashboard /
- * MCP app (apps/sandbox-dashboard), Claudeck (apps/claudeck), and the remote
- * MCP surface (apps/mcp).
+ * MCP app (apps/sandbox-dashboard) and the remote MCP surface (apps/mcp).
  *
  * All run as plain host `node` processes — NOT containers — because their
  * tools drive host-local things (Docker, VS Code, Terminal, kubectl, the
@@ -43,19 +42,15 @@ export interface WebApp {
   stem: string;
   /** Entry script, relative to the app dir. */
   entry: string;
-  /**
-   * Build artifact used as the staleness reference, or null for an app with no
-   * build step (Claudeck serves its sources directly).
-   */
-  buildRef: string | null;
+  /** Build artifact used as the staleness reference. */
+  buildRef: string;
   /**
    * Extra environment variables for this app's process, merged over
    * `process.env` last (see `start()`). Per-app rather than inherited by
    * every managed app: `apps/mcp` is the one server a container must reach
    * over the network, so it alone needs a wide (`0.0.0.0`) bind. DASHBOARD
-   * and CLAUDECK are host-only and unauthenticated — binding them to every
-   * interface would expose unauthenticated tools to the network, so they
-   * must not inherit this.
+   * is host-only and unauthenticated — binding it to every interface would
+   * expose unauthenticated tools to the network, so it must not inherit this.
    */
   env?: Record<string, string>;
 }
@@ -69,20 +64,11 @@ export const DASHBOARD: WebApp = {
   buildRef: "dist/main.js",
 };
 
-export const CLAUDECK: WebApp = {
-  label: "Claudeck",
-  dir: "claudeck",
-  port: 9009,
-  stem: "claudeck",
-  entry: "server.js",
-  buildRef: null,
-};
-
 /**
  * The remote MCP surface (`apps/mcp`) — the authenticated, headless sibling of
  * DASHBOARD. Its stem is `sandbox-mcp` and not `mcp-server`, which DASHBOARD
  * already holds: a shared stem means a shared PID file and two apps reaping
- * each other. Port 3002 is free — dashboard 3001, claudeck 9009, feature slots
+ * each other. Port 3002 is free — dashboard 3001, feature slots
  * from 11100 (`getPortRange`).
  */
 export const MCP: WebApp = {
@@ -98,13 +84,13 @@ export const MCP: WebApp = {
   // needs a wide bind. On a 0.0.0.0 bind, apps/mcp/lib/token.ts's
   // authorized() makes the bearer token mandatory (it only accepts a
   // missing header on loopback), so this does not open the surface up —
-  // it just makes auth non-optional. DASHBOARD/CLAUDECK deliberately don't
-  // set this: they're unauthenticated and must stay loopback-only.
+  // it just makes auth non-optional. DASHBOARD deliberately doesn't set
+  // this: it's unauthenticated and must stay loopback-only.
   env: { HOST: "0.0.0.0" },
 };
 
 /** Every app `sandbox connect` brings up (and `down`/`stop`/`restart` manage). */
-export const ALL: readonly WebApp[] = [DASHBOARD, CLAUDECK, MCP];
+export const ALL: readonly WebApp[] = [DASHBOARD, MCP];
 
 function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -207,9 +193,6 @@ function globMatch(dir: string, pattern: string): string[] {
  * source edit afterwards makes that source newer → stale.
  */
 function distStale(app: WebApp): boolean {
-  if (!app.buildRef) {
-    return false;
-  }
   const dir = appDir(app);
   const ref = path.join(dir, app.buildRef);
   let refMtime: number;
@@ -250,9 +233,6 @@ function distStale(app: WebApp): boolean {
  * bounce a healthy server on a stat error).
  */
 function buildNewerThanRunning(app: WebApp): boolean {
-  if (!app.buildRef) {
-    return false;
-  }
   const ref = path.join(appDir(app), app.buildRef);
   try {
     return fs.statSync(ref).mtimeMs > fs.statSync(pidFile(app)).mtimeMs;
@@ -383,7 +363,7 @@ export async function start(app: WebApp = DASHBOARD, build = true, force = false
       return false;
     }
     rebuilt = true;
-  } else if (build && app.buildRef) {
+  } else if (build) {
     info(`${app.label} build up to date; skipping build`);
   }
 
