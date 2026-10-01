@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { parse as parseYaml } from "yaml";
 
 import {
   defaultWorkspaceRepo,
@@ -31,7 +32,7 @@ import {
   type Runner,
   type Step,
 } from "sandbox-core/machine_setup";
-import { renderSecretsEnv, renderServicesYaml } from "sandbox-core/scaffold";
+import { REGISTRY_DEFAULTS, renderSecretsEnv, renderServicesLocalYaml } from "sandbox-core/scaffold";
 import { requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
@@ -62,30 +63,36 @@ function fakeRunner(table: Record<string, [number, string]>): Runner & { calls: 
 }
 
 describe("syncRegistryConfigs", () => {
-  it("creates every registry file on a fresh machine", () => {
+  it("creates every registry file on a fresh machine — services.yaml is generated elsewhere", () => {
     const steps = syncRegistryConfigs(false, { legacyDir: null });
     expect(steps.every((s) => s.ok)).toBe(true);
-    for (const name of ["services.yaml", "ports.yaml", "model-pricing.yaml", "secrets.env"]) {
+    for (const name of ["services.local.yaml", "ports.yaml", "model-pricing.yaml", "secrets.env"]) {
       expect(fs.existsSync(path.join(home.dir, name)), `${name} not created`).toBe(true);
     }
+    expect(fs.existsSync(path.join(home.dir, "services.yaml"))).toBe(false);
   });
 
   it("never overwrites an existing file — hand edits survive a re-run", () => {
-    home.write("services.yaml", "services:\n  hand-edited: {}\n");
-    const steps = syncRegistryConfigs(false, { legacyDir: null });
-    expect(fs.readFileSync(path.join(home.dir, "services.yaml"), "utf8")).toContain("hand-edited");
-    expect(detail(steps, "config services.yaml")).toContain("present");
+    home.write("services.local.yaml", "k8s_context: hand-edited\n");
+    const steps = syncRegistryConfigs(false, { legacyDir: null, k8sContext: "orbstack" });
+    expect(fs.readFileSync(path.join(home.dir, "services.local.yaml"), "utf8")).toContain("hand-edited");
+    expect(detail(steps, "config services.local.yaml")).toContain("present");
+  });
+
+  it("writes the wizard's k8s_context into a fresh services.local.yaml", () => {
+    syncRegistryConfigs(false, { legacyDir: null, k8sContext: "kind-dev" });
+    expect(fs.readFileSync(path.join(home.dir, "services.local.yaml"), "utf8")).toContain("k8s_context: kind-dev");
   });
 
   it("migrates a legacy infra/config checkout instead of scaffolding", () => {
     const legacy = fs.mkdtempSync(path.join(os.tmpdir(), "legacy-"));
-    fs.writeFileSync(path.join(legacy, "services.yaml"), "services:\n  from-legacy: {}\n");
+    fs.writeFileSync(path.join(legacy, "ports.yaml"), "feature_slots:\n  count: 3\n");
     try {
       const steps = syncRegistryConfigs(false, { legacyDir: legacy });
-      expect(detail(steps, "config services.yaml")).toContain("migrated");
-      expect(fs.readFileSync(path.join(home.dir, "services.yaml"), "utf8")).toContain("from-legacy");
+      expect(detail(steps, "config ports.yaml")).toContain("migrated");
+      expect(fs.readFileSync(path.join(home.dir, "ports.yaml"), "utf8")).toContain("count: 3");
       // Copied, not moved — the old checkout may still need it.
-      expect(fs.existsSync(path.join(legacy, "services.yaml"))).toBe(true);
+      expect(fs.existsSync(path.join(legacy, "ports.yaml"))).toBe(true);
     } finally {
       fs.rmSync(legacy, { recursive: true, force: true });
     }
@@ -93,8 +100,8 @@ describe("syncRegistryConfigs", () => {
 
   it("writes nothing in check mode and reports the missing files", () => {
     const steps = syncRegistryConfigs(true, { legacyDir: null });
-    expect(fs.existsSync(path.join(home.dir, "services.yaml"))).toBe(false);
-    expect(steps.find((s) => s.label === "config services.yaml")?.ok).toBe(false);
+    expect(fs.existsSync(path.join(home.dir, "services.local.yaml"))).toBe(false);
+    expect(steps.find((s) => s.label === "config services.local.yaml")?.ok).toBe(false);
     // secrets.env is a convenience, not a prerequisite — absence is not failure.
     expect(steps.find((s) => s.label === "config secrets.env")?.ok).toBe(true);
   });
@@ -112,18 +119,15 @@ describe("scaffold content", () => {
     expect(text).not.toMatch(/^[A-Z_]+=/m);
   });
 
-  it("omits per-service hostnames from the demo registry — they derive from ingress", () => {
-    const text = renderServicesYaml({ demo: true });
-    expect(text).toContain("frontend");
-    expect(text).not.toContain("hostname: frontend");
+  it("ships every archetype the self-host and demo fragments reference", () => {
+    expect(Object.keys(REGISTRY_DEFAULTS.archetypes)).toEqual(["node-web", "node-service", "node-tool", "mcp-client"]);
+    expect(Object.keys(REGISTRY_DEFAULTS.mcp_servers)).toEqual(["context7", "sandbox"]);
   });
 
-  it("emits a parseable empty skeleton with every section present", () => {
-    const text = renderServicesYaml({ demo: false, k8sContext: "kind-dev" });
-    expect(text).toContain("k8s_context: kind-dev");
-    for (const section of ["services:", "infrastructure:", "setup_services:", "repos:"]) {
-      expect(text, `missing ${section}`).toContain(section);
-    }
+  it("renders a parseable services.local.yaml carrying only k8s_context", () => {
+    const text = renderServicesLocalYaml("kind-dev");
+    // Comments may show an example `services:` block; the DATA is only k8s_context.
+    expect(parseYaml(text)).toEqual({ k8s_context: "kind-dev" });
   });
 });
 
@@ -552,11 +556,11 @@ describe("workspace repo", () => {
   });
 });
 
-describe("demo-services clone gating", () => {
-  // Gated on the registry, not on this run's --demo answer: `sandbox setup
-  // --check` passes no registry options, so keying off the answer would hide
-  // the step from the one command whose whole job is reporting drift.
-  const runSetupNow = () =>
+describe("demo-services clone gating and registry ordering", () => {
+  // Gated on the wizard's answer OR on-disk presence: the registry is
+  // generated AFTER the clones now, so it cannot be the gate any more, and a
+  // `--check` run (no answers) must still report a repo that is already there.
+  const runSetupNow = (demo = false) =>
     runSetup({
       checkOnly: true,
       reposRoot: home.dir,
@@ -564,28 +568,52 @@ describe("demo-services clone gating", () => {
       hostnames: [],
       jira: null,
       pathDirs: {},
+      demo,
     });
 
-  const seedRegistry = (demo: boolean) =>
-    fs.writeFileSync(path.join(home.dir, "services.yaml"), renderServicesYaml({ demo }));
-
-  it("includes the repo when the registry names it", async () => {
-    seedRegistry(true);
-    const labels = (await runSetupNow()).map((s) => s.label);
+  it("includes the repo when the wizard said yes", async () => {
+    const labels = (await runSetupNow(true)).map((s) => s.label);
     expect(labels).toContain(`repo ${DEMO_SERVICES_REPO}`);
     expect(labels).toContain(`repo ${WORKSPACE_ROOT_REPO}`);
   });
 
-  it("skips the repo for a registry that never mentions it", async () => {
-    seedRegistry(false);
-    const labels = (await runSetupNow()).map((s) => s.label);
+  it("includes the repo when it is already checked out", async () => {
+    // syncRepo treats a dir without .git as "not a checkout" — still a step, but be honest.
+    fs.mkdirSync(path.join(home.dir, DEMO_SERVICES_REPO, ".git"), { recursive: true });
+    const labels = (await runSetupNow(false)).map((s) => s.label);
+    expect(labels).toContain(`repo ${DEMO_SERVICES_REPO}`);
+  });
+
+  it("skips the repo on a fresh machine that declined the demo", async () => {
+    const labels = (await runSetupNow(false)).map((s) => s.label);
     expect(labels).not.toContain(`repo ${DEMO_SERVICES_REPO}`);
     // The workspace root repo is unconditional — it is not demo content.
     expect(labels).toContain(`repo ${WORKSPACE_ROOT_REPO}`);
   });
 
-  it("skips the repo on a fresh machine with no registry at all", async () => {
-    const labels = (await runSetupNow()).map((s) => s.label);
-    expect(labels).not.toContain(`repo ${DEMO_SERVICES_REPO}`);
+  it("generates the registry after the clone steps and fails loud with no fragments", async () => {
+    const steps = await runSetupNow(true);
+    const labels = steps.map((s) => s.label);
+    const registryAt = labels.indexOf("config services.yaml");
+    expect(registryAt).toBeGreaterThan(labels.indexOf(`repo ${DEMO_SERVICES_REPO}`));
+    expect(registryAt).toBeGreaterThan(labels.indexOf(`repo ${WORKSPACE_ROOT_REPO}`));
+    expect(steps[registryAt].ok).toBe(false);
+    expect(steps[registryAt].detail).toContain("no .sandbox/services.yaml found");
+  });
+
+  it("generates the registry from a fragment it finds under repos_root", async () => {
+    const fragmentDir = path.join(home.dir, "demo-services", ".sandbox");
+    fs.mkdirSync(fragmentDir, { recursive: true });
+    fs.mkdirSync(path.join(home.dir, "demo-services", ".git"), { recursive: true });
+    fs.writeFileSync(path.join(fragmentDir, "services.yaml"), "services:\n  backend:\n    path: apps/backend\n");
+    const steps = await runSetup({
+      checkOnly: false, reposRoot: home.dir, runner: fakeRunner({ "git clone": [0, ""], "claude": [0, ""] }),
+      hostnames: [], jira: null, pathDirs: {}, demo: false,
+      registry: { legacyDir: null, k8sContext: "kind-dev" },
+    });
+    expect(detail(steps, "config services.yaml")).toContain("generated");
+    const text = fs.readFileSync(path.join(home.dir, "services.yaml"), "utf8");
+    expect(text).toContain("k8s_context: kind-dev");
+    expect(text).toContain("repo: demo-services");
   });
 });
