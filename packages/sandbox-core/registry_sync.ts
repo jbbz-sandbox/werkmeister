@@ -199,6 +199,46 @@ export function renderRegistry(merged: Record<string, any>, sources: string[], l
   return header + stringifyYaml(ordered, { lineWidth: 0 });
 }
 
+/**
+ * The `k8s_context` of a HAND-WRITTEN registry at *registryPath*, or null for
+ * a missing, generated, unparsable or context-less file. An existing developer
+ * upgrading onto fragments keeps the cluster they already point at, rather
+ * than being silently reset to the default — intercepting the wrong cluster is
+ * the failure `getK8sContext` exists to prevent.
+ */
+export function inheritedK8sContext(registryPath: string): string | null {
+  if (!fs.existsSync(registryPath)) return null;
+  const text = fs.readFileSync(registryPath, "utf8");
+  if (text.startsWith(GENERATED_MARKER)) return null;
+  try {
+    const doc = parseYaml(text);
+    const ctx = isDict(doc) ? doc["k8s_context"] : undefined;
+    return typeof ctx === "string" && ctx.trim() ? ctx.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `section.name` for every entry of *oldText*'s three fragment sections that *merged* lacks. */
+function orphanedEntries(oldText: string, merged: Record<string, any>): string[] {
+  let old: unknown;
+  try {
+    old = parseYaml(oldText);
+  } catch {
+    return [];
+  }
+  if (!isDict(old)) return [];
+  const orphans: string[] = [];
+  for (const section of FRAGMENT_KEYS) {
+    const entries = old[section];
+    if (!isDict(entries)) continue;
+    for (const name of Object.keys(entries)) {
+      if (!(name in (merged[section] ?? {}))) orphans.push(`${section}.${name}`);
+    }
+  }
+  return orphans;
+}
+
 export interface SyncRegistryOptions {
   /** Defaults to `paths.repos_root`. */
   reposRoot?: string;
@@ -239,6 +279,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const localPath = servicesLocalYamlPath();
 
   let fragments: Fragment[];
+  let merged: Record<string, any>;
   let text: string;
   // A standalone `sandbox registry sync` on a machine that never ran the new
   // setup would otherwise merge with no overlay and silently drop k8s_context
@@ -247,8 +288,9 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   let seededLocal = "";
   try {
     if (!opts.checkOnly && !fs.existsSync(localPath)) {
-      seedFile(localPath, renderServicesLocalYaml("orbstack"));
-      seededLocal = `; seeded ${localPath} (k8s_context: orbstack — edit there)`;
+      const context = inheritedK8sContext(target) ?? "orbstack";
+      seedFile(localPath, renderServicesLocalYaml(context));
+      seededLocal = `; seeded ${localPath} (k8s_context: ${context} — edit there)`;
     }
     fragments = discoverFragments(reposRoot);
     if (fragments.length === 0) {
@@ -260,7 +302,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
           "re-run `sandbox setup` (or answer yes to the demo apps)",
       }];
     }
-    const merged = mergeRegistry(fragments, {
+    merged = mergeRegistry(fragments, {
       defaults: REGISTRY_DEFAULTS,
       local: readLocalOverlay(localPath),
       paths: placeholderPaths(),
@@ -291,6 +333,10 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
     const backup = `${target}.bak-${stamp}`;
     fs.copyFileSync(target, backup);
     note = `; hand-written registry backed up to ${backup}`;
+    // Entries the fragments do not carry vanish from the active registry; name
+    // them so the developer knows what to move into a fragment (or the overlay).
+    const orphans = orphanedEntries(existing, merged);
+    if (orphans.length) note += `; not in any fragment: ${orphans.join(", ")}`;
   }
   try {
     fs.mkdirSync(path.dirname(target), { recursive: true });

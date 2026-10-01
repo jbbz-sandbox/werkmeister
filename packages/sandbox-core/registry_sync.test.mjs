@@ -15,6 +15,7 @@ import {
   mergeRegistry,
   renderRegistry,
   syncRegistry,
+  inheritedK8sContext,
   GENERATED_MARKER,
   RegistryError,
 } from "./dist/registry_sync.js";
@@ -244,4 +245,35 @@ test("syncRegistry seeds services.local.yaml when absent so k8s_context is never
   const [again] = syncRegistry({ reposRoot: repos });
   assert.doesNotMatch(again.detail, /seeded/);
   assert.equal(parse(readFileSync(registryPath(), "utf8")).k8s_context, "kind-dev");
+});
+
+// --- Review fixes: the existing-developer upgrade path -----------------------
+
+test("inheritedK8sContext reads a hand-written registry's k8s_context and ignores a generated one", () => {
+  assert.equal(inheritedK8sContext(registryPath()), null);
+  writeFileSync(registryPath(), "k8s_context: kind-dev\nservices: {}\n");
+  assert.equal(inheritedK8sContext(registryPath()), "kind-dev");
+  writeFileSync(registryPath(), GENERATED_MARKER + "\nk8s_context: kind-dev\n");
+  assert.equal(inheritedK8sContext(registryPath()), null);
+  writeFileSync(registryPath(), "services: [unclosed\n");
+  assert.equal(inheritedK8sContext(registryPath()), null);
+});
+
+test("syncRegistry carries a hand-written registry's k8s_context into the seeded overlay", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  writeFileSync(registryPath(), "k8s_context: kind-dev\nservices:\n  backend:\n    repo: demo\n");
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, true, step.detail);
+  assert.equal(parse(readFileSync(path.join(home, "services.local.yaml"), "utf8")).k8s_context, "kind-dev");
+  assert.equal(parse(readFileSync(registryPath(), "utf8")).k8s_context, "kind-dev");
+});
+
+test("syncRegistry names hand-written entries that no fragment carries when it backs the file up", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  writeFileSync(registryPath(),
+    "services:\n  backend: {}\n  orphan-svc: {}\nsetup_services:\n  orphan-install: {}\ninfrastructure:\n  redis: {}\n");
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, true, step.detail);
+  assert.match(step.detail, /not in any fragment: services\.orphan-svc, setup_services\.orphan-install, infrastructure\.redis/);
+  assert.doesNotMatch(step.detail, /services\.backend/);
 });

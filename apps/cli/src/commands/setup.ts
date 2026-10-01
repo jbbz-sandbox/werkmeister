@@ -52,7 +52,7 @@ import {
   type Step,
 } from "sandbox-core/machine_setup";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
-import { discoverFragments, FRAGMENT_REL } from "sandbox-core/registry_sync";
+import { discoverFragments, FRAGMENT_REL, inheritedK8sContext } from "sandbox-core/registry_sync";
 import { expandUser } from "sandbox-core/config";
 
 function heading(text: string): void {
@@ -195,7 +195,10 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   const servicesYaml = gc.servicesYamlPath();
   const reposRoot = expandUser(resolvedPaths.repos_root);
   let demo = false;
-  let k8sContext = "orbstack";
+  // An existing hand-written registry's context is the default (and the
+  // non-interactive value): a `--yes` upgrade must not silently retarget
+  // `sandbox intercept` at the default cluster.
+  let k8sContext = inheritedK8sContext(servicesYaml) ?? "orbstack";
 
   let fragments: string[] = [];
   try {
