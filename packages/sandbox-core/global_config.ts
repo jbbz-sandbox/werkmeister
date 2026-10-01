@@ -409,9 +409,10 @@ export function loadGithubOrg(cfg?: Record<string, any>): string {
 /** GitHub org/user prompt — driven by `sandbox setup`. */
 export const _GITHUB_ORG_PROMPT: PromptSpec = {
   key: "github_org",
-  label: "GitHub org for service repos",
-  help: "Owner of the repos in your services registry. Used to link the " +
-        "canonical examples that standards docs cite (github.com/<org>/<repo>).",
+  label: "Default GitHub org for service repos (this is only used when writing documentation and can be overridden)",
+  help: "Owner assumed for a bare `canonical: <repo>:<path>` in standards docs, " +
+        "linking it as github.com/<org>/<repo>. A repo in another org writes " +
+        "`canonical: <owner>/<repo>:<path>` instead.",
   acceptEmpty: false,
   pattern: "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$",
   placeholder: "your-org",

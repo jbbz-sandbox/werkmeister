@@ -117,3 +117,36 @@ describe("generateSkills link rewriting", () => {
     expect(skill).not.toContain("(repos/widgets.md)");
   });
 });
+
+describe("canonical footer links", () => {
+  function writeDirModule(dir: string, canonical: string): void {
+    const mod = path.join(dir, "widgets");
+    fs.mkdirSync(path.join(mod, "references"), { recursive: true });
+    fs.writeFileSync(
+      path.join(mod, "STANDARD.md"),
+      "---\ndomain: widgets\nsummary: Widget rules\napplies_to: [\"**/*.widget.ts\"]\nphase: implement\n---\n\n- [ex](references/ex.md)\n",
+    );
+    fs.writeFileSync(path.join(mod, "references", "ex.md"), `---\ncanonical: ${canonical}\n---\n\nbody\n`);
+  }
+  const footer = () => generateSkills()["sb-widgets-standard"]["references/ex.md"];
+
+  it("prefixes a bare repo with the configured org", () => {
+    const dir = makeTree(null);
+    gc.save({ overrides: { standards_dir: dir, github_org: "acme" } });
+    writeDirModule(dir, "svc:src/a.ts");
+    expect(footer()).toContain("https://github.com/acme/svc/blob/HEAD/src/a.ts");
+  });
+
+  it("uses the owner in owner/repo:path as-is, ignoring the configured org", () => {
+    const dir = makeTree(null);
+    gc.save({ overrides: { standards_dir: dir, github_org: "acme" } });
+    writeDirModule(dir, "other-org/svc:src/a.ts");
+    expect(footer()).toContain("https://github.com/other-org/svc/blob/HEAD/src/a.ts");
+  });
+
+  it("links owner/repo:path even with no org configured", () => {
+    const dir = makeTree(null);
+    writeDirModule(dir, "other-org/svc:src/a.ts");
+    expect(footer()).toContain("https://github.com/other-org/svc/blob/HEAD/src/a.ts");
+  });
+});

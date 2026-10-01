@@ -302,9 +302,11 @@ function renderReference(filePath: string): string {
     const sep = canonical.indexOf(":");
     const repo = canonical.slice(0, sep);
     const rel = canonical.slice(sep + 1);
-    // No org configured: name the file and stop. A guessed owner would render
-    // a link that 404s, which is worse than no link at all.
-    const base = serviceRepoBase();
+    // `owner/repo:path` names its own owner, for repos outside the configured
+    // org. A bare `repo:path` takes the configured org; with none configured,
+    // name the file and stop — a guessed owner renders a link that 404s,
+    // which is worse than no link at all.
+    const base = repo.includes("/") ? "https://github.com" : serviceRepoBase();
     const link = base ? ` — ${base}/${repo}/blob/HEAD/${rel}` : "";
     body += `\n\n---\nFull file: \`${canonical}\`${link}\n`;
   }
