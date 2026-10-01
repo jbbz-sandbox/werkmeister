@@ -59,6 +59,11 @@ actually driven from a container.
 
 Tools take an optional `feature` argument that overrides the header.
 
+That covers a container the sandbox itself runs. For putting the *agent* in a
+container, a Docker Sandbox microVM, or a full VM — what each needs mounted and
+set, and which pieces stop working there — see "Running the agent itself in
+isolation" in `docs/users-guide.md`.
+
 ## Watching it
 
 `sandbox status` reports the *dashboard* under `mcp_web_server`, not this

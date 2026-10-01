@@ -998,6 +998,76 @@ the pieces that are not obvious from the demo services:
   server rejects with 403. Drive a *different* feature than the container's own: tearing
   down its own feature kills the caller mid-call.
 
+### Running the agent itself in isolation
+
+The four-edits recipe above wires a *compose service* that the sandbox manages. The
+same server also lets you put the whole agent — Claude Code, the editor, your shell —
+somewhere isolated from the host, with port 3002 as the only bridge back. Three
+shapes, in order of how much they share with the host.
+
+**What every shape needs.** The server holds the Docker privilege, so the isolated side
+needs none of the socket, `kubectl`, `~/.kube`, `~/.sandbox` or the `sandbox` binary.
+It does need:
+
+- `~/repos` and `~/features` mounted at their **host** paths. A worktree's `.git` is a
+  file holding an absolute `gitdir:` pointer into the main checkout's `.git/worktrees/`,
+  so a different mount point breaks every git command in the workspace.
+- `HOME` matching the host user, and `GIT_CONFIG_COUNT=1`,
+  `GIT_CONFIG_KEY_0=safe.directory`, `GIT_CONFIG_VALUE_0=*` — the mounts arrive owned by
+  a different uid.
+- `SANDBOX_MCP_TOKEN` from `~/.sandbox/mcp-token` and `FEATURE` set to the workspace's
+  feature, which the projected `.mcp.json` expands into the bearer header and
+  `X-Sandbox-Feature`.
+- A route to the host's 3002: `host.docker.internal` resolving to the host gateway.
+- The workspace's archetype carrying `mcp_servers: [sandbox]` (edit 3 above). Nothing
+  else makes the entry survive `init-workspace`.
+
+Two things stop working on the isolated side, by design. The `sandbox-tools` plugin's
+MCP entry runs `sandbox dashboard` over stdio, and its skills shell out to the CLI; with
+no binary there, use the `sandbox-*` tools the HTTP server exposes instead. And the
+dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
+
+**1. A plain container, by hand.** Nothing sandbox-managed; the host just has to have
+run `sandbox connect` so the server is up.
+
+```bash
+docker run -it --rm \
+  -v "$HOME/repos:$HOME/repos" -v "$HOME/features:$HOME/features" \
+  -e HOME="$HOME" \
+  -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+  -e SANDBOX_MCP_TOKEN="$(cat ~/.sandbox/mcp-token)" -e FEATURE=my-feature \
+  --add-host host.docker.internal:host-gateway \
+  -w "$HOME/features/my-feature" node:22 bash
+```
+
+Use `node:22`, not alpine, for the reason in the self-hosting list. Install `claude`
+inside as you would anywhere. The smoke test is the same `initialize` POST as above.
+
+**2. Docker Sandboxes (`docker sandbox run claude …`) or any other microVM agent runner.**
+Structurally it is shape 1 with a stronger wall: the agent runs in a VM with **its own
+Docker daemon**, so even a socket mount would show it an empty engine, never the host's
+compose containers. Port 3002 is the only way to drive the sandbox from inside. Two
+things to check against whatever product you use, since they vary and are not verified
+here: that its network policy lets the VM reach the host gateway (the server refuses
+nothing but a browser `Origin`, so an allow-rule for `host.docker.internal:3002` is all
+it needs), and that it can mount `~/repos` *and* `~/features` at host paths rather than
+only the directory you launched it from. `docker sandbox` is a Docker Desktop feature;
+on a machine whose Docker context is OrbStack or Colima it is simply absent.
+
+**3. A full VM with its own stack.** An OrbStack Linux machine, Lima, or a cloud box
+running `sandbox setup` end to end: its own `dockerd`, Caddy, `k8s-forwards` and
+telepresence, with the only shared thing a kubeconfig. The compose files already map
+`host.docker.internal:host-gateway`, so plain Linux `dockerd` works unchanged. This is
+the one shape that isolates you from the host's *containers* as well as its daemon, and
+it is a second complete install: `~/.sandbox`, certificates, `/etc/hosts` and all. To use
+the host's browser against it, point the host's `*.local.sandbox.com` entries at the VM's
+address instead of loopback, and copy the VM's CA into the browser's trust store. The
+apps/mcp server is irrelevant here — the CLI runs natively inside.
+
+Pick 1 when you want the agent off the host's Docker socket and nothing more. Pick 2
+when the runner is already part of your workflow. Pick 3 only when a wrong `sandbox
+clean` or a runaway compose build must not be able to touch the host's engine at all.
+
 ---
 
 ## Port Allocation
