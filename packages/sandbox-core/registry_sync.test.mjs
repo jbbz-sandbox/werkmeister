@@ -5,8 +5,8 @@
 // (syncRegistry) is pinned in the second half of this file.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, readdirSync } from "node:fs";
+import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
 import {
@@ -14,6 +14,7 @@ import {
   expandPlaceholders,
   mergeRegistry,
   renderRegistry,
+  syncRegistry,
   GENERATED_MARKER,
   RegistryError,
 } from "./dist/registry_sync.js";
@@ -133,4 +134,98 @@ test("renderRegistry emits the marker, sources and the fixed key order", () => {
   assert.deepEqual(Object.keys(parse(text)),
     ["archetypes", "mcp_servers", "k8s_context", "services", "infrastructure", "setup_services", "repos"]);
   assert.equal(parse(text).mcp_servers.context7.env.CONTEXT7_API_KEY, "${CONTEXT7_API_KEY:-}");
+});
+
+// --- syncRegistry: the step `sandbox setup` and `sandbox registry` run -------
+// Config lives in a temp ~/.sandbox via SANDBOX_CONFIG_FILE, the same seam the
+// CLI's tests use, so servicesYamlPath() lands in the temp dir.
+const ENV = ["SANDBOX_CONFIG_FILE", "SANDBOX_SERVICES_YAML", "SANDBOX_WORKSPACES_ROOT"];
+let savedEnv;
+let home;
+beforeEach(() => {
+  savedEnv = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
+  for (const k of ENV) delete process.env[k];
+  home = path.join(root, "sandbox-home");
+  mkdirSync(home);
+  process.env.SANDBOX_CONFIG_FILE = path.join(home, "config.yaml");
+  writeFileSync(process.env.SANDBOX_CONFIG_FILE,
+    `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(root, "features")}\n`);
+});
+afterEach(() => {
+  for (const k of ENV) {
+    if (savedEnv[k] === undefined) delete process.env[k]; else process.env[k] = savedEnv[k];
+  }
+});
+
+const registryPath = () => path.join(home, "services.yaml");
+
+test("syncRegistry fails loud with nothing written when no fragment exists", () => {
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.label, "config services.yaml");
+  assert.equal(step.ok, false);
+  assert.match(step.detail, /no .sandbox\/services\.yaml found under/);
+  assert.match(step.detail, /sandbox setup/);
+  assert.equal(existsSync(registryPath()), false);
+});
+
+test("syncRegistry reports 'no fragments' rather than throwing for a missing repos_root", () => {
+  const [step] = syncRegistry({ reposRoot: path.join(root, "absent") });
+  assert.equal(step.ok, false);
+  assert.match(step.detail, /no .sandbox\/services\.yaml found/);
+});
+
+test("syncRegistry writes the merged registry with expanded placeholders", () => {
+  writeFragment("demo", "services:\n  backend:\n    path: apps/backend\n    extra_volumes:\n      - '{{home}}/.sandbox:{{home}}/.sandbox'\n");
+  writeFileSync(path.join(home, "services.local.yaml"), "k8s_context: kind-dev\n");
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, true, step.detail);
+  const doc = parse(readFileSync(registryPath(), "utf8"));
+  assert.equal(doc.k8s_context, "kind-dev");
+  assert.equal(doc.services.backend.repo, "demo");
+  assert.equal(doc.services.backend.extra_volumes[0], `${os.homedir()}/.sandbox:${os.homedir()}/.sandbox`);
+  assert.deepEqual(doc.repos.demo.path_mappings, { "apps/backend": "backend" });
+});
+
+test("syncRegistry treats an empty services.local.yaml as no overrides", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  writeFileSync(path.join(home, "services.local.yaml"), "");
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, true, step.detail);
+});
+
+test("syncRegistry turns a merge error into a failing step", () => {
+  writeFragment("a", "services:\n  s: {}\n");
+  writeFragment("b", "services:\n  s: {}\n");
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, false);
+  assert.match(step.detail, /services\.s is defined by both a and b/);
+  assert.equal(existsSync(registryPath()), false);
+});
+
+test("syncRegistry is idempotent and --check reports drift or a missing file", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  assert.equal(syncRegistry({ reposRoot: repos, checkOnly: true })[0].ok, false);
+  assert.match(syncRegistry({ reposRoot: repos, checkOnly: true })[0].detail, /missing — would generate/);
+  syncRegistry({ reposRoot: repos });
+  const second = syncRegistry({ reposRoot: repos })[0];
+  assert.equal(second.ok, true);
+  assert.match(second.detail, /up to date/);
+  assert.equal(syncRegistry({ reposRoot: repos, checkOnly: true })[0].ok, true);
+  writeFragment("demo", "services:\n  backend:\n    port_offset: 1\n");
+  const drift = syncRegistry({ reposRoot: repos, checkOnly: true })[0];
+  assert.equal(drift.ok, false);
+  assert.match(drift.detail, /drift — would regenerate/);
+  assert.equal(existsSync(registryPath()) && !readFileSync(registryPath(), "utf8").includes("port_offset"), true);
+});
+
+test("syncRegistry backs up a hand-written registry once, never a generated one", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  writeFileSync(registryPath(), "services:\n  hand-edited: {}\n");
+  const first = syncRegistry({ reposRoot: repos, now: () => 1_700_000_000_000 })[0];
+  assert.match(first.detail, /backed up to .*services\.yaml\.bak-1700000000/);
+  assert.equal(readFileSync(path.join(home, "services.yaml.bak-1700000000"), "utf8"), "services:\n  hand-edited: {}\n");
+  writeFragment("demo", "services:\n  backend:\n    port_offset: 1\n");
+  const second = syncRegistry({ reposRoot: repos, now: () => 1_700_000_001_000 })[0];
+  assert.doesNotMatch(second.detail, /backed up/);
+  assert.deepEqual(readdirSync(home).filter((f) => f.startsWith("services.yaml.bak")), ["services.yaml.bak-1700000000"]);
 });

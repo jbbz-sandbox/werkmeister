@@ -16,9 +16,14 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+
+import { getReposRoot, servicesLocalYamlPath, servicesYamlPath, workspacesRoot } from "./config.js";
+import type { Step } from "./machine_setup.js";
+import { REGISTRY_DEFAULTS } from "./scaffold.js";
 
 /** Where a repo's fragment lives, relative to its checkout root. */
 export const FRAGMENT_REL = path.join(".sandbox", "services.yaml");
@@ -192,4 +197,97 @@ export function renderRegistry(merged: Record<string, any>, sources: string[], l
     "",
   ].join("\n");
   return header + stringifyYaml(ordered, { lineWidth: 0 });
+}
+
+export interface SyncRegistryOptions {
+  /** Defaults to `paths.repos_root`. */
+  reposRoot?: string;
+  /** Report what would happen; write nothing. */
+  checkOnly?: boolean;
+  /** Clock for the backup suffix (tests). */
+  now?: () => number;
+}
+
+function placeholderPaths(): PlaceholderPaths {
+  return { home: os.homedir(), repos_root: getReposRoot(), workspaces_root: workspacesRoot() };
+}
+
+function readLocalOverlay(localPath: string): Record<string, any> {
+  if (!fs.existsSync(localPath)) return {};
+  let doc: unknown;
+  try {
+    doc = parseYaml(fs.readFileSync(localPath, "utf8"));
+  } catch (e) {
+    throw new RegistryError(`${localPath}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (doc === null || doc === undefined) return {};
+  if (!isDict(doc)) throw new RegistryError(`${localPath}: must be a map of registry keys`);
+  return doc;
+}
+
+/**
+ * Regenerate `~/.sandbox/services.yaml` from every fragment under repos_root.
+ *
+ * One Step, label `config services.yaml`, matching the other registry files'
+ * steps in machine_setup. Never throws: a bad fragment or a collision is a
+ * failing step whose detail is the RegistryError message.
+ */
+export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
+  const label = "config services.yaml";
+  const reposRoot = opts.reposRoot ?? getReposRoot();
+  const target = servicesYamlPath();
+  const localPath = servicesLocalYamlPath();
+
+  let fragments: Fragment[];
+  let text: string;
+  try {
+    fragments = discoverFragments(reposRoot);
+    if (fragments.length === 0) {
+      return [{
+        label,
+        ok: false,
+        detail:
+          `no ${FRAGMENT_REL} found under ${reposRoot} — clone your team's repos there and ` +
+          "re-run `sandbox setup` (or answer yes to the demo apps)",
+      }];
+    }
+    const merged = mergeRegistry(fragments, {
+      defaults: REGISTRY_DEFAULTS,
+      local: readLocalOverlay(localPath),
+      paths: placeholderPaths(),
+    });
+    text = renderRegistry(merged, fragments.map((f) => f.path), localPath);
+  } catch (e) {
+    return [{ label, ok: false, detail: e instanceof Error ? e.message : String(e) }];
+  }
+
+  const sources = `${fragments.length} fragment${fragments.length === 1 ? "" : "s"}`;
+  const existing = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
+  if (existing === text) {
+    return [{ label, ok: true, detail: `up to date (${sources}) at ${target}` }];
+  }
+  if (opts.checkOnly) {
+    return [{
+      label,
+      ok: false,
+      detail: existing === null
+        ? `missing — would generate ${target} from ${sources}`
+        : `drift — would regenerate ${target} from ${sources}`,
+    }];
+  }
+
+  let note = "";
+  if (existing !== null && !existing.startsWith(GENERATED_MARKER)) {
+    const stamp = Math.floor((opts.now ?? Date.now)() / 1000);
+    const backup = `${target}.bak-${stamp}`;
+    fs.copyFileSync(target, backup);
+    note = `; hand-written registry backed up to ${backup}`;
+  }
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, text);
+  } catch (e) {
+    return [{ label, ok: false, detail: `could not write ${target}: ${e}` }];
+  }
+  return [{ label, ok: true, detail: `generated ${target} from ${sources}${note}` }];
 }
