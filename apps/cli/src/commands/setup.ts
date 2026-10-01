@@ -12,7 +12,7 @@
  *                     `overrides.github_org`
  *   2. browser      — which browser `sandbox open` launches (`overrides.browser`)
  *   3. ingress      — base domains + cert directory (`ingress:`)
- *   4. registry     — how to create services.yaml, if it doesn't exist yet
+ *   4. registry     — which repo fragments will generate services.yaml; demo clone; k8s context
  *   5. jira         — OPTIONAL REST credentials for the dashboard fast path
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
@@ -47,12 +47,13 @@ import * as gc from "sandbox-core/global_config";
 import type { PromptSpec } from "sandbox-core/global_config";
 import {
   githubOwners,
-  LEGACY_CONFIG_DIR,
   runSetup,
   WORKSPACE_ROOT_REPO,
   type Step,
 } from "sandbox-core/machine_setup";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
+import { discoverFragments, FRAGMENT_REL } from "sandbox-core/registry_sync";
+import { expandUser } from "sandbox-core/config";
 
 function heading(text: string): void {
   console.log(`\n${Colors.BOLD}${text}${Colors.RESET}`);
@@ -192,28 +193,30 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   // --- 4. registry --------------------------------------------------------
   heading("4. Service registry");
   const servicesYaml = gc.servicesYamlPath();
-  const legacyDir = path.join(getSandboxRoot(), LEGACY_CONFIG_DIR);
-  const hasLegacy = fs.existsSync(path.join(legacyDir, "services.yaml"));
+  const reposRoot = expandUser(resolvedPaths.repos_root);
   let demo = false;
   let k8sContext = "orbstack";
 
-  if (fs.existsSync(servicesYaml)) {
-    info(`Using the existing registry at ${servicesYaml} (left untouched).`);
-  } else if (hasLegacy) {
-    info(`Found a legacy registry at ${legacyDir} — it will be migrated to ~/.sandbox.`);
+  let fragments: string[] = [];
+  try {
+    fragments = discoverFragments(reposRoot).map((f) => f.repo);
+  } catch {
+    // A broken fragment is reported by the registry step itself.
+  }
+  if (fragments.length) {
+    info(`${servicesYaml} will be generated from ${fragments.length} repo fragment(s): ${fragments.join(", ")}.`);
   } else {
-    info(`No registry yet. One will be created at ${servicesYaml}.`);
-    demo = await confirm(
-      "  Seed it with the demo apps (backend, frontend) instead of an empty skeleton?",
-      false,
-      interactive,
+    info(`No <repo>/${FRAGMENT_REL} found under ${reposRoot}.`);
+    info("Clone your team's repos there and re-run `sandbox setup`, or try the demo apps.");
+  }
+  if (!fragments.includes("demo-services")) {
+    demo = await confirm("  Clone the demo apps (backend, frontend) so there is something to run?", false, interactive);
+  }
+  if (!fs.existsSync(gc.servicesLocalYamlPath()) && interactive) {
+    k8sContext = await prompt(
+      "Kube context for `sandbox intercept` (services.local.yaml k8s_context)",
+      k8sContext,
     );
-    if (interactive) {
-      k8sContext = await prompt(
-        "Kube context for `sandbox intercept` (services.yaml k8s_context)",
-        k8sContext,
-      );
-    }
   }
 
   // --- 5. jira (optional; prompted here so all writes happen together) -----
@@ -387,10 +390,11 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   const steps = await runSetup({
     checkOnly: false,
-    registry: { demo: answers.demo, k8sContext: answers.k8sContext },
+    demo: answers.demo,
+    registry: { k8sContext: answers.k8sContext },
     workspaceRepo: answers.workspaceRepo,
     // A thunk, not a list: on a first run services.yaml does not exist yet, and
-    // runSetup calls this only after its registry step has seeded it.
+    // runSetup calls this only after its registry step has generated it.
     hostnames: resolveHostnames,
     skipSudo: answers.skipSudo,
     installTelepresence: answers.installTelepresence,

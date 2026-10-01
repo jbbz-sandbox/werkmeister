@@ -29,6 +29,7 @@
  *     sandbox remove-workspace <name>          Hand off and delete a workspace (push, down, rm)
  *     sandbox code [feature]                   Open a workspace in VS Code
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
+ *     sandbox registry [sync] [--check]        Regenerate ~/.sandbox/services.yaml from repo fragments
  *     sandbox dashboard                        Launch the workspace dashboard's MCP server (stdio)
  *     sandbox mcp                              Launch the headless remote MCP surface (stdio)
  *
@@ -631,6 +632,20 @@ const SPECS: CommandSpec[] = [
       show: Boolean(o.show),
       check: Boolean(o.check),
     }),
+  },
+  {
+    name: "registry",
+    load: () => import("./commands/registry.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Regenerate ~/.sandbox/services.yaml from every <repo>/.sandbox/services.yaml " +
+            "under paths.repos_root (merged under ~/.sandbox/services.local.yaml)",
+        )
+        .argument("[action]", "sync — the default and only action")
+        .option("--check", "Report drift without writing; nonzero exit when stale.");
+    },
+    namespace: ([action], o) => ({ action: action ?? "sync", check: Boolean(o.check) }),
   },
   {
     name: "init-workspace",

@@ -36,6 +36,7 @@ import {
   sandboxHome,
   sandboxRoot,
   servicesYamlPath,
+  servicesLocalYamlPath,
 } from "./config.js";
 import { warn } from "./reporter.js";
 
@@ -72,7 +73,7 @@ const _ABS_PATH = "^/\\S*$"; // absolute path (leading slash, no whitespace)
 // `sandbox-core/config` rather than defined here: the dashboard and MCP servers
 // resolve the same files out-of-process, and two implementations had already
 // drifted apart on precedence. See that module's header.
-export { configPath, sandboxHome, servicesYamlPath, portsYamlPath, modelPricingYamlPath };
+export { configPath, sandboxHome, servicesYamlPath, servicesLocalYamlPath, portsYamlPath, modelPricingYamlPath };
 
 /** Path to the generated shell export file (sibling of the config). */
 export function envShPath(): string {
