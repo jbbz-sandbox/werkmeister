@@ -229,3 +229,19 @@ test("syncRegistry backs up a hand-written registry once, never a generated one"
   assert.doesNotMatch(second.detail, /backed up/);
   assert.deepEqual(readdirSync(home).filter((f) => f.startsWith("services.yaml.bak")), ["services.yaml.bak-1700000000"]);
 });
+
+test("syncRegistry seeds services.local.yaml when absent so k8s_context is never dropped", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  const localPath = path.join(home, "services.local.yaml");
+  assert.equal(existsSync(localPath), false);
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, true, step.detail);
+  assert.match(step.detail, /seeded .*services\.local\.yaml/);
+  assert.equal(parse(readFileSync(localPath, "utf8")).k8s_context, "orbstack");
+  assert.equal(parse(readFileSync(registryPath(), "utf8")).k8s_context, "orbstack");
+  // Re-running neither reseeds nor reports it again.
+  writeFileSync(localPath, "k8s_context: kind-dev\n");
+  const [again] = syncRegistry({ reposRoot: repos });
+  assert.doesNotMatch(again.detail, /seeded/);
+  assert.equal(parse(readFileSync(registryPath(), "utf8")).k8s_context, "kind-dev");
+});

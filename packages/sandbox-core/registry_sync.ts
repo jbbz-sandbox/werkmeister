@@ -23,7 +23,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { getReposRoot, servicesLocalYamlPath, servicesYamlPath, workspacesRoot } from "./config.js";
 import type { Step } from "./machine_setup.js";
-import { REGISTRY_DEFAULTS } from "./scaffold.js";
+import { REGISTRY_DEFAULTS, renderServicesLocalYaml, seedFile } from "./scaffold.js";
 
 /** Where a repo's fragment lives, relative to its checkout root. */
 export const FRAGMENT_REL = path.join(".sandbox", "services.yaml");
@@ -240,7 +240,16 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
 
   let fragments: Fragment[];
   let text: string;
+  // A standalone `sandbox registry sync` on a machine that never ran the new
+  // setup would otherwise merge with no overlay and silently drop k8s_context
+  // (which `sandbox intercept` requires). Seed the overlay the way setup does;
+  // seedFile never overwrites, so an existing file is untouched.
+  let seededLocal = "";
   try {
+    if (!opts.checkOnly && !fs.existsSync(localPath)) {
+      seedFile(localPath, renderServicesLocalYaml("orbstack"));
+      seededLocal = `; seeded ${localPath} (k8s_context: orbstack — edit there)`;
+    }
     fragments = discoverFragments(reposRoot);
     if (fragments.length === 0) {
       return [{
@@ -264,7 +273,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const sources = `${fragments.length} fragment${fragments.length === 1 ? "" : "s"}`;
   const existing = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
   if (existing === text) {
-    return [{ label, ok: true, detail: `up to date (${sources}) at ${target}` }];
+    return [{ label, ok: true, detail: `up to date (${sources}) at ${target}${seededLocal}` }];
   }
   if (opts.checkOnly) {
     return [{
@@ -289,5 +298,5 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   } catch (e) {
     return [{ label, ok: false, detail: `could not write ${target}: ${e}` }];
   }
-  return [{ label, ok: true, detail: `generated ${target} from ${sources}${note}` }];
+  return [{ label, ok: true, detail: `generated ${target} from ${sources}${note}${seededLocal}` }];
 }
