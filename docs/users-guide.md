@@ -852,7 +852,13 @@ The columns above are the required keys. `sandbox services` lists whatever is re
 
 ### Writing a fragment
 
-A fragment is a slice of the registry committed at `<repo>/.sandbox/services.yaml`:
+A fragment is a slice of the registry committed at `<repo>/.sandbox/services.yaml`.
+Its JSON Schema is `apps/cli/infra/schemas/services-fragment.schema.json`. `sandbox setup`
+offers to map it (and `workspace.schema.json`) in VS Code's user `yaml.schemas` by local
+path, which turns on validation through the redhat.vscode-yaml extension. Don't add a
+`# yaml-language-server` modeline or a `$schema:` key: the repo is private, so the GitHub
+URL 404s, and either one outranks the local mapping (the merge also rejects `$schema:` as
+an unexpected top-level key):
 
 ```yaml
 services:

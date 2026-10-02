@@ -598,7 +598,7 @@ const SPECS: CommandSpec[] = [
           "Guided machine setup: walks through paths, ingress domains and the " +
             "~/.sandbox service registry, then converges the plugins, the " +
             "sandbox-workspace checkout, the TLS certificate and the optional " +
-            "Jira and Telepresence prerequisites",
+            "Jira, Telepresence and VS Code YAML-schema prerequisites",
         )
         .option("--check", "Report prerequisite state without prompting or running any install/update commands")
         .option("--yes", "Non-interactive: accept every default and skip optional installs");

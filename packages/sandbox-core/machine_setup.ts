@@ -51,6 +51,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { applyEdits, modify, parse as parseJsonc, type ParseError } from "jsonc-parser";
+
 import { expandUser, getReposRoot, sandboxRoot, servicesLocalYamlPath } from "./config.js";
 import { syncRegistry } from "./registry_sync.js";
 import {
@@ -844,6 +846,100 @@ export async function syncJiraToken(
   }];
 }
 
+/** Schema file in `<cli>/infra/schemas/` → the glob it validates. */
+const EDITOR_SCHEMAS: Record<string, string> = {
+  "services-fragment.schema.json": "**/.sandbox/services.yaml",
+  "workspace.schema.json": "**/.sandbox/workspace.yml",
+};
+
+/** VS Code's user settings.json (stable channel only). */
+export function vscodeSettingsPath(): string {
+  return process.platform === "darwin"
+    ? path.join(os.homedir(), "Library", "Application Support", "Code", "User", "settings.json")
+    : path.join(os.homedir(), ".config", "Code", "User", "settings.json");
+}
+
+export interface EditorSchemaState {
+  /** VS Code's user dir exists. */
+  present: boolean;
+  /** Unparsable settings.json; its parse error. */
+  error?: string;
+  /** `yaml.schemas` keys to set (schema path → glob) and to drop (stale paths). */
+  set: Record<string, string>;
+  drop: string[];
+  /** Raw settings text the edits apply to. */
+  text: string;
+}
+
+/**
+ * What `yaml.schemas` in VS Code's user settings lacks for the sandbox schemas.
+ *
+ * The schemas are mapped by local path, not URL: the repo is private, so
+ * raw.githubusercontent.com 404s for an editor. A mapping for one of our globs
+ * that names some other file is stale (an old install path) and is dropped.
+ */
+export function editorSchemaState(
+  settingsPath = vscodeSettingsPath(),
+  schemasDir = path.join(sandboxRoot(), "infra", "schemas"),
+): EditorSchemaState {
+  const state: EditorSchemaState = { present: false, set: {}, drop: [], text: "{}" };
+  if (!fs.existsSync(path.dirname(settingsPath))) return state;
+  state.present = true;
+  if (fs.existsSync(settingsPath)) state.text = fs.readFileSync(settingsPath, "utf8");
+  const errors: ParseError[] = [];
+  const data = parseJsonc(state.text, errors, { allowTrailingComma: true });
+  if (errors.length) {
+    state.error = `parse error at offset ${errors[0].offset}`;
+    return state;
+  }
+  const mapped: Record<string, unknown> = data?.["yaml.schemas"] ?? {};
+  const covers = (v: unknown, glob: string) => v === glob || (Array.isArray(v) && v.includes(glob));
+  for (const [file, glob] of Object.entries(EDITOR_SCHEMAS)) {
+    const want = path.join(schemasDir, file);
+    if (!covers(mapped[want], glob)) state.set[want] = glob;
+    for (const [key, v] of Object.entries(mapped)) {
+      if (key !== want && covers(v, glob)) state.drop.push(key);
+    }
+  }
+  return state;
+}
+
+/**
+ * Map the sandbox YAML schemas in VS Code's user settings (redhat.vscode-yaml).
+ *
+ * Optional, and a user-owned file: writes only when the wizard asked and the
+ * user said yes (`install`). Edits go through jsonc-parser so comments and
+ * formatting in settings.json survive.
+ */
+export function syncEditorSchemas(
+  checkOnly: boolean,
+  install: boolean,
+  settingsPath = vscodeSettingsPath(),
+  schemasDir?: string,
+): Step[] {
+  const label = "VS Code YAML schemas (optional)";
+  const state = editorSchemaState(settingsPath, schemasDir);
+  if (!state.present) return [{ label, ok: true, detail: "VS Code not found — skipped" }];
+  if (state.error) {
+    return [{ label, ok: false, optional: true, detail: `${settingsPath}: ${state.error} — fix it and re-run` }];
+  }
+  const pending = Object.keys(state.set).length + state.drop.length;
+  if (!pending) return [{ label, ok: true, detail: `mapped in ${settingsPath}` }];
+  if (checkOnly || !install) {
+    return state.drop.length
+      ? [{ label, ok: false, optional: true, detail: "mapped to an old install path — re-run `sandbox setup`" }]
+      : [{ label, ok: true, detail: "not mapped (opt in via `sandbox setup`)" }];
+  }
+  let text = state.text;
+  const fmt = { formattingOptions: { insertSpaces: true, tabSize: 4 } };
+  for (const key of state.drop) text = applyEdits(text, modify(text, ["yaml.schemas", key], undefined, fmt));
+  for (const [key, glob] of Object.entries(state.set)) {
+    text = applyEdits(text, modify(text, ["yaml.schemas", key], glob, fmt));
+  }
+  fs.writeFileSync(settingsPath, text);
+  return [{ label, ok: true, optional: true, detail: `mapped in ${settingsPath}` }];
+}
+
 /**
  * Report — and optionally install via Homebrew — the Telepresence OSS client.
  *
@@ -985,6 +1081,8 @@ export interface RunSetupOptions {
   installTelepresence?: boolean;
   /** Install the optional plugins (superpowers) when they are missing. */
   installOptionalPlugins?: boolean;
+  /** Map the sandbox YAML schemas in VS Code's user settings (the wizard asks first). */
+  mapEditorSchemas?: boolean;
 }
 
 /**
@@ -1089,5 +1187,6 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   );
   steps.push(...(await syncJiraToken(jira, checkOnly, options.jiraVerifier)));
   steps.push(...syncTelepresence(runner, checkOnly, { install: options.installTelepresence }));
+  steps.push(...syncEditorSchemas(checkOnly, options.mapEditorSchemas ?? false));
   return steps;
 }

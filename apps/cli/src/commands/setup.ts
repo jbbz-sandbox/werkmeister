@@ -5,7 +5,7 @@
  * prerequisite that lives outside the checkout, writing the machine-global
  * config in `~/.sandbox` and converging the rest:
  *
- * The wizard asks everything up front, in seven sections:
+ * The wizard asks everything up front, in eight sections:
  *
  *   1. paths        — repos root and workspaces root (`paths:`), plus the
  *                     GitHub locations `overrides.workspace_repo` and
@@ -16,13 +16,14 @@
  *   5. jira         — OPTIONAL REST credentials for the dashboard fast path
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
+ *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings
  *
  * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
  * converges the machine (sandbox-core/machine_setup):
  * seeding the `~/.sandbox` registry files (or migrating them up from a legacy
  * `infra/config/` checkout), the sandbox-tools and ponytail plugins, the
  * companion sandbox-workspace checkout, the TLS certificate covering every
- * routed hostname, and the three optional prerequisites above.
+ * routed hostname, and the four optional prerequisites above.
  *
  * Every step is idempotent, so re-running after adding a service or changing a
  * domain converges just what changed. Nothing is written before the last
@@ -46,8 +47,10 @@ import { ingressHostnames } from "sandbox-core/feature_routing";
 import * as gc from "sandbox-core/global_config";
 import type { PromptSpec } from "sandbox-core/global_config";
 import {
+  editorSchemaState,
   githubOwners,
   runSetup,
+  vscodeSettingsPath,
   WORKSPACE_ROOT_REPO,
   type Step,
 } from "sandbox-core/machine_setup";
@@ -66,6 +69,7 @@ interface Answers {
   k8sContext: string;
   installTelepresence: boolean;
   installOptionalPlugins: boolean;
+  mapEditorSchemas: boolean;
   skipSudo: boolean;
 }
 
@@ -263,6 +267,25 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     interactive,
   );
 
+  // --- 8. editor schemas (optional) ----------------------------------------
+  heading("8. VS Code YAML validation (optional)");
+  const editor = editorSchemaState();
+  let mapEditorSchemas = false;
+  if (!editor.present) {
+    info("VS Code not found — skipping.");
+  } else if (editor.error) {
+    warn(`${vscodeSettingsPath()} does not parse (${editor.error}) — skipping.`);
+  } else if (!Object.keys(editor.set).length && !editor.drop.length) {
+    info("Already mapped.");
+  } else {
+    info(
+      "Validates <repo>/.sandbox/services.yaml and .sandbox/workspace.yml against the " +
+        "sandbox's JSON Schemas (needs the redhat.vscode-yaml extension). Adds " +
+        `\`yaml.schemas\` entries to ${vscodeSettingsPath()}; comments and other settings are kept.`,
+    );
+    mapEditorSchemas = await confirm("  Add the schema mappings to your VS Code user settings?", false, interactive);
+  }
+
   // --- write ---------------------------------------------------------------
   // Rebuilt rather than merged, but every hand-added section is carried across
   // verbatim: dropping an override or a token the wizard never asked about
@@ -319,6 +342,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     k8sContext,
     installTelepresence,
     installOptionalPlugins,
+    mapEditorSchemas,
     skipSudo: !interactive,
   };
 }
@@ -402,6 +426,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     skipSudo: answers.skipSudo,
     installTelepresence: answers.installTelepresence,
     installOptionalPlugins: answers.installOptionalPlugins,
+    mapEditorSchemas: answers.mapEditorSchemas,
   });
 
   const failed = report(steps);

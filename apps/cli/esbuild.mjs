@@ -42,6 +42,9 @@ const options = {
   bundle: true,
   outdir: "dist",
   external: ["dockerode", "*.node"],
+  // jsonc-parser's `main` is UMD, which loads its own files with a dynamic
+  // require esbuild can't follow; its ESM build is plain imports.
+  alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
   format: "esm",
   platform: "node",
   target: "node20",

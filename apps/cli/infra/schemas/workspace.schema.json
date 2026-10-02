@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/jbbz-sandbox/sandbox/main/infra/schemas/workspace.schema.json",
+  "$id": "https://raw.githubusercontent.com/jbbz-sandbox/sandbox/main/apps/cli/infra/schemas/workspace.schema.json",
   "title": "Sandbox workspace config (.sandbox/workspace.yml)",
   "description": "Durable source of truth for a sandbox workspace's inputs. Generated and re-read by `sandbox init-workspace`. Unmanaged keys are preserved across writes, so additional properties are allowed.",
   "type": "object",

@@ -148,15 +148,10 @@ function hasWorkspaceConfig(workspaceRoot: string, override: string | null): boo
   return _WORKSPACE_CONFIG_NAMES.some((name) => fs.existsSync(path.join(sandbox, name)));
 }
 
-// Editors (redhat.vscode-yaml) validate against the schema named by the
-// `# yaml-language-server` modeline below; the `$schema` key we also emit is
-// the machine-readable pointer for other tooling.
-const _WORKSPACE_SCHEMA_URL =
-  "https://raw.githubusercontent.com/jbbz-sandbox/sandbox/" +
-  "main/infra/schemas/workspace.schema.json";
-
+// No schema modeline or `$schema` key: the repo is private, so a GitHub URL
+// 404s in the editor, and either one outranks the local `yaml.schemas`
+// mapping `sandbox setup` writes (machine_setup.ts :: syncEditorSchemas).
 const _WORKSPACE_CONFIG_HEADER =
-  `# yaml-language-server: $schema=${_WORKSPACE_SCHEMA_URL}\n` +
   "# AUTO-GENERATED — durable source of truth for workspace inputs.\n" +
   "# Tool:    sandbox init-workspace\n" +
   "# Source:  src/commands/init_workspace.ts :: _write_workspace_config\n" +
@@ -203,11 +198,11 @@ export function writeWorkspaceConfig(workspaceRoot: string, resolved: Record<str
       }
     }
   }
-  // Drop the legacy `_generator` key — its job is now done by the header comment.
+  // Drop the legacy `_generator` key — its job is now done by the header comment —
+  // and the old `$schema` URL (see _WORKSPACE_CONFIG_HEADER).
   delete existing["_generator"];
+  delete existing["$schema"];
   const merged: Record<string, any> = { ...existing };
-  // `$` sorts before letters, so sort places this first — matching the modeline.
-  merged["$schema"] = _WORKSPACE_SCHEMA_URL;
   for (const [, , field] of _INPUT_FIELDS) {
     if (field in resolved) {
       let value: string | string[] = resolved[field];
