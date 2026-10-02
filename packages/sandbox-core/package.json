@@ -22,6 +22,7 @@
     "./errors": "./dist/errors.js",
     "./feature_routing": "./dist/feature_routing.js",
     "./form_schema": "./dist/form_schema.js",
+    "./fragment_detect": "./dist/fragment_detect/index.js",
     "./generate": "./dist/generate.js",
     "./gate": "./dist/gate.js",
     "./git_hooks": "./dist/git_hooks.js",

@@ -23,9 +23,16 @@ const ALLOWED = new Set(["reporter.ts", "cache.ts", "gate.ts"]);
 
 describe("sandbox-core console writes", () => {
   it("routes every log through the reporter, outside the documented exceptions", () => {
-    const offenders = fs
-      .readdirSync(CORE)
-      .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts") && !ALLOWED.has(f))
+    const files = [
+      ...fs.readdirSync(CORE).filter((f) => f.endsWith(".ts")),
+      ...(fs.existsSync(path.join(CORE, "fragment_detect"))
+        ? fs.readdirSync(path.join(CORE, "fragment_detect"))
+            .filter((f) => f.endsWith(".ts"))
+            .map((f) => `fragment_detect/${f}`)
+        : []),
+    ];
+    const offenders = files
+      .filter((f) => !f.endsWith(".d.ts") && !ALLOWED.has(f))
       .filter((f) => /\bconsole\.\w+\(/.test(fs.readFileSync(path.join(CORE, f), "utf8")));
 
     expect(offenders).toEqual([]);
