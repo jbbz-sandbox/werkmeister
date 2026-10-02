@@ -26,7 +26,7 @@ services:
   # credentials via the two bind mounts below, equivalent to the host user's own
   # `kubectl` access to the cluster:
   #   - ${HOME}/.kube:/root/.kube:ro                          (read-only)
-  #   - ./k8s-port-forward/tmp/kubeconfig:/tmp/kubeconfig:ro  (read-only, generated)
+  #   - ${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro  (read-only, generated)
   # A container escape, or a compromised/tampered image running at the pinned
   # digest below, would have that same k8s access. The digest pin on the
   # `alpine` base image (see k8s-port-forward/Dockerfile) is the primary
@@ -49,18 +49,13 @@ services:
     platform: linux/amd64
     container_name: sandbox-k8s-forwards
     restart: unless-stopped
-    ports:
-      # >>> GENERATED k8s-forward ports (from services.yaml — do not edit; `sandbox connect` regenerates)
-      - "9052:9052"   # backend
-      - "9053:9053"   # frontend
-      - "9050:9050"   # redis
-      - "9051:9051"   # postgres
-      # <<< GENERATED k8s-forward ports
+    # Published ports and network aliases come from the generated override
+    # (~/.sandbox/infra/compose/k8s-forwards.override.yml); see k8s_forwards.ts.
     volumes:
       - ${HOME}/.kube:/root/.kube:ro
-      - ./k8s-port-forward/tmp/kubeconfig:/tmp/kubeconfig:ro
+      - ${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro
       # Forward table generated from services.yaml by `sandbox connect`.
-      - ./k8s-port-forward/tmp/forwards:/tmp/forwards:ro
+      - ${SANDBOX_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro
     env_file:
       - ${HOME}/.sandbox/secrets.env
     # OrbStack's API server is https://127.0.0.1:26443 on the host; from inside
@@ -92,12 +87,6 @@ services:
       shared-network:
         aliases:
           - k8s-forwards
-          # >>> GENERATED k8s-forward aliases (from services.yaml — do not edit; `sandbox connect` regenerates)
-          - k8s-backend
-          - k8s-frontend
-          - k8s-redis
-          - k8s-postgres
-          # <<< GENERATED k8s-forward aliases
 
   jaeger:
     image: jaegertracing/all-in-one@sha256:ab6f1a1f0fb49ea08bcd19f6b84f6081d0d44b364b6de148e1798eb5816bacac  # pinned from tag "latest" of jaegertracing/all-in-one
@@ -169,8 +158,10 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ../proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${SANDBOX_STATE_DIR}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../proxy/ui:/sandbox/proxy/ui:ro
+      # Generated beside the Caddyfile; a file bind over the shipped ui dir.
+      - ${SANDBOX_STATE_DIR}/proxy/features.json:/sandbox/proxy/ui/features.json:ro
       # Cert location comes from `ingress.certs_dir` in ~/.sandbox/config.yaml,
       # exported as SANDBOX_CERTS_DIR by ~/.sandbox/env.sh. The default keeps
       # this working for a shell that hasn't sourced env.sh.

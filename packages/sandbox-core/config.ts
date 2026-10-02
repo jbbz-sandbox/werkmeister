@@ -566,10 +566,26 @@ export function sandboxRoot(): string {
 /**
  * The `infra/` dir holding compose files, templates, the proxy UI, schemas and
  * skills. All versioned code — the machine-specific registry files live in
- * `~/.sandbox` instead, reached via {@link servicesYamlPath} and friends.
+ * `~/.sandbox` instead, reached via {@link servicesYamlPath} and friends, and
+ * everything the CLI *generates* for the shared infra lives under
+ * {@link stateInfraRoot}. Nothing writes here at runtime.
  */
 export function infraRoot(): string {
   return path.join(sandboxRoot(), "infra");
+}
+
+/**
+ * `~/.sandbox/infra`: the generated runtime files for the shared infra — the
+ * Caddyfile, features.json, the pinned kubeconfig, the forwards table and the
+ * k8s-forwards compose override. Read-only sibling: {@link infraRoot}.
+ *
+ * Derived from {@link sandboxHome} so `SANDBOX_CONFIG_FILE` relocates it with
+ * the rest of `~/.sandbox`. Always absolute: Compose resolves a relative
+ * `${SANDBOX_STATE_DIR}` against the compose file's directory, which is the
+ * package — exactly where these files must not go.
+ */
+export function stateInfraRoot(): string {
+  return path.resolve(sandboxHome(), "infra");
 }
 
 /**

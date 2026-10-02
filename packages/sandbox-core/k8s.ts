@@ -8,11 +8,10 @@
 
 import * as http from "node:http";
 import * as net from "node:net";
-import * as path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { Colors } from "./colors.js";
-import { infraRoot } from "./config.js";
+import { composeInvocation } from "./compose_infra.js";
 import { containerRunning } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
@@ -24,10 +23,6 @@ import { error, info, success, warn } from "./reporter.js";
 // data file and shared-infra.yml's ports/aliases, so health checks can never
 // probe a service the container isn't actually forwarding.
 
-function infraComposeFile(): string {
-  return path.join(infraRoot(), "compose", "shared-infra.yml");
-}
-
 /**
  * Check the health of the containerized k8s-forwards service.
  *
@@ -35,16 +30,13 @@ function infraComposeFile(): string {
  * returns a dict with the container name and its health state.
  */
 export function checkPortForwardHealth(): Record<string, boolean> {
-  const composeFile = infraComposeFile();
+  const { argv, env } = composeInvocation();
   const results: Record<string, boolean> = {};
 
   try {
     const result = run(
-      [
-        "docker", "compose", "-f", composeFile,
-        "ps", "--format", "json", "k8s-forwards",
-      ],
-      { capture: true, timeout: 10 },
+      [...argv, "ps", "--format", "json", "k8s-forwards"],
+      { capture: true, timeout: 10, env },
     );
     if (result.status === 0 && result.stdout.trim()) {
       for (const line of result.stdout.trim().split("\n")) {
@@ -90,7 +82,7 @@ export function ensurePortForwardsHealthy(): ForwardsOutcome {
   }
 
   warn("k8s port-forwards container is unhealthy — restarting...");
-  const composeFile = infraComposeFile();
+  const { argv, env } = composeInvocation();
 
   try {
     // --force-recreate, because plain `up -d` cannot repair the case this
@@ -101,8 +93,8 @@ export function ensurePortForwardsHealthy(): ForwardsOutcome {
     // never coming back. Recreating also re-reads the mounted kubeconfig and
     // forwards table, which a bare restart would not.
     const result = run(
-      ["docker", "compose", "-f", composeFile, "up", "-d", "--force-recreate", "k8s-forwards"],
-      { capture: true, timeout: 60 },
+      [...argv, "up", "-d", "--force-recreate", "k8s-forwards"],
+      { capture: true, timeout: 60, env },
     );
     if (result.status !== 0) {
       error(`Failed to restart k8s-forwards: ${result.stderr.trim()}`);

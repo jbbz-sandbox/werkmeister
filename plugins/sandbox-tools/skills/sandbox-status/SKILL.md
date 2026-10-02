@@ -56,9 +56,10 @@ done
 ## Step 4: Caddy Status
 
 ```bash
-SANDBOX_ROOT="$(dirname "$(readlink -f "$(command -v sandbox)")")"
+CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
+CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
 docker exec sandbox-caddy caddy validate --config /etc/caddy/Caddyfile 2>&1
-HOST_SIZE=$(wc -c < "$SANDBOX_ROOT/infra/proxy/Caddyfile" 2>/dev/null)
+HOST_SIZE=$(wc -c < "$CADDYFILE" 2>/dev/null)
 CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c < /etc/caddy/Caddyfile 2>/dev/null)
 echo "Caddyfile: host=${HOST_SIZE}B container=${CONTAINER_SIZE}B"
 ```

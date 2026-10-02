@@ -382,7 +382,7 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
    - `<workspace>/.sandbox/supergraph-config.yml` — Apollo Federation config
 5. Verifies k8s port-forwards are healthy (restarts if needed)
 6. Starts containers with `docker compose up -d --build --remove-orphans`
-7. Regenerates `infra/proxy/Caddyfile` and reloads Caddy
+7. Regenerates `~/.sandbox/infra/proxy/Caddyfile` and reloads Caddy
 
 **Output example:**
 
@@ -763,7 +763,7 @@ No arguments. Checks the Docker container health of `sandbox-k8s-forwards` and r
 ./sandbox proxy-reload
 ```
 
-No arguments. Reads all active slot assignments, regenerates `infra/proxy/Caddyfile`, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
+No arguments. Reads all active slot assignments, regenerates `~/.sandbox/infra/proxy/Caddyfile`, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
 
 ---
 
@@ -1194,10 +1194,12 @@ A service whose forward/alias name differs from its service key can set
 `k8s_forward_name:` to override it.
 
 Both runtime consumers of this table are **generated** from `services.yaml` by
-`sandbox connect` (`apps/cli/src/lib/k8s_forwards.ts`): the container's forward list is
-written to `k8s-port-forward/tmp/forwards` (mounted at `/tmp/forwards`, read by
-`entrypoint.sh`), and the `k8s-forwards` service's `ports:`/`aliases:` in
-`shared-infra.yml` are regenerated in place between `# >>> GENERATED` markers.
+`sandbox connect` (`packages/sandbox-core/k8s_forwards.ts`) under `~/.sandbox/infra/`:
+the container's forward list is written to `k8s-port-forward/forwards` (mounted at
+`/tmp/forwards`, read by `entrypoint.sh`), and the `k8s-forwards` service's
+`ports:`/`aliases:` are written to `compose/k8s-forwards.override.yml`, which every
+`docker compose` call the CLI makes passes as a second `-f`. The shipped
+`shared-infra.yml` is never modified.
 `apps/cli/src/lib/__tests__/k8s_forward_drift.test.ts` fails if the committed
 `shared-infra.yml` drifts out of sync. To add or change a forward, edit only
 `services.yaml` and run `sandbox connect`.
@@ -1350,7 +1352,7 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 | `infra/compose/k8s-port-forward/` | Dockerfile and entrypoint for containerized k8s port-forwards |
 | `infra/templates/` | nunjucks templates for per-feature file generation |
 | `infra/compose/shared-infra.yml` | Shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy) |
-| `infra/proxy/Caddyfile` | Generated Caddy config (gitignored) |
+| `~/.sandbox/infra/proxy/Caddyfile` | Generated Caddy config (never inside the package) |
 | `infra/proxy/ui/index.html` | Feature selector web UI |
 | `apps/graphql-tools/` & `apps/otel-init/` | Node.js tooling (now an npm-workspaces monorepo with a root `package.json` + single root `package-lock.json`): GraphQL extract/validate scripts and `apps/graphql-tools/queries/` in `apps/graphql-tools/`, OTel source in `apps/otel-init/` |
 | `bin/` | Setup helper scripts (authenticate, generate-certs, generate-env, ...) |
@@ -1528,7 +1530,7 @@ ls ~/workspace/PROJ-1234/
 
 ```bash
 # Verify the Caddyfile includes your feature
-cat infra/proxy/Caddyfile | grep -A 5 "PROJ-1234"
+cat ~/.sandbox/infra/proxy/Caddyfile | grep -A 5 "PROJ-1234"
 
 # Regenerate and reload
 ./sandbox proxy-reload
@@ -1684,5 +1686,5 @@ sandbox up PROJ-1234
     │
     ├── 5. Start containers → docker compose up -d
     │
-    └── 6. Update proxy → infra/proxy/Caddyfile → caddy reload
+    └── 6. Update proxy → ~/.sandbox/infra/proxy/Caddyfile → caddy reload
 ```

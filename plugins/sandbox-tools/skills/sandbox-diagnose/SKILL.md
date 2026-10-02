@@ -76,21 +76,24 @@ done
 ## Step 4: Caddyfile Validation
 
 ```bash
-SANDBOX_ROOT="$(dirname "$(readlink -f "$(command -v sandbox)")")"
-docker cp "$SANDBOX_ROOT/infra/proxy/Caddyfile" sandbox-caddy:/tmp/Caddyfile.check
+CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
+CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/dist/lib/caddy.js');
 let s=''; for await (const c of process.stdin) s+=c;
-console.log('PASS: Caddyfile valid,', countCompiledRoutes(JSON.parse(s)), 'routes compiled');
+const walk=(rs=[])=>rs.reduce((n,r)=>n+(r.handle??[]).reduce((m,h)=>m+(h.handler==='subroute'?walk(h.routes):h.handler==='reverse_proxy'?1:0),0),0);
+const servers=JSON.parse(s).apps?.http?.servers??{};
+console.log('PASS: Caddyfile valid,', Object.values(servers).reduce((n,sv)=>n+walk(sv.routes),0), 'routes compiled');
 " 2>&1
 ```
 
-This reuses the CLI's canonical counter
-(`src/lib/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
+This mirrors the CLI's canonical counter
+(`sandbox-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
 leaf, across **all** compiled servers, same unit `sandbox proxy-reload`
-compares). **Expected:** the printed count matches
-`grep -c 'reverse_proxy ' "$SANDBOX_ROOT/infra/proxy/Caddyfile"` — there is no
+compares; the CLI ships as one bundle, so the walk is inlined here rather than
+imported). **Expected:** the printed count matches
+`grep -c 'reverse_proxy ' "$CADDYFILE"` — there is no
 fixed threshold; the number changes with the config. If the compiled count is
 **lower** than the grep count, routes are being silently dropped
 (handle-vs-route bug).
@@ -128,8 +131,9 @@ not `localhost:4321`.
 ## Step 7: Docker Desktop File Sync
 
 ```bash
-SANDBOX_ROOT="$(dirname "$(readlink -f "$(command -v sandbox)")")"
-HOST_SIZE=$(wc -c < "$SANDBOX_ROOT/infra/proxy/Caddyfile")
+CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
+CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+HOST_SIZE=$(wc -c < "$CADDYFILE")
 CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c < /etc/caddy/Caddyfile 2>/dev/null)
 if [ "$HOST_SIZE" = "$CONTAINER_SIZE" ]; then
     echo "PASS: Caddyfile synced ($HOST_SIZE bytes)"

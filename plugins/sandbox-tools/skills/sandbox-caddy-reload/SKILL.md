@@ -1,6 +1,6 @@
 ---
 name: sandbox-caddy-reload
-description: "Safely reload the Caddy proxy configuration with validation and smoke testing. Use after editing infra/proxy/Caddyfile, after running `sandbox proxy-reload`, or when the Caddyfile on disk has been updated but Caddy is still serving old config. Validates config, counts compiled routes to detect silent drops, reloads, and smoke tests key URLs."
+description: "Safely reload the Caddy proxy configuration with validation and smoke testing. Use after editing ~/.sandbox/infra/proxy/Caddyfile, after running `sandbox proxy-reload`, or when the Caddyfile on disk has been updated but Caddy is still serving old config. Validates config, counts compiled routes to detect silent drops, reloads, and smoke tests key URLs."
 ---
 
 # sandbox-caddy-reload
@@ -45,8 +45,9 @@ specifically so a manual reload never collides with a concurrently running
 `sandbox proxy-reload` (which owns `/tmp/Caddyfile`):
 
 ```bash
-SANDBOX_ROOT="$(dirname "$(readlink -f "$(command -v sandbox)")")"
-docker cp "$SANDBOX_ROOT/infra/proxy/Caddyfile" sandbox-caddy:/tmp/Caddyfile.new
+CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
+CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.new
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.new 2>&1
 ```
 
@@ -57,24 +58,26 @@ If output contains `Error:`, STOP and report. Do not reload an invalid config.
 ```bash
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.new 2>/dev/null | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/dist/lib/caddy.js');
 let s=''; for await (const c of process.stdin) s+=c;
-console.log('Compiled routes:', countCompiledRoutes(JSON.parse(s)));
+const walk=(rs=[])=>rs.reduce((n,r)=>n+(r.handle??[]).reduce((m,h)=>m+(h.handler==='subroute'?walk(h.routes):h.handler==='reverse_proxy'?1:0),0),0);
+const servers=JSON.parse(s).apps?.http?.servers??{};
+console.log('Compiled routes:', Object.values(servers).reduce((n,sv)=>n+walk(sv.routes),0));
 "
 ```
 
-This is the CLI's canonical counter
-(`src/lib/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
+This mirrors the CLI's canonical counter
+(`sandbox-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
 leaf, across **all** compiled servers, not just `srv0`), so the manual path
-and `sandbox proxy-reload` can never disagree on the number.
+and `sandbox proxy-reload` agree on the number. The CLI ships as one bundle
+with no importable `dist/lib/caddy.js`, so the walk is inlined here.
 
 **Expected:** compare the printed compiled count against the number of
 `reverse_proxy` occurrences in the Caddyfile you just copied in
-(`grep -c 'reverse_proxy ' "$SANDBOX_ROOT/infra/proxy/Caddyfile"`). These two
+(`grep -c 'reverse_proxy ' "$CADDYFILE"`). These two
 numbers count the same thing (distinct `reverse_proxy` destinations) and
 should match on a healthy config -- the same config-derived comparison
 `compute_expected_route_count()` performs in the CLI. There is no fixed
-threshold: a fresh checkout of the current `infra/proxy/Caddyfile` compiles to
+threshold: a fresh generation of the current `~/.sandbox/infra/proxy/Caddyfile` compiles to
 7 routes, and that number changes whenever site blocks or `reverse_proxy`
 directives are added or removed. If the compiled count is **lower** than the
 `reverse_proxy` occurrence count in the source file, routes were silently
@@ -108,8 +111,9 @@ Smoke-test every hostname the reload affects, not just one — `sandbox services
 ## Step 5: Verify File Sync
 
 ```bash
-SANDBOX_ROOT="$(dirname "$(readlink -f "$(command -v sandbox)")")"
-HOST_SIZE=$(wc -c < "$SANDBOX_ROOT/infra/proxy/Caddyfile")
+CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
+CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+HOST_SIZE=$(wc -c < "$CADDYFILE")
 CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c < /etc/caddy/Caddyfile 2>/dev/null)
 echo "Host: ${HOST_SIZE} bytes, Container bind-mount: ${CONTAINER_SIZE} bytes"
 if [ "$HOST_SIZE" != "$CONTAINER_SIZE" ]; then
