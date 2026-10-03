@@ -60,7 +60,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
+    "test": "node --test *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@types/dockerode": "^4.0.1",
