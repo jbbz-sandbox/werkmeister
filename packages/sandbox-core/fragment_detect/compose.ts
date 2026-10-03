@@ -50,7 +50,7 @@ export function detectCompose(ctx: DetectContext): Finding[] {
   for (const file of ctx.files.filter((f) => COMPOSE_FILE.test(f))) {
     let doc: any;
     try {
-      doc = parseYaml(readText(ctx, file));
+      doc = parseYaml(readText(ctx, file), { merge: true });
     } catch (e) {
       ctx.skipped.push({ item: file, reason: `unparsable YAML: ${e instanceof Error ? e.message : String(e)}` });
       continue;

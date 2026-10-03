@@ -11,10 +11,15 @@ const GLIBC_ONLY = ["sharp", "better-sqlite3", "esbuild", "@swc/core"];
 
 function testCommand(ws: Workspace, dir: string, pkgName: string | undefined): string {
   if (dir === ".") return `${ws.pm} test`;
-  const name = pkgName ?? dir;
-  if (ws.pm === "pnpm") return `pnpm --filter ${name} test`;
-  if (ws.pm === "yarn") return `yarn workspace ${name} test`;
-  return `npm test -w ${name}`;
+  if (pkgName !== undefined) {
+    if (ws.pm === "pnpm") return `pnpm --filter ${pkgName} test`;
+    if (ws.pm === "yarn") return `yarn workspace ${pkgName} test`;
+    return `npm test -w ${pkgName}`;
+  }
+  // Unnamed package: use dir-based fallback
+  if (ws.pm === "pnpm") return `pnpm --filter ./${dir} test`;
+  if (ws.pm === "yarn") return `cd ${dir} && yarn test`;
+  return `npm test -w ${dir}`;
 }
 
 function nodeMajor(ctx: DetectContext, dir: string, pkg: Record<string, any>, rootPkg: Record<string, any> | null): string {

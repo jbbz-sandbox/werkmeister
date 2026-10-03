@@ -65,6 +65,20 @@ test("a package with no name still gets a usable test command", () => {
     "apps/x/package.json": { scripts: { test: "vitest" } },
   });
   assert.equal(found[0].fields.test.value, "npm test -w apps/x");
+
+  const pnpm = run({
+    "package.json": {},
+    "pnpm-workspace.yaml": "packages: ['apps/*']\n",
+    "apps/x/package.json": { scripts: { test: "vitest" } },
+  });
+  assert.equal(pnpm[0].fields.test.value, "pnpm --filter ./apps/x test");
+
+  const yarn = run({
+    "package.json": { workspaces: ["apps/*"] },
+    "yarn.lock": "",
+    "apps/x/package.json": { scripts: { test: "vitest" } },
+  });
+  assert.equal(yarn[0].fields.test.value, "cd apps/x && yarn test");
 });
 
 test("pnpm and yarn test commands go through the workspace", () => {

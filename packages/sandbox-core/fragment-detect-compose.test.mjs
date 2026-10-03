@@ -75,3 +75,21 @@ test("an unparsable compose file is skipped, not thrown", () => {
   assert.equal(ctx.skipped.length, 1);
   assert.equal(ctx.skipped[0].item, "docker-compose.yml");
 });
+
+test("compose merge keys are resolved", () => {
+  const ctx = ctxFor(fixture({
+    "docker-compose.yml": `
+x-common: &common
+  environment:
+    A: "1"
+
+services:
+  svc:
+    <<: *common
+    build: ./svc
+`,
+  }));
+  const found = detectCompose(ctx);
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0].fields.environment.value, { A: "1" });
+});
