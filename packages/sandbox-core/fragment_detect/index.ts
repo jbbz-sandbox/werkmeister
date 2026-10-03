@@ -16,3 +16,4 @@ export * from "./precedence.js";
 export * from "./allocate.js";
 export * from "./plan.js";
 export * from "./render.js";
+export * from "./validate.js";
