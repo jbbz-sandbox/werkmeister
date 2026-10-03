@@ -13,7 +13,7 @@
  *     sandbox restart <feature|infra>          Restart containers
  *     sandbox stop <feature|infra>             Stop containers (preserve slot/volumes)
  *     sandbox status [--k8s]                   Show all active features; --k8s for k8s detail only
- *     sandbox detect <feature>                 Analyse worktrees for changed services
+ *     sandbox detect [repo] [--dry-run] [--yes] [--assist|--no-assist]  Generate a repo's .sandbox/services.yaml
  *     sandbox services <feature>               List service endpoints
  *     sandbox logs <feature> [service]         Tail container logs
  *     sandbox remove <feature> <service>       Stop a local service (fall back to k8s)
@@ -212,14 +212,17 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/detect.js"),
     configure: (cmd) => {
       cmd
-        .description("Analyse worktrees, show which services would run locally")
-        .argument("[feature]", "Feature name (optional — workspace is auto-detected from cwd).")
-        .option(
-          "-w, --workspace <path>",
-          "Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).",
-        );
+        .description(
+          "Generate <repo>/.sandbox/services.yaml from the repo's package manifests, " +
+            "Dockerfiles, compose, Helm and k8s files (re-runs only add what is missing)",
+        )
+        .argument("[repo]", "Repo directory (default: the git repo containing the current directory)")
+        .option("--dry-run", "Show the report and the proposed YAML; write nothing")
+        .option("-y, --yes", "Write without asking")
+        .option("--assist", "Ask Claude to resolve the fields the scan had to guess")
+        .option("--no-assist", "Never ask Claude");
     },
-    namespace: ([feature], o) => ({ feature: feature ?? null, workspace: o.workspace ?? null }),
+    namespace: ([repo], o) => ({ repo: repo ?? null, dryRun: Boolean(o.dryRun), yes: Boolean(o.yes), assist: o.assist }),
   },
   {
     name: "services",
