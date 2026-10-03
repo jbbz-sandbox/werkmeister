@@ -14,3 +14,5 @@ export * from "./kustomize.js";
 export * from "./correlate.js";
 export * from "./precedence.js";
 export * from "./allocate.js";
+export * from "./plan.js";
+export * from "./render.js";
