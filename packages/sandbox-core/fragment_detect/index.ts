@@ -7,3 +7,4 @@ export * from "./files.js";
 export * from "./workspace.js";
 export * from "./package.js";
 export * from "./dockerfile.js";
+export * from "./compose.js";
