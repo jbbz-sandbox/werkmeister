@@ -29,6 +29,8 @@ import {
   syncRegistryConfigs,
   syncRepo,
   syncTelepresence,
+  syncVscodeExtension,
+  vscodeExtensionState,
   WORKSPACE_ROOT_REPO,
   type Runner,
   type Step,
@@ -442,6 +444,80 @@ describe("syncTelepresence", () => {
     // The useful line survives; the progress-spinner noise does not.
     expect(steps[0].detail).toContain("not writable");
     expect(steps[0].detail).not.toContain("✔︎");
+  });
+});
+
+describe("syncVscodeExtension", () => {
+  const LIST = "code --list-extensions --show-versions";
+  let root: string;
+  beforeEach(() => {
+    // A stand-in package root: package.json carries the version, dist/ the .vsix.
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "vsix-"));
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ version: "0.3.0" }));
+    fs.mkdirSync(path.join(root, "dist"));
+    fs.writeFileSync(path.join(root, "dist", "sandbox-workspaces.vsix"), "");
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const sync = (runner: Runner, checkOnly: boolean, install = false) =>
+    syncVscodeExtension(checkOnly, install, vscodeExtensionState(runner, root), runner);
+
+  it("reports the bundled version, already installed, as ok", () => {
+    const runner = fakeRunner({ [LIST]: [0, "redhat.vscode-yaml@1.15.0\nJBBZ.vscode-plugin@0.3.0\n"] });
+    const steps = sync(runner, false, true);
+    expect(steps[0].ok).toBe(true);
+    expect(steps[0].detail).toContain("0.3.0");
+    expect(runner.calls.some((c) => c.includes("--install-extension"))).toBe(false);
+  });
+
+  it("installs the bundled .vsix when asked and it is missing", () => {
+    const runner = fakeRunner({ [LIST]: [0, ""], "code --install-extension": [0, "installed"] });
+    const steps = sync(runner, false, true);
+    expect(steps[0].ok).toBe(true);
+    expect(runner.calls).toContainEqual([
+      "code", "--install-extension", path.join(root, "dist", "sandbox-workspaces.vsix"), "--force",
+    ]);
+  });
+
+  it("treats a missing extension as ok when not asked to install", () => {
+    const steps = sync(fakeRunner({ [LIST]: [0, ""] }), false);
+    expect(steps[0].ok).toBe(true);
+    expect(steps[0].detail).toContain("not installed");
+  });
+
+  it("warns on a stale extension, and never installs in check mode", () => {
+    const runner = fakeRunner({ [LIST]: [0, "jbbz.vscode-plugin@0.2.0\n"] });
+    const steps = sync(runner, true, true);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+    expect(steps[0].detail).toContain("0.2.0");
+    expect(runner.calls.some((c) => c.includes("--install-extension"))).toBe(false);
+  });
+
+  it("skips with a hint when the `code` CLI is not on PATH", () => {
+    const steps = sync(fakeRunner({}), false, true);
+    expect(steps[0].ok).toBe(true);
+    expect(steps[0].detail).toContain("Shell Command");
+  });
+
+  it("never installs a checkout's build — only a packaged .vsix", () => {
+    fs.rmSync(path.join(root, "dist", "sandbox-workspaces.vsix"));
+    const runner = fakeRunner({ [LIST]: [0, ""] });
+    const steps = sync(runner, false, true);
+    expect(steps[0].ok).toBe(true);
+    expect(steps[0].detail).toContain("checkout");
+    expect(runner.calls.some((c) => c.includes("--install-extension"))).toBe(false);
+  });
+
+  it("marks a failed install optional", () => {
+    const runner = fakeRunner({ [LIST]: [0, ""], "code --install-extension": [1, "Error: corrupt"] });
+    const steps = sync(runner, false, true);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+    expect(steps[0].detail).toContain("corrupt");
+  });
+
+  it("ships the extension at the CLI's version — setup compares the two", () => {
+    const read = (p: string) => JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "../../../../..", p), "utf8"));
+    expect(read("packages/vscode-plugin/package.json").version).toBe(read("apps/cli/package.json").version);
   });
 });
 

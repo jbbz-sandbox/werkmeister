@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
 import * as os from "node:os";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import * as vscode from "vscode";
 import { listWorkspaces, resolveSandboxBin, childEnv, removeWorkspace } from "sandbox-core";
+import { getReposRoot } from "sandbox-core/config";
 import { runInTerminal } from "./terminal.js";
 import { showLogs } from "./logs.js";
 import type { SandboxTreeProvider } from "./tree.js";
@@ -87,6 +89,31 @@ async function switchWorkspace(node?: WsNode): Promise<void> {
     .map((f) => (f.name === basename(f.uri.fsPath) ? { uri: f.uri } : { uri: f.uri, name: f.name }));
   const ok = vscode.workspace.updateWorkspaceFolders(0, folders.length, { uri }, ...rest);
   if (!ok) void vscode.window.showErrorMessage(`Could not open ${ws.name} in this window.`);
+}
+
+/** A git checkout under `paths.repos_root` — the set `sandbox registry sync` reads fragments from. */
+async function pickRepo(): Promise<string | null> {
+  const root = getReposRoot();
+  let names: string[];
+  try {
+    names = fs.readdirSync(root).filter((n) => fs.existsSync(join(root, n, ".git"))).sort();
+  } catch (e) {
+    void vscode.window.showErrorMessage((e as Error).message);
+    return null;
+  }
+  if (!names.length) {
+    void vscode.window.showInformationMessage(`No git repos found under ${root}.`);
+    return null;
+  }
+  const choice = await vscode.window.showQuickPick(
+    names.map((n) => ({
+      label: n,
+      description: fs.existsSync(join(root, n, ".sandbox", "services.yaml")) ? "has services.yaml" : "",
+      path: join(root, n),
+    })),
+    { placeHolder: "Select a repo to detect services in" },
+  );
+  return choice?.path ?? null;
 }
 
 export function registerCommands(provider: SandboxTreeProvider): vscode.Disposable[] {
@@ -193,6 +220,17 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       child.on("error", (e) => void vscode.window.showErrorMessage(`sandbox open: ${e.message}`));
       child.unref();
       void vscode.window.showInformationMessage(`Opening a tagged browser for '${ws.name}'…`);
+    }),
+
+    // The CLI prompts for the Claude assist and before writing, so like
+    // newWorkspace it runs in a terminal rather than being reimplemented here.
+    vscode.commands.registerCommand("sandbox.detect", async () => {
+      const repo = await pickRepo();
+      if (repo) await runInTerminal(["detect", repo], repo);
+    }),
+
+    vscode.commands.registerCommand("sandbox.registrySync", async () => {
+      await runInTerminal(["registry", "sync"], getReposRoot(), "registry");
     }),
 
     vscode.commands.registerCommand("sandbox.remove", async (node?: WsNode) => {

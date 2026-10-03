@@ -2,7 +2,7 @@
   "name": "vscode-plugin",
   "displayName": "Sandbox Workspaces",
   "description": "Manage developer-sandbox feature workspaces — container state, Telepresence intercepts, and the sandbox CLI lifecycle — from a VS Code tree view.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "JBBZ",
   "private": true,
   "type": "module",
@@ -116,6 +116,18 @@
         "icon": "$(globe)"
       },
       {
+        "command": "sandbox.detect",
+        "title": "Detect Services in Repo...",
+        "category": "Sandbox",
+        "icon": "$(search)"
+      },
+      {
+        "command": "sandbox.registrySync",
+        "title": "Sync Service Registry",
+        "category": "Sandbox",
+        "icon": "$(sync)"
+      },
+      {
         "command": "sandbox.remove",
         "title": "Remove Workspace...",
         "category": "Sandbox",
@@ -133,6 +145,16 @@
           "command": "sandbox.refresh",
           "when": "view == sandboxWorkspaces",
           "group": "navigation@2"
+        },
+        {
+          "command": "sandbox.detect",
+          "when": "view == sandboxWorkspaces",
+          "group": "1_registry@1"
+        },
+        {
+          "command": "sandbox.registrySync",
+          "when": "view == sandboxWorkspaces",
+          "group": "1_registry@2"
         }
       ],
       "view/item/context": [

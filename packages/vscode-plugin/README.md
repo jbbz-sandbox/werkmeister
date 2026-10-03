@@ -50,9 +50,12 @@ and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://
 
 ## Install
 
+`sandbox setup` installs it (section 8): the published CLI package ships the
+`.vsix`, at the CLI's version. To try a local build from a checkout instead:
+
 ```bash
 npm run build && npm run package
-code --install-extension sandbox-workspaces-0.1.0.vsix
+code --install-extension vscode-plugin-*.vsix
 ```
 
 ## Not included
