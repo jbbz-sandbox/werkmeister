@@ -96,6 +96,31 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
   const corr = correlate(findings, repo);
   const services = corr.services.map(resolveService);
   const infrastructure = corr.infrastructure.map(resolveInfra);
+
+  // An entry the human renamed keeps its name: a service matched by path, infrastructure by pod prefix.
+  const adopt = (section: string, key: string, value: unknown) =>
+    Object.entries(existingDoc?.[section] ?? {}).find(([, e]: [string, any]) => e?.[key] === value)?.[0];
+  const renamed = new Map<string, string>();
+  for (const s of services) {
+    const name = adopt("services", "path", s.dir);
+    if (name && name !== s.name) {
+      renamed.set(s.name, name);
+      s.name = name;
+      for (const c of s.conflicts) c.service = name;
+    }
+  }
+  const hosts = new Map(infrastructure.map((i) => [i.name, i.name]));
+  for (const i of infrastructure) {
+    const name = adopt("infrastructure", "k8s_pod_prefix", i.fields.k8s_pod_prefix.value);
+    if (name && name !== i.name) {
+      renamed.set(i.name, name);
+      hosts.set(name, i.name);
+      i.name = name;
+    }
+  }
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+  services.sort(byName);
+  infrastructure.sort(byName);
   const names = new Set(services.map((s) => s.name));
 
   // Allocation: never for an entry that already has a value in the file.
@@ -122,6 +147,7 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
   // k8s env addressed at in-cluster infrastructure → the sandbox tunnel.
   const tunnels = infrastructure.map((i) => ({
     name: i.name,
+    host: hosts.get(i.name),
     port: Number(existingDoc?.infrastructure?.[i.name]?.internal_port ?? i.fields.internal_port.value),
     forward: Number(existingDoc?.infrastructure?.[i.name]?.k8s_forward_port ?? i.fields.k8s_forward_port?.value),
   }));
@@ -138,7 +164,9 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
   for (const s of services) {
     const d = s.fields.depends_on;
     if (!d) continue;
-    const kept = (d.value as string[]).filter((n) => names.has(n) && n !== s.name);
+    const kept = [...new Set((d.value as string[]).map((n) => renamed.get(n) ?? n))]
+      .filter((n) => names.has(n) && n !== s.name)
+      .sort();
     if (kept.length) s.fields.depends_on = { ...d, value: kept };
     else delete s.fields.depends_on;
   }

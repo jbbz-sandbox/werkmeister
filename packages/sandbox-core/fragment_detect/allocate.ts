@@ -96,7 +96,8 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 export function rewriteEnv(
   env: Record<string, string>,
   keys: string[],
-  tunnels: { name: string; port: number; forward: number }[],
+  /** `host` is the in-cluster name when the entry was renamed; it defaults to `name`. */
+  tunnels: { name: string; host?: string; port: number; forward: number }[],
 ): { env: Record<string, string>; rewritten: string[] } {
   const out = { ...env };
   const rewritten: string[] = [];
@@ -105,7 +106,7 @@ export function rewriteEnv(
     if (before === undefined) continue;
     let value = before;
     for (const t of tunnels) {
-      value = value.replace(new RegExp(`(?<![\\w.-])${escapeRe(t.name)}:${t.port}\\b`, "g"), `k8s-${t.name}:${t.forward}`);
+      value = value.replace(new RegExp(`(?<![\\w.-])${escapeRe(t.host ?? t.name)}:${t.port}\\b`, "g"), `k8s-${t.name}:${t.forward}`);
     }
     if (value !== before) {
       out[key] = value;

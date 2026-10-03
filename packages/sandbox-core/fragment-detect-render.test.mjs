@@ -179,3 +179,39 @@ test("no trailing newline: several edits at EOF keep the last original line inta
   assert.equal(doc.services.backend.internal_port, 3000);
   assert.ok(doc.services.frontend);
 });
+
+test("a service the human renamed is matched by path: no duplicate, only missing keys, port_offset kept", () => {
+  const existing = "services:\n  api-server:\n    path: apps/api\n    port_offset: 4\n";
+  const root = fixture({
+    "docker-compose.yml": "services:\n  api:\n    build: ./apps/api\n  web:\n    build: ./apps/web\n    depends_on: [api]\n",
+    "apps/api/Dockerfile": "FROM golang:1.23\nEXPOSE 8000\n",
+    "apps/web/Dockerfile": "FROM node:22\n",
+    ".sandbox/services.yaml": existing,
+  }, "shop");
+  const r = renderFragment(planFragment(root, opts(root)));
+  assertKeptAllBytes(existing, r.yaml);
+  const doc = parse(r.yaml);
+  assert.deepEqual(Object.keys(doc.services), ["api-server", "web"]);
+  assert.equal(doc.services["api-server"].port_offset, 4);
+  assert.equal(doc.services["api-server"].internal_port, 8000);
+  assert.ok(r.added.includes("services.api-server.internal_port"));
+  assert.ok(!r.added.some((a) => a.startsWith("services.api.") || a === "services.api-server.port_offset"));
+  assert.deepEqual(doc.services.web.depends_on, ["api-server"]);
+});
+
+test("renamed infrastructure is matched by k8s_pod_prefix, and the tunnel uses its name", () => {
+  const existing = "infrastructure:\n  pg:\n    k8s_pod_prefix: postgres\n    k8s_forward_port: 9055\n";
+  const root = fixture({
+    "k8s/postgres.yaml": "kind: Deployment\nmetadata: { name: postgres }\nspec: { template: { spec: { containers: [ { name: pg, image: 'postgres:16', ports: [ { containerPort: 5432 } ] } ] } } }\n",
+    "apps/api/Dockerfile": "FROM golang:1.23\n",
+    "apps/api/k8s.yaml": "kind: Deployment\nmetadata: { name: api }\nspec: { template: { spec: { containers: [ { name: api, image: 'api:1', env: [ { name: DATABASE_URL, value: 'postgres://u@postgres:5432/db' } ] } ] } } }\n",
+    ".sandbox/services.yaml": existing,
+  }, "shop");
+  const r = renderFragment(planFragment(root, opts(root)));
+  assertKeptAllBytes(existing, r.yaml);
+  const doc = parse(r.yaml);
+  assert.deepEqual(Object.keys(doc.infrastructure), ["pg"]);
+  assert.equal(doc.infrastructure.pg.k8s_forward_port, 9055);
+  assert.equal(doc.infrastructure.pg.internal_port, 5432);
+  assert.equal(doc.services.api.environment.DATABASE_URL, "postgres://u@k8s-pg:9055/db");
+});
