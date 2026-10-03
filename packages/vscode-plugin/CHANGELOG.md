@@ -1,0 +1,11 @@
+# vscode-plugin
+
+## 0.3.0
+
+### Minor Changes
+
+- 13bae18: Add "Detect Services in Repo..." and "Sync Service Registry" to the Workspaces view's `...` menu and the palette; both run the `sandbox` CLI in a terminal. Fix extension activation failing on jsonc-parser's unbundled UMD require.
+
+### Patch Changes
+
+- sandbox-core@0.3.0

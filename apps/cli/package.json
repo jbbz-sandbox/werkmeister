@@ -1,6 +1,6 @@
 {
   "name": "@jbbz-sandbox/sandbox-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Multi-feature concurrent development orchestrator CLI tool",
   "type": "module",
   "engines": {
@@ -48,7 +48,7 @@
     "@types/node": "^22.13.0",
     "commander": "^13.1.0",
     "esbuild": "^0.24.0",
-    "sandbox-core": "^0.2.0",
+    "sandbox-core": "^0.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
