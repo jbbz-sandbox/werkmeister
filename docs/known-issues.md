@@ -155,7 +155,7 @@ The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in t
 
 **Severity:** Critical (causes blank pages / empty responses)
 **Status:** Resolved — documented to prevent recurrence
-**Affects:** `apps/cli/infra/proxy/Caddyfile`, `apps/cli/infra/templates/Caddyfile.njk`, `packages/sandbox-core/generate.ts`
+**Affects:** `~/.sandbox/infra/proxy/Caddyfile` (formerly `apps/cli/infra/proxy/Caddyfile`), `apps/cli/infra/templates/Caddyfile.njk`, `packages/sandbox-core/generate.ts`
 
 When the Caddyfile uses multiple `handle` blocks at the same nesting level for path-based routing, Caddy groups them into a **mutual-exclusion set**. Only the first matching `handle` block executes; the remaining blocks are silently dropped from the compiled config. This results in URLs returning HTTP 200 with `content-length: 0` (empty body) for any path whose route was dropped.
 
@@ -198,9 +198,9 @@ and `apps/cli/src/lib/__tests__/caddy_lint.test.ts` pins the bare-vs-scoped stru
 
 **Severity:** Moderate (causes stale configs)
 **Status:** Open — inherent to Docker Desktop
-**Affects:** `apps/cli/infra/proxy/Caddyfile` (bind-mounted into `sandbox-caddy` container)
+**Affects:** `~/.sandbox/infra/proxy/Caddyfile` (bind-mounted into `sandbox-caddy` container; was `apps/cli/infra/proxy/Caddyfile`)
 
-Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediately after writes on the host. The `apps/cli/infra/proxy/Caddyfile` file may show different sizes when compared between host and container, causing Caddy to use stale or truncated config.
+Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediately after writes on the host. The generated `~/.sandbox/infra/proxy/Caddyfile` file may show different sizes when compared between host and container, causing Caddy to use stale or truncated config.
 
 **Symptoms:**
 - `caddy adapt` reports `unexpected EOF` after editing Caddyfile
@@ -210,7 +210,7 @@ Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediate
 **Workaround:** Always use `docker cp` to push the file, then reload from the copied path:
 
 ```bash
-docker cp apps/cli/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp ~/.sandbox/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
 ```
 
@@ -315,10 +315,12 @@ and is what `infraRoot()` resolves from — so **whichever install ran `sandbox 
 wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
 serving `infra/` out of the other one.
 
-Compounding it, generated state lives *inside* that package tree rather than beside the
-user's config: `apps/cli/infra/proxy/Caddyfile` and `apps/cli/infra/proxy/ui/features.json`
-are both gitignored build products under a directory that ships in the published package.
-Reinstalling or upgrading `@jbbz-sandbox/sandbox-cli` can therefore discard or stale them.
+Generated state used to live *inside* that package tree: `apps/cli/infra/proxy/Caddyfile`
+and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under a
+directory that ships in the published package, so reinstalling or upgrading
+`@jbbz-sandbox/sandbox-cli` could discard or stale them. Resolved 2026-10-01: everything
+`sandbox connect` generates now lives under `~/.sandbox/infra/`
+(`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md`).
 
 **Fix direction:** generated artifacts belong under `~/.sandbox/` (like `services.yaml` and
 `ports.yaml` already do), leaving the package tree read-only; `sandbox_root` then only has to
@@ -492,7 +494,7 @@ before trusting it.
 **Affects:** `packages/sandbox-core/lifecycle-proxy.test.mjs`, `packages/sandbox-core/lifecycle-clean.test.mjs`
 
 Both called the real `reloadProxy()` / `planClean()` rather than a seam. On a configured
-machine, running the core suite regenerated `infra/proxy/Caddyfile` from whatever features
+machine, running the core suite regenerated `infra/proxy/Caddyfile` (now `~/.sandbox/infra/proxy/Caddyfile`) from whatever features
 happened to be up and — if Caddy was running — reloaded it. Idempotent, and the file is
 gitignored, so nothing was lost; but a `npm test` that briefly bounces your proxy is a
 surprise, and it cut against this package's own line that real API calls are integration
@@ -517,12 +519,12 @@ on a developer box running Caddy the old test passed either way, and the "no liv
 volume is proposed for removal" property asserted nothing at all on a machine with no
 features up. `machineConfigured()` in `fixtures.mjs` had no callers left and is gone.
 
-**Verified:** `md5` of `apps/cli/infra/proxy/Caddyfile` is unchanged across a full
+**Verified:** `md5` of `apps/cli/infra/proxy/Caddyfile` (now `~/.sandbox/infra/proxy/Caddyfile`) is unchanged across a full
 `packages/sandbox-core` run, and both files pass under an empty `HOME`.
 
 **A related trap, already fixed:** both files used to pin `process.env.SANDBOX_ROOT` to their
 own checkout. Without that, a shell exporting `SANDBOX_ROOT` (which `~/.sandbox/env.sh` does)
-made the tests write **the shared checkout's** `infra/proxy/Caddyfile` when run from a git
+made the tests write **the shared checkout's** `infra/proxy/Caddyfile` (now `~/.sandbox/infra/proxy/Caddyfile`) when run from a git
 worktree — an isolated agent silently mutating the main working tree. Neither file resolves a
 path any more, so both pins are gone with the hazard.
 
@@ -537,7 +539,7 @@ path any more, so both pins are gone with the hazard.
 `loadServices()` / `loadPorts()` **throw** `Required config file not found` on a machine with
 no `~/.sandbox/{services,ports}.yaml` rather than returning empty. A CI runner is exactly that
 machine. So any core test that reaches the registry — directly, or through `getSlot`,
-`classifyEndpoint`, `detectReport`, `removeService`, `checkStandards` — passes on a developer
+`classifyEndpoint`, `removeService`, `checkStandards` — passes on a developer
 box and fails on CI.
 
 Nine did, in one PR. Every one of them was written against "run

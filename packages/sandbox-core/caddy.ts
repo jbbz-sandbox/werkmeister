@@ -8,7 +8,8 @@
 import * as fs from "node:fs";
 
 import { Colors } from "./colors.js";
-import { infraRoot, sandboxRoot } from "./config.js";
+import { composeInvocation } from "./compose_infra.js";
+import { stateInfraRoot } from "./config.js";
 import { copyFileToContainer, execCapture } from "./docker.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, raw, success, warn } from "./reporter.js";
@@ -28,10 +29,6 @@ const _HANDLE_OPEN_RE = /^\s*(handle(?:_path)?)\b\s*([^{]*)\{\s*$/;
 // route-drop signature documented in this repo's CLAUDE.md that
 // `_HANDLE_OPEN_RE` cannot see, since it only matches lines ending in "{".
 const _HANDLE_INLINE_RE = /^\s*(handle(?:_path)?)\b\s*([^{]*)\{.*\}\s*$/;
-
-function _infraComposeFile(): string {
-  return `${infraRoot()}/compose/shared-infra.yml`;
-}
 
 /** Everything before the first `#` in *line*. */
 function _stripComment(line: string): string {
@@ -284,14 +281,13 @@ export async function adaptAndCountRoutes(
  * Returns True on success.
  */
 function _runCaddyCompose(args: string[], { capture = false }: { capture?: boolean } = {}): boolean {
-  const composeFile = _infraComposeFile();
-  const envFile = `${sandboxRoot()}/.env`;
-  const cmd = ["docker", "compose", "--env-file", envFile, "-f", composeFile, ...args];
+  const { argv, env } = composeInvocation();
+  const cmd = [...argv, ...args];
   info(`Running: ${cmd.join(" ")}`);
 
   let result;
   try {
-    result = run(cmd, { capture, timeout: 60 });
+    result = run(cmd, { capture, timeout: 60, env });
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
       error("docker compose not found. Ensure Docker Desktop is installed.");
@@ -321,7 +317,7 @@ function _runCaddyCompose(args: string[], { capture = false }: { capture?: boole
  * Returns True on success.
  */
 export async function reloadCaddy(): Promise<boolean> {
-  const hostCaddyfile = `${infraRoot()}/proxy/Caddyfile`;
+  const hostCaddyfile = `${stateInfraRoot()}/proxy/Caddyfile`;
 
   info("Copying Caddyfile into Caddy container...");
   if (!(await cpCaddyfileToContainer(hostCaddyfile))) {
@@ -411,10 +407,10 @@ export function stopCaddy(): boolean {
 
 /** Check if the Caddy container is running. */
 export function isCaddyRunning(): boolean {
-  const composeFile = _infraComposeFile();
-  const cmd = ["docker", "compose", "-f", composeFile, "ps", "--status", "running", "-q", "caddy"];
+  const { argv, env } = composeInvocation();
+  const cmd = [...argv, "ps", "--status", "running", "-q", "caddy"];
   try {
-    const result = run(cmd, { capture: true, timeout: 10 });
+    const result = run(cmd, { capture: true, timeout: 10, env });
     return Boolean(result.stdout.trim());
   } catch (e) {
     if (e instanceof ProcError && (e.code === "ENOENT" || e.code === "ETIMEDOUT")) {

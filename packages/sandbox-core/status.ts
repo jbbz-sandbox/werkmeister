@@ -12,10 +12,10 @@
  */
 
 import * as fs from "node:fs";
-import * as path from "node:path";
 
+import { composeInvocation } from "./compose_infra.js";
 import { getContainerStatus, isOneShotService, type ContainerStatus } from "./compose.js";
-import { infraRoot, loadServices } from "./config.js";
+import { loadServices } from "./config.js";
 import { getPerServiceStatus, type ForwardStatus } from "./k8s.js";
 import { ProcError, run as procRun } from "./proc.js";
 // The only core module that reaches into `sandbox.ts`, for a one-line predicate
@@ -39,14 +39,14 @@ export interface InfraContainer {
 
 /** Return status of shared-infra containers without noisy logging. */
 export function getInfraStatus(): InfraContainer[] {
-  const composeFile = path.join(infraRoot(), "compose", "shared-infra.yml");
-  if (!fs.existsSync(composeFile)) {
+  const { argv, env } = composeInvocation();
+  if (!fs.existsSync(argv[3])) {
     return [];
   }
   try {
     const result = procRun(
-      ["docker", "compose", "-f", composeFile, "ps", "--format", "json"],
-      { capture: true, timeout: 10 },
+      [...argv, "ps", "--format", "json"],
+      { capture: true, timeout: 10, env },
     );
     if (result.status !== 0 || !result.stdout.trim()) {
       return [];

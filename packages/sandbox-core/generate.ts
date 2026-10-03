@@ -19,6 +19,7 @@ import * as YAML from "yaml";
 import { buildSandboxContextMd } from "./claude_md.js";
 import {
   infraRoot,
+  stateInfraRoot,
   loadPorts,
   loadServices,
   loadSetupServices,
@@ -1176,9 +1177,13 @@ export async function generateCaddyfile(
   config: Record<string, any> | null = null,
 ): Promise<string> {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
-  const proxyDir = path.join(infraRoot(), "proxy");
+  const proxyDir = path.join(stateInfraRoot(), "proxy");
   fs.mkdirSync(proxyDir, { recursive: true });
   const outPath = path.join(proxyDir, "Caddyfile");
+  // Docker creates a directory for a missing bind source; recover from one.
+  if (fs.existsSync(outPath) && fs.statSync(outPath).isDirectory()) {
+    fs.rmSync(outPath, { recursive: true, force: true });
+  }
 
   // Acquire lock BEFORE reading slots / writing the Caddyfile.  Re-read
   // slots inside the lock so we always see the latest committed state.
@@ -1187,9 +1192,9 @@ export async function generateCaddyfile(
       allFeatures = await getAllSlots();
     }
 
-    // Write features.json for the feature selector UI
-    const uiDir = path.join(proxyDir, "ui");
-    fs.mkdirSync(uiDir, { recursive: true });
+    // Write features.json for the feature selector UI. Caddy serves it from
+    // the shipped ui dir via a file bind-mount (shared-infra.yml), so it
+    // lives beside the Caddyfile, not in a ui/ subdir.
     const featuresJson = Object.entries(allFeatures)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .filter(([, featInfo]) => isDict(featInfo))
@@ -1199,7 +1204,7 @@ export async function generateCaddyfile(
         services: featInfo["services"] ?? [],
       }));
     fs.writeFileSync(
-      path.join(uiDir, "features.json"),
+      path.join(proxyDir, "features.json"),
       JSON.stringify(featuresJson, null, 2) + "\n",
     );
 

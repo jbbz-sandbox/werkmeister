@@ -16,6 +16,7 @@ import {
   sandboxRoot,
   servicesYamlPath,
   slotPortRange,
+  stateInfraRoot,
   workspacesRoot,
 } from "./dist/config.js";
 
@@ -117,4 +118,16 @@ test("sandboxRoot: SANDBOX_ROOT wins, else a walk-up finds the checkout's apps/c
 
   process.env.SANDBOX_ROOT = "~/elsewhere/apps/cli";
   assert.equal(sandboxRoot(), path.join(homedir(), "elsewhere", "apps", "cli"));
+});
+
+test("stateInfraRoot is <sandboxHome>/infra and follows SANDBOX_CONFIG_FILE", async () => {
+  const dir = await withConfig("version: 1\n");
+  assert.equal(stateInfraRoot(), path.join(dir, "infra"));
+  assert.equal(stateInfraRoot(), path.join(sandboxHome(), "infra"));
+});
+
+test("stateInfraRoot is absolute even when SANDBOX_CONFIG_FILE is relative", () => {
+  process.env.SANDBOX_CONFIG_FILE = "rel/config.yaml";
+  assert.ok(path.isAbsolute(stateInfraRoot()), stateInfraRoot());
+  assert.equal(stateInfraRoot(), path.resolve("rel", "infra"));
 });

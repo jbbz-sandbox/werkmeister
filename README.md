@@ -61,7 +61,12 @@ The package is a single esbuild bundle plus `infra/` — the templates, compose
 files, proxy UI and skills the CLI reads at runtime. `sandbox-core` and the
 CLI's other libraries are bundled in, so the only dependency npm resolves is
 `dockerode`. `sandbox setup` still seeds `~/.sandbox` exactly as it does from a
-checkout, which is what makes the two installs interchangeable.
+checkout, which is what makes the two installs interchangeable. The headless
+MCP server (`apps/mcp`) is bundled in too, as `dist/mcp.js`: `sandbox mcp`,
+`sandbox connect`'s MCP server on 3002 and the `sandbox-tools` plugin's MCP
+entry all work from the package. What stays checkout-only is the workspaces
+dashboard (`apps/sandbox-dashboard`: Jira, PRs, session and MCP-App UI tools);
+`sandbox dashboard` falls back to the headless server where it is absent.
 
 One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins
 in `~/.sandbox/env.sh`, so whichever CLI you last ran `sandbox config` from owns

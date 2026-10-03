@@ -43,7 +43,7 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 
 **Verify:**
 ```bash
-docker cp infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp ~/.sandbox/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
   node --input-type=module -e "
 const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/dist/lib/caddy.js');
@@ -141,14 +141,14 @@ docker restart sandbox-k8s-forwards
 
 ### Validate Config
 ```bash
-docker cp infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp ~/.sandbox/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1
 ```
 
 ### Reload After Changes
 ```bash
 # ALWAYS use docker cp — do NOT rely on bind mount sync
-docker cp infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp ~/.sandbox/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
 ```
 

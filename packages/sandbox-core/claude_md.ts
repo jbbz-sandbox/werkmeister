@@ -519,12 +519,12 @@ ${featureBlock}
 
 ### Feature missing from \`/__sandbox\` selector
 
-The dropdown is populated from \`$SANDBOX_ROOT/infra/proxy/ui/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
+The dropdown is populated from \`~/.sandbox/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
 
 Diagnose — compare what's labeled vs. what the UI shows:
 \`\`\`bash
 docker ps -a --filter label=com.sandbox.local.feature   --format '{{ .Label "com.sandbox.local.feature" }}' | sort -u
-jq '[.[].name]' "\${SANDBOX_ROOT:-$HOME/workspace/sandbox}/infra/proxy/ui/features.json"
+jq '[.[].name]' "$HOME/.sandbox/infra/proxy/features.json"
 \`\`\`
 
 Resync:

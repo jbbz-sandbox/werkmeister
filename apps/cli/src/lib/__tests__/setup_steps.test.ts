@@ -22,6 +22,7 @@ import {
   OPTIONAL_PLUGINS,
   resolveCertScript,
   runSetup,
+  syncEditorSchemas,
   syncIngressCerts,
   syncOptionalPlugin,
   syncPathDirs,
@@ -615,5 +616,66 @@ describe("demo-services clone gating and registry ordering", () => {
     const text = fs.readFileSync(path.join(home.dir, "services.yaml"), "utf8");
     expect(text).toContain("k8s_context: kind-dev");
     expect(text).toContain("repo: demo-services");
+  });
+});
+
+describe("syncEditorSchemas", () => {
+  let dir: string;
+  let settings: string;
+  const schemas = "/opt/sandbox/infra/schemas";
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "vscode-"));
+    settings = path.join(dir, "settings.json");
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it("skips when VS Code is not installed", () => {
+    const [step] = syncEditorSchemas(false, true, path.join(dir, "nope", "settings.json"), schemas);
+    expect(step.ok).toBe(true);
+    expect(step.detail).toContain("not found");
+  });
+
+  it("never writes without a yes, and --check stays green", () => {
+    fs.writeFileSync(settings, "{}");
+    for (const [checkOnly, install] of [[true, true], [false, false]]) {
+      const [step] = syncEditorSchemas(checkOnly, install, settings, schemas);
+      expect(step.ok).toBe(true);
+    }
+    expect(fs.readFileSync(settings, "utf8")).toBe("{}");
+  });
+
+  it("maps both schemas, keeps comments, replaces a stale path, and is then a no-op", () => {
+    fs.writeFileSync(
+      settings,
+      '{\n    // mine\n    "editor.tabSize": 2,\n    "yaml.schemas": {\n' +
+        '        "/old/infra/schemas/workspace.schema.json": "**/.sandbox/workspace.yml",\n' +
+        '        "/k8s.json": "*.k8s.yaml",\n    },\n}\n',
+    );
+    const [step] = syncEditorSchemas(false, true, settings, schemas);
+    expect(step.ok).toBe(true);
+    const text = fs.readFileSync(settings, "utf8");
+    expect(text).toContain("// mine");
+    expect(text).toContain('"/k8s.json": "*.k8s.yaml"');
+    expect(text).not.toContain("/old/");
+    expect(text).toContain(`"${schemas}/services-fragment.schema.json": "**/.sandbox/services.yaml"`);
+    expect(text).toContain(`"${schemas}/workspace.schema.json": "**/.sandbox/workspace.yml"`);
+
+    syncEditorSchemas(false, true, settings, schemas);
+    expect(fs.readFileSync(settings, "utf8")).toBe(text);
+  });
+
+  it("flags a stale mapping in --check without touching it", () => {
+    const before = '{"yaml.schemas": {"/old/workspace.schema.json": "**/.sandbox/workspace.yml"}}';
+    fs.writeFileSync(settings, before);
+    const [step] = syncEditorSchemas(true, false, settings, schemas);
+    expect(step).toMatchObject({ ok: false, optional: true });
+    expect(fs.readFileSync(settings, "utf8")).toBe(before);
+  });
+
+  it("refuses to edit an unparsable settings file", () => {
+    fs.writeFileSync(settings, "{ nope");
+    const [step] = syncEditorSchemas(false, true, settings, schemas);
+    expect(step).toMatchObject({ ok: false, optional: true });
+    expect(fs.readFileSync(settings, "utf8")).toBe("{ nope");
   });
 });

@@ -7,10 +7,15 @@
  * are bundled in rather than declared as runtime dependencies. That is what
  * makes the tarball installable from a checkout-free machine.
  *
- * Two entry points, because the wrapper has two: `hooks gate` execs
+ * Three entry points, because the wrapper has three: `hooks gate` execs
  * `dist/lib/gate.js` directly to skip the commander/yaml import chain (<200ms
  * budget — see gate.ts). Bundling would otherwise collapse them into one file
- * and hand the gate the whole CLI's import cost on every Edit/Write.
+ * and hand the gate the whole CLI's import cost on every Edit/Write. `mcp`
+ * execs `dist/mcp.js`: the headless MCP server lives in the sibling
+ * `apps/mcp` workspace, which is private and not published, so it is bundled
+ * here from source — the same reason sandbox-core is. Without it, `sandbox
+ * mcp` and the `sandbox-tools` plugin's MCP entry have no target on an
+ * `npm i -g` install.
  *
  * `dockerode` is the one exception, left external and declared as a real
  * dependency. 046 bundled it into the .vsix by externalising `*.node`, but that
@@ -29,11 +34,19 @@ import * as esbuild from "esbuild";
 const watch = process.argv.includes("--watch");
 
 const options = {
-  entryPoints: ["src/main.ts", "src/lib/gate.ts"],
+  entryPoints: [
+    { in: "src/main.ts", out: "main" },
+    { in: "src/lib/gate.ts", out: "lib/gate" },
+    { in: "../mcp/main.ts", out: "mcp" },
+  ],
   bundle: true,
   outdir: "dist",
-  outbase: "src",
-  external: ["dockerode", "*.node"],
+  // The Agent SDK runs a bundled Claude Code binary it locates relative to its
+  // own package, so it stays an installed dependency rather than bundled code.
+  external: ["dockerode", "*.node", "@anthropic-ai/claude-agent-sdk"],
+  // jsonc-parser's `main` is UMD, which loads its own files with a dynamic
+  // require esbuild can't follow; its ESM build is plain imports.
+  alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
   format: "esm",
   platform: "node",
   target: "node20",

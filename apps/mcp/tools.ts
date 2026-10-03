@@ -8,16 +8,27 @@
  * logic belongs in `sandbox-core` (predecessor spec §4).
  */
 
+import * as path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
 import { composeLogs } from "sandbox-core/compose";
-import { sandboxRoot } from "sandbox-core/config";
-import { detectReport } from "sandbox-core/detect";
+import { getReposRoot, sandboxRoot, servicesLocalYamlPath } from "sandbox-core/config";
 import { SandboxError } from "sandbox-core/errors";
 import { featureUrl } from "sandbox-core/feature_routing";
+import {
+  applyAnswers,
+  collectQuestions,
+  planFragment,
+  planSummary,
+  portsPerSlot,
+  renderFragment,
+  stdoutRunner,
+  validateFragment,
+  writeFragment,
+} from "sandbox-core/fragment_detect";
 import { connectK8s, up as infraUp } from "sandbox-core/infra";
 import {
   down,
@@ -203,26 +214,55 @@ function registerLifecycleTools(server: McpServer): void {
   server.registerTool(
     "sandbox-detect",
     {
-      title: "Detect changed services",
+      title: "Generate a repo's service-registry fragment",
       description:
-        "Which registered services this feature's workspace has local changes for, and which " +
-        "have none.",
+        "Scan a repo (package manifests, Dockerfiles, compose, Helm, k8s, kustomize) and propose its " +
+        ".sandbox/services.yaml. Returns the report, the proposed YAML and the questions the scan could " +
+        "not settle. Writes only with write: true. Answer questions by passing `answers` " +
+        "({ item: <question id>, value, reason, files_read }); answers can only fill those questions.",
       inputSchema: {
-        ...FEATURE_ARG,
-        workspace: z.string().optional().describe("Override the resolved workspace directory."),
+        repo: z.string().describe("Repo directory name under paths.repos_root, or an absolute path."),
+        write: z.boolean().optional().describe("Write the fragment when it is valid and something changed."),
+        answers: z
+          .array(
+            z.object({
+              item: z.string(),
+              value: z.unknown(),
+              reason: z.string(),
+              files_read: z.array(z.string()).default([]),
+            }),
+          )
+          .optional(),
       },
     },
-    async (args, extra): Promise<CallToolResult> =>
+    async (args): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        // detectReport calls resolveWorkspace() directly, which has no
-        // docker-compose.yml guard and, unconfigured, falls back to a path
-        // derived from process.cwd() — meaningless for this server. Route
-        // through the same guarded resolution every other tool uses so a bad
-        // resolution throws WORKSPACE instead of silently reporting on the
-        // wrong directory. An explicit `workspace` argument still wins.
+        const reposRoot = getReposRoot();
+        const root = path.isAbsolute(args.repo) ? args.repo : path.join(reposRoot, args.repo);
+        let plan = planFragment(root, {
+          reposRoot,
+          runner: stdoutRunner,
+          localPath: servicesLocalYamlPath(),
+          portsPerSlot: portsPerSlot(),
+        });
+        const applied = args.answers?.length ? applyAnswers(plan, args.answers) : null;
+        if (applied) plan = applied.plan;
+        const rendered = renderFragment(plan);
+        const errors = rendered.changed ? validateFragment(rendered, plan, reposRoot) : [];
+        const wrote = Boolean(args.write) && rendered.changed && errors.length === 0;
+        if (wrote) writeFragment(rendered);
         return {
-          ...detectReport(feature, args.workspace ?? resolveWorkspaceDir(feature)),
+          path: rendered.path,
+          wrote,
+          changed: rendered.changed,
+          added: rendered.added,
+          skipped: rendered.skipped,
+          errors,
+          yaml: rendered.yaml,
+          report: planSummary(plan),
+          questions: collectQuestions(plan),
+          accepted: applied?.accepted ?? [],
+          rejected: applied?.rejected ?? [],
         };
       }),
   );

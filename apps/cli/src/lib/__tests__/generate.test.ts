@@ -6,8 +6,8 @@
  * loadServices/loadPorts — the registry moved out of the checkout, so the
  * developer's own must never be read here. compose/env/supergraph tests pass
  * workspaceOverride=tmp so nothing lands outside the temp dir. Caddyfile tests
- * redirect infraRoot into tmp so the real infra/proxy/Caddyfile is never
- * mutated — and assert the redirect took hold before writing anything, because
+ * redirect stateInfraRoot into tmp so the real ~/.sandbox/infra/proxy/Caddyfile
+ * is never mutated — and assert the redirect took hold before writing anything, because
  * a redirect that silently fails writes into the developer's live infra tree.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,14 +16,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const h = vi.hoisted(() => ({ infraRoot: null as string | null }));
+const h = vi.hoisted(() => ({ stateInfraRoot: null as string | null }));
 
 vi.mock("sandbox-core/config", async (importOriginal) => {
   const actual = await importOriginal<typeof import("sandbox-core/config")>();
-  // Redirects only what importers see. config.ts's own loadServices/loadPorts
-  // call infraRoot internally, and intra-module calls are not intercepted, so
-  // they keep resolving against the real tree.
-  return { ...actual, infraRoot: () => h.infraRoot ?? actual.infraRoot() };
+  // Redirects only what importers see: generate.ts writes the Caddyfile and
+  // features.json under stateInfraRoot(), and that must land in tmp, never in
+  // the developer's ~/.sandbox. infraRoot() stays real so the templates load.
+  return { ...actual, stateInfraRoot: () => h.stateInfraRoot ?? actual.stateInfraRoot() };
 });
 
 import {
@@ -35,7 +35,7 @@ import {
   seedWorkspaceMetadataEnv,
 } from "sandbox-core/generate";
 import { loadFeatureRouters } from "sandbox-core/feature_routing";
-import { infraRoot, loadServices } from "sandbox-core/config";
+import { loadServices, stateInfraRoot } from "sandbox-core/config";
 import { getPortRange } from "sandbox-core/slots";
 import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
@@ -47,7 +47,7 @@ let home: SandboxHome;
 beforeEach(() => {
   process.env.SANDBOX_ROOT = repoRoot;
   home = useSandboxHome();
-  h.infraRoot = null;
+  h.stateInfraRoot = null;
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gen-"));
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
@@ -347,25 +347,32 @@ describe("generateSupergraphConfig", () => {
   });
 });
 
-// ---- generateCaddyfile (infraRoot redirected into tmp) --------------------
+// ---- generateCaddyfile (stateInfraRoot redirected into tmp) --------------------
 
 describe("generateCaddyfile", () => {
   beforeEach(() => {
-    h.infraRoot = tmp;
-    // Fail here, not after writing. When generate.ts moved into sandbox-core
-    // this mock's target moved with it; until it was retargeted every test in
-    // this block wrote a Caddyfile full of fixture features straight into the
-    // developer's real apps/cli/infra/proxy/.
-    expect(infraRoot()).toBe(tmp);
+    h.stateInfraRoot = tmp;
+    // Fail here, not after writing: a redirect that silently fails writes a
+    // Caddyfile full of fixture features into the developer's real ~/.sandbox.
+    expect(stateInfraRoot()).toBe(tmp);
   });
 
-  it("writes Caddyfile and features.json", async () => {
+  it("replaces a directory Docker left at the Caddyfile path", async () => {
+    // Docker creates a directory for a missing bind-mount source. The next
+    // generation must recover rather than fail on EISDIR.
+    fs.mkdirSync(path.join(tmp, "proxy", "Caddyfile"), { recursive: true });
+    const outPath = await generateCaddyfile({});
+    expect(fs.statSync(outPath).isFile()).toBe(true);
+  });
+
+  it("writes Caddyfile and features.json beside each other under proxy/", async () => {
     const outPath = await generateCaddyfile({ myfeat: { slot: 1, services: ["frontend"] } });
     expect(outPath).toBe(path.join(tmp, "proxy", "Caddyfile"));
     expect(fs.statSync(outPath).isFile()).toBe(true);
 
-    const featuresJsonPath = path.join(tmp, "proxy", "ui", "features.json");
+    const featuresJsonPath = path.join(tmp, "proxy", "features.json");
     expect(fs.statSync(featuresJsonPath).isFile()).toBe(true);
+    expect(fs.existsSync(path.join(tmp, "proxy", "ui"))).toBe(false);
     const features = JSON.parse(fs.readFileSync(featuresJsonPath, "utf8"));
     expect(features).toEqual([{ name: "myfeat", slot: 1, services: ["frontend"] }]);
   });

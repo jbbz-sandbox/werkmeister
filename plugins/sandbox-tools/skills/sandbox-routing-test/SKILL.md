@@ -61,15 +61,17 @@ Check for discrepancies:
 ## Step 5: Verify Caddy Route Exists
 
 ```bash
-SANDBOX_ROOT="$(dirname "$(readlink -f "$(command -v sandbox)")")"
-grep -n "path.*{relevant_pattern}" "$SANDBOX_ROOT/infra/proxy/Caddyfile"
+CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
+CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+grep -n "path.*{relevant_pattern}" "$CADDYFILE"
 ```
 
 Also check compiled config:
 
 ```bash
-SANDBOX_ROOT="$(dirname "$(readlink -f "$(command -v sandbox)")")"
-docker cp "$SANDBOX_ROOT/infra/proxy/Caddyfile" sandbox-caddy:/tmp/Caddyfile.check
+CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
+CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | python3 -c "
 import json, sys
 config = json.load(sys.stdin)

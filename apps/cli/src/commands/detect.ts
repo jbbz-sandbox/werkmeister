@@ -1,67 +1,200 @@
 /**
- * sandbox detect [feature]
+ * sandbox detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
  *
- * Analyze git worktrees in the feature's workspace and report which
- * services would run locally based on changed files.
+ * Generate <repo>/.sandbox/services.yaml from what the repo already says about
+ * itself: package manifests, Dockerfiles, compose, Helm, k8s and kustomize.
+ * Re-runs only add what is missing. Spec:
+ * docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md.
  */
+import * as fs from "node:fs";
+import * as path from "node:path";
 
-import { Colors, warn } from "../lib/config.js";
-import { detectReport, type DetectedService } from "sandbox-core/detect";
+import { getReposRoot, servicesLocalYamlPath } from "sandbox-core/config";
+import {
+  AllocationError,
+  applyAnswers,
+  collectQuestions,
+  planFragment,
+  portsPerSlot,
+  renderFragment,
+  stdoutRunner,
+  validateFragment,
+  writeFragment,
+  type FieldValue,
+  type Plan,
+  type Resolver,
+} from "sandbox-core/fragment_detect";
+import type { Runner } from "sandbox-core/machine_setup";
+import { RegistryError } from "sandbox-core/registry_sync";
 
-function printResults(detected: DetectedService[], nonLocal: string[]): void {
-  console.log();
-  if (detected.length) {
-    console.log(
-      `  ${Colors.GREEN}${Colors.BOLD}Detected ${detected.length} service(s) with changes:${Colors.RESET}`,
-    );
-    for (const svc of detected) {
-      console.log(
-        `    ${Colors.GREEN}*${Colors.RESET} ${svc.service}  (${svc.repo}, type=${svc.type})`,
-      );
+import { claudeResolver } from "../lib/assist_resolver.js";
+import { Colors, info, success, warn } from "../lib/config.js";
+import { confirm } from "../lib/wizard.js";
+
+export interface DetectArgs {
+  repo: string | null;
+  dryRun: boolean;
+  yes: boolean;
+  /** true = --assist, false = --no-assist, undefined = ask when interactive. */
+  assist: boolean | undefined;
+}
+
+export interface DetectDeps {
+  runner: Runner;
+  resolver: Resolver;
+  interactive: boolean;
+  reposRoot: string;
+  localPath: string;
+  portsPerSlot: number;
+  cwd: string;
+}
+
+function mark(fv: FieldValue): string {
+  return fv.confidence === "stated" ? "" : ` ${Colors.YELLOW}[${fv.confidence}]${Colors.RESET}`;
+}
+
+function printFields(fields: Record<string, FieldValue>): void {
+  for (const [key, fv] of Object.entries(fields)) {
+    console.log(`    ${key}: ${JSON.stringify(fv.value)}${mark(fv)}  ${Colors.DIM}${fv.source}${Colors.RESET}`);
+  }
+}
+
+function printPlan(plan: Plan): void {
+  for (const s of plan.services) {
+    console.log(`\n  ${Colors.BOLD}${s.name}${Colors.RESET} ${Colors.DIM}(${s.dir})${Colors.RESET}`);
+    printFields(s.fields);
+  }
+  for (const i of plan.infrastructure) {
+    console.log(`\n  ${Colors.BOLD}${i.name}${Colors.RESET} ${Colors.DIM}(infrastructure)${Colors.RESET}`);
+    printFields(i.fields);
+  }
+  if (plan.setup) {
+    console.log(`\n  ${Colors.BOLD}${plan.setup.name}${Colors.RESET} ${Colors.DIM}(setup service)${Colors.RESET}`);
+    printFields(plan.setup.fields);
+  }
+  const conflicts = plan.services.flatMap((s) => s.conflicts);
+  if (conflicts.length) {
+    console.log(`\n  ${Colors.BOLD}Conflicts${Colors.RESET}`);
+    for (const c of conflicts) {
+      const also = c.also.map((a) => `${JSON.stringify(a.value)} (${a.source})`).join(", ");
+      console.log(`    ${c.service}.${c.key}: ${JSON.stringify(c.chosen.value)} (${c.chosen.source}) over ${also}`);
+    }
+  }
+  if (plan.skipped.length) {
+    console.log(`\n  ${Colors.BOLD}Skipped${Colors.RESET}`);
+    for (const s of plan.skipped) console.log(`    ${s.item}: ${s.reason}`);
+  }
+}
+
+export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<number> {
+  let root: string;
+  if (args.repo) {
+    root = path.resolve(deps.cwd, args.repo);
+    if (!fs.statSync(root, { throwIfNoEntry: false })?.isDirectory()) {
+      warn(`${root} is not a directory — pass the repo path: sandbox detect <repo>`);
+      return 2;
     }
   } else {
-    console.log(`  ${Colors.YELLOW}No services detected with changes.${Colors.RESET}`);
-    console.log(`  ${Colors.DIM}This means all services would come from k8s.${Colors.RESET}`);
-    console.log(
-      `  ${Colors.DIM}Use 'sandbox up <feature> -s <service>' to force a service to run locally.${Colors.RESET}`,
-    );
+    const [rc, out] = deps.runner(["git", "-C", deps.cwd, "rev-parse", "--show-toplevel"]);
+    if (rc !== 0) {
+      warn("Not inside a git repo — pass the repo path: sandbox detect <repo>");
+      return 2;
+    }
+    root = out.trim();
   }
 
-  if (nonLocal.length) {
-    console.log(`\n  ${Colors.DIM}k8s (unchanged): ${nonLocal.join(", ")}${Colors.RESET}`);
+  let plan: Plan;
+  try {
+    plan = planFragment(root, {
+      reposRoot: deps.reposRoot,
+      runner: deps.runner,
+      localPath: deps.localPath,
+      portsPerSlot: deps.portsPerSlot,
+    });
+  } catch (e) {
+    if (e instanceof AllocationError || e instanceof RegistryError) {
+      warn(e.message);
+      return 1;
+    }
+    throw e;
   }
-  console.log();
+
+  console.log(`\n${Colors.BOLD}=== sandbox detect: ${plan.repo} ===${Colors.RESET}`);
+  printPlan(plan);
+  if (!plan.services.length && !plan.infrastructure.length) {
+    warn(`No services found in ${root}.`);
+    return 1;
+  }
+
+  const questions = collectQuestions(plan);
+  if (questions.length && args.dryRun) {
+    info(`${questions.length} field(s) are guesses; --assist would ask Claude about:`);
+    for (const q of questions) console.log(`    ? ${q.id}: ${q.prompt}`);
+  } else if (questions.length) {
+    const ask =
+      args.assist ??
+      (await confirm(`  ${questions.length} field(s) are guesses — ask Claude to resolve them?`, false, deps.interactive));
+    if (ask) {
+      try {
+        const result = applyAnswers(plan, await deps.resolver(plan.root, questions));
+        plan = result.plan;
+        for (const item of result.accepted) success(`Claude resolved ${item}`);
+        for (const r of result.rejected) warn(`Ignored Claude's answer for ${r.item}: ${r.reason}`);
+      } catch (e) {
+        warn(`Claude pass failed (${e instanceof Error ? e.message : String(e)}) — keeping the deterministic guesses.`);
+      }
+    }
+  }
+
+  const rendered = renderFragment(plan);
+  for (const s of rendered.skipped) warn(s);
+  if (!rendered.changed) {
+    success(`${rendered.path} is up to date — nothing to add.`);
+    return 0;
+  }
+  const errors = validateFragment(rendered, plan, deps.reposRoot);
+  if (errors.length) {
+    for (const e of errors) warn(e);
+    warn("Not written: the generated fragment failed validation.");
+    return 1;
+  }
+  console.log(plan.existing === null ? `\n${rendered.yaml}` : `\n  Would add: ${rendered.added.join(", ")}`);
+
+  if (args.dryRun) return 0;
+  if (!args.yes && !deps.interactive) {
+    info("Not a TTY — nothing written (pass --yes to write).");
+    return 0;
+  }
+  if (!args.yes && !(await confirm(`  Write ${rendered.path}?`, false, deps.interactive))) {
+    info("Nothing written.");
+    return 0;
+  }
+  writeFragment(rendered);
+  success(`Wrote ${rendered.path}`);
+  if (rendered.added.some((a) => a.endsWith(".port_offset"))) {
+    info("port_offset is machine-wide — a collision on another machine shows up at `sandbox registry sync`.");
+  }
+  info("next: sandbox registry sync");
+  return 0;
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
-  const workspaceOverride = (args.workspace as string | null) ?? null;
-  const feature = (args.feature as string | null) ?? "";
-
-  const label = feature ? `: ${feature}` : "";
-  console.log(`\n${Colors.BOLD}=== sandbox detect${label} ===${Colors.RESET}\n`);
-
-  // The two "nothing to do" cases come back as fields rather than as throws,
-  // because each prints its own hint and neither is a failure exit.
-  const report = detectReport(feature, workspaceOverride);
-
-  if (!report.workspaceExists) {
-    warn(`Workspace not found: ${report.workspace}`);
-    console.log(`\n  ${Colors.DIM}Expected workspace at: ${report.workspace}${Colors.RESET}`);
-    if (!workspaceOverride) {
-      console.log(
-        `  ${Colors.DIM}Create worktrees there, use --workspace to point to your repos, or check the feature name.${Colors.RESET}`,
-      );
-    }
-    console.log();
-    return;
-  }
-
-  if (!report.serviceCount) {
-    warn("No services configured in config/services.yaml");
-    console.log(`  ${Colors.DIM}Create config/services.yaml with service definitions.${Colors.RESET}`);
-    console.log();
-    return;
-  }
-
-  printResults(report.detected, report.nonLocal);
+  const code = await runDetect(
+    {
+      repo: (args.repo as string | null) ?? null,
+      dryRun: Boolean(args.dryRun),
+      yes: Boolean(args.yes),
+      assist: args.assist as boolean | undefined,
+    },
+    {
+      runner: stdoutRunner,
+      resolver: claudeResolver,
+      interactive: Boolean(process.stdin.isTTY),
+      reposRoot: getReposRoot(),
+      localPath: servicesLocalYamlPath(),
+      portsPerSlot: portsPerSlot(),
+      cwd: process.cwd(),
+    },
+  );
+  if (code) process.exit(code);
 }

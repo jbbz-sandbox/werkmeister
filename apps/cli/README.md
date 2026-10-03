@@ -50,7 +50,10 @@ feature name (`infra` plus the workspaces under the workspaces root).
 - CLI parsing is commander; templates in `infra/templates/*.njk` render through
   nunjucks with a small compat layer (`{% do %}`, dict truthiness,
   `map(attribute=…)`) so they stay shared verbatim with other consumers
-- `sandbox dashboard` launches the dashboard's MCP server over stdio; it lives in
-  `apps/sandbox-dashboard` and is not duplicated here
+- `sandbox mcp` runs the headless MCP server over stdio. Its source is
+  `apps/mcp`, bundled into `dist/mcp.js` by `esbuild.mjs` so it ships in the npm
+  package. `sandbox dashboard` runs the richer workspaces dashboard from
+  `apps/sandbox-dashboard` (Jira, PRs, MCP Apps UI), which is checkout-only;
+  where that app is absent the verb falls back to the bundled headless server
 - interactive prompts and process-spawn edges are async (`run()` is
   `async` throughout); core logic stays synchronous

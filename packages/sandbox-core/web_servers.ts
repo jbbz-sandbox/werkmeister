@@ -26,7 +26,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { monorepoRoot } from "./config.js";
+import { monorepoRoot, sandboxRoot } from "./config.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
 
@@ -44,6 +44,12 @@ export interface WebApp {
   entry: string;
   /** Build artifact used as the staleness reference. */
   buildRef: string;
+  /**
+   * Prebuilt copy inside the CLI package, relative to `sandboxRoot()`. Used
+   * when the sibling app dir is absent — an `npm i -g` install ships only
+   * apps/cli, with this bundled in by its esbuild.mjs. Nothing to build there.
+   */
+  bundled?: string;
   /**
    * Extra environment variables for this app's process, merged over
    * `process.env` last (see `start()`). Per-app rather than inherited by
@@ -78,6 +84,7 @@ export const MCP: WebApp = {
   stem: "sandbox-mcp",
   entry: "dist/main.js",
   buildRef: "dist/main.js",
+  bundled: "dist/mcp.js",
   // Must be reachable from a container with no Docker socket (that's the
   // whole point of this app), and a container's requests arrive over the
   // bridge network, not loopback — so this is the one managed app that
@@ -232,8 +239,7 @@ function distStale(app: WebApp): boolean {
  * the running process predates the build. Best-effort: unknown → false (don't
  * bounce a healthy server on a stat error).
  */
-function buildNewerThanRunning(app: WebApp): boolean {
-  const ref = path.join(appDir(app), app.buildRef);
+function buildNewerThanRunning(app: WebApp, ref: string): boolean {
   try {
     return fs.statSync(ref).mtimeMs > fs.statSync(pidFile(app)).mtimeMs;
   } catch {
@@ -333,10 +339,20 @@ export async function start(app: WebApp = DASHBOARD, build = true, force = false
     return true;
   }
 
-  const dir = appDir(app);
+  let dir = appDir(app);
+  let entry = app.entry;
+  let buildRef = path.join(dir, app.buildRef);
   if (!fs.existsSync(path.join(dir, "package.json"))) {
-    warn(`${app.label} not found at ${dir}; skipping`);
-    return false;
+    // No sibling app to build (package install): run the bundle the CLI ships.
+    const bundled = app.bundled ? path.join(sandboxRoot(), app.bundled) : null;
+    if (!bundled || !fs.existsSync(bundled)) {
+      warn(`${app.label} not found at ${dir}; skipping`);
+      return false;
+    }
+    dir = sandboxRoot();
+    entry = bundled;
+    buildRef = bundled;
+    build = false;
   }
 
   let rebuilt = false;
@@ -370,7 +386,7 @@ export async function start(app: WebApp = DASHBOARD, build = true, force = false
   // A direct `npm run build` can refresh dist without bouncing the server,
   // leaving it serving a stale bundle. Treat that like an explicit force so the
   // bounce path below reloads it.
-  if (running && !rebuilt && buildNewerThanRunning(app)) {
+  if (running && !rebuilt && buildNewerThanRunning(app, buildRef)) {
     info(`Running ${app.label} predates the current build; bouncing to reload it.`);
     force = true;
   }
@@ -396,7 +412,7 @@ export async function start(app: WebApp = DASHBOARD, build = true, force = false
   // Detached (own session) so it outlives this CLI invocation; logs to a
   // fresh file each start to stay bounded.
   const logFd = fs.openSync(log, "w");
-  const child = spawn("node", [app.entry], {
+  const child = spawn("node", [entry], {
     cwd: dir,
     detached: true,
     stdio: ["ignore", logFd, logFd],

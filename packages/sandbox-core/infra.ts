@@ -22,7 +22,8 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { infraRoot, sandboxHome, sandboxRoot } from "./config.js";
+import { composeInvocation } from "./compose_infra.js";
+import { sandboxHome, stateInfraRoot } from "./config.js";
 import { generateCaddyfile } from "./generate.js";
 import { configureGitHooksPath } from "./git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy } from "./k8s.js";
@@ -32,20 +33,11 @@ import { error, info, success, warn } from "./reporter.js";
 import { restartAll, startAll, stopAll } from "./web_servers.js";
 
 function composeCmd(subcommand: string[]): boolean {
-  const root = sandboxRoot();
-  const composeFile = path.join(infraRoot(), "compose", "shared-infra.yml");
-  // --env-file only if a root .env exists — shared-infra.yml interpolates only
-  // ${HOME} (from the process env), so the file is optional. Passing a missing
-  // path makes `docker compose` hard-error. `startSharedInfra` has guarded this
-  // since it was written; this side never did, so every teardown hard-errored
-  // on a machine with no apps/cli/.env — which is all of them, since nothing
-  // creates that file.
-  const envFile = path.join(root, ".env");
-  const envArgs = fs.existsSync(envFile) ? ["--env-file", envFile] : [];
-  const cmd = ["docker", "compose", ...envArgs, "-f", composeFile, ...subcommand];
+  const { argv, env } = composeInvocation();
+  const cmd = [...argv, ...subcommand];
   info(`Running: ${cmd.join(" ")}`);
   try {
-    const result = run(cmd, { capture: true, timeout: 120 });
+    const result = run(cmd, { capture: true, timeout: 120, env });
     if (result.status !== 0) {
       error(`docker compose failed:\n${result.stderr.trim()}`);
       return false;
@@ -145,39 +137,30 @@ function ensureCorpCa(): void {
   }
 }
 
-// ponytail: these all write into the CLI's own directory, which for an
-// `npm i -g` install is inside node_modules. Harmless on an nvm or Homebrew
-// prefix (user-owned, and every file here is regenerated on each connect, so
-// `npm update -g` discarding them costs nothing) but it would fail EACCES on a
-// root-owned prefix. Move the generated set to ~/.sandbox/infra/ if anyone hits
-// that.
-/** Generate proxy/Caddyfile and refresh the k8s kubeconfig. */
+/** Generate proxy/Caddyfile and refresh the k8s kubeconfig, under ~/.sandbox/infra. */
 async function ensureProxyFiles(): Promise<void> {
-  const root = infraRoot();
+  const root = stateInfraRoot();
 
   // Always regenerate: the Caddyfile must carry the host routers (and any
-  // active feature's routes) before Caddy loads it.
-  const caddyfile = path.join(root, "proxy", "Caddyfile");
-  if (isDir(caddyfile)) {
-    fs.rmSync(caddyfile, { recursive: true, force: true });
-  }
+  // active feature's routes) before Caddy loads it. generateCaddyfile() also
+  // clears a directory Docker may have left at the path.
   info("Generating proxy/Caddyfile...");
   await generateCaddyfile();
 
   // Generate the k8s forward table from services.yaml into the file the
-  // k8s-forwards container reads (tmp/forwards) and refresh the ports/aliases
-  // regions of shared-infra.yml — must happen before `docker compose up`.
+  // k8s-forwards container reads (k8s-port-forward/forwards) and the compose
+  // override — must happen before `docker compose up`.
   generateK8sForwards();
 
   // Always regenerate from the host's current context so the k8s-forwards
   // container tracks `kubectl config use-context` instead of pinning to a
   // stale snapshot. --minify --flatten keeps the file self-contained.
-  const kubeconfig = path.join(root, "compose", "k8s-port-forward", "tmp", "kubeconfig");
+  const kubeconfig = path.join(root, "k8s-port-forward", "kubeconfig");
   if (isDir(kubeconfig)) {
     fs.rmSync(kubeconfig, { recursive: true, force: true });
   }
   fs.mkdirSync(path.dirname(kubeconfig), { recursive: true });
-  info("Refreshing k8s-port-forward/tmp/kubeconfig from current context...");
+  info("Refreshing k8s-port-forward/kubeconfig from current context...");
   try {
     const result = run(
       ["kubectl", "config", "view", "--raw", "--minify", "--flatten"],
@@ -211,8 +194,8 @@ async function ensureProxyFiles(): Promise<void> {
  * k8s-forwards image, which routinely outlasts the cap.
  */
 async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
-  const root = sandboxRoot();
-  const composeFile = path.join(infraRoot(), "compose", "shared-infra.yml");
+  const { argv, env } = composeInvocation();
+  const composeFile = argv[3];
 
   if (!fs.existsSync(composeFile)) {
     warn(`Missing ${composeFile}`);
@@ -223,11 +206,9 @@ async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
     "Starting shared infrastructure (k8s-forwards, caddy, jaeger, redisinsight)...",
   );
   try {
-    const envFile = path.join(root, ".env");
-    const envArgs = fs.existsSync(envFile) ? ["--env-file", envFile] : [];
     const result = await runAsync(
-      ["docker", "compose", ...envArgs, "-f", composeFile, "up", "-d", "--build"],
-      { capture: true, signal },
+      [...argv, "up", "-d", "--build"],
+      { capture: true, signal, env },
     );
     if (result.status !== 0) {
       error(`docker compose failed:\n${result.stderr.trim()}`);
@@ -276,13 +257,13 @@ function checkPort(host: string, port: number, timeoutSec: number): Promise<bool
  * `sandbox connect` can say what converged.
  */
 async function checkInfraHealth(): Promise<Record<string, boolean>> {
-  const composeFile = path.join(infraRoot(), "compose", "shared-infra.yml");
+  const { argv, env } = composeInvocation();
 
   const services: Record<string, boolean> = {};
   try {
     const result = run(
-      ["docker", "compose", "-f", composeFile, "ps", "--format", "json"],
-      { capture: true },
+      [...argv, "ps", "--format", "json"],
+      { capture: true, env },
     );
     if (result.status === 0 && result.stdout.trim()) {
       for (const line of result.stdout.trim().split("\n")) {

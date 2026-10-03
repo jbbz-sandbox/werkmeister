@@ -73,8 +73,12 @@ fi
 # older .mcp.json stays harmless.
 #
 # Only apps/cli is published to npm (see its package.json `files`), so on a
-# global install these siblings are absent -- hence the explicit check rather
-# than a MODULE_NOT_FOUND from node.
+# global install these siblings are absent. apps/mcp is bundled into this
+# package as dist/mcp.js (esbuild.mjs), so `mcp` always has a target. The
+# dashboard (Jira, PRs, MCP Apps UI) is checkout-only; where it is missing its
+# verb falls back to the headless server, which carries the same sandbox-*
+# verbs, so the sandbox-tools plugin's `sandbox dashboard` MCP entry keeps
+# working on a package install instead of failing at every session start.
 case "${1:-}" in
     dashboard) app_dir="sandbox-dashboard" ;;
     mcp)       app_dir="mcp" ;;
@@ -82,10 +86,16 @@ case "${1:-}" in
 esac
 if [ -n "$app_dir" ]; then
     app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/$app_dir/dist/main.js"
+    bundled="$SANDBOX_ROOT/dist/mcp.js"
     if [ ! -f "$app_entry" ]; then
-        echo "Error: '$1' is not available in this install -- missing $app_entry." >&2
-        echo "It ships with the sandbox checkout, not the npm package. From a checkout: npm run build" >&2
-        exit 1
+        if [ ! -f "$bundled" ]; then
+            echo "Error: '$1' is not available -- missing $app_entry and $bundled (run 'npm run build')." >&2
+            exit 1
+        fi
+        if [ "$1" = dashboard ]; then
+            echo "sandbox dashboard: the workspaces dashboard ships with the checkout only; serving the headless MCP server ($bundled) instead." >&2
+        fi
+        app_entry="$bundled"
     fi
     shift
     exec "$node_bin" "$app_entry" --stdio "$@"
