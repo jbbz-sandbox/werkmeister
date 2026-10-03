@@ -29,7 +29,9 @@
  *     is reported ok with guidance, and only a filled-but-rejected token fails
  *     the step;
  *   * the **Telepresence OSS client** (OPTIONAL) — installed via Homebrew on
- *     request, since only `sandbox intercept` needs it.
+ *     request, since only `sandbox intercept` needs it;
+ *   * the **Sandbox Workspaces VS Code extension** (OPTIONAL) — installed on
+ *     request from the .vsix the published CLI package ships.
  *
  * This module inspects each and (unless check-only) shells out to
  * `claude plugin …` / `git …` / `brew …` to converge. Philosophy matches
@@ -940,6 +942,75 @@ export function syncEditorSchemas(
   return [{ label, ok: true, optional: true, detail: `mapped in ${settingsPath}` }];
 }
 
+/** `<publisher>.<name>` from packages/vscode-plugin/package.json, as `code` lists it. */
+export const VSCODE_EXTENSION_ID = "jbbz.vscode-plugin";
+/** Where the CLI's `prepack` puts the packaged extension inside the tarball. */
+export const BUNDLED_VSIX_REL = path.join("dist", "sandbox-workspaces.vsix");
+
+export interface VscodeExtensionState {
+  /** The `code` CLI answered. */
+  cli: boolean;
+  /** Installed extension version, or null. */
+  installed: string | null;
+  /**
+   * The .vsix shipped in the published CLI package, at the CLI's own version
+   * (the changeset `fixed` group keeps the two equal). Null in a checkout:
+   * only `prepack` builds it, so a dev's local build is never installed.
+   */
+  bundled: { path: string; version: string } | null;
+}
+
+export function vscodeExtensionState(runner: Runner = defaultRunner, root = sandboxRoot()): VscodeExtensionState {
+  const [rc, out] = runner(["code", "--list-extensions", "--show-versions"]);
+  const prefix = `${VSCODE_EXTENSION_ID}@`;
+  const line = rc === 0 ? out.split("\n").find((l) => l.trim().toLowerCase().startsWith(prefix)) : undefined;
+  const vsix = path.join(root, BUNDLED_VSIX_REL);
+  return {
+    cli: rc === 0,
+    installed: line ? line.trim().slice(prefix.length) : null,
+    bundled: fs.existsSync(vsix) ? { path: vsix, version: readJson(path.join(root, "package.json"))?.version } : null,
+  };
+}
+
+/**
+ * Install the Sandbox Workspaces extension from the .vsix the published CLI
+ * ships. Optional: only when the wizard asked and the answer was yes.
+ */
+export function syncVscodeExtension(
+  checkOnly: boolean,
+  install: boolean,
+  state = vscodeExtensionState(),
+  runner: Runner = defaultRunner,
+): Step[] {
+  const label = "VS Code extension (optional)";
+  if (!state.cli) {
+    return [{
+      label,
+      ok: true,
+      detail: "`code` not on PATH — skipped (in VS Code: \"Shell Command: Install 'code' command in PATH\")",
+    }];
+  }
+  if (!state.bundled) {
+    return [{
+      label,
+      ok: true,
+      detail: `${state.installed ?? "not installed"}; running from a checkout, which bundles no .vsix — build it from packages/vscode-plugin`,
+    }];
+  }
+  const want = state.bundled.version;
+  if (state.installed === want) return [{ label, ok: true, detail: `${VSCODE_EXTENSION_ID} ${want}` }];
+  if (checkOnly || !install) {
+    return state.installed
+      ? [{ label, ok: false, optional: true, detail: `${state.installed} < bundled ${want} — re-run \`sandbox setup\`` }]
+      : [{ label, ok: true, detail: "not installed (opt in via `sandbox setup`)" }];
+  }
+  const [rc, out] = runner(["code", "--install-extension", state.bundled.path, "--force"]);
+  if (rc !== 0) {
+    return [{ label, ok: false, optional: true, detail: `code --install-extension failed: ${briefOutput(out)}` }];
+  }
+  return [{ label, ok: true, detail: `installed ${VSCODE_EXTENSION_ID} ${want} — reload VS Code windows to pick it up` }];
+}
+
 /**
  * Report — and optionally install via Homebrew — the Telepresence OSS client.
  *
@@ -1083,6 +1154,8 @@ export interface RunSetupOptions {
   installOptionalPlugins?: boolean;
   /** Map the sandbox YAML schemas in VS Code's user settings (the wizard asks first). */
   mapEditorSchemas?: boolean;
+  /** Install the bundled Sandbox Workspaces VS Code extension (the wizard asks first). */
+  installVscodeExtension?: boolean;
 }
 
 /**
@@ -1188,5 +1261,8 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   steps.push(...(await syncJiraToken(jira, checkOnly, options.jiraVerifier)));
   steps.push(...syncTelepresence(runner, checkOnly, { install: options.installTelepresence }));
   steps.push(...syncEditorSchemas(checkOnly, options.mapEditorSchemas ?? false));
+  steps.push(
+    ...syncVscodeExtension(checkOnly, options.installVscodeExtension ?? false, vscodeExtensionState(runner), runner),
+  );
   return steps;
 }

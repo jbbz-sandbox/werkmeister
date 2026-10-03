@@ -16,7 +16,8 @@
  *   5. jira         — OPTIONAL REST credentials for the dashboard fast path
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
- *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings
+ *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings,
+ *                     and the Sandbox Workspaces extension the package ships
  *
  * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
  * converges the machine (sandbox-core/machine_setup):
@@ -50,6 +51,7 @@ import {
   editorSchemaState,
   githubOwners,
   runSetup,
+  vscodeExtensionState,
   vscodeSettingsPath,
   WORKSPACE_ROOT_REPO,
   type Step,
@@ -70,6 +72,7 @@ interface Answers {
   installTelepresence: boolean;
   installOptionalPlugins: boolean;
   mapEditorSchemas: boolean;
+  installVscodeExtension: boolean;
   skipSudo: boolean;
 }
 
@@ -268,7 +271,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   );
 
   // --- 8. editor schemas (optional) ----------------------------------------
-  heading("8. VS Code YAML validation (optional)");
+  heading("8. VS Code (optional)");
   const editor = editorSchemaState();
   let mapEditorSchemas = false;
   if (!editor.present) {
@@ -284,6 +287,15 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
         `\`yaml.schemas\` entries to ${vscodeSettingsPath()}; comments and other settings are kept.`,
     );
     mapEditorSchemas = await confirm("  Add the schema mappings to your VS Code user settings?", false, interactive);
+  }
+  const ext = vscodeExtensionState();
+  let installVscodeExtension = false;
+  if (ext.cli && ext.bundled && ext.installed !== ext.bundled.version) {
+    info(
+      "The Sandbox Workspaces extension shows your feature workspaces, containers " +
+        `and intercepts in a VS Code side bar (${ext.installed ?? "not installed"} → ${ext.bundled.version}).`,
+    );
+    installVscodeExtension = await confirm("  Install the Sandbox Workspaces extension?", false, interactive);
   }
 
   // --- write ---------------------------------------------------------------
@@ -343,6 +355,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     installTelepresence,
     installOptionalPlugins,
     mapEditorSchemas,
+    installVscodeExtension,
     skipSudo: !interactive,
   };
 }
@@ -427,6 +440,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     installTelepresence: answers.installTelepresence,
     installOptionalPlugins: answers.installOptionalPlugins,
     mapEditorSchemas: answers.mapEditorSchemas,
+    installVscodeExtension: answers.installVscodeExtension,
   });
 
   const failed = report(steps);
