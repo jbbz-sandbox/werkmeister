@@ -17,8 +17,8 @@
     "release": "npm run build && changeset publish"
   },
   "devDependencies": {
-    "turbo": "^2.5.0",
-    "@changesets/cli": "^2.27.0"
+    "@changesets/cli": "^2.27.0",
+    "turbo": "^2.5.0"
   },
   "engines": {
     "node": ">=20"

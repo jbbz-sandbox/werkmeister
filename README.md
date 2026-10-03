@@ -26,25 +26,34 @@ in [docs/users-guide.md](docs/users-guide.md).
 
 `@jbbz-sandbox/sandbox-cli` publishes to GitHub Packages, so a machine that only
 needs to *run* the CLI never has to clone this repo. Point npm at the registry
-with a `read:packages` token, then install:
+with a `read:packages` token, then install — from **outside** any checkout of
+this repo (see below):
 
 ```bash
-cat >> ~/.npmrc <<'EOF'
-@jbbz-sandbox:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-EOF
+npm config set @jbbz-sandbox:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
 
-export GITHUB_TOKEN=...                # see below — npm reads it from the env
+cd ~
 npx @jbbz-sandbox/sandbox-cli setup    # installs globally, then runs the wizard
 ```
 
-**`GITHUB_TOKEN` has to be set in the shell npm runs in.** npm expands it out of
-the environment when it reads `~/.npmrc`; it does not consult the `gh` keyring,
-so a machine where `gh auth login` works can still 404 on the install. Either
-`export GITHUB_TOKEN=$(gh auth token)` (needs `read:packages` on that token —
-`gh auth refresh -h github.com -s read:packages` adds it), or paste a classic PAT
-with `read:packages`. The failure is a plain 404 that reads like the package does
-not exist, not a permission error, so it is worth ruling out first.
+`gh auth token` needs `read:packages` (`write:packages` includes it);
+`gh auth refresh -h github.com -s read:packages` adds it. A classic PAT with
+`read:packages` works too. `~/.npmrc` stores a **copy** of the token, not a link
+to the `gh` keyring, so after a `gh auth login`, logout or revocation, re-run the
+`npm config set` line. To check the token, run
+`npm view @jbbz-sandbox/sandbox-cli version` — it should print a version.
+
+A bad or missing token fails as `401 Unauthorized` or as a `404 Not Found` that
+reads like the package does not exist. A 404 naming a different package — e.g.
+`"sandbox" does not exist under owner "jbbz-sandbox"` — is a wrong name: it is
+`@jbbz-sandbox/sandbox-cli`.
+
+**Don't run the `npx` line inside a checkout of this repo.** npx prefers the
+workspace link `node_modules/@jbbz-sandbox/sandbox-cli → apps/cli` over the
+registry, so it silently runs your checkout's CLI: nothing is installed,
+`sandbox` stays off your PATH, and `setup` records the checkout as
+`sandbox_root`.
 
 That one command is the whole onboarding. npx only bootstraps: the wrapper sees
 it is running from `~/.npm/_npx/<hash>/`, installs itself globally, and re-execs
@@ -55,7 +64,15 @@ workspace's `docker-compose.yml` as a bind mount. Running for real from the
 cache would pin permanent state to a directory that is going to vanish.
 
 `npm install -g @jbbz-sandbox/sandbox-cli && sandbox setup` is the same thing
-spelled out, if you would rather see the install happen.
+spelled out, if you would rather see the install happen. It is unaffected by the
+current directory.
+
+npm 11 warns that it skipped install scripts for `protobufjs`, `ssh2` and
+`cpu-features` (`npm warn allow-scripts …`). Ignore it — don't allow them. All
+three come in through `dockerode`: `protobufjs`'s only prints a version warning,
+and the other two compile optional native add-ons used only for Docker over SSH,
+which falls back to pure JS anyway. Allowing them just adds a `node-gyp` build
+that needs Xcode's tools.
 
 The package is a single esbuild bundle plus `infra/` — the templates, compose
 files, proxy UI and skills the CLI reads at runtime. `sandbox-core` and the
@@ -181,14 +198,14 @@ The `sandbox` CLI launcher lives at [apps/cli/sandbox](apps/cli/sandbox) (symlin
 
 ## Local Kubernetes bootstrap
 
-The cluster manifests (`charts/`) and their helper scripts now live in the
-**demo-services** repo, checked out alongside this one under `paths.repos_root`:
+The local cluster is set up from the **demo-services** repo, checked out
+alongside this one under `paths.repos_root`:
 
 ```bash
 cd ../demo-services
 kubectl config use-context orbstack
 ./bin/bootstrap-k8s-env.sh   # shared infra: postgres + redis
-./bin/deploy.sh              # the demo backend + frontend releases
+./bin/deploy.sh              # the demo backend + frontend
 ```
 
 Shared infra (postgres, redis) is deployed from there too — the sandbox
