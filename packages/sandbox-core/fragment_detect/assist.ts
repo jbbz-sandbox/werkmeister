@@ -115,13 +115,15 @@ export function collectQuestions(plan: Plan): Question[] {
       });
     }
   }
-  for (const u of plan.unmatched) {
+  for (const name of [...new Set(plan.unmatched.map((u) => u.name))]) {
+    const found = plan.unmatched.filter((u) => u.name === name);
+    const files = found.map((u) => u.file).join(", ");
     qs.push({
-      id: `unmatched.${u.name}`,
+      id: `unmatched.${name}`,
       kind: "unmatched",
       service: null,
-      prompt: `${u.file} defines ${u.name}, but no source directory matched it. Which service is it? Answer null if its code lives in another repo.`,
-      facts: { file: u.file, image: u.image ?? null },
+      prompt: `${files} define${found.length > 1 ? "" : "s"} ${name}, but no source directory matched it. Which service is it? Answer null if its code lives in another repo.`,
+      facts: { files: found.map((u) => u.file), image: found.find((u) => u.image)?.image ?? null },
       choices: [...names, null],
     });
   }
@@ -202,18 +204,18 @@ export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
       case "unmatched": {
         if (a.value === null) break;
         const target = typeof a.value === "string" ? next.services.find((s) => s.name === a.value) : undefined;
-        const finding = next.unmatched.find((u) => `unmatched.${u.name}` === q.id);
-        if (!target || !finding) {
+        const found = next.unmatched.filter((u) => `unmatched.${u.name}` === q.id);
+        if (!target || !found.length) {
           problem = "expected one of this repo's services, or null";
           break;
         }
-        const fresh = resolveService({ name: target.name, dir: target.dir, findings: [...target.findings, finding] });
+        const fresh = resolveService({ name: target.name, dir: target.dir, findings: [...target.findings, ...found] });
         for (const [k, fv] of Object.entries(fresh.fields)) {
           if (!(k in target.fields)) target.fields[k] = { ...fv, confidence: "inferred", source: `${fv.source}; matched by Claude: ${reason}` };
         }
-        target.findings.push(finding);
-        next.unmatched = next.unmatched.filter((u) => u !== finding);
-        next.skipped = next.skipped.filter((s) => !(s.item === finding.file && s.reason.includes(` ${finding.name} — `)));
+        target.findings.push(...found);
+        next.unmatched = next.unmatched.filter((u) => !found.includes(u));
+        next.skipped = next.skipped.filter((s) => !found.some((f) => s.item === f.file && s.reason.includes(` ${f.name} — `)));
         break;
       }
     }

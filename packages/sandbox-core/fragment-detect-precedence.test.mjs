@@ -90,3 +90,18 @@ test("infrastructure from k8s, and from compose alone", () => {
   assert.equal(compose.fields.k8s_pod_prefix.confidence, "guessed");
   assert.equal(compose.fields.health_endpoint.value, "redis");
 });
+
+test("infrastructure: k8s sources that disagree keep the first and report the rest", () => {
+  const skipped = [];
+  const r = resolveInfra({
+    name: "postgres",
+    datastore: "postgres",
+    findings: [
+      finding("k8s", { internal_port: st(5432, "a.yaml → containerPort"), k8s_namespace: st("dev", "a.yaml → metadata.namespace") }, { file: "a.yaml" }),
+      finding("k8s", { internal_port: st(5433, "b.yaml → containerPort"), k8s_namespace: st("dev", "b.yaml → metadata.namespace") }, { file: "b.yaml" }),
+    ],
+  }, skipped);
+  assert.equal(r.fields.internal_port.value, 5432);
+  assert.equal(r.fields.k8s_namespace.value, "dev");
+  assert.deepEqual(skipped, [{ item: "b.yaml", reason: "infrastructure postgres: internal_port 5433 disagrees with 5432 (a.yaml → containerPort), kept 5432" }]);
+});

@@ -95,7 +95,7 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
 
   const corr = correlate(findings, repo);
   const services = corr.services.map(resolveService);
-  const infrastructure = corr.infrastructure.map(resolveInfra);
+  const infrastructure = corr.infrastructure.map((g) => resolveInfra(g, corr.skipped));
 
   // An entry the human renamed keeps its name: a service matched by path, infrastructure by pod prefix.
   const adopt = (section: string, key: string, value: unknown) =>

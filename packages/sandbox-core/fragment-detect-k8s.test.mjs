@@ -204,3 +204,28 @@ test("real helm renders a real chart the same way (skipped without helm)", (t) =
   assert.equal(f.fields.internal_port.value, 4000);
   assert.equal(f.fields.health_endpoint.value, "/health");
 });
+
+const KUSTOMIZE_REPO = {
+  "k8s/base/kustomization.yaml": "resources: [deployment.yaml]\n",
+  "k8s/base/deployment.yaml": DEMO_BACKEND,
+  "k8s/overlays/dev/kustomization.yaml": "resources:\n  - ../../base\nnamespace: dev\n",
+  "k8s/overlays/dev/patch.yaml": "kind: Deployment\nmetadata: { name: backend }\n",
+  "deploy/other.yaml": "kind: Deployment\nmetadata: { name: other }\nspec: { template: { spec: { containers: [ { name: c, image: 'other:1' } ] } } }\n",
+};
+
+test("raw YAML under a kustomization dir is left to kustomize", () => {
+  const ctx = ctxFor(fixture(KUSTOMIZE_REPO));
+  assert.deepEqual(detectK8s(ctx).map((f) => f.name), ["other"]);
+});
+
+test("kustomize: a base another kustomization builds on is not rendered on its own", () => {
+  const rendered = [];
+  const root = fixture(KUSTOMIZE_REPO);
+  const ctx = ctxFor(root, (cmd) => {
+    if (cmd[0] !== "kubectl") return [128, ""];
+    rendered.push(path.relative(root, cmd[2]));
+    return [0, DEMO_BACKEND];
+  });
+  detectKustomize(ctx);
+  assert.deepEqual(rendered, ["k8s/overlays/dev"]);
+});

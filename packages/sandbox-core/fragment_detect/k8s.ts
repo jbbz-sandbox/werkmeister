@@ -108,23 +108,24 @@ export function chartDirs(files: string[]): string[] {
   return files.filter((f) => path.posix.basename(f) === "Chart.yaml").map((f) => path.posix.dirname(f));
 }
 
+export const KUSTOMIZATION = /(^|\/)kustomization\.ya?ml$/;
+
 const NOT_RAW = [
   /(^|\/)values[^/]*\.ya?ml$/,
   /\.values\.ya?ml$/,
-  /(^|\/)kustomization\.ya?ml$/,
   /^pnpm-workspace\.yaml$/,
   COMPOSE_FILE,
 ];
 /** Cheap pre-filter, so YAML that isn't k8s is never parsed or reported. */
 const K8S_KIND = /^\s*kind:\s*(Deployment|StatefulSet|Service|Ingress|List)\b/m;
 
-/** Raw manifests in the repo. Chart sources are left to detectHelm. */
+/** Raw manifests in the repo. Chart sources are left to detectHelm, kustomize dirs to detectKustomize. */
 export function detectK8s(ctx: DetectContext): Finding[] {
-  const charts = chartDirs(ctx.files);
-  const inChart = (f: string) => charts.some((c) => c === "." || f.startsWith(`${c}/`));
+  const owned = [...chartDirs(ctx.files), ...ctx.files.filter((f) => KUSTOMIZATION.test(f)).map((f) => path.posix.dirname(f))];
+  const ownedElsewhere = (f: string) => owned.some((c) => c === "." || f.startsWith(`${c}/`));
   const sources: ManifestSource[] = [];
   for (const file of ctx.files) {
-    if (!/\.ya?ml$/.test(file) || inChart(file) || NOT_RAW.some((r) => r.test(file))) continue;
+    if (!/\.ya?ml$/.test(file) || ownedElsewhere(file) || NOT_RAW.some((r) => r.test(file))) continue;
     const text = readText(ctx, file);
     if (!K8S_KIND.test(text)) continue;
     try {

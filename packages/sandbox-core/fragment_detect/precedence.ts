@@ -1,6 +1,6 @@
 /** One value per field from a correlated group, in the spec's precedence order (§3). */
 import { DATASTORES, type InfraGroup, type ServiceGroup } from "./correlate.js";
-import { guessed, stated, type FieldValue, type Finding, type FindingKind } from "./types.js";
+import { guessed, stated, type FieldValue, type Finding, type FindingKind, type Skipped } from "./types.js";
 
 export interface Conflict {
   service: string;
@@ -98,9 +98,23 @@ export function resolveService(group: ServiceGroup): ResolvedService {
   return { name: group.name, dir: group.dir, fields, conflicts, k8sEnvKeys, findings: group.findings };
 }
 
-export function resolveInfra(group: InfraGroup): ResolvedInfra {
+/** *skipped* receives one entry per later k8s source that disagrees with the first on port or namespace. */
+export function resolveInfra(group: InfraGroup, skipped: Skipped[] = []): ResolvedInfra {
   const ds = DATASTORES[group.datastore];
-  const k8s = group.findings.find((f) => f.kind === "k8s");
+  const k8sAll = group.findings.filter((f) => f.kind === "k8s");
+  const k8s = k8sAll[0];
+  for (const other of k8sAll.slice(1)) {
+    for (const key of ["internal_port", "k8s_namespace"]) {
+      const kept = k8s.fields[key];
+      const v = other.fields[key];
+      if (kept && v && !same(kept.value, v.value)) {
+        skipped.push({
+          item: other.file,
+          reason: `infrastructure ${group.name}: ${key} ${v.value} disagrees with ${kept.value} (${kept.source}), kept ${kept.value}`,
+        });
+      }
+    }
+  }
   const port = k8s?.fields.internal_port ?? group.findings.find((f) => f.fields.internal_port)?.fields.internal_port;
   const noManifest = "no k8s manifest for this datastore";
   return {

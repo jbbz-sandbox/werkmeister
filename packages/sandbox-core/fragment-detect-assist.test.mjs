@@ -90,3 +90,16 @@ test("the prompt carries every question id and the read-only rules", () => {
   assert.match(prompt, /Leave a question out/);
   assert.match(prompt, /Never put credentials/);
 });
+
+test("one name defined in several unmatched files: one question, and one answer attaches them all", () => {
+  const plan = goRepo({
+    "deploy/pay-dev.yaml": "kind: Deployment\nmetadata: { name: payments, namespace: dev }\nspec: { template: { spec: { containers: [ { name: c, image: 'pay:1' } ] } } }\n",
+  });
+  assert.equal(plan.unmatched.length, 2);
+  assert.deepEqual(collectQuestions(plan).filter((q) => q.kind === "unmatched").map((q) => q.id), ["unmatched.payments"]);
+  const r = applyAnswers(plan, [{ item: "unmatched.payments", value: "api", reason: "same binary", files_read: [] }]);
+  assert.deepEqual(r.accepted, ["unmatched.payments"]);
+  assert.equal(r.plan.unmatched.length, 0);
+  assert.equal(r.plan.services.find((s) => s.name === "api").findings.filter((f) => f.name === "payments").length, 2);
+  assert.ok(!r.plan.skipped.some((s) => s.reason.includes("payments")));
+});
