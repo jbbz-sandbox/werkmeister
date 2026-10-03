@@ -11,3 +11,4 @@ export * from "./compose.js";
 export * from "./k8s.js";
 export * from "./helm.js";
 export * from "./kustomize.js";
+export * from "./correlate.js";
