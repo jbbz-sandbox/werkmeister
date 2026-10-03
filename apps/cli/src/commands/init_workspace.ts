@@ -34,30 +34,11 @@
 
 import * as fs from "node:fs";
 
-import { buildFormSchema } from "sandbox-core/form_schema";
-import { PromptSpec, runWizard } from "../lib/wizard.js";
 import {
   WorkspaceInitError,
   WorkspaceRootError,
-  findWorkspaceRoot,
   initWorkspace,
 } from "sandbox-core/workspace_init";
-import {
-  _WIZARD_PROMPTS,
-  buildPromptSpec,
-  resolveInputs,
-} from "sandbox-core/workspace_prompts";
-
-/** Run *fn* with stdout diagnostics rerouted to stderr. */
-function withStdoutToStderr<T>(fn: () => T): T {
-  const orig = console.log;
-  console.log = (...a: unknown[]) => console.error(...(a as []));
-  try {
-    return fn();
-  } finally {
-    console.log = orig;
-  }
-}
 
 /**
  * Read a task title piped on stdin (`echo "…" | sandbox init-workspace`).
@@ -78,97 +59,11 @@ export function readStdinTask(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Interactive wizard
-// ---------------------------------------------------------------------------
-
-/** Prompt for any input `resolveInputs` didn't fill in. Driven by
- * `sandbox workspace`, which owns the interactive path. */
-export async function runInteractiveWizard(
-  workspaceRoot: string,
-  resolved: Record<string, string>,
-  extraPrompts: readonly PromptSpec[] = [],
-): Promise<Record<string, string>> {
-  // Workspace-only prompts (e.g. `repos`) are spliced in right after `services`
-  // so the terminal wizard presents the same fields, in the same order, as
-  // `--print-prompts` / the browser form (which inject them at the same spot).
-  const prompts: PromptSpec[] = [..._WIZARD_PROMPTS];
-  if (extraPrompts.length) {
-    const idx = prompts.findIndex((p) => p.key === "services");
-    prompts.splice(idx === -1 ? prompts.length : idx + 1, 0, ...extraPrompts);
-  }
-  return runWizard(
-    prompts,
-    resolved,
-    (spec) => (spec.defaultFn ? spec.defaultFn(workspaceRoot) : ""),
-    { intro: "Interactive wizard — press Ctrl-C to abort. Defaults shown in [brackets]." },
-  );
-}
-
-/** Resolve inputs and build the prompt spec, with all diagnostics on stderr. */
-function computePromptSpec(args: Record<string, unknown>): Record<string, any> {
-  return withStdoutToStderr(() => {
-    const workspaceRoot = findWorkspaceRoot();
-    const resolved = resolveInputs(args, workspaceRoot);
-    return buildPromptSpec(workspaceRoot, resolved);
-  });
-}
-
-/** Emit the standard {"error": …, "prompts": []} JSON and exit 1. */
-export function emitSpecError(exc: unknown): void {
-  const raw = exc instanceof Error ? exc.message : String(exc);
-  const message = raw.replace(/\x1b\[[0-9;]*m/g, "").trim();
-  process.stdout.write(JSON.stringify({ error: message, prompts: [] }) + "\n");
-  process.exit(1);
-}
-
-/** Handle `sandbox init-workspace --print-prompts`. */
-function printPrompts(args: Record<string, unknown>): void {
-  let spec: Record<string, any>;
-  try {
-    spec = computePromptSpec(args);
-  } catch (exc) {
-    if (exc instanceof WorkspaceRootError) {
-      emitSpecError(exc);
-      return;
-    }
-    throw exc;
-  }
-  process.stdout.write(JSON.stringify(spec, null, 2) + "\n");
-}
-
-/** Handle `sandbox init-workspace --print-form-schema`. */
-function printFormSchema(args: Record<string, unknown>): void {
-  let spec: Record<string, any>;
-  try {
-    spec = computePromptSpec(args);
-  } catch (exc) {
-    if (exc instanceof WorkspaceRootError) {
-      emitSpecError(exc);
-      return;
-    }
-    throw exc;
-  }
-  process.stdout.write(JSON.stringify(buildFormSchema(spec), null, 2) + "\n");
-}
-
-// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
 /** Execute `sandbox init-workspace`. */
 export async function run(args: Record<string, unknown>): Promise<void> {
-  // 0. Prompt-spec export — emit wizard definitions as JSON and exit without
-  //    touching the workspace.
-  if (args["print_prompts"]) {
-    printPrompts(args);
-    return;
-  }
-
-  if (args["print_form_schema"]) {
-    printFormSchema(args);
-    return;
-  }
-
   try {
     await initWorkspace(args, undefined, { readStdinTask });
   } catch (exc) {

@@ -40,21 +40,18 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { error, getMonorepoRoot } from "../lib/config.js";
-import { buildFormSchema } from "sandbox-core/form_schema";
 import { run as procRun } from "sandbox-core/proc";
 // The work itself lives in core (note 086 row 5), which is how `createWorkspace`
 // runs it without spawning this CLI. What stays here is the wizard, the
-// prompt-spec exports, the browser-form launcher, and exit codes.
+// browser-form launcher, and exit codes.
 import { WorkspaceInitError, provisionWorkspace } from "sandbox-core/workspace_init";
-// init-workspace owns the interactive wizard driver and the piped-stdin reader;
-// the prompt definitions themselves live in core, where the dashboard reaches
-// them without spawning this CLI (note 087).
-import { emitSpecError, readStdinTask, runInteractiveWizard } from "./init_workspace.js";
-import {
-  REPOS_PROMPT,
-  computePromptSpec as coreComputePromptSpec,
-  resolveInputs,
-} from "sandbox-core/workspace_prompts";
+// init-workspace owns the piped-stdin reader; the prompt definitions and the
+// form schema built from them live in core, where the dashboard reaches them
+// without spawning this CLI (note 087).
+import { readStdinTask } from "./init_workspace.js";
+import { runFormWizard } from "../lib/wizard.js";
+import { buildFormSchema } from "sandbox-core/form_schema";
+import { resolveInputs, workspacePromptSpec } from "sandbox-core/workspace_prompts";
 
 // ---------------------------------------------------------------------------
 // Input resolution
@@ -63,52 +60,22 @@ import {
 async function resolveWorkspaceInputs(args: Record<string, unknown>): Promise<Record<string, string>> {
   const base = process.cwd();
   let resolved = resolveInputs(args, base);
-  // On a TTY, run the wizard for whatever's still unresolved — `runWizard`
-  // skips any field already supplied via CLI/env/config, so a passed feature
-  // just pre-fills that one prompt rather than skipping the wizard entirely.
-  // Piped/non-TTY invocations fall through to flags + config only.
+  // On a TTY, run the wizard for whatever's still unresolved, rendered from the
+  // same form schema the browser form uses. Fields already supplied via
+  // CLI/env/config are left out of the schema, so a passed feature skips just
+  // that one prompt rather than the whole wizard. Piped/non-TTY invocations
+  // fall through to flags + config only.
   if (process.stdin.isTTY) {
-    resolved = await runInteractiveWizard(base, resolved, [REPOS_PROMPT]);
+    resolved = await runFormWizard(buildFormSchema(workspacePromptSpec(base, resolved)), resolved, {
+      intro: "Interactive wizard — press Ctrl-C to abort. Defaults shown in [brackets].",
+    });
   }
   return resolved;
 }
 
 // ---------------------------------------------------------------------------
-// Prompt / form-schema export (delegated to init-workspace's definitions)
+// Browser form
 // ---------------------------------------------------------------------------
-
-function computePromptSpec(args: Record<string, unknown>): Record<string, unknown> {
-  // Diagnostics go to stderr so stdout stays a clean JSON document.
-  const origLog = console.log;
-  try {
-    console.log = ((...a: unknown[]) => console.error(...a)) as typeof console.log;
-    return coreComputePromptSpec(args, process.cwd());
-  } finally {
-    console.log = origLog;
-  }
-}
-
-function printPrompts(args: Record<string, unknown>): void {
-  let spec: Record<string, unknown>;
-  try {
-    spec = computePromptSpec(args);
-  } catch (exc) {
-    emitSpecError(exc);
-    return;
-  }
-  process.stdout.write(JSON.stringify(spec, null, 2) + "\n");
-}
-
-function printFormSchema(args: Record<string, unknown>): void {
-  let spec: Record<string, unknown>;
-  try {
-    spec = computePromptSpec(args);
-  } catch (exc) {
-    emitSpecError(exc);
-    return;
-  }
-  process.stdout.write(JSON.stringify(buildFormSchema(spec), null, 2) + "\n");
-}
 
 /** Locate an executable on PATH. */
 function which(cmd: string): string | null {
@@ -156,17 +123,7 @@ function runBrowserForm(args: Record<string, unknown>): void {
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
-  // 0. Prompt-spec exports — emit and exit without touching the filesystem.
-  if (args.print_prompts) {
-    printPrompts(args);
-    return;
-  }
-  if (args.print_form_schema) {
-    printFormSchema(args);
-    return;
-  }
-
-  // 0b. Branded browser-form path — collect inputs in the browser, then create.
+  // 0. Branded browser-form path — collect inputs in the browser, then create.
   if (args.browser_form) {
     runBrowserForm(args);
     return;

@@ -249,8 +249,7 @@ The four genuine differences (why a naive share isn't free) are all host-level: 
 
 `getFormSchema()` now calls `computePromptSpec({}, os.homedir(), { defaults: false })`, and
 `promptEntry` in `workspace_prompts.ts` skips every prompt's `defaultFn` under that flag, so the
-scan never runs. `sandbox workspace --print-prompts` is unchanged: it runs against the cwd and
-still wants the defaults.
+scan never runs.
 
 The workspace-create form is built against `os.homedir()`, deliberately: a stray
 `./.sandbox/workspace.yml` under the caller's cwd must not pre-resolve fields for a

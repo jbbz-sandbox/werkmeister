@@ -1,6 +1,6 @@
 /**
  * The workspace prompt-spec chain: input resolution, the wizard's prompt
- * definitions, and their serialisation to the `--print-prompts` contract.
+ * definitions, and their serialisation to the prompt-spec JSON the form is built from.
  *
  * This lives in core because both drivers need it in-process. The CLI renders
  * these prompts in a terminal wizard (`runWizard` — rendering stays CLI-side)
@@ -403,6 +403,10 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     help: "Services to run locally with hot-reload; the rest fall through to k8s port-forwards.",
     multi: true,
     choicesFn: () => Object.keys(loadSandboxServiceConfigs()[0]).sort(),
+    choiceGroupsFn: () =>
+      Object.fromEntries(
+        Object.entries(loadSandboxServiceConfigs()[0]).map(([name, svc]) => [name, String(svc?.repo ?? "other")]),
+      ),
   },
   {
     key: "labels",
@@ -495,6 +499,15 @@ export function promptEntry(
   if (spec.choicesFn) {
     entry["choices"] = spec.choicesFn();
   }
+  if (spec.choiceGroupsFn) {
+    // choice → group inverted to group → choices, groups sorted by name.
+    const groups: Record<string, string[]> = {};
+    const byChoice = spec.choiceGroupsFn();
+    for (const choice of entry["choices"] ?? Object.keys(byChoice)) {
+      (groups[byChoice[choice] ?? "other"] ??= []).push(choice);
+    }
+    entry["choice_groups"] = Object.fromEntries(Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)));
+  }
   return entry;
 }
 
@@ -538,8 +551,7 @@ export function loadSandboxServiceConfigs(): [Record<string, any>, Record<string
 
 /**
  * `repos` is a workspace-creation prompt, not an init-workspace one, so it is
- * not in `_WIZARD_PROMPTS`; the terminal wizard, `--print-prompts` and the
- * browser form all splice this one spec in after `services`.
+ * not in `_WIZARD_PROMPTS`; the terminal wizard and the browser form both splice this one spec in after `services`.
  */
 export const REPOS_PROMPT: PromptSpec = {
   key: "repos",
@@ -564,7 +576,15 @@ export function computePromptSpec(
   workspaceRoot: string,
   opts: PromptSpecOptions = {},
 ): Record<string, any> {
-  const resolved = resolveInputs(args, workspaceRoot);
+  return workspacePromptSpec(workspaceRoot, resolveInputs(args, workspaceRoot), opts);
+}
+
+/** {@link computePromptSpec} for inputs the caller has already resolved. */
+export function workspacePromptSpec(
+  workspaceRoot: string,
+  resolved: Record<string, string>,
+  opts: PromptSpecOptions = {},
+): Record<string, any> {
   const spec = buildPromptSpec(workspaceRoot, resolved, opts);
 
   // workspaceRoot is only consulted for a spec's defaultFn; REPOS_PROMPT has

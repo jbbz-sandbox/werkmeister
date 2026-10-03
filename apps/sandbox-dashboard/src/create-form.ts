@@ -11,7 +11,7 @@
  * `onCreated(resultText)` — the dashboard flips back to the Workspaces tab,
  * the Desktop app forwards the text to `updateModelContext`.
  */
-import Form from "@rjsf/core";
+import Form, { getDefaultRegistry } from "@rjsf/core";
 import validator from "@rjsf/validator-ajv8";
 import type {
   FormValidation,
@@ -70,6 +70,11 @@ const CSS = `
      multi-column and fill the wide column instead of one long scroll. */
   .wsform .checkboxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 16px; }
   .wsform .checkbox { display: block; }
+  .wsform .checkgroup + .checkgroup { margin-top: 10px; }
+  .wsform .checkgroup-heading {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--sd-ghost); margin-bottom: 4px;
+  }
   .wsform .checkbox label, .wsform .radio label {
     display: flex; align-items: center; gap: 6px; font-weight: 400; font-size: 13px; color: var(--sd-ink); margin-bottom: 0;
   }
@@ -125,6 +130,48 @@ interface FormBundle {
 }
 
 const e = React.createElement;
+
+const StockCheckboxes = getDefaultRegistry().widgets.CheckboxesWidget;
+
+/**
+ * Checkboxes that honour `ui:options.groups` ({heading: [values]}) — e.g. local
+ * services under the repo that owns them, as the terminal wizard lists them.
+ * Each group is RJSF's own CheckboxesWidget over that group's options (its
+ * select/deselect keep the other groups' picks); anything no group names goes
+ * last under "other". Without groups it is the stock widget.
+ */
+export function GroupedCheckboxesWidget(props: WidgetProps): React.ReactElement<any> {
+  const groups = props.options.groups as Record<string, string[]> | undefined;
+  if (!groups) {
+    return e(StockCheckboxes, props);
+  }
+  const all = props.options.enumOptions ?? [];
+  const named = new Set(Object.values(groups).flat());
+  const sections: [string, unknown[]][] = [
+    ...Object.entries(groups),
+    ["other", all.map((o) => o.value).filter((v) => !named.has(v as string))],
+  ];
+  return e(
+    "div",
+    { className: "checkgroups" },
+    sections
+      .filter(([, values]) => values.length)
+      .map(([heading, values], i) =>
+        e(
+          "div",
+          { key: heading, className: "checkgroup" },
+          e("div", { className: "checkgroup-heading" }, heading),
+          e(StockCheckboxes, {
+            ...props,
+            // Option ids are `${id}-${index}`; a per-group id keeps them unique.
+            id: i === 0 ? props.id : `${props.id}__${i}`,
+            autofocus: props.autofocus && i === 0,
+            options: { ...props.options, enumOptions: all.filter((o) => values.includes(o.value)) },
+          }),
+        ),
+      ),
+  );
+}
 
 /** Textarea widget with the "Refine with Claude" button (opt-in via ui:options.refinable). */
 function makeTextareaWidget(bridge: HostBridge) {
@@ -412,7 +459,7 @@ function WorkspaceForm({
             setFormData((prev) => mergeJiraFields(prev, data)),
         },
         validator,
-        widgets: { textarea: TextareaWidget, jira: JiraWidget },
+        widgets: { textarea: TextareaWidget, jira: JiraWidget, checkboxes: GroupedCheckboxesWidget },
         customValidate: validateRepoSelection,
         transformErrors,
         liveValidate: submitAttempted,

@@ -14,6 +14,7 @@ import { buildFormSchema } from "./dist/form_schema.js";
 import {
   computePromptSpec,
   DEFAULT_PLAN,
+  promptEntry,
   WORK_TYPE_PHASES,
   planFor,
 } from "./dist/workspace_prompts.js";
@@ -55,6 +56,24 @@ test("the spec converts to a form schema", () => {
   assert.equal(schema.properties.work_type.enum.includes("bugfix"), true);
   assert.equal(uiSchema.starting_prompt["ui:widget"], "textarea");
   assert.deepEqual(schema.required, ["feature", "work_type"]);
+});
+
+test("choice groups reach the form schema as ui:options.groups", () => {
+  const entry = promptEntry(
+    {
+      key: "services",
+      label: "Services",
+      help: "h",
+      multi: true,
+      choicesFn: () => ["api", "cron", "web"],
+      choiceGroupsFn: () => ({ web: "repo-b", api: "repo-a" }),
+    },
+    root,
+    {},
+  );
+  assert.deepEqual(entry.choice_groups, { other: ["cron"], "repo-a": ["api"], "repo-b": ["web"] });
+  const { uiSchema } = buildFormSchema({ prompts: [entry] });
+  assert.deepEqual(uiSchema.services["ui:options"].groups, entry.choice_groups);
 });
 
 test("context_strategy is an optional select defaulting to jit", () => {

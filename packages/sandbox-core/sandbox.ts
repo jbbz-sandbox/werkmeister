@@ -6,8 +6,8 @@
  * input prompts and the create logic (git worktrees on a `<user>/<workspace>`
  * branch + `init-workspace`). We:
  *
- *   - read the form fields from `sandbox workspace --print-form-schema`
- *     (the same RJSF bundle the terminal wizard consumes), and
+ *   - build the form fields in-process from core's prompt definitions
+ *     (the same ones the terminal wizard renders; see {@link getFormSchema}), and
  *   - run `sandbox workspace <feature> [--flag value …]` to create one.
  *
  * The only thing we add on top of the script is the optional "open in VS Code"
@@ -66,7 +66,7 @@ export class WorkspaceError extends SandboxError {
   }
 }
 
-/** The render-ready RJSF bundle emitted by `sandbox workspace --print-form-schema`. */
+/** The render-ready RJSF bundle {@link getFormSchema} builds for the create form. */
 export interface FormSchemaBundle {
   schema: Record<string, unknown>;
   uiSchema: Record<string, unknown>;

@@ -11,9 +11,9 @@ the selected **services**) on a `<user>/<workspace>` branch under
 `$SANDBOX_WORKSPACES_ROOT`, followed by `init-workspace` (writes `CLAUDE.md`, `.env`,
 `docker-compose.yml`, …).
 
-There is **no hand-maintained schema** — fields come from `sandbox workspace
---print-form-schema`, derived from the same prompt definitions (`_WIZARD_PROMPTS` in
-`src/commands/init_workspace.ts`) that drive the terminal wizard. So every
+There is **no hand-maintained schema** — fields are built from the same prompt
+definitions (`_WIZARD_PROMPTS` in `packages/sandbox-core/workspace_prompts.ts`) that
+drive the terminal wizard. So every
 surface shows the same fields, labels, defaults, and validation — and the **same look**:
 every surface (browser form, dashboard tab, Desktop inline) renders the one shared form
 component (`apps/sandbox-dashboard/src/create-form.ts`).
