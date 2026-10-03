@@ -146,11 +146,15 @@ export function renderFragment(plan: Plan): Rendered {
     }
   }
 
+  // A file with no final newline gets exactly one "\n" before the first text inserted at EOF.
+  if (original && !original.endsWith("\n")) {
+    const atEof = edits.filter((e) => e.at === original.length).sort((a, b) => a.seq - b.seq)[0];
+    if (atEof) atEof.text = "\n" + atEof.text;
+  }
   let yaml = original;
   // Apply back to front; at one offset, the earlier edit must end up first in the text.
   for (const e of edits.sort((a, b) => b.at - a.at || b.seq - a.seq)) {
-    const sep = e.at === yaml.length && yaml.length && !yaml.endsWith("\n") ? "\n" : "";
-    yaml = yaml.slice(0, e.at) + sep + e.text + yaml.slice(e.at);
+    yaml = yaml.slice(0, e.at) + e.text + yaml.slice(e.at);
   }
   if (appended.length) {
     const prefix = yaml === "" ? FRAGMENT_HEADER : yaml.endsWith("\n\n") ? yaml : yaml.endsWith("\n") ? `${yaml}\n` : `${yaml}\n\n`;

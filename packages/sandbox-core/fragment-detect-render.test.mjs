@@ -167,3 +167,15 @@ test("compose depends_on on a datastore is dropped; on a sibling service it is k
   assert.deepEqual(doc.services.api.depends_on, ["web"]);
   assert.ok(doc.infrastructure.cache);
 });
+
+test("no trailing newline: several edits at EOF keep the last original line intact", () => {
+  const existing = "services:\n  backend:\n    path: apps/backend\n    port_offset: 7\n    notes: >-\n      x\n      y";
+  const root = fixture({ ...DEMO, ".sandbox/services.yaml": existing }, "demo-services");
+  const r = renderFragment(planFragment(root, opts(root)));
+  assertKeptAllBytes(existing, r.yaml);
+  assert.ok(r.yaml.startsWith(existing + "\n"));
+  const doc = parse(r.yaml);
+  assert.equal(doc.services.backend.notes, "x y");
+  assert.equal(doc.services.backend.internal_port, 3000);
+  assert.ok(doc.services.frontend);
+});
