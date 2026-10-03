@@ -71,11 +71,14 @@ test("an aborted child is actually dead, not just abandoned", async () => {
     { capture: true, signal: ac.signal },
   );
 
+  // Poll for the pid, not the file: writeFileSync creates the file before it
+  // writes to it, so a loaded machine can see it exist but still empty.
+  const readPid = () => Number(fs.readFileSync(pidFile, { encoding: "utf8", flag: "a+" }).trim());
   const deadline = Date.now() + 10000;
-  while (!fs.existsSync(pidFile) && Date.now() < deadline) {
+  while (!(readPid() > 0) && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 10));
   }
-  const pid = Number(fs.readFileSync(pidFile, "utf8").trim());
+  const pid = readPid();
   assert.ok(Number.isInteger(pid) && pid > 0, "the child never reported a pid");
 
   const started = Date.now();
