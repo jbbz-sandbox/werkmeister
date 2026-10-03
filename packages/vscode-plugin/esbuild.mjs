@@ -30,6 +30,10 @@ const options = {
   minify: false,
   define: { "import.meta.dirname": "__dirname", "import.meta.url": "__filename" },
   logLevel: "info",
+  // jsonc-parser's `main` is a UMD build whose `require("./impl/format")` is
+  // dynamic, so esbuild leaves it unbundled and activation throws. Its ESM
+  // `module` entry bundles cleanly.
+  mainFields: ["module", "main"],
 };
 
 if (watch) {
