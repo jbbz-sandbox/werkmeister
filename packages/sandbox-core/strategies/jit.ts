@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { buildTesterSpecs, writeWorkspaceAgents } from "../agent_gen.js";
+import { buildBugReportMd } from "../bug_report.js";
 import { presentArchetypes } from "../archetypes.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../claude_md.js";
 import { loadArchetypes } from "../config.js";
@@ -207,6 +208,11 @@ function init(ctx: InitContext): void {
   );
   fs.writeFileSync(claudeMdPath, content);
   success(`Wrote ${claudeMdPath}`);
+  // CLAUDE.md's "## Bugs" section points here.
+  const bugReportPath = path.join(workspaceRoot, ".sandbox", "bug-report.md");
+  fs.mkdirSync(path.dirname(bugReportPath), { recursive: true });
+  fs.writeFileSync(bugReportPath, buildBugReportMd(workspaceName));
+  success(`Wrote ${bugReportPath}`);
 
   // 6a. Projected sb-* skills into .claude/skills/.
   for (const skillPath of writeWorkspaceSkills(workspaceRoot, null, null, activeStandards)) {
@@ -280,6 +286,7 @@ export const jit: ContextStrategy = {
     ".claude/agents/sb-*",
     ".sandbox/notes",
     ".sandbox/standards.json",
+    ".sandbox/bug-report.md",
     ".sandbox/.gate",
   ],
 };

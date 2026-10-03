@@ -76,6 +76,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
       "BRIEF.md",
       "CLAUDE.md",
       "CONTEXT.md",
+      "_shared/bug-report.md",
       "_shared/standards.md",
       "stages/01_research/CONTEXT.md",
       "stages/01_research/output/.gitkeep",
@@ -101,6 +102,8 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.ok(claude.split("\n").length <= 60, `CLAUDE.md is ${claude.split("\n").length} lines`);
     assert.match(claude, /`docker restart demo-backend`/);
     assert.match(claude, /`stages\/02_spec\/CONTEXT\.md`/);
+    assert.match(claude, /`_shared\/bug-report\.md`: if this workspace's changes caused it, fix it here/);
+    assert.match(fs.readFileSync(path.join(root, "_shared", "bug-report.md"), "utf8"), /gh issue create -R jbbz-sandbox\/sandbox/);
 
     const implement = fs.readFileSync(path.join(root, "stages", "03_implement", "CONTEXT.md"), "utf8");
     assert.match(implement, /rows `comments`, `ponytail`/);

@@ -283,7 +283,11 @@ ${layoutHeader}
 
 ${layoutLines}
 ${routingSection}
-${codeStandardsSection}${notesSection}`;
+${codeStandardsSection}${notesSection}
+## Bugs
+
+Hit a bug in the \`sandbox\` tool or in a repo's code? If this workspace's changes caused it, fix it here; if it was already there, file a GitHub issue in the repo it belongs to and report the URL. Rules and template: [.sandbox/bug-report.md](.sandbox/bug-report.md).
+`;
 }
 
 // ---------------------------------------------------------------------------
