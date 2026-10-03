@@ -13,3 +13,4 @@ export * from "./helm.js";
 export * from "./kustomize.js";
 export * from "./correlate.js";
 export * from "./precedence.js";
+export * from "./allocate.js";
