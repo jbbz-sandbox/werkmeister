@@ -296,6 +296,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
         `and intercepts in a VS Code side bar (${ext.installed ?? "not installed"} → ${ext.bundled.version}).`,
     );
     installVscodeExtension = await confirm("  Install the Sandbox Workspaces extension?", false, interactive);
+  } else if (ext.cli && !ext.bundled) {
+    info(
+      `Sandbox Workspaces extension: ${ext.installed ?? "not installed"}. A checkout bundles no .vsix, so ` +
+        "setup can't install it — build it from packages/vscode-plugin (see the README).",
+    );
   }
 
   // --- write ---------------------------------------------------------------

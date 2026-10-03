@@ -22,6 +22,36 @@ Every workspace here can also be run as a sandbox service of its own, so a featu
 workspace can develop the sandbox inside the sandbox — see "Self-hosting the sandbox repo"
 in [docs/users-guide.md](docs/users-guide.md).
 
+## Install the CLI from a clone
+
+To run the CLI you are developing, link the checkout onto your PATH:
+
+```bash
+git clone https://github.com/jbbz-sandbox/sandbox.git
+cd sandbox
+npm install && npm run build
+npm link -w apps/cli       # puts `sandbox` on PATH, symlinked to apps/cli/sandbox
+sandbox setup
+```
+
+The global `sandbox` is a symlink into this checkout, not a copy, so a rebuild
+(`npm run build`) after a pull is all it takes to update it. `setup` records
+this checkout as `sandbox_root`, so don't move or delete it while it is linked.
+To skip the global link, run `./sandbox` from the repo root instead. To remove
+the link, run `npm rm -g @jbbz-sandbox/sandbox-cli`.
+
+A linked CLI doesn't offer to install the VS Code extension. Only the published
+package ships the `.vsix`, so build and install it yourself:
+
+```bash
+cd packages/vscode-plugin
+npm run build && npm run package -- --out sandbox-workspaces.vsix
+code --install-extension sandbox-workspaces.vsix --force
+```
+
+Linking replaces any registry install of the CLI, and the reverse is also
+true. See the caveat at the end of the next section.
+
 ## Install the CLI without a clone
 
 `@jbbz-sandbox/sandbox-cli` publishes to GitHub Packages, so a machine that only
