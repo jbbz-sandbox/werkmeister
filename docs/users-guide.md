@@ -15,7 +15,7 @@
    - [Slots & Port Ranges](#slots--port-ranges)
    - [k8s Port-Forwards (Baseline)](#k8s-port-forwards-baseline)
    - [Caddy Reverse Proxy](#caddy-reverse-proxy)
-   - [Service Auto-Detection](#service-auto-detection)
+   - [Which services run locally](#which-services-run-locally)
 5. [Getting Started](#getting-started)
 6. [CLI Reference](#cli-reference)
    - [sandbox up](#sandbox-up)
@@ -246,21 +246,9 @@ Caddy runs as a Docker container (ports 80 and 443) and provides:
 
 The Caddyfile is regenerated automatically whenever you run `sandbox up`, `sandbox down`, `sandbox remove`, or `sandbox proxy-reload`.
 
-### Service Auto-Detection
+### Which services run locally
 
-When `sandbox up <feature>` or `sandbox detect <feature>` is run, the detection algorithm:
-
-1. Resolves the workspace directory (see [Features & Workspaces](#features--workspaces))
-2. Lists all non-hidden subdirectories that match known repo names from `infra/config/services.yaml`
-3. For each repo, runs `git diff main..HEAD --name-only` (falls back to `origin/main` if `main` branch doesn't exist locally)
-4. Maps the repo name and changed file paths to services using the `repos` section of `infra/config/services.yaml`
-5. For monorepos, uses `path_mappings` to match specific subdirectories to specific services
-
-**Example:** If `demo-services/apps/frontend/app/page.tsx` is changed, the detector maps:
-- Repo: `demo-services`
-- Path matches: `apps/frontend` → service `frontend`
-
-**Skipping auto-detection:** Pass `--services` (or `-s`) to `sandbox up` to specify services explicitly instead of relying on git diff. See [sandbox up](#sandbox-up).
+`sandbox up` runs the services listed in the workspace's `.sandbox/workspace.yml` `services:` key (or passed with `-s`). Everything else is reached in the cluster through the k8s-forwards tunnels.
 
 ### Concurrency & Isolation
 
@@ -483,30 +471,27 @@ Useful after making code changes that hot-reload doesn't pick up. If the feature
 
 ### sandbox detect
 
-**Preview which services would run locally (dry run).**
+**Generate a repo's `.sandbox/services.yaml` from what the repo already contains.**
 
 ```
-./sandbox detect <feature> [--workspace <path>]
+sandbox detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
 ```
 
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name |
-| `--workspace`, `-w` | No | Path to directory containing repo checkouts. Default: `~/workspace/`. Also settable via `WORKSPACE` env var. |
+| Argument | Description |
+|---|---|
+| `repo` | Repo directory. Default: the git repo containing the current directory. |
+| `--dry-run` | Print the report and the proposed YAML; write nothing. |
+| `--yes`, `-y` | Write without asking. |
+| `--assist` / `--no-assist` | Ask Claude about the fields the scan had to guess, or never ask. Without either flag an interactive run asks first (default no), and a non-interactive run never asks. |
 
-This command does **not** start anything. It scans the workspace, runs git diff analysis, and reports which services have changes. Useful for verifying detection before running `sandbox up`.
+It reads `package.json` and workspaces (npm, pnpm, yarn), Dockerfiles, docker-compose files, Helm charts (rendered with `helm template`), raw k8s manifests and kustomize overlays (`kubectl kustomize`). For each value the report shows where it came from, and every guess is marked. Guesses are written with a `# guessed:` comment, so they're easy to find and fix.
 
-**Output example:**
+`port_offset` is picked from the offsets no other repo under `paths.repos_root` uses. Infrastructure (redis, postgres and other datastores) gets the next free `k8s_forward_port` from 9050.
 
-```
-[info] Scanning workspace: ~/workspace
+Re-running only adds services and keys the file doesn't have yet. Nothing already in the file changes: not values, comments or formatting. After writing, run `sandbox registry sync`.
 
-Detected services:
-  frontend          repo: sandbox     type: web
+`--assist` runs one read-only Claude session (Read, Glob and Grep only) over the repo. It only answers the listed questions: a non-Node service's dev command, health path, environment, secrets, `depends_on`, and which service an unmatched Deployment belongs to. Answers are written with `# inferred by Claude:` and never replace a value the scan read from a file.
 
-Services from k8s (no local changes):
-  backend
-```
 
 ---
 
@@ -852,7 +837,7 @@ The columns above are the required keys. `sandbox services` lists whatever is re
 
 ### Writing a fragment
 
-A fragment is a slice of the registry committed at `<repo>/.sandbox/services.yaml`.
+A fragment is a slice of the registry committed at `<repo>/.sandbox/services.yaml`. `sandbox detect` writes a first draft of this file for you; see [sandbox detect](#sandbox-detect).
 Its JSON Schema is `apps/cli/infra/schemas/services-fragment.schema.json`. `sandbox setup`
 offers to map it (and `workspace.schema.json`) in VS Code's user `yaml.schemas` by local
 path, which turns on validation through the redhat.vscode-yaml extension. Don't add a
@@ -1551,9 +1536,6 @@ docker compose -f infra/compose/shared-infra.yml ps caddy
 ### Services Not Auto-Detected
 
 ```bash
-# Run detection manually
-./sandbox detect PROJ-1234
-
 # Check that the workspace has committed changes
 cd ~/workspace/PROJ-1234/sandbox
 git diff main..HEAD --name-only

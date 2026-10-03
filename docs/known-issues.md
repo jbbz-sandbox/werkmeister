@@ -539,7 +539,7 @@ path any more, so both pins are gone with the hazard.
 `loadServices()` / `loadPorts()` **throw** `Required config file not found` on a machine with
 no `~/.sandbox/{services,ports}.yaml` rather than returning empty. A CI runner is exactly that
 machine. So any core test that reaches the registry — directly, or through `getSlot`,
-`classifyEndpoint`, `detectReport`, `removeService`, `checkStandards` — passes on a developer
+`classifyEndpoint`, `removeService`, `checkStandards` — passes on a developer
 box and fails on CI.
 
 Nine did, in one PR. Every one of them was written against "run

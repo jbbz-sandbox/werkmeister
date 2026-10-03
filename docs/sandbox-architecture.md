@@ -189,7 +189,6 @@ For a given feature workspace:
 **Re-detection triggers**:
 - On `sandbox up` (initial)
 - On Vibe Kanban status change (e.g., moving to "in review")
-- On-demand via `sandbox detect <feature>`
 - Optionally: file watcher that re-detects when new files are committed
 
 ### 4. Orchestrator CLI (`sandbox`)
@@ -204,7 +203,7 @@ sandbox restart <feature>     # restart feature's containers
 sandbox status               # show all features, their services, resource usage
 
 # Inspection
-sandbox detect <feature>     # analyze worktrees, show which services would run locally
+sandbox detect [repo]        # generate the repo's .sandbox/services.yaml (--dry-run to preview)
 sandbox services <feature>   # list services and their endpoints for this feature
 sandbox logs <feature> [svc] # tail logs for a feature's service
 
