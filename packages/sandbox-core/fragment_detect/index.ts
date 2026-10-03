@@ -8,3 +8,6 @@ export * from "./workspace.js";
 export * from "./package.js";
 export * from "./dockerfile.js";
 export * from "./compose.js";
+export * from "./k8s.js";
+export * from "./helm.js";
+export * from "./kustomize.js";
