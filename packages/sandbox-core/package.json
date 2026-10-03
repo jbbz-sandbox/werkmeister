@@ -17,7 +17,6 @@
     "./colors": "./dist/colors.js",
     "./compose": "./dist/compose.js",
     "./config": "./dist/config.js",
-    "./detect": "./dist/detect.js",
     "./docker": "./dist/docker.js",
     "./errors": "./dist/errors.js",
     "./feature_routing": "./dist/feature_routing.js",
