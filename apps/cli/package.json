@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node esbuild.mjs && vitest run"
   },
-  "//dependencies": "Everything else is bundled by esbuild.mjs — see its docstring. dockerode stays external because its ssh2 -> cpu-features requires must be allowed to fail into a pure-JS fallback, and ESM output turns an unresolved require into a shim that throws instead.",
+  "//dependencies": "Everything else is bundled by esbuild.mjs — see its docstring. dockerode stays external because its ssh2 -> cpu-features requires must be allowed to fail into a pure-JS fallback, and ESM output turns an unresolved require into a shim that throws instead. The Agent SDK is external too, because it locates its bundled Claude Code binary by its own package path.",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.288",
     "dockerode": "^5.0.1"

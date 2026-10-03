@@ -111,6 +111,12 @@ describe("sandbox detect", () => {
     expect(await runDetect(args({ repo: null }), deps(reposRoot))).toBe(2);
   });
 
+  it("a repo path that doesn't exist, or isn't a directory, exits 2", async () => {
+    const { reposRoot } = repo(NODE_APP);
+    expect(await runDetect(args({ repo: "nope" }), deps(reposRoot))).toBe(2);
+    expect(await runDetect(args({ repo: "shop/Dockerfile" }), deps(reposRoot))).toBe(2);
+  });
+
   it("a repo with nothing to detect exits 1 and writes nothing", async () => {
     const { root, reposRoot } = repo({ "README.md": "hi" });
     expect(await runDetect(args({ yes: true }), deps(reposRoot))).toBe(1);

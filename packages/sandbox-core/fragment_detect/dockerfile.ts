@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { readText } from "./files.js";
 import { guessed, stated, type DetectContext, type Finding } from "./types.js";
 
-const DOCKERFILE = /^(Dockerfile(\..+)?|.+\.Dockerfile)$/;
+const DOCKERFILE = /^(?!.*\.(md|dockerignore)$)(Dockerfile(\..+)?|.+\.Dockerfile)$/;
 const DEV = /(^|\.)dev(\.|$)/i;
 
 /** [INSTRUCTION, argument] pairs, with continuations joined and comments dropped. */

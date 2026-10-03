@@ -36,6 +36,8 @@ export interface Rendered {
   /** Dotted paths of every key added, e.g. `services.api.internal_port`. */
   added: string[];
   changed: boolean;
+  /** Sections the existing file shapes in a way that can't be extended, with what was left out. */
+  skipped: string[];
 }
 
 interface KeyLine {
@@ -108,6 +110,7 @@ export function renderFragment(plan: Plan): Rendered {
   const edits: { at: number; seq: number; text: string }[] = [];
   const appended: string[] = [];
   const added: string[] = [];
+  const skipped: string[] = [];
   let seq = 0;
 
   for (const [section, entries] of sections(plan)) {
@@ -116,7 +119,13 @@ export function renderFragment(plan: Plan): Rendered {
     if (!isMap(sec) || sec.flow || !sec.items.length) {
       // Present but empty, null or flow-styled: extending it means rewriting it, and appending
       // a second `services:` would be a duplicate key. Leave it to the human.
-      if (sec !== undefined) continue;
+      if (sec !== undefined) {
+        const names = entries.map(([name]) => name).filter((name) => !(isMap(sec) && sec.has(name)));
+        if (names.length) {
+          skipped.push(`${section}: is empty, null or flow-styled in the existing file, so ${names.join(", ")} were not added — add them by hand`);
+        }
+        continue;
+      }
       appended.push(`${section}:\n` + entries.map(([name, lines]) => entryBlock(name, lines, "  ")).join(""));
       for (const [name, lines] of entries) added.push(...lines.map((l) => `${section}.${name}.${l.key}`));
       continue;
@@ -160,5 +169,5 @@ export function renderFragment(plan: Plan): Rendered {
     const prefix = yaml === "" ? FRAGMENT_HEADER : yaml.endsWith("\n\n") ? yaml : yaml.endsWith("\n") ? `${yaml}\n` : `${yaml}\n\n`;
     yaml = prefix + appended.join("\n");
   }
-  return { path: plan.fragmentPath, yaml, added, changed: yaml !== original };
+  return { path: plan.fragmentPath, yaml, added, changed: yaml !== original, skipped };
 }

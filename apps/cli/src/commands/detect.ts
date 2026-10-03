@@ -6,6 +6,7 @@
  * Re-runs only add what is missing. Spec:
  * docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md.
  */
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { getReposRoot, servicesLocalYamlPath } from "sandbox-core/config";
@@ -89,6 +90,10 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   let root: string;
   if (args.repo) {
     root = path.resolve(deps.cwd, args.repo);
+    if (!fs.statSync(root, { throwIfNoEntry: false })?.isDirectory()) {
+      warn(`${root} is not a directory — pass the repo path: sandbox detect <repo>`);
+      return 2;
+    }
   } else {
     const [rc, out] = deps.runner(["git", "-C", deps.cwd, "rev-parse", "--show-toplevel"]);
     if (rc !== 0) {
@@ -142,6 +147,7 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   }
 
   const rendered = renderFragment(plan);
+  for (const s of rendered.skipped) warn(s);
   if (!rendered.changed) {
     success(`${rendered.path} is up to date — nothing to add.`);
     return 0;

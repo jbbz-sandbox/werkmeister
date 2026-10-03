@@ -215,3 +215,17 @@ test("renamed infrastructure is matched by k8s_pod_prefix, and the tunnel uses i
   assert.equal(doc.infrastructure.pg.internal_port, 5432);
   assert.equal(doc.services.api.environment.DATABASE_URL, "postgres://u@k8s-pg:9055/db");
 });
+
+test("a section present but empty, null or flow-styled is left alone, and the skip is reported", () => {
+  for (const existing of ["services: {}\n", "services:\n", "services: { other: { path: x } }\n"]) {
+    const root = fixture({ ...DEMO, ".sandbox/services.yaml": existing }, "demo-services");
+    const r = renderFragment(planFragment(root, opts(root)));
+    assert.ok(r.yaml.startsWith(existing));
+    assert.ok(!r.added.some((a) => a.startsWith("services.")));
+    assert.deepEqual(r.skipped, [
+      "services: is empty, null or flow-styled in the existing file, so backend, frontend were not added — add them by hand",
+    ]);
+  }
+  const root = fixture(DEMO, "demo-services");
+  assert.deepEqual(renderFragment(planFragment(root, opts(root))).skipped, []);
+});

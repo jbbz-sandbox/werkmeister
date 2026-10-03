@@ -55,3 +55,12 @@ test("ENTRYPOINT stands in when there is no CMD", () => {
   const [f] = detect({ "Dockerfile": "FROM alpine\nENTRYPOINT [\"/bin/run\", \"--serve\"]\n" });
   assert.equal(f.fields.command.value, "/bin/run --serve");
 });
+
+test("Dockerfile.md and Dockerfile.dockerignore are not Dockerfiles", () => {
+  const found = detect({
+    "docs/Dockerfile.md": "FROM node:22\n",
+    "api/Dockerfile.dockerignore": "node_modules\n",
+    "api/Dockerfile": "FROM golang:1.23\n",
+  });
+  assert.deepEqual(found.map((f) => f.file), ["api/Dockerfile"]);
+});

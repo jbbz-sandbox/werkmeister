@@ -256,6 +256,7 @@ function registerLifecycleTools(server: McpServer): void {
           wrote,
           changed: rendered.changed,
           added: rendered.added,
+          skipped: rendered.skipped,
           errors,
           yaml: rendered.yaml,
           report: planSummary(plan),
