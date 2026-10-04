@@ -14,9 +14,14 @@ import { buildFormSchema } from "./dist/form_schema.js";
 import {
   computePromptSpec,
   DEFAULT_PLAN,
+  promptEntry,
   WORK_TYPE_PHASES,
   planFor,
 } from "./dist/workspace_prompts.js";
+
+// The machine's config.yaml would leak in: `overrides.issue_tracker: github`
+// swaps the `jira_id` prompt for `github_issue`.
+process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
 
 // An empty dir: no workspace.yml to pre-resolve fields, no repos to scrape.
 const root = await mkdtemp(path.join(tmpdir(), "prompt-spec-"));
@@ -55,6 +60,24 @@ test("the spec converts to a form schema", () => {
   assert.equal(schema.properties.work_type.enum.includes("bugfix"), true);
   assert.equal(uiSchema.starting_prompt["ui:widget"], "textarea");
   assert.deepEqual(schema.required, ["feature", "work_type"]);
+});
+
+test("choice groups reach the form schema as ui:options.groups", () => {
+  const entry = promptEntry(
+    {
+      key: "services",
+      label: "Services",
+      help: "h",
+      multi: true,
+      choicesFn: () => ["api", "cron", "web"],
+      choiceGroupsFn: () => ({ web: "repo-b", api: "repo-a" }),
+    },
+    root,
+    {},
+  );
+  assert.deepEqual(entry.choice_groups, { other: ["cron"], "repo-a": ["api"], "repo-b": ["web"] });
+  const { uiSchema } = buildFormSchema({ prompts: [entry] });
+  assert.deepEqual(uiSchema.services["ui:options"].groups, entry.choice_groups);
 });
 
 test("context_strategy is an optional select defaulting to jit", () => {

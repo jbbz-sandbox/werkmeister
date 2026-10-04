@@ -77,6 +77,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
       "BRIEF.md",
       "CLAUDE.md",
       "CONTEXT.md",
+      "_shared/issues-report.md",
       "_shared/standards.md",
       "stages/01_research/CONTEXT.md",
       "stages/01_research/output/.gitkeep",
@@ -102,6 +103,11 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.ok(claude.split("\n").length <= 60, `CLAUDE.md is ${claude.split("\n").length} lines`);
     assert.match(claude, /`docker restart demo-backend`/);
     assert.match(claude, /`stages\/02_spec\/CONTEXT\.md`/);
+    assert.match(claude, /you hit a bug or need to log a feature\/task .*`_shared\/issues-report\.md`/);
+    assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
+    const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
+    assert.match(guide, /^# Filing an issue$/m);
+    assert.match(guide, /gh issue create -R jbbz-sandbox\/sandbox --label <label>/);
 
     const implement = fs.readFileSync(path.join(root, "stages", "03_implement", "CONTEXT.md"), "utf8");
     assert.match(implement, /rows `comments`, `ponytail`/);

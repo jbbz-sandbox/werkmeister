@@ -9,6 +9,9 @@ const seen: Record<string, any>[] = [];
 const record = (kind: string, config: Record<string, any>) => seen.push({ kind, ...config });
 
 vi.mock("@inquirer/prompts", () => ({
+  Separator: class {
+    constructor(public separator: string) {}
+  },
   select: async (config: Record<string, any>) => {
     record("select", config);
     if (fault) {
@@ -50,7 +53,7 @@ vi.mock("node:readline/promises", () => ({
   }),
 }));
 
-const { confirm, prompt, promptOne } = await import("../wizard.js");
+const { confirm, fieldsOf, prompt, promptOne } = await import("../wizard.js");
 
 const SPEC = { key: "work_type", label: "Work type", help: "h" };
 const MULTI = { key: "services", label: "Services", help: "h", multi: true };
@@ -88,6 +91,33 @@ describe("the Inquirer-backed prompts", () => {
     checked = ["api", "web"];
     expect(await promptOne(MULTI, "web", ["api", "web", "worker"])).toBe("api,web");
     expect(seen[0].choices.filter((c: any) => c.checked).map((c: any) => c.value)).toEqual(["web"]);
+  });
+
+  it("multi-value lists choices under their group headings, ungrouped last", async () => {
+    checked = [];
+    const groups = { "repo-a": ["web", "worker"], "repo-b": ["api"] };
+    await promptOne({ ...MULTI, groups }, "", ["api", "cron", "web", "worker"]);
+    expect(seen[0].choices.map((c: any) => c.separator ?? c.value)).toEqual([
+      "── repo-a ──", "web", "worker", "── repo-b ──", "api", "── other ──", "cron",
+    ]);
+  });
+
+  it("reads fields off the form schema bundle the browser form renders", async () => {
+    const { buildFormSchema } = await import("sandbox-core/form_schema");
+    const bundle = buildFormSchema({
+      prompts: [
+        { key: "feature", label: "Feature", accept_empty: false, pattern: "^[a-z]+$", default: "blog" },
+        { key: "services", label: "Services", multi: true, choices: ["api", "web"],
+          choice_groups: { r: ["api", "web"] }, default: "web" },
+        { key: "starting_prompt", label: "Prompt", multiline: true, refinable: true, refine_instruction: "tidy" },
+        { key: "done", label: "Done", resolved: true, resolved_value: "x" },
+      ],
+    });
+    const fields = fieldsOf(bundle);
+    expect(fields.map((f) => f.key)).toEqual(["feature", "services", "starting_prompt"]);
+    expect(fields[0]).toMatchObject({ required: true, pattern: "^[a-z]+$", default: "blog", multi: false });
+    expect(fields[1]).toMatchObject({ multi: true, choices: ["api", "web"], groups: { r: ["api", "web"] }, default: "web" });
+    expect(fields[2]).toMatchObject({ multiline: true, refinable: true, refineInstruction: "tidy", required: false });
   });
 
   it("off a TTY it types instead, so piped answers still work", async () => {

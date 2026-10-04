@@ -13,7 +13,9 @@
  *   2. browser      — which browser `sandbox open` launches (`overrides.browser`)
  *   3. ingress      — base domains + cert directory (`ingress:`)
  *   4. registry     — which repo fragments will generate services.yaml; demo clone; k8s context
- *   5. jira         — OPTIONAL REST credentials for the dashboard fast path
+ *   5. issues       — the issue tracker (`overrides.issue_tracker`): jira, with
+ *                     OPTIONAL REST credentials for the dashboard fast path, or
+ *                     github, spanning every registry repo under `github_org`
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
  *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings,
@@ -56,6 +58,7 @@ import {
   WORKSPACE_ROOT_REPO,
   type Step,
 } from "sandbox-core/machine_setup";
+import { ISSUE_TRACKERS, loadIssueTracker } from "sandbox-core/issue_tracker";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
 import { discoverFragments, FRAGMENT_REL, inheritedK8sContext } from "sandbox-core/registry_sync";
 import { expandUser } from "sandbox-core/config";
@@ -229,11 +232,45 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     );
   }
 
-  // --- 5. jira (optional; prompted here so all writes happen together) -----
-  heading("5. Jira credentials (optional)");
+  // --- 5. issue tracker (prompted here so all writes happen together) -----
+  heading("5. Issue tracker");
+  const resolvedIssues: Record<string, string> = {};
+  const trackerDefault = () => loadIssueTracker(cfg);
+  if (interactive) {
+    await runWizard(
+      [
+        {
+          key: "issue_tracker",
+          label: "Issue tracker",
+          help:
+            "Where workspace tickets come from and where agents file existing bugs. " +
+            "jira: one ticket key per workspace. github: issues per repo, across every repo in the services registry.",
+          acceptEmpty: false,
+          pattern: `(${ISSUE_TRACKERS.join("|")})`,
+          choicesFn: () => [...ISSUE_TRACKERS],
+        },
+      ],
+      resolvedIssues,
+      trackerDefault,
+    );
+  } else {
+    resolvedIssues.issue_tracker = trackerDefault();
+    info(`  issue_tracker: ${resolvedIssues.issue_tracker}`);
+  }
+
   const jira: gc.JiraSettings = { ...gc.loadJira() };
   const jiraConfigured = Boolean(jira.base_url && jira.email && jira.api_token);
-  if (jiraConfigured) {
+  if (resolvedIssues.issue_tracker === "github") {
+    // Issues are per repo; the tracker is every repo the registry knows.
+    const org = resolvedGh.github_org;
+    if (!org) {
+      warn("  No GitHub org set (section 1) — workspaces can only take owner/repo#n issue refs.");
+    } else if (fragments.length) {
+      info(`Tracking GitHub issues in: ${fragments.map((r) => `${org}/${r}`).join(", ")}.`);
+    } else {
+      info(`Tracking GitHub issues in every registry repo under ${org} (none registered yet).`);
+    }
+  } else if (jiraConfigured) {
     info(`Already configured for ${jira.email}.`);
   } else {
     info(
@@ -296,6 +333,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
         `and intercepts in a VS Code side bar (${ext.installed ?? "not installed"} → ${ext.bundled.version}).`,
     );
     installVscodeExtension = await confirm("  Install the Sandbox Workspaces extension?", false, interactive);
+  } else if (ext.cli && !ext.bundled) {
+    info(
+      `Sandbox Workspaces extension: ${ext.installed ?? "not installed"}. A checkout bundles no .vsix, so ` +
+        "setup can't install it — build it from packages/vscode-plugin (see the README).",
+    );
   }
 
   // --- write ---------------------------------------------------------------
@@ -319,6 +361,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     overrides: {
       ...(cfg.overrides ?? {}),
       browser: resolvedBrowser.browser,
+      issue_tracker: resolvedIssues.issue_tracker,
       // Omitted rather than written empty when unresolvable, so a later run
       // (or `gh auth login`) can still supply them.
       ...(resolvedGh.workspace_repo ? { workspace_repo: resolvedGh.workspace_repo } : {}),

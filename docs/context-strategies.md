@@ -4,7 +4,7 @@ Status: option B implemented — spec docs/superpowers/specs/2026-09-27-context-
 
 ## Using it
 
-Set `context_strategy: jit | icm` in `.sandbox/workspace.yml` (absent = `jit`), or pass `--context-strategy <id>` / `SANDBOX_CONTEXT_STRATEGY` to `sandbox workspace` / `sandbox init-workspace`. `jit` generates the sb-* skills, generated agents, gate manifest and SessionStart/PreToolUse hooks described below; `icm` instead writes a staged-folder pipeline — `CLAUDE.md`, `CONTEXT.md`, `BRIEF.md`, `_shared/standards.md` and `stages/NN_*/CONTEXT.md` — with no hooks, no notes and no gate.
+Set `context_strategy: jit | icm` in `.sandbox/workspace.yml` (absent = `jit`), or pass `--context-strategy <id>` / `SANDBOX_CONTEXT_STRATEGY` to `sandbox workspace` / `sandbox init-workspace`. `jit` generates the sb-* skills, generated agents, gate manifest and SessionStart/PreToolUse hooks described below; `icm` instead writes a staged-folder pipeline — `CLAUDE.md`, `CONTEXT.md`, `BRIEF.md`, `_shared/standards.md`, `_shared/issues-report.md` and `stages/NN_*/CONTEXT.md` — with no hooks, no notes and no gate. Both strategies write the issue-filing guide from `issues_report.ts` (type bug | feature | task → label and template; sandbox issues → `jbbz-sandbox/sandbox`, app issues → the configured tracker): icm at `_shared/issues-report.md`, routed from `CLAUDE.md`; jit at `.sandbox/issues-report.md`, linked from `CLAUDE.md`'s `## Issues` section.
 
 Switching an existing workspace's `context_strategy` and rerunning `init-workspace` writes the new layer but leaves the old one's files in place, with a warning naming them; pass `--prune-context` to delete them too. Only paths that are git-tracked and clean are deleted — untracked, ignored or modified paths are kept and reported instead, since git is the only way to get them back.
 
@@ -34,6 +34,7 @@ The hand-built `icm-ws2` maps onto existing data with no new inputs:
 | `CLAUDE.md` (router, <60 lines) | `feature`, `task`, repo list; static route table |
 | `CONTEXT.md` (pipeline table) | a stage template keyed by `work_type` |
 | `BRIEF.md` | `starting_prompt` verbatim |
+| `_shared/issues-report.md` | `buildIssuesReportMd` (`issues_report.ts`) — shared with jit's `.sandbox/issues-report.md` |
 | `_shared/standards.md` | `resolveActiveStandards` → rows pointing at `<standards_dir>/<domain>/STANDARD.md` (pointers, not copies) |
 | `stages/NN_*/CONTEXT.md` + `output/.gitkeep` | the same template; contracts reference `.sandbox/sandbox-context.md` for infra facts |
 | nothing in `.claude/`, no `.sandbox/notes/` | — |

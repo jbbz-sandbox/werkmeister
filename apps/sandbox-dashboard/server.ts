@@ -5,7 +5,7 @@
  * Two linked tools:
  *   - `workspace`        — the App tool (carries `_meta.ui.resourceUri`). When the
  *     host calls it, it renders the bundled HTML form and returns the RJSF
- *     bundle from `sandbox workspace --print-form-schema` for the form to render.
+ *     bundle from `getFormSchema` (sandbox-core) for the form to render.
  *   - `create-workspace` — invoked from the form via `app.callServerTool(...)`.
  *     Runs `sandbox workspace <feature> [flags]` (worktrees + branch +
  *     init-workspace) and optionally opens the result in VS Code.
@@ -124,7 +124,7 @@ export function createServer(): McpServer {
   //   • Hosts that DON'T (Claude Code CLI, VS Code extension) ignore `_meta.ui`,
   //     so the tool instead opens the SAME form in the user's browser over
   //     localhost, blocks until submit, and creates the workspace in-line.
-  // One form definition (`sandbox workspace --print-form-schema`), one create
+  // One form definition (`getFormSchema`), one create
   // path (`createWorkspace`), graceful degradation across surfaces.
   registerAppTool(
     server,
@@ -136,8 +136,8 @@ export function createServer(): McpServer {
         "worktrees on a <user>/<workspace> branch under $SANDBOX_WORKSPACES_ROOT, " +
         "then init-workspace). Opens a form to collect the inputs — inline if the " +
         "client renders MCP App UI (Claude Desktop), otherwise in the user's " +
-        "browser (Claude Code CLI / VS Code). Fields come from `sandbox workspace " +
-        "--print-form-schema`. Pass a Jira ticket ID or URL as `jira` to pre-fill.",
+        "browser (Claude Code CLI / VS Code). Fields come from the same prompt " +
+        "definitions as the terminal wizard. Pass a Jira ticket ID or URL as `jira` to pre-fill.",
       inputSchema: {
         jira: z
           .string()
@@ -252,7 +252,7 @@ export function createServer(): McpServer {
 
   // --- Worker tool: hand the RJSF form bundle to the browser dashboard -------
   // Data-only sibling of the `workspace` tool: returns the exact same bundle
-  // (`sandbox workspace --print-form-schema`) as structuredContent, with no UI
+  // (`getFormSchema`) as structuredContent, with no UI
   // of its own. The browser dashboard's "New workspace" tab fetches this, then
   // renders the form and calls `create-workspace` on submit — so create + list
   // live on one page without the localhost-form's separate throwaway server.
@@ -261,8 +261,8 @@ export function createServer(): McpServer {
     {
       title: "Workspace Form Schema",
       description:
-        "Return the New Sandbox Workspace form definition (RJSF schema/uiSchema/formData/title) " +
-        "from `sandbox workspace --print-form-schema`. Data-only; used by the browser dashboard's " +
+        "Return the New Sandbox Workspace form definition (RJSF schema/uiSchema/formData/title), " +
+        "built from the terminal wizard's prompt definitions. Data-only; used by the browser dashboard's " +
         "create-workspace tab.",
       inputSchema: {},
       outputSchema: z.object({

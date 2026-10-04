@@ -36,6 +36,7 @@ import { expandUser, getReposRoot, loadArchetypes, loadMcpServers, loadServices 
 import { SandboxError } from "./errors.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { loadPaths } from "./global_config.js";
+import { githubIssueSlug, normalizeGithubIssue } from "./issue_tracker.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
@@ -596,6 +597,7 @@ function logMeta(task: string, meta: Record<string, string>): void {
     ["FEATURE", "Feature"],
     ["SERVICES", "Services"],
     ["JIRA_ID", "Jira"],
+    ["GITHUB_ISSUE", "Issue"],
     ["TEST_PATH", "Test path"],
   ] as Array<[string, string]>) {
     const value = meta[key];
@@ -678,6 +680,7 @@ export async function initWorkspace(
     feature: "FEATURE",
     services: "SERVICES",
     jira_id: "JIRA_ID",
+    github_issue: "GITHUB_ISSUE",
     test_path: "TEST_PATH",
     description: "DESCRIPTION",
   };
@@ -844,8 +847,12 @@ export async function provisionWorkspace(
   parseStrategyId(resolved.context_strategy);
 
   const featureSlug = feature.toLowerCase();
-  const jiraId = (resolved.jira_id ?? "").trim() || null;
-  const workspaceName = buildWorkspaceName(feature, jiraId);
+  // The wizard ran after resolveInputs, so normalize its answer here too.
+  if (resolved.github_issue) {
+    resolved.github_issue = normalizeGithubIssue(resolved.github_issue);
+  }
+  const ticket = (resolved.jira_id ?? "").trim() || githubIssueSlug(resolved.github_issue ?? "") || null;
+  const workspaceName = buildWorkspaceName(feature, ticket);
   if (!_SLUG_RE.test(workspaceName)) {
     fail(
       `Workspace name '${workspaceName}' is not a valid slug ` +

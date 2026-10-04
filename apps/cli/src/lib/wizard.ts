@@ -1,16 +1,17 @@
 /**
  * Shared interactive-wizard machinery.
  *
- * A `PromptSpec` declares one input a command collects; `runWizard` drives a
- * list of them, prompting only for keys a caller hasn't already resolved and
- * validating each against its pattern. Extracted from init-workspace so
+ * Every prompt renders from the form schema (`buildFormSchema`'s RJSF bundle) —
+ * the one definition the browser form and MCP UI also render — so all surfaces
+ * show the same fields, choices, groups and validation. `runFormWizard` drives a
+ * whole bundle; `runWizard` drives `PromptSpec`s one field at a time, prompting
+ * only for keys a caller hasn't already resolved. Extracted from init-workspace so
  * `sandbox config` (and any future command) reuses the same prompt loop, pattern
  * validation, and multi-value normalisation instead of restating them.
  *
- * The loop is deliberately decoupled from where defaults come from: callers pass
- * a `resolveDefault(spec) -> string` so init-workspace can derive defaults from
- * a workspace path while `config` derives them from the current YAML/env — the
- * runner never needs to know.
+ * Defaults come from the bundle's `formData`, or for `runWizard` from the
+ * caller's `resolveDefault(spec)`, so `setup`/`config` can derive them from the
+ * current YAML/env and the answers given so far — the runner never needs to know.
  */
 
 import * as readline from "node:readline/promises";
@@ -22,10 +23,13 @@ import {
   input,
   password,
   select,
+  Separator,
 } from "@inquirer/prompts";
 
 import { info, warn } from "./config.js";
+import { buildFormSchema } from "sandbox-core/form_schema";
 import type { PromptSpec } from "sandbox-core/global_config";
+import { promptEntry } from "sandbox-core/workspace_prompts";
 
 // Re-exported so the commands and `browser.ts` that drive a wizard keep naming
 // one module for the runner and the shape it runs.
@@ -157,6 +161,79 @@ export function normalizeMulti(value: string, choices: string[] | null): string 
 const OTHER = Symbol("other");
 
 /**
+ * One input as the form schema describes it. Every prompt renders from this,
+ * read off an RJSF bundle by {@link fieldsOf}, so the terminal shows exactly
+ * what the browser form and MCP UI show.
+ */
+export interface WizardField {
+  key: string;
+  label: string;
+  multi?: boolean;
+  multiline?: boolean;
+  pattern?: string | null;
+  choices?: string[] | null;
+  groups?: Record<string, string[]> | null; // group heading → its choices
+  required?: boolean;
+  refinable?: boolean;
+  refineInstruction?: string | null;
+  default?: string;
+}
+
+/** Read the fields of a {@link buildFormSchema} bundle, in `ui:order`. */
+export function fieldsOf(bundle: Record<string, any>): WizardField[] {
+  const { schema, uiSchema = {}, formData = {} } = bundle;
+  const required = new Set<string>(schema.required ?? []);
+  const order: string[] = uiSchema["ui:order"] ?? Object.keys(schema.properties ?? {});
+  return order.map((key) => {
+    const prop = schema.properties[key];
+    const ui = uiSchema[key] ?? {};
+    const opts = ui["ui:options"] ?? {};
+    const value = formData[key];
+    return {
+      key,
+      label: prop.title ?? key,
+      multi: prop.type === "array",
+      multiline: ui["ui:widget"] === "textarea",
+      pattern: prop.pattern ?? null,
+      choices: prop.items?.enum ?? prop.enum ?? null,
+      groups: opts.groups ?? null,
+      required: required.has(key),
+      refinable: Boolean(opts.refinable),
+      refineInstruction: opts.refineInstruction ?? null,
+      default: Array.isArray(value) ? value.join(",") : String(value ?? ""),
+    };
+  });
+}
+
+/**
+ * List *items* under a Separator per group (e.g. services under their repo),
+ * in the groups' order; anything no group names goes last under "other".
+ * No groups → *items* unchanged.
+ */
+function withGroupHeadings<T extends { value: string }>(
+  items: T[],
+  groups: Record<string, string[]> | null | undefined,
+): (T | Separator)[] {
+  if (!groups) {
+    return items;
+  }
+  const remaining = new Map(items.map((item) => [item.value, item]));
+  const out: (T | Separator)[] = [];
+  const section = (heading: string, members: T[]) => {
+    if (members.length) {
+      out.push(new Separator(`── ${heading} ──`), ...members);
+    }
+  };
+  for (const [heading, values] of Object.entries(groups)) {
+    const members = values.flatMap((v) => remaining.get(v) ?? []);
+    members.forEach((m) => remaining.delete(m.value));
+    section(heading, members);
+  }
+  section("other", [...remaining.values()]);
+  return out;
+}
+
+/**
  * Pick from an enumerated set: an arrow-key list, or checkboxes when `multi`.
  *
  * Returns null when the choice can't be made this way — no TTY (piped stdin
@@ -165,7 +242,7 @@ const OTHER = Symbol("other");
  * an unlisted repo) stays reachable instead of being locked out by the list.
  */
 async function pickFromChoices(
-  spec: PromptSpec,
+  field: WizardField,
   defaultValue: string,
   choices: string[],
 ): Promise<string | null> {
@@ -176,15 +253,18 @@ async function pickFromChoices(
   // in, so a re-run pre-checks whatever the last run selected.
   const preselected = new Set(defaultValue.split(",").map((s) => s.trim()).filter(Boolean));
   try {
-    if (spec.multi) {
+    if (field.multi) {
       const picked = await checkbox({
-        message: spec.label,
-        choices: choices.map((c) => ({ value: c, checked: preselected.has(c) })),
+        message: field.label,
+        choices: withGroupHeadings(
+          choices.map((c) => ({ value: c, checked: preselected.has(c) })),
+          field.groups,
+        ),
       });
       return picked.join(",");
     }
     const picked = await select<string | symbol>({
-      message: spec.label,
+      message: field.label,
       choices: [...choices.map((c) => ({ name: c, value: c })), { name: "Other (type it)", value: OTHER }],
       default: choices.includes(defaultValue) ? defaultValue : undefined,
     });
@@ -195,25 +275,25 @@ async function pickFromChoices(
 }
 
 /**
- * Prompt repeatedly for one input until it satisfies the prompt's pattern.
+ * Prompt repeatedly for one input until it satisfies the field's pattern.
  *
- * Empty input is allowed here (the caller applies `acceptEmpty`); the pattern
- * is the same regex the form UI validates against, so terminal and form agree.
+ * Empty input is allowed here (the caller applies `required`); the pattern is
+ * the schema's own, so terminal and form validate against the same regex.
  */
 export async function promptOne(
-  spec: PromptSpec,
+  field: WizardField,
   defaultValue: string,
-  choices: string[] | null,
+  choices: string[] | null = field.choices ?? null,
 ): Promise<string> {
   while (true) {
-    let value = choices?.length ? await pickFromChoices(spec, defaultValue, choices) : null;
-    value ??= await prompt(spec.label, defaultValue, { multiline: spec.multiline });
-    if (spec.multi && value) {
+    let value = choices?.length ? await pickFromChoices(field, defaultValue, choices) : null;
+    value ??= await prompt(field.label, defaultValue, { multiline: field.multiline });
+    if (field.multi && value) {
       value = normalizeMulti(value, choices);
     }
     // Patterns are start-anchored only; a trailing `$` is the author's to add.
-    if (value && spec.pattern && !new RegExp(`^(?:${spec.pattern})`).test(value)) {
-      warn(`'${value}' doesn't match the expected format ${spec.pattern} — try again.`);
+    if (value && field.pattern && !new RegExp(`^(?:${field.pattern})`).test(value)) {
+      warn(`'${value}' doesn't match the expected format ${field.pattern} — try again.`);
       continue;
     }
     return value;
@@ -225,7 +305,7 @@ export async function promptOne(
  *
  * The rewrite runs through `sandbox-core`'s `refinePrompt` — the same
  * function behind the browser form's "Refine with Claude" button — so the
- * terminal honours the spec's `refineInstruction` instead of restating it and
+ * terminal honours the field's `refineInstruction` instead of restating it and
  * drifting. The wizard's answers so far are passed as the form-state context
  * sandbox-core grounds the rewrite in.
  *
@@ -234,7 +314,7 @@ export async function promptOne(
  * it must never cost them their text. `ask` is injected for tests.
  */
 export async function offerRefine(
-  spec: PromptSpec,
+  field: Pick<WizardField, "refineInstruction">,
   value: string,
   context: Record<string, string>,
   ask: (label: string, fallback: boolean) => Promise<boolean> = confirm,
@@ -246,7 +326,7 @@ export async function offerRefine(
   let refined: string;
   try {
     const { refinePrompt } = await import("sandbox-core");
-    refined = (await refinePrompt(value, spec.refineInstruction ?? "", context)).trim();
+    refined = (await refinePrompt(value, field.refineInstruction ?? "", context)).trim();
   } catch (e) {
     warn(`Refine failed (${(e as Error).message}) — keeping what you typed.`);
     return value;
@@ -259,12 +339,52 @@ export async function offerRefine(
   return (await ask("Keep this version?", true)) ? refined : value;
 }
 
+/** Ask one field and record the answer in *resolved*. */
+async function askField(field: WizardField, resolved: Record<string, string>): Promise<void> {
+  // On a TTY the list is the picker itself; only the typed fallback needs it
+  // spelled out.
+  if (field.choices?.length && !process.stdin.isTTY) {
+    info("  Choices: " + field.choices.join(", "));
+  }
+  let value = await promptOne(field, field.default ?? "");
+  if (field.refinable && value) {
+    value = await offerRefine(field, value, resolved);
+  }
+  // Required inputs are always recorded (the default stands in when the user
+  // enters nothing); empty optional inputs are dropped.
+  if (value || field.required) {
+    resolved[field.key] = value;
+  }
+}
+
 /**
- * Prompt for any input not already present in `resolved`.
+ * Prompt for every field of a form-schema bundle not already in `resolved` —
+ * the same bundle the browser form and MCP UI render. Returns the (mutated)
+ * `resolved` dict.
+ */
+export async function runFormWizard(
+  bundle: Record<string, any>,
+  resolved: Record<string, string>,
+  { intro = null }: { intro?: string | null } = {},
+): Promise<Record<string, string>> {
+  if (intro) {
+    info(intro);
+  }
+  for (const field of fieldsOf(bundle)) {
+    if (!(field.key in resolved)) {
+      await askField(field, resolved);
+    }
+  }
+  return resolved;
+}
+
+/**
+ * Prompt for any of *prompts* not already present in `resolved`.
  *
- * Only missing keys are prompted — anything a caller resolved earlier
- * (CLI/env/config) is preserved. `resolveDefault(spec)` supplies the shown
- * default. Returns the (mutated) `resolved` dict.
+ * For callers whose defaults follow earlier answers (`setup`, `config`):
+ * `resolveDefault(spec)` runs just before each prompt, and that prompt is then
+ * rendered through a one-field form schema — so these wizards share the
+ * schema path with {@link runFormWizard} without a static bundle.
  */
 export async function runWizard(
   prompts: readonly PromptSpec[],
@@ -275,35 +395,14 @@ export async function runWizard(
   if (intro) {
     info(intro);
   }
-
   for (const spec of prompts) {
     if (spec.key in resolved) {
       continue;
     }
-
-    const choices = spec.choicesFn ? spec.choicesFn() : null;
-    if (spec.choicesFn && (!choices || choices.length === 0)) {
-      // No values to choose from (e.g. services.yaml unavailable) — skip.
-      continue;
-    }
-    // On a TTY the list is the picker itself; only the typed fallback needs it
-    // spelled out.
-    if (choices && choices.length && !process.stdin.isTTY) {
-      info("  Choices: " + choices.join(", "));
-    }
-
-    const defaultValue = resolveDefault(spec);
-    let value = await promptOne(spec, defaultValue, choices);
-    if (spec.refinable && value) {
-      value = await offerRefine(spec, value, resolved);
-    }
-
-    // acceptEmpty=false inputs are always recorded (the default stands in
-    // when the user enters nothing); empty optional inputs are dropped.
-    if (value || spec.acceptEmpty === false) {
-      resolved[spec.key] = value;
+    const entry = { ...promptEntry(spec, "", resolved, { defaults: false }), default: resolveDefault(spec) };
+    for (const field of fieldsOf(buildFormSchema({ prompts: [entry] }))) {
+      await askField(field, resolved);
     }
   }
-
   return resolved;
 }

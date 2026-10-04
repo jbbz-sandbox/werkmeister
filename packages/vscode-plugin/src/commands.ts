@@ -42,9 +42,6 @@ async function pickWorkspace(node?: WsNode): Promise<{ name: string; path: strin
 /** Lifecycle actions that map 1:1 onto a `sandbox <action>` subcommand. */
 const LIFECYCLE = ["up", "stop", "restart", "down"] as const;
 
-/** Jira key or browse URL, loosely validated — the CLI does the real check. */
-const JIRA_REF_RE = /^[A-Za-z][A-Za-z0-9]+-\d+$/;
-
 /** Lazily created so it doesn't clutter the Output dropdown until something fails. */
 let outputChannel: vscode.OutputChannel | undefined;
 
@@ -179,21 +176,10 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       );
     }),
 
-    // The CLI's own interactive wizard does the prompting; a VS Code terminal is
-    // a TTY, so there is nothing to reimplement. Only the optional Jira ref is
-    // collected up front, because it changes the workspace directory name.
+    // The CLI's own interactive wizard does all the prompting (Jira ID
+    // included); a VS Code terminal is a TTY, so there is nothing to reimplement.
     vscode.commands.registerCommand("sandbox.newWorkspace", async () => {
-      const ref = await vscode.window.showInputBox({
-        title: "New Sandbox Workspace",
-        prompt: "Jira ticket (optional) — press Enter to skip",
-        placeHolder: "TRE-1234",
-        validateInput: (v) =>
-          !v.trim() || JIRA_REF_RE.test(v.trim()) ? null : "Expected a key like TRE-1234, or empty",
-      });
-      if (ref === undefined) return; // Escape — cancelled
-      const args = ["workspace"];
-      if (ref.trim()) args.push("--jira-id", ref.trim().toUpperCase());
-      await runInTerminal(args, os.homedir(), "workspace");
+      await runInTerminal(["workspace"], os.homedir(), "workspace");
     }),
 
     // `sandbox open` blocks for the whole lifetime of the Chrome window (Ctrl-C

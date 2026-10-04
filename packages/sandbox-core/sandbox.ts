@@ -6,8 +6,8 @@
  * input prompts and the create logic (git worktrees on a `<user>/<workspace>`
  * branch + `init-workspace`). We:
  *
- *   - read the form fields from `sandbox workspace --print-form-schema`
- *     (the same RJSF bundle the terminal wizard consumes), and
+ *   - build the form fields in-process from core's prompt definitions
+ *     (the same ones the terminal wizard renders; see {@link getFormSchema}), and
  *   - run `sandbox workspace <feature> [--flag value …]` to create one.
  *
  * The only thing we add on top of the script is the optional "open in VS Code"
@@ -37,6 +37,7 @@ import type Dockerode from "dockerode";
 import { docker } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { infraHealth, up as infraUp } from "./infra.js";
+import { jiraBrowseUrl } from "./issue_tracker.js";
 import { checkForwardHealth } from "./k8s.js";
 import { interceptsSnapshot, type InterceptRow } from "./status.js";
 import { buildFormSchema } from "./form_schema.js";
@@ -66,7 +67,7 @@ export class WorkspaceError extends SandboxError {
   }
 }
 
-/** The render-ready RJSF bundle emitted by `sandbox workspace --print-form-schema`. */
+/** The render-ready RJSF bundle {@link getFormSchema} builds for the create form. */
 export interface FormSchemaBundle {
   schema: Record<string, unknown>;
   uiSchema: Record<string, unknown>;
@@ -846,7 +847,6 @@ export interface WorkspaceEntry {
   labels: string[];
 }
 
-const JIRA_BROWSE_BASE = "https://hgdata.atlassian.net/browse/";
 
 /** Read `jira_id` and `labels` out of a workspace's `.sandbox/workspace.yml`. */
 async function readWorkspaceConfig(workspaceDir: string): Promise<{ jiraId: string | null; labels: string[] }> {
@@ -889,7 +889,7 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
         // vscode://file + an absolute path (already leading-slash) → single slash.
         vscodeUri: `vscode://file${p.split(path.sep).map(encodeURIComponent).join("/")}`,
         jiraId,
-        jiraUrl: jiraId ? JIRA_BROWSE_BASE + jiraId : null,
+        jiraUrl: jiraId ? jiraBrowseUrl(jiraId) : null,
         labels,
       };
     }),
@@ -1852,7 +1852,7 @@ export async function fetchJiraIssue(ref: string): Promise<JiraCard> {
         type: str(f.issuetype?.name),
         assignee: str(f.assignee?.displayName),
         description: str(f.description),
-        url: JIRA_BROWSE_BASE + resolvedKey,
+        url: jiraBrowseUrl(resolvedKey) ?? undefined,
       };
     }
     const prompt =

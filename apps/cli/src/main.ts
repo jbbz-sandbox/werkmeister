@@ -480,6 +480,11 @@ const SPECS: CommandSpec[] = [
             "workspace dir name; passed through to init-workspace.",
         )
         .option(
+          "--github-issue <ref>",
+          "GitHub issue (owner/repo#n or repo#n) when the issue tracker is github; " +
+            "repo-n is prefixed to the workspace dir name like --jira-id.",
+        )
+        .option(
           "-s, --services <list>",
           "Comma-separated services to run locally. Their owning repos are " +
             "added as worktrees, and the list is passed through to init-workspace.",
@@ -518,16 +523,6 @@ const SPECS: CommandSpec[] = [
           ).choices([...STRATEGY_IDS]),
         )
         .option(
-          "--print-prompts",
-          "Emit the interactive prompt definitions as JSON on stdout (shared " +
-            "with init-workspace) and exit without creating anything.",
-        )
-        .option(
-          "--print-form-schema",
-          "Emit a render-ready RJSF bundle ({schema, uiSchema, formData, title}) " +
-            "as JSON on stdout and exit without creating anything.",
-        )
-        .option(
           "--browser-form",
           "Collect inputs through the Sandbox-branded browser form (the same " +
             "form the Desktop MCP App renders), then create the workspace. Opens a " +
@@ -544,6 +539,7 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature], o) => ({
       feature: feature ?? null,
       jira_id: o.jiraId ?? null,
+      github_issue: o.githubIssue ?? null,
       services: o.services ?? null,
       repos: o.repos ?? null,
       labels: o.labels ?? null,
@@ -553,8 +549,6 @@ const SPECS: CommandSpec[] = [
       starting_prompt: o.startingPrompt ?? null,
       work_type: o.workType ?? null,
       context_strategy: o.contextStrategy ?? null,
-      print_prompts: Boolean(o.printPrompts),
-      print_form_schema: Boolean(o.printFormSchema),
       browser_form: Boolean(o.browserForm),
       open_vscode: Boolean(o.open),
       force: Boolean(o.force),
@@ -685,6 +679,10 @@ const SPECS: CommandSpec[] = [
         )
         .option("--jira-id <id>", "Jira ticket ID (env: SANDBOX_JIRA_ID; config: jira_id).")
         .option(
+          "--github-issue <ref>",
+          "GitHub issue, owner/repo#n or repo#n (env: SANDBOX_GITHUB_ISSUE; config: github_issue).",
+        )
+        .option(
           "--labels <list>",
           "Comma-separated free-form tags for filtering workspaces in the " +
             "dashboard search (env: SANDBOX_LABELS; config: labels).",
@@ -727,20 +725,6 @@ const SPECS: CommandSpec[] = [
           "--prune-context",
           "After a context_strategy change, delete the previous strategy's files that git " +
             "tracks unmodified (anything else is kept and reported).",
-        )
-        .option(
-          "--print-prompts",
-          "Emit the interactive wizard's prompt definitions as JSON on stdout " +
-            "(labels, defaults, service choices, and which inputs are already " +
-            "resolved), then exit without writing anything. Lets external tools " +
-            "drive the same prompts as the source of truth; diagnostics go to stderr.",
-        )
-        .option(
-          "--print-form-schema",
-          "Emit a render-ready RJSF bundle ({schema, uiSchema, formData, title}) as " +
-            "JSON on stdout, derived from the same prompt definitions as --print-prompts, " +
-            "then exit without writing anything. Lets a browser-form tool render the " +
-            "inputs from standard JSON Schema; diagnostics go to stderr.",
         );
     },
     namespace: (_a, o) => ({
@@ -750,6 +734,7 @@ const SPECS: CommandSpec[] = [
       repos: o.repos ?? null,
       force: Boolean(o.force),
       jira_id: o.jiraId ?? null,
+      github_issue: o.githubIssue ?? null,
       labels: o.labels ?? null,
       test_path: o.testPath ?? null,
       description: o.description ?? null,
@@ -758,8 +743,6 @@ const SPECS: CommandSpec[] = [
       context_strategy: o.contextStrategy ?? null,
       config_file: o.config ?? null,
       prune_context: Boolean(o.pruneContext),
-      print_prompts: Boolean(o.printPrompts),
-      print_form_schema: Boolean(o.printFormSchema),
     }),
   },
 ];

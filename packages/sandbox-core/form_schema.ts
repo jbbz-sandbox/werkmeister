@@ -1,23 +1,21 @@
 /**
- * Convert the `--print-prompts` contract into an RJSF JSON Schema + uiSchema.
+ * Convert a prompt spec into an RJSF JSON Schema + uiSchema.
  *
- * This is the shared, in-repo home for prompt → JSON Schema conversion. Any
- * subcommand that builds a prompt spec (see `init_workspace._build_prompt_spec`)
- * can expose a `--print-form-schema` flag that emits a standard, render-ready
- * bundle via `buildFormSchema`. The browser-form tool (`form-ui`) consumes the
- * bundle directly, so the CLI — not the skill — owns the schema, and the terminal
- * wizard, the MCP elicitation adapter, and the form all derive from the same
- * prompt definitions.
+ * This is the shared home for prompt → JSON Schema conversion. `getFormSchema`
+ * (sandbox.ts) runs it over `computePromptSpec`'s output to build the create
+ * form, so the terminal wizard, the MCP elicitation adapter, and the form all
+ * derive from the same prompt definitions.
  *
  * Input is a prompt spec: `{"workspace_name": str, "prompts": [ {prompt}, ... ]}`
- * where each prompt is the dict `_build_prompt_spec` emits (key, label, help,
+ * where each prompt is the dict `promptEntry` (workspace_prompts.ts) emits (key, label, help,
  * accept_empty, multi, recommended, pattern?, placeholder?, default, resolved,
  * resolved_value, choices?).
  *
  * Output: `{"schema": {...}, "uiSchema": {...}, "formData": {...}, "title": str}`.
  *
  * Mapping:
- *     multi + choices  → array of enum  (uiSchema ui:widget=checkboxes)
+ *     multi + choices  → array of enum  (uiSchema ui:widget=checkboxes; choice_groups
+ *                                         → ui:options.groups {group: [choices]})
  *     multi w/o choices → string        (free-form, user types comma-separated text —
  *                                         there's no RJSF array widget wired up in the
  *                                         renderers, so this stays a plain text input)
@@ -68,6 +66,11 @@ function _shape(
       items: { type: "string", enum: choices },
     });
     fieldUi["ui:widget"] = "checkboxes";
+    if (prompt["choice_groups"]) {
+      // group → choices, e.g. services under their repo. Renderers that don't
+      // know the option show the flat enum.
+      fieldUi["ui:options"] = { groups: prompt["choice_groups"] };
+    }
     if (defaultValue) {
       return String(defaultValue).split(",").map((s) => s.trim()).filter((s) => s);
     }

@@ -52,10 +52,10 @@ instead of breaking.
 
 The CLI owns the inputs and the create logic:
 
-- **Form fields** come from `sandbox workspace --print-form-schema` — a
-  render-ready RJSF bundle (`{schema, uiSchema, formData, title}`) shared with
-  the terminal wizard (`apps/cli/src/lib/form_schema.ts`). Change a prompt in the CLI and
-  every form tracks it.
+- **Form fields** come from `getFormSchema` in sandbox-core — a render-ready
+  RJSF bundle (`{schema, uiSchema, formData, title}`) built from the same prompt
+  definitions as the terminal wizard (`packages/sandbox-core/workspace_prompts.ts`,
+  converted by `form_schema.ts`). Change a prompt there and every form tracks it.
 - **Creation** runs `sandbox workspace <feature> [--flag value …]`; form keys
   map 1:1 onto CLI flags. The CLI validates, refuses existing branches, and
   rolls back partial worktrees.

@@ -61,6 +61,7 @@ export interface PromptSpec {
   placeholder?: string | null;                        // example value (UI hint; not a default)
   defaultFn?: ((workspace: string) => string) | null; // derive a default from the workspace
   choicesFn?: (() => string[]) | null;                // enumerate valid values (services)
+  choiceGroupsFn?: (() => Record<string, string>) | null; // choice → heading it's listed under (service → repo)
 }
 
 // ---------------------------------------------------------------------------
