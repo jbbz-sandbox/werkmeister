@@ -23,10 +23,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { composeInvocation } from "./compose_infra.js";
-import { sandboxHome, stateInfraRoot } from "./config.js";
+import { sandboxHome } from "./config.js";
 import { generateCaddyfile } from "./generate.js";
 import { configureGitHooksPath } from "./git_hooks.js";
-import { checkPortForwardHealth, ensurePortForwardsHealthy } from "./k8s.js";
+import { checkPortForwardHealth, ensurePortForwardsHealthy, refreshKubeconfig } from "./k8s.js";
 import { generateK8sForwards } from "./k8s_forwards.js";
 import { ProcError, run, runAsync } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
@@ -54,28 +54,6 @@ function composeCmd(subcommand: string[]): boolean {
     }
     throw err;
   }
-}
-
-function isDir(p: string): boolean {
-  return fs.existsSync(p) && fs.statSync(p).isDirectory();
-}
-
-/**
- * Make a localhost-served API (OrbStack: https://127.0.0.1:26443) reachable
- * from inside the k8s-forwards container. `127.0.0.1`/`localhost` there resolve
- * to the container, not the host, so rewrite the server host to
- * host.docker.internal (mapped to host-gateway in shared-infra.yml). The API
- * cert's SANs won't cover host.docker.internal, so swap CA verification for
- * insecure-skip-tls-verify — acceptable for a local dev tunnel. No-op for a
- * real remote cluster (server host is neither 127.0.0.1 nor localhost).
- */
-function shimLocalApiServer(kubeconfig: string): string {
-  if (!/server:\s*https:\/\/(127\.0\.0\.1|localhost)\b/.test(kubeconfig)) {
-    return kubeconfig;
-  }
-  return kubeconfig
-    .replace(/(server:\s*https:\/\/)(127\.0\.0\.1|localhost)\b/g, "$1host.docker.internal")
-    .replace(/^(\s*)certificate-authority-data:.*$/gm, "$1insecure-skip-tls-verify: true");
 }
 
 /**
@@ -139,8 +117,6 @@ function ensureCorpCa(): void {
 
 /** Generate proxy/Caddyfile and refresh the k8s kubeconfig, under ~/.sandbox/infra. */
 async function ensureProxyFiles(): Promise<void> {
-  const root = stateInfraRoot();
-
   // Always regenerate: the Caddyfile must carry the host routers (and any
   // active feature's routes) before Caddy loads it. generateCaddyfile() also
   // clears a directory Docker may have left at the path.
@@ -152,38 +128,7 @@ async function ensureProxyFiles(): Promise<void> {
   // override — must happen before `docker compose up`.
   generateK8sForwards();
 
-  // Always regenerate from the host's current context so the k8s-forwards
-  // container tracks `kubectl config use-context` instead of pinning to a
-  // stale snapshot. --minify --flatten keeps the file self-contained.
-  const kubeconfig = path.join(root, "k8s-port-forward", "kubeconfig");
-  if (isDir(kubeconfig)) {
-    fs.rmSync(kubeconfig, { recursive: true, force: true });
-  }
-  fs.mkdirSync(path.dirname(kubeconfig), { recursive: true });
-  info("Refreshing k8s-port-forward/kubeconfig from current context...");
-  try {
-    const result = run(
-      ["kubectl", "config", "view", "--raw", "--minify", "--flatten"],
-      { capture: true, timeout: 10 },
-    );
-    if (result.status === 0) {
-      fs.writeFileSync(kubeconfig, shimLocalApiServer(result.stdout));
-      const ctx = run(
-        ["kubectl", "--kubeconfig", kubeconfig, "config", "current-context"],
-        { capture: true, timeout: 5 },
-      );
-      const ctxName = ctx.status === 0 ? ctx.stdout.trim() : "?";
-      success(`Kubeconfig pinned to context: ${ctxName}`);
-    } else {
-      error(`kubectl config view failed: ${result.stderr.trim()}`);
-    }
-  } catch (e) {
-    if (e instanceof ProcError && (e.code === "ENOENT" || e.code === "ETIMEDOUT")) {
-      error(`Could not generate kubeconfig: ${e.message}`);
-    } else {
-      throw e;
-    }
-  }
+  refreshKubeconfig();
 }
 
 /**
