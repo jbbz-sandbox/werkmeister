@@ -42,12 +42,10 @@ function stageDirs(stages: Stage[]): string[] {
 }
 
 // ctx.repos, filtered to entries repoDirs (standards.ts) would also count: a
-// literal `<root>/<name>/.git`, not just "git rev-parse succeeds inside it"
-// (discoverRepos' rule), which is also true of a plain subdirectory when the
-// workspace root is itself a git repo. Without this, a rerun on such a
-// workspace lists icm's own generated `stages/`/`_shared/` as code
-// worktrees, and `check` sees permanent drift because contextFromDisk (via
-// repoDirs) never agreed they were repos in the first place.
+// literal `<root>/<name>/.git`. discoverRepos applies the same rule since #96;
+// this guard keeps a caller-built ctx from listing icm's own `stages/`/`_shared/`
+// as code worktrees, which `check` would see as permanent drift against
+// contextFromDisk (via repoDirs).
 function realRepos(ctx: InitContext): Array<[string, string]> {
   return ctx.repos.filter(([name]) => fs.existsSync(path.join(ctx.workspaceRoot, name, ".git")));
 }
