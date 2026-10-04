@@ -9,12 +9,21 @@
  */
 
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as path from "node:path";
 
 import { SandboxError } from "./errors.js";
 import { ProcError, runAsync } from "./proc.js";
 import { info, passthrough, raw, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
+
+/**
+ * The Playwright release `sandbox setup` downloads Chromium for. Each release
+ * expects one exact browser build, so a workspace on another version finds no
+ * browser. Mirrored in the sandbox-feature-test plugin's setup_feature.py, which
+ * ships separately and cannot import this; a parity test keeps them equal.
+ */
+export const PLAYWRIGHT_VERSION = "1.63.0";
 
 /** Ten minutes, matching what the CLI has always allowed a suite. */
 const TEST_TIMEOUT_SECONDS = 600;
@@ -38,6 +47,16 @@ export function playwrightCwd(workspace: string, root: string): string {
     }
   }
   return root;
+}
+
+/** The `@playwright/test` version *cwd* resolves (hoisting included), or null if none. */
+export function installedPlaywrightVersion(cwd: string): string | null {
+  try {
+    const pkg = createRequire(path.join(cwd, "package.json")).resolve("@playwright/test/package.json");
+    return JSON.parse(fs.readFileSync(pkg, "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export interface TestRunArgs {
@@ -85,6 +104,14 @@ export async function runFeatureTests({
 
   const cwd = playwrightCwd(workspace, root);
   info(`Working directory: ${cwd}`);
+  const installed = installedPlaywrightVersion(cwd);
+  if (installed !== PLAYWRIGHT_VERSION) {
+    warn(
+      `@playwright/test is ${installed ?? "not installed"} here, but \`sandbox setup\` ` +
+        `installs Chromium for ${PLAYWRIGHT_VERSION} -- the browser may be missing. ` +
+        `Fix with: npm install -D @playwright/test@${PLAYWRIGHT_VERSION}`,
+    );
+  }
   info(`SANDBOX_FEATURE=${feature}`);
 
   const cmd = ["npx", "playwright", "test", ...extraArgs];

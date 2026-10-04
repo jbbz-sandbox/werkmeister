@@ -10,6 +10,7 @@ Steps:
   2. Resolves the workspace directory (same logic as sandbox's resolve_workspace)
   3. Scaffolds playwright.config.ts in workspace (if missing)
   4. Scaffolds <feature>.spec.ts in workspace (if missing)
+  5. Installs the pinned @playwright/test in workspace (if missing)
 
 Exits non-zero on name collision. Prints workspace path to stdout on success
 so the caller can capture it for subsequent commands.
@@ -34,6 +35,11 @@ SERVICES_YAML = SANDBOX_DIR / "services.yaml"
 # generate.ts (`com.sandbox.local.feature`) — a mismatch silently reports every
 # feature name as free, because the filter matches nothing.
 FEATURE_LABEL = "com.sandbox.local.feature"
+
+# `sandbox setup` downloads Chromium for exactly this Playwright release; any
+# other version looks for a browser build that isn't there. Must match
+# PLAYWRIGHT_VERSION in sandbox-core/test_run.ts (a parity test enforces it).
+PLAYWRIGHT_VERSION = "1.63.0"
 
 
 def _scalar(path: Path, key: str) -> str | None:
@@ -180,6 +186,49 @@ def scaffold_spec(feature: str, workspace: Path, base_url: str, cookie_domain: s
     return True
 
 
+def installed_playwright(workspace: Path) -> str | None:
+    """The @playwright/test version node resolves from workspace, or None."""
+    try:
+        result = subprocess.run(
+            ["node", "-p", "require('@playwright/test/package.json').version"],
+            cwd=workspace, capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def ensure_playwright(workspace: Path) -> None:
+    """Install the pinned @playwright/test if absent; never replace a project's own version."""
+    installed = installed_playwright(workspace)
+    if installed == PLAYWRIGHT_VERSION:
+        print(f"[info]  @playwright/test {installed} present")
+        return
+    if installed:
+        print(
+            f"[warn]  workspace pins @playwright/test {installed}, but `sandbox setup` installs "
+            f"Chromium for {PLAYWRIGHT_VERSION} — if launch fails, run: "
+            f"npx playwright@{installed} install chromium"
+        )
+        return
+    # Spec imports resolve from the workspace, so `npx` alone cannot supply the package.
+    cmd = ["npm", "install", "--save-dev", f"@playwright/test@{PLAYWRIGHT_VERSION}"]
+    # resolve_workspace can land on the workspaces root (the workspace is itself a
+    # git repo); never drop a package.json + node_modules there.
+    if not (workspace / ".sandbox").is_dir():
+        print(f"[error] {workspace} is not a sandbox workspace (no .sandbox/) — pass --workspace,", file=sys.stderr)
+        print(f"[error] or install manually there: {' '.join(cmd)}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        rc = subprocess.run(cmd, cwd=workspace).returncode
+    except OSError:
+        rc = 127
+    if rc != 0:
+        print(f"[error] `{' '.join(cmd)}` failed in {workspace}", file=sys.stderr)
+        sys.exit(1)
+    print(f"[ok]    installed @playwright/test {PLAYWRIGHT_VERSION}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scaffold sandbox feature test files")
     parser.add_argument("--feature", required=True, help="Feature name (must be unique)")
@@ -221,6 +270,9 @@ def main() -> None:
         print(f"[info]  edit the spec file to add feature-specific assertions")
     else:
         print(f"[info]  {feature}.spec.ts already exists — skipping")
+
+    # 5. Test runner
+    ensure_playwright(workspace)
 
     # Emit workspace path as the last line for easy capture by callers
     print(f"WORKSPACE_PATH={workspace}")

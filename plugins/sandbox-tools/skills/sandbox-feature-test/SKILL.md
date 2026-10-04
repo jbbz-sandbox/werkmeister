@@ -11,7 +11,7 @@ Spins up a named sandbox feature, scaffolds test files if needed, and opens a he
 
 - `sandbox` CLI on PATH (its checkout is `paths.sandbox_root` in `~/.sandbox/config.yaml`)
 - `npx` / Node.js available
-- `@playwright/test` installed in the workspace (or `npx` will pull it)
+- `sandbox setup` run once on this machine — it downloads the Chromium build for the pinned Playwright (`setup_feature.py` installs the matching `@playwright/test` in the workspace)
 - Shared infra may or may not be running — this skill ensures it is
 
 ## Routing model (important)
@@ -101,4 +101,4 @@ Key patterns already in the template:
 | Browser shows wrong feature | Cookie not set before `goto` | Ensure `addCookies` runs before `page.goto` |
 | HTTP 502 or connection refused | Feature containers not healthy yet | Wait ~30s and retry, or check `sandbox status` |
 | `npx: command not found` | Node.js not on PATH in this shell | Add Node.js to PATH or use full path |
-| Playwright not installed | Missing dep in workspace | Run `npm install -D @playwright/test` in workspace |
+| `Executable doesn't exist at .../ms-playwright/chromium-NNNN` | Chromium for this Playwright version not downloaded | Re-run `sandbox setup`; if the workspace pins its own `@playwright/test`, run `npx playwright install chromium` in it |

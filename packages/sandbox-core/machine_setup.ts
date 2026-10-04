@@ -87,6 +87,7 @@ import {
   parseVersion,
   versionLt,
 } from "./telepresence.js";
+import { PLAYWRIGHT_VERSION } from "./test_run.js";
 
 // A command runner: argv in, [returncode, combined-output] out. Injected in
 // tests; the default shells out with a timeout and never throws.
@@ -1119,6 +1120,57 @@ export function syncTelepresence(
   return [{ label, ok: true, detail: `installed OSS client ${have} via brew` }];
 }
 
+/**
+ * Install the Chromium build the pinned Playwright expects — each release wants
+ * one exact revision, so a cache holding another one fails at launch (sandbox#99).
+ */
+export function syncPlaywright(
+  runner: Runner,
+  checkOnly: boolean,
+  interactive?: InteractiveRunner | null,
+): Step[] {
+  const label = "playwright chromium (optional)";
+  const pkg = `playwright@${PLAYWRIGHT_VERSION}`;
+
+  // Playwright's own --dry-run names the directories, so its cache-path rules
+  // (macOS vs Linux, PLAYWRIGHT_BROWSERS_PATH) stay its problem, not ours.
+  let probeOutput = "";
+  const missingDirs = (): string[] | null => {
+    const [rc, out] = runner(["npx", "-y", pkg, "install", "--dry-run", "chromium"]);
+    probeOutput = out;
+    const dirs = [...out.matchAll(/Install location:\s*(\S.*)$/gm)].map((m) => m[1]!.trim());
+    // No locations parsed means the output format moved, not that nothing is needed.
+    if (rc !== 0 || dirs.length === 0) return null;
+    // A partial download leaves the directory but not Playwright's completion marker.
+    return dirs.filter((d) => !fs.existsSync(path.join(d, "INSTALLATION_COMPLETE")));
+  };
+
+  const before = missingDirs();
+  if (before === null) {
+    return [{ label, ok: false, optional: true, detail: `\`npx ${pkg} install --dry-run chromium\` failed: ${briefOutput(probeOutput)}` }];
+  }
+  if (before.length === 0) {
+    return [{ label, ok: true, detail: `chromium for ${pkg} present` }];
+  }
+  if (checkOnly) {
+    return [{ label, ok: false, optional: true, detail: `chromium for ${pkg} missing — re-run \`sandbox setup\`` }];
+  }
+
+  // Interactive: the download is ~150 MB, so show progress rather than look hung.
+  const rc = (interactive ?? defaultInteractiveRunner)(["npx", "-y", pkg, "install", "chromium"]);
+  const after = missingDirs();
+  if (rc !== 0 || after === null || after.length > 0) {
+    const why = rc !== 0 ? `exited ${rc}` : "finished, but the browser is still not reported installed";
+    return [{
+      label,
+      ok: false,
+      optional: true,
+      detail: `\`npx ${pkg} install chromium\` ${why} — run it manually to see why`,
+    }];
+  }
+  return [{ label, ok: true, detail: `installed chromium for ${pkg}` }];
+}
+
 export interface RunSetupOptions {
   checkOnly?: boolean;
   reposRoot?: string | null;
@@ -1260,6 +1312,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   );
   steps.push(...(await syncJiraToken(jira, checkOnly, options.jiraVerifier)));
   steps.push(...syncTelepresence(runner, checkOnly, { install: options.installTelepresence }));
+  steps.push(...syncPlaywright(runner, checkOnly, options.interactiveRunner));
   steps.push(...syncEditorSchemas(checkOnly, options.mapEditorSchemas ?? false));
   steps.push(
     ...syncVscodeExtension(checkOnly, options.installVscodeExtension ?? false, vscodeExtensionState(runner), runner),

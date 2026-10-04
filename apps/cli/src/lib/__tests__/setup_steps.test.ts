@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 
 import {
@@ -26,6 +27,7 @@ import {
   syncIngressCerts,
   syncOptionalPlugin,
   syncPathDirs,
+  syncPlaywright,
   syncRegistryConfigs,
   syncRepo,
   syncTelepresence,
@@ -35,6 +37,7 @@ import {
   type Runner,
   type Step,
 } from "sandbox-core/machine_setup";
+import { PLAYWRIGHT_VERSION } from "sandbox-core/test_run";
 import { REGISTRY_DEFAULTS, renderSecretsEnv, renderServicesLocalYaml } from "sandbox-core/scaffold";
 import { resolveSecrets } from "sandbox-core/secrets";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
@@ -466,6 +469,74 @@ describe("syncTelepresence", () => {
     // The useful line survives; the progress-spinner noise does not.
     expect(steps[0].detail).toContain("not writable");
     expect(steps[0].detail).not.toContain("✔︎");
+  });
+});
+
+describe("syncPlaywright", () => {
+  const DRY_RUN = `npx -y playwright@${PLAYWRIGHT_VERSION} install --dry-run chromium`;
+  let browserDir: string;
+  beforeEach(() => {
+    browserDir = path.join(home.dir, "ms-playwright", "chromium-1243");
+  });
+  const dryRun = (): [number, string] => [0, `Chrome for Testing\n  Install location:    ${browserDir}\n`];
+  const markInstalled = () => {
+    fs.mkdirSync(browserDir, { recursive: true });
+    fs.writeFileSync(path.join(browserDir, "INSTALLATION_COMPLETE"), "");
+  };
+  const neverRun = (cmd: string[]): number => {
+    throw new Error(`unexpected install: ${cmd.join(" ")}`);
+  };
+
+  it("is a no-op when the pinned build is already installed", () => {
+    markInstalled();
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), false, neverRun);
+    expect(steps[0].ok).toBe(true);
+  });
+
+  it("installs when only a different build is cached, then verifies", () => {
+    fs.mkdirSync(path.join(home.dir, "ms-playwright", "chromium-1234"), { recursive: true });
+    const installs: string[][] = [];
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), false, (cmd) => {
+      installs.push(cmd);
+      markInstalled();
+      return 0;
+    });
+    expect(installs).toEqual([["npx", "-y", `playwright@${PLAYWRIGHT_VERSION}`, "install", "chromium"]]);
+    expect(steps[0].ok).toBe(true);
+  });
+
+  it("treats a half-finished download (no completion marker) as missing", () => {
+    fs.mkdirSync(browserDir, { recursive: true });
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), true);
+    expect(steps[0].ok).toBe(false);
+  });
+
+  it("never installs in check mode", () => {
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), true, neverRun);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("warns, not fails, when the install does not produce the browser", () => {
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), false, () => 1);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("never reports present when the dry-run lists no install locations", () => {
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: [0, "npm notice: new version available"] }), false, neverRun);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("warns when npx is unavailable", () => {
+    const steps = syncPlaywright(fakeRunner({}), false, neverRun);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("pins the same version as the sandbox-feature-test skill, which ships separately", () => {
+    const script = fs.readFileSync(
+      path.resolve(fileURLToPath(import.meta.url), "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts/setup_feature.py"),
+      "utf8",
+    );
+    expect(script).toContain(`PLAYWRIGHT_VERSION = "${PLAYWRIGHT_VERSION}"`);
   });
 });
 
