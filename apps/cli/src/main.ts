@@ -480,6 +480,11 @@ const SPECS: CommandSpec[] = [
             "workspace dir name; passed through to init-workspace.",
         )
         .option(
+          "--github-issue <ref>",
+          "GitHub issue (owner/repo#n or repo#n) when the issue tracker is github; " +
+            "repo-n is prefixed to the workspace dir name like --jira-id.",
+        )
+        .option(
           "-s, --services <list>",
           "Comma-separated services to run locally. Their owning repos are " +
             "added as worktrees, and the list is passed through to init-workspace.",
@@ -534,6 +539,7 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature], o) => ({
       feature: feature ?? null,
       jira_id: o.jiraId ?? null,
+      github_issue: o.githubIssue ?? null,
       services: o.services ?? null,
       repos: o.repos ?? null,
       labels: o.labels ?? null,
@@ -673,6 +679,10 @@ const SPECS: CommandSpec[] = [
         )
         .option("--jira-id <id>", "Jira ticket ID (env: SANDBOX_JIRA_ID; config: jira_id).")
         .option(
+          "--github-issue <ref>",
+          "GitHub issue, owner/repo#n or repo#n (env: SANDBOX_GITHUB_ISSUE; config: github_issue).",
+        )
+        .option(
           "--labels <list>",
           "Comma-separated free-form tags for filtering workspaces in the " +
             "dashboard search (env: SANDBOX_LABELS; config: labels).",
@@ -724,6 +734,7 @@ const SPECS: CommandSpec[] = [
       repos: o.repos ?? null,
       force: Boolean(o.force),
       jira_id: o.jiraId ?? null,
+      github_issue: o.githubIssue ?? null,
       labels: o.labels ?? null,
       test_path: o.testPath ?? null,
       description: o.description ?? null,

@@ -21,6 +21,7 @@ import * as YAML from "yaml";
 
 import { loadReposConfig, loadServices } from "./config.js";
 import type { PromptSpec } from "./global_config.js";
+import { GITHUB_ISSUE_PATTERN, loadIssueTracker, normalizeGithubIssue } from "./issue_tracker.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { info, warn } from "./reporter.js";
 import { STRATEGY_IDS } from "./strategies/types.js";
@@ -112,6 +113,7 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string, string]> = [
   ["repos", "SANDBOX_REPOS", "repos"],
   ["services", "SANDBOX_SERVICES", "services"],
   ["jira_id", "SANDBOX_JIRA_ID", "jira_id"],
+  ["github_issue", "SANDBOX_GITHUB_ISSUE", "github_issue"],
   ["test_path", "SANDBOX_TEST_PATH", "test_path"],
   ["description", "SANDBOX_DESCRIPTION", "description"],
   ["task", "SANDBOX_TASK", "task"],
@@ -243,6 +245,9 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
       }
     }
   }
+  if (resolved.github_issue) {
+    resolved.github_issue = normalizeGithubIssue(resolved.github_issue);
+  }
 
   return resolved;
 }
@@ -363,6 +368,16 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     pattern: "^[A-Z][A-Z0-9]+-[0-9]+$",
     placeholder: "PROJ-1234",
     defaultFn: (ws) => scrapeJiraId(ws),
+  },
+  {
+    // Shown instead of jira_id when `overrides.issue_tracker` is github.
+    key: "github_issue",
+    label: "GitHub issue (repo#number, blank to skip)",
+    help:
+      "Renders a clickable issue link in CLAUDE.md. Any repo in the services " +
+      "registry; a bare repo#number is owned by your GitHub org.",
+    pattern: GITHUB_ISSUE_PATTERN,
+    placeholder: "backend#123",
   },
   {
     key: "feature",
@@ -511,7 +526,13 @@ export function promptEntry(
   return entry;
 }
 
-/** Serialise `_WIZARD_PROMPTS` to JSON-ready data for external drivers. */
+/** `_WIZARD_PROMPTS` with the ticket prompt of the tracker this machine doesn't use dropped. */
+export function wizardPrompts(): PromptSpec[] {
+  const hidden = loadIssueTracker() === "github" ? "jira_id" : "github_issue";
+  return _WIZARD_PROMPTS.filter((spec) => spec.key !== hidden);
+}
+
+/** Serialise {@link wizardPrompts} to JSON-ready data for external drivers. */
 export function buildPromptSpec(
   workspaceRoot: string,
   resolved: Record<string, string>,
@@ -520,7 +541,7 @@ export function buildPromptSpec(
   return {
     workspace_root: workspaceRoot,
     workspace_name: path.basename(workspaceRoot),
-    prompts: _WIZARD_PROMPTS.map((spec) => promptEntry(spec, workspaceRoot, resolved, opts)),
+    prompts: wizardPrompts().map((spec) => promptEntry(spec, workspaceRoot, resolved, opts)),
   };
 }
 

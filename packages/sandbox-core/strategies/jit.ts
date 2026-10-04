@@ -211,7 +211,7 @@ function init(ctx: InitContext): void {
   // CLAUDE.md's "## Bugs" section points here.
   const bugReportPath = path.join(workspaceRoot, ".sandbox", "bug-report.md");
   fs.mkdirSync(path.dirname(bugReportPath), { recursive: true });
-  fs.writeFileSync(bugReportPath, buildBugReportMd(workspaceName));
+  fs.writeFileSync(bugReportPath, buildBugReportMd(workspaceName, meta["JIRA_ID"] ?? ""));
   success(`Wrote ${bugReportPath}`);
 
   // 6a. Projected sb-* skills into .claude/skills/.

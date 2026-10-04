@@ -37,6 +37,7 @@ import type Dockerode from "dockerode";
 import { docker } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { infraHealth, up as infraUp } from "./infra.js";
+import { jiraBrowseUrl } from "./issue_tracker.js";
 import { checkForwardHealth } from "./k8s.js";
 import { interceptsSnapshot, type InterceptRow } from "./status.js";
 import { buildFormSchema } from "./form_schema.js";
@@ -846,7 +847,6 @@ export interface WorkspaceEntry {
   labels: string[];
 }
 
-const JIRA_BROWSE_BASE = "https://hgdata.atlassian.net/browse/";
 
 /** Read `jira_id` and `labels` out of a workspace's `.sandbox/workspace.yml`. */
 async function readWorkspaceConfig(workspaceDir: string): Promise<{ jiraId: string | null; labels: string[] }> {
@@ -889,7 +889,7 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
         // vscode://file + an absolute path (already leading-slash) → single slash.
         vscodeUri: `vscode://file${p.split(path.sep).map(encodeURIComponent).join("/")}`,
         jiraId,
-        jiraUrl: jiraId ? JIRA_BROWSE_BASE + jiraId : null,
+        jiraUrl: jiraId ? jiraBrowseUrl(jiraId) : null,
         labels,
       };
     }),
@@ -1852,7 +1852,7 @@ export async function fetchJiraIssue(ref: string): Promise<JiraCard> {
         type: str(f.issuetype?.name),
         assignee: str(f.assignee?.displayName),
         description: str(f.description),
-        url: JIRA_BROWSE_BASE + resolvedKey,
+        url: jiraBrowseUrl(resolvedKey) ?? undefined,
       };
     }
     const prompt =

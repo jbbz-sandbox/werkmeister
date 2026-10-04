@@ -35,6 +35,10 @@
       "type": "string",
       "description": "Jira ticket key (e.g. PROJ-1897)."
     },
+    "github_issue": {
+      "type": "string",
+      "description": "GitHub issue as owner/repo#number (used instead of jira_id when overrides.issue_tracker is github)."
+    },
     "test_path": {
       "type": "string",
       "description": "Path or URL the feature is tested against."

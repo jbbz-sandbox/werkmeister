@@ -15,6 +15,7 @@ import * as path from "node:path";
 
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
 import { loadIngress } from "./global_config.js";
+import { issueLink } from "./issue_tracker.js";
 import { standardsSource, standardsUrl } from "./skill_gen.js";
 import { getServicePort } from "./slots.js";
 import { universalStandards } from "./standards.js";
@@ -242,14 +243,12 @@ Working notes live in [.sandbox/notes/](.sandbox/notes/) — \`NNN-<type>-<slug>
 Read relevant notes first; skip \`status: superseded\`. \`decision\` notes are binding and override task-level instincts — on conflict, raise it to the user rather than picking a side.
 ${contractRule}`;
 
-  // Current Task — Jira inlined when available. The task description, when
-  // provided, fills the "what + why" body; otherwise an HTML comment prompts
-  // the developer to write a 1-2 sentence "what + why" rather than leaving the
-  // workspace context with only the task title.
-  const jiraId = (meta["JIRA_ID"] ?? "").trim();
-  const currentTaskLine = jiraId
-    ? `${task} — [${jiraId}](https://hgdata.atlassian.net/browse/${jiraId})`
-    : task;
+  // Current Task — the Jira ticket or GitHub issue inlined when available. The
+  // task description, when provided, fills the "what + why" body; otherwise an
+  // HTML comment prompts the developer to write a 1-2 sentence "what + why"
+  // rather than leaving the workspace context with only the task title.
+  const link = issueLink(meta);
+  const currentTaskLine = !link ? task : link[1] ? `${task} — [${link[0]}](${link[1]})` : `${task} — ${link[0]}`;
   const description = (meta["DESCRIPTION"] ?? "").trim();
   const taskBody = description
     ? description
@@ -286,7 +285,7 @@ ${routingSection}
 ${codeStandardsSection}${notesSection}
 ## Bugs
 
-Hit a bug in the \`sandbox\` tool or in a repo's code? If this workspace's changes caused it, fix it here; if it was already there, file a GitHub issue in the repo it belongs to and report the URL. Rules and template: [.sandbox/bug-report.md](.sandbox/bug-report.md).
+Hit a bug in the \`sandbox\` tool or in a repo's code? If this workspace's changes caused it, fix it here; if it was already there, file an issue where it belongs (the sandbox repo, or this machine's Jira/GitHub tracker) and report the URL. Rules and template: [.sandbox/bug-report.md](.sandbox/bug-report.md).
 `;
 }
 

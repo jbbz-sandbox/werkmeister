@@ -184,7 +184,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     ),
     "| asked for status | `ls stages/*/output/` | report which stages hold artifacts |",
     "| containers / ports / routing broken | `.sandbox/sandbox-context.md` | — |",
-    "| you hit a bug — in the `sandbox` tool or in a repo's code | `_shared/bug-report.md`: if this workspace's changes caused it, fix it here; if it was already there, file a GitHub issue in the repo it belongs to | fixed, or issue URL reported to the person |",
+    "| you hit a bug — in the `sandbox` tool or in a repo's code | `_shared/bug-report.md`: if this workspace's changes caused it, fix it here; if it was already there, file an issue where it belongs | fixed, or issue URL reported to the person |",
     "",
     "## The one rule",
     "",
@@ -233,7 +233,7 @@ function render(ctx: InitContext): Record<string, string> {
   const base = vars(ctx, stages);
   const files: Record<string, string> = {
     "_shared/standards.md": renderStandards(r),
-    "_shared/bug-report.md": buildBugReportMd(ctx.workspaceName),
+    "_shared/bug-report.md": buildBugReportMd(ctx.workspaceName, ctx.meta["JIRA_ID"] ?? ""),
   };
   stages.forEach((stage, i) => {
     files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(dirs[i], stage, {
