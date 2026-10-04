@@ -28,8 +28,7 @@ vi.mock("sandbox-core/k8s", () => ({ ensurePortForwardsHealthy: () => "healthy" 
 vi.mock("sandbox-core/secrets", () => ({
   getSecretsPath: () => "/nonexistent/secrets.yaml",
   loadSecrets: () => ({}),
-  requiredSecretKeys: () => [],
-  validateRequiredSecrets: () => [],
+  resolveSecrets: () => ({ byService: {}, missing: [] }),
 }));
 vi.mock("sandbox-core/slots", () => ({
   allocateSlot: async () => 3,

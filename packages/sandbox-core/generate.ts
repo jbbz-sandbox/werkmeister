@@ -29,7 +29,7 @@ import {
 import { info, success, warn } from "./reporter.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "./locks.js";
-import { getSecretsPath, loadSecrets, requiredSecretKeys } from "./secrets.js";
+import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
 
 function isDict(value: unknown): value is Record<string, any> {
@@ -869,7 +869,8 @@ function avoidComposeEnvShadowing(
  * Generate `<workspace>/.env` for *feature*.
  *
  * Contains all service URLs, slot info, and shared environment variables
- * needed by the feature's containers. Workspace metadata keys (e.g.
+ * needed by the feature's containers; secrets go to per-service
+ * `.env.<svc>` files instead (see `writeServiceSecretEnvs`). Workspace metadata keys (e.g.
  * `FEATURE`, `SERVICES`, `JIRA_ID`, `TEST_PATH`) written by
  * `init-workspace` and not part of the generated body are preserved
  * across regeneration.
@@ -886,6 +887,7 @@ export function generateFeatureEnv(
   fs.mkdirSync(workspaceRoot, { recursive: true });
   const outPath = path.join(workspaceRoot, ".env");
   const legacyEnv = path.join(workspaceRoot, "docker-compose.env");
+  writeServiceSecretEnvs(workspaceRoot, localServices, servicesConfig);
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
@@ -895,7 +897,7 @@ export function generateFeatureEnv(
     // Build service_urls and env_vars for the template
     let serviceUrls: Record<string, string> = {};
     // Per-workspace overrides from `.sandbox/workspace.yml` (`env_vars:`). Rendered
-    // last so a workspace can override a generated service URL or a secret value.
+    // last so a workspace can override a generated service URL.
     const envVars: Record<string, string> = {};
     for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
       envVars[key] = String(value);
@@ -923,17 +925,6 @@ export function generateFeatureEnv(
       }
     }
     serviceUrls = avoidComposeEnvShadowing(serviceUrls, localServices, servicesConfig);
-    // Load secrets from ~/.sandbox/secrets.env if it exists, narrowed to the keys
-    // the feature's own local services declare via services.yaml `secrets:`. The
-    // global file is shared across every workspace; only the declared subset has
-    // any business being written into this feature's .env.
-    const allSecrets = loadSecrets(getSecretsPath());
-    const secrets: Record<string, string> = {};
-    for (const key of requiredSecretKeys(servicesConfig, localServices)) {
-      if (key in allSecrets) {
-        secrets[key] = allSecrets[key];
-      }
-    }
     const rendered = template.render(
       jinjaContext({
         feature_name: feature,
@@ -941,7 +932,6 @@ export function generateFeatureEnv(
         base_port: portStart,
         service_urls: serviceUrls,
         env_vars: envVars,
-        secrets,
       }),
     );
     writeWorkspaceEnv(outPath, rendered, legacyEnv);
@@ -994,6 +984,27 @@ export function generateFeatureEnv(
   writeWorkspaceEnv(outPath, lines.join("\n") + "\n", legacyEnv);
   success(`Generated .env (built-in): ${outPath}`);
   return outPath;
+}
+
+/**
+ * Write `<workspace>/.env.<svc>` for every local service: only the secrets that
+ * service declares, as plain `KEY=value`. Secrets stay out of the shared `.env`
+ * so each container sees only its own and two services can differ on one KEY.
+ * Written even when empty because compose fails on a missing `env_file`.
+ */
+function writeServiceSecretEnvs(
+  workspaceRoot: string,
+  localServices: string[],
+  servicesConfig: Record<string, any>,
+): void {
+  const { byService } = resolveSecrets(loadSecrets(getSecretsPath()), servicesConfig, localServices);
+  for (const [svcName, secrets] of Object.entries(byService)) {
+    const body = Object.keys(secrets)
+      .sort()
+      .map((key) => `${key}=${secrets[key]}\n`)
+      .join("");
+    fs.writeFileSync(path.join(workspaceRoot, `.env.${svcName}`), body, { mode: 0o600 });
+  }
 }
 
 /**

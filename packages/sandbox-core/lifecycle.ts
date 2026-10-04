@@ -57,12 +57,7 @@ import {
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { strategyFor } from "./strategies/index.js";
-import {
-  getSecretsPath,
-  loadSecrets,
-  requiredSecretKeys,
-  validateRequiredSecrets,
-} from "./secrets.js";
+import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
   allocateSlot,
   getAllSlots,
@@ -295,10 +290,7 @@ export function readServicesFromWorkspace(workspace: string): string[] {
  */
 function requireSecrets(servicesConfig: Record<string, any>, localServices: string[]): void {
   const secretsPath = getSecretsPath();
-  const missing = validateRequiredSecrets(
-    loadSecrets(secretsPath),
-    requiredSecretKeys(servicesConfig, localServices),
-  );
+  const { missing } = resolveSecrets(loadSecrets(secretsPath), servicesConfig, localServices);
   if (missing.length) {
     throw new SandboxError(
       `Missing required secret(s) in ${secretsPath}: ` +

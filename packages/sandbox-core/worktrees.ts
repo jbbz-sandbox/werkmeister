@@ -26,10 +26,11 @@ const _GITIGNORE_HEADER =
   "# Repo worktrees nested in this workspace, ignored by name. Rewritten by\n" +
   "# `sandbox init-workspace` on each run; rules above come from the repo's main.\n";
 
-// Ignored besides the repo worktree dirs: only secrets. The generated
+// Ignored besides the repo worktree dirs: only secrets (.env.<svc> holds each
+// service's resolved secrets). The generated
 // projections (.claude/, CLAUDE.md, .mcp.json, .sandbox/*) are deliberately
 // TRACKED — versioned workspace state is the point of the dedicated root repo.
-const _GITIGNORE_GENERATED = ["/.env"] as const;
+const _GITIGNORE_GENERATED = ["/.env", "/.env.*"] as const;
 
 /**
  * Rewrite the managed section of the workspace root's .gitignore.

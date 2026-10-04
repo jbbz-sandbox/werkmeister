@@ -120,6 +120,11 @@ describe("generateFeatureCompose", () => {
     expect(content).toContain("frontend:");
   });
 
+  it("loads the service's own secrets file after the shared .env", () => {
+    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
+    expect(content).toMatch(/env_file:\n\s+- \.env\n\s+- \.env\.frontend\n/);
+  });
+
   it("empty local services still writes a valid file", () => {
     const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, [], null, tmp), "utf8");
     expect(content.startsWith("# Sandbox docker-compose for feature: myfeat")).toBe(true);
@@ -309,24 +314,40 @@ describe("generateFeatureEnv", () => {
     );
   });
 
-  it("renders only the secrets the local services declare", () => {
-    home.write("secrets.env", "DEMO_TOKEN=shhh\nOTHER_TEAMS_KEY=nope\n");
+  it("writes each service's declared secrets to its own .env.<svc>, never the shared .env", () => {
+    home.write(
+      "secrets.env",
+      "BACKEND__EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=x\nDEMO_TOKEN=shhh\nOTHER_TEAMS_KEY=nope\n",
+    );
     const services = loadServices();
-    services.backend.secrets = ["DEMO_TOKEN"];
-    const content = fs.readFileSync(
+    services.backend.secrets = ["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY", "DEMO_TOKEN"];
+    const shared = fs.readFileSync(
       generateFeatureEnv("myfeat", 1, ["backend"], { services }, tmp),
       "utf8",
     );
-    expect(content).toContain("DEMO_TOKEN=shhh");
-    // The global secrets file is shared across every workspace; a key no local
-    // service declares must not leak into this feature's .env.
-    expect(content).not.toContain("OTHER_TEAMS_KEY");
+    // Namespaced key arrives as plain KEY; unprefixed key still resolves; an
+    // undeclared key reaches no container.
+    expect(fs.readFileSync(path.join(tmp, ".env.backend"), "utf8")).toBe(
+      "DEMO_TOKEN=shhh\nEXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=x\n",
+    );
+    expect(shared).not.toContain("shhh");
+    expect(shared).not.toContain("CLERK");
   });
 
-  it("renders no secrets when the local services declare none", () => {
+  it("gives two services different values for the same KEY", () => {
+    home.write("secrets.env", "BACKEND__API_KEY=b\nFRONTEND__API_KEY=f\n");
+    const services = loadServices();
+    services.backend.secrets = ["API_KEY"];
+    services.frontend.secrets = ["API_KEY"];
+    generateFeatureEnv("myfeat", 1, ["backend", "frontend"], { services }, tmp);
+    expect(fs.readFileSync(path.join(tmp, ".env.backend"), "utf8")).toBe("API_KEY=b\n");
+    expect(fs.readFileSync(path.join(tmp, ".env.frontend"), "utf8")).toBe("API_KEY=f\n");
+  });
+
+  it("writes an empty .env.<svc> when the service declares no secrets", () => {
     home.write("secrets.env", "DEMO_TOKEN=shhh\n");
-    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
-    expect(content).not.toContain("shhh");
+    generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
+    expect(fs.readFileSync(path.join(tmp, ".env.backend"), "utf8")).toBe("");
   });
 });
 

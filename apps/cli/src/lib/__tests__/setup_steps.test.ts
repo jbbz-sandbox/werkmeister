@@ -36,7 +36,7 @@ import {
   type Step,
 } from "sandbox-core/machine_setup";
 import { REGISTRY_DEFAULTS, renderSecretsEnv, renderServicesLocalYaml } from "sandbox-core/scaffold";
-import { requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
+import { resolveSecrets } from "sandbox-core/secrets";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 let home: SandboxHome;
@@ -134,27 +134,38 @@ describe("scaffold content", () => {
   });
 });
 
-describe("requiredSecretKeys", () => {
+describe("resolveSecrets", () => {
   const servicesConfig = {
     "backend": {},
     "auth-web": { secrets: ["AUTH0_CLIENT_SECRET", "NEXTAUTH_SECRET"] },
+    "mobile": { secrets: ["CLERK_KEY"] },
   };
 
-  it("is empty for a workspace whose services declare no secrets", () => {
-    expect(requiredSecretKeys(servicesConfig, ["backend"])).toEqual([]);
+  it("requires nothing for a workspace whose services declare no secrets", () => {
+    expect(resolveSecrets({ X: "1" }, servicesConfig, ["backend"])).toEqual({
+      byService: { backend: {} },
+      missing: [],
+    });
   });
 
-  it("only requires the keys declared by services actually in the workspace", () => {
-    expect(requiredSecretKeys(servicesConfig, ["backend", "auth-web"])).toEqual([
-      "AUTH0_CLIENT_SECRET",
-      "NEXTAUTH_SECRET",
-    ]);
+  it("reports missing/empty declared keys by both accepted names, never values", () => {
+    const { missing } = resolveSecrets(
+      { AUTH0_CLIENT_SECRET: "abc123", NEXTAUTH_SECRET: "  " },
+      servicesConfig,
+      ["backend", "auth-web"],
+    );
+    expect(missing).toEqual(["AUTH_WEB__NEXTAUTH_SECRET / NEXTAUTH_SECRET"]);
   });
 
-  it("validateRequiredSecrets reports only missing/empty declared keys", () => {
-    const required = requiredSecretKeys(servicesConfig, ["auth-web"]);
-    const missing = validateRequiredSecrets({ AUTH0_CLIENT_SECRET: "abc123" }, required);
-    expect(missing).toEqual(["NEXTAUTH_SECRET"]);
+  it("prefers <SERVICE>__KEY, falling back to plain KEY when it is absent or empty", () => {
+    const all = { MOBILE__CLERK_KEY: "mobile-val", CLERK_KEY: "shared", AUTH_WEB__AUTH0_CLIENT_SECRET: "" };
+    const { byService } = resolveSecrets(
+      { ...all, AUTH0_CLIENT_SECRET: "a", NEXTAUTH_SECRET: "n" },
+      servicesConfig,
+      ["auth-web", "mobile"],
+    );
+    expect(byService.mobile).toEqual({ CLERK_KEY: "mobile-val" });
+    expect(byService["auth-web"]).toEqual({ AUTH0_CLIENT_SECRET: "a", NEXTAUTH_SECRET: "n" });
   });
 });
 
