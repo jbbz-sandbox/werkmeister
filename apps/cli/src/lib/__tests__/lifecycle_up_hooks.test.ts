@@ -24,6 +24,7 @@ vi.mock("sandbox-core/feature_routing", () => ({ loadFeatureRouters: () => ({}) 
 vi.mock("sandbox-core/generate", () => ({
   generateCaddyfile: async () => {},
   isFeatureComposeStale: () => false,
+  writeServiceSecretEnvs: () => {},
 }));
 vi.mock("sandbox-core/k8s", () => ({ ensurePortForwardsHealthy: () => "healthy" }));
 vi.mock("sandbox-core/secrets", () => ({

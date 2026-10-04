@@ -876,6 +876,11 @@ Rules:
   checkout's directory name and `repos:` is derived from each service's `path`.
 - `{{home}}`, `{{repos_root}}` and `{{workspaces_root}}` expand from the developer's
   `config.yaml`; use them instead of absolute paths in `extra_volumes:` and `environment:`.
+- A `secrets:` key resolves from `~/.sandbox/secrets.env` as `<SERVICE>__KEY` first
+  (service name uppercased, `-` → `_`, e.g. `MY_API__MY_API_KEY`), then plain `KEY`. The
+  value reaches only that service, as plain `KEY`, through the git-ignored
+  `<workspace>/.env.<service>`; the shared workspace `.env` holds no secrets. Namespaced
+  keys no service declares (e.g. test logins for agents) reach no container.
 - `x-` keys are dropped from the output and exist to hold YAML anchors.
 - A duplicate service name, `port_offset` or `k8s_forward_port` across two repos fails the
   merge naming both. `sandbox registry --check` reports drift.
@@ -977,7 +982,7 @@ the pieces that are not obvious from the demo services:
      `init-workspace` deletes it.
   4. `SANDBOX_MCP_TOKEN` in `~/.sandbox/secrets.env` (copy `~/.sandbox/mcp-token`) *and*
      `secrets: [SANDBOX_MCP_TOKEN]` on the service entry, which routes it through the
-     feature `.env`. Never put `${SANDBOX_MCP_TOKEN}` in the service's `environment:`:
+     service's own `.env.<service>`. Never put `${SANDBOX_MCP_TOKEN}` in the service's `environment:`:
      compose expands it from whichever shell ran it — for the `sandbox-up` tool, the MCP
      server's own env, where it is unset — and `environment:` beats `env_file:`, so it
      would shadow the real value with an empty string.

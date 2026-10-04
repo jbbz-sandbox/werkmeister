@@ -334,6 +334,19 @@ describe("generateFeatureEnv", () => {
     expect(shared).not.toContain("CLERK");
   });
 
+  it("drops secrets an older generator left in .env instead of preserving them as metadata", () => {
+    fs.writeFileSync(path.join(tmp, ".env"), "FEATURE=myfeat\nDEMO_TOKEN=old-secret\n");
+    home.write("secrets.env", "DEMO_TOKEN=new-secret\n");
+    const services = loadServices();
+    services.backend.secrets = ["DEMO_TOKEN"];
+    const shared = fs.readFileSync(
+      generateFeatureEnv("myfeat", 1, ["backend"], { services }, tmp),
+      "utf8",
+    );
+    expect(shared).toContain("FEATURE=myfeat");
+    expect(shared).not.toContain("DEMO_TOKEN");
+  });
+
   it("gives two services different values for the same KEY", () => {
     home.write("secrets.env", "BACKEND__API_KEY=b\nFRONTEND__API_KEY=f\n");
     const services = loadServices();

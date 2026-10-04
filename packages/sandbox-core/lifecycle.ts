@@ -53,6 +53,7 @@ import {
   generateFeatureEnv,
   generateSupergraphConfig,
   isFeatureComposeStale,
+  writeServiceSecretEnvs,
 } from "./generate.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { info, raw, success, warn } from "./reporter.js";
@@ -121,6 +122,9 @@ export async function up(
   const config = { services: servicesConfig, ports: loadPorts() };
   const localServices = readServicesFromWorkspace(workspace);
   requireSecrets(servicesConfig, localServices);
+  // Unlike compose, these files are fully generated, so rewriting them on every
+  // `up` loses no hand-edits and picks up a rotated secret without init-workspace.
+  writeServiceSecretEnvs(workspace, localServices, servicesConfig);
 
   // Each strategy repairs its own layer: jit re-merges its hooks (a workspace
   // created before a hook-template change otherwise keeps the stale one), icm

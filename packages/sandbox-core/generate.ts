@@ -870,9 +870,9 @@ function avoidComposeEnvShadowing(
  *
  * Contains all service URLs, slot info, and shared environment variables
  * needed by the feature's containers; secrets go to per-service
- * `.env.<svc>` files instead (see `writeServiceSecretEnvs`). Workspace metadata keys (e.g.
- * `FEATURE`, `SERVICES`, `JIRA_ID`, `TEST_PATH`) written by
- * `init-workspace` and not part of the generated body are preserved
+ * `.env.<svc>` files instead (see `writeServiceSecretEnvs`). Workspace
+ * metadata keys (e.g. `FEATURE`, `SERVICES`, `JIRA_ID`, `TEST_PATH`) written
+ * by `init-workspace` and not part of the generated body are preserved
  * across regeneration.
  */
 export function generateFeatureEnv(
@@ -888,6 +888,11 @@ export function generateFeatureEnv(
   const outPath = path.join(workspaceRoot, ".env");
   const legacyEnv = path.join(workspaceRoot, "docker-compose.env");
   writeServiceSecretEnvs(workspaceRoot, localServices, servicesConfig);
+  // Workspaces generated before per-service secret files have secrets in .env;
+  // without dropping them, metadata preservation would keep them there forever.
+  const secretKeys = Object.values(servicesConfig).flatMap((svcDef) =>
+    isDict(svcDef) && Array.isArray(svcDef["secrets"]) ? svcDef["secrets"].map(String) : [],
+  );
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
@@ -934,7 +939,7 @@ export function generateFeatureEnv(
         env_vars: envVars,
       }),
     );
-    writeWorkspaceEnv(outPath, rendered, legacyEnv);
+    writeWorkspaceEnv(outPath, rendered, legacyEnv, secretKeys);
     success(`Generated .env (template): ${outPath}`);
     return outPath;
   }
@@ -981,7 +986,7 @@ export function generateFeatureEnv(
   }
 
   lines.push("");
-  writeWorkspaceEnv(outPath, lines.join("\n") + "\n", legacyEnv);
+  writeWorkspaceEnv(outPath, lines.join("\n") + "\n", legacyEnv, secretKeys);
   success(`Generated .env (built-in): ${outPath}`);
   return outPath;
 }
@@ -992,7 +997,7 @@ export function generateFeatureEnv(
  * so each container sees only its own and two services can differ on one KEY.
  * Written even when empty because compose fails on a missing `env_file`.
  */
-function writeServiceSecretEnvs(
+export function writeServiceSecretEnvs(
   workspaceRoot: string,
   localServices: string[],
   servicesConfig: Record<string, any>,
@@ -1014,12 +1019,18 @@ function writeServiceSecretEnvs(
  * but are NOT produced by the generator (e.g. `FEATURE`, `SERVICES`,
  * `JIRA_ID`, `TEST_PATH` written by `init-workspace`) are prepended
  * as a "Workspace metadata" header so they survive regeneration.
+ * *droppedKeys* are neither generated nor preserved.
  *
  * A legacy `<workspace>/docker-compose.env` from previous CLI versions
  * is removed if found.
  */
-function writeWorkspaceEnv(outPath: string, generatedBody: string, legacyEnv: string): void {
-  const generatedKeys = new Set<string>();
+function writeWorkspaceEnv(
+  outPath: string,
+  generatedBody: string,
+  legacyEnv: string,
+  droppedKeys: readonly string[],
+): void {
+  const generatedKeys = new Set<string>(droppedKeys);
   for (const line of generatedBody.split("\n")) {
     if (line.includes("=") && !line.trimStart().startsWith("#")) {
       generatedKeys.add(line.slice(0, line.indexOf("=")).trim());
