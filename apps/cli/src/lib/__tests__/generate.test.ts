@@ -356,6 +356,24 @@ describe("generateFeatureEnv", () => {
     expect(fs.readFileSync(path.join(tmp, ".env.backend"), "utf8")).toBe("API_KEY=dev\n");
   });
 
+  it("adds the /.env.* ignore rule to a workspace .gitignore that predates it, once", () => {
+    // remove-workspace commits `git add -A` and pushes, so an unignored
+    // .env.<svc> would publish its secrets.
+    fs.writeFileSync(path.join(tmp, ".gitignore"), "/sandbox/\n/.env");
+    generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
+    generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
+    expect(fs.readFileSync(path.join(tmp, ".gitignore"), "utf8")).toBe("/sandbox/\n/.env\n/.env.*\n");
+  });
+
+  it("a bare env_vars key does not override a secret with the string 'null'", () => {
+    writeWorkspaceYml(tmp, "env_vars:\n  API_KEY:\n");
+    home.write("secrets.env", "API_KEY=real\n");
+    const services = loadServices();
+    services.backend.secrets = ["API_KEY"];
+    generateFeatureEnv("myfeat", 1, ["backend"], { services }, tmp);
+    expect(fs.readFileSync(path.join(tmp, ".env.backend"), "utf8")).toBe("API_KEY=real\n");
+  });
+
   it("gives two services different values for the same KEY", () => {
     home.write("secrets.env", "BACKEND__API_KEY=b\nFRONTEND__API_KEY=f\n");
     const services = loadServices();

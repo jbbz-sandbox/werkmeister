@@ -310,7 +310,8 @@ function requireSecrets(
       `Missing required secret(s) in ${secretsPath}: ` +
         `${missing.join(", ")}\n` +
         `       Run \`sandbox setup\` to write a template to ${secretsPath}, ` +
-        "then fill in the missing values.",
+        "then fill in the missing values (or pin them under `env_vars:` in " +
+        ".sandbox/workspace.yml).",
       "MISSING_SECRETS",
     );
   }

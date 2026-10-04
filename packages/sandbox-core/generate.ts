@@ -30,6 +30,7 @@ import { info, success, warn } from "./reporter.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "./locks.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
+import { ensureSecretEnvsIgnored } from "./worktrees.js";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
 
 function isDict(value: unknown): value is Record<string, any> {
@@ -444,7 +445,10 @@ function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
 export function loadWorkspaceEnvVars(workspaceRoot: string): Record<string, string> {
   const envVars: Record<string, string> = {};
   for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
-    envVars[key] = String(value);
+    // A bare `KEY:` parses as null; "null" would silently override a real secret.
+    if (value != null) {
+      envVars[key] = String(value);
+    }
   }
   return envVars;
 }
@@ -1008,6 +1012,7 @@ export function writeServiceSecretEnvs(
   localServices: string[],
   servicesConfig: Record<string, any>,
 ): void {
+  ensureSecretEnvsIgnored(workspaceRoot);
   const { byService } = resolveSecrets(
     loadSecrets(getSecretsPath()),
     servicesConfig,

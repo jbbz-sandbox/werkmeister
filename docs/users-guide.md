@@ -878,9 +878,10 @@ Rules:
   `config.yaml`; use them instead of absolute paths in `extra_volumes:` and `environment:`.
 - A `secrets:` key resolves from the workspace's `.sandbox/workspace.yml` `env_vars:` first,
   then `~/.sandbox/secrets.env` as `<SERVICE>__KEY` (service name uppercased, `-` → `_`,
-  e.g. `MY_API__MY_API_KEY`), then plain `KEY`. The
-  value reaches only that service, as plain `KEY`, through the git-ignored
-  `<workspace>/.env.<service>`; the shared workspace `.env` holds no secrets. Namespaced
+  e.g. `MY_API__MY_API_KEY`), then plain `KEY`. A value from `secrets.env` reaches only
+  that service, as plain `KEY`, through the git-ignored `<workspace>/.env.<service>`; the
+  shared workspace `.env` holds no secrets. An `env_vars:` value also sits in that shared
+  `.env`, so every service sees it, and `env_vars:` keys are never namespaced. Namespaced
   keys no service declares (e.g. test logins for agents) reach no container.
 - `x-` keys are dropped from the output and exist to hold YAML anchors.
 - A duplicate service name, `port_offset` or `k8s_forward_port` across two repos fails the
