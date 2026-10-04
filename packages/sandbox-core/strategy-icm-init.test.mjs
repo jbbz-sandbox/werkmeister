@@ -158,9 +158,7 @@ test("discoverRepos ignores ICM directories when the workspace root itself is a 
     fs.mkdirSync(path.join(root, "demo-repo", ".git"), { recursive: true });
 
     const repos = discoverRepos(root);
-    assert.deepEqual(repos.map(([name]) => name).sort(), ["demo-repo"]);
-    assert.ok(!repos.some(([name]) => name === "_shared"));
-    assert.ok(!repos.some(([name]) => name === "stages"));
+    assert.deepEqual(repos.map(([name]) => name), ["demo-repo"]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -182,7 +180,7 @@ test("subdirectories of the workspace's own git repo are not treated as code wor
   await withIcmWorkspace(async (root, ctx) => {
     // A workspace root that is itself a git repo: `git rev-parse --git-dir`
     // then succeeds inside ANY of its subdirectories, not just nested
-    // worktrees -- exactly the rule discoverRepos (workspace_init.ts) uses to
+    // worktrees -- the rule discoverRepos (workspace_init.ts) used before #96 to
     // build InitContext.repos. icm's own check/sync instead goes through
     // repoDirs (standards.ts), which requires a literal `<dir>/.git`. If
     // icm.init trusted ctx.repos as given, a rerun after `stages/`/`_shared/`
