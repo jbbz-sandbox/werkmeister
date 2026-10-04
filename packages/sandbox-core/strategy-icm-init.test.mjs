@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { withSandboxHome } from "./fixtures.mjs";
+import { discoverRepos } from "./dist/workspace_init.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { templateFor } from "./dist/strategies/icm_templates.js";
@@ -146,6 +147,23 @@ test("an empty starting prompt still gives the brief a body", async () => {
     },
     { inputs: { starting_prompt: "" } },
   );
+});
+
+test("discoverRepos ignores ICM directories when the workspace root itself is a git repo", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-discover-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    fs.mkdirSync(path.join(root, "_shared"), { recursive: true });
+    fs.mkdirSync(path.join(root, "stages", "01_research"), { recursive: true });
+    fs.mkdirSync(path.join(root, "demo-repo", ".git"), { recursive: true });
+
+    const repos = discoverRepos(root);
+    assert.deepEqual(repos.map(([name]) => name).sort(), ["demo-repo"]);
+    assert.ok(!repos.some(([name]) => name === "_shared"));
+    assert.ok(!repos.some(([name]) => name === "stages"));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("no feature or services: the restart sentence points at sandbox-context.md", async () => {
