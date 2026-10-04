@@ -46,7 +46,7 @@ test("the issues guide maps each type to a label, a Jira type and a template", (
   const md = buildIssuesReportMd("ws");
   assert.match(md, /^\| bug \| .* \| `--label bug` \| Bug \|$/m);
   assert.match(md, /^\| feature \| .* \| `--label enhancement` \| Story \|$/m);
-  assert.match(md, /^\| task \| .*`--label task`.*`gh label create task -R <owner>\/<repo> --force`.* \| Task \|$/m);
+  assert.match(md, /^\| task \| .*`--label task`.*`gh label create task -R <owner>\/<repo> --color ededed --force`.* \| Task \|$/m);
   assert.match(md, /- \*\*Type:\*\* bug\n/);
   assert.match(md, /- \*\*Type:\*\* feature \| task\n[\s\S]*\*\*Ask\*\*[\s\S]*\*\*Why\*\*[\s\S]*\*\*Where to change\*\*[\s\S]*\*\*Done when\*\*/);
 });

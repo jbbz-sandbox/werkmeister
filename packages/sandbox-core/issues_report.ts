@@ -42,6 +42,8 @@ export function buildIssuesReportMd(
   const [appRow, searchStep] = appCodeRouting(tracker, jiraId.trim(), repos);
   return `# Filing an issue
 
+Log an issue when you find it, even if the notes are rough. Each issue must stand alone: a later agent should be able to act on it without re-running this workspace or asking follow-up questions.
+
 ## Type
 
 Every issue has one type. It sets the label (GitHub) or issue type (Jira) and the body template.
@@ -50,7 +52,7 @@ Every issue has one type. It sets the label (GitHub) or issue type (Jira) and th
 |---|---|---|---|
 | bug | something that is broken | \`--label bug\` | Bug |
 | feature | new or changed behavior | \`--label enhancement\` | Story |
-| task | setup, cleanup, chores — no behavior change | \`--label task\` (not a GitHub default: run \`gh label create task -R <owner>/<repo> --force\` first) | Task |
+| task | setup, cleanup, chores — no behavior change | \`--label task\` (not a GitHub default: run \`gh label create task -R <owner>/<repo> --color ededed --force\` first) | Task |
 
 ## Bugs: new or existing?
 
@@ -64,8 +66,6 @@ Not sure? Check whether it happens on the base branch. If you still can't tell, 
 ## Features and tasks
 
 File one when the person asks for it, or when you find work outside this workspace's task. Work inside the task is done here, not filed.
-
-Log an issue when you find it, even if the notes are rough. Each issue must stand alone: a later agent should be able to act on it without re-running this workspace or asking follow-up questions.
 
 ## Where
 
