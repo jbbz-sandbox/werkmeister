@@ -6,12 +6,15 @@
  * health-check and status utilities for that container.
  */
 
+import * as fs from "node:fs";
 import * as http from "node:http";
 import * as net from "node:net";
+import * as path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { Colors } from "./colors.js";
 import { composeInvocation } from "./compose_infra.js";
+import { stateInfraRoot } from "./config.js";
 import { containerRunning } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
@@ -71,6 +74,69 @@ export function checkPortForwardHealth(): Record<string, boolean> {
  */
 export type ForwardsOutcome = "healthy" | "restarted" | "failed";
 
+function isDir(p: string): boolean {
+  return fs.existsSync(p) && fs.statSync(p).isDirectory();
+}
+
+/**
+ * Make a localhost-served API (OrbStack: https://127.0.0.1:26443) reachable
+ * from inside the k8s-forwards container. `127.0.0.1`/`localhost` there resolve
+ * to the container, not the host, so rewrite the server host to
+ * host.docker.internal (mapped to host-gateway in shared-infra.yml). The API
+ * cert's SANs won't cover host.docker.internal, so swap CA verification for
+ * insecure-skip-tls-verify — acceptable for a local dev tunnel. No-op for a
+ * real remote cluster (server host is neither 127.0.0.1 nor localhost).
+ */
+function shimLocalApiServer(kubeconfig: string): string {
+  if (!/server:\s*https:\/\/(127\.0\.0\.1|localhost)\b/.test(kubeconfig)) {
+    return kubeconfig;
+  }
+  return kubeconfig
+    .replace(/(server:\s*https:\/\/)(127\.0\.0\.1|localhost)\b/g, "$1host.docker.internal")
+    .replace(/^(\s*)certificate-authority-data:.*$/gm, "$1insecure-skip-tls-verify: true");
+}
+
+/**
+ * Rewrite the kubeconfig the k8s-forwards container bind-mounts. Returns false
+ * if no regular file is left: compose would then bind-mount a Docker-created
+ * directory in its place (#97).
+ */
+export function refreshKubeconfig(): boolean {
+  // Regenerate from the host's current context so the k8s-forwards
+  // container tracks `kubectl config use-context` instead of pinning to a
+  // stale snapshot. --minify --flatten keeps the file self-contained.
+  const kubeconfig = path.join(stateInfraRoot(), "k8s-port-forward", "kubeconfig");
+  if (isDir(kubeconfig)) {
+    fs.rmSync(kubeconfig, { recursive: true, force: true });
+  }
+  fs.mkdirSync(path.dirname(kubeconfig), { recursive: true });
+  info("Refreshing k8s-port-forward/kubeconfig from current context...");
+  try {
+    const result = run(
+      ["kubectl", "config", "view", "--raw", "--minify", "--flatten"],
+      { capture: true, timeout: 10 },
+    );
+    if (result.status === 0) {
+      fs.writeFileSync(kubeconfig, shimLocalApiServer(result.stdout));
+      const ctx = run(
+        ["kubectl", "--kubeconfig", kubeconfig, "config", "current-context"],
+        { capture: true, timeout: 5 },
+      );
+      const ctxName = ctx.status === 0 ? ctx.stdout.trim() : "?";
+      success(`Kubeconfig pinned to context: ${ctxName}`);
+    } else {
+      error(`kubectl config view failed: ${result.stderr.trim()}`);
+    }
+  } catch (e) {
+    if (e instanceof ProcError && (e.code === "ENOENT" || e.code === "ETIMEDOUT")) {
+      error(`Could not generate kubeconfig: ${e.message}`);
+    } else {
+      throw e;
+    }
+  }
+  return fs.existsSync(kubeconfig) && fs.statSync(kubeconfig).isFile();
+}
+
 /**
  * Verify the k8s-forwards container is healthy, restarting it if not.
  */
@@ -82,6 +148,10 @@ export function ensurePortForwardsHealthy(): ForwardsOutcome {
   }
 
   warn("k8s port-forwards container is unhealthy — restarting...");
+  if (!refreshKubeconfig()) {
+    error("Not restarting k8s-forwards without a kubeconfig file to mount");
+    return "failed";
+  }
   const { argv, env } = composeInvocation();
 
   try {
@@ -90,8 +160,8 @@ export function ensurePortForwardsHealthy(): ForwardsOutcome {
     // unchanged config, compose reports "Running", does nothing, and exits 0 —
     // so an Up-but-unhealthy forwarder was reported "restarted" while nothing
     // had happened, and `up` then waited out its timeout for tunnels that were
-    // never coming back. Recreating also re-reads the mounted kubeconfig and
-    // forwards table, which a bare restart would not.
+    // never coming back. Recreating also re-reads the just-refreshed kubeconfig
+    // and the forwards table, which a bare restart would not.
     const result = run(
       [...argv, "up", "-d", "--force-recreate", "k8s-forwards"],
       { capture: true, timeout: 60, env },
