@@ -26,10 +26,32 @@ const _GITIGNORE_HEADER =
   "# Repo worktrees nested in this workspace, ignored by name. Rewritten by\n" +
   "# `sandbox init-workspace` on each run; rules above come from the repo's main.\n";
 
-// Ignored besides the repo worktree dirs: only secrets. The generated
-// projections (.claude/, CLAUDE.md, .mcp.json, .sandbox/*) are deliberately
-// TRACKED — versioned workspace state is the point of the dedicated root repo.
-const _GITIGNORE_GENERATED = ["/.env"] as const;
+// Ignored besides the repo worktree dirs: only secrets (.env.<svc> holds each
+// service's resolved secrets). The generated projections (.claude/, CLAUDE.md,
+// .mcp.json, .sandbox/*) are deliberately TRACKED — versioned workspace state
+// is the point of the dedicated root repo.
+const _SECRET_ENVS_RULE = "/.env.*";
+const _GITIGNORE_GENERATED = ["/.env", _SECRET_ENVS_RULE] as const;
+
+/**
+ * Add the `/.env.*` rule to a workspace .gitignore written before it existed.
+ * `sandbox up` writes per-service secret files without rerunning
+ * init-workspace, and remove-workspace runs `git add -A`, commits and pushes.
+ */
+export function ensureSecretEnvsIgnored(workspaceDir: string): void {
+  const gitignorePath = path.join(workspaceDir, ".gitignore");
+  let existing = "";
+  try {
+    existing = fs.readFileSync(gitignorePath, "utf8");
+  } catch {
+    /* absent */
+  }
+  if (existing.split("\n").some((line) => line.trim() === _SECRET_ENVS_RULE)) {
+    return;
+  }
+  const joiner = existing && !existing.endsWith("\n") ? "\n" : "";
+  fs.appendFileSync(gitignorePath, `${joiner}${_SECRET_ENVS_RULE}\n`);
+}
 
 /**
  * Rewrite the managed section of the workspace root's .gitignore.

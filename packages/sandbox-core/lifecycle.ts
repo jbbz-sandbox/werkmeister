@@ -53,16 +53,13 @@ import {
   generateFeatureEnv,
   generateSupergraphConfig,
   isFeatureComposeStale,
+  loadWorkspaceEnvVars,
+  writeServiceSecretEnvs,
 } from "./generate.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { strategyFor } from "./strategies/index.js";
-import {
-  getSecretsPath,
-  loadSecrets,
-  requiredSecretKeys,
-  validateRequiredSecrets,
-} from "./secrets.js";
+import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
   allocateSlot,
   getAllSlots,
@@ -125,7 +122,10 @@ export async function up(
   const servicesConfig = loadServices();
   const config = { services: servicesConfig, ports: loadPorts() };
   const localServices = readServicesFromWorkspace(workspace);
-  requireSecrets(servicesConfig, localServices);
+  requireSecrets(servicesConfig, localServices, workspace);
+  // Unlike compose, these files are fully generated, so rewriting them on every
+  // `up` loses no hand-edits and picks up a rotated secret without init-workspace.
+  writeServiceSecretEnvs(workspace, localServices, servicesConfig);
 
   // Each strategy repairs its own layer: jit re-merges its hooks (a workspace
   // created before a hook-template change otherwise keeps the stale one), icm
@@ -293,18 +293,25 @@ export function readServicesFromWorkspace(workspace: string): string[] {
  * workspace's own services is missing or empty, so it surfaces as a clear,
  * value-free message instead of an opaque runtime error deep in container logs.
  */
-function requireSecrets(servicesConfig: Record<string, any>, localServices: string[]): void {
+function requireSecrets(
+  servicesConfig: Record<string, any>,
+  localServices: string[],
+  workspace: string,
+): void {
   const secretsPath = getSecretsPath();
-  const missing = validateRequiredSecrets(
+  const { missing } = resolveSecrets(
     loadSecrets(secretsPath),
-    requiredSecretKeys(servicesConfig, localServices),
+    servicesConfig,
+    localServices,
+    loadWorkspaceEnvVars(workspace),
   );
   if (missing.length) {
     throw new SandboxError(
       `Missing required secret(s) in ${secretsPath}: ` +
         `${missing.join(", ")}\n` +
         `       Run \`sandbox setup\` to write a template to ${secretsPath}, ` +
-        "then fill in the missing values.",
+        "then fill in the missing values (or pin them under `env_vars:` in " +
+        ".sandbox/workspace.yml).",
       "MISSING_SECRETS",
     );
   }

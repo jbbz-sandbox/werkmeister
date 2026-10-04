@@ -27,7 +27,7 @@ x-mcp-client:
     GIT_CONFIG_VALUE_0: "*"
     # SANDBOX_MCP_TOKEN is deliberately NOT here. It arrives through
     # `secrets: [SANDBOX_MCP_TOKEN]` on the service entry, which puts it in the
-    # feature's generated .env (env_file). A `${SANDBOX_MCP_TOKEN}` value in
+    # service's generated .env.<service> (env_file). A `${SANDBOX_MCP_TOKEN}` value in
     # this block would be expanded by whichever shell ran `docker compose` --
     # for `sandbox-up` that is the MCP server's own process env, where it is
     # unset -- and compose `environment:` beats `env_file:`, so it would then

@@ -23,13 +23,14 @@ vi.mock("sandbox-core/feature_routing", () => ({ loadFeatureRouters: () => ({}) 
 vi.mock("sandbox-core/generate", () => ({
   generateCaddyfile: async () => {},
   isFeatureComposeStale: () => false,
+  loadWorkspaceEnvVars: () => ({}),
+  writeServiceSecretEnvs: () => {},
 }));
 vi.mock("sandbox-core/k8s", () => ({ ensurePortForwardsHealthy: () => "healthy" }));
 vi.mock("sandbox-core/secrets", () => ({
   getSecretsPath: () => "/nonexistent/secrets.yaml",
   loadSecrets: () => ({}),
-  requiredSecretKeys: () => [],
-  validateRequiredSecrets: () => [],
+  resolveSecrets: () => ({ byService: {}, missing: [] }),
 }));
 vi.mock("sandbox-core/slots", () => ({
   allocateSlot: async () => 3,

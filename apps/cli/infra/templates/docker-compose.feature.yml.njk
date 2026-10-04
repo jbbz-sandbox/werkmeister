@@ -150,6 +150,7 @@ services:
       - "{{ base_port + svc.port_offset }}:{{ svc.internal_port }}"
     env_file:
       - .env
+      - .env.{{ svc.name }}
 {% if svc.environment %}
     environment:
 {% for key, value in svc.environment.items() %}
