@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { playwrightCwd } from "./dist/test_run.js";
+import { installedPlaywrightVersion, playwrightCwd } from "./dist/test_run.js";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "pw-"));
 
@@ -37,4 +37,18 @@ test("falls back to the root when neither has a config", () => {
 
 test("a workspace that does not exist is not selected", () => {
   assert.equal(playwrightCwd("/definitely/not/here", "/some/root"), "/some/root");
+});
+
+// The mismatch warning hinges on this: a hoisted install must still count.
+test("finds @playwright/test hoisted to a parent node_modules", () => {
+  const root = tmp(), ws = path.join(root, "ws");
+  const pkg = path.join(root, "node_modules", "@playwright", "test");
+  fs.mkdirSync(pkg, { recursive: true });
+  fs.mkdirSync(ws);
+  fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ name: "@playwright/test", version: "9.9.9" }));
+  assert.equal(installedPlaywrightVersion(ws), "9.9.9");
+});
+
+test("reports no version when @playwright/test is not installed", () => {
+  assert.equal(installedPlaywrightVersion(tmp()), null);
 });
