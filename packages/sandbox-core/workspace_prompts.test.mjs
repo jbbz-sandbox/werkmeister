@@ -19,6 +19,10 @@ import {
   planFor,
 } from "./dist/workspace_prompts.js";
 
+// The machine's config.yaml would leak in: `overrides.issue_tracker: github`
+// swaps the `jira_id` prompt for `github_issue`.
+process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+
 // An empty dir: no workspace.yml to pre-resolve fields, no repos to scrape.
 const root = await mkdtemp(path.join(tmpdir(), "prompt-spec-"));
 

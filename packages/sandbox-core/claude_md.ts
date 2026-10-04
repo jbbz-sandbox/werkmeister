@@ -283,9 +283,9 @@ ${layoutHeader}
 ${layoutLines}
 ${routingSection}
 ${codeStandardsSection}${notesSection}
-## Bugs
+## Issues
 
-Hit a bug in the \`sandbox\` tool or in a repo's code? If this workspace's changes caused it, fix it here; if it was already there, file an issue where it belongs (the sandbox repo, or this machine's Jira/GitHub tracker) and report the URL. Rules and template: [.sandbox/bug-report.md](.sandbox/bug-report.md).
+Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's code? If this workspace's changes caused a bug, fix it here; otherwise file an issue (bug | feature | task) where it belongs (the sandbox repo, or this machine's Jira/GitHub tracker) and report the URL. Rules, labels and templates: [.sandbox/issues-report.md](.sandbox/issues-report.md).
 `;
 }
 
