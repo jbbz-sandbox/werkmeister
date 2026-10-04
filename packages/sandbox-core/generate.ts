@@ -29,7 +29,8 @@ import {
 import { info, success, warn } from "./reporter.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "./locks.js";
-import { getSecretsPath, loadSecrets, requiredSecretKeys } from "./secrets.js";
+import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
+import { ensureSecretEnvsIgnored } from "./worktrees.js";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
 
 function isDict(value: unknown): value is Record<string, any> {
@@ -438,6 +439,18 @@ function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string,
  */
 function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
   return loadWorkspaceDict(workspaceRoot, "dev_links");
+}
+
+/** Per-workspace env overrides from `.sandbox/workspace.yml` (`env_vars:`). */
+export function loadWorkspaceEnvVars(workspaceRoot: string): Record<string, string> {
+  const envVars: Record<string, string> = {};
+  for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
+    // A bare `KEY:` parses as null; "null" would silently override a real secret.
+    if (value != null) {
+      envVars[key] = String(value);
+    }
+  }
+  return envVars;
 }
 
 /**
@@ -869,9 +882,10 @@ function avoidComposeEnvShadowing(
  * Generate `<workspace>/.env` for *feature*.
  *
  * Contains all service URLs, slot info, and shared environment variables
- * needed by the feature's containers. Workspace metadata keys (e.g.
- * `FEATURE`, `SERVICES`, `JIRA_ID`, `TEST_PATH`) written by
- * `init-workspace` and not part of the generated body are preserved
+ * needed by the feature's containers; secrets go to per-service
+ * `.env.<svc>` files instead (see `writeServiceSecretEnvs`). Workspace
+ * metadata keys (e.g. `FEATURE`, `SERVICES`, `JIRA_ID`, `TEST_PATH`) written
+ * by `init-workspace` and not part of the generated body are preserved
  * across regeneration.
  */
 export function generateFeatureEnv(
@@ -886,6 +900,12 @@ export function generateFeatureEnv(
   fs.mkdirSync(workspaceRoot, { recursive: true });
   const outPath = path.join(workspaceRoot, ".env");
   const legacyEnv = path.join(workspaceRoot, "docker-compose.env");
+  writeServiceSecretEnvs(workspaceRoot, localServices, servicesConfig);
+  // Workspaces generated before per-service secret files have secrets in .env;
+  // without dropping them, metadata preservation would keep them there forever.
+  const secretKeys = Object.values(servicesConfig).flatMap((svcDef) =>
+    isDict(svcDef) && Array.isArray(svcDef["secrets"]) ? svcDef["secrets"].map(String) : [],
+  );
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
@@ -894,12 +914,9 @@ export function generateFeatureEnv(
     const [portStart] = getPortRange(slot);
     // Build service_urls and env_vars for the template
     let serviceUrls: Record<string, string> = {};
-    // Per-workspace overrides from `.sandbox/workspace.yml` (`env_vars:`). Rendered
-    // last so a workspace can override a generated service URL or a secret value.
-    const envVars: Record<string, string> = {};
-    for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
-      envVars[key] = String(value);
-    }
+    // Rendered last so a workspace can override a generated service URL; secrets
+    // get the same override in writeServiceSecretEnvs.
+    const envVars = loadWorkspaceEnvVars(workspaceRoot);
     for (const svcName of Object.keys(servicesConfig).sort()) {
       const svcDef = servicesConfig[svcName] ?? {};
       if (!isDict(svcDef)) {
@@ -923,17 +940,6 @@ export function generateFeatureEnv(
       }
     }
     serviceUrls = avoidComposeEnvShadowing(serviceUrls, localServices, servicesConfig);
-    // Load secrets from ~/.sandbox/secrets.env if it exists, narrowed to the keys
-    // the feature's own local services declare via services.yaml `secrets:`. The
-    // global file is shared across every workspace; only the declared subset has
-    // any business being written into this feature's .env.
-    const allSecrets = loadSecrets(getSecretsPath());
-    const secrets: Record<string, string> = {};
-    for (const key of requiredSecretKeys(servicesConfig, localServices)) {
-      if (key in allSecrets) {
-        secrets[key] = allSecrets[key];
-      }
-    }
     const rendered = template.render(
       jinjaContext({
         feature_name: feature,
@@ -941,10 +947,9 @@ export function generateFeatureEnv(
         base_port: portStart,
         service_urls: serviceUrls,
         env_vars: envVars,
-        secrets,
       }),
     );
-    writeWorkspaceEnv(outPath, rendered, legacyEnv);
+    writeWorkspaceEnv(outPath, rendered, legacyEnv, secretKeys);
     success(`Generated .env (template): ${outPath}`);
     return outPath;
   }
@@ -991,9 +996,36 @@ export function generateFeatureEnv(
   }
 
   lines.push("");
-  writeWorkspaceEnv(outPath, lines.join("\n") + "\n", legacyEnv);
+  writeWorkspaceEnv(outPath, lines.join("\n") + "\n", legacyEnv, secretKeys);
   success(`Generated .env (built-in): ${outPath}`);
   return outPath;
+}
+
+/**
+ * Write `<workspace>/.env.<svc>` for every local service: only the secrets that
+ * service declares, as plain `KEY=value`. Secrets stay out of the shared `.env`
+ * so each container sees only its own and two services can differ on one KEY.
+ * Written even when empty because compose fails on a missing `env_file`.
+ */
+export function writeServiceSecretEnvs(
+  workspaceRoot: string,
+  localServices: string[],
+  servicesConfig: Record<string, any>,
+): void {
+  ensureSecretEnvsIgnored(workspaceRoot);
+  const { byService } = resolveSecrets(
+    loadSecrets(getSecretsPath()),
+    servicesConfig,
+    localServices,
+    loadWorkspaceEnvVars(workspaceRoot),
+  );
+  for (const [svcName, secrets] of Object.entries(byService)) {
+    const body = Object.keys(secrets)
+      .sort()
+      .map((key) => `${key}=${secrets[key]}\n`)
+      .join("");
+    fs.writeFileSync(path.join(workspaceRoot, `.env.${svcName}`), body, { mode: 0o600 });
+  }
 }
 
 /**
@@ -1003,12 +1035,18 @@ export function generateFeatureEnv(
  * but are NOT produced by the generator (e.g. `FEATURE`, `SERVICES`,
  * `JIRA_ID`, `TEST_PATH` written by `init-workspace`) are prepended
  * as a "Workspace metadata" header so they survive regeneration.
+ * *droppedKeys* are neither generated nor preserved.
  *
  * A legacy `<workspace>/docker-compose.env` from previous CLI versions
  * is removed if found.
  */
-function writeWorkspaceEnv(outPath: string, generatedBody: string, legacyEnv: string): void {
-  const generatedKeys = new Set<string>();
+function writeWorkspaceEnv(
+  outPath: string,
+  generatedBody: string,
+  legacyEnv: string,
+  droppedKeys: readonly string[],
+): void {
+  const generatedKeys = new Set<string>(droppedKeys);
   for (const line of generatedBody.split("\n")) {
     if (line.includes("=") && !line.trimStart().startsWith("#")) {
       generatedKeys.add(line.slice(0, line.indexOf("=")).trim());

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 
 import {
@@ -26,6 +27,7 @@ import {
   syncIngressCerts,
   syncOptionalPlugin,
   syncPathDirs,
+  syncPlaywright,
   syncRegistryConfigs,
   syncRepo,
   syncTelepresence,
@@ -35,8 +37,9 @@ import {
   type Runner,
   type Step,
 } from "sandbox-core/machine_setup";
+import { PLAYWRIGHT_VERSION } from "sandbox-core/test_run";
 import { REGISTRY_DEFAULTS, renderSecretsEnv, renderServicesLocalYaml } from "sandbox-core/scaffold";
-import { requiredSecretKeys, validateRequiredSecrets } from "sandbox-core/secrets";
+import { resolveSecrets } from "sandbox-core/secrets";
 import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
 
 let home: SandboxHome;
@@ -134,27 +137,49 @@ describe("scaffold content", () => {
   });
 });
 
-describe("requiredSecretKeys", () => {
+describe("resolveSecrets", () => {
   const servicesConfig = {
     "backend": {},
     "auth-web": { secrets: ["AUTH0_CLIENT_SECRET", "NEXTAUTH_SECRET"] },
+    "mobile": { secrets: ["CLERK_KEY"] },
   };
 
-  it("is empty for a workspace whose services declare no secrets", () => {
-    expect(requiredSecretKeys(servicesConfig, ["backend"])).toEqual([]);
+  it("requires nothing for a workspace whose services declare no secrets", () => {
+    expect(resolveSecrets({ X: "1" }, servicesConfig, ["backend"])).toEqual({
+      byService: { backend: {} },
+      missing: [],
+    });
   });
 
-  it("only requires the keys declared by services actually in the workspace", () => {
-    expect(requiredSecretKeys(servicesConfig, ["backend", "auth-web"])).toEqual([
-      "AUTH0_CLIENT_SECRET",
-      "NEXTAUTH_SECRET",
-    ]);
+  it("reports missing/empty declared keys by both accepted names, never values", () => {
+    const { missing } = resolveSecrets(
+      { AUTH0_CLIENT_SECRET: "abc123", NEXTAUTH_SECRET: "  " },
+      servicesConfig,
+      ["backend", "auth-web"],
+    );
+    expect(missing).toEqual(["AUTH_WEB__NEXTAUTH_SECRET / NEXTAUTH_SECRET"]);
   });
 
-  it("validateRequiredSecrets reports only missing/empty declared keys", () => {
-    const required = requiredSecretKeys(servicesConfig, ["auth-web"]);
-    const missing = validateRequiredSecrets({ AUTH0_CLIENT_SECRET: "abc123" }, required);
-    expect(missing).toEqual(["NEXTAUTH_SECRET"]);
+  it("prefers <SERVICE>__KEY, falling back to plain KEY when it is absent or empty", () => {
+    const all = { MOBILE__CLERK_KEY: "mobile-val", CLERK_KEY: "shared", AUTH_WEB__AUTH0_CLIENT_SECRET: "" };
+    const { byService } = resolveSecrets(
+      { ...all, AUTH0_CLIENT_SECRET: "a", NEXTAUTH_SECRET: "n" },
+      servicesConfig,
+      ["auth-web", "mobile"],
+    );
+    expect(byService.mobile).toEqual({ CLERK_KEY: "mobile-val" });
+    expect(byService["auth-web"]).toEqual({ AUTH0_CLIENT_SECRET: "a", NEXTAUTH_SECRET: "n" });
+  });
+
+  it("lets a workspace env_vars override beat secrets.env and satisfy a missing key", () => {
+    const { byService } = resolveSecrets(
+      { MOBILE__CLERK_KEY: "mobile-val" },
+      servicesConfig,
+      ["mobile"],
+      { CLERK_KEY: "pinned" },
+    );
+    expect(byService.mobile).toEqual({ CLERK_KEY: "pinned" });
+    expect(resolveSecrets({}, servicesConfig, ["mobile"], { CLERK_KEY: "pinned" }).missing).toEqual([]);
   });
 });
 
@@ -444,6 +469,74 @@ describe("syncTelepresence", () => {
     // The useful line survives; the progress-spinner noise does not.
     expect(steps[0].detail).toContain("not writable");
     expect(steps[0].detail).not.toContain("✔︎");
+  });
+});
+
+describe("syncPlaywright", () => {
+  const DRY_RUN = `npx -y playwright@${PLAYWRIGHT_VERSION} install --dry-run chromium`;
+  let browserDir: string;
+  beforeEach(() => {
+    browserDir = path.join(home.dir, "ms-playwright", "chromium-1243");
+  });
+  const dryRun = (): [number, string] => [0, `Chrome for Testing\n  Install location:    ${browserDir}\n`];
+  const markInstalled = () => {
+    fs.mkdirSync(browserDir, { recursive: true });
+    fs.writeFileSync(path.join(browserDir, "INSTALLATION_COMPLETE"), "");
+  };
+  const neverRun = (cmd: string[]): number => {
+    throw new Error(`unexpected install: ${cmd.join(" ")}`);
+  };
+
+  it("is a no-op when the pinned build is already installed", () => {
+    markInstalled();
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), false, neverRun);
+    expect(steps[0].ok).toBe(true);
+  });
+
+  it("installs when only a different build is cached, then verifies", () => {
+    fs.mkdirSync(path.join(home.dir, "ms-playwright", "chromium-1234"), { recursive: true });
+    const installs: string[][] = [];
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), false, (cmd) => {
+      installs.push(cmd);
+      markInstalled();
+      return 0;
+    });
+    expect(installs).toEqual([["npx", "-y", `playwright@${PLAYWRIGHT_VERSION}`, "install", "chromium"]]);
+    expect(steps[0].ok).toBe(true);
+  });
+
+  it("treats a half-finished download (no completion marker) as missing", () => {
+    fs.mkdirSync(browserDir, { recursive: true });
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), true);
+    expect(steps[0].ok).toBe(false);
+  });
+
+  it("never installs in check mode", () => {
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), true, neverRun);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("warns, not fails, when the install does not produce the browser", () => {
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: dryRun() }), false, () => 1);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("never reports present when the dry-run lists no install locations", () => {
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: [0, "npm notice: new version available"] }), false, neverRun);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("warns when npx is unavailable", () => {
+    const steps = syncPlaywright(fakeRunner({}), false, neverRun);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
+  it("pins the same version as the sandbox-feature-test skill, which ships separately", () => {
+    const script = fs.readFileSync(
+      path.resolve(fileURLToPath(import.meta.url), "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts/setup_feature.py"),
+      "utf8",
+    );
+    expect(script).toContain(`PLAYWRIGHT_VERSION = "${PLAYWRIGHT_VERSION}"`);
   });
 });
 

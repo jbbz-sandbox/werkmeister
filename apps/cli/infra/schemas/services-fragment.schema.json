@@ -34,7 +34,7 @@
     },
     "environment": {
       "type": "object",
-      "description": "Compose `environment:`. Beats the feature .env (env_file), so never put `${SECRET}` here; declare it in `secrets:` instead.",
+      "description": "Compose `environment:`. Beats every env_file (including the service's secrets file), so never put `${SECRET}` here; declare it in `secrets:` instead.",
       "additionalProperties": { "type": ["string", "number", "boolean"] }
     },
     "volumes": {
@@ -92,7 +92,7 @@
         "secrets": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Keys `sandbox up` requires in ~/.sandbox/secrets.env; delivered via the feature .env."
+          "description": "Keys `sandbox up` requires in ~/.sandbox/secrets.env, as `<SERVICE>__KEY` or plain `KEY`; delivered as plain `KEY` via the service's own `<workspace>/.env.<service>` env_file."
         },
         "depends_on": {
           "type": "array",

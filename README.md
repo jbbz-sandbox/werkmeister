@@ -179,7 +179,7 @@ you to run `sandbox setup`.
 | `~/.sandbox/services.yaml` | Service registry — GENERATED from each repo's `.sandbox/services.yaml`; do not edit. |
 | `~/.sandbox/services.local.yaml` | Per-machine registry overrides (`k8s_context`, …), merged last. |
 | `~/.sandbox/ports.yaml` | Feature-slot port allocation. |
-| `~/.sandbox/secrets.env` | Real credentials, injected into each feature's `.env`. Never committed. |
+| `~/.sandbox/secrets.env` | Real credentials, as `<SERVICE>__KEY` or shared `KEY`. Each service gets the keys it declares in its own workspace `.env.<service>`. Never committed. |
 | `~/.sandbox/env.sh` | Generated `SANDBOX_*` exports, sourced by `~/.zshenv` and the CLI wrapper. |
 | `~/.sandbox/corp-ca.crt` | Corporate TLS-proxy root(s), trusted by image builds. Auto-populated on macOS; see below. |
 

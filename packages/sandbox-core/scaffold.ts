@@ -68,18 +68,21 @@ models:
  *
  * Empty by default: a service opts into a required secret by listing it in
  * its own `secrets:` entry in services.yaml, and `sandbox up` only fails fast
- * on the keys the feature's own services declare (lib/secrets.ts
- * `requiredSecretKeys`). Add real values here as your services need them.
+ * on the keys the feature's own services declare (secrets.ts
+ * `resolveSecrets`). Add real values here as your services need them.
  */
 export function renderSecretsEnv(): string {
   return [
     "# Machine-global secrets — real values, never committed.",
     "#",
-    "# Consumed by infra/templates/env.njk when generating each feature's .env,",
-    "# and read directly by docker compose as an env_file. A service declares",
-    "# the keys it needs via `secrets:` in its services.yaml entry; `sandbox up`",
-    "# fails fast when a key a workspace's own services declare is missing or",
-    "# empty. Add KEY=value lines below as your services require them.",
+    "# A service declares the keys it needs via `secrets:` in its services.yaml",
+    "# entry; `sandbox up` writes them, as plain KEY, into that service's own",
+    "# <workspace>/.env.<service>, and fails fast when one is missing or empty.",
+    "#",
+    "# Namespace a key by service as <SERVICE>__KEY (service name uppercased,",
+    "# - -> _), e.g. MOBILE__EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=... It wins over a",
+    "# plain KEY=... line, which stays a shared fallback. Namespaced keys a",
+    "# service doesn't declare (e.g. test logins for agents) reach no container.",
     "",
   ].join("\n") + "\n";
 }
