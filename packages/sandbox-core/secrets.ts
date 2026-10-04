@@ -32,14 +32,16 @@ export interface ResolvedSecrets {
 /**
  * Resolve each service's declared `secrets:` against *all* (secrets.env).
  *
- * `<PREFIX>__KEY` wins so two services can hold different values under one
- * name; plain `KEY` is the shared / pre-namespacing fallback. An empty value
- * counts as unset, so an empty `<PREFIX>__KEY` falls through to `KEY`.
+ * *overrides* (workspace `env_vars`) win first: the most local config beats the
+ * machine-global file. Then `<PREFIX>__KEY`, so two services can hold different
+ * values under one name; plain `KEY` is the shared / pre-namespacing fallback.
+ * An empty value counts as unset and falls through to the next source.
  */
 export function resolveSecrets(
   all: Record<string, string>,
   servicesConfig: Record<string, any>,
   serviceNames: readonly string[],
+  overrides: Record<string, string> = {},
 ): ResolvedSecrets {
   const byService: Record<string, Record<string, string>> = {};
   const missing = new Set<string>();
@@ -52,7 +54,7 @@ export function resolveSecrets(
       for (const raw of declared) {
         const key = String(raw);
         const namespaced = `${prefix}__${key}`;
-        const value = [all[namespaced], all[key]].find((v) => (v ?? "").trim());
+        const value = [overrides[key], all[namespaced], all[key]].find((v) => (v ?? "").trim());
         if (value === undefined) {
           missing.add(`${namespaced} / ${key}`);
         } else {

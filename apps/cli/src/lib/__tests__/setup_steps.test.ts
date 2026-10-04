@@ -167,6 +167,17 @@ describe("resolveSecrets", () => {
     expect(byService.mobile).toEqual({ CLERK_KEY: "mobile-val" });
     expect(byService["auth-web"]).toEqual({ AUTH0_CLIENT_SECRET: "a", NEXTAUTH_SECRET: "n" });
   });
+
+  it("lets a workspace env_vars override beat secrets.env and satisfy a missing key", () => {
+    const { byService } = resolveSecrets(
+      { MOBILE__CLERK_KEY: "mobile-val" },
+      servicesConfig,
+      ["mobile"],
+      { CLERK_KEY: "pinned" },
+    );
+    expect(byService.mobile).toEqual({ CLERK_KEY: "pinned" });
+    expect(resolveSecrets({}, servicesConfig, ["mobile"], { CLERK_KEY: "pinned" }).missing).toEqual([]);
+  });
 });
 
 describe("syncPathDirs", () => {

@@ -440,6 +440,15 @@ function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
   return loadWorkspaceDict(workspaceRoot, "dev_links");
 }
 
+/** Per-workspace env overrides from `.sandbox/workspace.yml` (`env_vars:`). */
+export function loadWorkspaceEnvVars(workspaceRoot: string): Record<string, string> {
+  const envVars: Record<string, string> = {};
+  for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
+    envVars[key] = String(value);
+  }
+  return envVars;
+}
+
 /**
  * Render the compose file for *feature* without writing it.
  *
@@ -901,12 +910,9 @@ export function generateFeatureEnv(
     const [portStart] = getPortRange(slot);
     // Build service_urls and env_vars for the template
     let serviceUrls: Record<string, string> = {};
-    // Per-workspace overrides from `.sandbox/workspace.yml` (`env_vars:`). Rendered
-    // last so a workspace can override a generated service URL.
-    const envVars: Record<string, string> = {};
-    for (const [key, value] of Object.entries(loadWorkspaceDict(workspaceRoot, "env_vars"))) {
-      envVars[key] = String(value);
-    }
+    // Rendered last so a workspace can override a generated service URL; secrets
+    // get the same override in writeServiceSecretEnvs.
+    const envVars = loadWorkspaceEnvVars(workspaceRoot);
     for (const svcName of Object.keys(servicesConfig).sort()) {
       const svcDef = servicesConfig[svcName] ?? {};
       if (!isDict(svcDef)) {
@@ -1002,7 +1008,12 @@ export function writeServiceSecretEnvs(
   localServices: string[],
   servicesConfig: Record<string, any>,
 ): void {
-  const { byService } = resolveSecrets(loadSecrets(getSecretsPath()), servicesConfig, localServices);
+  const { byService } = resolveSecrets(
+    loadSecrets(getSecretsPath()),
+    servicesConfig,
+    localServices,
+    loadWorkspaceEnvVars(workspaceRoot),
+  );
   for (const [svcName, secrets] of Object.entries(byService)) {
     const body = Object.keys(secrets)
       .sort()

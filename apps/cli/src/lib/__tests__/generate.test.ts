@@ -347,6 +347,15 @@ describe("generateFeatureEnv", () => {
     expect(shared).not.toContain("DEMO_TOKEN");
   });
 
+  it("workspace env_vars override a same-named secret in the service's file", () => {
+    writeWorkspaceYml(tmp, "env_vars:\n  API_KEY: dev\n");
+    home.write("secrets.env", "BACKEND__API_KEY=b\n");
+    const services = loadServices();
+    services.backend.secrets = ["API_KEY"];
+    generateFeatureEnv("myfeat", 1, ["backend"], { services }, tmp);
+    expect(fs.readFileSync(path.join(tmp, ".env.backend"), "utf8")).toBe("API_KEY=dev\n");
+  });
+
   it("gives two services different values for the same KEY", () => {
     home.write("secrets.env", "BACKEND__API_KEY=b\nFRONTEND__API_KEY=f\n");
     const services = loadServices();
