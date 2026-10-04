@@ -1121,14 +1121,8 @@ export function syncTelepresence(
 }
 
 /**
- * Install the Chromium build the pinned Playwright expects.
- *
- * Each Playwright release wants one exact browser revision, so "some chromium
- * is cached" is not enough — a stale cache fails at launch with "Executable
- * doesn't exist" (sandbox#99). Playwright's own `--dry-run` names the exact
- * directories, which keeps the macOS/Linux cache paths and
- * PLAYWRIGHT_BROWSERS_PATH its problem rather than ours. Failures are optional:
- * only browser tests need it.
+ * Install the Chromium build the pinned Playwright expects — each release wants
+ * one exact revision, so a cache holding another one fails at launch (sandbox#99).
  */
 export function syncPlaywright(
   runner: Runner,
@@ -1138,17 +1132,22 @@ export function syncPlaywright(
   const label = "playwright chromium (optional)";
   const pkg = `playwright@${PLAYWRIGHT_VERSION}`;
 
+  // Playwright's own --dry-run names the directories, so its cache-path rules
+  // (macOS vs Linux, PLAYWRIGHT_BROWSERS_PATH) stay its problem, not ours.
+  let probeOutput = "";
   const missingDirs = (): string[] | null => {
     const [rc, out] = runner(["npx", "-y", pkg, "install", "--dry-run", "chromium"]);
-    if (rc !== 0) return null;
+    probeOutput = out;
     const dirs = [...out.matchAll(/Install location:\s*(\S.*)$/gm)].map((m) => m[1]!.trim());
+    // No locations parsed means the output format moved, not that nothing is needed.
+    if (rc !== 0 || dirs.length === 0) return null;
     // A partial download leaves the directory but not Playwright's completion marker.
     return dirs.filter((d) => !fs.existsSync(path.join(d, "INSTALLATION_COMPLETE")));
   };
 
   const before = missingDirs();
   if (before === null) {
-    return [{ label, ok: false, optional: true, detail: `\`npx ${pkg}\` failed — is Node.js installed?` }];
+    return [{ label, ok: false, optional: true, detail: `\`npx ${pkg} install --dry-run chromium\` failed: ${briefOutput(probeOutput)}` }];
   }
   if (before.length === 0) {
     return [{ label, ok: true, detail: `chromium for ${pkg} present` }];
@@ -1161,11 +1160,12 @@ export function syncPlaywright(
   const rc = (interactive ?? defaultInteractiveRunner)(["npx", "-y", pkg, "install", "chromium"]);
   const after = missingDirs();
   if (rc !== 0 || after === null || after.length > 0) {
+    const why = rc !== 0 ? `exited ${rc}` : "finished, but the browser is still not reported installed";
     return [{
       label,
       ok: false,
       optional: true,
-      detail: `\`npx ${pkg} install chromium\` failed (exit ${rc}) — run it manually to see why`,
+      detail: `\`npx ${pkg} install chromium\` ${why} — run it manually to see why`,
     }];
   }
   return [{ label, ok: true, detail: `installed chromium for ${pkg}` }];

@@ -499,6 +499,11 @@ describe("syncPlaywright", () => {
     expect(steps[0]).toMatchObject({ ok: false, optional: true });
   });
 
+  it("never reports present when the dry-run lists no install locations", () => {
+    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: [0, "npm notice: new version available"] }), false, neverRun);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+  });
+
   it("warns when npx is unavailable", () => {
     const steps = syncPlaywright(fakeRunner({}), false, neverRun);
     expect(steps[0]).toMatchObject({ ok: false, optional: true });

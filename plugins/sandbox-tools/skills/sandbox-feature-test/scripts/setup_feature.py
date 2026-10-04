@@ -213,7 +213,17 @@ def ensure_playwright(workspace: Path) -> None:
         return
     # Spec imports resolve from the workspace, so `npx` alone cannot supply the package.
     cmd = ["npm", "install", "--save-dev", f"@playwright/test@{PLAYWRIGHT_VERSION}"]
-    if subprocess.run(cmd, cwd=workspace).returncode != 0:
+    # resolve_workspace can land on the workspaces root (the workspace is itself a
+    # git repo); never drop a package.json + node_modules there.
+    if not (workspace / ".sandbox").is_dir():
+        print(f"[error] {workspace} is not a sandbox workspace (no .sandbox/) — pass --workspace,", file=sys.stderr)
+        print(f"[error] or install manually there: {' '.join(cmd)}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        rc = subprocess.run(cmd, cwd=workspace).returncode
+    except OSError:
+        rc = 127
+    if rc != 0:
         print(f"[error] `{' '.join(cmd)}` failed in {workspace}", file=sys.stderr)
         sys.exit(1)
     print(f"[ok]    installed @playwright/test {PLAYWRIGHT_VERSION}")
