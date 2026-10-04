@@ -2,7 +2,7 @@
 // InitContext alone, and the write-once rules that protect a run in progress.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -149,19 +149,17 @@ test("an empty starting prompt still gives the brief a body", async () => {
   );
 });
 
-test("discoverRepos ignores ICM directories when the workspace root itself is a git repo", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-discover-"));
-  try {
+test("discoverRepos ignores ICM directories when the workspace root itself is a git repo", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
     execFileSync("git", ["init", "-q"], { cwd: root });
-    fs.mkdirSync(path.join(root, "_shared"), { recursive: true });
-    fs.mkdirSync(path.join(root, "stages", "01_research"), { recursive: true });
-    fs.mkdirSync(path.join(root, "demo-repo", ".git"), { recursive: true });
+    icm.init(ctx);
 
     const repos = discoverRepos(root);
     assert.deepEqual(repos.map(([name]) => name), ["demo-repo"]);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
+    // A rerun with the rediscovered repos must agree with contextFromDisk, or `check` reports drift.
+    icm.init({ ...ctx, repos });
+    assert.deepEqual(icm.check(root), []);
+  });
 });
 
 test("no feature or services: the restart sentence points at sandbox-context.md", async () => {
@@ -174,41 +172,6 @@ test("no feature or services: the restart sentence points at sandbox-context.md"
     },
     { meta: { FEATURE: "", SERVICES: "" } },
   );
-});
-
-test("subdirectories of the workspace's own git repo are not treated as code worktrees", async () => {
-  await withIcmWorkspace(async (root, ctx) => {
-    // A workspace root that is itself a git repo: `git rev-parse --git-dir`
-    // then succeeds inside ANY of its subdirectories, not just nested
-    // worktrees -- the rule discoverRepos (workspace_init.ts) used before #96 to
-    // build InitContext.repos. icm's own check/sync instead goes through
-    // repoDirs (standards.ts), which requires a literal `<dir>/.git`. If
-    // icm.init trusted ctx.repos as given, a rerun after `stages/`/`_shared/`
-    // exist would list them as code worktrees too, and `check` would see
-    // permanent drift because contextFromDisk never agreed they were repos.
-    execFileSync("git", ["init", "-q"], { cwd: root });
-    icm.init(ctx);
-
-    function discoverReposLikeWorkspaceInit(workspaceRoot) {
-      const repos = [];
-      for (const name of fs.readdirSync(workspaceRoot).sort()) {
-        const entry = path.join(workspaceRoot, name);
-        if (!fs.statSync(entry).isDirectory() || name.startsWith(".")) continue;
-        if (spawnSync("git", ["-C", entry, "rev-parse", "--git-dir"]).status === 0) {
-          repos.push([name, ""]);
-        }
-      }
-      return repos;
-    }
-    const discovered = discoverReposLikeWorkspaceInit(root);
-    assert.ok(discovered.some(([name]) => name === "stages"), "fixture should reproduce the false positive");
-    icm.init({ ...ctx, repos: discovered });
-
-    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
-    assert.doesNotMatch(claude, /`stages\/` \| code worktree/);
-    assert.doesNotMatch(claude, /`_shared\/` \| code worktree/);
-    assert.deepEqual(icm.check(root), []);
-  });
 });
 
 test("no feature (but services present): the restart sentence still points at sandbox-context.md", async () => {
