@@ -51,17 +51,17 @@
 | Modify `docs/users-guide.md`, `README.md`, `docs/known-issues.md` | Fragment docs, setup flow, stale reference. |
 | Create `.changeset/registry-fragments.md` | Release note. |
 | Create `demo-services/.sandbox/services.yaml` | Separate repo, separate PR. |
-| Create `wellness/.sandbox/services.yaml` | Separate repo, separate PR. |
+| Create `mobile-app/.sandbox/services.yaml` | Separate repo, separate PR. |
 
 Build/test commands used throughout:
 
 ```bash
 # sandbox-core: compile then run one test file
-cd /Users/jayboyer/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
+cd ~/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
 # sandbox-core: whole suite
-cd /Users/jayboyer/repos/sandbox/packages/sandbox-core && npm test
+cd ~/repos/sandbox/packages/sandbox-core && npm test
 # CLI tests need sandbox-core's dist (the exports map points at dist/)
-cd /Users/jayboyer/repos/sandbox && npm run build && cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts
+cd ~/repos/sandbox && npm run build && cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts
 ```
 
 ---
@@ -285,7 +285,7 @@ test("renderRegistry emits the marker, sources and the fixed key order", () => {
 - [ ] **Step 4: Run to verify it fails**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
+cd ~/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
 ```
 Expected: FAIL, `Cannot find module './dist/registry_sync.js'`.
 
@@ -509,14 +509,14 @@ export function servicesLocalYamlPath(): string {
 - [ ] **Step 6: Run to verify it passes**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
+cd ~/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
 ```
 Expected: all tests in the file PASS. If `structuredClone` is flagged by tsc, the project targets a Node that has it (22+); do not polyfill.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && git add packages/sandbox-core/registry_sync.ts packages/sandbox-core/registry_sync.test.mjs packages/sandbox-core/scaffold.ts packages/sandbox-core/config.ts packages/sandbox-core/package.json
+cd ~/repos/sandbox && git add packages/sandbox-core/registry_sync.ts packages/sandbox-core/registry_sync.test.mjs packages/sandbox-core/scaffold.ts packages/sandbox-core/config.ts packages/sandbox-core/package.json
 git commit -m "feat(core): merge per-repo registry fragments into one document
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
@@ -643,7 +643,7 @@ Also add `import os from "node:os";` (the existing import is `{ tmpdir }`; chang
 - [ ] **Step 2: Run to verify it fails**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
+cd ~/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
 ```
 Expected: FAIL, `syncRegistry` is not exported.
 
@@ -749,14 +749,14 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
 - [ ] **Step 4: Run to verify it passes**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
+cd ~/repos/sandbox/packages/sandbox-core && npx tsc && node --test registry_sync.test.mjs
 ```
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && git add packages/sandbox-core/registry_sync.ts packages/sandbox-core/registry_sync.test.mjs
+cd ~/repos/sandbox && git add packages/sandbox-core/registry_sync.ts packages/sandbox-core/registry_sync.test.mjs
 git commit -m "feat(core): syncRegistry generates ~/.sandbox/services.yaml from fragments
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
@@ -934,7 +934,7 @@ describe("demo-services clone gating and registry ordering", () => {
 - [ ] **Step 2: Run to verify the new tests fail**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && npm run build && cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts
+cd ~/repos/sandbox && npm run build && cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts
 ```
 Expected: FAIL (import of `renderServicesLocalYaml` undefined; `demo` option unknown; `config services.yaml` never emitted by `runSetup`).
 
@@ -1042,15 +1042,15 @@ Update the `runSetup` doc comment ("Order matters: ...") to: "Order matters: the
 - [ ] **Step 5: Build and run both suites**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox/packages/sandbox-core && npm test
-cd /Users/jayboyer/repos/sandbox && npm run build && cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts
+cd ~/repos/sandbox/packages/sandbox-core && npm test
+cd ~/repos/sandbox && npm run build && cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts
 ```
 Expected: both PASS. If vitest reports other files importing `renderServicesYaml`, grep for it (`grep -rn renderServicesYaml apps packages --include='*.ts' --include='*.mjs' | grep -v dist`) and switch them to `fixtureServicesYaml()` from `./helpers/sandbox_home.js`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && git add packages/sandbox-core/scaffold.ts packages/sandbox-core/machine_setup.ts apps/cli/src/lib/__tests__/setup_steps.test.ts
+cd ~/repos/sandbox && git add packages/sandbox-core/scaffold.ts packages/sandbox-core/machine_setup.ts apps/cli/src/lib/__tests__/setup_steps.test.ts
 git commit -m "feat(setup): generate the registry from repo fragments after the clone steps
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
@@ -1198,16 +1198,16 @@ And in the usage comment at the top of main.ts add, after the `sandbox config` l
 - [ ] **Step 4: Build, run the CLI suite, smoke the command**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && npm run build && cd apps/cli && npx vitest run
-cd /Users/jayboyer/repos/sandbox && ./sandbox registry --help
+cd ~/repos/sandbox && npm run build && cd apps/cli && npx vitest run
+cd ~/repos/sandbox && ./sandbox registry --help
 ./sandbox registry --check; echo "exit=$?"
 ```
-Expected: vitest PASS; `--help` shows the description; `--check` prints `✗ config services.yaml: no .sandbox/services.yaml found under /Users/jayboyer/repos …` and `exit=1` (no fragment exists yet — Task 5 adds the first).
+Expected: vitest PASS; `--help` shows the description; `--check` prints `✗ config services.yaml: no .sandbox/services.yaml found under ~/repos …` and `exit=1` (no fragment exists yet — Task 5 adds the first).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && git add apps/cli/src/commands/setup.ts apps/cli/src/commands/registry.ts apps/cli/src/main.ts packages/sandbox-core/global_config.ts
+cd ~/repos/sandbox && git add apps/cli/src/commands/setup.ts apps/cli/src/commands/registry.ts apps/cli/src/main.ts packages/sandbox-core/global_config.ts
 git commit -m "feat(cli): sandbox registry sync; setup wizard lists the repo fragments
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
@@ -1241,7 +1241,7 @@ In `.gitignore`, after the line `.sandbox/` add:
 Create `.sandbox/services.yaml` by transcribing the five self-host services, the `x-mcp-client` block and `sandbox-install` from the current `~/.sandbox/services.yaml` (the "The sandbox repo's own workspaces" section, `setup_services.sandbox-install`, and the `x-mcp-client` block), with these edits and nothing else:
 
 - drop every `repo: sandbox` line (derived from the directory name);
-- replace every `/Users/jayboyer/` with `{{home}}/`, so the mounts read:
+- replace every `~/` with `{{home}}/`, so the mounts read:
   ```yaml
     - /var/run/docker.sock:/var/run/docker.sock
     - "{{home}}/.sandbox:{{home}}/.sandbox"
@@ -1267,10 +1267,10 @@ Create `.sandbox/services.yaml` by transcribing the five self-host services, the
 
 Validate it parses and merges before committing:
 ```bash
-cd /Users/jayboyer/repos/sandbox && node -e '
+cd ~/repos/sandbox && node -e '
 const { discoverFragments, mergeRegistry } = await import("./packages/sandbox-core/dist/registry_sync.js");
 const { REGISTRY_DEFAULTS } = await import("./packages/sandbox-core/dist/scaffold.js");
-const f = discoverFragments("/Users/jayboyer/repos").filter(x => x.repo === "sandbox");
+const f = discoverFragments("~/repos").filter(x => x.repo === "sandbox");
 const m = mergeRegistry(f, { defaults: REGISTRY_DEFAULTS, local: {}, paths: { home: "/H", repos_root: "/R", workspaces_root: "/W" } });
 console.log(Object.keys(m.services), m.services.cli.extra_volumes, m.repos.sandbox);
 ' --input-type=module
@@ -1367,7 +1367,7 @@ Create `.changeset/registry-fragments.md`:
 - [ ] **Step 5: Run everything, commit**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && npm run build && npm test
+cd ~/repos/sandbox && npm run build && npm test
 git add .gitignore .sandbox/services.yaml docs/users-guide.md README.md docs/known-issues.md .changeset/registry-fragments.md
 git commit -m "feat: sandbox repo ships its own registry fragment; docs and changeset
 
@@ -1377,7 +1377,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 6: Round-trip check on this machine (after Task 6 lands demo-services' fragment)**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && ./sandbox registry sync
+cd ~/repos/sandbox && ./sandbox registry sync
 node -e '
 import { parse } from "yaml"; import { readFileSync, readdirSync } from "node:fs";
 const home = process.env.HOME + "/.sandbox/";
@@ -1396,7 +1396,7 @@ Then push and open the PR (`gh pr create --base main --head feat/registry-fragme
 ### Task 6: demo-services fragment (separate repo, separate PR)
 
 **Files:**
-- Create: `/Users/jayboyer/repos/demo-services/.sandbox/services.yaml`
+- Create: `~/repos/demo-services/.sandbox/services.yaml`
 
 **Interfaces:**
 - Consumes: fragment schema (Task 1).
@@ -1409,14 +1409,14 @@ On a branch `feat/registry-fragment` in demo-services, create `.sandbox/services
 - [ ] **Step 2: Validate the merge against the sandbox fragment**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && ./sandbox registry --check; ./sandbox registry sync
+cd ~/repos/sandbox && ./sandbox registry --check; ./sandbox registry sync
 ```
 Expected: `--check` reports drift (the fragment is new), `sync` reports `generated … from 2 fragments`. Then run the round-trip check from Task 5 Step 6 and expect `ok` on every key.
 
 - [ ] **Step 3: Commit and PR**
 
 ```bash
-cd /Users/jayboyer/repos/demo-services && git checkout -b feat/registry-fragment && git add .sandbox/services.yaml
+cd ~/repos/demo-services && git checkout -b feat/registry-fragment && git add .sandbox/services.yaml
 git commit -m "feat: sandbox registry fragment for backend, frontend and the demo infrastructure
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
@@ -1425,18 +1425,18 @@ Open the PR with `gh pr create` and the standard footer.
 
 ---
 
-### Task 7: wellness fragment (separate repo, separate PR)
+### Task 7: mobile-app fragment (separate repo, separate PR)
 
 **Files:**
-- Create: `/Users/jayboyer/repos/wellness/.sandbox/services.yaml`
+- Create: `~/repos/mobile-app/.sandbox/services.yaml`
 
 **Interfaces:**
 - Consumes: fragment schema; offsets 0-6 are taken (demo-services 0-1, sandbox 2-6).
-- Produces: `api`, `mobile`, `wellness-install`.
+- Produces: `api`, `mobile`, `mobile-app-install`.
 
 - [ ] **Step 1: Write the fragment**
 
-On a branch `feat/registry-fragment` in wellness, create `.sandbox/services.yaml`:
+On a branch `feat/registry-fragment` in mobile-app, create `.sandbox/services.yaml`:
 
 ```yaml
 # Sandbox service-registry fragment for this repo — see the sandbox users guide,
@@ -1455,7 +1455,7 @@ services:
     internal_port: 4000
     port_offset: 7
     health_endpoint: /health
-    setup_service: wellness-install
+    setup_service: mobile-app-install
     # Same base as apps/api/Dockerfile; the repo root mounts at /app.
     image: node:24-alpine
     command: "cd apps/api && exec npx nest start --watch"
@@ -1483,7 +1483,7 @@ services:
     internal_port: 8081
     port_offset: 8
     health_endpoint: /
-    setup_service: wellness-install
+    setup_service: mobile-app-install
     image: node:24-alpine
     # The web dev server, not the nginx static export the chart deploys.
     command: "cd apps/mobile && exec npx expo start --web --port 8081"
@@ -1506,7 +1506,7 @@ services:
 setup_services:
   # One install for the npm-workspaces root: both apps share the lockfile and the
   # hoisted node_modules, exactly like demo-services' demo-install.
-  wellness-install:
+  mobile-app-install:
     image: node:24-alpine
     command: "npm install"
     node_modules_volume: node-modules
@@ -1515,17 +1515,17 @@ setup_services:
 - [ ] **Step 2: Merge and bring it up**
 
 ```bash
-cd /Users/jayboyer/repos/sandbox && ./sandbox registry sync
+cd ~/repos/sandbox && ./sandbox registry sync
 grep -n "CLERK_SECRET_KEY" ~/.sandbox/secrets.env || echo "CLERK_SECRET_KEY=<value from apps/api/.env>" >> ~/.sandbox/secrets.env
-./sandbox up wellness-smoke -s api,mobile
-curl -sk https://api.local.sandbox.com/health -H "X-Feature: wellness-smoke"
+./sandbox up mobile-app-smoke -s api,mobile
+curl -sk https://api.local.sandbox.com/health -H "X-Feature: mobile-app-smoke"
 ```
-Expected: sync reports 3 fragments; `up` starts `wellness-install`, then `api` and `mobile` healthy; the health call returns the api's health body. If `mobile` is unhealthy because Metro bound to localhost only, add `environment: { EXPO_DEVTOOLS_LISTEN_ADDRESS: "0.0.0.0" }` to its entry and re-run `sandbox up`; if the api rejects the browser origin, that is a CORS setting in `apps/api/src/main.ts`, out of scope for this PR but note it in the PR body. Finish with `./sandbox down wellness-smoke`.
+Expected: sync reports 3 fragments; `up` starts `mobile-app-install`, then `api` and `mobile` healthy; the health call returns the api's health body. If `mobile` is unhealthy because Metro bound to localhost only, add `environment: { EXPO_DEVTOOLS_LISTEN_ADDRESS: "0.0.0.0" }` to its entry and re-run `sandbox up`; if the api rejects the browser origin, that is a CORS setting in `apps/api/src/main.ts`, out of scope for this PR but note it in the PR body. Finish with `./sandbox down mobile-app-smoke`.
 
 - [ ] **Step 3: Commit and PR**
 
 ```bash
-cd /Users/jayboyer/repos/wellness && git checkout -b feat/registry-fragment && git add .sandbox/services.yaml
+cd ~/repos/mobile-app && git checkout -b feat/registry-fragment && git add .sandbox/services.yaml
 git commit -m "feat: sandbox registry fragment for api and mobile
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"

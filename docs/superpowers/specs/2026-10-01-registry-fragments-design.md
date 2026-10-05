@@ -60,7 +60,7 @@ Rules:
 
 The sandbox repo's `.gitignore` ignores `.sandbox/` wholesale (the CLI writes
 generated files there when run from the checkout); it gains
-`!.sandbox/services.yaml`. demo-services and wellness have no such rule.
+`!.sandbox/services.yaml`. demo-services and mobile-app have no such rule.
 
 ### 2. The merge: `packages/sandbox-core/registry_sync.ts`
 
@@ -166,15 +166,15 @@ Three PRs, in this order:
 
 1. **sandbox**: `registry_sync.ts`, setup and wizard changes, the `registry`
    command, scaffold cleanup, `.sandbox/services.yaml` for the five
-   self-host services with `/Users/jayboyer` replaced by `{{home}}` and the
+   self-host services with `~` replaced by `{{home}}` and the
    `x-mcp-client` anchor block moved in with them, the gitignore negation,
    users-guide updates, a changeset.
 2. **demo-services**: `.sandbox/services.yaml` holding `backend`, `frontend`,
    `demo-install`, `redis`, `postgres`.
-3. **wellness**: `.sandbox/services.yaml` holding `api` (NestJS,
+3. **mobile-app**: `.sandbox/services.yaml` holding `api` (NestJS,
    `internal_port` 4000, `port_offset` 7, `/health`, `k8s_port` 80, secrets
    from `apps/api/.env`) and `mobile` (`expo start --web`, `internal_port`
-   8081, `port_offset` 8, `/`), plus a `wellness-install` setup service
+   8081, `port_offset` 8, `/`), plus a `mobile-app-install` setup service
    mirroring `demo-install`. Offsets 0-6 are taken by demo-services and
    sandbox.
 

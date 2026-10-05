@@ -4223,7 +4223,7 @@ Run:
 
 ```bash
 ACC=$(mktemp -d)
-for r in demo-services wellness; do
+for r in demo-services mobile-app; do
   rsync -a --exclude node_modules --exclude .git ~/repos/$r/ "$ACC/$r/"
   mv "$ACC/$r/.sandbox/services.yaml" "$ACC/$r.hand.yaml"
   node apps/cli/dist/main.js detect "$ACC/$r" --dry-run --no-assist > "$ACC/$r.detect.txt" 2>&1

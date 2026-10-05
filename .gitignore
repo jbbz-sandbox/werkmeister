@@ -17,3 +17,7 @@ apps/cli/infra/compose/k8s-port-forward/tmp/
 
 # Generated per-workspace env — carries merged values from ~/.sandbox/secrets.env
 .env
+
+# Python bytecode
+__pycache__/
+*.pyc
