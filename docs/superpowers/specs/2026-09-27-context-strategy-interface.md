@@ -152,7 +152,7 @@ Editing `context_strategy` in `workspace.yml` and rerunning `init-workspace` run
 5. `jit_unchanged.test.ts` — snapshot of every file `jit.init` writes for the existing `workspace_init` fixture, taken before the refactor on `main`, asserted equal after.
 6. CLI: `skills check` in an icm workspace exits 0 with "context layer fresh (icm)"; `notes context` prints nothing; `hooks gate` exits 0.
 
-Harness cell (`docs/experiments/context-management`): create both strategies from the same inputs and diff `find . -type f | sort` against the two expected manifests.
+Harness cell (internal experiment harness, not in this repo): create both strategies from the same inputs and diff `find . -type f | sort` against the two expected manifests.
 
 ## 6. Rollout
 

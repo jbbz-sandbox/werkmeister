@@ -24,7 +24,7 @@ alternative uses come from the machinery, not the application. Six primitives:
 | P6 | **Contracted durable state + explicit graduation** — notes survive subagent→agent, session→session, phase→phase; promotion out is deliberate | `.sandbox/notes/`, `sandbox notes graduate` |
 
 Plus one asset that is not a primitive but is rare: **an empirical measurement rig**
-(`docs/experiments/context-management/`, harnesses 1–9) that produced numbers on what
+(harnesses 1–9, kept outside this repo) that produced numbers on what
 actually changes model behavior. Very few teams have run that experiment at all.
 
 The one-line abstraction: **an ephemeral, per-actor, partially-materialized slice of a

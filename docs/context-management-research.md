@@ -223,10 +223,8 @@ late.*
 
 ## 5. Open threads — where to take the research next
 
-Threads #1 and #2 have now been measured — see
-[experiments/context-management/](experiments/context-management/) and its
-[RESULTS.md](experiments/context-management/results/RESULTS.md). Findings below; the rest
-remain open.
+Threads #1 and #2 have now been measured in internal experiments (harnesses not
+published). Findings below; the rest remain open.
 
 1. **Verify the token model empirically.** — ✅ **MEASURED (2026-07-03, headless `-p`, sonnet).**
    Original estimate: ~20–50 tok per skill description. Measured reality: **~3–7 tokens per
@@ -385,28 +383,26 @@ different context.* Two directions were decided in that session and are recorded
    questions, human consulted before each phase transition.
 
 10. **Service `archetype` — one control surface for all JIT context + tools.** *Decided: design
-    it.* Generalize the planned `standards: [ui, graphql]` field (§5.2) into a service `archetype`
+    it.* Generalize the planned `standards: [ui, service]` field (§5.2) into a service `archetype`
     that bundles the whole profile:
     ```yaml
-    frontend:      { archetype: nextjs-ui }
-    graph-gateway:   { archetype: graphql-subgraph }
-    backend:      { archetype: nest-api }
+    frontend:   { archetype: web-ui }
+    backend:    { archetype: api-service }
 
     archetypes:
-      graphql-subgraph:
-        standards:    [graphql]                         # existing axis (§5.1/§5.5)
-        mcp_servers:  [context7]                          # tool axis — which servers connect (#8)
+      api-service:
+        standards:    [service]                         # existing axis (§5.1/§5.5)
+        mcp_servers:  [context7]                        # tool axis — which servers connect (#8)
         agent_tools:  [Read, Edit, Bash, "mcp__context7__*"]  # subagent tools:  frontmatter (#9)
-        reference:    [federation-composition.md, schema-introspection-runbook.md]
-        run:          "npm run codegen && npm run dev"
+        reference:    [api-conventions.md]
+        run:          "npm run dev"
         test:         "npm run test:contract"
     ```
     This makes the archetype the **single source** from which the generator projects *all* the
     surfaces: the routing table (§5.3), the domain skills (§5.5), the subagent definitions (#9),
     and per-workspace MCP-server enablement (#8). It is thread #6 ("generalize beyond standards")
     made concrete plus the tool axis (#8). The candidate archetype set mirrors the service
-    taxonomy: `nextjs-ui`, `graphql-subgraph`, `nest-api`, `data` (airflow),
-    `mcp-server`.
+    taxonomy: `web-ui`, `api-service`, `data-pipeline`, `gateway`, `mcp-server`.
     ~~*Open:* migration and multi-archetype union.~~ **Resolved 2026-07-04** (see decisions
     above): `standards:` ships first and normalizes to an anonymous archetype (no flag day);
     union `mcp_servers` at the workspace level, never `agent_tools` at the agent level.

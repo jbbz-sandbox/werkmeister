@@ -208,7 +208,7 @@ function renderSkill(
 /**
  * Compose the trigger gate — the description IS the phase+domain gate (§5.1).
  *
- * Measured (docs/experiments/context-management/results/): description length
+ * Measured (internal context-management experiments): description length
  * costs nothing standing; wording drives trigger accuracy — so spell out the
  * phases and file patterns.
  */
