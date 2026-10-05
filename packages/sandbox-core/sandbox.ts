@@ -1578,6 +1578,7 @@ export interface OpenPr {
   outOfDate: boolean;
   hasApprovalLabel: boolean;
   jiraKey: string | null;
+  jiraUrl: string | null;
   isDraft: boolean;
 }
 
@@ -1684,12 +1685,14 @@ export function prFromView(v: ViewResult, _meLogin: string): OpenPr {
       outOfDate: false,
       hasApprovalLabel: false,
       jiraKey: null,
+      jiraUrl: null,
       isDraft: false,
     };
   }
   const labels = (v.labels ?? []).map((l) => l.name ?? "").filter(Boolean);
   const title = v.title ?? "";
   const body = v.body ?? "";
+  const jiraKey = parseJiraKey(`${title} ${body} ${v.headRefName ?? ""}`);
   return {
     url: v.url,
     repo,
@@ -1702,7 +1705,8 @@ export function prFromView(v: ViewResult, _meLogin: string): OpenPr {
     failingChecks: countFailingChecks(v.statusCheckRollup),
     outOfDate: v.mergeStateStatus === "BEHIND",
     hasApprovalLabel: labels.includes(APPROVAL_LABEL),
-    jiraKey: parseJiraKey(`${title} ${body} ${v.headRefName ?? ""}`),
+    jiraKey,
+    jiraUrl: jiraKey ? jiraBrowseUrl(jiraKey) : null,
     isDraft: v.isDraft ?? false,
   };
 }

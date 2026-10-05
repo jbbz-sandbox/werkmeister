@@ -641,6 +641,7 @@ export function createServer(): McpServer {
     outOfDate: z.boolean(),
     hasApprovalLabel: z.boolean(),
     jiraKey: z.string().nullable(),
+    jiraUrl: z.string().nullable(),
     isDraft: z.boolean(),
   });
   server.registerTool(
