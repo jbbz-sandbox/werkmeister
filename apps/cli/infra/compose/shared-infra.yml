@@ -1,0 +1,199 @@
+# Shared infrastructure services
+# These run locally (not per-feature) and are shared across all features.
+# Start with: docker compose -f compose/shared-infra.yml up -d
+#
+# Digest-pinned images (SEC-03/D-13/D-14/D-15): mutable `:latest`/unpinned tags can
+# silently resolve to different image content over time. Each pinned `image:` line
+# below carries a same-line comment naming the tag it was resolved from. To refresh
+# a pin after intentionally bumping to a newer release:
+#   docker pull <image>:<tag> && docker inspect --format='{{index .RepoDigests 0}}' <image>:<tag>
+# Then update the `@sha256:` value and the adjacent tag comment together.
+
+name: sandbox-infra
+
+networks:
+  shared-network:
+    name: sandbox-shared
+    driver: bridge
+
+services:
+  # redis and postgres are NOT docker services here — they run in the OrbStack
+  # k8s cluster (demo-services: charts/redis.yaml, charts/postgres.yaml) and are surfaced to the
+  # docker world by the k8s-forwards container below (host 9050 / 9051). This
+  # demonstrates the same port-forward path used for real k8s services.
+
+  # Trust boundary (SEC-03/D-16): k8s-forwards receives real, live k8s cluster
+  # credentials via the two bind mounts below, equivalent to the host user's own
+  # `kubectl` access to the cluster:
+  #   - ${HOME}/.kube:/root/.kube:ro                          (read-only)
+  #   - ${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro  (read-only, generated)
+  # A container escape, or a compromised/tampered image running at the pinned
+  # digest below, would have that same k8s access. The digest pin on the
+  # `alpine` base image (see k8s-port-forward/Dockerfile) is the primary
+  # mitigation against an unexpected image swap introducing that risk; full
+  # sandboxing/credential-scoping of this container is accepted as out-of-scope
+  # for this phase.
+  k8s-forwards:
+    build:
+      context: ./k8s-port-forward
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+      # See Dockerfile: corp-ca.crt is appended to alpine's trust store so
+      # `apk add` validates through a corporate TLS proxy (Netskope/Zscaler).
+      # `sandbox connect` writes ~/.sandbox/corp-ca.crt if it can find a
+      # proxy root in the System keychain; otherwise the file is empty and
+      # the build path is a no-op.
+      secrets:
+        - corp_ca
+    platform: linux/amd64
+    container_name: sandbox-k8s-forwards
+    restart: unless-stopped
+    # Published ports and network aliases come from the generated override
+    # (~/.sandbox/infra/compose/k8s-forwards.override.yml); see k8s_forwards.ts.
+    volumes:
+      - ${HOME}/.kube:/root/.kube:ro
+      - ${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro
+      # Forward table generated from services.yaml by `sandbox connect`.
+      - ${SANDBOX_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro
+    env_file:
+      - ${HOME}/.sandbox/secrets.env
+    # OrbStack's API server is https://127.0.0.1:26443 on the host; from inside
+    # this container 127.0.0.1 is the container itself. connect.ts rewrites the
+    # pinned kubeconfig's server to host.docker.internal, which this mapping
+    # points at the host gateway (as caddy already does).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - KUBECONFIG=/tmp/kubeconfig
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 4096M
+        reservations:
+          cpus: "0.2"
+          memory: 1024M
+    # probe.sh reads the same generated forward table the entrypoint does, so
+    # the forward set can change without this line changing, and each forward
+    # gets the probe its protocol needs (a dead forward still accepts TCP).
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/probe.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      shared-network:
+        aliases:
+          - k8s-forwards
+
+  jaeger:
+    image: jaegertracing/all-in-one@sha256:ab6f1a1f0fb49ea08bcd19f6b84f6081d0d44b364b6de148e1798eb5816bacac  # pinned from tag "latest" of jaegertracing/all-in-one
+    container_name: sandbox-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - QUERY_BASE_PATH=/jaeger
+    labels:
+      # 6 ports exposed; tell OrbStack's *.orb.local proxy which one is the UI
+      dev.orbstack.http-port: "16686"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:16686/ 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      shared-network:
+        aliases:
+          - jaeger
+
+  redisinsight:
+    image: redis/redisinsight@sha256:aa21bbd198455b4ad964f76782db951155aa0d712321f599972d1525f031f0e6  # pinned from tag "latest" of redis/redisinsight
+    container_name: redisinsight
+    ports:
+      - "5540:5540"
+    environment:
+      - RI_PROXY_PATH=redisinsight
+    volumes:
+      - redisinsight-data:/data
+      - ./redisinsight/databases.json:/data/databases.json:ro
+    restart: unless-stopped
+    # Preset DB points at the k8s-forwards tunnel (redis now lives in k8s); start
+    # after the tunnel container so the preset connects on first load.
+    depends_on:
+      k8s-forwards:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    networks:
+      shared-network:
+        aliases:
+          - redisinsight
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sandbox-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${SANDBOX_STATE_DIR}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../proxy/ui:/sandbox/proxy/ui:ro
+      # Generated beside the Caddyfile; a file bind over the shipped ui dir.
+      - ${SANDBOX_STATE_DIR}/proxy/features.json:/sandbox/proxy/ui/features.json:ro
+      # Cert location comes from `ingress.certs_dir` in ~/.sandbox/config.yaml,
+      # exported as SANDBOX_CERTS_DIR by ~/.sandbox/env.sh. The default keeps
+      # this working for a shell that hasn't sourced env.sh.
+      - ${SANDBOX_CERTS_DIR:-${HOME}/.docker/certs}:/etc/caddy/certs:ro
+      - sandbox-caddy-data:/data
+      - sandbox-caddy-config:/config
+    # Caddy terminates each service's hostname directly and dials the feature
+    # container via the host's published port, so it needs host.docker.internal
+    # (host-gateway on Linux; Docker Desktop provides it automatically, but
+    # declaring it is portable).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Liveness via the admin API — independent of any site, TLS trust, or a
+    # /etc/hosts entry for the routed hostname.
+    healthcheck:
+      # 127.0.0.1, not localhost: caddy's admin binds IPv4-only 127.0.0.1:2019,
+      # but localhost resolves to ::1 (IPv6) first inside the container → refused.
+      test: ["CMD-SHELL", "wget -qO /dev/null --timeout=3 http://127.0.0.1:2019/config/ 2>/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      shared-network:
+        aliases:
+          - caddy
+
+volumes:
+  sandbox-caddy-data:
+  sandbox-caddy-config:
+  redisinsight-data:
+
+secrets:
+  corp_ca:
+    file: ${HOME}/.sandbox/corp-ca.crt

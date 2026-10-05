@@ -1,0 +1,245 @@
+# Auto-generated for feature: {{ feature_name }}
+# Slot: {{ slot }} | Port range: {{ base_port }}-{{ base_port + 19 }}
+# Local services: {{ local_services | map(attribute='name') | join(', ') }}
+
+name: sandbox-{{ feature_name }}
+
+networks:
+  feature-{{ feature_name }}:
+    name: sandbox-{{ feature_name }}
+  shared-network:
+    external: true
+    name: sandbox-shared
+
+{% set setup_services_needed = [] %}
+{% for svc in local_services %}
+{% if svc.setup_service and svc.setup_service not in setup_services_needed %}
+{% do setup_services_needed.append(svc.setup_service) %}
+{% endif %}
+{% endfor %}
+
+{# Collect all named volumes and prefix with feature name for isolation #}
+{% set volume_names = [] %}
+{% for setup_name in setup_services_needed %}
+{% set setup = setup_configs[setup_name] %}
+{% if setup.node_modules_volume and setup.node_modules_volume not in volume_names %}
+{% do volume_names.append(setup.node_modules_volume) %}
+{% endif %}
+{% for vol in setup.extra_volumes %}
+{% set vol_name = vol.split(':')[0] %}
+{% if '/' not in vol_name and vol_name not in volume_names %}
+{% do volume_names.append(vol_name) %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% for svc in local_services %}
+{% if svc.node_modules_volume and svc.node_modules_volume not in volume_names %}
+{% do volume_names.append(svc.node_modules_volume) %}
+{% endif %}
+{% for vol in svc.get('extra_volumes', []) %}
+{% set vol_name = vol.split(':')[0] %}
+{% if '/' not in vol_name and vol_name not in volume_names %}
+{% do volume_names.append(vol_name) %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if volume_names %}
+volumes:
+{% for vol_name in volume_names %}
+  {{ feature_name }}-{{ vol_name }}:
+    name: {{ feature_name }}-{{ vol_name }}
+{% endfor %}
+{% endif %}
+
+services:
+{% for setup_name in setup_services_needed %}
+{% set setup = setup_configs[setup_name] %}
+{# Same `image` hook the app services get below. A setup container installs deps #}
+{# that the app container then loads, so the two must agree on platform+libc:    #}
+{# sharp picks @img/sharp-linux-x64 vs -linuxmusl-x64 at install time, and a     #}
+{# glibc-built tree will not load under an alpine app image.                     #}
+  {{ setup_name }}:
+    image: {{ setup.image | default('node:20.16.0') }}
+    container_name: {{ feature_name }}-{{ setup_name }}
+    labels:
+      com.sandbox.local.feature: "{{ feature_name }}"
+      com.sandbox.local.slot: "{{ slot }}"
+      com.sandbox.local.service: "{{ setup_name }}"
+      {#- One-shot: `sandbox status` and the VS Code tree read this to keep a
+          finished setup container out of the running/total tally. #}
+      com.sandbox.local.role: "setup"
+    working_dir: /app
+    volumes:
+      - {{ workspace_path }}/{{ setup.repo }}:/app
+{% if setup.worktree_gitdir %}
+      - {{ setup.worktree_gitdir }}:{{ setup.worktree_gitdir }}:ro
+{% endif %}
+{% if setup.node_modules_volume %}
+      - {{ feature_name }}-{{ setup.node_modules_volume }}:/app/node_modules
+{% endif %}
+{% for vol in setup.extra_volumes %}
+{% set vol_parts = vol.split(':') %}
+{% if '/' in vol_parts[0] %}
+      - {{ vol | replace('${REPO}', workspace_path + '/' + setup.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+{% else %}
+      - {{ feature_name }}-{{ vol }}
+{% endif %}
+{% endfor %}
+{# Opt-in: no `*-startup.sh` ships in infra/compose/scripts/, and bind-mounting #}
+{# a host path that does not exist makes Docker silently create an empty        #}
+{# directory at /usr/local/bin/startup.sh.                                      #}
+{% if setup.startup_script %}
+      - {{ sandbox_root }}/infra/compose/scripts/{{ setup_name }}-startup.sh:/usr/local/bin/startup.sh
+{% endif %}
+    command: ["/bin/sh", "-c", "{{ setup.command }}"]
+    deploy:
+      resources:
+        limits:
+          memory: {{ setup.memory_limit }}
+        reservations:
+          memory: {{ setup.memory_reservation }}
+{% if setup.environment %}
+    environment:
+{% for key, value in setup.environment.items() %}
+      - "{{ key }}={{ value }}"
+{% endfor %}
+{% endif %}
+    healthcheck:
+      test: ["CMD-SHELL", "{{ setup.healthcheck }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+    networks:
+      - feature-{{ feature_name }}
+      - shared-network
+
+{% endfor %}
+{% for svc in local_services %}
+  {{ svc.name }}:
+    image: {{ svc.image | default('node:20.16.0') }}
+    container_name: {{ feature_name }}-{{ svc.name }}
+    labels:
+      com.sandbox.local.feature: "{{ feature_name }}"
+      com.sandbox.local.slot: "{{ slot }}"
+      com.sandbox.local.service: "{{ svc.name }}"
+      com.sandbox.local.role: "app"
+    working_dir: /app
+    restart: unless-stopped
+    volumes:
+      - {{ workspace_path }}/{{ svc.repo }}:/app
+{% if svc.worktree_gitdir %}
+      - {{ svc.worktree_gitdir }}:{{ svc.worktree_gitdir }}:ro
+{% endif %}
+{% if svc.node_modules_volume %}
+      - {{ feature_name }}-{{ svc.node_modules_volume }}:/app/node_modules
+{% endif %}
+{% for vol in svc.get('extra_volumes', []) %}
+{% set vol_parts = vol.split(':') %}
+{% if '/' in vol_parts[0] %}
+      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+{% else %}
+      - {{ feature_name }}-{{ vol }}
+{% endif %}
+{% endfor %}
+{# Per-workspace dev-links (note 008): always host bind mounts, so no named-volume branch #}
+{% for vol in svc.get('dev_links', []) %}
+      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+{% endfor %}
+    ports:
+      - "{{ base_port + svc.port_offset }}:{{ svc.internal_port }}"
+    env_file:
+      - .env
+      - .env.{{ svc.name }}
+{% if svc.environment %}
+    environment:
+{% for key, value in svc.environment.items() %}
+      - "{{ key }}={{ value }}"
+{% endfor %}
+{% endif %}
+{% if svc.command %}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        # Rewrite git+ssh GitHub URLs to authenticated HTTPS so `yarn install`
+        # can fetch git-hosted deps (e.g. clearbit/needle) without SSH keys in
+        # the container. No-op when GITHUB_AUTH_TOKEN is absent. Two --add calls:
+        # a plain `git config` overwrites; git invokes the ssh:// form at runtime.
+        if [ -n "$${GITHUB_AUTH_TOKEN}" ]; then
+          git config --global --add url."https://$${GITHUB_AUTH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add url."https://$${GITHUB_AUTH_TOKEN}@github.com/".insteadOf "git+ssh://git@github.com/"
+        fi
+        {{ svc.command }}
+{% endif %}
+    deploy:
+      resources:
+        limits:
+          memory: {{ svc.memory_limit }}
+        reservations:
+          memory: {{ svc.memory_reservation }}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:{{ svc.internal_port }}{{ svc.health_endpoint }} || exit 0"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+{% set local_svc_names = [] %}
+{% for local_svc in local_services %}
+{% do local_svc_names.append(local_svc.name) %}
+{% endfor %}
+{% set svc_deps = [] %}
+{% for dep in svc.get('depends_on', []) %}
+{% if dep in local_svc_names and dep != svc.setup_service and dep not in svc_deps %}
+{% do svc_deps.append(dep) %}
+{% endif %}
+{% endfor %}
+{% if svc.setup_service or svc_deps %}
+    depends_on:
+{# One-shot setup containers must run to completion; long-running service deps #}
+{# must be up AND healthy (service_completed_successfully never fires on a      #}
+{# server that doesn't exit, leaving the dependent stuck in `Created`).        #}
+{% if svc.setup_service %}
+      {{ svc.setup_service }}:
+        condition: service_completed_successfully
+{% endif %}
+{% for dep in svc_deps %}
+      {{ dep }}:
+        condition: service_healthy
+{% endfor %}
+{% endif %}
+    networks:
+      feature-{{ feature_name }}:
+        aliases:
+          - {{ svc.name }}
+      shared-network:
+        aliases:
+          - {{ feature_name }}-{{ svc.name }}
+
+{% if svc.extra_services %}
+{% for extra_name, extra in svc.extra_services.items() %}
+  {{ extra_name }}:
+    image: {{ extra.image }}
+    container_name: {{ feature_name }}-{{ extra_name }}
+    labels:
+      com.sandbox.local.feature: "{{ feature_name }}"
+      com.sandbox.local.slot: "{{ slot }}"
+      com.sandbox.local.service: "{{ extra_name }}"
+      com.sandbox.local.role: "app"
+    ports:
+      - "{{ base_port + svc.port_offset + 100 }}:{{ extra.get('internal_port', 6379) }}"
+    command: {{ extra.command }}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - feature-{{ feature_name }}
+      - shared-network
+
+{% endfor %}
+{% endif %}
+{% endfor %}

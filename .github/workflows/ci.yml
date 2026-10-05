@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The dashboard smoke tests drive the real `commitAndPush`, which commits
+      # with the ambient git identity by design (the handoff commit belongs to
+      # the developer, not to a hardcoded bot). Runners have no identity
+      # configured, so that `git commit` fails with "Author identity unknown".
+      - name: Configure a git identity for the smoke tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@users.noreply.github.com"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      # The extension host is an Electron app: it needs a display even headless,
+      # and it downloads its own VS Code build on first run.
+      - run: xvfb-run -a npm run test:integration --workspace vscode-plugin
+      # `vsce package` fails on a README link it can't rewrite, and is the only
+      # check on .vscodeignore — #38 broke packaging and nothing caught it.
+      - run: npm run package --workspace vscode-plugin

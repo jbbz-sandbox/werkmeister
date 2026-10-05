@@ -1,0 +1,21 @@
+# AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
+# Source:    sandbox/infra/config/services.yaml (type: graphql-subgraph)
+#            + sandbox/infra/config/ports.yaml (k8s_forwards)
+#            + .sandbox/workspace.yml (feature local_services)
+# Generator: cli/lib/generate.py :: generate_supergraph_config
+# Template:  infra/templates/supergraph-config.yml.njk
+# Regen:     sandbox up  (or `sandbox init-workspace`)
+# To add a subgraph: set its `type: graphql-subgraph` in services.yaml and rerun.
+# To change endpoint path, set `graphql_path: /<path>` on the service (default /graphql).
+#
+# Feature: {{ feature_name }}
+# Local subgraphs use the per-feature container network; remote subgraphs
+# fall through to the shared k8s-forwards container.
+
+subgraphs:
+{% for subgraph in subgraphs %}
+  {{ subgraph.name }}:
+    routing_url: {{ subgraph.url }}
+    schema:
+      subgraph_url: {{ subgraph.url }}
+{% endfor %}

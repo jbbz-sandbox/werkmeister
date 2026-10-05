@@ -1,0 +1,57 @@
+{
+  "name": "@jbbz-sandbox/sandbox-cli",
+  "version": "0.3.0",
+  "description": "Multi-feature concurrent development orchestrator CLI tool",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "sandbox": "./sandbox"
+  },
+  "//files": "dist/ is gitignored build output, and npm drops gitignored paths unless an explicit list opts them back in. That opt-in is indiscriminate, so the negations below keep out files an older CLI generated into a maintainer's checkout — above all tmp/kubeconfig, which held live cluster credentials. Current versions generate under ~/.sandbox/infra, so these only guard stale local files at pack time.",
+  "files": [
+    "dist",
+    "!dist/**/*.map",
+    "infra",
+    "bin",
+    "sandbox",
+    "README.md",
+    "CONVENTIONS.md",
+    "!infra/compose/k8s-port-forward/tmp",
+    "!infra/proxy/Caddyfile",
+    "!infra/proxy/ui/features.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbbz-sandbox/sandbox.git",
+    "directory": "apps/cli"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node esbuild.mjs && vitest run",
+    "prepack": "cd ../../packages/vscode-plugin && npm run build && npm run package -- --out ../../apps/cli/dist/sandbox-workspaces.vsix"
+  },
+  "//prepack": "Ships the VS Code extension in the tarball for `sandbox setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build.",
+  "//dependencies": "Everything else is bundled by esbuild.mjs — see its docstring. dockerode stays external because its ssh2 -> cpu-features requires must be allowed to fail into a pure-JS fallback, and ESM output turns an unresolved require into a shim that throws instead. The Agent SDK is external too, because it locates its bundled Claude Code binary by its own package path.",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.288",
+    "dockerode": "^5.0.1"
+  },
+  "devDependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "@types/node": "^22.13.0",
+    "commander": "^13.1.0",
+    "esbuild": "^0.24.0",
+    "sandbox-core": "^0.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "yaml": "^2.7.0"
+  }
+}

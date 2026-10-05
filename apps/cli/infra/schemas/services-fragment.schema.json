@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/jbbz-sandbox/sandbox/main/apps/cli/infra/schemas/services-fragment.schema.json",
+  "title": "Sandbox service-registry fragment (<repo>/.sandbox/services.yaml)",
+  "description": "A repo's slice of the service registry. `sandbox registry sync` (run by `sandbox setup`) merges every fragment under paths.repos_root into ~/.sandbox/services.yaml. `{{home}}`, `{{repos_root}}` and `{{workspaces_root}}` expand in any string at merge time. Mirrors the checks in packages/sandbox-core/registry_sync.ts.",
+  "type": "object",
+  "properties": {
+    "services": {
+      "type": "object",
+      "description": "Application services this repo owns. Names must be unique across all repos.",
+      "additionalProperties": { "$ref": "#/definitions/service" }
+    },
+    "setup_services": {
+      "type": "object",
+      "description": "One-shot install/build containers that services gate on via `setup_service`.",
+      "additionalProperties": { "$ref": "#/definitions/setupService" }
+    },
+    "infrastructure": {
+      "type": "object",
+      "description": "Cluster datastores port-forwarded into the docker world by the k8s-forwards container. Never run locally.",
+      "additionalProperties": { "$ref": "#/definitions/infrastructure" }
+    }
+  },
+  "patternProperties": {
+    "^x-": { "description": "Holds YAML anchors; dropped from the generated registry." }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "memory": {
+      "type": "string",
+      "pattern": "^[0-9]+[KMG]?$",
+      "description": "Compose memory size, e.g. 512M or 2G."
+    },
+    "environment": {
+      "type": "object",
+      "description": "Compose `environment:`. Beats every env_file (including the service's secrets file), so never put `${SECRET}` here; declare it in `secrets:` instead.",
+      "additionalProperties": { "type": ["string", "number", "boolean"] }
+    },
+    "volumes": {
+      "type": "array",
+      "description": "Extra compose volume specs (`src:dst[:ro]`). Bare names are per-feature named volumes.",
+      "items": { "type": "string" }
+    },
+    "healthEndpoint": {
+      "type": "string",
+      "description": "HTTP path (e.g. /health), `redis` or `postgres` for a protocol probe, or \"\" for TCP-only."
+    },
+    "service": {
+      "type": "object",
+      "required": ["path", "type", "internal_port", "port_offset", "health_endpoint"],
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "Derived from the checkout's directory name. If set, it must equal that name."
+        },
+        "path": {
+          "type": "string",
+          "description": "Service directory within the repo; `.` for the whole repo. Drives the repo's path_mappings."
+        },
+        "type": { "enum": ["api", "web", "library", "cli"] },
+        "archetype": {
+          "type": "string",
+          "description": "Key in the registry's `archetypes:` (defaults: node-web, node-service, node-tool, mcp-client). Selects standards and MCP servers."
+        },
+        "standards": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Legacy: standards keys used only when `archetype` is unset."
+        },
+        "test": { "type": "string", "description": "Test command, run from the repo root." },
+        "internal_port": { "$ref": "#/definitions/port", "description": "Port the process listens on in-container (Helm containerPort)." },
+        "port_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Slot-relative host port. Must be unique across ALL repos."
+        },
+        "health_endpoint": { "$ref": "#/definitions/healthEndpoint" },
+        "image": { "type": "string" },
+        "dockerfile": { "type": "string", "description": "Relative to `path`; only used when no image template applies. Default Dockerfile." },
+        "command": { "type": "string", "description": "Run via `sh -c` from /app (the repo root), not from `path`." },
+        "memory_limit": { "$ref": "#/definitions/memory" },
+        "memory_reservation": { "$ref": "#/definitions/memory" },
+        "setup_service": {
+          "type": ["string", "null"],
+          "description": "Key in `setup_services:` this service waits on (service_completed_successfully)."
+        },
+        "monorepo": { "type": ["string", "null"] },
+        "node_modules_volume": { "type": ["string", "null"], "description": "Per-feature named volume mounted over node_modules." },
+        "extra_volumes": { "$ref": "#/definitions/volumes" },
+        "environment": { "$ref": "#/definitions/environment" },
+        "secrets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys `sandbox up` requires in ~/.sandbox/secrets.env, as `<SERVICE>__KEY` or plain `KEY`; delivered as plain `KEY` via the service's own `<workspace>/.env.<service>` env_file."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Services that must be healthy before this one starts."
+        },
+        "extra_services": {
+          "type": "object",
+          "description": "Sidecar containers rendered next to this service.",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["image"],
+            "properties": {
+              "image": { "type": "string" },
+              "command": { "type": "string" },
+              "internal_port": { "$ref": "#/definitions/port" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "feature_router": {
+          "type": "object",
+          "description": "Opts into Caddy ingress at <service>.<local_domain>. `{}` for local-only.",
+          "properties": {
+            "hostname": { "type": "string", "description": "Overrides the derived local hostname." },
+            "remote_upstream": { "type": "string", "description": "host:port Caddy dials for the remote route (a k8s-forwards alias, not cluster DNS). Opts into a remote route." },
+            "remote_hostname": { "type": "string", "description": "Overrides the derived remote hostname." }
+          },
+          "additionalProperties": false
+        },
+        "k8s_deployment": { "type": "string", "description": "Deployment `sandbox intercept` targets." },
+        "k8s_namespace": { "type": "string" },
+        "k8s_port": { "$ref": "#/definitions/port", "description": "Service port number (Helm service.port)." },
+        "k8s_port_name": { "type": "string", "description": "Named Service port; required by intercept." },
+        "k8s_pod_prefix": { "type": "string", "description": "Pod name prefix the port-forward selects." },
+        "k8s_forward_port": { "$ref": "#/definitions/port", "description": "Host listen port of the k8s-forwards tunnel. Unique across ALL repos." },
+        "k8s_forward_name": { "type": "string", "description": "Network alias for the tunnel when it differs from the service name." }
+      },
+      "additionalProperties": false
+    },
+    "setupService": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "repo": { "type": "string", "description": "Derived from the checkout's directory name." },
+        "image": { "type": "string", "description": "Must match the image of the services that use its node_modules." },
+        "command": { "type": "string" },
+        "node_modules_volume": { "type": ["string", "null"] },
+        "extra_volumes": { "$ref": "#/definitions/volumes" },
+        "environment": { "$ref": "#/definitions/environment" },
+        "memory_limit": { "$ref": "#/definitions/memory" },
+        "memory_reservation": { "$ref": "#/definitions/memory" },
+        "healthcheck": { "type": "string", "description": "CMD-SHELL test. Default `true`." },
+        "startup_script": {
+          "type": "boolean",
+          "description": "Mount infra/compose/scripts/<name>-startup.sh at /usr/local/bin/startup.sh."
+        }
+      },
+      "additionalProperties": false
+    },
+    "infrastructure": {
+      "type": "object",
+      "required": ["k8s_forward_port", "internal_port"],
+      "properties": {
+        "k8s_forward_port": { "$ref": "#/definitions/port", "description": "Host listen port. Unique across ALL repos." },
+        "k8s_forward_name": { "type": "string" },
+        "internal_port": { "$ref": "#/definitions/port" },
+        "k8s_namespace": { "type": "string" },
+        "k8s_pod_prefix": { "type": "string" },
+        "health_endpoint": { "$ref": "#/definitions/healthEndpoint" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

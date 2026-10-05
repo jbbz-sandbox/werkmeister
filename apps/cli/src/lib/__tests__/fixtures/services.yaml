@@ -1,0 +1,166 @@
+# Service Registry — maps services to repos, ports, and deployments.
+# Used by the sandbox CLI to detect, generate, and route services.
+#
+# This registry describes the two demo apps that live in the `demo-services`
+# turborepo (apps/backend, apps/frontend), cloned alongside sandbox under
+# `paths.repos_root`. They run in dev-mount mode: the CLI
+# mounts the app source into a node image and runs `command`, so `sandbox up`
+# / `down` bring a feature workspace of these apps up and down with live edits.
+#
+# `archetype:` (optional) names an entry in the `archetypes:` registry below,
+# bundling the standards routing, generated subagents, and MCP servers a
+# service type contributes to workspace generation. Services with no archetype
+# contribute only the universal `comments` base.
+
+# Named service-type bundles. `standards:` keys must match a
+# docs/standards/<key>.md module's `domain:` frontmatter; `comments` is
+# universal/implicit and never listed. `test:` is the archetype's default test
+# command, run from the service's repo root ({service} expands to the name).
+archetypes:
+  node-web:
+    standards: [ui, config, testing]
+    mcp_servers: [context7]
+    test: "npm test"
+
+# MCP server definitions the archetypes' `mcp_servers:` lists reference. The
+# union across a workspace's archetypes is projected into .mcp.json by
+# `sandbox init-workspace`. `${VAR:-}` env expansion happens at session start,
+# so secrets stay out of this file (context7 works keyless at lower limits).
+mcp_servers:
+  context7:
+    type: stdio
+    command: npx
+    args: ["-y", "@upstash/context7-mcp"]
+    env:
+      CONTEXT7_API_KEY: "${CONTEXT7_API_KEY:-}"
+
+# Kube context for a dev cluster — consumed by `sandbox intercept`. Unused by
+# the demo apps (no k8s deployment), but the loader expects the key present.
+k8s_context: orbstack
+
+services:
+  backend:
+    repo: demo-services
+    path: apps/backend
+    type: api
+    test: "npm test"
+    internal_port: 3000
+    port_offset: 0
+    health_endpoint: /health
+    monorepo: null
+    setup_service: null
+    # The repo root is mounted at /app; cd into the app's subdir (the template
+    # runs `command` from /app and does not use `path:` for the working dir).
+    # Zero-dependency stdlib http app — no install step, just run the source.
+    image: node:22-alpine
+    command: "cd apps/backend && exec node server.js"
+    memory_limit: 256M
+    memory_reservation: 64M
+    node_modules_volume: null
+    # Telepresence intercept coordinates (`sandbox intercept`). The demo apps also
+    # run in the OrbStack cluster as same-named Deployments in `default`; intercept
+    # reroutes cluster traffic carrying `x-feature: <feature>` to the local
+    # container. k8s_port is the Service port NUMBER; k8s_port_name is the named
+    # Service port (charts/webapp names it `http`) — required by the CLI's
+    # named-port precondition.
+    k8s_deployment: backend
+    k8s_namespace: default
+    k8s_port: 80
+    k8s_port_name: http
+    # Also port-forwarded into the docker world (like redis/postgres): the
+    # k8s-forwards container tunnels the in-cluster pod to the host so feature
+    # containers can reach the deployed app at k8s-forwards:9052. remote port is
+    # the pod's containerPort (internal_port 3000), not the Service port.
+    k8s_forward_port: 9052
+    k8s_pod_prefix: backend
+
+  frontend:
+    repo: demo-services
+    path: apps/frontend
+    type: web
+    archetype: node-web
+    test: "npm test"
+    internal_port: 3000
+    port_offset: 1
+    health_endpoint: /
+    monorepo: null
+    setup_service: null
+    # Idempotent boot: install only when deps are missing, then `next dev` for
+    # live reload — avoids re-installing on every restart. demo-services is an
+    # npm-workspaces turborepo, so the install runs at /app (the repo root) and
+    # deps hoist to the bind-mounted /app/node_modules, NOT apps/frontend's —
+    # hence the root-level probe. npm puts the ancestor .bin on PATH, so
+    # `npm run dev` still resolves `next` from the subdir.
+    image: node:22-alpine
+    command: "{ [ -d node_modules/next ] || npm install; } && cd apps/frontend && exec npm run dev"
+    memory_limit: 1G
+    memory_reservation: 256M
+    node_modules_volume: null
+    # Telepresence intercept coordinates (see backend). Service port is 8080.
+    k8s_deployment: frontend
+    k8s_namespace: default
+    k8s_port: 8080
+    k8s_port_name: http
+    # Also port-forwarded into the docker world (see backend): reachable at
+    # k8s-forwards:9053. remote is the pod containerPort (3000), not port 8080.
+    k8s_forward_port: 9053
+    k8s_pod_prefix: frontend
+    # Caddy feature routing (feature_routing.ts): Caddy terminates `hostname`
+    # directly and reverse-proxies
+    # to the running frontend container (via its published host port). When an
+    # X-Feature cookie is present, its value is copied into an X-Feature header
+    # on the upstream call so the app can read the selected feature.
+    feature_router:
+      # Local docker feature: Caddy terminates this host and reverse-proxies to
+      # the running frontend container via its published host port.
+      hostname: frontend.local.sandbox.com
+      # Remote K8s deployment: the docker Caddy terminates this host too (it
+      # resolves to 127.0.0.1 like the local one) and reverse-proxies to the
+      # cluster deployment through the k8s-forwards tunnel — NOT cluster DNS,
+      # which Caddy cannot resolve from the docker shared network. Static —
+      # always routed, independent of sandbox slots/features.
+      remote_hostname: frontend.remote.sandbox.com
+      remote_upstream: k8s-frontend:9053
+    # frontend fetches http://backend/ server-side; the feature network
+    # aliases each service to its name, so this dependency also guarantees
+    # backend is healthy before frontend renders.
+    depends_on:
+      - backend
+
+# Infrastructure forwarded from the OrbStack k8s cluster into the docker world.
+# The k8s-forwards container `kubectl port-forward`s each Service (by deployment
+# whose name starts with `k8s_pod_prefix`, in `k8s_namespace`) to the host on
+# `k8s_forward_port`. Feature containers reach them at host.docker.internal:<port>
+# — the ports the generated feature .env already expects (redis 9050, postgres
+# 9051). Apply the k8s side from the demo-services repo (`./bin/bootstrap-k8s-env.sh`,
+# or `kubectl apply -f charts/redis.yaml -f charts/postgres.yaml` there).
+# `health_endpoint: ""` selects the entrypoint's TCP-only
+# probe (these aren't HTTP services).
+infrastructure:
+  redis:
+    k8s_forward_port: 9050
+    internal_port: 6379
+    k8s_namespace: default
+    k8s_pod_prefix: redis
+    health_endpoint: ""
+  postgres:
+    k8s_forward_port: 9051
+    internal_port: 5432
+    k8s_namespace: default
+    k8s_pod_prefix: postgres
+    health_endpoint: ""
+
+# No shared setup container — backend needs no deps at all, and frontend does
+# its own root-level install on boot (see its `command`). Promote to a
+# setup_service if a third app makes the duplicated install cost real.
+setup_services: {}
+
+# Repo-to-directory mapping for auto-detection. Both apps live in the
+# demo-services turborepo, cloned alongside sandbox under `paths.repos_root`;
+# paths are relative to that checkout.
+repos:
+  demo-services:
+    services: [backend, frontend]
+    path_mappings:
+      apps/backend: backend
+      apps/frontend: frontend

@@ -1,0 +1,278 @@
+{
+  "name": "vscode-plugin",
+  "displayName": "Sandbox Workspaces",
+  "description": "Manage developer-sandbox feature workspaces — container state, Telepresence intercepts, and the sandbox CLI lifecycle — from a VS Code tree view.",
+  "version": "0.3.0",
+  "publisher": "JBBZ",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.93.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onView:sandboxWorkspaces"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sandbox",
+          "title": "Sandbox",
+          "icon": "resources/sandbox.svg"
+        }
+      ]
+    },
+    "views": {
+      "sandbox": [
+        {
+          "id": "sandboxWorkspaces",
+          "name": "Workspaces",
+          "icon": "$(zap)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sandbox.refresh",
+        "title": "Refresh",
+        "category": "Sandbox",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sandbox.open",
+        "title": "Open Workspace",
+        "category": "Sandbox",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "sandbox.switch",
+        "title": "Switch to Workspace",
+        "category": "Sandbox",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "sandbox.openJira",
+        "title": "Open Jira Issue",
+        "category": "Sandbox",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "sandbox.configure",
+        "title": "Configure Sandbox CLI Path",
+        "category": "Sandbox",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "sandbox.up",
+        "title": "Start",
+        "category": "Sandbox",
+        "icon": "$(play)"
+      },
+      {
+        "command": "sandbox.stop",
+        "title": "Stop",
+        "category": "Sandbox",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "sandbox.restart",
+        "title": "Restart",
+        "category": "Sandbox",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "sandbox.down",
+        "title": "Down",
+        "category": "Sandbox",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "sandbox.toggleIntercept",
+        "title": "Toggle Intercept",
+        "category": "Sandbox",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "sandbox.logs",
+        "title": "Logs",
+        "category": "Sandbox",
+        "icon": "$(output)"
+      },
+      {
+        "command": "sandbox.newWorkspace",
+        "title": "New Workspace",
+        "category": "Sandbox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sandbox.openFeature",
+        "title": "Open in Browser",
+        "category": "Sandbox",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "sandbox.detect",
+        "title": "Detect Services in Repo...",
+        "category": "Sandbox",
+        "icon": "$(search)"
+      },
+      {
+        "command": "sandbox.registrySync",
+        "title": "Sync Service Registry",
+        "category": "Sandbox",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "sandbox.remove",
+        "title": "Remove Workspace...",
+        "category": "Sandbox",
+        "icon": "$(trash)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sandbox.newWorkspace",
+          "when": "view == sandboxWorkspaces",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sandbox.refresh",
+          "when": "view == sandboxWorkspaces",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sandbox.detect",
+          "when": "view == sandboxWorkspaces",
+          "group": "1_registry@1"
+        },
+        {
+          "command": "sandbox.registrySync",
+          "when": "view == sandboxWorkspaces",
+          "group": "1_registry@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sandbox.up",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(down|stopped|partial)(:|$)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "sandbox.stop",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)(:|$)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "sandbox.open",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "inline@2"
+        },
+        {
+          "command": "sandbox.switch",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:[^:]+$/",
+          "group": "inline@3"
+        },
+        {
+          "command": "sandbox.toggleIntercept",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^service:(interceptable|intercepted-mine)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "sandbox.up",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@1"
+        },
+        {
+          "command": "sandbox.stop",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@2"
+        },
+        {
+          "command": "sandbox.restart",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@3"
+        },
+        {
+          "command": "sandbox.down",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@4"
+        },
+        {
+          "command": "sandbox.logs",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^(workspace|service)/",
+          "group": "2_inspect@1"
+        },
+        {
+          "command": "sandbox.openFeature",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "2_inspect@2"
+        },
+        {
+          "command": "sandbox.openJira",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "2_inspect@3"
+        },
+        {
+          "command": "sandbox.remove",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "9_danger@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "sandbox.openJira",
+          "when": "false"
+        },
+        {
+          "command": "sandbox.toggleIntercept",
+          "when": "false"
+        },
+        {
+          "command": "sandbox.logs",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Sandbox Workspaces",
+      "properties": {
+        "sandbox.binPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `sandbox` wrapper script. Overrides everything, including `#sandbox.root#`. Leave empty to resolve from the environment or `~/.sandbox/config.yaml`."
+        },
+        "sandbox.root": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the developer-sandbox checkout directory that contains the `sandbox` wrapper. Leave empty to resolve from the environment or `~/.sandbox/config.yaml`."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test src/*.test.mjs",
+    "test:integration": "npm run build && vscode-test",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "sandbox-core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.93.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "sandbox",
+  "description": "Diagnostics and operations tooling for the multi-feature sandbox.",
+  "owner": {
+    "name": "jbbz-sandbox",
+    "url": "https://github.com/jbbz-sandbox"
+  },
+  "plugins": [
+    {
+      "name": "sandbox-tools",
+      "description": "Full-stack health checks, URL routing tracing, safe Caddy reloads, workspace creation, and status overviews for the sandbox.",
+      "source": "./plugins/sandbox-tools",
+      "category": "productivity"
+    }
+  ]
+}

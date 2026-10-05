@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build vscode-plugin",
+      "type": "shell",
+      "command": "npm run build -w vscode-plugin"
+    },
+    {
+      // F5's debugger attach can fail (ECONNREFUSED ::1), leaving the dev host
+      // waiting forever on debugBrk. This opens one with no debugger to attach.
+      "label": "run vscode-plugin (no debugger)",
+      "type": "shell",
+      "command": "code --new-window --extensionDevelopmentPath=\"${workspaceFolder}/packages/vscode-plugin\" \"${workspaceFolder}\"",
+      "dependsOn": "build vscode-plugin",
+      "problemMatcher": []
+    },
+    {
+      "label": "watch vscode-plugin",
+      "type": "shell",
+      "command": "npm run watch -w vscode-plugin",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild",
+        "source": "esbuild",
+        "pattern": {
+          "regexp": "^✘ \\[ERROR\\] (.*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[watch\\] build started",
+          "endsPattern": "^\\[watch\\] build finished"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["node", "vite/client"],
+    // npm hoists @rjsf/* to the repo root but keeps our @types/react here, so
+    // @rjsf's own .d.ts files can't find React's types — its `Form` then loses
+    // its Component base class and fails to typecheck as a component. Point
+    // every `react` resolution in the program at the one copy we install.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
+  },
+  "include": ["src", "server.ts", "main.ts", "form-cli.ts", "lib"]
+}

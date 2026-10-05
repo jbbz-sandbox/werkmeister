@@ -1,0 +1,7 @@
+[
+  {
+    "host": "k8s-forwards",
+    "port": 9050,
+    "name": "sandbox-redis"
+  }
+]

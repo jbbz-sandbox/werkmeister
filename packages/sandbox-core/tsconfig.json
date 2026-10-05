@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "noEmit": false,
+    "types": ["node"]
+  },
+  // Globs, not a list: an explicit one silently dropped `k8s.ts` and
+  // `k8s_forwards.ts` from a build that still exited 0. Every .ts here and in
+  // strategies/ is a source file — the tests are .mjs and dist/ is the outDir.
+  "include": ["*.ts", "strategies/*.ts", "fragment_detect/*.ts"]
+}

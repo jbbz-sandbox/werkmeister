@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sandbox Feature Selector</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 420px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        h1 {
+            font-size: 1.4rem;
+            margin-bottom: 0.5rem;
+            color: #e94560;
+        }
+        p.subtitle {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 1.5rem;
+        }
+        .current {
+            background: #0f3460;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+        .current strong { color: #e94560; }
+        .current .value { color: #53d8fb; font-family: monospace; }
+        .features-section {
+            margin-bottom: 1.5rem;
+        }
+        .features-section h2 {
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 0.6rem;
+        }
+        .feature-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .feature-btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #0f3460;
+            color: #e0e0e0;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .feature-btn:hover {
+            background: #1a4a7a;
+            border-color: #53d8fb;
+        }
+        .feature-btn.active {
+            background: #1b4332;
+            border-color: #95d5b2;
+        }
+        .feature-btn .name {
+            font-family: monospace;
+            font-weight: 600;
+        }
+        .feature-btn .meta {
+            font-size: 0.75rem;
+            color: #888;
+        }
+        .feature-btn.active .meta {
+            color: #95d5b2;
+        }
+        .no-features {
+            font-size: 0.85rem;
+            color: #666;
+            font-style: italic;
+            padding: 0.5rem 0;
+        }
+        .default-btn {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #333;
+            color: #ccc;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 0.4rem;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .default-btn:hover {
+            background: #444;
+            border-color: #888;
+        }
+        .default-btn.active {
+            background: #1b4332;
+            border-color: #95d5b2;
+            color: #95d5b2;
+        }
+        .status { margin-top: 1rem; padding: 0.6rem; border-radius: 6px; font-size: 0.85rem; display: none; }
+        .status.success { display: block; background: #1b4332; color: #95d5b2; }
+        .status.info { display: block; background: #1a1a2e; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sandbox Feature Selector</h1>
+        <p class="subtitle">Route traffic to a feature's local containers via the X-Feature cookie.</p>
+
+        <div class="current">
+            Current feature: <span class="value" id="currentFeature">(loading...)</span>
+        </div>
+
+        <div class="features-section">
+            <h2>Available Features</h2>
+            <div class="feature-list" id="featureList">
+                <div class="no-features">Loading...</div>
+            </div>
+        </div>
+
+        <div class="status" id="status"></div>
+    </div>
+
+    <script>
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? decodeURIComponent(match[2]) : null;
+        }
+
+        // Share the X-Feature cookie across the sandbox's faces for this host
+        // (e.g. frontend.local.<base> and frontend.remote.<base>) by scoping
+        // it to the base domain — the last two labels of the current hostname.
+        function cookieDomain() {
+            const parts = location.hostname.split('.');
+            return parts.length >= 2 ? '.' + parts.slice(-2).join('.') : location.hostname;
+        }
+
+        function currentFeature() {
+            return getCookie('X-Feature');
+        }
+
+        function updateCurrent() {
+            const feature = currentFeature();
+            document.getElementById('currentFeature').textContent = feature || '(none — using k8s default)';
+            // Update active states on buttons
+            document.querySelectorAll('.feature-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.feature === feature);
+            });
+            const defaultBtn = document.getElementById('defaultBtn');
+            if (defaultBtn) {
+                defaultBtn.classList.toggle('active', !feature);
+            }
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status ' + type;
+            setTimeout(() => { el.className = 'status'; }, 3000);
+        }
+
+        function selectFeature(name) {
+            document.cookie = `X-Feature=${encodeURIComponent(name)}; path=/; domain=${cookieDomain()}; max-age=${60*60*24*30}`;
+            updateCurrent();
+            showStatus(`Routing to feature: ${name}`, 'success');
+        }
+
+        function clearFeature() {
+            document.cookie = `X-Feature=; path=/; domain=${cookieDomain()}; max-age=0`;
+            updateCurrent();
+            showStatus('Cleared — using k8s default routing', 'info');
+        }
+
+        function renderFeatures(features) {
+            const list = document.getElementById('featureList');
+            list.innerHTML = '';
+
+            if (!features || features.length === 0) {
+                list.innerHTML = '<div class="no-features">No features running. Start one with: sandbox up &lt;feature&gt;</div>';
+                // Still add the default button
+                const defaultBtn = document.createElement('button');
+                defaultBtn.className = 'default-btn';
+                defaultBtn.id = 'defaultBtn';
+                defaultBtn.textContent = 'k8s Default (no feature)';
+                defaultBtn.onclick = clearFeature;
+                list.appendChild(defaultBtn);
+                updateCurrent();
+                return;
+            }
+
+            features.forEach(f => {
+                const btn = document.createElement('button');
+                btn.className = 'feature-btn';
+                btn.dataset.feature = f.name;
+                btn.onclick = () => selectFeature(f.name);
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'name';
+                nameSpan.textContent = f.name;
+
+                const metaSpan = document.createElement('span');
+                metaSpan.className = 'meta';
+                const svcCount = f.services ? f.services.length : 0;
+                metaSpan.textContent = `slot ${f.slot} · ${svcCount} service${svcCount !== 1 ? 's' : ''}`;
+
+                btn.appendChild(nameSpan);
+                btn.appendChild(metaSpan);
+                list.appendChild(btn);
+            });
+
+            // Add default/clear button at the end
+            const defaultBtn = document.createElement('button');
+            defaultBtn.className = 'default-btn';
+            defaultBtn.id = 'defaultBtn';
+            defaultBtn.textContent = 'k8s Default (no feature)';
+            defaultBtn.onclick = clearFeature;
+            list.appendChild(defaultBtn);
+
+            updateCurrent();
+        }
+
+        // Fetch available features
+        fetch('/__sandbox/features.json')
+            .then(r => r.ok ? r.json() : [])
+            .then(renderFeatures)
+            .catch(() => renderFeatures([]));
+    </script>
+</body>
+</html>

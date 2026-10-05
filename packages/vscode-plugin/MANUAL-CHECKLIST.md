@@ -1,0 +1,183 @@
+# Sandbox Workspaces — Manual Verification Checklist
+
+The interactive checks that could not be automated, consolidated into one pass.
+Work through Phase A first (Extension Development Host, no install required),
+then Phase B (installed `.vsix`, real VS Code).
+
+Each entry gives what to click, what should happen, and — where it isn't
+obvious — what a failure looks like.
+
+**Automated already — do not re-check by hand:**
+
+| Covered by | What it asserts |
+|---|---|
+| `npm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), and that `Logs` / `Open Jira` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
+| `npm test` → `src/build-tree.test.mjs` | State icons, service health, the `current` marker (multi-root included), top-sorting, node id stability. |
+| `npm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
+| `npm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
+| `npm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `sandbox <workspace>`, the config tier order — a `sandbox.*` setting overrides the inherited `SANDBOX_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. |
+
+What is left below needs a human: real container/Telepresence state, the visual
+render, or a live editor.
+
+---
+
+## Phase A — Extension Development Host (F5)
+
+1. **Launch the dev host.** Open `packages/vscode-plugin` in VS Code and press
+   **F5**. A second VS Code window ("Extension Development Host") opens.
+
+2. **Open the view.** Click the Sandbox icon in the activity bar to open the
+   "Workspaces" view.
+
+3. **Tree renders real data.** Confirm real workspaces are listed with state
+   icons: green filled circle = up, yellow = partial, outline = stopped/down,
+   question mark = unknown. Expand a running workspace and confirm its
+   services are listed with their own health icons. Cross-check against
+   `sandbox status` in a terminal — names, paths, and states should match.
+   - Failure looks like: an empty tree with real workspaces running, or a tree
+     showing dozens of raw repo checkouts instead of workspace names — see
+     Phase B for the specific regression that indicates.
+
+4. **CLI-not-found recovery.** If the view instead shows "Could not find the
+   sandbox CLI": open Settings in the dev host and set `sandbox.root` (or
+   `sandbox.binPath`). Confirm the tree recovers **without a window reload** —
+   this exercises `onDidChangeConfiguration` → `applySettingsToEnv()` →
+   `provider.refresh()`.
+
+5. **Refresh button.** Click `⟳` in the view's title bar. Confirm it re-fetches
+   without error (no visible change is expected if nothing changed underneath).
+
+6. *Retired — visibility-gated polling is asserted in `src/poll.test.mjs`. The
+   number is not reused: the notes cite these as stable ids.*
+
+7. **Inline "open workspace" icon.** Hover a workspace node; a folder icon
+   appears inline. Click it. The workspace opens in a new VS Code window (via
+   native `vscode.openFolder`, not sandbox-core's `openWorkspace()`).
+
+7a. **Inline "switch workspace" icon.** Hover the same node; a → icon appears
+    next to the folder icon. Click it. The workspace is added to *this* window as
+    the **first** folder rather than opening a new window — folder 0 is what the
+    Claude Code extension reads CLAUDE.md from. Click it on a workspace already
+    open further down the folder list: it moves to the top, it is not duplicated.
+
+7b. **Current workspace marker.** The workspace of this window's **first** open
+    folder shows `current` first in its description, starts expanded, and is the
+    **top row** whatever its alphabetical position. Open a multi-root
+    `.code-workspace` where the sandbox workspace is *not* the first folder and
+    confirm it is still marked — later folders count when the first matches no
+    workspace.
+
+
+8. **Open Jira Issue.** Right-click a workspace with a Jira ID → "Open Jira
+   Issue" opens the browser to that issue.
+
+9. **Open Workspace from the palette.** Command Palette → "Sandbox: Open
+   Workspace", with no tree node focused. It falls back to a QuickPick listing
+   all workspaces (name, Jira ID, path).
+
+10. **Configure command — the filter only.** Palette → "Sandbox: Configure
+    Sandbox CLI Path". That Settings *opens* is asserted in the host suite; what
+    still needs eyes is that it is filtered to `sandbox.*` rather than opening
+    the whole settings tree, which no API reports back.
+
+11. **Lifecycle: Start.** Inline ▶ on a down workspace. A terminal named
+    **`sandbox <workspace>`** opens running `sandbox up` in that workspace's
+    directory; within ~5s (next poll) the icon turns green.
+
+12. **Lifecycle: Stop.** Inline ⏸ on a running workspace. It reuses the same
+    **`sandbox <workspace>`** terminal and the icon goes grey. (The *name* is
+    asserted in the integration test; what needs eyes here is that the
+    container state actually changes.)
+
+13. **Lifecycle: Restart / Down.** Right-click → **Restart**, then → **Down**.
+    Each runs in that workspace's terminal.
+
+14. **One terminal per command — the fix for a real bug.** With a `logs`
+    terminal still tailing (see step 15), click ▶ Start on any workspace.
+    Confirm a **separate, newly created terminal** appears and `sandbox up`
+    actually runs.
+    - Failure looks like: nothing happens at all, no error, the tree never
+      changes — the command was typed into the tailing process's stdin and
+      swallowed. That was the pre-fix behaviour; it must not recur.
+
+15. **Logs — scope.** Right-click **Logs** on a workspace node → terminal
+    `sandbox logs <feature>` (tails everything). Right-click **Logs** on a
+    service node → `sandbox logs <feature> <service>`. Confirm real log lines
+    stream.
+
+
+16. **New Workspace.** Click `+` in the view title. Enter a Jira ref, or leave
+    it empty, and press Enter. A terminal at `~` runs `sandbox workspace`
+    (with `--jira-id <ref>` appended if you entered one). Press Escape on the
+    input box instead and confirm **nothing** launches.
+
+17. **Open in Browser.** Right-click a running workspace → **Open in Browser**.
+    Spawns `sandbox open` detached — the one command that doesn't use a
+    terminal, because it blocks for the lifetime of the browser window.
+
+--- The remaining two are destructive. They change real state. Do them last. ---
+
+18. **Toggle an intercept (mutates real Telepresence state).** Click `⇄` on an
+    interceptable service. A terminal runs `sandbox intercept -s <service>`;
+    afterwards the description reads "intercepted (yours)". Click `⇄` again —
+    it now sends `--leave` and the intercept clears. This reroutes real traffic
+    to your machine; only do it on a service you're prepared to reroute.
+
+19. **Remove Workspace (destroys the workspace directory).** Right-click a
+    workspace you are willing to lose → **Remove Workspace...**.
+    - Confirm the modal names the workspace and its detail reads: *"Commits and
+      pushes every branch first — the delete is aborted if any push fails. Then
+      tears down containers, deletes `<path>`, and prunes the worktrees."* It
+      must **not** warn about losing unpushed commits — it doesn't lose them.
+    - Click **Cancel**. Nothing happens.
+    - Then on a workspace you do intend to remove, click **Remove**. Confirm a
+      **progress notification** appears for the duration (this call commits and
+      pushes every worktree, runs `sandbox down`, then deletes — it can take
+      minutes), an information message names the removed path on success, and
+      the tree refreshes.
+    - To exercise the failure path deliberately, make one worktree unpushable
+      first (e.g. point its remote at a URL you can't write to). Confirm the
+      delete is **aborted**, the workspace still exists, and the multi-line
+      handoff report naming the failing branch appears in a **"Sandbox
+      Workspaces" output channel** — not truncated into a toast.
+
+---
+
+## Phase B — Installed `.vsix`
+
+20. **Install into the real VS Code.**
+    ```bash
+    cd packages/vscode-plugin && npm run package && code --install-extension vscode-plugin-0.1.0.vsix
+    ```
+    Deliberately not run during implementation — it modifies your live editor.
+
+21. **Dock-launched, no shell environment — the check the config tier exists
+    for.** Quit VS Code entirely, then relaunch **from the Dock or Finder, not
+    `code .`**, so it inherits no shell environment (no `SANDBOX_ROOT`, no
+    `SANDBOX_WORKSPACES_ROOT`). Open the Sandbox view with **no**
+    `sandbox.root` / `sandbox.binPath` set.
+
+    Expected: the same workspaces `sandbox status` shows.
+
+    Failure looks like either:
+    - **Dozens of raw repo checkouts** instead of named workspaces —
+      `resolveWorkspacesRoot`'s config-file tier regressed and it fell back to
+      `~/workspace`, which is the *repos* root.
+    - **The "Could not find the sandbox CLI" node** — sandbox-core couldn't
+      resolve the binary from `~/.sandbox/config.yaml` with no env present.
+
+    Diagnose against sandbox-core directly, bypassing the extension:
+    ```bash
+    env -u SANDBOX_WORKSPACES_ROOT -u SANDBOX_ROOT node -e '
+      const m = await import("/path/to/sandbox/packages/sandbox-core/dist/sandbox.js");
+      console.log((await m.listWorkspaces()).root);
+    ' --input-type=module
+    ```
+    The printed `root` should be your `paths.workspaces_root`, not your
+    monorepo checkout.
+
+---
+
+**Total: 22 checks** (20 in Phase A, 2 in Phase B) — the rest are automated;
+see the table at the top.

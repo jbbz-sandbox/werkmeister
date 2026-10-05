@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Sandbox Workspaces Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/vscode-plugin"],
+      "outFiles": ["${workspaceFolder}/packages/vscode-plugin/dist/**/*.cjs"],
+      "preLaunchTask": "build vscode-plugin"
+    },
+    {
+      "name": "Run Sandbox Workspaces Extension (watch)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/vscode-plugin"],
+      "outFiles": ["${workspaceFolder}/packages/vscode-plugin/dist/**/*.cjs"],
+      "preLaunchTask": "watch vscode-plugin"
+    }
+  ]
+}
