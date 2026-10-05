@@ -59,7 +59,8 @@ export function githubIssueSlug(ref: string): string {
 /** Jira browse URL for a key, or null when `jira.base_url` is unset. */
 export function jiraBrowseUrl(key: string): string | null {
   const base = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
-  return base ? `${base}/browse/${key}` : null;
+  if (!base) return null;
+  return `${base.includes("://") ? base : `https://${base}`}/browse/${key}`;
 }
 
 /**

@@ -31,3 +31,9 @@ test("nothing configured → null and a lookup instruction", () => {
   assert.equal(jiraSiteRef(), null);
   assert.match(jiraSitePhrase(), /getAccessibleAtlassianResources/);
 });
+
+test("scheme-less base_url still gives an absolute browse link", async () => {
+  const { jiraBrowseUrl } = await import("./dist/issue_tracker.js");
+  writeFileSync(cfg, "jira:\n  base_url: acme.atlassian.net/\n");
+  assert.equal(jiraBrowseUrl("PROJ-1"), "https://acme.atlassian.net/browse/PROJ-1");
+});
