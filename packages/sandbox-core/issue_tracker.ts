@@ -62,6 +62,29 @@ export function jiraBrowseUrl(key: string): string | null {
   return base ? `${base}/browse/${key}` : null;
 }
 
+/**
+ * The Jira site as the Atlassian MCP tools address it: `jira.cloud_id`, else
+ * the `jira.base_url` hostname (the tools accept a site URL as cloudId), else null.
+ */
+export function jiraSiteRef(): string | null {
+  const jira = loadJira();
+  const id = (jira.cloud_id ?? "").trim();
+  if (id) return id;
+  const base = (jira.base_url ?? "").trim();
+  if (!base) return null;
+  try {
+    return new URL(base.includes("://") ? base : `https://${base}`).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Prompt phrase naming the Jira site for getJiraIssue / searchJiraIssuesUsingJql. */
+export function jiraSitePhrase(): string {
+  const ref = jiraSiteRef();
+  return ref ? `(Atlassian cloud id ${ref})` : "(find the cloud id with getAccessibleAtlassianResources)";
+}
+
 /** `[label, url]` for a workspace's ticket from its .env metadata, or null. */
 export function issueLink(meta: Record<string, string>): [string, string | null] | null {
   const jiraId = (meta["JIRA_ID"] ?? "").trim();
