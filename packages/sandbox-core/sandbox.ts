@@ -1534,24 +1534,23 @@ export async function getWorkspacePRs(): Promise<WorkspacePrs[]> {
  * trivial to change if the org convention differs.
  */
 export const APPROVAL_LABEL = "ready-for-human-approval";
-export const DEFAULT_REVIEW_SLACK_CHANNEL = "C0963TE8J91";
 
 /**
  * Post a "please review this PR" message to Slack via chat.postMessage.
- * Requires a bot token in SANDBOX_REVIEW_SLACK_TOKEN (channel:
- * SANDBOX_REVIEW_SLACK_CHANNEL, else the default). No token → a clear error,
- * never a fake success — the button must not claim it messaged Slack when it
- * didn't. Returns the channel it posted to.
+ * Requires SANDBOX_REVIEW_SLACK_TOKEN (a bot token with chat:write) and
+ * SANDBOX_REVIEW_SLACK_CHANNEL. Either missing → a clear error, never a fake
+ * success — the button must not claim it messaged Slack when it didn't.
+ * Returns the channel it posted to.
  */
 export async function postSlackReviewRequest(text: string): Promise<string> {
   const token = process.env.SANDBOX_REVIEW_SLACK_TOKEN;
-  if (!token) {
+  const channel = process.env.SANDBOX_REVIEW_SLACK_CHANNEL;
+  if (!token || !channel) {
     throw new WorkspaceError(
-      "Slack is not configured: set SANDBOX_REVIEW_SLACK_TOKEN to a bot token " +
-        "with chat:write to the review channel.",
+      "Slack is not configured: set SANDBOX_REVIEW_SLACK_TOKEN (a bot token with chat:write) " +
+        "and SANDBOX_REVIEW_SLACK_CHANNEL (the review channel id).",
     );
   }
-  const channel = process.env.SANDBOX_REVIEW_SLACK_CHANNEL || DEFAULT_REVIEW_SLACK_CHANNEL;
   const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
