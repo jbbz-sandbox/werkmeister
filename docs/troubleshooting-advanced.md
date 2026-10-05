@@ -215,13 +215,6 @@ docker logs {feature}-demo-services-setup --tail 20 2>&1
 docker exec {feature}-frontend env | grep -E "_URL"
 ```
 
-### backend (demo-services/apps/backend)
-
-**Auth0 errors:** Check that Auth0 secrets are set in `~/.sandbox/secrets.env`:
-```bash
-grep -c "AUTH0" ~/.sandbox/secrets.env
-```
-
 ### GraphQL gateway (if your registry defines one)
 
 **Subgraph connection errors:** Check that every dependent subgraph is running and accessible:

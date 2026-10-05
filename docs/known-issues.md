@@ -309,7 +309,7 @@ needs.
 **Affects:** `~/.sandbox/config.yaml` `paths.sandbox_root`, `apps/cli/infra/`
 
 `sandbox_root` is a single machine-global pointer at one CLI checkout (here,
-`/Users/jayboyer/repos/sandbox/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
+`<sandbox-checkout>/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
 and is what `infraRoot()` resolves from — so **whichever install ran `sandbox config` last
 wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
 serving `infra/` out of the other one.

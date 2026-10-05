@@ -88,13 +88,13 @@ test("a down workspace shows no ratio", () => {
 
 test("a Jira key appears in the description and the node carries its URL", () => {
   const [node] = buildTree(
-    [ws("a", { jiraId: "TRE-1125", jiraUrl: "https://x/browse/TRE-1125" })],
+    [ws("a", { jiraId: "PROJ-1125", jiraUrl: "https://x/browse/PROJ-1125" })],
     [st("a")],
     null,
     [],
   );
-  assert.match(node.description, /TRE-1125/);
-  assert.equal(node.workspace.jiraUrl, "https://x/browse/TRE-1125");
+  assert.match(node.description, /PROJ-1125/);
+  assert.equal(node.workspace.jiraUrl, "https://x/browse/PROJ-1125");
 });
 
 test("an interceptable service with no intercept offers the toggle", () => {
