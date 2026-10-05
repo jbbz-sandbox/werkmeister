@@ -289,7 +289,9 @@ services:
 - Volume mounts for hot-reload of source code from the worktree.
 - Environment variables are generated per-service, mixing local and k8s endpoints using Docker DNS names.
 
-### 6. Apollo Federation Gateway Configuration
+### 6. GraphQL Federation (optional)
+
+Applies only when the registry has a service with a GraphQL type (`graphql-subgraph`, `graphql`, `subgraph`, `federation`). Without one, no supergraph config is generated.
 
 The gateway needs to know where each subgraph lives. Since subgraph locations vary per feature (some local, some k8s), the config must be per-feature.
 
@@ -403,7 +405,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 ├── infra/templates/
 │   ├── docker-compose.feature.yml.njk  # nunjucks template for per-feature compose
 │   ├── Caddyfile.njk                   # Template for proxy config
-│   └── supergraph-config.yml.njk       # Template for Apollo gateway
+│   └── supergraph-config.yml.njk       # Template for the optional GraphQL gateway
 ├── infra/proxy/
 │   ├── Caddyfile                       # Generated — do not edit
 │   └── ui/                             # Feature selector web UI
@@ -418,7 +420,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 │   ├── docker-compose.yml              # Generated per-feature compose stack
 │   ├── .env                            # Generated resolved env vars
 │   ├── .sandbox/
-│   │   └── supergraph-config.yml       # Generated Apollo gateway config
+│   │   └── supergraph-config.yml       # Generated only when a GraphQL subgraph exists
 │   ├── sandbox/                     # git worktree
 │   ├── nx-mono/                        # git worktree
 │   └── sandbox/           # git worktree
@@ -453,7 +455,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
    │   ├── Local services: frontend → 11300, backend → 11301
    │   ├── k8s services: all others → their 9xxx ports
    │   └── Volume mounts pointing at worktree paths
-   ├── Render supergraph-config.yml (if any graphql subgraph is local)
+   ├── Render supergraph-config.yml (only if the registry has a GraphQL subgraph)
    └── Render .env file with all service URLs
 
 4. VERIFY k8s
@@ -473,7 +475,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
    └── Print feature URL, service endpoints, and status
        "✓ payment-refactor ready at https://frontend.local.sandbox.com (cookie: X-Feature=payment-refactor)"
        "  Local:  frontend (:11300), backend (:11301)"
-       "  k8s:    graphql-gateway (:9004), redis (:9050), ..."
+       "  k8s:    api (:9004), redis (:9050), ..."
 ```
 
 ---
