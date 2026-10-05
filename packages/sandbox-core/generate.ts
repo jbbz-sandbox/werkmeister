@@ -1077,6 +1077,7 @@ const _GRAPHQL_TYPES = new Set(["graphql-subgraph", "graphql", "subgraph", "fede
  *
  * Maps each GraphQL subgraph service to either its local port (if running
  * locally) or its k8s port-forward port.
+ * Returns null and writes nothing when no service has a GraphQL type.
  */
 export function generateSupergraphConfig(
   feature: string,
@@ -1084,12 +1085,22 @@ export function generateSupergraphConfig(
   localServices: string[],
   config: Record<string, any> | null = null,
   workspaceOverride: string | null = null,
-): string {
+): string | null {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
   const workspaceRoot = resolveWorkspace(feature, workspaceOverride);
   const sandboxDir = path.join(workspaceRoot, ".sandbox");
   fs.mkdirSync(sandboxDir, { recursive: true });
   const outPath = path.join(sandboxDir, "supergraph-config.yml");
+
+  // Federation is opt-in: no graphql-type service in the registry → no file
+  // (and drop one left by an earlier run).
+  const hasSubgraph = Object.values(servicesConfig).some(
+    (d) => isDict(d) && _GRAPHQL_TYPES.has(d["type"] ?? ""),
+  );
+  if (!hasSubgraph) {
+    fs.rmSync(outPath, { force: true });
+    return null;
+  }
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
