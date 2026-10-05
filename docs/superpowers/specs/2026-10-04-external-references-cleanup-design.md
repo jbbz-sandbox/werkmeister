@@ -40,7 +40,7 @@ in `sandbox-core/issue_tracker.ts` builds links from `jira.base_url`. What's lef
 - **A5: setup snippet** (`machine_setup.ts`, `JIRA_CONFIG_SNIPPET`). Use
   `https://your-org.atlassian.net`, the placeholder `sandbox setup` already uses. Add it to
   `JIRA_PLACEHOLDERS` so an unedited snippet fails validation.
-- **New: Slack channel** (`sandbox.ts`, `DEFAULT_REVIEW_SLACK_CHANNEL = "C0963TE8J91"`).
+- **New: Slack channel** (`sandbox.ts`, `DEFAULT_REVIEW_SLACK_CHANNEL = "<old-channel-id>"`).
   Delete the default. When `SANDBOX_REVIEW_SLACK_CHANNEL` is unset, throw the same kind of
   clear `WorkspaceError` the missing token throws. Update any doc that mentions a default
   channel.
@@ -55,7 +55,7 @@ in `sandbox-core/issue_tracker.ts` builds links from `jira.base_url`. What's lef
   It is wrong, since demo-services has no Auth0. Nothing replaces it.
 - B5 `setup_steps.test.ts`: rename the fixture to `web` with `SESSION_SECRET` and
   `OAUTH_CLIENT_SECRET`. The test still needs two secret keys, and only the names change.
-- B6 `build-tree.test.mjs`: `TRE-1125` → `PROJ-1125`.
+- B6 `build-tree.test.mjs`: `TRE-<n>` → `PROJ-1125`.
 - B7: handled by the experiments deletion in section 3.
 
 ### 3. Stack conventions presented as the tool's (C1–C8)
@@ -98,10 +98,10 @@ in `sandbox-core/issue_tracker.ts` builds links from `jira.base_url`. What's lef
 
 ### 4. Personal environment leakage (D1–D5)
 
-- D1 `known-issues.md`: `/Users/jayboyer/repos/sandbox/apps/cli` →
+- D1 `known-issues.md`: `/Users/<user>/repos/sandbox/apps/cli` →
   `<sandbox-checkout>/apps/cli`.
-- D2–D4 plans and specs: `/Users/jayboyer/repos/<x>` → `~/repos/<x>`. Any other
-  `/Users/jayboyer` becomes `~`. `wellness` → `mobile-app` (a placeholder Expo repo), with
+- D2–D4 plans and specs: `/Users/<user>/repos/<x>` → `~/repos/<x>`. Any other
+  `/Users/<user>` becomes `~`. `<personal-repo>` → `mobile-app` (a placeholder Expo repo), with
   matching names (`EXPO_PUBLIC_API_URL` stays as is because it's a generic Expo
   convention).
 - D5: `git rm -r docs/superpowers/archive/`.
@@ -123,9 +123,9 @@ in `sandbox-core/issue_tracker.ts` builds links from `jira.base_url`. What's lef
 
 ## Verification
 
-1. The leak grep returns nothing across tracked files, excluding the vendored bundle and
-   this spec and its plan, which name the strings on purpose:
-   `git grep -nE 'hgdata|hginsights|4a4bd20b|C0963TE8J91|/Users/jayboyer|interview-service|wellness|TRE-1125' -- ':!*.bundle.js' ':!docs/superpowers/*/2026-10-04-external-references-cleanup*'`
+1. The leak grep returns nothing across tracked files except the vendored bundle. Each
+   term brackets one character so the pattern does not match this spec or its plan:
+   `git grep -nE 'hg[d]ata|hginsight[s]|4a4bd2[0]b|C0963TE8J9[1]|/Users/jay[b]oyer|interview-servic[e]|wellnes[s]|TRE-112[5]' -- ':!*.bundle.js'`
 2. `npm test`, `npm run typecheck`, `npm run build` all pass.
 3. New and updated tests:
    - `jiraSiteRef()`: cloud_id wins, then base_url hostname, then null.
@@ -133,4 +133,4 @@ in `sandbox-core/issue_tracker.ts` builds links from `jira.base_url`. What's lef
      services, and still writes one when there is a subgraph.
    - `postSlackReviewRequest` throws when the channel is unset (token set).
    - `JIRA_CONFIG_SNIPPET` left unedited fails Jira validation.
-4. `git grep -n 'experiments/context-management'` returns nothing.
+4. `git grep -n 'experiments/context-management' -- ':!docs/superpowers/*/2026-10-04-external-references-cleanup*'` returns nothing.

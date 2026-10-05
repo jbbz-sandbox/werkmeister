@@ -14,7 +14,7 @@
 
 - Branch: `jayboyer/external-references-cleanup` (already checked out).
 - Placeholders: Jira site `your-org.atlassian.net` in user-facing text, `example.atlassian.net` and `dev@example.com` in tests. The Jira key placeholder is `PROJ-<n>`.
-- `wellness` → `mobile-app`. `/Users/jayboyer/repos/` → `~/repos/`, any other `/Users/jayboyer` → `~`.
+- `<personal-repo>` → `mobile-app`. `/Users/<user>/repos/` → `~/repos/`, any other `/Users/<user>` → `~`.
 - Do not touch tier-E items, `apps/cli/dist` (untracked build output), or `external-references-review.md` (stays untracked).
 - `sandbox-core` tests import from `dist/`, and the CLI's vitest resolves `sandbox-core` to its `dist/` too. **Run `npm run build -w sandbox-core` before any test that exercises core code.**
 - Commit messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -114,8 +114,8 @@ In `packages/sandbox-core/sandbox.ts`:
 1. L40: `import { jiraBrowseUrl } from "./issue_tracker.js";` → `import { jiraBrowseUrl, jiraSitePhrase } from "./issue_tracker.js";`
 2. Delete these two lines (~L446-447):
    ```ts
-   /** hgdata Atlassian Cloud id — the site behind the Jira links in CLAUDE.md. */
-   const JIRA_CLOUD_ID = "4a4bd20b-0645-4d11-9c98-8d0285630fd4";
+   /** <org> Atlassian Cloud id — the site behind the Jira links in CLAUDE.md. */
+   const JIRA_CLOUD_ID = "<old-cloud-id>";
    ```
 3. ~L652, replace
    ```ts
@@ -226,7 +226,7 @@ In the main return of `prFromView`, compute the key once:
 
 - [ ] **Step 4: Run tests and typecheck**
 
-Run: `npm run build -w sandbox-core && npm test -w sandbox-workspace-mcp-app && npm run typecheck -w sandbox-workspace-mcp-app && git grep -n hgdata -- apps/sandbox-dashboard`
+Run: `npm run build -w sandbox-core && npm test -w sandbox-workspace-mcp-app && npm run typecheck -w sandbox-workspace-mcp-app && git grep -n <org> -- apps/sandbox-dashboard`
 Expected: smoke passes, typecheck is clean, and the grep prints nothing.
 
 - [ ] **Step 5: Commit**
@@ -272,7 +272,7 @@ git commit -m "fix(dashboard): build the PR Jira link from jira.base_url"
 - [ ] **Step 2: Run it and confirm it fails**
 
 Run: `npm run build -w sandbox-core && (cd apps/cli && npx vitest run src/lib/__tests__/jira_config.test.ts)`
-Expected: the new test FAILS, because the hgdata URL is accepted as filled and the verifier runs.
+Expected: the new test FAILS, because the <org> URL is accepted as filled and the verifier runs.
 
 - [ ] **Step 3: Implement.** In `machine_setup.ts`:
 
@@ -338,7 +338,7 @@ test("no channel configured → a clear error before any request", async () => {
 Run: `npm run build -w sandbox-core && (cd packages/sandbox-core && node --test review-slack.test.mjs)`
 Expected: FAIL. The error is `Slack request failed: fetch must not be called`, because the default channel let it reach fetch.
 
-- [ ] **Step 3: Implement.** In `sandbox.ts`, delete `export const DEFAULT_REVIEW_SLACK_CHANNEL = "C0963TE8J91";` and replace the doc comment and the head of `postSlackReviewRequest` through the `const channel` line with:
+- [ ] **Step 3: Implement.** In `sandbox.ts`, delete `export const DEFAULT_REVIEW_SLACK_CHANNEL = "<old-channel-id>";` and replace the doc comment and the head of `postSlackReviewRequest` through the `const channel` line with:
 
 ```ts
 /**
@@ -363,7 +363,7 @@ The rest of the function (the `fetch` onward) stays unchanged.
 
 - [ ] **Step 4: Run tests**
 
-Run: `npm run build -w sandbox-core && (cd packages/sandbox-core && node --test review-slack.test.mjs) && npm run typecheck -w sandbox-workspace-mcp-app && git grep -n 'C0963\|DEFAULT_REVIEW_SLACK' -- packages apps`
+Run: `npm run build -w sandbox-core && (cd packages/sandbox-core && node --test review-slack.test.mjs) && npm run typecheck -w sandbox-workspace-mcp-app && git grep -n '<old-channel-id>\|DEFAULT_REVIEW_SLACK' -- packages apps`
 Expected: test passes, the dashboard typecheck is clean, and the grep prints nothing.
 
 - [ ] **Step 5: Commit**
@@ -463,19 +463,19 @@ git commit -m "fix(generate): only write supergraph-config.yml when the registry
 - Replace
   ```
        (log in with your Atlassian account — the one you use for
-       hgdata.atlassian.net).
+       <org>.atlassian.net).
   ```
   with
   ```
        (log in with your Atlassian account — the one you use for
        your Jira site, e.g. your-org.atlassian.net).
   ```
-- `   JIRA_BASE_URL=https://hgdata.atlassian.net` → `   JIRA_BASE_URL=https://your-org.atlassian.net`
+- `   JIRA_BASE_URL=https://<org>.atlassian.net` → `   JIRA_BASE_URL=https://your-org.atlassian.net`
 - Replace
   ```
      `JIRA_EMAIL` is the address on your Atlassian *account*. Aliases appear to
-     work (jay.boyer@hginsights\.ai authenticated even though the account
-     reports jay.boyer@hginsights\.com), but use the canonical one if in doubt —
+     work (<personal-email> authenticated even though the account
+     reports <personal-email>), but use the canonical one if in doubt —
      check your avatar menu in Jira.
   ```
   with
@@ -501,14 +501,14 @@ git commit -m "fix(generate): only write supergraph-config.yml when the registry
 
 ```bash
 perl -pi -e 's/auth-web/web-app/g; s/AUTH_WEB__/WEB_APP__/g; s/AUTH0_CLIENT_SECRET/OAUTH_CLIENT_SECRET/g; s/NEXTAUTH_SECRET/SESSION_SECRET/g' apps/cli/src/lib/__tests__/setup_steps.test.ts
-perl -pi -e 's/TRE-1125/PROJ-1125/g' packages/vscode-plugin/src/build-tree.test.mjs
+perl -pi -e 's/TRE-<n>/PROJ-1125/g' packages/vscode-plugin/src/build-tree.test.mjs
 ```
 
-- [ ] **Step 4: Edit `docs/known-issues.md:311`:** `` `/Users/jayboyer/repos/sandbox/apps/cli`). `` → `` `<sandbox-checkout>/apps/cli`). ``
+- [ ] **Step 4: Edit `docs/known-issues.md:311`:** `` `/Users/<user>/repos/sandbox/apps/cli`). `` → `` `<sandbox-checkout>/apps/cli`). ``
 
 - [ ] **Step 5: Run the affected tests**
 
-Run: `(cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts) && npm test -w vscode-plugin && git grep -nE 'hgdata|hginsights|AUTH0|TRE-1125|/Users/jayboyer' -- docs/jira-rest-setup.md docs/troubleshooting-advanced.md docs/known-issues.md apps/cli/src/lib/__tests__/setup_steps.test.ts packages/vscode-plugin/src`
+Run: `(cd apps/cli && npx vitest run src/lib/__tests__/setup_steps.test.ts) && npm test -w vscode-plugin && git grep -nE '<org>|<org>|AUTH0|TRE-<n>|/Users/<user>' -- docs/jira-rest-setup.md docs/troubleshooting-advanced.md docs/known-issues.md apps/cli/src/lib/__tests__/setup_steps.test.ts packages/vscode-plugin/src`
 Expected: tests pass, and the grep prints nothing.
 
 - [ ] **Step 6: Commit**
@@ -626,7 +626,7 @@ unset. An example set, in directory form:
 
 - [ ] **Step 5: Verify**
 
-Run: `git grep -n 'experiments/' -- ':!docs/superpowers/*/2026-10-04-external-references-cleanup*' ':!docs/superpowers/archive'; git grep -nE 'Auth0|Airflow|airflow|nextjs-ui|nest-api|interview-service' -- docs/jit-context-system.md docs/context-management-research.md; npm run build -w sandbox-core`
+Run: `git grep -n 'experiments/' -- ':!docs/superpowers/archive'; git grep -nE 'Auth0|Airflow|airflow|nextjs-ui|nest-api|<private-service>' -- docs/jit-context-system.md docs/context-management-research.md; npm run build -w sandbox-core`
 Expected: both greps print nothing, and the build succeeds.
 
 - [ ] **Step 6: Commit**
@@ -742,7 +742,7 @@ git commit -m "docs: present Jira/GitHub, Slack and GraphQL federation as option
 - [ ] **Step 1: Scrub**
 
 ```bash
-perl -pi -e 's#/Users/jayboyer/repos/#~/repos/#g; s#/Users/jayboyer#~#g; s/wellness/mobile-app/gi' \
+perl -pi -e 's#/Users/<user>/repos/#~/repos/#g; s#/Users/<user>#~#g; s/<personal-repo>/mobile-app/gi' \
   docs/superpowers/plans/2026-10-01-registry-fragments.md \
   docs/superpowers/plans/2026-10-02-sandbox-detect-fragment.md \
   docs/superpowers/specs/2026-10-01-registry-fragments-design.md \
@@ -759,7 +759,7 @@ printf '\n# Python bytecode\n__pycache__/\n*.pyc\n' >> .gitignore
 
 - [ ] **Step 3: Verify**
 
-Run: `git grep -nE '/Users/jayboyer|wellness' -- docs/superpowers ':!docs/superpowers/*/2026-10-04-external-references-cleanup*'; git ls-files | grep -c '\.pyc$'; git status --short | grep pyc`
+Run: `git grep -nE '/Users/<user>|<personal-repo>' -- docs/superpowers; git ls-files | grep -c '\.pyc$'; git status --short | grep pyc`
 Expected: the grep prints nothing, the count is `0`, and the `.pyc` files don't appear as untracked because they're now ignored.
 
 - [ ] **Step 4: Commit**
@@ -777,7 +777,7 @@ git commit -m "chore: scrub personal paths from plans/specs, drop archive and co
 
 Run:
 ```bash
-git grep -nE 'hgdata|hginsights|4a4bd20b|C0963TE8J91|/Users/jayboyer|interview-service|wellness|TRE-1125' -- ':!*.bundle.js' ':!docs/superpowers/*/2026-10-04-external-references-cleanup*'
+git grep -nE 'hg[d]ata|hginsight[s]|4a4bd2[0]b|C0963TE8J9[1]|/Users/jay[b]oyer|interview-servic[e]|wellnes[s]|TRE-112[5]' -- ':!*.bundle.js'
 git grep -n 'experiments/context-management' -- ':!docs/superpowers/*/2026-10-04-external-references-cleanup*'
 ```
 Expected: both print nothing.
