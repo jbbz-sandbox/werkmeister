@@ -4,7 +4,7 @@ import type { WorkspaceRow } from '../types'
 
 export const PLUGIN = 'sandbox-tools'
 export const PANE = 'workspaces'
-export const SERVER = 'sandbox-workspace'
+export const SERVER = 'plugin:sandbox-tools:sandbox-workspace'
 export const POLL_MS = 5000
 
 const ROWS = { plugin: 'sandbox-tools', key: 'rows' } as const

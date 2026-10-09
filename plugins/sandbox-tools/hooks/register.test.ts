@@ -3,6 +3,7 @@ import type { On } from 'claude-code'
 import type { Engine, Plugin } from 'claude-code/testing'
 
 const SURFACES = ['terminal', 'desktop'] as const
+const WS = 'plugin:sandbox-tools:sandbox-workspace'
 const PANE_PROPS = {
   title: 'Sandbox workspaces',
   isFocused: false,
@@ -49,8 +50,8 @@ async function openPane($: Engine) {
 
 test('empty list draws the empty message', async ($, on) => {
   world(on, {
-    'sandbox-workspace/list-workspaces': () => ok({ root: '/ws', workspaces: [] }),
-    'sandbox-workspace/workspace-status': () => ok({ statuses: [], infra: { state: 'down', running: 0, total: 0, services: [] } }),
+    [`${WS}/list-workspaces`]: () => ok({ root: '/ws', workspaces: [] }),
+    [`${WS}/workspace-status`]: () => ok({ statuses: [], infra: { state: 'down', running: 0, total: 0, services: [] } }),
     'ccd_session_mgmt/list_sessions': () => ok(undefined, '[]'),
   })
   await openPane($)
@@ -85,8 +86,8 @@ const SESSIONS = [
 
 function stubs(over: Partial<McpStub> = {}): McpStub {
   return {
-    'sandbox-workspace/list-workspaces': () => ok(LIST),
-    'sandbox-workspace/workspace-status': () => ok(STATUS),
+    [`${WS}/list-workspaces`]: () => ok(LIST),
+    [`${WS}/workspace-status`]: () => ok(STATUS),
     'ccd_session_mgmt/list_sessions': () => ok(undefined, JSON.stringify(SESSIONS)),
     ...over,
   }
@@ -143,7 +144,7 @@ test('a failed session lookup keeps the workspace list', async ($, on) => {
 
 test('a failed list keeps the last rows and shows the error', async ($, on) => {
   let fail = false
-  world(on, stubs({ 'sandbox-workspace/list-workspaces': () => (fail ? { content: [{ type: 'text', text: 'docker down' }], isError: true } : ok(LIST)) }))
+  world(on, stubs({ [`${WS}/list-workspaces`]: () => (fail ? { content: [{ type: 'text', text: 'docker down' }], isError: true } : ok(LIST)) }))
   await openPane($)
   fail = true
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
@@ -170,14 +171,14 @@ test('buttons follow the extension gating', async ($, on) => {
 })
 
 test('a lifecycle press calls workspace-action and refreshes', async ($, on) => {
-  const w = world(on, stubs({ 'sandbox-workspace/workspace-action': a => ok({ command: `sandbox ${a.action}`, output: 'done', path: '/ws/ab' }, `sandbox ${a.action}\n\ndone`) }))
+  const w = world(on, stubs({ [`${WS}/workspace-action`]: a => ok({ command: `sandbox ${a.action}`, output: 'done', path: '/ws/ab' }, `sandbox ${a.action}\n\ndone`) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  const before = w.calls.filter(c => c.key === 'sandbox-workspace/list-workspaces').length
+  const before = w.calls.filter(c => c.key === `${WS}/list-workspaces`).length
   await ui.press({ key: 'stop:ab' })
-  const action = w.calls.find(c => c.key === 'sandbox-workspace/workspace-action')
+  const action = w.calls.find(c => c.key === `${WS}/workspace-action`)
   expect(action?.args).toEqual({ name: 'ab', action: 'stop' })
-  expect(w.calls.filter(c => c.key === 'sandbox-workspace/list-workspaces').length).toBe(before + 1)
+  expect(w.calls.filter(c => c.key === `${WS}/list-workspaces`).length).toBe(before + 1)
   expect((await ui.find({ key: 'note' }))?.text).toBe('sandbox stop')
   await ui.unmount()
 })
@@ -185,7 +186,7 @@ test('a lifecycle press calls workspace-action and refreshes', async ($, on) => 
 test('press while busy is ignored', async ($, on) => {
   let release: () => void = () => undefined
   const gate = new Promise<void>(r => { release = r })
-  const w = world(on, stubs({ 'sandbox-workspace/workspace-action': async () => { await gate; return ok({ command: 'x', output: '', path: '' }) } }))
+  const w = world(on, stubs({ [`${WS}/workspace-action`]: async () => { await gate; return ok({ command: 'x', output: '', path: '' }) } }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   const first = ui.press({ key: 'stop:ab' })
@@ -194,20 +195,20 @@ test('press while busy is ignored', async ($, on) => {
   await ui.press({ key: 'up:abc' })
   release()
   await first
-  expect(w.calls.filter(c => c.key === 'sandbox-workspace/workspace-action')).toHaveLength(1)
+  expect(w.calls.filter(c => c.key === `${WS}/workspace-action`)).toHaveLength(1)
   await ui.unmount()
 })
 
 test('remove needs two presses on the same workspace', async ($, on) => {
-  const w = world(on, stubs({ 'sandbox-workspace/remove-workspace': () => ok({ command: 'sandbox remove', output: '', path: '/ws/ab' }, 'sandbox remove') }))
+  const w = world(on, stubs({ [`${WS}/remove-workspace`]: () => ok({ command: 'sandbox remove', output: '', path: '/ws/ab' }, 'sandbox remove') }))
   await openPane($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
     await ui.press({ key: 'remove:ab' })
-    expect(w.calls.filter(c => c.key === 'sandbox-workspace/remove-workspace')).toHaveLength(0)
+    expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
     expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Confirm remove')
     await ui.press({ key: 'remove:ab' })
-    expect(w.calls.filter(c => c.key === 'sandbox-workspace/remove-workspace').map(c => c.args)).toEqual([{ name: 'ab' }])
+    expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`).map(c => c.args)).toEqual([{ name: 'ab' }])
     expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Remove')
     await ui.unmount()
     w.calls.length = 0
@@ -215,21 +216,21 @@ test('remove needs two presses on the same workspace', async ($, on) => {
 })
 
 test("a press on another row's button clears the pending remove", async ($, on) => {
-  const w = world(on, stubs({ 'sandbox-workspace/workspace-action': () => ok({ command: 'sandbox up', output: '', path: '' }, 'sandbox up') }))
+  const w = world(on, stubs({ [`${WS}/workspace-action`]: () => ok({ command: 'sandbox up', output: '', path: '' }, 'sandbox up') }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'remove:ab' })
   await ui.press({ key: 'up:abc' })
   expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Remove')
   await ui.press({ key: 'remove:ab' })
-  expect(w.calls.filter(c => c.key === 'sandbox-workspace/remove-workspace')).toHaveLength(0)
+  expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
   await ui.unmount()
 })
 
 test('polls every 5 s while open', async ($, on) => {
   const w = world(on, stubs())
   await openPane($)
-  const count = () => w.calls.filter(c => c.key === 'sandbox-workspace/workspace-status').length
+  const count = () => w.calls.filter(c => c.key === `${WS}/workspace-status`).length
   const n = count()
   await w.clock.advance(5000)
   expect(count()).toBe(n + 1)
@@ -251,7 +252,7 @@ const CLOSER: Plugin = {
 test('closing the pane cancels the timer', { plugins: [CLOSER] }, async ($, on) => {
   const w = world(on, stubs())
   await openPane($)
-  const count = () => w.calls.filter(c => c.key === 'sandbox-workspace/workspace-status').length
+  const count = () => w.calls.filter(c => c.key === `${WS}/workspace-status`).length
   const n = count()
   await w.clock.advance(5000)
   expect(count()).toBe(n + 1)
@@ -264,14 +265,14 @@ test('a slow tick is skipped, not queued', async ($, on) => {
   let release: () => void = () => undefined
   const gate = new Promise<void>(r => { release = r })
   let held = 0
-  const w = world(on, stubs({ 'sandbox-workspace/list-workspaces': async () => { if (held++ === 1) await gate; return ok(LIST) } }))
+  const w = world(on, stubs({ [`${WS}/list-workspaces`]: async () => { if (held++ === 1) await gate; return ok(LIST) } }))
   await openPane($)
   await w.clock.advance(5000)
   await w.clock.advance(5000)
   await w.clock.advance(5000)
   release()
   await w.clock.settle()
-  expect(w.calls.filter(c => c.key === 'sandbox-workspace/list-workspaces')).toHaveLength(2)
+  expect(w.calls.filter(c => c.key === `${WS}/list-workspaces`)).toHaveLength(2)
 })
 
 test('switch calls change_directory with the workspace path and toasts', async ($, on) => {
