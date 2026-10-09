@@ -95,6 +95,49 @@ async function tick($: EngineInterface): Promise<void> {
   }
 }
 
+export type Action = 'up' | 'stop' | 'restart' | 'down' | 'switch' | 'remove'
+type Lifecycle = 'up' | 'stop' | 'restart' | 'down'
+const LIFECYCLE = new Set<Action>(['up', 'stop', 'restart', 'down'])
+
+/** Mirrors the VS Code extension's `view/item/context` when-clauses. */
+export function buttonsFor(state: WorkspaceRow['state']): Action[] {
+  const out: Action[] = []
+  if (state === 'down' || state === 'stopped' || state === 'partial') out.push('up')
+  if (state === 'up' || state === 'partial') out.push('stop')
+  out.push('restart', 'down', 'switch', 'remove')
+  return out
+}
+
+const LABEL: Record<Action, string> = { up: 'Up', stop: 'Stop', restart: 'Restart', down: 'Down', switch: 'Switch', remove: 'Remove' }
+
+/** First line of a tool result's text, for the note under the list. */
+function firstLine(r: ToolResult): string {
+  return (r.content.find(c => c.type === 'text')?.text ?? '').split('\n')[0]?.trim() ?? ''
+}
+
+async function runAction($: EngineInterface, name: string, action: Lifecycle | 'remove'): Promise<void> {
+  await $.state.set(BUSY, name)
+  await $.state.set(NOTE, `${name}: ${action}…`)
+  try {
+    const r = action === 'remove'
+      ? await $.mcp.call(SERVER, 'remove-workspace', { name })
+      : await $.mcp.call(SERVER, 'workspace-action', { name, action })
+    await $.state.set(NOTE, firstLine(r) || (r.isError ? 'failed' : 'done'))
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message)
+  } finally {
+    await $.state.set(BUSY, '')
+  }
+  await tick($)
+}
+
+/** Every row button lands here. A press while any action runs is ignored, never queued. */
+async function press($: EngineInterface, action: Action, name: string): Promise<void> {
+  const { value: busy = '' } = await $.state.get(BUSY)
+  if (busy !== '') return
+  if (LIFECYCLE.has(action)) await runAction($, name, action as Lifecycle)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'workspaces', description: 'Open the sandbox workspaces pane' })
@@ -112,6 +155,7 @@ export const register: Register = on => {
     const { value: rows = [] } = await $.state.get(ROWS)
     const { value: error = '' } = await $.state.get(ERROR)
     const { value: note = '' } = await $.state.get(NOTE)
+    const { value: busy = '' } = await $.state.get(BUSY)
 
     return (
       <Box flexDirection="column">
@@ -119,6 +163,15 @@ export const register: Register = on => {
         {rows.map(r => (
           <Box key={`ws:${r.name}`} flexDirection="column">
             <Box key={`row:${r.name}`}><Text>{rowLine(r)}</Text></Box>
+            {busy === r.name ? (
+              <Box key={`busy:${r.name}`}><Text dimColor>working…</Text></Box>
+            ) : (
+              <Box>
+                {buttonsFor(r.state).map(a => (
+                  <Button key={`${a}:${r.name}`} label={LABEL[a]} onPress={() => void press($, a, r.name)} />
+                ))}
+              </Box>
+            )}
             {r.session && <Box key={`session:${r.name}`}><Text dimColor>{`session: ${r.session.title}`}</Text></Box>}
           </Box>
         ))}
