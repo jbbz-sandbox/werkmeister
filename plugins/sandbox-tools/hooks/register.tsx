@@ -95,7 +95,7 @@ async function tick($: EngineInterface): Promise<void> {
   }
 }
 
-export type Action = 'up' | 'stop' | 'restart' | 'down' | 'switch' | 'remove'
+export type Action = 'up' | 'stop' | 'restart' | 'down' | 'switch' | 'remove' | 'jump'
 type Lifecycle = 'up' | 'stop' | 'restart' | 'down'
 const LIFECYCLE = new Set<Action>(['up', 'stop', 'restart', 'down'])
 
@@ -108,7 +108,7 @@ export function buttonsFor(state: WorkspaceRow['state']): Action[] {
   return out
 }
 
-const LABEL: Record<Action, string> = { up: 'Up', stop: 'Stop', restart: 'Restart', down: 'Down', switch: 'Switch', remove: 'Remove' }
+const LABEL: Record<Action, string> = { up: 'Up', stop: 'Stop', restart: 'Restart', down: 'Down', switch: 'Switch', remove: 'Remove', jump: 'Jump' }
 
 /** First line of a tool result's text, for the note under the list. */
 function firstLine(r: ToolResult): string {
@@ -138,6 +138,26 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
 
   const { value: pending = '' } = await $.state.get(CONFIRM)
   if (pending !== '' && pending !== name) await $.state.set(CONFIRM, '')
+
+  if (action === 'switch') {
+    const { value: rows = [] } = await $.state.get(ROWS)
+    const row = rows.find(r => r.name === name)
+    if (!row) return
+    const r = await $.mcp.call('ccd_directory', 'change_directory', { path: row.path })
+    if (r.isError) await $.state.set(NOTE, firstLine(r) || 'change_directory refused')
+    else $.ui.toast(`Switching to ${name} when this turn ends`)
+    return
+  }
+
+  // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09), so a button asks the app to focus the session instead.
+  if (action === 'jump') {
+    const { value: rows = [] } = await $.state.get(ROWS)
+    const session = rows.find(r => r.name === name)?.session
+    if (!session) return
+    const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: session.id, target: 'focus' })
+    if (r.isError) $.ui.toast(`Open "${session.title}" from the sidebar`)
+    return
+  }
 
   if (action === 'remove') {
     if (pending !== name) {
@@ -210,7 +230,12 @@ export const register: Register = on => {
                 ))}
               </Box>
             )}
-            {r.session && <Box key={`session:${r.name}`}><Text dimColor>{`session: ${r.session.title}`}</Text></Box>}
+            {r.session && (
+              <Box>
+                <Box key={`session:${r.name}`}><Text dimColor>{`session: ${r.session.title}`}</Text></Box>
+                <Button key={`jump:${r.name}`} label={LABEL.jump} onPress={() => void press($, 'jump', r.name)} />
+              </Box>
+            )}
           </Box>
         ))}
         {note !== '' && <Box key="note"><Text>{note}</Text></Box>}
