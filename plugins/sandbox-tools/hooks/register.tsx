@@ -12,8 +12,8 @@ export const PANE = 'workspaces'
 const SCRIPT = `
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
-import { realpathSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { realpathSync, readFileSync, readdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 const out = o => console.log(JSON.stringify(o))
 try {
@@ -26,11 +26,32 @@ try {
     file = createRequire(dirname(bin) + '/x').resolve('sandbox-core')
   }
   const core = await import(pathToFileURL(file).href)
+  const yaml = createRequire(file)('yaml')
+  const str = v => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  // The first ICM stage whose output/ is still empty; null when no stages/ dir or every stage has output.
+  const stageOf = dir => {
+    let names
+    try { names = readdirSync(join(dir, 'stages')).filter(n => /^\\d+_/.test(n)).sort() } catch { return null }
+    for (let i = 0; i < names.length; i++) {
+      let files = []
+      try { files = readdirSync(join(dir, 'stages', names[i], 'output')).filter(f => !f.startsWith('.')) } catch { /* no output dir yet */ }
+      if (files.length === 0) return { index: i + 1, total: names.length, name: names[i].replace(/^\\d+_/, '') }
+    }
+    return null
+  }
+  const details = async w => {
+    let cfg = {}
+    try { cfg = yaml.parse(readFileSync(join(w.path, '.sandbox', 'workspace.yml'), 'utf8')) ?? {} } catch { /* not initialised */ }
+    let sessionTitle = null
+    try { sessionTitle = (await core.listSessions(w.name))[0]?.title ?? null } catch { /* no sessions */ }
+    return { ...w, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), sessionTitle }
+  }
   const ops = {
-    'list-workspaces': () => core.listWorkspaces(),
+    'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
     'workspace-status': () => core.getWorkspaceStatuses(),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'remove-workspace': () => core.removeWorkspace(args.name),
+    'claude-resume': () => core.resumeClaudeInTerminal(args.name),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -60,7 +81,8 @@ const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
 const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 
-type ListResult = { workspaces: { name: string; path: string; jiraId: string | null }[] }
+type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'jiraId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle'>
+type ListResult = { workspaces: ListEntry[] }
 type StatusResult = { statuses: { name: string; state: WorkspaceRow['state']; running: number; total: number; claude: { state: string; waiting: boolean } }[] }
 type SessionInfo = { sessionId: string; title: string; cwd: string; link?: string }
 type ToolResult = { content: { type: string; text?: string }[]; isError: boolean; structuredContent?: unknown }
@@ -95,9 +117,7 @@ export function buildRows(list: ListResult, status: StatusResult, sessions: Sess
   return list.workspaces.map(w => {
     const s = byName.get(w.name)
     return {
-      name: w.name,
-      path: w.path,
-      jiraId: w.jiraId,
+      ...w,
       state: s?.state ?? 'unknown',
       running: s?.running ?? 0,
       total: s?.total ?? 0,
@@ -110,9 +130,24 @@ export function buildRows(list: ListResult, status: StatusResult, sessions: Sess
 const DOT: Record<WorkspaceRow['state'], string> = { up: '●', partial: '◐', stopped: '○', down: '○', unknown: '?' }
 const DOT_COLOR: Record<WorkspaceRow['state'], 'success' | 'warning' | 'inactive'> = { up: 'success', partial: 'warning', stopped: 'inactive', down: 'inactive', unknown: 'warning' }
 
-/** The metadata after the name: jira key, running/total, claude note; '' when none. */
-export function rowMeta(r: WorkspaceRow): string {
-  return [r.jiraId, r.total > 0 ? `${r.running}/${r.total}` : null, r.claude ? `claude: ${r.claude}` : null].filter(Boolean).join('  ')
+/** The card's header after the dot: name, task title, jira key. */
+export function cardHead(r: WorkspaceRow): string {
+  return [r.name, r.task, r.jiraId].filter(Boolean).join(' · ')
+}
+
+/** The card's detail line: work type, ICM stage, running/total, claude note; '' when none. */
+export function cardMeta(r: WorkspaceRow): string {
+  return [
+    r.workType,
+    r.stage ? `stage ${r.stage.index}/${r.stage.total} ${r.stage.name}` : null,
+    r.total > 0 ? `${r.running}/${r.total}` : null,
+    r.claude ? `claude: ${r.claude}` : null,
+  ].filter(Boolean).join(' · ')
+}
+
+/** The session line's title: the desktop session in the folder, else the newest on-disk session. */
+export function sessionTitle(r: WorkspaceRow): string | null {
+  return r.session?.title ?? r.sessionTitle
 }
 
 let ticking = false
@@ -198,10 +233,19 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09), so a button asks the app to focus the session instead.
   if (action === 'jump') {
     const { value: rows = [] } = await $.state.get(ROWS)
-    const session = rows.find(r => r.name === name)?.session
-    if (!session) return
-    const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: session.id, target: 'focus' })
-    if (r.isError) $.ui.toast(`Open "${session.title}" from the sidebar`)
+    const row = rows.find(r => r.name === name)
+    if (!row) return
+    if (row.session) {
+      const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: row.session.id, target: 'focus' })
+      if (r.isError) $.ui.toast(`Open "${row.session.title}" from the sidebar`)
+      return
+    }
+    try {
+      await core($, 'claude-resume', { name })
+      $.ui.toast(`Resuming "${row.sessionTitle ?? name}" in a Terminal window`)
+    } catch (err) {
+      await $.state.set(NOTE, (err as Error).message)
+    }
     return
   }
 
@@ -265,28 +309,28 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
         {rows.map(r => (
-          <Box key={`ws:${r.name}`} flexDirection="column" marginBottom={1}>
+          <Box key={`ws:${r.name}`} flexDirection="column" borderStyle="round" borderColor={DOT_COLOR[r.state]} borderDimColor={DOT_COLOR[r.state] === 'inactive' ? true : undefined} paddingX={1} marginBottom={1}>
             <Box key={`row:${r.name}`}>
               <Text color={DOT_COLOR[r.state]}>{DOT[r.state]}</Text>
-              <Text bold>{` ${r.name}`}</Text>
-              {rowMeta(r) !== '' && <Text dimColor>{`  ${rowMeta(r)}`}</Text>}
+              <Text bold>{` ${cardHead(r)}`}</Text>
             </Box>
+            {r.description && <Box key={`desc:${r.name}`}><Text dimColor>{r.description}</Text></Box>}
+            {cardMeta(r) !== '' && <Box key={`meta:${r.name}`}><Text dimColor>{cardMeta(r)}</Text></Box>}
+            {sessionTitle(r) && <Box key={`session:${r.name}`}><Text dimColor>{`session: ${sessionTitle(r)}`}</Text></Box>}
             {busy === r.name ? (
               <Box key={`busy:${r.name}`}><Text dimColor>working…</Text></Box>
             ) : (
-              <Box gap={1}>
-                {buttonsFor(r.state).filter(a => a !== 'remove').map(a => (
-                  <Button key={`${a}:${r.name}`} label={LABEL[a]} variant={a === 'switch' ? 'primary' : 'secondary'} onPress={() => void press($, a, r.name)} />
+              <Box gap={1} marginTop={1}>
+                {buttonsFor(r.state).filter(a => a !== 'remove' && a !== 'switch').map(a => (
+                  <Button key={`${a}:${r.name}`} label={LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
                 ))}
+                <Box marginLeft={2} gap={1}>
+                  <Button key={`switch:${r.name}`} label={LABEL.switch} variant="primary" onPress={() => void press($, 'switch', r.name)} />
+                  {sessionTitle(r) && <Button key={`jump:${r.name}`} label={LABEL.jump} variant="secondary" onPress={() => void press($, 'jump', r.name)} />}
+                </Box>
                 <Box marginLeft={2}>
                   <Button key={`remove:${r.name}`} label={confirm === r.name ? 'Confirm remove' : LABEL.remove} variant="secondary" onPress={() => void press($, 'remove', r.name)} />
                 </Box>
-              </Box>
-            )}
-            {r.session && (
-              <Box gap={1}>
-                <Box key={`session:${r.name}`}><Text dimColor>{`session: ${r.session.title}`}</Text></Box>
-                <Button key={`jump:${r.name}`} label={LABEL.jump} variant="secondary" onPress={() => void press($, 'jump', r.name)} />
               </Box>
             )}
           </Box>
