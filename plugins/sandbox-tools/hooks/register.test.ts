@@ -13,7 +13,7 @@ const PANE_PROPS = {
 }
 
 type McpAnswer = { content: { type: 'text'; text: string }[]; isError: boolean; structuredContent?: unknown }
-type McpStub = Record<string, (args: Record<string, unknown>) => McpAnswer>
+type McpStub = Record<string, (args: Record<string, unknown>) => McpAnswer | Promise<McpAnswer>>
 
 /** Stubs every noun the module calls. `calls` records each mcp.call as `server/tool`. */
 function world(on: On, stubs: McpStub = {}) {
@@ -29,12 +29,12 @@ function world(on: On, stubs: McpStub = {}) {
     return { value: undefined }
   })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
-  on('mcp.call', (_$, e) => {
+  on('mcp.call', async (_$, e) => {
     const key = `${e.server}/${e.tool}`
     calls.push({ key, args: e.args })
     const stub = stubs[key]
     if (!stub) return { value: { content: [{ type: 'text' as const, text: `no stub for ${key}` }], isError: true } }
-    return { value: stub(e.args) }
+    return { value: await stub(e.args) }
   })
   return { calls, toasts, clock }
 }
@@ -150,5 +150,50 @@ test('a failed list keeps the last rows and shows the error', async ($, on) => {
   await ui.press({ key: 'refresh' })
   expect(await ui.find({ key: 'row:ab' })).toBeDefined()
   expect((await ui.find({ key: 'error' }))?.text).toBe('docker down')
+  await ui.unmount()
+})
+
+test('buttons follow the extension gating', async ($, on) => {
+  world(on, stubs())
+  await openPane($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+    expect(await ui.find({ key: 'up:ab' })).toBeUndefined()
+    expect(await ui.find({ key: 'stop:ab' })).toBeDefined()
+    expect(await ui.find({ key: 'up:abc' })).toBeDefined()
+    expect(await ui.find({ key: 'stop:abc' })).toBeDefined()
+    expect(await ui.find({ key: 'up:empty' })).toBeDefined()
+    expect(await ui.find({ key: 'stop:empty' })).toBeUndefined()
+    for (const k of ['restart:ab', 'down:ab', 'switch:ab', 'remove:ab']) expect(await ui.find({ key: k })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('a lifecycle press calls workspace-action and refreshes', async ($, on) => {
+  const w = world(on, stubs({ 'sandbox-workspace/workspace-action': a => ok({ command: `sandbox ${a.action}`, output: 'done', path: '/ws/ab' }, `sandbox ${a.action}\n\ndone`) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  const before = w.calls.filter(c => c.key === 'sandbox-workspace/list-workspaces').length
+  await ui.press({ key: 'stop:ab' })
+  const action = w.calls.find(c => c.key === 'sandbox-workspace/workspace-action')
+  expect(action?.args).toEqual({ name: 'ab', action: 'stop' })
+  expect(w.calls.filter(c => c.key === 'sandbox-workspace/list-workspaces').length).toBe(before + 1)
+  expect((await ui.find({ key: 'note' }))?.text).toBe('sandbox stop')
+  await ui.unmount()
+})
+
+test('press while busy is ignored', async ($, on) => {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>(r => { release = r })
+  const w = world(on, stubs({ 'sandbox-workspace/workspace-action': async () => { await gate; return ok({ command: 'x', output: '', path: '' }) } }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  const first = ui.press({ key: 'stop:ab' })
+  await w.clock.settle()
+  expect((await ui.find({ key: 'busy:ab' }))?.text).toBe('working…')
+  await ui.press({ key: 'up:abc' })
+  release()
+  await first
+  expect(w.calls.filter(c => c.key === 'sandbox-workspace/workspace-action')).toHaveLength(1)
   await ui.unmount()
 })
