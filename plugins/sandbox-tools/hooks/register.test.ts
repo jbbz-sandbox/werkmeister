@@ -197,3 +197,31 @@ test('press while busy is ignored', async ($, on) => {
   expect(w.calls.filter(c => c.key === 'sandbox-workspace/workspace-action')).toHaveLength(1)
   await ui.unmount()
 })
+
+test('remove needs two presses on the same workspace', async ($, on) => {
+  const w = world(on, stubs({ 'sandbox-workspace/remove-workspace': () => ok({ command: 'sandbox remove', output: '', path: '/ws/ab' }, 'sandbox remove') }))
+  await openPane($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+    await ui.press({ key: 'remove:ab' })
+    expect(w.calls.filter(c => c.key === 'sandbox-workspace/remove-workspace')).toHaveLength(0)
+    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Confirm remove')
+    await ui.press({ key: 'remove:ab' })
+    expect(w.calls.filter(c => c.key === 'sandbox-workspace/remove-workspace').map(c => c.args)).toEqual([{ name: 'ab' }])
+    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Remove')
+    await ui.unmount()
+    w.calls.length = 0
+  }
+})
+
+test("a press on another row's button clears the pending remove", async ($, on) => {
+  const w = world(on, stubs({ 'sandbox-workspace/workspace-action': () => ok({ command: 'sandbox up', output: '', path: '' }, 'sandbox up') }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'remove:ab' })
+  await ui.press({ key: 'up:abc' })
+  expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Remove')
+  await ui.press({ key: 'remove:ab' })
+  expect(w.calls.filter(c => c.key === 'sandbox-workspace/remove-workspace')).toHaveLength(0)
+  await ui.unmount()
+})

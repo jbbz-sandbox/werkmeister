@@ -135,6 +135,20 @@ async function runAction($: EngineInterface, name: string, action: Lifecycle | '
 async function press($: EngineInterface, action: Action, name: string): Promise<void> {
   const { value: busy = '' } = await $.state.get(BUSY)
   if (busy !== '') return
+
+  const { value: pending = '' } = await $.state.get(CONFIRM)
+  if (pending !== '' && pending !== name) await $.state.set(CONFIRM, '')
+
+  if (action === 'remove') {
+    if (pending !== name) {
+      await $.state.set(CONFIRM, name)
+      return
+    }
+    await $.state.set(CONFIRM, '')
+    await runAction($, name, 'remove')
+    return
+  }
+
   if (LIFECYCLE.has(action)) await runAction($, name, action as Lifecycle)
 }
 
@@ -156,6 +170,7 @@ export const register: Register = on => {
     const { value: error = '' } = await $.state.get(ERROR)
     const { value: note = '' } = await $.state.get(NOTE)
     const { value: busy = '' } = await $.state.get(BUSY)
+    const { value: confirm = '' } = await $.state.get(CONFIRM)
 
     return (
       <Box flexDirection="column">
@@ -168,7 +183,7 @@ export const register: Register = on => {
             ) : (
               <Box>
                 {buttonsFor(r.state).map(a => (
-                  <Button key={`${a}:${r.name}`} label={LABEL[a]} onPress={() => void press($, a, r.name)} />
+                  <Button key={`${a}:${r.name}`} label={a === 'remove' && confirm === r.name ? 'Confirm remove' : LABEL[a]} onPress={() => void press($, a, r.name)} />
                 ))}
               </Box>
             )}
