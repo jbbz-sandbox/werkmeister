@@ -152,16 +152,39 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   if (LIFECYCLE.has(action)) await runAction($, name, action as Lifecycle)
 }
 
+let timer: { cancel: () => void } | null = null
+
+function startPolling($: EngineInterface): void {
+  timer?.cancel()
+  timer = $.clock.every(POLL_MS, () => {
+    void tick($)
+  })
+}
+
+function stopPolling(): void {
+  timer?.cancel()
+  timer = null
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'workspaces', description: 'Open the sandbox workspaces pane' })
+    // A hot reload drops the old environment's timer but leaves the pane open: re-arm it.
+    const panes = await $.ui.panes()
+    if (panes.some(p => p.id === PANE)) startPolling($)
     return next(e)
   })
 
   on('command.run', { command: 'workspaces' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Sandbox workspaces' })
     await tick($)
+    startPolling($)
     return { text: 'Workspaces pane opened.' }
+  })
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    stopPolling()
+    return next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
