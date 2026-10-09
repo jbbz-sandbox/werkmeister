@@ -108,11 +108,11 @@ export function buildRows(list: ListResult, status: StatusResult, sessions: Sess
 }
 
 const DOT: Record<WorkspaceRow['state'], string> = { up: '●', partial: '◐', stopped: '○', down: '○', unknown: '?' }
+const DOT_COLOR: Record<WorkspaceRow['state'], 'success' | 'warning' | 'inactive'> = { up: 'success', partial: 'warning', stopped: 'inactive', down: 'inactive', unknown: 'warning' }
 
-export function rowLine(r: WorkspaceRow): string {
-  return [DOT[r.state] + ' ' + r.name, r.jiraId, r.total > 0 ? `${r.running}/${r.total}` : null, r.claude ? `claude: ${r.claude}` : null]
-    .filter(Boolean)
-    .join('  ')
+/** The metadata after the name: jira key, running/total, claude note; '' when none. */
+export function rowMeta(r: WorkspaceRow): string {
+  return [r.jiraId, r.total > 0 ? `${r.running}/${r.total}` : null, r.claude ? `claude: ${r.claude}` : null].filter(Boolean).join('  ')
 }
 
 let ticking = false
@@ -265,21 +265,28 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
         {rows.map(r => (
-          <Box key={`ws:${r.name}`} flexDirection="column">
-            <Box key={`row:${r.name}`}><Text>{rowLine(r)}</Text></Box>
+          <Box key={`ws:${r.name}`} flexDirection="column" marginBottom={1}>
+            <Box key={`row:${r.name}`}>
+              <Text color={DOT_COLOR[r.state]}>{DOT[r.state]}</Text>
+              <Text bold>{` ${r.name}`}</Text>
+              {rowMeta(r) !== '' && <Text dimColor>{`  ${rowMeta(r)}`}</Text>}
+            </Box>
             {busy === r.name ? (
               <Box key={`busy:${r.name}`}><Text dimColor>working…</Text></Box>
             ) : (
-              <Box>
-                {buttonsFor(r.state).map(a => (
-                  <Button key={`${a}:${r.name}`} label={a === 'remove' && confirm === r.name ? 'Confirm remove' : LABEL[a]} onPress={() => void press($, a, r.name)} />
+              <Box gap={1}>
+                {buttonsFor(r.state).filter(a => a !== 'remove').map(a => (
+                  <Button key={`${a}:${r.name}`} label={LABEL[a]} variant={a === 'switch' ? 'primary' : 'secondary'} onPress={() => void press($, a, r.name)} />
                 ))}
+                <Box marginLeft={2}>
+                  <Button key={`remove:${r.name}`} label={confirm === r.name ? 'Confirm remove' : LABEL.remove} variant="secondary" onPress={() => void press($, 'remove', r.name)} />
+                </Box>
               </Box>
             )}
             {r.session && (
-              <Box>
+              <Box gap={1}>
                 <Box key={`session:${r.name}`}><Text dimColor>{`session: ${r.session.title}`}</Text></Box>
-                <Button key={`jump:${r.name}`} label={LABEL.jump} onPress={() => void press($, 'jump', r.name)} />
+                <Button key={`jump:${r.name}`} label={LABEL.jump} variant="secondary" onPress={() => void press($, 'jump', r.name)} />
               </Box>
             )}
           </Box>
