@@ -21,6 +21,16 @@ sandbox environment.
 | `sandbox-starting-prompt` | Run the `starting_prompt` defined in the workspace's `.sandbox/workspace.yml`. |
 | `install-workspace-dashboard` | Install the Sandbox Workspaces live dashboard as a **Cowork artifact** (`apps/sandbox-dashboard/dist/workspace-list.artifact.html`). |
 
+### Mods
+
+| Mod | What it does |
+|-----|--------------|
+| `/workspaces` | A docked pane listing every workspace with its container state, the Claude working/waiting flag, and the desktop session open in it. Up / Stop / Restart / Down / Remove run through the bundled `sandbox-workspace` MCP server; Remove asks twice. Switch moves this session into the workspace folder. Jump asks the app to focus that session. Source: [`hooks/register.tsx`](hooks/register.tsx). |
+
+Probe findings (2026-10-09): `change_directory` from a plugin call: yes, after the person approves the folder. `claude://` link in a pane focuses the session: no, the desktop pane draws nothing for it. Fallback taken: the session entry is text plus a Jump button that calls `ccd_window` `open_session_in`, which only focuses sessions this one started; otherwise it toasts the title to open from the sidebar.
+
+To load it from a checkout instead of the marketplace, set `CLAUDE_CODE_PLUGIN_DIRS` to this folder in the `env` block of `~/.claude/settings.json`.
+
 ### Code standards (`sb-*`) — NOT in this plugin
 
 The `sb-implement` / `sb-research` entry skills and the `sb-*-standard` code
