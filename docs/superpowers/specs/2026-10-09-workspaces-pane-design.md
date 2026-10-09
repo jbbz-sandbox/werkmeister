@@ -40,16 +40,20 @@ Everything outside it goes through `$`.
 
 ## Data
 
-All reads and writes go through MCP servers the session already has connected.
-The mod never shells out.
+Desktop-app tools (`ccd_*`) go through `$.mcp.call`. Workspace reads and actions
+do not: in the desktop host a plugin's call to its own MCP server gets no
+auto-mode verdict and is refused (found at the live check, 2026-10-09), while a
+host process is allowed. So those four go through `$.process.run` of a node child
+that imports sandbox-core, the pattern the former `/workspace-form` mod used:
+`listWorkspaces`, `getWorkspaceStatuses`, `runWorkspaceAction`, `removeWorkspace`.
 
 | Need | Call | Fields used |
 |---|---|---|
-| Workspace list | `$.mcp.call('sandbox-workspace', 'list-workspaces')` | `workspaces[].name`, `path`, `jiraId` |
-| Container state | `$.mcp.call('sandbox-workspace', 'workspace-status')` | `statuses[].name`, `state`, `running`, `total`, `claude.state`, `claude.waiting` |
+| Workspace list | node child: `listWorkspaces()` | `workspaces[].name`, `path`, `jiraId` |
+| Container state | node child: `getWorkspaceStatuses()` | `statuses[].name`, `state`, `running`, `total`, `claude.state`, `claude.waiting` |
 | Desktop sessions | `$.mcp.call('ccd_session_mgmt', 'list_sessions', { limit: 50 })` | `sessionId`, `title`, `cwd`, `link`, `isRunning` |
-| Lifecycle | `$.mcp.call('sandbox-workspace', 'workspace-action', { name, action })` | `action` in `up`, `stop`, `restart`, `down` |
-| Remove | `$.mcp.call('sandbox-workspace', 'remove-workspace', { name })` | |
+| Lifecycle | node child: `runWorkspaceAction(name, action)` | `action` in `up`, `stop`, `restart`, `down` |
+| Remove | node child: `removeWorkspace(name)` | |
 | Switch | `$.mcp.call('ccd_directory', 'change_directory', { path })` | |
 
 Each result is read from `structuredContent`; a result with `isError` is shown
