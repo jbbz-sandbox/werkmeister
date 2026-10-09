@@ -76,9 +76,9 @@ test('empty list draws the empty message', async ($, on) => {
 const LIST = {
   root: '/ws',
   workspaces: [
-    { name: 'ab', path: '/ws/ab', vscodeUri: 'vscode://file/ws/ab', jiraId: 'PROJ-1', jiraUrl: null, labels: [] },
-    { name: 'abc', path: '/ws/abc', vscodeUri: 'vscode://file/ws/abc', jiraId: null, jiraUrl: null, labels: [] },
-    { name: 'empty', path: '/ws/empty', vscodeUri: 'vscode://file/ws/empty', jiraId: null, jiraUrl: null, labels: [] },
+    { name: 'ab', path: '/ws/ab', jiraId: 'PROJ-1', labels: [], task: 'BWell', description: 'BWell technologies', workType: 'spike', stage: { index: 5, total: 6, name: 'implement' }, sessionTitle: 'Demo project' },
+    { name: 'abc', path: '/ws/abc', jiraId: null, labels: [], task: null, description: null, workType: 'bugfix', stage: null, sessionTitle: null },
+    { name: 'empty', path: '/ws/empty', jiraId: null, labels: [], task: null, description: null, workType: null, stage: null, sessionTitle: null },
   ],
 }
 const STATUS = {
@@ -116,8 +116,12 @@ test('rows draw dot, jira, counts and claude note', async ($, on) => {
   await openPane($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-    expect((await ui.find({ key: 'row:ab' }))?.text).toBe('● ab  PROJ-1  3/3  claude: working')
-    expect((await ui.find({ key: 'row:abc' }))?.text).toBe('◐ abc  1/3  claude: waiting')
+    expect((await ui.find({ key: 'row:ab' }))?.text).toBe('● ab · BWell · PROJ-1')
+    expect((await ui.find({ key: 'desc:ab' }))?.text).toBe('BWell technologies')
+    expect((await ui.find({ key: 'meta:ab' }))?.text).toBe('spike · stage 5/6 implement · 3/3 · claude: working')
+    expect((await ui.find({ key: 'row:abc' }))?.text).toBe('◐ abc')
+    expect(await ui.find({ key: 'desc:abc' })).toBeUndefined()
+    expect((await ui.find({ key: 'meta:abc' }))?.text).toBe('bugfix · 1/3 · claude: waiting')
     await ui.unmount()
   }
 })
@@ -128,6 +132,7 @@ test('no counts when total is 0', async ($, on) => {
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
     expect((await ui.find({ key: 'row:empty' }))?.text).toBe('○ empty')
+    expect(await ui.find({ key: 'meta:empty' })).toBeUndefined()
     await ui.unmount()
   }
 })
@@ -138,7 +143,8 @@ test('segment-aware join picks the deepest workspace and the newest session', as
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
     expect((await ui.find({ key: 'session:abc' }))?.text).toBe('session: Newer in abc')
-    expect(await ui.find({ key: 'session:ab' })).toBeUndefined()
+    expect((await ui.find({ key: 'session:ab' }))?.text).toBe('session: Demo project')
+    expect(await ui.find({ key: 'session:empty' })).toBeUndefined()
     await ui.unmount()
   }
 })
@@ -157,6 +163,26 @@ test('a failed session lookup keeps the workspace list', async ($, on) => {
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect(await ui.find({ key: 'row:ab' })).toBeDefined()
   expect(await ui.find({ key: 'session:abc' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a card border follows the state', async ($, on) => {
+  world(on, stubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect((await ui.find({ key: 'ws:ab' }))?.props.borderColor).toBe('success')
+  expect((await ui.find({ key: 'ws:abc' }))?.props.borderColor).toBe('warning')
+  expect((await ui.find({ key: 'ws:empty' }))?.props.borderDimColor).toBe(true)
+  await ui.unmount()
+})
+
+test('jump with no desktop session resumes the newest session in a Terminal', async ($, on) => {
+  const w = world(on, stubs({ [`${WS}/claude-resume`]: () => ok({ path: '/ws/ab', sessionId: 's1' }) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'jump:ab' })
+  expect(w.calls.find(c => c.key === `${WS}/claude-resume`)?.args).toEqual({ name: 'ab' })
+  expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')).toBeUndefined()
   await ui.unmount()
 })
 
