@@ -17,6 +17,12 @@
  *   --jira <ref>          Jira ticket id/URL to pre-fill the form.
  *   --open                Launch VS Code on the new workspace (default: off).
  *   --timeout <seconds>   How long to wait for the form submit (default: 600).
+ *
+ * Env:
+ *   SANDBOX_FORM_NO_BROWSER=1   Serve the form but don't open the system browser; the
+ *                               caller reads the URL off stderr and opens it itself
+ *                               (the /sandbox-workspace skill does this in the Claude
+ *                               Code desktop app to show the form in its Browser pane).
  */
 import {
   createWorkspace,
@@ -64,7 +70,10 @@ async function main(): Promise<void> {
     emit({ status: "error", message }, 1);
   }
 
-  const filled = await promptViaLocalhostForm(bundle!, { timeoutMs: args.timeoutMs });
+  const filled = await promptViaLocalhostForm(bundle!, {
+    timeoutMs: args.timeoutMs,
+    open: !process.env.SANDBOX_FORM_NO_BROWSER,
+  });
   if (filled.status !== "submitted") {
     // cancelled | timeout — nothing was created; not an error exit.
     emit({ status: filled.status }, 0);

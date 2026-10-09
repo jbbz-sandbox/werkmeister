@@ -18,12 +18,19 @@ surface shows the same fields, labels, defaults, and validation — and the **sa
 every surface (browser form, dashboard tab, Desktop inline) renders the one shared form
 component (`apps/sandbox-dashboard/src/create-form.ts`).
 
+## Which browser shows the form
+
+| Where this session runs | How to open the form |
+|-------------------------|----------------------|
+| **Claude Code desktop app** (the system prompt says so, and the `mcp__Claude_Browser__*` tools are present) | In the app's own Browser pane: see *Claude Code desktop* below. |
+| **VS Code extension**, a **terminal**, or anywhere else | In the system browser: the foreground `--browser-form` command below. Do this even if some browser tool happens to be available. |
+
 ## Preferred path — `sandbox workspace --browser-form`
 
 This is the self-contained path; it works in **Claude Code / VS Code** without any
-MCP-server connection. It opens the form on localhost (the same form, styling, and create
-path the Desktop MCP App uses), blocks until submit/cancel, creates the
-workspace, and prints a single outcome JSON to **stdout** (progress → stderr).
+MCP-server connection. It opens the form on localhost in the **system browser** (the same
+form, styling, and create path the Desktop MCP App uses), blocks until submit/cancel,
+creates the workspace, and prints a single outcome JSON to **stdout** (progress → stderr).
 
 ```bash
 sandbox workspace --browser-form                      # open the form; create on submit
@@ -42,6 +49,28 @@ Outcome JSON shapes:
 | `{"status":"submitted","create":{"ok":false,"error":"…"}}` | CLI failed — show `error`, offer to fix + retry. |
 | `{"status":"cancelled"}` / `{"status":"timeout"}` | Nothing created — offer to re-run. |
 | `{"status":"error","message":"…"}` | Pre-form failure (e.g. app not built) — relay it. |
+
+### Claude Code desktop — open the form in the in-app browser
+
+Only in the **Claude Code desktop app**: show the form in the Browser pane beside the
+conversation instead of the system browser. Only a tool call the model makes may drive that
+pane, so do it in these steps yourself:
+
+1. Start the CLI in the **background** with the browser launch suppressed, stderr to a file:
+
+   ```bash
+   SANDBOX_FORM_NO_BROWSER=1 sandbox workspace --browser-form 2>/tmp/workspace-form.err >/tmp/workspace-form.out
+   ```
+
+2. Read the form URL from the stderr file (the line `[sandbox-workspace] workspace form: http://127.0.0.1:<port>/`).
+3. Call `mcp__Claude_Browser__preview_start` with `url` set to that URL. The form loads in
+   the browser tab, but no browser tool brings the pane into view: check
+   `mcp__Claude_Browser__tabs_context`, and when it says the pane is hidden, tell the user to
+   open the Browser pane to see the form. Close any tab left from an earlier form run.
+4. Wait for the background command to exit (it blocks until submit, cancel, or timeout), then
+   read the outcome JSON from the stdout file and act on it per the table above.
+
+Add `--jira-id`/`--open` to step 1 exactly as for the foreground form.
 
 ### Desktop inline alternative — the `workspace` MCP tool
 
