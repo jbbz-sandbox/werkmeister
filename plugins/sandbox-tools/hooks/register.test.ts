@@ -76,9 +76,9 @@ test('empty list draws the empty message', async ($, on) => {
 const LIST = {
   root: '/ws',
   workspaces: [
-    { name: 'ab', path: '/ws/ab', jiraId: 'PROJ-1', labels: [], task: 'BWell', description: 'BWell technologies', workType: 'spike', stage: { index: 5, total: 6, name: 'implement' }, sessionTitle: 'Demo project' },
-    { name: 'abc', path: '/ws/abc', jiraId: null, labels: [], task: null, description: null, workType: 'bugfix', stage: null, sessionTitle: null },
-    { name: 'empty', path: '/ws/empty', jiraId: null, labels: [], task: null, description: null, workType: null, stage: null, sessionTitle: null },
+    { name: 'ab', path: '/ws/ab', jiraId: 'PROJ-1', labels: [], task: 'BWell', description: 'BWell technologies', workType: 'spike', stage: { index: 5, total: 6, name: 'implement' }, sessionTitle: 'Demo project', sessionOrigin: 'sdk-cli' },
+    { name: 'abc', path: '/ws/abc', jiraId: null, labels: [], task: null, description: null, workType: 'bugfix', stage: null, sessionTitle: null, sessionOrigin: null },
+    { name: 'empty', path: '/ws/empty', jiraId: null, labels: [], task: null, description: null, workType: null, stage: null, sessionTitle: null, sessionOrigin: null },
   ],
 }
 const STATUS = {
@@ -111,17 +111,22 @@ test('workspace data comes from the node child, not an MCP call', async ($, on) 
   expect(w.calls.filter(c => c.via === 'process').map(c => c.key)).toEqual([`${WS}/list-workspaces`, `${WS}/workspace-status`])
 })
 
-test('rows draw dot, jira, counts and claude note', async ($, on) => {
+test('rows draw name, jira, task, counts and claude note', async ($, on) => {
   world(on, stubs())
   await openPane($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-    expect((await ui.find({ key: 'row:ab' }))?.text).toBe('● ab · BWell · PROJ-1')
+    expect((await ui.find({ key: 'row:ab' }))?.text).toBe('ab · PROJ-1')
+    expect((await ui.find({ key: 'task:ab' }))?.text).toBe('BWell')
     expect((await ui.find({ key: 'desc:ab' }))?.text).toBe('BWell technologies')
-    expect((await ui.find({ key: 'meta:ab' }))?.text).toBe('spike · stage 5/6 implement · 3/3 · claude: working')
-    expect((await ui.find({ key: 'row:abc' }))?.text).toBe('◐ abc')
+    expect((await ui.find({ key: 'meta:ab' }))?.text).toBe('spike · stage 5/6 implement · 3/3')
+    expect((await ui.find({ key: 'claude:ab' }))?.text).toBe('◌ working')
+    expect((await ui.find({ key: 'row:abc' }))?.text).toBe('abc')
+    expect(await ui.find({ key: 'task:abc' })).toBeUndefined()
     expect(await ui.find({ key: 'desc:abc' })).toBeUndefined()
-    expect((await ui.find({ key: 'meta:abc' }))?.text).toBe('bugfix · 1/3 · claude: waiting')
+    expect((await ui.find({ key: 'meta:abc' }))?.text).toBe('bugfix · 1/3')
+    expect((await ui.find({ key: 'claude:abc' }))?.text).toBe('● waiting for you')
+    expect(await ui.find({ key: 'claude:empty' })).toBeUndefined()
     await ui.unmount()
   }
 })
@@ -131,7 +136,7 @@ test('no counts when total is 0', async ($, on) => {
   await openPane($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-    expect((await ui.find({ key: 'row:empty' }))?.text).toBe('○ empty')
+    expect((await ui.find({ key: 'row:empty' }))?.text).toBe('empty')
     expect(await ui.find({ key: 'meta:empty' })).toBeUndefined()
     await ui.unmount()
   }
@@ -142,8 +147,8 @@ test('segment-aware join picks the deepest workspace and the newest session', as
   await openPane($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-    expect((await ui.find({ key: 'session:abc' }))?.text).toBe('session: Newer in abc')
-    expect((await ui.find({ key: 'session:ab' }))?.text).toBe('session: Demo project')
+    expect((await ui.find({ key: 'session:abc' }))?.text).toBe('session · Desktop · Newer in abc')
+    expect((await ui.find({ key: 'session:ab' }))?.text).toBe('session · CLI · Demo project')
     expect(await ui.find({ key: 'session:empty' })).toBeUndefined()
     await ui.unmount()
   }
@@ -186,13 +191,36 @@ test('jump with no desktop session resumes the newest session in a Terminal', as
   await ui.unmount()
 })
 
+test('jump on a VS Code session opens the folder in VS Code, not a Terminal', async ($, on) => {
+  const vscode = { ...LIST, workspaces: LIST.workspaces.map(w => (w.name === 'ab' ? { ...w, sessionOrigin: 'claude-vscode' } : w)) }
+  const w = world(on, stubs({ [`${WS}/list-workspaces`]: () => ok(vscode), [`${WS}/open-vscode`]: () => ok({ path: '/ws/ab' }) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect((await ui.find({ key: 'session:ab' }))?.text).toBe('session · VS Code · Demo project')
+  await ui.press({ key: 'jump:ab' })
+  expect(w.calls.find(c => c.key === `${WS}/open-vscode`)?.args).toEqual({ path: '/ws/ab' })
+  expect(w.calls.find(c => c.key === `${WS}/claude-resume`)).toBeUndefined()
+  expect(w.toasts).toEqual(['Opening ab in VS Code'])
+  await ui.unmount()
+})
+
+test('the workspace this session sits in gets no Switch', async ($, on) => {
+  world(on, stubs())
+  on('session.cwd', () => ({ value: '/ws/abc/repo' }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect(await ui.find({ key: 'switch:abc' })).toBeUndefined()
+  expect(await ui.find({ key: 'switch:ab' })).toBeDefined()
+  await ui.unmount()
+})
+
 test('a failed list keeps the last rows and shows the error', async ($, on) => {
   let fail = false
-  world(on, stubs({ [`${WS}/list-workspaces`]: () => (fail ? { content: [{ type: 'text', text: 'docker down' }], isError: true } : ok(LIST)) }))
+  const w = world(on, stubs({ [`${WS}/list-workspaces`]: () => (fail ? { content: [{ type: 'text', text: 'docker down' }], isError: true } : ok(LIST)) }))
   await openPane($)
   fail = true
+  await w.clock.advance(5000)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'refresh' })
   expect(await ui.find({ key: 'row:ab' })).toBeDefined()
   expect((await ui.find({ key: 'error' }))?.text).toBe('docker down')
   await ui.unmount()
@@ -250,10 +278,10 @@ test('remove needs two presses on the same workspace', async ($, on) => {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
     await ui.press({ key: 'remove:ab' })
     expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
-    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Confirm remove')
+    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('✕ Yes, remove')
     await ui.press({ key: 'remove:ab' })
     expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`).map(c => c.args)).toEqual([{ name: 'ab' }])
-    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Remove')
+    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('✕ Remove')
     await ui.unmount()
     w.calls.length = 0
   }
@@ -265,7 +293,7 @@ test("a press on another row's button clears the pending remove", async ($, on) 
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'remove:ab' })
   await ui.press({ key: 'up:abc' })
-  expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('Remove')
+  expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('✕ Remove')
   await ui.press({ key: 'remove:ab' })
   expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
   await ui.unmount()

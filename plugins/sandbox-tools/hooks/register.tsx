@@ -12,7 +12,8 @@ export const PANE = 'workspaces'
 const SCRIPT = `
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
-import { realpathSync, readFileSync, readdirSync } from 'node:fs'
+import { realpathSync, readFileSync, readdirSync, openSync, readSync, closeSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 const out = o => console.log(JSON.stringify(o))
@@ -39,12 +40,27 @@ try {
     }
     return null
   }
+  // The transcript's "entrypoint" field (claude-vscode, claude-desktop, sdk-cli, ...) from its first 64 KiB; null when unknown.
+  const originOf = (dir, sessionId) => {
+    const enc = p => p.replace(/[^a-zA-Z0-9]/g, '-')
+    const root = join(homedir(), '.claude', 'projects')
+    let fd = null
+    try {
+      const proj = readdirSync(root).find(n => enc(n) === enc(dir))
+      if (!proj) return null
+      fd = openSync(join(root, proj, sessionId + '.jsonl'), 'r')
+      const buf = Buffer.alloc(65536)
+      const head = buf.toString('utf8', 0, readSync(fd, buf, 0, buf.length, 0))
+      return head.match(/"entrypoint":"([^"]+)"/)?.[1] ?? null
+    } catch { return null } finally { if (fd !== null) closeSync(fd) }
+  }
   const details = async w => {
     let cfg = {}
     try { cfg = yaml.parse(readFileSync(join(w.path, '.sandbox', 'workspace.yml'), 'utf8')) ?? {} } catch { /* not initialised */ }
-    let sessionTitle = null
-    try { sessionTitle = (await core.listSessions(w.name))[0]?.title ?? null } catch { /* no sessions */ }
-    return { ...w, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), sessionTitle }
+    let newest = null
+    try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
+    const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
+    return { ...w, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
   }
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
@@ -52,6 +68,7 @@ try {
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'remove-workspace': () => core.removeWorkspace(args.name),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
+    'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -81,7 +98,7 @@ const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
 const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 
-type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'jiraId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle'>
+type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'jiraId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
 type ListResult = { workspaces: ListEntry[] }
 type StatusResult = { statuses: { name: string; state: WorkspaceRow['state']; running: number; total: number; claude: { state: string; waiting: boolean } }[] }
 type SessionInfo = { sessionId: string; title: string; cwd: string; link?: string }
@@ -127,27 +144,40 @@ export function buildRows(list: ListResult, status: StatusResult, sessions: Sess
   })
 }
 
-const DOT: Record<WorkspaceRow['state'], string> = { up: '●', partial: '◐', stopped: '○', down: '○', unknown: '?' }
-const DOT_COLOR: Record<WorkspaceRow['state'], 'success' | 'warning' | 'inactive'> = { up: 'success', partial: 'warning', stopped: 'inactive', down: 'inactive', unknown: 'warning' }
+/** The card border carries the state; nothing else in the card repeats it. */
+const BORDER: Record<WorkspaceRow['state'], 'success' | 'warning' | 'inactive'> = { up: 'success', partial: 'warning', stopped: 'inactive', down: 'inactive', unknown: 'warning' }
 
-/** The card's header after the dot: name, task title, jira key. */
-export function cardHead(r: WorkspaceRow): string {
-  return [r.name, r.task, r.jiraId].filter(Boolean).join(' · ')
-}
-
-/** The card's detail line: work type, ICM stage, running/total, claude note; '' when none. */
+/** The card's detail line: work type, ICM stage, running/total; '' when none. */
 export function cardMeta(r: WorkspaceRow): string {
   return [
     r.workType,
     r.stage ? `stage ${r.stage.index}/${r.stage.total} ${r.stage.name}` : null,
     r.total > 0 ? `${r.running}/${r.total}` : null,
-    r.claude ? `claude: ${r.claude}` : null,
   ].filter(Boolean).join(' · ')
+}
+
+/** The Claude flag at the header's right edge: waiting on you is the one thing a glance must catch. */
+const CLAUDE: Record<NonNullable<WorkspaceRow['claude']>, { text: string; color: 'warning' | 'claude' }> = {
+  waiting: { text: '● waiting for you', color: 'warning' },
+  working: { text: '◌ working', color: 'claude' },
 }
 
 /** The session line's title: the desktop session in the folder, else the newest on-disk session. */
 export function sessionTitle(r: WorkspaceRow): string | null {
   return r.session?.title ?? r.sessionTitle
+}
+
+/** Where the session shown lives, so Jump's target is known before the press: Desktop, VS Code, or CLI. */
+export function sessionOrigin(r: WorkspaceRow): 'Desktop' | 'VS Code' | 'CLI' | null {
+  if (r.session) return 'Desktop'
+  if (r.sessionOrigin === null) return null
+  return r.sessionOrigin === 'claude-vscode' ? 'VS Code' : r.sessionOrigin === 'claude-desktop' ? 'Desktop' : 'CLI'
+}
+
+/** The session line: `session · VS Code · title`. */
+export function sessionLine(r: WorkspaceRow): string | null {
+  const title = sessionTitle(r)
+  return title ? ['session', sessionOrigin(r), title].filter(Boolean).join(' · ') : null
 }
 
 let ticking = false
@@ -189,7 +219,7 @@ export function buttonsFor(state: WorkspaceRow['state']): Action[] {
   return out
 }
 
-const LABEL: Record<Action, string> = { up: 'Up', stop: 'Stop', restart: 'Restart', down: 'Down', switch: 'Switch', remove: 'Remove', jump: 'Jump' }
+const LABEL: Record<Action, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', switch: '⇥ Switch', remove: '✕ Remove', jump: '↗ Jump' }
 
 /** First line of a tool result's text, for the note under the list. */
 function firstLine(r: ToolResult): string {
@@ -241,6 +271,11 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
       return
     }
     try {
+      if (row.sessionOrigin === 'claude-vscode') {
+        await core($, 'open-vscode', { path: row.path })
+        $.ui.toast(`Opening ${name} in VS Code`)
+        return
+      }
       await core($, 'claude-resume', { name })
       $.ui.toast(`Resuming "${row.sessionTitle ?? name}" in a Terminal window`)
     } catch (err) {
@@ -304,32 +339,42 @@ export const register: Register = on => {
     const { value: note = '' } = await $.state.get(NOTE)
     const { value: busy = '' } = await $.state.get(BUSY)
     const { value: confirm = '' } = await $.state.get(CONFIRM)
+    // The workspace this session already sits in gets no Switch.
+    const here = await $.session.cwd().catch(() => '')
 
     return (
       <Box flexDirection="column">
         {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
         {rows.map(r => (
-          <Box key={`ws:${r.name}`} flexDirection="column" borderStyle="round" borderColor={DOT_COLOR[r.state]} borderDimColor={DOT_COLOR[r.state] === 'inactive' ? true : undefined} paddingX={1} marginBottom={1}>
-            <Box key={`row:${r.name}`}>
-              <Text color={DOT_COLOR[r.state]}>{DOT[r.state]}</Text>
-              <Text bold>{` ${cardHead(r)}`}</Text>
+          <Box key={`ws:${r.name}`} flexDirection="column" borderStyle="round" borderColor={BORDER[r.state]} borderDimColor={BORDER[r.state] === 'inactive' ? true : undefined} paddingX={1} marginBottom={1}>
+            <Box key={`head:${r.name}`} justifyContent="space-between">
+              <Box key={`row:${r.name}`}>
+                <Text bold>{r.name}</Text>
+                {r.jiraId && <Text dimColor>{` · ${r.jiraId}`}</Text>}
+              </Box>
+              {r.claude && <Box key={`claude:${r.name}`}><Text color={CLAUDE[r.claude].color}>{CLAUDE[r.claude].text}</Text></Box>}
             </Box>
+            {r.task && <Box key={`task:${r.name}`}><Text>{r.task}</Text></Box>}
             {r.description && <Box key={`desc:${r.name}`}><Text dimColor>{r.description}</Text></Box>}
             {cardMeta(r) !== '' && <Box key={`meta:${r.name}`}><Text dimColor>{cardMeta(r)}</Text></Box>}
-            {sessionTitle(r) && <Box key={`session:${r.name}`}><Text dimColor>{`session: ${sessionTitle(r)}`}</Text></Box>}
+            {sessionLine(r) && <Box key={`session:${r.name}`}><Text dimColor>{sessionLine(r)}</Text></Box>}
             {busy === r.name ? (
               <Box key={`busy:${r.name}`}><Text dimColor>working…</Text></Box>
             ) : (
-              <Box gap={1} marginTop={1}>
-                {buttonsFor(r.state).filter(a => a !== 'remove' && a !== 'switch').map(a => (
-                  <Button key={`${a}:${r.name}`} label={LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
-                ))}
-                <Box marginLeft={2} gap={1}>
-                  <Button key={`switch:${r.name}`} label={LABEL.switch} variant="primary" onPress={() => void press($, 'switch', r.name)} />
-                  {sessionTitle(r) && <Button key={`jump:${r.name}`} label={LABEL.jump} variant="secondary" onPress={() => void press($, 'jump', r.name)} />}
+              <Box marginTop={1} justifyContent="space-between">
+                <Box gap={1}>
+                  {buttonsFor(r.state).filter(a => a !== 'remove' && a !== 'switch').map(a => (
+                    <Button key={`${a}:${r.name}`} label={LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
+                  ))}
+                  <Box marginLeft={2} gap={1}>
+                    {!(here && contains(r.path, here)) && <Button key={`switch:${r.name}`} label={LABEL.switch} variant="secondary" onPress={() => void press($, 'switch', r.name)} />}
+                    {sessionTitle(r) && <Button key={`jump:${r.name}`} label={LABEL.jump} variant="secondary" onPress={() => void press($, 'jump', r.name)} />}
+                  </Box>
                 </Box>
-                <Box marginLeft={2}>
-                  <Button key={`remove:${r.name}`} label={confirm === r.name ? 'Confirm remove' : LABEL.remove} variant="secondary" onPress={() => void press($, 'remove', r.name)} />
+                {/* Buttons take no colour; the label turns red under the pointer and the confirm prompt is red text beside it. */}
+                <Box gap={1}>
+                  {confirm === r.name && <Box key={`danger:${r.name}`}><Text color="error">{'Delete this workspace?'}</Text></Box>}
+                  <Button key={`remove:${r.name}`} label={confirm === r.name ? '✕ Yes, remove' : LABEL.remove} variant="secondary" dimColor hover={{ color: 'error', dimColor: false }} onPress={() => void press($, 'remove', r.name)} />
                 </Box>
               </Box>
             )}
@@ -337,7 +382,6 @@ export const register: Register = on => {
         ))}
         {note !== '' && <Box key="note"><Text>{note}</Text></Box>}
         {error !== '' && <Box key="error"><Text color="error">{error}</Text></Box>}
-        <Button key="refresh" label="Refresh" onPress={() => void tick($)} />
       </Box>
     )
   })

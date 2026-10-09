@@ -14,6 +14,8 @@ export type WorkspaceRow = {
   stage: { index: number; total: number; name: string } | null
   /** Title of the workspace's newest on-disk Claude session. */
   sessionTitle: string | null
+  /** That session's transcript `entrypoint`: claude-vscode, claude-desktop, sdk-cli, ...; null when unknown. */
+  sessionOrigin: string | null
   state: WorkspaceState
   running: number
   total: number
