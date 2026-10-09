@@ -21,14 +21,6 @@ sandbox environment.
 | `sandbox-starting-prompt` | Run the `starting_prompt` defined in the workspace's `.sandbox/workspace.yml`. |
 | `install-workspace-dashboard` | Install the Sandbox Workspaces live dashboard as a **Cowork artifact** (`apps/sandbox-dashboard/dist/workspace-list.artifact.html`). |
 
-### Mods
-
-| Mod | What it does |
-|-----|--------------|
-| `/workspace-form` | Opens a pane with the create-workspace form. Fields come from sandbox-core's `getFormSchema()`; Create calls `createWorkspace()` in a `node` child. Finds sandbox-core via `$SANDBOX_CORE_PATH`, else via the `sandbox` binary. Source: [`hooks/register.tsx`](hooks/register.tsx). |
-
-To load it from a checkout instead of the marketplace, set `CLAUDE_CODE_PLUGIN_DIRS` to this folder in the `env` block of `~/.claude/settings.json`.
-
 ### Code standards (`sb-*`) — NOT in this plugin
 
 The `sb-implement` / `sb-research` entry skills and the `sb-*-standard` code
