@@ -4,7 +4,54 @@ import type { WorkspaceRow } from '../types'
 
 export const PLUGIN = 'sandbox-tools'
 export const PANE = 'workspaces'
-export const SERVER = 'plugin:sandbox-tools:sandbox-workspace'
+
+// Workspace reads and actions run sandbox-core in a node child, the way the former /workspace-form mod did:
+// the plugin's own MCP server is not answerable from a hook in the desktop host, a host process is.
+// stdin carries one JSON request { op, ...args }; stdout ends with one JSON line { ok, result | error }.
+// sandbox-core is found from $SANDBOX_CORE_PATH, else from where the `sandbox` binary resolves its dependencies.
+const SCRIPT = `
+import { createRequire } from 'node:module'
+import { execFileSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
+const out = o => console.log(JSON.stringify(o))
+try {
+  let s = ''
+  for await (const c of process.stdin) s += c
+  const { op, ...args } = JSON.parse(s)
+  let file = process.env.SANDBOX_CORE_PATH
+  if (!file) {
+    const bin = realpathSync(execFileSync('sh', ['-c', 'command -v sandbox']).toString().trim())
+    file = createRequire(dirname(bin) + '/x').resolve('sandbox-core')
+  }
+  const core = await import(pathToFileURL(file).href)
+  const ops = {
+    'list-workspaces': () => core.listWorkspaces(),
+    'workspace-status': () => core.getWorkspaceStatuses(),
+    'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
+    'remove-workspace': () => core.removeWorkspace(args.name),
+  }
+  if (!ops[op]) throw new Error('unknown op ' + op)
+  out({ ok: true, result: await ops[op]() })
+} catch (e) {
+  out({ ok: false, error: (e && e.message) || String(e) })
+}
+`
+
+/** One sandbox-core call in a node child; throws with the child's error text. */
+async function core<T>($: EngineInterface, op: string, args: Record<string, unknown> = {}, timeoutMs = 30000): Promise<T> {
+  const r = await $.process.run(['node', '--input-type=module', '-e', SCRIPT], { stdin: JSON.stringify({ op, ...args }), timeoutMs })
+  const line = r.stdout.trim().split('\n').pop() ?? ''
+  let o: { ok: boolean; result?: T; error?: string }
+  try {
+    o = JSON.parse(line)
+  } catch {
+    throw new Error(r.stderr.trim().split('\n').pop() || `sandbox-core gave no result (exit ${r.exitCode})`)
+  }
+  if (!o.ok || o.result === undefined) throw new Error(o.error ?? 'sandbox-core failed')
+  return o.result
+}
 export const POLL_MS = 5000
 
 const ROWS = { plugin: 'sandbox-tools', key: 'rows' } as const
@@ -69,15 +116,14 @@ export function rowLine(r: WorkspaceRow): string {
 }
 
 let ticking = false
-
 /** Refreshes rows once. A tick that starts while one runs is skipped. */
 async function tick($: EngineInterface): Promise<void> {
   if (ticking) return
   ticking = true
   try {
-    const [listR, statusR, sessionsR] = await Promise.all([
-      $.mcp.call(SERVER, 'list-workspaces'),
-      $.mcp.call(SERVER, 'workspace-status'),
+    const [list, status, sessionsR] = await Promise.all([
+      core<ListResult>($, 'list-workspaces'),
+      core<StatusResult>($, 'workspace-status'),
       $.mcp.call('ccd_session_mgmt', 'list_sessions', { limit: 50 }).catch(() => null),
     ])
     let sessions: SessionInfo[] = []
@@ -86,7 +132,7 @@ async function tick($: EngineInterface): Promise<void> {
     } catch {
       sessions = []
     }
-    await $.state.set(ROWS, buildRows(payload<ListResult>(listR), payload<StatusResult>(statusR), sessions))
+    await $.state.set(ROWS, buildRows(list, status, sessions))
     await $.state.set(ERROR, '')
   } catch (err) {
     await $.state.set(ERROR, (err as Error).message)
@@ -120,9 +166,9 @@ async function runAction($: EngineInterface, name: string, action: Lifecycle | '
   await $.state.set(NOTE, `${name}: ${action}…`)
   try {
     const r = action === 'remove'
-      ? await $.mcp.call(SERVER, 'remove-workspace', { name })
-      : await $.mcp.call(SERVER, 'workspace-action', { name, action })
-    await $.state.set(NOTE, firstLine(r) || (r.isError ? 'failed' : 'done'))
+      ? await core<{ command: string; output: string }>($, 'remove-workspace', { name }, 600000)
+      : await core<{ command: string; output: string }>($, 'workspace-action', { name, action }, 600000)
+    await $.state.set(NOTE, r.command.split('\n')[0]?.trim() || 'done')
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message)
   } finally {

@@ -18,12 +18,23 @@ type McpStub = Record<string, (args: Record<string, unknown>) => McpAnswer | Pro
 
 /** Stubs every noun the module calls. `calls` records each mcp.call as `server/tool`. */
 function world(on: On, stubs: McpStub = {}) {
-  const calls: { key: string; args: Record<string, unknown> }[] = []
+  const calls: { key: string; args: Record<string, unknown>; via: 'mcp' | 'process' }[] = []
   const toasts: string[] = []
   const clock = mock.clock(on)
   on('ui.open', () => ({ value: { isPlaced: true as const } }))
   on('ui.close', () => ({ value: undefined }))
   on('ui.panes', () => ({ value: [] }))
+  // The workspace server's tools run in a node child (the auto-mode gate refuses a plugin's own MCP call):
+  // the request rides on stdin as { op, ...args }; the same `stubs` map answers by `${WS}/${op}`.
+  on('process.run', async (_$, e) => {
+    const { op, ...args } = JSON.parse(e.init?.stdin ?? '{}') as { op: string } & Record<string, unknown>
+    const key = `${WS}/${op}`
+    calls.push({ key, args, via: 'process' })
+    const stub = stubs[key]
+    const a = stub ? await stub(args) : { content: [{ type: 'text' as const, text: `no stub for ${key}` }], isError: true }
+    const line = a.isError ? { ok: false, error: a.content[0]?.text } : { ok: true, result: a.structuredContent }
+    return { value: { exitCode: 0, stdout: JSON.stringify(line) + '\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
   on('ui.log', () => ({ value: undefined }))
   on('ui.toast', (_$, e) => {
     toasts.push(e.text)
@@ -32,7 +43,7 @@ function world(on: On, stubs: McpStub = {}) {
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   on('mcp.call', async (_$, e) => {
     const key = `${e.server}/${e.tool}`
-    calls.push({ key, args: e.args })
+    calls.push({ key, args: e.args, via: 'mcp' })
     const stub = stubs[key]
     if (!stub) return { value: { content: [{ type: 'text' as const, text: `no stub for ${key}` }], isError: true } }
     return { value: await stub(e.args) }
@@ -92,6 +103,13 @@ function stubs(over: Partial<McpStub> = {}): McpStub {
     ...over,
   }
 }
+
+test('workspace data comes from the node child, not an MCP call', async ($, on) => {
+  const w = world(on, stubs())
+  await openPane($)
+  expect(w.calls.filter(c => c.via === 'mcp' && c.key.startsWith(WS))).toHaveLength(0)
+  expect(w.calls.filter(c => c.via === 'process').map(c => c.key)).toEqual([`${WS}/list-workspaces`, `${WS}/workspace-status`])
+})
 
 test('rows draw dot, jira, counts and claude note', async ($, on) => {
   world(on, stubs())
