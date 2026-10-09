@@ -1,6 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import type { Engine } from 'claude-code/testing'
+import type { Engine, Plugin } from 'claude-code/testing'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const PANE_PROPS = {
@@ -224,4 +224,52 @@ test("a press on another row's button clears the pending remove", async ($, on) 
   await ui.press({ key: 'remove:ab' })
   expect(w.calls.filter(c => c.key === 'sandbox-workspace/remove-workspace')).toHaveLength(0)
   await ui.unmount()
+})
+
+test('polls every 5 s while open', async ($, on) => {
+  const w = world(on, stubs())
+  await openPane($)
+  const count = () => w.calls.filter(c => c.key === 'sandbox-workspace/workspace-status').length
+  const n = count()
+  await w.clock.advance(5000)
+  expect(count()).toBe(n + 1)
+  await w.clock.advance(5000)
+  expect(count()).toBe(n + 2)
+})
+
+// The kit's $ cannot raise ui.close itself; a helper plugin's $.ui.close raises it the way the engine does.
+const CLOSER: Plugin = {
+  name: 'closer',
+  register: on => {
+    on('command.run', { command: 'close-workspaces' }, async $ => {
+      await $.ui.close({ id: 'workspaces' })
+      return { text: 'closed' }
+    })
+  },
+}
+
+test('closing the pane cancels the timer', { plugins: [CLOSER] }, async ($, on) => {
+  const w = world(on, stubs())
+  await openPane($)
+  const count = () => w.calls.filter(c => c.key === 'sandbox-workspace/workspace-status').length
+  const n = count()
+  await w.clock.advance(5000)
+  expect(count()).toBe(n + 1)
+  await $.command.run({ command: 'close-workspaces', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } })
+  await w.clock.advance(10000)
+  expect(count()).toBe(n + 1)
+})
+
+test('a slow tick is skipped, not queued', async ($, on) => {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>(r => { release = r })
+  let held = 0
+  const w = world(on, stubs({ 'sandbox-workspace/list-workspaces': async () => { if (held++ === 1) await gate; return ok(LIST) } }))
+  await openPane($)
+  await w.clock.advance(5000)
+  await w.clock.advance(5000)
+  await w.clock.advance(5000)
+  release()
+  await w.clock.settle()
+  expect(w.calls.filter(c => c.key === 'sandbox-workspace/list-workspaces')).toHaveLength(2)
 })
