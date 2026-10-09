@@ -42,6 +42,7 @@
    - [~/.sandbox/services.yaml (generated)](#sandboxservicesyaml-generated)
    - [infra/config/ports.yaml](#infraconfigportsyaml)
    - [k8s forward table (in services.yaml)](#k8s-forward-table-in-servicesyaml)
+   - [Optional integrations](#optional-integrations)
 10. [Generated Files](#generated-files)
 11. [Caddy Proxy & Feature Selector UI](#caddy-proxy--feature-selector-ui)
 12. [k8s Port-Forward Scripts](#k8s-port-forward-scripts)
@@ -258,7 +259,7 @@ Each feature runs in an isolated environment:
 - **Container names** — prefixed with the feature name (`<feature>-<service>`)
 - **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-frontend_node_modules`) so concurrent features never share mutable state
 - **Port ranges** — each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
-- **Generated files** — each feature's `docker-compose.yml` and `.env` are written to its workspace root, and `supergraph-config.yml` to `<workspace>/.sandbox/`
+- **Generated files** — each feature's `docker-compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.sandbox/`
 
 **Single-repo concurrency note:** In single-repo mode (`~/workspace/` with one checkout per repo), all features share the same source code checkout. This means two features modifying the same repo will see each other's uncommitted changes. For true concurrent multi-feature development, use the per-feature workspace layout via `SANDBOX_WORKSPACES_ROOT=<parent>` and place git worktrees under each feature subdir.
 
@@ -367,7 +368,7 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
 4. Generates per-feature files in the feature's workspace:
    - `docker-compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)
-   - `<workspace>/.sandbox/supergraph-config.yml` — Apollo Federation config
+   - `<workspace>/.sandbox/supergraph-config.yml` — GraphQL federation config (only when a service has `type: graphql-subgraph`)
 5. Verifies k8s port-forwards are healthy (restarts if needed)
 6. Starts containers with `docker compose up -d --build --remove-orphans`
 7. Regenerates `~/.sandbox/infra/proxy/Caddyfile` and reloads Caddy
@@ -917,7 +918,7 @@ Setup services are automatically included in generated Docker Compose files when
 The four workspaces of this repo (`apps/cli`, `apps/sandbox-dashboard`,
 `packages/sandbox-core`, `packages/vscode-plugin`) can be registered as services so a
 feature workspace develops the sandbox itself, each package in its own container. The
-registry shape lives in `docs/superpowers/archive/specs/2026-09-03-self-host-services-design.md`;
+registry shape is the one in [Services Reference](#services-reference);
 the pieces that are not obvious from the demo services:
 
 - **One `node:22` image everywhere.** `better-sqlite3`, `keytar`, `sharp` and the
@@ -1202,11 +1203,40 @@ the container's forward list is written to `k8s-port-forward/forwards` (mounted 
 `shared-infra.yml` drifts out of sync. To add or change a forward, edit only
 `services.yaml` and run `sandbox connect`.
 
+### Optional integrations
+
+None of these are required; each turns on only when configured.
+
+#### Issue tracker
+
+`sandbox setup` asks which tracker this machine uses — `jira` (the default) or `github` —
+and stores it as `overrides.issue_tracker` in `~/.sandbox/config.yaml`. With `github`, a
+workspace's ticket is `owner/repo#n` and issues are filed in the registry repos under
+`overrides.github_org`.
+
+For Jira, set `jira.base_url` (e.g. `https://your-org.atlassian.net`) to get ticket links in
+CLAUDE.md, the dashboard, and VS Code. Briefings fetched through the Atlassian MCP use
+`jira.cloud_id` when set, otherwise the `base_url` hostname. The REST token is optional; see
+[jira-rest-setup.md](jira-rest-setup.md).
+
+#### Slack review requests
+
+The dashboard's "Request review" button posts to Slack. Set both
+`SANDBOX_REVIEW_SLACK_TOKEN` (a bot token with `chat:write`) and
+`SANDBOX_REVIEW_SLACK_CHANNEL` (the channel id). Without them the button reports that Slack
+is not configured.
+
+#### GraphQL federation
+
+When a service in the registry has `type: graphql-subgraph`, `sandbox up` writes
+`<workspace>/.sandbox/supergraph-config.yml` listing each subgraph's URL for your gateway.
+Registries without a subgraph get no file.
+
 ---
 
 ## Generated Files
 
-When you run `sandbox up <feature>`, three files are generated in the feature's workspace — `docker-compose.yml` and `.env` at the workspace root, and `supergraph-config.yml` under `<workspace>/.sandbox/`:
+When you run `sandbox up <feature>`, `docker-compose.yml` and `.env` are generated at the feature's workspace root, plus `supergraph-config.yml` under `<workspace>/.sandbox/` when the registry has a GraphQL subgraph:
 
 ### docker-compose.yml
 
@@ -1232,7 +1262,7 @@ Environment file loaded by Docker Compose, containing:
 
 ### supergraph-config.yml
 
-Apollo Federation supergraph configuration. Lists each GraphQL subgraph with its URL — local services point to slot ports, remote services point to k8s forwards.
+Optional — generated only when a service has `type: graphql-subgraph`. Lists each subgraph with its URL for an Apollo-compatible gateway — local services point to slot ports, remote services point to k8s forwards.
 
 ---
 
@@ -1653,7 +1683,7 @@ cat ~/.sandbox/slots.json | jq .
 ├── docker-compose.yml      ← Generated from infra/templates/
 ├── .env                    ← Service URLs, DB connections
 └── .sandbox/
-    └── supergraph-config.yml   ← Apollo Federation routing
+    └── supergraph-config.yml   ← GraphQL federation routing (optional)
 
 Docker Network: sandbox-PROJ-1234 (isolated)
 
@@ -1675,7 +1705,7 @@ sandbox up PROJ-1234
     ├── 3. Generate files → ~/workspace/PROJ-1234/
     │       ├── docker-compose.yml      (from infra/templates/)
     │       ├── .env                    (from infra/templates/)
-    │       └── .sandbox/supergraph-config.yml
+    │       └── .sandbox/supergraph-config.yml  (if a GraphQL subgraph exists)
     │
     ├── 4. Verify k8s forwards → sandbox k8s-status
     │

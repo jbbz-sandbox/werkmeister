@@ -394,17 +394,21 @@ describe("generateFeatureEnv", () => {
 // ---- generateSupergraphConfig ----------------------------------------------
 
 describe("generateSupergraphConfig", () => {
-  // The demo config has no `graphql-subgraph` services, so the generator writes
-  // a valid file with an empty subgraph set and no service URLs. (The k8s /
-  // federation resolution branches are still in generate.ts, just unexercised
-  // by this playground's two self-contained apps.)
-  it("writes an empty supergraph config when there are no subgraphs", () => {
-    const outPath = generateSupergraphConfig("myfeat", 1, [], null, tmp);
+  // Federation is opt-in: the demo registry has no graphql-subgraph service,
+  // so nothing is written and a stale file from an earlier run is removed.
+  it("writes nothing when no service is a GraphQL subgraph", () => {
+    const stale = path.join(tmp, ".sandbox", "supergraph-config.yml");
+    fs.mkdirSync(path.dirname(stale), { recursive: true });
+    fs.writeFileSync(stale, "subgraphs: {}\n");
+    expect(generateSupergraphConfig("myfeat", 1, [], null, tmp)).toBeNull();
+    expect(fs.existsSync(stale)).toBe(false);
+  });
+
+  it("writes the config when a service is a GraphQL subgraph", () => {
+    const config = { services: { orders: { type: "graphql-subgraph", internal_port: 4000 } } };
+    const outPath = generateSupergraphConfig("myfeat", 1, ["orders"], config, tmp);
     expect(outPath).toBe(path.join(tmp, ".sandbox", "supergraph-config.yml"));
-    const content = fs.readFileSync(outPath, "utf8");
-    expect(content).toContain("subgraphs");
-    expect(content).not.toContain("k8s-forwards:");
-    expect(content).not.toContain("http://");
+    expect(fs.readFileSync(outPath!, "utf8")).toContain("http://orders:4000/graphql");
   });
 });
 

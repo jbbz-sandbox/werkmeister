@@ -6,6 +6,11 @@
 import assert from "node:assert";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+const cfgFile = path.join(mkdtempSync(path.join(tmpdir(), "open-prs-")), "config.yaml");
+writeFileSync(cfgFile, "jira:\n  base_url: https://example.atlassian.net/\n");
+process.env.SANDBOX_CONFIG_FILE = cfgFile;
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { countFailingChecks, isWithin30Days, prFromView, assembleOpenPrs, APPROVAL_LABEL, isValidPrUrl, buildReconcileContext } =
@@ -58,6 +63,9 @@ assert.equal(pr.outOfDate, true, "mergeStateStatus BEHIND");
 assert.equal(pr.failingChecks, 1, "one failing check");
 assert.equal(pr.hasApprovalLabel, true, "approval label present");
 assert.equal(pr.jiraKey, "PROJ-999", "jira key parsed from title");
+assert.equal(pr.jiraUrl, "https://example.atlassian.net/browse/PROJ-999", "jira url from jira.base_url");
+writeFileSync(cfgFile, "paths: {}\n");
+assert.equal(prFromView(view, "me").jiraUrl, null, "no jira.base_url → no link");
 assert.deepEqual(pr.labels, ["ready-for-human-approval", "bug"], "label names");
 
 const clean = prFromView({ ...view, mergeStateStatus: "UNKNOWN", reviewDecision: "APPROVED" }, "me");

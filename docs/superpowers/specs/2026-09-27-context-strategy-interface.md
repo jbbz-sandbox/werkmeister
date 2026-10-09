@@ -2,7 +2,7 @@
 
 **Status:** proposed
 **Scope:** `packages/sandbox-core` (`workspace_init.ts`, `lifecycle.ts`, `workspace_prompts.ts`, new `strategies/`), `apps/cli/src/commands/{skills,notes,hooks}.ts`, `apps/mcp/tools.ts`, `apps/cli/infra/schemas/workspace.schema.json`, `docs/jit-context-system.md`, `docs/context-strategies.md`.
-**Related:** `../archive/specs/2026-09-27-work-type-phases.md` — work type selects the JIT phase sequence and pre-implementation gate; the ICM stage templates in §3.5 should read the same `WORK_TYPE_PHASES` table.
+**Related:** the work-type phase gate (`WORK_TYPE_PHASES`) — work type selects the JIT phase sequence and pre-implementation gate; the ICM stage templates in §3.5 should read the same `WORK_TYPE_PHASES` table.
 **Precedes:** `docs/context-strategies.md` (option B). Evidence: `~/features/COMPARISON.md`, known-issues "`sandbox up` Re-Installs the Session Hooks Unconditionally".
 
 ## 1. Problem
@@ -152,7 +152,7 @@ Editing `context_strategy` in `workspace.yml` and rerunning `init-workspace` run
 5. `jit_unchanged.test.ts` — snapshot of every file `jit.init` writes for the existing `workspace_init` fixture, taken before the refactor on `main`, asserted equal after.
 6. CLI: `skills check` in an icm workspace exits 0 with "context layer fresh (icm)"; `notes context` prints nothing; `hooks gate` exits 0.
 
-Harness cell (`docs/experiments/context-management`): create both strategies from the same inputs and diff `find . -type f | sort` against the two expected manifests.
+Harness cell (internal experiment harness, not in this repo): create both strategies from the same inputs and diff `find . -type f | sort` against the two expected manifests.
 
 ## 6. Rollout
 

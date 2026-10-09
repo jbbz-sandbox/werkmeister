@@ -19,7 +19,7 @@ First performed: 2026-07-11. Verified working same day.
 1. **[manual] Create an Atlassian API token**
    - Open <https://id.atlassian.com/manage-profile/security/api-tokens>
      (log in with your Atlassian account — the one you use for
-     hgdata.atlassian.net).
+     your Jira site, e.g. your-org.atlassian.net).
    - Click **Create API token** (the plain one, *not* "with scopes" — the
      unscoped token works with all REST endpoints we use).
    - Name: `sandbox-jira` (anything memorable). Expiry: max is 1 year — note
@@ -31,17 +31,16 @@ First performed: 2026-07-11. Verified working same day.
    ```bash
    mkdir -p ~/.sandbox
    cat > ~/.sandbox/jira.env << 'EOF'
-   JIRA_BASE_URL=https://hgdata.atlassian.net
+   JIRA_BASE_URL=https://your-org.atlassian.net
    JIRA_EMAIL=<your-atlassian-login-email>
    JIRA_API_TOKEN=<paste-token-here>
    EOF
    chmod 600 ~/.sandbox/jira.env
    ```
 
-   `JIRA_EMAIL` is the address on your Atlassian *account*. Aliases appear to
-   work (jay.boyer@hginsights\.ai authenticated even though the account
-   reports jay.boyer@hginsights\.com), but use the canonical one if in doubt —
-   check your avatar menu in Jira.
+   `JIRA_EMAIL` is the address on your Atlassian *account*. Email aliases may
+   authenticate too, but use the canonical one if in doubt — check your
+   avatar menu in Jira.
 
 3. **Verify** (scriptable — this is the health check):
 

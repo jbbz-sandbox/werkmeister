@@ -30,8 +30,7 @@ Four gating axes, each wired to its natural mechanism:
 | **Service presence** | `services.yaml` archetypes → standards keys, resolved per workspace at init | init time, deterministic |
 | **Tools / isolation** | Generated subagents with `tools:` allowlists | init time, deterministic |
 
-Governing principles (each anchored to a measurement in
-[experiments/context-management/results/](experiments/context-management/results/)):
+Governing principles (each anchored to an internal measurement; the harnesses are not published):
 
 - **Map, not territory.** The workspace `CLAUDE.md` carries a compiled routing *table*, never
   standard bodies. Bodies live in skills and load on demand. (Harness-1: skill descriptions
@@ -64,19 +63,20 @@ repo, so an unconfigured install resolves zero modules. Loader:
 - flat: `<key>.md`, where `<key>` is lowercase kebab (so a `README.md` at the tree
   root is not mistaken for a module)
 
-All nine current domains use directory form:
+Domains come from the configured standards repo; the loader resolves none when it is
+unset. An example set, in directory form:
 
 | Domain | Covers |
 |--------|--------|
 | `comments` | Universal "comments explain the why, not the what" rubric |
-| `engineering` | Universal cross-cutting constraints — architectural fit, additive/reversible change, performance budgets, smallest-change discipline, reviewable PRs |
-| `service` | Service-boundary contract — REST/Nest conventions **and** GraphQL federation/Relay, plus cross-service resilience, contract evolution, query performance |
-| `config` | Inter-service URL/DNS conventions, env-var rules, no host-relative or templated addresses |
-| `auth` | Auth0 audience scoping per service, ID- vs access-token, shared-session cookie scope |
+| `engineering` | Cross-cutting constraints — architectural fit, reversible change, performance budgets, reviewable PRs |
+| `service` | Service-boundary contracts — API conventions, contract evolution, cross-service resilience |
+| `config` | Inter-service URL/DNS conventions and env-var rules |
+| `auth` | Token audiences and scopes, session cookie scope |
 | `testing` | Unit vs integration vs contract tests; what to mock at a service seam |
-| `observability` | OTel span/attribute conventions, structured logging, trace/correlation-ID propagation |
-| `data` | Airflow ordering/scheduling, epoch-ms conventions |
-| `ui` | Render/effect ordering, hydration, CDN caching |
+| `observability` | Tracing and structured-logging conventions, correlation-ID propagation |
+| `data` | Pipeline ordering and scheduling, timestamp conventions |
+| `ui` | Render/effect ordering, hydration, caching |
 
 `repos/*.md` are per-repo quirk snippets keyed by `repo:`, referenced from
 standard bodies. They are **not** loadable standards.
@@ -477,7 +477,7 @@ the standards tree or the generators.
 ## 9. Evidence base
 
 All n=3-scale — directions, not effect sizes. Harnesses 1–4 on Sonnet, 5–7 on Opus/Haiku 4.5.
-Details in [experiments/context-management/results/](experiments/context-management/results/).
+The harnesses and raw results are not published.
 
 | # | Question | Result |
 |---|----------|--------|

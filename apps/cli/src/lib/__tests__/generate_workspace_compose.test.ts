@@ -41,7 +41,8 @@ describe("generateWorkspaceCompose", () => {
     expect(typeof slot).toBe("number");
     expect(fs.statSync(path.join(tmp, "docker-compose.yml")).isFile()).toBe(true);
     expect(fs.statSync(path.join(tmp, ".env")).isFile()).toBe(true);
-    expect(fs.statSync(path.join(tmp, ".sandbox", "supergraph-config.yml")).isFile()).toBe(true);
+    // The fixture registry has no GraphQL subgraph, so no supergraph config.
+    expect(fs.existsSync(path.join(tmp, ".sandbox", "supergraph-config.yml"))).toBe(false);
     expect(fs.statSync(path.join(tmp, ".sandbox", "sandbox-context.md")).isFile()).toBe(true);
   });
 });

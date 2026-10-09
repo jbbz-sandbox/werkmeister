@@ -14,11 +14,11 @@ vi.mock("sandbox-core/global_config", async (importOriginal) => {
 
 import { run as runConfig } from "../../commands/config.js";
 import * as gc from "sandbox-core/global_config";
-import { syncJiraToken } from "sandbox-core/machine_setup";
+import { JIRA_CONFIG_SNIPPET, syncJiraToken } from "sandbox-core/machine_setup";
 
 const FILLED = {
-  base_url: "https://hgdata.atlassian.net/",
-  email: "dev@hginsights.com",
+  base_url: "https://example.atlassian.net/",
+  email: "dev@example.com",
   api_token: "real-token",
 };
 
@@ -77,6 +77,14 @@ describe("syncJiraToken", () => {
     const placeholder = await stepFor({ ...FILLED, api_token: "PASTE_TOKEN_HERE" });
     expect(placeholder.ok).toBe(true);
     expect(placeholder.detail).toContain("jira.api_token");
+  });
+
+  it("the unedited setup snippet counts as not configured", async () => {
+    const snippet = YAML.parse(JIRA_CONFIG_SNIPPET).jira;
+    const verified = () => [true, "verified"] as [boolean, string]; // never hit the network
+    const step = await stepFor({ ...snippet, email: "dev@example.com", api_token: "real-token" }, verified);
+    expect(step.ok).toBe(true);
+    expect(step.detail).toContain("jira.base_url");
   });
 
   it("filled creds reach the verifier with the yaml keys", async () => {

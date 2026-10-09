@@ -15,8 +15,8 @@ grep -rn 'ponytail:' . --exclude-dir=node_modules --exclude-dir=.git --exclude-d
 
 Grep the **bare string**, not `(#|//) ?ponytail:` as the `ponytail-debt` skill suggests —
 over half the markers here are JSDoc-style ` * ponytail:` and the prefixed pattern misses
-every one of them. The bare grep also picks up ~5 prose mentions in `docs/experiments/`
-and `docs/jit-context-system.md` that are *about* the convention rather than markers;
+every one of them. The bare grep also picks up a few prose mentions in
+`docs/jit-context-system.md` that are *about* the convention rather than markers;
 those are not debt and are excluded below.
 
 A row tagged **no-trigger** names a ceiling but nothing that would prompt revisiting it.

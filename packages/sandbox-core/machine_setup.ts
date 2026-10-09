@@ -763,12 +763,16 @@ export const JIRA_TOKEN_URL = "https://id.atlassian.com/manage-profile/security/
 
 /** The `jira:` keys the REST fast path needs, and the paste-me placeholders. */
 const JIRA_REQUIRED_KEYS = ["base_url", "email", "api_token"] as const;
-const JIRA_PLACEHOLDERS = new Set(["PASTE_TOKEN_HERE", "<your-atlassian-login-email>"]);
+const JIRA_PLACEHOLDERS = new Set([
+  "PASTE_TOKEN_HERE",
+  "<your-atlassian-login-email>",
+  "https://your-org.atlassian.net",
+]);
 
 /** Copy-pasteable stanza for the report when the section is missing. */
 export const JIRA_CONFIG_SNIPPET =
   "jira:\n" +
-  "  base_url: https://hgdata.atlassian.net\n" +
+  "  base_url: https://your-org.atlassian.net\n" +
   "  email: <your-atlassian-login-email>\n" +
   "  api_token: PASTE_TOKEN_HERE";
 

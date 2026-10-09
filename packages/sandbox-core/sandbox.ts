@@ -37,7 +37,7 @@ import type Dockerode from "dockerode";
 import { docker } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { infraHealth, up as infraUp } from "./infra.js";
-import { jiraBrowseUrl } from "./issue_tracker.js";
+import { jiraBrowseUrl, jiraSitePhrase } from "./issue_tracker.js";
 import { checkForwardHealth } from "./k8s.js";
 import { interceptsSnapshot, type InterceptRow } from "./status.js";
 import { buildFormSchema } from "./form_schema.js";
@@ -443,8 +443,6 @@ export async function refinePrompt(
 const JIRA_FILLABLE = ["feature", "jira_id", "task", "description", "starting_prompt"] as const;
 const FEATURE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const JIRA_KEY_RE = /[A-Za-z][A-Za-z0-9]+-\d+/;
-/** hgdata Atlassian Cloud id — the site behind the Jira links in CLAUDE.md. */
-const JIRA_CLOUD_ID = "4a4bd20b-0645-4d11-9c98-8d0285630fd4";
 
 /**
  * Pull a Jira issue key out of a bare ID or a browse/board URL, normalised to
@@ -649,8 +647,8 @@ function buildJiraExtractPrompt(
   return (
     backgroundContext +
     "You are a data extractor, not an agent. Do exactly two things and nothing else:\n" +
-    `1. Fetch Jira issue ${key} INCLUDING ITS COMMENTS using getJiraIssue (Atlassian cloud ` +
-    `id ${JIRA_CLOUD_ID}) — request the \`comment\` field (e.g. ` +
+    `1. Fetch Jira issue ${key} INCLUDING ITS COMMENTS using getJiraIssue ${jiraSitePhrase()} ` +
+    `— request the \`comment\` field (e.g. ` +
     'fields: ["summary","description","comment"]). The summary and description alone are ' +
     "often insufficient; comments frequently carry the real scope, decisions, and " +
     "acceptance criteria, so read them all and factor them into every field below.\n" +
@@ -679,8 +677,8 @@ async function fetchJiraTicketContext(key: string): Promise<string | null> {
   if (issue) return briefingFromIssue(issue);
   const prompt =
     "You are a data extractor, not an agent. Do exactly two things and nothing else:\n" +
-    `1. Fetch Jira issue ${key} INCLUDING ITS COMMENTS using getJiraIssue (Atlassian cloud ` +
-    `id ${JIRA_CLOUD_ID}) — request fields: ["summary","description","comment"]. Comments often ` +
+    `1. Fetch Jira issue ${key} INCLUDING ITS COMMENTS using getJiraIssue ${jiraSitePhrase()} ` +
+    `— request fields: ["summary","description","comment"]. Comments often ` +
     "carry the real scope, decisions, and acceptance criteria, so read them all.\n" +
     "2. Output ONLY a concise plain-text briefing between <result> and </result> tags covering the " +
     "title/summary, what the work is, and any acceptance criteria or key decisions (including those " +
@@ -713,7 +711,7 @@ async function fetchJiraStatusBatch(keys: string[]): Promise<Record<string, stri
   if (rest !== null) return rest;
   const prompt =
     "You are a data extractor, not an agent. Do exactly two things and nothing else:\n" +
-    `1. Run searchJiraIssuesUsingJql (Atlassian cloud id ${JIRA_CLOUD_ID}) with jql ` +
+    `1. Run searchJiraIssuesUsingJql ${jiraSitePhrase()} with jql ` +
     `'key in (${keys.join(",")})' and fields ["status"].\n` +
     "2. Output ONLY a JSON object between <result> and </result> tags mapping each issue key " +
     'to its status name, e.g. {"PROJ-1234":"In Progress"}. Omit keys you could not fetch. ' +
@@ -1536,24 +1534,23 @@ export async function getWorkspacePRs(): Promise<WorkspacePrs[]> {
  * trivial to change if the org convention differs.
  */
 export const APPROVAL_LABEL = "ready-for-human-approval";
-export const DEFAULT_REVIEW_SLACK_CHANNEL = "C0963TE8J91";
 
 /**
  * Post a "please review this PR" message to Slack via chat.postMessage.
- * Requires a bot token in SANDBOX_REVIEW_SLACK_TOKEN (channel:
- * SANDBOX_REVIEW_SLACK_CHANNEL, else the default). No token → a clear error,
- * never a fake success — the button must not claim it messaged Slack when it
- * didn't. Returns the channel it posted to.
+ * Requires SANDBOX_REVIEW_SLACK_TOKEN (a bot token with chat:write) and
+ * SANDBOX_REVIEW_SLACK_CHANNEL. Either missing → a clear error, never a fake
+ * success — the button must not claim it messaged Slack when it didn't.
+ * Returns the channel it posted to.
  */
 export async function postSlackReviewRequest(text: string): Promise<string> {
   const token = process.env.SANDBOX_REVIEW_SLACK_TOKEN;
-  if (!token) {
+  const channel = process.env.SANDBOX_REVIEW_SLACK_CHANNEL;
+  if (!token || !channel) {
     throw new WorkspaceError(
-      "Slack is not configured: set SANDBOX_REVIEW_SLACK_TOKEN to a bot token " +
-        "with chat:write to the review channel.",
+      "Slack is not configured: set SANDBOX_REVIEW_SLACK_TOKEN (a bot token with chat:write) " +
+        "and SANDBOX_REVIEW_SLACK_CHANNEL (the review channel id).",
     );
   }
-  const channel = process.env.SANDBOX_REVIEW_SLACK_CHANNEL || DEFAULT_REVIEW_SLACK_CHANNEL;
   const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -1580,6 +1577,7 @@ export interface OpenPr {
   outOfDate: boolean;
   hasApprovalLabel: boolean;
   jiraKey: string | null;
+  jiraUrl: string | null;
   isDraft: boolean;
 }
 
@@ -1686,12 +1684,14 @@ export function prFromView(v: ViewResult, _meLogin: string): OpenPr {
       outOfDate: false,
       hasApprovalLabel: false,
       jiraKey: null,
+      jiraUrl: null,
       isDraft: false,
     };
   }
   const labels = (v.labels ?? []).map((l) => l.name ?? "").filter(Boolean);
   const title = v.title ?? "";
   const body = v.body ?? "";
+  const jiraKey = parseJiraKey(`${title} ${body} ${v.headRefName ?? ""}`);
   return {
     url: v.url,
     repo,
@@ -1704,7 +1704,8 @@ export function prFromView(v: ViewResult, _meLogin: string): OpenPr {
     failingChecks: countFailingChecks(v.statusCheckRollup),
     outOfDate: v.mergeStateStatus === "BEHIND",
     hasApprovalLabel: labels.includes(APPROVAL_LABEL),
-    jiraKey: parseJiraKey(`${title} ${body} ${v.headRefName ?? ""}`),
+    jiraKey,
+    jiraUrl: jiraKey ? jiraBrowseUrl(jiraKey) : null,
     isDraft: v.isDraft ?? false,
   };
 }
@@ -1857,7 +1858,7 @@ export async function fetchJiraIssue(ref: string): Promise<JiraCard> {
     }
     const prompt =
       "You are a data extractor, not an agent. Do exactly two things and nothing else:\n" +
-      `1. Fetch Jira issue ${key} using getJiraIssue (Atlassian cloud id ${JIRA_CLOUD_ID}) — ` +
+      `1. Fetch Jira issue ${key} using getJiraIssue ${jiraSitePhrase()} — ` +
       'request fields ["summary","status","issuetype","assignee","description"].\n' +
       "2. Output ONLY a JSON object between <result> and </result> tags with keys: " +
       '"key","summary","status","type","assignee","description","url". Use empty strings for ' +

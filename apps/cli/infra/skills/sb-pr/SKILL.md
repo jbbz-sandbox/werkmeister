@@ -14,11 +14,13 @@ Run these steps in order. Steps 1 and 2 are gates — a failure stops the PR.
 2. **Self-review.** Invoke `sb-review` on the branch diff (vs the base branch)
    and address its findings before continuing.
 3. **PR conventions:**
-   - **Title:** `<type>(<optional scope>): <JIRA-ID> <short description>` —
+   - **Title:** `<type>(<optional scope>): <ISSUE-ID> <short description>` —
      conventional-commit types (`feat`, `fix`, `refactor`, `chore`, `docs`,
      `test`, `ci`, `perf`); scope optional, use it when targeting a specific
      app/package.
      Example: `feat(backend): PROJ-1125 Add rating field to the product payload`
+     `<ISSUE-ID>` is the workspace's ticket: a Jira key (`PROJ-1125`) or a GitHub
+     issue (`acme/backend#42`). No ticket → omit it.
    - **Body:**
 
      ```markdown
@@ -28,14 +30,14 @@ Run these steps in order. Steps 1 and 2 are gates — a failure stops the PR.
      ## Test plan
      <checklist of verification steps>
 
-     Refs: <JIRA-ID>
+     Refs: <ISSUE-ID>
 
      🤖 Generated with [Claude Code](https://claude.com/claude-code)
      ```
 
-   - **Jira:** transition the ticket named in the title to **In Development**
-     (use your configured Jira tooling; connection specifics live in your
-     personal config, not this skill).
+   - **Jira only:** when the ticket is a Jira key, transition it to **In
+     Development** (use your configured Jira tooling; connection specifics
+     live in your personal config, not this skill). Skip for GitHub issues.
 4. **Branch mechanics:** use `superpowers:finishing-a-development-branch` if
    installed; if not, say so once and create the PR with `gh pr create`.
 5. **Checkpoint:** after the PR exists, suggest `sb-handoff` so the PR state

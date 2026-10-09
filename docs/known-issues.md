@@ -309,7 +309,7 @@ needs.
 **Affects:** `~/.sandbox/config.yaml` `paths.sandbox_root`, `apps/cli/infra/`
 
 `sandbox_root` is a single machine-global pointer at one CLI checkout (here,
-`/Users/jayboyer/repos/sandbox/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
+`<sandbox-checkout>/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
 and is what `infraRoot()` resolves from — so **whichever install ran `sandbox config` last
 wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
 serving `infra/` out of the other one.
@@ -343,7 +343,7 @@ One full human round-trip before any work, on a workspace with no ambiguity from
 
 **Likely fix:** treat `--task` as a title for the starting prompt, not a peer of it — render the handoff note's goal (or its first heading) as the Current Task, and drop `--description` from the agent-facing CLAUDE.md (it is dashboard metadata). Alternatively, have `sb-research` step 0 state that the handoff note *is* the task and the CLAUDE.md line is its label.
 
-**Fix (partial):** `docs/superpowers/archive/specs/2026-09-27-work-type-phases.md`. The seeded handoff
+**Fix (partial):** the work-type phase gate (`WORK_TYPE_PHASES` in sandbox-core). The seeded handoff
 and CLAUDE.md now name the phase and artifact to start with, which is what the run-2 model
 asked about. The task-title-vs-prompt conflict itself is unchanged; this entry stays open.
 
@@ -365,7 +365,7 @@ The answer existed in the same session's context but not in the ledger, and the 
 
 **Related:** `sb-implement` asked four more design questions (validator dependency, drift-test style, `/health` method, Dockerfile COPY) after research had already gathered every fact needed to decide them. Not a bug, but it doubled the human turns relative to the ICM sibling, which proposed answers with evidence in a file for the human to flip to `decided`.
 
-**Fix:** `docs/superpowers/archive/specs/2026-09-27-work-type-phases.md`. `sb-research` now ends a
+**Fix:** the work-type phase gate (`WORK_TYPE_PHASES` in sandbox-core). `sb-research` now ends a
 `feature` in a `decision` note with `status: decided` recording the answers, `sandbox notes
 context` re-injects it every session, and the phase gate blocks source edits until it exists.
 Confirm with a jit-ws2 rerun before closing.
@@ -391,7 +391,7 @@ Both run-1 agents (`jit-ws`, `icm-ws`) spent roughly 15 tool calls each discover
 **Affects:** `packages/sandbox-core/gate.ts` (`decide`, `_noteStatus`), `packages/sandbox-core/workspace_skills.ts` (`checkStandardsManifest`), `docs/jit-context-system.md`, `docs/known-issues.md`
 
 Left over from the final review of the work-type phase gate
-(`docs/superpowers/archive/specs/2026-09-27-work-type-phases.md`):
+(`WORK_TYPE_PHASES` in sandbox-core):
 
 | Where | What |
 |---|---|

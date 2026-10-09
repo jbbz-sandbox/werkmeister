@@ -16,7 +16,7 @@ docker-compose files, Helm charts, raw k8s manifests and kustomize overlays.
 
 Since 2026-10-01 (`2026-10-01-registry-fragments-design.md`) the registry is
 generated from per-repo fragments, but every fragment is written by hand. The
-three that exist (demo-services, wellness, sandbox) restate facts their repos
+three that exist (demo-services, mobile-app, sandbox) restate facts their repos
 already hold: `containerPort` and `probePath` from the charts, `EXPOSE` and
 `FROM` from the Dockerfiles, `dev` and `test` scripts from `package.json`, the
 workspace layout from the root `package.json`. Onboarding a repo means
@@ -305,7 +305,7 @@ returns, so CI needs neither binary.
   installed and skips otherwise, so the stored render can't drift.
 
 **Acceptance check.** Before the work counts as done, run
-`sandbox detect --dry-run` on demo-services and wellness and compare with their
+`sandbox detect --dry-run` on demo-services and mobile-app and compare with their
 hand-written fragments.
 - Every field a file states must match.
 - Differences are allowed only in judgement fields (`environment` beyond the

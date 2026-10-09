@@ -140,7 +140,7 @@ describe("scaffold content", () => {
 describe("resolveSecrets", () => {
   const servicesConfig = {
     "backend": {},
-    "auth-web": { secrets: ["AUTH0_CLIENT_SECRET", "NEXTAUTH_SECRET"] },
+    "web-app": { secrets: ["OAUTH_CLIENT_SECRET", "SESSION_SECRET"] },
     "mobile": { secrets: ["CLERK_KEY"] },
   };
 
@@ -153,22 +153,22 @@ describe("resolveSecrets", () => {
 
   it("reports missing/empty declared keys by both accepted names, never values", () => {
     const { missing } = resolveSecrets(
-      { AUTH0_CLIENT_SECRET: "abc123", NEXTAUTH_SECRET: "  " },
+      { OAUTH_CLIENT_SECRET: "abc123", SESSION_SECRET: "  " },
       servicesConfig,
-      ["backend", "auth-web"],
+      ["backend", "web-app"],
     );
-    expect(missing).toEqual(["AUTH_WEB__NEXTAUTH_SECRET / NEXTAUTH_SECRET"]);
+    expect(missing).toEqual(["WEB_APP__SESSION_SECRET / SESSION_SECRET"]);
   });
 
   it("prefers <SERVICE>__KEY, falling back to plain KEY when it is absent or empty", () => {
-    const all = { MOBILE__CLERK_KEY: "mobile-val", CLERK_KEY: "shared", AUTH_WEB__AUTH0_CLIENT_SECRET: "" };
+    const all = { MOBILE__CLERK_KEY: "mobile-val", CLERK_KEY: "shared", WEB_APP__OAUTH_CLIENT_SECRET: "" };
     const { byService } = resolveSecrets(
-      { ...all, AUTH0_CLIENT_SECRET: "a", NEXTAUTH_SECRET: "n" },
+      { ...all, OAUTH_CLIENT_SECRET: "a", SESSION_SECRET: "n" },
       servicesConfig,
-      ["auth-web", "mobile"],
+      ["web-app", "mobile"],
     );
     expect(byService.mobile).toEqual({ CLERK_KEY: "mobile-val" });
-    expect(byService["auth-web"]).toEqual({ AUTH0_CLIENT_SECRET: "a", NEXTAUTH_SECRET: "n" });
+    expect(byService["web-app"]).toEqual({ OAUTH_CLIENT_SECRET: "a", SESSION_SECRET: "n" });
   });
 
   it("lets a workspace env_vars override beat secrets.env and satisfy a missing key", () => {

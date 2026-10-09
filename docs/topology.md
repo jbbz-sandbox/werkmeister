@@ -71,8 +71,7 @@ Linux behaves like Docker Desktop or OrbStack on a Mac.
 | `intercept` | required | traffic-manager + a traffic-agent; refused unless the service declares `k8s_deployment`, `k8s_namespace` and `k8s_port` |
 
 A registry whose services declare no `k8s_forward_port` yields an empty forward
-table rather than an error — the shape
-[docs/superpowers/archive/specs/2026-09-03-self-host-services-design.md](superpowers/archive/specs/2026-09-03-self-host-services-design.md)
+table rather than an error — the shape a fully self-hosted registry
 assumes, where nothing runs in a cluster at all and telepresence never enters the
 picture.
 

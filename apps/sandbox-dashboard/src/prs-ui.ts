@@ -28,6 +28,7 @@ interface OpenPr {
   outOfDate: boolean;
   hasApprovalLabel: boolean;
   jiraKey: string | null;
+  jiraUrl: string | null;
   isDraft: boolean;
 }
 interface OpenPrsResult {
@@ -277,7 +278,9 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
     if (pr.isDraft) meta.appendChild(el("span", "draft-badge", "draft"));
     if (pr.jiraKey) {
       meta.appendChild(
-        headLink("jira-link", pr.jiraKey, `https://hgdata.atlassian.net/browse/${pr.jiraKey}`, `Open ${pr.jiraKey} in Jira`),
+        pr.jiraUrl
+          ? headLink("jira-link", pr.jiraKey, pr.jiraUrl, `Open ${pr.jiraKey} in Jira`)
+          : el("span", "jira-link", pr.jiraKey),
       );
     }
     meta.appendChild(headLink("gh-link", "GitHub", pr.url, "Open this PR on GitHub"));
