@@ -273,3 +273,23 @@ test('a slow tick is skipped, not queued', async ($, on) => {
   await w.clock.settle()
   expect(w.calls.filter(c => c.key === 'sandbox-workspace/list-workspaces')).toHaveLength(2)
 })
+
+test('switch calls change_directory with the workspace path and toasts', async ($, on) => {
+  const w = world(on, stubs({ 'ccd_directory/change_directory': () => ok(undefined, 'Access granted.') }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'switch:abc' })
+  expect(w.calls.find(c => c.key === 'ccd_directory/change_directory')?.args).toEqual({ path: '/ws/abc' })
+  expect(w.toasts).toEqual(['Switching to abc when this turn ends'])
+  await ui.unmount()
+})
+
+test('jump focuses a session this session started, else toasts its title', async ($, on) => {
+  const w = world(on, stubs({ 'ccd_window/open_session_in': () => ({ content: [{ type: 'text', text: 'Only sessions this session started can be focused.' }], isError: true }) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'jump:abc' })
+  expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')?.args).toEqual({ session_id: 'local_1', target: 'focus' })
+  expect(w.toasts).toEqual(['Open "Newer in abc" from the sidebar'])
+  await ui.unmount()
+})

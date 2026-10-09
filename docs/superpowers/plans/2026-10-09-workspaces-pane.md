@@ -863,8 +863,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 Edit these two lines with Task 1's results before starting:
 
-- FINDING 1 (change_directory answers a plugin call): `yes` / `no`
-- FINDING 2 (a `claude://` Link focuses the session): `yes` / `no`
+- FINDING 1 (change_directory answers a plugin call): `yes` (the app asks the person to approve the folder, then grants it)
+- FINDING 2 (a `claude://` Link focuses the session): `no` (the desktop pane drew nothing for a Link with a claude:// href)
 
 - [ ] **Step 1: Write the failing tests**
 
