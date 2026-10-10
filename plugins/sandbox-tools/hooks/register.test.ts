@@ -406,7 +406,7 @@ const BUNDLE = {
     'ui:order': ['issue_id', 'feature', 'work_type', 'services', 'task', 'starting_prompt'],
     feature: { 'ui:placeholder': 'my-feature' },
     services: { 'ui:widget': 'checkboxes', 'ui:options': { groups: { web: ['web'], core: ['api'] } } },
-    starting_prompt: { 'ui:widget': 'textarea' },
+    starting_prompt: { 'ui:widget': 'textarea', 'ui:options': { refinable: true, refineInstruction: 'Make it actionable.' } },
   },
   formData: {},
 }
@@ -416,6 +416,7 @@ function formStubs(over: Partial<McpStub> = {}): McpStub {
     [`${WS}/form-schema`]: () => ok({ bundle: BUNDLE, trackerLabel: 'GitHub' }),
     [`${WS}/issue-form-data`]: () => ok({ issue_id: 'acme/api#7', feature: 'rate-limit', task: 'Rate limit the API', services: ['api'] }),
     [`${WS}/create-workspace`]: () => ok({ command: 'sandbox workspace rate-limit', workspacePath: '/ws/api-7-rate-limit' }),
+    [`${WS}/refine-prompt`]: args => ok(`## Goal\n${String(args.text)}, refined`),
     ...over,
   })
 }
@@ -551,5 +552,25 @@ test('the workspace_form tool opens the Create tab filled, says what is still ne
   expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect(((await ui.find({ key: 'f:feature' }))?.props.props as { value: string }).value).toBe('rate-limit')
+  await ui.unmount()
+})
+
+test('Refine with Claude rewrites the starting prompt with its instruction and the other fields as context', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  expect(await ui.find({ key: 'create:refine:task' })).toBeUndefined()
+  await ui.press({ key: 'create:refine:starting_prompt' })
+  expect((await ui.find({ text: /Write something first/ }))).toBeDefined()
+  await ui.post({ value: 'add a rate limit' }, { in: 'f:starting_prompt' })
+  await ui.post({ value: 'rate-limit' }, { in: 'f:feature' })
+  await ui.press({ key: 'create:refine:starting_prompt' })
+  expect(w.calls.find(c => c.key === `${WS}/refine-prompt`)?.args).toEqual({
+    text: 'add a rate limit',
+    instruction: 'Make it actionable.',
+    formData: { starting_prompt: 'add a rate limit', feature: 'rate-limit' },
+  })
+  expect(((await ui.find({ key: 'f:starting_prompt' }))?.props.props as { value: string }).value).toBe('## Goal\nadd a rate limit, refined')
   await ui.unmount()
 })

@@ -75,6 +75,7 @@ try {
     },
     'issue-form-data': () => core.fetchIssueFormData(args.ref),
     'create-workspace': () => core.createWorkspace(args.formData),
+    'refine-prompt': () => core.refinePrompt(args.text, args.instruction, args.formData),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -140,11 +141,18 @@ export function formFields(bundle: FormBundle): FormField[] {
       kind: options.length ? (p.type === 'array' ? 'multi' : 'select') : ui['ui:widget'] === 'textarea' ? 'textarea' : 'text',
       options,
       groups: (((ui['ui:options'] ?? {}) as { groups?: Record<string, string[]> }).groups) ?? {},
+      refine: refineOf(ui),
       required: required.has(k),
       pattern: p.pattern ?? null,
       placeholder: typeof ui['ui:placeholder'] === 'string' ? ui['ui:placeholder'] : '',
     } satisfies FormField
   })
+}
+
+/** A refinable field's instruction for refinePrompt ("" = its default), or null when the field isn't refinable. */
+function refineOf(ui: Record<string, unknown>): string | null {
+  const o = (ui['ui:options'] ?? {}) as { refinable?: boolean; refineInstruction?: string }
+  return o.refinable ? (o.refineInstruction ?? '') : null
 }
 
 /** A multi-pick draws as checkboxes in this many columns, as the browser form does. */
@@ -286,6 +294,31 @@ async function fetchIssue($: EngineInterface): Promise<void> {
     const filled = Object.keys(data).filter(k => k !== 'issue_id' && isEmpty(now[k]) && !isEmpty(merged[k]))
     await $.state.set(DRAFT, merged)
     await $.state.set(NOTE, filled.length ? `Filled ${filled.join(', ')} from ${data.issue_id}.` : `${data.issue_id}: nothing new to fill.`)
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message)
+  } finally {
+    await $.state.set(FORM_BUSY, '')
+  }
+}
+
+/** "Refine with Claude": rewrite the field with refinePrompt, the issue and the other fields as context. */
+async function refineField($: EngineInterface, key: string, instruction: string): Promise<void> {
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  const text = typeof draft[key] === 'string' ? draft[key].trim() : ''
+  if (!text) {
+    await $.state.set(NOTE, 'Write something first; Refine rewrites what is there.')
+    return
+  }
+  await $.state.set(FORM_BUSY, 'refine')
+  try {
+    const formData = Object.fromEntries(Object.entries(draft).filter(([, v]) => !isEmpty(v)))
+    const refined = (await core<string>($, 'refine-prompt', { text, instruction, formData }, 180000)).trim()
+    if (!refined) {
+      await $.state.set(NOTE, 'Refine returned no text; the field is unchanged.')
+      return
+    }
+    await setField($, key, refined)
+    await $.state.set(NOTE, 'Refined. Edit it, or Refine again.')
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message)
   } finally {
@@ -680,6 +713,12 @@ export const register: Register = on => {
               <Text bold>{`${f.key === 'issue_id' ? `${form.trackerLabel} issue` : f.title}${f.required ? ' *' : ''}`}</Text>
               {f.help !== '' && f.key !== 'issue_id' && <Text dimColor>{f.help}</Text>}
               {(f.kind === 'text' || f.kind === 'textarea') && textField(f)}
+              {f.refine !== null && (
+                <Box key={`refine:${f.key}`} marginTop={1} gap={1}>
+                  <Button key={`create:refine:${f.key}`} label={formBusy === 'refine' ? 'Refining…' : '✨ Refine with Claude'} variant="secondary" onPress={() => void (formBusy ? undefined : refineField($, f.key, f.refine ?? ''))} />
+                  <Text dimColor>Rewrites it as a clear instruction with a goal and acceptance criteria, using the issue and your other choices.</Text>
+                </Box>
+              )}
               {f.kind === 'select' && (
                 <Select key={`f:${f.key}`} options={[{ value: '', label: 'Choose…' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />
               )}
