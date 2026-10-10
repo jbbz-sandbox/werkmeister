@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
 import { composeLogs } from "sandbox-core/compose";
-import { getReposRoot, sandboxRoot, servicesLocalYamlPath } from "sandbox-core/config";
+import { getReposRoot, servicesLocalYamlPath } from "sandbox-core/config";
 import { SandboxError } from "sandbox-core/errors";
 import { featureUrl } from "sandbox-core/feature_routing";
 import {
@@ -341,7 +341,9 @@ function registerLifecycleTools(server: McpServer): void {
       title: "Run a feature's Playwright suite",
       description:
         "Run the feature's Playwright tests with SANDBOX_FEATURE set, so the suite carries the " +
-        "X-Feature routing cookie. A failing suite is a result (non-zero `status`), not an error.",
+        "X-Feature routing cookie. Runs only when the workspace has a Playwright config; otherwise nothing runs " +
+        "and `message` lists each service's test command and validation guidance. " +
+        "A failing suite is a result (non-zero `status`), not an error.",
       inputSchema: {
         ...FEATURE_ARG,
         extraArgs: z
@@ -357,7 +359,6 @@ function registerLifecycleTools(server: McpServer): void {
           ...(await runFeatureTests({
             feature,
             workspace: resolveWorkspaceDir(feature),
-            root: sandboxRoot(),
             extraArgs: args.extraArgs ?? [],
             signal: extra.signal,
           })),

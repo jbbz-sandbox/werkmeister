@@ -16,11 +16,13 @@ import * as path from "node:path";
 import nunjucks from "nunjucks";
 import * as YAML from "yaml";
 
+import { candidateServiceNames } from "./archetypes.js";
 import { buildSandboxContextMd } from "./claude_md.js";
 import {
   infraRoot,
   stateInfraRoot,
   loadPorts,
+  loadReposConfig,
   loadServices,
   loadSetupServices,
   resolveWorkspace,
@@ -1478,6 +1480,7 @@ export async function generateWorkspaceCompose(
   servicesStr: string,
   workspaceRoot: string,
   testPath = "",
+  repoNames: string[] = [],
 ): Promise<number | null> {
   info("Generating docker-compose.yml...");
   const servicesConfig = loadServices();
@@ -1564,6 +1567,8 @@ export async function generateWorkspaceCompose(
     localServices,
     servicesConfig,
     testPath,
+    null,
+    candidateServiceNames(repoNames, loadReposConfig(), localServices),
   );
   const sandboxDir = path.join(workspaceRoot, ".sandbox");
   fs.mkdirSync(sandboxDir, { recursive: true });

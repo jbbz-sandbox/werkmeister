@@ -80,6 +80,75 @@ export function serviceTestCommand(
 }
 
 /**
+ * How to exercise a change to one service when it has no URL to hit.
+ *
+ * Same precedence as `serviceTestCommand`: a per-service `validate:` wins over
+ * the archetype's, because the same archetype covers a library and a CLI.
+ * Free text, so no `{service}` expansion. `null` means nothing is registered.
+ */
+export function serviceValidation(
+  svcDef: any,
+  archetypes?: Record<string, any> | null,
+): string | null {
+  if (!isDict(svcDef)) return null;
+  const own = svcDef["validate"];
+  if (own) return String(own);
+  const text = (resolveServiceArchetype(svcDef, archetypes) ?? {})["validate"];
+  return text ? String(text) : null;
+}
+
+/** Selected services if any, else the services of the workspace's repos. */
+export function candidateServiceNames(
+  repoNames: string[],
+  reposConfig: Record<string, any>,
+  localServices?: string[] | null,
+): string[] {
+  if (localServices && localServices.length) return [...localServices];
+  return repoNames.flatMap((repo) => (reposConfig[repo] ?? {})["services"] ?? []);
+}
+
+export interface ValidationRow {
+  service: string;
+  repo: string;
+  path: string;
+  test: string | null;
+  validate: string;
+}
+
+/**
+ * One row per candidate service for the "How to validate" table.
+ *
+ * A service with a `feature_router` host and no `validate:` is reached by URL,
+ * so it falls through to the health check rather than to "unregistered".
+ */
+export function validationRows(
+  candidates: string[],
+  servicesConfig: Record<string, any>,
+  archetypes?: Record<string, any> | null,
+  routedServices: Set<string> = new Set(),
+): ValidationRow[] {
+  if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
+  const rows: ValidationRow[] = [];
+  for (const svc of [...new Set(candidates)].sort()) {
+    const svcDef = servicesConfig[svc];
+    if (!isDict(svcDef)) continue;
+    const own = serviceValidation(svcDef, archetypes);
+    rows.push({
+      service: svc,
+      repo: String(svcDef["repo"] ?? ""),
+      path: String(svcDef["path"] ?? "."),
+      test: serviceTestCommand(svc, svcDef, archetypes),
+      validate:
+        own ??
+        (routedServices.has(svc)
+          ? "URL health check (see Quick Health Checks)"
+          : "No validation guidance registered in services.yaml; say so instead of inventing one"),
+    });
+  }
+  return rows;
+}
+
+/**
  * Map each *named* archetype present in a workspace to its services.
  *
  * Presence follows the same candidate-service rule as
@@ -99,14 +168,7 @@ export function resolvePresentArchetypes(
 ): Record<string, string[]> {
   if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
 
-  let candidateServices: string[];
-  if (localServices && localServices.length) {
-    candidateServices = [...localServices];
-  } else {
-    candidateServices = repoNames.flatMap(
-      (repo) => (reposConfig[repo] ?? {})["services"] ?? [],
-    );
-  }
+  const candidateServices = candidateServiceNames(repoNames, reposConfig, localServices);
 
   const present: Record<string, string[]> = {};
   for (const svc of candidateServices) {

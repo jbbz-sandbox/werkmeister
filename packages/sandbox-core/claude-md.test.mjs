@@ -43,7 +43,7 @@ test("the routing table is two columns: one feature row, contract row only for m
     const single = buildRoutingTable([["a", "u/x"]], ws, true);
     assert.equal(single.split("\n")[0], "| Task | Read |");
     assert.match(single, /\| Working in a \| a\/CLAUDE\.md \|/);
-    assert.match(single, /\| Running the feature[^|]*\| \.sandbox\/sandbox-context\.md \|/);
+    assert.match(single, /\| Running or validating the change[^|]*\| \.sandbox\/sandbox-context\.md \|/);
     assert.doesNotMatch(single, /Cross-repo/);
     assert.doesNotMatch(single, /service-map/);
     const multi = buildRoutingTable([["a", "u/x"], ["b", "u/x"]], ws, false);
@@ -64,7 +64,7 @@ test("CLAUDE.md carries no Feature Testing section", () => {
     );
     assert.doesNotMatch(out, /## Feature Testing/);
     assert.doesNotMatch(out, /document\.cookie/, "the cookie one-liner lives in sandbox-context.md now");
-    assert.match(out, /Running the feature — URL, X-Feature cookie/, "the routing row still points at it");
+    assert.match(out, /Running or validating the change — test commands/, "the routing row still points at it");
     assert.match(out, /## Notes/);
     assert.match(out, /## Standards routing/);
     assert.doesNotMatch(out, /`finding`.*`decision`/s, "the Notes section no longer enumerates the types inline");

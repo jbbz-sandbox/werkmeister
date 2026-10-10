@@ -1,7 +1,7 @@
 /**
  * sandbox test <feature>
  *
- * Run Playwright tests against a feature's isolated stack. Sets the
+ * Run a feature's Playwright suite, if the workspace has one. Sets the
  * SANDBOX_FEATURE environment variable so the Playwright config can
  * include the correct X-Feature cookie.
  *
@@ -10,7 +10,7 @@
  * failing suite is a result the library reports, not an error it throws.
  */
 
-import { Colors, error, getSandboxRoot, resolveWorkspace, success } from "../lib/config.js";
+import { Colors, error, resolveWorkspace, success } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
 import { runFeatureTests } from "sandbox-core/test_run";
 
@@ -22,11 +22,14 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const result = await runFeatureTests({
     feature,
     workspace: resolveWorkspace(feature),
-    root: String(getSandboxRoot()),
     extraArgs: (args.extra as string[] | null) ?? [],
     signal: interruptSignal(),
   });
 
+  if (result.message) {
+    error(result.message);
+    process.exit(result.status);
+  }
   if (result.status === 0) {
     success(`All tests passed for feature '${feature}'`);
   } else {

@@ -14,7 +14,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { serviceTestCommand } from "./archetypes.js";
+import { serviceTestCommand, serviceValidation } from "./archetypes.js";
 import type { FeatureRouter } from "./feature_routing.js";
 
 // Agent files must open with the frontmatter block, so the do-not-hand-edit
@@ -134,6 +134,7 @@ export function buildTesterSpecs(
         name: svc,
         repo: svcDef["repo"],
         command: serviceTestCommand(svc, svcDef, archetypes),
+        validate: serviceValidation(svcDef, archetypes),
         // The through-Caddy URL for the smoke check; null when the service has
         // no feature_router host (nothing to curl) or no feature is known.
         url: feature && host ? `https://${host}/${testPath.replace(/^\/+/, "")}` : null,
@@ -159,7 +160,8 @@ export function buildTesterAgent(spec: Record<string, any>): string {
   for (const svc of services) {
     if (svc["command"]) {
       commandLines.push(
-        `- ${svc["name"]} — run from \`${svc["repo"]}/\`: \`${svc["command"]}\``,
+        `- ${svc["name"]} — run from \`${svc["repo"]}/\`: \`${svc["command"]}\`` +
+          (svc["validate"] ? `\n  validate: ${svc["validate"]}` : ""),
       );
     } else {
       commandLines.push(
