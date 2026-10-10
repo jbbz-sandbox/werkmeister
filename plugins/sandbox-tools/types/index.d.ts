@@ -32,6 +32,8 @@ declare module 'claude-code' {
       busy: string
       confirmRemove: string
       note: string
+      /** The pane's open tab. */
+      tab: 'list' | 'create'
     }
   }
 }
