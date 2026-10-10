@@ -21,7 +21,7 @@
  *      docker-compose.yml / .claude/ / .sandbox/*. The initial state is then
  *      committed (not pushed).
  *
- * The workspace directory name is derived from the optional Jira ticket id and
+ * The workspace directory name is derived from the optional issue ID and
  * the feature name. Workspace state (.sandbox/workspace.yml, .sandbox/notes/, the
  * projected .claude/ and generated context files) is tracked on the branch; the
  * nested repo worktrees and .env are gitignored.
@@ -29,9 +29,9 @@
  * Naming
  * ------
  *     feature only           dir: feature              branch: <user>/feature
- *     jira + feature         dir: proj-123-feature       branch: <user>/proj-123-feature
+ *     issue + feature        dir: <slug>-feature         branch: <user>/<slug>-feature
  *
- * (The Jira id is lower-cased and prefixed to the feature name.)
+ * (The issue's slug, e.g. PROJ-123 -> proj-123, is prefixed to the feature name.)
  *
  * See the module docstring for the full input/repo resolution rules.
  */
@@ -109,8 +109,8 @@ function runBrowserForm(args: Record<string, unknown>): void {
   }
 
   const cmd = [node, cliJs];
-  if (args.jira_id) {
-    cmd.push("--jira", args.jira_id as string);
+  if (args.issue_id) {
+    cmd.push("--issue", args.issue_id as string);
   }
   if (args.open_vscode) {
     cmd.push("--open");

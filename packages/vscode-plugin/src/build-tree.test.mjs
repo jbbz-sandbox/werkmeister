@@ -6,8 +6,8 @@ const ws = (name, over = {}) => ({
   name,
   path: `/ws/${name}`,
   vscodeUri: `vscode://file/ws/${name}`,
-  jiraId: null,
-  jiraUrl: null,
+  issueId: null,
+  issueUrl: null,
   labels: [],
   ...over,
 });
@@ -86,15 +86,15 @@ test("a down workspace shows no ratio", () => {
   assert.match(node.description, /down/);
 });
 
-test("a Jira key appears in the description and the node carries its URL", () => {
+test("an issue ID appears in the description and the node carries its URL", () => {
   const [node] = buildTree(
-    [ws("a", { jiraId: "PROJ-1125", jiraUrl: "https://x/browse/PROJ-1125" })],
+    [ws("a", { issueId: "PROJ-1125", issueUrl: "https://x/browse/PROJ-1125" })],
     [st("a")],
     null,
     [],
   );
   assert.match(node.description, /PROJ-1125/);
-  assert.equal(node.workspace.jiraUrl, "https://x/browse/PROJ-1125");
+  assert.equal(node.workspace.issueUrl, "https://x/browse/PROJ-1125");
 });
 
 test("an interceptable service with no intercept offers the toggle", () => {

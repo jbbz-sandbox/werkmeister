@@ -18,8 +18,8 @@ const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.
 const ws = (name, over = {}) => ({
   name,
   path: `/ws/${name}`,
-  jiraId: null,
-  jiraUrl: null,
+  issueId: null,
+  issueUrl: null,
   labels: [],
   ...over,
 });
@@ -148,7 +148,7 @@ test("the node-only commands are hidden from the palette", () => {
   const hidden = manifest.contributes.menus.commandPalette
     .filter((m) => m.when === "false")
     .map((m) => m.command);
-  assert.deepEqual(hidden.sort(), ["sandbox.logs", "sandbox.openJira", "sandbox.toggleIntercept"]);
+  assert.deepEqual(hidden.sort(), ["sandbox.logs", "sandbox.openIssue", "sandbox.toggleIntercept"]);
 });
 
 test("every command a menu references is declared", () => {

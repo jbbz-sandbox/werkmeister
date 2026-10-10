@@ -100,22 +100,22 @@ const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
 
 /** The prompt the Create tab submits: the form needs the Browser pane, which only a model's tool call can drive (see 1500cb1). */
-export function createPrompt(jiraId: string): string {
-  const id = jiraId.trim()
-  return `Create a new sandbox workspace with the sandbox-workspace skill${id ? `, pre-filled from Jira ticket ${id}` : ''}.`
+export function createPrompt(issueId: string): string {
+  const id = issueId.trim()
+  return `Create a new sandbox workspace with the sandbox-workspace skill${id ? `, pre-filled from issue ${id}` : ''}.`
 }
 
-// The Jira field's text as typed; a reload clears it.
-let draftJira = ''
+// The issue field's text as typed; a reload clears it.
+let draftIssue = ''
 
-async function create($: EngineInterface, jiraId: string): Promise<void> {
-  draftJira = ''
+async function create($: EngineInterface, issueId: string): Promise<void> {
+  draftIssue = ''
   await $.state.set(TAB, 'list')
   $.ui.toast('Opening the workspace form')
-  void $.prompt.submit({ text: createPrompt(jiraId) })
+  void $.prompt.submit({ text: createPrompt(issueId) })
 }
 
-type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'jiraId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
+type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'issueId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
 type ListResult = { workspaces: ListEntry[] }
 type StatusResult = { statuses: { name: string; state: WorkspaceRow['state']; running: number; total: number; claude: { state: string; waiting: boolean } }[] }
 type SessionInfo = { sessionId: string; title: string; cwd: string; link?: string }
@@ -393,9 +393,9 @@ export const register: Register = on => {
       return (
         <Box flexDirection="column">
           {tabs}
-          <Text dimColor>Opens the workspace form. A Jira ticket pre-fills it.</Text>
-          {Input && <Box key="jira" marginTop={1}><Input key="create:jira" label="Jira ticket (optional) " placeholder="PROJ-1234" value={draftJira} submitLabel="create" onInput={v => { draftJira = v }} onSubmit={v => void create($, v)} /></Box>}
-          <Box key="go" marginTop={1}><Button key="create:go" label="＋ Create workspace" variant="primary" onPress={() => void create($, draftJira)} /></Box>
+          <Text dimColor>Opens the workspace form. An issue ID pre-fills it.</Text>
+          {Input && <Box key="issue" marginTop={1}><Input key="create:issue" label="Issue ID (optional) " value={draftIssue} submitLabel="create" onInput={v => { draftIssue = v }} onSubmit={v => void create($, v)} /></Box>}
+          <Box key="go" marginTop={1}><Button key="create:go" label="＋ Create workspace" variant="primary" onPress={() => void create($, draftIssue)} /></Box>
         </Box>
       )
     }
@@ -409,7 +409,7 @@ export const register: Register = on => {
             <Box key={`head:${r.name}`} justifyContent="space-between">
               <Box key={`row:${r.name}`}>
                 <Text bold>{r.name}</Text>
-                {r.jiraId && <Text dimColor>{` · ${r.jiraId}`}</Text>}
+                {r.issueId && <Text dimColor>{` · ${r.issueId}`}</Text>}
               </Box>
               {r.claude && <Box key={`claude:${r.name}`}><Text color={CLAUDE[r.claude].color}>{CLAUDE[r.claude].text}</Text></Box>}
             </Box>

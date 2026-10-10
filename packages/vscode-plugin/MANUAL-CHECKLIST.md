@@ -11,7 +11,7 @@ obvious — what a failure looks like.
 
 | Covered by | What it asserts |
 |---|---|
-| `npm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), and that `Logs` / `Open Jira` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
+| `npm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), and that `Logs` / `Open Issue` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
 | `npm test` → `src/build-tree.test.mjs` | State icons, service health, the `current` marker (multi-root included), top-sorting, node id stability. |
 | `npm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
 | `npm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
@@ -69,12 +69,12 @@ render, or a live editor.
     workspace.
 
 
-8. **Open Jira Issue.** Right-click a workspace with a Jira ID → "Open Jira
+8. **Open Issue.** Right-click a workspace with an issue ID → "Open
    Issue" opens the browser to that issue.
 
 9. **Open Workspace from the palette.** Command Palette → "Sandbox: Open
    Workspace", with no tree node focused. It falls back to a QuickPick listing
-   all workspaces (name, Jira ID, path).
+   all workspaces (name, issue ID, path).
 
 10. **Configure command — the filter only.** Palette → "Sandbox: Configure
     Sandbox CLI Path". That Settings *opens* is asserted in the host suite; what
@@ -107,9 +107,9 @@ render, or a live editor.
     stream.
 
 
-16. **New Workspace.** Click `+` in the view title. Enter a Jira ref, or leave
+16. **New Workspace.** Click `+` in the view title. Enter an issue ID, or leave
     it empty, and press Enter. A terminal at `~` runs `sandbox workspace`
-    (with `--jira-id <ref>` appended if you entered one). Press Escape on the
+    (with `--issue-id <ref>` appended if you entered one). Press Escape on the
     input box instead and confirm **nothing** launches.
 
 17. **Open in Browser.** Right-click a running workspace → **Open in Browser**.

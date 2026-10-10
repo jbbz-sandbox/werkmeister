@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.dirname(fileURLToPath(import.meta.url));
-const { jiraCreds, briefingFromIssue, fetchIssueRest, fetchStatusesRest } =
+const { jiraCreds, fetchIssueRest, fetchStatusesRest } =
   await import(path.join(pkgRoot, "dist", "jira-rest.js"));
 
 // 1. creds from the `jira:` section, trailing slash stripped from base_url
@@ -25,35 +25,6 @@ assert.deepEqual(await jiraCreds(), {
   email: "c@d.e",
   token: "yaml-tok",
 });
-
-// 2. briefingFromIssue: full card
-const briefing = briefingFromIssue({
-  key: "PROJ-1",
-  fields: {
-    summary: "Do the thing",
-    description: "  Long body  ",
-    status: { name: "In Progress" },
-    issuetype: { name: "Story" },
-    assignee: { displayName: "Jay" },
-    comment: {
-      comments: [
-        { author: { displayName: "A" }, body: "first", created: "2026-07-01T00:00:00Z" },
-        { author: { displayName: "B" }, body: "  ", created: "2026-07-02T00:00:00Z" }, // blank → dropped
-        { body: "no author" },
-      ],
-    },
-  },
-});
-assert.match(briefing, /^PROJ-1: Do the thing/);
-assert.match(briefing, /Status: In Progress · Type: Story · Assignee: Jay/);
-assert.match(briefing, /Description:\nLong body/);
-assert.match(briefing, /- \[A 2026-07-01\] first/);
-assert.match(briefing, /- \[unknown\] no author/);
-assert.ok(!briefing.includes("[B"));
-
-// 3. briefingFromIssue: sparse card (no description/comments/meta)
-const sparse = briefingFromIssue({ key: "PROJ-2", fields: {} });
-assert.equal(sparse, "PROJ-2: (no summary)");
 
 // 4. process env overrides the YAML, but a placeholder token never counts as a
 // credential — it falls through to the configured section instead.

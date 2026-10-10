@@ -33,14 +33,14 @@ describe("buildFormSchema", () => {
       spec([
         { key: "feature", accept_empty: false, recommended: true, default: "f" },
         {
-          key: "jira_id", label: "Jira", accept_empty: true,
+          key: "issue_id", label: "Issue", accept_empty: true,
           pattern: "^[A-Z]+-[0-9]+$", default: "", resolved: false,
         },
       ]),
     );
-    const jira = out.schema.properties.jira_id;
-    expect(jira.pattern).toBe("^$|(?:^[A-Z]+-[0-9]+$)"); // optional → empty OR-ed in
-    expect(out.schema.required ?? []).not.toContain("jira_id");
+    const issue = out.schema.properties.issue_id;
+    expect(issue.pattern).toBe("^$|(?:^[A-Z]+-[0-9]+$)"); // optional → empty OR-ed in
+    expect(out.schema.required ?? []).not.toContain("issue_id");
   });
 
   it("multi choices become array with checkboxes", () => {

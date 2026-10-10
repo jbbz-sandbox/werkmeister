@@ -5,7 +5,7 @@
  * `sandbox workspace --browser-form`. It reuses the exact same pieces as the
  * Desktop MCP App and the MCP server's CLI fallback:
  *
- *   getFormSchema()  →  promptViaLocalhostForm()  →  createWorkspace()
+ *   getFormBundle()  →  promptViaLocalhostForm()  →  createWorkspace()
  *
  * so there is ONE form and ONE create path across every surface. Unlike
  * the MCP server, this needs no MCP client connection — it just opens the
@@ -14,7 +14,7 @@
  * stdout; all human-facing progress goes to stderr.
  *
  * Flags:
- *   --jira <ref>          Jira ticket id/URL to pre-fill the form.
+ *   --issue <ref>         Issue ID/URL (this machine's issue tracker) to pre-fill the form.
  *   --open                Launch VS Code on the new workspace (default: off).
  *   --timeout <seconds>   How long to wait for the form submit (default: 600).
  *
@@ -26,14 +26,13 @@
  */
 import {
   createWorkspace,
-  fetchJiraFormData,
-  getFormSchema,
+  fetchIssueFormData,
   WorkspaceError,
 } from "sandbox-core";
-import { promptViaLocalhostForm } from "./lib/localhost-form.js";
+import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {
-  jira?: string;
+  issue?: string;
   open: boolean;
   timeoutMs: number;
 }
@@ -42,7 +41,7 @@ function parseArgs(argv: string[]): CliArgs {
   const out: CliArgs = { open: false, timeoutMs: 600_000 };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--jira") out.jira = argv[++i];
+    if (arg === "--issue") out.issue = argv[++i];
     else if (arg === "--open") out.open = true;
     else if (arg === "--timeout") out.timeoutMs = Math.max(1, Number(argv[++i]) || 600) * 1000;
   }
@@ -60,10 +59,10 @@ async function main(): Promise<void> {
 
   let bundle;
   try {
-    bundle = await getFormSchema();
-    if (args.jira) {
-      const jiraData = await fetchJiraFormData(args.jira);
-      bundle.formData = { ...bundle.formData, ...jiraData };
+    bundle = await getFormBundle();
+    if (args.issue) {
+      const issueData = await fetchIssueFormData(args.issue);
+      bundle.formData = { ...bundle.formData, ...issueData };
     }
   } catch (e) {
     const message = e instanceof WorkspaceError ? e.message : (e as Error).message;

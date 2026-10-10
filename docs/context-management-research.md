@@ -435,7 +435,7 @@ user/repo-lifetime *learning*; this expansion is about feature-lifetime *working
   spec is drafted — same discipline that produced the 15/15 phase-entry validation.
 - **Teardown = print, don't exfiltrate.** `sandbox down` prints the latest `handoff` + open
   `decision` notes to the terminal before deletion; the human decides what graduates. No
-  automatic writes to PR/Jira surfaces.
+  automatic writes to PR/issue-tracker surfaces.
 
 The companion [jit-context-system.md](jit-context-system.md) is now
 drafted (2026-07-04, post-harness-4) — threads 11–13 below are the research trail behind it.
@@ -492,7 +492,7 @@ drafted (2026-07-04, post-harness-4) — threads 11–13 below are the research 
     the PR description. ~~*Open:* should `sandbox down` offer to exfiltrate the latest
     `handoff` + open `decision` notes instead of silently deleting them?~~ **Resolved
     2026-07-04:** print them to the terminal on `sandbox down`; the human graduates what
-    matters. No automatic PR/Jira writes.
+    matters. No automatic PR/issue writes.
 
 **Gap review (2026-07-04, pre-commit)** — a full pass over the feature-agent context
 surface against the three specs surfaced three gaps and two scope calls, resolved as
@@ -514,7 +514,7 @@ follows:
   service don't see each other's `contract` notes. Coordination across concurrent features
   is a human/k8s-mainline concern, not a workspace-context one — declared out of scope
   rather than left looking like a hole.
-- **Inbound external-context staleness: DEFERRED.** The Jira ticket is captured once at
+- **Inbound external-context staleness: DEFERRED.** The issue is captured once at
   workspace creation; mid-feature ticket updates and PR review feedback re-enter only via
   the human. Acceptable for now; revisit if stale-ticket confusion shows up in real
   sessions.

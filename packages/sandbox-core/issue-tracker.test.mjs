@@ -25,15 +25,52 @@ test("github tracker spans every registry repo under the org", () => {
 test("refs normalize, slug, and link", () => {
   assert.equal(it.normalizeGithubIssue("api#7"), "acme/api#7");
   assert.equal(it.normalizeGithubIssue("https://github.com/o/r/issues/9"), "o/r#9");
-  assert.equal(it.githubIssueSlug("acme/my_api#7"), "my-api-7");
+  const gh = it.issueTracker();
+  assert.equal(gh.id, "github");
+  assert.equal(gh.slug("acme/my_api#7"), "my-api-7");
+  assert.equal(gh.parseRef("api#7"), "acme/api#7");
+  assert.equal(gh.parseRef("Refs: acme/api#12 and more"), "acme/api#12");
+  assert.equal(gh.parseRef("jayboyer/proj-12-thing"), null);
+  assert.deepEqual(it.issueLink({ ISSUE_ID: "acme/api#7" }), ["acme/api#7", "https://github.com/acme/api/issues/7"]);
+  // Pre-rename .env keys still link.
   assert.deepEqual(it.issueLink({ GITHUB_ISSUE: "acme/api#7" }), ["acme/api#7", "https://github.com/acme/api/issues/7"]);
-  assert.deepEqual(it.issueLink({ JIRA_ID: "PROJ-1" }), ["PROJ-1", null]); // no jira.base_url
+  const jira = it.trackerById("jira");
+  assert.equal(jira.parseRef("https://x.atlassian.net/browse/proj-12?x=1"), "PROJ-12");
+  assert.equal(jira.parseRef("jayboyer/proj-12-thing"), "PROJ-12");
+  assert.equal(jira.url("PROJ-1"), null); // no jira.base_url
 });
 
-test("the wizard asks for a GitHub issue first, not a Jira id", () => {
-  const keys = wizardPrompts().map((p) => p.key);
-  assert.equal(keys[0], "github_issue");
-  assert.ok(!keys.includes("jira_id"));
+test("workspace.yml issue refs: issue_id, else the pre-rename keys", () => {
+  assert.equal(it.issueIdOf({ issue_id: "acme/api#1", jira_id: "PROJ-1" }), "acme/api#1");
+  assert.equal(it.issueIdOf({ jira_id: "PROJ-1" }), "PROJ-1");
+  assert.equal(it.issueIdOf({ github_issue: "acme/api#2" }), "acme/api#2");
+  assert.equal(it.issueIdOf(null), "");
+});
+
+test("the wizard's issue prompt takes the tracker's wording and pattern", () => {
+  const p = wizardPrompts();
+  assert.equal(p[0].key, "issue_id");
+  assert.match(p[0].label, /^GitHub issue/);
+  assert.equal(p[0].pattern, it.GITHUB_ISSUE_PATTERN);
+  assert.ok(!p.some((x) => x.key === "jira_id" || x.key === "github_issue"));
+});
+
+test("a briefing carries title, meta, description and the non-blank comments", () => {
+  const b = it.issueBriefing({
+    ref: "PROJ-1",
+    title: "Do the thing",
+    status: "In Progress",
+    type: "Story",
+    assignee: "Jay",
+    description: "Long body",
+    comments: [{ author: "A", created: "2026-07-01T00:00:00Z", body: "first" }, { author: "unknown", body: "no date" }],
+  });
+  assert.match(b, /^PROJ-1: Do the thing/);
+  assert.match(b, /Status: In Progress · Type: Story · Assignee: Jay/);
+  assert.match(b, /Description:\nLong body/);
+  assert.match(b, /- \[A 2026-07-01\] first/);
+  assert.match(b, /- \[unknown\] no date/);
+  assert.equal(it.issueBriefing({ ref: "PROJ-2" }), "PROJ-2: (no title)");
 });
 
 test("the issues guide routes app-code issues to the registry repos", () => {
@@ -42,8 +79,8 @@ test("the issues guide routes app-code issues to the registry repos", () => {
   assert.match(md, /gh issue list -R <owner>\/<repo>/);
 });
 
-test("the issues guide maps each type to a label, a Jira type and a template", () => {
-  const md = buildIssuesReportMd("ws");
+test("the issues guide maps each type to a label, the tracker's type and a template", () => {
+  const md = buildIssuesReportMd("ws", "", it.trackerById("jira"));
   assert.match(md, /^\| bug \| .* \| `--label bug` \| Bug \|$/m);
   assert.match(md, /^\| feature \| .* \| `--label enhancement` \| Story \|$/m);
   assert.match(md, /^\| task \| .*`--label task`.*`gh label create task -R <owner>\/<repo> --color ededed --force`.* \| Task \|$/m);
