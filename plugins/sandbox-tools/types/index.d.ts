@@ -32,9 +32,21 @@ export type FormField = {
   help: string
   kind: 'text' | 'textarea' | 'select' | 'multi'
   options: string[]
+  /** A multi-pick's options by group heading (`ui:options.groups`); {} draws them ungrouped. */
+  groups: Record<string, string[]>
   required: boolean
   pattern: string | null
   placeholder: string
+}
+
+/** The RJSF bundle getFormSchema builds: what the browser form renders, and the Create tab too. */
+export type FormBundle = {
+  schema: {
+    properties?: Record<string, { title?: string; description?: string; type?: string; enum?: string[]; pattern?: string; items?: { enum?: string[] } }>
+    required?: string[]
+  }
+  uiSchema: Record<string, unknown>
+  formData: Draft
 }
 
 /** The Create tab's values by field key; a multi-pick is a list. */
@@ -50,8 +62,11 @@ declare module 'claude-code' {
       note: string
       /** The pane's open tab. */
       tab: 'list' | 'create'
-      /** The Create tab's fields and the tracker's name for its fetch button; null until loaded. */
-      form: { fields: FormField[]; trackerLabel: string } | null
+      /**
+       * The Create tab's form as loaded and the tracker's name; null until loaded. The raw
+       * bundle, not the fields: state outlives a plugin reload, and fields are drawn from it fresh.
+       */
+      formSchema: { bundle: FormBundle; trackerLabel: string } | null
       draft: Draft
       /** '' idle, or what the Create tab is waiting on. */
       formBusy: '' | 'fetch' | 'create'

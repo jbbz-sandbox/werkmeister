@@ -1,5 +1,5 @@
 import { test, expect, mock } from 'claude-code/testing'
-import { formFields, nextTextField } from './register'
+import { formFields, nextTextField, optionGroups } from './register'
 import type { On } from 'claude-code'
 import type { Engine, Plugin } from 'claude-code/testing'
 
@@ -404,6 +404,7 @@ const BUNDLE = {
   uiSchema: {
     'ui:order': ['issue_id', 'feature', 'work_type', 'services', 'task', 'starting_prompt'],
     feature: { 'ui:placeholder': 'my-feature' },
+    services: { 'ui:widget': 'checkboxes', 'ui:options': { groups: { web: ['web'], core: ['api'] } } },
     starting_prompt: { 'ui:widget': 'textarea' },
   },
   formData: {},
@@ -493,4 +494,22 @@ test('create with a required field empty or a bad value says why and creates not
   expect((await ui.find({ text: /Work type: required/ }))?.text).toMatch(/Feature name: "Not A Slug" doesn't match[\s\S]*Work type: required/)
   expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
   await ui.unmount()
+})
+
+test('a multi-pick draws as checkboxes under its group headings, sorted, each in a fifth-width column', async ($, on) => {
+  world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  expect(await ui.find({ text: 'CORE' })).toBeDefined()
+  expect(await ui.find({ text: 'WEB' })).toBeDefined()
+  expect((await ui.find({ key: 'f:services:api' }))?.text).toBe('☐ api')
+  await ui.press({ key: 'f:services:api' })
+  expect((await ui.find({ key: 'f:services:api' }))?.text).toBe('☑ api')
+  expect((await ui.find({ key: 'cell:services:api' }))?.props.width).toBe('20%')
+  await ui.unmount()
+  const f = formFields(BUNDLE).find(x => x.key === 'services')!
+  expect(optionGroups(f)).toEqual([['core', ['api']], ['web', ['web']]])
+  expect(optionGroups({ ...f, groups: { core: ['api'] } })).toEqual([['core', ['api']], ['other', ['web']]])
+  expect(optionGroups({ ...f, groups: {} })).toEqual([['', ['api', 'web']]])
 })
