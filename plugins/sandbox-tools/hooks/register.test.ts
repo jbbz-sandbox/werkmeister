@@ -388,21 +388,70 @@ test('a session starting in a folder of workspaces opens the pane; elsewhere it 
   expect(opened()).toBe(1)
 })
 
-test('the Create tab submits the workspace skill prompt with the typed issue ID, then returns to the list', async ($, on) => {
-  const w = world(on, stubs())
-  const submitted: string[] = []
-  on('prompt.submit', (_$, e) => {
-    submitted.push(e.text)
-    return { text: e.text }
+const BUNDLE = {
+  schema: {
+    properties: {
+      issue_id: { type: 'string', title: 'GitHub issue (blank to skip)', pattern: '^$|(?:^([A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+#[0-9]+$)' },
+      feature: { type: 'string', title: 'Feature name', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
+      work_type: { type: 'string', title: 'Work type', enum: ['feature', 'bugfix'] },
+      services: { type: 'array', title: 'Local services', items: { enum: ['api', 'web'] } },
+      task: { type: 'string', title: 'Task title' },
+    },
+    required: ['feature', 'work_type'],
+  },
+  uiSchema: { 'ui:order': ['issue_id', 'feature', 'work_type', 'services', 'task'], feature: { 'ui:placeholder': 'my-feature' } },
+  formData: {},
+}
+
+function formStubs(over: Partial<McpStub> = {}): McpStub {
+  return stubs({
+    [`${WS}/form-schema`]: () => ok({ bundle: BUNDLE, trackerLabel: 'GitHub' }),
+    [`${WS}/issue-form-data`]: () => ok({ issue_id: 'acme/api#7', feature: 'rate-limit', task: 'Rate limit the API', services: ['api'] }),
+    [`${WS}/create-workspace`]: () => ok({ command: 'sandbox workspace rate-limit', workspacePath: '/ws/api-7-rate-limit' }),
+    ...over,
   })
+}
+
+test('the Create tab draws the form from the schema, the fetch button named for the tracker', async ($, on) => {
+  world(on, formStubs())
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect(await ui.find({ key: 'create:go' })).toBeUndefined()
   await ui.press({ key: 'tab:create' })
-  await ui.input({ key: 'create:issue', text: 'PROJ-9', kind: 'change' })
+  for (const key of ['f:issue_id', 'f:feature', 'f:work_type', 'f:services:api', 'f:services:web', 'f:task']) expect(await ui.find({ key })).toBeDefined()
+  expect((await ui.find({ key: 'create:fetch' }))?.text).toBe('⤓ Fetch from GitHub')
+  await ui.unmount()
+})
+
+test('fetch fills only the empty fields, then create submits the draft and returns to the list', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.input({ key: 'f:feature', text: 'my-own', kind: 'change' })
+  await ui.input({ key: 'f:issue_id', text: 'api#7', kind: 'change' })
+  await ui.press({ key: 'create:fetch' })
+  expect(w.calls.find(c => c.key === `${WS}/issue-form-data`)?.args).toEqual({ ref: 'api#7' })
+  expect((await ui.find({ text: /^Filled / }))?.text).toBe('Filled task, services from acme/api#7.')
+  await ui.press({ key: 'f:services:web' })
+  await ui.select({ key: 'f:work_type', value: 'bugfix' })
   await ui.press({ key: 'create:go' })
-  expect(submitted).toEqual(['Create a new sandbox workspace with the sandbox-workspace skill, pre-filled from issue PROJ-9.'])
-  expect(w.toasts).toEqual(['Opening the workspace form'])
+  expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
+    formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api', 'web'], work_type: 'bugfix' },
+  })
+  expect(w.toasts).toEqual(['Workspace created'])
   expect(await ui.find({ key: 'switch:abc' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('create with a required field empty or a bad value says why and creates nothing', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.input({ key: 'f:feature', text: 'Not A Slug', kind: 'change' })
+  await ui.press({ key: 'create:go' })
+  expect((await ui.find({ text: /Work type: required/ }))?.text).toMatch(/Feature name: "Not A Slug" doesn't match[\s\S]*Work type: required/)
+  expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
   await ui.unmount()
 })

@@ -1,6 +1,6 @@
 import type { Register, EngineInterface } from 'claude-code'
 
-import type { WorkspaceRow } from '../types'
+import type { Draft, FormField, WorkspaceRow } from '../types'
 
 export const PLUGIN = 'sandbox-tools'
 export const PANE = 'workspaces'
@@ -69,6 +69,12 @@ try {
     'remove-workspace': () => core.removeWorkspace(args.name),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
+    'form-schema': async () => {
+      const tracker = await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)
+      return { bundle: await core.getFormSchema(), trackerLabel: tracker.issueTracker().label }
+    },
+    'issue-form-data': () => core.fetchIssueFormData(args.ref),
+    'create-workspace': () => core.createWorkspace(args.formData),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -99,20 +105,140 @@ const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
 
-/** The prompt the Create tab submits: the form needs the Browser pane, which only a model's tool call can drive (see 1500cb1). */
+const FORM = { plugin: 'sandbox-tools', key: 'form' } as const
+const DRAFT = { plugin: 'sandbox-tools', key: 'draft' } as const
+const FORM_BUSY = { plugin: 'sandbox-tools', key: 'formBusy' } as const
+
+/** Mobile draws no Input or Select, so there the Create tab hands the form to the model instead. */
 export function createPrompt(issueId: string): string {
   const id = issueId.trim()
   return `Create a new sandbox workspace with the sandbox-workspace skill${id ? `, pre-filled from issue ${id}` : ''}.`
 }
 
-// The issue field's text as typed; a reload clears it.
-let draftIssue = ''
+type FormBundle = {
+  schema: { properties?: Record<string, { title?: string; type?: string; enum?: string[]; pattern?: string; items?: { enum?: string[] } }>; required?: string[] }
+  uiSchema: Record<string, unknown>
+  formData: Draft
+}
 
-async function create($: EngineInterface, issueId: string): Promise<void> {
-  draftIssue = ''
-  await $.state.set(TAB, 'list')
-  $.ui.toast('Opening the workspace form')
-  void $.prompt.submit({ text: createPrompt(issueId) })
+/**
+ * The create form's fields from the same RJSF bundle the browser form renders
+ * (getFormSchema: the terminal wizard's prompts), in its `ui:order`. An array
+ * with choices is a multi-pick; a string with choices a select; the rest text.
+ */
+export function formFields(bundle: FormBundle): FormField[] {
+  const props = bundle.schema.properties ?? {}
+  const order = (bundle.uiSchema['ui:order'] as string[] | undefined) ?? Object.keys(props)
+  const required = new Set(bundle.schema.required ?? [])
+  return order.flatMap(k => {
+    const p = props[k]
+    if (!p) return []
+    const ui = (bundle.uiSchema[k] ?? {}) as Record<string, unknown>
+    const options = (p.type === 'array' ? p.items?.enum : p.enum) ?? []
+    return {
+      key: k,
+      title: p.title ?? k,
+      kind: options.length === 0 ? 'text' : p.type === 'array' ? 'multi' : 'select',
+      options,
+      required: required.has(k),
+      pattern: p.pattern ?? null,
+      placeholder: typeof ui['ui:placeholder'] === 'string' ? ui['ui:placeholder'] : '',
+    } satisfies FormField
+  })
+}
+
+const isEmpty = (v: Draft[string] | undefined) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
+
+/** An issue's fields fill only what the person left empty; the issue ID itself is the lookup's normalised one. */
+export function mergeIssueFields(draft: Draft, data: Record<string, unknown>): Draft {
+  const out = { ...draft }
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v !== 'string' && !Array.isArray(v)) continue
+    if (k === 'issue_id' || isEmpty(out[k])) out[k] = Array.isArray(v) ? v.map(String) : v
+  }
+  return out
+}
+
+/** Why the draft can't be submitted, one line per field; [] when it can. */
+export function formErrors(fields: FormField[], draft: Draft): string[] {
+  const out: string[] = []
+  for (const f of fields) {
+    const v = draft[f.key]
+    if (isEmpty(v)) {
+      if (f.required) out.push(`${f.title}: required`)
+    } else if (f.pattern && typeof v === 'string' && !new RegExp(f.pattern).test(v)) {
+      out.push(`${f.title}: "${v}" doesn't match the expected format`)
+    }
+  }
+  return out
+}
+
+async function openCreate($: EngineInterface): Promise<void> {
+  await $.state.set(TAB, 'create')
+  const { value: form = null } = await $.state.get(FORM)
+  if (form) return
+  try {
+    const r = await core<{ bundle: FormBundle; trackerLabel: string }>($, 'form-schema')
+    await $.state.set(FORM, { fields: formFields(r.bundle), trackerLabel: r.trackerLabel })
+    await $.state.set(DRAFT, r.bundle.formData ?? {})
+  } catch (err) {
+    await $.state.set(NOTE, `Couldn't load the workspace form: ${(err as Error).message}`)
+  }
+}
+
+async function setField($: EngineInterface, key: string, value: string | string[]): Promise<void> {
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  await $.state.set(DRAFT, { ...draft, [key]: value })
+}
+
+async function fetchIssue($: EngineInterface): Promise<void> {
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  const ref = typeof draft.issue_id === 'string' ? draft.issue_id.trim() : ''
+  if (!ref) return
+  await $.state.set(FORM_BUSY, 'fetch')
+  try {
+    const data = await core<Record<string, unknown>>($, 'issue-form-data', { ref }, 180000)
+    if (!data.issue_id) {
+      await $.state.set(NOTE, `Couldn't read an issue from "${ref}".`)
+      return
+    }
+    const { value: now = {} } = await $.state.get(DRAFT)
+    const merged = mergeIssueFields(now, data)
+    const filled = Object.keys(data).filter(k => k !== 'issue_id' && isEmpty(now[k]) && !isEmpty(merged[k]))
+    await $.state.set(DRAFT, merged)
+    await $.state.set(NOTE, filled.length ? `Filled ${filled.join(', ')} from ${data.issue_id}.` : `${data.issue_id}: nothing new to fill.`)
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message)
+  } finally {
+    await $.state.set(FORM_BUSY, '')
+  }
+}
+
+async function submitForm($: EngineInterface): Promise<void> {
+  const { value: form = null } = await $.state.get(FORM)
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  if (!form) return
+  const errors = formErrors(form.fields, draft)
+  if (errors.length) {
+    await $.state.set(NOTE, errors.join('\n'))
+    return
+  }
+  const formData = Object.fromEntries(Object.entries(draft).filter(([, v]) => !isEmpty(v)))
+  await $.state.set(FORM_BUSY, 'create')
+  await $.state.set(NOTE, 'Creating the workspace…')
+  try {
+    const r = await core<{ command: string; workspacePath: string | null }>($, 'create-workspace', { formData }, 600000)
+    await $.state.set(DRAFT, {})
+    await $.state.set(TAB, 'list')
+    await $.state.set(NOTE, `Created ${r.workspacePath ?? r.command}`)
+    $.ui.toast('Workspace created')
+  } catch (err) {
+    // The transcript can run long; its last lines carry the failure.
+    await $.state.set(NOTE, (err as Error).message.split('\n').slice(-6).join('\n'))
+  } finally {
+    await $.state.set(FORM_BUSY, '')
+  }
+  await tick($)
 }
 
 type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'issueId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
@@ -378,24 +504,69 @@ export const register: Register = on => {
     // The workspace this session already sits in gets no Switch.
     const here = await $.session.cwd().catch(() => '')
     const { value: tab = 'list' } = await $.state.get(TAB)
-    // Mobile draws no Input; there the button alone opens a blank form.
+    // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e)
     const Input = 'Input' in els ? els.Input : null
+    const Select = 'Select' in els ? els.Select : null
 
     const tabs = (
       <Box key="tabs" gap={1} marginBottom={1}>
         <Button key="tab:list" label="Workspaces" variant={tab === 'list' ? 'primary' : 'secondary'} onPress={() => void $.state.set(TAB, 'list')} />
-        <Button key="tab:create" label="＋ Create" variant={tab === 'create' ? 'primary' : 'secondary'} onPress={() => void $.state.set(TAB, 'create')} />
+        <Button key="tab:create" label="＋ Create" variant={tab === 'create' ? 'primary' : 'secondary'} onPress={() => void openCreate($)} />
+      </Box>
+    )
+
+    const messages = (
+      <Box key="messages" flexDirection="column">
+        {note !== '' && <Box key="note"><Text>{note}</Text></Box>}
+        {error !== '' && <Box key="error"><Text color="error">{error}</Text></Box>}
       </Box>
     )
 
     if (tab === 'create') {
+      if (!Input || !Select) {
+        return (
+          <Box flexDirection="column">
+            {tabs}
+            <Button key="create:go" label="＋ Create workspace" variant="primary" onPress={() => { void $.state.set(TAB, 'list'); void $.prompt.submit({ text: createPrompt('') }) }} />
+          </Box>
+        )
+      }
+      const { value: form = null } = await $.state.get(FORM)
+      const { value: draft = {} } = await $.state.get(DRAFT)
+      const { value: formBusy = '' } = await $.state.get(FORM_BUSY)
+      const text = (k: string) => (typeof draft[k] === 'string' ? (draft[k] as string) : '')
+      const picked = (k: string) => (Array.isArray(draft[k]) ? (draft[k] as string[]) : [])
       return (
         <Box flexDirection="column">
           {tabs}
-          <Text dimColor>Opens the workspace form. An issue ID pre-fills it.</Text>
-          {Input && <Box key="issue" marginTop={1}><Input key="create:issue" label="Issue ID (optional) " value={draftIssue} submitLabel="create" onInput={v => { draftIssue = v }} onSubmit={v => void create($, v)} /></Box>}
-          <Box key="go" marginTop={1}><Button key="create:go" label="＋ Create workspace" variant="primary" onPress={() => void create($, draftIssue)} /></Box>
+          {!form && <Text dimColor>Loading the form…</Text>}
+          {form?.fields.map(f => (
+            <Box key={`field:${f.key}`} flexDirection="column" marginBottom={1}>
+              {f.kind === 'text' && (
+                <Box key={`row:${f.key}`} gap={1}>
+                  <Input key={`f:${f.key}`} label={`${f.title}${f.required ? ' *' : ''} `} placeholder={f.placeholder} value={text(f.key)} submitLabel={f.key === 'issue_id' ? 'fetch' : 'next'} onInput={v => void setField($, f.key, v)} onSubmit={v => { void setField($, f.key, v).then(() => (f.key === 'issue_id' ? fetchIssue($) : undefined)) }} />
+                  {f.key === 'issue_id' && <Button key="create:fetch" label={formBusy === 'fetch' ? 'Fetching…' : `⤓ Fetch from ${form.trackerLabel}`} variant="secondary" onPress={() => void (formBusy ? undefined : fetchIssue($))} />}
+                </Box>
+              )}
+              {f.kind === 'select' && (
+                <Select key={`f:${f.key}`} label={`${f.title}${f.required ? ' *' : ''} `} options={[{ value: '', label: '—' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />
+              )}
+              {f.kind === 'multi' && (
+                <Box key={`multi:${f.key}`} flexDirection="column">
+                  <Text>{f.title}</Text>
+                  <Box key={`opts:${f.key}`} flexWrap="wrap" columnGap={1}>
+                    {f.options.map(o => {
+                      const chosen = picked(f.key).includes(o)
+                      return <Button key={`f:${f.key}:${o}`} label={chosen ? `✓ ${o}` : o} variant={chosen ? 'primary' : 'secondary'} onPress={() => void setField($, f.key, chosen ? picked(f.key).filter(x => x !== o) : [...picked(f.key), o])} />
+                    })}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          ))}
+          {form && <Box key="go"><Button key="create:go" label={formBusy === 'create' ? 'Creating…' : '＋ Create workspace'} variant="primary" onPress={() => void (formBusy ? undefined : submitForm($))} /></Box>}
+          {messages}
         </Box>
       )
     }
@@ -439,8 +610,7 @@ export const register: Register = on => {
             )}
           </Box>
         ))}
-        {note !== '' && <Box key="note"><Text>{note}</Text></Box>}
-        {error !== '' && <Box key="error"><Text color="error">{error}</Text></Box>}
+        {messages}
       </Box>
     )
   })
