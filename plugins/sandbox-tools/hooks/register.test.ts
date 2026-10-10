@@ -366,3 +366,18 @@ test('jump focuses a session this session started, else toasts its title', async
   expect(w.toasts).toEqual(['Open "Newer in abc" from the sidebar'])
   await ui.unmount()
 })
+
+test('a session starting in a folder of workspaces opens the pane; elsewhere it does not', async ($, on) => {
+  const w = world(on, stubs())
+  // Opening the pane loads the list once.
+  const opened = () => w.calls.filter(c => c.key === `${WS}/list-workspaces`).length
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('fs.list', (_$, e) => ({ value: e.path === '/features' ? [{ name: 'ab', kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false }] : [] }))
+  on('fs.exists', (_$, e) => ({ value: e.path === '/features/ab/.sandbox/workspace.yml' }))
+  await $.session.start({ cwd: '/elsewhere', surface: 'desktop', isInteractive: true })
+  expect(opened()).toBe(0)
+  await $.session.start({ cwd: '/features', surface: null, isInteractive: false })
+  expect(opened()).toBe(0)
+  await $.session.start({ cwd: '/features', surface: 'desktop', isInteractive: true })
+  expect(opened()).toBe(1)
+})
