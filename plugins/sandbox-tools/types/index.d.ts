@@ -24,6 +24,20 @@ export type WorkspaceRow = {
   session: { id: string; title: string; link: string | null } | null
 }
 
+/** One field of the Create tab's form, from the RJSF bundle getFormSchema builds. */
+export type FormField = {
+  key: string
+  title: string
+  kind: 'text' | 'select' | 'multi'
+  options: string[]
+  required: boolean
+  pattern: string | null
+  placeholder: string
+}
+
+/** The Create tab's values by field key; a multi-pick is a list. */
+export type Draft = Record<string, string | string[]>
+
 declare module 'claude-code' {
   interface PluginState {
     'sandbox-tools': {
@@ -34,6 +48,11 @@ declare module 'claude-code' {
       note: string
       /** The pane's open tab. */
       tab: 'list' | 'create'
+      /** The Create tab's fields and the tracker's name for its fetch button; null until loaded. */
+      form: { fields: FormField[]; trackerLabel: string } | null
+      draft: Draft
+      /** '' idle, or what the Create tab is waiting on. */
+      formBusy: '' | 'fetch' | 'create'
     }
   }
 }
