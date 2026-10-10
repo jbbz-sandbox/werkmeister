@@ -97,6 +97,23 @@ const ERROR = { plugin: 'sandbox-tools', key: 'error' } as const
 const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
 const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
+const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
+
+/** The prompt the Create tab submits: the form needs the Browser pane, which only a model's tool call can drive (see 1500cb1). */
+export function createPrompt(jiraId: string): string {
+  const id = jiraId.trim()
+  return `Create a new sandbox workspace with the sandbox-workspace skill${id ? `, pre-filled from Jira ticket ${id}` : ''}.`
+}
+
+// The Jira field's text as typed; a reload clears it.
+let draftJira = ''
+
+async function create($: EngineInterface, jiraId: string): Promise<void> {
+  draftJira = ''
+  await $.state.set(TAB, 'list')
+  $.ui.toast('Opening the workspace form')
+  void $.prompt.submit({ text: createPrompt(jiraId) })
+}
 
 type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'jiraId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
 type ListResult = { workspaces: ListEntry[] }
@@ -360,9 +377,32 @@ export const register: Register = on => {
     const { value: confirm = '' } = await $.state.get(CONFIRM)
     // The workspace this session already sits in gets no Switch.
     const here = await $.session.cwd().catch(() => '')
+    const { value: tab = 'list' } = await $.state.get(TAB)
+    // Mobile draws no Input; there the button alone opens a blank form.
+    const els = $.ui.resolve(e)
+    const Input = 'Input' in els ? els.Input : null
+
+    const tabs = (
+      <Box key="tabs" gap={1} marginBottom={1}>
+        <Button key="tab:list" label="Workspaces" variant={tab === 'list' ? 'primary' : 'secondary'} onPress={() => void $.state.set(TAB, 'list')} />
+        <Button key="tab:create" label="＋ Create" variant={tab === 'create' ? 'primary' : 'secondary'} onPress={() => void $.state.set(TAB, 'create')} />
+      </Box>
+    )
+
+    if (tab === 'create') {
+      return (
+        <Box flexDirection="column">
+          {tabs}
+          <Text dimColor>Opens the workspace form. A Jira ticket pre-fills it.</Text>
+          {Input && <Box key="jira" marginTop={1}><Input key="create:jira" label="Jira ticket (optional) " placeholder="PROJ-1234" value={draftJira} submitLabel="create" onInput={v => { draftJira = v }} onSubmit={v => void create($, v)} /></Box>}
+          <Box key="go" marginTop={1}><Button key="create:go" label="＋ Create workspace" variant="primary" onPress={() => void create($, draftJira)} /></Box>
+        </Box>
+      )
+    }
 
     return (
       <Box flexDirection="column">
+        {tabs}
         {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
         {rows.map(r => (
           <Box key={`ws:${r.name}`} flexDirection="column" borderStyle="round" borderColor={BORDER[r.state]} borderDimColor={BORDER[r.state] === 'inactive' ? true : undefined} paddingX={1} marginBottom={1}>
