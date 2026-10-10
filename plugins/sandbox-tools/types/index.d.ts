@@ -34,6 +34,8 @@ export type FormField = {
   options: string[]
   /** A multi-pick's options by group heading (`ui:options.groups`); {} draws them ungrouped. */
   groups: Record<string, string[]>
+  /** A refinable field's instruction for refinePrompt ("" = its default); null when it has no Refine button. */
+  refine: string | null
   required: boolean
   pattern: string | null
   placeholder: string
@@ -69,7 +71,7 @@ declare module 'claude-code' {
       formSchema: { bundle: FormBundle; trackerLabel: string } | null
       draft: Draft
       /** '' idle, or what the Create tab is waiting on. */
-      formBusy: '' | 'fetch' | 'create'
+      formBusy: '' | 'fetch' | 'create' | 'refine'
       /** The Create tab's last-clicked text field, by key: the one drawn with a cursor. */
       focusedField: string
     }
