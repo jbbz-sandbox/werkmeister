@@ -1,6 +1,6 @@
 import type { Register, EngineInterface } from 'claude-code'
 
-import type { Draft, FormField, WorkspaceRow } from '../types'
+import type { Draft, FormBundle, FormField, WorkspaceRow } from '../types'
 
 export const PLUGIN = 'sandbox-tools'
 export const PANE = 'workspaces'
@@ -105,7 +105,7 @@ const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
 
-const FORM = { plugin: 'sandbox-tools', key: 'form' } as const
+const FORM = { plugin: 'sandbox-tools', key: 'formSchema' } as const
 const DRAFT = { plugin: 'sandbox-tools', key: 'draft' } as const
 const FORM_BUSY = { plugin: 'sandbox-tools', key: 'formBusy' } as const
 
@@ -113,15 +113,6 @@ const FORM_BUSY = { plugin: 'sandbox-tools', key: 'formBusy' } as const
 export function createPrompt(issueId: string): string {
   const id = issueId.trim()
   return `Create a new sandbox workspace with the sandbox-workspace skill${id ? `, pre-filled from issue ${id}` : ''}.`
-}
-
-type FormBundle = {
-  schema: {
-    properties?: Record<string, { title?: string; description?: string; type?: string; enum?: string[]; pattern?: string; items?: { enum?: string[] } }>
-    required?: string[]
-  }
-  uiSchema: Record<string, unknown>
-  formData: Draft
 }
 
 /**
@@ -147,11 +138,26 @@ export function formFields(bundle: FormBundle): FormField[] {
       help: p.description ?? '',
       kind: options.length ? (p.type === 'array' ? 'multi' : 'select') : ui['ui:widget'] === 'textarea' ? 'textarea' : 'text',
       options,
+      groups: (((ui['ui:options'] ?? {}) as { groups?: Record<string, string[]> }).groups) ?? {},
       required: required.has(k),
       pattern: p.pattern ?? null,
       placeholder: typeof ui['ui:placeholder'] === 'string' ? ui['ui:placeholder'] : '',
     } satisfies FormField
   })
+}
+
+/** A multi-pick draws as checkboxes in this many columns, as the browser form does. */
+const COLUMNS = 5
+
+/** [heading, options] in schema order: the bundle's groups (an option in none goes under "other"), else one unheaded group. */
+export function optionGroups(f: FormField): [string, string[]][] {
+  const headings = Object.keys(f.groups)
+  if (!headings.length) return [['', f.options]]
+  const grouped = new Set(Object.values(f.groups).flat())
+  const out: [string, string[]][] = headings.sort().map(h => [h, f.options.filter(o => f.groups[h]!.includes(o))])
+  const rest = f.options.filter(o => !grouped.has(o))
+  if (rest.length) out.push(['other', rest])
+  return out.filter(([, opts]) => opts.length > 0)
 }
 
 /** The key of the next one-line field after `key`, for Enter; null at the last. */
@@ -192,7 +198,7 @@ async function openCreate($: EngineInterface): Promise<void> {
   if (form) return
   try {
     const r = await core<{ bundle: FormBundle; trackerLabel: string }>($, 'form-schema')
-    await $.state.set(FORM, { fields: formFields(r.bundle), trackerLabel: r.trackerLabel })
+    await $.state.set(FORM, { bundle: r.bundle, trackerLabel: r.trackerLabel })
     await $.state.set(DRAFT, r.bundle.formData ?? {})
   } catch (err) {
     await $.state.set(NOTE, `Couldn't load the workspace form: ${(err as Error).message}`)
@@ -231,7 +237,7 @@ async function submitForm($: EngineInterface): Promise<void> {
   const { value: form = null } = await $.state.get(FORM)
   const { value: draft = {} } = await $.state.get(DRAFT)
   if (!form) return
-  const errors = formErrors(form.fields, draft)
+  const errors = formErrors(formFields(form.bundle), draft)
   if (errors.length) {
     await $.state.set(NOTE, errors.join('\n'))
     return
@@ -554,6 +560,7 @@ export const register: Register = on => {
         )
       }
       const { value: form = null } = await $.state.get(FORM)
+      const fields = form ? formFields(form.bundle) : []
       const { value: draft = {} } = await $.state.get(DRAFT)
       const { value: formBusy = '' } = await $.state.get(FORM_BUSY)
       const text = (k: string) => (typeof draft[k] === 'string' ? (draft[k] as string) : '')
@@ -564,7 +571,7 @@ export const register: Register = on => {
       const enter = (f: FormField, v: string) => {
         void setField($, f.key, v).then(() => {
           if (f.key === 'issue_id') return fetchIssue($)
-          const next = form && nextTextField(form.fields, f.key)
+          const next = nextTextField(fields, f.key)
           // A focus the site can't move (it doesn't hold the keys) is no error: the value is already kept.
           return next ? $.ui.focus({ requestId: PANE, key: `f:${next}` }).then(() => undefined, () => undefined) : undefined
         })
@@ -577,7 +584,7 @@ export const register: Register = on => {
           {tabs}
           {!form && <Text dimColor>Loading the form…</Text>}
           {form && <Box key="legend" marginBottom={1}><Text dimColor>Fields marked * are required.</Text></Box>}
-          {form?.fields.map(f => (
+          {form && fields.map(f => (
             <Box key={`field:${f.key}`} flexDirection="column" marginBottom={1}>
               <Text bold>{`${f.key === 'issue_id' ? `${form.trackerLabel} issue` : f.title}${f.required ? ' *' : ''}`}</Text>
               {f.help !== '' && f.key !== 'issue_id' && <Text dimColor>{f.help}</Text>}
@@ -588,14 +595,21 @@ export const register: Register = on => {
               {f.kind === 'select' && (
                 <Select key={`f:${f.key}`} options={[{ value: '', label: 'Choose…' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />
               )}
-              {f.kind === 'multi' && (
-                <Box key={`opts:${f.key}`} flexWrap="wrap" columnGap={1}>
-                  {f.options.map(o => {
-                    const chosen = picked(f.key).includes(o)
-                    return <Button key={`f:${f.key}:${o}`} label={chosen ? `✓ ${o}` : o} variant={chosen ? 'primary' : 'secondary'} onPress={() => void setField($, f.key, chosen ? picked(f.key).filter(x => x !== o) : [...picked(f.key), o])} />
-                  })}
+              {f.kind === 'multi' && optionGroups(f).map(([group, opts]) => (
+                <Box key={`group:${f.key}:${group}`} flexDirection="column" marginTop={1}>
+                  {group !== '' && <Text dimColor>{group.toUpperCase()}</Text>}
+                  <Box key={`opts:${f.key}:${group}`} flexWrap="wrap">
+                    {opts.map(o => {
+                      const chosen = picked(f.key).includes(o)
+                      return (
+                        <Box key={`cell:${f.key}:${o}`} width={`${100 / COLUMNS}%`}>
+                          <Button key={`f:${f.key}:${o}`} plain label={`${chosen ? '☑' : '☐'} ${o}`} onPress={() => void setField($, f.key, chosen ? picked(f.key).filter(x => x !== o) : [...picked(f.key), o])} />
+                        </Box>
+                      )
+                    })}
+                  </Box>
                 </Box>
-              )}
+              ))}
               {f.key === 'issue_id' && (
                 <Box key="fetch" flexDirection="column" marginTop={1}>
                   <Text dimColor>{`Optional. Reads the issue from ${form.trackerLabel} and fills in the fields below that are still empty.`}</Text>
