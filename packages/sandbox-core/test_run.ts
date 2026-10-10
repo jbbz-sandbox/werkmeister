@@ -12,7 +12,10 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 
+import { candidateServiceNames, validationRows } from "./archetypes.js";
+import { loadArchetypes, loadReposConfig, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
+import { loadFeatureRouters } from "./feature_routing.js";
 import { ProcError, runAsync } from "./proc.js";
 import { info, passthrough, raw, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
@@ -30,15 +33,31 @@ const TEST_TIMEOUT_SECONDS = 600;
 
 const CONFIG_NAMES = ["playwright.config.ts", "playwright.config.js", "playwright.config.mjs"];
 
+/** The workspace root plus each repo worktree directly under it. */
+export function playwrightSearchDirs(workspace: string): string[] {
+  const dirs = [workspace];
+  try {
+    for (const entry of fs.readdirSync(workspace, { withFileTypes: true })) {
+      if (entry.isDirectory() && fs.existsSync(path.join(workspace, entry.name, ".git"))) {
+        dirs.push(path.join(workspace, entry.name));
+      }
+    }
+  } catch {
+    // An unreadable workspace has no suite; the caller reports that.
+  }
+  return dirs;
+}
+
 /**
- * Where to run playwright: the feature's workspace if it holds a config,
- * otherwise the sandbox root.
+ * The first of *dirs* holding a playwright config, or null when none does.
  *
- * Separated out because it is the one decision here worth testing on its own —
- * choosing wrong runs the wrong suite, or none, and reports success either way.
+ * Separated out because it is the one decision here worth testing on its own.
+ * There is deliberately no fallback to the sandbox root: running whatever suite
+ * lives there (or none) against an unrelated workspace reports success either
+ * way, which is the false green this guards against.
  */
-export function playwrightCwd(workspace: string, root: string): string {
-  for (const dir of [workspace, root]) {
+export function playwrightCwd(dirs: string[]): string | null {
+  for (const dir of dirs) {
     if (!(fs.existsSync(dir) && fs.statSync(dir).isDirectory())) {
       continue;
     }
@@ -46,7 +65,35 @@ export function playwrightCwd(workspace: string, root: string): string {
       return dir;
     }
   }
-  return root;
+  return null;
+}
+
+/**
+ * What to say when the workspace has no Playwright suite: the per-service
+ * guidance that does apply, so a caller is not left with only "nothing ran".
+ */
+export function noSuiteMessage(workspace: string): string {
+  const repoNames = playwrightSearchDirs(workspace).slice(1).map((d) => path.basename(d));
+  let services = "";
+  try {
+    services = /^SERVICES=(.*)$/m.exec(fs.readFileSync(path.join(workspace, ".env"), "utf8"))?.[1] ?? "";
+  } catch {
+    // No .env: fall back to the repos' services.
+  }
+  const selected = services.split(",").map((s) => s.trim()).filter(Boolean);
+  const servicesConfig = loadServices();
+  const routers = loadFeatureRouters(servicesConfig);
+  const rows = validationRows(
+    candidateServiceNames(repoNames, loadReposConfig(), selected),
+    servicesConfig,
+    loadArchetypes(),
+    new Set(Object.keys(routers)),
+  );
+  const lines = rows.map((r) => `  - ${r.service} — test: ${r.test ?? "—"} — validate: ${r.validate}`);
+  return (
+    "No Playwright suite found for this workspace (no playwright.config.{ts,js,mjs} in the workspace root or a repo worktree), so nothing was run." +
+    (lines.length ? `\nValidate each service as follows:\n${lines.join("\n")}` : "")
+  );
 }
 
 /** The `@playwright/test` version *cwd* resolves (hoisting included), or null if none. */
@@ -62,14 +109,16 @@ export function installedPlaywrightVersion(cwd: string): string | null {
 export interface TestRunArgs {
   feature: string;
   workspace: string;
-  root: string;
   extraArgs?: string[];
   signal?: AbortSignal;
 }
 
 export interface TestRunResult {
   status: number;
-  cwd: string;
+  /** null when no suite was found and nothing ran. */
+  cwd: string | null;
+  /** Set only when nothing ran; says why and what to do instead. */
+  message?: string;
   slot: number | null;
 }
 
@@ -84,11 +133,14 @@ export interface TestRunResult {
 export async function runFeatureTests({
   feature,
   workspace,
-  root,
   extraArgs = [],
   signal,
 }: TestRunArgs): Promise<TestRunResult> {
   const slot = await getSlot(feature);
+  const cwd = playwrightCwd(playwrightSearchDirs(workspace));
+  if (cwd === null) {
+    return { status: 1, cwd, slot, message: noSuiteMessage(workspace) };
+  }
   if (slot === null) {
     // Not a refusal: routing still works by header, so the suite is worth
     // running -- the caller just needs to know why nothing is on a slot port.
@@ -102,7 +154,6 @@ export async function runFeatureTests({
     env["SANDBOX_SLOT"] = String(slot);
   }
 
-  const cwd = playwrightCwd(workspace, root);
   info(`Working directory: ${cwd}`);
   const installed = installedPlaywrightVersion(cwd);
   if (installed !== PLAYWRIGHT_VERSION) {

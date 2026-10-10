@@ -16,6 +16,8 @@ Spins up a named sandbox feature, scaffolds test files if needed, and opens a he
 
 ## Routing model (important)
 
+This skill is for front-door services (those with a `feature_router:`). A library, CLI or extension has no URL; follow the "How to validate" section of `.sandbox/sandbox-context.md` instead.
+
 The ingress host is configured per machine, not hardcoded here: it derives from
 `ingress.local_domain` in `~/.sandbox/config.yaml` joined to a service that
 declares a `feature_router:` block in `~/.sandbox/services.yaml`. `sandbox setup`
