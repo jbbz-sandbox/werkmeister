@@ -255,8 +255,13 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     const row = rows.find(r => r.name === name)
     if (!row) return
     const r = await $.mcp.call('ccd_directory', 'change_directory', { path: row.path })
-    if (r.isError) await $.state.set(NOTE, firstLine(r) || 'change_directory refused')
-    else $.ui.toast(`Switching to ${name} when this turn ends`)
+    if (r.isError) {
+      await $.state.set(NOTE, firstLine(r) || 'change_directory refused')
+      return
+    }
+    // change_directory moves the cwd only when a turn ends, and a press on an idle session starts none: submit one.
+    $.ui.toast(`Switching to ${name}`)
+    void $.prompt.submit({ text: `Switched to workspace ${name}. Read ${row.path}/CLAUDE.md, then wait for my next instruction.` })
     return
   }
 
@@ -311,19 +316,33 @@ function stopPolling(): void {
   timer = null
 }
 
+async function openPane($: EngineInterface): Promise<void> {
+  await $.ui.open({ id: PANE, title: 'Sandbox workspaces' })
+  await tick($)
+  startPolling($)
+}
+
+/** A folder of workspaces (e.g. ~/features): some direct child holds `.sandbox/workspace.yml`. */
+async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean> {
+  const entries = await $.fs.list(dir).catch(() => [])
+  for (const d of entries) {
+    if (d.kind === 'dir' && (await $.fs.exists(`${dir}/${d.name}/.sandbox/workspace.yml`))) return true
+  }
+  return false
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'workspaces', description: 'Open the sandbox workspaces pane' })
     // A hot reload drops the old environment's timer but leaves the pane open: re-arm it.
     const panes = await $.ui.panes()
     if (panes.some(p => p.id === PANE)) startPolling($)
+    else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($)
     return next(e)
   })
 
   on('command.run', { command: 'workspaces' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Sandbox workspaces' })
-    await tick($)
-    startPolling($)
+    await openPane($)
     return { text: 'Workspaces pane opened.' }
   })
 

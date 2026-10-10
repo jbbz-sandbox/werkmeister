@@ -347,13 +347,19 @@ test('a slow tick is skipped, not queued', async ($, on) => {
   expect(w.calls.filter(c => c.key === `${WS}/list-workspaces`)).toHaveLength(2)
 })
 
-test('switch calls change_directory with the workspace path and toasts', async ($, on) => {
+test('switch calls change_directory, toasts, and submits a turn so the move lands', async ($, on) => {
   const w = world(on, stubs({ 'ccd_directory/change_directory': () => ok(undefined, 'Access granted.') }))
+  const submitted: string[] = []
+  on('prompt.submit', (_$, e) => {
+    submitted.push(e.text)
+    return { text: e.text }
+  })
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'switch:abc' })
   expect(w.calls.find(c => c.key === 'ccd_directory/change_directory')?.args).toEqual({ path: '/ws/abc' })
-  expect(w.toasts).toEqual(['Switching to abc when this turn ends'])
+  expect(w.toasts).toEqual(['Switching to abc'])
+  expect(submitted).toEqual(['Switched to workspace abc. Read /ws/abc/CLAUDE.md, then wait for my next instruction.'])
   await ui.unmount()
 })
 
@@ -365,4 +371,19 @@ test('jump focuses a session this session started, else toasts its title', async
   expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')?.args).toEqual({ session_id: 'local_1', target: 'focus' })
   expect(w.toasts).toEqual(['Open "Newer in abc" from the sidebar'])
   await ui.unmount()
+})
+
+test('a session starting in a folder of workspaces opens the pane; elsewhere it does not', async ($, on) => {
+  const w = world(on, stubs())
+  // Opening the pane loads the list once.
+  const opened = () => w.calls.filter(c => c.key === `${WS}/list-workspaces`).length
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('fs.list', (_$, e) => ({ value: e.path === '/features' ? [{ name: 'ab', kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false }] : [] }))
+  on('fs.exists', (_$, e) => ({ value: e.path === '/features/ab/.sandbox/workspace.yml' }))
+  await $.session.start({ cwd: '/elsewhere', surface: 'desktop', isInteractive: true })
+  expect(opened()).toBe(0)
+  await $.session.start({ cwd: '/features', surface: null, isInteractive: false })
+  expect(opened()).toBe(0)
+  await $.session.start({ cwd: '/features', surface: 'desktop', isInteractive: true })
+  expect(opened()).toBe(1)
 })
