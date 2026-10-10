@@ -1,4 +1,5 @@
 import { test, expect, mock } from 'claude-code/testing'
+import { formFields, nextTextField } from './register'
 import type { On } from 'claude-code'
 import type { Engine, Plugin } from 'claude-code/testing'
 
@@ -395,11 +396,16 @@ const BUNDLE = {
       feature: { type: 'string', title: 'Feature name', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
       work_type: { type: 'string', title: 'Work type', enum: ['feature', 'bugfix'] },
       services: { type: 'array', title: 'Local services', items: { enum: ['api', 'web'] } },
-      task: { type: 'string', title: 'Task title' },
+      task: { type: 'string', title: 'Task title (Enter for default)', description: 'Short title for the Current Task section.' },
+      starting_prompt: { type: 'string', title: 'Starting prompt (blank to skip)' },
     },
     required: ['feature', 'work_type'],
   },
-  uiSchema: { 'ui:order': ['issue_id', 'feature', 'work_type', 'services', 'task'], feature: { 'ui:placeholder': 'my-feature' } },
+  uiSchema: {
+    'ui:order': ['issue_id', 'feature', 'work_type', 'services', 'task', 'starting_prompt'],
+    feature: { 'ui:placeholder': 'my-feature' },
+    starting_prompt: { 'ui:widget': 'textarea' },
+  },
   formData: {},
 }
 
@@ -412,15 +418,48 @@ function formStubs(over: Partial<McpStub> = {}): McpStub {
   })
 }
 
-test('the Create tab draws the form from the schema, the fetch button named for the tracker', async ($, on) => {
+test('the Create tab draws the form from the schema: titles without wizard hints, the issue named for the tracker', async ($, on) => {
   world(on, formStubs())
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect(await ui.find({ key: 'create:go' })).toBeUndefined()
   await ui.press({ key: 'tab:create' })
-  for (const key of ['f:issue_id', 'f:feature', 'f:work_type', 'f:services:api', 'f:services:web', 'f:task']) expect(await ui.find({ key })).toBeDefined()
-  expect((await ui.find({ key: 'create:fetch' }))?.text).toBe('⤓ Fetch from GitHub')
+  for (const key of ['f:issue_id', 'f:feature', 'f:work_type', 'f:services:api', 'f:services:web', 'f:task', 'f:starting_prompt']) expect(await ui.find({ key })).toBeDefined()
+  expect((await ui.find({ key: 'f:starting_prompt' }))?.type).toBe('Client')
+  expect((await ui.find({ text: 'GitHub issue' }))).toBeDefined()
+  expect((await ui.find({ text: 'Task title' }))).toBeDefined()
+  expect((await ui.find({ text: 'Feature name *' }))).toBeDefined()
+  expect((await ui.find({ text: 'Short title for the Current Task section.' }))).toBeDefined()
+  expect((await ui.find({ key: 'create:fetch' }))?.text).toBe('⤓ Fill empty fields from this issue')
   await ui.unmount()
+})
+
+test('the multi-line field types across lines and its text reaches the create call', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  for (const key of ['a', 'b', 'return', 'c', 'backspace', 'd', 'up', 'end', '!']) await ui.key({ key, in: 'f:starting_prompt' })
+  await ui.input({ key: 'f:feature', text: 'x', kind: 'change' })
+  await ui.select({ key: 'f:work_type', value: 'feature' })
+  await ui.press({ key: 'create:go' })
+  expect((w.calls.find(c => c.key === `${WS}/create-workspace`)?.args as { formData: Record<string, unknown> }).formData.starting_prompt).toBe('ab!\nd')
+  await ui.unmount()
+})
+
+test('Enter in a one-line field keeps its value; the next field it moves to skips selects, picks and multi-line fields', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.input({ key: 'f:feature', text: 'x' })
+  await ui.select({ key: 'f:work_type', value: 'feature' })
+  await ui.press({ key: 'create:go' })
+  expect((w.calls.find(c => c.key === `${WS}/create-workspace`)?.args as { formData: Record<string, unknown> }).formData.feature).toBe('x')
+  await ui.unmount()
+  const fields = formFields(BUNDLE)
+  expect(nextTextField(fields, 'feature')).toBe('task')
+  expect(nextTextField(fields, 'task')).toBeNull()
 })
 
 test('fetch fills only the empty fields, then create submits the draft and returns to the list', async ($, on) => {

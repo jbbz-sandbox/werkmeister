@@ -116,7 +116,10 @@ export function createPrompt(issueId: string): string {
 }
 
 type FormBundle = {
-  schema: { properties?: Record<string, { title?: string; type?: string; enum?: string[]; pattern?: string; items?: { enum?: string[] } }>; required?: string[] }
+  schema: {
+    properties?: Record<string, { title?: string; description?: string; type?: string; enum?: string[]; pattern?: string; items?: { enum?: string[] } }>
+    required?: string[]
+  }
   uiSchema: Record<string, unknown>
   formData: Draft
 }
@@ -124,7 +127,10 @@ type FormBundle = {
 /**
  * The create form's fields from the same RJSF bundle the browser form renders
  * (getFormSchema: the terminal wizard's prompts), in its `ui:order`. An array
- * with choices is a multi-pick; a string with choices a select; the rest text.
+ * with choices is a multi-pick; a string with choices a select; a `textarea`
+ * widget a multi-line field; the rest one line. Titles lose the wizard's
+ * terminal hints, `(blank to skip)` and the like: the form marks required
+ * fields itself and the description says the rest.
  */
 export function formFields(bundle: FormBundle): FormField[] {
   const props = bundle.schema.properties ?? {}
@@ -137,14 +143,21 @@ export function formFields(bundle: FormBundle): FormField[] {
     const options = (p.type === 'array' ? p.items?.enum : p.enum) ?? []
     return {
       key: k,
-      title: p.title ?? k,
-      kind: options.length === 0 ? 'text' : p.type === 'array' ? 'multi' : 'select',
+      title: (p.title ?? k).replace(/\s*\([^)]*\)\s*$/, ''),
+      help: p.description ?? '',
+      kind: options.length ? (p.type === 'array' ? 'multi' : 'select') : ui['ui:widget'] === 'textarea' ? 'textarea' : 'text',
       options,
       required: required.has(k),
       pattern: p.pattern ?? null,
       placeholder: typeof ui['ui:placeholder'] === 'string' ? ui['ui:placeholder'] : '',
     } satisfies FormField
   })
+}
+
+/** The key of the next one-line field after `key`, for Enter; null at the last. */
+export function nextTextField(fields: FormField[], key: string): string | null {
+  const i = fields.findIndex(f => f.key === key)
+  return fields.slice(i + 1).find(f => f.kind === 'text')?.key ?? null
 }
 
 const isEmpty = (v: Draft[string] | undefined) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
@@ -494,6 +507,14 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // The multi-line fields (textarea.tsx) post every edit as { value }; the element is `f:<field key>`.
+  on('ui.message', { requestId: PANE }, async ($, e, next) => {
+    const value = (e.data as { value?: unknown } | null)?.value
+    if (!e.element.startsWith('f:') || typeof value !== 'string') return next(e)
+    await setField($, e.element.slice(2), value)
+    return {}
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const { value: rows = [] } = await $.state.get(ROWS)
@@ -537,29 +558,49 @@ export const register: Register = on => {
       const { value: formBusy = '' } = await $.state.get(FORM_BUSY)
       const text = (k: string) => (typeof draft[k] === 'string' ? (draft[k] as string) : '')
       const picked = (k: string) => (Array.isArray(draft[k]) ? (draft[k] as string[]) : [])
+      // Desktop and terminal draw a Client: there a multi-line field is textarea.tsx; elsewhere one line.
+      const Client = 'Client' in els ? els.Client : null
+      // Enter in a one-line field moves to the next one; the issue field's Enter fills from the issue.
+      const enter = (f: FormField, v: string) => {
+        void setField($, f.key, v).then(() => {
+          if (f.key === 'issue_id') return fetchIssue($)
+          const next = form && nextTextField(form.fields, f.key)
+          // A focus the site can't move (it doesn't hold the keys) is no error: the value is already kept.
+          return next ? $.ui.focus({ requestId: PANE, key: `f:${next}` }).then(() => undefined, () => undefined) : undefined
+        })
+      }
+      const line = (f: FormField) => (
+        <Input key={`f:${f.key}`} placeholder={f.placeholder} value={text(f.key)} submitLabel={f.key === 'issue_id' ? 'fill' : 'next field'} onInput={v => void setField($, f.key, v)} onSubmit={v => enter(f, v)} />
+      )
       return (
         <Box flexDirection="column">
           {tabs}
           {!form && <Text dimColor>Loading the form…</Text>}
+          {form && <Box key="legend" marginBottom={1}><Text dimColor>Fields marked * are required.</Text></Box>}
           {form?.fields.map(f => (
             <Box key={`field:${f.key}`} flexDirection="column" marginBottom={1}>
-              {f.kind === 'text' && (
-                <Box key={`row:${f.key}`} gap={1}>
-                  <Input key={`f:${f.key}`} label={`${f.title}${f.required ? ' *' : ''} `} placeholder={f.placeholder} value={text(f.key)} submitLabel={f.key === 'issue_id' ? 'fetch' : 'next'} onInput={v => void setField($, f.key, v)} onSubmit={v => { void setField($, f.key, v).then(() => (f.key === 'issue_id' ? fetchIssue($) : undefined)) }} />
-                  {f.key === 'issue_id' && <Button key="create:fetch" label={formBusy === 'fetch' ? 'Fetching…' : `⤓ Fetch from ${form.trackerLabel}`} variant="secondary" onPress={() => void (formBusy ? undefined : fetchIssue($))} />}
-                </Box>
-              )}
+              <Text bold>{`${f.key === 'issue_id' ? `${form.trackerLabel} issue` : f.title}${f.required ? ' *' : ''}`}</Text>
+              {f.help !== '' && f.key !== 'issue_id' && <Text dimColor>{f.help}</Text>}
+              {f.kind === 'text' && line(f)}
+              {f.kind === 'textarea' && (Client
+                ? <Client key={`f:${f.key}`} module="./textarea.tsx" props={{ value: text(f.key), placeholder: f.placeholder }} />
+                : line(f))}
               {f.kind === 'select' && (
-                <Select key={`f:${f.key}`} label={`${f.title}${f.required ? ' *' : ''} `} options={[{ value: '', label: '—' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />
+                <Select key={`f:${f.key}`} options={[{ value: '', label: 'Choose…' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />
               )}
               {f.kind === 'multi' && (
-                <Box key={`multi:${f.key}`} flexDirection="column">
-                  <Text>{f.title}</Text>
-                  <Box key={`opts:${f.key}`} flexWrap="wrap" columnGap={1}>
-                    {f.options.map(o => {
-                      const chosen = picked(f.key).includes(o)
-                      return <Button key={`f:${f.key}:${o}`} label={chosen ? `✓ ${o}` : o} variant={chosen ? 'primary' : 'secondary'} onPress={() => void setField($, f.key, chosen ? picked(f.key).filter(x => x !== o) : [...picked(f.key), o])} />
-                    })}
+                <Box key={`opts:${f.key}`} flexWrap="wrap" columnGap={1}>
+                  {f.options.map(o => {
+                    const chosen = picked(f.key).includes(o)
+                    return <Button key={`f:${f.key}:${o}`} label={chosen ? `✓ ${o}` : o} variant={chosen ? 'primary' : 'secondary'} onPress={() => void setField($, f.key, chosen ? picked(f.key).filter(x => x !== o) : [...picked(f.key), o])} />
+                  })}
+                </Box>
+              )}
+              {f.key === 'issue_id' && (
+                <Box key="fetch" flexDirection="column" marginTop={1}>
+                  <Text dimColor>{`Optional. Reads the issue from ${form.trackerLabel} and fills in the fields below that are still empty.`}</Text>
+                  <Box key="fetch:row" marginTop={1}>
+                    <Button key="create:fetch" label={formBusy === 'fetch' ? 'Reading the issue…' : '⤓ Fill empty fields from this issue'} variant="secondary" onPress={() => void (formBusy ? undefined : fetchIssue($))} />
                   </Box>
                 </Box>
               )}

@@ -28,7 +28,9 @@ export type WorkspaceRow = {
 export type FormField = {
   key: string
   title: string
-  kind: 'text' | 'select' | 'multi'
+  /** The schema's description: one line under the title. */
+  help: string
+  kind: 'text' | 'textarea' | 'select' | 'multi'
   options: string[]
   required: boolean
   pattern: string | null
