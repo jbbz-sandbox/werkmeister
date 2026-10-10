@@ -13,9 +13,10 @@
  *   2. browser      — which browser `sandbox open` launches (`overrides.browser`)
  *   3. ingress      — base domains + cert directory (`ingress:`)
  *   4. registry     — which repo fragments will generate services.yaml; demo clone; k8s context
- *   5. issues       — the issue tracker (`overrides.issue_tracker`): jira, with
- *                     OPTIONAL REST credentials for the dashboard fast path, or
- *                     github, spanning every registry repo under `github_org`
+ *   5. issues       — the issue tracker (`overrides.issue_tracker`), plus that
+ *                     tracker's own setup (e.g. OPTIONAL Jira REST credentials
+ *                     for the dashboard fast path, or the registry repos under
+ *                     `github_org` for GitHub)
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
  *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings,
@@ -58,7 +59,7 @@ import {
   WORKSPACE_ROOT_REPO,
   type Step,
 } from "sandbox-core/machine_setup";
-import { ISSUE_TRACKERS, loadIssueTracker } from "sandbox-core/issue_tracker";
+import { TRACKER_IDS, loadIssueTracker, trackerById } from "sandbox-core/issue_tracker";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
 import { discoverFragments, FRAGMENT_REL, inheritedK8sContext } from "sandbox-core/registry_sync";
 import { expandUser } from "sandbox-core/config";
@@ -243,11 +244,12 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
           key: "issue_tracker",
           label: "Issue tracker",
           help:
-            "Where workspace tickets come from and where agents file existing bugs. " +
-            "jira: one ticket key per workspace. github: issues per repo, across every repo in the services registry.",
+            "Where workspace issues come from and where agents file existing bugs. " +
+            TRACKER_IDS.map((id) => `${id}: ${trackerById(id).label} (e.g. ${trackerById(id).refExample})`).join("; ") +
+            ".",
           acceptEmpty: false,
-          pattern: `(${ISSUE_TRACKERS.join("|")})`,
-          choicesFn: () => [...ISSUE_TRACKERS],
+          pattern: `(${TRACKER_IDS.join("|")})`,
+          choicesFn: () => [...TRACKER_IDS],
         },
       ],
       resolvedIssues,
@@ -270,9 +272,9 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     } else {
       info(`Tracking GitHub issues in every registry repo under ${org} (none registered yet).`);
     }
-  } else if (jiraConfigured) {
+  } else if (resolvedIssues.issue_tracker === "jira" && jiraConfigured) {
     info(`Already configured for ${jira.email}.`);
-  } else {
+  } else if (resolvedIssues.issue_tracker === "jira") {
     info(
       "A Jira API token lets the dashboard read tickets directly instead of " +
         "shelling out to the claude CLI. Entirely optional — skip to leave it out.",

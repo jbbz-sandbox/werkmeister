@@ -5,7 +5,7 @@
  *
  * Same neutral form as the browser dashboard's "New workspace" tab and the
  * localhost fallback page; only the transport differs:
- *   • the RJSF bundle arrives via `ontoolresult` (with any Jira pre-fill
+ *   • the RJSF bundle arrives via `ontoolresult` (with any issue pre-fill
  *     merged by the server), so the bridge answers `workspace-form-schema`
  *     locally instead of re-fetching (which would lose the pre-fill);
  *   • server tools go through `app.callServerTool` with bare tool names, and

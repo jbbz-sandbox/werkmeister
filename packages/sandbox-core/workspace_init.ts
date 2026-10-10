@@ -36,7 +36,7 @@ import { expandUser, getReposRoot, loadArchetypes, loadMcpServers, loadServices 
 import { SandboxError } from "./errors.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { loadPaths } from "./global_config.js";
-import { githubIssueSlug, normalizeGithubIssue } from "./issue_tracker.js";
+import { issueTracker } from "./issue_tracker.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
@@ -156,7 +156,7 @@ const _WORKSPACE_CONFIG_HEADER =
   "# AUTO-GENERATED — durable source of truth for workspace inputs.\n" +
   "# Tool:    sandbox init-workspace\n" +
   "# Source:  src/commands/init_workspace.ts :: _write_workspace_config\n" +
-  "# Edit:    Hand-edit `feature`, `repos`, `services`, `jira_id`, `task`,\n" +
+  "# Edit:    Hand-edit `feature`, `repos`, `services`, `issue_id`, `task`,\n" +
   "#          `test_path`, `description`, `labels`, or `starting_prompt` below; rerun\n" +
   "#          `sandbox init-workspace` to propagate changes into\n" +
   "#          CLAUDE.md / .env / docker-compose.yml / .sandbox/*.\n" +
@@ -236,10 +236,11 @@ const _SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // Pure helpers
 // ---------------------------------------------------------------------------
 
-export function buildWorkspaceName(feature: string, jiraId: string | null): string {
+/** `<issue slug>-<feature>`, or the feature alone. `issueSlug` is the tracker's slug of the ref. */
+export function buildWorkspaceName(feature: string, issueSlug: string | null): string {
   const featureSlug = (feature || "").trim().toLowerCase();
-  const jiraSlug = (jiraId || "").trim().toLowerCase();
-  return jiraSlug ? `${jiraSlug}-${featureSlug}` : featureSlug;
+  const prefix = (issueSlug || "").trim().toLowerCase();
+  return prefix ? `${prefix}-${featureSlug}` : featureSlug;
 }
 
 export function buildBranchName(username: string, workspaceName: string): string {
@@ -596,8 +597,7 @@ function logMeta(task: string, meta: Record<string, string>): void {
   for (const [key, label] of [
     ["FEATURE", "Feature"],
     ["SERVICES", "Services"],
-    ["JIRA_ID", "Jira"],
-    ["GITHUB_ISSUE", "Issue"],
+    ["ISSUE_ID", "Issue"],
     ["TEST_PATH", "Test path"],
   ] as Array<[string, string]>) {
     const value = meta[key];
@@ -679,8 +679,7 @@ export async function initWorkspace(
   const _INPUT_TO_META: Record<string, string> = {
     feature: "FEATURE",
     services: "SERVICES",
-    jira_id: "JIRA_ID",
-    github_issue: "GITHUB_ISSUE",
+    issue_id: "ISSUE_ID",
     test_path: "TEST_PATH",
     description: "DESCRIPTION",
   };
@@ -848,11 +847,11 @@ export async function provisionWorkspace(
 
   const featureSlug = feature.toLowerCase();
   // The wizard ran after resolveInputs, so normalize its answer here too.
-  if (resolved.github_issue) {
-    resolved.github_issue = normalizeGithubIssue(resolved.github_issue);
+  const tracker = issueTracker();
+  if (resolved.issue_id) {
+    resolved.issue_id = tracker.parseRef(resolved.issue_id) ?? resolved.issue_id;
   }
-  const ticket = (resolved.jira_id ?? "").trim() || githubIssueSlug(resolved.github_issue ?? "") || null;
-  const workspaceName = buildWorkspaceName(feature, ticket);
+  const workspaceName = buildWorkspaceName(feature, resolved.issue_id ? tracker.slug(resolved.issue_id) : null);
   if (!_SLUG_RE.test(workspaceName)) {
     fail(
       `Workspace name '${workspaceName}' is not a valid slug ` +

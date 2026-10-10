@@ -64,7 +64,7 @@ async function printNotes(feature: string): Promise<void> {
     if (!process.stdin.isTTY) {
       console.log(
         `${Colors.BOLD}Open decision notes${Colors.RESET} — graduate what ` +
-          "should outlive the feature (PR body, Jira, docs/standards); " +
+          "should outlive the feature (PR body, the issue, docs/standards); " +
           "run `sandbox notes graduate` to do it:\n",
       );
       for (const note of decisions) {

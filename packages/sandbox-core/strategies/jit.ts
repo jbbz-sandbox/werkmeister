@@ -12,6 +12,7 @@ import * as path from "node:path";
 
 import { buildTesterSpecs, writeWorkspaceAgents } from "../agent_gen.js";
 import { buildIssuesReportMd } from "../issues_report.js";
+import { issueIdOfMeta } from "../issue_tracker.js";
 import { presentArchetypes } from "../archetypes.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../claude_md.js";
 import { loadArchetypes } from "../config.js";
@@ -211,7 +212,7 @@ function init(ctx: InitContext): void {
   // CLAUDE.md's "## Issues" section points here.
   const issuesReportPath = path.join(workspaceRoot, ".sandbox", "issues-report.md");
   fs.mkdirSync(path.dirname(issuesReportPath), { recursive: true });
-  fs.writeFileSync(issuesReportPath, buildIssuesReportMd(workspaceName, meta["JIRA_ID"] ?? ""));
+  fs.writeFileSync(issuesReportPath, buildIssuesReportMd(workspaceName, issueIdOfMeta(meta)));
   success(`Wrote ${issuesReportPath}`);
 
   // 6a. Projected sb-* skills into .claude/skills/.

@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { buildIssuesReportMd } from "../issues_report.js";
+import { issueIdOfMeta } from "../issue_tracker.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { removeWorkspaceHooks } from "../hooks_gen.js";
 import { info, success, warn } from "../reporter.js";
@@ -222,7 +223,7 @@ function render(ctx: InitContext): Record<string, string> {
   const base = vars(ctx, stages);
   const files: Record<string, string> = {
     "_shared/standards.md": renderStandards(r),
-    "_shared/issues-report.md": buildIssuesReportMd(ctx.workspaceName, ctx.meta["JIRA_ID"] ?? ""),
+    "_shared/issues-report.md": buildIssuesReportMd(ctx.workspaceName, issueIdOfMeta(ctx.meta)),
   };
   stages.forEach((stage, i) => {
     files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(dirs[i], stage, {

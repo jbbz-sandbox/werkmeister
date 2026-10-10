@@ -394,7 +394,7 @@ function registerLifecycleTools(server: McpServer): void {
 const WORKSPACE_FIELDS = {
   repos: z.string().optional().describe("Comma-separated repos to check out."),
   services: z.string().optional().describe("Comma-separated services to run locally."),
-  jira_id: z.string().optional().describe("Jira ticket key or URL."),
+  issue_id: z.string().optional().describe("Issue ID or URL in this machine's issue tracker (see `sandbox setup`)."),
   work_type: z.string().optional().describe("Work type (drives the workspace phases)."),
   task: z.string().optional().describe("One-line task title."),
   description: z.string().optional().describe("Longer description."),
@@ -443,7 +443,7 @@ function registerAuthoringTools(server: McpServer): void {
     {
       title: "List sandbox workspaces",
       description:
-        "Every workspace directory under the workspaces root, with its path, Jira ticket, " +
+        "Every workspace directory under the workspaces root, with its path, issue ID, " +
         "labels and VS Code URI. Not scoped to a feature — this is the whole root, and it " +
         "lists workspaces that were never brought up.",
       inputSchema: {},
@@ -453,10 +453,10 @@ function registerAuthoringTools(server: McpServer): void {
         const result = await listWorkspaces();
         // listWorkspaces is a directory scan and reports nothing through the
         // reporter, so `content` would be empty without this. The names and
-        // tickets are the transcript; structuredContent carries the rest.
+        // issue IDs are the transcript; structuredContent carries the rest.
         raw(
           `${
-            result.workspaces.map((w) => `${w.name}${w.jiraId ? `  ${w.jiraId}` : ""}`).join("\n") ||
+            result.workspaces.map((w) => `${w.name}${w.issueId ? `  ${w.issueId}` : ""}`).join("\n") ||
             "(no workspaces)"
           }\n`,
         );

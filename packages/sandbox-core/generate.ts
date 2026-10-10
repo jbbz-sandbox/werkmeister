@@ -884,7 +884,7 @@ function avoidComposeEnvShadowing(
  * Contains all service URLs, slot info, and shared environment variables
  * needed by the feature's containers; secrets go to per-service
  * `.env.<svc>` files instead (see `writeServiceSecretEnvs`). Workspace
- * metadata keys (e.g. `FEATURE`, `SERVICES`, `JIRA_ID`, `TEST_PATH`) written
+ * metadata keys (e.g. `FEATURE`, `SERVICES`, `ISSUE_ID`, `TEST_PATH`) written
  * by `init-workspace` and not part of the generated body are preserved
  * across regeneration.
  */
@@ -1033,7 +1033,7 @@ export function writeServiceSecretEnvs(
  *
  * Any `key=value` lines that exist in the current `<workspace>/.env`
  * but are NOT produced by the generator (e.g. `FEATURE`, `SERVICES`,
- * `JIRA_ID`, `TEST_PATH` written by `init-workspace`) are prepended
+ * `ISSUE_ID`, `TEST_PATH` written by `init-workspace`) are prepended
  * as a "Workspace metadata" header so they survive regeneration.
  * *droppedKeys* are neither generated nor preserved.
  *

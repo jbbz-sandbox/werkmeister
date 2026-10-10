@@ -30,7 +30,7 @@ async function pickWorkspace(node?: WsNode): Promise<{ name: string; path: strin
   const choice = await vscode.window.showQuickPick(
     listed.workspaces.map((w) => ({
       label: w.name,
-      description: w.jiraId ?? "",
+      description: w.issueId ?? "",
       detail: w.path,
       ws: w,
     })),
@@ -123,10 +123,10 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.open", openWorkspace),
     vscode.commands.registerCommand("sandbox.switch", switchWorkspace),
 
-    vscode.commands.registerCommand("sandbox.openJira", async (node?: WsNode) => {
-      const url = node?.workspace?.jiraUrl;
+    vscode.commands.registerCommand("sandbox.openIssue", async (node?: WsNode) => {
+      const url = node?.workspace?.issueUrl;
       if (!url) {
-        void vscode.window.showInformationMessage("This workspace has no Jira ticket.");
+        void vscode.window.showInformationMessage("This workspace has no issue.");
         return;
       }
       await vscode.env.openExternal(vscode.Uri.parse(url));
@@ -176,7 +176,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       );
     }),
 
-    // The CLI's own interactive wizard does all the prompting (Jira ID
+    // The CLI's own interactive wizard does all the prompting (issue ID
     // included); a VS Code terminal is a TTY, so there is nothing to reimplement.
     vscode.commands.registerCommand("sandbox.newWorkspace", async () => {
       await runInTerminal(["workspace"], os.homedir(), "workspace");

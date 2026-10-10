@@ -29,15 +29,14 @@ import {
   approvePr,
   createWorkspace,
   postSlackReviewRequest,
-  fetchJiraFormData,
-  fetchJiraIssue,
+  fetchIssueCard,
+  fetchIssueFormData,
   getClaudeTranscript,
   listSessions,
   getClaudeTurnStatus,
   getDockerUi,
   getK8sForwardsHealth,
-  getFormSchema,
-  getJiraStatuses,
+  getIssueStatuses,
   getKubeContext,
   getOpenPrs,
   getWorkspacePRs,
@@ -57,7 +56,7 @@ import {
   WORKSPACE_ACTIONS,
   WorkspaceError,
 } from "sandbox-core";
-import { promptViaLocalhostForm } from "./lib/localhost-form.js";
+import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 // Works both from source (server.ts via tsx) and compiled (dist/server.js).
 const DIST_DIR = import.meta.filename.endsWith(".ts")
@@ -98,12 +97,12 @@ function formatCreateResult(result: Awaited<ReturnType<typeof createWorkspace>>)
 function renderWorkspaceTable(result: Awaited<ReturnType<typeof listWorkspaces>>): string {
   if (!result.workspaces.length) return `No workspaces found in ${result.root}.`;
   const rows = result.workspaces.map((w) => {
-    const jira = w.jiraId && w.jiraUrl ? `[${w.jiraId}](${w.jiraUrl})` : "—";
-    return `| [${w.name}](${w.vscodeUri}) | ${jira} |`;
+    const issue = w.issueId && w.issueUrl ? `[${w.issueId}](${w.issueUrl})` : w.issueId || "—";
+    return `| [${w.name}](${w.vscodeUri}) | ${issue} |`;
   });
   return (
     `Workspaces in ${result.root} (click a name to open in VS Code):\n\n` +
-    `| Workspace | Jira Ticket |\n| --- | --- |\n` +
+    `| Workspace | Issue |\n| --- | --- |\n` +
     rows.join("\n") +
     `\n\nFor the interactive dashboard (status, PRs, actions, chat), call the ` +
     `\`open-workspaces-ui\` tool.`
@@ -137,15 +136,15 @@ export function createServer(): McpServer {
         "then init-workspace). Opens a form to collect the inputs — inline if the " +
         "client renders MCP App UI (Claude Desktop), otherwise in the user's " +
         "browser (Claude Code CLI / VS Code). Fields come from the same prompt " +
-        "definitions as the terminal wizard. Pass a Jira ticket ID or URL as `jira` to pre-fill.",
+        "definitions as the terminal wizard. Pass an issue ID or URL as `issue` to pre-fill.",
       inputSchema: {
-        jira: z
+        issue: z
           .string()
           .optional()
           .describe(
-            "Jira ticket ID (e.g. PROJ-1234) or URL. When set, the ticket is fetched " +
-              "and used to pre-fill the form (feature, jira_id, task, description, " +
-              "starting_prompt).",
+            "Issue ID or URL in this machine's issue tracker (see `sandbox setup`). When set, " +
+              "the issue is fetched and used to pre-fill the form (feature, issue_id, task, " +
+              "description, starting_prompt).",
           ),
         open: z
           .boolean()
@@ -156,16 +155,16 @@ export function createServer(): McpServer {
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const bundle = await getFormSchema();
+        const bundle = await getFormBundle();
         let note = "";
-        const jiraRef = typeof args?.jira === "string" ? args.jira.trim() : "";
-        if (jiraRef) {
-          const jiraData = await fetchJiraFormData(jiraRef);
-          bundle.formData = { ...bundle.formData, ...jiraData };
-          const filledKey = typeof jiraData.jira_id === "string" ? jiraData.jira_id : "";
+        const issueRef = typeof args?.issue === "string" ? args.issue.trim() : "";
+        if (issueRef) {
+          const issueData = await fetchIssueFormData(issueRef);
+          bundle.formData = { ...bundle.formData, ...issueData };
+          const filledKey = typeof issueData.issue_id === "string" ? issueData.issue_id : "";
           note = filledKey
             ? ` Pre-filled from ${filledKey}; review before creating.`
-            : ` Couldn't read a ticket from “${jiraRef}”.`;
+            : ` Couldn't read an issue from “${issueRef}”.`;
         }
 
         // Inline-UI hosts (Desktop): hand the bundle to the `ui://` form, which
@@ -222,7 +221,7 @@ export function createServer(): McpServer {
         formData: z
           .record(z.string(), z.unknown())
           .describe(
-            "Submitted form fields (feature, services[], jira_id, test_path, task, …). " +
+            "Submitted form fields (feature, services[], issue_id, test_path, task, …). " +
               "Maps 1:1 onto `sandbox workspace` flags; `feature` is required.",
           ),
         open: z.boolean().optional().describe("Launch VS Code on the new workspace (default true)."),
@@ -252,7 +251,7 @@ export function createServer(): McpServer {
 
   // --- Worker tool: hand the RJSF form bundle to the browser dashboard -------
   // Data-only sibling of the `workspace` tool: returns the exact same bundle
-  // (`getFormSchema`) as structuredContent, with no UI
+  // (`getFormBundle`) as structuredContent, with no UI
   // of its own. The browser dashboard's "New workspace" tab fetches this, then
   // renders the form and calls `create-workspace` on submit — so create + list
   // live on one page without the localhost-form's separate throwaway server.
@@ -274,7 +273,7 @@ export function createServer(): McpServer {
     },
     async (): Promise<CallToolResult> => {
       try {
-        const bundle = await getFormSchema();
+        const bundle = await getFormBundle();
         return {
           content: [{ type: "text", text: `Loaded the New Workspace form (${bundle.title}).` }],
           structuredContent: bundle as unknown as Record<string, unknown>,
@@ -287,27 +286,29 @@ export function createServer(): McpServer {
     },
   );
 
-  // --- Worker tool: map a Jira ticket to New-workspace form fields ----------
-  // The browser dashboard's create form calls this from its "Fetch from Jira"
-  // button to populate fields live. Reuses the exact fetchJiraFormData the
-  // `workspace` tool uses for open-time --jira prefill, so button and flag
-  // agree. Best-effort: returns { jira_id } alone when the lookup fails.
+  // --- Worker tool: map an issue to New-workspace form fields ---------------
+  // The browser dashboard's create form calls this from its "Fetch from
+  // <tracker>" button to populate fields live. Reuses the exact
+  // fetchIssueFormData the `workspace` tool uses for open-time `issue` prefill,
+  // so button and arg agree. Best-effort: returns { issue_id } alone when the
+  // lookup fails.
   server.registerTool(
-    "jira-form-data",
+    "issue-form-data",
     {
-      title: "Jira → Form Fields",
+      title: "Issue → Form Fields",
       description:
-        "Distil a Jira ticket into New Sandbox Workspace form fields (jira_id, feature, task, " +
-        "description, starting_prompt, suggested services) from a ticket key or URL. Best-effort; " +
-        "returns just { jira_id } if the lookup fails. Called by the form's “Fetch from Jira” button.",
-      inputSchema: { ref: z.string().describe("A Jira key (e.g. PROJ-1234) or a string containing one.") },
+        "Distil an issue from this machine's issue tracker into New Sandbox Workspace form fields " +
+        "(issue_id, feature, task, description, starting_prompt, suggested services) from an issue " +
+        "ID or URL. Best-effort; returns just { issue_id } if the lookup fails. Called by the " +
+        "form's “Fetch from <tracker>” button.",
+      inputSchema: { ref: z.string().describe("An issue ID or URL, or any string containing one.") },
       outputSchema: z.object({ formData: z.record(z.string(), z.unknown()) }),
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const formData = await fetchJiraFormData(args.ref);
-        const key = typeof formData.jira_id === "string" ? formData.jira_id : "";
-        const text = key ? `Loaded form fields from ${key}.` : `No ticket found in “${args.ref}”.`;
+        const formData = await fetchIssueFormData(args.ref);
+        const key = typeof formData.issue_id === "string" ? formData.issue_id : "";
+        const text = key ? `Loaded form fields from ${key}.` : `No issue found in “${args.ref}”.`;
         return { content: [{ type: "text", text }], structuredContent: { formData } };
       } catch (e) {
         const message =
@@ -362,7 +363,7 @@ export function createServer(): McpServer {
   // --- App tool: list workspaces (inline table UI, or markdown fallback) -----
   // Like `workspace`, this adapts to the client (see `hostRendersUi`):
   //   • Desktop renders the bundled table UI (mcp-list.html) inline via `_meta.ui`;
-  //     rows open in VS Code (`open-workspace`) or link to Jira.
+  //     rows open in VS Code (`open-workspace`) or link to their issue.
   //   • Claude Code CLI / VS Code get a markdown table instead (their link
   //     renderers ignore `vscode://`, so they should call `open-workspace`).
   // Both paths return the same structuredContent, so the model always sees the list.
@@ -372,7 +373,7 @@ export function createServer(): McpServer {
     {
       title: "List Sandbox Workspaces",
       description:
-        "List the workspaces under $SANDBOX_WORKSPACES_ROOT (workspace name + Jira ticket). " +
+        "List the workspaces under $SANDBOX_WORKSPACES_ROOT (workspace name + issue). " +
         "Renders an interactive table inline where the client supports MCP App UI (Claude " +
         "Desktop), otherwise a markdown table. To open one in VS Code, call `open-workspace` " +
         "with the name.",
@@ -384,8 +385,8 @@ export function createServer(): McpServer {
             name: z.string(),
             path: z.string(),
             vscodeUri: z.string(),
-            jiraId: z.string().nullable(),
-            jiraUrl: z.string().nullable(),
+            issueId: z.string().nullable(),
+            issueUrl: z.string().nullable(),
             labels: z.array(z.string()),
           }),
         ),
@@ -589,28 +590,28 @@ export function createServer(): McpServer {
     },
   );
 
-  // --- Tool: current Jira status for a batch of ticket keys ------------------
-  // One `claude` CLI + Atlassian call for all keys; the table fills the Jira
-  // status badges asynchronously (same fill-in pattern as workspace-prs).
+  // --- Tool: current issue status for a batch of issue refs ------------------
+  // One tracker lookup for all refs; the table fills the issue status badges
+  // asynchronously (same fill-in pattern as workspace-prs).
   server.registerTool(
-    "jira-statuses",
+    "issue-statuses",
     {
-      title: "Jira Ticket Statuses",
+      title: "Issue Statuses",
       description:
-        "Fetch the current Jira status name for a batch of issue keys (e.g. PROJ-1234) in one " +
-        "lookup. Best-effort: keys that can't be fetched are omitted from the result.",
+        "Fetch the current status name for a batch of issue IDs in this machine's issue tracker " +
+        "in one lookup. Best-effort: issues that can't be fetched are omitted from the result.",
       inputSchema: {
-        keys: z.array(z.string()).describe("Jira issue keys, e.g. [\"PROJ-1234\", \"PROJ-1300\"]."),
+        refs: z.array(z.string()).describe("Issue IDs in the configured tracker."),
         refresh: z
           .boolean()
           .optional()
-          .describe("Bypass the cache and re-fetch every key from Jira."),
+          .describe("Bypass the cache and re-fetch every issue from the tracker."),
       },
       outputSchema: z.object({ statuses: z.record(z.string(), z.string()) }),
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const statuses = await getJiraStatuses(args.keys ?? [], { refresh: args.refresh });
+        const statuses = await getIssueStatuses(args.refs ?? [], { refresh: args.refresh });
         const text =
           Object.entries(statuses)
             .map(([k, s]) => `${k}: ${s}`)
@@ -627,6 +628,18 @@ export function createServer(): McpServer {
     },
   );
 
+  // An `Issue` (sandbox-core/issue_tracker): the `issue` card and pr-reconcile's issue.
+  const issueSchema = z.object({
+    ref: z.string(),
+    title: z.string().optional(),
+    status: z.string().optional(),
+    type: z.string().optional(),
+    assignee: z.string().optional(),
+    description: z.string().optional(),
+    url: z.string().optional(),
+    comments: z.array(z.object({ author: z.string(), created: z.string().optional(), body: z.string() })).optional(),
+  });
+
   // --- Tool: open PRs across the org (dashboard "Open Pull Requests" tab) -----
   const openPrSchema = z.object({
     url: z.string(),
@@ -640,8 +653,8 @@ export function createServer(): McpServer {
     failingChecks: z.number(),
     outOfDate: z.boolean(),
     hasApprovalLabel: z.boolean(),
-    jiraKey: z.string().nullable(),
-    jiraUrl: z.string().nullable(),
+    issueId: z.string().nullable(),
+    issueUrl: z.string().nullable(),
     isDraft: z.boolean(),
   });
   server.registerTool(
@@ -650,8 +663,8 @@ export function createServer(): McpServer {
       title: "Open Pull Requests",
       description:
         "List open PRs across the sandbox org (younger than 30 days): my own PRs and other " +
-        "members' ready-for-human-approval PRs, each with review/check/label state and its Jira " +
-        "key. Best-effort — a PR whose details can't be read degrades to a stub card.",
+        "members' ready-for-human-approval PRs, each with review/check/label state and its issue " +
+        "ID. Best-effort — a PR whose details can't be read degrades to a stub card.",
       inputSchema: {},
       outputSchema: z.object({
         me: z.string(),
@@ -731,30 +744,22 @@ export function createServer(): McpServer {
     },
   );
 
-  // --- Tool: fetch a compact Jira card (best-effort) --------------------------
+  // --- Tool: fetch a compact issue card (best-effort) -------------------------
   server.registerTool(
-    "jira-issue",
+    "issue",
     {
-      title: "Jira Issue Card",
+      title: "Issue Card",
       description:
-        "Fetch a compact Jira card (key, summary, status, type, assignee, description, url) for a " +
-        "ticket key or any string containing one. Best-effort: returns `{ key }` alone if the " +
-        "lookup fails.",
-      inputSchema: { ref: z.string().describe("A Jira key (e.g. PROJ-1234) or a string containing one.") },
-      outputSchema: z.object({
-        key: z.string(),
-        summary: z.string().optional(),
-        status: z.string().optional(),
-        type: z.string().optional(),
-        assignee: z.string().optional(),
-        description: z.string().optional(),
-        url: z.string().optional(),
-      }),
+        "Fetch a compact issue card (ref, title, status, type, assignee, description, url, comments) " +
+        "from this machine's issue tracker for an issue ID or any string containing one. " +
+        "Best-effort: returns `{ ref }` alone if the lookup fails.",
+      inputSchema: { ref: z.string().describe("An issue ID or URL, or any string containing one.") },
+      outputSchema: issueSchema,
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const result = await fetchJiraIssue(args.ref);
-        const text = result.summary ? `${result.key}: ${result.summary}` : result.key || "No ticket.";
+        const result = await fetchIssueCard(args.ref);
+        const text = result.title ? `${result.ref}: ${result.title}` : result.ref || "No issue.";
         return {
           content: [{ type: "text", text }],
           structuredContent: result as unknown as Record<string, unknown>,
@@ -771,33 +776,25 @@ export function createServer(): McpServer {
   server.registerTool(
     "pr-reconcile",
     {
-      title: "Reconcile PR with Jira",
+      title: "Reconcile PR with Issue",
       description:
-        "Gather a PR's Jira ticket, description, and diff, then launch a headless, tool-restricted " +
+        "Gather a PR's issue, description, and diff, then launch a headless, tool-restricted " +
         "`claude -p` session (context handed off at spawn) in a background Terminal window to " +
         "reconcile the two. Returns " +
         "the `sessionKey` the dashboard chat panel streams from (a `reconcile:<repo>-<number>` key).",
       inputSchema: {
         url: z.string().describe("The pull request URL to reconcile."),
-        jiraKey: z.string().optional().describe("Jira key hint (e.g. PROJ-1234); inferred from the PR when omitted."),
+        issueRef: z.string().optional().describe("Issue ID hint; inferred from the PR when omitted."),
       },
       outputSchema: z.object({
         sessionKey: z.string(),
         slug: z.string(),
-        jira: z.object({
-          key: z.string(),
-          summary: z.string().optional(),
-          status: z.string().optional(),
-          type: z.string().optional(),
-          assignee: z.string().optional(),
-          description: z.string().optional(),
-          url: z.string().optional(),
-        }),
+        issue: issueSchema,
       }),
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const result = await launchPrReconcile(args.url, args.jiraKey);
+        const result = await launchPrReconcile(args.url, args.issueRef);
         return {
           content: [{ type: "text", text: `Launched reconcile session ${result.sessionKey} for ${args.url}.` }],
           structuredContent: result as unknown as Record<string, unknown>,

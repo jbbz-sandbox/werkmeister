@@ -243,7 +243,7 @@ Working notes live in [.sandbox/notes/](.sandbox/notes/) — \`NNN-<type>-<slug>
 Read relevant notes first; skip \`status: superseded\`. \`decision\` notes are binding and override task-level instincts — on conflict, raise it to the user rather than picking a side.
 ${contractRule}`;
 
-  // Current Task — the Jira ticket or GitHub issue inlined when available. The
+  // Current Task — the workspace's issue inlined when available. The
   // task description, when provided, fills the "what + why" body; otherwise an
   // HTML comment prompts the developer to write a 1-2 sentence "what + why"
   // rather than leaving the workspace context with only the task title.
@@ -285,7 +285,7 @@ ${routingSection}
 ${codeStandardsSection}${notesSection}
 ## Issues
 
-Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's code? If this workspace's changes caused a bug, fix it here; otherwise file an issue (bug | feature | task) where it belongs (the sandbox repo, or this machine's Jira/GitHub tracker) and report the URL. Rules, labels and templates: [.sandbox/issues-report.md](.sandbox/issues-report.md).
+Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's code? If this workspace's changes caused a bug, fix it here; otherwise file an issue (bug | feature | task) where it belongs (the sandbox repo, or this machine's issue tracker) and report the URL. Rules, labels and templates: [.sandbox/issues-report.md](.sandbox/issues-report.md).
 `;
 }
 

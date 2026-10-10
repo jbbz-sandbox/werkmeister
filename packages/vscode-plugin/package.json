@@ -56,8 +56,8 @@
         "icon": "$(arrow-right)"
       },
       {
-        "command": "sandbox.openJira",
-        "title": "Open Jira Issue",
+        "command": "sandbox.openIssue",
+        "title": "Open Issue",
         "category": "Sandbox",
         "icon": "$(link-external)"
       },
@@ -214,7 +214,7 @@
           "group": "2_inspect@2"
         },
         {
-          "command": "sandbox.openJira",
+          "command": "sandbox.openIssue",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
           "group": "2_inspect@3"
         },
@@ -226,7 +226,7 @@
       ],
       "commandPalette": [
         {
-          "command": "sandbox.openJira",
+          "command": "sandbox.openIssue",
           "when": "false"
         },
         {

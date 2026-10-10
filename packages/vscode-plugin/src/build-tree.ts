@@ -11,8 +11,8 @@
 export interface WorkspaceEntryLike {
   name: string;
   path: string;
-  jiraId: string | null;
-  jiraUrl: string | null;
+  issueId: string | null;
+  issueUrl: string | null;
   labels: string[];
 }
 
@@ -51,7 +51,7 @@ export interface WsNode {
   icon: { id: string; color?: string };
   contextValue: string;
   expanded: boolean;
-  workspace?: { name: string; path: string; feature: string | null; jiraUrl: string | null };
+  workspace?: { name: string; path: string; feature: string | null; issueUrl: string | null };
   service?: { name: string; workspacePath: string; feature: string | null; leave: boolean };
   /** Command id to run when the node is clicked, if any. */
   command?: string;
@@ -200,7 +200,7 @@ function workspaceNode(
   else if (status && status.total > 0) bits.push(`${status.running}/${status.total}`);
   else bits.push("down");
   if (status?.slot != null) bits.push(`slot ${status.slot}`);
-  if (ws.jiraId) bits.push(ws.jiraId);
+  if (ws.issueId) bits.push(ws.issueId);
 
   const tip = [
     ws.path,
@@ -220,7 +220,7 @@ function workspaceNode(
     // window's own workspace; every workspace `when` regex tolerates it.
     contextValue: `workspace:${state}${isCurrent ? ":current" : ""}`,
     expanded: isCurrent,
-    workspace: { name: ws.name, path: ws.path, feature, jiraUrl: ws.jiraUrl },
+    workspace: { name: ws.name, path: ws.path, feature, issueUrl: ws.issueUrl },
     children: (status?.services ?? []).map((s) => serviceNode(s, ws, feature, intercepts)),
   };
 }

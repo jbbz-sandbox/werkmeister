@@ -1,6 +1,6 @@
 /**
- * Persistent, cross-process TTL cache for the claude-backed Jira lookups
- * (status pills + form briefing). One JSON file at ~/.sandbox/jira-cache.json
+ * Persistent, cross-process TTL cache for the issue-tracker lookups
+ * (status pills + form briefing). One JSON file at ~/.sandbox/issue-cache.json
  * holds namespaced `{ v, at }` entries, shared by the long-lived MCP server and
  * the short-lived browser-form CLI. Reads load the file on demand; writes
  * re-read-merge-and-atomically-rename so concurrent writers don't clobber each
@@ -30,7 +30,7 @@ export interface CacheEntry<T> {
 type Store = Record<string, { v: unknown; at: number }>;
 
 function cacheFilePath(): string {
-  return process.env.SANDBOX_CACHE_FILE || path.join(os.homedir(), ".sandbox", "jira-cache.json");
+  return process.env.SANDBOX_CACHE_FILE || path.join(os.homedir(), ".sandbox", "issue-cache.json");
 }
 
 async function readStore(): Promise<Store> {

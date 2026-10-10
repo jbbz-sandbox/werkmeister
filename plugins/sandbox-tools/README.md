@@ -25,7 +25,7 @@ sandbox environment.
 
 | Mod | What it does |
 |-----|--------------|
-| `/workspaces` | Opens by itself when an interactive session starts in a folder of workspaces (one whose child holds `.sandbox/workspace.yml`, e.g. `~/features`). A docked pane with one card per workspace: border colour by state, task title, Jira key, description, work type, current ICM stage (the first `stages/*/output/` still empty), container counts, the Claude working/waiting flag coloured at the header's right edge, and the newest Claude session title with where it lives (Desktop, VS Code, CLI). The workspace this session sits in shows no Switch. Up / Stop / Restart / Down / Remove run sandbox-core in a `node` child (a plugin's call to its own MCP server is refused by the desktop's auto mode; a host process is not); Remove asks twice. Switch moves this session into the workspace folder. Jump focuses the desktop session open in that folder, opens VS Code on the folder when the newest session came from VS Code, else resumes it in a Terminal window. A Workspaces | ＋ Create tab bar heads the pane; the Create tab takes an optional Jira ticket and submits a turn asking for the `sandbox-workspace` skill, since only a model tool call can load the form into the Browser pane. Source: [`hooks/register.tsx`](hooks/register.tsx). |
+| `/workspaces` | Opens by itself when an interactive session starts in a folder of workspaces (one whose child holds `.sandbox/workspace.yml`, e.g. `~/features`). A docked pane with one card per workspace: border colour by state, task title, issue ID, description, work type, current ICM stage (the first `stages/*/output/` still empty), container counts, the Claude working/waiting flag coloured at the header's right edge, and the newest Claude session title with where it lives (Desktop, VS Code, CLI). The workspace this session sits in shows no Switch. Up / Stop / Restart / Down / Remove run sandbox-core in a `node` child (a plugin's call to its own MCP server is refused by the desktop's auto mode; a host process is not); Remove asks twice. Switch moves this session into the workspace folder. Jump focuses the desktop session open in that folder, opens VS Code on the folder when the newest session came from VS Code, else resumes it in a Terminal window. A Workspaces | ＋ Create tab bar heads the pane; the Create tab takes an optional issue ID and submits a turn asking for the `sandbox-workspace` skill, since only a model tool call can load the form into the Browser pane. Source: [`hooks/register.tsx`](hooks/register.tsx). |
 
 Probe findings (2026-10-09): `change_directory` from a plugin call: yes, after the person approves the folder. `claude://` link in a pane focuses the session: no, the desktop pane draws nothing for it. Fallback taken: the session entry is text plus a Jump button that calls `ccd_window` `open_session_in`, which only focuses sessions this one started; otherwise it toasts the title to open from the sidebar.
 
@@ -44,7 +44,7 @@ generated from [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/
 
 The plugin's [`.mcp.json`](./.mcp.json) auto-wires an MCP server (`sandbox dashboard`,
 source in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard)) exposing ~26 tools —
-workspace create/manage, PR review, Jira lookups, k8s/kube health, and a Claude
+workspace create/manage, PR review, issue lookups, k8s/kube health, and a Claude
 session bridge — with **one form definition and graceful UI degradation per client**:
 
 | Surface | How it connects | UI |
@@ -56,7 +56,7 @@ session bridge — with **one form definition and graceful UI degradation per cl
 The server detects whether the client renders MCP App UI (`io.modelcontextprotocol/ui`
 capability); every tool also returns markdown/text, so any host degrades gracefully.
 Call the create tool directly: `mcp__sandbox-workspace__workspace` (optionally
-`{ "jira": "PROJ-1234" }`). Full tool table in the
+`{ "issue": "<issue ID>" }`). Full tool table in the
 [app README](../../apps/sandbox-dashboard/README.md).
 
 ### Register on Claude Desktop
@@ -72,9 +72,9 @@ Plugins don't install in Desktop, so add the same server to
 - **MCP server build:** run `cd apps/sandbox-dashboard && npm run build` once — `sandbox dashboard`
   runs the compiled `dist/main.js`. Without it, the server won't start.
 - The `sandbox` CLI must be on `PATH` (e.g. `~/.local/bin/sandbox`), and Docker running.
-- **Self-contained:** the workspace form and its "Refine with Claude" / Jira-fetch logic
+- **Self-contained:** the workspace form and its "Refine with Claude" / issue-fetch logic
   live in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard) — no external skill is required.
-  Jira fetch/refine uses the local `claude` CLI's Atlassian MCP.
+  Issues come from the tracker picked in `sandbox setup`; refine uses the local `claude` CLI.
 
 ## Install
 

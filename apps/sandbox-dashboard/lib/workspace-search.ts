@@ -11,7 +11,7 @@
  * (server-side WorkspaceEntry, browser-side copy) don't have to match exactly. */
 export interface SearchableWorkspace {
   name: string;
-  jiraId?: string | null;
+  issueId?: string | null;
   labels?: string[];
 }
 
@@ -23,7 +23,7 @@ export interface RepoPr {
 }
 
 export interface FilterWorkspacesOptions {
-  /** Jira issue key -> status text. */
+  /** Issue ID -> status text. */
   statuses?: Record<string, string>;
   /** workspace name -> Claude session state. */
   cstateByWs?: Record<string, { state?: string } | undefined>;
@@ -35,8 +35,8 @@ function haystack(w: SearchableWorkspace, opts: FilterWorkspacesOptions): string
   const repos = opts.prsByWs?.[w.name] || [];
   const parts = [
     w.name,
-    w.jiraId || "",
-    (w.jiraId && opts.statuses?.[w.jiraId]) || "",
+    w.issueId || "",
+    (w.issueId && opts.statuses?.[w.issueId]) || "",
     opts.cstateByWs?.[w.name]?.state || "",
     ...(w.labels || []),
     ...repos.flatMap((r) => [r.repo, r.branch, r.title, r.state].filter(Boolean) as string[]),
@@ -75,7 +75,7 @@ function parseQuery(raw: string): ParsedQuery {
 
 /**
  * Filter `all` down to entries matching `query` (substring match, terms
- * AND-combined, `-term` excludes, `a|b` ORs) across name/jiraId/status/
+ * AND-combined, `-term` excludes, `a|b` ORs) across name/issueId/status/
  * session-state/labels/repo-PR text. Empty/whitespace query returns `all`
  * unchanged. Preserves the original order of `all`.
  */
