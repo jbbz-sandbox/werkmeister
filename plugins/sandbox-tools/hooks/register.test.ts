@@ -1,5 +1,5 @@
 import { test, expect, mock } from 'claude-code/testing'
-import { formFields, nextTextField, optionGroups } from './register'
+import { optionGroups, formFields } from './register'
 import type { On } from 'claude-code'
 import type { Engine, Plugin } from 'claude-code/testing'
 
@@ -441,26 +441,33 @@ test('the multi-line field types across lines and its text reaches the create ca
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'tab:create' })
   for (const key of ['a', 'b', 'return', 'c', 'backspace', 'd', 'up', 'end', '!']) await ui.key({ key, in: 'f:starting_prompt' })
-  await ui.input({ key: 'f:feature', text: 'x', kind: 'change' })
+  await ui.post({ value: 'x' }, { in: 'f:feature' })
   await ui.select({ key: 'f:work_type', value: 'feature' })
   await ui.press({ key: 'create:go' })
   expect((w.calls.find(c => c.key === `${WS}/create-workspace`)?.args as { formData: Record<string, unknown> }).formData.starting_prompt).toBe('ab!\nd')
   await ui.unmount()
 })
 
-test('Enter in a one-line field keeps its value; the next field it moves to skips selects, picks and multi-line fields', async ($, on) => {
+test('text fields are plugin-drawn editors: a click draws the cursor in that field alone; Enter in the issue field fills from the issue', async ($, on) => {
   const w = world(on, formStubs())
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'tab:create' })
-  await ui.input({ key: 'f:feature', text: 'x' })
+  for (const key of ['f:issue_id', 'f:feature', 'f:task']) expect((await ui.find({ key }))?.type).toBe('Client')
+  const focusedOf = async (key: string) => ((await ui.find({ key }))?.props.props as { focused: boolean }).focused
+  await ui.pointer({ type: 'down', x: 1, y: 0, button: 'left', in: 'f:feature' })
+  expect([await focusedOf('f:feature'), await focusedOf('f:task')]).toEqual([true, false])
+  await ui.pointer({ type: 'down', x: 1, y: 0, button: 'left', in: 'f:task' })
+  expect([await focusedOf('f:feature'), await focusedOf('f:task')]).toEqual([false, true])
+  // A one-line Enter adds no line.
+  for (const key of ['a', 'return', 'b']) await ui.key({ key, in: 'f:task' })
+  for (const key of ['a', 'p', 'i', '#', '7', 'return']) await ui.key({ key, in: 'f:issue_id' })
+  expect(w.calls.find(c => c.key === `${WS}/issue-form-data`)?.args).toEqual({ ref: 'api#7' })
+  await ui.post({ value: 'x' }, { in: 'f:feature' })
   await ui.select({ key: 'f:work_type', value: 'feature' })
   await ui.press({ key: 'create:go' })
-  expect((w.calls.find(c => c.key === `${WS}/create-workspace`)?.args as { formData: Record<string, unknown> }).formData.feature).toBe('x')
+  expect((w.calls.find(c => c.key === `${WS}/create-workspace`)?.args as { formData: Record<string, unknown> }).formData.task).toBe('ab')
   await ui.unmount()
-  const fields = formFields(BUNDLE)
-  expect(nextTextField(fields, 'feature')).toBe('task')
-  expect(nextTextField(fields, 'task')).toBeNull()
 })
 
 test('fetch fills only the empty fields, then create submits the draft and returns to the list', async ($, on) => {
@@ -468,8 +475,8 @@ test('fetch fills only the empty fields, then create submits the draft and retur
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'tab:create' })
-  await ui.input({ key: 'f:feature', text: 'my-own', kind: 'change' })
-  await ui.input({ key: 'f:issue_id', text: 'api#7', kind: 'change' })
+  await ui.post({ value: 'my-own' }, { in: 'f:feature' })
+  await ui.post({ value: 'api#7' }, { in: 'f:issue_id' })
   await ui.press({ key: 'create:fetch' })
   expect(w.calls.find(c => c.key === `${WS}/issue-form-data`)?.args).toEqual({ ref: 'api#7' })
   expect((await ui.find({ text: /^Filled / }))?.text).toBe('Filled task, services from acme/api#7.')
@@ -489,7 +496,7 @@ test('create with a required field empty or a bad value says why and creates not
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'tab:create' })
-  await ui.input({ key: 'f:feature', text: 'Not A Slug', kind: 'change' })
+  await ui.post({ value: 'Not A Slug' }, { in: 'f:feature' })
   await ui.press({ key: 'create:go' })
   expect((await ui.find({ text: /Work type: required/ }))?.text).toMatch(/Feature name: "Not A Slug" doesn't match[\s\S]*Work type: required/)
   expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
