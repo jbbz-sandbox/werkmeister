@@ -255,8 +255,13 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     const row = rows.find(r => r.name === name)
     if (!row) return
     const r = await $.mcp.call('ccd_directory', 'change_directory', { path: row.path })
-    if (r.isError) await $.state.set(NOTE, firstLine(r) || 'change_directory refused')
-    else $.ui.toast(`Switching to ${name} when this turn ends`)
+    if (r.isError) {
+      await $.state.set(NOTE, firstLine(r) || 'change_directory refused')
+      return
+    }
+    // change_directory moves the cwd only when a turn ends, and a press on an idle session starts none: submit one.
+    $.ui.toast(`Switching to ${name}`)
+    void $.prompt.submit({ text: `Switched to workspace ${name}. Read ${row.path}/CLAUDE.md, then wait for my next instruction.` })
     return
   }
 

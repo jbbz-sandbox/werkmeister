@@ -347,13 +347,19 @@ test('a slow tick is skipped, not queued', async ($, on) => {
   expect(w.calls.filter(c => c.key === `${WS}/list-workspaces`)).toHaveLength(2)
 })
 
-test('switch calls change_directory with the workspace path and toasts', async ($, on) => {
+test('switch calls change_directory, toasts, and submits a turn so the move lands', async ($, on) => {
   const w = world(on, stubs({ 'ccd_directory/change_directory': () => ok(undefined, 'Access granted.') }))
+  const submitted: string[] = []
+  on('prompt.submit', (_$, e) => {
+    submitted.push(e.text)
+    return { text: e.text }
+  })
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'switch:abc' })
   expect(w.calls.find(c => c.key === 'ccd_directory/change_directory')?.args).toEqual({ path: '/ws/abc' })
-  expect(w.toasts).toEqual(['Switching to abc when this turn ends'])
+  expect(w.toasts).toEqual(['Switching to abc'])
+  expect(submitted).toEqual(['Switched to workspace abc. Read /ws/abc/CLAUDE.md, then wait for my next instruction.'])
   await ui.unmount()
 })
 
