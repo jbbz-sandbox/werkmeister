@@ -188,6 +188,70 @@ export function formErrors(fields: FormField[], draft: Draft): string[] {
   return out
 }
 
+/**
+ * Values from the workspace_form tool laid over the draft: a key the form doesn't
+ * have, a choice it doesn't offer or a value of the wrong shape is left out and
+ * named in `problems`. "" or [] clears a field; a multi-pick also takes "a, b".
+ */
+export function applyFormFields(fields: FormField[], draft: Draft, input: Record<string, unknown>): { draft: Draft; problems: string[] } {
+  const out = { ...draft }
+  const problems: string[] = []
+  for (const [k, raw] of Object.entries(input)) {
+    const f = fields.find(x => x.key === k)
+    if (!f) {
+      problems.push(`${k}: no such field (fields: ${fields.map(x => x.key).join(', ')})`)
+      continue
+    }
+    if (f.kind === 'multi') {
+      const list = typeof raw === 'string' ? raw.split(',').map(s => s.trim()).filter(Boolean) : raw
+      if (!Array.isArray(list) || !list.every(v => typeof v === 'string')) {
+        problems.push(`${k}: expected a list of choices`)
+        continue
+      }
+      const bad = list.filter(v => !f.options.includes(v))
+      if (bad.length) problems.push(`${k}: not offered: ${bad.join(', ')} (choices: ${f.options.join(', ')})`)
+      out[k] = list.filter(v => f.options.includes(v))
+      continue
+    }
+    if (typeof raw !== 'string') {
+      problems.push(`${k}: expected text`)
+      continue
+    }
+    if (f.kind === 'select' && raw !== '' && !f.options.includes(raw)) {
+      problems.push(`${k}: "${raw}" is not offered (choices: ${f.options.join(', ')})`)
+      continue
+    }
+    out[k] = raw
+  }
+  return { draft: out, problems }
+}
+
+const FORM_TOOL = 'workspace_form'
+
+/** The workspace_form tool: fill the Create tab from the prompt, then the person reviews and creates. */
+async function fillFormTool($: EngineInterface, input: Record<string, unknown>): Promise<string> {
+  await openPane($)
+  await openCreate($)
+  const { value: form = null } = await $.state.get(FORM)
+  if (!form) {
+    const { value: note = '' } = await $.state.get(NOTE)
+    return note || "Couldn't load the workspace form."
+  }
+  const fields = formFields(form.bundle)
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  const given = input.fields && typeof input.fields === 'object' && !Array.isArray(input.fields) ? (input.fields as Record<string, unknown>) : {}
+  const r = applyFormFields(fields, draft, given)
+  await $.state.set(DRAFT, r.draft)
+  const missing = formErrors(fields, r.draft)
+  return [
+    `The Create tab of the /workspaces pane now holds:`,
+    JSON.stringify(r.draft, null, 2),
+    r.problems.length ? `Left out:\n- ${r.problems.join('\n- ')}` : '',
+    missing.length ? `Still needed before Create:\n- ${missing.join('\n- ')}` : 'Ready: the person presses ＋ Create workspace in the pane to create it.',
+    'This tool never creates the workspace.',
+  ].filter(Boolean).join('\n\n')
+}
+
 async function openCreate($: EngineInterface): Promise<void> {
   await $.state.set(TAB, 'create')
   const { value: form = null } = await $.state.get(FORM)
@@ -492,6 +556,29 @@ async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'workspaces', description: 'Open the sandbox workspaces pane' })
+    await $.tool.register({
+      name: FORM_TOOL,
+      description:
+        "Fill fields of the New Sandbox Workspace form in the /workspaces pane's Create tab, so the person can " +
+        'set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on ' +
+        'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
+        'slug), work_type, context_strategy, services and repos (lists of choices), labels, test_path, task, ' +
+        'description, starting_prompt (multi-line). Pass {} as fields to read the current values. Returns what the ' +
+        'form holds, values it left out and why, and what is still required. It never creates the workspace: the ' +
+        'person presses Create in the pane.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          fields: {
+            type: 'object',
+            description: 'Field key → value: a string, or a list of strings for services and repos.',
+            additionalProperties: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+          },
+        },
+        required: ['fields'],
+      },
+      isDeferred: false,
+    })
     // A hot reload drops the old environment's timer but leaves the pane open: re-arm it.
     const panes = await $.ui.panes()
     if (panes.some(p => p.id === PANE)) startPolling($)
@@ -503,6 +590,12 @@ export const register: Register = on => {
     await openPane($)
     return { text: 'Workspaces pane opened.' }
   })
+
+  // A regex: the tool-name type only lists tools laid when the types were written, and this one registers at start.
+  // The call's input fields arrive on the event itself, beside `tool` and `tool_use_id`.
+  on('tool.call', { tool: /^mcp__sandbox-tools__workspace_form$/ }, async ($, e) => ({ result: await fillFormTool($, e as unknown as Record<string, unknown>) })).catch(
+    () => ({ deny: 'The workspace form could not be filled; open /workspaces and fill it by hand.' }),
+  )
 
   on('ui.close', { id: PANE }, async ($, e, next) => {
     stopPolling()

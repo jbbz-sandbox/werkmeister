@@ -1,5 +1,5 @@
 import { test, expect, mock } from 'claude-code/testing'
-import { optionGroups, formFields } from './register'
+import { applyFormFields, formFields, optionGroups } from './register'
 import type { On } from 'claude-code'
 import type { Engine, Plugin } from 'claude-code/testing'
 
@@ -42,6 +42,7 @@ function world(on: On, stubs: McpStub = {}) {
     return { value: undefined }
   })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__sandbox-tools__${e.name}` } }))
   on('mcp.call', async (_$, e) => {
     const key = `${e.server}/${e.tool}`
     calls.push({ key, args: e.args, via: 'mcp' })
@@ -519,4 +520,36 @@ test('a multi-pick draws as checkboxes under its group headings, sorted, each in
   expect(optionGroups(f)).toEqual([['core', ['api']], ['web', ['web']]])
   expect(optionGroups({ ...f, groups: { core: ['api'] } })).toEqual([['core', ['api']], ['other', ['web']]])
   expect(optionGroups({ ...f, groups: {} })).toEqual([['', ['api', 'web']]])
+})
+
+test('applyFormFields replaces, clears and checks values against the form', () => {
+  const fields = formFields(BUNDLE)
+  const r = applyFormFields(fields, { task: 'old', feature: 'keep' }, {
+    task: '',
+    starting_prompt: 'line one\nline two',
+    work_type: 'chore',
+    services: 'api, nope',
+    bogus: 'x',
+  })
+  expect(r.draft).toEqual({ task: '', feature: 'keep', starting_prompt: 'line one\nline two', services: ['api'] })
+  expect(r.problems).toEqual([
+    'work_type: "chore" is not offered (choices: feature, bugfix)',
+    'services: not offered: nope (choices: api, web)',
+    'bogus: no such field (fields: issue_id, feature, work_type, services, task, starting_prompt)',
+  ])
+})
+
+test('the workspace_form tool opens the Create tab filled, says what is still needed, and creates nothing', async ($, on) => {
+  const w = world(on, formStubs())
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('fs.list', () => ({ value: [] }))
+  await $.session.start({ cwd: '/elsewhere', surface: 'desktop', isInteractive: true })
+  const r = await $.tool.call({ tool: 'mcp__sandbox-tools__workspace_form', fields: { feature: 'rate-limit', starting_prompt: 'Do it.\nThen test.' } } as never)
+  const text = String((r as { result?: unknown }).result)
+  expect(text).toMatch(/"starting_prompt": "Do it.\\nThen test."/)
+  expect(text).toMatch(/Still needed before Create:\n- Work type: required/)
+  expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect(((await ui.find({ key: 'f:feature' }))?.props.props as { value: string }).value).toBe('rate-limit')
+  await ui.unmount()
 })
