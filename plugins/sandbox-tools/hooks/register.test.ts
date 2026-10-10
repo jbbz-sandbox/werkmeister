@@ -387,3 +387,22 @@ test('a session starting in a folder of workspaces opens the pane; elsewhere it 
   await $.session.start({ cwd: '/features', surface: 'desktop', isInteractive: true })
   expect(opened()).toBe(1)
 })
+
+test('the Create tab submits the workspace skill prompt with the typed Jira ticket, then returns to the list', async ($, on) => {
+  const w = world(on, stubs())
+  const submitted: string[] = []
+  on('prompt.submit', (_$, e) => {
+    submitted.push(e.text)
+    return { text: e.text }
+  })
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect(await ui.find({ key: 'create:go' })).toBeUndefined()
+  await ui.press({ key: 'tab:create' })
+  await ui.input({ key: 'create:jira', text: 'PROJ-9', kind: 'change' })
+  await ui.press({ key: 'create:go' })
+  expect(submitted).toEqual(['Create a new sandbox workspace with the sandbox-workspace skill, pre-filled from Jira ticket PROJ-9.'])
+  expect(w.toasts).toEqual(['Opening the workspace form'])
+  expect(await ui.find({ key: 'switch:abc' })).toBeDefined()
+  await ui.unmount()
+})
