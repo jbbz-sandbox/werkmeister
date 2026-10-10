@@ -31,13 +31,19 @@
       "type": "string",
       "description": "Comma-separated list of services to run locally (kept a flat string for back-compat)."
     },
+    "issue_id": {
+      "type": "string",
+      "description": "Issue ID in this machine's issue tracker (overrides.issue_tracker, set by `sandbox setup`)."
+    },
     "jira_id": {
       "type": "string",
-      "description": "Jira ticket key (e.g. PROJ-1897)."
+      "deprecated": true,
+      "description": "Deprecated: replaced by issue_id. Read for old workspaces only; never written."
     },
     "github_issue": {
       "type": "string",
-      "description": "GitHub issue as owner/repo#number (used instead of jira_id when overrides.issue_tracker is github)."
+      "deprecated": true,
+      "description": "Deprecated: replaced by issue_id. Read for old workspaces only; never written."
     },
     "test_path": {
       "type": "string",

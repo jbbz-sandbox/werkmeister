@@ -9,6 +9,7 @@ import path from "node:path";
 const cfg = path.join(mkdtempSync(path.join(tmpdir(), "jira-site-")), "config.yaml");
 process.env.SANDBOX_CONFIG_FILE = cfg;
 const { jiraSiteRef, jiraSitePhrase } = await import("./dist/issue_tracker.js");
+const { jiraBrowseUrl } = await import("./dist/issue_trackers/jira.js");
 
 test("cloud_id wins over base_url", () => {
   writeFileSync(cfg, "jira:\n  cloud_id: abc-123\n  base_url: https://acme.atlassian.net/\n");
@@ -33,7 +34,6 @@ test("nothing configured → null and a lookup instruction", () => {
 });
 
 test("scheme-less base_url still gives an absolute browse link", async () => {
-  const { jiraBrowseUrl } = await import("./dist/issue_tracker.js");
   writeFileSync(cfg, "jira:\n  base_url: acme.atlassian.net/\n");
   assert.equal(jiraBrowseUrl("PROJ-1"), "https://acme.atlassian.net/browse/PROJ-1");
 });

@@ -56,17 +56,24 @@ export async function jiraCreds(): Promise<JiraCreds | null> {
   }
 }
 
-/** GET a Jira REST path (already query-encoded). Throws on HTTP/network failure. */
-async function jiraGet<T>(creds: JiraCreds, restPath: string): Promise<T> {
+/** A Jira REST call (path already query-encoded). Throws on HTTP/network failure. */
+async function jiraFetch(creds: JiraCreds, restPath: string, body?: unknown): Promise<Response> {
   const res = await fetch(`${creds.baseUrl}${restPath}`, {
+    method: body === undefined ? "GET" : "POST",
     headers: {
       Authorization: "Basic " + Buffer.from(`${creds.email}:${creds.token}`).toString("base64"),
       Accept: "application/json",
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`Jira REST ${restPath} → HTTP ${res.status}`);
-  return (await res.json()) as T;
+  return res;
+}
+
+async function jiraGet<T>(creds: JiraCreds, restPath: string): Promise<T> {
+  return (await (await jiraFetch(creds, restPath)).json()) as T;
 }
 
 /** The v2 issue subset we read. Rich-text fields are plain strings in v2. */
@@ -124,36 +131,31 @@ export async function fetchStatusesRest(keys: string[]): Promise<Record<string, 
   }
 }
 
-const MAX_DESCRIPTION = 4000;
-const MAX_COMMENTS = 10;
-const MAX_COMMENT = 1000;
 
 /**
- * Plain-text ticket briefing (summary, status line, description, recent
- * comments) — the REST-built equivalent of what the claude-CLI extractor used
- * to write, consumed as refine background context and as the form-prefill
- * distillation input.
+ * Move an issue to the status named `status` (case-insensitive, matched on the
+ * transition's target status, then its own name) and/or add a comment. Null
+ * when no credentials are configured, so the caller can fall back; throws when
+ * Jira refuses or no transition reaches `status`.
  */
-export function briefingFromIssue(issue: JiraRestIssue): string {
-  const f = issue.fields ?? {};
-  const lines: string[] = [`${issue.key}: ${f.summary ?? "(no summary)"}`];
-  const meta = [
-    f.status?.name && `Status: ${f.status.name}`,
-    f.issuetype?.name && `Type: ${f.issuetype.name}`,
-    f.assignee?.displayName && `Assignee: ${f.assignee.displayName}`,
-  ].filter(Boolean);
-  if (meta.length) lines.push(meta.join(" · "));
-  if (f.description?.trim()) {
-    lines.push("", "Description:", f.description.trim().slice(0, MAX_DESCRIPTION));
-  }
-  const comments = (f.comment?.comments ?? []).filter((c) => c.body?.trim());
-  if (comments.length) {
-    lines.push("", `Comments (last ${Math.min(comments.length, MAX_COMMENTS)} of ${comments.length}):`);
-    for (const c of comments.slice(-MAX_COMMENTS)) {
-      const who = c.author?.displayName ?? "unknown";
-      const when = c.created ? ` ${c.created.slice(0, 10)}` : "";
-      lines.push(`- [${who}${when}] ${c.body!.trim().slice(0, MAX_COMMENT)}`);
+export async function updateIssueRest(key: string, update: { status?: string; comment?: string }): Promise<true | null> {
+  const creds = await jiraCreds();
+  if (!creds) return null;
+  const path = `/rest/api/2/issue/${encodeURIComponent(key)}`;
+  if (update.status) {
+    const want = update.status.trim().toLowerCase();
+    const { transitions = [] } = await jiraGet<{ transitions?: Array<{ id: string; name?: string; to?: { name?: string } }> }>(
+      creds,
+      `${path}/transitions`,
+    );
+    const t =
+      transitions.find((x) => x.to?.name?.toLowerCase() === want) ?? transitions.find((x) => x.name?.toLowerCase() === want);
+    if (!t) {
+      const names = transitions.map((x) => x.to?.name ?? x.name).filter(Boolean).join(", ");
+      throw new Error(`${key} has no transition to "${update.status}" (available: ${names || "none"})`);
     }
+    await jiraFetch(creds, `${path}/transitions`, { transition: { id: t.id } });
   }
-  return lines.join("\n");
+  if (update.comment) await jiraFetch(creds, `${path}/comment`, { body: update.comment });
+  return true;
 }

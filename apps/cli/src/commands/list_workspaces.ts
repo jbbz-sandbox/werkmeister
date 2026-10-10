@@ -1,7 +1,7 @@
 /**
  * sandbox list-workspaces
  *
- * The workspaces under $SANDBOX_WORKSPACES_ROOT with their Jira ticket and
+ * The workspaces under $SANDBOX_WORKSPACES_ROOT with their issue and
  * labels. The scan is `sandbox-core`'s `listWorkspaces` -- the same call the
  * dashboard and the MCP surface make; what is left here is the table.
  */
@@ -22,16 +22,16 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
   }
 
   console.log(
-    `  ${Colors.BOLD}${"Workspace".padEnd(32)}  ${"Jira".padEnd(12)}  Labels${Colors.RESET}`,
+    `  ${Colors.BOLD}${"Workspace".padEnd(32)}  ${"Issue".padEnd(12)}  Labels${Colors.RESET}`,
   );
   console.log(`  ${"─".repeat(70)}`);
 
-  for (const { name, jiraId, labels } of workspaces) {
+  for (const { name, issueId, labels } of workspaces) {
     // padEnd counts escape sequences, so the coloured placeholder is padded by
     // hand -- the same reason services.ts spells its Source cells out.
-    const jiraCell = jiraId ? jiraId.padEnd(12) : `${Colors.DIM}--${Colors.RESET}${" ".repeat(10)}`;
+    const issueCell = issueId ? issueId.padEnd(12) : `${Colors.DIM}--${Colors.RESET}${" ".repeat(10)}`;
     console.log(
-      `  ${name.padEnd(32)}  ${jiraCell}  ${Colors.DIM}${labels.join(", ")}${Colors.RESET}`,
+      `  ${name.padEnd(32)}  ${issueCell}  ${Colors.DIM}${labels.join(", ")}${Colors.RESET}`,
     );
   }
 

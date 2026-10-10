@@ -76,9 +76,9 @@ test('empty list draws the empty message', async ($, on) => {
 const LIST = {
   root: '/ws',
   workspaces: [
-    { name: 'ab', path: '/ws/ab', jiraId: 'PROJ-1', labels: [], task: 'BWell', description: 'BWell technologies', workType: 'spike', stage: { index: 5, total: 6, name: 'implement' }, sessionTitle: 'Demo project', sessionOrigin: 'sdk-cli' },
-    { name: 'abc', path: '/ws/abc', jiraId: null, labels: [], task: null, description: null, workType: 'bugfix', stage: null, sessionTitle: null, sessionOrigin: null },
-    { name: 'empty', path: '/ws/empty', jiraId: null, labels: [], task: null, description: null, workType: null, stage: null, sessionTitle: null, sessionOrigin: null },
+    { name: 'ab', path: '/ws/ab', issueId: 'PROJ-1', labels: [], task: 'BWell', description: 'BWell technologies', workType: 'spike', stage: { index: 5, total: 6, name: 'implement' }, sessionTitle: 'Demo project', sessionOrigin: 'sdk-cli' },
+    { name: 'abc', path: '/ws/abc', issueId: null, labels: [], task: null, description: null, workType: 'bugfix', stage: null, sessionTitle: null, sessionOrigin: null },
+    { name: 'empty', path: '/ws/empty', issueId: null, labels: [], task: null, description: null, workType: null, stage: null, sessionTitle: null, sessionOrigin: null },
   ],
 }
 const STATUS = {
@@ -111,7 +111,7 @@ test('workspace data comes from the node child, not an MCP call', async ($, on) 
   expect(w.calls.filter(c => c.via === 'process').map(c => c.key)).toEqual([`${WS}/list-workspaces`, `${WS}/workspace-status`])
 })
 
-test('rows draw name, jira, task, counts and claude note', async ($, on) => {
+test('rows draw name, issue, task, counts and claude note', async ($, on) => {
   world(on, stubs())
   await openPane($)
   for (const surface of SURFACES) {
@@ -388,7 +388,7 @@ test('a session starting in a folder of workspaces opens the pane; elsewhere it 
   expect(opened()).toBe(1)
 })
 
-test('the Create tab submits the workspace skill prompt with the typed Jira ticket, then returns to the list', async ($, on) => {
+test('the Create tab submits the workspace skill prompt with the typed issue ID, then returns to the list', async ($, on) => {
   const w = world(on, stubs())
   const submitted: string[] = []
   on('prompt.submit', (_$, e) => {
@@ -399,9 +399,9 @@ test('the Create tab submits the workspace skill prompt with the typed Jira tick
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect(await ui.find({ key: 'create:go' })).toBeUndefined()
   await ui.press({ key: 'tab:create' })
-  await ui.input({ key: 'create:jira', text: 'PROJ-9', kind: 'change' })
+  await ui.input({ key: 'create:issue', text: 'PROJ-9', kind: 'change' })
   await ui.press({ key: 'create:go' })
-  expect(submitted).toEqual(['Create a new sandbox workspace with the sandbox-workspace skill, pre-filled from Jira ticket PROJ-9.'])
+  expect(submitted).toEqual(['Create a new sandbox workspace with the sandbox-workspace skill, pre-filled from issue PROJ-9.'])
   expect(w.toasts).toEqual(['Opening the workspace form'])
   expect(await ui.find({ key: 'switch:abc' })).toBeDefined()
   await ui.unmount()

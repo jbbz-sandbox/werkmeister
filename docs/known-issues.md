@@ -241,11 +241,11 @@ The four genuine differences (why a naive share isn't free) are all host-level: 
 
 ---
 
-## `getFormSchema()` Scans Your Home Directory for a Jira ID It Discards
+## `getFormSchema()` Scans Your Home Directory for an Issue ID It Discards
 
 **Severity:** Low (wasted work and a surprising `git` call, not a wrong result)
 **Status:** Resolved — the create form opts out of defaults
-**Affects:** `packages/sandbox-core/sandbox.ts` — `getFormSchema()`, via `scrapeJiraId` in `workspace_prompts.ts`
+**Affects:** `packages/sandbox-core/sandbox.ts` — `getFormSchema()`, via `scrapeIssueId` in `workspace_prompts.ts`
 
 `getFormSchema()` now calls `computePromptSpec({}, os.homedir(), { defaults: false })`, and
 `promptEntry` in `workspace_prompts.ts` skips every prompt's `defaultFn` under that flag, so the
@@ -254,7 +254,7 @@ scan never runs.
 The workspace-create form is built against `os.homedir()`, deliberately: a stray
 `./.sandbox/workspace.yml` under the caller's cwd must not pre-resolve fields for a
 brand-new workspace. But building the prompt spec evaluates every prompt's `defaultFn`, and
-`jira_id`'s is `scrapeJiraId(workspaceRoot)` — which lists that root and runs
+`issue_id`'s is `scrapeIssueId(workspaceRoot)` — which lists that root and runs
 `git branch --show-current` in **every non-dot subdirectory**, looking for a ticket key.
 
 The result is then thrown away: `formData` starts blank on purpose, so a derived value can't

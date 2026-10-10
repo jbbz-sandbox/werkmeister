@@ -3,8 +3,8 @@
  * CSS-injection approach as workspace-ui.ts). Two sections — my open PRs and the
  * ready-for-approval queue — each an expandable card. Expanding renders the PR
  * body via markdown-it (html:false) and shows an Approve button plus, when the PR
- * carries the approval label, a Reconcile-with-Jira flow: the server hands the
- * Jira ticket + PR + diff to a background headless `claude -p` session, which is
+ * carries the approval label, a Reconcile-with-issue flow: the server hands the
+ * issue + PR + diff to a background headless `claude -p` session, which is
  * then embedded and watched inline via the shared chat panel (src/chat-panel.ts).
  *
  * Browser surface only (needs the same-origin Express server for its reconcile +
@@ -27,8 +27,8 @@ interface OpenPr {
   failingChecks: number;
   outOfDate: boolean;
   hasApprovalLabel: boolean;
-  jiraKey: string | null;
-  jiraUrl: string | null;
+  issueId: string | null;
+  issueUrl: string | null;
   isDraft: boolean;
 }
 interface OpenPrsResult {
@@ -36,9 +36,10 @@ interface OpenPrsResult {
   mine: OpenPr[];
   others: OpenPr[];
 }
-interface JiraCard {
-  key: string;
-  summary?: string;
+/** An `Issue` (sandbox-core/issue_tracker), as the `pr-reconcile` tool returns it. */
+interface IssueCard {
+  ref: string;
+  title?: string;
   status?: string;
   type?: string;
   assignee?: string;
@@ -85,13 +86,13 @@ const CSS = `
   .prs .ttl { font-size: 13px; flex: 1; min-width: 160px; }
   .prs .head-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .prs .author { color: var(--sd-muted); font-size: 12px; }
-  .prs .draft-badge, .prs .jira-link, .prs .gh-link, .prs .lbl, .prs .pr-flag {
+  .prs .draft-badge, .prs .issue-link, .prs .gh-link, .prs .lbl, .prs .pr-flag {
     display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px;
     border-radius: 999px; text-decoration: none; white-space: nowrap;
   }
   .prs .draft-badge { background: var(--sd-line-soft); color: var(--sd-muted); }
-  .prs .jira-link { background: var(--sd-info-bg); color: var(--sd-info); }
-  .prs .jira-link:hover { text-decoration: underline; }
+  .prs .issue-link { background: var(--sd-info-bg); color: var(--sd-info); }
+  .prs .issue-link:hover { text-decoration: underline; }
   .prs .gh-link { background: var(--sd-line-soft); color: var(--sd-muted); }
   .prs .gh-link:hover { text-decoration: underline; }
   .prs .lbl { background: var(--sd-warn-bg); color: var(--sd-warn); }
@@ -120,25 +121,25 @@ const CSS = `
   .prs .act-msg { font-size: 12px; color: var(--sd-muted); margin-left: auto; }
   .prs .act-msg.err { color: var(--sd-err); }
   .prs .act-msg.ok { color: var(--sd-ok); }
-  .prs .jira { margin-top: 12px; border: 1px solid #dbe4f0; border-radius: 8px;
+  .prs .issue-card { margin-top: 12px; border: 1px solid #dbe4f0; border-radius: 8px;
     background: #f4f8fd; padding: 10px 12px; font-size: 12px; }
-  .prs .jira .k { font-weight: 700; }
-  .prs .jira .st { font-size: 10px; background: var(--sd-info-bg); color: var(--sd-info);
+  .prs .issue-card .k { font-weight: 700; }
+  .prs .issue-card .st { font-size: 10px; background: var(--sd-info-bg); color: var(--sd-info);
     padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
-  .prs .jira .meta { color: var(--sd-muted); margin-top: 4px; }
-  .prs .jira .desc { margin-top: 6px; color: var(--sd-ink); max-height: 260px; overflow-y: auto; line-height: 1.45; }
-  .prs .jira .desc > :first-child { margin-top: 0; }
-  .prs .jira .desc > :last-child { margin-bottom: 0; }
-  .prs .jira .desc h1, .prs .jira .desc h2, .prs .jira .desc h3, .prs .jira .desc h4 {
+  .prs .issue-card .meta { color: var(--sd-muted); margin-top: 4px; }
+  .prs .issue-card .desc { margin-top: 6px; color: var(--sd-ink); max-height: 260px; overflow-y: auto; line-height: 1.45; }
+  .prs .issue-card .desc > :first-child { margin-top: 0; }
+  .prs .issue-card .desc > :last-child { margin-bottom: 0; }
+  .prs .issue-card .desc h1, .prs .issue-card .desc h2, .prs .issue-card .desc h3, .prs .issue-card .desc h4 {
     font-size: 12px; font-weight: 700; color: var(--sd-ink); margin: 10px 0 4px; }
-  .prs .jira .desc p { margin: 5px 0; }
-  .prs .jira .desc ul, .prs .jira .desc ol { margin: 5px 0; padding-left: 20px; }
-  .prs .jira .desc li { margin: 2px 0; }
-  .prs .jira .desc code { background: #e6edf6; padding: 1px 4px; border-radius: 4px;
+  .prs .issue-card .desc p { margin: 5px 0; }
+  .prs .issue-card .desc ul, .prs .issue-card .desc ol { margin: 5px 0; padding-left: 20px; }
+  .prs .issue-card .desc li { margin: 2px 0; }
+  .prs .issue-card .desc code { background: #e6edf6; padding: 1px 4px; border-radius: 4px;
     font-family: var(--sd-mono); font-size: 11px; }
-  .prs .jira .desc pre { background: #e6edf6; padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 5px 0; }
-  .prs .jira .desc pre code { background: none; padding: 0; }
-  .prs .jira .desc a { color: var(--sd-info); }
+  .prs .issue-card .desc pre { background: #e6edf6; padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 5px 0; }
+  .prs .issue-card .desc pre code { background: none; padding: 0; }
+  .prs .issue-card .desc a { color: var(--sd-info); }
   /* The embedded reconcile chat styles itself (src/chat-panel.ts). Give it a
      little breathing room from the actions row above. */
   .prs .claude-chat { margin-top: 12px; border-radius: 8px; overflow: hidden; }
@@ -199,11 +200,14 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
     return out;
   }
 
-  // Jira descriptions come back as Jira wiki markup (h2. / * bullets / {{mono}} /
+  // Some trackers return descriptions as wiki markup (h2. / * bullets / {{mono}} /
   // {code}), not markdown — so translate the common constructs to markdown, then
   // reuse the same (html:false → XSS-safe) renderer as PR bodies. Bold/italic are
   // left as-is; the goal is styled headings, lists, and code, not full fidelity.
-  function jiraToMarkdown(src: string): string {
+  // ponytail: sniffs for wiki-only markers so markdown (`# heading`) passes through
+  // untouched; a tracker strategy returning markdown would retire this.
+  function descriptionToMarkdown(src: string): string {
+    if (!/^h[1-6]\.\s|\{code|\{noformat\}|\{\{/m.test(src)) return src;
     let s = src.replace(/\{code(?::[^}]*)?\}|\{noformat\}/g, "\n```\n").replace(/\{\{([^}]+)\}\}/g, "`$1`");
     return s
       .split(/\r?\n/)
@@ -219,18 +223,18 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
       .join("\n");
   }
 
-  function renderJiraCard(c: JiraCard): HTMLElement {
-    const box = el("div", "jira");
+  function renderIssueCard(c: IssueCard): HTMLElement {
+    const box = el("div", "issue-card");
     const line = el("div");
-    line.appendChild(el("span", "k", c.key));
-    if (c.summary) line.appendChild(document.createTextNode(` ${c.summary}`));
+    line.appendChild(el("span", "k", c.ref));
+    if (c.title) line.appendChild(document.createTextNode(` ${c.title}`));
     if (c.status) line.appendChild(el("span", "st", c.status));
     box.appendChild(line);
     const metaBits = [c.type, c.assignee ? `@${c.assignee}` : ""].filter(Boolean).join(" · ");
     if (metaBits) box.appendChild(el("div", "meta", metaBits));
     if (c.description) {
       const desc = el("div", "desc");
-      desc.innerHTML = renderMarkdown(jiraToMarkdown(c.description));
+      desc.innerHTML = renderMarkdown(descriptionToMarkdown(c.description));
       box.appendChild(desc);
     }
     return box;
@@ -276,11 +280,11 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
     const meta = el("div", "head-meta");
     if (!isMine && pr.author) meta.appendChild(el("span", "author", pr.author));
     if (pr.isDraft) meta.appendChild(el("span", "draft-badge", "draft"));
-    if (pr.jiraKey) {
+    if (pr.issueId) {
       meta.appendChild(
-        pr.jiraUrl
-          ? headLink("jira-link", pr.jiraKey, pr.jiraUrl, `Open ${pr.jiraKey} in Jira`)
-          : el("span", "jira-link", pr.jiraKey),
+        pr.issueUrl
+          ? headLink("issue-link", pr.issueId, pr.issueUrl, `Open issue ${pr.issueId}`)
+          : el("span", "issue-link", pr.issueId),
       );
     }
     meta.appendChild(headLink("gh-link", "GitHub", pr.url, "Open this PR on GitHub"));
@@ -324,7 +328,7 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
 
       let reconcileBtn: HTMLButtonElement | null = null;
       if (pr.hasApprovalLabel) {
-        reconcileBtn = el("button", "btn", "Reconcile with Jira") as HTMLButtonElement;
+        reconcileBtn = el("button", "btn", "Reconcile with issue") as HTMLButtonElement;
         actions.appendChild(reconcileBtn);
       }
 
@@ -343,19 +347,19 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
         }
       });
 
-      let jiraEl: HTMLElement | null = null;
+      let issueEl: HTMLElement | null = null;
       reconcileBtn?.addEventListener("click", async () => {
         reconcileBtn!.disabled = true;
         msg.className = "act-msg";
-        msg.textContent = "Gathering Jira + PR context…";
+        msg.textContent = "Gathering issue + PR context…";
         try {
           const res = (await call("pr-reconcile", {
             url: pr.url,
-            jiraKey: pr.jiraKey ?? undefined,
-          })) as { sessionKey: string; jira?: JiraCard };
-          if (res.jira?.key && !jiraEl) {
-            jiraEl = renderJiraCard(res.jira);
-            panel.insertBefore(jiraEl, actions.nextSibling);
+            issueRef: pr.issueId ?? undefined,
+          })) as { sessionKey: string; issue?: IssueCard };
+          if (res.issue?.ref && !issueEl) {
+            issueEl = renderIssueCard(res.issue);
+            panel.insertBefore(issueEl, actions.nextSibling);
           }
           if (!chat) {
             chat = initChatPanel(res.sessionKey, {

@@ -3,7 +3,7 @@ export type WorkspaceState = 'up' | 'partial' | 'stopped' | 'down' | 'unknown'
 export type WorkspaceRow = {
   name: string
   path: string
-  jiraId: string | null
+  issueId: string | null
   /** `task` from .sandbox/workspace.yml. */
   task: string | null
   /** `description` from .sandbox/workspace.yml. */

@@ -2,57 +2,38 @@
  * The issue-filing guide both context strategies write into a workspace: what
  * type an issue is (bug | feature | task), where it goes — a bug is fixed here
  * if this workspace's changes caused it, otherwise it is filed on the sandbox
- * repo or in the machine's issue tracker (`overrides.issue_tracker`: the Jira
- * project, or the GitHub issues of the registry repo it belongs to) — and the
+ * repo or in the machine's issue tracker (`overrides.issue_tracker`; each tracker's
+ * strategy supplies its own routing row) — and the
  * body per type. icm writes it to `_shared/issues-report.md`, jit to
  * `.sandbox/issues-report.md`; each strategy's CLAUDE.md points at its copy.
  */
 
-import { loadJira } from "./global_config.js";
-import { githubIssueRepos, loadIssueTracker, type IssueTracker } from "./issue_tracker.js";
+import { issueTracker, type IssueTrackerStrategy } from "./issue_tracker.js";
 
 export const SANDBOX_ISSUES_REPO = "jbbz-sandbox/sandbox";
 
-/** The app-code row of the "Where" table and the search step, per tracker. */
-function appCodeRouting(tracker: IssueTracker, jiraId: string, repos: string[]): [string, string] {
-  if (tracker === "github") {
-    const where = repos.length
-      ? `the GitHub issues of the repo it belongs to — one of ${repos.map((r) => `\`${r}\``).join(", ")}`
-      : "that repo's GitHub issues — find it with \`git -C <worktree> remote get-url origin\`";
-    return [
-      `| app code in a worktree | ${where} | \`gh issue create -R <owner>/<repo> --label <label>\` |`,
-      'Search first: `gh issue list -R <owner>/<repo> --search "<keywords>" --state all`. If it exists, comment on it instead.',
-    ];
-  }
-  const project = /^([A-Z][A-Z0-9]+)-\d+$/.exec(jiraId)?.[1];
-  const base = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
-  const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${base ? ` (${base})` : ""}`;
-  return [
-    `| app code in a worktree | ${where} | the Atlassian MCP tools if connected, with the Jira issue type from the type table; otherwise hand the person the title, type and body to file |`,
-    `Search first: JQL \`${project ? `project = ${project} AND ` : ""}text ~ "<keywords>"\`. If it exists, comment on it instead. (Sandbox-tool issues: \`gh issue list -R ${SANDBOX_ISSUES_REPO} --search "<keywords>" --state all\`.)`,
-  ];
-}
-
 export function buildIssuesReportMd(
   workspaceName: string,
-  jiraId = "",
-  tracker: IssueTracker = loadIssueTracker(),
-  repos: string[] = tracker === "github" ? githubIssueRepos() : [],
+  issueId = "",
+  tracker: IssueTrackerStrategy = issueTracker(),
 ): string {
-  const [appRow, searchStep] = appCodeRouting(tracker, jiraId.trim(), repos);
+  const { row: appRow, search: searchStep } = tracker.filingGuide(issueId.trim());
+  // GitHub labels always apply (sandbox-tool issues are GitHub's); a tracker with its own types adds a column.
+  const types = tracker.issueTypes;
+  const col = (k: "bug" | "feature" | "task") => (types ? ` ${types[k]} |` : "");
   return `# Filing an issue
 
 Log an issue when you find it, even if the notes are rough. Each issue must stand alone: a later agent should be able to act on it without re-running this workspace or asking follow-up questions.
 
 ## Type
 
-Every issue has one type. It sets the label (GitHub) or issue type (Jira) and the body template.
+Every issue has one type. It sets the label (GitHub)${types ? ` or issue type (${tracker.label})` : ""} and the body template.
 
-| Type | Use for | GitHub label | Jira issue type |
-|---|---|---|---|
-| bug | something that is broken | \`--label bug\` | Bug |
-| feature | new or changed behavior | \`--label enhancement\` | Story |
-| task | setup, cleanup, chores — no behavior change | \`--label task\` (not a GitHub default: run \`gh label create task -R <owner>/<repo> --color ededed --force\` first) | Task |
+| Type | Use for | GitHub label |${types ? ` ${tracker.label} issue type |` : ""}
+|---|---|---|${types ? "---|" : ""}
+| bug | something that is broken | \`--label bug\` |${col("bug")}
+| feature | new or changed behavior | \`--label enhancement\` |${col("feature")}
+| task | setup, cleanup, chores — no behavior change | \`--label task\` (not a GitHub default: run \`gh label create task -R <owner>/<repo> --color ededed --force\` first) |${col("task")}
 
 ## Bugs: new or existing?
 

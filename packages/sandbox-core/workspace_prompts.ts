@@ -21,7 +21,7 @@ import * as YAML from "yaml";
 
 import { loadReposConfig, loadServices } from "./config.js";
 import type { PromptSpec } from "./global_config.js";
-import { GITHUB_ISSUE_PATTERN, loadIssueTracker, normalizeGithubIssue } from "./issue_tracker.js";
+import { issueIdOf, issueTracker } from "./issue_tracker.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { info, warn } from "./reporter.js";
 import { STRATEGY_IDS } from "./strategies/types.js";
@@ -112,8 +112,7 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string, string]> = [
   ["context_strategy", "SANDBOX_CONTEXT_STRATEGY", "context_strategy"],
   ["repos", "SANDBOX_REPOS", "repos"],
   ["services", "SANDBOX_SERVICES", "services"],
-  ["jira_id", "SANDBOX_JIRA_ID", "jira_id"],
-  ["github_issue", "SANDBOX_GITHUB_ISSUE", "github_issue"],
+  ["issue_id", "SANDBOX_ISSUE_ID", "issue_id"],
   ["test_path", "SANDBOX_TEST_PATH", "test_path"],
   ["description", "SANDBOX_DESCRIPTION", "description"],
   ["task", "SANDBOX_TASK", "task"],
@@ -194,6 +193,8 @@ function loadExistingEnvMetadata(workspaceRoot: string): Record<string, string> 
   for (const [, , field] of _INPUT_FIELDS) {
     wanted[field.toUpperCase()] = field;
   }
+  // Pre-rename .env keys; a later ISSUE_ID line still wins.
+  wanted["JIRA_ID"] = wanted["GITHUB_ISSUE"] = "issue_id";
   const found: Record<string, string> = {};
   for (let line of fs.readFileSync(envPath, "utf8").split("\n")) {
     line = line.trim();
@@ -222,7 +223,9 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
   for (const [cliAttr, envVar, configField] of _INPUT_FIELDS) {
     const cliValue = args[cliAttr] ?? null;
     const envValue = process.env[envVar] ?? null;
-    const cfgValue = configField in configData ? configData[configField] : null;
+    // Workspaces made before the rename hold `jira_id` / `github_issue`: read, never written.
+    const cfgValue =
+      configField === "issue_id" ? issueIdOf(configData) || null : configField in configData ? configData[configField] : null;
     const envFileValue = configField in existingEnv ? existingEnv[configField] : null;
     for (const source of [cliValue, envValue, cfgValue, envFileValue]) {
       if (source === null || source === undefined) {
@@ -245,14 +248,10 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
       }
     }
   }
-  if (resolved.github_issue) {
-    resolved.github_issue = normalizeGithubIssue(resolved.github_issue);
-  }
+  if (resolved.issue_id) resolved.issue_id = issueTracker().parseRef(resolved.issue_id) ?? resolved.issue_id;
 
   return resolved;
 }
-
-const _JIRA_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/;
 
 /** Derive a kebab-case feature default from the workspace dir name. */
 function defaultFeatureFromDir(workspaceName: string): string {
@@ -263,8 +262,8 @@ function defaultFeatureFromDir(workspaceName: string): string {
   return parts.length ? parts.join("-") : workspaceName;
 }
 
-/** Best-effort: scan each immediate-child repo's branch for a Jira-like key. */
-function scrapeJiraId(workspaceRoot: string): string {
+/** Best-effort: scan each immediate-child repo's branch for an issue ref the tracker recognises. */
+function scrapeIssueId(workspaceRoot: string): string {
   for (const name of fs.readdirSync(workspaceRoot).sort()) {
     const entry = path.join(workspaceRoot, name);
     if (!isDir(entry) || name.startsWith(".")) {
@@ -285,9 +284,9 @@ function scrapeJiraId(workspaceRoot: string): string {
     if (result.status !== 0) {
       continue;
     }
-    const match = _JIRA_RE.exec(result.stdout);
-    if (match) {
-      return match[1];
+    const ref = issueTracker().parseRef(result.stdout.trim());
+    if (ref) {
+      return ref;
     }
   }
   return "";
@@ -360,24 +359,13 @@ const WORK_TYPES: string[] = Object.keys(WORK_TYPE_PHASES);
 
 export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   {
-    key: "jira_id",
-    label: "Jira ID (blank to skip)",
+    // Label, pattern and placeholder come from the configured tracker: see wizardPrompts().
+    key: "issue_id",
+    label: "Issue ID (blank to skip)",
     help:
-      "Renders a clickable ticket link in CLAUDE.md. Fill it first — the " +
-      "browser form's “Fetch from Jira” button uses it to pre-fill the rest.",
-    pattern: "^[A-Z][A-Z0-9]+-[0-9]+$",
-    placeholder: "PROJ-1234",
-    defaultFn: (ws) => scrapeJiraId(ws),
-  },
-  {
-    // Shown instead of jira_id when `overrides.issue_tracker` is github.
-    key: "github_issue",
-    label: "GitHub issue (repo#number, blank to skip)",
-    help:
-      "Renders a clickable issue link in CLAUDE.md. Any repo in the services " +
-      "registry; a bare repo#number is owned by your GitHub org.",
-    pattern: GITHUB_ISSUE_PATTERN,
-    placeholder: "backend#123",
+      "Renders a clickable issue link in CLAUDE.md. Fill it first — the " +
+      "browser form's “Fetch issue” button uses it to pre-fill the rest.",
+    defaultFn: (ws) => scrapeIssueId(ws),
   },
   {
     key: "feature",
@@ -471,7 +459,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
 
 export interface PromptSpecOptions {
   /**
-   * `false` skips every prompt's `defaultFn`. The Jira default scans
+   * `false` skips every prompt's `defaultFn`. The issue default scans
    * *workspaceRoot*'s subdirectories with `git`, so a caller that discards
    * defaults anyway (the create form, built against `$HOME`) opts out.
    */
@@ -526,10 +514,19 @@ export function promptEntry(
   return entry;
 }
 
-/** `_WIZARD_PROMPTS` with the ticket prompt of the tracker this machine doesn't use dropped. */
+/** `_WIZARD_PROMPTS` with the issue prompt worded and validated for the configured tracker. */
 export function wizardPrompts(): PromptSpec[] {
-  const hidden = loadIssueTracker() === "github" ? "jira_id" : "github_issue";
-  return _WIZARD_PROMPTS.filter((spec) => spec.key !== hidden);
+  const tracker = issueTracker();
+  return _WIZARD_PROMPTS.map((spec) =>
+    spec.key === "issue_id"
+      ? {
+          ...spec,
+          label: `${tracker.label} issue (blank to skip)`,
+          placeholder: tracker.refExample,
+          ...(tracker.refPattern ? { pattern: tracker.refPattern } : {}),
+        }
+      : spec,
+  );
 }
 
 /** Serialise {@link wizardPrompts} to JSON-ready data for external drivers. */

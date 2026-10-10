@@ -11,7 +11,7 @@ Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 
 | Package | Path | What |
 | --- | --- | --- |
-| `sandbox-core` | [packages/sandbox-core](packages/sandbox-core) | Shared library: config/registry resolution, workspace + Jira helpers, typed wrappers over the CLI. |
+| `sandbox-core` | [packages/sandbox-core](packages/sandbox-core) | Shared library: config/registry resolution, workspace + issue-tracker helpers, typed wrappers over the CLI. |
 | `vscode-plugin` | [packages/vscode-plugin](packages/vscode-plugin) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
 
 `sandbox-core` is the one shared dependency — the CLI, the dashboard and the VS
@@ -112,7 +112,7 @@ checkout, which is what makes the two installs interchangeable. The headless
 MCP server (`apps/mcp`) is bundled in too, as `dist/mcp.js`: `sandbox mcp`,
 `sandbox connect`'s MCP server on 3002 and the `sandbox-tools` plugin's MCP
 entry all work from the package. What stays checkout-only is the workspaces
-dashboard (`apps/sandbox-dashboard`: Jira, PRs, session and MCP-App UI tools);
+dashboard (`apps/sandbox-dashboard`: issues, PRs, session and MCP-App UI tools);
 `sandbox dashboard` falls back to the headless server where it is absent.
 
 One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins
@@ -161,7 +161,7 @@ The wizard walks through your repo/workspace paths, the ingress base domains,
 and the service registry (generated from each repo's `.sandbox/services.yaml`),
 then converges the rest: the `sandbox-tools` and
 `ponytail` plugins, the companion `sandbox-workspace` checkout, a TLS
-certificate covering every routed hostname, and the optional Jira and
+certificate covering every routed hostname, and the issue-tracker and
 Telepresence prerequisites. It is safe to re-run — nothing already configured
 is overwritten.
 

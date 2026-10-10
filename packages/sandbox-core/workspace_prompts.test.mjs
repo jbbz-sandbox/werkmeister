@@ -20,7 +20,7 @@ import {
 } from "./dist/workspace_prompts.js";
 
 // The machine's config.yaml would leak in: `overrides.issue_tracker: github`
-// swaps the `jira_id` prompt for `github_issue`.
+// rewords and re-validates the `issue_id` prompt.
 process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
 
 // An empty dir: no workspace.yml to pre-resolve fields, no repos to scrape.
@@ -30,7 +30,7 @@ test("the spec carries the wizard prompts, with repos spliced after services", (
   const spec = computePromptSpec({}, root);
   const keys = spec.prompts.map((p) => p.key);
   assert.deepEqual(keys.filter((k) => k !== "repos"), [
-    "jira_id",
+    "issue_id",
     "feature",
     "work_type",
     "context_strategy",
@@ -90,19 +90,19 @@ test("context_strategy is an optional select defaulting to jit", () => {
 });
 
 // `getFormSchema` builds the spec against $HOME and discards every default, so
-// the Jira default's `git` scan of each subdirectory was pure cost
+// the issue default's `git` scan of each subdirectory was pure cost
 // (known-issues.md, "getFormSchema() Scans Your Home Directory").
-test("defaults: false skips the Jira scan of the root's repos", () => {
+test("defaults: false skips the issue scan of the root's repos", () => {
   const scanned = mkdtempSync(path.join(tmpdir(), "prompt-defaults-"));
   const repo = path.join(scanned, "repo");
   mkdirSync(repo);
   spawnSync("git", ["init", "-q"], { cwd: repo });
   spawnSync("git", ["symbolic-ref", "HEAD", "refs/heads/PROJ-7-thing"], { cwd: repo });
 
-  const jiraDefault = (opts) =>
-    computePromptSpec({}, scanned, opts).prompts.find((p) => p.key === "jira_id").default;
-  assert.equal(jiraDefault(undefined), "PROJ-7");
-  assert.equal(jiraDefault({ defaults: false }), "");
+  const issueDefault = (opts) =>
+    computePromptSpec({}, scanned, opts).prompts.find((p) => p.key === "issue_id").default;
+  assert.equal(issueDefault(undefined), "PROJ-7");
+  assert.equal(issueDefault({ defaults: false }), "");
 });
 
 const PHASES = ["research", "implement", "test", "review", "pr"];
