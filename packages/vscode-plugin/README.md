@@ -14,7 +14,7 @@ is plain Node, so there is no HTTP or stdio hop.
 
 | Data | Call |
 |---|---|
-| Names, paths, Jira keys, labels | `listWorkspaces()` |
+| Names, paths, issue IDs, labels | `listWorkspaces()` |
 | State, slot, ports, per-service health | `getWorkspaceStatuses()` — one `docker ps -a` sweep |
 | Per-service intercept state | `getIntercepts()` — one `sandbox status --intercepts --json` |
 

@@ -34,7 +34,7 @@ creates the workspace, and prints a single outcome JSON to **stdout** (progress 
 
 ```bash
 sandbox workspace --browser-form                      # open the form; create on submit
-sandbox workspace --browser-form --jira-id PROJ-1234   # pre-fill from a Jira ticket
+sandbox workspace --browser-form --issue-id <ref>      # pre-fill from an issue
 sandbox workspace --browser-form --open               # also launch VS Code afterward
 ```
 
@@ -70,7 +70,7 @@ pane, so do it in these steps yourself:
 4. Wait for the background command to exit (it blocks until submit, cancel, or timeout), then
    read the outcome JSON from the stdout file and act on it per the table above.
 
-Add `--jira-id`/`--open` to step 1 exactly as for the foreground form.
+Add `--issue-id`/`--open` to step 1 exactly as for the foreground form.
 
 ### Desktop inline alternative — the `workspace` MCP tool
 
@@ -92,10 +92,10 @@ Desktop.
 If the user already gave every input, skip the form:
 
 ```bash
-sandbox workspace add-pricing --jira-id PROJ-1234 --services backend,frontend
+sandbox workspace add-pricing --issue-id <ref> --services backend,frontend
 ```
 
-`feature` is positional; other form keys map 1:1 onto flags (`jira_id` → `--jira-id`,
+`feature` is positional; other form keys map 1:1 onto flags (`issue_id` → `--issue-id`,
 `services` → `--services`, `test_path` → `--test-path`, …). Add `--repos r1,r2` to force
 worktrees for repos beyond what the selected services imply (the form has no repos field —
 it derives repos from services).

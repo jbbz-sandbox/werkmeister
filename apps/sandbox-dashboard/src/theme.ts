@@ -35,7 +35,7 @@ export const THEME_CSS = `
     --sd-accent: #d97757;
     --sd-accent-hover: #c56647;
 
-    /* Semantic: good / caution / bad / informational (Jira, links) */
+    /* Semantic: good / caution / bad / informational (issues, links) */
     --sd-ok: #1e7a46;       --sd-ok-bg: #e9f7ef;   --sd-ok-dot: #29a35a;  --sd-ok-border: #b7e4c7;
     --sd-warn: #b76a00;     --sd-warn-bg: #fff4e5; --sd-warn-dot: #e0932f;
     --sd-err: #c0392b;      --sd-err-bg: #fdecea;  --sd-err-border: #f3c0c0;

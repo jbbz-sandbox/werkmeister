@@ -8,9 +8,9 @@ import assert from "node:assert";
 const { filterWorkspaces } = await import("../dist/lib/workspace-search.js");
 
 const all = [
-  { name: "proj-2165-pageview-500-fix", jiraId: "PROJ-2165", labels: ["urgent", "webapp"] },
-  { name: "blog-mdx-poc", jiraId: null, labels: ["blog"] },
-  { name: "frontend-refresh", jiraId: "PROJ-9001", labels: ["webapp"] },
+  { name: "proj-2165-pageview-500-fix", issueId: "PROJ-2165", labels: ["urgent", "webapp"] },
+  { name: "blog-mdx-poc", issueId: null, labels: ["blog"] },
+  { name: "frontend-refresh", issueId: "PROJ-9001", labels: ["webapp"] },
 ];
 
 // Empty query: passthrough, original order preserved.
@@ -38,11 +38,11 @@ assert.deepEqual(
   "multi-token query requires every token to match (AND)",
 );
 
-// jiraId is still searchable (existing field).
+// issueId is still searchable (existing field).
 assert.deepEqual(
   filterWorkspaces(all, "proj-9001").map((w) => w.name),
   ["frontend-refresh"],
-  "jiraId substring match",
+  "issueId substring match",
 );
 
 // No match -> empty result, not a throw.

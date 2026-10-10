@@ -26,6 +26,7 @@
  *     sandbox optimize [--collect N]           Analyze usage vs limits, recommend changes
  *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
  *     sandbox list-workspaces                  List workspaces under the workspaces root
+ *     sandbox issue <view|update> [ref]        Read or update an issue in the configured tracker
  *     sandbox remove-workspace <name>          Hand off and delete a workspace (push, down, rm)
  *     sandbox code [feature]                   Open a workspace in VS Code
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
@@ -68,7 +69,7 @@ Multi-feature concurrent development orchestrator
 /**
  * The parsed-argument bag handed to every command module's run().
  * Keys use snake_case names so command modules read
- * `args.jira_id` etc. verbatim.
+ * `args.issue_id` etc. verbatim.
  */
 export type Namespace = Record<string, unknown>;
 
@@ -470,19 +471,14 @@ const SPECS: CommandSpec[] = [
         )
         .argument(
           "[feature]",
-          "Feature name (lower-cased). Combined with --jira-id to form the " +
-            "workspace dir name, e.g. PROJ-123 + feature -> proj-123-feature. " +
+          "Feature name (lower-cased). Combined with --issue-id to form the " +
+            "workspace dir name, e.g. an issue + feature -> <issue-slug>-feature. " +
             "If omitted, resolved from ./.sandbox/workspace.yml, then interactively (TTY).",
         )
         .option(
-          "--jira-id <id>",
-          "Jira ticket ID (e.g. PROJ-123). Lower-cased and prefixed to the " +
-            "workspace dir name; passed through to init-workspace.",
-        )
-        .option(
-          "--github-issue <ref>",
-          "GitHub issue (owner/repo#n or repo#n) when the issue tracker is github; " +
-            "repo-n is prefixed to the workspace dir name like --jira-id.",
+          "--issue-id <ref>",
+          "Issue ID in this machine's issue tracker (see `sandbox setup`). Its slug is " +
+            "prefixed to the workspace dir name; passed through to init-workspace.",
         )
         .option(
           "-s, --services <list>",
@@ -538,8 +534,7 @@ const SPECS: CommandSpec[] = [
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
-      jira_id: o.jiraId ?? null,
-      github_issue: o.githubIssue ?? null,
+      issue_id: o.issueId ?? null,
       services: o.services ?? null,
       repos: o.repos ?? null,
       labels: o.labels ?? null,
@@ -558,9 +553,34 @@ const SPECS: CommandSpec[] = [
     name: "list-workspaces",
     load: () => import("./commands/list_workspaces.js"),
     configure: (cmd) => {
-      cmd.description("List the workspaces under the workspaces root with their Jira ticket and labels");
+      cmd.description("List the workspaces under the workspaces root with their issue and labels");
     },
     namespace: () => ({}),
+  },
+  {
+    name: "issue",
+    load: () => import("./commands/issue.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Read or update an issue in this machine's issue tracker (see `sandbox setup`)")
+        .addArgument(
+          new Argument(
+            "<action>",
+            "view: print the issue; update: change its status and/or add a comment",
+          ).choices(["view", "update"]),
+        )
+        .argument("[ref]", "Issue ID; omit inside a workspace to use its .sandbox/workspace.yml issue")
+        .option("--json", "view: print the issue as JSON")
+        .option("--status <name>", "update: move the issue to this status")
+        .option("--comment <text>", "update: add this comment");
+    },
+    namespace: ([action, ref], o) => ({
+      action,
+      ref: ref ?? null,
+      json: Boolean(o.json),
+      status: o.status ?? null,
+      comment: o.comment ?? null,
+    }),
   },
   {
     name: "remove-workspace",
@@ -595,7 +615,7 @@ const SPECS: CommandSpec[] = [
           "Guided machine setup: walks through paths, ingress domains and the " +
             "~/.sandbox service registry, then converges the plugins, the " +
             "sandbox-workspace checkout, the TLS certificate and the optional " +
-            "Jira, Telepresence and VS Code YAML-schema prerequisites",
+            "issue tracker, Telepresence and VS Code YAML-schema prerequisites",
         )
         .option("--check", "Report prerequisite state without prompting or running any install/update commands")
         .option("--yes", "Non-interactive: accept every default and skip optional installs");
@@ -677,10 +697,10 @@ const SPECS: CommandSpec[] = [
             "they have uncommitted changes, and delete a <user>/<workspace> branch an earlier " +
             "workspace left on origin instead of aborting (default: abort without changes).",
         )
-        .option("--jira-id <id>", "Jira ticket ID (env: SANDBOX_JIRA_ID; config: jira_id).")
         .option(
-          "--github-issue <ref>",
-          "GitHub issue, owner/repo#n or repo#n (env: SANDBOX_GITHUB_ISSUE; config: github_issue).",
+          "--issue-id <ref>",
+          "Issue ID in this machine's issue tracker (see `sandbox setup`) " +
+            "(env: SANDBOX_ISSUE_ID; config: issue_id).",
         )
         .option(
           "--labels <list>",
@@ -733,8 +753,7 @@ const SPECS: CommandSpec[] = [
       services: o.services ?? null,
       repos: o.repos ?? null,
       force: Boolean(o.force),
-      jira_id: o.jiraId ?? null,
-      github_issue: o.githubIssue ?? null,
+      issue_id: o.issueId ?? null,
       labels: o.labels ?? null,
       test_path: o.testPath ?? null,
       description: o.description ?? null,

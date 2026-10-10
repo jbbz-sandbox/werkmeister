@@ -7,7 +7,7 @@
  *
  * The UI is host-agnostic: every server call and external link goes through
  * the {@link HostBridge} the entrypoint supplies. Features: expandable
- * workspace cards (container state, Jira status, repos + PRs), lifecycle
+ * workspace cards (container state, issue status, repos + PRs), lifecycle
  * actions, and an embedded Claude Code chat panel that continues the
  * workspace's newest session (fire-and-forget sends; the browser surface
  * live-streams via SSE — the other two poll `claude-transcript` /
@@ -38,7 +38,7 @@ export interface HostBridge {
    * host connection isn't available.
    */
   callTool(name: string, args?: Record<string, unknown>): Promise<any>;
-  /** Open an external URL (Jira, GitHub) in the user's browser. */
+  /** Open an external URL (issue, PR) in the user's browser. */
   openLink(url: string): void;
   /**
    * Optional live session stream. Present ONLY on the browser surface (a
@@ -96,8 +96,8 @@ const CSS = `
   .wsui .repo-count { font-size: 12px; color: var(--sd-faint); }
 
   .wsui .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
-  .wsui .b-jira { background: var(--sd-info-bg); color: var(--sd-info); cursor: pointer; }
-  .wsui .b-jira:hover { text-decoration: underline; }
+  .wsui .b-issue { background: var(--sd-info-bg); color: var(--sd-info); cursor: pointer; }
+  .wsui .b-issue:hover { text-decoration: underline; }
   .wsui .status { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
   .wsui .st-dev { background: var(--sd-info-bg); color: var(--sd-info); }
   .wsui .st-todo { background: var(--sd-line-soft); color: var(--sd-muted); }
@@ -185,8 +185,8 @@ interface WorkspaceEntry {
   name: string;
   path: string;
   vscodeUri: string;
-  jiraId: string | null;
-  jiraUrl: string | null;
+  issueId: string | null;
+  issueUrl: string | null;
   labels: string[];
 }
 
@@ -212,7 +212,7 @@ export function initWorkspaceUI(
     </header>`;
   const bodyHTML = `
     <div class="controls" data-id="controls" style="display:none;">
-      <input type="search" data-id="filter" placeholder="Filter by name, Jira ID, status, repo, labels…">
+      <input type="search" data-id="filter" placeholder="Filter by name, issue ID, status, repo, labels…">
       <span class="count" data-id="count"></span>
     </div>
     <div class="load-status" data-id="status">Loading workspaces…</div>
@@ -231,7 +231,7 @@ export function initWorkspaceUI(
 
   // ---- state ----
   let all: WorkspaceEntry[] = [];
-  let statuses: Record<string, string> = {}; // jiraId -> status name
+  let statuses: Record<string, string> = {}; // issueId -> status name
   let statusesLoading = false;
   let cstateLoaded = false; // false until the first workspace-status resolves
   const prsByWs: Record<string, any[]> = {};
@@ -407,16 +407,16 @@ export function initWorkspaceUI(
     bar.appendChild(kubeWrap);
     bar.appendChild(msg); // shared message slot at the end
 
-    // Force-refresh the claude-backed Jira status cache (bypasses ~/.sandbox
-    // jira-cache.json). Other data reloads too; only Jira skips its cache.
+    // Force-refresh the issue status cache. Other data reloads too; only the
+    // issue statuses skip their cache.
     bar.appendChild(el("span", "tb-sep", "|"));
-    const jiraRefresh = el("button", "btn tb-btn tb-k8s", "↻ Refresh Jira") as HTMLButtonElement;
-    jiraRefresh.title = "Re-fetch Jira statuses from Atlassian, bypassing the cache";
-    jiraRefresh.addEventListener("click", () => {
-      jiraRefresh.disabled = true;
-      void load({ refreshJira: true }).finally(() => (jiraRefresh.disabled = false));
+    const issueRefresh = el("button", "btn tb-btn tb-k8s", "↻ Refresh issues") as HTMLButtonElement;
+    issueRefresh.title = "Re-fetch issue statuses from the issue tracker, bypassing the cache";
+    issueRefresh.addEventListener("click", () => {
+      issueRefresh.disabled = true;
+      void load({ refreshIssues: true }).finally(() => (issueRefresh.disabled = false));
     });
-    bar.appendChild(jiraRefresh);
+    bar.appendChild(issueRefresh);
 
     function paintKube(env: string, context: string | null): void {
       const known = ["dev", "stage", "prod"].includes(env) ? env : "other";
@@ -453,22 +453,22 @@ export function initWorkspaceUI(
     void refreshKube();
   }
 
-  // Jira statuses in chunks of 5 so no call approaches the MCP timeout;
+  // Issue statuses in chunks of 5 so no call approaches the MCP timeout;
   // progressive render as chunks land, one retry per chunk.
-  async function loadJiraStatuses(keys: string[], refresh = false): Promise<void> {
+  async function loadIssueStatuses(refs: string[], refresh = false): Promise<void> {
     const CHUNK = 5;
     statusesLoading = true;
     const chunks: string[][] = [];
-    for (let i = 0; i < keys.length; i += CHUNK) chunks.push(keys.slice(i, i + CHUNK));
+    for (let i = 0; i < refs.length; i += CHUNK) chunks.push(refs.slice(i, i + CHUNK));
     for (const chunk of chunks) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          const d = await call("jira-statuses", { keys: chunk, refresh });
+          const d = await call("issue-statuses", { refs: chunk, refresh });
           Object.assign(statuses, d.statuses || {});
           applyFilter();
           break;
         } catch (e) {
-          if (attempt === 2) console.warn("jira-statuses chunk failed after retry:", chunk.join(","));
+          if (attempt === 2) console.warn("issue-statuses chunk failed after retry:", chunk.join(","));
         }
       }
     }
@@ -650,9 +650,9 @@ export function initWorkspaceUI(
         wb.title = "Claude replied and is waiting for your next message";
         meta.appendChild(wb);
       }
-      if (w.jiraId && w.jiraUrl) meta.appendChild(linkEl("badge b-jira", w.jiraId, w.jiraUrl, w.jiraUrl));
-      if (w.jiraId) {
-        const st = statuses[w.jiraId];
+      if (w.issueId && w.issueUrl) meta.appendChild(linkEl("badge b-issue", w.issueId, w.issueUrl, w.issueUrl));
+      if (w.issueId) {
+        const st = statuses[w.issueId];
         if (st) meta.appendChild(el("span", "status " + statusClass(st), st));
         else if (statusesLoading) meta.appendChild(el("span", "status st-loading", "…"));
       }
@@ -716,7 +716,7 @@ export function initWorkspaceUI(
   let autoRetries = 0;
   const MAX_AUTO_RETRIES = 3;
 
-  async function load(opts?: { refreshJira?: boolean }): Promise<void> {
+  async function load(opts?: { refreshIssues?: boolean }): Promise<void> {
     const s = $("status");
     s.className = "load-status";
     s.style.display = "block";
@@ -735,10 +735,10 @@ export function initWorkspaceUI(
         filterInput.dataset.bound = "1";
       }
 
-      const keys = [...new Set(all.map((w) => w.jiraId).filter(Boolean))] as string[];
+      const refs = [...new Set(all.map((w) => w.issueId).filter(Boolean))] as string[];
       await Promise.all([
         refreshStatus(),
-        keys.length ? loadJiraStatuses(keys, opts?.refreshJira) : Promise.resolve(),
+        refs.length ? loadIssueStatuses(refs, opts?.refreshIssues) : Promise.resolve(),
         call("workspace-prs", {})
           .then((d: any) => (d.workspaces || []).forEach((w: any) => (prsByWs[w.name] = w.repos || [])))
           .catch(() => {}),

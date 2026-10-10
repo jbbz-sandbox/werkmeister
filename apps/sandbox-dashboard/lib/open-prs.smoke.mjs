@@ -1,5 +1,5 @@
 // Smoke test for the Open PRs pure logic: failing-checks classifier, 30-day
-// cutoff, prFromView mapping (outOfDate/changesRequested/approval-label/jiraKey/
+// cutoff, prFromView mapping (outOfDate/changesRequested/approval-label/issueId/
 // repo+number-from-url/unavailable stub), section split with self-exclusion, and
 // the markdown-it config invariant (html:false). Synthetic JSON — no network.
 //   npm run build && node lib/open-prs.smoke.mjs
@@ -62,10 +62,11 @@ assert.equal(pr.reviewStatus, "CHANGES_REQUESTED", "reviewDecision CHANGES_REQUE
 assert.equal(pr.outOfDate, true, "mergeStateStatus BEHIND");
 assert.equal(pr.failingChecks, 1, "one failing check");
 assert.equal(pr.hasApprovalLabel, true, "approval label present");
-assert.equal(pr.jiraKey, "PROJ-999", "jira key parsed from title");
-assert.equal(pr.jiraUrl, "https://example.atlassian.net/browse/PROJ-999", "jira url from jira.base_url");
+// The default tracker (no overrides.issue_tracker) is jira; its URLs need jira.base_url.
+assert.equal(pr.issueId, "PROJ-999", "issue id parsed from title");
+assert.equal(pr.issueUrl, "https://example.atlassian.net/browse/PROJ-999", "issue url from the tracker config");
 writeFileSync(cfgFile, "paths: {}\n");
-assert.equal(prFromView(view, "me").jiraUrl, null, "no jira.base_url → no link");
+assert.equal(prFromView(view, "me").issueUrl, null, "no tracker url config → no link");
 assert.deepEqual(pr.labels, ["ready-for-human-approval", "bug"], "label names");
 
 const clean = prFromView({ ...view, mergeStateStatus: "UNKNOWN", reviewDecision: "APPROVED" }, "me");
@@ -112,16 +113,16 @@ assert.equal(isValidPrUrl("https://evil.com/a/b/pull/1"), false, "non-github hos
 assert.equal(isValidPrUrl("https://github.com/sandbox/sandbox/pull/abc"), false, "non-numeric PR rejected");
 console.log("✓ isValidPrUrl injection guard");
 
-// 7. buildReconcileContext: embeds Jira + PR + diff; truncates a huge diff.
+// 7. buildReconcileContext: embeds issue + PR + diff; truncates a huge diff.
 const ctx = buildReconcileContext(
-  { key: "PROJ-1", summary: "Do a thing", status: "In Review", description: "ticket body" },
+  { ref: "PROJ-1", title: "Do a thing", status: "In Review", description: "ticket body" },
   { url: "https://github.com/sandbox/sandbox/pull/9", title: "PR title", body: "pr body", author: { login: "me" }, labels: [{ name: "ready-for-human-approval" }] },
   "diff --git a b",
 );
-assert.ok(ctx.includes("PROJ-1") && ctx.includes("ticket body"), "embeds Jira ticket");
+assert.ok(ctx.includes("PROJ-1") && ctx.includes("ticket body"), "embeds the issue");
 assert.ok(ctx.includes("PR title") && ctx.includes("pr body") && ctx.includes("@me"), "embeds PR details");
 assert.ok(ctx.includes("diff --git a b"), "embeds diff");
-const bigCtx = buildReconcileContext({ key: "PROJ-2" }, { url: "https://github.com/x/y/pull/1", unavailable: true }, "x".repeat(200_000));
+const bigCtx = buildReconcileContext({ ref: "PROJ-2" }, { url: "https://github.com/x/y/pull/1", unavailable: true }, "x".repeat(200_000));
 assert.ok(bigCtx.includes("diff truncated"), "huge diff is truncated");
 assert.ok(bigCtx.includes("(PR details unavailable)"), "unavailable PR degrades in place");
 console.log("✓ buildReconcileContext");

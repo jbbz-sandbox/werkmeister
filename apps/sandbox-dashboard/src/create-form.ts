@@ -255,50 +255,55 @@ function isBlank(v: unknown): boolean {
 }
 
 /**
- * Merge Jira-derived fields into the current form data, fill-empty style: a
+ * Merge issue-derived fields into the current form data, fill-empty style: a
  * field the user already touched is never clobbered, so re-fetching is safe.
- * `jira_id` is the exception — the lookup normalizes it (e.g. `proj-1234` →
- * `PROJ-1234`), so the canonical key always wins.
+ * `issue_id` is the exception — the lookup normalizes it (e.g. `proj-1234` →
+ * `PROJ-1234`), so the canonical ref always wins.
  */
-function mergeJiraFields(
+function mergeIssueFields(
   current: Record<string, unknown>,
-  jira: Record<string, unknown>,
+  issue: Record<string, unknown>,
 ): Record<string, unknown> {
   const out = { ...current };
-  for (const [k, v] of Object.entries(jira)) {
+  for (const [k, v] of Object.entries(issue)) {
     if (!isBlank(v) && isBlank(out[k])) out[k] = v;
   }
-  if (typeof jira.jira_id === "string" && jira.jira_id) out.jira_id = jira.jira_id;
+  if (typeof issue.issue_id === "string" && issue.issue_id) out.issue_id = issue.issue_id;
   return out;
 }
 
-/** Text widget for `jira_id` with a "Fetch from Jira" button (opt-in via ui:widget "jira"). */
-function makeJiraWidget(bridge: HostBridge) {
-  return function JiraWidget(props: WidgetProps): React.ReactElement<any> {
-    const { id, value, disabled, readonly, onChange, onBlur, onFocus, placeholder, autofocus, formContext } = props;
+/**
+ * Text widget for `issue_id` with a "Fetch from <tracker>" button (opt-in via
+ * ui:widget "issue"). The tracker's label arrives in `ui:options.trackerLabel`,
+ * set server-side where the bundle is built.
+ */
+function makeIssueWidget(bridge: HostBridge) {
+  return function IssueWidget(props: WidgetProps): React.ReactElement<any> {
+    const { id, value, disabled, readonly, onChange, onBlur, onFocus, placeholder, autofocus, formContext, options } = props;
+    const trackerLabel = typeof options?.trackerLabel === "string" ? options.trackerLabel : "";
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [note, setNote] = useState<string | null>(null);
     const text = value == null ? "" : String(value);
 
-    async function fetchFromJira(): Promise<void> {
+    async function fetchIssue(): Promise<void> {
       setBusy(true);
       setErr(null);
       setNote(null);
       try {
-        const res = await bridge.callTool("jira-form-data", { ref: text });
+        const res = await bridge.callTool("issue-form-data", { ref: text });
         const data = ((res?.formData ?? {}) as Record<string, unknown>) || {};
-        const apply = (formContext as { applyJiraData?: (d: Record<string, unknown>) => void } | undefined)
-          ?.applyJiraData;
+        const apply = (formContext as { applyIssueData?: (d: Record<string, unknown>) => void } | undefined)
+          ?.applyIssueData;
         if (apply) apply(data);
-        const key = typeof data.jira_id === "string" ? data.jira_id : "";
-        const filled = Object.keys(data).filter((k) => k !== "jira_id");
+        const key = typeof data.issue_id === "string" ? data.issue_id : "";
+        const filled = Object.keys(data).filter((k) => k !== "issue_id");
         setNote(
           key
             ? filled.length
               ? `Filled ${filled.join(", ")} from ${key}.`
               : `Found ${key}, but no fields to fill.`
-            : "No ticket found in that value.",
+            : "No issue found in that value.",
         );
       } catch (ex) {
         setErr((ex as Error).message || "Lookup failed.");
@@ -330,10 +335,10 @@ function makeJiraWidget(bridge: HostBridge) {
           {
             type: "button",
             className: "refine-btn",
-            onClick: fetchFromJira,
+            onClick: fetchIssue,
             disabled: busy || disabled || readonly || !text.trim(),
           },
-          busy ? "Fetching…" : "⤓ Fetch from Jira",
+          busy ? "Fetching…" : trackerLabel ? `⤓ Fetch from ${trackerLabel}` : "⤓ Fetch issue",
         ),
         err ? e("span", { className: "refine-err" }, err) : note ? e("span", { className: "refine-note" }, note) : null,
       ),
@@ -391,7 +396,7 @@ function WorkspaceForm({
   formDataRef.current = formData;
 
   const TextareaWidget = React.useMemo(() => makeTextareaWidget(bridge), [bridge]);
-  const JiraWidget = React.useMemo(() => makeJiraWidget(bridge), [bridge]);
+  const IssueWidget = React.useMemo(() => makeIssueWidget(bridge), [bridge]);
 
   async function onSubmit({ formData }: { formData?: unknown }): Promise<void> {
     setBusy(true);
@@ -415,11 +420,11 @@ function WorkspaceForm({
   // Drop the root schema title — the card already has a heading.
   const schema: RJSFSchema = { ...bundle.schema, title: undefined };
 
-  // Route the `jira_id` field through the JiraWidget (adds the Fetch button)
+  // Route the `issue_id` field through the IssueWidget (adds the Fetch button)
   // client-side, so the shared CLI-provided schema needs no browser-only knob.
   const uiSchema: UiSchema = {
     ...bundle.uiSchema,
-    jira_id: { ...(bundle.uiSchema?.jira_id as Record<string, unknown> | undefined), "ui:widget": "jira" },
+    issue_id: { ...(bundle.uiSchema?.issue_id as Record<string, unknown> | undefined), "ui:widget": "issue" },
   };
 
   const actions = e(
@@ -453,13 +458,13 @@ function WorkspaceForm({
         formData,
         formContext: {
           getFormData: () => formDataRef.current,
-          // The Jira widget calls this to populate fields from a ticket without
-          // clobbering anything the user has already filled (see mergeJiraFields).
-          applyJiraData: (data: Record<string, unknown>) =>
-            setFormData((prev) => mergeJiraFields(prev, data)),
+          // The issue widget calls this to populate fields from an issue without
+          // clobbering anything the user has already filled (see mergeIssueFields).
+          applyIssueData: (data: Record<string, unknown>) =>
+            setFormData((prev) => mergeIssueFields(prev, data)),
         },
         validator,
-        widgets: { textarea: TextareaWidget, jira: JiraWidget, checkboxes: GroupedCheckboxesWidget },
+        widgets: { textarea: TextareaWidget, issue: IssueWidget, checkboxes: GroupedCheckboxesWidget },
         customValidate: validateRepoSelection,
         transformErrors,
         liveValidate: submitAttempted,

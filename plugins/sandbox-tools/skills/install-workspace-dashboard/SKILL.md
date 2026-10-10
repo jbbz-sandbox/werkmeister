@@ -7,7 +7,7 @@ description: Install the Sandbox Workspaces live dashboard as a Cowork artifact.
 
 Installs `apps/sandbox-dashboard/dist/workspace-list.artifact.html` (from the
 sandbox repo) as a persistent Cowork live artifact: an expandable
-workspace list (container state, Jira status, repos + PRs, lifecycle actions)
+workspace list (container state, issue status, repos + PRs, lifecycle actions)
 with an embedded Claude Code chat panel per workspace that continues that
 workspace's newest session.
 

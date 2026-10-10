@@ -26,13 +26,28 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
 import type { FormSchemaBundle } from "sandbox-core";
-import { fetchJiraFormData, refinePrompt, WorkspaceError } from "sandbox-core";
+import { fetchIssueFormData, getFormSchema, refinePrompt, WorkspaceError } from "sandbox-core";
+import { issueTracker } from "sandbox-core/issue_tracker";
 
 // Works both from source (lib/localhost-form.ts via tsx) and compiled
 // (dist/lib/localhost-form.js) — the built page always lives at dist/form.html.
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "..", "dist")
   : path.join(import.meta.dirname, "..");
+
+/**
+ * `getFormSchema()` with the configured tracker's label on `issue_id`'s
+ * `ui:options.trackerLabel`, so the form's "Fetch from <tracker>" button names
+ * the tracker without the browser bundle knowing it. Every surface that hands
+ * the form a bundle (server.ts, form-cli.ts) builds it here.
+ */
+export async function getFormBundle(): Promise<FormSchemaBundle> {
+  const bundle = await getFormSchema();
+  const ui = (bundle.uiSchema.issue_id ?? {}) as Record<string, unknown>;
+  const opts = (ui["ui:options"] ?? {}) as Record<string, unknown>;
+  bundle.uiSchema.issue_id = { ...ui, "ui:options": { ...opts, trackerLabel: issueTracker().label } };
+  return bundle;
+}
 
 export type LocalhostFormStatus = "submitted" | "cancelled" | "timeout";
 
@@ -156,9 +171,9 @@ export function promptViaLocalhostForm(
             res.json({ structuredContent: { refined } });
             return;
           }
-          case "jira-form-data": {
+          case "issue-form-data": {
             const ref = typeof args?.ref === "string" ? args.ref : "";
-            res.json({ structuredContent: { formData: await fetchJiraFormData(ref) } });
+            res.json({ structuredContent: { formData: await fetchIssueFormData(ref) } });
             return;
           }
           case "create-workspace":

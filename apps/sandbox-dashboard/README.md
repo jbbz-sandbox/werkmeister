@@ -2,7 +2,7 @@
 
 The sandbox **workspace dashboard** (`sandbox dashboard`): ~29 tools for creating and
 operating sandbox workspaces — worktree creation, container lifecycle, PR review,
-Jira lookups, k8s/kube health, and an embedded Claude Code session bridge — plus
+issue lookups, k8s/kube health, and an embedded Claude Code session bridge — plus
 interactive UIs for every kind of MCP host. It delegates all real work to the
 `sandbox` CLI, `gh`, `kubectl`, and the local `claude` CLI; the server renders,
 routes, and shells out.
@@ -36,17 +36,17 @@ sampling (no host implements it) — prompt refinement goes through the
 
 | Group | Tools |
 |-------|-------|
-| Create workspace | `workspace` (App tool: inline form or localhost fallback; `jira` arg pre-fills), `create-workspace`, `workspace-form-schema`, `refine-prompt` |
+| Create workspace | `workspace` (App tool: inline form or localhost fallback; `issue` arg pre-fills), `create-workspace`, `workspace-form-schema`, `issue-form-data`, `refine-prompt` |
 | List & manage | `list-workspaces` (App tool), `workspace-status`, `workspace-action` (start/stop/restart/down), `remove-workspace`, `open-workspace` (VS Code), `open-feature` (tagged browser), `open-workspaces-ui` |
-| Pull requests | `workspace-prs`, `open-prs`, `pr-approve`, `pr-triage` |
-| Jira | `jira-issue`, `jira-statuses` |
+| Pull requests | `workspace-prs`, `open-prs`, `pr-approve`, `pr-reconcile` |
+| Issues | `issue`, `issue-statuses` |
 | Infra | `sandbox-connect`, `docker-ui`, `k8s-forwards-status`, `kube-context`, `kube-switch` |
 | Claude sessions | `claude-transcript`, `claude-send`, `claude-turn-status`, `claude-resume` (Terminal) |
 
-Jira reads are **REST-first** (`lib/jira-rest.ts`, creds in the `jira:` section of
-`~/.sandbox/config.yaml` — run `sandbox setup` to check them) with the `claude` CLI
-Atlassian-MCP path as automatic fallback, so machines without a token degrade
-instead of breaking.
+Issue reads and status lookups go through the issue tracker `sandbox setup`
+configured (`issueTracker()` in `sandbox-core/issue_tracker`); the dashboard never
+names a tracker, and the create form's "Fetch from …" button takes its label from
+the bundle (`ui:options.trackerLabel` on `issue_id`).
 
 ## Single source of truth
 
@@ -71,7 +71,7 @@ The CLI owns the inputs and the create logic:
 | `lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
 | `lib/markdown.ts` · `lib/workspace-search.ts` | markdown-it config (`html:false`); workspace fuzzy match |
-| `sandbox-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, Jira REST fast path, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
+| `sandbox-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
 | `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
 
 ## Build & test

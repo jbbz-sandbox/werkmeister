@@ -187,8 +187,8 @@ When you run `sandbox up my-feature`, the CLI:
 
 `sandbox init-workspace` writes the per-feature `CLAUDE.md` and `.env` into the workspace root. Each input resolves in this order (first non-empty wins):
 
-1. **CLI flag** — `--feature`, `--services`, `--jira-id`, `--test-path`, `--description`, `--task`
-2. **`SANDBOX_*` env var** — `SANDBOX_FEATURE`, `SANDBOX_SERVICES`, `SANDBOX_JIRA_ID`, `SANDBOX_TEST_PATH`, `SANDBOX_DESCRIPTION`, `SANDBOX_TASK`
+1. **CLI flag** — `--feature`, `--services`, `--issue-id`, `--test-path`, `--description`, `--task`
+2. **`SANDBOX_*` env var** — `SANDBOX_FEATURE`, `SANDBOX_SERVICES`, `SANDBOX_ISSUE_ID`, `SANDBOX_TEST_PATH`, `SANDBOX_DESCRIPTION`, `SANDBOX_TASK`
 3. **Config file** — `<workspace>/.sandbox/workspace.yml` (override with `--config <path>` or `SANDBOX_WORKSPACE_CONFIG`; legacy `workspace.jsonc` / `workspace.json` are still read)
 4. **Stdin / defaults** — piped stdin or a slug-derived hint from the workspace directory name (for `task`)
 
@@ -196,8 +196,11 @@ When you run `sandbox up my-feature`, the CLI:
 sandbox init-workspace \
     --feature blog \
     --services frontend,backend \
-    --jira-id PROJ-1234
+    --issue-id <ref>
 ```
+
+`<ref>` is an issue ID in the tracker `sandbox setup` picked; it is stored as `issue_id` in
+`.sandbox/workspace.yml`.
 
 ### Slots & Port Ranges
 
@@ -1211,13 +1214,24 @@ None of these are required; each turns on only when configured.
 
 `sandbox setup` asks which tracker this machine uses — `jira` (the default) or `github` —
 and stores it as `overrides.issue_tracker` in `~/.sandbox/config.yaml`. With `github`, a
-workspace's ticket is `owner/repo#n` and issues are filed in the registry repos under
+workspace's issue ID is `owner/repo#n` and issues are filed in the registry repos under
 `overrides.github_org`.
 
-For Jira, set `jira.base_url` (e.g. `https://your-org.atlassian.net`) to get ticket links in
+For Jira, set `jira.base_url` (e.g. `https://your-org.atlassian.net`) to get issue links in
 CLAUDE.md, the dashboard, and VS Code. Briefings fetched through the Atlassian MCP use
 `jira.cloud_id` when set, otherwise the `base_url` hostname. The REST token is optional; see
 [jira-rest-setup.md](jira-rest-setup.md).
+
+Read or update an issue in the configured tracker from the command line:
+
+```bash
+sandbox issue view [ref] [--json]                                # print the issue (--json: as JSON)
+sandbox issue update [ref] --status <name> --comment <text>      # either option alone works too
+```
+
+`ref` is optional inside a workspace — it defaults to the workspace's `issue_id`. On GitHub,
+`--status closed` or `done` closes the issue, `open` reopens it, and any other status is added
+as a label.
 
 #### Slack review requests
 

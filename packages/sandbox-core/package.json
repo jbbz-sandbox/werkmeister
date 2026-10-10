@@ -3,7 +3,7 @@
   "version": "0.4.0",
   "type": "module",
   "private": true,
-  "description": "Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and Jira helpers. Consumed by the `sandbox` CLI itself, sandbox-dashboard, and the VS Code extension.",
+  "description": "Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and issue-tracker helpers. Consumed by the `sandbox` CLI itself, sandbox-dashboard, and the VS Code extension.",
   "main": "dist/sandbox.js",
   "types": "dist/sandbox.d.ts",
   "exports": {
