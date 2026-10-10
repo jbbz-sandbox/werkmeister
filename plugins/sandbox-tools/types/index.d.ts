@@ -70,6 +70,8 @@ declare module 'claude-code' {
       draft: Draft
       /** '' idle, or what the Create tab is waiting on. */
       formBusy: '' | 'fetch' | 'create'
+      /** The Create tab's last-clicked text field, by key: the one drawn with a cursor. */
+      focusedField: string
     }
   }
 }

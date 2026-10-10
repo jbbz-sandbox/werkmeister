@@ -108,6 +108,7 @@ const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
 const FORM = { plugin: 'sandbox-tools', key: 'formSchema' } as const
 const DRAFT = { plugin: 'sandbox-tools', key: 'draft' } as const
 const FORM_BUSY = { plugin: 'sandbox-tools', key: 'formBusy' } as const
+const FOCUSED = { plugin: 'sandbox-tools', key: 'focusedField' } as const
 
 /** Mobile draws no Input or Select, so there the Create tab hands the form to the model instead. */
 export function createPrompt(issueId: string): string {
@@ -160,11 +161,6 @@ export function optionGroups(f: FormField): [string, string[]][] {
   return out.filter(([, opts]) => opts.length > 0)
 }
 
-/** The key of the next one-line field after `key`, for Enter; null at the last. */
-export function nextTextField(fields: FormField[], key: string): string | null {
-  const i = fields.findIndex(f => f.key === key)
-  return fields.slice(i + 1).find(f => f.kind === 'text')?.key ?? null
-}
 
 const isEmpty = (v: Draft[string] | undefined) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
 
@@ -515,9 +511,13 @@ export const register: Register = on => {
 
   // The multi-line fields (textarea.tsx) post every edit as { value }; the element is `f:<field key>`.
   on('ui.message', { requestId: PANE }, async ($, e, next) => {
-    const value = (e.data as { value?: unknown } | null)?.value
-    if (!e.element.startsWith('f:') || typeof value !== 'string') return next(e)
-    await setField($, e.element.slice(2), value)
+    if (!e.element.startsWith('f:')) return next(e)
+    const key = e.element.slice(2)
+    const data = (e.data ?? {}) as { value?: unknown; focus?: unknown; submit?: unknown }
+    if (data.focus === true) await $.state.set(FOCUSED, key)
+    if (typeof data.value === 'string') await setField($, key, data.value)
+    // Enter in the issue field fills from the issue; elsewhere a one-line Enter does nothing.
+    if (data.submit === true && key === 'issue_id') void fetchIssue($)
     return {}
   })
 
@@ -568,17 +568,15 @@ export const register: Register = on => {
       // Desktop and terminal draw a Client: there a multi-line field is textarea.tsx; elsewhere one line.
       const Client = 'Client' in els ? els.Client : null
       // Enter in a one-line field moves to the next one; the issue field's Enter fills from the issue.
-      const enter = (f: FormField, v: string) => {
-        void setField($, f.key, v).then(() => {
-          if (f.key === 'issue_id') return fetchIssue($)
-          const next = nextTextField(fields, f.key)
-          // A focus the site can't move (it doesn't hold the keys) is no error: the value is already kept.
-          return next ? $.ui.focus({ requestId: PANE, key: `f:${next}` }).then(() => undefined, () => undefined) : undefined
-        })
-      }
-      const line = (f: FormField) => (
-        <Input key={`f:${f.key}`} placeholder={f.placeholder} value={text(f.key)} submitLabel={f.key === 'issue_id' ? 'fill' : 'next field'} onInput={v => void setField($, f.key, v)} onSubmit={v => enter(f, v)} />
-      )
+      const { value: focused = '' } = await $.state.get(FOCUSED)
+      // Text fields are textarea.tsx where a Client draws (no Enter chip, multi-line when asked);
+      // elsewhere the app's one-line Input.
+      const textField = (f: FormField) =>
+        Client ? (
+          <Client key={`f:${f.key}`} module="./textarea.tsx" props={{ value: text(f.key), placeholder: f.placeholder, multiline: f.kind === 'textarea', focused: focused === f.key }} />
+        ) : (
+          <Input key={`f:${f.key}`} placeholder={f.placeholder} value={text(f.key)} submitLabel={f.key === 'issue_id' ? 'fill' : 'save'} onInput={v => void setField($, f.key, v)} onSubmit={v => void setField($, f.key, v).then(() => (f.key === 'issue_id' ? fetchIssue($) : undefined))} />
+        )
       return (
         <Box flexDirection="column">
           {tabs}
@@ -588,10 +586,7 @@ export const register: Register = on => {
             <Box key={`field:${f.key}`} flexDirection="column" marginBottom={1}>
               <Text bold>{`${f.key === 'issue_id' ? `${form.trackerLabel} issue` : f.title}${f.required ? ' *' : ''}`}</Text>
               {f.help !== '' && f.key !== 'issue_id' && <Text dimColor>{f.help}</Text>}
-              {f.kind === 'text' && line(f)}
-              {f.kind === 'textarea' && (Client
-                ? <Client key={`f:${f.key}`} module="./textarea.tsx" props={{ value: text(f.key), placeholder: f.placeholder }} />
-                : line(f))}
+              {(f.kind === 'text' || f.kind === 'textarea') && textField(f)}
               {f.kind === 'select' && (
                 <Select key={`f:${f.key}`} options={[{ value: '', label: 'Choose…' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />
               )}

@@ -1,13 +1,17 @@
 import type { ClientModule } from 'claude-code'
 
 /**
- * A multi-line text field for the Create tab: the pane's own Input is one line.
- * Click to type; Enter adds a line; arrows, Home/End and Backspace/Delete edit.
- * Every edit is posted to the hooks module as `{ value }`; a new `value` prop
- * (an issue fetch filled it) replaces the text.
+ * The Create tab's text field, drawn by the plugin: the app's own Input carries
+ * an Enter hint chip a plugin cannot remove, and has no multi-line mode.
+ * Click to type; arrows, Home/End and Backspace/Delete edit; with `multiline`
+ * Enter adds a line, without it Enter submits. Posts to the hooks module:
+ * `{ focus: true }` on a click, `{ value }` on every edit, `{ submit: true }`
+ * on a one-line Enter. A new `value` prop (an issue fetch filled it) replaces
+ * the text; `focused` (the pane's last-clicked field) draws the cursor.
+ * Pasting does not reach it: the engine hands a plugin's region keys, not pastes.
  */
-type Props = { value: string; placeholder: string }
-type State = { text: string; cursor: number; seen: string; focused: boolean }
+type Props = { value: string; placeholder: string; multiline: boolean; focused: boolean }
+type State = { text: string; cursor: number; seen: string }
 
 /** [line, column] of `cursor` in `text`. */
 function lineCol(text: string, cursor: number): [number, number] {
@@ -41,49 +45,49 @@ export function edit(s: { text: string; cursor: number }, key: string, ctrl?: bo
   }
   // Any other named key (tab, pageup, f1, ...) or a ctrl chord types nothing.
   if (ctrl || key === '' || (key.length > 1 && /^[a-z0-9]+$/.test(key))) return s
-  // A typed character, or a paste delivered as one string.
   return { text: text.slice(0, cursor) + key + text.slice(cursor), cursor: cursor + key.length }
 }
 
-const Textarea: ClientModule<Props, State> = (props, surface) => {
+const TextField: ClientModule<Props, State> = (props, surface) => {
   const { Box, Text } = surface.elements
-  const prev = surface.state
-  let s = prev
+  let s = surface.state
   if (!s || props.value !== s.seen) {
     // First draw, or the value changed from outside (a fetch): take it.
-    s = { text: props.value, cursor: props.value.length, seen: props.value, focused: prev?.focused ?? false }
-    if (!prev) {
-      surface.onPointer(ev => {
-        const cur = surface.state
-        if (ev.type === 'down' && cur && !cur.focused) surface.setState({ ...cur, focused: true })
-      })
-      surface.onKey(ev => {
-        const cur = surface.state
-        if (!cur) return
-        const next = edit(cur, ev.key, ev.ctrl)
-        if (next === cur) return
-        surface.setState({ ...cur, ...next, seen: next.text, focused: true })
-        surface.post({ value: next.text })
-      })
-    }
+    s = { text: props.value, cursor: props.value.length, seen: props.value }
     surface.setState(s)
   }
-  const atNewline = s.text[s.cursor] === '\n' || s.cursor === s.text.length
+  // Listeners are set on every draw (a later call replaces the last), so they see this draw's props.
+  surface.onPointer(ev => {
+    if (ev.type === 'down') surface.post({ focus: true })
+  })
+  surface.onKey(ev => {
+    const cur = surface.state
+    if (!cur) return
+    if (ev.key === 'return' && !props.multiline) {
+      surface.post({ submit: true })
+      return
+    }
+    const next = edit(cur, ev.key, ev.ctrl)
+    if (next === cur) return
+    surface.setState({ ...next, seen: next.text })
+    surface.post({ value: next.text })
+  })
+  const atEnd = s.text[s.cursor] === '\n' || s.cursor === s.text.length
   return (
-    <Box borderStyle="round" borderColor={s.focused ? 'claude' : 'inactive'} paddingX={1} flexDirection="column">
-      {s.text === '' && !s.focused ? (
-        <Text dimColor>{props.placeholder || 'Click to type. Enter adds a line.'}</Text>
-      ) : !s.focused ? (
+    <Box borderStyle="round" borderColor={props.focused ? 'claude' : 'inactive'} paddingX={1} flexDirection="column">
+      {s.text === '' && !props.focused ? (
+        <Text dimColor>{props.placeholder || (props.multiline ? 'Click to type. Enter adds a line.' : 'Click to type.')}</Text>
+      ) : !props.focused ? (
         <Text>{s.text}</Text>
       ) : (
         <Text>
           {s.text.slice(0, s.cursor)}
-          <Text inverse>{atNewline ? ' ' : s.text[s.cursor]}</Text>
-          {s.text.slice(atNewline ? s.cursor : s.cursor + 1)}
+          <Text inverse>{atEnd ? ' ' : s.text[s.cursor]}</Text>
+          {s.text.slice(atEnd ? s.cursor : s.cursor + 1)}
         </Text>
       )}
     </Box>
   )
 }
 
-export default Textarea
+export default TextField
