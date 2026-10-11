@@ -14,6 +14,7 @@
  * stdout; all human-facing progress goes to stderr.
  *
  * Flags:
+ *   --prefill <json>      Form values from CLI flags; they win over the issue's.
  *   --issue <ref>         Issue ID/URL (this machine's issue tracker) to pre-fill the form.
  *   --open                Launch VS Code on the new workspace (default: off).
  *   --timeout <seconds>   How long to wait for the form submit (default: 600).
@@ -33,6 +34,7 @@ import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {
   issue?: string;
+  prefill?: Record<string, string>;
   open: boolean;
   timeoutMs: number;
 }
@@ -42,7 +44,13 @@ function parseArgs(argv: string[]): CliArgs {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--issue") out.issue = argv[++i];
-    else if (arg === "--open") out.open = true;
+    else if (arg === "--prefill") {
+      try {
+        out.prefill = JSON.parse(argv[++i]);
+      } catch {
+        process.stderr.write("form-cli: ignoring unparseable --prefill\n");
+      }
+    } else if (arg === "--open") out.open = true;
     else if (arg === "--timeout") out.timeoutMs = Math.max(1, Number(argv[++i]) || 600) * 1000;
   }
   return out;
@@ -60,10 +68,12 @@ async function main(): Promise<void> {
   let bundle;
   try {
     bundle = await getFormBundle();
+    // Explicit CLI values win over the issue's.
     if (args.issue) {
       const issueData = await fetchIssueFormData(args.issue);
       bundle.formData = { ...bundle.formData, ...issueData };
     }
+    if (args.prefill) bundle.formData = { ...bundle.formData, ...args.prefill };
   } catch (e) {
     const message = e instanceof WorkspaceError ? e.message : (e as Error).message;
     emit({ status: "error", message }, 1);

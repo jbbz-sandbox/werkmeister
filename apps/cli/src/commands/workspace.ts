@@ -39,12 +39,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { error, getMonorepoRoot } from "../lib/config.js";
+import { error, getMonorepoRoot, info } from "../lib/config.js";
 import { run as procRun } from "sandbox-core/proc";
 // The work itself lives in core (note 086 row 5), which is how `createWorkspace`
 // runs it without spawning this CLI. What stays here is the wizard, the
 // browser-form launcher, and exit codes.
-import { WorkspaceInitError, provisionWorkspace } from "sandbox-core/workspace_init";
+import { WorkspaceError, createWorkspace, distillIssue } from "sandbox-core";
+import { fetchIssueSnapshot, type IssueSnapshot } from "sandbox-core/issue_snapshot";
+import { WorkspaceInitError } from "sandbox-core/workspace_init";
 // init-workspace owns the piped-stdin reader; the prompt definitions and the
 // form schema built from them live in core, where the dashboard reaches them
 // without spawning this CLI (note 087).
@@ -57,9 +59,12 @@ import { resolveInputs, workspacePromptSpec } from "sandbox-core/workspace_promp
 // Input resolution
 // ---------------------------------------------------------------------------
 
-async function resolveWorkspaceInputs(args: Record<string, unknown>): Promise<Record<string, string>> {
+async function resolveWorkspaceInputs(
+  args: Record<string, unknown>,
+): Promise<{ resolved: Record<string, string>; issue?: IssueSnapshot }> {
   const base = process.cwd();
   let resolved = resolveInputs(args, base);
+  let issue: IssueSnapshot | undefined;
   // On a TTY, run the wizard for whatever's still unresolved, rendered from the
   // same form schema the browser form uses. Fields already supplied via
   // CLI/env/config are left out of the schema, so a passed feature skips just
@@ -68,9 +73,19 @@ async function resolveWorkspaceInputs(args: Record<string, unknown>): Promise<Re
   if (process.stdin.isTTY) {
     resolved = await runFormWizard(buildFormSchema(workspacePromptSpec(base, resolved)), resolved, {
       intro: "Interactive wizard — press Ctrl-C to abort. Defaults shown in [brackets].",
+      // Typed in the wizard: read the issue now so later prompts default to it.
+      afterField: async (key, r) => {
+        // A flag-supplied issue is createWorkspace's to handle.
+        if (key !== "issue_id" || !r.issue_id || args.issue_id) return {};
+        issue = await fetchIssueSnapshot(r.issue_id);
+        if (args.no_distill) return { task: issue.title };
+        const { fields, warning } = await distillIssue(issue);
+        if (warning) info(`Issue read; fields not pre-filled: ${warning}`);
+        return { task: issue.title, ...fields };
+      },
     });
   }
-  return resolved;
+  return { resolved, issue };
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +108,17 @@ function which(cmd: string): string | null {
   return null;
 }
 
+/** CLI keys the form knows; everything else (browser_form, open_vscode, force, no_distill) is a CLI switch. */
+const FORM_KEYS = ["feature", "issue_id", "services", "repos", "labels", "task", "test_path", "description", "starting_prompt", "work_type", "context_strategy"];
+
+export function browserFormCommand(node: string, cliJs: string, args: Record<string, unknown>): string[] {
+  const prefill = Object.fromEntries(FORM_KEYS.filter((k) => args[k] != null && args[k] !== "").map((k) => [k, args[k]]));
+  const cmd = [node, cliJs];
+  if (Object.keys(prefill).length) cmd.push("--prefill", JSON.stringify(prefill));
+  if (args.open_vscode) cmd.push("--open");
+  return cmd;
+}
+
 function runBrowserForm(args: Record<string, unknown>): void {
   const cliJs = path.join(getMonorepoRoot(), "apps", "sandbox-dashboard", "dist", "form-cli.js");
   if (!(fs.existsSync(cliJs) && fs.statSync(cliJs).isFile())) {
@@ -108,13 +134,7 @@ function runBrowserForm(args: Record<string, unknown>): void {
     process.exit(1);
   }
 
-  const cmd = [node, cliJs];
-  if (args.issue_id) {
-    cmd.push("--issue", args.issue_id as string);
-  }
-  if (args.open_vscode) {
-    cmd.push("--open");
-  }
+  const cmd = browserFormCommand(node, cliJs, args);
 
   // Inherit stdio: node's stdout (outcome JSON) and stderr (progress) flow
   // straight through to our caller.
@@ -131,12 +151,21 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // 1. Resolve inputs (CLI > ./.sandbox/workspace.yml > interactive), then hand
   //    the whole creation to core.
+  const { resolved, issue } = await resolveWorkspaceInputs(args);
   try {
-    await provisionWorkspace(await resolveWorkspaceInputs(args), { readStdinTask, force: Boolean(args.force) });
+    await createWorkspace(resolved, {
+      live: true,
+      open: Boolean(args.open_vscode),
+      cwd: process.cwd(),
+      issue,
+      // The wizard already distilled (and the person reviewed) when it read the issue.
+      distill: args.no_distill || issue ? false : undefined,
+      readStdinTask,
+      force: Boolean(args.force),
+    });
   } catch (exc) {
-    // Its `[err]`/`[warn]` line is already out; restating it is all main.ts's
-    // handler would do.
-    if (exc instanceof WorkspaceInitError) {
+    if (exc instanceof WorkspaceError || exc instanceof WorkspaceInitError) {
+      error((exc as Error).message);
       process.exit(1);
     }
     throw exc;
