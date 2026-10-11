@@ -80,9 +80,9 @@ function salvageLegacyHandoffNotes(workspaceRoot: string, claudeMdPath: string):
 }
 
 /**
- * A handoff seeded by an older CLI that had no prompt to carry. It blocks
- * nothing: the next init that has a prompt supersedes it (notes-conventions.md
- * rule 1).
+ * A handoff seeded by an older CLI that had no prompt to carry, or from the
+ * issue alone at creation. It blocks nothing: the next init that has a
+ * prompt supersedes it (notes-conventions.md rule 1).
  */
 function isPlaceholderHandoff(note: Note): boolean {
   return (
@@ -100,7 +100,8 @@ function supersedeNote(note: Note): void {
 /**
  * Seed the workspace's first handoff note from `starting_prompt`.
  *
- * Writes nothing without a prompt — the work-type line alone is already in
+ * Writes nothing without a prompt or an issue (the caller passes the issue
+ * alone only at creation) — the work-type line alone is already in
  * CLAUDE.md's by-phase table, and a placeholder used to block the real prompt
  * forever. Exported for its tests.
  */
@@ -138,13 +139,15 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
     if (wt) {
       lines.push(`This workspace is a ${wt} — ${plan.hint}.`, "");
     }
-    lines.push(
-      "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
-      "workspace was created. The task below has not begun — confirm",
-      "direction with the user before executing it.",
-      "",
-    );
-    if (prompt) lines.push(prompt);
+    if (prompt) {
+      lines.push(
+        "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
+        "workspace was created. The task below has not begun — confirm",
+        "direction with the user before executing it.",
+        "",
+        prompt,
+      );
+    }
     fs.writeFileSync(path.join(directory, filename), lines.join("\n") + "\n");
     success(`Seeded starting handoff → .sandbox/notes/${filename}`);
   } catch (exc) {
@@ -200,7 +203,9 @@ function init(ctx: InitContext): void {
   // seeded as the first handoff note if the workspace has none yet.
   fs.mkdirSync(notesDir(workspaceRoot), { recursive: true });
   salvageLegacyHandoffNotes(workspaceRoot, claudeMdPath);
-  seedStartingHandoff(workspaceRoot, inputs["starting_prompt"] ?? "", inputs["work_type"] ?? "", ctx.issue ?? null);
+  // The issue alone seeds only at creation: a re-init or --refresh-issue on a run in progress must not open a new handoff.
+  const prompt = inputs["starting_prompt"] ?? "";
+  seedStartingHandoff(workspaceRoot, prompt, inputs["work_type"] ?? "", ctx.isCreate || prompt.trim() ? (ctx.issue ?? null) : null);
   const content = buildClaudeMd(
     workspaceName,
     workspaceRoot,

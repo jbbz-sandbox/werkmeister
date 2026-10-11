@@ -28,6 +28,8 @@ export interface InitContext {
   configOverride: string | null;
   /** The workspace's issue (`.sandbox/issue.md`, else just `issue_id`); null/absent when it has none. */
   issue?: IssueRef | null;
+  /** True only on the creation run (initWorkspace was handed the fetched snapshot). */
+  isCreate?: boolean;
 }
 
 export interface ContextStrategy {

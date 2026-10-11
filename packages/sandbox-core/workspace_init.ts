@@ -740,6 +740,7 @@ export async function initWorkspace(
     inputs,
     configOverride: (args["config"] as string | null) ?? null,
     issue,
+    isCreate: Boolean(opts.issue),
   });
 
   // The config field read at the top of this run is already the new value when

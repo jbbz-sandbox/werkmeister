@@ -88,7 +88,7 @@ export function writeIssueCopy(root: string, s: IssueSnapshot): void {
   fs.writeFileSync(p, renderIssueCopy(s));
 }
 
-/** What the strategies render: the stored copy, else a no-copy ref built from `issueId`, else null. */
+/** What the strategies render: the stored copy (when it is `issueId`'s), else a no-copy ref built from `issueId`, else null. */
 export function readIssueRef(root: string, issueId: string): IssueRef | null {
   let s: IssueSnapshot | null = null;
   try {
@@ -96,7 +96,7 @@ export function readIssueRef(root: string, issueId: string): IssueRef | null {
   } catch {
     /* no copy */
   }
-  if (s) return { ref: s.ref, url: s.url, title: s.title, fetchedAt: s.fetchedAt };
+  if (s && s.ref === issueId) return { ref: s.ref, url: s.url, title: s.title, fetchedAt: s.fetchedAt };
   if (!issueId) return null;
   return { ref: issueId, url: issueTracker().url(issueId), title: "", fetchedAt: null };
 }
