@@ -49,9 +49,12 @@ function split(ref: string): [string, string] {
   return [m[1], m[2]];
 }
 
+/** `gh`, or $SANDBOX_GH_BIN (tests point it at a fake). */
+export const ghBin = () => process.env.SANDBOX_GH_BIN || "gh";
+
 /** `gh` with its stdout; throws with gh's own message on a non-zero exit. */
 async function gh(args: string[]): Promise<string> {
-  const r = await runAsync(["gh", ...args], { capture: true, env: childEnv(), timeout: 30 });
+  const r = await runAsync([ghBin(), ...args], { capture: true, env: childEnv(), timeout: 30 });
   if (r.status !== 0) throw new Error(r.stderr.trim() || `gh ${args[0]} ${args[1]} exited ${r.status}`);
   return r.stdout;
 }
