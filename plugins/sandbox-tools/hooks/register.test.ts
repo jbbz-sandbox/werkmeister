@@ -416,7 +416,7 @@ function formStubs(over: Partial<McpStub> = {}): McpStub {
     [`${WS}/form-schema`]: () => ok({ bundle: BUNDLE, trackerLabel: 'GitHub' }),
     [`${WS}/issue-form-data`]: () => ok({ issue_id: 'acme/api#7', feature: 'rate-limit', task: 'Rate limit the API', services: ['api'] }),
     [`${WS}/create-workspace`]: () => ok({ command: 'sandbox workspace rate-limit', workspacePath: '/ws/api-7-rate-limit' }),
-    [`${WS}/refine-prompt`]: args => ok(`## Goal\n${String(args.text)}, refined`),
+    [`${WS}/refine-request`]: args => ok(`REFINE: ${String(args.text)}`),
     ...over,
   })
 }
@@ -555,8 +555,16 @@ test('the workspace_form tool opens the Create tab filled, says what is still ne
   await ui.unmount()
 })
 
-test('Refine with Claude rewrites the starting prompt with its instruction and the other fields as context', async ($, on) => {
+const USAGE = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+
+test('Refine with Claude rewrites the starting prompt through the session model, not a claude child', async ($, on) => {
   const w = world(on, formStubs())
+  const asked: { model: string; prompt: string }[] = []
+  on('model.complete', (_$, e) => {
+    asked.push({ model: e.model, prompt: e.prompt })
+    const text = `Sure.\n<result>\n## Goal\n${e.prompt.replace('REFINE: ', '')}, refined\n</result>`
+    return { value: { isAnswered: true as const, text, usage: USAGE } }
+  })
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'tab:create' })
@@ -566,12 +574,26 @@ test('Refine with Claude rewrites the starting prompt with its instruction and t
   await ui.post({ value: 'add a rate limit' }, { in: 'f:starting_prompt' })
   await ui.post({ value: 'rate-limit' }, { in: 'f:feature' })
   await ui.press({ key: 'create:refine:starting_prompt' })
-  expect(w.calls.find(c => c.key === `${WS}/refine-prompt`)?.args).toEqual({
+  expect(w.calls.find(c => c.key === `${WS}/refine-request`)?.args).toEqual({
     text: 'add a rate limit',
     instruction: 'Make it actionable.',
     formData: { starting_prompt: 'add a rate limit', feature: 'rate-limit' },
   })
+  expect(asked).toEqual([{ model: 'sonnet', prompt: 'REFINE: add a rate limit' }])
   expect(((await ui.find({ key: 'f:starting_prompt' }))?.props.props as { value: string }).value).toBe('## Goal\nadd a rate limit, refined')
+  await ui.unmount()
+})
+
+test('a failed Refine completion leaves the field and says why', async ($, on) => {
+  world(on, formStubs())
+  on('model.complete', () => ({ value: { isAnswered: false as const, reason: 'empty-reply' as const, usage: USAGE } }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.post({ value: 'add a rate limit' }, { in: 'f:starting_prompt' })
+  await ui.press({ key: 'create:refine:starting_prompt' })
+  expect((await ui.find({ key: 'note' }))?.text).toBe('Refine failed (empty-reply); the field is unchanged.')
+  expect(((await ui.find({ key: 'f:starting_prompt' }))?.props.props as { value: string }).value).toBe('add a rate limit')
   await ui.unmount()
 })
 
