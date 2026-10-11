@@ -37,7 +37,8 @@ import {
   syncSkills,
   writeWorkspaceSkills,
 } from "../workspace_skills.js";
-import type { ContextStrategy, InitContext } from "./types.js";
+import { renderIssueRef } from "./issue_section.js";
+import type { ContextStrategy, InitContext, IssueRef } from "./types.js";
 
 const _LEGACY_HANDOFF_PLACEHOLDER = "*No handoff notes yet.*";
 
@@ -103,9 +104,9 @@ function supersedeNote(note: Note): void {
  * CLAUDE.md's by-phase table, and a placeholder used to block the real prompt
  * forever. Exported for its tests.
  */
-export function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string): void {
+export function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string, issue: IssueRef | null = null): void {
   const prompt = startingPrompt.trim();
-  if (!prompt) {
+  if (!prompt && !issue) {
     return;
   }
   const wt = workType.trim().toLowerCase();
@@ -133,6 +134,7 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
       "# Handoff: workspace creation",
       "",
     ];
+    if (issue) lines.push(renderIssueRef(issue));
     if (wt) {
       lines.push(`This workspace is a ${wt} — ${plan.hint}.`, "");
     }
@@ -141,8 +143,8 @@ export function seedStartingHandoff(workspaceRoot: string, startingPrompt: strin
       "workspace was created. The task below has not begun — confirm",
       "direction with the user before executing it.",
       "",
-      prompt,
     );
+    if (prompt) lines.push(prompt);
     fs.writeFileSync(path.join(directory, filename), lines.join("\n") + "\n");
     success(`Seeded starting handoff → .sandbox/notes/${filename}`);
   } catch (exc) {
@@ -198,7 +200,7 @@ function init(ctx: InitContext): void {
   // seeded as the first handoff note if the workspace has none yet.
   fs.mkdirSync(notesDir(workspaceRoot), { recursive: true });
   salvageLegacyHandoffNotes(workspaceRoot, claudeMdPath);
-  seedStartingHandoff(workspaceRoot, inputs["starting_prompt"] ?? "", inputs["work_type"] ?? "");
+  seedStartingHandoff(workspaceRoot, inputs["starting_prompt"] ?? "", inputs["work_type"] ?? "", ctx.issue ?? null);
   const content = buildClaudeMd(
     workspaceName,
     workspaceRoot,
@@ -206,6 +208,7 @@ function init(ctx: InitContext): void {
     task,
     meta,
     standardsSection,
+    ctx.issue ?? null,
   );
   fs.writeFileSync(claudeMdPath, content);
   success(`Wrote ${claudeMdPath}`);

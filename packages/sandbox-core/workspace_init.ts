@@ -37,6 +37,7 @@ import { SandboxError } from "./errors.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { loadPaths } from "./global_config.js";
 import { issueTracker } from "./issue_tracker.js";
+import { IssueFetchError, fetchIssueSnapshot, readIssueRef, writeIssueCopy, type IssueSnapshot } from "./issue_snapshot.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
@@ -46,6 +47,7 @@ import {
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
+import type { IssueRef } from "./strategies/types.js";
 import { STRATEGY_IDS, parseStrategyId, reportLeftovers, strategyById } from "./strategies/index.js";
 import {
   _INPUT_FIELDS,
@@ -100,6 +102,32 @@ export interface InitWorkspaceOptions {
    * deleted instead of blocking creation.
    */
   force?: boolean;
+  /** The snapshot createWorkspace fetched; written to .sandbox/issue.md before the strategy runs. */
+  issue?: IssueSnapshot;
+}
+
+/**
+ * Write the issue copy when one is handed over or a refresh is asked for, then
+ * return what the strategy renders. A failed refresh throws before writing, so
+ * the old copy survives.
+ */
+export async function resolveIssueCopy(
+  root: string,
+  issueId: string,
+  opts: { issue?: IssueSnapshot; refresh?: boolean },
+): Promise<IssueRef | null> {
+  if (opts.issue) {
+    writeIssueCopy(root, opts.issue);
+  } else if (opts.refresh) {
+    if (!issueId) throw new WorkspaceInitError("--refresh-issue: this workspace has no issue_id.");
+    try {
+      writeIssueCopy(root, await fetchIssueSnapshot(issueId));
+    } catch (e) {
+      if (e instanceof IssueFetchError) throw new WorkspaceInitError(`${e.message}; run \`sandbox connect\` to check the issue tracker.`);
+      throw e;
+    }
+  }
+  return readIssueRef(root, issueId);
 }
 /** Thrown by {@link findWorkspaceRoot}; the CLI's print paths and
  *  `init-workspace` adapter catch it and print the (pre-rendered) message. */
@@ -646,6 +674,16 @@ export async function initWorkspace(
   // other file — the durable source of truth. A no-op when unchanged.
   writeWorkspaceConfig(workspaceRoot, inputs);
 
+  // 2b. The issue copy (.sandbox/issue.md): handed over at creation, refreshed on request, else read back.
+  const issueId = inputs["issue_id"] ? (issueTracker().parseRef(inputs["issue_id"]) ?? inputs["issue_id"]) : "";
+  let issue: IssueRef | null;
+  try {
+    issue = await resolveIssueCopy(workspaceRoot, issueId, { issue: opts.issue, refresh: Boolean(args["refresh_issue"]) });
+  } catch (e) {
+    if (e instanceof WorkspaceInitError) fail(e.message);
+    throw e;
+  }
+
   // 3. Reconcile repo worktrees against workspace.yml. Gated on `repos` being
   //    declared. Desired set = union(repos, repos owning `services`).
   if (inputs["repos"]) {
@@ -701,6 +739,7 @@ export async function initWorkspace(
     meta,
     inputs,
     configOverride: (args["config"] as string | null) ?? null,
+    issue,
   });
 
   // The config field read at the top of this run is already the new value when
