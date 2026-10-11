@@ -1,4 +1,5 @@
 import { test, expect, mock } from 'claude-code/testing'
+import { applyFormFields, formFields, optionGroups } from './register'
 import type { On } from 'claude-code'
 import type { Engine, Plugin } from 'claude-code/testing'
 
@@ -41,6 +42,7 @@ function world(on: On, stubs: McpStub = {}) {
     return { value: undefined }
   })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__sandbox-tools__${e.name}` } }))
   on('mcp.call', async (_$, e) => {
     const key = `${e.server}/${e.tool}`
     calls.push({ key, args: e.args, via: 'mcp' })
@@ -181,36 +183,37 @@ test('a card border follows the state', async ($, on) => {
   await ui.unmount()
 })
 
-test('jump with no desktop session resumes the newest session in a Terminal', async ($, on) => {
+test('Continue with no desktop session is labelled Terminal and resumes there', async ($, on) => {
   const w = world(on, stubs({ [`${WS}/claude-resume`]: () => ok({ path: '/ws/ab', sessionId: 's1' }) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'jump:ab' })
+  expect((await ui.find({ key: 'continue:ab' }))?.text).toBe('↗ Continue in Terminal')
+  await ui.press({ key: 'continue:ab' })
   expect(w.calls.find(c => c.key === `${WS}/claude-resume`)?.args).toEqual({ name: 'ab' })
   expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')).toBeUndefined()
   await ui.unmount()
 })
 
-test('jump on a VS Code session opens the folder in VS Code, not a Terminal', async ($, on) => {
+test('Continue on a VS Code session is labelled VS Code and opens the folder there', async ($, on) => {
   const vscode = { ...LIST, workspaces: LIST.workspaces.map(w => (w.name === 'ab' ? { ...w, sessionOrigin: 'claude-vscode' } : w)) }
   const w = world(on, stubs({ [`${WS}/list-workspaces`]: () => ok(vscode), [`${WS}/open-vscode`]: () => ok({ path: '/ws/ab' }) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect((await ui.find({ key: 'session:ab' }))?.text).toBe('session · VS Code · Demo project')
-  await ui.press({ key: 'jump:ab' })
+  expect((await ui.find({ key: 'continue:ab' }))?.text).toBe('↗ Continue in VS Code')
+  await ui.press({ key: 'continue:ab' })
   expect(w.calls.find(c => c.key === `${WS}/open-vscode`)?.args).toEqual({ path: '/ws/ab' })
   expect(w.calls.find(c => c.key === `${WS}/claude-resume`)).toBeUndefined()
   expect(w.toasts).toEqual(['Opening ab in VS Code'])
   await ui.unmount()
 })
 
-test('the workspace this session sits in gets no Switch', async ($, on) => {
+test('every workspace has New session, the one this session sits in too', async ($, on) => {
   world(on, stubs())
   on('session.cwd', () => ({ value: '/ws/abc/repo' }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  expect(await ui.find({ key: 'switch:abc' })).toBeUndefined()
-  expect(await ui.find({ key: 'switch:ab' })).toBeDefined()
+  for (const name of ['ab', 'abc', 'empty']) expect((await ui.find({ key: `new:${name}` }))?.text).toBe('＋ New session')
   await ui.unmount()
 })
 
@@ -237,7 +240,7 @@ test('buttons follow the extension gating', async ($, on) => {
     expect(await ui.find({ key: 'stop:abc' })).toBeDefined()
     expect(await ui.find({ key: 'up:empty' })).toBeDefined()
     expect(await ui.find({ key: 'stop:empty' })).toBeUndefined()
-    for (const k of ['restart:ab', 'down:ab', 'switch:ab', 'remove:ab']) expect(await ui.find({ key: k })).toBeDefined()
+    for (const k of ['restart:ab', 'down:ab', 'new:ab', 'remove:ab']) expect(await ui.find({ key: k })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -347,29 +350,28 @@ test('a slow tick is skipped, not queued', async ($, on) => {
   expect(w.calls.filter(c => c.key === `${WS}/list-workspaces`)).toHaveLength(2)
 })
 
-test('switch calls change_directory, toasts, and submits a turn so the move lands', async ($, on) => {
-  const w = world(on, stubs({ 'ccd_directory/change_directory': () => ok(undefined, 'Access granted.') }))
-  const submitted: string[] = []
-  on('prompt.submit', (_$, e) => {
-    submitted.push(e.text)
-    return { text: e.text }
-  })
+test('New session opens the app\'s new-session link for the workspace folder', async ($, on) => {
+  const w = world(on, stubs({ [`${WS}/open-claude-link`]: a => ok({ url: a.url }) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'switch:abc' })
-  expect(w.calls.find(c => c.key === 'ccd_directory/change_directory')?.args).toEqual({ path: '/ws/abc' })
-  expect(w.toasts).toEqual(['Switching to abc'])
-  expect(submitted).toEqual(['Switched to workspace abc. Read /ws/abc/CLAUDE.md, then wait for my next instruction.'])
+  await ui.press({ key: 'new:abc' })
+  expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://code/new?folder=%2Fws%2Fabc&source=services' })
+  expect(w.calls.some(c => c.key === 'ccd_directory/change_directory')).toBe(false)
+  expect(w.toasts).toEqual(['Opening a new session in abc'])
   await ui.unmount()
 })
 
-test('jump focuses a session this session started, else toasts its title', async ($, on) => {
-  const w = world(on, stubs({ 'ccd_window/open_session_in': () => ({ content: [{ type: 'text', text: 'Only sessions this session started can be focused.' }], isError: true }) }))
+test('Continue in Desktop focuses a session this one started, else opens the session\'s own link', async ($, on) => {
+  const w = world(on, stubs({
+    'ccd_window/open_session_in': () => ({ content: [{ type: 'text', text: 'Only sessions this session started can be focused.' }], isError: true }),
+    [`${WS}/open-claude-link`]: a => ok({ url: a.url }),
+  }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'jump:abc' })
+  expect((await ui.find({ key: 'continue:abc' }))?.text).toBe('↗ Continue in Desktop')
+  await ui.press({ key: 'continue:abc' })
   expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')?.args).toEqual({ session_id: 'local_1', target: 'focus' })
-  expect(w.toasts).toEqual(['Open "Newer in abc" from the sidebar'])
+  expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://x/local_1' })
   await ui.unmount()
 })
 
@@ -388,22 +390,188 @@ test('a session starting in a folder of workspaces opens the pane; elsewhere it 
   expect(opened()).toBe(1)
 })
 
-test('the Create tab submits the workspace skill prompt with the typed issue ID, then returns to the list', async ($, on) => {
-  const w = world(on, stubs())
-  const submitted: string[] = []
-  on('prompt.submit', (_$, e) => {
-    submitted.push(e.text)
-    return { text: e.text }
+const BUNDLE = {
+  schema: {
+    properties: {
+      issue_id: { type: 'string', title: 'GitHub issue (blank to skip)', pattern: '^$|(?:^([A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+#[0-9]+$)' },
+      feature: { type: 'string', title: 'Feature name', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
+      work_type: { type: 'string', title: 'Work type', enum: ['feature', 'bugfix'] },
+      services: { type: 'array', title: 'Local services', items: { enum: ['api', 'web'] } },
+      task: { type: 'string', title: 'Task title (Enter for default)', description: 'Short title for the Current Task section.' },
+      starting_prompt: { type: 'string', title: 'Starting prompt (blank to skip)' },
+    },
+    required: ['feature', 'work_type'],
+  },
+  uiSchema: {
+    'ui:order': ['issue_id', 'feature', 'work_type', 'services', 'task', 'starting_prompt'],
+    feature: { 'ui:placeholder': 'my-feature' },
+    services: { 'ui:widget': 'checkboxes', 'ui:options': { groups: { web: ['web'], core: ['api'] } } },
+    starting_prompt: { 'ui:widget': 'textarea', 'ui:options': { refinable: true, refineInstruction: 'Make it actionable.' } },
+  },
+  formData: {},
+}
+
+function formStubs(over: Partial<McpStub> = {}): McpStub {
+  return stubs({
+    [`${WS}/form-schema`]: () => ok({ bundle: BUNDLE, trackerLabel: 'GitHub' }),
+    [`${WS}/issue-form-data`]: () => ok({ issue_id: 'acme/api#7', feature: 'rate-limit', task: 'Rate limit the API', services: ['api'] }),
+    [`${WS}/create-workspace`]: () => ok({ command: 'sandbox workspace rate-limit', workspacePath: '/ws/api-7-rate-limit' }),
+    [`${WS}/refine-prompt`]: args => ok(`## Goal\n${String(args.text)}, refined`),
+    ...over,
   })
+}
+
+test('the Create tab draws the form from the schema: titles without wizard hints, the issue named for the tracker', async ($, on) => {
+  world(on, formStubs())
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect(await ui.find({ key: 'create:go' })).toBeUndefined()
   await ui.press({ key: 'tab:create' })
-  await ui.input({ key: 'create:issue', text: 'PROJ-9', kind: 'change' })
+  for (const key of ['f:issue_id', 'f:feature', 'f:work_type', 'f:services:api', 'f:services:web', 'f:task', 'f:starting_prompt']) expect(await ui.find({ key })).toBeDefined()
+  expect((await ui.find({ key: 'f:starting_prompt' }))?.type).toBe('Client')
+  expect((await ui.find({ text: 'GitHub issue' }))).toBeDefined()
+  expect((await ui.find({ text: 'Task title' }))).toBeDefined()
+  expect((await ui.find({ text: 'Feature name *' }))).toBeDefined()
+  expect((await ui.find({ text: 'Short title for the Current Task section.' }))).toBeDefined()
+  expect((await ui.find({ key: 'create:fetch' }))?.text).toBe('⤓ Fill empty fields from this issue')
+  await ui.unmount()
+})
+
+test('the multi-line field types across lines and its text reaches the create call', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  for (const key of ['a', 'b', 'return', 'c', 'backspace', 'd', 'up', 'end', '!']) await ui.key({ key, in: 'f:starting_prompt' })
+  await ui.post({ value: 'x' }, { in: 'f:feature' })
+  await ui.select({ key: 'f:work_type', value: 'feature' })
   await ui.press({ key: 'create:go' })
-  expect(submitted).toEqual(['Create a new sandbox workspace with the sandbox-workspace skill, pre-filled from issue PROJ-9.'])
-  expect(w.toasts).toEqual(['Opening the workspace form'])
-  expect(await ui.find({ key: 'switch:abc' })).toBeDefined()
+  expect((w.calls.find(c => c.key === `${WS}/create-workspace`)?.args as { formData: Record<string, unknown> }).formData.starting_prompt).toBe('ab!\nd')
+  await ui.unmount()
+})
+
+test('text fields are plugin-drawn editors: a click draws the cursor in that field alone; Enter in the issue field fills from the issue', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  for (const key of ['f:issue_id', 'f:feature', 'f:task']) expect((await ui.find({ key }))?.type).toBe('Client')
+  const focusedOf = async (key: string) => ((await ui.find({ key }))?.props.props as { focused: boolean }).focused
+  await ui.pointer({ type: 'down', x: 1, y: 0, button: 'left', in: 'f:feature' })
+  expect([await focusedOf('f:feature'), await focusedOf('f:task')]).toEqual([true, false])
+  await ui.pointer({ type: 'down', x: 1, y: 0, button: 'left', in: 'f:task' })
+  expect([await focusedOf('f:feature'), await focusedOf('f:task')]).toEqual([false, true])
+  // A one-line Enter adds no line.
+  for (const key of ['a', 'return', 'b']) await ui.key({ key, in: 'f:task' })
+  for (const key of ['a', 'p', 'i', '#', '7', 'return']) await ui.key({ key, in: 'f:issue_id' })
+  expect(w.calls.find(c => c.key === `${WS}/issue-form-data`)?.args).toEqual({ ref: 'api#7' })
+  await ui.post({ value: 'x' }, { in: 'f:feature' })
+  await ui.select({ key: 'f:work_type', value: 'feature' })
+  await ui.press({ key: 'create:go' })
+  expect((w.calls.find(c => c.key === `${WS}/create-workspace`)?.args as { formData: Record<string, unknown> }).formData.task).toBe('ab')
+  await ui.unmount()
+})
+
+test('fetch fills only the empty fields, then create submits the draft and returns to the list', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.post({ value: 'my-own' }, { in: 'f:feature' })
+  await ui.post({ value: 'api#7' }, { in: 'f:issue_id' })
+  await ui.press({ key: 'create:fetch' })
+  expect(w.calls.find(c => c.key === `${WS}/issue-form-data`)?.args).toEqual({ ref: 'api#7' })
+  expect((await ui.find({ text: /^Filled / }))?.text).toBe('Filled task, services from acme/api#7.')
+  await ui.press({ key: 'f:services:web' })
+  await ui.select({ key: 'f:work_type', value: 'bugfix' })
+  await ui.press({ key: 'create:go' })
+  expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
+    formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api', 'web'], work_type: 'bugfix' },
+  })
+  expect(w.toasts).toEqual(['Workspace created'])
+  expect(await ui.find({ key: 'new:abc' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('create with a required field empty or a bad value says why and creates nothing', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.post({ value: 'Not A Slug' }, { in: 'f:feature' })
+  await ui.press({ key: 'create:go' })
+  expect((await ui.find({ text: /Work type: required/ }))?.text).toMatch(/Feature name: "Not A Slug" doesn't match[\s\S]*Work type: required/)
+  expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
+  await ui.unmount()
+})
+
+test('a multi-pick draws as checkboxes under its group headings, sorted, each in a fifth-width column', async ($, on) => {
+  world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  expect(await ui.find({ text: 'CORE' })).toBeDefined()
+  expect(await ui.find({ text: 'WEB' })).toBeDefined()
+  expect((await ui.find({ key: 'f:services:api' }))?.text).toBe('☐ api')
+  await ui.press({ key: 'f:services:api' })
+  expect((await ui.find({ key: 'f:services:api' }))?.text).toBe('☑ api')
+  expect((await ui.find({ key: 'cell:services:api' }))?.props.width).toBe('20%')
+  await ui.unmount()
+  const f = formFields(BUNDLE).find(x => x.key === 'services')!
+  expect(optionGroups(f)).toEqual([['core', ['api']], ['web', ['web']]])
+  expect(optionGroups({ ...f, groups: { core: ['api'] } })).toEqual([['core', ['api']], ['other', ['web']]])
+  expect(optionGroups({ ...f, groups: {} })).toEqual([['', ['api', 'web']]])
+})
+
+test('applyFormFields replaces, clears and checks values against the form', () => {
+  const fields = formFields(BUNDLE)
+  const r = applyFormFields(fields, { task: 'old', feature: 'keep' }, {
+    task: '',
+    starting_prompt: 'line one\nline two',
+    work_type: 'chore',
+    services: 'api, nope',
+    bogus: 'x',
+  })
+  expect(r.draft).toEqual({ task: '', feature: 'keep', starting_prompt: 'line one\nline two', services: ['api'] })
+  expect(r.problems).toEqual([
+    'work_type: "chore" is not offered (choices: feature, bugfix)',
+    'services: not offered: nope (choices: api, web)',
+    'bogus: no such field (fields: issue_id, feature, work_type, services, task, starting_prompt)',
+  ])
+})
+
+test('the workspace_form tool opens the Create tab filled, says what is still needed, and creates nothing', async ($, on) => {
+  const w = world(on, formStubs())
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('fs.list', () => ({ value: [] }))
+  await $.session.start({ cwd: '/elsewhere', surface: 'desktop', isInteractive: true })
+  const r = await $.tool.call({ tool: 'mcp__sandbox-tools__workspace_form', fields: { feature: 'rate-limit', starting_prompt: 'Do it.\nThen test.' } } as never)
+  const text = String((r as { result?: unknown }).result)
+  expect(text).toMatch(/"starting_prompt": "Do it.\\nThen test."/)
+  expect(text).toMatch(/Still needed before Create:\n- Work type: required/)
+  expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect(((await ui.find({ key: 'f:feature' }))?.props.props as { value: string }).value).toBe('rate-limit')
+  await ui.unmount()
+})
+
+test('Refine with Claude rewrites the starting prompt with its instruction and the other fields as context', async ($, on) => {
+  const w = world(on, formStubs())
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  expect(await ui.find({ key: 'create:refine:task' })).toBeUndefined()
+  await ui.press({ key: 'create:refine:starting_prompt' })
+  expect((await ui.find({ text: /Write something first/ }))).toBeDefined()
+  await ui.post({ value: 'add a rate limit' }, { in: 'f:starting_prompt' })
+  await ui.post({ value: 'rate-limit' }, { in: 'f:feature' })
+  await ui.press({ key: 'create:refine:starting_prompt' })
+  expect(w.calls.find(c => c.key === `${WS}/refine-prompt`)?.args).toEqual({
+    text: 'add a rate limit',
+    instruction: 'Make it actionable.',
+    formData: { starting_prompt: 'add a rate limit', feature: 'rate-limit' },
+  })
+  expect(((await ui.find({ key: 'f:starting_prompt' }))?.props.props as { value: string }).value).toBe('## Goal\nadd a rate limit, refined')
   await ui.unmount()
 })
 
