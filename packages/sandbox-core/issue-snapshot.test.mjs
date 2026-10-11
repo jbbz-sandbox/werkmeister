@@ -69,3 +69,15 @@ test("readIssueRef: copy, else a no-copy ref from issue_id, else null", async ()
     });
   }, { config: GH });
 });
+
+test("comment bodies containing ### lines round-trip", () => {
+  const s = {
+    ref: "o/r#5", url: "https://github.com/o/r/issues/5", tracker: "github", title: "T", status: "Open",
+    body: "B", fetchedAt: "2026-10-11T18:04:00.000Z",
+    comments: [
+      { author: "amy", created: "2026-10-02T10:00:00Z", body: "Notes\n### x\n\nsteps" },
+      { author: "bob", created: "2026-10-03T10:00:00Z", body: "ok" },
+    ],
+  };
+  assert.deepEqual(parseIssueCopy(renderIssueCopy(s)), s);
+});
