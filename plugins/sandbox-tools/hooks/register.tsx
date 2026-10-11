@@ -83,7 +83,7 @@ try {
     },
     'issue-form-data': () => core.fetchIssueFormData(args.ref),
     'create-workspace': () => core.createWorkspace(args.formData),
-    'refine-prompt': () => core.refinePrompt(args.text, args.instruction, args.formData),
+    'refine-request': () => core.buildRefinePrompt(args.text, args.instruction, args.formData),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -314,7 +314,13 @@ async function fetchIssue($: EngineInterface): Promise<void> {
   }
 }
 
-/** "Refine with Claude": rewrite the field with refinePrompt, the issue and the other fields as context. */
+/** The model behind Refine with Claude. */
+export const REFINE_MODEL = 'sonnet'
+
+/**
+ * "Refine with Claude": rewrite the field with sandbox-core's refine prompt, the issue and the other fields as context.
+ * The completion runs on this session's own client and login, not a `claude -p` child with credentials of its own.
+ */
 async function refineField($: EngineInterface, key: string, instruction: string): Promise<void> {
   const { value: draft = {} } = await $.state.get(DRAFT)
   const text = typeof draft[key] === 'string' ? draft[key].trim() : ''
@@ -325,7 +331,14 @@ async function refineField($: EngineInterface, key: string, instruction: string)
   await $.state.set(FORM_BUSY, 'refine')
   try {
     const formData = Object.fromEntries(Object.entries(draft).filter(([, v]) => !isEmpty(v)))
-    const refined = (await core<string>($, 'refine-prompt', { text, instruction, formData }, 180000)).trim()
+    const prompt = await core<string>($, 'refine-request', { text, instruction, formData })
+    const r = await $.model.complete({ model: REFINE_MODEL, prompt })
+    if (!r.isAnswered) {
+      await $.state.set(NOTE, `Refine failed (${r.reason}); the field is unchanged.`)
+      return
+    }
+    // Same extraction as sandbox-core's extractResult.
+    const refined = (r.text.match(/<result>\s*([\s\S]*?)\s*<\/result>/i)?.[1] ?? r.text).trim()
     if (!refined) {
       await $.state.set(NOTE, 'Refine returned no text; the field is unchanged.')
       return

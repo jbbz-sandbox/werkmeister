@@ -289,20 +289,15 @@ const STARTING_PROMPT_FORMAT =
   "Derive every section from the source material; never invent scope, services, or criteria.";
 
 /**
- * Rewrite a starting-prompt draft by shelling out to the local `claude` CLI in
- * headless print mode (`claude -p`). Returns the rewritten text.
- *
- * Used when the MCP host doesn't support `sampling/createMessage` — the server
- * runs on the same machine and account as Claude Desktop, so the CLI is the
- * dependable path to a completion. The prompt explicitly tells the agent to
- * REWRITE (not perform) the task and to wrap its answer in `<result>` tags so
- * we can extract it cleanly past any conversational preamble.
+ * The prompt that rewrites a starting-prompt draft. It tells the model to
+ * REWRITE (not perform) the task and to wrap its answer in `<result>` tags
+ * (see extractResult) so the rewrite comes out cleanly past any preamble.
  *
  * `formData` is the form's current state (all populated inputs); when present it
  * and the service registry are embedded as background context so the rewrite is
  * grounded in the workspace the user is actually setting up.
  */
-export async function refinePrompt(
+export async function buildRefinePrompt(
   text: string,
   instruction: string,
   formData?: Record<string, unknown>,
@@ -316,7 +311,7 @@ export async function refinePrompt(
     "\n\n" +
     STARTING_PROMPT_FORMAT;
   const background = await buildRefineContext(formData);
-  const prompt =
+  return (
     "You are a text rewriter, not an agent. Right now your ONLY job is to produce the rewritten " +
     "instruction: do not perform the task, do not ask the user anything, and do not use tools yourself. " +
     "This is distinct from what the rewritten instruction may contain — that instruction can, and when " +
@@ -326,8 +321,25 @@ export async function refinePrompt(
     background +
     "Put ONLY the rewritten text between <result> and </result> tags and write nothing else.\n" +
     "---\n" +
-    trimmed;
+    trimmed
+  );
+}
 
+/**
+ * Rewrite a starting-prompt draft by shelling out to the local `claude` CLI in
+ * headless print mode (`claude -p`) with buildRefinePrompt. Returns the rewritten text.
+ *
+ * Used when the MCP host doesn't support `sampling/createMessage` — the server
+ * runs on the same machine and account as Claude Desktop, so the CLI is the
+ * dependable path to a completion. The workspaces pane does not come here: it
+ * runs buildRefinePrompt through the session's own client (`$.model.complete`).
+ */
+export async function refinePrompt(
+  text: string,
+  instruction: string,
+  formData?: Record<string, unknown>,
+): Promise<string> {
+  const prompt = await buildRefinePrompt(text, instruction, formData);
   const bin = await resolveClaudeBin();
   let res: { stdout: string; stderr: string; code: number | null };
   try {
