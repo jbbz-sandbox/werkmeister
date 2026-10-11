@@ -1,17 +1,17 @@
 /**
- * Thin bridge to the `sandbox` CLI.
+ * Workspace creation for the `sandbox` CLI and every other surface.
  *
- * Rather than re-implementing workspace creation in TypeScript, this delegates
- * to the `sandbox workspace` command — the single source of truth for both the
- * input prompts and the create logic (git worktrees on a `<user>/<workspace>`
+ * {@link createWorkspace} is the single create entry: the CLI, the browser
+ * form, both MCP servers and the /workspaces pane all call it, and it calls
+ * `provisionWorkspace` in-process (git worktrees on a `<user>/<workspace>`
  * branch + `init-workspace`). We:
  *
  *   - build the form fields in-process from core's prompt definitions
  *     (the same ones the terminal wizard renders; see {@link getFormSchema}), and
- *   - run `sandbox workspace <feature> [--flag value …]` to create one.
+ *   - run {@link createWorkspace} to create one.
  *
- * The only thing we add on top of the script is the optional "open in VS Code"
- * convenience, which the CLI itself doesn't do.
+ * The only thing we add on top is the optional "open in VS Code"
+ * convenience.
  */
 import { execFile, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -80,7 +80,7 @@ export interface FormSchemaBundle {
 export interface CreateResult {
   /** The CLI command that was run, e.g. `sandbox workspace foo --services bar`. */
   command: string;
-  /** stdout from the `sandbox workspace` run (info/ok lines), ANSI-stripped. */
+  /** info/ok lines from the create run, ANSI-stripped. */
   output: string;
   /** Absolute path of the created (or re-initialised) workspace, if parseable. */
   workspacePath: string | null;

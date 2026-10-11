@@ -9,8 +9,8 @@
  *
  * so there is ONE form and ONE create path across every surface. Unlike
  * the MCP server, this needs no MCP client connection — it just opens the
- * bundled create form in the user's browser, blocks until submit/cancel, then shells
- * `sandbox workspace`. A single JSON object describing the outcome is written to
+ * bundled create form in the user's browser, blocks until submit/cancel, then runs
+ * `createWorkspace` in-process. A single JSON object describing the outcome is written to
  * stdout; all human-facing progress goes to stderr.
  *
  * Flags:
