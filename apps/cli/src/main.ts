@@ -521,9 +521,10 @@ const SPECS: CommandSpec[] = [
         .option(
           "--browser-form",
           "Collect inputs through the Sandbox-branded browser form (the same " +
-            "form the Desktop MCP App renders), then create the workspace. Opens a " +
+            "form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a " +
             "localhost page in the default browser and blocks until submit/cancel.",
         )
+        .option("--no-distill", "Store the issue but don't have a model rewrite it into description/starting_prompt.")
         .option("--open", "With --browser-form: launch VS Code on the new workspace after creating.")
         .option(
           "--force",
@@ -546,6 +547,7 @@ const SPECS: CommandSpec[] = [
       context_strategy: o.contextStrategy ?? null,
       browser_form: Boolean(o.browserForm),
       open_vscode: Boolean(o.open),
+      no_distill: o.distill === false,
       force: Boolean(o.force),
     }),
   },
