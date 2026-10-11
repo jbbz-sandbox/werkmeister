@@ -43,6 +43,8 @@ export function edit(s: { text: string; cursor: number }, key: string, ctrl?: bo
     case 'home': return { text, cursor: cursor - col }
     case 'end': return { text, cursor: indexAt(text, line, Infinity) }
   }
+  // Space can arrive by name, which the next line would drop as a named key.
+  if (key === 'space') key = ' '
   // Any other named key (tab, pageup, f1, ...) or a ctrl chord types nothing.
   if (ctrl || key === '' || (key.length > 1 && /^[a-z0-9]+$/.test(key))) return s
   return { text: text.slice(0, cursor) + key + text.slice(cursor), cursor: cursor + key.length }
