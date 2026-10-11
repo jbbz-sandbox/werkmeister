@@ -39,13 +39,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { error, getMonorepoRoot, info } from "../lib/config.js";
+import { error, getMonorepoRoot, info, warn } from "../lib/config.js";
 import { run as procRun } from "sandbox-core/proc";
 // The work itself lives in core (note 086 row 5), which is how `createWorkspace`
 // runs it without spawning this CLI. What stays here is the wizard, the
 // browser-form launcher, and exit codes.
 import { WorkspaceError, createWorkspace, distillIssue } from "sandbox-core";
 import { fetchIssueSnapshot, type IssueSnapshot } from "sandbox-core/issue_snapshot";
+import { issueTracker } from "sandbox-core/issue_tracker";
 import { WorkspaceInitError } from "sandbox-core/workspace_init";
 // init-workspace owns the piped-stdin reader; the prompt definitions and the
 // form schema built from them live in core, where the dashboard reaches them
@@ -65,6 +66,7 @@ async function resolveWorkspaceInputs(
   const base = process.cwd();
   let resolved = resolveInputs(args, base);
   let issue: IssueSnapshot | undefined;
+  const preset = new Set(Object.keys(resolved));
   // On a TTY, run the wizard for whatever's still unresolved, rendered from the
   // same form schema the browser form uses. Fields already supplied via
   // CLI/env/config are left out of the schema, so a passed feature skips just
@@ -75,9 +77,22 @@ async function resolveWorkspaceInputs(
       intro: "Interactive wizard — press Ctrl-C to abort. Defaults shown in [brackets].",
       // Typed in the wizard: read the issue now so later prompts default to it.
       afterField: async (key, r) => {
-        // A flag-supplied issue is createWorkspace's to handle.
-        if (key !== "issue_id" || !r.issue_id || args.issue_id) return {};
-        issue = await fetchIssueSnapshot(r.issue_id);
+        // An issue from flag/env/config is createWorkspace's to read.
+        if (key !== "issue_id" || !r.issue_id || preset.has("issue_id")) return {};
+        const tracker = issueTracker();
+        const ref = tracker.parseRef(r.issue_id);
+        if (!ref) {
+          warn(`${r.issue_id} isn't a ${tracker.label} issue ref (e.g. ${tracker.refExample})`);
+          return {};
+        }
+        r.issue_id = ref;
+        try {
+          issue = await fetchIssueSnapshot(ref);
+        } catch {
+          // createWorkspace tries again and fails cleanly before creating anything.
+          warn(`couldn't read ${ref} from ${tracker.label}; run \`sandbox connect\` to check the issue tracker.`);
+          return {};
+        }
         if (args.no_distill) return { task: issue.title };
         const { fields, warning } = await distillIssue(issue);
         if (warning) info(`Issue read; fields not pre-filled: ${warning}`);
@@ -115,6 +130,7 @@ export function browserFormCommand(node: string, cliJs: string, args: Record<str
   const prefill = Object.fromEntries(FORM_KEYS.filter((k) => args[k] != null && args[k] !== "").map((k) => [k, args[k]]));
   const cmd = [node, cliJs];
   if (Object.keys(prefill).length) cmd.push("--prefill", JSON.stringify(prefill));
+  if (args.issue_id) cmd.push("--issue", String(args.issue_id));
   if (args.open_vscode) cmd.push("--open");
   return cmd;
 }
@@ -164,8 +180,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       force: Boolean(args.force),
     });
   } catch (exc) {
-    if (exc instanceof WorkspaceError || exc instanceof WorkspaceInitError) {
-      error((exc as Error).message);
+    // A WorkspaceInitError's `[err]` line is already out; restating it would print twice.
+    if (exc instanceof WorkspaceInitError) process.exit(1);
+    if (exc instanceof WorkspaceError) {
+      error(exc.message);
       process.exit(1);
     }
     throw exc;

@@ -49,7 +49,7 @@ import { featureUrl } from "./feature_routing.js";
 import { launchFeatureWindow } from "./browser.js";
 import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { fetchIssueSnapshot, IssueFetchError, type IssueSnapshot } from "./issue_snapshot.js";
-import { provisionWorkspace } from "./workspace_init.js";
+import { WorkspaceInitError, provisionWorkspace } from "./workspace_init.js";
 import { loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 
@@ -921,7 +921,8 @@ export async function createWorkspace(
   try {
     workspacePath = opts.live ? await run() : await withReporter(reporter, run);
   } catch (e) {
-    if (opts.live) throw new WorkspaceError((e as Error).message);
+    // A provisioning failure's `[err]` line already went out through the live reporter.
+    if (opts.live) throw e instanceof WorkspaceInitError ? e : new WorkspaceError((e as Error).message);
     // The transcript is the detail, exactly as the child's captured output was.
     const detail = stripAnsi(reporter.text().trim()) || (e as Error).message;
     throw new WorkspaceError(`${command} failed:\n${detail}`);
