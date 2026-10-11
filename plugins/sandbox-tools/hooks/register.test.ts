@@ -412,10 +412,23 @@ const BUNDLE = {
   formData: {},
 }
 
+const USAGE = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+
+/** Answer the session model the way the issue distillation expects, recording what it was asked. */
+function answerIssueModel(on: On): { model: string; prompt: string }[] {
+  const asked: { model: string; prompt: string }[] = []
+  on('model.complete', (_$, e) => {
+    asked.push({ model: e.model, prompt: e.prompt })
+    return { value: { isAnswered: true as const, text: '<result>{"feature":"rate-limit"}</result>', usage: USAGE } }
+  })
+  return asked
+}
+
 function formStubs(over: Partial<McpStub> = {}): McpStub {
   return stubs({
     [`${WS}/form-schema`]: () => ok({ bundle: BUNDLE, trackerLabel: 'GitHub' }),
-    [`${WS}/issue-form-data`]: () => ok({ issue_id: 'acme/api#7', feature: 'rate-limit', task: 'Rate limit the API', services: ['api'] }),
+    [`${WS}/issue-form-request`]: () => ok({ base: { issue_id: 'acme/api#7', task: 'Rate limit the API' }, prompt: 'EXTRACT acme/api#7' }),
+    [`${WS}/issue-form-apply`]: a => ok({ ...(a.base as Record<string, unknown>), feature: 'rate-limit', services: ['api'] }),
     [`${WS}/create-workspace`]: () => ok({ command: 'sandbox workspace rate-limit', workspacePath: '/ws/api-7-rate-limit' }),
     [`${WS}/open-claude-link`]: a => ok({ url: a.url }),
     [`${WS}/refine-request`]: args => ok(`REFINE: ${String(args.text)}`),
@@ -454,6 +467,7 @@ test('the multi-line field types across lines and its text reaches the create ca
 
 test('text fields are plugin-drawn editors: a click draws the cursor in that field alone; Enter in the issue field fills from the issue', async ($, on) => {
   const w = world(on, formStubs())
+  answerIssueModel(on)
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'tab:create' })
@@ -466,7 +480,7 @@ test('text fields are plugin-drawn editors: a click draws the cursor in that fie
   // A one-line Enter adds no line.
   for (const key of ['a', 'return', 'b']) await ui.key({ key, in: 'f:task' })
   for (const key of ['a', 'p', 'i', '#', '7', 'return']) await ui.key({ key, in: 'f:issue_id' })
-  expect(w.calls.find(c => c.key === `${WS}/issue-form-data`)?.args).toEqual({ ref: 'api#7' })
+  expect(w.calls.find(c => c.key === `${WS}/issue-form-request`)?.args).toEqual({ ref: 'api#7' })
   await ui.post({ value: 'x' }, { in: 'f:feature' })
   await ui.select({ key: 'f:work_type', value: 'feature' })
   await ui.press({ key: 'create:go' })
@@ -474,15 +488,21 @@ test('text fields are plugin-drawn editors: a click draws the cursor in that fie
   await ui.unmount()
 })
 
-test('fetch fills only the empty fields, then create submits the draft and returns to the list', async ($, on) => {
+test('fetch fills only the empty fields, distilled on the session model, then create submits the draft and returns to the list', async ($, on) => {
   const w = world(on, formStubs())
+  const asked = answerIssueModel(on)
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'tab:create' })
   await ui.post({ value: 'my-own' }, { in: 'f:feature' })
   await ui.post({ value: 'api#7' }, { in: 'f:issue_id' })
   await ui.press({ key: 'create:fetch' })
-  expect(w.calls.find(c => c.key === `${WS}/issue-form-data`)?.args).toEqual({ ref: 'api#7' })
+  expect(w.calls.find(c => c.key === `${WS}/issue-form-request`)?.args).toEqual({ ref: 'api#7' })
+  expect(asked).toEqual([{ model: 'sonnet', prompt: 'EXTRACT acme/api#7' }])
+  expect(w.calls.find(c => c.key === `${WS}/issue-form-apply`)?.args).toEqual({
+    base: { issue_id: 'acme/api#7', task: 'Rate limit the API' },
+    answer: '<result>{"feature":"rate-limit"}</result>',
+  })
   expect((await ui.find({ text: /^Filled / }))?.text).toBe('Filled task, services from acme/api#7.')
   await ui.press({ key: 'f:services:web' })
   await ui.select({ key: 'f:work_type', value: 'bugfix' })
@@ -494,6 +514,19 @@ test('fetch fills only the empty fields, then create submits the draft and retur
   expect(w.calls.some(c => c.key === `${WS}/open-vscode`)).toBe(false)
   expect(w.toasts).toEqual(['Workspace created; opening a new session in it'])
   expect(await ui.find({ key: 'new:abc' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a failed issue distillation still fills what the lookup found and says why', async ($, on) => {
+  const w = world(on, formStubs())
+  on('model.complete', () => ({ value: { isAnswered: false as const, reason: 'empty-reply' as const, usage: USAGE } }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.post({ value: 'api#7' }, { in: 'f:issue_id' })
+  await ui.press({ key: 'create:fetch' })
+  expect(w.calls.some(c => c.key === `${WS}/issue-form-apply`)).toBe(false)
+  expect((await ui.find({ key: 'note' }))?.text).toBe("Filled task from acme/api#7. Couldn't distil the rest (empty-reply).")
   await ui.unmount()
 })
 
@@ -558,8 +591,6 @@ test('the workspace_form tool opens the Create tab filled, says what is still ne
   expect(((await ui.find({ key: 'f:feature' }))?.props.props as { value: string }).value).toBe('rate-limit')
   await ui.unmount()
 })
-
-const USAGE = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
 test('Refine with Claude rewrites the starting prompt through the session model, not a claude child', async ($, on) => {
   const w = world(on, formStubs())
