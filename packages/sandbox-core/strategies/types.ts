@@ -45,3 +45,11 @@ export interface ContextStrategy {
   /** Workspace-relative paths this strategy owns. A trailing `*` in the last segment is a prefix glob. */
   ownedPaths(): string[];
 }
+
+/** The workspace's issue as the context layer renders it; `fetchedAt` null = no stored copy. */
+export interface IssueRef {
+  ref: string;
+  url: string | null;
+  title: string;
+  fetchedAt: string | null;
+}
