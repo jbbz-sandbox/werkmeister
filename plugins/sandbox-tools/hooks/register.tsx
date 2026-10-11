@@ -82,7 +82,8 @@ try {
       return { bundle: await core.getFormSchema(), trackerLabel: tracker.issueTracker().label }
     },
     'issue-form-data': () => core.fetchIssueFormData(args.ref),
-    'create-workspace': () => core.createWorkspace(args.formData),
+    // open: false: the pane opens a Desktop session in the new folder instead of VS Code.
+    'create-workspace': () => core.createWorkspace(args.formData, { open: false }),
     'refine-request': () => core.buildRefinePrompt(args.text, args.instruction, args.formData),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
@@ -369,7 +370,9 @@ async function submitForm($: EngineInterface): Promise<void> {
     await $.state.set(DRAFT, {})
     await $.state.set(TAB, 'list')
     await $.state.set(NOTE, `Created ${r.workspacePath ?? r.command}`)
-    $.ui.toast('Workspace created')
+    // A failed open must not read as a failed create: the workspace exists either way.
+    const opened = r.workspacePath !== null && (await core($, 'open-claude-link', { url: newSessionLink(r.workspacePath) }).then(() => true, () => false))
+    $.ui.toast(opened ? 'Workspace created; opening a new session in it' : 'Workspace created; open it with ＋ New session')
   } catch (err) {
     // The transcript can run long; its last lines carry the failure.
     await $.state.set(NOTE, (err as Error).message.split('\n').slice(-6).join('\n'))
