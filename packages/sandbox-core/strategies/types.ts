@@ -26,6 +26,8 @@ export interface InitContext {
   inputs: Record<string, string>;
   /** `args["config"]` — a workspace config path overriding .sandbox/workspace.yml. */
   configOverride: string | null;
+  /** The workspace's issue (`.sandbox/issue.md`, else just `issue_id`); null/absent when it has none. */
+  issue?: IssueRef | null;
 }
 
 export interface ContextStrategy {
