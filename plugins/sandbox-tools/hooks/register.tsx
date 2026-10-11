@@ -81,7 +81,8 @@ try {
       const tracker = await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)
       return { bundle: await core.getFormSchema(), trackerLabel: tracker.issueTracker().label }
     },
-    'issue-form-data': () => core.fetchIssueFormData(args.ref),
+    'issue-form-request': () => core.buildIssueFormRequest(args.ref),
+    'issue-form-apply': () => core.applyIssueFormAnswer(args.base, args.answer),
     // open: false: the pane opens a Desktop session in the new folder instead of VS Code.
     'create-workspace': () => core.createWorkspace(args.formData, { open: false }),
     'refine-request': () => core.buildRefinePrompt(args.text, args.instruction, args.formData),
@@ -298,16 +299,24 @@ async function fetchIssue($: EngineInterface): Promise<void> {
   if (!ref) return
   await $.state.set(FORM_BUSY, 'fetch')
   try {
-    const data = await core<Record<string, unknown>>($, 'issue-form-data', { ref }, 180000)
-    if (!data.issue_id) {
+    // The tracker lookup runs in sandbox-core; the distillation runs on this session's own client and login.
+    const req = await core<{ base: Record<string, unknown>; prompt: string | null }>($, 'issue-form-request', { ref }, 180000)
+    if (!req.base.issue_id) {
       await $.state.set(NOTE, `Couldn't read an issue from "${ref}".`)
       return
+    }
+    let data = req.base
+    let failed = ''
+    if (req.prompt) {
+      const r = await $.model.complete({ model: REFINE_MODEL, prompt: req.prompt })
+      if (r.isAnswered) data = await core<Record<string, unknown>>($, 'issue-form-apply', { base: req.base, answer: r.text })
+      else failed = ` Couldn't distil the rest (${r.reason}).`
     }
     const { value: now = {} } = await $.state.get(DRAFT)
     const merged = mergeIssueFields(now, data)
     const filled = Object.keys(data).filter(k => k !== 'issue_id' && isEmpty(now[k]) && !isEmpty(merged[k]))
     await $.state.set(DRAFT, merged)
-    await $.state.set(NOTE, filled.length ? `Filled ${filled.join(', ')} from ${data.issue_id}.` : `${data.issue_id}: nothing new to fill.`)
+    await $.state.set(NOTE, (filled.length ? `Filled ${filled.join(', ')} from ${data.issue_id}.` : `${data.issue_id}: nothing new to fill.`) + failed)
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message)
   } finally {
@@ -315,7 +324,7 @@ async function fetchIssue($: EngineInterface): Promise<void> {
   }
 }
 
-/** The model behind Refine with Claude. */
+/** The model behind Refine with Claude and the issue fetch's distillation. */
 export const REFINE_MODEL = 'sonnet'
 
 /**
