@@ -39,6 +39,13 @@ The hand-built `icm-ws2` maps onto existing data with no new inputs:
 | `stages/NN_*/CONTEXT.md` + `output/.gitkeep` | the same template; contracts reference `.sandbox/sandbox-context.md` for infra facts |
 | nothing in `.claude/`, no `.sandbox/notes/` | — |
 
+With an issue, both strategies also show it. The stored copy is `.sandbox/issue.md`:
+
+| | Issue section | Brief / first instruction |
+|---|---|---|
+| ICM | root `CLAUDE.md`, plus a "Where things live" row for `.sandbox/issue.md` | `BRIEF.md` = issue section, then `description`, then `starting_prompt`. The "No starting prompt was given" note appears only with no issue and no prompt |
+| JIT | `CLAUDE.md` Current Task, replacing the bare link | the starting-prompt handoff note opens with the issue section; written even when `starting_prompt` is empty, if there is an issue |
+
 The stage template for `feature` is the four-stage research → spec → implement → ship pipeline in `~/features/icm-ws2/stages/`. `bugfix` would be reproduce → fix → verify → ship; `spike` would be two stages. Contracts must tell the agent to use `docker restart <feature>-<service>` rather than `sandbox up` unless the `up` hook refresh is gated (next section).
 
 ## Option A — a `context_strategy` field, branch in core

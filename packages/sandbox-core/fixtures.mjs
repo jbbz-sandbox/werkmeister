@@ -77,3 +77,34 @@ export async function dockerAvailable() {
     return false;
   }
 }
+
+/**
+ * Run *fn* with $SANDBOX_GH_BIN pointing at a fake `gh`: `issue view` prints
+ * `issue` as JSON (exit 1 when null), `auth status` exits `auth`, `repo view` exits `repoView`.
+ */
+export async function withFakeGh({ issue = null, auth = 0, repoView = 0 } = {}, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
+  fs.writeFileSync(path.join(dir, "issue.json"), JSON.stringify(issue));
+  const bin = path.join(dir, "gh");
+  fs.writeFileSync(
+    bin,
+    `#!/bin/sh
+case "$1 $2" in
+  "issue view") if [ "$(cat '${dir}/issue.json')" = "null" ]; then echo "could not resolve" >&2; exit 1; fi; cat '${dir}/issue.json';;
+  "auth status") if [ ${auth} = 0 ]; then echo "  ✓ Logged in to github.com account octo (keyring)" >&2; else echo "You are not logged into any GitHub hosts." >&2; fi; exit ${auth};;
+  "repo view") exit ${repoView};;
+  *) exit 0;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  const prev = process.env.SANDBOX_GH_BIN;
+  process.env.SANDBOX_GH_BIN = bin;
+  try {
+    return await fn(bin);
+  } finally {
+    if (prev === undefined) delete process.env.SANDBOX_GH_BIN;
+    else process.env.SANDBOX_GH_BIN = prev;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}

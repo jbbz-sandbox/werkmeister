@@ -334,6 +334,21 @@ curl -H "X-Feature: my-feature" https://frontend.local.sandbox.com/
 
 ---
 
+## Creating a workspace
+
+Every entry point — `sandbox workspace`, `--browser-form`, the MCP `workspace` /
+`create-workspace` tools, and the /workspaces pane — runs the same `createWorkspace`.
+With an issue ID it fetches the issue (failing if it can't), stores it in
+`.sandbox/issue.md`, fills the task from the title, and rewrites the issue into a
+description and starting prompt for any you left empty (`--no-distill` to skip).
+Both context strategies show the issue in CLAUDE.md and the brief.
+
+The copy is frozen at creation. To update it: `sandbox init-workspace --refresh-issue`
+(the brief is not rewritten, except one that is still the untouched placeholder, which is rebuilt from the issue). `sandbox connect` reports whether this machine can read
+the issue tracker and, on a terminal, offers `gh auth login`.
+
+---
+
 ## CLI Reference
 
 All commands are invoked via the `./sandbox` wrapper script. Run `./sandbox --help` for a list of commands, or `./sandbox <command> --help` for command-specific help.

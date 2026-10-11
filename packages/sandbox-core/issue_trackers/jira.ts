@@ -6,7 +6,7 @@
 
 import { askClaudeJson } from "../claude_cli.js";
 import { loadJira } from "../global_config.js";
-import { fetchIssueRest, fetchStatusesRest, updateIssueRest, type JiraRestIssue } from "../jira-rest.js";
+import { fetchIssueRest, fetchStatusesRest, isJiraPlaceholder, jiraMyself, updateIssueRest, type JiraRestIssue } from "../jira-rest.js";
 import type { Issue, IssueComment, IssueTrackerStrategy, IssueUpdate } from "./types.js";
 
 const KEY_RE = /[A-Za-z][A-Za-z0-9]+-\d+/;
@@ -14,7 +14,7 @@ const KEY_RE = /[A-Za-z][A-Za-z0-9]+-\d+/;
 /** Jira browse URL for a key, or null when `jira.base_url` is unset. */
 export function jiraBrowseUrl(key: string): string | null {
   const base = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
-  if (!base) return null;
+  if (!base || isJiraPlaceholder(base)) return null;
   return `${base.includes("://") ? base : `https://${base}`}/browse/${key}`;
 }
 
@@ -27,7 +27,7 @@ export function jiraSiteRef(): string | null {
   const id = (jira.cloud_id ?? "").trim();
   if (id) return id;
   const base = (jira.base_url ?? "").trim();
-  if (!base) return null;
+  if (!base || isJiraPlaceholder(base)) return null;
   try {
     return new URL(base.includes("://") ? base : `https://${base}`).hostname || null;
   } catch {
@@ -152,7 +152,8 @@ export const jira: IssueTrackerStrategy = {
 
   filingGuide(issueId) {
     const project = /^([A-Z][A-Z0-9]+)-\d+$/.exec(issueId)?.[1];
-    const base = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
+    const rawBase = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
+    const base = isJiraPlaceholder(rawBase) ? "" : rawBase;
     const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${base ? ` (${base})` : ""}`;
     return {
       row: `| app code in a worktree | ${where} | the Atlassian MCP tools if connected, with the Jira issue type from the type table; otherwise hand the person the title, type and body to file |`,
@@ -162,5 +163,21 @@ export const jira: IssueTrackerStrategy = {
 
   async updateIssue(ref, update) {
     if ((await updateIssueRest(ref, update)) === null) await updateViaMcp(ref, update);
+  },
+
+  async checkAuth() {
+    const fix = "set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md)";
+    try {
+      const me = await jiraMyself();
+      if (me) return { ok: true, who: me.who, fix: "" };
+      // No REST creds: fetchIssue still works through the Atlassian MCP, so only placeholder values are a fault.
+      const j = loadJira();
+      const values = [process.env.JIRA_BASE_URL, process.env.JIRA_EMAIL, process.env.JIRA_API_TOKEN, j.base_url, j.email, j.api_token];
+      return values.some((v) => v && isJiraPlaceholder(String(v)))
+        ? { ok: false, reason: "Jira settings still hold the placeholder values", fix }
+        : { ok: true, who: "via Atlassian MCP (not checked)", fix: "" };
+    } catch (e) {
+      return { ok: false, reason: (e as Error).message, fix };
+    }
   },
 };

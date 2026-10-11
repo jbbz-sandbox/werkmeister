@@ -20,14 +20,15 @@ export interface JiraCreds {
   token: string;
 }
 
-/** Placeholder the setup report treats as "not filled in yet". */
-const UNFILLED_TOKEN = "PASTE_TOKEN_HERE";
+/** Paste-me values from the config template: "not filled in yet". */
+export const JIRA_PLACEHOLDERS = new Set(["PASTE_TOKEN_HERE", "<your-atlassian-login-email>", "https://your-org.atlassian.net"]);
+export const isJiraPlaceholder = (v: string): boolean => JIRA_PLACEHOLDERS.has(v.trim().replace(/\/+$/, ""));
 
 function normalizeCreds(baseUrl: string, email: string, token: string): JiraCreds | null {
   // Linear trailing-slash strip; `/\/+$/` triggers a backtracking lint.
   let trimmed = baseUrl.trim();
   while (trimmed.endsWith("/")) trimmed = trimmed.slice(0, -1);
-  if (!trimmed || !email || !token || token === UNFILLED_TOKEN) return null;
+  if (!trimmed || !email || !token || isJiraPlaceholder(trimmed) || isJiraPlaceholder(email) || isJiraPlaceholder(token)) return null;
   return { baseUrl: trimmed, email, token };
 }
 
@@ -70,6 +71,15 @@ async function jiraFetch(creds: JiraCreds, restPath: string, body?: unknown): Pr
   });
   if (!res.ok) throw new Error(`Jira REST ${restPath} → HTTP ${res.status}`);
   return res;
+}
+
+/** Who the configured token signs in as; null without usable creds. Throws on HTTP failure. */
+export async function jiraMyself(): Promise<{ who: string } | null> {
+  const creds = await jiraCreds();
+  if (!creds) return null;
+  const r = await jiraFetch(creds, "/rest/api/3/myself");
+  const j = (await r.json()) as { emailAddress?: string; displayName?: string };
+  return { who: j.emailAddress ?? j.displayName ?? creds.email };
 }
 
 async function jiraGet<T>(creds: JiraCreds, restPath: string): Promise<T> {

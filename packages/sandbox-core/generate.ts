@@ -283,8 +283,9 @@ function resolveComposeOutPath(
  * preserve it.
  */
 export function seedWorkspaceMetadataEnv(envPath: string, meta: Record<string, string>): void {
+  // One line per key: a multi-line value (a distilled description) would end the entry early.
   const body = Object.entries(meta)
-    .map(([k, v]) => `${k}=${v}\n`)
+    .map(([k, v]) => `${k}=${String(v).replace(/\s*\n\s*/g, " ").trim()}\n`)
     .join("");
   fs.writeFileSync(envPath, preservedEnvMetadata(envPath, new Set(Object.keys(meta))) + body);
 }
