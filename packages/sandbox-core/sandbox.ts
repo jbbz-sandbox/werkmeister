@@ -23,7 +23,7 @@ import { createReadStream } from "node:fs";
 import readline from "node:readline";
 import { parse as parseYaml } from "yaml";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
-import { askClaudeJson, childEnv, extractJson, extractResult, isExecutable, resolveClaudeBin, runCapture, stripAnsi } from "./claude_cli.js";
+import { askClaude, childEnv, extractJson, extractResult, isExecutable, resolveClaudeBin, runCapture, stripAnsi } from "./claude_cli.js";
 export { childEnv } from "./claude_cli.js";
 import {
   forwardSpecs,
@@ -415,29 +415,29 @@ export function parseServiceNames(yaml: string): string[] {
 
 
 /**
- * Look up an issue in the configured tracker and distil it into form fields,
- * best-effort.
+ * The first half of {@link fetchIssueFormData}: look the issue up in the
+ * configured tracker and build the tools-free extraction prompt over it.
  *
- * The tracker fetches the issue (REST, `gh`, or its own fallback); the
- * distillation is a tools-free `claude -p` run over the fetched text, so issue
- * content never reaches a model that holds tools.
- *
- * Always degrades gracefully: the locally-parsed ref is authoritative and is
- * returned even if the lookup fails, so the form still opens with `issue_id`
- * pre-filled. Returns `{}` only when `ref` holds no issue ref at all.
+ * `base` is what the form gets even if the distillation fails: the
+ * locally-parsed `issue_id`, plus `task` from the title once the issue is
+ * fetched. `prompt` is null when there is no issue to distil (no ref in `text`,
+ * or the lookup failed). The workspaces pane runs `prompt` on its session's own
+ * model and hands the answer to {@link applyIssueFormAnswer}.
  *
  * When the service registry (`~/.sandbox/services.yaml`) is reachable it's
  * embedded as background context, so the model can map the issue onto the
  * sandbox's actual services and suggest which `services` to spin up.
  */
-export async function fetchIssueFormData(text: string): Promise<Record<string, unknown>> {
+export async function buildIssueFormRequest(
+  text: string,
+): Promise<{ base: Record<string, unknown>; prompt: string | null }> {
   const tracker = issueTracker();
   const ref = tracker.parseRef(text);
-  if (!ref) return {};
+  if (!ref) return { base: {}, prompt: null };
   const base: Record<string, unknown> = { issue_id: ref };
 
   const issue = await tracker.fetchIssue(ref);
-  if (!issue) return base;
+  if (!issue) return { base, prompt: null };
   // Cache the briefing up front so refine reuses it even if the distillation
   // fails, and pre-fill `task` from the title as a floor.
   const briefing = issueBriefing(issue);
@@ -446,15 +446,54 @@ export async function fetchIssueFormData(text: string): Promise<Record<string, u
 
   const registry = await readServicesRegistry();
   const serviceNames = registry ? parseServiceNames(registry) : [];
-  const parsed = await askClaudeJson(buildIssueExtractPrompt(tracker.label, ref, registry, serviceNames, briefing));
-  if (!parsed) return base;
+  return { base, prompt: buildIssueExtractPrompt(tracker.label, ref, registry, serviceNames, briefing) };
+}
+
+/**
+ * The second half of {@link fetchIssueFormData}: layer the model's answer to
+ * the extraction prompt onto `base`. An answer with no usable JSON leaves
+ * `base` as it is.
+ */
+export async function applyIssueFormAnswer(
+  base: Record<string, unknown>,
+  answer: string | null,
+): Promise<Record<string, unknown>> {
+  const json = answer === null ? null : extractJson(extractResult(stripAnsi(answer)));
+  let parsed: Record<string, unknown> | null;
+  try {
+    parsed = json ? JSON.parse(json) : null;
+  } catch {
+    return base;
+  }
+  if (!parsed || typeof parsed !== "object") return base;
 
   // The locally-parsed ref always wins; layer the model's known string fields on
   // top, then the registry-validated `services`.
+  const registry = await readServicesRegistry();
+  const serviceNames = registry ? parseServiceNames(registry) : [];
   const out: Record<string, unknown> = { ...base, ...mapIssueStringFields(parsed) };
   const services = pickValidServices(parsed.services, serviceNames);
   if (services.length) out.services = services;
   return out;
+}
+
+/**
+ * Look up an issue in the configured tracker and distil it into form fields,
+ * best-effort, with the distillation a tools-free `claude -p` run over the
+ * fetched text, so issue content never reaches a model that holds tools.
+ *
+ * Always degrades gracefully: the locally-parsed ref is authoritative and is
+ * returned even if the lookup fails, so the form still opens with `issue_id`
+ * pre-filled. Returns `{}` only when `ref` holds no issue ref at all.
+ *
+ * Used by the browser form, the CLI and the `issue-form-data` MCP tool. The
+ * workspaces pane does not come here: it runs {@link buildIssueFormRequest}'s
+ * prompt through the session's own client (`$.model.complete`).
+ */
+export async function fetchIssueFormData(text: string): Promise<Record<string, unknown>> {
+  const { base, prompt } = await buildIssueFormRequest(text);
+  if (!prompt) return base;
+  return applyIssueFormAnswer(base, await askClaude(prompt));
 }
 
 /**
