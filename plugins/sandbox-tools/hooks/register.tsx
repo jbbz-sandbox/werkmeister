@@ -376,6 +376,14 @@ async function submitForm($: EngineInterface): Promise<void> {
   // Core stores the issue but doesn't run a model for the pane: fill empty fields on the session model first.
   if (typeof first.issue_id === 'string' && first.issue_id.trim() && (isEmpty(first.description) || isEmpty(first.starting_prompt))) {
     await fetchIssue($)
+    // What the model filled is a default to review, not something to create from unseen.
+    const { value: filled = {} } = await $.state.get(DRAFT)
+    // The ref's own normalisation (api#7 → acme/api#7) is not a fill.
+    if (Object.keys(filled).some(k => k !== 'issue_id' && JSON.stringify(filled[k]) !== JSON.stringify(first[k]))) {
+      const { value: note = '' } = await $.state.get(NOTE)
+      await $.state.set(NOTE, `${note} Review, then press Create again.`)
+      return
+    }
   }
   const { value: draft = {} } = await $.state.get(DRAFT)
   const errors = formErrors(formFields(form.bundle), draft)
@@ -566,7 +574,11 @@ async function tick($: EngineInterface): Promise<void> {
     await $.state.set(ERROR, '')
     if (Date.now() - trackerAt > TRACKER_TTL_MS) {
       trackerAt = Date.now()
-      await $.state.set(TRACKER, await core<{ ok: boolean; reason?: string; fix: string }>($, 'tracker-auth').catch(() => null))
+      // Not awaited: a slow tracker check must not hold up row polling.
+      void core<{ ok: boolean; reason?: string; fix: string }>($, 'tracker-auth').then(
+        a => $.state.set(TRACKER, a),
+        () => $.state.set(TRACKER, null),
+      )
     }
   } catch (err) {
     await $.state.set(ERROR, (err as Error).message)

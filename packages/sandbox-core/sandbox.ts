@@ -759,7 +759,11 @@ function kebab(key: string): string {
  */
 export function buildWorkspaceArgs(formData: Record<string, unknown>): string[] {
   const feature = String(formData.feature ?? "").trim();
-  if (!feature) throw new WorkspaceError("A feature name is required.");
+  if (!feature) {
+    throw new WorkspaceError(
+      "A feature name is required (pass it as an argument, set it in ./.sandbox/workspace.yml, or run interactively).",
+    );
+  }
 
   const args = ["workspace", feature];
   for (const [key, raw] of Object.entries(formData)) {
@@ -830,7 +834,7 @@ export interface CreateOptions {
 
 const DISTILLED = ["feature", "task", "description", "starting_prompt", "services"] as const;
 
-/** The model's rewrite of one issue into form fields; never throws. */
+/** The model's rewrite of one issue into form fields (all of DISTILLED, for the wizard to show as defaults); never throws. */
 export async function distillIssue(
   issue: IssueSnapshot,
   distill: Distiller = askClaude,
@@ -853,7 +857,7 @@ export async function distillIssue(
   return Object.keys(fields).length ? { fields, warning: null } : { fields, warning: "the answer held no usable fields" };
 }
 
-/** Resolve inputs, fetch the issue (failing the create), then fill empty fields from it. */
+/** Resolve inputs, fetch the issue (failing the create), then fill an empty task, description and starting_prompt from it. */
 export async function prepareCreate(
   formData: Record<string, unknown>,
   opts: CreateOptions = {},
@@ -883,7 +887,8 @@ export async function prepareCreate(
 
   if (opts.distill !== false && (!resolved.description || !resolved.starting_prompt)) {
     const { fields, warning } = await distillIssue(issue, opts.distill ?? askClaude);
-    for (const [k, v] of Object.entries(fields)) if (!resolved[k]) resolved[k] = v;
+    // Only the prose: a model-picked feature or services would make unattended creates nondeterministic.
+    for (const k of ["description", "starting_prompt"]) if (!resolved[k] && fields[k]) resolved[k] = fields[k];
     if (warning) warn(`description/starting_prompt not filled from the issue: ${warning}`);
   }
   return { resolved, issue };

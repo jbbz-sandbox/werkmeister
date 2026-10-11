@@ -6,7 +6,7 @@ import * as path from "node:path";
 
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { createWorkspace, prepareCreate } from "./dist/sandbox.js";
+import { buildWorkspaceArgs, createWorkspace, prepareCreate } from "./dist/sandbox.js";
 
 const GH = "overrides:\n  issue_tracker: github\n";
 const ISSUE = { title: "Stale config", state: "OPEN", body: "Body.", url: "https://github.com/o/r/issues/5", labels: [], assignees: [], comments: [] };
@@ -23,6 +23,20 @@ test("an issue fills task from the title and distils only empty fields", async (
       assert.equal(resolved.task, "Stale config");
       assert.equal(resolved.description, "Mine.");
       assert.equal(resolved.starting_prompt, "## Goal\n\nFix.");
+    });
+  }, { config: GH });
+});
+
+test("an unattended create takes only description and starting_prompt from the model", async () => {
+  await withSandboxHome(async () => {
+    await withFakeGh({ issue: ISSUE }, async () => {
+      const answer = '<result>{"feature":"model-pick","task":"Model task","services":["backend"],"description":"Distilled.","starting_prompt":"Go."}</result>';
+      const { resolved } = await quiet(() => prepareCreate({ issue_id: "o/r#5" }, { cwd: cwd(), distill: async () => answer }));
+      assert.equal(resolved.feature, undefined);
+      assert.equal(resolved.services, undefined);
+      assert.equal(resolved.task, "Stale config");
+      assert.equal(resolved.description, "Distilled.");
+      assert.equal(resolved.starting_prompt, "Go.");
     });
   }, { config: GH });
 });
@@ -81,4 +95,8 @@ test("an unparseable ref fails with the tracker's example", async () => {
     await assert.rejects(quiet(() => prepareCreate({ feature: "f", issue_id: "nonsense" }, { cwd: cwd(), distill: false })),
       /isn't a GitHub issue ref \(e\.g\. owner\/repo#12\)/);
   }, { config: GH });
+});
+
+test("a missing feature tells the CLI user how to give one", () => {
+  assert.throws(() => buildWorkspaceArgs({}), /^WorkspaceError: A feature name is required \(pass it as an argument, set it in \.\/\.sandbox\/workspace\.yml, or run interactively\)\.$/);
 });
