@@ -13,7 +13,33 @@
 import { Colors } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
 import { connectK8s, infraHealth, up as infraUp } from "sandbox-core/infra";
+import * as readline from "node:readline/promises";
+import { ghBin, issueTracker, type TrackerAuth } from "sandbox-core/issue_tracker";
+import { run as procRun } from "sandbox-core/proc";
 import { DASHBOARD, MCP, status as webStatus } from "sandbox-core/web_servers";
+
+export function trackerLine(label: string, auth: TrackerAuth): string {
+  return auth.ok
+    ? `  ${Colors.GREEN}issue tracker · ${label} · ok${auth.who ? ` (${auth.who})` : ""}${Colors.RESET}`
+    : `  ${Colors.YELLOW}issue tracker · ${label} · ${auth.reason} — run: ${auth.fix}${Colors.RESET}`;
+}
+
+/** Report tracker sign-in; on a TTY, offer GitHub's own login. Never fails connect. */
+async function checkTracker(): Promise<void> {
+  const tracker = issueTracker();
+  let auth = await tracker.checkAuth();
+  if (!auth.ok && tracker.id === "github" && process.stdin.isTTY) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const yes = /^y/i.test(await rl.question(`  GitHub: ${auth.reason}. Sign in now? (${auth.fix}) [y/N] `));
+    rl.close();
+    if (yes) {
+      // The terminal goes to gh; credentials are typed into gh's own prompt, never read here.
+      procRun([ghBin(), ...auth.fix.split(" ").slice(1)], { stdio: "inherit" });
+      auth = await tracker.checkAuth();
+    }
+  }
+  console.log(trackerLine(tracker.label, auth));
+}
 
 /** Handle `sandbox connect --k8s`: start/restart the k8s port-forwards container only. */
 function runK8sOnly(): void {
@@ -66,6 +92,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       console.log(`  ${Colors.DIM}Check docker and your kubeconfig.${Colors.RESET}`);
     }
   }
+
+  await checkTracker();
 
   console.log();
   console.log(`  ${Colors.BOLD}Developer tools:${Colors.RESET}`);
