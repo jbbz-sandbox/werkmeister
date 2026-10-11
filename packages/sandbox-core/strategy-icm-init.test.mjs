@@ -270,3 +270,18 @@ test("same context twice gives byte-identical files", async () => {
   };
   assert.deepEqual(await snap({}), await snap({}));
 });
+
+test("a no-copy issue keeps the placeholder brief; a fetched copy then rebuilds it", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    const noCopy = { ...ISSUE, title: "", fetchedAt: null };
+    icm.init(ctx);
+    const placeholder = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+    icm.init({ ...ctx, issue: noCopy });
+    assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), placeholder);
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), /\| `\.sandbox\/issue\.md` \|/);
+    icm.init({ ...ctx, issue: ISSUE });
+    const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+    assert.match(brief, /Copy taken 2026-10-11: `\.sandbox\/issue\.md`\./);
+    assert.match(brief, /_Read `\.sandbox\/issue\.md`, then/);
+  }, { inputs: { starting_prompt: "" } });
+});

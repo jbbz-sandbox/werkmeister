@@ -157,7 +157,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "| Path | Holds |",
     "|---|---|",
     "| `BRIEF.md` | the run's input: goal, acceptance criteria, open questions |",
-    ...(ctx.issue ? ["| `.sandbox/issue.md` | the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` |"] : []),
+    ...(ctx.issue?.fetchedAt ? ["| `.sandbox/issue.md` | the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` |"] : []),
     "| `CONTEXT.md` | the pipeline in one screen |",
     "| `stages/NN_*/` | one stage each: `CONTEXT.md` (contract) + `output/` (this run's artifacts) |",
     "| `_shared/` | factory: the coding standards and `issues-report.md` (fix a bug here or file an issue — bug, feature or task — and how), same every run |",
@@ -213,14 +213,15 @@ export const PLACEHOLDER_BRIEF_RE = /^---\nsource: \.sandbox\/workspace\.yml \(s
 
 function renderBrief(ctx: InitContext): string {
   const prompt = (ctx.inputs["starting_prompt"] ?? "").trim();
-  if (!ctx.issue) {
-    // Unchanged from before the issue copy existed.
+  const description = (ctx.inputs["description"] ?? "").trim();
+  const copy = !!ctx.issue?.fetchedAt;
+  if (!ctx.issue || (!copy && !description && !prompt)) {
+    // Unchanged from before the issue copy existed; with no copy yet, still the placeholder --refresh-issue rebuilds.
     return ["---", "source: .sandbox/workspace.yml (starting_prompt)", "---", "", `# Brief: ${ctx.task}`, "", prompt || NO_PROMPT, ""].join("\n");
   }
-  const description = (ctx.inputs["description"] ?? "").trim();
   return [
     "---",
-    "source: .sandbox/workspace.yml (description, starting_prompt), .sandbox/issue.md",
+    `source: .sandbox/workspace.yml (description, starting_prompt)${copy ? ", .sandbox/issue.md" : ""}`,
     "---",
     "",
     `# Brief: ${ctx.task}`,
@@ -228,7 +229,7 @@ function renderBrief(ctx: InitContext): string {
     renderIssueRef(ctx.issue),
     ...(description ? [description, ""] : []),
     ...(prompt ? [prompt, ""] : []),
-    ...(!description && !prompt ? [READ_ISSUE, ""] : []),
+    ...(copy && !description && !prompt ? [READ_ISSUE, ""] : []),
   ].join("\n");
 }
 
@@ -297,10 +298,10 @@ function init(ctx: InitContext): void {
     ...render(ctx),
   };
   // The brief is the operator's once written — same rule as seedStartingHandoff —
-  // except an untouched placeholder, rebuilt once there is an issue to brief from.
+  // except an untouched placeholder, rebuilt once there is an issue copy to brief from.
   const briefPath = path.join(root, "BRIEF.md");
   const existing = fs.existsSync(briefPath) ? fs.readFileSync(briefPath, "utf8") : null;
-  if (existing === null || (ctx.issue && PLACEHOLDER_BRIEF_RE.test(existing))) {
+  if (existing === null || (ctx.issue?.fetchedAt && PLACEHOLDER_BRIEF_RE.test(existing))) {
     files["BRIEF.md"] = renderBrief(ctx);
   }
   for (const [rel, body] of Object.entries(files)) {

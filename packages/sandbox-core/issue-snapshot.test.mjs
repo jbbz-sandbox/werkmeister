@@ -67,6 +67,10 @@ test("readIssueRef: copy, else a no-copy ref from issue_id, else null", async ()
       ref: "o/r#5", url: "https://github.com/o/r/issues/5", title: "Stale config survives up",
       fetchedAt: "2026-10-11T18:04:00.000Z",
     });
+    // issue_id changed since the copy was taken: the copy is another issue's, so ignore it.
+    assert.deepEqual(readIssueRef(root, "o/r#6"), {
+      ref: "o/r#6", url: "https://github.com/o/r/issues/6", title: "", fetchedAt: null,
+    });
   }, { config: GH });
 });
 
