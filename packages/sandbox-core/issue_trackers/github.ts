@@ -144,4 +144,16 @@ export const github: IssueTrackerStrategy = {
     }
     if (update.comment) await gh(["issue", "comment", n, "-R", repo, "--body", update.comment]);
   },
+
+  async checkAuth() {
+    const run = (args: string[]) => runAsync([ghBin(), ...args], { capture: true, env: childEnv(), timeout: 15 }).catch(() => null);
+    const s = await run(["auth", "status", "--hostname", "github.com"]);
+    if (!s || s.status !== 0) return { ok: false, reason: "not signed in", fix: "gh auth login" };
+    const who = /account (\S+)/.exec(`${s.stdout}${s.stderr}`)?.[1];
+    for (const repo of githubIssueRepos()) {
+      const v = await run(["repo", "view", repo, "--json", "name"]);
+      if (!v || v.status !== 0) return { ok: false, ...(who ? { who } : {}), reason: `can't read ${repo}`, fix: "gh auth refresh -s repo" };
+    }
+    return { ok: true, ...(who ? { who } : {}), fix: "" };
+  },
 };

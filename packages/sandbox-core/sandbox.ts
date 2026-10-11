@@ -871,7 +871,11 @@ export async function prepareCreate(
     try {
       issue = await fetchIssueSnapshot(ref);
     } catch (e) {
-      if (e instanceof IssueFetchError) throw new WorkspaceError(`${e.message}; run \`sandbox connect\` to check the issue tracker.`);
+      if (e instanceof IssueFetchError) {
+        const auth = await tracker.checkAuth();
+        const hint = auth.ok ? "run `sandbox connect` to check the issue tracker" : `${tracker.label}: ${auth.reason}; run: ${auth.fix}`;
+        throw new WorkspaceError(`${e.message}; ${hint}.`);
+      }
       throw e;
     }
   }
