@@ -183,36 +183,37 @@ test('a card border follows the state', async ($, on) => {
   await ui.unmount()
 })
 
-test('jump with no desktop session resumes the newest session in a Terminal', async ($, on) => {
+test('Continue with no desktop session is labelled Terminal and resumes there', async ($, on) => {
   const w = world(on, stubs({ [`${WS}/claude-resume`]: () => ok({ path: '/ws/ab', sessionId: 's1' }) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'jump:ab' })
+  expect((await ui.find({ key: 'continue:ab' }))?.text).toBe('↗ Continue in Terminal')
+  await ui.press({ key: 'continue:ab' })
   expect(w.calls.find(c => c.key === `${WS}/claude-resume`)?.args).toEqual({ name: 'ab' })
   expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')).toBeUndefined()
   await ui.unmount()
 })
 
-test('jump on a VS Code session opens the folder in VS Code, not a Terminal', async ($, on) => {
+test('Continue on a VS Code session is labelled VS Code and opens the folder there', async ($, on) => {
   const vscode = { ...LIST, workspaces: LIST.workspaces.map(w => (w.name === 'ab' ? { ...w, sessionOrigin: 'claude-vscode' } : w)) }
   const w = world(on, stubs({ [`${WS}/list-workspaces`]: () => ok(vscode), [`${WS}/open-vscode`]: () => ok({ path: '/ws/ab' }) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect((await ui.find({ key: 'session:ab' }))?.text).toBe('session · VS Code · Demo project')
-  await ui.press({ key: 'jump:ab' })
+  expect((await ui.find({ key: 'continue:ab' }))?.text).toBe('↗ Continue in VS Code')
+  await ui.press({ key: 'continue:ab' })
   expect(w.calls.find(c => c.key === `${WS}/open-vscode`)?.args).toEqual({ path: '/ws/ab' })
   expect(w.calls.find(c => c.key === `${WS}/claude-resume`)).toBeUndefined()
   expect(w.toasts).toEqual(['Opening ab in VS Code'])
   await ui.unmount()
 })
 
-test('the workspace this session sits in gets no Switch', async ($, on) => {
+test('every workspace has New session, the one this session sits in too', async ($, on) => {
   world(on, stubs())
   on('session.cwd', () => ({ value: '/ws/abc/repo' }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  expect(await ui.find({ key: 'switch:abc' })).toBeUndefined()
-  expect(await ui.find({ key: 'switch:ab' })).toBeDefined()
+  for (const name of ['ab', 'abc', 'empty']) expect((await ui.find({ key: `new:${name}` }))?.text).toBe('＋ New session')
   await ui.unmount()
 })
 
@@ -239,7 +240,7 @@ test('buttons follow the extension gating', async ($, on) => {
     expect(await ui.find({ key: 'stop:abc' })).toBeDefined()
     expect(await ui.find({ key: 'up:empty' })).toBeDefined()
     expect(await ui.find({ key: 'stop:empty' })).toBeUndefined()
-    for (const k of ['restart:ab', 'down:ab', 'switch:ab', 'remove:ab']) expect(await ui.find({ key: k })).toBeDefined()
+    for (const k of ['restart:ab', 'down:ab', 'new:ab', 'remove:ab']) expect(await ui.find({ key: k })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -349,29 +350,28 @@ test('a slow tick is skipped, not queued', async ($, on) => {
   expect(w.calls.filter(c => c.key === `${WS}/list-workspaces`)).toHaveLength(2)
 })
 
-test('switch calls change_directory, toasts, and submits a turn so the move lands', async ($, on) => {
-  const w = world(on, stubs({ 'ccd_directory/change_directory': () => ok(undefined, 'Access granted.') }))
-  const submitted: string[] = []
-  on('prompt.submit', (_$, e) => {
-    submitted.push(e.text)
-    return { text: e.text }
-  })
+test('New session opens the app\'s new-session link for the workspace folder', async ($, on) => {
+  const w = world(on, stubs({ [`${WS}/open-claude-link`]: a => ok({ url: a.url }) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'switch:abc' })
-  expect(w.calls.find(c => c.key === 'ccd_directory/change_directory')?.args).toEqual({ path: '/ws/abc' })
-  expect(w.toasts).toEqual(['Switching to abc'])
-  expect(submitted).toEqual(['Switched to workspace abc. Read /ws/abc/CLAUDE.md, then wait for my next instruction.'])
+  await ui.press({ key: 'new:abc' })
+  expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://code/new?folder=%2Fws%2Fabc&source=services' })
+  expect(w.calls.some(c => c.key === 'ccd_directory/change_directory')).toBe(false)
+  expect(w.toasts).toEqual(['Opening a new session in abc'])
   await ui.unmount()
 })
 
-test('jump focuses a session this session started, else toasts its title', async ($, on) => {
-  const w = world(on, stubs({ 'ccd_window/open_session_in': () => ({ content: [{ type: 'text', text: 'Only sessions this session started can be focused.' }], isError: true }) }))
+test('Continue in Desktop focuses a session this one started, else opens the session\'s own link', async ($, on) => {
+  const w = world(on, stubs({
+    'ccd_window/open_session_in': () => ({ content: [{ type: 'text', text: 'Only sessions this session started can be focused.' }], isError: true }),
+    [`${WS}/open-claude-link`]: a => ok({ url: a.url }),
+  }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'jump:abc' })
+  expect((await ui.find({ key: 'continue:abc' }))?.text).toBe('↗ Continue in Desktop')
+  await ui.press({ key: 'continue:abc' })
   expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')?.args).toEqual({ session_id: 'local_1', target: 'focus' })
-  expect(w.toasts).toEqual(['Open "Newer in abc" from the sidebar'])
+  expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://x/local_1' })
   await ui.unmount()
 })
 
@@ -489,7 +489,7 @@ test('fetch fills only the empty fields, then create submits the draft and retur
     formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api', 'web'], work_type: 'bugfix' },
   })
   expect(w.toasts).toEqual(['Workspace created'])
-  expect(await ui.find({ key: 'switch:abc' })).toBeDefined()
+  expect(await ui.find({ key: 'new:abc' })).toBeDefined()
   await ui.unmount()
 })
 
