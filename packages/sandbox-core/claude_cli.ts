@@ -105,13 +105,28 @@ export function extractResult(out: string): string {
   return (m ? m[1] : out).trim();
 }
 
-/** Slice a `{…}` (possibly fenced) JSON object out of free-form model output. */
+/**
+ * Slice a `{…}` (possibly fenced) JSON object out of free-form model output.
+ * The outermost braces win when they parse, so a fence inside a JSON string
+ * value (a starting prompt with a ```bash block) isn't mistaken for the answer.
+ */
 export function extractJson(out: string): string | null {
+  const slice = (s: string): string | null => {
+    const start = s.indexOf("{");
+    const end = s.lastIndexOf("}");
+    return start !== -1 && end > start ? s.slice(start, end + 1) : null;
+  };
+  const whole = slice(out);
+  if (whole) {
+    try {
+      JSON.parse(whole);
+      return whole;
+    } catch {
+      // fall through to a fenced block
+    }
+  }
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(out);
-  const body = (fenced ? fenced[1] : out).trim();
-  const start = body.indexOf("{");
-  const end = body.lastIndexOf("}");
-  return start !== -1 && end > start ? body.slice(start, end + 1) : null;
+  return fenced ? slice(fenced[1]) : whole;
 }
 
 /**
