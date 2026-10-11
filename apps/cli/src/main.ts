@@ -748,7 +748,7 @@ const SPECS: CommandSpec[] = [
           "After a context_strategy change, delete the previous strategy's files that git " +
             "tracks unmodified (anything else is kept and reported).",
         )
-        .option("--refresh-issue", "Re-fetch the workspace's issue into .sandbox/issue.md (BRIEF.md is not rewritten).");
+        .option("--refresh-issue", "Re-fetch the workspace's issue into .sandbox/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).");
     },
     namespace: (_a, o) => ({
       task: o.task ?? null,

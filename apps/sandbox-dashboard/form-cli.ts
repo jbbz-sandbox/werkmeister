@@ -34,7 +34,7 @@ import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {
   issue?: string;
-  prefill?: Record<string, string>;
+  prefill?: Record<string, string | string[]>;
   open: boolean;
   timeoutMs: number;
 }
