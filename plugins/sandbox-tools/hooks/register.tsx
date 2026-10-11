@@ -729,7 +729,7 @@ export const register: Register = on => {
         properties: {
           fields: {
             type: 'object',
-            description: 'Field key → value: a string, or a list of strings for services and repos.',
+            description: 'Field key → value: a string, or a list of strings for services.',
             additionalProperties: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
           },
         },

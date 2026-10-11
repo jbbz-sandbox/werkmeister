@@ -24,3 +24,11 @@ test("no app or plugin calls provisionWorkspace", () => {
     .map((f) => path.relative(REPO, f));
   assert.deepEqual(hits, []);
 });
+
+test("the sandbox-workspace skill states the one rule and the batch check", () => {
+  const skill = fs.readFileSync(path.join(REPO, "plugins/sandbox-tools/skills/sandbox-workspace/SKILL.md"), "utf8");
+  assert.match(skill, /Every create goes through `createWorkspace`/);
+  assert.match(skill, /\.sandbox\/issue\.md/);
+  assert.match(skill, /mcp__plugin_sandbox-tools_sandbox-workspace__workspace/);
+  assert.doesNotMatch(skill, /mcp__sandbox-workspace__workspace/);
+});
