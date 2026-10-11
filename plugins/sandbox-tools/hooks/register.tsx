@@ -71,7 +71,8 @@ try {
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
     // Only claude:// links: a new Desktop session in a folder, or a session's own link.
     'open-claude-link': () => {
-      if (!/^claude:\/\//.test(args.url)) throw new Error('not a claude:// link: ' + args.url)
+      // No regex here: this script is a template literal, where a \\/ escape collapses to / and starts a comment.
+      if (!String(args.url).startsWith('claude://')) throw new Error('not a claude:// link: ' + args.url)
       execFileSync('open', [args.url])
       return { url: args.url }
     },
@@ -98,7 +99,9 @@ async function core<T>($: EngineInterface, op: string, args: Record<string, unkn
   try {
     o = JSON.parse(line)
   } catch {
-    throw new Error(r.stderr.trim().split('\n').pop() || `sandbox-core gave no result (exit ${r.exitCode})`)
+    // The first error line names the failure; node's last stderr line is often only its version banner.
+    const lines = r.stderr.trim().split('\n')
+    throw new Error(lines.find(l => /Error\b/.test(l)) || lines.pop() || `sandbox-core gave no result (exit ${r.exitCode})`)
   }
   if (!o.ok || o.result === undefined) throw new Error(o.error ?? 'sandbox-core failed')
   return o.result
