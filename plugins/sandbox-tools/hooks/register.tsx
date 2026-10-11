@@ -1,6 +1,6 @@
 import type { Register, EngineInterface } from 'claude-code'
 
-import type { InfraStatus, WorkspaceRow } from '../types'
+import type { Draft, FormBundle, FormField, InfraStatus, WorkspaceRow } from '../types'
 
 export const PLUGIN = 'sandbox-tools'
 export const PANE = 'workspaces'
@@ -70,6 +70,20 @@ try {
     'remove-workspace': () => core.removeWorkspace(args.name),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
+    // Only claude:// links: a new Desktop session in a folder, or a session's own link.
+    'open-claude-link': () => {
+      // No regex here: this script is a template literal, where a \\/ escape collapses to / and starts a comment.
+      if (!String(args.url).startsWith('claude://')) throw new Error('not a claude:// link: ' + args.url)
+      execFileSync('open', [args.url])
+      return { url: args.url }
+    },
+    'form-schema': async () => {
+      const tracker = await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)
+      return { bundle: await core.getFormSchema(), trackerLabel: tracker.issueTracker().label }
+    },
+    'issue-form-data': () => core.fetchIssueFormData(args.ref),
+    'create-workspace': () => core.createWorkspace(args.formData),
+    'refine-prompt': () => core.refinePrompt(args.text, args.instruction, args.formData),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -86,7 +100,9 @@ async function core<T>($: EngineInterface, op: string, args: Record<string, unkn
   try {
     o = JSON.parse(line)
   } catch {
-    throw new Error(r.stderr.trim().split('\n').pop() || `sandbox-core gave no result (exit ${r.exitCode})`)
+    // The first error line names the failure; node's last stderr line is often only its version banner.
+    const lines = r.stderr.trim().split('\n')
+    throw new Error(lines.find(l => /Error\b/.test(l)) || lines.pop() || `sandbox-core gave no result (exit ${r.exitCode})`)
   }
   if (!o.ok || o.result === undefined) throw new Error(o.error ?? 'sandbox-core failed')
   return o.result
@@ -103,20 +119,251 @@ const INFRA = { plugin: 'sandbox-tools', key: 'infra' } as const
 /** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
 const CONNECTING = '(connect)'
 
-/** The prompt the Create tab submits: the form needs the Browser pane, which only a model's tool call can drive (see 1500cb1). */
+const FORM = { plugin: 'sandbox-tools', key: 'formSchema' } as const
+const DRAFT = { plugin: 'sandbox-tools', key: 'draft' } as const
+const FORM_BUSY = { plugin: 'sandbox-tools', key: 'formBusy' } as const
+const FOCUSED = { plugin: 'sandbox-tools', key: 'focusedField' } as const
+
+/** Mobile draws no Input or Select, so there the Create tab hands the form to the model instead. */
 export function createPrompt(issueId: string): string {
   const id = issueId.trim()
   return `Create a new sandbox workspace with the sandbox-workspace skill${id ? `, pre-filled from issue ${id}` : ''}.`
 }
 
-// The issue field's text as typed; a reload clears it.
-let draftIssue = ''
+/**
+ * The create form's fields from the same RJSF bundle the browser form renders
+ * (getFormSchema: the terminal wizard's prompts), in its `ui:order`. An array
+ * with choices is a multi-pick; a string with choices a select; a `textarea`
+ * widget a multi-line field; the rest one line. Titles lose the wizard's
+ * terminal hints, `(blank to skip)` and the like: the form marks required
+ * fields itself and the description says the rest.
+ */
+export function formFields(bundle: FormBundle): FormField[] {
+  const props = bundle.schema.properties ?? {}
+  const order = (bundle.uiSchema['ui:order'] as string[] | undefined) ?? Object.keys(props)
+  const required = new Set(bundle.schema.required ?? [])
+  return order.flatMap(k => {
+    const p = props[k]
+    if (!p) return []
+    const ui = (bundle.uiSchema[k] ?? {}) as Record<string, unknown>
+    const options = (p.type === 'array' ? p.items?.enum : p.enum) ?? []
+    return {
+      key: k,
+      title: (p.title ?? k).replace(/\s*\([^)]*\)\s*$/, ''),
+      help: p.description ?? '',
+      kind: options.length ? (p.type === 'array' ? 'multi' : 'select') : ui['ui:widget'] === 'textarea' ? 'textarea' : 'text',
+      options,
+      groups: (((ui['ui:options'] ?? {}) as { groups?: Record<string, string[]> }).groups) ?? {},
+      refine: refineOf(ui),
+      required: required.has(k),
+      pattern: p.pattern ?? null,
+      placeholder: typeof ui['ui:placeholder'] === 'string' ? ui['ui:placeholder'] : '',
+    } satisfies FormField
+  })
+}
 
-async function create($: EngineInterface, issueId: string): Promise<void> {
-  draftIssue = ''
-  await $.state.set(TAB, 'list')
-  $.ui.toast('Opening the workspace form')
-  void $.prompt.submit({ text: createPrompt(issueId) })
+/** A refinable field's instruction for refinePrompt ("" = its default), or null when the field isn't refinable. */
+function refineOf(ui: Record<string, unknown>): string | null {
+  const o = (ui['ui:options'] ?? {}) as { refinable?: boolean; refineInstruction?: string }
+  return o.refinable ? (o.refineInstruction ?? '') : null
+}
+
+/** A multi-pick draws as checkboxes in this many columns, as the browser form does. */
+const COLUMNS = 5
+
+/** [heading, options] in schema order: the bundle's groups (an option in none goes under "other"), else one unheaded group. */
+export function optionGroups(f: FormField): [string, string[]][] {
+  const headings = Object.keys(f.groups)
+  if (!headings.length) return [['', f.options]]
+  const grouped = new Set(Object.values(f.groups).flat())
+  const out: [string, string[]][] = headings.sort().map(h => [h, f.options.filter(o => f.groups[h]!.includes(o))])
+  const rest = f.options.filter(o => !grouped.has(o))
+  if (rest.length) out.push(['other', rest])
+  return out.filter(([, opts]) => opts.length > 0)
+}
+
+
+const isEmpty = (v: Draft[string] | undefined) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
+
+/** An issue's fields fill only what the person left empty; the issue ID itself is the lookup's normalised one. */
+export function mergeIssueFields(draft: Draft, data: Record<string, unknown>): Draft {
+  const out = { ...draft }
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v !== 'string' && !Array.isArray(v)) continue
+    if (k === 'issue_id' || isEmpty(out[k])) out[k] = Array.isArray(v) ? v.map(String) : v
+  }
+  return out
+}
+
+/** Why the draft can't be submitted, one line per field; [] when it can. */
+export function formErrors(fields: FormField[], draft: Draft): string[] {
+  const out: string[] = []
+  for (const f of fields) {
+    const v = draft[f.key]
+    if (isEmpty(v)) {
+      if (f.required) out.push(`${f.title}: required`)
+    } else if (f.pattern && typeof v === 'string' && !new RegExp(f.pattern).test(v)) {
+      out.push(`${f.title}: "${v}" doesn't match the expected format`)
+    }
+  }
+  return out
+}
+
+/**
+ * Values from the workspace_form tool laid over the draft: a key the form doesn't
+ * have, a choice it doesn't offer or a value of the wrong shape is left out and
+ * named in `problems`. "" or [] clears a field; a multi-pick also takes "a, b".
+ */
+export function applyFormFields(fields: FormField[], draft: Draft, input: Record<string, unknown>): { draft: Draft; problems: string[] } {
+  const out = { ...draft }
+  const problems: string[] = []
+  for (const [k, raw] of Object.entries(input)) {
+    const f = fields.find(x => x.key === k)
+    if (!f) {
+      problems.push(`${k}: no such field (fields: ${fields.map(x => x.key).join(', ')})`)
+      continue
+    }
+    if (f.kind === 'multi') {
+      const list = typeof raw === 'string' ? raw.split(',').map(s => s.trim()).filter(Boolean) : raw
+      if (!Array.isArray(list) || !list.every(v => typeof v === 'string')) {
+        problems.push(`${k}: expected a list of choices`)
+        continue
+      }
+      const bad = list.filter(v => !f.options.includes(v))
+      if (bad.length) problems.push(`${k}: not offered: ${bad.join(', ')} (choices: ${f.options.join(', ')})`)
+      out[k] = list.filter(v => f.options.includes(v))
+      continue
+    }
+    if (typeof raw !== 'string') {
+      problems.push(`${k}: expected text`)
+      continue
+    }
+    if (f.kind === 'select' && raw !== '' && !f.options.includes(raw)) {
+      problems.push(`${k}: "${raw}" is not offered (choices: ${f.options.join(', ')})`)
+      continue
+    }
+    out[k] = raw
+  }
+  return { draft: out, problems }
+}
+
+const FORM_TOOL = 'workspace_form'
+
+/** The workspace_form tool: fill the Create tab from the prompt, then the person reviews and creates. */
+async function fillFormTool($: EngineInterface, input: Record<string, unknown>): Promise<string> {
+  await openPane($)
+  await openCreate($)
+  const { value: form = null } = await $.state.get(FORM)
+  if (!form) {
+    const { value: note = '' } = await $.state.get(NOTE)
+    return note || "Couldn't load the workspace form."
+  }
+  const fields = formFields(form.bundle)
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  const given = input.fields && typeof input.fields === 'object' && !Array.isArray(input.fields) ? (input.fields as Record<string, unknown>) : {}
+  const r = applyFormFields(fields, draft, given)
+  await $.state.set(DRAFT, r.draft)
+  const missing = formErrors(fields, r.draft)
+  return [
+    `The Create tab of the /workspaces pane now holds:`,
+    JSON.stringify(r.draft, null, 2),
+    r.problems.length ? `Left out:\n- ${r.problems.join('\n- ')}` : '',
+    missing.length ? `Still needed before Create:\n- ${missing.join('\n- ')}` : 'Ready: the person presses ＋ Create workspace in the pane to create it.',
+    'This tool never creates the workspace.',
+  ].filter(Boolean).join('\n\n')
+}
+
+async function openCreate($: EngineInterface): Promise<void> {
+  await $.state.set(TAB, 'create')
+  const { value: form = null } = await $.state.get(FORM)
+  if (form) return
+  try {
+    const r = await core<{ bundle: FormBundle; trackerLabel: string }>($, 'form-schema')
+    await $.state.set(FORM, { bundle: r.bundle, trackerLabel: r.trackerLabel })
+    await $.state.set(DRAFT, r.bundle.formData ?? {})
+  } catch (err) {
+    await $.state.set(NOTE, `Couldn't load the workspace form: ${(err as Error).message}`)
+  }
+}
+
+async function setField($: EngineInterface, key: string, value: string | string[]): Promise<void> {
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  await $.state.set(DRAFT, { ...draft, [key]: value })
+}
+
+async function fetchIssue($: EngineInterface): Promise<void> {
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  const ref = typeof draft.issue_id === 'string' ? draft.issue_id.trim() : ''
+  if (!ref) return
+  await $.state.set(FORM_BUSY, 'fetch')
+  try {
+    const data = await core<Record<string, unknown>>($, 'issue-form-data', { ref }, 180000)
+    if (!data.issue_id) {
+      await $.state.set(NOTE, `Couldn't read an issue from "${ref}".`)
+      return
+    }
+    const { value: now = {} } = await $.state.get(DRAFT)
+    const merged = mergeIssueFields(now, data)
+    const filled = Object.keys(data).filter(k => k !== 'issue_id' && isEmpty(now[k]) && !isEmpty(merged[k]))
+    await $.state.set(DRAFT, merged)
+    await $.state.set(NOTE, filled.length ? `Filled ${filled.join(', ')} from ${data.issue_id}.` : `${data.issue_id}: nothing new to fill.`)
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message)
+  } finally {
+    await $.state.set(FORM_BUSY, '')
+  }
+}
+
+/** "Refine with Claude": rewrite the field with refinePrompt, the issue and the other fields as context. */
+async function refineField($: EngineInterface, key: string, instruction: string): Promise<void> {
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  const text = typeof draft[key] === 'string' ? draft[key].trim() : ''
+  if (!text) {
+    await $.state.set(NOTE, 'Write something first; Refine rewrites what is there.')
+    return
+  }
+  await $.state.set(FORM_BUSY, 'refine')
+  try {
+    const formData = Object.fromEntries(Object.entries(draft).filter(([, v]) => !isEmpty(v)))
+    const refined = (await core<string>($, 'refine-prompt', { text, instruction, formData }, 180000)).trim()
+    if (!refined) {
+      await $.state.set(NOTE, 'Refine returned no text; the field is unchanged.')
+      return
+    }
+    await setField($, key, refined)
+    await $.state.set(NOTE, 'Refined. Edit it, or Refine again.')
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message)
+  } finally {
+    await $.state.set(FORM_BUSY, '')
+  }
+}
+
+async function submitForm($: EngineInterface): Promise<void> {
+  const { value: form = null } = await $.state.get(FORM)
+  const { value: draft = {} } = await $.state.get(DRAFT)
+  if (!form) return
+  const errors = formErrors(formFields(form.bundle), draft)
+  if (errors.length) {
+    await $.state.set(NOTE, errors.join('\n'))
+    return
+  }
+  const formData = Object.fromEntries(Object.entries(draft).filter(([, v]) => !isEmpty(v)))
+  await $.state.set(FORM_BUSY, 'create')
+  await $.state.set(NOTE, 'Creating the workspace…')
+  try {
+    const r = await core<{ command: string; workspacePath: string | null }>($, 'create-workspace', { formData }, 600000)
+    await $.state.set(DRAFT, {})
+    await $.state.set(TAB, 'list')
+    await $.state.set(NOTE, `Created ${r.workspacePath ?? r.command}`)
+    $.ui.toast('Workspace created')
+  } catch (err) {
+    // The transcript can run long; its last lines carry the failure.
+    await $.state.set(NOTE, (err as Error).message.split('\n').slice(-6).join('\n'))
+  } finally {
+    await $.state.set(FORM_BUSY, '')
+  }
+  await tick($)
 }
 
 type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'issueId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
@@ -188,11 +435,26 @@ export function sessionTitle(r: WorkspaceRow): string | null {
   return r.session?.title ?? r.sessionTitle
 }
 
-/** Where the session shown lives, so Jump's target is known before the press: Desktop, VS Code, or CLI. */
+/** Where the session shown started: Desktop, VS Code, or CLI. */
 export function sessionOrigin(r: WorkspaceRow): 'Desktop' | 'VS Code' | 'CLI' | null {
   if (r.session) return 'Desktop'
   if (r.sessionOrigin === null) return null
   return r.sessionOrigin === 'claude-vscode' ? 'VS Code' : r.sessionOrigin === 'claude-desktop' ? 'Desktop' : 'CLI'
+}
+
+/**
+ * Where Continue picks the session up, named on its button: Desktop when the app lists it
+ * (the pane focuses or opens it), VS Code for a VS Code session (the folder opens there),
+ * else a Terminal window running `claude --resume`.
+ */
+export function continueTarget(r: WorkspaceRow): 'Desktop' | 'VS Code' | 'Terminal' {
+  if (r.session) return 'Desktop'
+  return r.sessionOrigin === 'claude-vscode' ? 'VS Code' : 'Terminal'
+}
+
+/** `claude://code/new?folder=…`: the link the app's "New Claude Code Session Here" Finder service opens. */
+export function newSessionLink(path: string): string {
+  return `claude://code/new?folder=${encodeURIComponent(path)}&source=services`
 }
 
 /** The session line: `session · VS Code · title`. */
@@ -254,7 +516,7 @@ async function tick($: EngineInterface): Promise<void> {
   }
 }
 
-export type Action = 'up' | 'stop' | 'restart' | 'down' | 'switch' | 'remove' | 'jump'
+export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'remove' | 'continue'
 type Lifecycle = 'up' | 'stop' | 'restart' | 'down'
 const LIFECYCLE = new Set<Action>(['up', 'stop', 'restart', 'down'])
 
@@ -263,16 +525,11 @@ export function buttonsFor(state: WorkspaceRow['state']): Action[] {
   const out: Action[] = []
   if (state === 'down' || state === 'stopped' || state === 'partial') out.push('up')
   if (state === 'up' || state === 'partial') out.push('stop')
-  out.push('restart', 'down', 'switch', 'remove')
+  out.push('restart', 'down', 'new', 'remove')
   return out
 }
 
-const LABEL: Record<Action, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', switch: '⇥ Switch', remove: '✕ Remove', jump: '↗ Jump' }
-
-/** First line of a tool result's text, for the note under the list. */
-function firstLine(r: ToolResult): string {
-  return (r.content.find(c => c.type === 'text')?.text ?? '').split('\n')[0]?.trim() ?? ''
-}
+const LABEL: Record<Exclude<Action, 'continue'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', remove: '✕ Remove' }
 
 async function runAction($: EngineInterface, name: string, action: Lifecycle | 'remove'): Promise<void> {
   await $.state.set(BUSY, name)
@@ -298,33 +555,35 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   const { value: pending = '' } = await $.state.get(CONFIRM)
   if (pending !== '' && pending !== name) await $.state.set(CONFIRM, '')
 
-  if (action === 'switch') {
+  if (action === 'new') {
     const { value: rows = [] } = await $.state.get(ROWS)
     const row = rows.find(r => r.name === name)
     if (!row) return
-    const r = await $.mcp.call('ccd_directory', 'change_directory', { path: row.path })
-    if (r.isError) {
-      await $.state.set(NOTE, firstLine(r) || 'change_directory refused')
-      return
+    try {
+      await core($, 'open-claude-link', { url: newSessionLink(row.path) })
+      $.ui.toast(`Opening a new session in ${name}`)
+    } catch (err) {
+      await $.state.set(NOTE, (err as Error).message)
     }
-    // change_directory moves the cwd only when a turn ends, and a press on an idle session starts none: submit one.
-    $.ui.toast(`Switching to ${name}`)
-    void $.prompt.submit({ text: `Switched to workspace ${name}. Read ${row.path}/CLAUDE.md, then wait for my next instruction.` })
     return
   }
 
-  // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09), so a button asks the app to focus the session instead.
-  if (action === 'jump') {
+  // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09), so the button focuses the session,
+  // else opens its link through the node child.
+  if (action === 'continue') {
     const { value: rows = [] } = await $.state.get(ROWS)
     const row = rows.find(r => r.name === name)
     if (!row) return
-    if (row.session) {
-      const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: row.session.id, target: 'focus' })
-      if (r.isError) $.ui.toast(`Open "${row.session.title}" from the sidebar`)
-      return
-    }
     try {
-      if (row.sessionOrigin === 'claude-vscode') {
+      if (row.session) {
+        const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: row.session.id, target: 'focus' })
+        if (!r.isError) return
+        // open_session_in focuses only sessions this one started; the session's own link opens any.
+        if (row.session.link) await core($, 'open-claude-link', { url: row.session.link })
+        else $.ui.toast(`Open "${row.session.title}" from the sidebar`)
+        return
+      }
+      if (continueTarget(row) === 'VS Code') {
         await core($, 'open-vscode', { path: row.path })
         $.ui.toast(`Opening ${name} in VS Code`)
         return
@@ -382,6 +641,29 @@ async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'workspaces', description: 'Open the sandbox workspaces pane' })
+    await $.tool.register({
+      name: FORM_TOOL,
+      description:
+        "Fill fields of the New Sandbox Workspace form in the /workspaces pane's Create tab, so the person can " +
+        'set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on ' +
+        'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
+        'slug), work_type, context_strategy, services and repos (lists of choices), labels, test_path, task, ' +
+        'description, starting_prompt (multi-line). Pass {} as fields to read the current values. Returns what the ' +
+        'form holds, values it left out and why, and what is still required. It never creates the workspace: the ' +
+        'person presses Create in the pane.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          fields: {
+            type: 'object',
+            description: 'Field key → value: a string, or a list of strings for services and repos.',
+            additionalProperties: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+          },
+        },
+        required: ['fields'],
+      },
+      isDeferred: false,
+    })
     // A hot reload drops the old environment's timer but leaves the pane open: re-arm it.
     const panes = await $.ui.panes()
     if (panes.some(p => p.id === PANE)) startPolling($)
@@ -394,9 +676,27 @@ export const register: Register = on => {
     return { text: 'Workspaces pane opened.' }
   })
 
+  // A regex: the tool-name type only lists tools laid when the types were written, and this one registers at start.
+  // The call's input fields arrive on the event itself, beside `tool` and `tool_use_id`.
+  on('tool.call', { tool: /^mcp__sandbox-tools__workspace_form$/ }, async ($, e) => ({ result: await fillFormTool($, e as unknown as Record<string, unknown>) })).catch(
+    () => ({ deny: 'The workspace form could not be filled; open /workspaces and fill it by hand.' }),
+  )
+
   on('ui.close', { id: PANE }, async ($, e, next) => {
     stopPolling()
     return next(e)
+  })
+
+  // The multi-line fields (textarea.tsx) post every edit as { value }; the element is `f:<field key>`.
+  on('ui.message', { requestId: PANE }, async ($, e, next) => {
+    if (!e.element.startsWith('f:')) return next(e)
+    const key = e.element.slice(2)
+    const data = (e.data ?? {}) as { value?: unknown; focus?: unknown; submit?: unknown }
+    if (data.focus === true) await $.state.set(FOCUSED, key)
+    if (typeof data.value === 'string') await setField($, key, data.value)
+    // Enter in the issue field fills from the issue; elsewhere a one-line Enter does nothing.
+    if (data.submit === true && key === 'issue_id') void fetchIssue($)
+    return {}
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -407,27 +707,99 @@ export const register: Register = on => {
     const { value: busy = '' } = await $.state.get(BUSY)
     const { value: confirm = '' } = await $.state.get(CONFIRM)
     const { value: infra = null } = await $.state.get(INFRA)
-    // The workspace this session already sits in gets no Switch.
-    const here = await $.session.cwd().catch(() => '')
     const { value: tab = 'list' } = await $.state.get(TAB)
-    // Mobile draws no Input; there the button alone opens a blank form.
+    // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e)
     const Input = 'Input' in els ? els.Input : null
+    const Select = 'Select' in els ? els.Select : null
 
     const tabs = (
       <Box key="tabs" gap={1} marginBottom={1}>
         <Button key="tab:list" label="Workspaces" variant={tab === 'list' ? 'primary' : 'secondary'} onPress={() => void $.state.set(TAB, 'list')} />
-        <Button key="tab:create" label="＋ Create" variant={tab === 'create' ? 'primary' : 'secondary'} onPress={() => void $.state.set(TAB, 'create')} />
+        <Button key="tab:create" label="＋ Create" variant={tab === 'create' ? 'primary' : 'secondary'} onPress={() => void openCreate($)} />
+      </Box>
+    )
+
+    const messages = (
+      <Box key="messages" flexDirection="column">
+        {note !== '' && <Box key="note"><Text>{note}</Text></Box>}
+        {error !== '' && <Box key="error"><Text color="error">{error}</Text></Box>}
       </Box>
     )
 
     if (tab === 'create') {
+      if (!Input || !Select) {
+        return (
+          <Box flexDirection="column">
+            {tabs}
+            <Button key="create:go" label="＋ Create workspace" variant="primary" onPress={() => { void $.state.set(TAB, 'list'); void $.prompt.submit({ text: createPrompt('') }) }} />
+          </Box>
+        )
+      }
+      const { value: form = null } = await $.state.get(FORM)
+      const fields = form ? formFields(form.bundle) : []
+      const { value: draft = {} } = await $.state.get(DRAFT)
+      const { value: formBusy = '' } = await $.state.get(FORM_BUSY)
+      const text = (k: string) => (typeof draft[k] === 'string' ? (draft[k] as string) : '')
+      const picked = (k: string) => (Array.isArray(draft[k]) ? (draft[k] as string[]) : [])
+      // Desktop and terminal draw a Client: there a multi-line field is textarea.tsx; elsewhere one line.
+      const Client = 'Client' in els ? els.Client : null
+      // Enter in a one-line field moves to the next one; the issue field's Enter fills from the issue.
+      const { value: focused = '' } = await $.state.get(FOCUSED)
+      // Text fields are textarea.tsx where a Client draws (no Enter chip, multi-line when asked);
+      // elsewhere the app's one-line Input.
+      const textField = (f: FormField) =>
+        Client ? (
+          <Client key={`f:${f.key}`} module="./textarea.tsx" props={{ value: text(f.key), placeholder: f.placeholder, multiline: f.kind === 'textarea', focused: focused === f.key }} />
+        ) : (
+          <Input key={`f:${f.key}`} placeholder={f.placeholder} value={text(f.key)} submitLabel={f.key === 'issue_id' ? 'fill' : 'save'} onInput={v => void setField($, f.key, v)} onSubmit={v => void setField($, f.key, v).then(() => (f.key === 'issue_id' ? fetchIssue($) : undefined))} />
+        )
       return (
         <Box flexDirection="column">
           {tabs}
-          <Text dimColor>Opens the workspace form. An issue ID pre-fills it.</Text>
-          {Input && <Box key="issue" marginTop={1}><Input key="create:issue" label="Issue ID (optional) " value={draftIssue} submitLabel="create" onInput={v => { draftIssue = v }} onSubmit={v => void create($, v)} /></Box>}
-          <Box key="go" marginTop={1}><Button key="create:go" label="＋ Create workspace" variant="primary" onPress={() => void create($, draftIssue)} /></Box>
+          {!form && <Text dimColor>Loading the form…</Text>}
+          {form && <Box key="legend" marginBottom={1}><Text dimColor>Fields marked * are required.</Text></Box>}
+          {form && fields.map(f => (
+            <Box key={`field:${f.key}`} flexDirection="column" marginBottom={1}>
+              <Text bold>{`${f.key === 'issue_id' ? `${form.trackerLabel} issue` : f.title}${f.required ? ' *' : ''}`}</Text>
+              {f.help !== '' && f.key !== 'issue_id' && <Text dimColor>{f.help}</Text>}
+              {(f.kind === 'text' || f.kind === 'textarea') && textField(f)}
+              {f.refine !== null && (
+                <Box key={`refine:${f.key}`} marginTop={1} gap={1}>
+                  <Button key={`create:refine:${f.key}`} label={formBusy === 'refine' ? 'Refining…' : '✨ Refine with Claude'} variant="secondary" onPress={() => void (formBusy ? undefined : refineField($, f.key, f.refine ?? ''))} />
+                  <Text dimColor>Rewrites it as a clear instruction with a goal and acceptance criteria, using the issue and your other choices.</Text>
+                </Box>
+              )}
+              {f.kind === 'select' && (
+                <Select key={`f:${f.key}`} options={[{ value: '', label: 'Choose…' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />
+              )}
+              {f.kind === 'multi' && optionGroups(f).map(([group, opts]) => (
+                <Box key={`group:${f.key}:${group}`} flexDirection="column" marginTop={1}>
+                  {group !== '' && <Text dimColor>{group.toUpperCase()}</Text>}
+                  <Box key={`opts:${f.key}:${group}`} flexWrap="wrap">
+                    {opts.map(o => {
+                      const chosen = picked(f.key).includes(o)
+                      return (
+                        <Box key={`cell:${f.key}:${o}`} width={`${100 / COLUMNS}%`}>
+                          <Button key={`f:${f.key}:${o}`} plain label={`${chosen ? '☑' : '☐'} ${o}`} onPress={() => void setField($, f.key, chosen ? picked(f.key).filter(x => x !== o) : [...picked(f.key), o])} />
+                        </Box>
+                      )
+                    })}
+                  </Box>
+                </Box>
+              ))}
+              {f.key === 'issue_id' && (
+                <Box key="fetch" flexDirection="column" marginTop={1}>
+                  <Text dimColor>{`Optional. Reads the issue from ${form.trackerLabel} and fills in the fields below that are still empty.`}</Text>
+                  <Box key="fetch:row" marginTop={1}>
+                    <Button key="create:fetch" label={formBusy === 'fetch' ? 'Reading the issue…' : '⤓ Fill empty fields from this issue'} variant="secondary" onPress={() => void (formBusy ? undefined : fetchIssue($))} />
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          ))}
+          {form && <Box key="go"><Button key="create:go" label={formBusy === 'create' ? 'Creating…' : '＋ Create workspace'} variant="primary" onPress={() => void (formBusy ? undefined : submitForm($))} /></Box>}
+          {messages}
         </Box>
       )
     }
@@ -460,12 +832,12 @@ export const register: Register = on => {
             ) : (
               <Box marginTop={1} justifyContent="space-between">
                 <Box gap={1}>
-                  {buttonsFor(r.state).filter(a => a !== 'remove' && a !== 'switch').map(a => (
+                  {buttonsFor(r.state).filter((a): a is Lifecycle => LIFECYCLE.has(a)).map(a => (
                     <Button key={`${a}:${r.name}`} label={LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
                   ))}
                   <Box marginLeft={2} gap={1}>
-                    {!(here && contains(r.path, here)) && <Button key={`switch:${r.name}`} label={LABEL.switch} variant="secondary" onPress={() => void press($, 'switch', r.name)} />}
-                    {sessionTitle(r) && <Button key={`jump:${r.name}`} label={LABEL.jump} variant="secondary" onPress={() => void press($, 'jump', r.name)} />}
+                    <Button key={`new:${r.name}`} label={LABEL.new} variant="secondary" onPress={() => void press($, 'new', r.name)} />
+                    {sessionTitle(r) && <Button key={`continue:${r.name}`} label={`↗ Continue in ${continueTarget(r)}`} variant="secondary" onPress={() => void press($, 'continue', r.name)} />}
                   </Box>
                 </Box>
                 {/* Buttons take no colour; the label turns red under the pointer and the confirm prompt is red text beside it. */}
@@ -477,8 +849,7 @@ export const register: Register = on => {
             )}
           </Box>
         ))}
-        {note !== '' && <Box key="note"><Text>{note}</Text></Box>}
-        {error !== '' && <Box key="error"><Text color="error">{error}</Text></Box>}
+        {messages}
       </Box>
     )
   })
