@@ -1,6 +1,6 @@
 import type { Register, EngineInterface } from 'claude-code'
 
-import type { Draft, FormBundle, FormField, InfraStatus, WorkspaceRow } from '../types'
+import type { Draft, FormBundle, FormField, InfraStatus, RepoPr, WorkspaceRow } from '../types'
 
 export const PLUGIN = 'sandbox-tools'
 export const PANE = 'workspaces'
@@ -54,17 +54,19 @@ try {
       return head.match(/"entrypoint":"([^"]+)"/)?.[1] ?? null
     } catch { return null } finally { if (fd !== null) closeSync(fd) }
   }
+  const tracker = (await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)).issueTracker()
   const details = async w => {
     let cfg = {}
     try { cfg = yaml.parse(readFileSync(join(w.path, '.sandbox', 'workspace.yml'), 'utf8')) ?? {} } catch { /* not initialised */ }
     let newest = null
     try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
     const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
-    return { ...w, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
+    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
   }
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
     'workspace-status': () => core.getWorkspaceStatuses(),
+    'workspace-prs': () => core.getWorkspacePRs(),
     connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'remove-workspace': () => core.removeWorkspace(args.name),
@@ -77,14 +79,13 @@ try {
       execFileSync('open', [args.url])
       return { url: args.url }
     },
-    'form-schema': async () => {
-      const tracker = await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)
-      return { bundle: await core.getFormSchema(), trackerLabel: tracker.issueTracker().label }
-    },
+    'form-schema': async () => ({ bundle: await core.getFormSchema(), trackerLabel: tracker.label }),
     'issue-form-request': () => core.buildIssueFormRequest(args.ref),
     'issue-form-apply': () => core.applyIssueFormAnswer(args.base, args.answer),
     // open: false: the pane opens a Desktop session in the new folder instead of VS Code.
-    'create-workspace': () => core.createWorkspace(args.formData, { open: false }),
+    'tracker-auth': () => tracker.checkAuth(),
+    // The pane distils on the session's own model (fetchIssue) before Create and sends distill: false.
+    'create-workspace': () => core.createWorkspace(args.formData, { open: false, distill: args.distill }),
     'refine-request': () => core.buildRefinePrompt(args.text, args.instruction, args.formData),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
@@ -110,6 +111,8 @@ async function core<T>($: EngineInterface, op: string, args: Record<string, unkn
   return o.result
 }
 export const POLL_MS = 5000
+/** PRs refresh this often: each workspace × repo is a `gh` network call. */
+export const PR_POLL_MS = 60000
 
 const ROWS = { plugin: 'sandbox-tools', key: 'rows' } as const
 const ERROR = { plugin: 'sandbox-tools', key: 'error' } as const
@@ -117,7 +120,11 @@ const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
 const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
+const TRACKER = { plugin: 'sandbox-tools', key: 'tracker' } as const
+export const TRACKER_TTL_MS = 5 * 60 * 1000
+let trackerAt = 0
 const INFRA = { plugin: 'sandbox-tools', key: 'infra' } as const
+const PRS = { plugin: 'sandbox-tools', key: 'prs' } as const
 /** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
 const CONNECTING = '(connect)'
 
@@ -364,8 +371,21 @@ async function refineField($: EngineInterface, key: string, instruction: string)
 
 async function submitForm($: EngineInterface): Promise<void> {
   const { value: form = null } = await $.state.get(FORM)
-  const { value: draft = {} } = await $.state.get(DRAFT)
+  const { value: first = {} } = await $.state.get(DRAFT)
   if (!form) return
+  // Core stores the issue but doesn't run a model for the pane: fill empty fields on the session model first.
+  if (typeof first.issue_id === 'string' && first.issue_id.trim() && (isEmpty(first.description) || isEmpty(first.starting_prompt))) {
+    await fetchIssue($)
+    // What the model filled is a default to review, not something to create from unseen.
+    const { value: filled = {} } = await $.state.get(DRAFT)
+    // The ref's own normalisation (api#7 → acme/api#7) is not a fill.
+    if (Object.keys(filled).some(k => k !== 'issue_id' && JSON.stringify(filled[k]) !== JSON.stringify(first[k]))) {
+      const { value: note = '' } = await $.state.get(NOTE)
+      await $.state.set(NOTE, `${note} Review, then press Create again.`)
+      return
+    }
+  }
+  const { value: draft = {} } = await $.state.get(DRAFT)
   const errors = formErrors(formFields(form.bundle), draft)
   if (errors.length) {
     await $.state.set(NOTE, errors.join('\n'))
@@ -375,7 +395,7 @@ async function submitForm($: EngineInterface): Promise<void> {
   await $.state.set(FORM_BUSY, 'create')
   await $.state.set(NOTE, 'Creating the workspace…')
   try {
-    const r = await core<{ command: string; workspacePath: string | null }>($, 'create-workspace', { formData }, 600000)
+    const r = await core<{ command: string; workspacePath: string | null }>($, 'create-workspace', { formData, distill: false }, 600000)
     await $.state.set(DRAFT, {})
     await $.state.set(TAB, 'list')
     await $.state.set(NOTE, `Created ${r.workspacePath ?? r.command}`)
@@ -391,7 +411,7 @@ async function submitForm($: EngineInterface): Promise<void> {
   await tick($)
 }
 
-type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'issueId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
+type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'issueId' | 'issueUrl' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
 type ListResult = { workspaces: ListEntry[] }
 type StatusResult = { infra?: InfraStatus; statuses: { name: string; state: WorkspaceRow['state']; running: number; total: number; claude: { state: string; waiting: boolean } }[] }
 type SessionInfo = { sessionId: string; title: string; cwd: string; link?: string }
@@ -440,10 +460,10 @@ export function buildRows(list: ListResult, status: StatusResult, sessions: Sess
 /** The card border carries the state; nothing else in the card repeats it. */
 const BORDER: Record<WorkspaceRow['state'], 'success' | 'warning' | 'inactive'> = { up: 'success', partial: 'warning', stopped: 'inactive', down: 'inactive', unknown: 'warning' }
 
-/** The card's detail line: work type, ICM stage, running/total; '' when none. */
+/** The card's detail line: work type (when no issue line carries it), ICM stage, running/total; '' when none. */
 export function cardMeta(r: WorkspaceRow): string {
   return [
-    r.workType,
+    r.issueId ? null : r.workType,
     r.stage ? `stage ${r.stage.index}/${r.stage.total} ${r.stage.name}` : null,
     r.total > 0 ? `${r.running}/${r.total}` : null,
   ].filter(Boolean).join(' · ')
@@ -489,11 +509,29 @@ export function sessionLine(r: WorkspaceRow): string | null {
 }
 
 /** The infra line: `infra · partial · 4/5 · down: caddy`; services not healthy or running are named. */
-export function infraLine(i: InfraStatus | null): string {
-  if (!i) return 'infra · unknown'
+export function infraLine(i: InfraStatus | null, t: { ok: boolean; reason?: string; fix: string } | null = null): string {
+  const tracker = t && !t.ok ? `tracker: ${t.reason} · ${t.fix}` : null
+  if (!i) return ['infra · unknown', tracker].filter(Boolean).join(' · ')
   const bad = i.services.filter(s => s.state !== 'healthy' && s.state !== 'running').map(s => `${s.state}: ${s.name}`)
-  return ['infra', i.state, i.total > 0 ? `${i.running}/${i.total}` : null, ...bad].filter(Boolean).join(' · ')
+  return ['infra', i.state, i.total > 0 ? `${i.running}/${i.total}` : null, ...bad, tracker].filter(Boolean).join(' · ')
 }
+
+/** The issue line's prefix: the work type, as the issue's kind. */
+export function issueKind(r: WorkspaceRow): string {
+  return r.workType ?? 'issue'
+}
+
+/** The PRs worth a link: those that exist. Label `org/repo#N`, as GitHub refs are written, from the PR URL. */
+export function prLinks(prs: RepoPr[]): { key: string; href: string; label: string; state: RepoPr['state'] }[] {
+  return prs.flatMap(p => {
+    if (!p.url) return []
+    const m = p.url.match(/^https:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/(\d+)/)
+    return [{ key: p.url, href: p.url, label: m ? `${m[1]}#${m[2]}` : `${p.repo}#${p.url.split('/').pop()}`, state: p.state }]
+  })
+}
+
+/** GitHub's state colours for the merge icon and state after the link: green open, purple merged, red closed. */
+const PR_COLOR: Record<NonNullable<RepoPr['state']>, 'success' | 'merged' | 'error'> = { OPEN: 'success', MERGED: 'merged', CLOSED: 'error' }
 
 const INFRA_COLOR: Record<InfraStatus['state'], 'success' | 'warning' | 'error'> = { up: 'success', partial: 'warning', down: 'error', unknown: 'warning' }
 
@@ -534,6 +572,14 @@ async function tick($: EngineInterface): Promise<void> {
     await $.state.set(ROWS, buildRows(list, status, sessions))
     await $.state.set(INFRA, status.infra ?? null)
     await $.state.set(ERROR, '')
+    if (Date.now() - trackerAt > TRACKER_TTL_MS) {
+      trackerAt = Date.now()
+      // Not awaited: a slow tracker check must not hold up row polling.
+      void core<{ ok: boolean; reason?: string; fix: string }>($, 'tracker-auth').then(
+        a => $.state.set(TRACKER, a),
+        () => $.state.set(TRACKER, null),
+      )
+    }
   } catch (err) {
     await $.state.set(ERROR, (err as Error).message)
   } finally {
@@ -634,23 +680,37 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   if (LIFECYCLE.has(action)) await runAction($, name, action as Lifecycle)
 }
 
-let timer: { cancel: () => void } | null = null
+let prTicking = false
+/** Refreshes PRs once; a failure keeps the last ones shown. */
+async function prTick($: EngineInterface): Promise<void> {
+  if (prTicking) return
+  prTicking = true
+  try {
+    const r = await core<{ name: string; repos: RepoPr[] }[]>($, 'workspace-prs', {}, 120000)
+    await $.state.set(PRS, Object.fromEntries(r.map(w => [w.name, w.repos])))
+  } catch {
+    // gh missing or offline: keep what's shown.
+  } finally {
+    prTicking = false
+  }
+}
+
+let timers: { cancel: () => void }[] = []
 
 function startPolling($: EngineInterface): void {
-  timer?.cancel()
-  timer = $.clock.every(POLL_MS, () => {
-    void tick($)
-  })
+  stopPolling()
+  timers = [$.clock.every(POLL_MS, () => void tick($)), $.clock.every(PR_POLL_MS, () => void prTick($))]
 }
 
 function stopPolling(): void {
-  timer?.cancel()
-  timer = null
+  for (const t of timers) t.cancel()
+  timers = []
 }
 
 async function openPane($: EngineInterface): Promise<void> {
   await $.ui.open({ id: PANE, title: 'Sandbox workspaces' })
   await tick($)
+  void prTick($)
   startPolling($)
 }
 
@@ -672,7 +732,7 @@ export const register: Register = on => {
         "Fill fields of the New Sandbox Workspace form in the /workspaces pane's Create tab, so the person can " +
         'set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on ' +
         'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
-        'slug), work_type, context_strategy, services and repos (lists of choices), labels, test_path, task, ' +
+        'slug), work_type, context_strategy, services (a list of choices), labels, test_path, task, ' +
         'description, starting_prompt (multi-line). Pass {} as fields to read the current values. Returns what the ' +
         'form holds, values it left out and why, and what is still required. It never creates the workspace: the ' +
         'person presses Create in the pane.',
@@ -681,7 +741,7 @@ export const register: Register = on => {
         properties: {
           fields: {
             type: 'object',
-            description: 'Field key → value: a string, or a list of strings for services and repos.',
+            description: 'Field key → value: a string, or a list of strings for services.',
             additionalProperties: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
           },
         },
@@ -691,7 +751,10 @@ export const register: Register = on => {
     })
     // A hot reload drops the old environment's timer but leaves the pane open: re-arm it.
     const panes = await $.ui.panes()
-    if (panes.some(p => p.id === PANE)) startPolling($)
+    if (panes.some(p => p.id === PANE)) {
+      startPolling($)
+      void prTick($)
+    }
     else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($)
     return next(e)
   })
@@ -725,13 +788,15 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text, Button, Link } = $.ui.resolve(e)
     const { value: rows = [] } = await $.state.get(ROWS)
     const { value: error = '' } = await $.state.get(ERROR)
     const { value: note = '' } = await $.state.get(NOTE)
     const { value: busy = '' } = await $.state.get(BUSY)
     const { value: confirm = '' } = await $.state.get(CONFIRM)
     const { value: infra = null } = await $.state.get(INFRA)
+    const { value: tracker = null } = await $.state.get(TRACKER)
+    const { value: prs = {} } = await $.state.get(PRS)
     const { value: tab = 'list' } = await $.state.get(TAB)
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e)
@@ -833,7 +898,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {tabs}
         <Box key="infra-bar" justifyContent="space-between" marginBottom={1}>
-          <Box key="infra"><Text color={INFRA_COLOR[infra?.state ?? 'unknown']}>{infraLine(infra)}</Text></Box>
+          <Box key="infra"><Text color={INFRA_COLOR[infra?.state ?? 'unknown']}>{infraLine(infra, tracker)}</Text></Box>
           {busy === CONNECTING
             ? <Box key="connecting"><Text dimColor>connecting…</Text></Box>
             : <Button key="connect" label="⚡ Connect" variant="secondary" onPress={() => void connect($)} />}
@@ -844,13 +909,24 @@ export const register: Register = on => {
             <Box key={`head:${r.name}`} justifyContent="space-between">
               <Box key={`row:${r.name}`}>
                 <Text bold>{r.name}</Text>
-                {r.issueId && <Text dimColor>{` · ${r.issueId}`}</Text>}
               </Box>
               {r.claude && <Box key={`claude:${r.name}`}><Text color={CLAUDE[r.claude].color}>{CLAUDE[r.claude].text}</Text></Box>}
             </Box>
+            {r.issueId && <Box key={`issue:${r.name}`}><Text>{`${issueKind(r)}: `}{r.issueUrl ? <Link href={r.issueUrl} label={r.issueId} /> : r.issueId}</Text></Box>}
             {r.task && <Box key={`task:${r.name}`}><Text>{r.task}</Text></Box>}
             {r.description && <Box key={`desc:${r.name}`}><Text dimColor>{r.description}</Text></Box>}
             {cardMeta(r) !== '' && <Box key={`meta:${r.name}`}><Text dimColor>{cardMeta(r)}</Text></Box>}
+            {prLinks(prs[r.name] ?? []).length > 0 && (
+              <Box key={`prs:${r.name}`} flexDirection="column">
+                {prLinks(prs[r.name] ?? []).map(p => (
+                  <Text key={`pr:${p.key}`}>
+                    {'pr: '}
+                    <Link href={p.href} label={p.label} />
+                    {p.state && <Text color={PR_COLOR[p.state]}>{` ⑂ ${p.state.toLowerCase()}`}</Text>}
+                  </Text>
+                ))}
+              </Box>
+            )}
             {sessionLine(r) && <Box key={`session:${r.name}`}><Text dimColor>{sessionLine(r)}</Text></Box>}
             {busy === r.name ? (
               <Box key={`busy:${r.name}`}><Text dimColor>working…</Text></Box>

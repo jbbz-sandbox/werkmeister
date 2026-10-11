@@ -521,9 +521,10 @@ const SPECS: CommandSpec[] = [
         .option(
           "--browser-form",
           "Collect inputs through the Sandbox-branded browser form (the same " +
-            "form the Desktop MCP App renders), then create the workspace. Opens a " +
+            "form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a " +
             "localhost page in the default browser and blocks until submit/cancel.",
         )
+        .option("--no-distill", "Store the issue but don't have a model rewrite it into description/starting_prompt.")
         .option("--open", "With --browser-form: launch VS Code on the new workspace after creating.")
         .option(
           "--force",
@@ -546,6 +547,7 @@ const SPECS: CommandSpec[] = [
       context_strategy: o.contextStrategy ?? null,
       browser_form: Boolean(o.browserForm),
       open_vscode: Boolean(o.open),
+      no_distill: o.distill === false,
       force: Boolean(o.force),
     }),
   },
@@ -745,7 +747,8 @@ const SPECS: CommandSpec[] = [
           "--prune-context",
           "After a context_strategy change, delete the previous strategy's files that git " +
             "tracks unmodified (anything else is kept and reported).",
-        );
+        )
+        .option("--refresh-issue", "Re-fetch the workspace's issue into .sandbox/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).");
     },
     namespace: (_a, o) => ({
       task: o.task ?? null,
@@ -762,6 +765,7 @@ const SPECS: CommandSpec[] = [
       context_strategy: o.contextStrategy ?? null,
       config_file: o.config ?? null,
       prune_context: Boolean(o.pruneContext),
+      refresh_issue: Boolean(o.refreshIssue),
     }),
   },
 ];

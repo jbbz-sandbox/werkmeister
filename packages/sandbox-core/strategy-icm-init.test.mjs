@@ -215,3 +215,73 @@ test("sessionContext is null and gate is a no-op", () => {
   assert.equal(icm.sessionContext("/nonexistent", {}), null);
   assert.equal(icm.gate(), undefined);
 });
+
+const ISSUE = { ref: "o/r#5", url: "https://github.com/o/r/issues/5", title: "Stale config", fetchedAt: "2026-10-11T18:04:00.000Z" };
+
+test("an issue puts the issue section in CLAUDE.md and BRIEF.md", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init({ ...ctx, issue: ISSUE });
+    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+    assert.match(claude, /\n## Issue\n\n\[o\/r#5\]\(https:\/\/github.com\/o\/r\/issues\/5\): Stale config\./);
+    assert.match(claude, /\| `\.sandbox\/issue\.md` \| the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` \|/);
+    const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+    assert.match(brief, /^---\nsource: \.sandbox\/workspace\.yml \(description, starting_prompt\), \.sandbox\/issue\.md\n---\n\n# Brief: /);
+    assert.match(brief, /## Issue\n[\s\S]*Fix the thing\.\n\n## Goal/);
+    assert.doesNotMatch(brief, /No starting prompt was given/);
+  }, { inputs: { description: "Fix the thing.", starting_prompt: "## Goal\n\nGone." } });
+});
+
+test("an issue with no description or prompt tells the agent to read the copy", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init({ ...ctx, issue: ISSUE });
+    assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
+      /_Read `\.sandbox\/issue\.md`, then write the goal, acceptance criteria and open questions here before starting the first stage\._/);
+  }, { inputs: { starting_prompt: "" } });
+});
+
+test("a placeholder brief is rebuilt once an issue exists; an edited brief is kept", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init(ctx); // placeholder brief, as the 2026-10-11 workspaces got
+    icm.init({ ...ctx, issue: ISSUE });
+    assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), /## Issue/);
+    fs.writeFileSync(path.join(root, "BRIEF.md"), "hand edit\n");
+    icm.init({ ...ctx, issue: ISSUE });
+    assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), "hand edit\n");
+  }, { inputs: { starting_prompt: "" } });
+});
+
+test("no issue: CLAUDE.md and BRIEF.md are unchanged from before", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init({ ...ctx, issue: null });
+    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+    assert.doesNotMatch(claude, /## Issue|issue\.md/);
+    assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---/);
+  });
+});
+
+test("same context twice gives byte-identical files", async () => {
+  const snap = async (ctxPatch) => {
+    let files;
+    await withIcmWorkspace(async (root, ctx) => {
+      icm.init({ ...ctx, ...ctxPatch, issue: ISSUE });
+      files = Object.fromEntries(walk(root).filter((f) => !f.startsWith("demo-repo")).map((f) => [f, fs.readFileSync(path.join(root, f), "utf8").replace(/icm-(ws|std)-[A-Za-z0-9]+/g, "icm-$1-X")]));
+    }, { inputs: { starting_prompt: "## Goal\n\nGone." } });
+    return files;
+  };
+  assert.deepEqual(await snap({}), await snap({}));
+});
+
+test("a no-copy issue keeps the placeholder brief; a fetched copy then rebuilds it", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    const noCopy = { ...ISSUE, title: "", fetchedAt: null };
+    icm.init(ctx);
+    const placeholder = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+    icm.init({ ...ctx, issue: noCopy });
+    assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), placeholder);
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), /\| `\.sandbox\/issue\.md` \|/);
+    icm.init({ ...ctx, issue: ISSUE });
+    const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+    assert.match(brief, /Copy taken 2026-10-11: `\.sandbox\/issue\.md`\./);
+    assert.match(brief, /_Read `\.sandbox\/issue\.md`, then/);
+  }, { inputs: { starting_prompt: "" } });
+});

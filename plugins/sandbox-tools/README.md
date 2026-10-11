@@ -55,7 +55,7 @@ session bridge — with **one form definition and graceful UI degradation per cl
 
 The server detects whether the client renders MCP App UI (`io.modelcontextprotocol/ui`
 capability); every tool also returns markdown/text, so any host degrades gracefully.
-Call the create tool directly: `mcp__sandbox-workspace__workspace` (optionally
+Call the create tool directly: `mcp__plugin_sandbox-tools_sandbox-workspace__workspace` (optionally
 `{ "issue": "<issue ID>" }`). Full tool table in the
 [app README](../../apps/sandbox-dashboard/README.md).
 

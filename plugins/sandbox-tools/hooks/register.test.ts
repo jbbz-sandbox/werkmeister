@@ -79,9 +79,9 @@ test('empty list draws the empty message', async ($, on) => {
 const LIST = {
   root: '/ws',
   workspaces: [
-    { name: 'ab', path: '/ws/ab', issueId: 'PROJ-1', labels: [], task: 'BWell', description: 'BWell technologies', workType: 'spike', stage: { index: 5, total: 6, name: 'implement' }, sessionTitle: 'Demo project', sessionOrigin: 'sdk-cli' },
-    { name: 'abc', path: '/ws/abc', issueId: null, labels: [], task: null, description: null, workType: 'bugfix', stage: null, sessionTitle: null, sessionOrigin: null },
-    { name: 'empty', path: '/ws/empty', issueId: null, labels: [], task: null, description: null, workType: null, stage: null, sessionTitle: null, sessionOrigin: null },
+    { name: 'ab', path: '/ws/ab', issueId: 'PROJ-1', issueUrl: 'https://x.atlassian.net/browse/PROJ-1', labels: [], task: 'BWell', description: 'BWell technologies', workType: 'spike', stage: { index: 5, total: 6, name: 'implement' }, sessionTitle: 'Demo project', sessionOrigin: 'sdk-cli' },
+    { name: 'abc', path: '/ws/abc', issueId: null, issueUrl: null, labels: [], task: null, description: null, workType: 'bugfix', stage: null, sessionTitle: null, sessionOrigin: null },
+    { name: 'empty', path: '/ws/empty', issueId: null, issueUrl: null, labels: [], task: null, description: null, workType: null, stage: null, sessionTitle: null, sessionOrigin: null },
   ],
 }
 const STATUS = {
@@ -98,11 +98,25 @@ const SESSIONS = [
   { sessionId: 'local_3', title: 'Elsewhere', cwd: '/home/x', link: 'claude://x/local_3', lastActivityAt: '2026-10-09T00:00:00Z' },
 ]
 
+const PRS = [
+  {
+    name: 'ab',
+    repos: [
+      { repo: 'sandbox', branch: 'u/ab', url: 'https://github.com/o/sandbox/pull/12', state: 'OPEN', title: 'Fix', labels: [] },
+      { repo: 'api', branch: 'u/ab', url: 'https://github.com/o/api/pull/7', state: 'MERGED', title: 'Api', labels: [] },
+      { repo: 'web', branch: 'u/ab', url: null, state: null, title: null, labels: [] },
+    ],
+  },
+  { name: 'abc', repos: [{ repo: 'sandbox', branch: 'main', url: null, state: null, title: null, labels: [] }] },
+]
+
 function stubs(over: Partial<McpStub> = {}): McpStub {
   return {
     [`${WS}/list-workspaces`]: () => ok(LIST),
     [`${WS}/workspace-status`]: () => ok(STATUS),
     'ccd_session_mgmt/list_sessions': () => ok(undefined, JSON.stringify(SESSIONS)),
+    [`${WS}/workspace-prs`]: () => ok(PRS),
+    [`${WS}/tracker-auth`]: () => ok({ ok: true, fix: '' }),
     ...over,
   }
 }
@@ -111,7 +125,7 @@ test('workspace data comes from the node child, not an MCP call', async ($, on) 
   const w = world(on, stubs())
   await openPane($)
   expect(w.calls.filter(c => c.via === 'mcp' && c.key.startsWith(WS))).toHaveLength(0)
-  expect(w.calls.filter(c => c.via === 'process').map(c => c.key)).toEqual([`${WS}/list-workspaces`, `${WS}/workspace-status`])
+  expect(w.calls.filter(c => c.via === 'process').map(c => c.key).sort()).toEqual([`${WS}/list-workspaces`, `${WS}/tracker-auth`, `${WS}/workspace-prs`, `${WS}/workspace-status`])
 })
 
 test('rows draw name, issue, task, counts and claude note', async ($, on) => {
@@ -119,10 +133,12 @@ test('rows draw name, issue, task, counts and claude note', async ($, on) => {
   await openPane($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-    expect((await ui.find({ key: 'row:ab' }))?.text).toBe('ab · PROJ-1')
+    expect((await ui.find({ key: 'row:ab' }))?.text).toBe('ab')
+    expect((await ui.find({ key: 'issue:ab' }))?.text).toBe('spike: PROJ-1')
+    expect(await ui.find({ key: 'issue:abc' })).toBeUndefined()
     expect((await ui.find({ key: 'task:ab' }))?.text).toBe('BWell')
     expect((await ui.find({ key: 'desc:ab' }))?.text).toBe('BWell technologies')
-    expect((await ui.find({ key: 'meta:ab' }))?.text).toBe('spike · stage 5/6 implement · 3/3')
+    expect((await ui.find({ key: 'meta:ab' }))?.text).toBe('stage 5/6 implement · 3/3')
     expect((await ui.find({ key: 'claude:ab' }))?.text).toBe('◌ working')
     expect((await ui.find({ key: 'row:abc' }))?.text).toBe('abc')
     expect(await ui.find({ key: 'task:abc' })).toBeUndefined()
@@ -130,6 +146,18 @@ test('rows draw name, issue, task, counts and claude note', async ($, on) => {
     expect((await ui.find({ key: 'meta:abc' }))?.text).toBe('bugfix · 1/3')
     expect((await ui.find({ key: 'claude:abc' }))?.text).toBe('● waiting for you')
     expect(await ui.find({ key: 'claude:empty' })).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
+test('cards link the issue and each PR with its state', async ($, on) => {
+  world(on, stubs())
+  await openPane($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+    expect((await ui.find({ key: 'prs:ab' }))?.text).toMatch(/pr: o\/sandbox#12 ⑂ open.*pr: o\/api#7 ⑂ merged/)
+    expect((await ui.find({ key: 'prs:ab' }))?.text).not.toMatch(/web/)
+    expect(await ui.find({ key: 'prs:abc' })).toBeUndefined()
     await ui.unmount()
   }
 })
@@ -509,11 +537,41 @@ test('fetch fills only the empty fields, distilled on the session model, then cr
   await ui.press({ key: 'create:go' })
   expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
     formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api', 'web'], work_type: 'bugfix' },
+    distill: false,
   })
   expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://code/new?folder=%2Fws%2Fapi-7-rate-limit&source=services' })
   expect(w.calls.some(c => c.key === `${WS}/open-vscode`)).toBe(false)
   expect(w.toasts).toEqual(['Workspace created; opening a new session in it'])
   expect(await ui.find({ key: 'new:abc' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('Create with an issue and empty fields fills from the issue on the session model and stops for review; the next press creates with distill off', async ($, on) => {
+  const w = world(on, formStubs())
+  const asked = answerIssueModel(on)
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.post({ value: 'my-own' }, { in: 'f:feature' })
+  await ui.post({ value: 'api#7' }, { in: 'f:issue_id' })
+  await ui.select({ key: 'f:work_type', value: 'bugfix' })
+  await ui.press({ key: 'create:go' })
+  expect(asked).toEqual([{ model: 'sonnet', prompt: 'EXTRACT acme/api#7' }])
+  expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
+  expect((await ui.find({ key: 'note' }))?.text).toBe('Filled task, services from acme/api#7. Review, then press Create again.')
+  await ui.press({ key: 'create:go' })
+  expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
+    formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api'], work_type: 'bugfix' },
+    distill: false,
+  })
+  await ui.unmount()
+})
+
+test('a signed-out tracker shows on the infra line', async ($, on) => {
+  world(on, stubs({ [`${WS}/tracker-auth`]: () => ok({ ok: false, reason: 'not signed in', fix: 'gh auth login' }) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'terminal', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect((await ui.find({ key: 'infra' }))?.text).toMatch(/tracker: not signed in · gh auth login/)
   await ui.unmount()
 })
 

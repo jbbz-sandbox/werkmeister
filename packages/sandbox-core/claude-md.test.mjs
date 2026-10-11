@@ -110,3 +110,10 @@ test("an empty or unknown work type renders today's section exactly", () => {
   assert.doesNotMatch(today, /Work type/);
   assert.equal((byPhase(today).match(/^\| [^|]+ \| `sb-/gm) ?? []).length, 5);
 });
+
+test("an issue replaces the inline link with the issue section", () => {
+  const issue = { ref: "o/r#5", url: "https://github.com/o/r/issues/5", title: "Stale config", fetchedAt: "2026-10-11T18:04:00.000Z" };
+  const md = buildClaudeMd("ws", "/ws", [], "Fix it", { ISSUE_ID: "o/r#5" }, null, issue);
+  assert.match(md, /## Current Task\n\nFix it\n\n/);
+  assert.match(md, /## Issue\n\n\[o\/r#5\]\(https:\/\/github.com\/o\/r\/issues\/5\): Stale config\./);
+});

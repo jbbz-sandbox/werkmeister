@@ -1,17 +1,17 @@
 /**
- * Thin bridge to the `sandbox` CLI.
+ * Workspace creation for the `sandbox` CLI and every other surface.
  *
- * Rather than re-implementing workspace creation in TypeScript, this delegates
- * to the `sandbox workspace` command — the single source of truth for both the
- * input prompts and the create logic (git worktrees on a `<user>/<workspace>`
+ * {@link createWorkspace} is the single create entry: the CLI, the browser
+ * form, both MCP servers and the /workspaces pane all call it, and it calls
+ * `provisionWorkspace` in-process (git worktrees on a `<user>/<workspace>`
  * branch + `init-workspace`). We:
  *
  *   - build the form fields in-process from core's prompt definitions
  *     (the same ones the terminal wizard renders; see {@link getFormSchema}), and
- *   - run `sandbox workspace <feature> [--flag value …]` to create one.
+ *   - run {@link createWorkspace} to create one.
  *
- * The only thing we add on top of the script is the optional "open in VS Code"
- * convenience, which the CLI itself doesn't do.
+ * The only thing we add on top is the optional "open in VS Code"
+ * convenience.
  */
 import { execFile, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -47,8 +47,9 @@ import { computePromptSpec } from "./workspace_prompts.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { featureUrl } from "./feature_routing.js";
 import { launchFeatureWindow } from "./browser.js";
-import { collectingReporter, info, withReporter } from "./reporter.js";
-import { provisionWorkspace } from "./workspace_init.js";
+import { collectingReporter, info, warn, withReporter } from "./reporter.js";
+import { fetchIssueSnapshot, IssueFetchError, type IssueSnapshot } from "./issue_snapshot.js";
+import { WorkspaceInitError, provisionWorkspace } from "./workspace_init.js";
 import { loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 
@@ -79,7 +80,7 @@ export interface FormSchemaBundle {
 export interface CreateResult {
   /** The CLI command that was run, e.g. `sandbox workspace foo --services bar`. */
   command: string;
-  /** stdout from the `sandbox workspace` run (info/ok lines), ANSI-stripped. */
+  /** info/ok lines from the create run, ANSI-stripped. */
   output: string;
   /** Absolute path of the created (or re-initialised) workspace, if parseable. */
   workspacePath: string | null;
@@ -444,9 +445,14 @@ export async function buildIssueFormRequest(
   await cacheSet(`briefing:${ref}`, briefing);
   if (issue.title) base.task = issue.title;
 
+  return { base, prompt: await issueExtractPrompt(ref, briefing) };
+}
+
+/** The distillation prompt for one fetched issue's briefing. */
+async function issueExtractPrompt(ref: string, briefing: string): Promise<string> {
   const registry = await readServicesRegistry();
   const serviceNames = registry ? parseServiceNames(registry) : [];
-  return { base, prompt: buildIssueExtractPrompt(tracker.label, ref, registry, serviceNames, briefing) };
+  return buildIssueExtractPrompt(issueTracker().label, ref, registry, serviceNames, briefing);
 }
 
 /**
@@ -753,7 +759,11 @@ function kebab(key: string): string {
  */
 export function buildWorkspaceArgs(formData: Record<string, unknown>): string[] {
   const feature = String(formData.feature ?? "").trim();
-  if (!feature) throw new WorkspaceError("A feature name is required.");
+  if (!feature) {
+    throw new WorkspaceError(
+      "A feature name is required (pass it as an argument, set it in ./.sandbox/workspace.yml, or run interactively).",
+    );
+  }
 
   const args = ["workspace", feature];
   for (const [key, raw] of Object.entries(formData)) {
@@ -805,8 +815,90 @@ async function openInVscode(target: string): Promise<{ opened: boolean; note?: s
   }
 }
 
+export type Distiller = (prompt: string) => Promise<string | null>;
+
+export interface CreateOptions {
+  open?: boolean;
+  onData?: (chunk: string) => void;
+  /** Report through the caller's reporter (the CLI's terminal) instead of collecting a transcript. */
+  live?: boolean;
+  /** Where inputs resolve from; $HOME by default so a stray ./.sandbox/workspace.yml can't leak in. */
+  cwd?: string;
+  /** The model behind the issue rewrite (default `askClaude`); false skips it. */
+  distill?: false | Distiller;
+  /** A snapshot the caller already fetched (the CLI wizard), so it isn't fetched twice. */
+  issue?: IssueSnapshot;
+  readStdinTask?: () => string;
+  force?: boolean;
+}
+
+const DISTILLED = ["feature", "task", "description", "starting_prompt", "services"] as const;
+
+/** The model's rewrite of one issue into form fields (all of DISTILLED, for the wizard to show as defaults); never throws. */
+export async function distillIssue(
+  issue: IssueSnapshot,
+  distill: Distiller = askClaude,
+): Promise<{ fields: Record<string, string>; warning: string | null }> {
+  const briefing = issueBriefing({ ref: issue.ref, title: issue.title, status: issue.status, description: issue.body, url: issue.url ?? undefined, comments: issue.comments });
+  let answer: string | null = null;
+  try {
+    answer = await distill(await issueExtractPrompt(issue.ref, briefing));
+  } catch (e) {
+    return { fields: {}, warning: (e as Error).message };
+  }
+  if (answer === null) return { fields: {}, warning: "the model gave no answer" };
+  const data = await applyIssueFormAnswer({}, answer);
+  const fields: Record<string, string> = {};
+  for (const k of DISTILLED) {
+    const v = data[k];
+    if (typeof v === "string" && v.trim()) fields[k] = v.trim();
+    else if (Array.isArray(v) && v.length) fields[k] = v.map(String).join(",");
+  }
+  return Object.keys(fields).length ? { fields, warning: null } : { fields, warning: "the answer held no usable fields" };
+}
+
+/** Resolve inputs, fetch the issue (failing the create), then fill an empty task, description and starting_prompt from it. */
+export async function prepareCreate(
+  formData: Record<string, unknown>,
+  opts: CreateOptions = {},
+): Promise<{ resolved: Record<string, string>; issue: IssueSnapshot | null }> {
+  const resolved = resolveInputs(formData, opts.cwd ?? os.homedir());
+  if (!resolved.issue_id) return { resolved, issue: null };
+
+  const tracker = issueTracker();
+  const ref = tracker.parseRef(resolved.issue_id);
+  if (!ref) throw new WorkspaceError(`${resolved.issue_id} isn't a ${tracker.label} issue ref (e.g. ${tracker.refExample})`);
+  resolved.issue_id = ref;
+
+  let issue = opts.issue ?? null;
+  if (!issue) {
+    try {
+      issue = await fetchIssueSnapshot(ref);
+    } catch (e) {
+      if (e instanceof IssueFetchError) {
+        const auth = await tracker.checkAuth();
+        const hint = auth.ok ? "run `sandbox connect` to check the issue tracker" : `${tracker.label}: ${auth.reason}; run: ${auth.fix}`;
+        throw new WorkspaceError(`${e.message}; ${hint}.`);
+      }
+      throw e;
+    }
+  }
+  if (!resolved.task && issue.title) resolved.task = issue.title;
+
+  if (opts.distill !== false && (!resolved.description || !resolved.starting_prompt)) {
+    const { fields, warning } = await distillIssue(issue, opts.distill ?? askClaude);
+    // Only the prose: a model-picked feature or services would make unattended creates nondeterministic.
+    for (const k of ["description", "starting_prompt"]) if (!resolved[k] && fields[k]) resolved[k] = fields[k];
+    if (warning) warn(`description/starting_prompt not filled from the issue: ${warning}`);
+  }
+  return { resolved, issue };
+}
+
 /**
  * Create a workspace, then (optionally) open it in VS Code.
+ *
+ * When the form names an issue, {@link prepareCreate} fetches it first (a failed
+ * fetch fails the create before anything is made) and fills empty fields from it.
  *
  * The creation itself is `workspace_init`'s, called in this process — it used
  * to be a `sandbox workspace` child, which made this package depend on the CLI
@@ -821,20 +913,25 @@ async function openInVscode(target: string): Promise<{ opened: boolean; note?: s
  */
 export async function createWorkspace(
   formData: Record<string, unknown>,
-  opts: { open?: boolean; onData?: (chunk: string) => void } = {},
+  opts: CreateOptions = {},
 ): Promise<CreateResult> {
   // Still built (and still validating that a feature was supplied) because it
   // is what `command` reports.
   const args = buildWorkspaceArgs(formData);
   const command = `sandbox ${args.join(" ")}`;
 
+  const run = async () => {
+    const { resolved, issue } = await prepareCreate(formData, opts);
+    return provisionWorkspace(resolved, { issue: issue ?? undefined, readStdinTask: opts.readStdinTask, force: opts.force });
+  };
+
   const reporter = collectingReporter(opts.onData);
   let workspacePath: string | null;
   try {
-    workspacePath = await withReporter(reporter, () =>
-      provisionWorkspace(resolveInputs(formData, os.homedir())),
-    );
+    workspacePath = opts.live ? await run() : await withReporter(reporter, run);
   } catch (e) {
+    // A provisioning failure's `[err]` line already went out through the live reporter.
+    if (opts.live) throw e instanceof WorkspaceInitError ? e : new WorkspaceError((e as Error).message);
     // The transcript is the detail, exactly as the child's captured output was.
     const detail = stripAnsi(reporter.text().trim()) || (e as Error).message;
     throw new WorkspaceError(`${command} failed:\n${detail}`);

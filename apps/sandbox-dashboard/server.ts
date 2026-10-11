@@ -131,9 +131,10 @@ export function createServer(): McpServer {
     {
       title: "New Sandbox Workspace",
       description:
-        "Create a new sandbox workspace via `sandbox workspace` (git " +
-        "worktrees on a <user>/<workspace> branch under $SANDBOX_WORKSPACES_ROOT, " +
-        "then init-workspace). Opens a form to collect the inputs — inline if the " +
+        "Create a new sandbox workspace through `createWorkspace` in this process " +
+        "(git worktrees on a <user>/<workspace> branch under $SANDBOX_WORKSPACES_ROOT, " +
+        "then init-workspace). With an `issue_id` the issue is fetched and stored in " +
+        "`.sandbox/issue.md` (the create fails if it can't be read). Opens a form to collect the inputs — inline if the " +
         "client renders MCP App UI (Claude Desktop), otherwise in the user's " +
         "browser (Claude Code CLI / VS Code). Fields come from the same prompt " +
         "definitions as the terminal wizard. Pass an issue ID or URL as `issue` to pre-fill.",
@@ -214,15 +215,16 @@ export function createServer(): McpServer {
     {
       title: "Create Workspace",
       description:
-        "Run `sandbox workspace <feature> [flags]` to create the workspace " +
-        "(worktrees + branch + init-workspace). Called by the New Sandbox " +
+        "Create the workspace through `createWorkspace` in this process " +
+        "(worktrees + branch + init-workspace); with an `issue_id` the issue is fetched and " +
+        "stored in `.sandbox/issue.md` (the create fails if it can't be read). Called by the New Sandbox " +
         "Workspace form; can also be invoked directly.",
       inputSchema: {
         formData: z
           .record(z.string(), z.unknown())
           .describe(
             "Submitted form fields (feature, services[], issue_id, test_path, task, …). " +
-              "Maps 1:1 onto `sandbox workspace` flags; `feature` is required.",
+              "Holds the form's fields, same keys as the CLI flags; `feature` is required.",
           ),
         open: z.boolean().optional().describe("Launch VS Code on the new workspace (default true)."),
       },
