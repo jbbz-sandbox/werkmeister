@@ -42,7 +42,7 @@ export type FormField = {
   options: string[]
   /** A multi-pick's options by group heading (`ui:options.groups`); {} draws them ungrouped. */
   groups: Record<string, string[]>
-  /** A refinable field's instruction for refinePrompt ("" = its default); null when it has no Refine button. */
+  /** A refinable field's instruction for buildRefinePrompt ("" = its default); null when it has no Refine button. */
   refine: string | null
   required: boolean
   pattern: string | null
