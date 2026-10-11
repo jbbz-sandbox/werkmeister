@@ -83,7 +83,9 @@ try {
     'issue-form-request': () => core.buildIssueFormRequest(args.ref),
     'issue-form-apply': () => core.applyIssueFormAnswer(args.base, args.answer),
     // open: false: the pane opens a Desktop session in the new folder instead of VS Code.
-    'create-workspace': () => core.createWorkspace(args.formData, { open: false }),
+    'tracker-auth': () => tracker.checkAuth(),
+    // The pane distils on the session's own model (fetchIssue) before Create and sends distill: false.
+    'create-workspace': () => core.createWorkspace(args.formData, { open: false, distill: args.distill }),
     'refine-request': () => core.buildRefinePrompt(args.text, args.instruction, args.formData),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
@@ -118,6 +120,9 @@ const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
 const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
+const TRACKER = { plugin: 'sandbox-tools', key: 'tracker' } as const
+export const TRACKER_TTL_MS = 5 * 60 * 1000
+let trackerAt = 0
 const INFRA = { plugin: 'sandbox-tools', key: 'infra' } as const
 const PRS = { plugin: 'sandbox-tools', key: 'prs' } as const
 /** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
@@ -366,8 +371,13 @@ async function refineField($: EngineInterface, key: string, instruction: string)
 
 async function submitForm($: EngineInterface): Promise<void> {
   const { value: form = null } = await $.state.get(FORM)
-  const { value: draft = {} } = await $.state.get(DRAFT)
+  const { value: first = {} } = await $.state.get(DRAFT)
   if (!form) return
+  // Core stores the issue but doesn't run a model for the pane: fill empty fields on the session model first.
+  if (typeof first.issue_id === 'string' && first.issue_id.trim() && (isEmpty(first.description) || isEmpty(first.starting_prompt))) {
+    await fetchIssue($)
+  }
+  const { value: draft = {} } = await $.state.get(DRAFT)
   const errors = formErrors(formFields(form.bundle), draft)
   if (errors.length) {
     await $.state.set(NOTE, errors.join('\n'))
@@ -377,7 +387,7 @@ async function submitForm($: EngineInterface): Promise<void> {
   await $.state.set(FORM_BUSY, 'create')
   await $.state.set(NOTE, 'Creating the workspace…')
   try {
-    const r = await core<{ command: string; workspacePath: string | null }>($, 'create-workspace', { formData }, 600000)
+    const r = await core<{ command: string; workspacePath: string | null }>($, 'create-workspace', { formData, distill: false }, 600000)
     await $.state.set(DRAFT, {})
     await $.state.set(TAB, 'list')
     await $.state.set(NOTE, `Created ${r.workspacePath ?? r.command}`)
@@ -491,10 +501,11 @@ export function sessionLine(r: WorkspaceRow): string | null {
 }
 
 /** The infra line: `infra · partial · 4/5 · down: caddy`; services not healthy or running are named. */
-export function infraLine(i: InfraStatus | null): string {
-  if (!i) return 'infra · unknown'
+export function infraLine(i: InfraStatus | null, t: { ok: boolean; reason?: string; fix: string } | null = null): string {
+  const tracker = t && !t.ok ? `tracker: ${t.reason} · ${t.fix}` : null
+  if (!i) return ['infra · unknown', tracker].filter(Boolean).join(' · ')
   const bad = i.services.filter(s => s.state !== 'healthy' && s.state !== 'running').map(s => `${s.state}: ${s.name}`)
-  return ['infra', i.state, i.total > 0 ? `${i.running}/${i.total}` : null, ...bad].filter(Boolean).join(' · ')
+  return ['infra', i.state, i.total > 0 ? `${i.running}/${i.total}` : null, ...bad, tracker].filter(Boolean).join(' · ')
 }
 
 /** The issue line's prefix: the work type, as the issue's kind. */
@@ -553,6 +564,10 @@ async function tick($: EngineInterface): Promise<void> {
     await $.state.set(ROWS, buildRows(list, status, sessions))
     await $.state.set(INFRA, status.infra ?? null)
     await $.state.set(ERROR, '')
+    if (Date.now() - trackerAt > TRACKER_TTL_MS) {
+      trackerAt = Date.now()
+      await $.state.set(TRACKER, await core<{ ok: boolean; reason?: string; fix: string }>($, 'tracker-auth').catch(() => null))
+    }
   } catch (err) {
     await $.state.set(ERROR, (err as Error).message)
   } finally {
@@ -705,7 +720,7 @@ export const register: Register = on => {
         "Fill fields of the New Sandbox Workspace form in the /workspaces pane's Create tab, so the person can " +
         'set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on ' +
         'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
-        'slug), work_type, context_strategy, services and repos (lists of choices), labels, test_path, task, ' +
+        'slug), work_type, context_strategy, services (a list of choices), labels, test_path, task, ' +
         'description, starting_prompt (multi-line). Pass {} as fields to read the current values. Returns what the ' +
         'form holds, values it left out and why, and what is still required. It never creates the workspace: the ' +
         'person presses Create in the pane.',
@@ -768,6 +783,7 @@ export const register: Register = on => {
     const { value: busy = '' } = await $.state.get(BUSY)
     const { value: confirm = '' } = await $.state.get(CONFIRM)
     const { value: infra = null } = await $.state.get(INFRA)
+    const { value: tracker = null } = await $.state.get(TRACKER)
     const { value: prs = {} } = await $.state.get(PRS)
     const { value: tab = 'list' } = await $.state.get(TAB)
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
@@ -870,7 +886,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {tabs}
         <Box key="infra-bar" justifyContent="space-between" marginBottom={1}>
-          <Box key="infra"><Text color={INFRA_COLOR[infra?.state ?? 'unknown']}>{infraLine(infra)}</Text></Box>
+          <Box key="infra"><Text color={INFRA_COLOR[infra?.state ?? 'unknown']}>{infraLine(infra, tracker)}</Text></Box>
           {busy === CONNECTING
             ? <Box key="connecting"><Text dimColor>connecting…</Text></Box>
             : <Button key="connect" label="⚡ Connect" variant="secondary" onPress={() => void connect($)} />}
