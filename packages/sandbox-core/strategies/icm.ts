@@ -14,6 +14,7 @@ import { buildIssuesReportMd } from "../issues_report.js";
 import { issueIdOfMeta } from "../issue_tracker.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { removeWorkspaceHooks } from "../hooks_gen.js";
+import { renderIssueRef } from "./issue_section.js";
 import { info, success, warn } from "../reporter.js";
 import {
   loadStandardsModules,
@@ -148,6 +149,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "",
     ctx.task,
     "",
+    ...(ctx.issue ? [renderIssueRef(ctx.issue)] : []),
     "Read this file, then `CONTEXT.md`, then only the one stage `CONTEXT.md` the routing table sends you to. Nothing else up front.",
     "",
     "## Where things live",
@@ -155,6 +157,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "| Path | Holds |",
     "|---|---|",
     "| `BRIEF.md` | the run's input: goal, acceptance criteria, open questions |",
+    ...(ctx.issue ? ["| `.sandbox/issue.md` | the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` |"] : []),
     "| `CONTEXT.md` | the pipeline in one screen |",
     "| `stages/NN_*/` | one stage each: `CONTEXT.md` (contract) + `output/` (this run's artifacts) |",
     "| `_shared/` | factory: the coding standards and `issues-report.md` (fix a bug here or file an issue — bug, feature or task — and how), same every run |",
@@ -200,18 +203,32 @@ function renderPipeline(ctx: InitContext, stages: Stage[]): string {
   ].join("\n");
 }
 
+const NO_PROMPT =
+  "_No starting prompt was given. Write the goal, acceptance criteria and open questions here before starting the first stage._";
+const READ_ISSUE =
+  "_Read `.sandbox/issue.md`, then write the goal, acceptance criteria and open questions here before starting the first stage._";
+
+/** A brief nobody has touched: what renderBrief wrote with no issue and no prompt. */
+export const PLACEHOLDER_BRIEF_RE = /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---\n\n# Brief: [^\n]*\n\n_No starting prompt was given\. [^\n]*_\n$/;
+
 function renderBrief(ctx: InitContext): string {
   const prompt = (ctx.inputs["starting_prompt"] ?? "").trim();
+  if (!ctx.issue) {
+    // Unchanged from before the issue copy existed.
+    return ["---", "source: .sandbox/workspace.yml (starting_prompt)", "---", "", `# Brief: ${ctx.task}`, "", prompt || NO_PROMPT, ""].join("\n");
+  }
+  const description = (ctx.inputs["description"] ?? "").trim();
   return [
     "---",
-    "source: .sandbox/workspace.yml (starting_prompt)",
+    "source: .sandbox/workspace.yml (description, starting_prompt), .sandbox/issue.md",
     "---",
     "",
     `# Brief: ${ctx.task}`,
     "",
-    prompt ||
-      "_No starting prompt was given. Write the goal, acceptance criteria and open questions here before starting the first stage._",
-    "",
+    renderIssueRef(ctx.issue),
+    ...(description ? [description, ""] : []),
+    ...(prompt ? [prompt, ""] : []),
+    ...(!description && !prompt ? [READ_ISSUE, ""] : []),
   ].join("\n");
 }
 
@@ -279,8 +296,11 @@ function init(ctx: InitContext): void {
     "CONTEXT.md": renderPipeline(ctx, stages),
     ...render(ctx),
   };
-  // The brief is the operator's once written — same rule as seedStartingHandoff.
-  if (!fs.existsSync(path.join(root, "BRIEF.md"))) {
+  // The brief is the operator's once written — same rule as seedStartingHandoff —
+  // except an untouched placeholder, rebuilt once there is an issue to brief from.
+  const briefPath = path.join(root, "BRIEF.md");
+  const existing = fs.existsSync(briefPath) ? fs.readFileSync(briefPath, "utf8") : null;
+  if (existing === null || (ctx.issue && PLACEHOLDER_BRIEF_RE.test(existing))) {
     files["BRIEF.md"] = renderBrief(ctx);
   }
   for (const [rel, body] of Object.entries(files)) {
