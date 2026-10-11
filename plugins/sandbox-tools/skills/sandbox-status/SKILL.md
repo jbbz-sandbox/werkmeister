@@ -27,11 +27,17 @@ so a `"dead"` status means the service is genuinely not responding, not just a p
 ## Step 2: Feature Slots
 
 If `summary.total_features > 0`, review the `features` array from Step 1.
-For any feature with `containers_running < containers_total`, tail its logs:
+For any feature with `containers_running < containers_total`, read the last lines of each
+stopped container's log, by the `containers[].name` Step 1 lists (e.g. `bwell-clickhouse`):
 
 ```bash
-sandbox logs <feature> [service]
+docker logs --tail 30 <container-name> 2>&1
+docker inspect -f 'exit={{.State.ExitCode}} oom={{.State.OOMKilled}} finished={{.State.FinishedAt}}' <container-name>
 ```
+
+Don't use `sandbox logs` here: it follows the log and never exits.
+A feature with `containers_total: 0` has no containers to read: its workspace has no
+`docker-compose.yml` yet (`sandbox init-workspace`, then `sandbox up`, in that workspace).
 
 ## Step 3: Service Health Checks
 
@@ -59,8 +65,9 @@ done
 CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
 CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
 docker exec sandbox-caddy caddy validate --config /etc/caddy/Caddyfile 2>&1
-HOST_SIZE=$(wc -c < "$CADDYFILE" 2>/dev/null)
-CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c < /etc/caddy/Caddyfile 2>/dev/null)
+HOST_SIZE=$(wc -c < "$CADDYFILE" 2>/dev/null | tr -d " ")
+# The path goes to wc inside the container: a `< /etc/caddy/Caddyfile` redirect would read the host's file.
+CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')
 echo "Caddyfile: host=${HOST_SIZE}B container=${CONTAINER_SIZE}B"
 ```
 
