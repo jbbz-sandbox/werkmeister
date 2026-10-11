@@ -66,12 +66,12 @@ export function parseIssueCopy(text: string): IssueSnapshot | null {
   if (!m) return null;
   const rest = text.slice(m[0].length);
   // The renderer always writes the Comments heading before the comment blocks; take the final one.
-  // ponytail: splits at the last Comments heading; a comment quoting "\n\n## Comments\n" would mis-split.
+  // ponytail: splits at the last Comments heading; a comment quoting "\n\n## Comments\n" or a "### a · b" line followed by a blank line would mis-split.
   const at = rest.lastIndexOf(COMMENTS);
   if (at < 0) return null;
   const blocks = rest.slice(at + COMMENTS.length);
   const comments: IssueComment[] = [];
-  for (const b of blocks.split(/\n(?=### )/).filter((x) => x.trim())) {
+  for (const b of blocks.split(/\n(?=### [^\n]* · [^\n]*\n\n)/).filter((x) => x.trim())) {
     const c = /^\n?### (.*) · (.*)\n\n([\s\S]*?)\n?$/.exec(b);
     if (!c) return null;
     comments.push({ author: c[1], ...(c[2] ? { created: c[2] } : {}), body: c[3] });
