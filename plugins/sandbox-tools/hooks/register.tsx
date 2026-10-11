@@ -69,6 +69,12 @@ try {
     'remove-workspace': () => core.removeWorkspace(args.name),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
+    // Only claude:// links: a new Desktop session in a folder, or a session's own link.
+    'open-claude-link': () => {
+      if (!/^claude:\/\//.test(args.url)) throw new Error('not a claude:// link: ' + args.url)
+      execFileSync('open', [args.url])
+      return { url: args.url }
+    },
     'form-schema': async () => {
       const tracker = await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)
       return { bundle: await core.getFormSchema(), trackerLabel: tracker.issueTracker().label }
@@ -422,11 +428,26 @@ export function sessionTitle(r: WorkspaceRow): string | null {
   return r.session?.title ?? r.sessionTitle
 }
 
-/** Where the session shown lives, so Jump's target is known before the press: Desktop, VS Code, or CLI. */
+/** Where the session shown started: Desktop, VS Code, or CLI. */
 export function sessionOrigin(r: WorkspaceRow): 'Desktop' | 'VS Code' | 'CLI' | null {
   if (r.session) return 'Desktop'
   if (r.sessionOrigin === null) return null
   return r.sessionOrigin === 'claude-vscode' ? 'VS Code' : r.sessionOrigin === 'claude-desktop' ? 'Desktop' : 'CLI'
+}
+
+/**
+ * Where Continue picks the session up, named on its button: Desktop when the app lists it
+ * (the pane focuses or opens it), VS Code for a VS Code session (the folder opens there),
+ * else a Terminal window running `claude --resume`.
+ */
+export function continueTarget(r: WorkspaceRow): 'Desktop' | 'VS Code' | 'Terminal' {
+  if (r.session) return 'Desktop'
+  return r.sessionOrigin === 'claude-vscode' ? 'VS Code' : 'Terminal'
+}
+
+/** `claude://code/new?folder=…`: the link the app's "New Claude Code Session Here" Finder service opens. */
+export function newSessionLink(path: string): string {
+  return `claude://code/new?folder=${encodeURIComponent(path)}&source=services`
 }
 
 /** The session line: `session · VS Code · title`. */
@@ -461,7 +482,7 @@ async function tick($: EngineInterface): Promise<void> {
   }
 }
 
-export type Action = 'up' | 'stop' | 'restart' | 'down' | 'switch' | 'remove' | 'jump'
+export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'remove' | 'continue'
 type Lifecycle = 'up' | 'stop' | 'restart' | 'down'
 const LIFECYCLE = new Set<Action>(['up', 'stop', 'restart', 'down'])
 
@@ -470,16 +491,11 @@ export function buttonsFor(state: WorkspaceRow['state']): Action[] {
   const out: Action[] = []
   if (state === 'down' || state === 'stopped' || state === 'partial') out.push('up')
   if (state === 'up' || state === 'partial') out.push('stop')
-  out.push('restart', 'down', 'switch', 'remove')
+  out.push('restart', 'down', 'new', 'remove')
   return out
 }
 
-const LABEL: Record<Action, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', switch: '⇥ Switch', remove: '✕ Remove', jump: '↗ Jump' }
-
-/** First line of a tool result's text, for the note under the list. */
-function firstLine(r: ToolResult): string {
-  return (r.content.find(c => c.type === 'text')?.text ?? '').split('\n')[0]?.trim() ?? ''
-}
+const LABEL: Record<Exclude<Action, 'continue'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', remove: '✕ Remove' }
 
 async function runAction($: EngineInterface, name: string, action: Lifecycle | 'remove'): Promise<void> {
   await $.state.set(BUSY, name)
@@ -505,33 +521,35 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   const { value: pending = '' } = await $.state.get(CONFIRM)
   if (pending !== '' && pending !== name) await $.state.set(CONFIRM, '')
 
-  if (action === 'switch') {
+  if (action === 'new') {
     const { value: rows = [] } = await $.state.get(ROWS)
     const row = rows.find(r => r.name === name)
     if (!row) return
-    const r = await $.mcp.call('ccd_directory', 'change_directory', { path: row.path })
-    if (r.isError) {
-      await $.state.set(NOTE, firstLine(r) || 'change_directory refused')
-      return
+    try {
+      await core($, 'open-claude-link', { url: newSessionLink(row.path) })
+      $.ui.toast(`Opening a new session in ${name}`)
+    } catch (err) {
+      await $.state.set(NOTE, (err as Error).message)
     }
-    // change_directory moves the cwd only when a turn ends, and a press on an idle session starts none: submit one.
-    $.ui.toast(`Switching to ${name}`)
-    void $.prompt.submit({ text: `Switched to workspace ${name}. Read ${row.path}/CLAUDE.md, then wait for my next instruction.` })
     return
   }
 
-  // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09), so a button asks the app to focus the session instead.
-  if (action === 'jump') {
+  // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09), so the button focuses the session,
+  // else opens its link through the node child.
+  if (action === 'continue') {
     const { value: rows = [] } = await $.state.get(ROWS)
     const row = rows.find(r => r.name === name)
     if (!row) return
-    if (row.session) {
-      const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: row.session.id, target: 'focus' })
-      if (r.isError) $.ui.toast(`Open "${row.session.title}" from the sidebar`)
-      return
-    }
     try {
-      if (row.sessionOrigin === 'claude-vscode') {
+      if (row.session) {
+        const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: row.session.id, target: 'focus' })
+        if (!r.isError) return
+        // open_session_in focuses only sessions this one started; the session's own link opens any.
+        if (row.session.link) await core($, 'open-claude-link', { url: row.session.link })
+        else $.ui.toast(`Open "${row.session.title}" from the sidebar`)
+        return
+      }
+      if (continueTarget(row) === 'VS Code') {
         await core($, 'open-vscode', { path: row.path })
         $.ui.toast(`Opening ${name} in VS Code`)
         return
@@ -654,8 +672,6 @@ export const register: Register = on => {
     const { value: note = '' } = await $.state.get(NOTE)
     const { value: busy = '' } = await $.state.get(BUSY)
     const { value: confirm = '' } = await $.state.get(CONFIRM)
-    // The workspace this session already sits in gets no Switch.
-    const here = await $.session.cwd().catch(() => '')
     const { value: tab = 'list' } = await $.state.get(TAB)
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e)
@@ -775,12 +791,12 @@ export const register: Register = on => {
             ) : (
               <Box marginTop={1} justifyContent="space-between">
                 <Box gap={1}>
-                  {buttonsFor(r.state).filter(a => a !== 'remove' && a !== 'switch').map(a => (
+                  {buttonsFor(r.state).filter((a): a is Lifecycle => LIFECYCLE.has(a)).map(a => (
                     <Button key={`${a}:${r.name}`} label={LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
                   ))}
                   <Box marginLeft={2} gap={1}>
-                    {!(here && contains(r.path, here)) && <Button key={`switch:${r.name}`} label={LABEL.switch} variant="secondary" onPress={() => void press($, 'switch', r.name)} />}
-                    {sessionTitle(r) && <Button key={`jump:${r.name}`} label={LABEL.jump} variant="secondary" onPress={() => void press($, 'jump', r.name)} />}
+                    <Button key={`new:${r.name}`} label={LABEL.new} variant="secondary" onPress={() => void press($, 'new', r.name)} />
+                    {sessionTitle(r) && <Button key={`continue:${r.name}`} label={`↗ Continue in ${continueTarget(r)}`} variant="secondary" onPress={() => void press($, 'continue', r.name)} />}
                   </Box>
                 </Box>
                 {/* Buttons take no colour; the label turns red under the pointer and the confirm prompt is red text beside it. */}
