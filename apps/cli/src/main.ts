@@ -745,7 +745,8 @@ const SPECS: CommandSpec[] = [
           "--prune-context",
           "After a context_strategy change, delete the previous strategy's files that git " +
             "tracks unmodified (anything else is kept and reported).",
-        );
+        )
+        .option("--refresh-issue", "Re-fetch the workspace's issue into .sandbox/issue.md (BRIEF.md is not rewritten).");
     },
     namespace: (_a, o) => ({
       task: o.task ?? null,
@@ -762,6 +763,7 @@ const SPECS: CommandSpec[] = [
       context_strategy: o.contextStrategy ?? null,
       config_file: o.config ?? null,
       prune_context: Boolean(o.pruneContext),
+      refresh_issue: Boolean(o.refreshIssue),
     }),
   },
 ];

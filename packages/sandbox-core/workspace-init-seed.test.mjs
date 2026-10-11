@@ -96,3 +96,11 @@ test("the seeded handoff starts at the work type's first phase", () => {
     assert.doesNotMatch(note.body, /This workspace is a/);
   });
 });
+
+test("an issue seeds the handoff even with an empty prompt, issue section first", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "seed-"));
+  seedStartingHandoff(root, "", "bugfix", { ref: "o/r#5", url: null, title: "T", fetchedAt: "2026-10-11T00:00:00.000Z" });
+  const [note] = fs.readdirSync(path.join(root, ".sandbox", "notes"));
+  const body = fs.readFileSync(path.join(root, ".sandbox", "notes", note), "utf8");
+  assert.match(body, /# Handoff: workspace creation\n\n## Issue\n\no\/r#5: T\./);
+});
