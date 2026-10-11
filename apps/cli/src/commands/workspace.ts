@@ -39,7 +39,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { error, getMonorepoRoot, info, warn } from "../lib/config.js";
+import { error, getMonorepoRoot, info } from "../lib/config.js";
 import { run as procRun } from "sandbox-core/proc";
 // The work itself lives in core (note 086 row 5), which is how `createWorkspace`
 // runs it without spawning this CLI. What stays here is the wizard, the
@@ -81,17 +81,13 @@ async function resolveWorkspaceInputs(
         if (key !== "issue_id" || !r.issue_id || preset.has("issue_id")) return {};
         const tracker = issueTracker();
         const ref = tracker.parseRef(r.issue_id);
-        if (!ref) {
-          warn(`${r.issue_id} isn't a ${tracker.label} issue ref (e.g. ${tracker.refExample})`);
-          return {};
-        }
+        // A bad ref or a failed read stops the wizard: run prints it once and exits 1.
+        if (!ref) throw new WorkspaceError(`${r.issue_id} isn't a ${tracker.label} issue ref (e.g. ${tracker.refExample})`);
         r.issue_id = ref;
         try {
           issue = await fetchIssueSnapshot(ref);
         } catch {
-          // createWorkspace tries again and fails cleanly before creating anything.
-          warn(`couldn't read ${ref} from ${tracker.label}; run \`sandbox connect\` to check the issue tracker.`);
-          return {};
+          throw new WorkspaceError(`couldn't read ${ref} from ${tracker.label}; run \`sandbox connect\` to check the issue tracker.`);
         }
         if (args.no_distill) return { task: issue.title };
         const { fields, warning } = await distillIssue(issue);
@@ -126,8 +122,16 @@ function which(cmd: string): string | null {
 /** CLI keys the form knows; everything else (browser_form, open_vscode, force, no_distill) is a CLI switch. */
 const FORM_KEYS = ["feature", "issue_id", "services", "repos", "labels", "task", "test_path", "description", "starting_prompt", "work_type", "context_strategy"];
 
+/** Form fields that are arrays of choices (checkboxes); their comma-separated flag values are split. */
+const ARRAY_KEYS = new Set(["services", "repos"]);
+
 export function browserFormCommand(node: string, cliJs: string, args: Record<string, unknown>): string[] {
-  const prefill = Object.fromEntries(FORM_KEYS.filter((k) => args[k] != null && args[k] !== "").map((k) => [k, args[k]]));
+  const prefill = Object.fromEntries(
+    FORM_KEYS.filter((k) => args[k] != null && args[k] !== "").map((k) => [
+      k,
+      ARRAY_KEYS.has(k) ? String(args[k]).split(",").map((s) => s.trim()).filter(Boolean) : args[k],
+    ]),
+  );
   const cmd = [node, cliJs];
   if (Object.keys(prefill).length) cmd.push("--prefill", JSON.stringify(prefill));
   if (args.issue_id) cmd.push("--issue", String(args.issue_id));
@@ -167,8 +171,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // 1. Resolve inputs (CLI > ./.sandbox/workspace.yml > interactive), then hand
   //    the whole creation to core.
-  const { resolved, issue } = await resolveWorkspaceInputs(args);
   try {
+    const { resolved, issue } = await resolveWorkspaceInputs(args);
     await createWorkspace(resolved, {
       live: true,
       open: Boolean(args.open_vscode),

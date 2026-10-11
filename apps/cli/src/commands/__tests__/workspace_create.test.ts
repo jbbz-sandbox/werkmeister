@@ -75,7 +75,12 @@ describe("sandbox workspace", () => {
     expect(cmd.slice(0, 2)).toEqual(["node", "form-cli.js"]);
     expect(cmd).toContain("--open");
     expect(cmd[cmd.indexOf("--issue") + 1]).toBe("o/r#5");
-    expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({ feature: "f", services: "cli", issue_id: "o/r#5" });
+    expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({ feature: "f", services: ["cli"], issue_id: "o/r#5" });
+  });
+
+  it("--browser-form splits comma-separated multi fields into the form's arrays", () => {
+    const cmd = browserFormCommand("node", "form-cli.js", { services: "cli, api", repos: "a,b", labels: "x,y" });
+    expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({ services: ["cli", "api"], repos: ["a", "b"], labels: "x,y" });
   });
 
   describe("wizard issue step", () => {
@@ -99,21 +104,20 @@ describe("sandbox workspace", () => {
       expect(afterFieldResults).toEqual([{}]);
     });
 
-    it("warns and moves on for an unparseable ref", async () => {
+    it("stops the wizard on an unparseable ref: printed once, exit 1, nothing created", async () => {
       wizardResolved = { issue_id: "nonsense" };
-      await run({ feature: "f" });
-      expect(warns).toEqual(["nonsense isn't a GitHub issue ref (e.g. o/r#1)"]);
+      await expect(run({ feature: "f" })).rejects.toThrow("exit:1");
+      expect(errors).toEqual(["nonsense isn't a GitHub issue ref (e.g. o/r#1)"]);
       expect(fetched).toEqual([]);
-      expect(afterFieldResults).toEqual([{}]);
+      expect(calls).toEqual([]);
     });
 
-    it("warns and moves on when the tracker fetch fails", async () => {
+    it("stops the wizard when the tracker fetch fails: printed once, exit 1, nothing created", async () => {
       wizardResolved = { issue_id: "o/r#5" };
       fetchError = new Error("401");
-      await run({ feature: "f" });
-      expect(warns).toEqual(["couldn't read o/r#5 from GitHub; run `sandbox connect` to check the issue tracker."]);
-      expect(afterFieldResults).toEqual([{}]);
-      expect((calls[0] as unknown[])[1]).toMatchObject({ issue: undefined });
+      await expect(run({ feature: "f" })).rejects.toThrow("exit:1");
+      expect(errors).toEqual(["couldn't read o/r#5 from GitHub; run `sandbox connect` to check the issue tracker."]);
+      expect(calls).toEqual([]);
     });
   });
 });

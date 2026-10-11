@@ -25,20 +25,26 @@ export function trackerLine(label: string, auth: TrackerAuth): string {
 }
 
 /** Report tracker sign-in; on a TTY, offer GitHub's own login. Never fails connect. */
-async function checkTracker(): Promise<void> {
-  const tracker = issueTracker();
-  let auth = await tracker.checkAuth();
-  if (!auth.ok && tracker.id === "github" && process.stdin.isTTY) {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const yes = /^y/i.test(await rl.question(`  GitHub: ${auth.reason}. Sign in now? (${auth.fix}) [y/N] `));
-    rl.close();
-    if (yes) {
-      // The terminal goes to gh; credentials are typed into gh's own prompt, never read here.
-      procRun([ghBin(), ...auth.fix.split(" ").slice(1)], { stdio: "inherit" });
-      auth = await tracker.checkAuth();
+export async function checkTracker(): Promise<void> {
+  let label = "";
+  try {
+    const tracker = issueTracker();
+    label = tracker.label;
+    let auth = await tracker.checkAuth();
+    if (!auth.ok && tracker.id === "github" && process.stdin.isTTY) {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const yes = /^y/i.test(await rl.question(`  GitHub: ${auth.reason}. Sign in now? (${auth.fix}) [y/N] `));
+      rl.close();
+      if (yes) {
+        // The terminal goes to gh; credentials are typed into gh's own prompt, never read here.
+        procRun([ghBin(), ...auth.fix.split(" ").slice(1)], { stdio: "inherit" });
+        auth = await tracker.checkAuth();
+      }
     }
+    console.log(trackerLine(tracker.label, auth));
+  } catch (e) {
+    console.log(`  ${Colors.YELLOW}issue tracker · ${label ? `${label} · ` : ""}check failed: ${(e as Error).message}${Colors.RESET}`);
   }
-  console.log(trackerLine(tracker.label, auth));
 }
 
 /** Handle `sandbox connect --k8s`: start/restart the k8s port-forwards container only. */
