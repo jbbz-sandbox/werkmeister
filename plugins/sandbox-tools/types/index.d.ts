@@ -81,6 +81,8 @@ declare module 'claude-code' {
       confirmRemove: string
       note: string
       infra: InfraStatus | null
+      /** The configured issue tracker's sign-in check; null until checked or if the check failed. */
+      tracker: { ok: boolean; reason?: string; fix: string } | null
       /** Each workspace's repo PRs by workspace name; refreshed slower than rows, as each is a `gh` call. */
       prs: Record<string, RepoPr[]>
       /** The pane's open tab. */

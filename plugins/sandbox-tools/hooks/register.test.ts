@@ -116,6 +116,7 @@ function stubs(over: Partial<McpStub> = {}): McpStub {
     [`${WS}/workspace-status`]: () => ok(STATUS),
     'ccd_session_mgmt/list_sessions': () => ok(undefined, JSON.stringify(SESSIONS)),
     [`${WS}/workspace-prs`]: () => ok(PRS),
+    [`${WS}/tracker-auth`]: () => ok({ ok: true, fix: '' }),
     ...over,
   }
 }
@@ -124,7 +125,7 @@ test('workspace data comes from the node child, not an MCP call', async ($, on) 
   const w = world(on, stubs())
   await openPane($)
   expect(w.calls.filter(c => c.via === 'mcp' && c.key.startsWith(WS))).toHaveLength(0)
-  expect(w.calls.filter(c => c.via === 'process').map(c => c.key).sort()).toEqual([`${WS}/list-workspaces`, `${WS}/workspace-prs`, `${WS}/workspace-status`])
+  expect(w.calls.filter(c => c.via === 'process').map(c => c.key).sort()).toEqual([`${WS}/list-workspaces`, `${WS}/tracker-auth`, `${WS}/workspace-prs`, `${WS}/workspace-status`])
 })
 
 test('rows draw name, issue, task, counts and claude note', async ($, on) => {
@@ -536,11 +537,38 @@ test('fetch fills only the empty fields, distilled on the session model, then cr
   await ui.press({ key: 'create:go' })
   expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
     formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api', 'web'], work_type: 'bugfix' },
+    distill: false,
   })
   expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://code/new?folder=%2Fws%2Fapi-7-rate-limit&source=services' })
   expect(w.calls.some(c => c.key === `${WS}/open-vscode`)).toBe(false)
   expect(w.toasts).toEqual(['Workspace created; opening a new session in it'])
   expect(await ui.find({ key: 'new:abc' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('Create with an issue and empty fields fills from the issue on the session model, then creates with distill off', async ($, on) => {
+  const w = world(on, formStubs())
+  const asked = answerIssueModel(on)
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.post({ value: 'my-own' }, { in: 'f:feature' })
+  await ui.post({ value: 'api#7' }, { in: 'f:issue_id' })
+  await ui.select({ key: 'f:work_type', value: 'bugfix' })
+  await ui.press({ key: 'create:go' })
+  expect(asked).toEqual([{ model: 'sonnet', prompt: 'EXTRACT acme/api#7' }])
+  expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
+    formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api'], work_type: 'bugfix' },
+    distill: false,
+  })
+  await ui.unmount()
+})
+
+test('a signed-out tracker shows on the infra line', async ($, on) => {
+  world(on, stubs({ [`${WS}/tracker-auth`]: () => ok({ ok: false, reason: 'not signed in', fix: 'gh auth login' }) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'terminal', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect((await ui.find({ key: 'infra' }))?.text).toMatch(/tracker: not signed in · gh auth login/)
   await ui.unmount()
 })
 
