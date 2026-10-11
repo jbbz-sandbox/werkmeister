@@ -224,7 +224,7 @@ export function createServer(): McpServer {
           .record(z.string(), z.unknown())
           .describe(
             "Submitted form fields (feature, services[], issue_id, test_path, task, …). " +
-              "Maps 1:1 onto `sandbox workspace` flags; `feature` is required.",
+              "Holds the form's fields, same keys as the CLI flags; `feature` is required.",
           ),
         open: z.boolean().optional().describe("Launch VS Code on the new workspace (default true)."),
       },

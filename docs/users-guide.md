@@ -344,7 +344,7 @@ description and starting prompt for any you left empty (`--no-distill` to skip).
 Both context strategies show the issue in CLAUDE.md and the brief.
 
 The copy is frozen at creation. To update it: `sandbox init-workspace --refresh-issue`
-(the brief is not rewritten). `sandbox connect` reports whether this machine can read
+(the brief is not rewritten, except one that is still the untouched placeholder, which is rebuilt from the issue). `sandbox connect` reports whether this machine can read
 the issue tracker and, on a terminal, offers `gh auth login`.
 
 ---
