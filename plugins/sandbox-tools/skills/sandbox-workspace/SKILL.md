@@ -29,7 +29,7 @@ With an `issue_id`, `createWorkspace` always:
 **Batch check** — after creating, for each new workspace:
 
 ```bash
-test -f <ws>/.sandbox/issue.md && grep -q "## Issue" <ws>/CLAUDE.md && echo ok
+test -f <ws>/.sandbox/issue.md && grep -q '^## Issue$' <ws>/CLAUDE.md && echo ok
 ```
 
 Report any workspace that fails it; don't hand-patch files.
@@ -75,7 +75,7 @@ Outcome JSON shapes:
 | Shape | Action |
 |-------|--------|
 | `{"status":"submitted","create":{"ok":true,"result":{…}}}` | Success — `result.workspacePath` is the new dir. |
-| `{"status":"submitted","create":{"ok":false,"error":"…"}}` | CLI failed — show `error`, offer to fix + retry. |
+| `{"status":"submitted","create":{"ok":false,"error":"…"}}` | Create failed — show `error`, offer to fix + retry. |
 | `{"status":"cancelled"}` / `{"status":"timeout"}` | Nothing created — offer to re-run. |
 | `{"status":"error","message":"…"}` | Pre-form failure (e.g. app not built) — relay it. |
 

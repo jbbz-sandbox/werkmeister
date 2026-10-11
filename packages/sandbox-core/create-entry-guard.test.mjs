@@ -31,4 +31,7 @@ test("the sandbox-workspace skill states the one rule and the batch check", () =
   assert.match(skill, /\.sandbox\/issue\.md/);
   assert.match(skill, /mcp__plugin_sandbox-tools_sandbox-workspace__workspace/);
   assert.doesNotMatch(skill, /mcp__sandbox-workspace__workspace/);
+  assert.ok(skill.includes("grep -q '^## Issue$'"));
+  assert.match(skill, /--no-distill/);
+  assert.match(skill, /fails the create\*\*\s+if the issue can't be read/);
 });
