@@ -133,8 +133,8 @@ not `localhost:4321`.
 ```bash
 CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
 CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
-HOST_SIZE=$(wc -c < "$CADDYFILE")
-CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c < /etc/caddy/Caddyfile 2>/dev/null)
+HOST_SIZE=$(wc -c < "$CADDYFILE" | tr -d " ")  # macOS wc pads the count with spaces
+CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
 if [ "$HOST_SIZE" = "$CONTAINER_SIZE" ]; then
     echo "PASS: Caddyfile synced ($HOST_SIZE bytes)"
 else
