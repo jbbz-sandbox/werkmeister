@@ -169,7 +169,13 @@ export const jira: IssueTrackerStrategy = {
     const fix = "set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md)";
     try {
       const me = await jiraMyself();
-      return me ? { ok: true, who: me.who, fix: "" } : { ok: false, reason: "no Jira API token configured", fix };
+      if (me) return { ok: true, who: me.who, fix: "" };
+      // No REST creds: fetchIssue still works through the Atlassian MCP, so only placeholder values are a fault.
+      const j = loadJira();
+      const values = [process.env.JIRA_BASE_URL, process.env.JIRA_EMAIL, process.env.JIRA_API_TOKEN, j.base_url, j.email, j.api_token];
+      return values.some((v) => v && isJiraPlaceholder(String(v)))
+        ? { ok: false, reason: "Jira settings still hold the placeholder values", fix }
+        : { ok: true, who: "via Atlassian MCP (not checked)", fix: "" };
     } catch (e) {
       return { ok: false, reason: (e as Error).message, fix };
     }

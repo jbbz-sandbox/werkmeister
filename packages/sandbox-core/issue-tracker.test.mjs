@@ -102,6 +102,18 @@ test("github checkAuth: signed in, signed out, no repo access", async () => {
   }, { config: "overrides:\n  issue_tracker: github\n  github_org: acme\n" });
 });
 
+test("jira with no REST creds: ok, via the Atlassian MCP fallback", async () => {
+  const saved = Object.fromEntries(["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"].map((k) => [k, process.env[k]]));
+  for (const k of Object.keys(saved)) delete process.env[k];
+  try {
+    await withSandboxHome(async () => {
+      assert.deepEqual(await it.issueTracker().checkAuth(), { ok: true, who: "via Atlassian MCP (not checked)", fix: "" });
+    }, { config: "overrides:\n  issue_tracker: jira\n" });
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
+  }
+});
+
 test("jira placeholder base_url counts as not configured (#114)", async () => {
   const saved = Object.fromEntries(["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"].map((k) => [k, process.env[k]]));
   for (const k of Object.keys(saved)) delete process.env[k];

@@ -546,7 +546,7 @@ test('fetch fills only the empty fields, distilled on the session model, then cr
   await ui.unmount()
 })
 
-test('Create with an issue and empty fields fills from the issue on the session model, then creates with distill off', async ($, on) => {
+test('Create with an issue and empty fields fills from the issue on the session model and stops for review; the next press creates with distill off', async ($, on) => {
   const w = world(on, formStubs())
   const asked = answerIssueModel(on)
   await openPane($)
@@ -557,6 +557,9 @@ test('Create with an issue and empty fields fills from the issue on the session 
   await ui.select({ key: 'f:work_type', value: 'bugfix' })
   await ui.press({ key: 'create:go' })
   expect(asked).toEqual([{ model: 'sonnet', prompt: 'EXTRACT acme/api#7' }])
+  expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
+  expect((await ui.find({ key: 'note' }))?.text).toBe('Filled task, services from acme/api#7. Review, then press Create again.')
+  await ui.press({ key: 'create:go' })
   expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
     formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api'], work_type: 'bugfix' },
     distill: false,
