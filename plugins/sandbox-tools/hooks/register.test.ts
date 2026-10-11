@@ -1,5 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 import { applyFormFields, formFields, optionGroups } from './register'
+import { edit } from './textarea'
 import type { On } from 'claude-code'
 import type { Engine, Plugin } from 'claude-code/testing'
 
@@ -416,6 +417,7 @@ function formStubs(over: Partial<McpStub> = {}): McpStub {
     [`${WS}/form-schema`]: () => ok({ bundle: BUNDLE, trackerLabel: 'GitHub' }),
     [`${WS}/issue-form-data`]: () => ok({ issue_id: 'acme/api#7', feature: 'rate-limit', task: 'Rate limit the API', services: ['api'] }),
     [`${WS}/create-workspace`]: () => ok({ command: 'sandbox workspace rate-limit', workspacePath: '/ws/api-7-rate-limit' }),
+    [`${WS}/open-claude-link`]: a => ok({ url: a.url }),
     [`${WS}/refine-request`]: args => ok(`REFINE: ${String(args.text)}`),
     ...over,
   })
@@ -488,7 +490,9 @@ test('fetch fills only the empty fields, then create submits the draft and retur
   expect(w.calls.find(c => c.key === `${WS}/create-workspace`)?.args).toEqual({
     formData: { feature: 'my-own', issue_id: 'acme/api#7', task: 'Rate limit the API', services: ['api', 'web'], work_type: 'bugfix' },
   })
-  expect(w.toasts).toEqual(['Workspace created'])
+  expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://code/new?folder=%2Fws%2Fapi-7-rate-limit&source=services' })
+  expect(w.calls.some(c => c.key === `${WS}/open-vscode`)).toBe(false)
+  expect(w.toasts).toEqual(['Workspace created; opening a new session in it'])
   expect(await ui.find({ key: 'new:abc' })).toBeDefined()
   await ui.unmount()
 })
@@ -612,4 +616,11 @@ test('Connect runs sandbox connect, refreshes, and the infra line shows status',
   expect(w.calls.filter(c => c.key === `${WS}/workspace-status`).length).toBe(before + 1)
   expect((await ui.find({ key: 'note' }))?.text).toBe('sandbox connect: done')
   await ui.unmount()
+})
+
+test('a text field types a space whether it arrives as " " or by name', () => {
+  expect(edit({ text: 'ab', cursor: 1 }, ' ')).toEqual({ text: 'a b', cursor: 2 })
+  expect(edit({ text: 'ab', cursor: 1 }, 'space')).toEqual({ text: 'a b', cursor: 2 })
+  const s = { text: 'ab', cursor: 1 }
+  expect(edit(s, 'tab')).toBe(s)
 })
