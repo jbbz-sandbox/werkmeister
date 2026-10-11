@@ -24,6 +24,14 @@ export type WorkspaceRow = {
   session: { id: string; title: string; link: string | null } | null
 }
 
+/** Shared infra (`sandbox connect`): the `infra` block of workspace-status. */
+export type InfraStatus = {
+  state: 'up' | 'partial' | 'down' | 'unknown'
+  running: number
+  total: number
+  services: { name: string; state: 'healthy' | 'starting' | 'running' | 'down' }[]
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'sandbox-tools': {
@@ -32,6 +40,7 @@ declare module 'claude-code' {
       busy: string
       confirmRemove: string
       note: string
+      infra: InfraStatus | null
       /** The pane's open tab. */
       tab: 'list' | 'create'
     }

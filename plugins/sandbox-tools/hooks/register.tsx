@@ -1,6 +1,6 @@
 import type { Register, EngineInterface } from 'claude-code'
 
-import type { WorkspaceRow } from '../types'
+import type { InfraStatus, WorkspaceRow } from '../types'
 
 export const PLUGIN = 'sandbox-tools'
 export const PANE = 'workspaces'
@@ -65,6 +65,7 @@ try {
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
     'workspace-status': () => core.getWorkspaceStatuses(),
+    connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'remove-workspace': () => core.removeWorkspace(args.name),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
@@ -98,6 +99,9 @@ const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
 const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
+const INFRA = { plugin: 'sandbox-tools', key: 'infra' } as const
+/** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
+const CONNECTING = '(connect)'
 
 /** The prompt the Create tab submits: the form needs the Browser pane, which only a model's tool call can drive (see 1500cb1). */
 export function createPrompt(issueId: string): string {
@@ -117,7 +121,7 @@ async function create($: EngineInterface, issueId: string): Promise<void> {
 
 type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'issueId' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
 type ListResult = { workspaces: ListEntry[] }
-type StatusResult = { statuses: { name: string; state: WorkspaceRow['state']; running: number; total: number; claude: { state: string; waiting: boolean } }[] }
+type StatusResult = { infra?: InfraStatus; statuses: { name: string; state: WorkspaceRow['state']; running: number; total: number; claude: { state: string; waiting: boolean } }[] }
 type SessionInfo = { sessionId: string; title: string; cwd: string; link?: string }
 type ToolResult = { content: { type: string; text?: string }[]; isError: boolean; structuredContent?: unknown }
 
@@ -197,6 +201,32 @@ export function sessionLine(r: WorkspaceRow): string | null {
   return title ? ['session', sessionOrigin(r), title].filter(Boolean).join(' · ') : null
 }
 
+/** The infra line: `infra · partial · 4/5 · down: caddy`; services not healthy or running are named. */
+export function infraLine(i: InfraStatus | null): string {
+  if (!i) return 'infra · unknown'
+  const bad = i.services.filter(s => s.state !== 'healthy' && s.state !== 'running').map(s => `${s.state}: ${s.name}`)
+  return ['infra', i.state, i.total > 0 ? `${i.running}/${i.total}` : null, ...bad].filter(Boolean).join(' · ')
+}
+
+const INFRA_COLOR: Record<InfraStatus['state'], 'success' | 'warning' | 'error'> = { up: 'success', partial: 'warning', down: 'error', unknown: 'warning' }
+
+/** `sandbox connect`: brings up the shared infra, then refreshes so the infra line shows the result. */
+async function connect($: EngineInterface): Promise<void> {
+  const { value: busy = '' } = await $.state.get(BUSY)
+  if (busy !== '') return
+  await $.state.set(BUSY, CONNECTING)
+  await $.state.set(NOTE, 'sandbox connect…')
+  try {
+    const r = await core<{ ok: boolean }>($, 'connect', {}, 600000)
+    await $.state.set(NOTE, r.ok ? 'sandbox connect: done' : 'sandbox connect: some infra failed to start; check docker and your kubeconfig')
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message)
+  } finally {
+    await $.state.set(BUSY, '')
+  }
+  await tick($)
+}
+
 let ticking = false
 /** Refreshes rows once. A tick that starts while one runs is skipped. */
 async function tick($: EngineInterface): Promise<void> {
@@ -215,6 +245,7 @@ async function tick($: EngineInterface): Promise<void> {
       sessions = []
     }
     await $.state.set(ROWS, buildRows(list, status, sessions))
+    await $.state.set(INFRA, status.infra ?? null)
     await $.state.set(ERROR, '')
   } catch (err) {
     await $.state.set(ERROR, (err as Error).message)
@@ -375,6 +406,7 @@ export const register: Register = on => {
     const { value: note = '' } = await $.state.get(NOTE)
     const { value: busy = '' } = await $.state.get(BUSY)
     const { value: confirm = '' } = await $.state.get(CONFIRM)
+    const { value: infra = null } = await $.state.get(INFRA)
     // The workspace this session already sits in gets no Switch.
     const here = await $.session.cwd().catch(() => '')
     const { value: tab = 'list' } = await $.state.get(TAB)
@@ -403,6 +435,12 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {tabs}
+        <Box key="infra-bar" justifyContent="space-between" marginBottom={1}>
+          <Box key="infra"><Text color={INFRA_COLOR[infra?.state ?? 'unknown']}>{infraLine(infra)}</Text></Box>
+          {busy === CONNECTING
+            ? <Box key="connecting"><Text dimColor>connecting…</Text></Box>
+            : <Button key="connect" label="⚡ Connect" variant="secondary" onPress={() => void connect($)} />}
+        </Box>
         {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
         {rows.map(r => (
           <Box key={`ws:${r.name}`} flexDirection="column" borderStyle="round" borderColor={BORDER[r.state]} borderDimColor={BORDER[r.state] === 'inactive' ? true : undefined} paddingX={1} marginBottom={1}>
