@@ -574,3 +574,20 @@ test('Refine with Claude rewrites the starting prompt with its instruction and t
   expect(((await ui.find({ key: 'f:starting_prompt' }))?.props.props as { value: string }).value).toBe('## Goal\nadd a rate limit, refined')
   await ui.unmount()
 })
+
+test('Connect runs sandbox connect, refreshes, and the infra line shows status', async ($, on) => {
+  const infra = { state: 'partial', running: 2, total: 3, services: [{ name: 'caddy', state: 'healthy' }, { name: 'jaeger', state: 'running' }, { name: 'k8s-forwards', state: 'starting' }] }
+  const w = world(on, stubs({
+    [`${WS}/workspace-status`]: () => ok({ ...STATUS, infra }),
+    [`${WS}/connect`]: () => ok({ ok: true }),
+  }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect((await ui.find({ key: 'infra' }))?.text).toBe('infra · partial · 2/3 · starting: k8s-forwards')
+  const before = w.calls.filter(c => c.key === `${WS}/workspace-status`).length
+  await ui.press({ key: 'connect' })
+  expect(w.calls.filter(c => c.key === `${WS}/connect`)).toHaveLength(1)
+  expect(w.calls.filter(c => c.key === `${WS}/workspace-status`).length).toBe(before + 1)
+  expect((await ui.find({ key: 'note' }))?.text).toBe('sandbox connect: done')
+  await ui.unmount()
+})
