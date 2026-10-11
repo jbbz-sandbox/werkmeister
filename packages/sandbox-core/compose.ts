@@ -44,7 +44,8 @@ function labelValue(labels: unknown, key: string): string {
  * Looks up the workspace via the `com.docker.compose.project.working_dir`
  * label on any container belonging to *feature*; falls back to
  * `resolveWorkspace(feature)` (cwd / env-based) when no container exists
- * yet. Returns `null` if neither source yields an existing file.
+ * yet, provided that workspace's `.env` names *feature*. Returns `null` if
+ * neither source yields an existing file.
  */
 function composeFile(feature: string): string | null {
   const workspace = workspaceForFeature(feature);
@@ -69,10 +70,26 @@ export function workspaceForFeature(feature: string): string | null {
   } catch {
     return labelWorkspace;
   }
-  if (isFile(path.join(fallback, "docker-compose.yml"))) {
+  // resolveWorkspace answers "the workspace cwd is in", not "this feature's" —
+  // without the ownership check any feature resolves to the enclosing one (#101).
+  if (isFile(path.join(fallback, "docker-compose.yml")) && envNamesFeature(fallback, feature)) {
     return fallback;
   }
   return labelWorkspace;
+}
+
+/** True when *workspace*'s generated `.env` declares `FEATURE=` or `SANDBOX_FEATURE=` *feature*. */
+function envNamesFeature(workspace: string, feature: string): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(path.join(workspace, ".env"), "utf8");
+  } catch {
+    return false;
+  }
+  return text.split("\n").some((line) => {
+    const m = /^\s*(?:SANDBOX_)?FEATURE=(.*)$/.exec(line);
+    return m !== null && m[1].trim() === feature;
+  });
 }
 
 function isFile(p: string): boolean {
