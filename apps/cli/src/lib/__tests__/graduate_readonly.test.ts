@@ -45,6 +45,9 @@ beforeEach(() => {
   fs.mkdirSync(standardsDir);
   writeDomain();
 });
+// Root bypasses file modes, so a chmod can't make the write fail (e.g. in a workspace container).
+const asRoot = process.getuid?.() === 0;
+
 afterEach(() => {
   // Restore write permission first, or the cleanup itself fails.
   fs.chmodSync(path.join(standardsDir, "widgets"), 0o755);
@@ -56,14 +59,14 @@ describe("graduateNote against a read-only standards tree", () => {
   // The two kinds write different things, so they are blocked by different
   // permissions: a rule rewrites STANDARD.md in place, a reference creates a
   // file under references/. A guard on only one of them leaves the other raw.
-  it("refuses a `rule` when STANDARD.md itself is read-only", () => {
+  it.skipIf(asRoot)("refuses a `rule` when STANDARD.md itself is read-only", () => {
     fs.chmodSync(path.join(standardsDir, "widgets", "STANDARD.md"), 0o444);
     expect(() =>
       graduateNote(tmp, note(), { domain: "widgets", kind: "rule", standardsDir }),
     ).toThrow(GraduationError);
   });
 
-  it("refuses an `example` when the domain directory is read-only", () => {
+  it.skipIf(asRoot)("refuses an `example` when the domain directory is read-only", () => {
     fs.chmodSync(path.join(standardsDir, "widgets"), 0o555);
     expect(() =>
       graduateNote(tmp, note(), { domain: "widgets", kind: "example", standardsDir }),
