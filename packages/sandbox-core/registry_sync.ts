@@ -58,13 +58,15 @@ function isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Every `<dir>/.sandbox/services.yaml` directly under *reposRoot*, sorted by dir name. */
+/** Every `<dir>/.sandbox/services.yaml` directly under *reposRoot* (main checkouts only), sorted by dir name. */
 export function discoverFragments(reposRoot: string): Fragment[] {
   if (!fs.existsSync(reposRoot)) return [];
   const out: Fragment[] = [];
   for (const repo of fs.readdirSync(reposRoot).sort()) {
     const file = path.join(reposRoot, repo, FRAGMENT_REL);
     if (!fs.existsSync(file)) continue;
+    // A linked worktree (`.git` is a file) repeats its main checkout's fragment; every service would collide.
+    if (fs.statSync(path.join(reposRoot, repo, ".git"), { throwIfNoEntry: false })?.isFile()) continue;
     let doc: unknown;
     try {
       doc = parseYaml(fs.readFileSync(file, "utf8"));

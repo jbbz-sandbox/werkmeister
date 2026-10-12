@@ -11,13 +11,14 @@ import os from "node:os";
 import path from "node:path";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cpush-"));
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
-const gitEnv = {
+// Process-wide so commitAndPush's own commits have an identity too; containers have no ~/.gitconfig.
+Object.assign(process.env, {
   GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
-};
+});
 const commit = (cwd, file, msg) => {
   fs.writeFileSync(path.join(cwd, file), msg);
   execFileSync("git", ["add", "-A"], { cwd });
-  execFileSync("git", ["commit", "-m", msg], { cwd, env: { ...process.env, ...gitEnv } });
+  execFileSync("git", ["commit", "-m", msg], { cwd });
 };
 
 // Bare "origin" + a source clone that owns `main` with two commits.
