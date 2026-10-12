@@ -16,7 +16,7 @@ const bundle = {
 describe("runFormWizard afterField", () => {
   it("afterField answers become later fields' defaults", async () => {
     Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
-    const out = await runFormWizard(bundle, {}, { afterField: async (k) => (k === "issue_id" ? { task: "From issue" } : {}) });
+    const out = await runFormWizard(bundle, {}, { afterField: async (k): Promise<Record<string, string>> => (k === "issue_id" ? { task: "From issue" } : {}) });
     expect(out).toEqual({ issue_id: "o/r#5", task: "From issue" });
   });
 });
