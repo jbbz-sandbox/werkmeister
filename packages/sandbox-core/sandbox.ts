@@ -1709,6 +1709,8 @@ function gitErrorLine(text: string): string {
 export async function commitAndPush(
   dir: string,
   message = `chore: handoff ${path.basename(dir)} before workspace teardown`,
+  // Only these paths (relative to *dir*), e.g. the PR files a record commit is about; default: everything.
+  paths: string[] = [],
 ): Promise<{ ok: boolean; message: string }> {
   const label = path.basename(dir);
   const br = await runCapture("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"]).catch(() => null);
@@ -1717,10 +1719,11 @@ export async function commitAndPush(
 
   // Stage everything, then commit only if there's something staged
   // (`diff --cached --quiet` exits 1 when there are staged changes).
-  await runCapture("git", ["-C", dir, "add", "-A"]).catch(() => {});
-  const staged = await runCapture("git", ["-C", dir, "diff", "--cached", "--quiet"]).catch(() => null);
+  const only = paths.length ? ["--", ...paths] : [];
+  await runCapture("git", ["-C", dir, "add", "-A", ...only]).catch(() => {});
+  const staged = await runCapture("git", ["-C", dir, "diff", "--cached", "--quiet", ...only]).catch(() => null);
   if (staged && staged.code === 1) {
-    const c = await runCapture("git", ["-C", dir, "commit", "-m", message]).catch(
+    const c = await runCapture("git", ["-C", dir, "commit", "-m", message, ...only]).catch(
       () => null,
     );
     if (!c || c.code !== 0) {

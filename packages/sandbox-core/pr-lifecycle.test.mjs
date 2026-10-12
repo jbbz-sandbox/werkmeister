@@ -227,8 +227,10 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
   const ws = icmWorkspace();
   try {
     let updated = null;
+    let recorded = null;
     const d = deps([DIFF_API, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]], {
       tracker: { fetchIssue: async () => null, updateIssue: async (ref, u) => (updated = [ref, u.status]) },
+      commitRecord: async (_ws, _msg, paths) => ((recorded = paths), { ok: true, message: "record pushed" }),
     });
     const r = await open(ws, d);
     assert.ok(r.ok, r.lines.join("\n"));
@@ -236,6 +238,7 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(f.fm.status, "open");
     assert.equal(f.fm.url, "https://github.com/o/app/pull/9");
     assert.deepEqual(updated, ["o/app#7", "In Development"]);
+    assert.deepEqual(recorded, ["stages/03_propose/output/pr-app.md"], "the record commit names only the PR file");
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
   } finally {
     clean(ws);
