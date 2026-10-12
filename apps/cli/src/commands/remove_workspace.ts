@@ -1,5 +1,5 @@
 /**
- * sandbox remove-workspace <name> [--yes]
+ * sandbox remove-workspace <name> [--yes] [--abandon <reason>]
  *
  * Hand off and delete a workspace: commit + push every worktree branch, tear
  * the feature down, delete the directory, prune the source repos' worktree
@@ -11,6 +11,8 @@
  * aborts the whole teardown, so no surface can delete unpushed work. The
  * prompt is a second line of defence against a mistyped name, which is why
  * --yes exists rather than the prompt being skipped for non-TTY callers.
+ * Core also refuses unshipped work (open PR, unmerged commits) unless
+ * --abandon records why (docs/workspace-lifecycle.md).
  */
 
 import { Colors, info } from "../lib/config.js";
@@ -34,7 +36,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     }
   }
 
-  const result = await removeWorkspace(name);
+  const result = await removeWorkspace(name, { abandon: (args.abandon as string | null) ?? undefined });
 
   console.log(result.output);
   console.log(`\n${Colors.GREEN}${Colors.BOLD}Workspace '${name}' removed${Colors.RESET}`);

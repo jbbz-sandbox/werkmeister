@@ -14,6 +14,7 @@ const SERVICES = `services:
     repo: demo-repo
     path: apps/frontend
     port_offset: 1
+    test: npm test -w frontend
     feature_router: {}
   backend:
     type: api
@@ -55,6 +56,17 @@ test("no test path means the feature URL is the host root", async () => {
     async () => {
       const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices());
       assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.sandbox\.com\/\n/);
+    },
+    { services: SERVICES },
+  );
+});
+
+test("each local service's test command runs in its container; none says so", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend", "backend"], loadServices(), "", {});
+      assert.match(out, /^- `frontend`: `docker exec test-frontend sh -c 'npm test -w frontend'`$/m);
+      assert.match(out, /^- `backend`: no test command registered \(add `test:` to its registry entry\)$/m);
     },
     { services: SERVICES },
   );

@@ -33,17 +33,22 @@ it("does not delete when the prompt is declined", async () => {
 it("deletes when the prompt is accepted", async () => {
   vi.mocked(confirm).mockResolvedValue(true);
   await runRemove({ name: "ws", yes: false });
-  expect(removeWorkspace).toHaveBeenCalledWith("ws");
+  expect(removeWorkspace).toHaveBeenCalledWith("ws", { abandon: undefined });
 });
 
 it("--yes skips the prompt entirely", async () => {
   await runRemove({ name: "ws", yes: true });
   expect(confirm).not.toHaveBeenCalled();
-  expect(removeWorkspace).toHaveBeenCalledWith("ws");
+  expect(removeWorkspace).toHaveBeenCalledWith("ws", { abandon: undefined });
 });
 
 it("defaults the prompt to no", async () => {
   vi.mocked(confirm).mockResolvedValue(false);
   await runRemove({ name: "ws", yes: false });
   expect(vi.mocked(confirm).mock.calls[0][1]).toBe(false);
+});
+
+it("--abandon passes the reason through to core", async () => {
+  await runRemove({ name: "ws", yes: true, abandon: "superseded by #140" });
+  expect(removeWorkspace).toHaveBeenCalledWith("ws", { abandon: "superseded by #140" });
 });

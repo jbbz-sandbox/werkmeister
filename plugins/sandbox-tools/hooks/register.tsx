@@ -40,6 +40,7 @@ try {
     }
     return null
   }
+  const lifecycleOf = dir => { try { return core.lifecycleOf(dir) } catch { return null } }
   // The transcript's "entrypoint" field (claude-vscode, claude-desktop, sdk-cli, ...) from its first 64 KiB; null when unknown.
   const originOf = (dir, sessionId) => {
     const enc = p => p.replace(/[^a-zA-Z0-9]/g, '-')
@@ -61,7 +62,7 @@ try {
     let newest = null
     try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
     const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
-    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
+    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), lifecycle: lifecycleOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
   }
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
@@ -70,6 +71,8 @@ try {
     connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'remove-workspace': () => core.removeWorkspace(args.name),
+    'pr-status': async () => ({ command: (await core.refreshPrStatus(args.path)).lines.join('\\n') || 'no PR files' }),
+    'close-out': () => core.closeOut(args.name),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
     // Only claude:// links: a new Desktop session in a folder, or a session's own link.
@@ -460,11 +463,19 @@ export function buildRows(list: ListResult, status: StatusResult, sessions: Sess
 /** The card border carries the state; nothing else in the card repeats it. */
 const BORDER: Record<WorkspaceRow['state'], 'success' | 'warning' | 'inactive'> = { up: 'success', partial: 'warning', stopped: 'inactive', down: 'inactive', unknown: 'warning' }
 
-/** The card's detail line: work type (when no issue line carries it), ICM stage, running/total; '' when none. */
+/** Past `working`, the lifecycle says more than the stage does (every stage has output by then). */
+export function lifecycleLabel(r: WorkspaceRow): string | null {
+  const l = r.lifecycle
+  if (!l || l.state === 'working') return null
+  if (l.state === 'pr-open') return `PR open (${l.prs.filter(p => p.status === 'open').length}/${l.prs.length})`
+  return { ready: 'ready to open', merged: 'merged — awaiting release', shipped: 'shipped — close out', 'closed-out': 'closed out', abandoned: 'abandoned' }[l.state]
+}
+
+/** The card's detail line: work type (when no issue line carries it), lifecycle or ICM stage, running/total; '' when none. */
 export function cardMeta(r: WorkspaceRow): string {
   return [
     r.issueId ? null : r.workType,
-    r.stage ? `stage ${r.stage.index}/${r.stage.total} ${r.stage.name}` : null,
+    lifecycleLabel(r) ?? (r.stage ? `stage ${r.stage.index}/${r.stage.total} ${r.stage.name}` : null),
     r.total > 0 ? `${r.running}/${r.total}` : null,
   ].filter(Boolean).join(' · ')
 }
@@ -587,7 +598,7 @@ async function tick($: EngineInterface): Promise<void> {
   }
 }
 
-export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'remove' | 'continue'
+export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'remove' | 'continue' | 'prs' | 'closeout'
 type Lifecycle = 'up' | 'stop' | 'restart' | 'down'
 const LIFECYCLE = new Set<Action>(['up', 'stop', 'restart', 'down'])
 
@@ -600,15 +611,30 @@ export function buttonsFor(state: WorkspaceRow['state']): Action[] {
   return out
 }
 
-const LABEL: Record<Exclude<Action, 'continue'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', remove: '✕ Remove' }
+const LABEL: Record<Exclude<Action, 'continue'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', remove: '✕ Remove', prs: '↻ PRs', closeout: '✓ Close out' }
 
-async function runAction($: EngineInterface, name: string, action: Lifecycle | 'remove'): Promise<void> {
+/** The lifecycle buttons a row offers: refresh PR state while one is in flight, close out once shipped. */
+export function lifecycleButtonsFor(r: WorkspaceRow): Action[] {
+  const s = r.lifecycle?.state
+  return s === 'pr-open' || s === 'merged' ? ['prs'] : s === 'shipped' || s === 'abandoned' ? ['closeout'] : []
+}
+
+/** CONFIRM holds `<name>` for a pending remove and `close-out:<name>` for a pending close-out. */
+const CLOSE_OUT = 'close-out:'
+
+
+async function runAction($: EngineInterface, name: string, action: Lifecycle | 'remove' | 'prs' | 'closeout'): Promise<void> {
   await $.state.set(BUSY, name)
   await $.state.set(NOTE, `${name}: ${action}…`)
   try {
+    const { value: rows = [] } = await $.state.get(ROWS)
     const r = action === 'remove'
       ? await core<{ command: string; output: string }>($, 'remove-workspace', { name }, 600000)
-      : await core<{ command: string; output: string }>($, 'workspace-action', { name, action }, 600000)
+      : action === 'closeout'
+        ? await core<{ command: string; output: string }>($, 'close-out', { name }, 600000)
+        : action === 'prs'
+          ? await core<{ command: string }>($, 'pr-status', { path: rows.find(x => x.name === name)?.path }, 120000)
+          : await core<{ command: string; output: string }>($, 'workspace-action', { name, action }, 600000)
     await $.state.set(NOTE, r.command.split('\n')[0]?.trim() || 'done')
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message)
@@ -624,7 +650,7 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   if (busy !== '') return
 
   const { value: pending = '' } = await $.state.get(CONFIRM)
-  if (pending !== '' && pending !== name) await $.state.set(CONFIRM, '')
+  if (pending !== '' && pending !== name && pending !== CLOSE_OUT + name) await $.state.set(CONFIRM, '')
 
   if (action === 'new') {
     const { value: rows = [] } = await $.state.get(ROWS)
@@ -674,6 +700,21 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     }
     await $.state.set(CONFIRM, '')
     await runAction($, name, 'remove')
+    return
+  }
+
+  if (action === 'closeout') {
+    if (pending !== CLOSE_OUT + name) {
+      await $.state.set(CONFIRM, CLOSE_OUT + name)
+      return
+    }
+    await $.state.set(CONFIRM, '')
+    await runAction($, name, 'closeout')
+    return
+  }
+
+  if (action === 'prs') {
+    await runAction($, name, 'prs')
     return
   }
 
@@ -943,6 +984,10 @@ export const register: Register = on => {
                 </Box>
                 {/* Buttons take no colour; the label turns red under the pointer and the confirm prompt is red text beside it. */}
                 <Box gap={1}>
+                  {lifecycleButtonsFor(r).map(a => (
+                    <Button key={`${a}:${r.name}`} label={a === 'closeout' && confirm === CLOSE_OUT + r.name ? '✓ Yes, close out' : LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
+                  ))}
+                  {confirm === CLOSE_OUT + r.name && <Box key={`closeout-confirm:${r.name}`}><Text color="warning">{'Close out and remove this workspace?'}</Text></Box>}
                   {confirm === r.name && <Box key={`danger:${r.name}`}><Text color="error">{'Delete this workspace?'}</Text></Box>}
                   <Button key={`remove:${r.name}`} label={confirm === r.name ? '✕ Yes, remove' : LABEL.remove} variant="secondary" dimColor hover={{ color: 'error', dimColor: false }} onPress={() => void press($, 'remove', r.name)} />
                 </Box>
