@@ -1,5 +1,6 @@
 // icm.refresh is the repair path for a workspace a pre-strategy `up` polluted
-// with JIT hooks. It removes exactly the sandbox-managed entries.
+// with JIT hooks. It removes exactly the JIT-managed entries and installs the
+// PR guard, the one hook both strategies share.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -7,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { PRE_TOOL_USE_GATE_COMMAND, SESSION_START_COMMAND } from "./dist/hooks_gen.js";
+import { buildPrGuardEntry, PRE_TOOL_USE_GATE_COMMAND, SESSION_START_COMMAND } from "./dist/hooks_gen.js";
 import { strategyById } from "./dist/strategies/index.js";
 
 const icm = strategyById("icm");
@@ -38,7 +39,7 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
   try {
     const log = await refresh(root);
     const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    assert.deepEqual(settings, { hooks: { SessionStart: [HAND] } });
+    assert.deepEqual(settings, { hooks: { SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] } });
     assert.ok(!fs.existsSync(path.join(root, ".sandbox", ".gate")));
     assert.match(log, /sandbox notes context/);
     assert.match(log, /sandbox hooks gate/);
@@ -47,11 +48,12 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
   }
 });
 
-test("only managed hooks: settings.json and the empty .claude/ go", async () => {
+test("only JIT hooks: settings.json keeps just the PR guard", async () => {
   const root = workspace({ hooks: { SessionStart: [{ hooks: [{ type: "command", command: SESSION_START_COMMAND }] }] } });
   try {
     await refresh(root);
-    assert.ok(!fs.existsSync(path.join(root, ".claude")));
+    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
+    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] } });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -67,11 +69,13 @@ test("unparseable settings.json is left untouched", async () => {
   }
 });
 
-test("a workspace with no .claude/ stays without one", async () => {
+test("a workspace with no .claude/ gets the PR guard alone, once", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-refresh-"));
   try {
     await refresh(root);
-    assert.ok(!fs.existsSync(path.join(root, ".claude")));
+    await refresh(root);
+    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
+    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] } });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

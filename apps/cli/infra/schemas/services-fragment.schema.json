@@ -19,6 +19,28 @@
       "type": "object",
       "description": "Cluster datastores port-forwarded into the docker world by the k8s-forwards container. Never run locally.",
       "additionalProperties": { "$ref": "#/definitions/infrastructure" }
+    },
+    "repo": {
+      "type": "object",
+      "description": "Settings for this repo as a whole; merged into `repos.<repo>` of the generated registry. Read by `sandbox pr` and `sandbox close-out` (docs/workspace-lifecycle.md).",
+      "properties": {
+        "ship": {
+          "enum": ["merge", "tag"],
+          "default": "merge",
+          "description": "When a merged PR counts as shipped. `merge`: on merge. `tag`: once its merge commit is in a tag matching `release_tag`."
+        },
+        "release_tag": {
+          "type": "string",
+          "description": "Glob for `git tag --list`, e.g. `@jbbz-sandbox/sandbox-cli@*`. Required when `ship: tag`."
+        },
+        "release_check": {
+          "type": "string",
+          "description": "Pre-PR gate command, run from the repo root in a service container; non-zero means this branch would not produce a release (e.g. `npx changeset status --since=origin/main`)."
+        }
+      },
+      "if": { "properties": { "ship": { "const": "tag" } }, "required": ["ship"] },
+      "then": { "required": ["release_tag"] },
+      "additionalProperties": false
     }
   },
   "patternProperties": {
