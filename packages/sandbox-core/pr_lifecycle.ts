@@ -50,7 +50,8 @@ export interface Deps {
   repos: Record<string, any>;
   tracker: IssueTrackerStrategy;
   doneStatus: string;
-  commitRecord: (ws: string, message: string) => Promise<{ ok: boolean; message: string }>;
+  /** Commit and push *paths* (relative to the workspace) on the record branch — nothing else that is dirty. */
+  commitRecord: (ws: string, message: string, paths: string[]) => Promise<{ ok: boolean; message: string }>;
   remove: (name: string) => Promise<{ output: string }>;
   sourceOf: (dir: string) => Promise<string | null>;
 }
@@ -348,7 +349,7 @@ export async function openPrs(ws: string, only?: string, deps: Deps = defaultDep
   const files = selectFiles(ws, only, (f) => statusOf(f) === "approved");
   const lines: string[] = [];
   let ok = true;
-  let opened = 0;
+  const opened: string[] = [];
   for (const f of files) {
     const g = await runGate(ws, f, deps);
     if (!g.ok) {
@@ -383,7 +384,7 @@ export async function openPrs(ws: string, only?: string, deps: Deps = defaultDep
       }
     }
     writePrFields(f, { status: "open", url });
-    opened++;
+    opened.push(path.relative(ws, f.path));
     lines.push(`${f.dir}: open ${url}`);
     const ref = issueIdOf(loadConfigFile(ws, null));
     if (ref) {
@@ -394,13 +395,13 @@ export async function openPrs(ws: string, only?: string, deps: Deps = defaultDep
       }
     }
   }
-  if (opened) lines.push((await deps.commitRecord(ws, "chore: record opened PR(s)")).message);
+  if (opened.length) lines.push((await deps.commitRecord(ws, "chore: record opened PR(s)", opened)).message);
   return { ok, lines };
 }
 
 export async function refreshPrStatus(ws: string, deps: Deps = defaultDeps()): Promise<{ lines: string[]; changed: boolean }> {
   const lines: string[] = [];
-  let changed = false;
+  const changed: string[] = [];
   for (const f of readPrFiles(ws)) {
     const before = statusOf(f);
     if (before === "open" && f.fm["url"]) {
@@ -426,11 +427,11 @@ export async function refreshPrStatus(ws: string, deps: Deps = defaultDeps()): P
       }
     }
     const after = statusOf(f);
-    if (after !== before) changed = true;
+    if (after !== before) changed.push(path.relative(ws, f.path));
     lines.push(`${f.dir}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`);
   }
-  if (changed) lines.push((await deps.commitRecord(ws, "chore: record PR status")).message);
-  return { lines, changed };
+  if (changed.length) lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
+  return { lines, changed: changed.length > 0 };
 }
 
 /** The workspace's place in the lifecycle, from files only — cheap enough for the pane's poll. */
