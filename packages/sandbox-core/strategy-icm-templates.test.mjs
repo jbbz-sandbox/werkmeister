@@ -13,10 +13,10 @@ import { ICM_TEMPLATES, templateFor } from "./dist/strategies/icm_templates.js";
 import { WORK_TYPE_PHASES } from "./dist/workspace_prompts.js";
 
 const EXPECTED = {
-  feature: ["research", "spec", "implement", "ship"],
-  bugfix: ["reproduce", "fix", "verify", "ship"],
-  incident: ["reproduce", "fix", "verify", "ship"],
-  refactor: ["scope", "implement", "ship"],
+  feature: ["research", "spec", "implement", "propose"],
+  bugfix: ["reproduce", "fix", "exercise", "propose"],
+  incident: ["reproduce", "fix", "exercise", "propose"],
+  refactor: ["scope", "implement", "propose"],
   spike: ["questions", "findings"],
 };
 

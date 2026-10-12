@@ -472,16 +472,21 @@ function registerAuthoringTools(server: McpServer): void {
       description:
         "Commit and push every worktree branch, tear the feature down, delete the workspace " +
         "directory and prune the source repos. Destructive, and NOT scoped to your feature — it " +
-        "names a workspace. Nothing is deleted if any branch cannot be pushed.",
+        "names a workspace. Nothing is deleted if any branch cannot be pushed, or while a PR is open or " +
+        "a code branch has unmerged commits unless `abandon` gives a reason.",
       inputSchema: {
         name: z
           .string()
           .describe("Workspace directory name, as sandbox-list-workspaces reports it."),
+        abandon: z
+          .string()
+          .optional()
+          .describe("Reason for removing despite an open PR or unmerged commits; recorded in closeout.md."),
       },
     },
     async (args): Promise<CallToolResult> =>
       adapt(async () => {
-        const result = await removeWorkspace(args.name);
+        const result = await removeWorkspace(args.name, args.abandon ? { abandon: args.abandon } : undefined);
         // Same shadowing as sandbox-workspace: removeWorkspace installs its own
         // collecting reporter for the teardown, so re-emit what it captured or
         // the transcript loses the push and down output.

@@ -52,29 +52,36 @@ const IMPLEMENT_STEPS = [
 const TEST_STEP =
   "Run the test command exactly as `../../.sandbox/sandbox-context.md` states it. Redirect output to a file, trust the exit code, read back only the failing slice.";
 
-const ship: Stage = {
-  name: "ship",
-  job: "acceptance walk and PR description",
-  writes: "one commit per repo touched, `output/pr.md`",
-  check: "approve, then open the PR",
+// Decision 11 (sandbox-133): "ship" means reaching a release, so the stage that
+// ends at an approved PR file is "propose".
+const EXERCISE_FORMAT =
+  "a `| check | result |` table, each result `PASS` or `FAIL`, with the captured output under it";
+
+const propose: Stage = {
+  name: "propose",
+  job: "acceptance walk and PR files",
+  writes: "one commit per code repo touched, `output/pr-<repo>.md` per repo",
+  check: "approve each PR file; `sandbox pr open` opens it",
   standards: "none",
   contract: () => ({
     oneJob:
-      "One job: prove each acceptance criterion with a pointer to evidence, commit, and write the PR description. Opening the PR is the person's act.",
+      "One job: prove each acceptance criterion, commit in each code worktree, and write one PR file per repo touched. Approving is the person's act; opening is `sandbox pr open`.",
     inputs: [
       "Working (this run): `../../BRIEF.md` § Acceptance criteria",
       "Working (this run): `../*/output/` — every prior stage's artifacts",
       "Working (this run): `git status` and `git diff --stat` in each repo you touched",
+      "Reference (every run): `../../_shared/pr-rules.md` — the PR file format and the gate",
     ],
     doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.sandbox/`.",
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write PASS or FAIL with the file and line in a prior `output/` that proves it. A FAIL routes back to the owning stage — do not fix it here.",
-      "Commit the changes on the workspace branch with a message that names the change, not the stage.",
-      "Write `output/pr.md`: title, summary, the test summary and proof from the previous stage's output, a one-line justification for any added dependency, and the acceptance table from step 1.",
+      "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit.",
+      "Write `output/pr-<repo>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`. Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs, the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
+      "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],
-    outputs: ["One commit per repo touched, on the workspace branch", "`output/pr.md`"],
+    outputs: ["One commit per code repo touched, on that worktree's branch", "`output/pr-<repo>.md` per repo"],
     humanCheck:
-      "Read `pr.md`. If every row is PASS, push and open the PR with `pr.md` as the body. If a row is FAIL, send the run back to the stage it names.",
+      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then `sandbox close-out`.",
   }),
 };
 
@@ -136,7 +143,7 @@ const feature: Stage[] = [
   {
     name: "implement",
     job: "build it and prove it",
-    writes: "code diff, `output/verify.md`",
+    writes: "code diff, `output/exercise.md`",
     check: "read the diff; tests green",
     standards: "all",
     contract: (v) => ({
@@ -154,13 +161,13 @@ const feature: Stage[] = [
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change against the published port from \`sandbox-context.md\` and capture the response.`,
-        "Write `output/verify.md`: `git diff --stat` for each repo you touched, the test exit code and summary line, the reload-and-exercise output, and any deviation from `spec.md` with its reason.",
+        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, the exercise checks as ${EXERCISE_FORMAT}, and any deviation from \`spec.md\` with its reason.`,
       ],
-      outputs: ["Code changes, uncommitted — the next stage commits after the person reads the diff", "`output/verify.md`"],
+      outputs: ["Code changes, uncommitted — the next stage commits after the person reads the diff", "`output/exercise.md`"],
       humanCheck: "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
     }),
   },
-  ship,
+  propose,
 ];
 
 const bugfix: Stage[] = [
@@ -218,9 +225,9 @@ const bugfix: Stage[] = [
     }),
   },
   {
-    name: "verify",
+    name: "exercise",
     job: "prove it against the running service",
-    writes: "`output/verify.md`",
+    writes: "`output/exercise.md`",
     check: "the original reproduction no longer fails",
     standards: "none",
     contract: (v) => ({
@@ -235,13 +242,13 @@ const bugfix: Stage[] = [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
-        "Write `output/verify.md`: steps 2–3 with their output, and PASS or FAIL for each.",
+        `Write \`output/exercise.md\`: steps 2–3 as ${EXERCISE_FORMAT}.`,
       ],
-      outputs: ["`output/verify.md`"],
-      humanCheck: "Read `verify.md`. A FAIL sends the run back to the fix stage.",
+      outputs: ["`output/exercise.md`"],
+      humanCheck: "Read `exercise.md`. A FAIL sends the run back to the fix stage.",
     }),
   },
-  ship,
+  propose,
 ];
 
 const refactor: Stage[] = [
@@ -272,7 +279,7 @@ const refactor: Stage[] = [
   {
     name: "implement",
     job: "refactor in green steps",
-    writes: "code diff, `output/verify.md`",
+    writes: "code diff, `output/exercise.md`",
     check: "read the diff; tests green at every step",
     enter:
       "`stages/01_scope/output/scope.md` reads `status: decided` — the flip *is* the approval, do not ask again",
@@ -290,13 +297,13 @@ const refactor: Stage[] = [
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
         `Take the steps in order. After each one: ${TEST_STEP}`,
         `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE}`,
-        "Write `output/verify.md`: `git diff --stat` per repo, the test result after each step, and the final exercise output.",
+        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, and the final exercise checks as ${EXERCISE_FORMAT}.`,
       ],
-      outputs: ["Code changes, uncommitted", "`output/verify.md`"],
+      outputs: ["Code changes, uncommitted", "`output/exercise.md`"],
       humanCheck: "Read the diff against `scope.md`. Anything outside scope goes back.",
     }),
   },
-  ship,
+  propose,
 ];
 
 const spike: Stage[] = [
@@ -342,7 +349,8 @@ const spike: Stage[] = [
         "End `findings.md` with a recommendation: the next work item and its work type.",
       ],
       outputs: ["`output/findings.md`"],
-      humanCheck: "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here.",
+      humanCheck:
+        "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here. When the recommendation is recorded where it is needed, `sandbox close-out`.",
     }),
   },
 ];

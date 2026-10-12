@@ -11,6 +11,10 @@
  * - PreToolUse (matcher `Edit|Write`): every governed edit runs `sandbox
  *   hooks gate`, which denies the first Edit/Write per session x domain once,
  *   carrying the loading instructions in the deny reason.
+ * - PreToolUse (matcher `Bash|mcp__.*create_pull_request`): `sandbox hooks
+ *   pr-guard` denies opening a PR any way but `sandbox pr open`
+ *   (docs/workspace-lifecycle.md). Unlike the two above it is installed for
+ *   every strategy (`writePrGuardHook`), and `removeWorkspaceHooks` keeps it.
  *
  * Unlike the other projections, settings.json may legitimately hold user
  * entries (JSON carries no do-not-hand-edit comment), so this generator merges:
@@ -24,6 +28,7 @@ import * as path from "node:path";
 // Markers doubling as the payload: entries containing them are sandbox-managed.
 const _HOOK_MARKER = "sandbox notes context";
 const _GATE_MARKER = "sandbox hooks gate";
+const _PR_GUARD_MARKER = "sandbox hooks pr-guard";
 
 // Projections lag whenever the standards tree moves on after a workspace was
 // inited, and nothing else re-runs the writer — so the session that would read a
@@ -42,6 +47,7 @@ const _SKILLS_SELF_HEAL =
 // existing workspace with two SessionStart hooks instead of one updated one.
 export const SESSION_START_COMMAND = `command -v sandbox >/dev/null 2>&1 && { ${_SKILLS_SELF_HEAL}; ${_HOOK_MARKER}; } || true`;
 export const PRE_TOOL_USE_GATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_GATE_MARKER} || true`;
+export const PR_GUARD_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_PR_GUARD_MARKER} || true`;
 
 /** The managed SessionStart matcher-group (matcher-less: all sources). */
 export function buildSessionStartEntry(): Record<string, any> {
@@ -53,6 +59,14 @@ export function buildPreToolUseGateEntry(): Record<string, any> {
   return {
     matcher: "Edit|Write",
     hooks: [{ type: "command", command: PRE_TOOL_USE_GATE_COMMAND }],
+  };
+}
+
+/** The managed PR-guard matcher-group: shell `gh pr create` and the GitHub MCP's create tool. */
+export function buildPrGuardEntry(): Record<string, any> {
+  return {
+    matcher: "Bash|mcp__.*create_pull_request",
+    hooks: [{ type: "command", command: PR_GUARD_COMMAND }],
   };
 }
 
@@ -94,9 +108,10 @@ function _mergeEvent(
   return true;
 }
 
+type Managed = [event: string, entry: Record<string, any>, marker: string];
+
 /**
- * Merge the managed SessionStart + PreToolUse hooks into
- * `.claude/settings.json`.
+ * Merge *managed* entries into `.claude/settings.json`.
  *
  * Preserves user-added settings keys, other hook events, and non-managed
  * entries within each managed event; replaces any stale sandbox-managed entry.
@@ -104,7 +119,7 @@ function _mergeEvent(
  * shapes, and non-dict entries within an event are left untouched (returning
  * the path) rather than clobbered — a human put something there.
  */
-export function writeWorkspaceHooks(workspaceRoot: string): string {
+function _writeManaged(workspaceRoot: string, managed: Managed[]): string {
   const settingsPath = path.join(workspaceRoot, ".claude", "settings.json");
   let settings: Record<string, any> = {};
   if (fs.existsSync(settingsPath) && fs.statSync(settingsPath).isFile()) {
@@ -127,11 +142,10 @@ export function writeWorkspaceHooks(workspaceRoot: string): string {
   if (typeof hooks !== "object" || hooks === null || Array.isArray(hooks)) {
     return settingsPath;
   }
-  if (!_mergeEvent(hooks, "SessionStart", buildSessionStartEntry(), _HOOK_MARKER)) {
-    return settingsPath;
-  }
-  if (!_mergeEvent(hooks, "PreToolUse", buildPreToolUseGateEntry(), _GATE_MARKER)) {
-    return settingsPath;
+  for (const [event, entry, marker] of managed) {
+    if (!_mergeEvent(hooks, event, entry, marker)) {
+      return settingsPath;
+    }
   }
 
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
@@ -139,9 +153,23 @@ export function writeWorkspaceHooks(workspaceRoot: string): string {
   return settingsPath;
 }
 
+/** The JIT hooks (SessionStart + standards gate) plus the PR guard. */
+export function writeWorkspaceHooks(workspaceRoot: string): string {
+  return _writeManaged(workspaceRoot, [
+    ["SessionStart", buildSessionStartEntry(), _HOOK_MARKER],
+    ["PreToolUse", buildPreToolUseGateEntry(), _GATE_MARKER],
+    ["PreToolUse", buildPrGuardEntry(), _PR_GUARD_MARKER],
+  ]);
+}
+
+/** The PR guard alone — what a non-JIT workspace gets. */
+export function writePrGuardHook(workspaceRoot: string): string {
+  return _writeManaged(workspaceRoot, [["PreToolUse", buildPrGuardEntry(), _PR_GUARD_MARKER]]);
+}
+
 /**
- * Remove every sandbox-managed hook entry from `.claude/settings.json`,
- * keeping hand-added ones. When nothing else is left, the file goes too, and
+ * Remove the JIT-managed hook entries from `.claude/settings.json`, keeping
+ * hand-added ones and the PR guard. When nothing else is left, the file goes too, and
  * `.claude/` if that empties it. Returns the removed commands. Unparseable
  * JSON or an unexpected shape is left untouched — the writer's doctrine.
  */

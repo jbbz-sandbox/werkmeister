@@ -5,23 +5,22 @@ description: "Begin the PR/finishing phase in a sandbox workspace. Use when impl
 
 # sb-pr — enter the PR/finishing phase
 
-Run these steps in order. Steps 1 and 2 are gates — a failure stops the PR.
+PRs open only through `sandbox pr open` (`.sandbox/pr-rules.md`). `gh pr create`,
+`/create-pr` and `superpowers:finishing-a-development-branch` are blocked in a
+workspace — don't reach for them.
 
-1. **Pre-PR gate — local CI checks.** From the repo root run `npm test`,
-   `npm run typecheck`, and `npm run build` — the three the CI workflow runs.
-   Any failure → fix it first. Never create a PR on failing local checks.
-   (There is deliberately no `lint` script; typecheck is the static gate.)
-2. **Self-review.** Invoke `sb-review` on the branch diff (vs the base branch)
+1. **Self-review.** Invoke `sb-review` on the branch diff (vs the base branch)
    and address its findings before continuing.
-3. **PR conventions:**
-   - **Title:** `<type>(<optional scope>): <ISSUE-ID> <short description>` —
+2. **Write one PR file per repo touched:** `.sandbox/notes/pr-<repo>.md`, in the
+   format of `.sandbox/pr-rules.md`, at `status: draft`.
+   - **Title** (the first `#` heading): `<type>(<optional scope>): <ISSUE-ID> <short description>` —
      conventional-commit types (`feat`, `fix`, `refactor`, `chore`, `docs`,
      `test`, `ci`, `perf`); scope optional, use it when targeting a specific
      app/package.
      Example: `feat(backend): PROJ-1125 Add rating field to the product payload`
      `<ISSUE-ID>` is the workspace's issue (`issue_id` in
      `.sandbox/workspace.yml`), as the issue tracker writes it. No issue → omit it.
-   - **Body:**
+   - **Body** (everything after the title):
 
      ```markdown
      ## Summary
@@ -30,16 +29,23 @@ Run these steps in order. Steps 1 and 2 are gates — a failure stops the PR.
      ## Test plan
      <checklist of verification steps>
 
+     ## Acceptance
+     | Criterion | Result |
+     |---|---|
+     | <criterion> | PASS |
+
      Refs: <ISSUE-ID>
 
      🤖 Generated with [Claude Code](https://claude.com/claude-code)
      ```
 
-   - **Issue status:** when the workspace has an issue, run
-     `sandbox issue update --status "In Development"` (no ref needed inside the
-     workspace). If the tracker refuses the status, report its reason and
-     continue.
-4. **Branch mechanics:** use `superpowers:finishing-a-development-branch` if
-   installed; if not, say so once and create the PR with `gh pr create`.
-5. **Checkpoint:** after the PR exists, suggest `sb-handoff` so the PR state
-   survives into the next session.
+   - A repo whose registry entry has `ship: tag` and a `release_check` needs its
+     release entry (e.g. a changeset) committed on the branch, or `skip_release`
+     with a reason.
+3. **Approval is the person's.** Ask them to read the PR file and set
+   `status: approved`. Don't set it yourself.
+4. **Open:** run `sandbox pr open`. It runs the gate (tests, exercise evidence,
+   release check), pushes, opens the PR, moves the issue to "In Development",
+   and records the URL in the PR file. A failed gate check names what to fix.
+5. **Checkpoint:** suggest `sb-handoff` so the PR state survives into the next
+   session. After merge and release: `sandbox pr status`, then `sandbox close-out`.

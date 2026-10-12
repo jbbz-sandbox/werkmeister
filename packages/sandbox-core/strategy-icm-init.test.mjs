@@ -9,6 +9,7 @@ import * as path from "node:path";
 
 import { withSandboxHome } from "./fixtures.mjs";
 import { discoverRepos } from "./dist/workspace_init.js";
+import { buildPrGuardEntry } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { templateFor } from "./dist/strategies/icm_templates.js";
@@ -74,10 +75,12 @@ test("init writes the icm layer and nothing of jit's", async () => {
     icm.init(ctx);
     const files = walk(root).filter((f) => !f.startsWith("demo-repo") && !f.startsWith(".sandbox"));
     assert.deepEqual(files, [
+      ".claude/settings.json",
       "BRIEF.md",
       "CLAUDE.md",
       "CONTEXT.md",
       "_shared/issues-report.md",
+      "_shared/pr-rules.md",
       "_shared/standards.md",
       "stages/01_research/CONTEXT.md",
       "stages/01_research/output/.gitkeep",
@@ -85,10 +88,12 @@ test("init writes the icm layer and nothing of jit's", async () => {
       "stages/02_spec/output/.gitkeep",
       "stages/03_implement/CONTEXT.md",
       "stages/03_implement/output/.gitkeep",
-      "stages/04_ship/CONTEXT.md",
-      "stages/04_ship/output/.gitkeep",
+      "stages/04_propose/CONTEXT.md",
+      "stages/04_propose/output/.gitkeep",
     ]);
-    assert.ok(!fs.existsSync(path.join(root, ".claude")));
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")), {
+      hooks: { PreToolUse: [buildPrGuardEntry()] },
+    });
     assert.ok(!fs.existsSync(path.join(root, ".sandbox", "notes")));
     assert.ok(!fs.existsSync(path.join(root, ".sandbox", "standards.json")));
 
@@ -104,6 +109,9 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.match(claude, /`docker restart demo-backend`/);
     assert.match(claude, /`stages\/02_spec\/CONTEXT\.md`/);
     assert.match(claude, /you hit a bug or need to log a feature\/task .*`_shared\/issues-report\.md`/);
+    assert.match(claude, /^\| this folder's git branch \| the run's record .*never open a PR from it or merge it \|$/m);
+    assert.match(claude, /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `sandbox pr open` \|/m);
+    assert.match(fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"), /`stages\/04_propose\/output\/pr-<repo>\.md`/);
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);
@@ -205,7 +213,7 @@ test("feature and services both present: the restart sentence uses docker restar
 
 test("templateFor falls back to feature for free text, and normalises case", () => {
   const feature = templateFor("feature").map((s) => s.name);
-  assert.deepEqual(feature, ["research", "spec", "implement", "ship"]);
+  assert.deepEqual(feature, ["research", "spec", "implement", "propose"]);
   assert.deepEqual(templateFor("constructor").map((s) => s.name), feature);
   assert.deepEqual(templateFor(" Feature ").map((s) => s.name), feature);
   assert.deepEqual(templateFor("").map((s) => s.name), feature);

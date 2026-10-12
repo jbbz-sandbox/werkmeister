@@ -19,6 +19,8 @@ import { issueLink } from "./issue_tracker.js";
 import { renderIssueRef } from "./strategies/issue_section.js";
 import type { IssueRef } from "./strategies/types.js";
 import { standardsSource, standardsUrl } from "./skill_gen.js";
+import { serviceTestCommand } from "./archetypes.js";
+import { loadArchetypes } from "./config.js";
 import { getServicePort } from "./slots.js";
 import { universalStandards } from "./standards.js";
 import { DEFAULT_PLAN, planFor, type Phase, type WorkTypePlan } from "./workspace_prompts.js";
@@ -94,6 +96,8 @@ export function buildRoutingTable(
   if (repos.length > 1) {
     rows.push("| Cross-repo contract change | .sandbox/notes/ (`contract` notes) |");
   }
+
+  rows.push("| Open or create a PR (including `/create-pr`), merge, close out | .sandbox/pr-rules.md |");
 
   if (rows.length === 0) {
     return "";
@@ -175,7 +179,7 @@ export function buildStandardsRoutingSection(
     implement: `| implementing (before the first code edit) | \`sb-implement\` | universal base (${universalSkills}) + rows matching the files you edit |`,
     test: "| testing | `sb-test` | nothing — spawns the matching `sb-tester-<archetype>` agent(s) |",
     review: "| review (before reading any diff or PR) | `sb-review` | the standards covering files in the diff |",
-    pr: "| PR / finishing | `sb-pr` | nothing — runs the pre-PR gate, then `sb-review` |",
+    pr: "| PR / finishing | `sb-pr` | `.sandbox/pr-rules.md` — PRs open only via `sandbox pr open` |",
   };
   const workTypeBlock =
     plan === DEFAULT_PLAN
@@ -297,6 +301,13 @@ Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's
 // ---------------------------------------------------------------------------
 
 /** Render .sandbox/sandbox-context.md — ports, service topology, lifecycle commands, health checks. */
+function testCommandLine(feature: string, svc: string, servicesConfig: Record<string, any>, archetypes: Record<string, any>): string {
+  const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
+  return cmd
+    ? `- \`${svc}\`: \`docker exec ${feature}-${svc} sh -c '${cmd}'\``
+    : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;
+}
+
 export function buildSandboxContextMd(
   feature: string,
   slot: number,
@@ -305,6 +316,7 @@ export function buildSandboxContextMd(
   localServices: string[],
   servicesConfig: Record<string, any>,
   testPath = "",
+  archetypes: Record<string, any> | null = null,
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the
   // same source Caddy's site blocks are generated from — so this file can never
@@ -413,6 +425,12 @@ docker compose ps
 docker compose logs -f ${sampleSvc}
 docker compose restart ${sampleSvc}
 \`\`\`
+
+### Test commands
+
+The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`sandbox pr gate\`).
+
+${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? loadArchetypes())).join("\n")}
 
 `;
   } else {

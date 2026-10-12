@@ -6,9 +6,9 @@
  * reintroduced once per migration step, so it is guarded here rather than
  * rediscovered.
  *
- * The three exceptions are deliberate, not yet-to-be-converted. `reporter.ts`
- * is the sink itself. `gate.ts` writes the hook's deny JSON, which is the
- * PreToolUse contract rather than a log line. `cache.ts` writes to stderr from
+ * The four exceptions are deliberate, not yet-to-be-converted. `reporter.ts`
+ * is the sink itself. `gate.ts` and `pr_guard.ts` write their hook's deny
+ * JSON, which is the PreToolUse contract rather than a log line. `cache.ts` writes to stderr from
  * a module the CLI never reaches — converting it would route its diagnostics
  * to a reporter no consumer of `sandbox.ts` installs, silencing them
  * (.sandbox/notes/033).
@@ -19,7 +19,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CORE = path.resolve(fileURLToPath(import.meta.url), "../../../../../../packages/sandbox-core");
-const ALLOWED = new Set(["reporter.ts", "cache.ts", "gate.ts"]);
+const ALLOWED = new Set(["reporter.ts", "cache.ts", "gate.ts", "pr_guard.ts"]);
 
 describe("sandbox-core console writes", () => {
   it("routes every log through the reporter, outside the documented exceptions", () => {

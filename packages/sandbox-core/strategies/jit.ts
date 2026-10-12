@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { buildTesterSpecs, writeWorkspaceAgents } from "../agent_gen.js";
+import { buildPrRulesMd } from "../pr_rules.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { issueIdOfMeta } from "../issue_tracker.js";
 import { presentArchetypes } from "../archetypes.js";
@@ -222,6 +223,9 @@ function init(ctx: InitContext): void {
   fs.mkdirSync(path.dirname(issuesReportPath), { recursive: true });
   fs.writeFileSync(issuesReportPath, buildIssuesReportMd(workspaceName, issueIdOfMeta(meta)));
   success(`Wrote ${issuesReportPath}`);
+  const prRulesPath = path.join(workspaceRoot, ".sandbox", "pr-rules.md");
+  fs.writeFileSync(prRulesPath, buildPrRulesMd(".sandbox/notes/"));
+  success(`Wrote ${prRulesPath}`);
 
   // 6a. Projected sb-* skills into .claude/skills/.
   for (const skillPath of writeWorkspaceSkills(workspaceRoot, null, null, activeStandards)) {
@@ -296,6 +300,7 @@ export const jit: ContextStrategy = {
     ".sandbox/notes",
     ".sandbox/standards.json",
     ".sandbox/issues-report.md",
+    ".sandbox/pr-rules.md",
     ".sandbox/.gate",
   ],
 };

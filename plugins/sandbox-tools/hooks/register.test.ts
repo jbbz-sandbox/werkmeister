@@ -713,3 +713,57 @@ test('a text field types a space whether it arrives as " " or by name', () => {
   const s = { text: 'ab', cursor: 1 }
   expect(edit(s, 'tab')).toBe(s)
 })
+
+// docs/workspace-lifecycle.md: past `working`, a card shows the lifecycle instead of the stage,
+// and offers ↻ PRs while a PR is in flight and ✓ Close out once shipped.
+function lifecycleList(ab: unknown, abc: unknown) {
+  return { ...LIST, workspaces: LIST.workspaces.map(w => (w.name === 'ab' ? { ...w, lifecycle: ab } : w.name === 'abc' ? { ...w, lifecycle: abc } : w)) }
+}
+const PR_OPEN = { state: 'pr-open', prs: [{ dir: 'app', status: 'open', url: 'u' }, { dir: 'lib', status: 'approved', url: null }] }
+const SHIPPED = { state: 'shipped', prs: [{ dir: 'app', status: 'shipped', url: 'u' }] }
+
+test('the lifecycle replaces the stage on the card and picks the lifecycle button', async ($, on) => {
+  world(on, stubs({ [`${WS}/list-workspaces`]: () => ok(lifecycleList(PR_OPEN, SHIPPED)) }))
+  await openPane($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+    // ab has an issue, so its issue line carries the work type, not the meta line.
+    expect((await ui.find({ key: 'meta:ab' }))?.text).toBe('PR open (1/2) · 3/3')
+    expect((await ui.find({ key: 'meta:abc' }))?.text).toBe('bugfix · shipped — close out · 1/3')
+    expect(await ui.find({ key: 'prs:ab' })).toBeTruthy()
+    expect(await ui.find({ key: 'closeout:ab' })).toBeFalsy()
+    expect(await ui.find({ key: 'closeout:abc' })).toBeTruthy()
+    expect(await ui.find({ key: 'prs:empty' })).toBeFalsy()
+    await ui.unmount()
+  }
+})
+
+test('↻ PRs runs pr-status for that workspace path', async ($, on) => {
+  const w = world(on, stubs({
+    [`${WS}/list-workspaces`]: () => ok(lifecycleList(PR_OPEN, null)),
+    [`${WS}/pr-status`]: () => ok({ command: 'app: merged' }),
+  }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'prs:ab' })
+  expect(w.calls.filter(c => c.key === `${WS}/pr-status`).map(c => c.args)).toEqual([{ path: '/ws/ab' }])
+  await ui.unmount()
+})
+
+test('close-out needs two presses, and a remove press on the same row cancels it', async ($, on) => {
+  const w = world(on, stubs({
+    [`${WS}/list-workspaces`]: () => ok(lifecycleList(null, SHIPPED)),
+    [`${WS}/close-out`]: () => ok({ command: 'sandbox close-out abc', output: '' }),
+  }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'closeout:abc' })
+  expect((await ui.find({ key: 'closeout:abc' }))?.props.label).toBe('✓ Yes, close out')
+  await ui.press({ key: 'remove:abc' })
+  expect((await ui.find({ key: 'closeout:abc' }))?.props.label).toBe('✓ Close out')
+  await ui.press({ key: 'closeout:abc' })
+  await ui.press({ key: 'closeout:abc' })
+  expect(w.calls.filter(c => c.key === `${WS}/close-out`).map(c => c.args)).toEqual([{ name: 'abc' }])
+  expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
+  await ui.unmount()
+})

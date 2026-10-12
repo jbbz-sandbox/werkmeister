@@ -54,6 +54,17 @@ const remoteBranches = git(origin, "branch", "--list");
 assert.match(remoteBranches, /dev\/feature-x/, "feature branch reached origin");
 console.log("✓ new feature branch with local work → committed + pushed to origin");
 
+// Case 3: a record commit with `paths` commits and pushes only those; other
+// dirty files stay uncommitted (pr_lifecycle's record of an opened PR).
+fs.writeFileSync(path.join(feat, "pr-app.md"), "status: open");
+fs.writeFileSync(path.join(feat, "unrelated.txt"), "not mine");
+const r3 = await commitAndPush(feat, "chore: record opened PR(s)", ["pr-app.md"]);
+assert.equal(r3.ok, true, `record push must succeed, got: ${r3.message}`);
+assert.deepEqual(git(feat, "show", "--name-only", "--format=", "HEAD").trim().split("\n"), ["pr-app.md"]);
+assert.match(git(feat, "status", "--porcelain"), /^\?\? unrelated\.txt$/m, "unrelated file left alone");
+assert.match(git(origin, "log", "-1", "--format=%s", "dev/feature-x"), /record opened PR/, "pushed");
+console.log("✓ record commit with paths → only those paths committed + pushed");
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("ALL PASS");
 process.exit(0);

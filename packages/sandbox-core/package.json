@@ -24,6 +24,8 @@
     "./fragment_detect": "./dist/fragment_detect/index.js",
     "./generate": "./dist/generate.js",
     "./gate": "./dist/gate.js",
+    "./pr_guard": "./dist/pr_guard.js",
+    "./pr_lifecycle": "./dist/pr_lifecycle.js",
     "./git_hooks": "./dist/git_hooks.js",
     "./global_config": "./dist/global_config.js",
     "./graduate": "./dist/graduate.js",
