@@ -26,6 +26,10 @@ export interface InitContext {
   inputs: Record<string, string>;
   /** `args["config"]` — a workspace config path overriding .sandbox/workspace.yml. */
   configOverride: string | null;
+  /** The workspace's issue (`.sandbox/issue.md`, else just `issue_id`); null/absent when it has none. */
+  issue?: IssueRef | null;
+  /** True only on the creation run (initWorkspace was handed the fetched snapshot). */
+  isCreate?: boolean;
 }
 
 export interface ContextStrategy {
@@ -44,4 +48,12 @@ export interface ContextStrategy {
   gate(): void;
   /** Workspace-relative paths this strategy owns. A trailing `*` in the last segment is a prefix glob. */
   ownedPaths(): string[];
+}
+
+/** The workspace's issue as the context layer renders it; `fetchedAt` null = no stored copy. */
+export interface IssueRef {
+  ref: string;
+  url: string | null;
+  title: string;
+  fetchedAt: string | null;
 }

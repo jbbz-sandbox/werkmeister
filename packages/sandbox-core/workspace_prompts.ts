@@ -363,8 +363,8 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "issue_id",
     label: "Issue ID (blank to skip)",
     help:
-      "Renders a clickable issue link in CLAUDE.md. Fill it first — the " +
-      "browser form's “Fetch issue” button uses it to pre-fill the rest.",
+      "Issue ID in this machine's issue tracker. The issue is fetched and stored in " +
+      "the workspace; empty fields are filled from it.",
     defaultFn: (ws) => scrapeIssueId(ws),
   },
   {

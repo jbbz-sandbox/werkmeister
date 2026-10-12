@@ -365,14 +365,25 @@ async function askField(field: WizardField, resolved: Record<string, string>): P
 export async function runFormWizard(
   bundle: Record<string, any>,
   resolved: Record<string, string>,
-  { intro = null }: { intro?: string | null } = {},
+  {
+    intro = null,
+    afterField,
+  }: {
+    intro?: string | null;
+    /** Runs after each answered field; what it returns becomes the default of later fields. */
+    afterField?: (key: string, resolved: Record<string, string>) => Promise<Record<string, string>>;
+  } = {},
 ): Promise<Record<string, string>> {
   if (intro) {
     info(intro);
   }
+  const defaults: Record<string, string> = {};
   for (const field of fieldsOf(bundle)) {
     if (!(field.key in resolved)) {
-      await askField(field, resolved);
+      await askField(defaults[field.key] ? { ...field, default: defaults[field.key] } : field, resolved);
+    }
+    if (afterField && field.key in resolved) {
+      Object.assign(defaults, await afterField(field.key, resolved));
     }
   }
   return resolved;

@@ -4,6 +4,8 @@ export type WorkspaceRow = {
   name: string
   path: string
   issueId: string | null
+  /** The issue's page in the configured tracker; null when it can't be built from config. */
+  issueUrl: string | null
   /** `task` from .sandbox/workspace.yml. */
   task: string | null
   /** `description` from .sandbox/workspace.yml. */
@@ -27,6 +29,14 @@ export type WorkspaceRow = {
   claude: 'working' | 'waiting' | null
   /** The desktop-app session whose cwd lies in this workspace. */
   session: { id: string; title: string; link: string | null } | null
+}
+
+/** One repo worktree's PR for its branch (sandbox-core getWorkspacePRs, via `gh`); url null when it has none. */
+export type RepoPr = {
+  repo: string
+  url: string | null
+  state: 'OPEN' | 'MERGED' | 'CLOSED' | null
+  title: string | null
 }
 
 /** Shared infra (`sandbox connect`): the `infra` block of workspace-status. */
@@ -76,6 +86,10 @@ declare module 'claude-code' {
       confirmRemove: string
       note: string
       infra: InfraStatus | null
+      /** The configured issue tracker's sign-in check; null until checked or if the check failed. */
+      tracker: { ok: boolean; reason?: string; fix: string } | null
+      /** Each workspace's repo PRs by workspace name; refreshed slower than rows, as each is a `gh` call. */
+      prs: Record<string, RepoPr[]>
       /** The pane's open tab. */
       tab: 'list' | 'create'
       /**

@@ -16,6 +16,8 @@ import * as path from "node:path";
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
 import { loadIngress } from "./global_config.js";
 import { issueLink } from "./issue_tracker.js";
+import { renderIssueRef } from "./strategies/issue_section.js";
+import type { IssueRef } from "./strategies/types.js";
 import { standardsSource, standardsUrl } from "./skill_gen.js";
 import { serviceTestCommand } from "./archetypes.js";
 import { loadArchetypes } from "./config.js";
@@ -212,6 +214,7 @@ export function buildClaudeMd(
   task: string,
   meta: Record<string, string>,
   standardsSection: string | null = null,
+  issue: IssueRef | null = null,
 ): string {
   const layoutLines = repos.map(([name, branch]) => `- ${name}/ — branch: ${branch}`).join("\n");
 
@@ -251,14 +254,14 @@ ${contractRule}`;
   // task description, when provided, fills the "what + why" body; otherwise an
   // HTML comment prompts the developer to write a 1-2 sentence "what + why"
   // rather than leaving the workspace context with only the task title.
-  const link = issueLink(meta);
+  const link = issue ? null : issueLink(meta);
   const currentTaskLine = !link ? task : link[1] ? `${task} — [${link[0]}](${link[1]})` : `${task} — ${link[0]}`;
   const description = (meta["DESCRIPTION"] ?? "").trim();
   const taskBody = description
     ? description
     : "<!-- Replace this comment with 1-2 sentences describing what this " +
       "feature does and the user-visible outcome. -->";
-  const currentTaskSection = `## Current Task\n\n${currentTaskLine}\n\n${taskBody}\n`;
+  const currentTaskSection = `## Current Task\n\n${currentTaskLine}\n\n${taskBody}\n${issue ? `\n${renderIssueRef(issue)}` : ""}`;
 
   // Code Standards — the compiled "Standards routing" block when the caller
   // resolved one (repo-scoped JIT loading, docs/jit-context-system.md §5.3);

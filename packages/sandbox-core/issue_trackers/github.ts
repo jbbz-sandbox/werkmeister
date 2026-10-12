@@ -49,9 +49,12 @@ function split(ref: string): [string, string] {
   return [m[1], m[2]];
 }
 
+/** `gh`, or $SANDBOX_GH_BIN (tests point it at a fake). */
+export const ghBin = () => process.env.SANDBOX_GH_BIN || "gh";
+
 /** `gh` with its stdout; throws with gh's own message on a non-zero exit. */
 async function gh(args: string[]): Promise<string> {
-  const r = await runAsync(["gh", ...args], { capture: true, env: childEnv(), timeout: 30 });
+  const r = await runAsync([ghBin(), ...args], { capture: true, env: childEnv(), timeout: 30 });
   if (r.status !== 0) throw new Error(r.stderr.trim() || `gh ${args[0]} ${args[1]} exited ${r.status}`);
   return r.stdout;
 }
@@ -140,5 +143,17 @@ export const github: IssueTrackerStrategy = {
       else await gh(["issue", "edit", n, "-R", repo, "--add-label", status]);
     }
     if (update.comment) await gh(["issue", "comment", n, "-R", repo, "--body", update.comment]);
+  },
+
+  async checkAuth() {
+    const run = (args: string[]) => runAsync([ghBin(), ...args], { capture: true, env: childEnv(), timeout: 15 }).catch(() => null);
+    const s = await run(["auth", "status", "--hostname", "github.com"]);
+    if (!s || s.status !== 0) return { ok: false, reason: "not signed in", fix: "gh auth login" };
+    const who = /account (\S+)/.exec(`${s.stdout}${s.stderr}`)?.[1];
+    for (const repo of githubIssueRepos()) {
+      const v = await run(["repo", "view", repo, "--json", "name"]);
+      if (!v || v.status !== 0) return { ok: false, ...(who ? { who } : {}), reason: `can't read ${repo}`, fix: "gh auth refresh -s repo" };
+    }
+    return { ok: true, ...(who ? { who } : {}), fix: "" };
   },
 };

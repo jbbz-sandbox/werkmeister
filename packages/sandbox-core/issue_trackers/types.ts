@@ -39,6 +39,14 @@ export interface IssueUpdate {
   comment?: string;
 }
 
+/** Whether this machine can read issues; `fix` is the one command or doc that repairs it. */
+export interface TrackerAuth {
+  ok: boolean;
+  who?: string;
+  reason?: string;
+  fix: string;
+}
+
 export interface IssueTrackerStrategy {
   readonly id: TrackerId;
   /** The tracker's name in prose and buttons: `Jira`, `GitHub`. */
@@ -66,4 +74,6 @@ export interface IssueTrackerStrategy {
   filingGuide(issueId: string): { row: string; search: string };
   /** Move the issue's status and/or add a comment. Throws with the tracker's reason. */
   updateIssue(ref: string, update: IssueUpdate): Promise<void>;
+  /** Whether this machine can read issues, and the one command or doc that fixes it. Never throws. */
+  checkAuth(): Promise<TrackerAuth>;
 }
