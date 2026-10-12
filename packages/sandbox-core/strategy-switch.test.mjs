@@ -11,6 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { withSandboxHome } from "./fixtures.mjs";
+import { buildPrGuardEntry } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { leftoverPaths, reportLeftovers, strategyById } from "./dist/strategies/index.js";
 import { initWorkspace } from "./dist/workspace_init.js";
@@ -193,9 +194,10 @@ test("initWorkspace after a switch to icm removes jit's managed hooks even witho
       { config: `overrides:\n  standards_dir: ${std}\n` },
     );
 
-    // Only the managed hooks existed, so removeWorkspaceHooks takes the whole
-    // file with them — the leftover skills/agents (not pruned) stay untouched.
-    assert.ok(!fs.existsSync(settingsPath), "jit's managed hooks (and the file) are gone");
+    // jit's own hooks go; the PR guard, shared by both strategies, stays —
+    // and the leftover skills/agents (not pruned) stay untouched.
+    const after = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    assert.deepEqual(after, { hooks: { PreToolUse: [buildPrGuardEntry()] } }, "only the PR guard is left");
     assert.ok(fs.existsSync(path.join(root, ".claude", "skills")), "unrelated jit leftovers untouched");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -218,7 +220,11 @@ test("initWorkspace --prune-context removes tracked jit leftovers after a switch
       !fs.existsSync(path.join(root, ".claude", "skills", "sb-research")),
       "jit-tracked skills pruned",
     );
-    assert.ok(!fs.existsSync(path.join(root, ".claude", "settings.json")), "jit-tracked settings pruned");
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
+      { hooks: { PreToolUse: [buildPrGuardEntry()] } },
+      "jit-tracked settings pruned; icm wrote back only the PR guard",
+    );
     assert.ok(
       !fs.existsSync(path.join(root, ".claude", "agents", "sb-researcher.md")),
       "jit-tracked agent pruned",

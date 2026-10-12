@@ -4,7 +4,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { CONTEXT_CHAR_CAP, renderActiveStandards, renderDecisions, renderNote } from "./dist/notes.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
+import { CONTEXT_CHAR_CAP, listNotes, nextNoteNumber, renderActiveStandards, renderDecisions, renderNote } from "./dist/notes.js";
 
 const fakeNote = (n, body = "x".repeat(2000)) => ({
   path: `/ws/.sandbox/notes/${String(n).padStart(3, "0")}-decision-x.md`,
@@ -66,4 +70,21 @@ test("renderActiveStandards renders both situations verbatim", () => {
       precedence +
       "\n- `sb-python-standard`\n",
   );
+});
+
+// JIT keeps PR files and exercise evidence in .sandbox/notes/ (docs/workspace-lifecycle.md);
+// they are not notes, so they never reach the SessionStart payload or the numbering.
+test("pr-*.md and exercise.md in the notes dir are not notes", () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "notes-pr-"));
+  try {
+    const dir = path.join(ws, ".sandbox", "notes");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "001-decision-x.md"), "---\ntype: decision\nstatus: open\n---\nbody\n");
+    fs.writeFileSync(path.join(dir, "pr-app.md"), "---\nstatus: draft\n---\n# t\n");
+    fs.writeFileSync(path.join(dir, "exercise.md"), "| smoke | PASS |\n");
+    assert.deepEqual(listNotes(ws).map((n) => path.basename(n.path)), ["001-decision-x.md"]);
+    assert.equal(nextNoteNumber(dir), 2);
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
 });

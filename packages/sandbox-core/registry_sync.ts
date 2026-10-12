@@ -138,11 +138,17 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record
   for (const fragment of fragments) {
     const doc = expandPlaceholders(fragment.doc, opts.paths);
     for (const key of Object.keys(doc)) {
-      if (key.startsWith("x-") || (FRAGMENT_KEYS as readonly string[]).includes(key)) continue;
+      if (key.startsWith("x-") || key === "repo" || (FRAGMENT_KEYS as readonly string[]).includes(key)) continue;
       throw new RegistryError(
         `${fragment.path}: unexpected top-level key \`${key}\` — a fragment may only ` +
-          `contain ${FRAGMENT_KEYS.join(", ")} (and x-* anchor blocks)`,
+          `contain ${FRAGMENT_KEYS.join(", ")}, repo (and x-* anchor blocks)`,
       );
+    }
+    // `repo:` is settings for the fragment's repo as a whole (ship detection,
+    // docs/workspace-lifecycle.md), not a map of named entries like the sections below.
+    if (doc["repo"] !== undefined) {
+      if (!isDict(doc["repo"])) throw new RegistryError(`${fragment.path}: \`repo:\` must be a map`);
+      Object.assign((merged["repos"][fragment.repo] ??= { services: [], path_mappings: {} }), doc["repo"]);
     }
     for (const section of FRAGMENT_KEYS) {
       const entries = doc[section] ?? {};

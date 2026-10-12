@@ -51,6 +51,18 @@ import { collectingReporter, info, withReporter } from "./reporter.js";
 import { provisionWorkspace } from "./workspace_init.js";
 import { loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
+import { abandonWorkspace, removalBlockers } from "./pr_lifecycle.js";
+export {
+  closeOut,
+  gatePrs,
+  lifecycleOf,
+  openPrs,
+  readPrFiles,
+  refreshPrStatus,
+  runGate,
+  type Lifecycle,
+  type PrStatus,
+} from "./pr_lifecycle.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -857,7 +869,7 @@ export async function createWorkspace(
  * directory, verifying it exists. Path separators / `..` are rejected so callers
  * can't escape the workspaces root. Throws {@link WorkspaceError} otherwise.
  */
-async function resolveWorkspaceDir(name: string): Promise<string> {
+export async function resolveWorkspaceDir(name: string): Promise<string> {
   const clean = (name ?? "").trim();
   if (!clean || clean.includes("/") || clean.includes("\\") || clean.includes("..")) {
     throw new WorkspaceError(`Invalid workspace name: ${JSON.stringify(name)}`);
@@ -1273,7 +1285,7 @@ async function hasGit(dir: string): Promise<boolean> {
 }
 
 /** Immediate subdirectories of a workspace that are git worktrees (the repo checkouts). */
-async function listRepoWorktrees(workspaceDir: string): Promise<Array<{ repo: string; dir: string }>> {
+export async function listRepoWorktrees(workspaceDir: string): Promise<Array<{ repo: string; dir: string }>> {
   const entries = await fs.readdir(workspaceDir, { withFileTypes: true }).catch(() => []);
   const out: Array<{ repo: string; dir: string }> = [];
   for (const e of entries) {
@@ -1664,7 +1676,7 @@ async function listWorkspaceWorktrees(workspaceDir: string): Promise<string[]> {
  * worktree's git common dir. Collected BEFORE a delete so we can
  * `git worktree prune` them afterwards.
  */
-async function worktreeSources(worktrees: string[]): Promise<string[]> {
+export async function worktreeSources(worktrees: string[]): Promise<string[]> {
   const srcs = new Set<string>();
   for (const d of worktrees) {
     const res = await runCapture("git", ["-C", d, "rev-parse", "--path-format=absolute", "--git-common-dir"]).catch(
@@ -1694,7 +1706,12 @@ function gitErrorLine(text: string): string {
   return (lines.find((l) => /^\s*!\s|^(error|fatal):/.test(l)) ?? lines[0]).trim().replace(/\s+/g, " ");
 }
 
-export async function commitAndPush(dir: string): Promise<{ ok: boolean; message: string }> {
+export async function commitAndPush(
+  dir: string,
+  message = `chore: handoff ${path.basename(dir)} before workspace teardown`,
+  // Only these paths (relative to *dir*), e.g. the PR files a record commit is about; default: everything.
+  paths: string[] = [],
+): Promise<{ ok: boolean; message: string }> {
   const label = path.basename(dir);
   const br = await runCapture("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"]).catch(() => null);
   const branch = br && br.code === 0 ? stripAnsi(br.stdout).trim() : null;
@@ -1702,10 +1719,11 @@ export async function commitAndPush(dir: string): Promise<{ ok: boolean; message
 
   // Stage everything, then commit only if there's something staged
   // (`diff --cached --quiet` exits 1 when there are staged changes).
-  await runCapture("git", ["-C", dir, "add", "-A"]).catch(() => {});
-  const staged = await runCapture("git", ["-C", dir, "diff", "--cached", "--quiet"]).catch(() => null);
+  const only = paths.length ? ["--", ...paths] : [];
+  await runCapture("git", ["-C", dir, "add", "-A", ...only]).catch(() => {});
+  const staged = await runCapture("git", ["-C", dir, "diff", "--cached", "--quiet", ...only]).catch(() => null);
   if (staged && staged.code === 1) {
-    const c = await runCapture("git", ["-C", dir, "commit", "-m", `chore: handoff ${label} before workspace teardown`]).catch(
+    const c = await runCapture("git", ["-C", dir, "commit", "-m", message, ...only]).catch(
       () => null,
     );
     if (!c || c.code !== 0) {
@@ -1745,9 +1763,26 @@ export async function commitAndPush(dir: string): Promise<{ ok: boolean; message
  * is lost — the caller surfaces the per-branch detail. The `<user>/<workspace>`
  * branches are deliberately kept: they hold the pushed work / open PRs.
  * Destructive once it proceeds — the caller (the table's ✕ button) confirms first.
+ *
+ * Refuses while a PR is open or a code branch holds commits no merged PR
+ * covers (`removalBlockers`), unless *abandon* records why or close-out
+ * already ran (docs/workspace-lifecycle.md).
  */
-export async function removeWorkspace(name: string): Promise<{ command: string; output: string; path: string }> {
+export async function removeWorkspace(
+  name: string,
+  opts: { abandon?: string; closedOut?: boolean } = {},
+): Promise<{ command: string; output: string; path: string }> {
   const target = await resolveWorkspaceDir(name);
+  if (!opts.closedOut) {
+    const blockers = await removalBlockers(target, await listRepoWorktrees(target));
+    if (blockers.length && !opts.abandon?.trim()) {
+      throw new WorkspaceError(
+        `Workspace '${name}' NOT removed — it holds unshipped work:\n${blockers.map((b) => `  ${b}`).join("\n")}\n` +
+          `Ship it and run \`sandbox close-out\`, or give up with \`sandbox remove-workspace ${name} --abandon "<reason>"\`.`,
+      );
+    }
+    if (opts.abandon?.trim()) abandonWorkspace(target, opts.abandon.trim());
+  }
   const worktrees = await listWorkspaceWorktrees(target);
   const sources = await worktreeSources(worktrees);
   const parts: string[] = [];

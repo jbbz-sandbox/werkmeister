@@ -1,6 +1,6 @@
 ---
 name: sb-test
-description: "Begin the test phase in a sandbox workspace. Use when running or writing tests — after an implementation lands, before review or a PR, or when the user asks to verify a change with the test suite."
+description: "Begin the test phase in a sandbox workspace. Use when running or writing tests — after an implementation lands, before review or a PR, or when the user asks to test a change."
 ---
 
 # sb-test — enter the test phase
@@ -27,6 +27,9 @@ description: "Begin the test phase in a sandbox workspace. Use when running or w
   service's `test:` in `~/.sandbox/services.yaml` (or its archetype's) or the repo's
   `package.json`; edit only
   test files; never "fix" application source in this phase.
+- **Record the exercise evidence** the PR gate reads: write `.sandbox/notes/exercise.md`
+  with the smoke check and every change-specific check as a `| check | result |` table,
+  each result `PASS` or `FAIL`, the captured output under it.
 - Relay the results per service, then put the testers' OPEN QUESTIONS / AMBIGUITIES to
   the user (AskUserQuestion) and let them resolve those **before** proposing fixes.
 - Fixing a failure is the implement phase: invoke `sb-implement` first (it loads the

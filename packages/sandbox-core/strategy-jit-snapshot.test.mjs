@@ -16,6 +16,9 @@ const REPO = path.resolve(import.meta.dirname, "..", "..");
 // Skill templates come from $SANDBOX_ROOT/infra/skills; a developer's shell
 // often points it at another checkout. Pin it to this one.
 process.env.SANDBOX_ROOT = path.join(REPO, "apps", "cli");
+// A workspace container exports SANDBOX_FEATURE, which init reads as an input
+// (`_INPUT_FIELDS`) — and the pre-PR gate runs this suite in one.
+delete process.env.SANDBOX_FEATURE;
 
 function walk(root, rel = "") {
   const out = [];
