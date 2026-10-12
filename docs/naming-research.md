@@ -191,7 +191,11 @@ Ruled out. Free on npm and PyPI, but:
   also sells software); Stellwerk easy (model-railway control software, discontinued
   February 2022); a Swiss online school-skills test called Stellwerk (St. Gallen);
   TauStellwerk (hobby model-railway project on GitHub).
-- Numeronym s7k not checked further.
+- **Numeronym s7k** (9 letters: s + 7 + k): free on npm, PyPI, crates.io and Docker Hub;
+  no Go-mirror repository at `s7k/s7k`. This does not change the verdict: a numeronym is a
+  shortcut for a full name people already know, and the full name is what clashes. s7k
+  also looks like s7t (Stellpult), and starts with "S7", the name of Siemens' S7 line of
+  factory controllers.
 
 ### 7.6 English numeronym round
 
@@ -260,7 +264,7 @@ trademarks are not checked.
 | Abzweig, Nebengleis, Baustelle, Spurwerk | a5g, n8s, b7e, s6k | Open, not pursued | Free; harder to say, or numeronym looks like others |
 | Featurelane, Graftstack | — | Open, not pursued | Free on npm; weaker meaning |
 | Junction | j6n | Open, not searched | |
-| Stellwerk | s7k | **Ruled out** | Reserved on crates.io by an AI-agent project; GitHub name probably taken |
+| Stellwerk | s7k | **Ruled out** | Reserved on crates.io by an AI-agent project; GitHub name probably taken (s7k itself is free) |
 | LocalStack | — | **Ruled out** | Funded company in the same field |
 | Mystack | — | **Ruled out** | Everyday phrase; npm name taken; says nothing about the tool |
 | Switchyard, Signalbox, Roundhouse | — | **Ruled out** | Existing developer software with the same name |
