@@ -82,6 +82,9 @@ function deps(table, over = {}) {
 }
 
 const clean = (ws) => fs.rmSync(ws, { recursive: true, force: true });
+// The baseline check reads ports.yaml for host ports; CI has no ~/.sandbox.
+const gate = (ws, d) => withSandboxHome(() => runGate(ws, readPrFiles(ws)[0], d));
+const open = (ws, d) => withSandboxHome(() => openPrs(ws, undefined, d));
 const failed = (g) => g.checks.filter((c) => !c.ok).map((c) => c.name);
 
 test("PR file: title and body split, writePrFields keeps the body", () => {
@@ -155,7 +158,7 @@ test("gate passes: tests, exercise, baseline, release check, approved", async ()
   const ws = icmWorkspace();
   try {
     const d = deps([DIFF_API]);
-    const g = await runGate(ws, readPrFiles(ws)[0], d);
+    const g = await gate(ws, d);
     assert.deepEqual(failed(g), []);
     assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"));
     assert.ok(d.calls.includes("docker exec feat-api sh -c npx changeset status"));
@@ -167,7 +170,7 @@ test("gate passes: tests, exercise, baseline, release check, approved", async ()
 test("gate fails on an unfinished stage, a FAIL row and missing exercise evidence", async () => {
   const ws = icmWorkspace({ researchDone: false, exercise: null, files: { app: prFile({ body: "| x | FAIL |\n" }) } });
   try {
-    const g = await runGate(ws, readPrFiles(ws)[0], deps([DIFF_API]));
+    const g = await gate(ws, deps([DIFF_API]));
     assert.deepEqual(failed(g), ["stages", "acceptance", "exercise"]);
   } finally {
     clean(ws);
@@ -178,13 +181,13 @@ test("gate: a touched service with no test command fails unless skip_tests gives
   const diffLib = [/diff --name-only/, { stdout: "packages/lib/y.ts\n" }];
   const ws = icmWorkspace();
   try {
-    assert.deepEqual(failed(await runGate(ws, readPrFiles(ws)[0], deps([diffLib]))), ["test lib"]);
+    assert.deepEqual(failed(await gate(ws, deps([diffLib]))), ["test lib"]);
   } finally {
     clean(ws);
   }
   const skipped = icmWorkspace({ files: { app: prFile({ extra: "skip_tests:\n  lib: pure types, covered by api tests\n" }) } });
   try {
-    const g = await runGate(skipped, readPrFiles(skipped)[0], deps([diffLib]));
+    const g = await gate(skipped, deps([diffLib]));
     assert.deepEqual(failed(g), []);
     assert.match(g.checks.find((c) => c.name === "test lib").detail, /skipped: pure types/);
   } finally {
@@ -196,13 +199,13 @@ test("gate: a failing release check fails unless skip_release gives a reason", a
   const noChangeset = [/changeset status/, { code: 1, stderr: "no changesets were found" }];
   const ws = icmWorkspace();
   try {
-    assert.deepEqual(failed(await runGate(ws, readPrFiles(ws)[0], deps([DIFF_API, noChangeset]))), ["release"]);
+    assert.deepEqual(failed(await gate(ws, deps([DIFF_API, noChangeset]))), ["release"]);
   } finally {
     clean(ws);
   }
   const skipped = icmWorkspace({ files: { app: prFile({ extra: "skip_release: docs only\n" }) } });
   try {
-    assert.deepEqual(failed(await runGate(skipped, readPrFiles(skipped)[0], deps([DIFF_API, noChangeset]))), []);
+    assert.deepEqual(failed(await gate(skipped, deps([DIFF_API, noChangeset]))), []);
   } finally {
     clean(skipped);
   }
@@ -214,7 +217,7 @@ test("gate: dirty worktree, failing test, down health endpoint, unapproved", asy
     const d = deps([DIFF_API, [/status --porcelain/, { stdout: " M x.ts\n" }], [/npm test -w api/, { code: 1, stdout: "1 failing" }]], {
       httpStatus: async () => 502,
     });
-    assert.deepEqual(failed(await runGate(ws, readPrFiles(ws)[0], d)), ["clean", "test api", "baseline api", "approved"]);
+    assert.deepEqual(failed(await gate(ws, d)), ["clean", "test api", "baseline api", "approved"]);
   } finally {
     clean(ws);
   }
@@ -227,7 +230,7 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     const d = deps([DIFF_API, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]], {
       tracker: { fetchIssue: async () => null, updateIssue: async (ref, u) => (updated = [ref, u.status]) },
     });
-    const r = await openPrs(ws, undefined, d);
+    const r = await open(ws, d);
     assert.ok(r.ok, r.lines.join("\n"));
     const [f] = readPrFiles(ws);
     assert.equal(f.fm.status, "open");
@@ -240,7 +243,7 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
   const bad = icmWorkspace({ exercise: "| smoke | FAIL |\n" });
   try {
     const d = deps([DIFF_API]);
-    const r = await openPrs(bad, undefined, d);
+    const r = await open(bad, d);
     assert.equal(r.ok, false);
     assert.ok(!d.calls.some((c) => c.startsWith("gh pr create")));
     assert.equal(readPrFiles(bad)[0].fm.status, "approved");
