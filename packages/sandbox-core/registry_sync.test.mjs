@@ -74,6 +74,20 @@ test("expandPlaceholders touches only the three names, at any depth", () => {
   });
 });
 
+test("mergeRegistry merges a fragment's repo: block into repos.<repo>", () => {
+  const out = merge([
+    frag("app", { repo: { ship: "tag", release_tag: "v*" }, services: { api: { path: "apps/api" } } }),
+  ]);
+  assert.deepEqual(out.repos.app, {
+    services: ["api"],
+    path_mappings: { "apps/api": "api" },
+    ship: "tag",
+    release_tag: "v*",
+  });
+  assert.throws(() => merge([frag("app", { repo: "tag" })]), (e) => e instanceof RegistryError && /`repo:` must be a map/.test(e.message));
+  assert.throws(() => merge([frag("app", { repos: {} })]), (e) => e instanceof RegistryError && /unexpected top-level key `repos`/.test(e.message));
+});
+
 test("mergeRegistry layers defaults, fragments and derives repos", () => {
   const out = merge([
     frag("demo", { services: { backend: { path: "apps/backend", port_offset: 0 }, frontend: { path: "apps/frontend", port_offset: 1 } },

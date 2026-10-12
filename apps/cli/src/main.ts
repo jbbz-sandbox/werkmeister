@@ -27,7 +27,9 @@
  *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
  *     sandbox list-workspaces                  List workspaces under the workspaces root
  *     sandbox issue <view|update> [ref]        Read or update an issue in the configured tracker
- *     sandbox remove-workspace <name>          Hand off and delete a workspace (push, down, rm)
+ *     sandbox remove-workspace <name>          Hand off and delete a workspace (push, down, rm); --abandon <reason>
+ *     sandbox pr <gate|open|status> [repo]     Pre-PR gate, open PRs from approved PR files, record merge/release
+ *     sandbox close-out [name]                 After release: close the issue, record, remove, delete merged branches
  *     sandbox code [feature]                   Open a workspace in VS Code
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
  *     sandbox registry [sync] [--check]        Regenerate ~/.sandbox/services.yaml from repo fragments
@@ -414,13 +416,13 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "PreToolUse standards gate (deny-once-with-payload on Edit/Write; hook entrypoint)",
+          "PreToolUse hook entrypoints: the standards gate and the PR guard",
         )
         .addArgument(
           new Argument(
             "<action>",
-            "gate: read the PreToolUse stdin JSON, deny or allow per the standards gate",
-          ).choices(["gate"]),
+            "gate: deny or allow an Edit/Write per the standards gate; pr-guard: deny opening a PR except via `sandbox pr open`",
+          ).choices(["gate", "pr-guard"]),
         );
     },
     namespace: ([action]) => ({ action }),
@@ -589,9 +591,38 @@ const SPECS: CommandSpec[] = [
       cmd
         .description("Hand off (commit + push) and delete a workspace, its containers and its worktrees")
         .argument("<name>", "Workspace directory name, as `sandbox list-workspaces` reports it")
+        .option("-y, --yes", "Skip the confirmation prompt")
+        .option("--abandon <reason>", "Remove despite unshipped work; records the reason in closeout.md and the PR files");
+    },
+    namespace: ([name], o) => ({ name, yes: Boolean(o.yes), abandon: o.abandon ?? null }),
+  },
+  {
+    name: "pr",
+    load: () => import("./commands/pr.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)")
+        .addArgument(
+          new Argument(
+            "<action>",
+            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed",
+          ).choices(["gate", "open", "status"]),
+        )
+        .argument("[repo]", "Only this code worktree's PR file")
+        .option("--json", "Print the result as JSON");
+    },
+    namespace: ([action, repo], o) => ({ action, repo: repo ?? null, json: Boolean(o.json) }),
+  },
+  {
+    name: "close-out",
+    load: () => import("./commands/close_out.js"),
+    configure: (cmd) => {
+      cmd
+        .description("After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches")
+        .argument("[name]", "Workspace directory name; defaults to the workspace you are in")
         .option("-y, --yes", "Skip the confirmation prompt");
     },
-    namespace: ([name], o) => ({ name, yes: Boolean(o.yes) }),
+    namespace: ([name], o) => ({ name: name ?? null, yes: Boolean(o.yes) }),
   },
   {
     name: "code",

@@ -106,5 +106,9 @@ fi
 if [ "${1:-}" = "hooks" ] && [ "${2:-}" = "gate" ]; then
     exec "$node_bin" "$SANDBOX_ROOT/dist/lib/gate.js"
 fi
+# `hooks pr-guard` fires on every Bash call in every workspace — same reason.
+if [ "${1:-}" = "hooks" ] && [ "${2:-}" = "pr-guard" ]; then
+    exec "$node_bin" "$SANDBOX_ROOT/dist/lib/pr_guard.js"
+fi
 
 exec "$node_bin" "$entry" "$@"

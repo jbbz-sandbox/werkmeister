@@ -784,6 +784,28 @@ With `--all`, it first stops all active features (equivalent to running `sandbox
 
 ---
 
+### Workspace lifecycle: sandbox pr, close-out, remove-workspace
+
+**Open PRs from a workspace, track them to a release, then close the workspace out.** The full process — PR files, the pre-PR gate, ship detection, the PR guard — is in [workspace-lifecycle.md](workspace-lifecycle.md).
+
+```
+sandbox pr <gate|open|status> [repo] [--json]
+sandbox close-out [name] [--yes]
+sandbox remove-workspace <name> [--yes] [--abandon <reason>]
+```
+
+| Command | Description |
+|---|---|
+| `sandbox pr gate` | Run the pre-PR gate for each PR file; change nothing |
+| `sandbox pr open` | Gate, push and open a PR for each PR file at `status: approved`; record its URL |
+| `sandbox pr status` | Record merged / shipped / closed from GitHub and the repo's release tags |
+| `sandbox close-out` | After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches |
+| `sandbox remove-workspace` | Hand off (commit + push every branch) and delete a workspace. Refuses while a PR is open or a code branch has unmerged commits, unless `--abandon` records why |
+
+Inside a workspace, `gh pr create` (and so `/create-pr`) is blocked by a PreToolUse hook; `sandbox pr open` is the way to open a PR.
+
+---
+
 ## Cleanup & Disk Usage
 
 Running multiple features concurrently creates per-feature Docker volumes for `node_modules` and build caches. These persist after `sandbox down` (by design — to speed up subsequent `sandbox up`).

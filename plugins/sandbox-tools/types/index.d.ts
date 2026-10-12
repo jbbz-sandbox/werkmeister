@@ -12,6 +12,11 @@ export type WorkspaceRow = {
   workType: string | null
   /** The first ICM stage whose output/ is still empty; null when not an ICM workspace or every stage has output. */
   stage: { index: number; total: number; name: string } | null
+  /** sandbox-core `lifecycleOf` — PR files only, no network; null when it could not be read. */
+  lifecycle: {
+    state: 'working' | 'ready' | 'pr-open' | 'merged' | 'shipped' | 'closed-out' | 'abandoned'
+    prs: { dir: string; status: string; url: string | null }[]
+  } | null
   /** Title of the workspace's newest on-disk Claude session. */
   sessionTitle: string | null
   /** That session's transcript `entrypoint`: claude-vscode, claude-desktop, sdk-cli, ...; null when unknown. */

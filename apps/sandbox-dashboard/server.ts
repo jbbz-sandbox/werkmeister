@@ -48,6 +48,11 @@ import {
   openWorkspace,
   refinePrompt,
   removeWorkspace,
+  resolveWorkspaceDir,
+  gatePrs,
+  openPrs,
+  refreshPrStatus,
+  closeOut,
   resumeClaudeInTerminal,
   runConnect,
   runWorkspaceAction,
@@ -816,16 +821,21 @@ export function createServer(): McpServer {
         "Hand a workspace off, then tear it down: commit + push every branch (the sandbox-workspace " +
         "root branch AND each repo) so the work survives on the remote, then `sandbox down` (stop " +
         "containers + release the slot), remove the workspace directory, and prune the git worktree " +
-        "registrations. Aborts without deleting if any push fails (no work lost). Pass the workspace " +
+        "registrations. Aborts without deleting if any push fails (no work lost), and refuses while a PR " +
+        "is open or a code branch has unmerged commits unless `abandon` gives a reason. Pass the workspace " +
         "`name` from `list-workspaces`.",
       inputSchema: {
         name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        abandon: z
+          .string()
+          .optional()
+          .describe("Reason for removing despite an open PR or unmerged commits; recorded in closeout.md."),
       },
       outputSchema: z.object({ command: z.string(), output: z.string(), path: z.string() }),
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const result = await removeWorkspace(args.name);
+        const result = await removeWorkspace(args.name, args.abandon ? { abandon: args.abandon } : undefined);
         return {
           content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
           structuredContent: result as unknown as Record<string, unknown>,
@@ -838,6 +848,70 @@ export function createServer(): McpServer {
         // to diagnose. (ponytail: remove-workspace only; generalize to a shared
         // handler wrapper if other tools need the same visibility.)
         console.error(`[sandbox-workspace] remove-workspace failed: ${(e as Error).stack ?? message}`);
+        return { isError: true, content: [{ type: "text", text: message }] };
+      }
+    },
+  );
+
+  // --- Tools: the workspace PR lifecycle (docs/workspace-lifecycle.md) -------
+  server.registerTool(
+    "workspace-pr",
+    {
+      title: "Workspace PR: gate, open, status",
+      description:
+        "The only way to open a PR from a sandbox workspace — use it instead of `gh pr create`, " +
+        "`/create-pr` or `finishing-a-development-branch`. `gate` runs the pre-PR gate; `open` gates " +
+        "each PR file at `status: approved`, pushes, opens the PR and records its URL; `status` records " +
+        "merged / shipped / closed from GitHub and release tags.",
+      inputSchema: {
+        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        action: z.enum(["gate", "open", "status"]),
+        repo: z.string().optional().describe("Only this code worktree's PR file."),
+      },
+      outputSchema: z.object({ ok: z.boolean(), lines: z.array(z.string()) }),
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const ws = await resolveWorkspaceDir(args.name);
+        const result =
+          args.action === "gate"
+            ? await gatePrs(ws, args.repo)
+            : args.action === "open"
+              ? await openPrs(ws, args.repo)
+              : { ok: true, lines: (await refreshPrStatus(ws)).lines };
+        return {
+          isError: !result.ok,
+          content: [{ type: "text", text: result.lines.join("\n") }],
+          structuredContent: result as unknown as Record<string, unknown>,
+        };
+      } catch (e) {
+        const message = e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
+        return { isError: true, content: [{ type: "text", text: message }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "close-out",
+    {
+      title: "Close Out Workspace",
+      description:
+        "After every PR shipped (or was closed/abandoned): close the issue, write closeout.md to the " +
+        "record branch, remove the workspace, and delete the merged code branches. Destructive — confirm first.",
+      inputSchema: {
+        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+      },
+      outputSchema: z.object({ command: z.string(), output: z.string() }),
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const result = await closeOut(args.name);
+        return {
+          content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
+          structuredContent: result as unknown as Record<string, unknown>,
+        };
+      } catch (e) {
+        const message = e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
         return { isError: true, content: [{ type: "text", text: message }] };
       }
     },

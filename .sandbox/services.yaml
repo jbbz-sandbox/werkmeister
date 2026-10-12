@@ -2,9 +2,10 @@
 #
 # `sandbox registry sync` (run by `sandbox setup`) merges every
 # <repo>/.sandbox/services.yaml under paths.repos_root into
-# ~/.sandbox/services.yaml. Only `services:`, `setup_services:` and
-# `infrastructure:` may appear here; `repo:` is the checkout's directory name
-# and `repos:` is derived. {{home}}, {{repos_root}} and {{workspaces_root}}
+# ~/.sandbox/services.yaml. Only `services:`, `setup_services:`,
+# `infrastructure:` and `repo:` (this repo's own settings, merged into
+# `repos.<dir>`) may appear here; the repo key is the checkout's directory name
+# and the rest of `repos:` is derived. {{home}}, {{repos_root}} and {{workspaces_root}}
 # expand from the developer's config.yaml at merge time. `x-` keys hold YAML
 # anchors and are dropped from the output.
 
@@ -32,6 +33,14 @@ x-mcp-client:
     # for `sandbox-up` that is the MCP server's own process env, where it is
     # unset -- and compose `environment:` beats `env_file:`, so it would then
     # shadow the real value with an empty string.
+
+# Ship detection for `sandbox pr status` and the pre-PR gate's release check
+# (docs/workspace-lifecycle.md): changesets publishes and tags each release, so
+# a merge has shipped once a sandbox-cli release tag contains it.
+repo:
+  ship: tag
+  release_tag: "@jbbz-sandbox/sandbox-cli@*"
+  release_check: npx changeset status --since=origin/main
 
 services:
   # --- The sandbox repo's own workspaces (self-hosting) -----------------------
