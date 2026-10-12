@@ -52,6 +52,13 @@ test("discoverFragments finds only <dir>/.sandbox/services.yaml, sorted by repo"
   assert.equal(found[0].path, path.join(repos, "a-repo", ".sandbox", "services.yaml"));
 });
 
+test("discoverFragments skips a linked git worktree of a repo it already scans", () => {
+  writeFragment("app", "services: {}\n");
+  writeFragment("app-wt", "services: {}\n");
+  writeFileSync(path.join(repos, "app-wt", ".git"), "gitdir: ../app/.git/worktrees/app-wt\n");
+  assert.deepEqual(discoverFragments(repos).map((f) => f.repo), ["app"]);
+});
+
 test("discoverFragments returns [] for a repos_root that does not exist", () => {
   assert.deepEqual(discoverFragments(path.join(root, "nope")), []);
 });
