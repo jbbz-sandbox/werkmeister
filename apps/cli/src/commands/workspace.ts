@@ -76,7 +76,7 @@ async function resolveWorkspaceInputs(
     resolved = await runFormWizard(buildFormSchema(workspacePromptSpec(base, resolved)), resolved, {
       intro: "Interactive wizard — press Ctrl-C to abort. Defaults shown in [brackets].",
       // Typed in the wizard: read the issue now so later prompts default to it.
-      afterField: async (key, r) => {
+      afterField: async (key, r): Promise<Record<string, string>> => {
         // An issue from flag/env/config is createWorkspace's to read.
         if (key !== "issue_id" || !r.issue_id || preset.has("issue_id")) return {};
         const tracker = issueTracker();
