@@ -10,7 +10,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { SESSION_START_COMMAND, writeWorkspaceHooks } from "sandbox-core/hooks_gen";
+import {
+  buildPrGuardEntry,
+  removeWorkspaceHooks,
+  SESSION_START_COMMAND,
+  writePrGuardHook,
+  writeWorkspaceHooks,
+} from "sandbox-core/hooks_gen";
 
 /** The shape shipped before skills self-healing — what real workspaces hold. */
 const PRIOR_COMMAND = "command -v sandbox >/dev/null 2>&1 && sandbox notes context || true";
@@ -78,5 +84,30 @@ describe("writeWorkspaceHooks", () => {
     expect(SESSION_START_COMMAND).toContain("sandbox skills sync");
     // Only `notes context` may reach stdout — see the comment on _SKILLS_SELF_HEAL.
     expect(SESSION_START_COMMAND).not.toMatch(/sandbox skills (check|sync)(?! >\/dev\/null)/);
+  });
+});
+
+// The PR guard is the one hook every strategy installs (docs/workspace-lifecycle.md):
+// it must merge idempotently next to user entries and outlive removal of the JIT hooks.
+describe("writePrGuardHook", () => {
+  const preToolUseOf = (root: string): any[] =>
+    JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")).hooks.PreToolUse;
+  const mine = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] };
+
+  it("is idempotent and keeps a hand-added PreToolUse entry", () => {
+    const root = fs.mkdtempSync(path.join(tmp, "ws-"));
+    fs.mkdirSync(path.join(root, ".claude"));
+    fs.writeFileSync(path.join(root, ".claude", "settings.json"), JSON.stringify({ hooks: { PreToolUse: [mine] } }));
+    writePrGuardHook(root);
+    writePrGuardHook(root);
+    expect(preToolUseOf(root)).toEqual([mine, buildPrGuardEntry()]);
+  });
+
+  it("is part of the JIT set, and survives removeWorkspaceHooks", () => {
+    const root = fs.mkdtempSync(path.join(tmp, "ws-"));
+    writeWorkspaceHooks(root);
+    expect(preToolUseOf(root)).toContainEqual(buildPrGuardEntry());
+    removeWorkspaceHooks(root);
+    expect(preToolUseOf(root)).toEqual([buildPrGuardEntry()]);
   });
 });
