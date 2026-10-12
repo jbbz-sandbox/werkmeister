@@ -414,7 +414,8 @@ function registerAuthoringTools(server: McpServer): void {
       title: "Create a sandbox workspace",
       description:
         "Create a workspace: git worktrees on a <user>/<workspace> branch under the workspaces " +
-        "root, then init-workspace. Non-interactive — every wizard input is an argument here. " +
+        "root, then init-workspace. Runs `createWorkspace` in this process; with an `issue_id` the " +
+        "issue is fetched and stored in `.sandbox/issue.md` (the create fails if it can't be read). Non-interactive — every wizard input is an argument here. " +
         "Never opens VS Code.",
       inputSchema: {
         feature: z.string().describe("Feature name. Required — this creates the feature."),

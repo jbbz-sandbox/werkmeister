@@ -31,6 +31,7 @@
     "./graduate": "./dist/graduate.js",
     "./hooks_gen": "./dist/hooks_gen.js",
     "./infra": "./dist/infra.js",
+    "./issue_snapshot": "./dist/issue_snapshot.js",
     "./issue_tracker": "./dist/issue_tracker.js",
     "./k8s": "./dist/k8s.js",
     "./k8s_forwards": "./dist/k8s_forwards.js",

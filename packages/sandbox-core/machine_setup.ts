@@ -88,6 +88,7 @@ import {
   versionLt,
 } from "./telepresence.js";
 import { PLAYWRIGHT_VERSION } from "./test_run.js";
+import { JIRA_PLACEHOLDERS } from "./jira-rest.js";
 
 // A command runner: argv in, [returncode, combined-output] out. Injected in
 // tests; the default shells out with a timeout and never throws.
@@ -763,11 +764,6 @@ export const JIRA_TOKEN_URL = "https://id.atlassian.com/manage-profile/security/
 
 /** The `jira:` keys the REST fast path needs, and the paste-me placeholders. */
 const JIRA_REQUIRED_KEYS = ["base_url", "email", "api_token"] as const;
-const JIRA_PLACEHOLDERS = new Set([
-  "PASTE_TOKEN_HERE",
-  "<your-atlassian-login-email>",
-  "https://your-org.atlassian.net",
-]);
 
 /** Copy-pasteable stanza for the report when the section is missing. */
 export const JIRA_CONFIG_SNIPPET =

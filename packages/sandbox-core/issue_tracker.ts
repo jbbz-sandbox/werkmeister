@@ -24,8 +24,8 @@ import { jira } from "./issue_trackers/jira.js";
 import { TRACKER_IDS, type Issue, type IssueTrackerStrategy, type TrackerId } from "./issue_trackers/types.js";
 
 export { TRACKER_IDS } from "./issue_trackers/types.js";
-export type { Issue, IssueComment, IssueTrackerStrategy, IssueUpdate, TrackerId } from "./issue_trackers/types.js";
-export { GITHUB_ISSUE_PATTERN, githubIssueRepos, normalizeGithubIssue } from "./issue_trackers/github.js";
+export type { Issue, IssueComment, IssueTrackerStrategy, IssueUpdate, TrackerAuth, TrackerId } from "./issue_trackers/types.js";
+export { GITHUB_ISSUE_PATTERN, ghBin, githubIssueRepos, normalizeGithubIssue } from "./issue_trackers/github.js";
 export { jiraSitePhrase, jiraSiteRef } from "./issue_trackers/jira.js";
 
 const REGISTRY: Record<TrackerId, IssueTrackerStrategy> = { jira, github };

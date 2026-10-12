@@ -5,11 +5,38 @@ description: "Create a brand-new sandbox workspace (git worktrees on a <user>/<w
 
 # Sandbox Workspace
 
-Create a brand-new sandbox workspace by collecting inputs through a form, then
-running `sandbox workspace`. The workspace is git worktrees (one per repo, derived from
-the selected **services**) on a `<user>/<workspace>` branch under
-`$SANDBOX_WORKSPACES_ROOT`, followed by `init-workspace` (writes `CLAUDE.md`, `.env`,
-`docker-compose.yml`, …).
+**Every create goes through `createWorkspace`** (packages/sandbox-core/sandbox.ts) — the CLI,
+the browser form, both MCP servers and the /workspaces pane all call it. Never write
+workspace files by hand.
+
+With an `issue_id`, `createWorkspace` always:
+1. fetches the issue and stores it verbatim in `.sandbox/issue.md` — it **fails the create**
+   if the issue can't be read (run `sandbox connect` to check tracker sign-in);
+2. fills `task` from the issue title when empty;
+3. has a model rewrite the issue into `description` / `starting_prompt` for whichever is
+   empty (`--no-distill` skips it; a failed rewrite only warns);
+4. renders the issue section (link, copy date, `sandbox issue view`) in CLAUDE.md and the
+   brief, for both JIT and ICM.
+
+## Pick the path
+
+| Situation | Do |
+|---|---|
+| every input known (feature, issue, services) | `sandbox workspace <feature> --issue-id <ref> --services <a,b> [--work-type <t>] [--context-strategy icm]`. Pass `--task` only to override the issue title |
+| the person should review the fields first | the /workspaces pane's Create tab, or the browser form (below) |
+| many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check |
+
+**Batch check** — after creating, for each new workspace:
+
+```bash
+test -f <ws>/.sandbox/issue.md && grep -q '^## Issue$' <ws>/CLAUDE.md && echo ok
+```
+
+Report any workspace that fails it; don't hand-patch files.
+
+The workspace is git worktrees (one per repo, derived from the selected **services**) on a
+`<user>/<workspace>` branch under `$SANDBOX_WORKSPACES_ROOT`, followed by `init-workspace`
+(writes `CLAUDE.md`, `.env`, `docker-compose.yml`, …).
 
 There is **no hand-maintained schema** — fields are built from the same prompt
 definitions (`_WIZARD_PROMPTS` in `packages/sandbox-core/workspace_prompts.ts`) that
@@ -38,6 +65,8 @@ sandbox workspace --browser-form --issue-id <ref>      # pre-fill from an issue
 sandbox workspace --browser-form --open               # also launch VS Code afterward
 ```
 
+Every flag given alongside `--browser-form` pre-fills the form.
+
 Run it in the **foreground** with a generous Bash timeout (~900000 ms) — it blocks while the
 user fills the form (default 600s wait) plus worktree creation + init.
 
@@ -46,7 +75,7 @@ Outcome JSON shapes:
 | Shape | Action |
 |-------|--------|
 | `{"status":"submitted","create":{"ok":true,"result":{…}}}` | Success — `result.workspacePath` is the new dir. |
-| `{"status":"submitted","create":{"ok":false,"error":"…"}}` | CLI failed — show `error`, offer to fix + retry. |
+| `{"status":"submitted","create":{"ok":false,"error":"…"}}` | Create failed — show `error`, offer to fix + retry. |
 | `{"status":"cancelled"}` / `{"status":"timeout"}` | Nothing created — offer to re-run. |
 | `{"status":"error","message":"…"}` | Pre-form failure (e.g. app not built) — relay it. |
 
@@ -75,7 +104,7 @@ Add `--issue-id`/`--open` to step 1 exactly as for the foreground form.
 ### Desktop inline alternative — the `workspace` MCP tool
 
 In **Claude Desktop**, the bundled `sandbox-workspace` MCP server renders the form **inline**
-(an MCP App `ui://` resource). Calling `mcp__sandbox-workspace__workspace` there shows the
+(an MCP App `ui://` resource). Calling `mcp__plugin_sandbox-tools_sandbox-workspace__workspace` there shows the
 same form in-conversation; on a CLI/VS-Code client it falls back to the same browser
 form as `--browser-form`. Use `--browser-form` from Claude Code; reserve the MCP tool for
 Desktop.
@@ -87,24 +116,12 @@ Desktop.
   builds it. Without the build, `--browser-form` errors with a clear message.
   The form page (`dist/form.html`) is fully self-contained — no internet needed.
 
-## Skip the form — direct CLI
-
-If the user already gave every input, skip the form:
-
-```bash
-sandbox workspace add-pricing --issue-id <ref> --services backend,frontend
-```
-
-`feature` is positional; other form keys map 1:1 onto flags (`issue_id` → `--issue-id`,
-`services` → `--services`, `test_path` → `--test-path`, …). Add `--repos r1,r2` to force
-worktrees for repos beyond what the selected services imply (the form has no repos field —
-it derives repos from services).
-
 ## Common pitfalls
 
+- **Issue can't be read.** The create fails before anything is made; run `sandbox connect`, fix sign-in, retry.
 - **No repos resolvable.** The form derives worktree repos from **services**; if none are
   picked, `sandbox workspace` has nothing to make worktrees from and exits nonzero. Pick
-  services, or pass `--repos`.
+  services, or pass `--repos r1,r2` (the form has no repos field).
 - **Source repo missing.** Worktrees are cut from `$SANDBOX_REPOS_ROOT/<repo>`; a missing
   checkout fails the create.
 - **Workspace already exists.** `sandbox workspace` skips worktree creation and just re-runs
