@@ -90,6 +90,9 @@ try {
     // The pane distils on the session's own model (fetchIssue) before Create and sends distill: false.
     'create-workspace': () => core.createWorkspace(args.formData, { open: false, distill: args.distill }),
     'refine-request': () => core.buildRefinePrompt(args.text, args.instruction, args.formData),
+    // The create form's rules live in sandbox-core, shared with the browser form.
+    'validate-form': () => core.validateFormData(args.bundle, args.formData),
+    'merge-form': () => core.mergeFormData(args.current, args.incoming),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -197,28 +200,11 @@ export function optionGroups(f: FormField): [string, string[]][] {
 
 const isEmpty = (v: Draft[string] | undefined) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
 
-/** An issue's fields fill only what the person left empty; the issue ID itself is the lookup's normalised one. */
-export function mergeIssueFields(draft: Draft, data: Record<string, unknown>): Draft {
-  const out = { ...draft }
-  for (const [k, v] of Object.entries(data)) {
-    if (typeof v !== 'string' && !Array.isArray(v)) continue
-    if (k === 'issue_id' || isEmpty(out[k])) out[k] = Array.isArray(v) ? v.map(String) : v
-  }
-  return out
-}
-
-/** Why the draft can't be submitted, one line per field; [] when it can. */
-export function formErrors(fields: FormField[], draft: Draft): string[] {
-  const out: string[] = []
-  for (const f of fields) {
-    const v = draft[f.key]
-    if (isEmpty(v)) {
-      if (f.required) out.push(`${f.title}: required`)
-    } else if (f.pattern && typeof v === 'string' && !new RegExp(f.pattern).test(v)) {
-      out.push(`${f.title}: "${v}" doesn't match the expected format`)
-    }
-  }
-  return out
+/** Why the draft can't be submitted, one line per field in form order; [] when it can. The rules are sandbox-core's validateFormData. */
+async function formErrors($: EngineInterface, bundle: FormBundle, fields: FormField[], draft: Draft): Promise<string[]> {
+  const errors = await core<Record<string, string>>($, 'validate-form', { bundle: { schema: bundle.schema }, formData: draft })
+  const known = fields.filter(f => errors[f.key]).map(f => `${f.title}: ${errors[f.key]}`)
+  return [...known, ...Object.keys(errors).filter(k => !fields.some(f => f.key === k)).map(k => errors[k]!)]
 }
 
 /**
@@ -275,7 +261,7 @@ async function fillFormTool($: EngineInterface, input: Record<string, unknown>):
   const given = input.fields && typeof input.fields === 'object' && !Array.isArray(input.fields) ? (input.fields as Record<string, unknown>) : {}
   const r = applyFormFields(fields, draft, given)
   await $.state.set(DRAFT, r.draft)
-  const missing = formErrors(fields, r.draft)
+  const missing = await formErrors($, form.bundle, fields, r.draft)
   return [
     `The Create tab of the /workspaces pane now holds:`,
     JSON.stringify(r.draft, null, 2),
@@ -323,7 +309,7 @@ async function fetchIssue($: EngineInterface): Promise<void> {
       else failed = ` Couldn't distil the rest (${r.reason}).`
     }
     const { value: now = {} } = await $.state.get(DRAFT)
-    const merged = mergeIssueFields(now, data)
+    const merged = await core<Draft>($, 'merge-form', { current: now, incoming: data })
     const filled = Object.keys(data).filter(k => k !== 'issue_id' && isEmpty(now[k]) && !isEmpty(merged[k]))
     await $.state.set(DRAFT, merged)
     await $.state.set(NOTE, (filled.length ? `Filled ${filled.join(', ')} from ${data.issue_id}.` : `${data.issue_id}: nothing new to fill.`) + failed)
@@ -389,7 +375,7 @@ async function submitForm($: EngineInterface): Promise<void> {
     }
   }
   const { value: draft = {} } = await $.state.get(DRAFT)
-  const errors = formErrors(formFields(form.bundle), draft)
+  const errors = await formErrors($, form.bundle, formFields(form.bundle), draft)
   if (errors.length) {
     await $.state.set(NOTE, errors.join('\n'))
     return

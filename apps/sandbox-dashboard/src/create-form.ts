@@ -24,6 +24,7 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { HostBridge } from "./workspace-ui.js";
 import { injectCss } from "./theme.js";
+import { mergeFormData, repoSelectionError } from "sandbox-core/form_schema";
 
 // Neutral form styling scoped under `.wsform` so it matches src/workspace-ui.ts
 // (same shared --sd-* tokens, src/theme.ts) and never collides with the list's
@@ -249,29 +250,6 @@ function makeTextareaWidget(bridge: HostBridge) {
   };
 }
 
-/** Empty = nothing to keep: null/undefined, blank string, or empty array. */
-function isBlank(v: unknown): boolean {
-  return v == null || v === "" || (Array.isArray(v) && v.length === 0);
-}
-
-/**
- * Merge issue-derived fields into the current form data, fill-empty style: a
- * field the user already touched is never clobbered, so re-fetching is safe.
- * `issue_id` is the exception — the lookup normalizes it (e.g. `proj-1234` →
- * `PROJ-1234`), so the canonical ref always wins.
- */
-function mergeIssueFields(
-  current: Record<string, unknown>,
-  issue: Record<string, unknown>,
-): Record<string, unknown> {
-  const out = { ...current };
-  for (const [k, v] of Object.entries(issue)) {
-    if (!isBlank(v) && isBlank(out[k])) out[k] = v;
-  }
-  if (typeof issue.issue_id === "string" && issue.issue_id) out.issue_id = issue.issue_id;
-  return out;
-}
-
 /**
  * Text widget for `issue_id` with a "Fetch from <tracker>" button (opt-in via
  * ui:widget "issue"). The tracker's label arrives in `ui:options.trackerLabel`,
@@ -346,16 +324,10 @@ function makeIssueWidget(bridge: HostBridge) {
   };
 }
 
-/** A workspace needs at least one repo — derived from selected services or explicit repos. */
+/** A workspace needs at least one repo; the rule lives in sandbox-core so every create form shares it. */
 function validateRepoSelection(formData: unknown, errors: FormValidation): FormValidation {
-  const data = (formData ?? {}) as Record<string, unknown>;
-  const services = Array.isArray(data.services) ? data.services.filter(Boolean) : [];
-  const repos = Array.isArray(data.repos) ? data.repos.filter(Boolean) : [];
-  if (services.length === 0 && repos.length === 0) {
-    errors.services?.addError(
-      "Select at least one service (or add a repo below) — a workspace needs at least one repo.",
-    );
-  }
+  const message = repoSelectionError((formData ?? {}) as Record<string, unknown>);
+  if (message) errors.services?.addError(message);
   return errors;
 }
 
@@ -459,9 +431,9 @@ function WorkspaceForm({
         formContext: {
           getFormData: () => formDataRef.current,
           // The issue widget calls this to populate fields from an issue without
-          // clobbering anything the user has already filled (see mergeIssueFields).
+          // clobbering anything the user has already filled (see sandbox-core mergeFormData).
           applyIssueData: (data: Record<string, unknown>) =>
-            setFormData((prev) => mergeIssueFields(prev, data)),
+            setFormData((prev) => mergeFormData(prev, data)),
         },
         validator,
         widgets: { textarea: TextareaWidget, issue: IssueWidget, checkboxes: GroupedCheckboxesWidget },
