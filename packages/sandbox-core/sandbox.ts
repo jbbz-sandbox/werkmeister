@@ -43,6 +43,7 @@ import { issueBriefing, issueIdOf, issueTracker, type Issue } from "./issue_trac
 import { checkForwardHealth } from "./k8s.js";
 import { interceptsSnapshot, type InterceptRow } from "./status.js";
 import { buildFormSchema } from "./form_schema.js";
+export { mergeFormData, repoSelectionError, validateFormData } from "./form_schema.js";
 import { computePromptSpec } from "./workspace_prompts.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { featureUrl } from "./feature_routing.js";

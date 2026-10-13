@@ -452,6 +452,19 @@ function answerIssueModel(on: On): { model: string; prompt: string }[] {
   return asked
 }
 
+const blank = (v: unknown) => v == null || v === '' || (Array.isArray(v) && v.length === 0)
+
+function validateStub(data: Record<string, unknown>): Record<string, string> {
+  const errors: Record<string, string> = {}
+  for (const [k, p] of Object.entries(BUNDLE.schema.properties) as [string, { pattern?: string }][]) {
+    const v = data[k]
+    if (blank(v)) {
+      if (BUNDLE.schema.required.includes(k)) errors[k] = 'required'
+    } else if (p.pattern && typeof v === 'string' && !new RegExp(p.pattern).test(v)) errors[k] = `"${v}" doesn't match the expected format`
+  }
+  return errors
+}
+
 function formStubs(over: Partial<McpStub> = {}): McpStub {
   return stubs({
     [`${WS}/form-schema`]: () => ok({ bundle: BUNDLE, trackerLabel: 'GitHub' }),
@@ -460,6 +473,13 @@ function formStubs(over: Partial<McpStub> = {}): McpStub {
     [`${WS}/create-workspace`]: () => ok({ command: 'sandbox workspace rate-limit', workspacePath: '/ws/api-7-rate-limit' }),
     [`${WS}/open-claude-link`]: a => ok({ url: a.url }),
     [`${WS}/refine-request`]: args => ok(`REFINE: ${String(args.text)}`),
+    // Stand-ins for sandbox-core's validateFormData and mergeFormData (form-validate.test.mjs tests the real ones).
+    [`${WS}/validate-form`]: a => ok(validateStub(a.formData as Record<string, unknown>)),
+    [`${WS}/merge-form`]: a => {
+      const out = { ...(a.current as Record<string, unknown>) }
+      for (const [k, v] of Object.entries(a.incoming as Record<string, unknown>)) if (k === 'issue_id' || blank(out[k])) out[k] = v
+      return ok(out)
+    },
     ...over,
   })
 }
@@ -765,5 +785,19 @@ test('close-out needs two presses, and a remove press on the same row cancels it
   await ui.press({ key: 'closeout:abc' })
   expect(w.calls.filter(c => c.key === `${WS}/close-out`).map(c => c.args)).toEqual([{ name: 'abc' }])
   expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
+  await ui.unmount()
+})
+
+test("Create checks the draft with sandbox-core's rules: no service or repo means no create", async ($, on) => {
+  const repoRule = 'Select at least one service (or add a repo below) — a workspace needs at least one repo.'
+  const w = world(on, formStubs({ [`${WS}/validate-form`]: () => ok({ services: repoRule }) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  await ui.press({ key: 'tab:create' })
+  await ui.post({ value: 'rate-limit' }, { in: 'f:feature' })
+  await ui.press({ key: 'create:go' })
+  expect(w.calls.find(c => c.key === `${WS}/validate-form`)?.args).toEqual({ bundle: { schema: BUNDLE.schema }, formData: { feature: 'rate-limit' } })
+  expect((await ui.find({ key: 'note' }))?.text).toBe(`Local services: ${repoRule}`)
+  expect(w.calls.some(c => c.key === `${WS}/create-workspace`)).toBe(false)
   await ui.unmount()
 })

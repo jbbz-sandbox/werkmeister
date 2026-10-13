@@ -183,3 +183,57 @@ export function buildFormSchema(
     title: resolvedTitle,
   };
 }
+
+/** A workspace needs at least one repo: a selected service or an explicit repo. The message, or null when satisfied. */
+export function repoSelectionError(formData: Record<string, unknown>): string | null {
+  const picked = (v: unknown) => (Array.isArray(v) ? v.filter(Boolean).length : 0);
+  if (picked(formData["services"]) + picked(formData["repos"]) > 0) return null;
+  return "Select at least one service (or add a repo below) — a workspace needs at least one repo.";
+}
+
+const blank = (v: unknown) => v == null || v === "" || (Array.isArray(v) && v.length === 0);
+
+/**
+ * Field key → why `formData` can't be submitted against a `buildFormSchema` bundle: required, pattern and choices,
+ * plus `repoSelectionError` (under `services`). Empty when it can. For renderers without a JSON Schema validator
+ * (the /workspaces pane); the browser form's AJV covers the schema part and calls `repoSelectionError` itself.
+ */
+export function validateFormData(
+  bundle: { schema: Record<string, any> },
+  formData: Record<string, unknown>,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const required = new Set<string>(bundle.schema["required"] ?? []);
+  for (const [key, prop] of Object.entries<Record<string, any>>(bundle.schema["properties"] ?? {})) {
+    const v = formData[key];
+    if (blank(v)) {
+      if (required.has(key)) errors[key] = "required";
+      continue;
+    }
+    const allowed: unknown[] | undefined = prop["type"] === "array" ? prop["items"]?.["enum"] : prop["enum"];
+    const bad = allowed ? (Array.isArray(v) ? v : [v]).filter((x) => !allowed.includes(x)) : [];
+    if (bad.length) errors[key] = `not offered: ${bad.join(", ")}`;
+    else if (prop["pattern"] && typeof v === "string" && !new RegExp(prop["pattern"]).test(v)) {
+      errors[key] = `"${v}" doesn't match the expected format`;
+    }
+  }
+  const repo = repoSelectionError(formData);
+  if (repo && !errors["services"]) errors["services"] = repo;
+  return errors;
+}
+
+/**
+ * Fill-empty merge of an issue's fields into form data: a field already filled is never clobbered, so re-fetching
+ * is safe. `issue_id` is the exception — the lookup normalizes it (`api#7` → `acme/api#7`), so the canonical ref wins.
+ */
+export function mergeFormData(
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...current };
+  for (const [k, v] of Object.entries(incoming)) {
+    if (!blank(v) && blank(out[k])) out[k] = v;
+  }
+  if (typeof incoming["issue_id"] === "string" && incoming["issue_id"]) out["issue_id"] = incoming["issue_id"];
+  return out;
+}
