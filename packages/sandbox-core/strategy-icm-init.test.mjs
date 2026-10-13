@@ -176,6 +176,23 @@ test("discoverRepos ignores ICM directories when the workspace root itself is a 
   });
 });
 
+test("discoverRepos and contextFromDisk agree on dot-prefixed and symlinked repo dirs (#110)", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    fs.mkdirSync(path.join(root, ".hidden-repo", ".git"), { recursive: true });
+    const real = fs.mkdtempSync(path.join(os.tmpdir(), "icm-linked-"));
+    fs.mkdirSync(path.join(real, ".git"));
+    fs.symlinkSync(real, path.join(root, "linked-repo"));
+    try {
+      const repos = discoverRepos(root);
+      assert.deepEqual(repos.map(([name]) => name), ["demo-repo", "linked-repo"]);
+      icm.init({ ...ctx, repos });
+      assert.deepEqual(icm.check(root), []);
+    } finally {
+      fs.rmSync(real, { recursive: true, force: true });
+    }
+  });
+});
+
 test("no feature or services: the restart sentence points at sandbox-context.md", async () => {
   await withIcmWorkspace(
     async (root, ctx) => {

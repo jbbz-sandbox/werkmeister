@@ -100,21 +100,31 @@ export function fnmatch(name: string, pat: string): boolean {
 /**
  * Immediate subdirectories of *workspace* that are git repos/worktrees.
  *
- * Worktrees carry a `.git` file, standalone clones a `.git` dir —
- * `existsSync` covers both. Never throws: an unreadable workspace yields no
- * repos.
+ * The one owner of this rule — `discoverRepos` builds on it so init and icm
+ * check never disagree (#110). Dot dirs (`.sandbox/`, `.claude/`) are tool
+ * dirs, never repos; symlinked dirs count. Worktrees carry a `.git` file,
+ * standalone clones a `.git` dir — `existsSync` covers both. Not `rev-parse`:
+ * it succeeds in any plain subdir of a git-tracked workspace root (#96). Never
+ * throws: an unreadable workspace yields no repos.
  */
 export function repoDirs(workspace: string): string[] {
   try {
     return fs
-      .readdirSync(workspace, { withFileTypes: true })
-      .filter(
-        (e) => e.isDirectory() && fs.existsSync(path.join(workspace, e.name, ".git")),
-      )
-      .map((e) => path.join(workspace, e.name))
+      .readdirSync(workspace)
+      .filter((name) => !name.startsWith("."))
+      .map((name) => path.join(workspace, name))
+      .filter((p) => isDirFollowingLinks(p) && fs.existsSync(path.join(p, ".git")))
       .sort();
   } catch {
     return [];
+  }
+}
+
+function isDirFollowingLinks(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
   }
 }
 

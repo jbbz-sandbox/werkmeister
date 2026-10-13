@@ -47,6 +47,7 @@ import {
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
+import { repoDirs } from "./standards.js";
 import type { IssueRef } from "./strategies/types.js";
 import { STRATEGY_IDS, parseStrategyId, reportLeftovers, strategyById } from "./strategies/index.js";
 import {
@@ -445,13 +446,6 @@ function ancestors(p: string): string[] {
 // Repo discovery
 // ---------------------------------------------------------------------------
 
-/** Return True if *path* is the root of a git repo or worktree. */
-function isGitRepo(p: string): boolean {
-  // Not `rev-parse`: it succeeds in any plain subdir of an enclosing repo, e.g. ICM
-  // `_shared/`/`stages/` under a git-tracked workspace root (#96).
-  return fs.existsSync(path.join(p, ".git"));
-}
-
 /** Return the current branch name, or the short commit hash if detached. */
 function getBranch(p: string): string {
   const result = procRun(["git", "-C", p, "branch", "--show-current"], { capture: true });
@@ -465,17 +459,7 @@ function getBranch(p: string): string {
 
 /** (dir_name, branch) for every immediate subdir that is a git repo/worktree, sorted. */
 export function discoverRepos(workspaceRoot: string): Array<[string, string]> {
-  const repos: Array<[string, string]> = [];
-  for (const name of fs.readdirSync(workspaceRoot).sort()) {
-    const entry = path.join(workspaceRoot, name);
-    if (!isDir(entry) || name.startsWith(".")) {
-      continue;
-    }
-    if (isGitRepo(entry)) {
-      repos.push([name, getBranch(entry)]);
-    }
-  }
-  return repos;
+  return repoDirs(workspaceRoot).map((d) => [path.basename(d), getBranch(d)]);
 }
 
 // ---------------------------------------------------------------------------
