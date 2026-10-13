@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.5.1
+
+### Patch Changes
+
+- 47a7667: `discoverRepos` and `repoDirs` now share one rule for which workspace dirs are repos: dot-prefixed dirs are skipped and symlinked dirs count. Before, an icm workspace with a dot-prefixed or symlinked repo dir reported drift in `sandbox skills check` that `sync` could never clear (#110).
+
 ## 0.5.0
 
 ## 0.4.0
