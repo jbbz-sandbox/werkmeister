@@ -41,6 +41,25 @@ test("an unattended create takes only description and starting_prompt from the m
   }, { config: GH });
 });
 
+test("a workspace container's own env does not leak into an unattended create (#148)", async () => {
+  const keys = ["FEATURE", "SANDBOX_FEATURE", "SANDBOX_SLOT"];
+  const prev = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  Object.assign(process.env, { FEATURE: "repo-dir-drift", SANDBOX_FEATURE: "repo-dir-drift", SANDBOX_SLOT: "3" });
+  try {
+    await withSandboxHome(async () => {
+      await withFakeGh({ issue: ISSUE }, async () => {
+        const { resolved } = await quiet(() => prepareCreate({ issue_id: "o/r#5" }, { cwd: cwd(), distill: false }));
+        assert.equal(resolved.feature, undefined);
+      });
+    }, { config: GH });
+  } finally {
+    for (const k of keys) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  }
+});
+
 test("URL ref is normalised", async () => {
   await withSandboxHome(async () => {
     await withFakeGh({ issue: ISSUE }, async () => {

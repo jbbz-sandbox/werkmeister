@@ -131,10 +131,12 @@ setup_services:
   # The sandbox repo's install + build + tools download. `npm run build` runs
   # so sandbox-core/dist exists before the four services start; startup.sh
   # (infra/compose/scripts/sandbox-install-startup.sh) fills the `tools`
-  # volume with docker/compose/kubectl for the host-access services.
+  # volume with docker/compose/kubectl for the host-access services. `npm ci`,
+  # not `install`: the image's npm re-serializes package-lock.json (dropping the
+  # `libc` fields a newer host npm writes), dirtying the worktree on every up (#148).
   sandbox-install:
     image: node:22
-    command: "npm install && npm run build && sh /usr/local/bin/startup.sh"
+    command: "npm ci && npm run build && sh /usr/local/bin/startup.sh"
     node_modules_volume: node-modules
     startup_script: true
     extra_volumes:

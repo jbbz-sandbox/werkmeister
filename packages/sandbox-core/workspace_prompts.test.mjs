@@ -12,9 +12,6 @@ import path from "node:path";
 
 import { buildFormSchema } from "./dist/form_schema.js";
 
-// A workspace container exports SANDBOX_FEATURE, which prefills `feature` (and
-// drops it from `required`) — and the pre-PR gate runs this suite in one.
-delete process.env.SANDBOX_FEATURE;
 import {
   computePromptSpec,
   DEFAULT_PLAN,
