@@ -711,7 +711,7 @@ const SPECS: CommandSpec[] = [
         .option("-t, --task <title>", "Task description / title (env: SANDBOX_TASK; config: task).")
         .option(
           "--feature <name>",
-          "Feature name for sandbox slot routing (env: SANDBOX_FEATURE; config: feature).",
+          "Feature name for sandbox slot routing (config: feature).",
         )
         .option(
           "--services <list>",
