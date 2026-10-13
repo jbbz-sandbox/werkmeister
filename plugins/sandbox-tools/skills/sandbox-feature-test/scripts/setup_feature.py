@@ -122,14 +122,22 @@ def _first_routed_service() -> str | None:
 
 
 def resolve_workspace(workspace_override: str | None) -> Path:
-    """Mirror sandbox's resolve_workspace: .git-boundary walk → ~/workspace fallback."""
+    """Mirror sandbox-core's resolveWorkspace (config.ts): workspaces_root → .git-boundary walk → ~/workspace."""
     if workspace_override:
         return Path(workspace_override).resolve()
     env = os.environ.get("WORKSPACE")
     if env:
         return Path(env).resolve()
+    cwd = Path.cwd()
+    # A workspace root is itself a git repo, so the .git walk below would return the
+    # workspaces root; under paths.workspaces_root the workspace is cwd's first segment.
+    configured = _scalar(CONFIG_YAML, "workspaces_root")
+    if configured:
+        root = Path(configured).expanduser().resolve()
+        if root in cwd.parents:
+            return root / cwd.relative_to(root).parts[0]
     # Walk up from cwd to nearest .git boundary; return its parent (the workspace).
-    for d in [Path.cwd(), *Path.cwd().parents]:
+    for d in [cwd, *cwd.parents]:
         if (d / ".git").exists():
             return d.parent
     return Path.home() / "workspace"
