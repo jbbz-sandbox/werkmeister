@@ -106,8 +106,10 @@ export function loadWorkspaceConfig(p: string): any {
 }
 
 // Keys are [cliAttr, envVar, configField], consulted in order CLI > env > config.
-export const _INPUT_FIELDS: ReadonlyArray<[string, string, string]> = [
-  ["feature", "SANDBOX_FEATURE", "feature"],
+// `feature` has no env source: every workspace container exports SANDBOX_FEATURE
+// as its own identity, which would prefill any workspace created from inside one (#148).
+export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
+  ["feature", null, "feature"],
   ["work_type", "SANDBOX_WORK_TYPE", "work_type"],
   ["context_strategy", "SANDBOX_CONTEXT_STRATEGY", "context_strategy"],
   ["repos", "SANDBOX_REPOS", "repos"],
@@ -222,7 +224,7 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
 
   for (const [cliAttr, envVar, configField] of _INPUT_FIELDS) {
     const cliValue = args[cliAttr] ?? null;
-    const envValue = process.env[envVar] ?? null;
+    const envValue = envVar ? (process.env[envVar] ?? null) : null;
     // Workspaces made before the rename hold `jira_id` / `github_issue`: read, never written.
     const cfgValue =
       configField === "issue_id" ? issueIdOf(configData) || null : configField in configData ? configData[configField] : null;
