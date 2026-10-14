@@ -386,7 +386,7 @@ test('New session opens the app\'s new-session link for the workspace folder', a
   await ui.press({ key: 'new:abc' })
   expect(w.calls.find(c => c.key === `${WS}/open-claude-link`)?.args).toEqual({ url: 'claude://code/new?folder=%2Fws%2Fabc&source=services' })
   expect(w.calls.some(c => c.key === 'ccd_directory/change_directory')).toBe(false)
-  expect(w.toasts).toEqual(['Opening a new session in abc'])
+  expect(w.toasts).toEqual(['Opening a new session in abc. To keep this pane in sight: right-click it in the sidebar → Open in → Split view'])
   await ui.unmount()
 })
 
