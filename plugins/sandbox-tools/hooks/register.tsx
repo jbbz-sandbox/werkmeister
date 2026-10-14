@@ -647,7 +647,7 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     if (!row) return
     try {
       await core($, 'open-claude-link', { url: newSessionLink(row.path) })
-      $.ui.toast(`Opening a new session in ${name}`)
+      $.ui.toast(`Opening a new session in ${name}. To keep this pane in sight: right-click it in the sidebar → Open in → Split view`)
     } catch (err) {
       await $.state.set(NOTE, (err as Error).message)
     }
