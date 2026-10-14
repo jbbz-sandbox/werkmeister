@@ -8,7 +8,7 @@
  * port-forwarded from k8s.
  *
  * Usage:
- *     sandbox up <feature|infra> [-s svc,...]  Start a feature or shared infra
+ *     sandbox up <feature|infra>               Start a feature or shared infra
  *     sandbox down <feature|infra> [-v]        Stop and clean up a feature or infra
  *     sandbox restart <feature|infra>          Restart containers
  *     sandbox stop <feature|infra>             Stop containers (preserve slot/volumes)
@@ -102,22 +102,14 @@ const SPECS: CommandSpec[] = [
           "Feature name (arbitrary label for slot/proxy routing). " +
             "If omitted, read from FEATURE in a .env file in the current directory tree.",
         )
-        .option("--force", "Start even if no services are detected")
         .option(
           "-w, --workspace <path>",
           "Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).",
-        )
-        .option(
-          "-s, --services <list>",
-          "Comma-separated list of services to run locally (e.g. 'backend,frontend'). " +
-            "Skips auto-detection from git diff.",
         );
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
-      force: Boolean(o.force),
       workspace: o.workspace ?? null,
-      services: o.services ?? null,
     }),
   },
   {
