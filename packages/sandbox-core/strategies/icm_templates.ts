@@ -160,7 +160,7 @@ const feature: Stage[] = [
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change against the published port from \`sandbox-context.md\` and capture the response.`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`sandbox-context.md\` describes for each service touched, and capture the output.`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, the exercise checks as ${EXERCISE_FORMAT}, and any deviation from \`spec.md\` with its reason.`,
       ],
       outputs: ["Code changes, uncommitted — the next stage commits after the person reads the diff", "`output/exercise.md`"],

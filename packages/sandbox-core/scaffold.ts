@@ -158,8 +158,17 @@ export const REGISTRY_DEFAULTS: Record<string, any> = {
   archetypes: {
     "node-web": { standards: ["ui", "config", "testing"], mcp_servers: ["context7"], test: "npm test" },
     "node-service": { standards: ["service", "testing"], test: "npm test" },
-    "node-tool": { standards: ["engineering", "testing"] },
-    "mcp-client": { standards: ["engineering", "testing"], mcp_servers: [SANDBOX_MCP_SERVER] },
+    "node-tool": {
+      standards: ["engineering", "testing"],
+      validate: "Library: run the unit/smoke tests. No URL, cookie, or Caddy step applies.",
+    },
+    "mcp-client": {
+      standards: ["engineering", "testing"],
+      mcp_servers: [SANDBOX_MCP_SERVER],
+      validate:
+        "Build, then npm run test:integration (Extension Development Host via @vscode/test-cli). " +
+        "Walk the open items in MANUAL-CHECKLIST.md for anything visual.",
+    },
   },
   mcp_servers: {
     context7: {

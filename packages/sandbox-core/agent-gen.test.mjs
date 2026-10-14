@@ -54,3 +54,12 @@ test("the researcher carries the investigation method, phrased for a subagent", 
   assert.doesNotMatch(body, /read CLAUDE\.md first/);
   assert.match(body, /RETURN CONTRACT/);
 });
+
+test("a registered validate line sits under the test command; none adds nothing", () => {
+  const svcs = { lib: { repo: "demo", archetype: "tool", validate: "run the smoke tests" }, bare: { repo: "demo", archetype: "tool" } };
+  const archs = { tool: { standards: [], test: "npm test" } };
+  const [spec] = buildTesterSpecs({ tool: ["bare", "lib"] }, svcs, archs, "test", {}, "");
+  const body = buildTesterAgent(spec);
+  assert.match(body, /- lib — run from `demo\/`: `npm test`\n  validate: run the smoke tests/);
+  assert.doesNotMatch(body.split("- lib")[0], /validate:/, "bare service has no validate line");
+});

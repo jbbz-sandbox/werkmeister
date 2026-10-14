@@ -13,6 +13,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { validationRows } from "./archetypes.js";
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
 import { loadIngress } from "./global_config.js";
 import { issueLink } from "./issue_tracker.js";
@@ -89,7 +90,7 @@ export function buildRoutingTable(
 
   if (hasFeature) {
     rows.push(
-      "| Running the feature — URL, X-Feature cookie, ports, lifecycle, health checks | .sandbox/sandbox-context.md |",
+      "| Running or validating the change — test commands, how to validate, ports, lifecycle | .sandbox/sandbox-context.md |",
     );
   }
 
@@ -300,7 +301,6 @@ Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's
 // sandbox-context.md generation
 // ---------------------------------------------------------------------------
 
-/** Render .sandbox/sandbox-context.md — ports, service topology, lifecycle commands, health checks. */
 function testCommandLine(feature: string, svc: string, servicesConfig: Record<string, any>, archetypes: Record<string, any>): string {
   const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
   return cmd
@@ -308,6 +308,13 @@ function testCommandLine(feature: string, svc: string, servicesConfig: Record<st
     : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;
 }
 
+/**
+ * Render .sandbox/sandbox-context.md — how to validate, then (when they apply)
+ * ports, service topology, lifecycle commands, health checks.
+ *
+ * `candidates` is the workspace's services (selected, else its repos'); routing
+ * and Caddy sections appear only for those with a URL.
+ */
 export function buildSandboxContextMd(
   feature: string,
   slot: number,
@@ -317,6 +324,7 @@ export function buildSandboxContextMd(
   servicesConfig: Record<string, any>,
   testPath = "",
   archetypes: Record<string, any> | null = null,
+  candidates: string[] = localServices,
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the
   // same source Caddy's site blocks are generated from — so this file can never
@@ -336,15 +344,34 @@ export function buildSandboxContextMd(
   // runs locally. The routed-host list below stays machine-wide — it describes
   // what Caddy terminates, which is a fact about the proxy, not the feature.
   let localHosts: string[] = [];
+  let urlHosts: string[] = [];
+  let urlServices = new Set<string>();
   try {
     const routers = loadFeatureRouters(servicesConfig);
-    localHosts = localServices
-      .map((svc) => routers[svc]?.hostname)
-      .filter((h): h is string => Boolean(h))
-      .sort();
+    const hostsOf = (svcs: string[]) =>
+      svcs
+        .map((svc) => routers[svc]?.hostname)
+        .filter((h): h is string => Boolean(h))
+        .sort();
+    localHosts = hostsOf(localServices);
+    urlHosts = hostsOf(candidates);
+    urlServices = new Set(candidates.filter((svc) => routers[svc]?.hostname));
   } catch {
     localHosts = [];
   }
+  // A service is URL-addressed when it has a feature_router host; only those get
+  // Caddy/cookie routing. The rest are validated by their test/validate guidance.
+  const hasLocal = localServices.length > 0;
+  const hasUrl = urlServices.size > 0;
+  const validationTable =
+    "| Service | Repo | Path in repo | Test command | Validation |\n" +
+    "|---------|------|--------------|--------------|------------|\n" +
+    validationRows(candidates, servicesConfig, archetypes, urlServices)
+      .map(
+        (r) =>
+          `| \`${r.service}\` | ${r.repo} | \`${r.path}\` | ${r.test ? `\`${r.test}\`` : "—"} | ${r.validate} |`,
+      )
+      .join("\n");
 
   const k8sPort = (svc: string): number | null => {
     // k8s-forwards container listen-port; single source is services.yaml.
@@ -367,7 +394,7 @@ export function buildSandboxContextMd(
     }
     const offset = svcDef["port_offset"] ?? 0;
     const hostPort = getServicePort(slot, offset);
-    if (firstLocalHostPort === null) {
+    if (firstLocalHostPort === null && urlServices.has(svc)) {
       firstLocalHostPort = hostPort;
     }
     const internalPort = svcDef["internal_port"] ?? 3000;
@@ -378,6 +405,11 @@ export function buildSandboxContextMd(
   }
   for (const svc of Object.keys(servicesConfig).sort()) {
     if (localServices.includes(svc)) {
+      continue;
+    }
+    // Local containers get every k8s service's URL injected, so their table keeps
+    // them all. With none running, only the workspace's own services are relevant.
+    if (!hasLocal && !candidates.includes(svc)) {
       continue;
     }
     const svcDef = servicesConfig[svc] ?? {};
@@ -440,7 +472,7 @@ ${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? load
   // Quick health checks — direct-to-localhost line must hit a real local
   // service port, not `port_start` (the slot base) where nothing listens.
   let healthChecks: string;
-  if (localServices.length > 0 && firstLocalHostPort !== null) {
+  if (firstLocalHostPort !== null) {
     const directCheck =
       "# Direct to a local service (bypass Caddy — isolates routing vs app issues):\n" +
       'curl -s -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
@@ -460,10 +492,14 @@ ${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? load
       "# Container status:\n" +
       `docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" | grep ${feature}`;
     healthChecks = proxyCheck + directCheck + statusCheck;
+  } else if (hasLocal) {
+    healthChecks =
+      "# Container status:\n" +
+      `docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" | grep ${feature}`;
   } else {
     healthChecks =
       "# Through Caddy (all traffic routes to k8s):\n" +
-      routedHosts
+      urlHosts
         .map(
           (host) =>
             'curl -sk -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
@@ -490,24 +526,23 @@ or visit https://${proxy.host}/__sandbox and select \`${feature}\` — the selec
 `
     : "";
 
-  return `<!--
-  AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
-  Source:    ~/.sandbox/services.yaml + ports.yaml
-             + .sandbox/workspace.yml (feature, services, slot)
-  Generator: packages/sandbox-core/claude_md.ts :: buildSandboxContextMd
-  Regen:     sandbox init-workspace  (or \`sandbox up\` after slot changes)
-  To change ports/health endpoints/services, edit services.yaml / ports.yaml.
-  To change which services run locally, edit .sandbox/workspace.yml and rerun.
--->
+  const validateBlock = `## How to validate
 
-# Sandbox Context: ${feature}
+How to exercise a change to each service in this workspace.
 
-## Slot & Port Range
+${validationTable}
+
+`;
+  const slotBlock = hasLocal
+    ? `## Slot & Port Range
 
 - **Slot:** ${slot}
 - **Port range:** ${portStart}–${portEnd}
 
-## Container Lifecycle
+`
+    : "";
+  const lifecycleBlock = hasLocal
+    ? `## Container Lifecycle
 
 Run from anywhere in the workspace — \`sandbox\` reads \`FEATURE\` from \`.env\` at the workspace root.
 
@@ -521,27 +556,40 @@ sandbox down -v     # tear down + remove volumes (node_modules, caches)
 
 > **Fallback:** If \`sandbox\` CLI is unavailable, \`docker compose up -d --build\` / \`docker compose down\` from the workspace root works equivalently. Prefer \`sandbox\` — it also manages slot allocation and Caddy proxy regeneration.
 
-## Services
+`
+    : "";
+  const servicesBlock = hasLocal || serviceRows.length > 0
+    ? `## Services
 
 Every container gets each service's URL injected as an env var (the last column). Local services resolve to the Docker DNS alias on the per-feature network; k8s-forwarded services resolve via the shared \`k8s-forwards\` container.
 
 ${servicesTable}
 
-${containerCommandsBlock}## Quick Health Checks
+`
+    : "";
+  const healthBlock = hasUrl || hasLocal
+    ? `## Quick Health Checks
 
 \`\`\`bash
 ${healthChecks}
 \`\`\`
 
-## Proxy Routing
+`
+    : "";
+  const proxyBlock = hasUrl
+    ? `## Proxy Routing
 
 ${routingHostList}
 
 Set \`X-Feature=${feature}\` (cookie or header) to route to this workspace's local containers; otherwise traffic falls through to the k8s port-forwards.
 ${featureBlock}
-## Troubleshooting
+`
+    : "";
+  const troubleshootingBlock =
+    hasUrl || hasLocal
+      ? `## Troubleshooting
 
-### Feature missing from \`/__sandbox\` selector
+${hasUrl ? `### Feature missing from \`/__sandbox\` selector
 
 The dropdown is populated from \`~/.sandbox/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
 
@@ -560,12 +608,27 @@ sandbox proxy-reload      # regenerates Caddyfile + features.json, reloads Caddy
 
 Caddy routing issue, not an app issue. Try \`sandbox proxy-reload\` first; if Caddy is still misrouting, check \`docker logs sandbox-caddy --tail 50\`.
 
-### Containers expected per the table above are missing from \`docker ps\`
+` : ""}${hasLocal ? `### Containers expected per the table above are missing from \`docker ps\`
 
 \`sandbox up\` may have partially failed. Re-run from the workspace root:
 \`\`\`bash
 sandbox up                # idempotent — starts missing containers
 docker compose logs -f    # watch startup if something crashes
 \`\`\`
-`;
+` : ""}`
+      : "";
+
+  return `<!--
+  AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
+  Source:    ~/.sandbox/services.yaml + ports.yaml
+             + .sandbox/workspace.yml (feature, services, slot)
+  Generator: packages/sandbox-core/claude_md.ts :: buildSandboxContextMd
+  Regen:     sandbox init-workspace  (or \`sandbox up\` after slot changes)
+  To change ports/health endpoints/services, edit services.yaml / ports.yaml.
+  To change which services run locally, edit .sandbox/workspace.yml and rerun.
+-->
+
+# Sandbox Context: ${feature}
+
+${validateBlock}${slotBlock}${lifecycleBlock}${servicesBlock}${containerCommandsBlock}${healthBlock}${proxyBlock}${troubleshootingBlock}`;
 }
