@@ -115,7 +115,7 @@ repo:
 | Command | Does |
 |---|---|
 | `sandbox pr gate [repo]` | run the gate, change nothing |
-| `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to "In Development", commit and push the PR file on the record branch |
+| `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to "In Development" (on GitHub, add an `In Development` label, created if the repo lacks it), commit and push the PR file on the record branch |
 | `sandbox pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`. For `merged` files, write `shipped` (+ `release`) per the registry. Commits and pushes the changed PR files on the record branch. |
 | `sandbox close-out [name]` | close out (below) |
 | `sandbox remove-workspace <name> [--abandon "<reason>"]` | remove; refuses unshipped work unless abandoning |

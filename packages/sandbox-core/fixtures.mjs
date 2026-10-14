@@ -81,15 +81,21 @@ export async function dockerAvailable() {
 /**
  * Run *fn* with $SANDBOX_GH_BIN pointing at a fake `gh`: `issue view` prints
  * `issue` as JSON (exit 1 when null), `auth status` exits `auth`, `repo view` exits `repoView`.
+ * Like the real repo, `issue edit --add-label` fails for a label not in `labels`;
+ * `label create` adds one. Every call is a line in `<dir>/calls`.
  */
-export async function withFakeGh({ issue = null, auth = 0, repoView = 0 } = {}, fn) {
+export async function withFakeGh({ issue = null, auth = 0, repoView = 0, labels = [] } = {}, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
   fs.writeFileSync(path.join(dir, "issue.json"), JSON.stringify(issue));
+  fs.writeFileSync(path.join(dir, "labels"), labels.map((l) => `${l}\n`).join(""));
   const bin = path.join(dir, "gh");
   fs.writeFileSync(
     bin,
     `#!/bin/sh
+echo "$*" >> '${dir}/calls'
 case "$1 $2" in
+  "label create") grep -qxF "$3" '${dir}/labels' || echo "$3" >> '${dir}/labels';;
+  "issue edit") if [ "$6" = "--add-label" ] && ! grep -qxF "$7" '${dir}/labels'; then echo "'$7' not found" >&2; exit 1; fi;;
   "issue view") if [ "$(cat '${dir}/issue.json')" = "null" ]; then echo "could not resolve" >&2; exit 1; fi; cat '${dir}/issue.json';;
   "auth status") if [ ${auth} = 0 ]; then echo "  ✓ Logged in to github.com account octo (keyring)" >&2; else echo "You are not logged into any GitHub hosts." >&2; fi; exit ${auth};;
   "repo view") exit ${repoView};;
