@@ -301,13 +301,12 @@ Add to `/etc/hosts`:
 # Or point to a different repo directory
 ./sandbox up my-feature --workspace /path/to/repos
 
-# Skip auto-detection — specify services explicitly
-./sandbox up my-feature --services backend,frontend
-./sandbox up my-feature -s frontend
-
-# Force start with no services (all traffic goes to k8s)
-./sandbox up my-feature --force
+# Run another service locally: add it to `services` in .sandbox/workspace.yml, then
+./sandbox init-workspace
+./sandbox up my-feature
 ```
+
+A workspace with no services still comes up; all its traffic goes to k8s.
 
 ### Step 5: Access Your Feature
 
@@ -368,20 +367,20 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
 **Start a feature's local development environment.**
 
 ```
-./sandbox up <feature> [--force] [--workspace <path>] [--services <svc,...>]
+./sandbox up <feature> [--workspace <path>]
 ```
 
 | Argument | Required | Description |
 |---|---|---|
 | `feature` | Yes | Feature name (arbitrary label for slot allocation and proxy routing) |
-| `--force` | No | Start even if no changed services are detected |
 | `--workspace`, `-w` | No | Path to directory containing repo checkouts. Default: `~/workspace/`. Also settable via `WORKSPACE` env var. |
-| `--services`, `-s` | No | Comma-separated list of services to run locally (e.g. `backend,frontend`). Skips git diff auto-detection entirely. |
+
+The local services come from the workspace's `.sandbox/workspace.yml` (via `sandbox init-workspace`), not from a flag.
 
 **What it does:**
 
 1. Loads service registry and port configuration
-2. Resolves the workspace (default: `~/workspace/`) and scans for changed services — or uses the explicit list from `--services` if provided
+2. Resolves the workspace (default: `~/workspace/`) and reads its local services from the `SERVICES=` line `sandbox init-workspace` wrote to the workspace `.env`
 3. Allocates a slot (1–12) if the feature doesn't already have one
 4. Generates per-feature files in the feature's workspace:
    - `docker-compose.yml` — Docker Compose stack definition (workspace root)
@@ -408,7 +407,7 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
   Services:  backend (:11100), frontend (:11101)
 ```
 
-**If no services are detected** and `--force` is not set, the command prints a warning but still proceeds — the feature is registered and routes entirely to k8s. You can add services later with `sandbox up <feature> -s <service>` (or by editing `.sandbox/workspace.yml` and rerunning `sandbox init-workspace`).
+**If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.sandbox/workspace.yml`, rerun `sandbox init-workspace`, then `sandbox up`.
 
 **If all 12 slots are occupied**, the command exits with an error. Free a slot by running `sandbox down` on another feature.
 
@@ -564,13 +563,10 @@ Streams logs in real-time (equivalent to `docker compose logs -f --tail 100`). P
 
 ### Adding a service to a running feature
 
-There is no `sandbox add` command. To force a service to run locally:
-
-- **On the fly:** `sandbox up <feature> -s <service>` — brings the feature up
-  (or back up) with that service running locally.
-- **Durably:** add the service to the `services` field in the workspace's
-  `.sandbox/workspace.yml`, then rerun `sandbox init-workspace` — this also
-  adds the owning repo's worktree if it isn't present yet.
+There is no `sandbox add` command, and `sandbox up` takes no service list. To run a
+service locally, add it to the `services` field in the workspace's
+`.sandbox/workspace.yml`, rerun `sandbox init-workspace` — this also adds the owning
+repo's worktree if it isn't present yet — then `sandbox up`.
 
 ---
 
@@ -691,8 +687,8 @@ Two details, both verified live rather than assumed:
   cluster's request dies as `{"error":"EOF"}` while your local container sits idle.
 
 ```bash
-# Start the feature first — the local container is the intercept target
-./sandbox up my-feature -s backend
+# Start the feature first (with backend in workspace.yml's services) — the local container is the intercept target
+./sandbox up my-feature
 ./sandbox intercept my-feature -s backend --docker-daemon
 
 # From inside the cluster: the header reaches your laptop, bare traffic does not
@@ -1528,8 +1524,9 @@ If you started with just `frontend` but now need `backend` running locally:
 # Check what's currently running
 ./sandbox services PROJ-1234
 
-# Add backend locally
-./sandbox up PROJ-1234 -s backend
+# Add backend to `services` in .sandbox/workspace.yml, then
+./sandbox init-workspace
+./sandbox up PROJ-1234
 
 # Verify
 ./sandbox services PROJ-1234
@@ -1668,8 +1665,9 @@ git diff main..HEAD --name-only
 # Verify repo name matches config
 grep -A 3 "repos:" infra/config/services.yaml
 
-# Force-add a service manually
-./sandbox up PROJ-1234 -s frontend
+# Add the service manually: list it in `services` in .sandbox/workspace.yml, then
+./sandbox init-workspace
+./sandbox up PROJ-1234
 ```
 
 ### Build/Dependency Errors
