@@ -39,6 +39,7 @@ services:
     type: cli
     archetype: node-tool
     test: "npx turbo run test --filter=@jbbz-sandbox/sandbox-cli"
+    validate: "Build, then run the built sandbox binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
@@ -90,7 +91,7 @@ services:
   # tests can use docker directly (#134).
   vscode-plugin:
     path: packages/vscode-plugin
-    type: library
+    type: extension
     archetype: mcp-client
     test: "npx turbo run test --filter=vscode-plugin"
     internal_port: 3997

@@ -778,6 +778,7 @@ export async function initWorkspace(
       meta["SERVICES"] ?? "",
       workspaceRoot,
       (meta["TEST_PATH"] ?? "").trim(),
+      repos.map(([name]) => name),
     );
     if (slot !== null) {
       // 9. Build images (without starting containers)

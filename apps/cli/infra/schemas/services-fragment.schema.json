@@ -80,7 +80,7 @@
           "type": "string",
           "description": "Service directory within the repo; `.` for the whole repo. Drives the repo's path_mappings."
         },
-        "type": { "enum": ["api", "web", "library", "cli"] },
+        "type": { "enum": ["api", "web", "library", "cli", "extension"] },
         "archetype": {
           "type": "string",
           "description": "Key in the registry's `archetypes:` (defaults: node-web, node-service, node-tool, mcp-client). Selects standards and MCP servers."
@@ -91,6 +91,7 @@
           "description": "Legacy: standards keys used only when `archetype` is unset."
         },
         "test": { "type": "string", "description": "Test command, run from the repo root." },
+        "validate": { "type": "string", "description": "How to exercise a change to this service when it has no URL (library, CLI, extension). Overrides the archetype's `validate:`." },
         "internal_port": { "$ref": "#/definitions/port", "description": "Port the process listens on in-container (Helm containerPort)." },
         "port_offset": {
           "type": "integer",

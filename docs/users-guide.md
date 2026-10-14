@@ -612,12 +612,9 @@ If removing the last service, the feature's containers are fully stopped (though
 
 **What it does:**
 
-1. Sets environment variables `SANDBOX_FEATURE` and `SANDBOX_SLOT` for the Playwright process
-2. Searches for a `playwright.config.ts` (or `.js`/`.mjs`) in the following locations, in order:
-   - `~/workspace/<feature>/sandbox/`
-   - `~/workspace/<feature>/`
-   - The sandbox root directory
-3. Runs `npx playwright test` with a 10-minute timeout
+1. Looks for a `playwright.config.ts` (or `.js`/`.mjs`) in the workspace root, then in each repo worktree under it (`~/workspace/<feature>/<repo>/`). There is no fallback to the sandbox root.
+2. If none is found, runs nothing and exits non-zero. The message lists each workspace service's test command and `validate:` guidance. Libraries, CLIs and extensions are validated that way, not with Playwright; see [Test commands and validation guidance](#test-commands-and-validation-guidance).
+3. Otherwise sets `SANDBOX_FEATURE` and `SANDBOX_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
 
 ```bash
 # Run all tests
@@ -890,9 +887,10 @@ an unexpected top-level key):
 services:
   my-api:
     path: services/my-api         # within the repo; `.` for the whole repo
-    type: api                     # api | web | library | cli
+    type: api                     # api | web | library | cli | extension
     archetype: node-service       # optional; node-web | node-service | node-tool | mcp-client
     test: "npm test"
+    validate: "..."               # optional; how a person or agent checks a change by hand (overrides the archetype's). See "Test commands and validation guidance"
     internal_port: 3000           # port the process listens on in-container
     port_offset: 9                # slot-relative host port; unique across ALL repos
     health_endpoint: /health      # or redis | postgres | "" (TCP-only)
@@ -933,6 +931,45 @@ Rules:
 
 Per-machine values (`k8s_context`, a bigger `memory_limit` on your laptop) go in
 `~/.sandbox/services.local.yaml`, which merges last.
+
+### Test commands and validation guidance
+
+Each service can carry two related keys. They do different jobs, and a change needs both.
+
+| | `test:` | `validate:` |
+|---|---|---|
+| What it is | A shell command, e.g. `npx turbo run test --filter=sandbox-core` | Plain-language instructions, e.g. "Build, then run the built binary against a temp fixture workspace; assert on exit code, stdout/stderr and the files it writes." Never executed. |
+| Who uses it | Tooling: the implement stage's test step, `sandbox pr gate`, `sandbox test`'s fallback message | Whoever exercises the change: an agent in the implement stage, or you |
+| Question it answers | Do the automated tests still pass? | Does the change actually do what was asked, seen from outside? |
+| Evidence it leaves | The exit code and summary line | A `\| check \| result \|` table of PASS/FAIL rows with the captured output (`exercise.md`) |
+
+**How each is resolved.** A service's own value wins over its archetype's. A `test:` template from an archetype has `{service}` replaced by the service name. When neither is set:
+
+| Missing | What shows up |
+|---|---|
+| `test:` | The How to validate table shows `—`. The gate fails `test <service>` unless the PR file sets `skip_tests: { <service>: <reason> }`, which is accepted only for a service with no test command. |
+| `validate:`, service has a `feature_router:` | "URL health check (see Quick Health Checks)": the proxy, cookie and health-check sections of `sandbox-context.md` are the validation. |
+| `validate:`, no `feature_router:` | "No validation guidance registered in services.yaml; say so instead of inventing one". Add a `validate:` value rather than leave agents to guess. |
+
+The shipped archetypes give `node-tool` (libraries) and `mcp-client` (editor extensions) a default `validate:`. A CLI service sets its own, because "run the unit tests" doesn't show that a command does the right thing.
+
+**Where each is used, in order:**
+
+1. **`.sandbox/sandbox-context.md`.** The first section, "How to validate", has one row per workspace service: repo, path, test command, validation. Both keys are read from here, not from the registry directly.
+2. **Implement stage (ICM)**, or the test phase in JIT (`sb-test` and the tester agents):
+   - The **test step** runs each touched service's test command exactly as `sandbox-context.md` states it.
+   - The **exercise step** reloads the running code, then checks the change the way the service's validation text says. It records the result in `output/exercise.md` as a `| check | result |` table.
+   - `test:` catches regressions; `validate:` shows the new behaviour works. Passing tests are not a substitute for the exercise.
+3. **PR gate** (`sandbox pr gate`, re-run by `sandbox pr open`):
+   - It re-runs `test:` for every service the branch touches, inside a running container of that repo, so the workspace needs one up (`sandbox up`).
+   - It doesn't read `validate:` itself. It checks the exercise evidence: the exercise table must have at least one PASS row and no FAIL row. An ICM workspace keeps it in `stages/*/output/exercise.md` (`verify.md` in workspaces made before the rename); JIT keeps it in `.sandbox/notes/exercise.md`.
+4. **`sandbox test`** runs the Playwright suite if the workspace or one of its repos has one. With no suite, it runs nothing and prints each service's test command and validation text instead, since libraries, CLIs and extensions are checked that way.
+
+**Writing a good `validate:` value:**
+- Say what to run and what to observe: a command and the output, files or UI state that proves the change, not "verify it works".
+- Don't repeat the test command; `test:` already covers that.
+- Name any manual list a person has to walk, e.g. `MANUAL-CHECKLIST.md` for the VS Code extension.
+- Keep it to a sentence or two. It shows in a table cell and in tester-agent prompts.
 
 ### Infrastructure Services
 

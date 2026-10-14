@@ -21,7 +21,9 @@ description: "Begin the test phase in a sandbox workspace. Use when running or w
 - **Verifying the running feature.** The tester agents run a proxy smoke check (curl
   through Caddy with the `X-Feature` cookie) when the containers are up. For a headed
   browser session against the feature URL, use the `sandbox-tools:sandbox-feature-test`
-  plugin skill; the URL and cookie are in `.sandbox/sandbox-context.md`.
+  plugin skill; the URL and cookie are in `.sandbox/sandbox-context.md`. That applies to
+  URL-addressed services only; libraries, CLIs and extensions follow the "How to validate"
+  section of the same file.
 - **Fallback** (a workspace generated before tester agents existed, or a service with
   no tester): run the tests inline under the same rules — the test command is the
   service's `test:` in `~/.sandbox/services.yaml` (or its archetype's) or the repo's
