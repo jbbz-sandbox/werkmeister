@@ -45,7 +45,8 @@ workspace — don't reach for them.
 3. **Approval is the person's.** Ask them to read the PR file and set
    `status: approved`. Don't set it yourself.
 4. **Open:** run `sandbox pr open`. It runs the gate (tests, exercise evidence,
-   release check), pushes, opens the PR, moves the issue to "In Development",
+   release check), pushes, opens the PR, moves the issue to "In Development"
+   (on GitHub: adds an `In Development` label, created if the repo lacks it),
    and records the URL in the PR file. A failed gate check names what to fix.
 5. **Checkpoint:** suggest `sb-handoff` so the PR state survives into the next
    session. After merge and release: `sandbox pr status`, then `sandbox close-out`.
