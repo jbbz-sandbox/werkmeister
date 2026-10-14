@@ -404,6 +404,36 @@ test('Continue in Desktop focuses a session this one started, else opens the ses
   await ui.unmount()
 })
 
+test('Open beside shows only for a session this one started, and splits it', async ($, on) => {
+  // local_1 was started by this session (its starter is not listed); local_9 by a listed session.
+  const sessions = [
+    { ...SESSIONS[0], startedBy: 'local_self' },
+    { sessionId: 'local_9', title: 'Side of local_3', cwd: '/ws/empty', link: 'claude://x/local_9', startedBy: 'local_3' },
+    SESSIONS[2],
+  ]
+  const w = world(on, stubs({
+    'ccd_session_mgmt/list_sessions': () => ok(undefined, JSON.stringify(sessions)),
+    'ccd_window/open_session_in': () => ok({}),
+  }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect((await ui.find({ key: 'beside:abc' }))?.text).toBe('⇆ Open beside')
+  expect(await ui.find({ key: 'beside:empty' })).toBeFalsy()
+  await ui.press({ key: 'beside:abc' })
+  expect(w.calls.find(c => c.key === 'ccd_window/open_session_in')?.args).toEqual({ session_id: 'local_1', target: 'split' })
+  expect(w.toasts).toEqual([])
+  await ui.unmount()
+})
+
+test('without a session this one started, there is no Open beside', async ($, on) => {
+  world(on, stubs({ 'ccd_session_mgmt/list_sessions': () => ok(undefined, JSON.stringify(SESSIONS)) }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect(await ui.find({ key: 'continue:abc' })).toBeTruthy()
+  expect(await ui.find({ key: 'beside:abc' })).toBeFalsy()
+  await ui.unmount()
+})
+
 test('a session starting in a folder of workspaces opens the pane; elsewhere it does not', async ($, on) => {
   const w = world(on, stubs())
   // Opening the pane loads the list once.
