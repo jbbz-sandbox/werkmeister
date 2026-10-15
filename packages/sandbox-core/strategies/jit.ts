@@ -20,7 +20,7 @@ import { loadArchetypes } from "../config.js";
 import { loadFeatureRouters, type FeatureRouter } from "../feature_routing.js";
 import { main as gateMain, resetSessionState } from "../gate.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
-import { writeWorkspaceHooks } from "../hooks_gen.js";
+import { workspaceAllowRules, writeWorkspaceHooks, writeWorkspacePermissions } from "../hooks_gen.js";
 import { buildContext, listNotes, nextNoteNumber, noteFilename, notesDir, type Note } from "../notes.js";
 import { info, success, warn } from "../reporter.js";
 import {
@@ -258,6 +258,7 @@ function init(ctx: InitContext): void {
 
   // 6c. SessionStart hook. Merges into settings.json, never clobbers.
   const hooksPath = writeWorkspaceHooks(workspaceRoot);
+  writeWorkspacePermissions(workspaceRoot, workspaceAllowRules(workspaceRoot));
   success(`Wrote ${hooksPath}`);
 }
 
@@ -269,6 +270,7 @@ export const jit: ContextStrategy = {
     // a hook-template change kept the stale hook until someone re-ran it by hand.
     // The merge is idempotent and never clobbers a hand-added entry.
     writeWorkspaceHooks(workspaceRoot);
+    writeWorkspacePermissions(workspaceRoot, workspaceAllowRules(workspaceRoot));
   },
   check(workspaceRoot) {
     // Resolved once, up front: it reads .sandbox/workspace.yml (one [info] line)

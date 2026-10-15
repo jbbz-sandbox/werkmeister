@@ -66,6 +66,7 @@ import {
   modelPricingYamlPath,
   portsYamlPath,
   secretsPath,
+  standardsDirPath,
   type IngressSettings,
   type JiraSettings,
 } from "./global_config.js";
@@ -943,6 +944,88 @@ export function syncEditorSchemas(
   return [{ label, ok: true, optional: true, detail: `mapped in ${settingsPath}` }];
 }
 
+/** Claude Code's user settings.json. */
+export function claudeUserSettingsPath(): string {
+  return path.join(os.homedir(), ".claude", "settings.json");
+}
+
+export interface ClaudeStandardsDirState {
+  /** `~/.claude/` exists. */
+  present: boolean;
+  /** The standards dir does not exist. */
+  dirMissing: boolean;
+  /** Unparsable settings.json, or `permissions.additionalDirectories` that isn't an array. */
+  error?: string;
+  /** An `additionalDirectories` entry already resolves to the standards dir. */
+  granted: boolean;
+  /** Raw settings text the edit applies to. */
+  text: string;
+}
+
+/**
+ * Whether Claude Code may read the standards dir without a prompt.
+ *
+ * Every stage contract points the agent at the standards, which live outside
+ * any workspace; a grant in the user settings covers every session on the
+ * machine, and keeps the machine path out of the portable workspace record.
+ */
+export function claudeStandardsDirState(
+  settingsPath = claudeUserSettingsPath(),
+  dir = standardsDirPath(),
+): ClaudeStandardsDirState {
+  const state: ClaudeStandardsDirState = { present: false, dirMissing: false, granted: false, text: "{}" };
+  state.present = fs.existsSync(path.dirname(settingsPath));
+  state.dirMissing = !(fs.existsSync(dir) && fs.statSync(dir).isDirectory());
+  if (!state.present || state.dirMissing) return state;
+  if (fs.existsSync(settingsPath)) state.text = fs.readFileSync(settingsPath, "utf8");
+  const errors: ParseError[] = [];
+  const data = parseJsonc(state.text, errors, { allowTrailingComma: true });
+  if (errors.length) {
+    state.error = `parse error at offset ${errors[0].offset}`;
+    return state;
+  }
+  const dirs = data?.["permissions"]?.["additionalDirectories"];
+  if (dirs !== undefined && !Array.isArray(dirs)) {
+    state.error = "permissions.additionalDirectories is not an array";
+    return state;
+  }
+  const want = path.resolve(dir);
+  state.granted = (dirs ?? []).some((d: unknown) => path.resolve(expandUser(String(d))) === want);
+  return state;
+}
+
+/**
+ * Grant Claude Code read access to the standards dir in its user settings.
+ *
+ * Optional, and a user-owned file: writes only when the wizard asked and the
+ * user said yes (`install`). Edits go through jsonc-parser so comments and
+ * formatting in settings.json survive.
+ */
+export function syncClaudeStandardsDir(
+  checkOnly: boolean,
+  install: boolean,
+  settingsPath = claudeUserSettingsPath(),
+  dir = standardsDirPath(),
+): Step[] {
+  const label = "Claude Code standards access (optional)";
+  const state = claudeStandardsDirState(settingsPath, dir);
+  if (!state.present) return [{ label, ok: true, detail: "Claude Code settings dir not found — skipped" }];
+  if (state.dirMissing) return [{ label, ok: true, detail: `standards dir ${dir} not found — skipped` }];
+  if (state.error) {
+    return [{ label, ok: false, optional: true, detail: `${settingsPath}: ${state.error} — fix it and re-run` }];
+  }
+  if (state.granted) return [{ label, ok: true, detail: `granted in ${settingsPath}` }];
+  if (checkOnly || !install) return [{ label, ok: true, detail: "not granted (opt in via `sandbox setup`)" }];
+  const fmt = { formattingOptions: { insertSpaces: true, tabSize: 2 } };
+  const hasList = Array.isArray(parseJsonc(state.text, [], { allowTrailingComma: true })?.["permissions"]?.["additionalDirectories"]);
+  // ponytail: add-only — a grant left by an old standards_dir stays; record the granted path under ~/.sandbox if stale grants ever matter.
+  const edits = hasList
+    ? modify(state.text, ["permissions", "additionalDirectories", -1], dir, { ...fmt, isArrayInsertion: true })
+    : modify(state.text, ["permissions", "additionalDirectories"], [dir], fmt);
+  fs.writeFileSync(settingsPath, applyEdits(state.text, edits));
+  return [{ label, ok: true, optional: true, detail: `granted in ${settingsPath}` }];
+}
+
 /** `<publisher>.<name>` from packages/vscode-plugin/package.json, as `code` lists it. */
 export const VSCODE_EXTENSION_ID = "jbbz.vscode-plugin";
 /** Where the CLI's `prepack` puts the packaged extension inside the tarball. */
@@ -1208,6 +1291,8 @@ export interface RunSetupOptions {
   mapEditorSchemas?: boolean;
   /** Install the bundled Sandbox Workspaces VS Code extension (the wizard asks first). */
   installVscodeExtension?: boolean;
+  /** Grant Claude Code read access to the standards dir in its user settings (the wizard asks first). */
+  grantStandardsDir?: boolean;
 }
 
 /**
@@ -1314,6 +1399,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   steps.push(...syncTelepresence(runner, checkOnly, { install: options.installTelepresence }));
   steps.push(...syncPlaywright(runner, checkOnly, options.interactiveRunner));
   steps.push(...syncEditorSchemas(checkOnly, options.mapEditorSchemas ?? false));
+  steps.push(...syncClaudeStandardsDir(checkOnly, options.grantStandardsDir ?? false));
   steps.push(
     ...syncVscodeExtension(checkOnly, options.installVscodeExtension ?? false, vscodeExtensionState(runner), runner),
   );
