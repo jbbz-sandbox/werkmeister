@@ -207,8 +207,7 @@ sandbox detect [repo]        # generate the repo's .sandbox/services.yaml (--dry
 sandbox services <feature>   # list services and their endpoints for this feature
 sandbox logs <feature> [svc] # tail logs for a feature's service
 
-# Manual overrides
-sandbox up <feature> -s <svc>  # force a service to run locally
+# Manual overrides (to run a service locally: add it to .sandbox/workspace.yml, then init-workspace + up)
 sandbox remove <feature> <svc> # stop a local service, fall back to k8s
 
 # Testing
@@ -544,8 +543,9 @@ sandbox up payment-refactor
 # Agent wants to check its work
 sandbox test payment-refactor
 
-# Agent adds a service it now needs
-sandbox up payment-refactor -s graphql-orders
+# Agent adds a service it now needs (after listing graphql-orders in .sandbox/workspace.yml)
+sandbox init-workspace
+sandbox up payment-refactor
 
 # Agent checks what's running
 sandbox status
