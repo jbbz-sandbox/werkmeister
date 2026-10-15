@@ -1,5 +1,13 @@
 # sandbox-mcp
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [594efe1]
+- Updated dependencies [542eecf]
+  - sandbox-core@0.8.0
+
 ## 0.1.6
 
 ### Patch Changes
