@@ -1241,7 +1241,7 @@ In `.gitignore`, after the line `.sandbox/` add:
 Create `.sandbox/services.yaml` by transcribing the five self-host services, the `x-mcp-client` block and `sandbox-install` from the current `~/.sandbox/services.yaml` (the "The sandbox repo's own workspaces" section, `setup_services.sandbox-install`, and the `x-mcp-client` block), with these edits and nothing else:
 
 - drop every `repo: sandbox` line (derived from the directory name);
-- replace every `~/` with `{{home}}/`, so the mounts read:
+- replace the absolute home directory with `{{home}}` wherever it appears, so the mounts read:
   ```yaml
     - /var/run/docker.sock:/var/run/docker.sock
     - "{{home}}/.sandbox:{{home}}/.sandbox"
@@ -1268,9 +1268,10 @@ Create `.sandbox/services.yaml` by transcribing the five self-host services, the
 Validate it parses and merges before committing:
 ```bash
 cd ~/repos/sandbox && node -e '
+import os from "node:os"; import path from "node:path";
 const { discoverFragments, mergeRegistry } = await import("./packages/sandbox-core/dist/registry_sync.js");
 const { REGISTRY_DEFAULTS } = await import("./packages/sandbox-core/dist/scaffold.js");
-const f = discoverFragments("~/repos").filter(x => x.repo === "sandbox");
+const f = discoverFragments(path.join(os.homedir(), "repos")).filter(x => x.repo === "sandbox");
 const m = mergeRegistry(f, { defaults: REGISTRY_DEFAULTS, local: {}, paths: { home: "/H", repos_root: "/R", workspaces_root: "/W" } });
 console.log(Object.keys(m.services), m.services.cli.extra_volumes, m.repos.sandbox);
 ' --input-type=module
