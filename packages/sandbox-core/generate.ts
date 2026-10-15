@@ -1092,7 +1092,6 @@ export function generateSupergraphConfig(
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
   const workspaceRoot = resolveWorkspace(feature, workspaceOverride);
   const sandboxDir = path.join(workspaceRoot, ".sandbox");
-  fs.mkdirSync(sandboxDir, { recursive: true });
   const outPath = path.join(sandboxDir, "supergraph-config.yml");
 
   // Federation is opt-in: no graphql-type service in the registry → no file
@@ -1104,6 +1103,7 @@ export function generateSupergraphConfig(
     fs.rmSync(outPath, { force: true });
     return null;
   }
+  fs.mkdirSync(sandboxDir, { recursive: true });
 
   // Try template
   const jinjaEnv = getNunjucksEnv();
