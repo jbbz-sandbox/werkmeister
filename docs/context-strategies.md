@@ -59,7 +59,7 @@ The stage template for `feature` is the four-stage research → spec → impleme
 
 ## Option A — a `context_strategy` field, branch in core
 
-`context_strategy: jit | icm | none` in `workspace.yml` (default `jit`, `--context-strategy` on `workspace`/`init-workspace`, one row in `_INPUT_FIELDS`, one schema property).
+`context_strategy: jit | icm | none` in `workspace.yml` (default `icm`; a file without the key reads as `jit`, `--context-strategy` on `workspace`/`init-workspace`, one row in `_INPUT_FIELDS`, one schema property).
 
 - `initWorkspace`: steps 5b–6c run for `jit`; a new `icm_gen.ts` (one module, ~200 lines: five template literals plus the standards table) runs for `icm`; `none` writes nothing but `sandbox-context.md`.
 - `lifecycle.ts:133`: `if (strategy === "jit") writeWorkspaceHooks(...)`.
