@@ -20,6 +20,7 @@
  *                                         there's no RJSF array widget wired up in the
  *                                         renderers, so this stays a plain text input)
  *     choices (single) → string enum    (dropdown)
+ *     boolean          → boolean        (RJSF's checkbox; formData true/false)
  *     multiline        → string         (uiSchema ui:widget=textarea)
  *     multiline+refinable → string      (ui:widget=textarea + ui:options.refinable; the
  *                                         refine_instruction → ui:options.refineInstruction.
@@ -59,6 +60,11 @@ function _shape(
   const choices = prompt["choices"];
   // An absent or EMPTY choices list falls through to the free-text shape.
   const hasChoices = Array.isArray(choices) && choices.length > 0;
+  if (prompt["boolean"]) {
+    prop["type"] = "boolean";
+    // resolveInputs has already normalised the value to "true" / "false".
+    return defaultValue === true || defaultValue === "true";
+  }
   if (prompt["multi"] && hasChoices) {
     Object.assign(prop, {
       type: "array",

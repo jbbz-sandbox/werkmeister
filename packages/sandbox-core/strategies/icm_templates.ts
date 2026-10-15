@@ -15,6 +15,8 @@ export interface IcmVars {
   restart: string;
   /** This stage's standards Reference line, or "" — the renderer fills it. */
   standards: string;
+  /** The `autonomous` input: every human check renders as a self-check. */
+  autonomous: boolean;
 }
 
 export interface Contract {
@@ -24,6 +26,8 @@ export interface Contract {
   process: string[];
   outputs: string[];
   humanCheck: string;
+  /** What replaces `humanCheck` under `autonomous`; default {@link SELF_CHECK}. */
+  selfCheck?: string;
 }
 
 export interface Stage {
@@ -52,6 +56,11 @@ const IMPLEMENT_STEPS = [
 const TEST_STEP =
   "Run the test command exactly as `../../.sandbox/sandbox-context.md` states it. Redirect output to a file, trust the exit code, read back only the failing slice.";
 
+export const SELF_CHECK =
+  "Review `output/` once against `../../BRIEF.md` and the live issue (`sandbox issue view`). " +
+  "Flip every `status: proposed` to `status: decided` yourself, and record each decision — and anything you " +
+  "would have asked a person — under `## Recommendations for reviewer` in the PR body. Then start the next stage without asking.";
+
 // Decision 11 (sandbox-133): "ship" means reaching a release, so the stage that
 // ends at an approved PR file is "propose".
 const EXERCISE_FORMAT =
@@ -63,9 +72,10 @@ const propose: Stage = {
   writes: "one commit per code repo touched, `output/pr-<repo>.md` per repo",
   check: "approve each PR file; `sandbox pr open` opens it",
   standards: "none",
-  contract: () => ({
-    oneJob:
-      "One job: prove each acceptance criterion, commit in each code worktree, and write one PR file per repo touched. Approving is the person's act; opening is `sandbox pr open`.",
+  contract: (v) => ({
+    oneJob: `One job: prove each acceptance criterion, commit in each code worktree, and write one PR file per repo touched. ${
+      v.autonomous ? "You approve it after the self-check" : "Approving is the person's act"
+    }; opening is \`sandbox pr open\`.`,
     inputs: [
       "Working (this run): `../../BRIEF.md` § Acceptance criteria",
       "Working (this run): `../*/output/` — every prior stage's artifacts",
@@ -82,6 +92,8 @@ const propose: Stage = {
     outputs: ["One commit per code repo touched, on that worktree's branch", "`output/pr-<repo>.md` per repo"],
     humanCheck:
       "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then `sandbox close-out`.",
+    selfCheck:
+      "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `sandbox pr open`. Stop at the PR URL. Merging is the person's.",
   }),
 };
 

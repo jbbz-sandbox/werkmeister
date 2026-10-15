@@ -700,6 +700,14 @@ test('applyFormFields replaces, clears and checks values against the form', () =
   ])
 })
 
+test('a boolean field is a check; workspace_form takes "true" / "false" for it', () => {
+  const bundle = { schema: { properties: { autonomous: { type: 'boolean', title: 'Autonomous run' } } }, uiSchema: {}, formData: { autonomous: false } }
+  const fields = formFields(bundle as never)
+  expect(fields[0]!.kind).toBe('check')
+  expect(applyFormFields(fields, {}, { autonomous: 'true' })).toEqual({ draft: { autonomous: true }, problems: [] })
+  expect(applyFormFields(fields, { autonomous: true }, { autonomous: 'maybe' }).problems).toEqual(['autonomous: expected true or false'])
+})
+
 test('the workspace_form tool opens the Create tab filled, says what is still needed, and creates nothing', async ($, on) => {
   const w = world(on, formStubs())
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
