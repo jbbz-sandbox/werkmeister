@@ -24,6 +24,7 @@ import {
   OPTIONAL_PLUGINS,
   resolveCertScript,
   runSetup,
+  syncClaudeStandardsDir,
   syncEditorSchemas,
   syncIngressCerts,
   syncOptionalPlugin,
@@ -810,6 +811,91 @@ describe("demo-services clone gating and registry ordering", () => {
     const text = fs.readFileSync(path.join(home.dir, "services.yaml"), "utf8");
     expect(text).toContain("k8s_context: kind-dev");
     expect(text).toContain("repo: demo-services");
+  });
+});
+
+describe("syncClaudeStandardsDir", () => {
+  let dir: string;
+  let settings: string;
+  let standards: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-"));
+    settings = path.join(dir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(settings));
+    standards = path.join(dir, "standards");
+    fs.mkdirSync(standards);
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const dirs = () => JSON.parse(fs.readFileSync(settings, "utf8").replace(/^\s*\/\/.*$/gm, "")).permissions.additionalDirectories;
+
+  it("skips when Claude Code's settings dir is missing, creating nothing", () => {
+    const missing = path.join(dir, "nope", "settings.json");
+    const [step] = syncClaudeStandardsDir(false, true, missing, standards);
+    expect(step).toMatchObject({ ok: true });
+    expect(step.detail).toContain("not found");
+    expect(fs.existsSync(path.dirname(missing))).toBe(false);
+  });
+
+  it("skips when the standards dir is missing, leaving settings untouched", () => {
+    fs.writeFileSync(settings, "{}");
+    const [step] = syncClaudeStandardsDir(false, true, settings, path.join(dir, "gone"));
+    expect(step.ok).toBe(true);
+    expect(step.detail).toContain("not found");
+    expect(fs.readFileSync(settings, "utf8")).toBe("{}");
+  });
+
+  it("grants the dir, keeping comments and other keys", () => {
+    fs.writeFileSync(settings, '{\n  // mine\n  "model": "opus"\n}\n');
+    const [step] = syncClaudeStandardsDir(false, true, settings, standards);
+    expect(step).toMatchObject({ ok: true, detail: `granted in ${settings}` });
+    const text = fs.readFileSync(settings, "utf8");
+    expect(text).toContain("// mine");
+    expect(text).toContain('"model": "opus"');
+    expect(dirs()).toEqual([standards]);
+  });
+
+  it("appends to an existing list, and a second run changes nothing", () => {
+    fs.writeFileSync(settings, JSON.stringify({ permissions: { additionalDirectories: ["/other"] } }));
+    syncClaudeStandardsDir(false, true, settings, standards);
+    const text = fs.readFileSync(settings, "utf8");
+    expect(dirs()).toEqual(["/other", standards]);
+    const [again] = syncClaudeStandardsDir(false, true, settings, standards);
+    expect(again.detail).toBe(`granted in ${settings}`);
+    expect(fs.readFileSync(settings, "utf8")).toBe(text);
+  });
+
+  it("counts a ~ entry that expands to the dir as granted", () => {
+    const home = process.env.HOME;
+    process.env.HOME = dir;
+    try {
+      const before = JSON.stringify({ permissions: { additionalDirectories: ["~/standards"] } });
+      fs.writeFileSync(settings, before);
+      const [step] = syncClaudeStandardsDir(false, true, settings, standards);
+      expect(step.detail).toBe(`granted in ${settings}`);
+      expect(fs.readFileSync(settings, "utf8")).toBe(before);
+    } finally {
+      process.env.HOME = home;
+    }
+  });
+
+  it("never writes without a yes, and --check stays green", () => {
+    fs.writeFileSync(settings, "{}");
+    for (const [checkOnly, install] of [[true, true], [false, false]]) {
+      const [step] = syncClaudeStandardsDir(checkOnly, install, settings, standards);
+      expect(step).toMatchObject({ ok: true, detail: "not granted (opt in via `sandbox setup`)" });
+    }
+    expect(fs.readFileSync(settings, "utf8")).toBe("{}");
+  });
+
+  it.each([
+    ["an unparsable file", "{ nope"],
+    ["a non-array additionalDirectories", '{"permissions": {"additionalDirectories": "x"}}'],
+  ])("refuses to edit %s", (_name, body) => {
+    fs.writeFileSync(settings, body);
+    const [step] = syncClaudeStandardsDir(false, true, settings, standards);
+    expect(step).toMatchObject({ ok: false, optional: true });
+    expect(fs.readFileSync(settings, "utf8")).toBe(body);
   });
 });
 

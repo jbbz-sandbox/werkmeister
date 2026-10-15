@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { issueIdOfMeta } from "../issue_tracker.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
-import { removeWorkspaceHooks, writePrGuardHook } from "../hooks_gen.js";
+import { removeWorkspaceHooks, workspaceAllowRules, writePrGuardHook, writeWorkspacePermissions } from "../hooks_gen.js";
 import { buildPrRulesMd } from "../pr_rules.js";
 import { renderIssueRef } from "./issue_section.js";
 import { info, success, warn } from "../reporter.js";
@@ -345,7 +345,7 @@ export const icm: ContextStrategy = {
   init,
   // The repair path for a workspace whose pre-strategy `up` installed the JIT
   // hooks. `_isManaged` is exact, so hand-added hooks survive. `sandbox up`
-  // runs this too, which is how existing workspaces get the PR guard.
+  // runs this too, which is how existing workspaces get the PR guard and allow rules.
   refresh(root) {
     for (const command of removeWorkspaceHooks(root)) {
       info(`Removed JIT hook from .claude/settings.json: ${command}`);
@@ -356,6 +356,7 @@ export const icm: ContextStrategy = {
       info("Removed .sandbox/.gate/");
     }
     writePrGuardHook(root);
+    writeWorkspacePermissions(root, workspaceAllowRules(root));
   },
   check: (root) => drifted(root).map(([rel]) => rel),
   sync(root) {

@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { buildPrGuardEntry, SESSION_START_COMMAND } from "sandbox-core/hooks_gen";
+import { buildPrGuardEntry, READ_ONLY_GIT_RULES, SESSION_START_COMMAND } from "sandbox-core/hooks_gen";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
 
@@ -55,10 +55,10 @@ afterEach(() => {
 });
 
 describe("lifecycle.up in an icm workspace", () => {
-  it("installs only the PR guard, the hook both strategies share", async () => {
+  it("installs the PR guard and allow rules, what both strategies share", async () => {
     await withReporter(quiet, () => up("demo", root));
     const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    expect(settings).toEqual({ hooks: { PreToolUse: [buildPrGuardEntry()] } });
+    expect(settings).toEqual({ hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } });
   });
 
   it("heals a workspace a pre-strategy up polluted", async () => {
@@ -70,6 +70,9 @@ describe("lifecycle.up in an icm workspace", () => {
     );
     await withReporter(quiet, () => up("demo", root));
     const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    expect(settings).toEqual({ hooks: { SessionStart: [hand], PreToolUse: [buildPrGuardEntry()] } });
+    expect(settings).toEqual({
+      hooks: { SessionStart: [hand], PreToolUse: [buildPrGuardEntry()] },
+      permissions: { allow: READ_ONLY_GIT_RULES },
+    });
   });
 });

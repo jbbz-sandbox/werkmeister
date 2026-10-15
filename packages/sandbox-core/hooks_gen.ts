@@ -16,14 +16,22 @@
  *   (docs/workspace-lifecycle.md). Unlike the two above it is installed for
  *   every strategy (`writePrGuardHook`), and `removeWorkspaceHooks` keeps it.
  *
+ * - `permissions.allow`: the workspace's test commands and read-only git, for
+ *   every strategy (`writeWorkspacePermissions`), so a headless session can run
+ *   the stage's test step without an approval prompt.
+ *
  * Unlike the other projections, settings.json may legitimately hold user
  * entries (JSON carries no do-not-hand-edit comment), so this generator merges:
  * it owns exactly the hook entries whose command contains each marker below,
+ * and the allow rules recorded in `.sandbox/claude-permissions.json`,
  * replacing stale versions and preserving everything else.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+
+import { containerTestCommand, serviceTestCommand } from "./archetypes.js";
+import { loadArchetypes, loadServices } from "./config.js";
 
 // Markers doubling as the payload: entries containing them are sandbox-managed.
 const _HOOK_MARKER = "sandbox notes context";
@@ -110,6 +118,40 @@ function _mergeEvent(
 
 type Managed = [event: string, entry: Record<string, any>, marker: string];
 
+function _isDict(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function _settingsPath(workspaceRoot: string): string {
+  return path.join(workspaceRoot, ".claude", "settings.json");
+}
+
+/** The settings object (`{}` when absent), or null when a human left something we must not rewrite. */
+function _readSettings(settingsPath: string): Record<string, any> | null {
+  if (!fs.existsSync(settingsPath)) return {};
+  try {
+    const existing = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    return _isDict(existing) ? existing : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Write *settings*, or remove the file (and `.claude/` if that empties it) once nothing is left. */
+function _saveSettings(settingsPath: string, settings: Record<string, any>): void {
+  if (Object.keys(settings).length) {
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+    return;
+  }
+  fs.rmSync(settingsPath, { force: true });
+  try {
+    fs.rmdirSync(path.dirname(settingsPath));
+  } catch {
+    // .claude/ holds something else — keep it
+  }
+}
+
 /**
  * Merge *managed* entries into `.claude/settings.json`.
  *
@@ -120,19 +162,10 @@ type Managed = [event: string, entry: Record<string, any>, marker: string];
  * the path) rather than clobbered — a human put something there.
  */
 function _writeManaged(workspaceRoot: string, managed: Managed[]): string {
-  const settingsPath = path.join(workspaceRoot, ".claude", "settings.json");
-  let settings: Record<string, any> = {};
-  if (fs.existsSync(settingsPath) && fs.statSync(settingsPath).isFile()) {
-    try {
-      const existing = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-      if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) {
-        settings = existing;
-      } else {
-        return settingsPath;
-      }
-    } catch {
-      return settingsPath;
-    }
+  const settingsPath = _settingsPath(workspaceRoot);
+  const settings = _readSettings(settingsPath);
+  if (settings === null) {
+    return settingsPath;
   }
 
   if (!("hooks" in settings)) {
@@ -148,8 +181,7 @@ function _writeManaged(workspaceRoot: string, managed: Managed[]): string {
     }
   }
 
-  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+  _saveSettings(settingsPath, settings);
   return settingsPath;
 }
 
@@ -174,7 +206,7 @@ export function writePrGuardHook(workspaceRoot: string): string {
  * JSON or an unexpected shape is left untouched — the writer's doctrine.
  */
 export function removeWorkspaceHooks(workspaceRoot: string): string[] {
-  const settingsPath = path.join(workspaceRoot, ".claude", "settings.json");
+  const settingsPath = _settingsPath(workspaceRoot);
   let settings: any;
   try {
     settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -203,15 +235,121 @@ export function removeWorkspaceHooks(workspaceRoot: string): string[] {
     return [];
   }
   if (!Object.keys(hooks).length) delete settings["hooks"];
-  if (Object.keys(settings).length) {
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
-  } else {
-    fs.rmSync(settingsPath);
-    try {
-      fs.rmdirSync(path.dirname(settingsPath));
-    } catch {
-      // .claude/ holds something else — keep it
+  _saveSettings(settingsPath, settings);
+  return removed;
+}
+
+// ---------------------------------------------------------------------------
+// permissions.allow — every strategy
+// ---------------------------------------------------------------------------
+
+export const READ_ONLY_GIT_RULES = ["Bash(git diff:*)", "Bash(git status:*)", "Bash(git ls-files:*)"];
+
+// Permission strings can't carry a marker the way hook commands do, so the rules
+// sandbox inserted are listed here; anything else in `allow` is the person's.
+const _PERMISSIONS_RECORD = path.join(".sandbox", "claude-permissions.json");
+
+/**
+ * Allow rules for each local service's registered test command, then read-only
+ * git. Each command gets the container form the agent is told to run, plus the
+ * bare command as a prefix. A service with no command gets none.
+ */
+export function buildAllowRules(
+  feature: string,
+  services: string[],
+  servicesConfig: Record<string, any>,
+  archetypes: Record<string, any>,
+): string[] {
+  const rules: string[] = [];
+  for (const svc of services) {
+    const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
+    if (cmd) rules.push(`Bash(${containerTestCommand(feature, svc, cmd)})`, `Bash(${cmd}:*)`);
+  }
+  return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
+}
+
+function _readEnv(workspaceRoot: string): Record<string, string> {
+  let text: string;
+  try {
+    text = fs.readFileSync(path.join(workspaceRoot, ".env"), "utf8");
+  } catch {
+    return {};
+  }
+  const env: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const eq = line.indexOf("=");
+    if (eq > 0) env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  }
+  return env;
+}
+
+/**
+ * The allow rules this workspace should have, from its `.env` and the registry.
+ * Reads `.env` itself: lifecycle.ts's reader would close an import cycle
+ * (lifecycle → strategies → jit → here).
+ */
+export function workspaceAllowRules(workspaceRoot: string): string[] {
+  const env = _readEnv(workspaceRoot);
+  const feature = env["FEATURE"] ?? "";
+  const services = (env["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!feature || !services.length) return [...READ_ONLY_GIT_RULES];
+  return buildAllowRules(feature, services, loadServices(), loadArchetypes());
+}
+
+function _readRecord(recordPath: string): string[] {
+  try {
+    const data = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+    return _isDict(data) && Array.isArray(data["allow"]) ? data["allow"].filter((r: unknown) => typeof r === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Merge *want* into `.claude/settings.json` `permissions.allow`.
+ *
+ * Adds what is missing, drops rules sandbox added earlier that are no longer
+ * wanted, and never touches a rule it didn't add — one the person already had
+ * is not recorded, so it survives removal. Unparseable JSON or an unexpected
+ * `permissions` / `allow` shape is left untouched, record included.
+ */
+export function writeWorkspacePermissions(workspaceRoot: string, want: string[]): string {
+  const settingsPath = _settingsPath(workspaceRoot);
+  const settings = _readSettings(settingsPath);
+  if (settings === null) return settingsPath;
+  const permissions = settings["permissions"] ?? {};
+  if (!_isDict(permissions)) return settingsPath;
+  const allow: unknown[] = permissions["allow"] ?? [];
+  if (!Array.isArray(allow)) return settingsPath;
+
+  const recordPath = path.join(workspaceRoot, _PERMISSIONS_RECORD);
+  const previous = _readRecord(recordPath);
+  const recorded = new Set(previous);
+  const wanted = [...new Set(want)];
+  const kept = allow.filter((rule) => !(typeof rule === "string" && recorded.has(rule) && !wanted.includes(rule)));
+  const added = wanted.filter((rule) => !kept.includes(rule));
+  const record = wanted.filter((rule) => recorded.has(rule) || added.includes(rule));
+
+  if (kept.length !== allow.length || added.length) {
+    const next = [...kept, ...added];
+    if (next.length) permissions["allow"] = next;
+    else delete permissions["allow"];
+    if (Object.keys(permissions).length) settings["permissions"] = permissions;
+    else delete settings["permissions"];
+    _saveSettings(settingsPath, settings);
+  }
+  if (JSON.stringify(record) !== JSON.stringify(previous)) {
+    if (record.length) {
+      fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+      fs.writeFileSync(recordPath, JSON.stringify({ allow: record }, null, 2) + "\n");
+    } else {
+      fs.rmSync(recordPath, { force: true });
     }
   }
-  return removed;
+  return settingsPath;
+}
+
+/** Remove every allow rule sandbox added, keeping the person's. */
+export function removeWorkspacePermissions(workspaceRoot: string): string {
+  return writeWorkspacePermissions(workspaceRoot, []);
 }
