@@ -32,8 +32,8 @@ url:                     # written by sandbox pr open
 merge_sha:               # written by sandbox pr status
 release:                 # release tag that shipped it, written by sandbox pr status
 reason:                  # required for closed / abandoned
-skip_tests: {}           # <service>: <reason> — only for a service with no test command
-skip_release:            # <reason> — no release needed; ship = merge for this PR
+skip_tests: {}           # <service>: <reason> — for a service with no test command or no running container
+skip_release:            # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag
 ---
 # <PR title>
 <PR body: summary, test and exercise results, acceptance table (PASS/FAIL), Fixes <issue>>

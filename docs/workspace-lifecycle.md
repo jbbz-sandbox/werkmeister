@@ -65,8 +65,8 @@ url:                           # written by sandbox pr open
 merge_sha:                     # written by sandbox pr status
 release:                       # the release tag that shipped it, written by sandbox pr status
 reason:                        # required for closed / abandoned
-skip_tests: {}                 # <service>: <reason> — only for a service with no test command
-skip_release:                  # <reason> — no release needed; ship = merge for this PR
+skip_tests: {}                 # <service>: <reason> — for a service with no test command or no running container
+skip_release:                  # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag
 ---
 # feat(cli): owner/repo#133 Workspace PR lifecycle
 <body: summary, test and exercise results, acceptance table, Fixes owner/repo#133>
@@ -83,10 +83,10 @@ The first `#` heading is the PR title and the rest is the body. The person sets 
 | stages | ICM: every stage before propose has output. JIT: no open decision notes. |
 | acceptance | the PR body has a `PASS` table cell and no `FAIL` cell |
 | clean | `git status --porcelain` in the code worktree is empty |
-| test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, because the worktree is mounted at `/app` with its `node_modules`. A service with no command fails unless `skip_tests` names it with a reason. |
+| test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, because the worktree is mounted at `/app` with its `node_modules`. A service with no command, or with no running container for its repo, fails unless `skip_tests` names it with a reason. |
 | exercise | `exercise.md` (ICM: any stage output; JIT: `.sandbox/notes/`) has a `PASS` cell and no `FAIL` |
 | baseline `<svc>` | the touched local service's container is running; for `api`/`web` services, its `health_endpoint` also answers below 400 |
-| release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason |
+| release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `sandbox pr status` still waits for the release tag. |
 | approved | `status: approved` |
 
 **Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix. A file under no mapping marks every service in the repo as touched.
