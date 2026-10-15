@@ -47,6 +47,22 @@ function stageDirs(stages: Stage[]): string[] {
   return stages.map((s, i) => `${String(i + 1).padStart(2, "0")}_${s.name}`);
 }
 
+/**
+ * Stage dirs on disk that this template would not render — a run started under
+ * another stage set, e.g. `03_verify`/`04_ship` from before decision 11 renamed
+ * them. Rendering over it would add the new dirs beside the old ones (#149).
+ */
+function foreignStageDirs(root: string, stages: Stage[]): string[] {
+  const own = stageDirs(stages);
+  let onDisk: string[];
+  try {
+    onDisk = fs.readdirSync(path.join(root, "stages")).filter((n) => /^\d+_/.test(n));
+  } catch {
+    return [];
+  }
+  return onDisk.filter((d) => !own.includes(d)).sort();
+}
+
 /** The stage dir that holds PR files, or null for a template with no propose stage (spike). */
 function proposeDir(stages: Stage[]): string | null {
   const i = stages.findIndex((s) => s.name === "propose");
@@ -297,7 +313,9 @@ function writeRel(root: string, rel: string, body: string): void {
 }
 
 function drifted(root: string): Array<[string, string]> {
-  return Object.entries(render(contextFromDisk(root))).filter(([rel, body]) => {
+  const ctx = contextFromDisk(root);
+  if (foreignStageDirs(root, templateFor(ctx.inputs["work_type"] ?? "")).length) return [];
+  return Object.entries(render(ctx)).filter(([rel, body]) => {
     try {
       return fs.readFileSync(path.join(root, rel), "utf8") !== body;
     } catch {
@@ -309,11 +327,17 @@ function drifted(root: string): Array<[string, string]> {
 function init(ctx: InitContext): void {
   const root = ctx.workspaceRoot;
   const stages = templateFor(ctx.inputs["work_type"] ?? "");
-  const files: Record<string, string> = {
-    "CLAUDE.md": renderClaudeMd(ctx, stages),
-    "CONTEXT.md": renderPipeline(ctx, stages),
-    ...render(ctx),
-  };
+  const foreign = foreignStageDirs(root, stages);
+  if (foreign.length) {
+    warn(
+      `stages/ holds ${foreign.join(", ")}, which the current ${ctx.inputs["work_type"] || "feature"} template does not render — ` +
+        "left CLAUDE.md, CONTEXT.md, _shared/ and stages/ as they are so the run keeps its pipeline. " +
+        "To regenerate them from the current template, move stages/ aside and rerun.",
+    );
+  }
+  const files: Record<string, string> = foreign.length
+    ? {}
+    : { "CLAUDE.md": renderClaudeMd(ctx, stages), "CONTEXT.md": renderPipeline(ctx, stages), ...render(ctx) };
   // The brief is the operator's once written — same rule as seedStartingHandoff —
   // except an untouched placeholder, rebuilt once there is an issue copy to brief from.
   const briefPath = path.join(root, "BRIEF.md");
@@ -326,7 +350,7 @@ function init(ctx: InitContext): void {
     success(`Wrote ${rel}`);
   }
   // Never write into an existing output/: it holds a run in progress.
-  for (const dir of stageDirs(stages)) {
+  for (const dir of foreign.length ? [] : stageDirs(stages)) {
     const out = path.join(root, "stages", dir, "output");
     if (!fs.existsSync(out)) {
       fs.mkdirSync(out, { recursive: true });
