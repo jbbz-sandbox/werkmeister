@@ -93,8 +93,8 @@ declare module 'claude-code' {
       prs: Record<string, RepoPr[]>
       /** The pane's open tab. */
       tab: 'list' | 'create'
-      /** Hide workspaces labelled `skip` from the list. */
-      hideSkip: boolean
+      /** List only workspaces labelled `focus`. */
+      focus: boolean
       /**
        * The Create tab's form as loaded and the tracker's name; null until loaded. The raw
        * bundle, not the fields: state outlives a plugin reload, and fields are drawn from it fresh.

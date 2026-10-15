@@ -126,7 +126,7 @@ const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
 const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
-const HIDE_SKIP = { plugin: 'sandbox-tools', key: 'hideSkip' } as const
+const FOCUS = { plugin: 'sandbox-tools', key: 'focus' } as const
 const TRACKER = { plugin: 'sandbox-tools', key: 'tracker' } as const
 export const TRACKER_TTL_MS = 5 * 60 * 1000
 let trackerAt = 0
@@ -450,9 +450,9 @@ export function buildRows(list: ListResult, status: StatusResult, sessions: Sess
   })
 }
 
-/** With the toggle on, workspaces labelled `skip` (in `.sandbox/workspace.yml`) are left off the list. */
-export function visibleRows(rows: WorkspaceRow[], hideSkip: boolean): WorkspaceRow[] {
-  return hideSkip ? rows.filter(r => !r.labels.includes('skip')) : rows
+/** With the toggle on, only workspaces labelled `focus` (in `.sandbox/workspace.yml`) are listed. */
+export function visibleRows(rows: WorkspaceRow[], focus: boolean): WorkspaceRow[] {
+  return focus ? rows.filter(r => r.labels.includes('focus')) : rows
 }
 
 /** The card border carries the state; nothing else in the card repeats it. */
@@ -845,7 +845,7 @@ export const register: Register = on => {
     const { value: tracker = null } = await $.state.get(TRACKER)
     const { value: prs = {} } = await $.state.get(PRS)
     const { value: tab = 'list' } = await $.state.get(TAB)
-    const { value: hideSkip = false } = await $.state.get(HIDE_SKIP)
+    const { value: focus = false } = await $.state.get(FOCUS)
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e)
     const Input = 'Input' in els ? els.Input : null
@@ -855,7 +855,7 @@ export const register: Register = on => {
       <Box key="tabs" gap={1} marginBottom={1}>
         <Button key="tab:list" label="Workspaces" variant={tab === 'list' ? 'primary' : 'secondary'} onPress={() => void $.state.set(TAB, 'list')} />
         <Button key="tab:create" label="＋ Create" variant={tab === 'create' ? 'primary' : 'secondary'} onPress={() => void openCreate($)} />
-        {tab === 'list' && <Button key="hide-skip" plain label={`${hideSkip ? '☑' : '☐'} Hide skip`} onPress={() => void $.state.set(HIDE_SKIP, !hideSkip)} />}
+        {tab === 'list' && <Button key="focus" plain label={`${focus ? '☑' : '☐'} Focus`} onPress={() => void $.state.set(FOCUS, !focus)} />}
       </Box>
     )
 
@@ -953,7 +953,7 @@ export const register: Register = on => {
             : <Button key="connect" label="⚡ Connect" variant="secondary" onPress={() => void connect($)} />}
         </Box>
         {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
-        {visibleRows(rows, hideSkip).map(r => (
+        {visibleRows(rows, focus).map(r => (
           <Box key={`ws:${r.name}`} flexDirection="column" borderStyle="round" borderColor={BORDER[r.state]} borderDimColor={BORDER[r.state] === 'inactive' ? true : undefined} paddingX={1} marginBottom={1}>
             <Box key={`head:${r.name}`} justifyContent="space-between">
               <Box key={`row:${r.name}`}>
