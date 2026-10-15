@@ -72,7 +72,7 @@ skip_release:                  # <reason> — skips the gate's release check; a 
 <body: summary, test and exercise results, acceptance table, Fixes owner/repo#133>
 ```
 
-The first `#` heading is the PR title and the rest is the body. The person sets `draft → approved`; tooling writes every other status and never infers `approved`.
+The first `#` heading is the PR title and the rest is the body. The person sets `draft → approved`; tooling writes every other status and never infers `approved`. In an `autonomous` icm workspace the agent sets it after its self-check and lists its decisions under `## Recommendations for reviewer` in the body, so the person's review happens on the PR itself ([context-strategies.md](context-strategies.md#autonomous-175)).
 
 ## The gate
 

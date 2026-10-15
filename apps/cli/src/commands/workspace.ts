@@ -120,7 +120,7 @@ function which(cmd: string): string | null {
 }
 
 /** CLI keys the form knows; everything else (browser_form, open_vscode, force, no_distill) is a CLI switch. */
-const FORM_KEYS = ["feature", "issue_id", "services", "repos", "labels", "task", "test_path", "description", "starting_prompt", "work_type", "context_strategy"];
+const FORM_KEYS = ["feature", "issue_id", "services", "repos", "labels", "task", "test_path", "description", "starting_prompt", "work_type", "context_strategy", "autonomous"];
 
 /** Form fields that are arrays of choices (checkboxes); their comma-separated flag values are split. */
 const ARRAY_KEYS = new Set(["services", "repos"]);
