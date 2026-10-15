@@ -385,7 +385,7 @@ The local services come from the workspace's `.sandbox/workspace.yml` (via `sand
 4. Generates per-feature files in the feature's workspace:
    - `docker-compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)
-   - `<workspace>/.sandbox/supergraph-config.yml` — GraphQL federation config (only when a service has `type: graphql-subgraph`)
+   - `<workspace>/.sandbox/supergraph-config.yml` — GraphQL federation config (only when a service has a GraphQL type: `graphql-subgraph`, `graphql`, `subgraph` or `federation`)
 5. Verifies k8s port-forwards are healthy (restarts if needed)
 6. Starts containers with `docker compose up -d --build --remove-orphans`
 7. Regenerates `~/.sandbox/infra/proxy/Caddyfile` and reloads Caddy
@@ -1201,7 +1201,7 @@ own defaults, `repos:` is derived, and `~/.sandbox/services.local.yaml` is merge
 - **`services`** — Map of service name to service definition. Each service has:
   - `repo` (string) — Repository name (directory name in workspace)
   - `path` (string) — Path within the repo (`.` for entire repo, `apps/frontend` for monorepo packages)
-  - `type` (string) — Service category: `web`, `api`, `graphql-subgraph`, `graphql-gateway`
+  - `type` (string) — Service category: `web`, `api`, `graphql-subgraph` (also `graphql`, `subgraph`, `federation`), `graphql-gateway`
   - `internal_port` (int) — Port the service listens on inside its container
   - `port_offset` (int) — Offset within the feature slot range (0–19)
   - `k8s_deployment` (string | null) — Kubernetes deployment name
@@ -1312,7 +1312,8 @@ is not configured.
 
 #### GraphQL federation
 
-When a service in the registry has `type: graphql-subgraph`, `sandbox up` writes
+When a service in the registry has a GraphQL type (`graphql-subgraph`, `graphql`, `subgraph`,
+`federation`), `sandbox up` writes
 `<workspace>/.sandbox/supergraph-config.yml` listing each subgraph's URL for your gateway.
 Registries without a subgraph get no file.
 
@@ -1346,7 +1347,7 @@ Environment file loaded by Docker Compose, containing:
 
 ### supergraph-config.yml
 
-Optional — generated only when a service has `type: graphql-subgraph`. Lists each subgraph with its URL for an Apollo-compatible gateway — local services point to slot ports, remote services point to k8s forwards.
+Optional — generated only when a service has a GraphQL type (`graphql-subgraph`, `graphql`, `subgraph`, `federation`). Lists each subgraph with its URL for an Apollo-compatible gateway — local services point to slot ports, remote services point to k8s forwards.
 
 ---
 
