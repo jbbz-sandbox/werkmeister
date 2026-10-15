@@ -449,6 +449,22 @@ test('without a session this one started, there is no Open beside', async ($, on
   await ui.unmount()
 })
 
+test('Pin toggles the sidebar pin of the card\'s session and redraws from the app\'s answer', async ($, on) => {
+  let pinned = false
+  const w = world(on, stubs({
+    'ccd_session_mgmt/list_sessions': () => ok(undefined, JSON.stringify(SESSIONS.map(x => (x.sessionId === 'local_1' ? { ...x, pinned } : x)))),
+    'ccd_sidebar/set_pinned': args => { pinned = args.pinned as boolean; return ok({}) },
+  }))
+  await openPane($)
+  const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
+  expect((await ui.find({ key: 'pin:abc' }))?.text).toBe('📌 Pin')
+  expect(await ui.find({ key: 'pin:empty' })).toBeFalsy()
+  await ui.press({ key: 'pin:abc' })
+  expect(w.calls.find(c => c.key === 'ccd_sidebar/set_pinned')?.args).toEqual({ session_id: 'local_1', pinned: true })
+  expect((await ui.find({ key: 'pin:abc' }))?.text).toBe('📌 Unpin')
+  await ui.unmount()
+})
+
 test('a session starting in a folder of workspaces opens the pane; elsewhere it does not', async ($, on) => {
   const w = world(on, stubs())
   // Opening the pane loads the list once.
