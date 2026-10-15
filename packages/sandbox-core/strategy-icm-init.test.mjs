@@ -110,7 +110,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.match(claude, /`stages\/02_spec\/CONTEXT\.md`/);
     assert.match(claude, /you hit a bug or need to log a feature\/task .*`_shared\/issues-report\.md`/);
     assert.match(claude, /^\| this folder's git branch \| the run's record .*never open a PR from it or merge it \|$/m);
-    assert.match(claude, /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `sandbox pr open` \|/m);
+    assert.match(claude, /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `sandbox pr open`, then Auto-fix on \(rule 5\) \| PR URL is in the PR file and Auto-fix is on \|/m);
     assert.match(fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"), /`stages\/04_propose\/output\/pr-<repo>\.md`/);
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
