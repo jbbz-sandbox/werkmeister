@@ -53,7 +53,7 @@ describe("sandbox __complete", { timeout: 30_000 }, () => {
   });
 
   it("completes long flags of the named command", () => {
-    expect(complete("sandbox up --f")).toEqual(["--force"]);
+    expect(complete("sandbox up --w")).toEqual(["--workspace"]);
   });
 
   it("completes a positional as a feature name", () => {
