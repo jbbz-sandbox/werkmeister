@@ -15,8 +15,9 @@ These hold for every PR this workspace produces, whatever skill or command was a
 2. **PRs come only from code worktrees** — one per repo touched, from that repo's PR file (below).
 3. **Gate.** Before a PR opens, all of these hold: every earlier stage/phase is done; the PR file's acceptance table is all PASS; the code worktree is clean; each touched service's registry test command passes (\`.sandbox/sandbox-context.md\`); the exercise evidence is all PASS; the repo's release check passes; the PR file reads \`status: approved\`.
 4. **Only \`sandbox pr open\` opens PRs.** \`gh pr create\`, \`/create-pr\` and \`finishing-a-development-branch\` are blocked inside a workspace.
-5. **Merge is the person's act.** Tooling never merges.
-6. **Close out only when every PR file is \`shipped\`, \`closed\` or \`abandoned\`.**
+5. **Auto-fix is always on.** Right after \`sandbox pr open\`, in the Claude desktop app: bind the PR to this session (\`ccd_pr\` \`get_status\`; \`bind_pr\` with the PR's URL if it isn't bound), then turn on Auto-fix with \`ccd_pr\` \`set_monitor\` (\`auto_fix: true\`, \`address_comments: true\`, the PR's \`url\`). Don't ask first. Never turn on auto-merge.
+6. **Merge is the person's act.** Tooling never merges.
+7. **Close out only when every PR file is \`shipped\`, \`closed\` or \`abandoned\`.**
 
 ## PR file — \`${prFileDir}pr-<repo>.md\`
 
@@ -61,7 +62,7 @@ Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out
 | Command | Does |
 |---|---|
 | \`sandbox pr gate [repo]\` | run the gate, change nothing |
-| \`sandbox pr open [repo]\` | gate, push, open the PR, record its URL |
+| \`sandbox pr open [repo]\` | gate, push, open the PR, record its URL; then turn on Auto-fix (rule 5) |
 | \`sandbox pr status\` | record merged / shipped / closed from GitHub and release tags |
 | \`sandbox close-out\` | after ship: close the issue, write \`closeout.md\`, remove the workspace, delete merged branches |
 | \`sandbox remove-workspace <name> --abandon "<reason>"\` | give up: record the reason, then remove |
