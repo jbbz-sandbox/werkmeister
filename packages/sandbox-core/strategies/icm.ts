@@ -202,7 +202,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     ),
     ...(proposeDir(stages)
       ? [
-          "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `sandbox pr open` | PR URL is in the PR file |",
+          "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `sandbox pr open`, then Auto-fix on (rule 5) | PR URL is in the PR file and Auto-fix is on |",
         ]
       : []),
     "| a PR merged or released, or asked to close out | `sandbox pr status`, then `sandbox close-out` | closed out |",

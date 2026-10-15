@@ -20,7 +20,10 @@ is `docs/workspace-lifecycle.md` in the sandbox repo.
    table, a dirty worktree, each touched service's test command, the exercise
    evidence, the release check (e.g. a missing changeset).
 4. **`sandbox pr open`** gates, pushes, opens the PR and records its URL in the
-   PR file. Merging is the person's act.
+   PR file. Then, in the Claude desktop app, turn on Auto-fix without asking:
+   `ccd_pr` `get_status` (`bind_pr` with the URL if the PR isn't bound), then
+   `set_monitor` with `auto_fix: true`, `address_comments: true` and the PR's
+   `url`. Never auto-merge. Merging is the person's act.
 5. **`sandbox pr status`** after merge and release: records `merged`, then
    `shipped` with the release tag that contains the merge.
 6. **`sandbox close-out`** once every PR file is shipped, closed or abandoned:

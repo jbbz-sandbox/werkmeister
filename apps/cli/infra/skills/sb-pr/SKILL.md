@@ -48,5 +48,8 @@ workspace — don't reach for them.
    release check), pushes, opens the PR, moves the issue to "In Development"
    (on GitHub: adds an `In Development` label, created if the repo lacks it),
    and records the URL in the PR file. A failed gate check names what to fix.
+   Then, in the Claude desktop app, turn on Auto-fix without asking: `ccd_pr`
+   `get_status` (`bind_pr` with the URL if unbound), then `set_monitor` with
+   `auto_fix: true`, `address_comments: true` and the PR's `url`. Never auto-merge.
 5. **Checkpoint:** suggest `sb-handoff` so the PR state survives into the next
    session. After merge and release: `sandbox pr status`, then `sandbox close-out`.
