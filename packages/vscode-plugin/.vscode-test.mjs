@@ -12,6 +12,11 @@ import { defineConfig } from "@vscode/test-cli";
  */
 export default defineConfig({
   files: "src/test/*.test.cjs",
+  // Pinned, not `stable`: `stable` asks update.code.visualstudio.com on every
+  // run, and that lookup has failed CI before any test ran (#151). This is the
+  // `engines.vscode` floor. Bump it by hand when a newer VS Code matters, and
+  // bump the cache key in .github/workflows/ci.yml with it.
+  version: "1.93.0",
   // No folder open: the tree's 5s poll only runs while the view is visible, and
   // nothing here opens it, so no `docker ps` sweep fires during the run.
   launchArgs: ["--disable-extensions", "--disable-workspace-trust"],
