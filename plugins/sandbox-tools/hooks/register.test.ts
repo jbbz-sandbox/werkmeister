@@ -162,17 +162,18 @@ test('cards link the issue and each PR with its state', async ($, on) => {
   }
 })
 
-test('the Hide skip toggle drops workspaces labelled skip', async ($, on) => {
-  const list = { ...LIST, workspaces: LIST.workspaces.map(w => (w.name === 'abc' ? { ...w, labels: ['skip'] } : w)) }
+test('the Focus toggle shows only workspaces labelled focus', async ($, on) => {
+  const list = { ...LIST, workspaces: LIST.workspaces.map(w => (w.name === 'abc' ? { ...w, labels: ['focus'] } : w)) }
   world(on, stubs({ [`${WS}/list-workspaces`]: () => ok(list) }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'terminal', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   expect((await ui.find({ key: 'row:abc' }))?.text).toBe('abc')
-  await ui.press({ key: 'hide-skip' })
-  expect(await ui.find({ key: 'row:abc' })).toBeUndefined()
   expect((await ui.find({ key: 'row:ab' }))?.text).toBe('ab')
-  await ui.press({ key: 'hide-skip' })
+  await ui.press({ key: 'focus' })
+  expect(await ui.find({ key: 'row:ab' })).toBeUndefined()
   expect((await ui.find({ key: 'row:abc' }))?.text).toBe('abc')
+  await ui.press({ key: 'focus' })
+  expect((await ui.find({ key: 'row:ab' }))?.text).toBe('ab')
   await ui.unmount()
 })
 
