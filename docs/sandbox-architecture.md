@@ -421,9 +421,8 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 │   ├── .env                            # Generated resolved env vars
 │   ├── .sandbox/
 │   │   └── supergraph-config.yml       # Generated only when a GraphQL subgraph exists
-│   ├── sandbox/                     # git worktree
-│   ├── nx-mono/                        # git worktree
-│   └── sandbox/           # git worktree
+│   ├── demo-services/                  # git worktree
+│   └── api/                            # git worktree
 ├── auth-redesign/
 │   ├── docker-compose.yml
 │   ├── .env
