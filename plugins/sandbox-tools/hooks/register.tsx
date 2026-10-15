@@ -149,8 +149,8 @@ export function createPrompt(issueId: string): string {
 /**
  * The create form's fields from the same RJSF bundle the browser form renders
  * (getFormSchema: the terminal wizard's prompts), in its `ui:order`. An array
- * with choices is a multi-pick; a string with choices a select; a `textarea`
- * widget a multi-line field; the rest one line. Titles lose the wizard's
+ * with choices is a multi-pick; a string with choices a select; a boolean a
+ * checkbox; a `textarea` widget a multi-line field; the rest one line. Titles lose the wizard's
  * terminal hints, `(blank to skip)` and the like: the form marks required
  * fields itself and the description says the rest.
  */
@@ -167,7 +167,7 @@ export function formFields(bundle: FormBundle): FormField[] {
       key: k,
       title: (p.title ?? k).replace(/\s*\([^)]*\)\s*$/, ''),
       help: p.description ?? '',
-      kind: options.length ? (p.type === 'array' ? 'multi' : 'select') : ui['ui:widget'] === 'textarea' ? 'textarea' : 'text',
+      kind: p.type === 'boolean' ? 'check' : options.length ? (p.type === 'array' ? 'multi' : 'select') : ui['ui:widget'] === 'textarea' ? 'textarea' : 'text',
       options,
       groups: (((ui['ui:options'] ?? {}) as { groups?: Record<string, string[]> }).groups) ?? {},
       refine: refineOf(ui),
@@ -220,6 +220,13 @@ export function applyFormFields(fields: FormField[], draft: Draft, input: Record
     const f = fields.find(x => x.key === k)
     if (!f) {
       problems.push(`${k}: no such field (fields: ${fields.map(x => x.key).join(', ')})`)
+      continue
+    }
+    if (f.kind === 'check') {
+      // The tool's input schema carries strings, so "true" / "false" arrive as text.
+      const on = raw === true || raw === 'true' ? true : raw === false || raw === 'false' || raw === '' ? false : null
+      if (on === null) problems.push(`${k}: expected true or false`)
+      else out[k] = on
       continue
     }
     if (f.kind === 'multi') {
@@ -285,7 +292,7 @@ async function openCreate($: EngineInterface): Promise<void> {
   }
 }
 
-async function setField($: EngineInterface, key: string, value: string | string[]): Promise<void> {
+async function setField($: EngineInterface, key: string, value: Draft[string]): Promise<void> {
   const { value: draft = {} } = await $.state.get(DRAFT)
   await $.state.set(DRAFT, { ...draft, [key]: value })
 }
@@ -776,6 +783,28 @@ async function openPane($: EngineInterface): Promise<void> {
   startPolling($)
 }
 
+/** Sidebar group that desktop sessions started in a workspace are filed under, when the person has made it. */
+export const SESSION_GROUP = 'Feature Workspaces'
+
+/** A workspace or a folder inside one: `dir` or some ancestor holds `.sandbox/workspace.yml`. */
+async function inWorkspace($: EngineInterface, dir: string): Promise<boolean> {
+  for (let d = dir; d.length > 1; d = d.slice(0, d.lastIndexOf('/')) || '/') {
+    if (await $.fs.exists(`${d}/.sandbox/workspace.yml`)) return true
+  }
+  return false
+}
+
+/** Files this session under SESSION_GROUP when that group exists and the session sits in no group yet. */
+async function fileInGroup($: EngineInterface): Promise<void> {
+  try {
+    const group = payload<{ id: string; name: string }[]>(await $.mcp.call('ccd_sidebar', 'list_groups')).find(g => g.name === SESSION_GROUP)
+    if (!group) return
+    const self = payload<{ group?: { id: string } | null }>(await $.mcp.call('ccd_session_mgmt', 'get_session', { session_id: 'self' }))
+    if (self.group) return
+    await $.mcp.call('ccd_sidebar', 'move_sessions', { session_ids: ['self'], group_id: group.id })
+  } catch { /* groups not reported yet, or the app refused: the session stays where it is */ }
+}
+
 /** A folder of workspaces (e.g. ~/features): some direct child holds `.sandbox/workspace.yml`. */
 async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean> {
   const entries = await $.fs.list(dir).catch(() => [])
@@ -794,7 +823,7 @@ export const register: Register = on => {
         "Fill fields of the New Sandbox Workspace form in the /workspaces pane's Create tab, so the person can " +
         'set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on ' +
         'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
-        'slug), work_type, context_strategy, services (a list of choices), labels, test_path, task, ' +
+        'slug), work_type, context_strategy, autonomous ("true" or "false"), services (a list of choices), labels, test_path, task, ' +
         'description, starting_prompt (multi-line). Pass {} as fields to read the current values. Returns what the ' +
         'form holds, values it left out and why, and what is still required. It never creates the workspace: the ' +
         'person presses Create in the pane.',
@@ -818,6 +847,7 @@ export const register: Register = on => {
       void prTick($)
     }
     else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($)
+    if (e.surface === 'desktop' && (await inWorkspace($, e.cwd))) await fileInGroup($)
     return next(e)
   })
 
@@ -923,6 +953,9 @@ export const register: Register = on => {
                   <Button key={`create:refine:${f.key}`} label={formBusy === 'refine' ? 'Refining…' : '✨ Refine with Claude'} variant="secondary" onPress={() => void (formBusy ? undefined : refineField($, f.key, f.refine ?? ''))} />
                   <Text dimColor>Rewrites it as a clear instruction with a goal and acceptance criteria, using the issue and your other choices.</Text>
                 </Box>
+              )}
+              {f.kind === 'check' && (
+                <Button key={`f:${f.key}`} plain label={`${draft[f.key] === true ? '☑' : '☐'} ${f.title}`} onPress={() => void setField($, f.key, draft[f.key] !== true)} />
               )}
               {f.kind === 'select' && (
                 <Select key={`f:${f.key}`} options={[{ value: '', label: 'Choose…' }, ...f.options.map(o => ({ value: o }))]} value={text(f.key)} onSelect={v => void setField($, f.key, v)} />

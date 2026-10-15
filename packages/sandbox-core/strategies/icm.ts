@@ -24,8 +24,8 @@ import {
   resolveActiveStandards,
   universalStandards,
 } from "../standards.js";
-import { _INPUT_FIELDS, loadConfigFile, loadSandboxServiceConfigs } from "../workspace_prompts.js";
-import { templateFor, type IcmVars, type Stage } from "./icm_templates.js";
+import { _INPUT_FIELDS, isTrue, loadConfigFile, loadSandboxServiceConfigs } from "../workspace_prompts.js";
+import { SELF_CHECK, templateFor, type IcmVars, type Stage } from "./icm_templates.js";
 import type { ContextStrategy, InitContext } from "./types.js";
 
 const PONYTAIL_ROW =
@@ -45,6 +45,22 @@ function list(s: string | undefined): string[] {
 
 function stageDirs(stages: Stage[]): string[] {
   return stages.map((s, i) => `${String(i + 1).padStart(2, "0")}_${s.name}`);
+}
+
+/**
+ * Stage dirs on disk that this template would not render — a run started under
+ * another stage set, e.g. `03_verify`/`04_ship` from before decision 11 renamed
+ * them. Rendering over it would add the new dirs beside the old ones (#149).
+ */
+function foreignStageDirs(root: string, stages: Stage[]): string[] {
+  const own = stageDirs(stages);
+  let onDisk: string[];
+  try {
+    onDisk = fs.readdirSync(path.join(root, "stages")).filter((n) => /^\d+_/.test(n));
+  } catch {
+    return [];
+  }
+  return onDisk.filter((d) => !own.includes(d)).sort();
 }
 
 /** The stage dir that holds PR files, or null for a template with no propose stage (spike). */
@@ -67,6 +83,7 @@ function vars(ctx: InitContext, stages: Stage[]): IcmVars {
         ? services.map((s) => `\`docker restart ${feature}-${s}\``).join(", ")
         : "restart whatever serves the change as `.sandbox/sandbox-context.md` describes",
     standards: "",
+    autonomous: isTrue(ctx.inputs["autonomous"]),
   };
 }
 
@@ -143,8 +160,7 @@ function renderContract(dir: string, stage: Stage, v: IcmVars): string {
     "## Outputs",
     ...c.outputs.map((o) => `- ${o}`),
     "",
-    "## Human check",
-    c.humanCheck,
+    ...(v.autonomous ? ["## Self-check", c.selfCheck ?? SELF_CHECK] : ["## Human check", c.humanCheck]),
     "",
   ].join("\n");
 }
@@ -182,7 +198,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "|---|---|---|",
     ...stages.map(
       (s, i) =>
-        `| ${i === 0 ? "starting the run" : (s.enter ?? `\`${dirs[i - 1]}\` output approved`)} | \`stages/${dirs[i]}/CONTEXT.md\` | a person has read \`output/\` |`,
+        `| ${i === 0 ? "starting the run" : (s.enter ?? `\`${dirs[i - 1]}\` output ${v.autonomous ? "self-checked" : "approved"}`)} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
     ),
     ...(proposeDir(stages)
       ? [
@@ -194,11 +210,30 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "| containers / ports / routing broken | `.sandbox/sandbox-context.md` | — |",
     "| you hit a bug or need to log a feature/task — in the `sandbox` tool or in a repo's code | `_shared/issues-report.md`: if this workspace's changes caused a bug, fix it here; otherwise file an issue where it belongs | fixed, or issue URL reported to the person |",
     "",
-    "## The one rule",
-    "",
-    "Nothing moves to the next stage until a person has read — and edited if needed — the previous stage's `output/`. The next stage reads whatever is there. The person's edit (a `decided` status, or a \"proceed\" after a gate) is the approval; never ask them to confirm it a second time.",
+    ...(v.autonomous ? stopPoints(stages) : ONE_RULE),
     "",
   ].join("\n");
+}
+
+const ONE_RULE = [
+  "## The one rule",
+  "",
+  "Nothing moves to the next stage until a person has read — and edited if needed — the previous stage's `output/`. The next stage reads whatever is there. The person's edit (a `decided` status, or a \"proceed\" after a gate) is the approval; never ask them to confirm it a second time.",
+];
+
+// `autonomous` (#175): the person's review moves to the PR, so these replace the one rule.
+function stopPoints(stages: Stage[]): string[] {
+  return [
+    "## Stop points",
+    "",
+    "Walk every stage without stopping: each stage's self-check is its approval. Stop only at:",
+    "",
+    proposeDir(stages) ? "1. the PR URL from `sandbox pr open`" : "1. the last stage's `output/` written",
+    "2. a question only a person can answer",
+    "3. a gate failure outside this issue's scope",
+    "",
+    "The gate (`sandbox pr gate`: tests, clean worktree, exercise PASS, release check) still applies; `skip_tests` only for a service this workspace doesn't run, with the reason.",
+  ];
 }
 
 function renderPipeline(ctx: InitContext, stages: Stage[]): string {
@@ -206,7 +241,7 @@ function renderPipeline(ctx: InitContext, stages: Stage[]): string {
   return [
     `# ${ctx.workspaceName} — the pipeline`,
     "",
-    "| Stage | Job | Output | Human check |",
+    `| Stage | Job | Output | ${isTrue(ctx.inputs["autonomous"]) ? "Self-check" : "Human check"} |`,
     "|---|---|---|---|",
     ...stages.map((s, i) => `| \`${dirs[i]}\` | ${s.job} | ${s.writes} | ${s.check} |`),
     "",
@@ -259,7 +294,7 @@ function render(ctx: InitContext): Record<string, string> {
     "_shared/issues-report.md": buildIssuesReportMd(ctx.workspaceName, issueIdOfMeta(ctx.meta)),
   };
   const propose = proposeDir(stages);
-  if (propose) files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${propose}/output/`);
+  if (propose) files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${propose}/output/`, base.autonomous);
   stages.forEach((stage, i) => {
     files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(dirs[i], stage, {
       ...base,
@@ -297,7 +332,9 @@ function writeRel(root: string, rel: string, body: string): void {
 }
 
 function drifted(root: string): Array<[string, string]> {
-  return Object.entries(render(contextFromDisk(root))).filter(([rel, body]) => {
+  const ctx = contextFromDisk(root);
+  if (foreignStageDirs(root, templateFor(ctx.inputs["work_type"] ?? "")).length) return [];
+  return Object.entries(render(ctx)).filter(([rel, body]) => {
     try {
       return fs.readFileSync(path.join(root, rel), "utf8") !== body;
     } catch {
@@ -309,11 +346,17 @@ function drifted(root: string): Array<[string, string]> {
 function init(ctx: InitContext): void {
   const root = ctx.workspaceRoot;
   const stages = templateFor(ctx.inputs["work_type"] ?? "");
-  const files: Record<string, string> = {
-    "CLAUDE.md": renderClaudeMd(ctx, stages),
-    "CONTEXT.md": renderPipeline(ctx, stages),
-    ...render(ctx),
-  };
+  const foreign = foreignStageDirs(root, stages);
+  if (foreign.length) {
+    warn(
+      `stages/ holds ${foreign.join(", ")}, which the current ${ctx.inputs["work_type"] || "feature"} template does not render — ` +
+        "left CLAUDE.md, CONTEXT.md, _shared/ and stages/ as they are so the run keeps its pipeline. " +
+        "To regenerate them from the current template, move stages/ aside and rerun.",
+    );
+  }
+  const files: Record<string, string> = foreign.length
+    ? {}
+    : { "CLAUDE.md": renderClaudeMd(ctx, stages), "CONTEXT.md": renderPipeline(ctx, stages), ...render(ctx) };
   // The brief is the operator's once written — same rule as seedStartingHandoff —
   // except an untouched placeholder, rebuilt once there is an issue copy to brief from.
   const briefPath = path.join(root, "BRIEF.md");
@@ -326,7 +369,7 @@ function init(ctx: InitContext): void {
     success(`Wrote ${rel}`);
   }
   // Never write into an existing output/: it holds a run in progress.
-  for (const dir of stageDirs(stages)) {
+  for (const dir of foreign.length ? [] : stageDirs(stages)) {
     const out = path.join(root, "stages", dir, "output");
     if (!fs.existsSync(out)) {
       fs.mkdirSync(out, { recursive: true });

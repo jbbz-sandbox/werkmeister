@@ -424,9 +424,8 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 │   ├── .env                            # Generated resolved env vars
 │   ├── .sandbox/
 │   │   └── supergraph-config.yml       # Generated only when a GraphQL subgraph exists
-│   ├── sandbox/                     # git worktree
-│   ├── nx-mono/                        # git worktree
-│   └── sandbox/           # git worktree
+│   ├── demo-services/                  # git worktree
+│   └── api/                            # git worktree
 ├── auth-redesign/
 │   ├── docker-compose.yml
 │   ├── .env

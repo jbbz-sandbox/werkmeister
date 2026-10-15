@@ -7,6 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import {
+  AUTONOMOUS_RULES,
   buildAllowRules,
   READ_ONLY_GIT_RULES,
   removeWorkspacePermissions,
@@ -138,4 +139,31 @@ test("jit refresh writes its hooks and the same allow rules", async () => {
   assert.ok(settings.hooks.SessionStart, "JIT SessionStart hook");
   assert.equal(settings.hooks.PreToolUse.length, 2, "standards gate + PR guard");
   assert.deepEqual(settings.permissions.allow, READ_ONLY_GIT_RULES);
+});
+
+function setAutonomous(root, on) {
+  fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), `context_strategy: icm\nautonomous: ${on}\n`);
+}
+
+// #175: a headless claude-send run needs these with nobody to approve them.
+test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and turning it off removes them", async () => {
+  const { strategyById } = await import("./dist/strategies/index.js");
+  const root = workspace({ permissions: { allow: ["Bash(git:*)"] } });
+  setAutonomous(root, true);
+  strategyById("icm").refresh(root);
+  let settings = readSettings(root);
+  for (const rule of AUTONOMOUS_RULES) assert.ok(settings.permissions.allow.includes(rule), rule);
+  assert.ok(settings.permissions.allow.includes("mcp__plugin_sandbox-tools_sandbox-workspace"));
+  assert.ok(!readRecord(root).allow.includes("Bash(git:*)"), "the person's own rule is not recorded");
+  assert.ok(
+    settings.hooks.PreToolUse.some((e) => e.hooks.some((h) => h.command.includes("sandbox hooks pr-guard"))),
+    "PR guard still installed",
+  );
+
+  setAutonomous(root, false);
+  strategyById("icm").refresh(root);
+  settings = readSettings(root);
+  assert.deepEqual(settings.permissions.allow, ["Bash(git:*)", ...READ_ONLY_GIT_RULES]);
+  assert.deepEqual(readRecord(root), { allow: READ_ONLY_GIT_RULES });
 });

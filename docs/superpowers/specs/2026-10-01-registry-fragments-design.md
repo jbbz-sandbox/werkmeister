@@ -166,9 +166,9 @@ Three PRs, in this order:
 
 1. **sandbox**: `registry_sync.ts`, setup and wizard changes, the `registry`
    command, scaffold cleanup, `.sandbox/services.yaml` for the five
-   self-host services with `~` replaced by `{{home}}` and the
-   `x-mcp-client` anchor block moved in with them, the gitignore negation,
-   users-guide updates, a changeset.
+   self-host services with the absolute home directory replaced by
+   `{{home}}` and the `x-mcp-client` anchor block moved in with them, the
+   gitignore negation, users-guide updates, a changeset.
 2. **demo-services**: `.sandbox/services.yaml` holding `backend`, `frontend`,
    `demo-install`, `redis`, `postgres`.
 3. **mobile-app**: `.sandbox/services.yaml` holding `api` (NestJS,

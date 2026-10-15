@@ -154,6 +154,36 @@ test("check is empty right after init, and sync repairs an edited contract", asy
   });
 });
 
+test("init leaves a pre-rename stage layout alone: no new stage dirs, no rewritten contracts (#149)", async () => {
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      const old = ["01_reproduce", "02_fix", "03_verify", "04_ship"];
+      const kept = ["CLAUDE.md", "CONTEXT.md", "_shared/standards.md", "_shared/issues-report.md"];
+      for (const d of old) {
+        fs.mkdirSync(path.join(root, "stages", d, "output"), { recursive: true });
+        fs.writeFileSync(path.join(root, "stages", d, "CONTEXT.md"), `old ${d} contract\n`);
+        fs.writeFileSync(path.join(root, "stages", d, "output", "artifact.md"), `${d} done\n`);
+      }
+      fs.mkdirSync(path.join(root, "_shared"));
+      for (const f of kept) fs.writeFileSync(path.join(root, f), `old ${f}\n`);
+      const reporter = collectingReporter();
+      await withReporter(reporter, async () => icm.init(ctx));
+      assert.deepEqual(fs.readdirSync(path.join(root, "stages")).sort(), old);
+      for (const d of old) {
+        assert.equal(fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8"), `old ${d} contract\n`);
+        assert.equal(fs.readFileSync(path.join(root, "stages", d, "output", "artifact.md"), "utf8"), `${d} done\n`);
+      }
+      for (const f of kept) assert.equal(fs.readFileSync(path.join(root, f), "utf8"), `old ${f}\n`);
+      assert.ok(!fs.existsSync(path.join(root, "_shared", "pr-rules.md")));
+      assert.match(reporter.text(), /03_verify, 04_ship/);
+      assert.deepEqual(icm.check(root), []);
+      assert.deepEqual(icm.sync(root), { wrote: [] });
+      assert.deepEqual(fs.readdirSync(path.join(root, "stages")).sort(), old);
+    },
+    { inputs: { work_type: "bugfix" } },
+  );
+});
+
 test("an empty starting prompt still gives the brief a body", async () => {
   await withIcmWorkspace(
     async (root, ctx) => {

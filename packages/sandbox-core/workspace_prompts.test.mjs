@@ -5,17 +5,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { buildFormSchema } from "./dist/form_schema.js";
+import { writeWorkspaceConfig } from "./dist/workspace_init.js";
 
 import {
   computePromptSpec,
   DEFAULT_PLAN,
   promptEntry,
+  readAutonomous,
+  resolveInputs,
   WORK_TYPE_PHASES,
   planFor,
 } from "./dist/workspace_prompts.js";
@@ -35,6 +38,7 @@ test("the spec carries the wizard prompts, with repos spliced after services", (
     "feature",
     "work_type",
     "context_strategy",
+    "autonomous",
     "services",
     "labels",
     "test_path",
@@ -81,13 +85,53 @@ test("choice groups reach the form schema as ui:options.groups", () => {
   assert.deepEqual(uiSchema.services["ui:options"].groups, entry.choice_groups);
 });
 
-test("context_strategy is an optional select defaulting to jit", () => {
+test("context_strategy is an optional select defaulting to icm", () => {
   const spec = computePromptSpec({}, root);
   const prompt = spec.prompts.find((p) => p.key === "context_strategy");
-  assert.equal(prompt.default, "jit");
+  assert.equal(prompt.default, "icm");
   assert.equal(prompt.accept_empty, true);
   const { schema } = buildFormSchema(spec);
   assert.ok(!schema.required.includes("context_strategy"));
+});
+
+test("autonomous is an optional checkbox, off by default", () => {
+  const { schema, formData } = buildFormSchema(computePromptSpec({}, root));
+  assert.equal(schema.properties.autonomous.type, "boolean");
+  assert.equal(formData.autonomous, false);
+  assert.ok(!schema.required.includes("autonomous"));
+});
+
+/** A workspace root whose workspace.yml holds *yml*. */
+function wsWith(yml) {
+  const ws = mkdtempSync(path.join(tmpdir(), "autonomous-"));
+  mkdirSync(path.join(ws, ".sandbox"));
+  writeFileSync(path.join(ws, ".sandbox", "workspace.yml"), yml);
+  return ws;
+}
+
+test("autonomous resolves from the flag, the env var and workspace.yml, as true/false", () => {
+  assert.equal(resolveInputs({ autonomous: true }, root).autonomous, "true");
+  assert.equal(resolveInputs({}, wsWith("autonomous: true\n")).autonomous, "true");
+  assert.equal(resolveInputs({}, wsWith("autonomous: false\n")).autonomous, "false");
+  assert.ok(!("autonomous" in resolveInputs({}, root)));
+  process.env.SANDBOX_AUTONOMOUS = "1";
+  try {
+    assert.equal(resolveInputs({}, wsWith("autonomous: false\n")).autonomous, "true");
+  } finally {
+    delete process.env.SANDBOX_AUTONOMOUS;
+  }
+});
+
+test("readAutonomous reads workspace.yml; absent is off", () => {
+  assert.equal(readAutonomous(wsWith("autonomous: true\n")), true);
+  assert.equal(readAutonomous(wsWith("autonomous: false\n")), false);
+  assert.equal(readAutonomous(root), false);
+});
+
+test("workspace.yml stores autonomous as a YAML boolean", () => {
+  const ws = wsWith("feature: x\n");
+  writeWorkspaceConfig(ws, { autonomous: "true" });
+  assert.match(readFileSync(path.join(ws, ".sandbox", "workspace.yml"), "utf8"), /^autonomous: true$/m);
 });
 
 // `getFormSchema` builds the spec against $HOME and discards every default, so
