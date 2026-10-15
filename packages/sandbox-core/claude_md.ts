@@ -20,7 +20,7 @@ import { issueLink } from "./issue_tracker.js";
 import { renderIssueRef } from "./strategies/issue_section.js";
 import type { IssueRef } from "./strategies/types.js";
 import { standardsSource, standardsUrl } from "./skill_gen.js";
-import { serviceTestCommand } from "./archetypes.js";
+import { containerTestCommand, serviceTestCommand } from "./archetypes.js";
 import { loadArchetypes } from "./config.js";
 import { getServicePort } from "./slots.js";
 import { universalStandards } from "./standards.js";
@@ -304,7 +304,7 @@ Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's
 function testCommandLine(feature: string, svc: string, servicesConfig: Record<string, any>, archetypes: Record<string, any>): string {
   const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
   return cmd
-    ? `- \`${svc}\`: \`docker exec ${feature}-${svc} sh -c '${cmd}'\``
+    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, cmd)}\``
     : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;
 }
 

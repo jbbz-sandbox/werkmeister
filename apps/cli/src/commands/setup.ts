@@ -51,6 +51,8 @@ import { ingressHostnames } from "sandbox-core/feature_routing";
 import * as gc from "sandbox-core/global_config";
 import type { PromptSpec } from "sandbox-core/global_config";
 import {
+  claudeStandardsDirState,
+  claudeUserSettingsPath,
   editorSchemaState,
   githubOwners,
   runSetup,
@@ -77,6 +79,7 @@ interface Answers {
   installOptionalPlugins: boolean;
   mapEditorSchemas: boolean;
   installVscodeExtension: boolean;
+  grantStandardsDir: boolean;
   skipSudo: boolean;
 }
 
@@ -342,6 +345,27 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     );
   }
 
+  // --- 9. Claude Code standards access (optional) -------------------------
+  heading("9. Claude Code standards access (optional)");
+  const standards = claudeStandardsDirState();
+  let grantStandardsDir = false;
+  if (!standards.present) {
+    info("Claude Code settings dir not found — skipping.");
+  } else if (standards.dirMissing) {
+    info(`Standards dir ${gc.standardsDirPath()} not found — skipping.`);
+  } else if (standards.error) {
+    warn(`${claudeUserSettingsPath()}: ${standards.error} — skipping.`);
+  } else if (standards.granted) {
+    info("Already granted.");
+  } else {
+    info(
+      `Lets every Claude Code session read the coding standards in ${gc.standardsDirPath()} without a prompt. ` +
+        `Adds it to \`permissions.additionalDirectories\` in ${claudeUserSettingsPath()}; other settings are kept.`,
+    );
+    // Default yes for a person at the prompt, but --yes must not edit a user-owned file uninvited.
+    grantStandardsDir = interactive && (await confirm("  Grant Claude Code read access to the standards dir?", true, interactive));
+  }
+
   // --- write ---------------------------------------------------------------
   // Rebuilt rather than merged, but every hand-added section is carried across
   // verbatim: dropping an override or a token the wizard never asked about
@@ -401,6 +425,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     installOptionalPlugins,
     mapEditorSchemas,
     installVscodeExtension,
+    grantStandardsDir,
     skipSudo: !interactive,
   };
 }
@@ -486,6 +511,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     installOptionalPlugins: answers.installOptionalPlugins,
     mapEditorSchemas: answers.mapEditorSchemas,
     installVscodeExtension: answers.installVscodeExtension,
+    grantStandardsDir: answers.grantStandardsDir,
   });
 
   const failed = report(steps);
