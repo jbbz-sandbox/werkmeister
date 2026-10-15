@@ -73,3 +73,67 @@ test("each template renders with no undefined and a route per stage", async () =
     }
   }
 });
+
+/** Init a feature-template icm workspace at *root* with *autonomous*; returns what it wrote. */
+async function initIcm(root, standardsDir, autonomous) {
+  await withSandboxHome(
+    () =>
+      withReporter(collectingReporter(), async () =>
+        strategyById("icm").init({
+          workspaceRoot: root,
+          workspaceName: "demo",
+          repos: [["repo", "me/demo"]],
+          task: "t",
+          meta: { FEATURE: "demo", SERVICES: "api" },
+          inputs: { work_type: "feature", starting_prompt: "p", autonomous },
+          configOverride: null,
+        }),
+      ),
+    { config: `overrides:\n  standards_dir: ${standardsDir}\n` },
+  );
+  const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+  const stages = fs.readdirSync(path.join(root, "stages")).sort();
+  return {
+    claude: read("CLAUDE.md"),
+    pipeline: read("CONTEXT.md"),
+    prRules: read("_shared/pr-rules.md"),
+    contracts: stages.map((d) => read(`stages/${d}/CONTEXT.md`)),
+  };
+}
+
+// #175: autonomous moves the person's review to the PR; flipping it off restores every human check.
+test("autonomous renders self-checks and stop points, and turning it off restores the human checks", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-autonomous-"));
+  const standardsDir = fs.mkdtempSync(path.join(os.tmpdir(), "icm-autonomous-standards-"));
+  try {
+    const on = await initIcm(root, standardsDir, "true");
+    for (const c of on.contracts) {
+      assert.match(c, /^## Self-check$/m);
+      assert.doesNotMatch(c, /## Human check/);
+    }
+    assert.match(on.contracts.at(-1), /set `status: approved` yourself and run `sandbox pr open`\. Stop at the PR URL\./);
+    assert.match(on.contracts[0], /## Recommendations for reviewer/);
+    assert.match(on.claude, /## Stop points/);
+    assert.doesNotMatch(on.claude, /The one rule|a person has read/);
+    assert.deepEqual(
+      on.claude.split("\n").filter((l) => /^\d\. /.test(l)),
+      [
+        "1. the PR URL from `sandbox pr open`",
+        "2. a question only a person can answer",
+        "3. a gate failure outside this issue's scope",
+      ],
+    );
+    assert.match(on.pipeline, /\| Self-check \|/);
+    assert.match(on.prRules, /The agent sets `draft → approved`/);
+
+    const off = await initIcm(root, standardsDir, "false");
+    for (const c of off.contracts) assert.match(c, /^## Human check$/m);
+    assert.match(off.contracts.at(-1), /Set `status: approved` on each one to open/);
+    assert.match(off.claude, /## The one rule/);
+    assert.doesNotMatch(off.claude, /## Stop points/);
+    assert.match(off.prRules, /The person sets `draft → approved`/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(standardsDir, { recursive: true, force: true });
+  }
+});

@@ -235,10 +235,12 @@ export function writeWorkspaceConfig(workspaceRoot: string, resolved: Record<str
   const merged: Record<string, any> = { ...existing };
   for (const [, , field] of _INPUT_FIELDS) {
     if (field in resolved) {
-      let value: string | string[] = resolved[field];
+      let value: string | string[] | boolean = resolved[field];
       if (_LIST_VALUED_FIELDS.has(field) && typeof value === "string") {
         value = splitMultiValue(value);
       }
+      // A real YAML boolean, so workspace.schema.json's `type: boolean` holds.
+      if (field === "autonomous") value = value === "true";
       merged[field] = value;
     }
   }

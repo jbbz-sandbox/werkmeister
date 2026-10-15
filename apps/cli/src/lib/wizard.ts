@@ -170,6 +170,7 @@ export interface WizardField {
   label: string;
   multi?: boolean;
   multiline?: boolean;
+  boolean?: boolean;
   pattern?: string | null;
   choices?: string[] | null;
   groups?: Record<string, string[]> | null; // group heading → its choices
@@ -194,6 +195,7 @@ export function fieldsOf(bundle: Record<string, any>): WizardField[] {
       label: prop.title ?? key,
       multi: prop.type === "array",
       multiline: ui["ui:widget"] === "textarea",
+      boolean: prop.type === "boolean",
       pattern: prop.pattern ?? null,
       choices: prop.items?.enum ?? prop.enum ?? null,
       groups: opts.groups ?? null,
@@ -341,6 +343,10 @@ export async function offerRefine(
 
 /** Ask one field and record the answer in *resolved*. */
 async function askField(field: WizardField, resolved: Record<string, string>): Promise<void> {
+  if (field.boolean) {
+    resolved[field.key] = String(await confirm(field.label, field.default === "true"));
+    return;
+  }
   // On a TTY the list is the picker itself; only the typed fallback needs it
   // spelled out.
   if (field.choices?.length && !process.stdin.isTTY) {

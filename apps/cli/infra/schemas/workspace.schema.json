@@ -23,6 +23,11 @@
       "enum": ["jit", "icm"],
       "description": "Which context layer init-workspace generates and up refreshes."
     },
+    "autonomous": {
+      "type": "boolean",
+      "default": false,
+      "description": "icm: run stage 01 to `sandbox pr open` with self-checks instead of human checks. Every strategy: add the Bash and sandbox-workspace MCP allow rules a headless session needs to .claude/settings.json (recorded in .sandbox/claude-permissions.json, removed when this turns off)."
+    },
     "repos": {
       "type": "string",
       "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `sandbox init-workspace` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."

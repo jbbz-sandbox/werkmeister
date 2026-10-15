@@ -22,9 +22,11 @@ With an `issue_id`, `createWorkspace` always:
 
 | Situation | Do |
 |---|---|
-| every input known (feature, issue, services) | `sandbox workspace <feature> --issue-id <ref> --services <a,b> [--work-type <t>] [--context-strategy icm]`. Pass `--task` only to override the issue title |
+| every input known (feature, issue, services) | `sandbox workspace <feature> --issue-id <ref> --services <a,b> [--work-type <t>] [--context-strategy icm] [--autonomous]`. Pass `--task` only to override the issue title |
 | the person should review the fields first | the /workspaces pane's Create tab, or the browser form (below) |
 | many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check |
+
+**`autonomous`** (off by default; `--autonomous`, `SANDBOX_AUTONOMOUS=1`, `autonomous: true` in `workspace.yml`, or the form's checkbox): an icm workspace runs stage 01 → `sandbox pr open` with self-checks instead of human checks, and `.claude/settings.json` allows the git/sandbox/docker/gh/node/python3 calls a headless `claude-send "start the run"` needs. Set it only when the person asked for an unattended run — they then review only the PR. Off again: `autonomous: false`, then `sandbox init-workspace`.
 
 **Batch check** — after creating, for each new workspace:
 

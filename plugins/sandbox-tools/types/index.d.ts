@@ -54,7 +54,7 @@ export type FormField = {
   title: string
   /** The schema's description: one line under the title. */
   help: string
-  kind: 'text' | 'textarea' | 'select' | 'multi'
+  kind: 'text' | 'textarea' | 'select' | 'multi' | 'check'
   options: string[]
   /** A multi-pick's options by group heading (`ui:options.groups`); {} draws them ungrouped. */
   groups: Record<string, string[]>
@@ -76,7 +76,7 @@ export type FormBundle = {
 }
 
 /** The Create tab's values by field key; a multi-pick is a list. */
-export type Draft = Record<string, string | string[]>
+export type Draft = Record<string, string | string[] | boolean>
 
 declare module 'claude-code' {
   interface PluginState {
