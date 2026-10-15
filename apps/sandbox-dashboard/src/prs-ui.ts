@@ -86,12 +86,13 @@ const CSS = `
   .prs .ttl { font-size: 13px; flex: 1; min-width: 160px; }
   .prs .head-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .prs .author { color: var(--sd-muted); font-size: 12px; }
-  .prs .draft-badge, .prs .issue-link, .prs .gh-link, .prs .lbl, .prs .pr-flag {
+  .prs .draft-badge, .prs .issue-link, .prs .issue-key, .prs .gh-link, .prs .lbl, .prs .pr-flag {
     display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px;
     border-radius: 999px; text-decoration: none; white-space: nowrap;
   }
   .prs .draft-badge { background: var(--sd-line-soft); color: var(--sd-muted); }
-  .prs .issue-link { background: var(--sd-info-bg); color: var(--sd-info); }
+  /* .issue-key: the same badge with no tracker URL, so no hover underline. */
+  .prs .issue-link, .prs .issue-key { background: var(--sd-info-bg); color: var(--sd-info); }
   .prs .issue-link:hover { text-decoration: underline; }
   .prs .gh-link { background: var(--sd-line-soft); color: var(--sd-muted); }
   .prs .gh-link:hover { text-decoration: underline; }
@@ -284,7 +285,7 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
       meta.appendChild(
         pr.issueUrl
           ? headLink("issue-link", pr.issueId, pr.issueUrl, `Open issue ${pr.issueId}`)
-          : el("span", "issue-link", pr.issueId),
+          : el("span", "issue-key", pr.issueId),
       );
     }
     meta.appendChild(headLink("gh-link", "GitHub", pr.url, "Open this PR on GitHub"));
