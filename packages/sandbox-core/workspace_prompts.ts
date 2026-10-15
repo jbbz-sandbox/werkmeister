@@ -397,7 +397,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Context strategy",
     help:
       "Which context layer init-workspace generates: jit (sb-* skills, hooks, notes) " +
-      "or icm (staged folders the agent walks by itself).",
+      "or icm (staged folders the agent walks by itself). Default icm.",
     pattern: "^(" + STRATEGY_IDS.join("|") + ")$",
     defaultFn: () => STRATEGY_IDS[0],
     choicesFn: () => [...STRATEGY_IDS],
