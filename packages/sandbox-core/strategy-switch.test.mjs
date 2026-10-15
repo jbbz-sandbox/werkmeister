@@ -11,7 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { withSandboxHome } from "./fixtures.mjs";
-import { buildPrGuardEntry } from "./dist/hooks_gen.js";
+import { buildPrGuardEntry, READ_ONLY_GIT_RULES } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { leftoverPaths, reportLeftovers, strategyById } from "./dist/strategies/index.js";
 import { initWorkspace } from "./dist/workspace_init.js";
@@ -194,10 +194,14 @@ test("initWorkspace after a switch to icm removes jit's managed hooks even witho
       { config: `overrides:\n  standards_dir: ${std}\n` },
     );
 
-    // jit's own hooks go; the PR guard, shared by both strategies, stays —
-    // and the leftover skills/agents (not pruned) stay untouched.
+    // jit's own hooks go; the PR guard and allow rules, shared by both
+    // strategies, stay — and the leftover skills/agents (not pruned) stay untouched.
     const after = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    assert.deepEqual(after, { hooks: { PreToolUse: [buildPrGuardEntry()] } }, "only the PR guard is left");
+    assert.deepEqual(
+      after,
+      { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } },
+      "only the PR guard and the allow rules are left",
+    );
     assert.ok(fs.existsSync(path.join(root, ".claude", "skills")), "unrelated jit leftovers untouched");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -222,8 +226,8 @@ test("initWorkspace --prune-context removes tracked jit leftovers after a switch
     );
     assert.deepEqual(
       JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
-      { hooks: { PreToolUse: [buildPrGuardEntry()] } },
-      "jit-tracked settings pruned; icm wrote back only the PR guard",
+      { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } },
+      "jit-tracked settings pruned; icm wrote back only the PR guard and the allow rules",
     );
     assert.ok(
       !fs.existsSync(path.join(root, ".claude", "agents", "sb-researcher.md")),

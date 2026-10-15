@@ -8,7 +8,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { buildPrGuardEntry, PRE_TOOL_USE_GATE_COMMAND, SESSION_START_COMMAND } from "./dist/hooks_gen.js";
+import {
+  buildPrGuardEntry,
+  PRE_TOOL_USE_GATE_COMMAND,
+  READ_ONLY_GIT_RULES,
+  SESSION_START_COMMAND,
+} from "./dist/hooks_gen.js";
 import { strategyById } from "./dist/strategies/index.js";
 
 const icm = strategyById("icm");
@@ -39,7 +44,10 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
   try {
     const log = await refresh(root);
     const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    assert.deepEqual(settings, { hooks: { SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] } });
+    assert.deepEqual(settings, {
+      hooks: { SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] },
+      permissions: { allow: READ_ONLY_GIT_RULES },
+    });
     assert.ok(!fs.existsSync(path.join(root, ".sandbox", ".gate")));
     assert.match(log, /sandbox notes context/);
     assert.match(log, /sandbox hooks gate/);
@@ -53,7 +61,7 @@ test("only JIT hooks: settings.json keeps just the PR guard", async () => {
   try {
     await refresh(root);
     const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] } });
+    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -69,13 +77,13 @@ test("unparseable settings.json is left untouched", async () => {
   }
 });
 
-test("a workspace with no .claude/ gets the PR guard alone, once", async () => {
+test("a workspace with no .claude/ gets the PR guard and the allow rules, once, and no JIT hook", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-refresh-"));
   try {
     await refresh(root);
     await refresh(root);
     const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] } });
+    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
