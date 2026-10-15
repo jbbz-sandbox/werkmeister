@@ -37,7 +37,7 @@ beforeEach(() => {
   // Pin what this fixture actually resolved to — otherwise a regression in
   // readContextStrategy (falling back to jit) would make every assertion
   // below silently test jit and still pass.
-  expect(strategyId).toBe(STRATEGY_IDS[1]);
+  expect(strategyId).toBe(STRATEGY_IDS[0]); // icm: the first (default) entry
   strategy.init({
     workspaceRoot: root,
     workspaceName: path.basename(root),
