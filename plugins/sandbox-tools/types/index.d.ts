@@ -29,7 +29,8 @@ export type WorkspaceRow = {
   claude: 'working' | 'waiting' | null
   /** The desktop-app session whose cwd lies in this workspace. */
   /** `beside`: this session started it, so the app will open it in split view next to this one. */
-  session: { id: string; title: string; link: string | null; beside: boolean } | null
+  /** `pinned`: the session is pinned in the app's sidebar. */
+  session: { id: string; title: string; link: string | null; beside: boolean; pinned: boolean } | null
 }
 
 /** One repo worktree's PR for its branch (sandbox-core getWorkspacePRs, via `gh`); url null when it has none. */

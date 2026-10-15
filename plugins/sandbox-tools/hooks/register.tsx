@@ -404,7 +404,7 @@ async function submitForm($: EngineInterface): Promise<void> {
 type ListEntry = Pick<WorkspaceRow, 'name' | 'path' | 'issueId' | 'issueUrl' | 'task' | 'description' | 'workType' | 'stage' | 'sessionTitle' | 'sessionOrigin'>
 type ListResult = { workspaces: ListEntry[] }
 type StatusResult = { infra?: InfraStatus; statuses: { name: string; state: WorkspaceRow['state']; running: number; total: number; claude: { state: string; waiting: boolean } }[] }
-type SessionInfo = { sessionId: string; title: string; cwd: string; link?: string; startedBy?: string }
+type SessionInfo = { sessionId: string; title: string; cwd: string; link?: string; startedBy?: string; pinned?: boolean }
 type ToolResult = { content: { type: string; text?: string }[]; isError: boolean; structuredContent?: unknown }
 
 /** The tool's structured result, or its first text block parsed as JSON (ccd tools return JSON text). */
@@ -429,7 +429,7 @@ export function sessionFor(path: string, allPaths: string[], sessions: SessionIn
     if (!contains(path, s.cwd)) continue
     const deeper = allPaths.some(p => p !== path && p.length > path.length && contains(path, p) && contains(p, s.cwd))
     if (deeper) continue
-    return { id: s.sessionId, title: s.title, link: s.link ?? null, beside: !!s.startedBy && !listed.has(s.startedBy) }
+    return { id: s.sessionId, title: s.title, link: s.link ?? null, beside: !!s.startedBy && !listed.has(s.startedBy), pinned: s.pinned === true }
   }
   return null
 }
@@ -593,7 +593,7 @@ async function tick($: EngineInterface): Promise<void> {
   }
 }
 
-export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'remove' | 'continue' | 'beside' | 'prs' | 'closeout'
+export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'remove' | 'continue' | 'beside' | 'pin' | 'prs' | 'closeout'
 type Lifecycle = 'up' | 'stop' | 'restart' | 'down'
 const LIFECYCLE = new Set<Action>(['up', 'stop', 'restart', 'down'])
 
@@ -606,7 +606,7 @@ export function buttonsFor(state: WorkspaceRow['state']): Action[] {
   return out
 }
 
-const LABEL: Record<Exclude<Action, 'continue'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', remove: '✕ Remove', beside: '⇆ Open beside', prs: '↻ PRs', closeout: '✓ Close out' }
+const LABEL: Record<Exclude<Action, 'continue' | 'pin'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', remove: '✕ Remove', beside: '⇆ Open beside', prs: '↻ PRs', closeout: '✓ Close out' }
 
 /** The lifecycle buttons a row offers: refresh PR state while one is in flight, close out once shipped. */
 export function lifecycleButtonsFor(r: WorkspaceRow): Action[] {
@@ -670,6 +670,21 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     if (!row?.session?.beside) return
     const r = await $.mcp.call('ccd_window', 'open_session_in', { session_id: row.session.id, target: 'split' })
     if (r.isError) await $.state.set(NOTE, r.content.map(c => c.text ?? '').join(' ').trim())
+    return
+  }
+
+  // Pin: the session's sidebar pin, through the desktop's ccd_sidebar server (absent outside the desktop).
+  if (action === 'pin') {
+    const { value: rows = [] } = await $.state.get(ROWS)
+    const row = rows.find(r => r.name === name)
+    if (!row?.session) return
+    try {
+      const r = await $.mcp.call('ccd_sidebar', 'set_pinned', { session_id: row.session.id, pinned: !row.session.pinned })
+      if (r.isError) await $.state.set(NOTE, r.content.map(c => c.text ?? '').join(' ').trim())
+    } catch (err) {
+      await $.state.set(NOTE, (err as Error).message)
+    }
+    await tick($)
     return
   }
 
@@ -989,6 +1004,7 @@ export const register: Register = on => {
                     <Button key={`new:${r.name}`} label={LABEL.new} variant="secondary" onPress={() => void press($, 'new', r.name)} />
                     {sessionTitle(r) && <Button key={`continue:${r.name}`} label={`↗ Continue in ${continueTarget(r)}`} variant="secondary" onPress={() => void press($, 'continue', r.name)} />}
                     {r.session?.beside && <Button key={`beside:${r.name}`} label={LABEL.beside} variant="secondary" onPress={() => void press($, 'beside', r.name)} />}
+                    {r.session && <Button key={`pin:${r.name}`} label={r.session.pinned ? '📌 Unpin' : '📌 Pin'} variant="secondary" onPress={() => void press($, 'pin', r.name)} />}
                   </Box>
                 </Box>
                 {/* Buttons take no colour; the label turns red under the pointer and the confirm prompt is red text beside it. */}
