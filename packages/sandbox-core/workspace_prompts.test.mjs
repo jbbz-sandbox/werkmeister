@@ -81,10 +81,10 @@ test("choice groups reach the form schema as ui:options.groups", () => {
   assert.deepEqual(uiSchema.services["ui:options"].groups, entry.choice_groups);
 });
 
-test("context_strategy is an optional select defaulting to jit", () => {
+test("context_strategy is an optional select defaulting to icm", () => {
   const spec = computePromptSpec({}, root);
   const prompt = spec.prompts.find((p) => p.key === "context_strategy");
-  assert.equal(prompt.default, "jit");
+  assert.equal(prompt.default, "icm");
   assert.equal(prompt.accept_empty, true);
   const { schema } = buildFormSchema(spec);
   assert.ok(!schema.required.includes("context_strategy"));
