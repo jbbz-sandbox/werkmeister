@@ -38,7 +38,7 @@ test("an unknown context_strategy aborts before the workspace dir is created", a
     provisionWorkspace({ feature: "demo", context_strategy: "bogus" }),
   );
   assert.equal(err.code, "UNKNOWN_CONTEXT_STRATEGY");
-  assert.match(err.message, /'bogus'.*jit, icm/);
+  assert.match(err.message, /'bogus'.*icm, jit/);
   // Rejected before touching the filesystem — nothing to print.
   assert.equal(text, "");
 });

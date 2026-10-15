@@ -31,7 +31,7 @@ test("icm → the icm strategy", () => {
 test("an unknown value throws, naming the choices", () => {
   assert.throws(() => readContextStrategy(ws("context_strategy: foo\n")), (err) => {
     assert.equal(err.code, "UNKNOWN_CONTEXT_STRATEGY");
-    assert.match(err.message, /'foo'.*jit, icm/);
+    assert.match(err.message, /'foo'.*icm, jit/);
     return true;
   });
 });
