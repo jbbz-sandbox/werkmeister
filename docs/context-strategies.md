@@ -8,6 +8,13 @@ Set `context_strategy: jit | icm` in `.sandbox/workspace.yml` (absent = `jit`), 
 
 Both strategies share one PR lifecycle — rules file, PR files, pre-PR gate, PR guard hook, close-out: [workspace-lifecycle.md](workspace-lifecycle.md).
 
+### `autonomous` (#175)
+
+`autonomous: true` in `workspace.yml` (or `--autonomous`, `SANDBOX_AUTONOMOUS=1`, or the form's checkbox; off by default) lets a headless session started with `claude-send "start the run"` go from stage 01 to `sandbox pr open` with no stop. The person's review moves to the PR; `sandbox pr gate` still applies.
+
+- **icm**: each stage contract ends in `## Self-check` instead of `## Human check` — review `output/` once against `BRIEF.md` and the live issue, flip `status: proposed → decided`, and record each decision under `## Recommendations for reviewer` in the PR body. The propose stage's self-check sets the PR file to `status: approved` and runs `sandbox pr open`. `CLAUDE.md`'s one rule becomes `## Stop points`: the PR URL, a question only a person can answer, or a gate failure outside the issue's scope. `_shared/pr-rules.md` says the agent approves.
+- **both strategies**: `.claude/settings.json` gains `AUTONOMOUS_RULES` (`hooks_gen.ts`) — `Bash(git|sandbox|docker|gh|node|npm|npx|python3:*)`, the read-only utilities `ls cat grep find head tail sed diff wc test mkdir`, and the `mcp__plugin_sandbox-tools_sandbox-workspace` server — recorded in `.sandbox/claude-permissions.json`, so flipping back to `false` and rerunning `init-workspace` (or `sandbox up`) removes them. The PR guard still denies `gh pr create`: a PreToolUse deny outranks an allow rule. jit's gates are unchanged.
+
 Switching an existing workspace's `context_strategy` and rerunning `init-workspace` writes the new layer but leaves the old one's files in place, with a warning naming them; pass `--prune-context` to delete them too. Only paths that are git-tracked and clean are deleted — untracked, ignored or modified paths are kept and reported instead, since git is the only way to get them back.
 
 ## What the generator does today
@@ -52,7 +59,7 @@ The stage template for `feature` is the four-stage research → spec → impleme
 
 ## Option A — a `context_strategy` field, branch in core
 
-`context_strategy: jit | icm | none` in `workspace.yml` (default `jit`, `--context-strategy` on `workspace`/`init-workspace`, one row in `_INPUT_FIELDS`, one schema property).
+`context_strategy: jit | icm | none` in `workspace.yml` (default `icm`; a file without the key reads as `jit`, `--context-strategy` on `workspace`/`init-workspace`, one row in `_INPUT_FIELDS`, one schema property).
 
 - `initWorkspace`: steps 5b–6c run for `jit`; a new `icm_gen.ts` (one module, ~200 lines: five template literals plus the standards table) runs for `icm`; `none` writes nothing but `sandbox-context.md`.
 - `lifecycle.ts:133`: `if (strategy === "jit") writeWorkspaceHooks(...)`.

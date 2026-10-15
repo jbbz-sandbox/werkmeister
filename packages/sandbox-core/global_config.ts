@@ -54,6 +54,7 @@ export interface PromptSpec {
   acceptEmpty?: boolean;                              // may the user submit nothing? (default true)
   multi?: boolean;                                    // comma-separated multi-value (services)
   multiline?: boolean;                                // free-form prose (form: textarea widget)
+  boolean?: boolean;                                  // on/off (form: checkbox; wizard: yes/no)
   refinable?: boolean;                                // form: offer a "Refine with Claude" button
   refineInstruction?: string | null;                  // how Claude should rewrite the field
   recommended?: boolean;                              // strongly-recommended input (feature)

@@ -6,7 +6,7 @@
 import assert from "node:assert";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 const cfgFile = path.join(mkdtempSync(path.join(tmpdir(), "open-prs-")), "config.yaml");
 writeFileSync(cfgFile, "jira:\n  base_url: https://example.atlassian.net/\n");
@@ -126,6 +126,18 @@ const bigCtx = buildReconcileContext({ ref: "PROJ-2" }, { url: "https://github.c
 assert.ok(bigCtx.includes("diff truncated"), "huge diff is truncated");
 assert.ok(bigCtx.includes("(PR details unavailable)"), "unavailable PR degrades in place");
 console.log("✓ buildReconcileContext");
+
+// 8. PR row: an unlinked issue key (no tracker URL) must not reuse the link's
+// class, or it underlines on hover like a dead link (#116). No DOM here, so
+// check prs-ui.ts source: the unlinked span's class is styled but has no :hover.
+const prsUi = readFileSync(path.join(pkgRoot, "src/prs-ui.ts"), "utf8");
+const unlinkedCls = /:\s*el\("span",\s*"([^"]+)",\s*pr\.issueId\)/.exec(prsUi)?.[1];
+assert.ok(unlinkedCls, "unlinked issue key is rendered as a span");
+assert.notEqual(unlinkedCls, "issue-link", "unlinked key does not reuse the link class");
+assert.ok(new RegExp(`\\.prs \\.${unlinkedCls}\\b(?!:)`).test(prsUi), "unlinked key is styled");
+assert.ok(!new RegExp(`\\.${unlinkedCls}:hover`).test(prsUi), "unlinked key has no hover style");
+assert.ok(/\.prs \.issue-link:hover \{ text-decoration: underline; \}/.test(prsUi), "linked key still underlines");
+console.log("✓ unlinked issue key is not styled as a link");
 
 console.log("ALL PASS");
 process.exit(0);

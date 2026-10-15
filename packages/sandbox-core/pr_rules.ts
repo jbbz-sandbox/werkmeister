@@ -4,7 +4,10 @@
  * (docs/workspace-lifecycle.md is the long form).
  */
 
-export function buildPrRulesMd(prFileDir: string): string {
+export function buildPrRulesMd(prFileDir: string, autonomous = false): string {
+  const approver = autonomous
+    ? "The agent sets `draft → approved` after its self-check, with every decision it made under `## Recommendations for reviewer` in the PR body; the person reviews the PR."
+    : "The person sets `draft → approved`; that flip is the approval.";
   return `# PR rules — read before opening, merging or closing out
 
 These hold for every PR this workspace produces, whatever skill or command was asked for.
@@ -39,7 +42,7 @@ skip_release:            # <reason> — skips the gate's release check; a ship: 
 <PR body: summary, test and exercise results, acceptance table (PASS/FAIL), Fixes <issue>>
 \`\`\`
 
-The person sets \`draft → approved\`; that flip is the approval. Tooling writes every other status.
+${approver} Tooling writes every other status.
 
 ## Words
 
@@ -48,7 +51,7 @@ The person sets \`draft → approved\`; that flip is the approval. Tooling write
 | Test | run each touched service's registry test command; the exit code decides |
 | Exercise | observe the change in this workspace's running containers; PASS/FAIL per check |
 | Gate | rule 3 |
-| Approve | the person sets \`status: approved\` |
+| Approve | ${autonomous ? "the agent" : "the person"} sets \`status: approved\` |
 | Open | \`sandbox pr open\` creates the PR |
 | Merge | the person merges it |
 | Ship | the merge is part of a release — the work is done |

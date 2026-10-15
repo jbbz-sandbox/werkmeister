@@ -27,7 +27,13 @@ jobs:
       - run: npm run build
       - run: npm test
       # The extension host is an Electron app: it needs a display even headless,
-      # and it downloads its own VS Code build on first run.
+      # and it downloads its own VS Code build on first run. With the build
+      # cached for the version pinned in .vscode-test.mjs, vscode-test skips
+      # update.code.visualstudio.com entirely (#151).
+      - uses: actions/cache@v4
+        with:
+          path: packages/vscode-plugin/.vscode-test
+          key: vscode-${{ runner.os }}-1.93.0-${{ hashFiles('packages/vscode-plugin/.vscode-test.mjs') }}
       - run: xvfb-run -a npm run test:integration --workspace vscode-plugin
       # `vsce package` fails on a README link it can't rewrite, and is the only
       # check on .vscodeignore — #38 broke packaging and nothing caught it.

@@ -20,8 +20,13 @@
     },
     "context_strategy": {
       "type": "string",
-      "enum": ["jit", "icm"],
-      "description": "Which context layer init-workspace generates and up refreshes."
+      "enum": ["icm", "jit"],
+      "description": "Which context layer init-workspace generates and up refreshes. Default icm."
+    },
+    "autonomous": {
+      "type": "boolean",
+      "default": false,
+      "description": "icm: run stage 01 to `sandbox pr open` with self-checks instead of human checks. Every strategy: add the Bash and sandbox-workspace MCP allow rules a headless session needs to .claude/settings.json (recorded in .sandbox/claude-permissions.json, removed when this turns off)."
     },
     "repos": {
       "type": "string",

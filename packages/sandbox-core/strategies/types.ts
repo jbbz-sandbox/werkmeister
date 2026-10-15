@@ -10,7 +10,8 @@
  * anything heavier here would close an import cycle through `jit.ts`.
  */
 
-export const STRATEGY_IDS = ["jit", "icm"] as const;
+/** First entry is the default for new workspaces; a workspace.yml without the key still reads as jit (pre-field layouts). */
+export const STRATEGY_IDS = ["icm", "jit"] as const;
 export type StrategyId = (typeof STRATEGY_IDS)[number];
 
 /** Everything init has resolved before the context layer is written. */

@@ -18,7 +18,8 @@
  *
  * - `permissions.allow`: the workspace's test commands and read-only git, for
  *   every strategy (`writeWorkspacePermissions`), so a headless session can run
- *   the stage's test step without an approval prompt.
+ *   the stage's test step without an approval prompt. An `autonomous` workspace
+ *   also gets `AUTONOMOUS_RULES` — everything a run needs to reach `sandbox pr open`.
  *
  * Unlike the other projections, settings.json may legitimately hold user
  * entries (JSON carries no do-not-hand-edit comment), so this generator merges:
@@ -32,6 +33,7 @@ import * as path from "node:path";
 
 import { containerTestCommand, serviceTestCommand } from "./archetypes.js";
 import { loadArchetypes, loadServices } from "./config.js";
+import { readAutonomous } from "./workspace_prompts.js";
 
 // Markers doubling as the payload: entries containing them are sandbox-managed.
 const _HOOK_MARKER = "sandbox notes context";
@@ -245,6 +247,15 @@ export function removeWorkspaceHooks(workspaceRoot: string): string[] {
 
 export const READ_ONLY_GIT_RULES = ["Bash(git diff:*)", "Bash(git status:*)", "Bash(git ls-files:*)"];
 
+// `claude -p --permission-mode acceptEdits` (claude-send) refuses any Bash call
+// without a rule and nobody is there to approve it (#175). The PR guard is a
+// PreToolUse deny, which outranks `Bash(gh:*)`, so `gh pr create` stays blocked.
+export const AUTONOMOUS_RULES = [
+  ...["git", "sandbox", "docker", "gh", "node", "npm", "npx", "python3"].map((cmd) => `Bash(${cmd}:*)`),
+  ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map((cmd) => `Bash(${cmd}:*)`),
+  "mcp__plugin_sandbox-tools_sandbox-workspace",
+];
+
 // Permission strings can't carry a marker the way hook commands do, so the rules
 // sandbox inserted are listed here; anything else in `allow` is the person's.
 const _PERMISSIONS_RECORD = path.join(".sandbox", "claude-permissions.json");
@@ -284,7 +295,8 @@ function _readEnv(workspaceRoot: string): Record<string, string> {
 }
 
 /**
- * The allow rules this workspace should have, from its `.env` and the registry.
+ * The allow rules this workspace should have, from its `.env`, the registry and
+ * its `autonomous` input.
  * Reads `.env` itself: lifecycle.ts's reader would close an import cycle
  * (lifecycle → strategies → jit → here).
  */
@@ -292,8 +304,9 @@ export function workspaceAllowRules(workspaceRoot: string): string[] {
   const env = _readEnv(workspaceRoot);
   const feature = env["FEATURE"] ?? "";
   const services = (env["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (!feature || !services.length) return [...READ_ONLY_GIT_RULES];
-  return buildAllowRules(feature, services, loadServices(), loadArchetypes());
+  const rules =
+    feature && services.length ? buildAllowRules(feature, services, loadServices(), loadArchetypes()) : [...READ_ONLY_GIT_RULES];
+  return readAutonomous(workspaceRoot) ? [...new Set([...rules, ...AUTONOMOUS_RULES])] : rules;
 }
 
 function _readRecord(recordPath: string): string[] {

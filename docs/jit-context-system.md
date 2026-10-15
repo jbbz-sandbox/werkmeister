@@ -202,7 +202,7 @@ the task as given is raised to the user, never silently resolved.
 
 ## 5. Delivery artifacts
 
-These artifacts are written by the `jit` context strategy (`packages/sandbox-core/strategies/jit.ts`); `context_strategy` in `workspace.yml` selects it, and it is the default.
+These artifacts are written by the `jit` context strategy (`packages/sandbox-core/strategies/jit.ts`); `context_strategy: jit` in `workspace.yml` selects it (the default for new workspaces is `icm`).
 
 Everything below is **generated or copied into the workspace** at `sandbox init-workspace` —
 nothing is distributed through a plugin. Projection scopes the skills to the sessions they

@@ -86,6 +86,15 @@ describe("buildFormSchema", () => {
     expect(out.schema.required ?? []).not.toContain("starting_prompt");
   });
 
+  it("boolean becomes an optional checkbox; formData follows the resolved value", () => {
+    const off = buildFormSchema(spec([{ key: "autonomous", label: "Autonomous run", boolean: true, accept_empty: true, resolved: false }]));
+    expect(off.schema.properties.autonomous.type).toBe("boolean");
+    expect(off.formData.autonomous).toBe(false);
+    expect(off.schema.required ?? []).not.toContain("autonomous");
+    const on = buildFormSchema(spec([{ key: "autonomous", label: "a", boolean: true, default: "", resolved_value: "true", resolved: false }]));
+    expect(on.formData.autonomous).toBe(true);
+  });
+
   it("refinable multiline keeps standard textarea with options", () => {
     const out = buildFormSchema(
       spec([

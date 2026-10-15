@@ -120,7 +120,34 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
   ["task", "SANDBOX_TASK", "task"],
   ["starting_prompt", "SANDBOX_STARTING_PROMPT", "starting_prompt"],
   ["labels", "SANDBOX_LABELS", "labels"],
+  ["autonomous", "SANDBOX_AUTONOMOUS", "autonomous"],
 ];
+
+/** A truthy flag value as it arrives from a CLI switch, an env var, YAML or a form. */
+export function isTrue(value: unknown): boolean {
+  return /^(true|1|yes|on)$/i.test(String(value ?? "").trim());
+}
+
+/**
+ * The workspace's `autonomous` input. Reads the config itself rather than
+ * through `loadConfigFile`, which logs — the same reason as `readContextStrategy`.
+ */
+export function readAutonomous(workspaceRoot: string): boolean {
+  const envOverride = process.env["SANDBOX_WORKSPACE_CONFIG"];
+  const candidates = [
+    ...(envOverride ? [expandUserPath(envOverride)] : []),
+    ..._WORKSPACE_CONFIG_NAMES.map((name) => path.join(workspaceRoot, ".sandbox", name)),
+  ];
+  for (const p of candidates) {
+    if (!fs.existsSync(p)) continue;
+    try {
+      return isTrue(loadWorkspaceConfig(p)?.["autonomous"]);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
 
 
 // Workspace config filenames in search-order precedence: preferred YAML first,
@@ -251,6 +278,7 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
     }
   }
   if (resolved.issue_id) resolved.issue_id = issueTracker().parseRef(resolved.issue_id) ?? resolved.issue_id;
+  if (resolved.autonomous) resolved.autonomous = String(isTrue(resolved.autonomous));
 
   return resolved;
 }
@@ -397,10 +425,20 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Context strategy",
     help:
       "Which context layer init-workspace generates: jit (sb-* skills, hooks, notes) " +
-      "or icm (staged folders the agent walks by itself).",
+      "or icm (staged folders the agent walks by itself). Default icm.",
     pattern: "^(" + STRATEGY_IDS.join("|") + ")$",
     defaultFn: () => STRATEGY_IDS[0],
     choicesFn: () => [...STRATEGY_IDS],
+  },
+  {
+    key: "autonomous",
+    label: "Autonomous run",
+    help:
+      "Off by default. On: an icm run goes from stage 01 to `sandbox pr open` with no human check " +
+      "(each stage self-checks and the agent approves its own PR file), and .claude/settings.json " +
+      "allows the git, sandbox, docker, gh, node and python3 calls a headless session needs. " +
+      "The person reviews the PR; `sandbox pr gate` still applies.",
+    boolean: true,
   },
   {
     key: "services",
@@ -488,6 +526,9 @@ export function promptEntry(
   };
   if (spec.multiline) {
     entry["multiline"] = true;
+  }
+  if (spec.boolean) {
+    entry["boolean"] = true;
   }
   if (spec.refinable) {
     entry["refinable"] = true;
