@@ -2,7 +2,7 @@
  * GitHub issues, through the `gh` CLI. Issues are per repo, so a ref is
  * `owner/repo#12`; a bare `repo#12` takes `overrides.github_org` as its owner.
  * GitHub has only open and closed, so a status other than those two becomes a
- * label on the issue.
+ * label on the issue, created first since `gh issue edit --add-label` won't (#156).
  */
 
 import { childEnv } from "../claude_cli.js";
@@ -17,6 +17,8 @@ export const GITHUB_ISSUE_PATTERN = "^([A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+#[0-9]+$
 const FULL_RE = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#(\d+)$/;
 const CLOSED = new Set(["closed", "close", "done"]);
 const OPEN = new Set(["open", "reopen", "reopened"]);
+// Fixed, or `--force` would give the status label a random color on every update.
+const STATUS_LABEL_COLOR = "1D76DB";
 
 /** `repo#12` → `<github_org>/repo#12`; an issue URL → `owner/repo#12`; else unchanged. */
 export function normalizeGithubIssue(ref: string): string {
@@ -140,7 +142,10 @@ export const github: IssueTrackerStrategy = {
       const s = status.toLowerCase();
       if (CLOSED.has(s)) await gh(["issue", "close", n, "-R", repo]);
       else if (OPEN.has(s)) await gh(["issue", "reopen", n, "-R", repo]);
-      else await gh(["issue", "edit", n, "-R", repo, "--add-label", status]);
+      else {
+        await gh(["label", "create", status, "-R", repo, "--color", STATUS_LABEL_COLOR, "--force"]);
+        await gh(["issue", "edit", n, "-R", repo, "--add-label", status]);
+      }
     }
     if (update.comment) await gh(["issue", "comment", n, "-R", repo, "--body", update.comment]);
   },

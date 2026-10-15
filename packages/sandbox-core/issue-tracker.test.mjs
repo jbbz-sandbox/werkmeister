@@ -3,7 +3,7 @@
 // issues of every repo in the services registry.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
@@ -100,6 +100,21 @@ test("github checkAuth: signed in, signed out, no repo access", async () => {
     await withFakeGh({ auth: 0, repoView: 1 }, async () =>
       assert.deepEqual(await t.checkAuth(), { ok: false, who: "octo", reason: "can't read acme/api", fix: "gh auth refresh -s repo" }));
   }, { config: "overrides:\n  issue_tracker: github\n  github_org: acme\n" });
+});
+
+test("github updateIssue: a status label is created when the repo lacks it, then added (#156)", async () => {
+  const t = it.issueTracker();
+  for (const labels of [[], ["In Development"]]) {
+    await withFakeGh({ labels }, async (bin) => {
+      await t.updateIssue("acme/api#12", { status: "In Development" });
+      await t.updateIssue("acme/api#12", { status: "In Development" });
+      const calls = readFileSync(path.join(path.dirname(bin), "calls"), "utf8").trim().split("\n");
+      assert.deepEqual(calls.slice(0, 2), [
+        "label create In Development -R acme/api --color 1D76DB --force",
+        "issue edit 12 -R acme/api --add-label In Development",
+      ]);
+    });
+  }
 });
 
 test("jira with no REST creds: ok, via the Atlassian MCP fallback", async () => {
