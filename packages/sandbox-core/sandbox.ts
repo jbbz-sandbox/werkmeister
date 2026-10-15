@@ -781,6 +781,12 @@ export function buildWorkspaceArgs(formData: Record<string, unknown>): string[] 
   const args = ["workspace", feature];
   for (const [key, raw] of Object.entries(formData)) {
     if (key === "feature" || RESERVED_KEYS.has(key)) continue;
+    // A checkbox is a bare switch on the CLI.
+    if (raw === true) {
+      args.push(kebab(key));
+      continue;
+    }
+    if (raw === false) continue;
     let value: string;
     if (Array.isArray(raw)) {
       value = raw.map((v) => String(v).trim()).filter(Boolean).join(",");
