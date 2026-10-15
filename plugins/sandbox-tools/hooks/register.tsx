@@ -761,6 +761,28 @@ async function openPane($: EngineInterface): Promise<void> {
   startPolling($)
 }
 
+/** Sidebar group that desktop sessions started in a workspace are filed under, when the person has made it. */
+export const SESSION_GROUP = 'Feature Workspaces'
+
+/** A workspace or a folder inside one: `dir` or some ancestor holds `.sandbox/workspace.yml`. */
+async function inWorkspace($: EngineInterface, dir: string): Promise<boolean> {
+  for (let d = dir; d.length > 1; d = d.slice(0, d.lastIndexOf('/')) || '/') {
+    if (await $.fs.exists(`${d}/.sandbox/workspace.yml`)) return true
+  }
+  return false
+}
+
+/** Files this session under SESSION_GROUP when that group exists and the session sits in no group yet. */
+async function fileInGroup($: EngineInterface): Promise<void> {
+  try {
+    const group = payload<{ id: string; name: string }[]>(await $.mcp.call('ccd_sidebar', 'list_groups')).find(g => g.name === SESSION_GROUP)
+    if (!group) return
+    const self = payload<{ group?: { id: string } | null }>(await $.mcp.call('ccd_session_mgmt', 'get_session', { session_id: 'self' }))
+    if (self.group) return
+    await $.mcp.call('ccd_sidebar', 'move_sessions', { session_ids: ['self'], group_id: group.id })
+  } catch { /* groups not reported yet, or the app refused: the session stays where it is */ }
+}
+
 /** A folder of workspaces (e.g. ~/features): some direct child holds `.sandbox/workspace.yml`. */
 async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean> {
   const entries = await $.fs.list(dir).catch(() => [])
@@ -803,6 +825,7 @@ export const register: Register = on => {
       void prTick($)
     }
     else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($)
+    if (e.surface === 'desktop' && (await inWorkspace($, e.cwd))) await fileInGroup($)
     return next(e)
   })
 

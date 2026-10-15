@@ -464,6 +464,26 @@ test('a session starting in a folder of workspaces opens the pane; elsewhere it 
   expect(opened()).toBe(1)
 })
 
+test('a desktop session starting inside a workspace is filed under the Feature Workspaces group, once', async ($, on) => {
+  let group: { id: string } | null = null
+  const w = world(on, stubs({
+    'ccd_sidebar/list_groups': () => ok(undefined, JSON.stringify([{ id: 'cg-1', name: 'Other' }, { id: 'cg-2', name: 'Feature Workspaces' }])),
+    'ccd_session_mgmt/get_session': () => ok(undefined, JSON.stringify({ sessionId: 'local_x', group })),
+    'ccd_sidebar/move_sessions': args => { group = { id: args.group_id as string }; return ok(undefined, 'moved') },
+  }))
+  const moves = () => w.calls.filter(c => c.key === 'ccd_sidebar/move_sessions')
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.exists', (_$, e) => ({ value: e.path === '/features/ab/.sandbox/workspace.yml' }))
+  await $.session.start({ cwd: '/features', surface: 'desktop', isInteractive: true })
+  await $.session.start({ cwd: '/features/ab/sandbox', surface: 'terminal', isInteractive: true })
+  expect(moves()).toHaveLength(0)
+  await $.session.start({ cwd: '/features/ab/sandbox', surface: 'desktop', isInteractive: true })
+  expect(moves().map(c => c.args)).toEqual([{ session_ids: ['self'], group_id: 'cg-2' }])
+  await $.session.start({ cwd: '/features/ab', surface: 'desktop', isInteractive: true })
+  expect(moves()).toHaveLength(1)
+})
+
 const BUNDLE = {
   schema: {
     properties: {
