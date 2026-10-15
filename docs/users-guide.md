@@ -947,7 +947,7 @@ Each service can carry two related keys. They do different jobs, and a change ne
 
 | Missing | What shows up |
 |---|---|
-| `test:` | The How to validate table shows `—`. The gate fails `test <service>` unless the PR file sets `skip_tests: { <service>: <reason> }`, which is accepted only for a service with no test command. |
+| `test:` | The How to validate table shows `—`. The gate fails `test <service>` unless the PR file sets `skip_tests: { <service>: <reason> }`, which is accepted for a service with no test command or no running container. |
 | `validate:`, service has a `feature_router:` | "URL health check (see Quick Health Checks)": the proxy, cookie and health-check sections of `sandbox-context.md` are the validation. |
 | `validate:`, no `feature_router:` | "No validation guidance registered in services.yaml; say so instead of inventing one". Add a `validate:` value rather than leave agents to guess. |
 

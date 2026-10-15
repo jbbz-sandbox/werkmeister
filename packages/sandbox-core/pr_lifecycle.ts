@@ -269,14 +269,14 @@ export async function runGate(ws: string, file: PrFile, deps: Deps = defaultDeps
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
   for (const svc of touched) {
     const cmd = serviceTestCommand(svc, deps.services[svc], deps.archetypes);
+    const why = reason(skips[svc]);
     if (!cmd) {
-      const why = reason(skips[svc]);
       add(`test ${svc}`, Boolean(why), why ? `skipped: ${why}` : "no test command registered — add `test:` to its registry entry, or `skip_tests: { " + svc + ": <reason> }`");
       continue;
     }
     const container = containerFor(svc);
     if (!container) {
-      add(`test ${svc}`, false, "no running container for this repo — run `sandbox up`");
+      add(`test ${svc}`, Boolean(why), why ? `skipped: ${why}` : "no running container for this repo — run `sandbox up`");
       continue;
     }
     const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
@@ -416,7 +416,8 @@ export async function refreshPrStatus(ws: string, deps: Deps = defaultDeps()): P
     }
     if (statusOf(f) === "merged") {
       const repo = deps.repos[f.dir] ?? {};
-      if (reason(f.fm["skip_release"]) || repo["ship"] !== "tag") {
+      // skip_release only skips the gate's release check; a ship: tag repo still ships with its tag (#145).
+      if (repo["ship"] !== "tag") {
         writePrFields(f, { status: "shipped" });
       } else {
         const dir = path.join(ws, f.dir);
