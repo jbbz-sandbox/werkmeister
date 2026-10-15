@@ -211,6 +211,32 @@ test("gate: a failing release check fails unless skip_release gives a reason", a
   }
 });
 
+test("gate: a touched service with a test command but no container fails unless skip_tests gives a reason", async () => {
+  // #145: the workspace runs other services (k8s), so this repo has no container.
+  const noContainers = (ws) => {
+    fs.writeFileSync(path.join(ws, ".sandbox", "workspace.yml"), "feature: feat\nservices: backend,frontend\nissue_id: o/app#7\nwork_type: feature\n");
+    const d = deps([]);
+    d.run = stubRun([[/^docker ps/, { stdout: "" }], DIFF_API]).run;
+    return d;
+  };
+  const ws = icmWorkspace({ files: { app: prFile({ extra: "skip_release: changeset committed, checked on host\n" }) } });
+  try {
+    const g = await gate(ws, noContainers(ws));
+    assert.deepEqual(failed(g), ["test api"]);
+    assert.match(g.checks.find((c) => c.name === "test api").detail, /no running container for this repo/);
+  } finally {
+    clean(ws);
+  }
+  const skipped = icmWorkspace({ files: { app: prFile({ extra: "skip_release: changeset committed, checked on host\nskip_tests:\n  api: ran on host, 12/12 pass\n" }) } });
+  try {
+    const g = await gate(skipped, noContainers(skipped));
+    assert.deepEqual(failed(g), []);
+    assert.match(g.checks.find((c) => c.name === "test api").detail, /skipped: ran on host/);
+  } finally {
+    clean(skipped);
+  }
+});
+
 test("gate: dirty worktree, failing test, down health endpoint, unapproved", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
   try {
@@ -271,11 +297,24 @@ test("refreshPrStatus: merged, then shipped once a release tag contains the merg
   }
 });
 
-test("refreshPrStatus: ship: merge (or skip_release) ships on merge", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "merged", extra: "merge_sha: abc\nskip_release: docs\n" }) } });
+test("refreshPrStatus: ship: merge ships on merge", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "merged", extra: "merge_sha: abc\n" }) } });
   try {
-    await refreshPrStatus(ws, deps([]));
+    await refreshPrStatus(ws, deps([], { repos: { app: { ...REGISTRY.repos.app, ship: "merge" } } }));
     assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: ship: tag ignores skip_release and waits for a release tag (#145)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "merged", extra: "merge_sha: abc\nskip_release: no container, checked on host\n" }) } });
+  try {
+    await refreshPrStatus(ws, deps([[/tag --contains abc/, { stdout: "" }]]));
+    assert.equal(readPrFiles(ws)[0].fm.status, "merged");
+    await refreshPrStatus(ws, deps([[/tag --contains abc/, { stdout: "v2.0.0\n" }]]));
+    assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
+    assert.equal(readPrFiles(ws)[0].fm.release, "v2.0.0");
   } finally {
     clean(ws);
   }
