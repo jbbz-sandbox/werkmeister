@@ -1918,7 +1918,9 @@ export async function removeWorkspace(
     const collector = collectingReporter();
     try {
       await withReporter(collector, async () => {
-        await down(feature);
+        // The workspace is going away, so its per-feature volumes go with it;
+        // plain `sandbox down` keeps them for the next `up`.
+        await down(feature, { removeVolumes: true });
         // Not part of `down()` — the CLI reloads separately (note 063), and
         // skipping it leaves Caddy routing to containers that no longer exist.
         await reloadProxy();
