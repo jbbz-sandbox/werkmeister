@@ -897,6 +897,8 @@ export async function provisionWorkspace(
     const repos = await selectRepos(resolved.repos, resolved.services);
     resolved.repos = repos.join(",");
     createWorkspaceRoot(workspaceDir, branch, Boolean(opts.force));
+    // A new workspace.yml names its strategy: an absent key reads as jit (pre-field files).
+    resolved.context_strategy ||= STRATEGY_IDS[0];
     writeWorkspaceConfig(workspaceDir, resolved);
   }
 
