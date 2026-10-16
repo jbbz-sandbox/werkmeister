@@ -121,10 +121,15 @@ repo:
 | `sandbox pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`. For `merged` files, write `shipped` (+ `release`) per the registry. Commits and pushes the changed PR files on the record branch. |
 | `sandbox pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
 | `sandbox pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
-| `sandbox close-out [name]` | close out (below) |
-| `sandbox remove-workspace <name> [--abandon "<reason>"]` | remove; refuses unshipped work unless abandoning |
+| `sandbox close-out [name] [--abandon "<reason>"]` | end the workspace (below). The one end-of-workspace verb |
+| `sandbox remove-workspace <name>` | deprecated alias, kept for one release: prints "use `sandbox close-out --abandon`" and removes as before |
 
-The workspaces pane shows the state on each card. It offers **↻ PRs** (`sandbox pr status`) while a PR is open or merged, and **✓ Close out** once shipped, which asks twice. The sandbox-workspace MCP server has the same actions as `workspace-pr`, `close-out` and `remove-workspace` with `abandon`.
+The workspaces pane shows the state on each card. It offers **↻ PRs** (`sandbox pr status`) while a PR is open or merged, and one end button, which asks twice:
+
+- **✓ Close out** once every PR is shipped (or closed / abandoned), or for a spike with no PR files;
+- **✕ Abandon…** otherwise, with a reason field the second press needs filled.
+
+The sandbox-workspace MCP server has the same actions as `workspace-pr` and `close-out` (with an optional `abandon` reason).
 
 ## The PR guard
 
@@ -137,20 +142,31 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `san
 
 ## Close-out
 
-`sandbox close-out` refuses unless the workspace is `shipped` or `abandoned`. A `spike` with no PR files is also allowed. Then, in order:
+`sandbox close-out` is the only way to end a workspace. It has two outcomes.
+
+**Shipped.** Without `--abandon`, it refuses unless the workspace is `shipped` or `abandoned`. A `spike` with no PR files is also allowed, and so is `closed-out` (a `closeout.md` exists but the removal failed), which retries. Then, in order:
 
 1. **Issue.** If the workspace has one and it isn't already done, move it to the done status: `overrides.issue_done_status` in `~/.sandbox/config.yaml`, else `closed` (GitHub) or `Done` (Jira). The comment names the release and PR. A tracker refusal stops close-out before anything is removed.
 2. **Record.** Write `closeout.md`: one row per PR (repo, URL, status, merge SHA, release, reason) plus the issue line.
-3. **Remove.** `removeWorkspace`: commit and push every branch (the record branch now carries `closeout.md`), `sandbox down`, reload the proxy, delete the directory, prune the worktrees.
+3. **Remove.** `removeWorkspace`, the internal step: commit and push every branch (the record branch now carries `closeout.md`), `sandbox down`, reload the proxy, delete the directory, prune the worktrees. If any push fails, nothing is deleted.
 4. **Branches.** Delete each merged code branch locally, and on origin if it is still there (GitHub's "delete branch on merge" may have done it already). An `adopted` PR's branch was never the workspace's, so it is kept. The record branch is kept.
 
-## Abandoning
+**Abandoned.** `sandbox close-out <name> --abandon "<reason>"` ends a workspace whose work won't ship. The reason is required.
 
-`removeWorkspace` refuses while a PR file is `open`, or while a code branch has commits not on its base and no merged PR file. With `--abandon "<reason>"` it goes ahead:
+1. Every unsettled PR file becomes `abandoned` with the reason.
+2. The issue is left as it is.
+3. `closeout.md` records the reason.
+4. Remove, as above: every branch is pushed, so no work is lost.
+5. Every branch is kept.
 
-- it marks every unsettled PR file `abandoned` with the reason;
-- it writes `closeout.md`;
-- it still pushes every branch, so no work is lost.
+The `abandoned` PR status is the record of this, not a second way in. A workspace whose PR files are already all `abandoned` closes out the same way without the flag.
+
+### Sessions
+
+The workspace's Claude sessions are cleaned up as part of close-out:
+
+- **Desktop sessions.** The pane and the `close-out` MCP tool (through the sandbox-tools plugin) call `archive_session` on every desktop session whose cwd is in the workspace. The desktop app may refuse some, such as a pinned session, the one on screen, or an archive you declined outside auto mode. Each refusal is reported as "left open"; it doesn't fail the close-out. The CLI and VS Code can't reach the app, so they tell you to archive these from the sidebar.
+- **Terminal sessions.** `claude` running in a terminal can't be archived from outside. Every surface lists those still open in the workspace (`terminal session: pid … on ttys… in <dir> — /exit it`) so you can exit them.
 
 ## Spikes
 

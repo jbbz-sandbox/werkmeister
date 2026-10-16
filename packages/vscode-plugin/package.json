@@ -128,8 +128,8 @@
         "icon": "$(sync)"
       },
       {
-        "command": "sandbox.remove",
-        "title": "Remove Workspace...",
+        "command": "sandbox.closeOut",
+        "title": "Close Out Workspace...",
         "category": "Sandbox",
         "icon": "$(trash)"
       }
@@ -219,7 +219,7 @@
           "group": "2_inspect@3"
         },
         {
-          "command": "sandbox.remove",
+          "command": "sandbox.closeOut",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
           "group": "9_danger@1"
         }

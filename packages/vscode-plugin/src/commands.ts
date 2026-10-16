@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { basename, join } from "node:path";
 import * as vscode from "vscode";
-import { listWorkspaces, resolveSandboxBin, childEnv, removeWorkspace } from "sandbox-core";
+import { listWorkspaces, resolveSandboxBin, childEnv, closeOut, lifecycleOf } from "sandbox-core";
 import { getReposRoot } from "sandbox-core/config";
 import { runInTerminal } from "./terminal.js";
 import { showLogs } from "./logs.js";
@@ -219,41 +219,60 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       await runInTerminal(["registry", "sync"], getReposRoot(), "registry");
     }),
 
-    vscode.commands.registerCommand("sandbox.remove", async (node?: WsNode) => {
+    // The one end-of-workspace verb (#160): close out once every PR settled, else abandon with a reason.
+    vscode.commands.registerCommand("sandbox.closeOut", async (node?: WsNode) => {
       const ws = await pickWorkspace(node);
       if (!ws) return;
+      const state = lifecycleOf(ws.path).state;
+      const settled = state === "shipped" || state === "abandoned" || state === "closed-out";
+      let abandon: string | undefined;
+      if (!settled) {
+        abandon = (
+          await vscode.window.showInputBox({
+            title: `Abandon workspace '${ws.name}'`,
+            prompt: `Its work is ${state}, not shipped. Why abandon it? Recorded in closeout.md and the PR files.`,
+            ignoreFocusOut: true,
+          })
+        )?.trim();
+        if (!abandon) return;
+      }
+      const verb = settled ? "Close out" : "Abandon";
       const confirm = await vscode.window.showWarningMessage(
-        `Remove workspace '${ws.name}'?`,
+        `${verb} workspace '${ws.name}'?`,
         {
           modal: true,
-          detail: `Commits and pushes every branch first — the delete is aborted if any push fails. Then tears down containers, deletes ${ws.path}, and prunes the worktrees.`,
+          detail: settled
+            ? `Closes the issue, writes closeout.md, pushes every branch, tears down containers, deletes ${ws.path}, then deletes the merged branches.`
+            : `Records the reason, pushes every branch and keeps them, tears down containers and deletes ${ws.path}. The delete is aborted if any push fails.`,
         },
-        "Remove",
+        verb,
       );
-      if (confirm !== "Remove") return;
+      if (confirm !== verb) return;
+      const channel = getOutputChannel();
       try {
         // Not cancellable: this commits/pushes every worktree branch then tears
         // down containers and deletes the directory — interrupting a partial
         // teardown is worse than waiting out the (up to minutes-long) call.
-        const { path: removed } = await vscode.window.withProgress(
+        const result = await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: `Removing workspace '${ws.name}'…`,
+            title: `${settled ? "Closing out" : "Abandoning"} workspace '${ws.name}'…`,
             cancellable: false,
           },
-          () => removeWorkspace(ws.name),
+          () => (abandon ? closeOut(ws.name, { abandon }) : closeOut(ws.name)),
         );
-        void vscode.window.showInformationMessage(`Removed ${removed}`);
+        // VS Code can't reach the desktop app's sessions; the output names the terminal ones to /exit.
+        channel.appendLine(`${result.command}\n${result.output}`);
+        void vscode.window.showInformationMessage(`Closed out ${result.path}. Archive its desktop Claude sessions from the sidebar.`);
         provider.refresh();
       } catch (e) {
-        // sandbox-core's failure message is a multi-line handoff report (which
-        // branch failed to push, etc.) — a toast squeezes it onto one line, so
-        // the full text goes to the output channel and the toast just points there.
-        const channel = getOutputChannel();
+        // sandbox-core's failure message is a multi-line report (which branch
+        // failed to push, which PR is unshipped) — a toast squeezes it onto one
+        // line, so the full text goes to the output channel and the toast points there.
         channel.appendLine((e as Error).message);
         channel.show();
         void vscode.window.showErrorMessage(
-          `Failed to remove workspace '${ws.name}' — see the "Sandbox Workspaces" output channel for details.`,
+          `Failed to close out workspace '${ws.name}' — see the "Sandbox Workspaces" output channel for details.`,
         );
       }
     }),

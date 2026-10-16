@@ -136,7 +136,7 @@ test("the intercept toggle shows on interceptable and own intercepts only", () =
 test("no workspace action is offered on a service node, or on the CLI-not-found node", () => {
   const service = serviceContext(interceptRow());
   const error = cliNotFoundNode("boom").contextValue;
-  for (const command of ["sandbox.open", "sandbox.switch", "sandbox.up", "sandbox.stop", "sandbox.remove"]) {
+  for (const command of ["sandbox.open", "sandbox.switch", "sandbox.up", "sandbox.stop", "sandbox.closeOut"]) {
     assert.equal(shows(command, service), false, `${command} on a service`);
     assert.equal(shows(command, error), false, `${command} on the error node`);
   }

@@ -37,7 +37,7 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
 
   console.log();
   console.log(
-    `  ${Colors.DIM}Delete one with: sandbox remove-workspace <name>${Colors.RESET}`,
+    `  ${Colors.DIM}End one with: sandbox close-out <name>${Colors.RESET}`,
   );
   console.log();
 }

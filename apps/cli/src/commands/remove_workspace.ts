@@ -1,6 +1,9 @@
 /**
  * sandbox remove-workspace <name> [--yes] [--abandon <reason>]
  *
+ * Deprecated for one release (#160): `sandbox close-out --abandon` is the
+ * public verb, and `removeWorkspace` is the internal step it calls.
+ *
  * Hand off and delete a workspace: commit + push every worktree branch, tear
  * the feature down, delete the directory, prune the source repos' worktree
  * registrations.
@@ -15,13 +18,14 @@
  * --abandon records why (docs/workspace-lifecycle.md).
  */
 
-import { Colors, info } from "../lib/config.js";
+import { Colors, info, warn } from "../lib/config.js";
 import { removeWorkspace } from "sandbox-core";
 import { confirm } from "../lib/wizard.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const name = args.name as string;
 
+  warn('sandbox remove-workspace is deprecated — use `sandbox close-out --abandon "<reason>"`');
   console.log(`\n${Colors.BOLD}=== sandbox remove-workspace: ${name} ===${Colors.RESET}\n`);
 
   if (!args.yes) {
