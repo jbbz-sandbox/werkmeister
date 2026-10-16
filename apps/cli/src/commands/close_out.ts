@@ -1,10 +1,11 @@
 /**
- * sandbox close-out [name] [--yes]
+ * sandbox close-out [name] [--yes] [--abandon <reason>]
  *
- * After every PR shipped (or was closed/abandoned): close the issue, write
- * closeout.md to the record branch, remove the workspace, delete the merged
- * code branches. `name` defaults to the workspace the cwd is in. The checks
- * live in sandbox-core's `closeOut`, shared with the pane and the MCP tool.
+ * The one end-of-workspace verb (docs/workspace-lifecycle.md). Shipped: close
+ * the issue, write closeout.md, remove the workspace, delete the merged code
+ * branches. --abandon: record why, push every branch and keep them, remove.
+ * `name` defaults to the workspace the cwd is in. The checks live in
+ * sandbox-core's `closeOut`, shared with the pane and the MCP tool.
  */
 
 import path from "node:path";
@@ -20,19 +21,25 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     error("No workspace given and not inside one.");
     process.exit(1);
   }
+  const abandon = (args.abandon as string | null | undefined) ?? null;
 
   console.log(`\n${Colors.BOLD}=== sandbox close-out: ${name} ===${Colors.RESET}\n`);
   if (!args.yes) {
     console.log(
-      `  ${Colors.DIM}Closes the issue, writes closeout.md, removes the workspace, ` +
-        `and deletes merged code branches.${Colors.RESET}`,
+      `  ${Colors.DIM}${
+        abandon === null
+          ? "Closes the issue, writes closeout.md, removes the workspace, and deletes merged code branches."
+          : "Records the reason in closeout.md, pushes every branch and keeps them, then removes the workspace."
+      }${Colors.RESET}`,
     );
-    if (!(await confirm(`Close out and remove '${name}'?`, false))) {
+    if (!(await confirm(abandon === null ? `Close out and remove '${name}'?` : `Abandon and remove '${name}'?`, false))) {
       info("Aborted -- nothing changed.");
       return;
     }
   }
-  const result = await closeOut(name);
+  const result = abandon === null ? await closeOut(name) : await closeOut(name, { abandon });
   console.log(result.output);
-  console.log(`\n${Colors.GREEN}${Colors.BOLD}Workspace '${name}' closed out${Colors.RESET}\n`);
+  console.log(`\n${Colors.GREEN}${Colors.BOLD}Workspace '${name}' closed out${Colors.RESET}`);
+  // The CLI can't reach the desktop app; the pane and the close-out MCP tool archive these themselves.
+  console.log(`  ${Colors.DIM}Archive this workspace's desktop sessions from the Claude sidebar.${Colors.RESET}\n`);
 }

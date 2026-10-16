@@ -70,9 +70,9 @@ try {
     'workspace-prs': () => core.getWorkspacePRs(),
     connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
-    'remove-workspace': () => core.removeWorkspace(args.name),
+    'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
     'pr-status': async () => ({ command: (await core.refreshPrStatus(args.path)).lines.join('\\n') || 'no PR files' }),
-    'close-out': () => core.closeOut(args.name),
+    'close-out': () => core.closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {}),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
     // Only claude:// links: a new Desktop session in a folder, or a session's own link.
@@ -123,7 +123,8 @@ export const PR_POLL_MS = 60000
 const ROWS = { plugin: 'sandbox-tools', key: 'rows' } as const
 const ERROR = { plugin: 'sandbox-tools', key: 'error' } as const
 const BUSY = { plugin: 'sandbox-tools', key: 'busy' } as const
-const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmRemove' } as const
+const CONFIRM = { plugin: 'sandbox-tools', key: 'confirmEnd' } as const
+const REASON = { plugin: 'sandbox-tools', key: 'abandonReason' } as const
 const NOTE = { plugin: 'sandbox-tools', key: 'note' } as const
 const TAB = { plugin: 'sandbox-tools', key: 'tab' } as const
 const FOCUS = { plugin: 'sandbox-tools', key: 'focus' } as const
@@ -600,7 +601,7 @@ async function tick($: EngineInterface): Promise<void> {
   }
 }
 
-export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'remove' | 'continue' | 'beside' | 'pin' | 'prs' | 'closeout'
+export type Action = 'up' | 'stop' | 'restart' | 'down' | 'new' | 'continue' | 'beside' | 'pin' | 'prs' | 'closeout' | 'abandon'
 type Lifecycle = 'up' | 'stop' | 'restart' | 'down'
 const LIFECYCLE = new Set<Action>(['up', 'stop', 'restart', 'down'])
 
@@ -609,35 +610,75 @@ export function buttonsFor(state: WorkspaceRow['state']): Action[] {
   const out: Action[] = []
   if (state === 'down' || state === 'stopped' || state === 'partial') out.push('up')
   if (state === 'up' || state === 'partial') out.push('stop')
-  out.push('restart', 'down', 'new', 'remove')
+  out.push('restart', 'down', 'new')
   return out
 }
 
-const LABEL: Record<Exclude<Action, 'continue' | 'pin'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', remove: '✕ Remove', beside: '⇆ Open beside', prs: '↻ PRs', closeout: '✓ Close out' }
+const LABEL: Record<Exclude<Action, 'continue' | 'pin'>, string> = { up: '▶ Up', stop: '■ Stop', restart: '↻ Restart', down: '⏻ Down', new: '＋ New session', beside: '⇆ Open beside', prs: '↻ PRs', closeout: '✓ Close out', abandon: '✕ Abandon…' }
 
-/** The lifecycle buttons a row offers: refresh PR state while one is in flight, close out once shipped. */
+/** The lifecycle buttons a row offers: refresh PR state while one is in flight. */
 export function lifecycleButtonsFor(r: WorkspaceRow): Action[] {
   const s = r.lifecycle?.state
-  return s === 'pr-open' || s === 'merged' ? ['prs'] : s === 'shipped' || s === 'abandoned' ? ['closeout'] : []
+  return s === 'pr-open' || s === 'merged' ? ['prs'] : []
 }
 
-/** CONFIRM holds `<name>` for a pending remove and `close-out:<name>` for a pending close-out. */
+/**
+ * The card's one end-of-workspace button (#160): Close out once every PR settled (or a spike with none, or a
+ * retry after a failed removal), else Abandon, which needs a typed reason, so none where no Input draws.
+ */
+export function endActionFor(r: WorkspaceRow, canType: boolean): 'closeout' | 'abandon' | null {
+  const s = r.lifecycle?.state
+  if (s === 'shipped' || s === 'abandoned' || s === 'closed-out' || (r.workType === 'spike' && !r.lifecycle?.prs.length)) return 'closeout'
+  return canType ? 'abandon' : null
+}
+
+/** CONFIRM holds `close-out:<name>` or `abandon:<name>` between the two presses. */
 const CLOSE_OUT = 'close-out:'
+const ABANDON = 'abandon:'
+
+/**
+ * Archives every desktop session whose cwd is in `path`, one line each. A refusal (a pinned or on-screen
+ * session, a declined approval) is reported, never fatal: the workspace is already gone. list_sessions
+ * leaves out the calling session, so it is never archived from under itself.
+ */
+export async function archiveSessions($: EngineInterface, path: string): Promise<string[]> {
+  let sessions: SessionInfo[]
+  try {
+    sessions = payload<SessionInfo[]>(await $.mcp.call('ccd_session_mgmt', 'list_sessions', { limit: 200 }))
+  } catch (err) {
+    return [`desktop sessions not archived: ${(err as Error).message}`]
+  }
+  const out: string[] = []
+  for (const s of sessions.filter(x => contains(path, x.cwd))) {
+    try {
+      const r = await $.mcp.call('ccd_session_mgmt', 'archive_session', { session_id: s.sessionId })
+      out.push(r.isError ? `left open "${s.title}": ${r.content.map(c => c.text ?? '').join(' ').trim()}` : `archived "${s.title}"`)
+    } catch (err) {
+      out.push(`left open "${s.title}": ${(err as Error).message}`)
+    }
+  }
+  return out
+}
 
 
-async function runAction($: EngineInterface, name: string, action: Lifecycle | 'remove' | 'prs' | 'closeout'): Promise<void> {
+async function runAction($: EngineInterface, name: string, action: Lifecycle | 'prs' | 'closeout' | 'abandon'): Promise<void> {
   await $.state.set(BUSY, name)
   await $.state.set(NOTE, `${name}: ${action}…`)
   try {
     const { value: rows = [] } = await $.state.get(ROWS)
-    const r = action === 'remove'
-      ? await core<{ command: string; output: string }>($, 'remove-workspace', { name }, 600000)
-      : action === 'closeout'
-        ? await core<{ command: string; output: string }>($, 'close-out', { name }, 600000)
-        : action === 'prs'
-          ? await core<{ command: string }>($, 'pr-status', { path: rows.find(x => x.name === name)?.path }, 120000)
-          : await core<{ command: string; output: string }>($, 'workspace-action', { name, action }, 600000)
-    await $.state.set(NOTE, r.command.split('\n')[0]?.trim() || 'done')
+    const path = rows.find(x => x.name === name)?.path
+    if (action === 'closeout' || action === 'abandon') {
+      const { value: reason = '' } = await $.state.get(REASON)
+      const r = await core<{ command: string; terminals?: string[] }>($, 'close-out', action === 'abandon' ? { name, abandon: reason } : { name }, 600000)
+      const archived = path ? await archiveSessions($, path) : []
+      await $.state.set(NOTE, [r.command.split('\n')[0]?.trim() || 'done', ...archived, ...(r.terminals ?? [])].join('\n'))
+      await $.state.set(REASON, '')
+    } else {
+      const r = action === 'prs'
+        ? await core<{ command: string }>($, 'pr-status', { path }, 120000)
+        : await core<{ command: string; output: string }>($, 'workspace-action', { name, action }, 600000)
+      await $.state.set(NOTE, r.command.split('\n')[0]?.trim() || 'done')
+    }
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message)
   } finally {
@@ -652,7 +693,10 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   if (busy !== '') return
 
   const { value: pending = '' } = await $.state.get(CONFIRM)
-  if (pending !== '' && pending !== name && pending !== CLOSE_OUT + name) await $.state.set(CONFIRM, '')
+  if (pending !== '' && pending !== CLOSE_OUT + name && pending !== ABANDON + name) {
+    await $.state.set(CONFIRM, '')
+    await $.state.set(REASON, '')
+  }
 
   if (action === 'new') {
     const { value: rows = [] } = await $.state.get(ROWS)
@@ -721,13 +765,19 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     return
   }
 
-  if (action === 'remove') {
-    if (pending !== name) {
-      await $.state.set(CONFIRM, name)
+  if (action === 'abandon') {
+    if (pending !== ABANDON + name) {
+      await $.state.set(CONFIRM, ABANDON + name)
+      await $.state.set(REASON, '')
+      return
+    }
+    const { value: reason = '' } = await $.state.get(REASON)
+    if (!reason.trim()) {
+      await $.state.set(NOTE, 'Give a reason to abandon')
       return
     }
     await $.state.set(CONFIRM, '')
-    await runAction($, name, 'remove')
+    await runAction($, name, 'abandon')
     return
   }
 
@@ -862,6 +912,17 @@ export const register: Register = on => {
     () => ({ deny: 'The workspace form could not be filled; open /workspaces and fill it by hand.' }),
   )
 
+  // The close-out MCP tool runs in its own server, which can't reach the app's session tools: archive here once it succeeded.
+  on('tool.call', { tool: /^mcp__.*sandbox-workspace__close-out$/ }, async ($, e, next) => {
+    const name = (e as unknown as { name?: unknown }).name
+    // Resolved first: the folder is gone once the call returns.
+    const path = typeof name === 'string' ? await core<{ path: string }>($, 'workspace-path', { name }).then(r => r.path, () => null) : null
+    const r = await next(e)
+    if (!path || r.result === undefined || r.isError) return r
+    const lines = await archiveSessions($, path)
+    return { ...r, context: [...(r.context ?? []), `Desktop sessions in ${path}: ${lines.join('; ') || 'none open'}`] }
+  })
+
   on('ui.close', { id: PANE }, async ($, e, next) => {
     stopPolling()
     return next(e)
@@ -886,6 +947,7 @@ export const register: Register = on => {
     const { value: note = '' } = await $.state.get(NOTE)
     const { value: busy = '' } = await $.state.get(BUSY)
     const { value: confirm = '' } = await $.state.get(CONFIRM)
+    const { value: reason = '' } = await $.state.get(REASON)
     const { value: infra = null } = await $.state.get(INFRA)
     const { value: tracker = null } = await $.state.get(TRACKER)
     const { value: prs = {} } = await $.state.get(PRS)
@@ -1040,14 +1102,22 @@ export const register: Register = on => {
                     {r.session && <Button key={`pin:${r.name}`} label={r.session.pinned ? '📌 Unpin' : '📌 Pin'} variant="secondary" onPress={() => void press($, 'pin', r.name)} />}
                   </Box>
                 </Box>
-                {/* Buttons take no colour; the label turns red under the pointer and the confirm prompt is red text beside it. */}
+                {/* Buttons take no colour; Abandon's label turns red under the pointer and its confirm prompt is red text beside it. */}
                 <Box gap={1}>
                   {lifecycleButtonsFor(r).map(a => (
-                    <Button key={`${a}:${r.name}`} label={a === 'closeout' && confirm === CLOSE_OUT + r.name ? '✓ Yes, close out' : LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
+                    <Button key={`${a}:${r.name}`} label={LABEL[a]} variant="secondary" onPress={() => void press($, a, r.name)} />
                   ))}
                   {confirm === CLOSE_OUT + r.name && <Box key={`closeout-confirm:${r.name}`}><Text color="warning">{'Close out and remove this workspace?'}</Text></Box>}
-                  {confirm === r.name && <Box key={`danger:${r.name}`}><Text color="error">{'Delete this workspace?'}</Text></Box>}
-                  <Button key={`remove:${r.name}`} label={confirm === r.name ? '✕ Yes, remove' : LABEL.remove} variant="secondary" dimColor hover={{ color: 'error', dimColor: false }} onPress={() => void press($, 'remove', r.name)} />
+                  {confirm === ABANDON + r.name && Input && (
+                    <Input key={`reason:${r.name}`} placeholder="Why abandon? (required)" value={reason} submitLabel="save" onInput={v => void $.state.set(REASON, v)} onSubmit={v => void $.state.set(REASON, v)} />
+                  )}
+                  {confirm === ABANDON + r.name && <Box key={`abandon-confirm:${r.name}`}><Text color="error">{'Abandon: pushes and keeps every branch, removes the workspace'}</Text></Box>}
+                  {endActionFor(r, Input !== null) === 'closeout' && (
+                    <Button key={`closeout:${r.name}`} label={confirm === CLOSE_OUT + r.name ? '✓ Yes, close out' : LABEL.closeout} variant="secondary" onPress={() => void press($, 'closeout', r.name)} />
+                  )}
+                  {endActionFor(r, Input !== null) === 'abandon' && (
+                    <Button key={`abandon:${r.name}`} label={confirm === ABANDON + r.name ? '✕ Yes, abandon' : LABEL.abandon} variant="secondary" dimColor hover={{ color: 'error', dimColor: false }} onPress={() => void press($, 'abandon', r.name)} />
+                  )}
                 </Box>
               </Box>
             )}

@@ -792,14 +792,13 @@ With `--all`, it first stops all active features (equivalent to running `sandbox
 
 ---
 
-### Workspace lifecycle: sandbox pr, close-out, remove-workspace
+### Workspace lifecycle: sandbox pr, close-out
 
 **Open PRs from a workspace, track them to a release, then close the workspace out.** The full process — PR files, the pre-PR gate, ship detection, the PR guard — is in [workspace-lifecycle.md](workspace-lifecycle.md).
 
 ```
 sandbox pr <gate|open|status> [repo] [--json]
-sandbox close-out [name] [--yes]
-sandbox remove-workspace <name> [--yes] [--abandon <reason>]
+sandbox close-out [name] [--yes] [--abandon <reason>]
 ```
 
 | Command | Description |
@@ -807,8 +806,8 @@ sandbox remove-workspace <name> [--yes] [--abandon <reason>]
 | `sandbox pr gate` | Run the pre-PR gate for each PR file; change nothing |
 | `sandbox pr open` | Gate, push and open a PR for each PR file at `status: approved`; record its URL |
 | `sandbox pr status` | Record merged / shipped / closed from GitHub and the repo's release tags |
-| `sandbox close-out` | After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches |
-| `sandbox remove-workspace` | Hand off (commit + push every branch) and delete a workspace. Refuses while a PR is open or a code branch has unmerged commits, unless `--abandon` records why |
+| `sandbox close-out` | The one way to end a workspace. After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches. With `--abandon "<reason>"`: record the reason, leave the issue, push every branch and keep them, remove the workspace. Lists terminal Claude sessions still open in it |
+| `sandbox remove-workspace` | Deprecated alias, kept for one release: use `sandbox close-out --abandon` |
 
 Inside a workspace, `gh pr create` (and so `/create-pr`) is blocked by a PreToolUse hook; `sandbox pr open` is the way to open a PR.
 

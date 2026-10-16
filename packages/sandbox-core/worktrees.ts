@@ -36,7 +36,7 @@ const _GITIGNORE_GENERATED = ["/.env", _SECRET_ENVS_RULE] as const;
 /**
  * Add the `/.env.*` rule to a workspace .gitignore written before it existed.
  * `sandbox up` writes per-service secret files without rerunning
- * init-workspace, and remove-workspace runs `git add -A`, commits and pushes.
+ * init-workspace, and close-out (removeWorkspace) runs `git add -A`, commits and pushes.
  */
 export function ensureSecretEnvsIgnored(workspaceDir: string): void {
   const gitignorePath = path.join(workspaceDir, ".gitignore");
@@ -181,7 +181,7 @@ export function defaultBaseRef(src: string): string {
  * same `<user>/<workspace>` branch as its siblings.
  *
  * A *branch* that exists only on origin was left by an earlier workspace of the
- * same name (remove-workspace keeps the pushed branch). Cutting a fresh one
+ * same name (close-out keeps the pushed branch). Cutting a fresh one
  * from main would diverge from it and the eventual handoff push would be
  * rejected, so this aborts with the two ways out — unless `force`, which
  * deletes the remote branch first.

@@ -284,7 +284,12 @@ test('buttons follow the extension gating', async ($, on) => {
     expect(await ui.find({ key: 'stop:abc' })).toBeDefined()
     expect(await ui.find({ key: 'up:empty' })).toBeDefined()
     expect(await ui.find({ key: 'stop:empty' })).toBeUndefined()
-    for (const k of ['restart:ab', 'down:ab', 'new:ab', 'remove:ab']) expect(await ui.find({ key: k })).toBeDefined()
+    for (const k of ['restart:ab', 'down:ab', 'new:ab']) expect(await ui.find({ key: k })).toBeDefined()
+    // One end button per card (#160): a spike with no PR files closes out; unshipped work abandons; Remove is gone.
+    expect(await ui.find({ key: 'closeout:ab' })).toBeDefined()
+    expect(await ui.find({ key: 'abandon:ab' })).toBeUndefined()
+    expect(await ui.find({ key: 'abandon:abc' })).toBeDefined()
+    for (const n of ['ab', 'abc', 'empty']) expect(await ui.find({ key: `remove:${n}` })).toBeUndefined()
     await ui.unmount()
   }
 })
@@ -318,32 +323,64 @@ test('press while busy is ignored', async ($, on) => {
   await ui.unmount()
 })
 
-test('remove needs two presses on the same workspace', async ($, on) => {
-  const w = world(on, stubs({ [`${WS}/remove-workspace`]: () => ok({ command: 'sandbox remove', output: '', path: '/ws/ab' }, 'sandbox remove') }))
+test('abandon asks for a reason in the pane, needs a second press, then closes out with it and archives', async ($, on) => {
+  const w = world(on, stubs({
+    [`${WS}/close-out`]: () => ok({ command: 'sandbox close-out abc --abandon', output: '', path: '/ws/abc', terminals: ['terminal session: pid 9 on ttys001 in /ws/abc — /exit it'] }),
+    'ccd_session_mgmt/archive_session': () => ok(undefined, '{}'),
+  }))
   await openPane($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface, component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-    await ui.press({ key: 'remove:ab' })
-    expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
-    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('✕ Yes, remove')
-    await ui.press({ key: 'remove:ab' })
-    expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`).map(c => c.args)).toEqual([{ name: 'ab' }])
-    expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('✕ Remove')
+    await ui.press({ key: 'abandon:abc' })
+    expect((await ui.find({ key: 'abandon:abc' }))?.props.label).toBe('✕ Yes, abandon')
+    await ui.press({ key: 'abandon:abc' })
+    expect(w.calls.filter(c => c.key === `${WS}/close-out`)).toHaveLength(0)
+    expect((await ui.find({ key: 'note' }))?.text).toBe('Give a reason to abandon')
+    await ui.input({ key: 'reason:abc', text: 'superseded by #170' })
+    await ui.press({ key: 'abandon:abc' })
+    expect(w.calls.filter(c => c.key === `${WS}/close-out`).map(c => c.args)).toEqual([{ name: 'abc', abandon: 'superseded by #170' }])
+    // Inside the workspace (and below it), not elsewhere.
+    expect(w.calls.filter(c => c.key === 'ccd_session_mgmt/archive_session').map(c => c.args)).toEqual([{ session_id: 'local_1' }, { session_id: 'local_2' }])
+    expect((await ui.find({ key: 'note' }))?.text).toBe(
+      'sandbox close-out abc --abandon\narchived "Newer in abc"\narchived "Older in abc"\nterminal session: pid 9 on ttys001 in /ws/abc — /exit it',
+    )
+    expect((await ui.find({ key: 'abandon:abc' }))?.props.label).toBe('✕ Abandon…')
     await ui.unmount()
     w.calls.length = 0
   }
 })
 
-test("a press on another row's button clears the pending remove", async ($, on) => {
+test("a press on another row's button clears the pending abandon and its reason", async ($, on) => {
   const w = world(on, stubs({ [`${WS}/workspace-action`]: () => ok({ command: 'sandbox up', output: '', path: '' }, 'sandbox up') }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
-  await ui.press({ key: 'remove:ab' })
-  await ui.press({ key: 'up:abc' })
-  expect((await ui.find({ key: 'remove:ab' }))?.props.label).toBe('✕ Remove')
-  await ui.press({ key: 'remove:ab' })
-  expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
+  await ui.press({ key: 'abandon:abc' })
+  await ui.input({ key: 'reason:abc', text: 'gone' })
+  await ui.press({ key: 'up:empty' })
+  expect((await ui.find({ key: 'abandon:abc' }))?.props.label).toBe('✕ Abandon…')
+  expect(await ui.find({ key: 'reason:abc' })).toBeUndefined()
+  await ui.press({ key: 'abandon:abc' })
+  await ui.press({ key: 'abandon:abc' })
+  expect(w.calls.filter(c => c.key === `${WS}/close-out`)).toHaveLength(0)
   await ui.unmount()
+})
+
+test('the close-out MCP tool archives the desktop sessions once it succeeded', async ($, on) => {
+  const w = world(on, stubs({
+    [`${WS}/workspace-path`]: a => ok({ path: `/ws/${a.name}` }),
+    'ccd_session_mgmt/archive_session': a => (a.session_id === 'local_2' ? { content: [{ type: 'text', text: 'session is pinned' }], isError: true } : ok(undefined, '{}')),
+  }))
+  let failNext = false
+  on('tool.call', { tool: /sandbox-workspace__close-out$/ }, () =>
+    failNext ? { result: 'not shipped', isError: true, text: 'not shipped' } : { result: { command: 'sandbox close-out abc' }, text: 'sandbox close-out abc' })
+  const tool = 'mcp__plugin_sandbox-tools_sandbox-workspace__close-out'
+  const r = await $.tool.call({ tool, name: 'abc' } as never)
+  expect(r.context).toEqual(['Desktop sessions in /ws/abc: archived "Newer in abc"; left open "Older in abc": session is pinned'])
+  failNext = true
+  w.calls.length = 0
+  const failed = await $.tool.call({ tool, name: 'abc' } as never)
+  expect(failed.context ?? []).toEqual([])
+  expect(w.calls.filter(c => c.key === 'ccd_session_mgmt/archive_session')).toHaveLength(0)
 })
 
 test('polls every 5 s while open', async ($, on) => {
@@ -841,6 +878,7 @@ test('the lifecycle replaces the stage on the card and picks the lifecycle butto
     expect((await ui.find({ key: 'meta:abc' }))?.text).toBe('bugfix · shipped — close out · 1/3')
     expect(await ui.find({ key: 'prs:ab' })).toBeTruthy()
     expect(await ui.find({ key: 'closeout:ab' })).toBeFalsy()
+    expect(await ui.find({ key: 'abandon:ab' })).toBeTruthy()
     expect(await ui.find({ key: 'closeout:abc' })).toBeTruthy()
     expect(await ui.find({ key: 'prs:empty' })).toBeFalsy()
     await ui.unmount()
@@ -859,21 +897,23 @@ test('↻ PRs runs pr-status for that workspace path', async ($, on) => {
   await ui.unmount()
 })
 
-test('close-out needs two presses, and a remove press on the same row cancels it', async ($, on) => {
+test("close-out needs two presses, and a press on another row's button cancels it", async ($, on) => {
   const w = world(on, stubs({
     [`${WS}/list-workspaces`]: () => ok(lifecycleList(null, SHIPPED)),
     [`${WS}/close-out`]: () => ok({ command: 'sandbox close-out abc', output: '' }),
+    [`${WS}/workspace-action`]: () => ok({ command: 'sandbox up', output: '', path: '' }, 'sandbox up'),
+    'ccd_session_mgmt/archive_session': () => ok(undefined, '{}'),
   }))
   await openPane($)
   const ui = await $.ui.mount({ plugin: 'sandbox-tools', surface: 'desktop', component: 'Pane', props: PANE_PROPS, requestId: 'workspaces' })
   await ui.press({ key: 'closeout:abc' })
   expect((await ui.find({ key: 'closeout:abc' }))?.props.label).toBe('✓ Yes, close out')
-  await ui.press({ key: 'remove:abc' })
+  await ui.press({ key: 'up:empty' })
   expect((await ui.find({ key: 'closeout:abc' }))?.props.label).toBe('✓ Close out')
   await ui.press({ key: 'closeout:abc' })
   await ui.press({ key: 'closeout:abc' })
   expect(w.calls.filter(c => c.key === `${WS}/close-out`).map(c => c.args)).toEqual([{ name: 'abc' }])
-  expect(w.calls.filter(c => c.key === `${WS}/remove-workspace`)).toHaveLength(0)
+  expect(w.calls.filter(c => c.key === 'ccd_session_mgmt/archive_session')).toHaveLength(2)
   await ui.unmount()
 })
 

@@ -13,6 +13,7 @@ import {
   closeOut,
   lifecycleOf,
   mapTouched,
+  openTerminalSessions,
   openPrs,
   prFileDir,
   readPrFiles,
@@ -77,6 +78,7 @@ function deps(table, over = {}) {
     doneStatus: "closed",
     commitRecord: async () => ({ ok: true, message: "record pushed" }),
     remove: async () => ({ output: "removed" }),
+    terminals: async () => [],
     sourceOf: async () => "/src/app",
     ...over,
   };
@@ -416,7 +418,7 @@ test("removeWorkspace refuses while a PR is open, before touching anything", asy
 test("closeOut refuses before ship", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "merged" }) } });
   try {
-    const err = await inWorkspacesRoot(ws, (name) => closeOut(name, deps([])).then(() => null, (e) => e));
+    const err = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, deps([])).then(() => null, (e) => e));
     assert.match(String(err), /is merged \(app: merged\)/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
   } finally {
@@ -442,7 +444,7 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
       if (args.includes("branch")) order.push("branch -D");
       return origRun(bin, args);
     };
-    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, d));
+    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.deepEqual(issue, ["o/app#7", "closed"]);
     assert.deepEqual(order, ["remove", "branch -D"]);
     assert.ok(d.calls.includes("git -C /src/app branch -D me/ws"));
@@ -451,6 +453,66 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
   } finally {
     clean(ws);
   }
+});
+
+test("closeOut --abandon: needs a reason", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
+  try {
+    const err = await inWorkspacesRoot(ws, (name) => closeOut(name, { abandon: "  " }, deps([])).then(() => null, (e) => e));
+    assert.ok(err instanceof WorkspaceError, String(err));
+    assert.match(err.message, /needs a reason/);
+    assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon: records why, leaves the issue, removes, keeps every branch, lists terminals", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: u\n" }), lib: prFile({ status: "shipped", extra: "url: https://x/pr/3\n" }) },
+  });
+  try {
+    let updated = false;
+    const d = deps([], {
+      tracker: { fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }), updateIssue: async () => (updated = true) },
+      terminals: async (dir) => [`terminal session: pid 9 on ttys001 in ${dir} — /exit it`],
+    });
+    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, { abandon: "superseded by #170" }, d));
+    const closeout = fs.readFileSync(path.join(ws, "closeout.md"), "utf8");
+    assert.match(closeout, /Abandoned: superseded by #170/);
+    assert.match(closeout, /left OPEN \(abandoned\)/);
+    assert.equal(updated, false);
+    assert.ok(!d.calls.some((c) => c.includes("branch -D") || c.includes("--delete")), "abandon keeps every branch");
+    assert.match(r.output, /removed/);
+    assert.deepEqual(r.terminals, [`terminal session: pid 9 on ttys001 in ${ws} — /exit it`]);
+    assert.equal(r.path, ws);
+    assert.match(r.command, /--abandon$/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut retry after an abandon that failed to remove: still abandoned", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "abandoned", extra: "reason: gone\nurl: u\n" }) } });
+  fs.writeFileSync(path.join(ws, "closeout.md"), "# Close-out\n");
+  try {
+    let updated = false;
+    const d = deps([], { tracker: { fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }), updateIssue: async () => (updated = true) } });
+    await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
+    assert.equal(updated, false);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openTerminalSessions: TTY claude processes whose cwd is in the workspace", async () => {
+  const ps = "  11 ttys001  /usr/local/bin/claude\n  12 ??       claude\n  13 ttys002  claude\n  14 ttys003  zsh\n  15 ttys004  claude\n";
+  const lsof = "p11\nfcwd\nn/ws/a/repo\np13\nfcwd\nn/ws/ab\np15\nfcwd\nn/ws/a\n";
+  const r = stubRun([[/^ps /, { stdout: ps }], [/^lsof /, { stdout: lsof, code: 1 }]]);
+  const out = await openTerminalSessions("/ws/a", r.run);
+  assert.deepEqual(out, ["terminal session: pid 11 on ttys001 in /ws/a/repo — /exit it", "terminal session: pid 15 on ttys004 in /ws/a — /exit it"]);
+  assert.ok(r.calls.includes("lsof -a -d cwd -Fpn -p 11,13,15"));
+  assert.deepEqual(await openTerminalSessions("/ws/a", stubRun([[/^ps /, { code: 1 }]]).run), []);
 });
 
 test("PR file: invalid YAML names the parser's error", () => {
@@ -483,7 +545,7 @@ test("adoptPr: a merged PR from outside is written, shipped by its release tag, 
     assert.ok(committed.includes("stages/03_propose/output/pr-app.md"));
     await assert.rejects(adoptPr(ws, { pr: "140" }, d), /already exists/);
 
-    const out = await inWorkspacesRoot(ws, (name) => closeOut(name, d));
+    const out = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /\| o\/app \| https:\/\/github\.com\/o\/app\/pull\/140 \| shipped \| abc \| v0\.7\.0 \|/);
     assert.ok(!d.calls.some((c) => c.includes("branch -D")), "an adopted PR's branch is not the workspace's to delete");
     assert.match(out.output, /removed/);
@@ -504,7 +566,7 @@ test("adoptPr --no-pr: a closed PR file with the reason; close-out then runs", a
     assert.equal(f.fm.reason, "fixed on main by 25957ae");
     assert.ok(!d.calls.some((c) => c.startsWith("gh ")));
     assert.equal(lifecycleOf(ws).state, "shipped");
-    await inWorkspacesRoot(ws, (name) => closeOut(name, d));
+    await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /\| app \| — \| closed \| — \| — \| fixed on main by 25957ae \|/);
   } finally {
     clean(ws);

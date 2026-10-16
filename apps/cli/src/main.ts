@@ -27,9 +27,9 @@
  *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
  *     sandbox list-workspaces                  List workspaces under the workspaces root
  *     sandbox issue <view|update> [ref]        Read or update an issue in the configured tracker
- *     sandbox remove-workspace <name>          Hand off and delete a workspace (push, down, rm); --abandon <reason>
+ *     sandbox remove-workspace <name>          Deprecated: use `sandbox close-out --abandon <reason>`
  *     sandbox pr <gate|open|status> [repo]     Pre-PR gate, open PRs from approved PR files, record merge/release
- *     sandbox close-out [name]                 After release: close the issue, record, remove, delete merged branches
+ *     sandbox close-out [name]                 End a workspace: after release, or with --abandon <reason>
  *     sandbox code [feature]                   Open a workspace in VS Code
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
  *     sandbox registry [sync] [--check]        Regenerate ~/.sandbox/services.yaml from repo fragments
@@ -590,7 +590,7 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/remove_workspace.js"),
     configure: (cmd) => {
       cmd
-        .description("Hand off (commit + push) and delete a workspace, its containers and its worktrees")
+        .description("Deprecated: use `sandbox close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace")
         .argument("<name>", "Workspace directory name, as `sandbox list-workspaces` reports it")
         .option("-y, --yes", "Skip the confirmation prompt")
         .option("--abandon <reason>", "Remove despite unshipped work; records the reason in closeout.md and the PR files");
@@ -626,11 +626,15 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/close_out.js"),
     configure: (cmd) => {
       cmd
-        .description("After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches")
+        .description(
+          "End a workspace. After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. " +
+            "With --abandon: record the reason, push every branch and keep them, remove the workspace",
+        )
         .argument("[name]", "Workspace directory name; defaults to the workspace you are in")
-        .option("-y, --yes", "Skip the confirmation prompt");
+        .option("-y, --yes", "Skip the confirmation prompt")
+        .option("--abandon <reason>", "Close out without shipping; the reason goes in closeout.md and the PR files");
     },
-    namespace: ([name], o) => ({ name: name ?? null, yes: Boolean(o.yes) }),
+    namespace: ([name], o) => ({ name: name ?? null, yes: Boolean(o.yes), abandon: o.abandon ?? null }),
   },
   {
     name: "code",
