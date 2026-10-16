@@ -6,8 +6,15 @@
 // reprinting (note 086 row 5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
+import { withSandboxHome } from "./fixtures.mjs";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
+import { createWorkspace } from "./dist/sandbox.js";
 import { WorkspaceInitError, provisionWorkspace } from "./dist/workspace_init.js";
 
 /** Run `fn`, returning its rejection and everything it printed. */
@@ -41,4 +48,32 @@ test("an unknown context_strategy aborts before the workspace dir is created", a
   assert.match(err.message, /'bogus'.*icm, jit/);
   // Rejected before touching the filesystem — nothing to print.
   assert.equal(text, "");
+});
+
+test("a non-interactive create with no strategy writes context_strategy: icm (#190)", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "create-default-"));
+  const repos = path.join(tmp, "repos");
+  // demo-repo needs an origin: worktrees branch from origin's default branch.
+  const seed = path.join(tmp, "seed");
+  fs.mkdirSync(seed);
+  execFileSync("git", ["-C", seed, "init", "-q", "-b", "main"]);
+  execFileSync("git", ["-C", seed, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"]);
+  execFileSync("git", ["clone", "-q", seed, path.join(repos, "demo-repo")]);
+  const prevRoot = process.env.SANDBOX_ROOT;
+  process.env.SANDBOX_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+  try {
+    await withSandboxHome(async () => {
+      const { workspacePath } = await createWorkspace(
+        { feature: "demo", services: "backend", work_type: "feature" },
+        { open: false, cwd: tmp, distill: false },
+      );
+      const yml = fs.readFileSync(path.join(workspacePath, ".sandbox", "workspace.yml"), "utf8");
+      assert.match(yml, /^context_strategy: icm$/m);
+      assert.ok(fs.existsSync(path.join(workspacePath, "stages")), "ICM layout");
+    }, { config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(tmp, "ws")}\n` });
+  } finally {
+    if (prevRoot === undefined) delete process.env.SANDBOX_ROOT;
+    else process.env.SANDBOX_ROOT = prevRoot;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
