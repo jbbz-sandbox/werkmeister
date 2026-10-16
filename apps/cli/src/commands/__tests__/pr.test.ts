@@ -5,10 +5,10 @@
  */
 import { beforeEach, expect, it, vi } from "vitest";
 
-vi.mock("sandbox-core", () => ({ gatePrs: vi.fn(), openPrs: vi.fn(), refreshPrStatus: vi.fn() }));
+vi.mock("sandbox-core", () => ({ adoptPr: vi.fn(), gatePrs: vi.fn(), openPrs: vi.fn(), refreshPrStatus: vi.fn() }));
 vi.mock("sandbox-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
 
-import { gatePrs, openPrs, refreshPrStatus } from "sandbox-core";
+import { adoptPr, gatePrs, openPrs, refreshPrStatus } from "sandbox-core";
 import { findRecordRoot } from "sandbox-core/pr_guard";
 import { run } from "../pr.js";
 
@@ -38,6 +38,14 @@ it("status goes to refreshPrStatus", async () => {
   vi.mocked(refreshPrStatus).mockResolvedValue({ lines: ["app: shipped"], changed: true });
   await run({ action: "status", repo: null, json: false });
   expect(refreshPrStatus).toHaveBeenCalledWith("/features/ws");
+});
+
+it("adopt goes to adoptPr with the PR, or with --no-pr's reason", async () => {
+  vi.mocked(adoptPr).mockResolvedValue({ ok: true, lines: ["app: adopted as merged"] });
+  await run({ action: "adopt", pr: "140", noPr: null, repo: "app", json: false });
+  expect(adoptPr).toHaveBeenCalledWith("/features/ws", { pr: "140", noPr: undefined, repo: "app" });
+  await run({ action: "adopt", pr: null, noPr: "fixed on main", repo: null, json: false });
+  expect(adoptPr).toHaveBeenLastCalledWith("/features/ws", { pr: undefined, noPr: "fixed on main", repo: undefined });
 });
 
 it("outside a workspace it exits 1 without calling core", async () => {
