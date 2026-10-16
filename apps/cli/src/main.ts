@@ -44,6 +44,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
+import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
@@ -946,6 +947,12 @@ export async function main(): Promise<void> {
 
   if (process.argv[2] === "__complete") {
     return completeLine(program);
+  }
+
+  // Not for `hooks`: they run on every tool call, and git would be a spawn each.
+  if (process.argv[2] !== "hooks") {
+    const warning = staleBuildWarning(BUILD_STAMP, path.resolve(_REPO_ROOT, "../.."));
+    if (warning) console.error(warning);
   }
 
   if (process.argv.length <= 2) {

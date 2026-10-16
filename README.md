@@ -37,7 +37,12 @@ sandbox setup
 The global `sandbox` is a symlink into this checkout, not a copy, so a rebuild
 (`npm run build`) after a pull is all it takes to update it. `setup` records
 this checkout as `sandbox_root`, so don't move or delete it while it is linked.
-To skip the global link, run `./sandbox` from the repo root instead. To remove
+Until you rebuild, it keeps running the old bundle, so the CLI
+prints a one-line stderr warning when `apps/cli/dist` was built from a
+different commit than the checkout's `HEAD`. The warning names both SHAs and
+the rebuild command, `npm run build --workspace sandbox-core && npm run build --workspace apps/cli`.
+It never shows on a published install, which has no `.git`, and `sandbox hooks`
+skips it. To skip the global link, run `./sandbox` from the repo root instead. To remove
 the link, run `npm rm -g @jbbz-sandbox/sandbox-cli`.
 
 A linked CLI doesn't offer to install the VS Code extension. Only the published
