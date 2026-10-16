@@ -17,7 +17,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.mocked(findRecordRoot).mockReturnValue("/features/sandbox-133-x");
-  vi.mocked(closeOut).mockResolvedValue({ command: "sandbox close-out sandbox-133-x", output: "removed" });
+  vi.mocked(closeOut).mockResolvedValue({ command: "sandbox close-out sandbox-133-x", output: "removed", path: "/features/sandbox-133-x", terminals: [] });
 });
 
 it("does nothing when the prompt is declined, and defaults to no", async () => {
