@@ -22,6 +22,7 @@ vi.mock("sandbox-core/config", () => ({ loadPorts: () => ({}), loadServices: () 
 vi.mock("sandbox-core/feature_routing", () => ({ loadFeatureRouters: () => ({}) }));
 vi.mock("sandbox-core/generate", () => ({
   generateCaddyfile: async () => {},
+  generateSupergraphConfig: () => null,
   isFeatureComposeStale: () => false,
   loadWorkspaceEnvVars: () => ({}),
   writeServiceSecretEnvs: () => {},
