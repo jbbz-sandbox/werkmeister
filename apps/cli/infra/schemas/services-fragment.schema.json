@@ -36,6 +36,11 @@
         "release_check": {
           "type": "string",
           "description": "Pre-PR gate command, run from the repo root in a service container; non-zero means this branch would not produce a release (e.g. `npx changeset status --since=origin/main`)."
+        },
+        "no_service_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Path prefixes (a directory or a file, from the repo root) whose changes touch no service, e.g. `docs`, `.changeset`, `README.md`. The pre-PR gate runs no service tests for them; any other path outside every service's `path` touches every service."
         }
       },
       "if": { "properties": { "ship": { "const": "tag" } }, "required": ["ship"] },
