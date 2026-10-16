@@ -32,6 +32,8 @@ jobs:
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-node24-
       - run: npm ci
+      # Before turbo so a lint or format failure surfaces in seconds, not after the build.
+      - run: npx biome ci .
       # One invocation so typecheck runs alongside build instead of before it.
       - run: npx turbo run typecheck build test
       # The extension host is an Electron app: it needs a display even headless,
