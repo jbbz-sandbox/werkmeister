@@ -112,6 +112,12 @@ function appliesWhen(meta: Record<string, any>): string {
   return "editing " + globs.map((g) => `\`${g}\``).join(", ");
 }
 
+// The file is tracked in the run's record, so a machine path here would read
+// as drift on any other machine (#163); name the root and say how to find it.
+function standardsPath(meta: Record<string, any>): string {
+  return "<standards_dir>/" + path.relative(standardsDirPath(), meta["path"]).split(path.sep).join("/");
+}
+
 function renderStandards(r: Resolved): string {
   const lines = [
     "# Coding standards (factory)",
@@ -120,8 +126,11 @@ function renderStandards(r: Resolved): string {
     "",
     "| Standard | Read | Applies when |",
     "|---|---|---|",
-    ...r.active.map((d) => `| ${d} | \`${r.modules[d]["path"]}\` | ${appliesWhen(r.modules[d])} |`),
+    ...r.active.map((d) => `| ${d} | \`${standardsPath(r.modules[d])}\` | ${appliesWhen(r.modules[d])} |`),
     PONYTAIL_ROW,
+    "",
+    "`<standards_dir>` is this machine's standards tree: `sandbox standards check` prints its path " +
+      "(`overrides.standards_dir` in `sandbox config`), and `sandbox setup` grants Claude Code read access to it.",
     "",
   ];
   if (r.notActive.length) {

@@ -101,7 +101,9 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.ok(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8").endsWith(`\n${PROMPT}\n`));
 
     const standards = fs.readFileSync(path.join(root, "_shared", "standards.md"), "utf8");
-    assert.match(standards, /^\| comments \| `.*comments\/STANDARD\.md` \| any code edit \|$/m);
+    assert.match(standards, /^\| comments \| `<standards_dir>\/comments\/STANDARD\.md` \| any code edit \|$/m);
+    assert.match(standards, /^`<standards_dir>` is this machine's standards tree: `sandbox standards check` prints its path/m);
+    assert.ok(!standards.includes(os.tmpdir()) && !standards.includes(os.homedir()), standards);
     assert.match(standards, /^\| ponytail \| already loaded/m);
     assert.match(standards, /do not load\): ui\./);
 
@@ -151,6 +153,26 @@ test("check is empty right after init, and sync repairs an edited contract", asy
     assert.deepEqual(icm.sync(root), { wrote: ["stages/02_spec/CONTEXT.md"] });
     assert.deepEqual(icm.check(root), []);
     assert.equal(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), "hand edit\n");
+  });
+});
+
+test("another machine's standards_dir: no drift for _shared/standards.md (#163)", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init(ctx);
+    const file = path.join(root, "_shared", "standards.md");
+    const before = fs.readFileSync(file, "utf8");
+    const cfg = process.env.SANDBOX_CONFIG_FILE;
+    const here = fs.readFileSync(cfg, "utf8").match(/standards_dir: (.*)/)[1];
+    const there = fs.mkdtempSync(path.join(os.tmpdir(), "icm-std-other-"));
+    try {
+      fs.cpSync(here, there, { recursive: true });
+      fs.writeFileSync(cfg, `version: 1\noverrides:\n  standards_dir: ${there}\n`);
+      assert.deepEqual(icm.check(root), []);
+      assert.deepEqual(icm.sync(root), { wrote: [] });
+      assert.equal(fs.readFileSync(file, "utf8"), before);
+    } finally {
+      fs.rmSync(there, { recursive: true, force: true });
+    }
   });
 });
 
