@@ -9,6 +9,7 @@ import * as path from "node:path";
 
 import {
   abandonWorkspace,
+  adoptPr,
   closeOut,
   lifecycleOf,
   mapTouched,
@@ -447,6 +448,77 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
     assert.ok(d.calls.includes("git -C /src/app branch -D me/ws"));
     assert.ok(!d.calls.some((c) => c.includes("push origin --delete")), "remote already gone (ls-remote exit 2)");
     assert.match(r.output, /origin\/me\/ws already gone/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("PR file: invalid YAML names the parser's error", () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped", extra: "release: @jbbz-sandbox/sandbox-cli@0.7.0\n" }) } });
+  try {
+    assert.throws(() => readPrFiles(ws), /needs YAML frontmatter.*YAML error: .*reserved/s);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("adoptPr: a merged PR from outside is written, shipped by its release tag, and close-out keeps its branch", async () => {
+  const ws = icmWorkspace({ files: {} });
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  try {
+    const view = { url: "https://github.com/o/app/pull/140", headRefName: "other/fix", baseRefName: "main", title: "fix: the thing", state: "MERGED", mergeCommit: { oid: "abc" } };
+    const committed = [];
+    const d = deps([[/^gh pr view 140 /, { stdout: JSON.stringify(view) }], [/tag --contains abc --list v\*/, { stdout: "v0.7.0\n" }], [/ls-remote/, { code: 2 }]], {
+      commitRecord: async (_ws, _m, paths) => (committed.push(...paths), { ok: true, message: "record pushed" }),
+    });
+    const r = await adoptPr(ws, { pr: "140" }, d);
+    assert.ok(r.ok);
+    const [f] = readPrFiles(ws);
+    assert.equal(f.dir, "app");
+    assert.equal(f.title, "fix: the thing");
+    assert.deepEqual(
+      { repo: f.fm.repo, branch: f.fm.branch, base: f.fm.base, url: f.fm.url, merge_sha: f.fm.merge_sha, status: f.fm.status, release: f.fm.release },
+      { repo: "o/app", branch: "other/fix", base: "main", url: view.url, merge_sha: "abc", status: "shipped", release: "v0.7.0" },
+    );
+    assert.ok(committed.includes("stages/03_propose/output/pr-app.md"));
+    await assert.rejects(adoptPr(ws, { pr: "140" }, d), /already exists/);
+
+    const out = await inWorkspacesRoot(ws, (name) => closeOut(name, d));
+    assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /\| o\/app \| https:\/\/github\.com\/o\/app\/pull\/140 \| shipped \| abc \| v0\.7\.0 \|/);
+    assert.ok(!d.calls.some((c) => c.includes("branch -D")), "an adopted PR's branch is not the workspace's to delete");
+    assert.match(out.output, /removed/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("adoptPr --no-pr: a closed PR file with the reason; close-out then runs", async () => {
+  const ws = icmWorkspace({ files: {} });
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  try {
+    const d = deps([]);
+    await assert.rejects(adoptPr(ws, { noPr: " " }, d), /needs a reason/);
+    await adoptPr(ws, { noPr: "fixed on main by 25957ae" }, d);
+    const [f] = readPrFiles(ws);
+    assert.equal(f.fm.status, "closed");
+    assert.equal(f.fm.reason, "fixed on main by 25957ae");
+    assert.ok(!d.calls.some((c) => c.startsWith("gh ")));
+    assert.equal(lifecycleOf(ws).state, "shipped");
+    await inWorkspacesRoot(ws, (name) => closeOut(name, d));
+    assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /\| app \| — \| closed \| — \| — \| fixed on main by 25957ae \|/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("adoptPr: refuses a closed-unmerged PR and an ambiguous repo", async () => {
+  const ws = icmWorkspace({ files: {} });
+  try {
+    await assert.rejects(adoptPr(ws, { pr: "9" }, deps([])), /no code worktree/);
+    fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+    const closed = { url: "https://github.com/o/app/pull/9", headRefName: "x", baseRefName: "main", title: "t", state: "CLOSED", mergeCommit: null };
+    await assert.rejects(adoptPr(ws, { pr: "9" }, deps([[/^gh pr view/, { stdout: JSON.stringify(closed) }]])), /is CLOSED, not merged.*--no-pr/);
+    assert.deepEqual(readPrFiles(ws), []);
   } finally {
     clean(ws);
   }

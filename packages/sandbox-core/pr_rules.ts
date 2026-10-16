@@ -67,6 +67,8 @@ Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out
 | \`sandbox pr gate [repo]\` | run the gate, change nothing |
 | \`sandbox pr open [repo]\` | gate, push, open the PR, record its URL; then turn on Auto-fix (rule 5) |
 | \`sandbox pr status\` | record merged / shipped / closed from GitHub and release tags |
+| \`sandbox pr adopt <pr-number\\|url> [repo]\` | the fix landed outside this workspace: write the PR file from that PR, then record its status |
+| \`sandbox pr adopt --no-pr "<reason>" [repo]\` | the fix is already on base with no PR: write a \`closed\` PR file with the reason |
 | \`sandbox close-out\` | after ship: close the issue, write \`closeout.md\`, remove the workspace, delete merged branches |
 | \`sandbox remove-workspace <name> --abandon "<reason>"\` | give up: record the reason, then remove |
 `;

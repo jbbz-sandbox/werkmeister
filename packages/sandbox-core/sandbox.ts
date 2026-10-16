@@ -55,6 +55,7 @@ import { loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { abandonWorkspace, removalBlockers } from "./pr_lifecycle.js";
 export {
+  adoptPr,
   closeOut,
   gatePrs,
   lifecycleOf,
