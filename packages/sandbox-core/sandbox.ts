@@ -34,6 +34,7 @@ import {
   workspacesRoot,
 } from "./config.js";
 import { isOneShotService } from "./compose.js";
+import { INFRA_PROJECT } from "./compose_infra.js";
 // Type-only: erased at build, so this adds nothing to the bundle.
 import type Dockerode from "dockerode";
 import { docker } from "./docker.js";
@@ -1134,9 +1135,6 @@ export interface InfraStatus {
    */
   services: { name: string; state: ServiceHealth }[];
 }
-
-/** The Compose project name for shared infra (see infra/compose/shared-infra.yml `name:`). */
-const INFRA_PROJECT = "sandbox-infra";
 
 /** A one-shot container that finished its job — `docker ps` `{{.Status}}` of `Exited (0) …`. */
 function exitedCleanly(status: string): boolean {

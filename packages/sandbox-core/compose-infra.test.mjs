@@ -13,7 +13,7 @@ import path from "node:path";
 import { composeInvocation } from "./dist/compose_infra.js";
 import { infraRoot, stateInfraRoot } from "./dist/config.js";
 
-const VARS = ["SANDBOX_CONFIG_FILE", "SANDBOX_SERVICES_YAML", "SANDBOX_ROOT"];
+const VARS = ["SANDBOX_CONFIG_FILE", "SANDBOX_SERVICES_YAML", "SANDBOX_ROOT", "COMPOSE_PROJECT_NAME"];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 
 const REGISTRY = `
@@ -49,9 +49,20 @@ test("argv names the shipped file then the override, env carries SANDBOX_STATE_D
   assert.deepEqual(argv.slice(2), [
     "-f", path.join(infraRoot(), "compose", "shared-infra.yml"),
     "-f", path.join(stateInfraRoot(), "compose", "k8s-forwards.override.yml"),
+    "-p", "sandbox-infra",
   ]);
   assert.equal(env.SANDBOX_STATE_DIR, path.join(home, "infra"));
   assert.equal(env.PATH, process.env.PATH, "inherits the process env");
+});
+
+// Inside a workspace container the generated `.env` exports
+// COMPOSE_PROJECT_NAME=sandbox-<feature>, which beats shared-infra.yml's
+// `name:` — the shared stack was then addressed as the workspace's project
+// (#198). `-p` beats the env var.
+test("names the infra project even when the caller's env sets COMPOSE_PROJECT_NAME", () => {
+  process.env.COMPOSE_PROJECT_NAME = "sandbox-demo";
+  const { argv } = composeInvocation();
+  assert.deepEqual(argv.slice(-2), ["-p", "sandbox-infra"]);
 });
 
 test("creates the override from the registry when it is missing", () => {
