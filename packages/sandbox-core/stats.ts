@@ -81,7 +81,9 @@ export async function collectStats(
     // Aborting keeps the partial aggregate: a half-finished collection is still
     // the answer to "what was it using before I stopped it".
     if (signal?.aborted) break;
-    const snapshot = await containerStats();
+    const snapshot = await containerStats(signal);
+    // A snapshot the abort cut short is missing containers; counting it would skew the averages.
+    if (signal?.aborted) break;
     for (const entry of snapshot) {
       const name = entry.name;
       if (filterPrefix && !name.startsWith(filterPrefix)) continue;
