@@ -61,7 +61,22 @@ jobs:
       packages: write        # publish to npm.pkg.github.com
     runs-on: ubuntu-latest
     steps:
+      # A push made with GITHUB_TOKEN gets its CI held for approval, so the
+      # version PR could merge before `test` ran on it. A GitHub App token's
+      # pushes run CI like a person's. Without the App configured
+      # (RELEASE_APP_ID variable, RELEASE_APP_PRIVATE_KEY secret) this falls
+      # back to GITHUB_TOKEN and the old behaviour.
+      - id: app-token
+        if: vars.RELEASE_APP_ID != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      # The checkout's credentials are what changesets/action pushes the
+      # version branch and tags with.
       - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
       # changesets/action's own commit needs an identity, and a runner has none.
       - name: Configure a git identity
         run: |
@@ -93,5 +108,7 @@ jobs:
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Opens/updates the version PR and creates the GitHub release.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          # Publishing to GitHub Packages stays on the job's own token.
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
