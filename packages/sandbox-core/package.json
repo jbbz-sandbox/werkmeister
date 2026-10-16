@@ -1,6 +1,6 @@
 {
   "name": "sandbox-core",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "private": true,
   "description": "Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and issue-tracker helpers. Consumed by the `sandbox` CLI itself, sandbox-dashboard, and the VS Code extension.",
