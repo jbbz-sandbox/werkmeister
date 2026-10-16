@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { containerStats } from "./dist/docker.js";
 import { runCollection } from "./dist/stats.js";
 
 test("an aborted run stops early and reports what it actually did", { timeout: 20_000 }, async () => {
@@ -23,6 +24,17 @@ test("an aborted run stops early and reports what it actually did", { timeout: 2
   assert.equal(run.saved, false);
   assert.ok(run.samples >= 0);
   assert.equal(run.reportPath, null);
+});
+
+// A host-wide snapshot is one request per running container, so on a loaded host
+// it alone outlasts the test above. The abort has to reach the requests in flight,
+// or the run's length is whatever the daemon makes it.
+test("an abort interrupts a snapshot already in flight", { timeout: 20_000 }, async () => {
+  const started = Date.now();
+  await containerStats(AbortSignal.timeout(100));
+  const elapsedSeconds = (Date.now() - started) / 1000;
+
+  assert.ok(elapsedSeconds < 2, `abort must cut the snapshot short, took ${elapsedSeconds}s`);
 });
 
 test("a signal already aborted collects nothing", { timeout: 20_000 }, async () => {
