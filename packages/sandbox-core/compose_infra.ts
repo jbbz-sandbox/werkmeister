@@ -17,6 +17,9 @@ import * as path from "node:path";
 import { infraRoot, stateInfraRoot } from "./config.js";
 import { generateK8sForwards, overrideFilePath } from "./k8s_forwards.js";
 
+/** The Compose project name for shared infra (shared-infra.yml's `name:`). */
+export const INFRA_PROJECT = "sandbox-infra";
+
 export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv } {
   const override = overrideFilePath();
   // A fresh machine's first `status`/`down` arrives before any `connect` has
@@ -30,6 +33,11 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv } 
       "docker", "compose",
       "-f", path.join(infraRoot(), "compose", "shared-infra.yml"),
       "-f", override,
+      // `-p`, not just the file's `name:`: a workspace container's `.env`
+      // exports COMPOSE_PROJECT_NAME=sandbox-<feature>, which outranks `name:`
+      // and pointed every infra call at the workspace's project (#198). Last,
+      // because callers read the shipped file at argv[3].
+      "-p", INFRA_PROJECT,
     ],
     env: { ...process.env, SANDBOX_STATE_DIR: stateInfraRoot() },
   };

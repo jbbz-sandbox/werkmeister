@@ -100,13 +100,15 @@ export interface UpResult {
  * `MISSING_SECRETS` when a secret this workspace's own services require is
  * absent, `SLOT_ALLOC` when no slot can be allocated, `FORWARDS_NEVER_READY`
  * when the forwards are restarted and their tunnels never reconnect, and
- * `COMPOSE_UP_FAILED` when `docker compose up` reports failure.
+ * `COMPOSE_UP_FAILED` when `docker compose up` reports failure, and
+ * `INSIDE_OWN_CONTAINER` before any of it when run inside *feature*'s own container.
  */
 export async function up(
   feature: string,
   workspace: string,
   { signal }: { signal?: AbortSignal } = {},
 ): Promise<UpResult> {
+  refuseInsideOwnContainer(feature, "up");
   const workspaceCompose = path.join(workspace, "docker-compose.yml");
   if (!fs.existsSync(workspaceCompose)) {
     throw new SandboxError(
@@ -319,6 +321,35 @@ function requireSecrets(
   }
 }
 
+/**
+ * True when this process runs inside *feature*'s own container: every
+ * workspace container exports `SANDBOX_FEATURE`, and Docker writes
+ * `/.dockerenv`. Reads the caller's env about *itself*, not to pick a feature.
+ */
+export function insideOwnContainer(
+  feature: string,
+  env: NodeJS.ProcessEnv = process.env,
+  dockerenv = "/.dockerenv",
+): boolean {
+  return env.SANDBOX_FEATURE === feature && fs.existsSync(dockerenv);
+}
+
+/**
+ * Compose recreates, stops or removes the container this process runs in, so
+ * the verb dies mid-sequence with exit 137 — `down` before it releases the
+ * slot (#198). Another feature's containers are safe to drive from here.
+ */
+function refuseInsideOwnContainer(feature: string, verb: string): void {
+  if (insideOwnContainer(feature)) {
+    throw new SandboxError(
+      `'sandbox ${verb}' is running inside ${feature}'s own container, which it would ` +
+        "recreate or stop and so kill itself.\n" +
+        `       Run it from the host: cd to the workspace and run 'sandbox ${verb}'.`,
+      "INSIDE_OWN_CONTAINER",
+    );
+  }
+}
+
 /** A feature that was running, and the slot it keeps while stopped. */
 export interface StopResult {
   feature: string;
@@ -339,6 +370,7 @@ export interface RestartResult {
  * `COMPOSE_STOP_FAILED` when `docker compose stop` reports failure.
  */
 export async function stop(feature: string): Promise<StopResult> {
+  refuseInsideOwnContainer(feature, "stop");
   const slot = await requireSlot(feature);
 
   info(`Stopping containers for '${feature}' (slot ${slot})...`);
@@ -356,6 +388,7 @@ export async function stop(feature: string): Promise<StopResult> {
  * `COMPOSE_RESTART_FAILED` when `docker compose restart` reports failure.
  */
 export async function restart(feature: string): Promise<RestartResult> {
+  refuseInsideOwnContainer(feature, "restart");
   const slot = await requireSlot(feature);
 
   info(`Restarting containers for '${feature}' (slot ${slot})...`);
@@ -393,6 +426,7 @@ export async function down(
   feature: string,
   { removeVolumes = false, signal }: { removeVolumes?: boolean; signal?: AbortSignal } = {},
 ): Promise<DownResult> {
+  refuseInsideOwnContainer(feature, "down");
   // Best-effort, and before composeDown: leaveFeatureIntercepts resolves the
   // workspace from compose labels on the still-running containers.
   try {
