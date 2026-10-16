@@ -171,19 +171,25 @@ export function memMib(s: Dockerode.ContainerStats): number {
  * Each call costs about a second: the daemon samples twice to produce the CPU
  * delta, exactly as `docker stats --no-stream` does. They run concurrently, so
  * the wall clock is one sample, not one per container.
+ *
+ * *signal* cancels the requests in flight: on a loaded daemon one snapshot runs
+ * for tens of seconds. An aborted snapshot comes back partial or empty.
  */
-export async function containerStats(): Promise<ContainerStat[]> {
+export async function containerStats(signal?: AbortSignal): Promise<ContainerStat[]> {
   let running: Dockerode.ContainerInfo[];
   try {
-    running = await docker().listContainers();
+    running = await docker().listContainers({ abortSignal: signal });
   } catch {
     return []; // daemon unreachable — the caller reports an empty table
   }
 
+  // @types/dockerode leaves `abortSignal` off stats() though dockerode passes it
+  // through; a non-literal options object gets past the excess-property check.
+  const sampleOptions = { stream: false as const, abortSignal: signal };
   const stats = await Promise.all(
     running.map(async (c) => {
       try {
-        const s = await docker().getContainer(c.Id).stats({ stream: false });
+        const s = await docker().getContainer(c.Id).stats(sampleOptions);
         return {
           name: c.Names[0]?.replace(/^\//, "") ?? c.Id.slice(0, 12),
           cpuPercent: cpuPercent(s),
