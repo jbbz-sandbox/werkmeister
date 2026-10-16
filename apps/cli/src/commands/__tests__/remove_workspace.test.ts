@@ -9,9 +9,11 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 vi.mock("sandbox-core", () => ({ removeWorkspace: vi.fn() }));
 vi.mock("../../lib/wizard.js", () => ({ confirm: vi.fn() }));
+vi.mock("../../lib/config.js", async (orig) => ({ ...(await orig<object>()), warn: vi.fn() }));
 
 import { removeWorkspace } from "sandbox-core";
 import { confirm } from "../../lib/wizard.js";
+import { warn } from "../../lib/config.js";
 import { run as runRemove } from "../remove_workspace.js";
 
 beforeEach(() => {
@@ -51,4 +53,9 @@ it("defaults the prompt to no", async () => {
 it("--abandon passes the reason through to core", async () => {
   await runRemove({ name: "ws", yes: true, abandon: "superseded by #140" });
   expect(removeWorkspace).toHaveBeenCalledWith("ws", { abandon: "superseded by #140" });
+});
+
+it("prints the deprecation notice pointing at close-out --abandon", async () => {
+  await runRemove({ name: "ws", yes: true });
+  expect(vi.mocked(warn).mock.calls[0][0]).toMatch(/deprecated.*sandbox close-out --abandon/);
 });

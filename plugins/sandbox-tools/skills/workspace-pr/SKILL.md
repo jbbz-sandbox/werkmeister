@@ -26,10 +26,16 @@ is `docs/workspace-lifecycle.md` in the sandbox repo.
    `url`. Never auto-merge. Merging is the person's act.
 5. **`sandbox pr status`** after merge and release: records `merged`, then
    `shipped` with the release tag that contains the merge.
-6. **`sandbox close-out`** once every PR file is shipped, closed or abandoned:
-   closes the issue, writes `closeout.md`, removes the workspace, deletes merged
-   branches. To give up instead:
-   `sandbox remove-workspace <name> --abandon "<reason>"`.
+6. **`sandbox close-out`** is the one way to end a workspace, with two outcomes:
+   - **Shipped** (every PR file shipped, closed or abandoned): closes the issue,
+     writes `closeout.md`, removes the workspace, deletes merged branches.
+   - **Abandoned**: `sandbox close-out <name> --abandon "<reason>"` records the
+     reason, leaves the issue, pushes every branch and keeps them, then removes.
+
+   Either way, the workspace's desktop Claude sessions are archived (by the pane
+   and the MCP tool; from the CLI, archive them in the sidebar), and terminal
+   sessions still open are listed for the person to `/exit`.
+   `sandbox remove-workspace` is a deprecated alias; don't use it.
 
 MCP equivalents (sandbox-workspace server): `workspace-pr` (`gate|open|status`),
-`close-out`, `remove-workspace` with `abandon`.
+`close-out` (with `abandon` for the second outcome).

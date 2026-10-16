@@ -47,7 +47,6 @@ import {
   openFeatureBrowser,
   openWorkspace,
   refinePrompt,
-  removeWorkspace,
   resolveWorkspaceDir,
   gatePrs,
   openPrs,
@@ -814,47 +813,6 @@ export function createServer(): McpServer {
     },
   );
 
-  // --- Tool: destroy a workspace (down + delete directory) ------------------
-  server.registerTool(
-    "remove-workspace",
-    {
-      title: "Hand Off & Delete Workspace",
-      description:
-        "Hand a workspace off, then tear it down: commit + push every branch (the sandbox-workspace " +
-        "root branch AND each repo) so the work survives on the remote, then `sandbox down` (stop " +
-        "containers + release the slot), remove the workspace directory, and prune the git worktree " +
-        "registrations. Aborts without deleting if any push fails (no work lost), and refuses while a PR " +
-        "is open or a code branch has unmerged commits unless `abandon` gives a reason. Pass the workspace " +
-        "`name` from `list-workspaces`.",
-      inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
-        abandon: z
-          .string()
-          .optional()
-          .describe("Reason for removing despite an open PR or unmerged commits; recorded in closeout.md."),
-      },
-      outputSchema: z.object({ command: z.string(), output: z.string(), path: z.string() }),
-    },
-    async (args): Promise<CallToolResult> => {
-      try {
-        const result = await removeWorkspace(args.name, args.abandon ? { abandon: args.abandon } : undefined);
-        return {
-          content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
-          structuredContent: result as unknown as Record<string, unknown>,
-        };
-      } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        // Surface the real cause to the MCP stderr log — the client only sees
-        // `message`, so without this a remove-workspace failure leaves no trace
-        // to diagnose. (ponytail: remove-workspace only; generalize to a shared
-        // handler wrapper if other tools need the same visibility.)
-        console.error(`[sandbox-workspace] remove-workspace failed: ${(e as Error).stack ?? message}`);
-        return { isError: true, content: [{ type: "text", text: message }] };
-      }
-    },
-  );
-
   // --- Tools: the workspace PR lifecycle (docs/workspace-lifecycle.md) -------
   server.registerTool(
     "workspace-pr",
@@ -898,22 +856,33 @@ export function createServer(): McpServer {
     {
       title: "Close Out Workspace",
       description:
-        "After every PR shipped (or was closed/abandoned): close the issue, write closeout.md to the " +
-        "record branch, remove the workspace, and delete the merged code branches. Destructive — confirm first.",
+        "The one way to end a workspace. After every PR shipped (or was closed/abandoned): close the issue, " +
+        "write closeout.md, remove the workspace (commit + push every branch, `sandbox down`, delete the " +
+        "folder) and delete the merged code branches. With `abandon` (a reason) when work is unshipped: " +
+        "record the reason, leave the issue, remove the workspace and keep every branch. Without `abandon` it " +
+        "refuses while a PR is unshipped. The sandbox-tools plugin then archives the workspace's desktop " +
+        "Claude sessions; terminal sessions still open are listed for the person to /exit. Destructive — " +
+        "confirm with the person first.",
       inputSchema: {
         name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        abandon: z
+          .string()
+          .optional()
+          .describe("Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files."),
       },
-      outputSchema: z.object({ command: z.string(), output: z.string() }),
+      outputSchema: z.object({ command: z.string(), output: z.string(), path: z.string(), terminals: z.array(z.string()) }),
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const result = await closeOut(args.name);
+        const result = await closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {});
         return {
           content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
         const message = e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
+        // The client only sees `message`; the stack in the MCP stderr log is what a failed teardown is diagnosed from.
+        console.error(`[sandbox-workspace] close-out failed: ${(e as Error).stack ?? message}`);
         return { isError: true, content: [{ type: "text", text: message }] };
       }
     },

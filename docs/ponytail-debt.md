@@ -75,7 +75,6 @@ calls the same file, so a dead forward is now restarted rather than merely repor
 | [commands.ts:145](../packages/vscode-plugin/src/commands.ts#L145) | fire-and-forget launch | a failure after spawn is invisible | it ever matters → status check |
 | [build-tree.ts:67](../packages/vscode-plugin/src/build-tree.ts#L67) | strip the `sandbox-` prefix instead of reading `workspace.yml` per workspace | breaks if a hand-edited `.env` violates the convention | that happens → read the yml |
 | [session-stream.ts:13](../apps/sandbox-dashboard/lib/session-stream.ts#L13) | re-read and re-parse the whole transcript on every change | same cost the 3s poller already paid, but push-triggered | large transcripts measurably lag → byte-offset tailing |
-| [server.ts:840](../apps/sandbox-dashboard/server.ts#L840) | error logging on `remove-workspace` only | other tools fail without the same diagnosis trail | other tools need the visibility → shared handler wrapper |
 
 ## Keeping this current
 

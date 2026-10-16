@@ -124,22 +124,23 @@ render, or a live editor.
     it now sends `--leave` and the intercept clears. This reroutes real traffic
     to your machine; only do it on a service you're prepared to reroute.
 
-19. **Remove Workspace (destroys the workspace directory).** Right-click a
-    workspace you are willing to lose → **Remove Workspace...**.
-    - Confirm the modal names the workspace and its detail reads: *"Commits and
-      pushes every branch first — the delete is aborted if any push fails. Then
-      tears down containers, deletes `<path>`, and prunes the worktrees."* It
-      must **not** warn about losing unpushed commits — it doesn't lose them.
+19. **Close Out Workspace (destroys the workspace directory).** Right-click a
+    workspace you are willing to lose → **Close Out Workspace...**.
+    - On a workspace whose PRs are not all shipped, an input box asks why it is
+      being abandoned. Press Escape: nothing happens. Give a reason: the modal
+      reads **Abandon** and says every branch is pushed and kept.
+    - On a shipped workspace there is no input box; the modal reads **Close out**.
     - Click **Cancel**. Nothing happens.
-    - Then on a workspace you do intend to remove, click **Remove**. Confirm a
-      **progress notification** appears for the duration (this call commits and
-      pushes every worktree, runs `sandbox down`, then deletes — it can take
-      minutes), an information message names the removed path on success, and
-      the tree refreshes.
+    - Then on a workspace you do intend to end, confirm. A **progress
+      notification** appears for the duration (it commits and pushes every
+      worktree, runs `sandbox down`, then deletes — it can take minutes), an
+      information message names the path and says to archive its desktop
+      sessions, the "Sandbox Workspaces" output channel holds the close-out
+      output, and the tree refreshes.
     - To exercise the failure path deliberately, make one worktree unpushable
       first (e.g. point its remote at a URL you can't write to). Confirm the
       delete is **aborted**, the workspace still exists, and the multi-line
-      handoff report naming the failing branch appears in a **"Sandbox
+      handoff report naming the failing branch appears in the **"Sandbox
       Workspaces" output channel** — not truncated into a toast.
 
 ---
