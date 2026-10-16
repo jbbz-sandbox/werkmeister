@@ -14,6 +14,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const SCRIPT = path.resolve(__dirname, "../../../bin/generate-certs.sh");
+// Each case runs openssl RSA keygen; ~1 s alone, up to ~47 s under full-suite load on a busy host (#178).
+const CERT_TIMEOUT = { timeout: 60_000 };
 
 let dir: string;
 let hosts: string;
@@ -36,7 +38,7 @@ function run(args: string[]) {
   return { rc: r.status, out: r.stdout + r.stderr };
 }
 
-describe("generate-certs.sh --check", () => {
+describe("generate-certs.sh --check", CERT_TIMEOUT, () => {
   it("reports a SAN for a host the registry no longer routes", () => {
     expect(run(["keep.local.test", "gone.local.test"]).rc).toBe(0);
 
@@ -64,7 +66,7 @@ describe("generate-certs.sh --check", () => {
   });
 });
 
-describe("generate-certs.sh hosts reconcile", () => {
+describe("generate-certs.sh hosts reconcile", CERT_TIMEOUT, () => {
   it("prunes removed services and leaves the user's own lines alone", () => {
     fs.writeFileSync(
       hosts,
