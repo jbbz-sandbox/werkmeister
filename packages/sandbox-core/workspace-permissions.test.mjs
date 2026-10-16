@@ -155,6 +155,8 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   let settings = readSettings(root);
   for (const rule of AUTONOMOUS_RULES) assert.ok(settings.permissions.allow.includes(rule), rule);
   assert.ok(settings.permissions.allow.includes("mcp__plugin_sandbox-tools_sandbox-workspace"));
+  assert.ok(settings.permissions.allow.includes("Bash(claude plugin test:*)"));
+  assert.ok(!settings.permissions.allow.some((r) => /^Bash\(claude( plugin)?:\*\)$/.test(r)), "no blanket claude rule");
   assert.ok(!readRecord(root).allow.includes("Bash(git:*)"), "the person's own rule is not recorded");
   assert.ok(
     settings.hooks.PreToolUse.some((e) => e.hooks.some((h) => h.command.includes("sandbox hooks pr-guard"))),
