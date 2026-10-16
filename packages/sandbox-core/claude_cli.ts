@@ -8,11 +8,11 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 
-const ANSI_RE = /\x1b\[[0-9;]*m/g;
 export function stripAnsi(s: string): string {
-  return s.replace(ANSI_RE, "");
+  return stripVTControlCharacters(s);
 }
 
 export async function isExecutable(p: string): Promise<boolean> {

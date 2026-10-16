@@ -303,7 +303,7 @@ export function initWorkspaceUI(
     try {
       const d = await call("workspace-status", {});
       cstateByWs = {};
-      (d.statuses || []).forEach((s: any) => (cstateByWs[s.name] = s));
+      for (const s of d.statuses || []) cstateByWs[s.name] = s;
       cstateLoaded = true;
       infraState = d.infra || null;
       updateInfraUI();
@@ -501,7 +501,7 @@ export function initWorkspaceUI(
     verb: string,
   ): Promise<void> {
     const siblings = btn.parentElement!.querySelectorAll<HTMLButtonElement>(".btn");
-    siblings.forEach((b) => (b.disabled = true));
+    for (const b of siblings) b.disabled = true;
     msgEl.className = "act-msg";
     msgEl.textContent = verb + "…";
     try {
@@ -516,7 +516,7 @@ export function initWorkspaceUI(
     } catch (e) {
       msgEl.className = "act-msg err";
       msgEl.textContent = verb + " failed";
-      siblings.forEach((b) => (b.disabled = false));
+      for (const b of siblings) b.disabled = false;
     }
   }
 
@@ -620,7 +620,7 @@ export function initWorkspaceUI(
       if (r.url) {
         pr.appendChild(linkEl("", "#" + r.url.split("/").pop(), r.url, r.title || ""));
         if (r.state) pr.appendChild(el("span", "pr-state " + prStateClass(r.state), r.state));
-        (r.labels || []).forEach((l: string) => pr.appendChild(el("span", "lbl", l)));
+        for (const l of r.labels || []) pr.appendChild(el("span", "lbl", l));
       } else {
         pr.appendChild(el("span", "none", "no PR"));
       }
@@ -788,9 +788,9 @@ export function initWorkspaceUI(
         refreshStatus(),
         refs.length ? loadIssueStatuses(refs, opts?.refreshIssues) : Promise.resolve(),
         call("workspace-prs", {})
-          .then((d: any) =>
-            (d.workspaces || []).forEach((w: any) => (prsByWs[w.name] = w.repos || [])),
-          )
+          .then((d: any) => {
+            for (const w of d.workspaces || []) prsByWs[w.name] = w.repos || [];
+          })
           .catch(() => {}),
       ]);
       applyFilter();

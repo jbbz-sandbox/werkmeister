@@ -135,7 +135,7 @@ const TAB_TITLES: Record<Tab, string> = {
 };
 
 function show(tab: Tab): void {
-  tabs.forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  for (const b of tabs) b.classList.toggle("active", b.dataset.tab === tab);
   listPane.hidden = tab !== "list";
   newPane.hidden = tab !== "new";
   prsPane.hidden = tab !== "prs";
@@ -179,7 +179,7 @@ function navigate(tab: Tab): void {
   else location.hash = tab;
 }
 
-tabs.forEach((b) => b.addEventListener("click", () => navigate(b.dataset.tab as Tab)));
+for (const b of tabs) b.addEventListener("click", () => navigate(b.dataset.tab as Tab));
 window.addEventListener("hashchange", () => show(tabFromHash()));
 
 // Initial render honors a deep link (…/#new); default is the list.

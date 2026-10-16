@@ -294,7 +294,7 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
       );
     }
     meta.appendChild(headLink("gh-link", "GitHub", pr.url, "Open this PR on GitHub"));
-    chips(pr).forEach((c) => meta.appendChild(c));
+    meta.append(...chips(pr));
     head.appendChild(meta);
 
     const panel = el("div", "panel");
@@ -427,7 +427,7 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
       host.appendChild(el("div", "sec-empty", "Nothing here."));
       return;
     }
-    shown.forEach((pr) => host.appendChild(buildCard(pr, isMine)));
+    for (const pr of shown) host.appendChild(buildCard(pr, isMine));
   }
 
   function render(): void {

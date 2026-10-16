@@ -1136,7 +1136,7 @@ test("the multi-line field types across lines and its text reaches the create ca
   await ui.press({ key: "create:go" });
   expect(
     (
-      w.calls.find((c) => c.key === `${WS}/create-workspace`)?.args as {
+      w.calls.find((c) => c.key === `${WS}/create-workspace`)!.args as {
         formData: Record<string, unknown>;
       }
     ).formData.starting_prompt,
@@ -1159,7 +1159,7 @@ test("text fields are plugin-drawn editors: a click draws the cursor in that fie
   for (const key of ["f:issue_id", "f:feature", "f:task"])
     expect((await ui.find({ key }))?.type).toBe("Client");
   const focusedOf = async (key: string) =>
-    ((await ui.find({ key }))?.props.props as { focused: boolean }).focused;
+    ((await ui.find({ key }))!.props.props as { focused: boolean }).focused;
   await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:feature" });
   expect([await focusedOf("f:feature"), await focusedOf("f:task")]).toEqual([true, false]);
   await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:task" });
@@ -1173,7 +1173,7 @@ test("text fields are plugin-drawn editors: a click draws the cursor in that fie
   await ui.press({ key: "create:go" });
   expect(
     (
-      w.calls.find((c) => c.key === `${WS}/create-workspace`)?.args as {
+      w.calls.find((c) => c.key === `${WS}/create-workspace`)!.args as {
         formData: Record<string, unknown>;
       }
     ).formData.task,
@@ -1418,7 +1418,7 @@ test("the workspace_form tool opens the Create tab filled, says what is still ne
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect(((await ui.find({ key: "f:feature" }))?.props.props as { value: string }).value).toBe(
+  expect(((await ui.find({ key: "f:feature" }))!.props.props as { value: string }).value).toBe(
     "rate-limit",
   );
   await ui.unmount();
@@ -1454,7 +1454,7 @@ test("Refine with Claude rewrites the starting prompt through the session model,
   });
   expect(asked).toEqual([{ model: "sonnet", prompt: "REFINE: add a rate limit" }]);
   expect(
-    ((await ui.find({ key: "f:starting_prompt" }))?.props.props as { value: string }).value,
+    ((await ui.find({ key: "f:starting_prompt" }))!.props.props as { value: string }).value,
   ).toBe("## Goal\nadd a rate limit, refined");
   await ui.unmount();
 });
@@ -1479,7 +1479,7 @@ test("a failed Refine completion leaves the field and says why", async ($, on) =
     "Refine failed (empty-reply); the field is unchanged.",
   );
   expect(
-    ((await ui.find({ key: "f:starting_prompt" }))?.props.props as { value: string }).value,
+    ((await ui.find({ key: "f:starting_prompt" }))!.props.props as { value: string }).value,
   ).toBe("add a rate limit");
   await ui.unmount();
 });

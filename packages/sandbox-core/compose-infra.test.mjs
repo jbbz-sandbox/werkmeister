@@ -35,7 +35,7 @@ infrastructure:
 
 let home;
 beforeEach(async () => {
-  VARS.forEach((v) => delete process.env[v]);
+  for (const v of VARS) delete process.env[v];
   home = await mkdtemp(path.join(tmpdir(), "sandbox-compose-"));
   process.env.SANDBOX_CONFIG_FILE = path.join(home, "config.yaml");
   await writeFile(path.join(home, "services.yaml"), REGISTRY);

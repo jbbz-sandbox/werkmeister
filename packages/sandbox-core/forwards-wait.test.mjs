@@ -53,9 +53,11 @@ async function registry(ports) {
   process.env.SANDBOX_SERVICES_YAML = file;
 }
 
-beforeEach(() => VARS.forEach((v) => delete process.env[v]));
+beforeEach(() => {
+  for (const v of VARS) delete process.env[v];
+});
 afterEach(() => {
-  open.forEach((s) => s.close());
+  for (const s of open) s.close();
   open = [];
   for (const [k, v] of Object.entries(SAVED)) {
     if (v === undefined) delete process.env[k];

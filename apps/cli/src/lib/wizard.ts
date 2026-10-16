@@ -229,7 +229,7 @@ function withGroupHeadings<T extends { value: string }>(
   };
   for (const [heading, values] of Object.entries(groups)) {
     const members = values.flatMap((v) => remaining.get(v) ?? []);
-    members.forEach((m) => remaining.delete(m.value));
+    for (const m of members) remaining.delete(m.value);
     section(heading, members);
   }
   section("other", [...remaining.values()]);

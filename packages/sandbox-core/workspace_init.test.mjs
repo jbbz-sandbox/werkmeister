@@ -31,6 +31,7 @@ async function abort(fn) {
 test("a missing feature aborts before touching the filesystem", async () => {
   const { err, text } = await abort(() => provisionWorkspace({}));
   assert.ok(err instanceof WorkspaceInitError, `got ${err}`);
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: asserts the raw ANSI colour code
   assert.match(text, /^\x1b\[31m\[err\] {2}A feature name is required/);
   // Exactly one line: the adapters exit on this without printing it again.
   assert.equal(text.trimEnd().split("\n").length, 1);
