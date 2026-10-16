@@ -29,9 +29,21 @@
  * import.meta away): sandbox-core resolves paths through `import.meta.dirname`,
  * which is native here.
  */
+import { execFileSync } from "node:child_process";
 import * as esbuild from "esbuild";
 
 const watch = process.argv.includes("--watch");
+
+// The source commit, so a linked dev CLI can warn when dist is older than the
+// checkout (src/lib/build_freshness.ts). Empty outside a git checkout.
+function git(...args) {
+  try {
+    return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return "";
+  }
+}
+const buildStamp = { sha: git("rev-parse", "HEAD"), dirty: git("status", "--porcelain") !== "" };
 
 const options = {
   entryPoints: [
@@ -51,6 +63,7 @@ const options = {
   format: "esm",
   platform: "node",
   target: "node20",
+  define: { __SANDBOX_BUILD__: JSON.stringify(buildStamp) },
   sourcemap: true,
   minify: false,
   // commander and nunjucks are CJS, and ESM output has no `require` for their
