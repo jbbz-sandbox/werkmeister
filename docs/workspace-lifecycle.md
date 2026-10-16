@@ -119,6 +119,8 @@ repo:
 | `sandbox pr gate [repo]` | run the gate, change nothing |
 | `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to "In Development" (on GitHub, add an `In Development` label, created if the repo lacks it), commit and push the PR file on the record branch |
 | `sandbox pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`. For `merged` files, write `shipped` (+ `release`) per the registry. Commits and pushes the changed PR files on the record branch. |
+| `sandbox pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
+| `sandbox pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
 | `sandbox close-out [name]` | close out (below) |
 | `sandbox remove-workspace <name> [--abandon "<reason>"]` | remove; refuses unshipped work unless abandoning |
 
@@ -140,7 +142,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `san
 1. **Issue.** If the workspace has one and it isn't already done, move it to the done status: `overrides.issue_done_status` in `~/.sandbox/config.yaml`, else `closed` (GitHub) or `Done` (Jira). The comment names the release and PR. A tracker refusal stops close-out before anything is removed.
 2. **Record.** Write `closeout.md`: one row per PR (repo, URL, status, merge SHA, release, reason) plus the issue line.
 3. **Remove.** `removeWorkspace`: commit and push every branch (the record branch now carries `closeout.md`), `sandbox down`, reload the proxy, delete the directory, prune the worktrees.
-4. **Branches.** Delete each merged code branch locally, and on origin if it is still there (GitHub's "delete branch on merge" may have done it already). The record branch is kept.
+4. **Branches.** Delete each merged code branch locally, and on origin if it is still there (GitHub's "delete branch on merge" may have done it already). An `adopted` PR's branch was never the workspace's, so it is kept. The record branch is kept.
 
 ## Abandoning
 

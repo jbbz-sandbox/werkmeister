@@ -19,7 +19,7 @@ import { updateNoteStatus } from "./graduate.js";
 import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import { openDecisions } from "./notes.js";
-import { commitAndPush, removeWorkspace, resolveWorkspaceDir, WorkspaceError, worktreeSources } from "./sandbox.js";
+import { commitAndPush, listRepoWorktrees, removeWorkspace, resolveWorkspaceDir, WorkspaceError, worktreeSources } from "./sandbox.js";
 import { getServicePort } from "./slots.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
@@ -115,13 +115,14 @@ export function prFileDir(ws: string): string | null {
 function parsePrFile(p: string): PrFile {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(fs.readFileSync(p, "utf8"));
   let fm: unknown = null;
+  let yamlError = "";
   try {
     fm = m ? YAML.parse(m[1]) : null;
-  } catch {
-    /* reported below */
+  } catch (e) {
+    yamlError = ` YAML error: ${(e as Error).message}`;
   }
   if (!m || typeof fm !== "object" || fm === null || Array.isArray(fm)) {
-    throw new WorkspaceError(`${p}: PR file needs YAML frontmatter between --- lines (see pr-rules.md).`);
+    throw new WorkspaceError(`${p}: PR file needs YAML frontmatter between --- lines (see pr-rules.md).${yamlError}`);
   }
   const heading = /^#\s+(.+)$/m.exec(m[2]);
   return {
@@ -442,6 +443,56 @@ export async function refreshPrStatus(ws: string, deps: Deps = defaultDeps()): P
   return { lines, changed: changed.length > 0 };
 }
 
+/**
+ * `sandbox pr adopt`: record a fix that landed outside the workspace, so close-out can run.
+ * With *pr*, write the PR from `gh pr view` and let `refreshPrStatus` promote it; with
+ * *noPr*, the fix is already on base and the file is `closed` with that reason.
+ */
+export async function adoptPr(ws: string, opts: { pr?: string; noPr?: string; repo?: string }, deps: Deps = defaultDeps()): Promise<{ ok: boolean; lines: string[] }> {
+  const dir = prFileDir(ws);
+  if (!dir) throw new WorkspaceError("This workspace has no propose stage to hold a PR file.");
+  let repo = opts.repo;
+  if (!repo) {
+    const wts = await listRepoWorktrees(ws);
+    if (wts.length !== 1) throw new WorkspaceError(`Name the repo — this workspace has ${wts.map((w) => w.repo).join(", ") || "no code worktree"}.`);
+    repo = wts[0].repo;
+  }
+  const file = path.join(dir, `pr-${repo}.md`);
+  if (fs.existsSync(file)) throw new WorkspaceError(`${file} already exists — remove it first to adopt.`);
+
+  let fm: Record<string, unknown>;
+  let title: string;
+  if (opts.noPr !== undefined) {
+    if (!opts.noPr.trim()) throw new WorkspaceError("--no-pr needs a reason.");
+    fm = { status: "closed", reason: opts.noPr.trim(), adopted: true };
+    title = "No PR: the fix is already on base";
+  } else {
+    if (!opts.pr) throw new WorkspaceError("Give a PR number or URL, or --no-pr <reason>.");
+    const v = await deps.run("gh", ["pr", "view", opts.pr, "--json", "url,headRefName,baseRefName,title,state,mergeCommit"], path.join(ws, repo));
+    if (v.code !== 0) throw new WorkspaceError(`gh pr view ${opts.pr} failed — ${v.stderr.trim()}`);
+    const pr = JSON.parse(v.stdout) as { url: string; headRefName: string; baseRefName: string; title: string; state: string; mergeCommit?: { oid?: string } | null };
+    if (pr.state !== "MERGED" && pr.state !== "OPEN") throw new WorkspaceError(`${pr.url} is ${pr.state}, not merged — use --no-pr <reason> if the fix landed another way.`);
+    const merged = pr.state === "MERGED";
+    fm = {
+      repo: /github\.com\/([^/]+\/[^/]+)\/pull\//.exec(pr.url)?.[1] ?? "",
+      branch: pr.headRefName,
+      base: pr.baseRefName,
+      status: merged ? "merged" : "open",
+      url: pr.url,
+      ...(merged ? { merge_sha: pr.mergeCommit?.oid ?? "" } : {}),
+      adopted: true,
+    };
+    title = pr.title;
+  }
+  // Through the YAML library: a hand-written `release: @scope/pkg@1.0` is invalid YAML.
+  fs.writeFileSync(file, `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`sandbox pr adopt\`: the work landed outside this workspace.\n`);
+  const lines = [`${repo}: adopted as ${fm["status"]}`];
+  if (fm["status"] !== "closed") lines.push(...(await refreshPrStatus(ws, deps)).lines);
+  // No-op when refreshPrStatus already committed it.
+  lines.push((await deps.commitRecord(ws, "chore: adopt PR", [path.relative(ws, file)])).message);
+  return { ok: true, lines };
+}
+
 /** The workspace's place in the lifecycle, from files only — cheap enough for the pane's poll. */
 export function lifecycleOf(ws: string): { state: Lifecycle; prs: Array<{ dir: string; status: string; url: string | null }> } {
   let files: PrFile[] = [];
@@ -546,7 +597,8 @@ export async function closeOut(name: string, deps: Deps = defaultDeps()): Promis
   const files = readPrFiles(ws);
   fs.writeFileSync(path.join(ws, "closeout.md"), renderCloseout(files, issueLine));
   const branches: Array<{ src: string; branch: string }> = [];
-  for (const f of files.filter((x) => statusOf(x) === "merged" || statusOf(x) === "shipped")) {
+  // An adopted PR's branch was never this workspace's to delete.
+  for (const f of files.filter((x) => (statusOf(x) === "merged" || statusOf(x) === "shipped") && !x.fm["adopted"])) {
     const src = await deps.sourceOf(path.join(ws, f.dir));
     if (src && f.fm["branch"]) branches.push({ src, branch: String(f.fm["branch"]) });
   }

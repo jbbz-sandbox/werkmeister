@@ -606,13 +606,20 @@ const SPECS: CommandSpec[] = [
         .addArgument(
           new Argument(
             "<action>",
-            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed",
-          ).choices(["gate", "open", "status"]),
+            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace",
+          ).choices(["gate", "open", "status", "adopt"]),
         )
-        .argument("[repo]", "Only this code worktree's PR file")
+        .argument("[args...]", "[repo] — only this code worktree's PR file; adopt: <pr-number|url> [repo]")
+        .option("--no-pr <reason>", "adopt: no PR — the fix is already on base")
         .option("--json", "Print the result as JSON");
     },
-    namespace: ([action, repo], o) => ({ action, repo: repo ?? null, json: Boolean(o.json) }),
+    namespace: ([action, rest], o) => {
+      const args = rest as string[];
+      // Commander reads `--no-pr <reason>` as `pr`: true by default, the reason when given.
+      const noPr = typeof o.pr === "string" ? o.pr : null;
+      const pr = action === "adopt" && noPr === null ? (args[0] ?? null) : null;
+      return { action, pr, noPr, repo: args[pr ? 1 : 0] ?? null, json: Boolean(o.json) };
+    },
   },
   {
     name: "close-out",
