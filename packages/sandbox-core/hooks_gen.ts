@@ -253,6 +253,9 @@ export const READ_ONLY_GIT_RULES = ["Bash(git diff:*)", "Bash(git status:*)", "B
 export const AUTONOMOUS_RULES = [
   ...["git", "sandbox", "docker", "gh", "node", "npm", "npx", "python3"].map((cmd) => `Bash(${cmd}:*)`),
   ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map((cmd) => `Bash(${cmd}:*)`),
+  // A plugin's pane tests; never `claude plugin:*`, which would also allow install/uninstall.
+  "Bash(claude plugin validate:*)",
+  "Bash(claude plugin test:*)",
   "mcp__plugin_sandbox-tools_sandbox-workspace",
 ];
 
