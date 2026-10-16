@@ -209,16 +209,23 @@ function exerciseFile(ws: string): string | null {
   return null;
 }
 
-/** Services whose files the branch changed, by longest `path_mappings` prefix; an unmapped file touches the whole repo. */
+/**
+ * Services whose files the branch changed, by longest prefix among `path_mappings` and
+ * `no_service_paths` (which touch nothing, e.g. docs); any other file touches the whole repo.
+ */
 export function mapTouched(files: string[], repo: Record<string, any>): string[] {
-  const mappings = Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>);
+  const mappings: [string, string | null][] = [
+    ...Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>),
+    ...((repo["no_service_paths"] ?? []) as string[]).map((p): [string, null] => [p.replace(/\/+$/, ""), null]),
+  ];
   const out = new Set<string>();
   for (const f of files) {
     const hit = mappings
       .filter(([p]) => f === p || f.startsWith(p + "/"))
       .sort((a, b) => b[0].length - a[0].length)[0];
-    if (hit) out.add(hit[1]);
-    else for (const s of (repo["services"] ?? []) as string[]) out.add(s);
+    if (hit) {
+      if (hit[1] !== null) out.add(hit[1]);
+    } else for (const s of (repo["services"] ?? []) as string[]) out.add(s);
   }
   return [...out].sort();
 }
