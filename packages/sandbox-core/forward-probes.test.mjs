@@ -47,6 +47,25 @@ test("a forward that accepts and never replies is unhealthy", async () => {
   }
 });
 
+// #207: Docker's port proxy, or a forward mid-reconnect, accepts the connection
+// and hangs up without a byte. That fires none of data/timeout/error, so the
+// probe never settled and `sandbox up` exited on an unsettled top-level await.
+// The per-test timeout is the guard, and unref() keeps the server from holding
+// the file open past it: a pending probe fails here instead of hanging the run.
+test("a forward that hangs up without replying is unhealthy, not pending", { timeout: 2_000 }, async () => {
+  const srv = net.createServer((sock) => sock.on("data", () => sock.destroy()));
+  await new Promise((resolve) => srv.listen(0, "127.0.0.1", resolve));
+  srv.unref();
+  try {
+    for (const kind of ["redis", "postgres"]) {
+      const r = await checkWireHealth(srv.address().port, kind, 1_000);
+      assert.equal(r.ok, false, `${kind} hung up`);
+    }
+  } finally {
+    srv.close();
+  }
+});
+
 test("a reply from something else on the port is unhealthy", async () => {
   assert.equal((await probe("HTTP/1.1 200 OK\r\n", "redis")).ok, false);
   assert.equal((await probe("X", "postgres")).ok, false);
