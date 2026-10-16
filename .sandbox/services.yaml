@@ -16,6 +16,9 @@ repo:
   ship: tag
   release_tag: "@jbbz-sandbox/sandbox-cli@*"
   release_check: npx changeset status --since=origin/main
+  # Changes here touch no service, so the gate runs no service tests for them.
+  # Anything else outside a service's `path` still touches every service.
+  no_service_paths: [docs, .changeset, .gitignore, README.md]
 
 services:
   # --- The sandbox repo's own workspaces (self-hosting) -----------------------
