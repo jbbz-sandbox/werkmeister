@@ -24,7 +24,8 @@ With an `issue_id`, `createWorkspace` always:
 |---|---|
 | every input known (feature, issue, services) | `sandbox workspace <feature> --issue-id <ref> --services <a,b> [--work-type <t>] [--context-strategy icm] [--autonomous]`. Pass `--task` only to override the issue title |
 | the person should review the fields first | the /workspaces pane's Create tab, or the browser form (below) |
-| many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check |
+| many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check. Before the first: the `sandbox` CLI runs `$SANDBOX_REPOS_ROOT/sandbox/apps/cli/dist`, so check that checkout is on an up-to-date `main` and rebuilt (`npm run build --workspace apps/cli`), or the batch comes out with stale defaults |
+| many issues, run unattended | as above with `--autonomous` on each create. Then start one Claude Code session per workspace folder with the prompt `start the run`, **one at a time**: each new folder raises a trust prompt, and parallel starts collide |
 
 **`autonomous`** (off by default; `--autonomous`, `SANDBOX_AUTONOMOUS=1`, `autonomous: true` in `workspace.yml`, or the form's checkbox): an icm workspace runs stage 01 → `sandbox pr open` with self-checks instead of human checks, and `.claude/settings.json` allows the git/sandbox/docker/gh/node/python3 calls a headless `claude-send "start the run"` needs. Set it only when the person asked for an unattended run — they then review only the PR. Off again: `autonomous: false`, then `sandbox init-workspace`.
 
