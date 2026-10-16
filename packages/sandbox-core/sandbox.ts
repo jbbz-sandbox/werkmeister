@@ -1883,7 +1883,7 @@ export async function removeWorkspace(
     if (blockers.length && !opts.abandon?.trim()) {
       throw new WorkspaceError(
         `Workspace '${name}' NOT removed — it holds unshipped work:\n${blockers.map((b) => `  ${b}`).join("\n")}\n` +
-          `Ship it and run \`sandbox close-out\`, or give up with \`sandbox remove-workspace ${name} --abandon "<reason>"\`.`,
+          `Ship it and run \`sandbox close-out\`, or give up with \`sandbox close-out ${name} --abandon "<reason>"\`.`,
       );
     }
     if (opts.abandon?.trim()) abandonWorkspace(target, opts.abandon.trim());

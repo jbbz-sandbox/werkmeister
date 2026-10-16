@@ -486,9 +486,9 @@ export function initWorkspaceUI(
       await call(tool, args);
       msgEl.className = "act-msg ok";
       msgEl.textContent = verb + " ✓";
-      // remove-workspace changes the SET of workspaces, not just a state — drop
+      // close-out changes the SET of workspaces, not just a state — drop
       // it from `all` so its card disappears (refreshStatus only updates state).
-      if (tool === "remove-workspace") all = all.filter((w) => w.name !== args.name);
+      if (tool === "close-out") all = all.filter((w) => w.name !== args.name);
       await refreshStatus();
       applyFilter();
     } catch (e) {
@@ -536,7 +536,8 @@ export function initWorkspaceUI(
       else addBtn("Start", "go", "workspace-action", { name: w.name, action: "up" }, "Starting");
       addBtn("Down", null, "workspace-action", { name: w.name, action: "down" }, "Tearing down");
     }
-    addBtn("Remove", "danger", "remove-workspace", { name: w.name }, "Removing", true);
+    // Shipped only: abandoning needs a reason, which the pane, the CLI and the MCP tool take.
+    addBtn("Close out", "danger", "close-out", { name: w.name }, "Closing out", true);
 
     // Usage: on-demand token/model breakdown, toggled open below the actions.
     // The panel itself is cached per workspace (see usagePanelCache) — this

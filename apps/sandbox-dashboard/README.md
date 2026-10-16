@@ -37,7 +37,7 @@ sampling (no host implements it) — prompt refinement goes through the
 | Group | Tools |
 |-------|-------|
 | Create workspace | `workspace` (App tool: inline form or localhost fallback; `issue` arg pre-fills), `create-workspace`, `workspace-form-schema`, `issue-form-data`, `refine-prompt` |
-| List & manage | `list-workspaces` (App tool), `workspace-status`, `workspace-action` (start/stop/restart/down), `remove-workspace`, `open-workspace` (VS Code), `open-feature` (tagged browser), `open-workspaces-ui` |
+| List & manage | `list-workspaces` (App tool), `workspace-status`, `workspace-action` (start/stop/restart/down), `close-out` (end a workspace: shipped, or `abandon` with a reason), `open-workspace` (VS Code), `open-feature` (tagged browser), `open-workspaces-ui` |
 | Pull requests | `workspace-prs`, `open-prs`, `pr-approve`, `pr-reconcile` |
 | Issues | `issue`, `issue-statuses` |
 | Infra | `sandbox-connect`, `docker-ui`, `k8s-forwards-status`, `kube-context`, `kube-switch` |

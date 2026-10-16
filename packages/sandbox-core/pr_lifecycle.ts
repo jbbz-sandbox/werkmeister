@@ -53,6 +53,8 @@ export interface Deps {
   /** Commit and push *paths* (relative to the workspace) on the record branch — nothing else that is dirty. */
   commitRecord: (ws: string, message: string, paths: string[]) => Promise<{ ok: boolean; message: string }>;
   remove: (name: string) => Promise<{ output: string }>;
+  /** Terminal sessions still open in the workspace, one line each. */
+  terminals: (ws: string) => Promise<string[]>;
   sourceOf: (dir: string) => Promise<string | null>;
 }
 
@@ -90,6 +92,7 @@ export function defaultDeps(): Deps {
     doneStatus: String(overrides["issue_done_status"] ?? (loadIssueTracker() === "github" ? "closed" : "Done")),
     commitRecord: commitAndPush,
     remove: (name) => removeWorkspace(name, { closedOut: true }),
+    terminals: (ws) => openTerminalSessions(ws),
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
   };
 }
@@ -565,15 +568,63 @@ export function abandonWorkspace(ws: string, why: string): void {
   fs.writeFileSync(path.join(ws, "closeout.md"), renderCloseout(files, "not closed (abandoned)", `Abandoned: ${why}`));
 }
 
-export async function closeOut(name: string, deps: Deps = defaultDeps()): Promise<{ command: string; output: string }> {
+/**
+ * Running terminal `claude` sessions (a TTY, so not the desktop app's or VS Code's) whose cwd is in *ws*.
+ * Nothing outside a terminal can end one, so close-out names them for the person to `/exit`.
+ */
+export async function openTerminalSessions(ws: string, run: Run = execRun): Promise<string[]> {
+  const ps = await run("ps", ["-axo", "pid=,tty=,comm="]);
+  if (ps.code !== 0) return [];
+  const ttys = new Map<string, string>();
+  for (const line of ps.stdout.split("\n")) {
+    const m = /^\s*(\d+)\s+(\S+)\s+(.+?)\s*$/.exec(line);
+    if (m && path.basename(m[3]) === "claude" && m[2] !== "??" && m[2] !== "?") ttys.set(m[1], m[2]);
+  }
+  if (!ttys.size) return [];
+  const lsof = await run("lsof", ["-a", "-d", "cwd", "-Fpn", "-p", [...ttys.keys()].join(",")]);
+  // lsof exits 1 when some pid has gone; what it printed is still good.
+  const out: string[] = [];
+  let pid = "";
+  for (const line of lsof.stdout.split("\n")) {
+    if (line.startsWith("p")) pid = line.slice(1);
+    else if (line.startsWith("n") && ttys.has(pid)) {
+      const cwd = line.slice(1);
+      if (cwd === ws || cwd.startsWith(ws + path.sep)) out.push(`terminal session: pid ${pid} on ${ttys.get(pid)} in ${cwd} — /exit it`);
+    }
+  }
+  return out;
+}
+
+/**
+ * The one end-of-workspace verb (#160). Shipped: close the issue, write closeout.md, remove, delete
+ * the merged branches. With *abandon*: record the reason, leave the issue, remove (which pushes every
+ * branch) and keep the branches.
+ */
+export async function closeOut(
+  name: string,
+  opts: { abandon?: string } = {},
+  deps: Deps = defaultDeps(),
+): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
+  const why = opts.abandon?.trim();
+  if (opts.abandon !== undefined && !why) {
+    throw new WorkspaceError(`Abandon needs a reason: sandbox close-out ${name} --abandon "<reason>"`);
+  }
   const ws = await resolveWorkspaceDir(name);
   const cfg = loadConfigFile(ws, null);
+  if (why) abandonWorkspace(ws, why);
   const life = lifecycleOf(ws);
   const spikeDone = life.prs.length === 0 && String(cfg["work_type"] ?? "").trim().toLowerCase() === "spike";
-  if (!(life.state === "shipped" || life.state === "abandoned" || spikeDone)) {
+  // closed-out: closeout.md was written but removal failed; running again finishes it.
+  if (!(life.state === "shipped" || life.state === "abandoned" || life.state === "closed-out" || spikeDone)) {
     const detail = life.prs.map((p) => `${p.dir}: ${p.status}`).join(", ") || "no PR files";
-    throw new WorkspaceError(`'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`sandbox pr status\` after the release.`);
+    throw new WorkspaceError(
+      `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`sandbox pr status\` after the release, ` +
+        `or give up with \`sandbox close-out ${name} --abandon "<reason>"\`.`,
+    );
   }
+  // Not from the state alone: shipped + newly abandoned PR files read `shipped`, and a retry reads
+  // `closed-out`; neither may post "Shipped:" or delete branches.
+  const abandoned = !!why || life.state === "abandoned" || (life.state === "closed-out" && life.prs.some((p) => p.status === "abandoned"));
 
   const lines: string[] = [];
   const ref = issueIdOf(cfg);
@@ -581,7 +632,7 @@ export async function closeOut(name: string, deps: Deps = defaultDeps()): Promis
   if (ref) {
     const done = deps.doneStatus.toLowerCase();
     const current = (await deps.tracker.fetchIssue(ref))?.status ?? "";
-    if (life.state === "abandoned") {
+    if (abandoned) {
       issueLine = `${ref} left ${current || "as is"} (abandoned)`;
     } else if ([done, "closed", "done"].includes(current.toLowerCase())) {
       issueLine = `${ref} already ${current}`;
@@ -595,14 +646,16 @@ export async function closeOut(name: string, deps: Deps = defaultDeps()): Promis
   }
 
   const files = readPrFiles(ws);
-  fs.writeFileSync(path.join(ws, "closeout.md"), renderCloseout(files, issueLine));
+  fs.writeFileSync(path.join(ws, "closeout.md"), renderCloseout(files, issueLine, why ? `Abandoned: ${why}` : undefined));
   const branches: Array<{ src: string; branch: string }> = [];
-  // An adopted PR's branch was never this workspace's to delete.
-  for (const f of files.filter((x) => (statusOf(x) === "merged" || statusOf(x) === "shipped") && !x.fm["adopted"])) {
+  // An adopted PR's branch was never this workspace's to delete; an abandoned workspace keeps them all.
+  for (const f of abandoned ? [] : files.filter((x) => (statusOf(x) === "merged" || statusOf(x) === "shipped") && !x.fm["adopted"])) {
     const src = await deps.sourceOf(path.join(ws, f.dir));
     if (src && f.fm["branch"]) branches.push({ src, branch: String(f.fm["branch"]) });
   }
 
+  // Before removal: the cwd of a session in a deleted folder no longer matches it.
+  const terminals = await deps.terminals(ws);
   lines.push((await deps.remove(name)).output);
 
   // After removal: a branch checked out in a worktree can't be deleted.
@@ -617,5 +670,7 @@ export async function closeOut(name: string, deps: Deps = defaultDeps()): Promis
       lines.push(`origin/${branch} already gone`);
     }
   }
-  return { command: `sandbox close-out ${name}`, output: lines.filter(Boolean).join("\n") };
+  lines.push(...terminals);
+  const command = `sandbox close-out ${name}${why ? " --abandon" : ""}`;
+  return { command, output: lines.filter(Boolean).join("\n"), path: ws, terminals };
 }

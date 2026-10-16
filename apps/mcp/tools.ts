@@ -49,7 +49,7 @@ import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
 
 import { listNotes, parseNote } from "sandbox-core/notes";
 import { graduateNote } from "sandbox-core/graduate";
-import { createWorkspace, listWorkspaces, removeWorkspace } from "sandbox-core";
+import { closeOut, createWorkspace, listWorkspaces } from "sandbox-core";
 import { checkStandards } from "sandbox-core/standards";
 import { STRATEGY_IDS, strategyFor } from "sandbox-core/strategies";
 import { initWorkspace } from "sandbox-core/workspace_init";
@@ -467,14 +467,15 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-remove-workspace",
+    "sandbox-close-out",
     {
-      title: "Hand off and delete a workspace",
+      title: "End a workspace",
       description:
-        "Commit and push every worktree branch, tear the feature down, delete the workspace " +
-        "directory and prune the source repos. Destructive, and NOT scoped to your feature — it " +
-        "names a workspace. Nothing is deleted if any branch cannot be pushed, or while a PR is open or " +
-        "a code branch has unmerged commits unless `abandon` gives a reason.",
+        "The one way to end a workspace. After every PR shipped: close the issue, write closeout.md, " +
+        "commit and push every branch, tear the feature down, delete the workspace directory and the " +
+        "merged code branches. With `abandon` (a reason) when work is unshipped: record the reason, leave " +
+        "the issue, push and keep every branch, then remove. Destructive, and NOT scoped to your feature — " +
+        "it names a workspace. Nothing is deleted if any branch cannot be pushed.",
       inputSchema: {
         name: z
           .string()
@@ -482,12 +483,12 @@ function registerAuthoringTools(server: McpServer): void {
         abandon: z
           .string()
           .optional()
-          .describe("Reason for removing despite an open PR or unmerged commits; recorded in closeout.md."),
+          .describe("Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files."),
       },
     },
     async (args): Promise<CallToolResult> =>
       adapt(async () => {
-        const result = await removeWorkspace(args.name, args.abandon ? { abandon: args.abandon } : undefined);
+        const result = await closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {});
         // Same shadowing as sandbox-workspace: removeWorkspace installs its own
         // collecting reporter for the teardown, so re-emit what it captured or
         // the transcript loses the push and down output.

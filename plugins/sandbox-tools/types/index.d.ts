@@ -85,7 +85,10 @@ declare module 'claude-code' {
       rows: WorkspaceRow[]
       error: string
       busy: string
-      confirmRemove: string
+      /** `close-out:<name>` or `abandon:<name>` between an end button's two presses; '' when none is pending. */
+      confirmEnd: string
+      /** The reason typed for a pending abandon. */
+      abandonReason: string
       note: string
       infra: InfraStatus | null
       /** The configured issue tracker's sign-in check; null until checked or if the check failed. */
