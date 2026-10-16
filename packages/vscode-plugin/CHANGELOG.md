@@ -1,5 +1,12 @@
 # vscode-plugin
 
+## 0.10.1
+
+### Patch Changes
+
+- Updated dependencies [da18100]
+  - sandbox-core@0.10.1
+
 ## 0.10.0
 
 ### Minor Changes
