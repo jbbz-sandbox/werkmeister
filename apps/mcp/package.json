@@ -1,6 +1,6 @@
 {
   "name": "sandbox-mcp",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "type": "module",
   "private": true,
   "description": "Headless, authenticated MCP server exposing the sandbox verbs to a container agent with no Docker access.",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.1.0",
-    "sandbox-core": "^0.9.0",
+    "sandbox-core": "^0.10.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
