@@ -139,14 +139,22 @@ description lands in the changelog of whichever package the changeset names, and
 the CLI is the one anyone reads. `sandbox-core` is `fixed` to the CLI, so its
 version follows either way.
 
-On merge to `main`, `.github/workflows/release.yml` opens (or updates) a **"chore:
-version packages"** PR carrying the version bumps and `CHANGELOG.md`. Merging
-*that* PR publishes to GitHub Packages and tags the release. So a release is one
-reviewable merge, and `main` never publishes by accident.
+On merge to `main`, the `release` job in `.github/workflows/ci.yml` opens (or
+updates) a **"chore: version packages"** PR carrying the version bumps and
+`CHANGELOG.md`. Merging *that* PR publishes to GitHub Packages and tags the
+release. So a release is one reviewable merge, and `main` never publishes by
+accident.
 
-The workflow re-runs `typecheck` and `test` before publishing. It duplicates CI on
-purpose — both trigger on the same push, so CI is a race, not a gate, and GitHub
-Packages will not accept a re-publish of a version.
+`release` runs only after the same push's `test` job passes (`needs: test`), so
+nothing publishes untested; GitHub Packages will not accept a re-publish of a
+version.
+
+The version PR is pushed with a GitHub App's token so its own CI runs without
+anyone approving it. The App needs Contents and Pull requests (read and write)
+on this repo, no webhook; its ID goes in the repo variable `RELEASE_APP_ID` and
+its private key in the secret `RELEASE_APP_PRIVATE_KEY`. Without them the job
+falls back to `GITHUB_TOKEN`, and GitHub holds the version PR's CI until someone
+approves it in the Actions tab.
 
 `0.1.0` predates this and was published by hand from `main` at `7d77cf6`.
 
