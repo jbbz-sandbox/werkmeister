@@ -14,11 +14,8 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
-const MAIN = path.join(CLI_DIR, "src/main.ts");
-
-/** The hoisted-or-local `tsx` binary. Spawned directly: `npx` costs ~3s a call. */
-const TSX = [path.join(CLI_DIR, "node_modules/.bin/tsx"), path.join(CLI_DIR, "../../node_modules/.bin/tsx")]
-  .find((p) => fs.existsSync(p))!;
+/** Built by the `test` script; a cold `tsx src/main.ts` per case transpiles the whole CLI each time (#206). */
+const MAIN = path.join(CLI_DIR, "dist/main.js");
 
 let cwd: string;
 
@@ -27,9 +24,9 @@ beforeAll(() => {
 });
 afterAll(() => fs.rmSync(cwd, { recursive: true, force: true }));
 
-const sandbox = (...argv: string[]) => spawnSync(TSX, [MAIN, ...argv], { cwd, encoding: "utf-8" });
+const sandbox = (...argv: string[]) => spawnSync(process.execPath, [MAIN, ...argv], { cwd, encoding: "utf-8" });
 
-describe("sandbox up flags", { timeout: 30_000 }, () => {
+describe("sandbox up flags", () => {
   it.each([["-s", "backend"], ["--services", "backend"], ["--force"]])("rejects %s as unknown", (...argv) => {
     const res = sandbox("up", ...argv);
     expect(res.status).not.toBe(0);
