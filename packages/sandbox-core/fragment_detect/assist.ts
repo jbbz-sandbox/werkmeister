@@ -9,7 +9,14 @@ import type { Plan } from "./plan.js";
 import { resolveService } from "./precedence.js";
 import type { FieldValue } from "./types.js";
 
-export type QuestionKind = "command" | "health_endpoint" | "environment" | "secrets" | "depends_on" | "conflict" | "unmatched";
+export type QuestionKind =
+  | "command"
+  | "health_endpoint"
+  | "environment"
+  | "secrets"
+  | "depends_on"
+  | "conflict"
+  | "unmatched";
 
 export interface Question {
   id: string;
@@ -110,7 +117,9 @@ export function collectQuestions(plan: Plan): Question[] {
       ask(c.key, {
         kind: "conflict",
         prompt: `Sources disagree on ${s.name}.${c.key}. Which value is right for local development?`,
-        facts: { sources: [c.chosen, ...c.also].map((x) => ({ value: x.value, source: x.source })) },
+        facts: {
+          sources: [c.chosen, ...c.also].map((x) => ({ value: x.value, source: x.source })),
+        },
         choices: [c.chosen.value, ...c.also.map((a) => a.value)],
       });
     }
@@ -131,7 +140,10 @@ export function collectQuestions(plan: Plan): Question[] {
 }
 
 const isStringMap = (v: unknown): v is Record<string, string> =>
-  !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
+  !!v &&
+  typeof v === "object" &&
+  !Array.isArray(v) &&
+  Object.values(v).every((x) => typeof x === "string");
 const subsetOf = (v: unknown, choices: unknown[]): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string" && choices.includes(x));
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -155,17 +167,23 @@ export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
     }
     seen.add(a.item);
     const reason = a.reason?.trim() || "no reason given";
-    const inferred = (value: unknown): FieldValue => ({ value, source: reason, confidence: "inferred" });
+    const inferred = (value: unknown): FieldValue => ({
+      value,
+      source: reason,
+      confidence: "inferred",
+    });
     const svc = q.service ? next.services.find((s) => s.name === q.service) : undefined;
     let problem: string | null = null;
 
     switch (q.kind) {
       case "command":
-        if (typeof a.value === "string" && a.value.trim()) svc!.fields.command = inferred(a.value.trim());
+        if (typeof a.value === "string" && a.value.trim())
+          svc!.fields.command = inferred(a.value.trim());
         else problem = "expected a non-empty command string";
         break;
       case "health_endpoint":
-        if (typeof a.value === "string" && (a.value === "" || a.value.startsWith("/"))) svc!.fields.health_endpoint = inferred(a.value);
+        if (typeof a.value === "string" && (a.value === "" || a.value.startsWith("/")))
+          svc!.fields.health_endpoint = inferred(a.value);
         else problem = 'expected "" or a path starting with /';
         break;
       case "environment": {
@@ -174,7 +192,9 @@ export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
           break;
         }
         const current = (svc!.fields.environment?.value ?? {}) as Record<string, string>;
-        const merged = Object.fromEntries(Object.entries({ ...a.value, ...current }).sort(([x], [y]) => x.localeCompare(y)));
+        const merged = Object.fromEntries(
+          Object.entries({ ...a.value, ...current }).sort(([x], [y]) => x.localeCompare(y)),
+        );
         const before = svc!.fields.environment?.source;
         svc!.fields.environment = inferred(merged);
         if (before) svc!.fields.environment.source = `${before}; Claude added keys: ${reason}`;
@@ -203,19 +223,31 @@ export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
       }
       case "unmatched": {
         if (a.value === null) break;
-        const target = typeof a.value === "string" ? next.services.find((s) => s.name === a.value) : undefined;
+        const target =
+          typeof a.value === "string" ? next.services.find((s) => s.name === a.value) : undefined;
         const found = next.unmatched.filter((u) => `unmatched.${u.name}` === q.id);
         if (!target || !found.length) {
           problem = "expected one of this repo's services, or null";
           break;
         }
-        const fresh = resolveService({ name: target.name, dir: target.dir, findings: [...target.findings, ...found] });
+        const fresh = resolveService({
+          name: target.name,
+          dir: target.dir,
+          findings: [...target.findings, ...found],
+        });
         for (const [k, fv] of Object.entries(fresh.fields)) {
-          if (!(k in target.fields)) target.fields[k] = { ...fv, confidence: "inferred", source: `${fv.source}; matched by Claude: ${reason}` };
+          if (!(k in target.fields))
+            target.fields[k] = {
+              ...fv,
+              confidence: "inferred",
+              source: `${fv.source}; matched by Claude: ${reason}`,
+            };
         }
         target.findings.push(...found);
         next.unmatched = next.unmatched.filter((u) => !found.includes(u));
-        next.skipped = next.skipped.filter((s) => !found.some((f) => s.item === f.file && s.reason.includes(` ${f.name} — `)));
+        next.skipped = next.skipped.filter(
+          (s) => !found.some((f) => s.item === f.file && s.reason.includes(` ${f.name} — `)),
+        );
         break;
       }
     }
@@ -236,7 +268,7 @@ export function assistPrompt(questions: Question[]): string {
     "- When a question has `choices`, `value` must be one of them; for list questions, a subset of them.",
     "- Leave a question out if the repository doesn't settle it. A missing answer keeps the scan's guess; a wrong answer is worse than none.",
     "- Never put credentials, tokens or keys in environment values. Those belong in `secrets`.",
-    "- `reason` is one short sentence naming the evidence, e.g. \"apps/api/src/main.ts registers GET /healthz\". It is written into the file as a comment.",
+    '- `reason` is one short sentence naming the evidence, e.g. "apps/api/src/main.ts registers GET /healthz". It is written into the file as a comment.',
     "- `files_read` lists the files that support the answer.",
     "",
     "Questions (JSON):",

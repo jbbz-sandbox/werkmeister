@@ -16,19 +16,18 @@
  *     route changes don't need this -- the injected script self-heals those
  *     on its own once it's running.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as net from "node:net";
-
-import { error, info, raw } from "./reporter.js";
 import {
   badgeScript,
   COOKIE_DOMAIN,
+  type FeatureWindow,
   featureColor,
   findFreePort,
   sleep,
-  type FeatureWindow,
 } from "./browser.js";
+import { error, info, raw } from "./reporter.js";
 
 const SAFARIDRIVER = "/usr/bin/safaridriver";
 
@@ -187,7 +186,11 @@ export async function launchSafariWindow(
     });
     await wdFetch(port, `/session/${sessionId}/url`, "POST", { url });
 
-    const initialHandles: string[] = await wdFetch(port, `/session/${sessionId}/window/handles`, "GET");
+    const initialHandles: string[] = await wdFetch(
+      port,
+      `/session/${sessionId}/window/handles`,
+      "GET",
+    );
     for (const h of initialHandles) await tagHandle(h);
   } catch (e) {
     // Nobody will call supervise(), so this is the last chance to clean up.

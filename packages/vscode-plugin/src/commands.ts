@@ -2,13 +2,13 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { basename, join } from "node:path";
-import * as vscode from "vscode";
-import { listWorkspaces, resolveSandboxBin, childEnv, closeOut, lifecycleOf } from "sandbox-core";
+import { childEnv, closeOut, lifecycleOf, listWorkspaces, resolveSandboxBin } from "sandbox-core";
 import { getReposRoot } from "sandbox-core/config";
-import { runInTerminal } from "./terminal.js";
-import { showLogs } from "./logs.js";
-import type { SandboxTreeProvider } from "./tree.js";
+import * as vscode from "vscode";
 import type { WsNode } from "./build-tree.js";
+import { showLogs } from "./logs.js";
+import { runInTerminal } from "./terminal.js";
+import type { SandboxTreeProvider } from "./tree.js";
 
 /**
  * The workspace a command should act on: the tree node it was invoked from, or —
@@ -83,7 +83,9 @@ async function switchWorkspace(node?: WsNode): Promise<void> {
   // multi-root `.code-workspace` would be renamed by every switch.
   const rest = folders
     .filter((f) => f.uri.fsPath !== uri.fsPath)
-    .map((f) => (f.name === basename(f.uri.fsPath) ? { uri: f.uri } : { uri: f.uri, name: f.name }));
+    .map((f) =>
+      f.name === basename(f.uri.fsPath) ? { uri: f.uri } : { uri: f.uri, name: f.name },
+    );
   const ok = vscode.workspace.updateWorkspaceFolders(0, folders.length, { uri }, ...rest);
   if (!ok) void vscode.window.showErrorMessage(`Could not open ${ws.name} in this window.`);
 }
@@ -93,7 +95,10 @@ async function pickRepo(): Promise<string | null> {
   const root = getReposRoot();
   let names: string[];
   try {
-    names = fs.readdirSync(root).filter((n) => fs.existsSync(join(root, n, ".git"))).sort();
+    names = fs
+      .readdirSync(root)
+      .filter((n) => fs.existsSync(join(root, n, ".git")))
+      .sort();
   } catch (e) {
     void vscode.window.showErrorMessage((e as Error).message);
     return null;
@@ -105,7 +110,9 @@ async function pickRepo(): Promise<string | null> {
   const choice = await vscode.window.showQuickPick(
     names.map((n) => ({
       label: n,
-      description: fs.existsSync(join(root, n, ".sandbox", "services.yaml")) ? "has services.yaml" : "",
+      description: fs.existsSync(join(root, n, ".sandbox", "services.yaml"))
+        ? "has services.yaml"
+        : "",
       path: join(root, n),
     })),
     { placeHolder: "Select a repo to detect services in" },
@@ -263,7 +270,9 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         );
         // VS Code can't reach the desktop app's sessions; the output names the terminal ones to /exit.
         channel.appendLine(`${result.command}\n${result.output}`);
-        void vscode.window.showInformationMessage(`Closed out ${result.path}. Archive its desktop Claude sessions from the sidebar.`);
+        void vscode.window.showInformationMessage(
+          `Closed out ${result.path}. Archive its desktop Claude sessions from the sidebar.`,
+        );
         provider.refresh();
       } catch (e) {
         // sandbox-core's failure message is a multi-line report (which branch

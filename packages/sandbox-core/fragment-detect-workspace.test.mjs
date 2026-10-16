@@ -1,9 +1,14 @@
 // The first two stages every detection run depends on: which files exist,
 // and which directories are workspace packages.
-import { test } from "node:test";
-import assert from "node:assert/strict";
 
-import { detectWorkspace, expandWorkspaceGlobs, listRepoFiles } from "./dist/fragment_detect/index.js";
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import {
+  detectWorkspace,
+  expandWorkspaceGlobs,
+  listRepoFiles,
+} from "./dist/fragment_detect/index.js";
 import { ctxFor, fixture, noTools } from "./fragment-detect-helpers.mjs";
 
 test("listRepoFiles walks a non-git dir, pruning node_modules and dot dirs but keeping dotfiles", () => {
@@ -19,7 +24,8 @@ test("listRepoFiles walks a non-git dir, pruning node_modules and dot dirs but k
 
 test("listRepoFiles drops node_modules even when git lists it", () => {
   const root = fixture({ "package.json": {}, "node_modules/x/Dockerfile": "FROM x" });
-  const git = (cmd) => (cmd[0] === "git" ? [0, "node_modules/x/Dockerfile\npackage.json\n"] : [127, ""]);
+  const git = (cmd) =>
+    cmd[0] === "git" ? [0, "node_modules/x/Dockerfile\npackage.json\n"] : [127, ""];
   assert.deepEqual(listRepoFiles(root, git), ["package.json"]);
 });
 
@@ -61,7 +67,7 @@ test("negated workspace patterns exclude", () => {
 });
 
 test("no root package.json means no workspace and no setup service", () => {
-  const ws = detectWorkspace(ctxFor(fixture({ "Dockerfile": "FROM golang:1.23" })));
+  const ws = detectWorkspace(ctxFor(fixture({ Dockerfile: "FROM golang:1.23" })));
   assert.deepEqual(ws.packageDirs, []);
   assert.equal(ws.setupName, null);
 });

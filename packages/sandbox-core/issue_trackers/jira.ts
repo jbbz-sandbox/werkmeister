@@ -6,7 +6,14 @@
 
 import { askClaudeJson } from "../claude_cli.js";
 import { loadJira } from "../global_config.js";
-import { fetchIssueRest, fetchStatusesRest, isJiraPlaceholder, jiraMyself, updateIssueRest, type JiraRestIssue } from "../jira-rest.js";
+import {
+  fetchIssueRest,
+  fetchStatusesRest,
+  isJiraPlaceholder,
+  type JiraRestIssue,
+  jiraMyself,
+  updateIssueRest,
+} from "../jira-rest.js";
 import type { Issue, IssueComment, IssueTrackerStrategy, IssueUpdate } from "./types.js";
 
 const KEY_RE = /[A-Za-z][A-Za-z0-9]+-\d+/;
@@ -38,16 +45,23 @@ export function jiraSiteRef(): string | null {
 /** Prompt phrase naming the Jira site for getJiraIssue / searchJiraIssuesUsingJql. */
 export function jiraSitePhrase(): string {
   const ref = jiraSiteRef();
-  return ref ? `(Atlassian cloud id ${ref})` : "(find the cloud id with getAccessibleAtlassianResources)";
+  return ref
+    ? `(Atlassian cloud id ${ref})`
+    : "(find the cloud id with getAccessibleAtlassianResources)";
 }
 
-const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+const str = (v: unknown): string | undefined =>
+  typeof v === "string" && v.trim() ? v.trim() : undefined;
 
 function fromRest(r: JiraRestIssue): Issue {
   const f = r.fields ?? {};
   const comments: IssueComment[] = (f.comment?.comments ?? [])
     .filter((c) => c.body?.trim())
-    .map((c) => ({ author: c.author?.displayName ?? "unknown", created: c.created, body: c.body!.trim() }));
+    .map((c) => ({
+      author: c.author?.displayName ?? "unknown",
+      created: c.created,
+      body: c.body!.trim(),
+    }));
   return {
     ref: r.key,
     title: str(f.summary),
@@ -60,7 +74,8 @@ function fromRest(r: JiraRestIssue): Issue {
   };
 }
 
-const READ_ONLY = "Do not create, edit, transition, or comment on anything; write no prose outside the tags.";
+const READ_ONLY =
+  "Do not create, edit, transition, or comment on anything; write no prose outside the tags.";
 
 async function fetchViaMcp(key: string): Promise<Issue | null> {
   const parsed = await askClaudeJson(
@@ -77,8 +92,14 @@ async function fetchViaMcp(key: string): Promise<Issue | null> {
   if (!parsed || !str(parsed.title)) return null;
   const comments = Array.isArray(parsed.comments)
     ? parsed.comments
-        .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null && !!str(c.body))
-        .map((c) => ({ author: str(c.author) ?? "unknown", created: str(c.created), body: str(c.body)! }))
+        .filter(
+          (c): c is Record<string, unknown> => typeof c === "object" && c !== null && !!str(c.body),
+        )
+        .map((c) => ({
+          author: str(c.author) ?? "unknown",
+          created: str(c.created),
+          body: str(c.body)!,
+        }))
     : [];
   return {
     ref: key,
@@ -110,8 +131,10 @@ async function statusesViaMcp(keys: string[]): Promise<Record<string, string>> {
 
 async function updateViaMcp(key: string, update: IssueUpdate): Promise<void> {
   const steps = [
-    update.status && `Transition Jira issue ${key} to the status "${update.status}" with transitionJiraIssue.`,
-    update.comment && `Add this comment to Jira issue ${key} with addCommentToJiraIssue, verbatim:\n${update.comment}`,
+    update.status &&
+      `Transition Jira issue ${key} to the status "${update.status}" with transitionJiraIssue.`,
+    update.comment &&
+      `Add this comment to Jira issue ${key} with addCommentToJiraIssue, verbatim:\n${update.comment}`,
   ].filter(Boolean);
   const parsed = await askClaudeJson(
     `Do exactly this on the Jira site ${jiraSitePhrase()} and nothing else:\n` +
@@ -120,7 +143,8 @@ async function updateViaMcp(key: string, update: IssueUpdate): Promise<void> {
       "when any step failed. Write no prose outside the tags.",
     { tools: true },
   );
-  if (parsed?.ok !== true) throw new Error(str(parsed?.error) ?? `Could not update ${key} through the Atlassian MCP`);
+  if (parsed?.ok !== true)
+    throw new Error(str(parsed?.error) ?? `Could not update ${key} through the Atlassian MCP`);
 }
 
 /** Sandbox-tool issues always go to GitHub, whatever the tracker; issues_report.ts names it too. */
@@ -146,7 +170,8 @@ export const jira: IssueTrackerStrategy = {
     if (!refs.length) return {};
     const statuses = (await fetchStatusesRest(refs)) ?? (await statusesViaMcp(refs));
     const out: Record<string, Issue> = {};
-    for (const [ref, status] of Object.entries(statuses)) out[ref] = { ref, status, url: jiraBrowseUrl(ref) ?? undefined };
+    for (const [ref, status] of Object.entries(statuses))
+      out[ref] = { ref, status, url: jiraBrowseUrl(ref) ?? undefined };
     return out;
   },
 
@@ -172,7 +197,14 @@ export const jira: IssueTrackerStrategy = {
       if (me) return { ok: true, who: me.who, fix: "" };
       // No REST creds: fetchIssue still works through the Atlassian MCP, so only placeholder values are a fault.
       const j = loadJira();
-      const values = [process.env.JIRA_BASE_URL, process.env.JIRA_EMAIL, process.env.JIRA_API_TOKEN, j.base_url, j.email, j.api_token];
+      const values = [
+        process.env.JIRA_BASE_URL,
+        process.env.JIRA_EMAIL,
+        process.env.JIRA_API_TOKEN,
+        j.base_url,
+        j.email,
+        j.api_token,
+      ];
       return values.some((v) => v && isJiraPlaceholder(String(v)))
         ? { ok: false, reason: "Jira settings still hold the placeholder values", fix }
         : { ok: true, who: "via Atlassian MCP (not checked)", fix: "" };

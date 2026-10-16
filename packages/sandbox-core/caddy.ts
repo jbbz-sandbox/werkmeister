@@ -280,7 +280,10 @@ export async function adaptAndCountRoutes(
  *
  * Returns True on success.
  */
-function _runCaddyCompose(args: string[], { capture = false }: { capture?: boolean } = {}): boolean {
+function _runCaddyCompose(
+  args: string[],
+  { capture = false }: { capture?: boolean } = {},
+): boolean {
   const { argv, env } = composeInvocation();
   const cmd = [...argv, ...args];
   info(`Running: ${cmd.join(" ")}`);
@@ -357,7 +360,10 @@ export async function reloadCaddy(): Promise<boolean> {
   let result;
   try {
     result = await execCapture(CADDY_CONTAINER, [
-      "caddy", "reload", "--config", CADDY_CONTAINER_PATH,
+      "caddy",
+      "reload",
+      "--config",
+      CADDY_CONTAINER_PATH,
     ]);
   } catch (e) {
     error(`Caddy reload failed: ${(e as Error).message}`);

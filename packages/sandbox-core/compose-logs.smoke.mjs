@@ -11,10 +11,12 @@ import { composeLogsStream } from "./dist/compose.js";
 
 let projects = [];
 try {
-  projects = JSON.parse(execFileSync("docker", ["compose", "ls", "--format", "json"], {
-    encoding: "utf8",
-    timeout: 15_000,
-  }));
+  projects = JSON.parse(
+    execFileSync("docker", ["compose", "ls", "--format", "json"], {
+      encoding: "utf8",
+      timeout: 15_000,
+    }),
+  );
 } catch {
   console.log("compose-logs.smoke SKIPPED (no reachable daemon)");
   process.exit(0);
@@ -64,4 +66,6 @@ assert.equal(
   "expected null rather than a doomed child when the feature has no compose file",
 );
 
-console.log(`compose-logs.smoke: PASS (feature '${feature}', ${output.length} bytes, ANSI present)`);
+console.log(
+  `compose-logs.smoke: PASS (feature '${feature}', ${output.length} bytes, ANSI present)`,
+);

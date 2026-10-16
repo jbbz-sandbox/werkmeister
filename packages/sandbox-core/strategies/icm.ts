@@ -10,13 +10,16 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-
-import { buildIssuesReportMd } from "../issues_report.js";
-import { issueIdOfMeta } from "../issue_tracker.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
-import { removeWorkspaceHooks, workspaceAllowRules, writePrGuardHook, writeWorkspacePermissions } from "../hooks_gen.js";
+import {
+  removeWorkspaceHooks,
+  workspaceAllowRules,
+  writePrGuardHook,
+  writeWorkspacePermissions,
+} from "../hooks_gen.js";
+import { issueIdOfMeta } from "../issue_tracker.js";
+import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd } from "../pr_rules.js";
-import { renderIssueRef } from "./issue_section.js";
 import { info, success, warn } from "../reporter.js";
 import {
   loadStandardsModules,
@@ -24,8 +27,14 @@ import {
   resolveActiveStandards,
   universalStandards,
 } from "../standards.js";
-import { _INPUT_FIELDS, isTrue, loadConfigFile, loadSandboxServiceConfigs } from "../workspace_prompts.js";
-import { SELF_CHECK, templateFor, type IcmVars, type Stage } from "./icm_templates.js";
+import {
+  _INPUT_FIELDS,
+  isTrue,
+  loadConfigFile,
+  loadSandboxServiceConfigs,
+} from "../workspace_prompts.js";
+import { type IcmVars, SELF_CHECK, type Stage, templateFor } from "./icm_templates.js";
+import { renderIssueRef } from "./issue_section.js";
 import type { ContextStrategy, InitContext } from "./types.js";
 
 const PONYTAIL_ROW =
@@ -40,7 +49,10 @@ interface Resolved {
 }
 
 function list(s: string | undefined): string[] {
-  return (s ?? "").split(",").map((x) => x.trim()).filter((x) => x);
+  return (s ?? "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => x);
 }
 
 function stageDirs(stages: Stage[]): string[] {
@@ -76,7 +88,9 @@ function vars(ctx: InitContext, stages: Stage[]): IcmVars {
   const repos = ctx.repos.map(([name]) => name);
   return {
     at: (name) => `../${dirs[stages.findIndex((s) => s.name === name)]}`,
-    repos: repos.length ? repos.map((r) => `\`../../${r}/\``).join(", ") : "the code worktrees in this workspace",
+    repos: repos.length
+      ? repos.map((r) => `\`../../${r}/\``).join(", ")
+      : "the code worktrees in this workspace",
     // Container names follow docker-compose.feature.yml.njk: <feature>-<service>.
     restart:
       feature && services.length
@@ -91,7 +105,10 @@ function vars(ctx: InitContext, stages: Stage[]): IcmVars {
 function resolveStandards(ctx: InitContext): Resolved {
   const modules = loadStandardsModules();
   if (!Object.keys(modules).length) {
-    warn(standardsDirProblem() || `no standard modules found in ${standardsDirPath()} — _shared/standards.md lists none`);
+    warn(
+      standardsDirProblem() ||
+        `no standard modules found in ${standardsDirPath()} — _shared/standards.md lists none`,
+    );
     return { active: [], notActive: [], modules };
   }
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
@@ -115,7 +132,9 @@ function appliesWhen(meta: Record<string, any>): string {
 // The file is tracked in the run's record, so a machine path here would read
 // as drift on any other machine (#163); name the root and say how to find it.
 function standardsPath(meta: Record<string, any>): string {
-  return "<standards_dir>/" + path.relative(standardsDirPath(), meta["path"]).split(path.sep).join("/");
+  return (
+    "<standards_dir>/" + path.relative(standardsDirPath(), meta["path"]).split(path.sep).join("/")
+  );
 }
 
 function renderStandards(r: Resolved): string {
@@ -126,7 +145,9 @@ function renderStandards(r: Resolved): string {
     "",
     "| Standard | Read | Applies when |",
     "|---|---|---|",
-    ...r.active.map((d) => `| ${d} | \`${standardsPath(r.modules[d])}\` | ${appliesWhen(r.modules[d])} |`),
+    ...r.active.map(
+      (d) => `| ${d} | \`${standardsPath(r.modules[d])}\` | ${appliesWhen(r.modules[d])} |`,
+    ),
     PONYTAIL_ROW,
     "",
     "`<standards_dir>` is this machine's standards tree: `sandbox standards check` prints its path " +
@@ -169,7 +190,9 @@ function renderContract(dir: string, stage: Stage, v: IcmVars): string {
     "## Outputs",
     ...c.outputs.map((o) => `- ${o}`),
     "",
-    ...(v.autonomous ? ["## Self-check", c.selfCheck ?? SELF_CHECK] : ["## Human check", c.humanCheck]),
+    ...(v.autonomous
+      ? ["## Self-check", c.selfCheck ?? SELF_CHECK]
+      : ["## Human check", c.humanCheck]),
     "",
   ].join("\n");
 }
@@ -190,11 +213,18 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "| Path | Holds |",
     "|---|---|",
     "| `BRIEF.md` | the run's input: goal, acceptance criteria, open questions |",
-    ...(ctx.issue?.fetchedAt ? ["| `.sandbox/issue.md` | the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` |"] : []),
+    ...(ctx.issue?.fetchedAt
+      ? [
+          "| `.sandbox/issue.md` | the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` |",
+        ]
+      : []),
     "| `CONTEXT.md` | the pipeline in one screen |",
     "| `stages/NN_*/` | one stage each: `CONTEXT.md` (contract) + `output/` (this run's artifacts) |",
     "| `_shared/` | factory: the coding standards and `issues-report.md` (fix a bug here or file an issue — bug, feature or task — and how), same every run |",
-    ...ctx.repos.map(([name, branch]) => `| \`${name}/\` | code worktree${branch ? `, branch \`${branch}\`` : ""} |`),
+    ...ctx.repos.map(
+      ([name, branch]) =>
+        `| \`${name}/\` | code worktree${branch ? `, branch \`${branch}\`` : ""} |`,
+    ),
     "| this folder's git branch | the run's record (contracts + stage outputs): commit and push it; never open a PR from it or merge it |",
     "| `.sandbox/sandbox-context.md` | generated infra facts: how to validate, test command, ports, container names |",
     "| `.sandbox/*.yml`, `docker-compose.yml`, `.env` | generated by `sandbox`; do not hand-edit |",
@@ -237,7 +267,9 @@ function stopPoints(stages: Stage[]): string[] {
     "",
     "Walk every stage without stopping: each stage's self-check is its approval. Stop only at:",
     "",
-    proposeDir(stages) ? "1. the PR URL from `sandbox pr open`" : "1. the last stage's `output/` written",
+    proposeDir(stages)
+      ? "1. the PR URL from `sandbox pr open`"
+      : "1. the last stage's `output/` written",
     "2. a question only a person can answer",
     "3. a gate failure outside this issue's scope",
     "",
@@ -268,7 +300,8 @@ const READ_ISSUE =
   "_Read `.sandbox/issue.md`, then write the goal, acceptance criteria and open questions here before starting the first stage._";
 
 /** A brief nobody has touched: what renderBrief wrote with no issue and no prompt. */
-export const PLACEHOLDER_BRIEF_RE = /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---\n\n# Brief: [^\n]*\n\n_No starting prompt was given\. [^\n]*_\n$/;
+export const PLACEHOLDER_BRIEF_RE =
+  /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---\n\n# Brief: [^\n]*\n\n_No starting prompt was given\. [^\n]*_\n$/;
 
 function renderBrief(ctx: InitContext): string {
   const prompt = (ctx.inputs["starting_prompt"] ?? "").trim();
@@ -276,7 +309,16 @@ function renderBrief(ctx: InitContext): string {
   const copy = !!ctx.issue?.fetchedAt;
   if (!ctx.issue || (!copy && !description && !prompt)) {
     // Unchanged from before the issue copy existed; with no copy yet, still the placeholder --refresh-issue rebuilds.
-    return ["---", "source: .sandbox/workspace.yml (starting_prompt)", "---", "", `# Brief: ${ctx.task}`, "", prompt || NO_PROMPT, ""].join("\n");
+    return [
+      "---",
+      "source: .sandbox/workspace.yml (starting_prompt)",
+      "---",
+      "",
+      `# Brief: ${ctx.task}`,
+      "",
+      prompt || NO_PROMPT,
+      "",
+    ].join("\n");
   }
   return [
     "---",
@@ -303,7 +345,8 @@ function render(ctx: InitContext): Record<string, string> {
     "_shared/issues-report.md": buildIssuesReportMd(ctx.workspaceName, issueIdOfMeta(ctx.meta)),
   };
   const propose = proposeDir(stages);
-  if (propose) files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${propose}/output/`, base.autonomous);
+  if (propose)
+    files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${propose}/output/`, base.autonomous);
   stages.forEach((stage, i) => {
     files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(dirs[i], stage, {
       ...base,
@@ -365,7 +408,11 @@ function init(ctx: InitContext): void {
   }
   const files: Record<string, string> = foreign.length
     ? {}
-    : { "CLAUDE.md": renderClaudeMd(ctx, stages), "CONTEXT.md": renderPipeline(ctx, stages), ...render(ctx) };
+    : {
+        "CLAUDE.md": renderClaudeMd(ctx, stages),
+        "CONTEXT.md": renderPipeline(ctx, stages),
+        ...render(ctx),
+      };
   // The brief is the operator's once written — same rule as seedStartingHandoff —
   // except an untouched placeholder, rebuilt once there is an issue copy to brief from.
   const briefPath = path.join(root, "BRIEF.md");

@@ -32,13 +32,19 @@ async function waitFor(predicate, what, timeoutMs = 10_000) {
 
 // 1. cold miss → fetcher runs, value stored + returned
 let calls = 0;
-let v = await withCache("status:A", 1000, async () => { calls++; return "up"; });
+let v = await withCache("status:A", 1000, async () => {
+  calls++;
+  return "up";
+});
 assert.equal(v, "up");
 assert.equal(calls, 1);
 assert.deepEqual((await cacheGet("status:A")).v, "up");
 
 // 2. fresh hit → fetcher NOT called
-v = await withCache("status:A", 1000, async () => { calls++; return "changed"; });
+v = await withCache("status:A", 1000, async () => {
+  calls++;
+  return "changed";
+});
 assert.equal(v, "up");
 assert.equal(calls, 1);
 
@@ -52,7 +58,10 @@ const raw = JSON.parse(fs.readFileSync(cacheFile, "utf-8"));
 raw["status:B"].at = Date.now() - 10_000;
 fs.writeFileSync(cacheFile, JSON.stringify(raw));
 let bgCalls = 0;
-v = await withCache("status:B", 1000, async () => { bgCalls++; return "new"; });
+v = await withCache("status:B", 1000, async () => {
+  bgCalls++;
+  return "new";
+});
 assert.equal(v, "old"); // served stale immediately
 await waitFor(async () => (await cacheGet("status:B")).v === "new", "the background refresh");
 assert.equal(bgCalls, 1);
@@ -70,7 +79,9 @@ assert.equal(await cacheGet("status:C"), undefined);
 
 // 7. stored null is a real value, not a failure
 await cacheSet("briefing:X", null);
-v = await withCache("briefing:X", 1000, async () => { throw new Error("should not fetch"); });
+v = await withCache("briefing:X", 1000, async () => {
+  throw new Error("should not fetch");
+});
 assert.equal(v, null);
 
 // 8. concurrent merge → both keys survive
@@ -80,8 +91,14 @@ assert.ok(merged["status:D"] && merged["status:E"]);
 
 // 9. runBatchOnce dedupes in-flight keys
 let batch = 0;
-runBatchOnce(["k1", "k2"], async () => { batch++; await sleep(30); });
-runBatchOnce(["k1"], async () => { batch++; await sleep(30); }); // k1 in-flight → skipped
+runBatchOnce(["k1", "k2"], async () => {
+  batch++;
+  await sleep(30);
+});
+runBatchOnce(["k1"], async () => {
+  batch++;
+  await sleep(30);
+}); // k1 in-flight → skipped
 await waitFor(() => batch > 0, "the batch job to start");
 await sleep(60); // and then long enough that a second, wrongly-admitted job would have run too
 assert.equal(batch, 1);

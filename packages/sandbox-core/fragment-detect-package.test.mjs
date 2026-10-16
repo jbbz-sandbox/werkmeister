@@ -1,6 +1,7 @@
 // package.json → command, test, type/archetype and a fallback image.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { detectPackages, detectWorkspace } from "./dist/fragment_detect/index.js";
 import { ctxFor, fixture } from "./fragment-detect-helpers.mjs";
@@ -27,7 +28,13 @@ test("a turbo monorepo: one finding per workspace package", () => {
     },
     "demo-services",
   );
-  assert.deepEqual(found.map((f) => [f.name, f.dir]), [["backend", "apps/backend"], ["frontend", "apps/frontend"]]);
+  assert.deepEqual(
+    found.map((f) => [f.name, f.dir]),
+    [
+      ["backend", "apps/backend"],
+      ["frontend", "apps/frontend"],
+    ],
+  );
   const [backend, frontend] = found;
   assert.equal(backend.fields.command.value, "cd apps/backend && exec npm run dev");
   assert.equal(backend.fields.test.value, "npm test -w backend");
@@ -43,7 +50,13 @@ test("a turbo monorepo: one finding per workspace package", () => {
 
 test("a single-package repo is one service at the root, named after the repo", () => {
   const [svc] = run(
-    { "package.json": { name: "shop", scripts: { start: "node index.js", test: "node --test" }, dependencies: { express: "4" } } },
+    {
+      "package.json": {
+        name: "shop",
+        scripts: { start: "node index.js", test: "node --test" },
+        dependencies: { express: "4" },
+      },
+    },
     "shop",
   );
   assert.equal(svc.name, "shop");
@@ -54,7 +67,10 @@ test("a single-package repo is one service at the root, named after the repo", (
 });
 
 test("a glibc-only dependency drops -alpine; .nvmrc sets the major", () => {
-  const [svc] = run({ "package.json": { name: "img", dependencies: { sharp: "0.33" } }, ".nvmrc": "v24.1.0\n" });
+  const [svc] = run({
+    "package.json": { name: "img", dependencies: { sharp: "0.33" } },
+    ".nvmrc": "v24.1.0\n",
+  });
   assert.equal(svc.fields.image.value, "node:24");
   assert.match(svc.fields.image.source, /sharp/);
 });

@@ -173,10 +173,7 @@ export function updateNoteStatus(notePath: string, fields: Record<string, string
  * not a git checkout leaves every note `graduating`, which is the honest answer
  * — nothing can confirm the rule landed, so nothing claims it did.
  */
-export function reconcileGraduating(
-  workspaceRoot: string,
-  standardsDir?: string | null,
-): Note[] {
+export function reconcileGraduating(workspaceRoot: string, standardsDir?: string | null): Note[] {
   const pending = listNotes(workspaceRoot).filter(
     (n) => n.frontmatter["status"] === "graduating" && n.frontmatter["graduated_to"],
   );

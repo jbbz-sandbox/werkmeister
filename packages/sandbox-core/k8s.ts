@@ -17,7 +17,7 @@ import { composeInvocation } from "./compose_infra.js";
 import { stateInfraRoot } from "./config.js";
 import { containerRunning } from "./docker.js";
 import { SandboxError } from "./errors.js";
-import { forwardSpecs, type ForwardSpec } from "./k8s_forwards.js";
+import { type ForwardSpec, forwardSpecs } from "./k8s_forwards.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
 
@@ -37,18 +37,18 @@ export function checkPortForwardHealth(): Record<string, boolean> {
   const results: Record<string, boolean> = {};
 
   try {
-    const result = run(
-      [...argv, "ps", "--format", "json", "k8s-forwards"],
-      { capture: true, timeout: 10, env },
-    );
+    const result = run([...argv, "ps", "--format", "json", "k8s-forwards"], {
+      capture: true,
+      timeout: 10,
+      env,
+    });
     if (result.status === 0 && result.stdout.trim()) {
       for (const line of result.stdout.trim().split("\n")) {
         try {
           const svc = JSON.parse(line);
           const health = svc["Health"] ?? "";
           const state = svc["State"] ?? "";
-          results["k8s-forwards"] =
-            health === "healthy" || (state === "running" && health === "");
+          results["k8s-forwards"] = health === "healthy" || (state === "running" && health === "");
         } catch {
           continue;
         }
@@ -112,16 +112,16 @@ export function refreshKubeconfig(): boolean {
   fs.mkdirSync(path.dirname(kubeconfig), { recursive: true });
   info("Refreshing k8s-port-forward/kubeconfig from current context...");
   try {
-    const result = run(
-      ["kubectl", "config", "view", "--raw", "--minify", "--flatten"],
-      { capture: true, timeout: 10 },
-    );
+    const result = run(["kubectl", "config", "view", "--raw", "--minify", "--flatten"], {
+      capture: true,
+      timeout: 10,
+    });
     if (result.status === 0) {
       fs.writeFileSync(kubeconfig, shimLocalApiServer(result.stdout));
-      const ctx = run(
-        ["kubectl", "--kubeconfig", kubeconfig, "config", "current-context"],
-        { capture: true, timeout: 5 },
-      );
+      const ctx = run(["kubectl", "--kubeconfig", kubeconfig, "config", "current-context"], {
+        capture: true,
+        timeout: 5,
+      });
       const ctxName = ctx.status === 0 ? ctx.stdout.trim() : "?";
       success(`Kubeconfig pinned to context: ${ctxName}`);
     } else {
@@ -162,10 +162,11 @@ export function ensurePortForwardsHealthy(): ForwardsOutcome {
     // had happened, and `up` then waited out its timeout for tunnels that were
     // never coming back. Recreating also re-reads the just-refreshed kubeconfig
     // and the forwards table, which a bare restart would not.
-    const result = run(
-      [...argv, "up", "-d", "--force-recreate", "k8s-forwards"],
-      { capture: true, timeout: 60, env },
-    );
+    const result = run([...argv, "up", "-d", "--force-recreate", "k8s-forwards"], {
+      capture: true,
+      timeout: 60,
+      env,
+    });
     if (result.status !== 0) {
       error(`Failed to restart k8s-forwards: ${result.stderr.trim()}`);
       return "failed";
@@ -260,7 +261,9 @@ function checkHttpHealth(
       req.destroy();
       resolve({ ok: false, detail: "timeout" });
     });
-    req.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
+    req.on("error", (e) =>
+      resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }),
+    );
   });
 }
 
@@ -300,7 +303,9 @@ export function checkWireHealth(
       sock.destroy();
       resolve({ ok: false, detail: "timeout (connected, no reply)" });
     });
-    sock.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
+    sock.on("error", (e) =>
+      resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }),
+    );
     // A peer that hangs up without a byte (Docker's port proxy before the tunnel
     // binds) fires none of the above; without this the probe never settles (#207).
     sock.on("close", () => resolve({ ok: false, detail: "closed without reply" }));
@@ -318,7 +323,9 @@ function checkTcpHealth(port: number, timeoutMs = 2500): Promise<{ ok: boolean; 
       sock.destroy();
       resolve({ ok: false, detail: "timeout" });
     });
-    sock.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
+    sock.on("error", (e) =>
+      resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }),
+    );
   });
 }
 
@@ -383,9 +390,7 @@ export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
       listen_port: spec.listen,
       remote_port: spec.remote,
       health_path: spec.health,
-      status: forwardsUp
-        ? await classifyForward(spec.listen, spec.health)
-        : "container_down",
+      status: forwardsUp ? await classifyForward(spec.listen, spec.health) : "container_down",
     });
   }
   return results;

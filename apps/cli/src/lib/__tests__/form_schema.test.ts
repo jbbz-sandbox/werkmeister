@@ -1,7 +1,7 @@
 /** buildFormSchema (RJSF bundle). */
-import { describe, expect, it } from "vitest";
 
 import { buildFormSchema } from "sandbox-core/form_schema";
+import { describe, expect, it } from "vitest";
 
 function spec(prompts: Record<string, any>[], name = "demo"): Record<string, any> {
   return { workspace_name: name, workspace_root: `/ws/${name}`, prompts };
@@ -12,9 +12,16 @@ describe("buildFormSchema", () => {
     const out = buildFormSchema(
       spec([
         {
-          key: "feature", label: "Feature", help: "h", accept_empty: false,
-          multi: false, recommended: true, pattern: "^[a-z-]+$",
-          placeholder: "mdx-blog", default: "my-feat", resolved: false,
+          key: "feature",
+          label: "Feature",
+          help: "h",
+          accept_empty: false,
+          multi: false,
+          recommended: true,
+          pattern: "^[a-z-]+$",
+          placeholder: "mdx-blog",
+          default: "my-feat",
+          resolved: false,
         },
       ]),
     );
@@ -33,8 +40,12 @@ describe("buildFormSchema", () => {
       spec([
         { key: "feature", accept_empty: false, recommended: true, default: "f" },
         {
-          key: "issue_id", label: "Issue", accept_empty: true,
-          pattern: "^[A-Z]+-[0-9]+$", default: "", resolved: false,
+          key: "issue_id",
+          label: "Issue",
+          accept_empty: true,
+          pattern: "^[A-Z]+-[0-9]+$",
+          default: "",
+          resolved: false,
         },
       ]),
     );
@@ -47,8 +58,11 @@ describe("buildFormSchema", () => {
     const out = buildFormSchema(
       spec([
         {
-          key: "services", label: "Services", multi: true,
-          choices: ["backend", "frontend"], default: "frontend",
+          key: "services",
+          label: "Services",
+          multi: true,
+          choices: ["backend", "frontend"],
+          default: "frontend",
           resolved: false,
         },
       ]),
@@ -63,20 +77,26 @@ describe("buildFormSchema", () => {
 
   it("multi without choices becomes plain string", () => {
     const out = buildFormSchema(
-      spec([
-        { key: "labels", label: "Labels", multi: true, default: "one,two", resolved: false },
-      ]),
+      spec([{ key: "labels", label: "Labels", multi: true, default: "one,two", resolved: false }]),
     );
     const prop = out.schema.properties.labels;
     expect(prop.type).toBe("string");
-    expect(!("labels" in out.uiSchema) || out.uiSchema.labels["ui:widget"] !== "checkboxes").toBe(true);
+    expect(!("labels" in out.uiSchema) || out.uiSchema.labels["ui:widget"] !== "checkboxes").toBe(
+      true,
+    );
     expect(out.formData.labels).toBe("one,two");
   });
 
   it("multiline string becomes textarea", () => {
     const out = buildFormSchema(
       spec([
-        { key: "starting_prompt", label: "Starting prompt", multiline: true, accept_empty: true, resolved: false },
+        {
+          key: "starting_prompt",
+          label: "Starting prompt",
+          multiline: true,
+          accept_empty: true,
+          resolved: false,
+        },
       ]),
     );
     const prop = out.schema.properties.starting_prompt;
@@ -87,11 +107,32 @@ describe("buildFormSchema", () => {
   });
 
   it("boolean becomes an optional checkbox; formData follows the resolved value", () => {
-    const off = buildFormSchema(spec([{ key: "autonomous", label: "Autonomous run", boolean: true, accept_empty: true, resolved: false }]));
+    const off = buildFormSchema(
+      spec([
+        {
+          key: "autonomous",
+          label: "Autonomous run",
+          boolean: true,
+          accept_empty: true,
+          resolved: false,
+        },
+      ]),
+    );
     expect(off.schema.properties.autonomous.type).toBe("boolean");
     expect(off.formData.autonomous).toBe(false);
     expect(off.schema.required ?? []).not.toContain("autonomous");
-    const on = buildFormSchema(spec([{ key: "autonomous", label: "a", boolean: true, default: "", resolved_value: "true", resolved: false }]));
+    const on = buildFormSchema(
+      spec([
+        {
+          key: "autonomous",
+          label: "a",
+          boolean: true,
+          default: "",
+          resolved_value: "true",
+          resolved: false,
+        },
+      ]),
+    );
     expect(on.formData.autonomous).toBe(true);
   });
 
@@ -99,16 +140,21 @@ describe("buildFormSchema", () => {
     const out = buildFormSchema(
       spec([
         {
-          key: "starting_prompt", label: "Starting prompt", multiline: true,
-          refinable: true, refine_instruction: "Rewrite as a dev instruction.",
-          accept_empty: true, resolved: false,
+          key: "starting_prompt",
+          label: "Starting prompt",
+          multiline: true,
+          refinable: true,
+          refine_instruction: "Rewrite as a dev instruction.",
+          accept_empty: true,
+          resolved: false,
         },
       ]),
     );
     const ui = out.uiSchema.starting_prompt;
     expect(ui["ui:widget"]).toBe("textarea");
     expect(ui["ui:options"]).toEqual({
-      refinable: true, refineInstruction: "Rewrite as a dev instruction.",
+      refinable: true,
+      refineInstruction: "Rewrite as a dev instruction.",
     });
   });
 

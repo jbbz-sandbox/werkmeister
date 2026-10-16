@@ -21,7 +21,7 @@
  * (or window close) it closes Chrome and removes the throwaway profile.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
@@ -31,9 +31,9 @@ import * as path from "node:path";
 import { parse as yamlParse } from "yaml";
 
 import { Colors } from "./colors.js";
-import { error, info, raw } from "./reporter.js";
-import * as gc from "./global_config.js";
 import type { PromptSpec } from "./global_config.js";
+import * as gc from "./global_config.js";
+import { error, info, raw } from "./reporter.js";
 
 export const COOKIE_DOMAIN = ".local.sandbox.com";
 
@@ -211,7 +211,9 @@ export class WS {
         const statusLine = buf.subarray(0, buf.indexOf("\r\n")).toString("latin1");
         if (!statusLine.includes(" 101 ")) {
           sock.destroy();
-          reject(new Error(`websocket handshake failed: ${buf.subarray(0, 80).toString("latin1")}`));
+          reject(
+            new Error(`websocket handshake failed: ${buf.subarray(0, 80).toString("latin1")}`),
+          );
           return;
         }
         ws.rxbuf = buf.subarray(idx + 4);
@@ -325,7 +327,11 @@ export class WS {
   }
 
   // --- CDP command helpers -------------------------------------------------
-  send(method: string, params: Record<string, unknown> | null = null, sessionId: string | null = null): number {
+  send(
+    method: string,
+    params: Record<string, unknown> | null = null,
+    sessionId: string | null = null,
+  ): number {
     this.nextId += 1;
     const msg: Record<string, unknown> = { id: this.nextId, method, params: params ?? {} };
     if (sessionId) msg["sessionId"] = sessionId;
@@ -364,11 +370,18 @@ export function featureColor(feature: string): string {
   const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
   const m = lum - c / 2;
   const table: [number, number, number][] = [
-    [c, x, 0], [x, c, 0], [0, c, x],
-    [0, x, c], [x, 0, c], [c, 0, x],
+    [c, x, 0],
+    [x, c, 0],
+    [0, c, x],
+    [0, x, c],
+    [x, 0, c],
+    [c, 0, x],
   ];
   const [r, g, b] = table[Math.floor(hue / 60)];
-  const hex = (v: number) => Math.trunc((v + m) * 255).toString(16).padStart(2, "0");
+  const hex = (v: number) =>
+    Math.trunc((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
   return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
 
@@ -476,11 +489,18 @@ class FeatureSession {
     if (!this.cookieSet) {
       // cookie store is shared per profile; set once
       this.ws.send("Network.enable", null, sid);
-      this.ws.send("Network.setCookie", {
-        name: "X-Feature", value: this.feature,
-        domain: COOKIE_DOMAIN, path: "/",
-        secure: true, sameSite: "Lax",
-      }, sid);
+      this.ws.send(
+        "Network.setCookie",
+        {
+          name: "X-Feature",
+          value: this.feature,
+          domain: COOKIE_DOMAIN,
+          path: "/",
+          secure: true,
+          sameSite: "Lax",
+        },
+        sid,
+      );
       this.cookieSet = true;
     }
     this.ws.send("Page.enable", null, sid);
@@ -518,7 +538,9 @@ class FeatureSession {
    */
   async start(timeoutMs = 15_000): Promise<boolean> {
     this.ws.send("Target.setAutoAttach", {
-      autoAttach: true, waitForDebuggerOnStart: false, flatten: true,
+      autoAttach: true,
+      waitForDebuggerOnStart: false,
+      flatten: true,
     });
     this.ws.onMessage = (msg) => this.onEvent(msg);
     const deadline = Date.now() + timeoutMs;
@@ -693,7 +715,14 @@ async function launchChromiumWindow(
   let stop = false;
   try {
     ws = await WS.connect(await waitForBrowserWs(port));
-    session = new FeatureSession(ws, feature, color, url, () => procExited, () => stop);
+    session = new FeatureSession(
+      ws,
+      feature,
+      color,
+      url,
+      () => procExited,
+      () => stop,
+    );
     if (!(await session.start())) {
       error("The browser window never came up — nothing was tagged.");
       await cleanup();
@@ -735,7 +764,6 @@ async function launchChromiumWindow(
     },
   };
 }
-
 
 /**
  * Read `<workspace>/.sandbox/workspace.yml` (or `.yaml`).

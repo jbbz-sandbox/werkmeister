@@ -6,13 +6,13 @@
  * `<workspace>/docker-compose.yml` (the canonical location).
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { Colors } from "./colors.js";
 import { resolveWorkspace } from "./config.js";
-import { ProcError, run, runAsync, RunResult } from "./proc.js";
+import { ProcError, RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
 
@@ -58,10 +58,7 @@ function composeFile(feature: string): string | null {
 /** Return the workspace path for *feature*, or `null` if unresolvable. */
 export function workspaceForFeature(feature: string): string | null {
   const labelWorkspace = workspaceFromContainerLabel(feature);
-  if (
-    labelWorkspace !== null &&
-    isFile(path.join(labelWorkspace, "docker-compose.yml"))
-  ) {
+  if (labelWorkspace !== null && isFile(path.join(labelWorkspace, "docker-compose.yml"))) {
     return labelWorkspace;
   }
   let fallback: string;
@@ -112,9 +109,13 @@ function workspaceFromContainerLabel(feature: string): string | null {
   try {
     result = run(
       [
-        "docker", "ps", "-a",
-        "--filter", `label=com.sandbox.local.feature=${feature}`,
-        "--format", '{{.Label "com.docker.compose.project.working_dir"}}',
+        "docker",
+        "ps",
+        "-a",
+        "--filter",
+        `label=com.sandbox.local.feature=${feature}`,
+        "--format",
+        '{{.Label "com.docker.compose.project.working_dir"}}',
       ],
       { capture: true, timeout: 10 },
     );
@@ -216,8 +217,8 @@ function composeCommand(
   if (composePath === null || !isFile(composePath)) {
     error(
       `No docker-compose.yml found for feature '${feature}'.\n` +
-      `       Run 'sandbox init-workspace' (and 'sandbox up') from the ` +
-      `feature's workspace first.`,
+        `       Run 'sandbox init-workspace' (and 'sandbox up') from the ` +
+        `feature's workspace first.`,
     );
     return null;
   }
@@ -268,10 +269,7 @@ function reportComposeFailure(err: unknown): null {
     return null;
   }
   if (err instanceof ProcError && err.code === "ENOENT") {
-    error(
-      "docker compose not found. " +
-      "Ensure Docker Desktop is installed and running.",
-    );
+    error("docker compose not found. " + "Ensure Docker Desktop is installed and running.");
     return null;
   }
   if (err instanceof ProcError && err.code === "ETIMEDOUT") {
@@ -294,11 +292,9 @@ function reportComposeFailure(err: unknown): null {
  * Returns true on success.
  */
 export function composeUp(feature: string): boolean {
-  const result = runCompose(
-    feature,
-    ["up", "-d", "--build", "--remove-orphans"],
-    { capture: true },
-  );
+  const result = runCompose(feature, ["up", "-d", "--build", "--remove-orphans"], {
+    capture: true,
+  });
   if (result && result.status === 0) {
     success(`Containers for '${feature}' are up`);
     return true;
@@ -343,11 +339,10 @@ export function composeDown(
 
 /** Cancellable {@link composeUp}. */
 export async function composeUpAsync(feature: string, signal?: AbortSignal): Promise<boolean> {
-  const result = await runComposeAsync(
-    feature,
-    ["up", "-d", "--build", "--remove-orphans"],
-    { capture: true, signal },
-  );
+  const result = await runComposeAsync(feature, ["up", "-d", "--build", "--remove-orphans"], {
+    capture: true,
+    signal,
+  });
   if (result && result.status === 0) {
     success(`Containers for '${feature}' are up`);
     return true;

@@ -17,7 +17,9 @@ afterEach(() => {
 
 function commit(repo: string): string {
   const git = (...args: string[]) =>
-    execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { encoding: "utf8" }).trim();
+    execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+      encoding: "utf8",
+    }).trim();
   git("init", "-q");
   git("commit", "-q", "--allow-empty", "-m", "x");
   return git("rev-parse", "HEAD");

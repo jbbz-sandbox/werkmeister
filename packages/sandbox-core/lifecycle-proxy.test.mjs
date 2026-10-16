@@ -10,11 +10,11 @@
 // absent, which is every CI run. With the ops injected it touches nothing, runs
 // everywhere, and can assert the branches a real machine only reaches by luck:
 // `started` is meaningless against a real Caddy that is already up.
-import { test } from "node:test";
-import assert from "node:assert/strict";
 
-import { collectingReporter, withReporter } from "./dist/reporter.js";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { reloadProxy } from "./dist/lifecycle.js";
+import { collectingReporter, withReporter } from "./dist/reporter.js";
 
 /** Two features, deliberately out of order: reloadProxy owes the caller a sort. */
 const SLOTS = {
@@ -27,11 +27,26 @@ function fakeOps({ slots = SLOTS, running = true, reload = true, start = true } 
   const calls = [];
   return {
     calls,
-    generate: async () => { calls.push("generate"); return "/tmp/Caddyfile"; },
-    slots: async () => { calls.push("slots"); return slots; },
-    running: () => { calls.push("running"); return running; },
-    reload: async () => { calls.push("reload"); return reload; },
-    start: () => { calls.push("start"); return start; },
+    generate: async () => {
+      calls.push("generate");
+      return "/tmp/Caddyfile";
+    },
+    slots: async () => {
+      calls.push("slots");
+      return slots;
+    },
+    running: () => {
+      calls.push("running");
+      return running;
+    },
+    reload: async () => {
+      calls.push("reload");
+      return reload;
+    },
+    start: () => {
+      calls.push("start");
+      return start;
+    },
   };
 }
 

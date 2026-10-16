@@ -11,17 +11,28 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { buildTesterSpecs, writeWorkspaceAgents } from "../agent_gen.js";
-import { buildPrRulesMd } from "../pr_rules.js";
-import { buildIssuesReportMd } from "../issues_report.js";
-import { issueIdOfMeta } from "../issue_tracker.js";
 import { presentArchetypes } from "../archetypes.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../claude_md.js";
 import { loadArchetypes } from "../config.js";
-import { loadFeatureRouters, type FeatureRouter } from "../feature_routing.js";
+import { type FeatureRouter, loadFeatureRouters } from "../feature_routing.js";
 import { main as gateMain, resetSessionState } from "../gate.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
-import { workspaceAllowRules, writeWorkspaceHooks, writeWorkspacePermissions } from "../hooks_gen.js";
-import { buildContext, listNotes, nextNoteNumber, noteFilename, notesDir, type Note } from "../notes.js";
+import {
+  workspaceAllowRules,
+  writeWorkspaceHooks,
+  writeWorkspacePermissions,
+} from "../hooks_gen.js";
+import { issueIdOfMeta } from "../issue_tracker.js";
+import { buildIssuesReportMd } from "../issues_report.js";
+import {
+  buildContext,
+  listNotes,
+  type Note,
+  nextNoteNumber,
+  noteFilename,
+  notesDir,
+} from "../notes.js";
+import { buildPrRulesMd } from "../pr_rules.js";
 import { info, success, warn } from "../reporter.js";
 import {
   buildStandardsManifest,
@@ -106,7 +117,12 @@ function supersedeNote(note: Note): void {
  * CLAUDE.md's by-phase table, and a placeholder used to block the real prompt
  * forever. Exported for its tests.
  */
-export function seedStartingHandoff(workspaceRoot: string, startingPrompt: string, workType: string, issue: IssueRef | null = null): void {
+export function seedStartingHandoff(
+  workspaceRoot: string,
+  startingPrompt: string,
+  workType: string,
+  issue: IssueRef | null = null,
+): void {
   const prompt = startingPrompt.trim();
   if (!prompt && !issue) {
     return;
@@ -171,7 +187,10 @@ function init(ctx: InitContext): void {
     }
     const workspaceConfig = loadConfigFile(workspaceRoot, configOverride);
     const repoNames = repos.map(([name]) => name);
-    const localServices = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
+    const localServices = (meta["SERVICES"] ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s);
     const [active] = resolveActiveStandards(
       repoNames,
       servicesConfig,
@@ -181,7 +200,12 @@ function init(ctx: InitContext): void {
       localServices,
     );
     activeStandards = active;
-    standardsSection = buildStandardsRoutingSection(active, modules, repoNames, inputs["work_type"] ?? "");
+    standardsSection = buildStandardsRoutingSection(
+      active,
+      modules,
+      repoNames,
+      inputs["work_type"] ?? "",
+    );
     info(`Standards routing: active = ${active.join(", ")}`);
     // PreToolUse standards gate manifest.
     writeStandardsManifest(
@@ -206,7 +230,12 @@ function init(ctx: InitContext): void {
   salvageLegacyHandoffNotes(workspaceRoot, claudeMdPath);
   // The issue alone seeds only at creation: a re-init or --refresh-issue on a run in progress must not open a new handoff.
   const prompt = inputs["starting_prompt"] ?? "";
-  seedStartingHandoff(workspaceRoot, prompt, inputs["work_type"] ?? "", ctx.isCreate || prompt.trim() ? (ctx.issue ?? null) : null);
+  seedStartingHandoff(
+    workspaceRoot,
+    prompt,
+    inputs["work_type"] ?? "",
+    ctx.isCreate || prompt.trim() ? (ctx.issue ?? null) : null,
+  );
   const content = buildClaudeMd(
     workspaceName,
     workspaceRoot,

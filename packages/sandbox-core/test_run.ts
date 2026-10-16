@@ -73,14 +73,20 @@ export function playwrightCwd(dirs: string[]): string | null {
  * guidance that does apply, so a caller is not left with only "nothing ran".
  */
 export function noSuiteMessage(workspace: string): string {
-  const repoNames = playwrightSearchDirs(workspace).slice(1).map((d) => path.basename(d));
+  const repoNames = playwrightSearchDirs(workspace)
+    .slice(1)
+    .map((d) => path.basename(d));
   let services = "";
   try {
-    services = /^SERVICES=(.*)$/m.exec(fs.readFileSync(path.join(workspace, ".env"), "utf8"))?.[1] ?? "";
+    services =
+      /^SERVICES=(.*)$/m.exec(fs.readFileSync(path.join(workspace, ".env"), "utf8"))?.[1] ?? "";
   } catch {
     // No .env: fall back to the repos' services.
   }
-  const selected = services.split(",").map((s) => s.trim()).filter(Boolean);
+  const selected = services
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const servicesConfig = loadServices();
   const routers = loadFeatureRouters(servicesConfig);
   const rows = validationRows(
@@ -89,7 +95,9 @@ export function noSuiteMessage(workspace: string): string {
     loadArchetypes(),
     new Set(Object.keys(routers)),
   );
-  const lines = rows.map((r) => `  - ${r.service} — test: ${r.test ?? "—"} — validate: ${r.validate}`);
+  const lines = rows.map(
+    (r) => `  - ${r.service} — test: ${r.test ?? "—"} — validate: ${r.validate}`,
+  );
   return (
     "No Playwright suite found for this workspace (no playwright.config.{ts,js,mjs} in the workspace root or a repo worktree), so nothing was run." +
     (lines.length ? `\nValidate each service as follows:\n${lines.join("\n")}` : "")
@@ -99,7 +107,9 @@ export function noSuiteMessage(workspace: string): string {
 /** The `@playwright/test` version *cwd* resolves (hoisting included), or null if none. */
 export function installedPlaywrightVersion(cwd: string): string | null {
   try {
-    const pkg = createRequire(path.join(cwd, "package.json")).resolve("@playwright/test/package.json");
+    const pkg = createRequire(path.join(cwd, "package.json")).resolve(
+      "@playwright/test/package.json",
+    );
     return JSON.parse(fs.readFileSync(pkg, "utf8")).version ?? null;
   } catch {
     return null;

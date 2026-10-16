@@ -8,7 +8,7 @@
  * `.sandbox/issues-report.md`; each strategy's CLAUDE.md points at its copy.
  */
 
-import { issueTracker, type IssueTrackerStrategy } from "./issue_tracker.js";
+import { type IssueTrackerStrategy, issueTracker } from "./issue_tracker.js";
 
 export const SANDBOX_ISSUES_REPO = "jbbz-sandbox/sandbox";
 

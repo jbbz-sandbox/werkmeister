@@ -11,9 +11,10 @@
  * The fixture ports.yaml + services.yaml, staged in a throwaway ~/.sandbox,
  * back the un-overridden cases.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   containers: [] as any[] | null, // null → simulate an unreachable daemon
@@ -54,6 +55,7 @@ vi.mock("sandbox-core/locks", () => ({
   },
 }));
 
+import { type Reporter, withReporter } from "sandbox-core/reporter";
 import {
   allocateSlot,
   getAllSlots,
@@ -62,8 +64,7 @@ import {
   getSlot,
   releaseSlot,
 } from "sandbox-core/slots";
-import { withReporter, type Reporter } from "sandbox-core/reporter";
-import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
+import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -202,7 +203,9 @@ describe("port math and slot lookups", () => {
     h.containers[0].Labels["com.sandbox.local.slot"] = "not-a-number";
     const messages: string[] = [];
     const recorder: Reporter = {
-      emit: (e) => { if (e.level !== "raw") messages.push(e.msg); },
+      emit: (e) => {
+        if (e.level !== "raw") messages.push(e.msg);
+      },
       passthrough: false,
     };
     await withReporter(recorder, () => getAllSlots());

@@ -17,7 +17,7 @@ import {
   type McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { initWorkspaceUI, type HostBridge } from "./workspace-ui.js";
+import { type HostBridge, initWorkspaceUI } from "./workspace-ui.js";
 
 const app = new App({ name: "Sandbox Workspaces", version: "0.2.0" });
 

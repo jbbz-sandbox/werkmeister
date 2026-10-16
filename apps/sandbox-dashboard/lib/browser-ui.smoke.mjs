@@ -22,11 +22,13 @@ assert.equal(url, `http://127.0.0.1:${PORT}/`, "reused URL should be the pinned 
 
 // The squatter is still the one serving the port — no second server took over.
 const body = await new Promise((resolve, reject) => {
-  http.get(url, (res) => {
-    let d = "";
-    res.on("data", (c) => (d += c));
-    res.on("end", () => resolve(d));
-  }).on("error", reject);
+  http
+    .get(url, (res) => {
+      let d = "";
+      res.on("data", (c) => (d += c));
+      res.on("end", () => resolve(d));
+    })
+    .on("error", reject);
 });
 assert.equal(body, "ok", "port must still be served by the pre-existing server");
 

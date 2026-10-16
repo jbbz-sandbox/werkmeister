@@ -10,8 +10,8 @@
  * library emits it, as `up` does with its "Local services" line.
  */
 
-import { Colors, error, success } from "../lib/config.js";
 import { reloadProxy } from "sandbox-core/lifecycle";
+import { Colors, error, success } from "../lib/config.js";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== Proxy Reload ===${Colors.RESET}\n`);

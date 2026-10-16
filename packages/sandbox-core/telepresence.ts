@@ -152,10 +152,7 @@ export function parseVersion(output: string): [number, number, number] | null {
 }
 
 /** Component-wise less-than for a (major, minor, patch) triple. */
-export function versionLt(
-  a: [number, number, number],
-  b: [number, number, number],
-): boolean {
+export function versionLt(a: [number, number, number], b: [number, number, number]): boolean {
   for (let i = 0; i < 3; i++) {
     if (a[i] !== b[i]) return a[i] < b[i];
   }
@@ -225,10 +222,15 @@ export function buildInterceptArgs(
   // port http" while the number resolves. Verified live in the Phase-0 spike.
   // --mount false: singular in 2.30.1; disables the FUSE volume mount (we only route traffic).
   return [
-    "telepresence", "intercept", deployment,
-    "--port", `${localPort}:${portId}`,
-    "--http-header", `x-feature=${feature}`,
-    "--mount", "false",
+    "telepresence",
+    "intercept",
+    deployment,
+    "--port",
+    `${localPort}:${portId}`,
+    "--http-header",
+    `x-feature=${feature}`,
+    "--mount",
+    "false",
     // Host mode leaves this alone: 127.0.0.1 is already the right laptop.
     ...(docker ? ["--address", DAEMON_HOST_ADDRESS] : []),
   ];
@@ -428,7 +430,10 @@ function servicesFromEnv(envPath: string): string[] {
     line = line.trim();
     if (line.startsWith("SERVICES=")) {
       const value = line.slice(line.indexOf("=") + 1);
-      return value.split(",").map((s) => s.trim()).filter(Boolean);
+      return value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
   }
   return [];
@@ -570,7 +575,13 @@ export async function startIntercept(a: InterceptArgs): Promise<InterceptResult>
 
   info(`Intercepting ${deployment} → localhost:${localPort} (x-feature=${a.feature})...`);
   const [rc, out] = await runner(
-    buildInterceptArgs(deployment, localPort, svcDef["k8s_port"], a.feature, Boolean(a.dockerDaemon)),
+    buildInterceptArgs(
+      deployment,
+      localPort,
+      svcDef["k8s_port"],
+      a.feature,
+      Boolean(a.dockerDaemon),
+    ),
   );
   if (rc !== 0) {
     throw new SandboxError(

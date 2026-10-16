@@ -4,13 +4,13 @@
  * survived a plain `up` (#120). Every collaborator of `up` is mocked except
  * `generateSupergraphConfig`, which runs for real against the mocked registry.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const registry = vi.hoisted(() => ({ services: {} as Record<string, unknown> }));
 

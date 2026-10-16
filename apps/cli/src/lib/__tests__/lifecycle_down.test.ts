@@ -4,10 +4,10 @@
  * teardown that failed must say so rather than pass as success
  * (known-issues.md, "Library Rough Edges").
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeRecorder } from "../../commands/__tests__/helpers/recorder.js";
 
@@ -40,7 +40,9 @@ describe("lifecycle.down", () => {
 
     const result = await withReporter(recorder, () => down("demo"));
 
-    expect(lines.some((l) => l.startsWith("[warn] Containers for 'demo' may still exist"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("[warn] Containers for 'demo' may still exist"))).toBe(
+      true,
+    );
     expect(result).toEqual({ feature: "demo", slot: 3 });
   });
 });

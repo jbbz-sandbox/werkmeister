@@ -15,10 +15,10 @@ import * as path from "node:path";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
 import { featureUrl } from "sandbox-core/feature_routing";
-import { Colors, error, warn } from "../lib/config.js";
 import { raw } from "sandbox-core/reporter";
-import { loadDotenv } from "../lib/dotenv.js";
 import { getSlot } from "sandbox-core/slots";
+import { Colors, error, warn } from "../lib/config.js";
+import { loadDotenv } from "../lib/dotenv.js";
 
 /**
  * The nearest workspace.yml at or above *start*.

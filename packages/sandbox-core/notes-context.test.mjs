@@ -1,14 +1,21 @@
 // The SessionStart hook truncates at ~10k characters, and decisions render last
 // — so an unbudgeted list silently drops the newest decisions, which are exactly
 // the ones a fresh session needs. The cap is the contract.
-import { test } from "node:test";
-import assert from "node:assert/strict";
 
+import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
-import { CONTEXT_CHAR_CAP, listNotes, nextNoteNumber, renderActiveStandards, renderDecisions, renderNote } from "./dist/notes.js";
+import {
+  CONTEXT_CHAR_CAP,
+  listNotes,
+  nextNoteNumber,
+  renderActiveStandards,
+  renderDecisions,
+  renderNote,
+} from "./dist/notes.js";
 
 const fakeNote = (n, body = "x".repeat(2000)) => ({
   path: `/ws/.sandbox/notes/${String(n).padStart(3, "0")}-decision-x.md`,
@@ -38,7 +45,10 @@ test("renderDecisions keeps the newest and names what it elided", () => {
 
 test("renderNote truncates a body over the per-note cap", () => {
   const out = renderNote("Open decision", fakeNote(7, "y".repeat(9000)), "/ws");
-  assert.ok(out.startsWith("── Open decision: .sandbox/notes/007-decision-x.md ──\ny"), out.slice(0, 80));
+  assert.ok(
+    out.startsWith("── Open decision: .sandbox/notes/007-decision-x.md ──\ny"),
+    out.slice(0, 80),
+  );
   assert.match(out, /\n…\(truncated — read the full note\)\n$/);
   assert.ok(out.length < 3700, `rendered ${out.length}`);
 });
@@ -79,10 +89,16 @@ test("pr-*.md and exercise.md in the notes dir are not notes", () => {
   try {
     const dir = path.join(ws, ".sandbox", "notes");
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "001-decision-x.md"), "---\ntype: decision\nstatus: open\n---\nbody\n");
+    fs.writeFileSync(
+      path.join(dir, "001-decision-x.md"),
+      "---\ntype: decision\nstatus: open\n---\nbody\n",
+    );
     fs.writeFileSync(path.join(dir, "pr-app.md"), "---\nstatus: draft\n---\n# t\n");
     fs.writeFileSync(path.join(dir, "exercise.md"), "| smoke | PASS |\n");
-    assert.deepEqual(listNotes(ws).map((n) => path.basename(n.path)), ["001-decision-x.md"]);
+    assert.deepEqual(
+      listNotes(ws).map((n) => path.basename(n.path)),
+      ["001-decision-x.md"],
+    );
     assert.equal(nextNoteNumber(dir), 2);
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });

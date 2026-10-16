@@ -46,25 +46,25 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "sandbox-core/browser";
-import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
+import { expandUser } from "sandbox-core/config";
 import { ingressHostnames } from "sandbox-core/feature_routing";
-import * as gc from "sandbox-core/global_config";
 import type { PromptSpec } from "sandbox-core/global_config";
+import * as gc from "sandbox-core/global_config";
+import { loadIssueTracker, TRACKER_IDS, trackerById } from "sandbox-core/issue_tracker";
 import {
   claudeStandardsDirState,
   claudeUserSettingsPath,
   editorSchemaState,
   githubOwners,
   runSetup,
+  type Step,
   vscodeExtensionState,
   vscodeSettingsPath,
   WORKSPACE_ROOT_REPO,
-  type Step,
 } from "sandbox-core/machine_setup";
-import { TRACKER_IDS, loadIssueTracker, trackerById } from "sandbox-core/issue_tracker";
-import { confirm, prompt, runWizard } from "../lib/wizard.js";
 import { discoverFragments, FRAGMENT_REL, inheritedK8sContext } from "sandbox-core/registry_sync";
-import { expandUser } from "sandbox-core/config";
+import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
+import { confirm, prompt, runWizard } from "../lib/wizard.js";
 
 function heading(text: string): void {
   console.log(`\n${Colors.BOLD}${text}${Colors.RESET}`);
@@ -98,8 +98,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   // `resolvedPaths` is read back as it fills, so the workspaces root defaults
   // under whatever repos root was just answered.
   const resolvedPaths: Record<string, string> = {};
-  const pathDefault = (spec: PromptSpec): string =>
-    gc.pathDefault(spec.key, cfg, resolvedPaths);
+  const pathDefault = (spec: PromptSpec): string => gc.pathDefault(spec.key, cfg, resolvedPaths);
 
   if (interactive) {
     await runWizard(gc._CONFIG_PROMPTS, resolvedPaths, pathDefault, {
@@ -132,7 +131,10 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
 
   const resolvedGh: Record<string, string> = {};
   const ghPrompts = [
-    withChoices(gc._WORKSPACE_REPO_PROMPT, owners.map((o) => `${o}/${WORKSPACE_ROOT_REPO}`)),
+    withChoices(
+      gc._WORKSPACE_REPO_PROMPT,
+      owners.map((o) => `${o}/${WORKSPACE_ROOT_REPO}`),
+    ),
     withChoices(gc._GITHUB_ORG_PROMPT, owners),
   ];
   const ghDefault = (spec: PromptSpec): string => {
@@ -177,7 +179,10 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     resolvedBrowser.browser = browserDefault();
     info(`  browser: ${resolvedBrowser.browser}`);
   }
-  if (BROWSERS[resolvedBrowser.browser]?.engine !== "chromium" && resolvedBrowser.browser !== "safari") {
+  if (
+    BROWSERS[resolvedBrowser.browser]?.engine !== "chromium" &&
+    resolvedBrowser.browser !== "safari"
+  ) {
     warn(
       `  ${BROWSERS[resolvedBrowser.browser].label} isn't wired up yet -- ` +
         "`sandbox open` will error until it's picked to chrome/chromium/brave/edge/safari.",
@@ -221,13 +226,19 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     // A broken fragment is reported by the registry step itself.
   }
   if (fragments.length) {
-    info(`${servicesYaml} will be generated from ${fragments.length} repo fragment(s): ${fragments.join(", ")}.`);
+    info(
+      `${servicesYaml} will be generated from ${fragments.length} repo fragment(s): ${fragments.join(", ")}.`,
+    );
   } else {
     info(`No <repo>/${FRAGMENT_REL} found under ${reposRoot}.`);
     info("Clone your team's repos there and re-run `sandbox setup`, or try the demo apps.");
   }
   if (!fragments.includes("demo-services")) {
-    demo = await confirm("  Clone the demo apps (backend, frontend) so there is something to run?", false, interactive);
+    demo = await confirm(
+      "  Clone the demo apps (backend, frontend) so there is something to run?",
+      false,
+      interactive,
+    );
   }
   if (!fs.existsSync(gc.servicesLocalYamlPath()) && interactive) {
     k8sContext = await prompt(
@@ -248,7 +259,9 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
           label: "Issue tracker",
           help:
             "Where workspace issues come from and where agents file existing bugs. " +
-            TRACKER_IDS.map((id) => `${id}: ${trackerById(id).label} (e.g. ${trackerById(id).refExample})`).join("; ") +
+            TRACKER_IDS.map(
+              (id) => `${id}: ${trackerById(id).label} (e.g. ${trackerById(id).refExample})`,
+            ).join("; ") +
             ".",
           acceptEmpty: false,
           pattern: `(${TRACKER_IDS.join("|")})`,
@@ -283,7 +296,10 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
         "shelling out to the claude CLI. Entirely optional — skip to leave it out.",
     );
     if (await confirm("  Configure Jira credentials now?", false, interactive)) {
-      jira.base_url = await prompt("Jira base URL", jira.base_url ?? "https://your-org.atlassian.net");
+      jira.base_url = await prompt(
+        "Jira base URL",
+        jira.base_url ?? "https://your-org.atlassian.net",
+      );
       jira.email = await prompt("Atlassian login email", jira.email ?? "");
       info(`  Create a token at ${"https://id.atlassian.com/manage-profile/security/api-tokens"}`);
       jira.api_token = await prompt("API token", jira.api_token ?? "", { secret: true });
@@ -328,7 +344,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
         "sandbox's JSON Schemas (needs the redhat.vscode-yaml extension). Adds " +
         `\`yaml.schemas\` entries to ${vscodeSettingsPath()}; comments and other settings are kept.`,
     );
-    mapEditorSchemas = await confirm("  Add the schema mappings to your VS Code user settings?", false, interactive);
+    mapEditorSchemas = await confirm(
+      "  Add the schema mappings to your VS Code user settings?",
+      false,
+      interactive,
+    );
   }
   const ext = vscodeExtensionState();
   let installVscodeExtension = false;
@@ -337,7 +357,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       "The Sandbox Workspaces extension shows your feature workspaces, containers " +
         `and intercepts in a VS Code side bar (${ext.installed ?? "not installed"} → ${ext.bundled.version}).`,
     );
-    installVscodeExtension = await confirm("  Install the Sandbox Workspaces extension?", false, interactive);
+    installVscodeExtension = await confirm(
+      "  Install the Sandbox Workspaces extension?",
+      false,
+      interactive,
+    );
   } else if (ext.cli && !ext.bundled) {
     info(
       `Sandbox Workspaces extension: ${ext.installed ?? "not installed"}. A checkout bundles no .vsix, so ` +
@@ -363,7 +387,9 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
         `Adds it to \`permissions.additionalDirectories\` in ${claudeUserSettingsPath()}; other settings are kept.`,
     );
     // Default yes for a person at the prompt, but --yes must not edit a user-owned file uninvited.
-    grantStandardsDir = interactive && (await confirm("  Grant Claude Code read access to the standards dir?", true, interactive));
+    grantStandardsDir =
+      interactive &&
+      (await confirm("  Grant Claude Code read access to the standards dir?", true, interactive));
   }
 
   // --- write ---------------------------------------------------------------
@@ -475,9 +501,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     const steps = await runSetup({ checkOnly: true, hostnames: resolveHostnames() });
     // Skip the "paths.X does not exist" problems — syncPathDirs already reports
     // each one, with the fix it would apply. Reporting both reads as two faults.
-    const problems = gc
-      .check(gc.load())
-      .filter((p) => !/^paths\.\w+ does not exist/.test(p));
+    const problems = gc.check(gc.load()).filter((p) => !/^paths\.\w+ does not exist/.test(p));
     for (const p of problems) {
       steps.unshift({ label: "global config", ok: false, detail: p });
     }

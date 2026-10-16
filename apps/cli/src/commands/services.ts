@@ -5,9 +5,9 @@
  * are running locally (with port) or via k8s port-forward.
  */
 
-import { Colors, info, warn } from "../lib/config.js";
 import { SandboxError } from "sandbox-core/errors";
-import { featureServices, type FeatureServices, type ServiceEndpoint } from "sandbox-core/slots";
+import { type FeatureServices, featureServices, type ServiceEndpoint } from "sandbox-core/slots";
+import { Colors, info, warn } from "../lib/config.js";
 
 /**
  * The Source column, colour and all.

@@ -7,14 +7,14 @@
  * scaffold time is what made that invisible, so the note now stays an open
  * decision until git actually tracks the file.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import { graduateNote, reconcileGraduating } from "sandbox-core/graduate";
 import { openDecisions, parseNote } from "sandbox-core/notes";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 let tmp: string;
 let workspace: string;

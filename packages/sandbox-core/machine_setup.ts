@@ -53,12 +53,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { applyEdits, modify, parse as parseJsonc, type ParseError } from "jsonc-parser";
+import { applyEdits, modify, type ParseError, parse as parseJsonc } from "jsonc-parser";
 
 import { expandUser, getReposRoot, sandboxRoot, servicesLocalYamlPath } from "./config.js";
-import { syncRegistry } from "./registry_sync.js";
 import {
   configPath,
+  type IngressSettings,
+  type JiraSettings,
   loadIngress,
   loadJira,
   loadPaths as loadPathsSection,
@@ -67,18 +68,18 @@ import {
   portsYamlPath,
   secretsPath,
   standardsDirPath,
-  type IngressSettings,
-  type JiraSettings,
 } from "./global_config.js";
+import { JIRA_PLACEHOLDERS } from "./jira-rest.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { ProcError, run } from "./proc.js";
+import { syncRegistry } from "./registry_sync.js";
 import {
   DEFAULT_MODEL_PRICING_YAML,
   DEFAULT_PORTS_YAML,
   renderSecretsEnv,
   renderServicesLocalYaml,
-  seedFile,
   type SeedResult,
+  seedFile,
 } from "./scaffold.js";
 import {
   BREW_FORMULA,
@@ -89,7 +90,6 @@ import {
   versionLt,
 } from "./telepresence.js";
 import { PLAYWRIGHT_VERSION } from "./test_run.js";
-import { JIRA_PLACEHOLDERS } from "./jira-rest.js";
 
 // A command runner: argv in, [returncode, combined-output] out. Injected in
 // tests; the default shells out with a timeout and never throws.
@@ -221,9 +221,13 @@ export function githubOwners(runner: Runner = defaultRunner): string[] {
     return [];
   }
   const [rc, out] = runner(["gh", "api", "user/orgs", "--paginate", "-q", ".[].login"]);
-  const orgs = rc === 0
-    ? out.split("\n").map((l) => l.trim()).filter((l) => isLogin(l) && l !== user)
-    : [];
+  const orgs =
+    rc === 0
+      ? out
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => isLogin(l) && l !== user)
+      : [];
   return [user, ...orgs];
 }
 
@@ -258,8 +262,7 @@ const workspaceRootSpec = (slug: string): RepoSpec => ({
 const DEMO_SERVICES_SPEC: RepoSpec = {
   name: DEMO_SERVICES_REPO,
   url: DEMO_SERVICES_REPO_URL,
-  missingConsequence:
-    "The demo backend/frontend services will not start until it is cloned there.",
+  missingConsequence: "The demo backend/frontend services will not start until it is cloned there.",
 };
 
 function defaultRunner(cmd: string[]): [number, string] {
@@ -321,7 +324,9 @@ export function installedVersion(claudePluginsDir: string, spec: PluginSpec): st
   }
   for (const entry of entries) {
     if (
-      typeof entry === "object" && entry !== null && !Array.isArray(entry) &&
+      typeof entry === "object" &&
+      entry !== null &&
+      !Array.isArray(entry) &&
       entry["installPath"]
     ) {
       return String(entry["version"] || "unknown");
@@ -350,7 +355,13 @@ export function syncPlugin(
 
   if (checkOnly) {
     if (!marketplaceKnown) {
-      return [{ label, ok: false, detail: `marketplace ${spec.marketplace} not added (source: ${spec.source})` }];
+      return [
+        {
+          label,
+          ok: false,
+          detail: `marketplace ${spec.marketplace} not added (source: ${spec.source})`,
+        },
+      ];
     }
     if (version === null) {
       return [{ label, ok: false, detail: `not installed from marketplace ${spec.marketplace}` }];
@@ -373,7 +384,11 @@ export function syncPlugin(
     if (rc !== 0) {
       return [{ label, ok: false, detail: `marketplace add (${spec.source}) failed: ${out}` }];
     }
-    steps.push({ label, ok: true, detail: `added marketplace ${spec.marketplace} (${spec.source})` });
+    steps.push({
+      label,
+      ok: true,
+      detail: `added marketplace ${spec.marketplace} (${spec.source})`,
+    });
   }
 
   if (version === null) {
@@ -392,8 +407,7 @@ export function syncPlugin(
         label,
         ok: false,
         detail:
-          "updated, but the install still lags this repo — are your " +
-          "changes pushed to GitHub?",
+          "updated, but the install still lags this repo — are your " + "changes pushed to GitHub?",
       });
     } else {
       steps.push({ label, ok: true, detail: `up to date (was v${version})` });
@@ -457,12 +471,14 @@ export function syncRepo(
 
   if (!fs.existsSync(dest)) {
     if (checkOnly) {
-      return [{
-        label,
-        ok: false,
-        optional: true,
-        detail: `missing — would clone ${spec.url} into ${dest}`,
-      }];
+      return [
+        {
+          label,
+          ok: false,
+          optional: true,
+          detail: `missing — would clone ${spec.url} into ${dest}`,
+        },
+      ];
     }
     const [rc, out] = runner(["git", "clone", spec.url, dest]);
     if (rc === 0) {
@@ -472,7 +488,9 @@ export function syncRepo(
     // "private and you're not authenticated" and "does not exist", and both are
     // ordinary states here (the repo may simply not be created yet), so say so
     // rather than dumping git's credential-helper stack trace.
-    const notFound = /Repository not found|could not read Username|Authentication failed/i.test(out);
+    const notFound = /Repository not found|could not read Username|Authentication failed/i.test(
+      out,
+    );
     const detail = notFound
       ? `${spec.url} is not reachable — it may not exist yet, or ` +
         "you may not be authenticated to GitHub (`gh auth login`, or check your " +
@@ -482,11 +500,13 @@ export function syncRepo(
   }
 
   if (!fs.existsSync(path.join(dest, ".git"))) {
-    return [{
-      label,
-      ok: false,
-      detail: `${dest} exists but is not a git checkout — move it aside and rerun`,
-    }];
+    return [
+      {
+        label,
+        ok: false,
+        detail: `${dest} exists but is not a git checkout — move it aside and rerun`,
+      },
+    ];
   }
 
   if (checkOnly) {
@@ -501,9 +521,10 @@ export function syncRepo(
   const [, branch] = runner(["git", "-C", dest, "branch", "--show-current"]);
   const [, dirty] = runner(["git", "-C", dest, "status", "--porcelain"]);
   if (branch.trim() !== "main" || dirty.trim()) {
-    const why = branch.trim() !== "main"
-      ? `on branch ${branch.trim() || "(detached)"}`
-      : "working tree dirty";
+    const why =
+      branch.trim() !== "main"
+        ? `on branch ${branch.trim() || "(detached)"}`
+        : "working tree dirty";
     return [{ label, ok: true, detail: `fetched; skipped fast-forward (${why})` }];
   }
 
@@ -581,10 +602,7 @@ export interface RegistryOptions {
  * These files are the reason `sandbox up` can run at all, so in check mode a
  * missing one is a hard failure rather than a hint.
  */
-export function syncRegistryConfigs(
-  checkOnly: boolean,
-  options: RegistryOptions = {},
-): Step[] {
+export function syncRegistryConfigs(checkOnly: boolean, options: RegistryOptions = {}): Step[] {
   const legacyDir =
     options.legacyDir === undefined
       ? path.join(sandboxRoot(), LEGACY_CONFIG_DIR)
@@ -592,11 +610,19 @@ export function syncRegistryConfigs(
 
   // [label, destination, legacy basename (null = never migrated), content factory]
   const files: [string, string, string | null, () => string][] = [
-    ["services.local.yaml", servicesLocalYamlPath(), null,
-      () => renderServicesLocalYaml(options.k8sContext ?? "orbstack")],
+    [
+      "services.local.yaml",
+      servicesLocalYamlPath(),
+      null,
+      () => renderServicesLocalYaml(options.k8sContext ?? "orbstack"),
+    ],
     ["ports.yaml", portsYamlPath(), "ports.yaml", () => DEFAULT_PORTS_YAML],
-    ["model-pricing.yaml", modelPricingYamlPath(), "model-pricing.yaml",
-      () => DEFAULT_MODEL_PRICING_YAML],
+    [
+      "model-pricing.yaml",
+      modelPricingYamlPath(),
+      "model-pricing.yaml",
+      () => DEFAULT_MODEL_PRICING_YAML,
+    ],
   ];
 
   const steps: Step[] = [];
@@ -713,21 +739,26 @@ export function syncIngressCerts(
   const { hostnames } = options;
 
   if (!hostnames.length) {
-    return [{
-      label,
-      ok: true,
-      detail: "no routed services — nothing to certify (add a `feature_router:` " +
-              "block in services.yaml to enable ingress)",
-    }];
+    return [
+      {
+        label,
+        ok: true,
+        detail:
+          "no routed services — nothing to certify (add a `feature_router:` " +
+          "block in services.yaml to enable ingress)",
+      },
+    ];
   }
 
   const script = options.scriptPath ?? resolveCertScript();
   if (!script) {
-    return [{
-      label,
-      ok: false,
-      detail: "bin/generate-certs.sh not found — is the sandbox checkout complete?",
-    }];
+    return [
+      {
+        label,
+        ok: false,
+        detail: "bin/generate-certs.sh not found — is the sandbox checkout complete?",
+      },
+    ];
   }
 
   const ingress = options.ingress ?? loadIngress();
@@ -737,13 +768,16 @@ export function syncIngressCerts(
   if (checkOnly) {
     // --check writes nothing, so the captured runner is right here.
     const [rc, out] = defaultRunner([...base, "--check"]);
-    return [{
-      label,
-      ok: rc === 0,
-      detail: rc === 0
-        ? `${ingress.certs_dir}/localhost.crt covers ${hostnames.length} hostname(s)`
-        : `${out.trim() || `exit ${rc}`} — run \`sandbox setup\` to (re)generate`,
-    }];
+    return [
+      {
+        label,
+        ok: rc === 0,
+        detail:
+          rc === 0
+            ? `${ingress.certs_dir}/localhost.crt covers ${hostnames.length} hostname(s)`
+            : `${out.trim() || `exit ${rc}`} — run \`sandbox setup\` to (re)generate`,
+      },
+    ];
   }
 
   const cmd = [...base];
@@ -754,7 +788,8 @@ export function syncIngressCerts(
   if (rc !== 0) {
     return [{ label, ok: false, detail: `generate-certs.sh failed (exit ${rc})` }];
   }
-  const detail = `${ingress.certs_dir} covers ${hostnames.join(", ")}` +
+  const detail =
+    `${ingress.certs_dir} covers ${hostnames.join(", ")}` +
     (options.skipSudo ? " (trust + /etc/hosts skipped — rerun without --yes)" : "");
   return [{ label, ok: true, detail }];
 }
@@ -776,9 +811,7 @@ export const JIRA_CONFIG_SNIPPET =
 // A token verifier: the config's jira settings in, [ok, detail] out. Injected in
 // tests; the default hits GET /rest/api/2/myself with Basic auth. Async because
 // Node has no sync HTTP client.
-export type JiraVerifier = (
-  jira: JiraSettings,
-) => Promise<[boolean, string]> | [boolean, string];
+export type JiraVerifier = (jira: JiraSettings) => Promise<[boolean, string]> | [boolean, string];
 
 async function defaultJiraVerifier(jira: JiraSettings): Promise<[boolean, string]> {
   let baseUrl = (jira.base_url ?? "").trim();
@@ -822,16 +855,25 @@ export async function syncJiraToken(
   });
   if (unfilled.length) {
     const keys = unfilled.map((k) => `jira.${k}`).join(", ");
-    return [{
-      label,
-      ok: true,
-      detail: `not configured (${keys}) — create a token at ${JIRA_TOKEN_URL}, ` +
-              `then add it to ${where}:\n${JIRA_CONFIG_SNIPPET}`,
-    }];
+    return [
+      {
+        label,
+        ok: true,
+        detail:
+          `not configured (${keys}) — create a token at ${JIRA_TOKEN_URL}, ` +
+          `then add it to ${where}:\n${JIRA_CONFIG_SNIPPET}`,
+      },
+    ];
   }
 
   if (checkOnly) {
-    return [{ label, ok: true, detail: `configured for ${jira.email} (run \`sandbox setup\` to live-verify)` }];
+    return [
+      {
+        label,
+        ok: true,
+        detail: `configured for ${jira.email} (run \`sandbox setup\` to live-verify)`,
+      },
+    ];
   }
 
   const [ok, detail] = await (verifier ?? defaultJiraVerifier)(jira);
@@ -840,14 +882,16 @@ export async function syncJiraToken(
   }
   // Optional: the dashboard falls back to the claude CLI for Jira reads, so a
   // rejected token degrades one fast path — it does not break the machine.
-  return [{
-    label,
-    ok: false,
-    optional: true,
-    detail:
-      `token rejected (${detail}) — renew at ${JIRA_TOKEN_URL} and update ` +
-      `jira.api_token in ${where}. Reads fall back to the claude CLI meanwhile.`,
-  }];
+  return [
+    {
+      label,
+      ok: false,
+      optional: true,
+      detail:
+        `token rejected (${detail}) — renew at ${JIRA_TOKEN_URL} and update ` +
+        `jira.api_token in ${where}. Reads fall back to the claude CLI meanwhile.`,
+    },
+  ];
 }
 
 /** Schema file in `<cli>/infra/schemas/` → the glob it validates. */
@@ -925,18 +969,33 @@ export function syncEditorSchemas(
   const state = editorSchemaState(settingsPath, schemasDir);
   if (!state.present) return [{ label, ok: true, detail: "VS Code not found — skipped" }];
   if (state.error) {
-    return [{ label, ok: false, optional: true, detail: `${settingsPath}: ${state.error} — fix it and re-run` }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `${settingsPath}: ${state.error} — fix it and re-run`,
+      },
+    ];
   }
   const pending = Object.keys(state.set).length + state.drop.length;
   if (!pending) return [{ label, ok: true, detail: `mapped in ${settingsPath}` }];
   if (checkOnly || !install) {
     return state.drop.length
-      ? [{ label, ok: false, optional: true, detail: "mapped to an old install path — re-run `sandbox setup`" }]
+      ? [
+          {
+            label,
+            ok: false,
+            optional: true,
+            detail: "mapped to an old install path — re-run `sandbox setup`",
+          },
+        ]
       : [{ label, ok: true, detail: "not mapped (opt in via `sandbox setup`)" }];
   }
   let text = state.text;
   const fmt = { formattingOptions: { insertSpaces: true, tabSize: 4 } };
-  for (const key of state.drop) text = applyEdits(text, modify(text, ["yaml.schemas", key], undefined, fmt));
+  for (const key of state.drop)
+    text = applyEdits(text, modify(text, ["yaml.schemas", key], undefined, fmt));
   for (const [key, glob] of Object.entries(state.set)) {
     text = applyEdits(text, modify(text, ["yaml.schemas", key], glob, fmt));
   }
@@ -973,7 +1032,12 @@ export function claudeStandardsDirState(
   settingsPath = claudeUserSettingsPath(),
   dir = standardsDirPath(),
 ): ClaudeStandardsDirState {
-  const state: ClaudeStandardsDirState = { present: false, dirMissing: false, granted: false, text: "{}" };
+  const state: ClaudeStandardsDirState = {
+    present: false,
+    dirMissing: false,
+    granted: false,
+    text: "{}",
+  };
   state.present = fs.existsSync(path.dirname(settingsPath));
   state.dirMissing = !(fs.existsSync(dir) && fs.statSync(dir).isDirectory());
   if (!state.present || state.dirMissing) return state;
@@ -1009,18 +1073,35 @@ export function syncClaudeStandardsDir(
 ): Step[] {
   const label = "Claude Code standards access (optional)";
   const state = claudeStandardsDirState(settingsPath, dir);
-  if (!state.present) return [{ label, ok: true, detail: "Claude Code settings dir not found — skipped" }];
-  if (state.dirMissing) return [{ label, ok: true, detail: `standards dir ${dir} not found — skipped` }];
+  if (!state.present)
+    return [{ label, ok: true, detail: "Claude Code settings dir not found — skipped" }];
+  if (state.dirMissing)
+    return [{ label, ok: true, detail: `standards dir ${dir} not found — skipped` }];
   if (state.error) {
-    return [{ label, ok: false, optional: true, detail: `${settingsPath}: ${state.error} — fix it and re-run` }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `${settingsPath}: ${state.error} — fix it and re-run`,
+      },
+    ];
   }
   if (state.granted) return [{ label, ok: true, detail: `granted in ${settingsPath}` }];
-  if (checkOnly || !install) return [{ label, ok: true, detail: "not granted (opt in via `sandbox setup`)" }];
+  if (checkOnly || !install)
+    return [{ label, ok: true, detail: "not granted (opt in via `sandbox setup`)" }];
   const fmt = { formattingOptions: { insertSpaces: true, tabSize: 2 } };
-  const hasList = Array.isArray(parseJsonc(state.text, [], { allowTrailingComma: true })?.["permissions"]?.["additionalDirectories"]);
+  const hasList = Array.isArray(
+    parseJsonc(state.text, [], { allowTrailingComma: true })?.["permissions"]?.[
+      "additionalDirectories"
+    ],
+  );
   // ponytail: add-only — a grant left by an old standards_dir stays; record the granted path under ~/.sandbox if stale grants ever matter.
   const edits = hasList
-    ? modify(state.text, ["permissions", "additionalDirectories", -1], dir, { ...fmt, isArrayInsertion: true })
+    ? modify(state.text, ["permissions", "additionalDirectories", -1], dir, {
+        ...fmt,
+        isArrayInsertion: true,
+      })
     : modify(state.text, ["permissions", "additionalDirectories"], [dir], fmt);
   fs.writeFileSync(settingsPath, applyEdits(state.text, edits));
   return [{ label, ok: true, optional: true, detail: `granted in ${settingsPath}` }];
@@ -1044,15 +1125,21 @@ export interface VscodeExtensionState {
   bundled: { path: string; version: string } | null;
 }
 
-export function vscodeExtensionState(runner: Runner = defaultRunner, root = sandboxRoot()): VscodeExtensionState {
+export function vscodeExtensionState(
+  runner: Runner = defaultRunner,
+  root = sandboxRoot(),
+): VscodeExtensionState {
   const [rc, out] = runner(["code", "--list-extensions", "--show-versions"]);
   const prefix = `${VSCODE_EXTENSION_ID}@`;
-  const line = rc === 0 ? out.split("\n").find((l) => l.trim().toLowerCase().startsWith(prefix)) : undefined;
+  const line =
+    rc === 0 ? out.split("\n").find((l) => l.trim().toLowerCase().startsWith(prefix)) : undefined;
   const vsix = path.join(root, BUNDLED_VSIX_REL);
   return {
     cli: rc === 0,
     installed: line ? line.trim().slice(prefix.length) : null,
-    bundled: fs.existsSync(vsix) ? { path: vsix, version: readJson(path.join(root, "package.json"))?.version } : null,
+    bundled: fs.existsSync(vsix)
+      ? { path: vsix, version: readJson(path.join(root, "package.json"))?.version }
+      : null,
   };
 }
 
@@ -1068,31 +1155,57 @@ export function syncVscodeExtension(
 ): Step[] {
   const label = "VS Code extension (optional)";
   if (!state.cli) {
-    return [{
-      label,
-      ok: true,
-      detail: "`code` not on PATH — skipped (in VS Code: \"Shell Command: Install 'code' command in PATH\")",
-    }];
+    return [
+      {
+        label,
+        ok: true,
+        detail:
+          "`code` not on PATH — skipped (in VS Code: \"Shell Command: Install 'code' command in PATH\")",
+      },
+    ];
   }
   if (!state.bundled) {
-    return [{
-      label,
-      ok: true,
-      detail: `${state.installed ?? "not installed"}; running from a checkout, which bundles no .vsix — build it from packages/vscode-plugin`,
-    }];
+    return [
+      {
+        label,
+        ok: true,
+        detail: `${state.installed ?? "not installed"}; running from a checkout, which bundles no .vsix — build it from packages/vscode-plugin`,
+      },
+    ];
   }
   const want = state.bundled.version;
-  if (state.installed === want) return [{ label, ok: true, detail: `${VSCODE_EXTENSION_ID} ${want}` }];
+  if (state.installed === want)
+    return [{ label, ok: true, detail: `${VSCODE_EXTENSION_ID} ${want}` }];
   if (checkOnly || !install) {
     return state.installed
-      ? [{ label, ok: false, optional: true, detail: `${state.installed} < bundled ${want} — re-run \`sandbox setup\`` }]
+      ? [
+          {
+            label,
+            ok: false,
+            optional: true,
+            detail: `${state.installed} < bundled ${want} — re-run \`sandbox setup\``,
+          },
+        ]
       : [{ label, ok: true, detail: "not installed (opt in via `sandbox setup`)" }];
   }
   const [rc, out] = runner(["code", "--install-extension", state.bundled.path, "--force"]);
   if (rc !== 0) {
-    return [{ label, ok: false, optional: true, detail: `code --install-extension failed: ${briefOutput(out)}` }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `code --install-extension failed: ${briefOutput(out)}`,
+      },
+    ];
   }
-  return [{ label, ok: true, detail: `installed ${VSCODE_EXTENSION_ID} ${want} — reload VS Code windows to pick it up` }];
+  return [
+    {
+      label,
+      ok: true,
+      detail: `installed ${VSCODE_EXTENSION_ID} ${want} — reload VS Code windows to pick it up`,
+    },
+  ];
 }
 
 /**
@@ -1144,37 +1257,43 @@ export function syncTelepresence(
     if (stale) {
       return [{ label, ok: false, optional: true, detail: `${current} — ${INSTALL_HINT}` }];
     }
-    return [{
-      label,
-      ok: true,
-      detail: `not installed (needed only for \`sandbox intercept\`; ${INSTALL_HINT})`,
-    }];
+    return [
+      {
+        label,
+        ok: true,
+        detail: `not installed (needed only for \`sandbox intercept\`; ${INSTALL_HINT})`,
+      },
+    ];
   }
 
   // Install requested. brew is the happy path; anything else falls back to the
   // documented direct download rather than trying to be clever.
   const [brewRc] = runner(["brew", "--version"]);
   if (brewRc !== 0) {
-    return [{
-      label,
-      ok: !stale,
-      optional: true,
-      detail: `${current}; Homebrew not found — ${DOWNLOAD_HINT}`,
-    }];
+    return [
+      {
+        label,
+        ok: !stale,
+        optional: true,
+        detail: `${current}; Homebrew not found — ${DOWNLOAD_HINT}`,
+      },
+    ];
   }
 
   const action = stale ? "upgrade" : "install";
   const [rc, out] = runner(["brew", action, BREW_FORMULA]);
   if (rc !== 0) {
-    return [{
-      label,
-      ok: false,
-      optional: true,
-      detail:
-        `brew ${action} ${BREW_FORMULA} failed: ${briefOutput(out)}\n` +
-        `    Telepresence stays optional — this does not block anything except ` +
-        `\`sandbox intercept\`. Install manually with: ${DOWNLOAD_HINT}`,
-    }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail:
+          `brew ${action} ${BREW_FORMULA} failed: ${briefOutput(out)}\n` +
+          `    Telepresence stays optional — this does not block anything except ` +
+          `\`sandbox intercept\`. Install manually with: ${DOWNLOAD_HINT}`,
+      },
+    ];
   }
 
   // Verify rather than trust: the whole reason brew was previously rejected is
@@ -1184,21 +1303,25 @@ export function syncTelepresence(
     return [postErr];
   }
   if (postVersion === null) {
-    return [{
-      label,
-      ok: false,
-      optional: true,
-      detail: `brew ${action} reported success but telepresence is not on PATH`,
-    }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `brew ${action} reported success but telepresence is not on PATH`,
+      },
+    ];
   }
   const have = postVersion.join(".");
   if (versionLt(postVersion, MIN_VERSION)) {
-    return [{
-      label,
-      ok: false,
-      optional: true,
-      detail: `brew installed ${have}, still < required ${need} — ${DOWNLOAD_HINT}`,
-    }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `brew installed ${have}, still < required ${need} — ${DOWNLOAD_HINT}`,
+      },
+    ];
   }
   return [{ label, ok: true, detail: `installed OSS client ${have} via brew` }];
 }
@@ -1230,26 +1353,43 @@ export function syncPlaywright(
 
   const before = missingDirs();
   if (before === null) {
-    return [{ label, ok: false, optional: true, detail: `\`npx ${pkg} install --dry-run chromium\` failed: ${briefOutput(probeOutput)}` }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `\`npx ${pkg} install --dry-run chromium\` failed: ${briefOutput(probeOutput)}`,
+      },
+    ];
   }
   if (before.length === 0) {
     return [{ label, ok: true, detail: `chromium for ${pkg} present` }];
   }
   if (checkOnly) {
-    return [{ label, ok: false, optional: true, detail: `chromium for ${pkg} missing — re-run \`sandbox setup\`` }];
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `chromium for ${pkg} missing — re-run \`sandbox setup\``,
+      },
+    ];
   }
 
   // Interactive: the download is ~150 MB, so show progress rather than look hung.
   const rc = (interactive ?? defaultInteractiveRunner)(["npx", "-y", pkg, "install", "chromium"]);
   const after = missingDirs();
   if (rc !== 0 || after === null || after.length > 0) {
-    const why = rc !== 0 ? `exited ${rc}` : "finished, but the browser is still not reported installed";
-    return [{
-      label,
-      ok: false,
-      optional: true,
-      detail: `\`npx ${pkg} install chromium\` ${why} — run it manually to see why`,
-    }];
+    const why =
+      rc !== 0 ? `exited ${rc}` : "finished, but the browser is still not reported installed";
+    return [
+      {
+        label,
+        ok: false,
+        optional: true,
+        detail: `\`npx ${pkg} install chromium\` ${why} — run it manually to see why`,
+      },
+    ];
   }
   return [{ label, ok: true, detail: `installed chromium for ${pkg}` }];
 }
@@ -1387,7 +1527,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   steps.push(...syncRegistry({ reposRoot, checkOnly }));
   // Resolved here, not at call time — see RunSetupOptions.hostnames.
   const hostnames =
-    typeof options.hostnames === "function" ? options.hostnames() : options.hostnames ?? [];
+    typeof options.hostnames === "function" ? options.hostnames() : (options.hostnames ?? []);
   steps.push(
     ...syncIngressCerts(
       checkOnly,
@@ -1401,7 +1541,12 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   steps.push(...syncEditorSchemas(checkOnly, options.mapEditorSchemas ?? false));
   steps.push(...syncClaudeStandardsDir(checkOnly, options.grantStandardsDir ?? false));
   steps.push(
-    ...syncVscodeExtension(checkOnly, options.installVscodeExtension ?? false, vscodeExtensionState(runner), runner),
+    ...syncVscodeExtension(
+      checkOnly,
+      options.installVscodeExtension ?? false,
+      vscodeExtensionState(runner),
+      runner,
+    ),
   );
   return steps;
 }

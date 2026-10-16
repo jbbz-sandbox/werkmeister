@@ -11,9 +11,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-
-import { info } from "./reporter.js";
 import { run } from "./proc.js";
+import { info } from "./reporter.js";
 
 // ---------------------------------------------------------------------------
 // Workspace .gitignore (managed section)
@@ -100,12 +99,18 @@ export function resolveRepos(
 ): [string[], string[], string[]] {
   const repos = new Set<string>();
 
-  const explicit = (reposArg ?? "").split(",").map((r) => r.trim()).filter((r) => r);
+  const explicit = (reposArg ?? "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter((r) => r);
   for (const repo of explicit) {
     repos.add(repo);
   }
 
-  const services = (servicesArg ?? "").split(",").map((s) => s.trim()).filter((s) => s);
+  const services = (servicesArg ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s);
   const unknown: string[] = [];
   for (const svc of services) {
     const svcDef = servicesConfig[svc];
@@ -137,10 +142,9 @@ export function defaultBaseRef(src: string): string {
   run(["git", "-C", src, "fetch", "origin", "--prune", "--quiet"], { capture: true });
 
   const originHead = (): string | null => {
-    const result = run(
-      ["git", "-C", src, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
-      { capture: true },
-    );
+    const result = run(["git", "-C", src, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], {
+      capture: true,
+    });
     const ref = result.stdout.trim();
     const prefix = "refs/remotes/";
     if (result.status === 0 && ref.startsWith(prefix)) {
@@ -204,7 +208,9 @@ export function createWorktree(
   } else {
     const base = defaultBaseRef(src);
     const remote = `origin/${branch}`;
-    const onOrigin = run(["git", "-C", src, "rev-parse", "--verify", "--quiet", remote], { capture: true });
+    const onOrigin = run(["git", "-C", src, "rev-parse", "--verify", "--quiet", remote], {
+      capture: true,
+    });
     if (onOrigin.status === 0 && force) {
       const del = run(["git", "-C", src, "push", "origin", "--delete", branch], { capture: true });
       if (del.status !== 0) {
@@ -212,7 +218,9 @@ export function createWorktree(
       }
       info(`  ${repo}: deleted ${remote} (--force)`);
     } else if (onOrigin.status === 0) {
-      const tip = run(["git", "-C", src, "log", "-1", "--format=%cs %s", remote], { capture: true }).stdout.trim();
+      const tip = run(["git", "-C", src, "log", "-1", "--format=%cs %s", remote], {
+        capture: true,
+      }).stdout.trim();
       throw new Error(
         `${repo}: branch '${branch}' already exists on origin (last commit: ${tip}), ` +
           "left by an earlier workspace of the same name.\n" +

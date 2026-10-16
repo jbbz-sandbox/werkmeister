@@ -1,10 +1,11 @@
 // The PR guard is the one layer that holds whichever skill fires: inside a
 // workspace, `gh pr create` and the GitHub MCP's create tool are denied.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { decide, findRecordRoot } from "./dist/pr_guard.js";
 
@@ -38,7 +39,11 @@ test("denies gh pr create from the root and from a code worktree, pointing at sa
       const reason = decide(bash(cwd, 'cd app && gh pr create --title "x" --body y'));
       assert.match(reason ?? "", /only through `sandbox pr open`/);
       assert.match(reason, /`stages\/04_propose\/output\/`/);
-      assert.match(reason, /Rules: `docs\/workspace-lifecycle\.md in the sandbox repo`/, "no rules file yet");
+      assert.match(
+        reason,
+        /Rules: `docs\/workspace-lifecycle\.md in the sandbox repo`/,
+        "no rules file yet",
+      );
     }
     fs.mkdirSync(path.join(ws, "_shared"));
     fs.writeFileSync(path.join(ws, "_shared", "pr-rules.md"), "x");

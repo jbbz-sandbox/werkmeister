@@ -147,14 +147,9 @@ async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
     return false;
   }
 
-  info(
-    "Starting shared infrastructure (k8s-forwards, caddy, jaeger, redisinsight)...",
-  );
+  info("Starting shared infrastructure (k8s-forwards, caddy, jaeger, redisinsight)...");
   try {
-    const result = await runAsync(
-      [...argv, "up", "-d", "--build"],
-      { capture: true, signal, env },
-    );
+    const result = await runAsync([...argv, "up", "-d", "--build"], { capture: true, signal, env });
     if (result.status !== 0) {
       error(`docker compose failed:\n${result.stderr.trim()}`);
       return false;
@@ -206,10 +201,7 @@ async function checkInfraHealth(): Promise<Record<string, boolean>> {
 
   const services: Record<string, boolean> = {};
   try {
-    const result = run(
-      [...argv, "ps", "--format", "json"],
-      { capture: true, env },
-    );
+    const result = run([...argv, "ps", "--format", "json"], { capture: true, env });
     if (result.status === 0 && result.stdout.trim()) {
       for (const line of result.stdout.trim().split("\n")) {
         try {
@@ -302,7 +294,11 @@ export async function infraHealth(timeoutSec: number): Promise<Record<string, bo
   info("Waiting for services to become healthy...");
   const deadline = Date.now() + timeoutSec * 1000;
   let health = await checkInfraHealth();
-  while (Object.keys(health).length > 0 && Object.values(health).some((h) => !h) && Date.now() < deadline) {
+  while (
+    Object.keys(health).length > 0 &&
+    Object.values(health).some((h) => !h) &&
+    Date.now() < deadline
+  ) {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     health = await checkInfraHealth();
   }
@@ -348,7 +344,9 @@ export async function down(volumes = false): Promise<void> {
 export async function stop(): Promise<void> {
   await stopAll();
   if (composeCmd(["stop"])) {
-    success("Shared infrastructure stopped (containers preserved, resumable with 'sandbox up infra')");
+    success(
+      "Shared infrastructure stopped (containers preserved, resumable with 'sandbox up infra')",
+    );
   }
 }
 

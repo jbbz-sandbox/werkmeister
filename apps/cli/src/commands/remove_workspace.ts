@@ -18,8 +18,8 @@
  * --abandon records why (docs/workspace-lifecycle.md).
  */
 
-import { Colors, info, warn } from "../lib/config.js";
 import { removeWorkspace } from "sandbox-core";
+import { Colors, info, warn } from "../lib/config.js";
 import { confirm } from "../lib/wizard.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
@@ -40,7 +40,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     }
   }
 
-  const result = await removeWorkspace(name, { abandon: (args.abandon as string | null) ?? undefined });
+  const result = await removeWorkspace(name, {
+    abandon: (args.abandon as string | null) ?? undefined,
+  });
 
   console.log(result.output);
   console.log(`\n${Colors.GREEN}${Colors.BOLD}Workspace '${name}' removed${Colors.RESET}`);

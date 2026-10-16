@@ -12,19 +12,17 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-
-import { validationRows } from "./archetypes.js";
+import { containerTestCommand, serviceTestCommand, validationRows } from "./archetypes.js";
+import { loadArchetypes } from "./config.js";
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
 import { loadIngress } from "./global_config.js";
 import { issueLink } from "./issue_tracker.js";
-import { renderIssueRef } from "./strategies/issue_section.js";
-import type { IssueRef } from "./strategies/types.js";
 import { standardsSource, standardsUrl } from "./skill_gen.js";
-import { containerTestCommand, serviceTestCommand } from "./archetypes.js";
-import { loadArchetypes } from "./config.js";
 import { getServicePort } from "./slots.js";
 import { universalStandards } from "./standards.js";
-import { DEFAULT_PLAN, planFor, type Phase, type WorkTypePlan } from "./workspace_prompts.js";
+import { renderIssueRef } from "./strategies/issue_section.js";
+import type { IssueRef } from "./strategies/types.js";
+import { DEFAULT_PLAN, type Phase, planFor, type WorkTypePlan } from "./workspace_prompts.js";
 
 /**
  * The public hostname to point the reader at, and the cookie's domain scope.
@@ -98,7 +96,9 @@ export function buildRoutingTable(
     rows.push("| Cross-repo contract change | .sandbox/notes/ (`contract` notes) |");
   }
 
-  rows.push("| Open or create a PR (including `/create-pr`), merge, close out | .sandbox/pr-rules.md |");
+  rows.push(
+    "| Open or create a PR (including `/create-pr`), merge, close out | .sandbox/pr-rules.md |",
+  );
 
   if (rows.length === 0) {
     return "";
@@ -151,8 +151,7 @@ export function buildStandardsRoutingSection(
     if (universal.includes(key)) {
       loadsOn = "any code edit";
     } else {
-      loadsOn =
-        ((meta["applies_to"] || []) as string[]).map((g) => `\`${g}\``).join(", ") || "—";
+      loadsOn = ((meta["applies_to"] || []) as string[]).map((g) => `\`${g}\``).join(", ") || "—";
     }
     rows.push(`| ${key} | \`sb-${key}-standard\` | ${loadsOn} |`);
   }
@@ -176,10 +175,12 @@ export function buildStandardsRoutingSection(
 
   const plan = planFor(workType);
   const phaseRows: Record<Phase, string> = {
-    research: "| research / planning | `sb-research` | nothing — spawns the read-only `sb-researcher` agent |",
+    research:
+      "| research / planning | `sb-research` | nothing — spawns the read-only `sb-researcher` agent |",
     implement: `| implementing (before the first code edit) | \`sb-implement\` | universal base (${universalSkills}) + rows matching the files you edit |`,
     test: "| testing | `sb-test` | nothing — spawns the matching `sb-tester-<archetype>` agent(s) |",
-    review: "| review (before reading any diff or PR) | `sb-review` | the standards covering files in the diff |",
+    review:
+      "| review (before reading any diff or PR) | `sb-review` | the standards covering files in the diff |",
     pr: "| PR / finishing | `sb-pr` | `.sandbox/pr-rules.md` — PRs open only via `sandbox pr open` |",
   };
   const workTypeBlock =
@@ -256,7 +257,11 @@ ${contractRule}`;
   // HTML comment prompts the developer to write a 1-2 sentence "what + why"
   // rather than leaving the workspace context with only the task title.
   const link = issue ? null : issueLink(meta);
-  const currentTaskLine = !link ? task : link[1] ? `${task} — [${link[0]}](${link[1]})` : `${task} — ${link[0]}`;
+  const currentTaskLine = !link
+    ? task
+    : link[1]
+      ? `${task} — [${link[0]}](${link[1]})`
+      : `${task} — ${link[0]}`;
   const description = (meta["DESCRIPTION"] ?? "").trim();
   const taskBody = description
     ? description
@@ -301,7 +306,12 @@ Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's
 // sandbox-context.md generation
 // ---------------------------------------------------------------------------
 
-function testCommandLine(feature: string, svc: string, servicesConfig: Record<string, any>, archetypes: Record<string, any>): string {
+function testCommandLine(
+  feature: string,
+  svc: string,
+  servicesConfig: Record<string, any>,
+  archetypes: Record<string, any>,
+): string {
   const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
   return cmd
     ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, cmd)}\``
@@ -376,7 +386,11 @@ export function buildSandboxContextMd(
   const k8sPort = (svc: string): number | null => {
     // k8s-forwards container listen-port; single source is services.yaml.
     const svcDef = servicesConfig[svc] ?? {};
-    if (isDict(svcDef) && svcDef["k8s_forward_port"] !== null && svcDef["k8s_forward_port"] !== undefined) {
+    if (
+      isDict(svcDef) &&
+      svcDef["k8s_forward_port"] !== null &&
+      svcDef["k8s_forward_port"] !== undefined
+    ) {
       return Number(svcDef["k8s_forward_port"]);
     }
     return null;
@@ -558,24 +572,26 @@ sandbox down -v     # tear down + remove volumes (node_modules, caches)
 
 `
     : "";
-  const servicesBlock = hasLocal || serviceRows.length > 0
-    ? `## Services
+  const servicesBlock =
+    hasLocal || serviceRows.length > 0
+      ? `## Services
 
 Every container gets each service's URL injected as an env var (the last column). Local services resolve to the Docker DNS alias on the per-feature network; k8s-forwarded services resolve via the shared \`k8s-forwards\` container.
 
 ${servicesTable}
 
 `
-    : "";
-  const healthBlock = hasUrl || hasLocal
-    ? `## Quick Health Checks
+      : "";
+  const healthBlock =
+    hasUrl || hasLocal
+      ? `## Quick Health Checks
 
 \`\`\`bash
 ${healthChecks}
 \`\`\`
 
 `
-    : "";
+      : "";
   const proxyBlock = hasUrl
     ? `## Proxy Routing
 
@@ -589,7 +605,9 @@ ${featureBlock}
     hasUrl || hasLocal
       ? `## Troubleshooting
 
-${hasUrl ? `### Feature missing from \`/__sandbox\` selector
+${
+  hasUrl
+    ? `### Feature missing from \`/__sandbox\` selector
 
 The dropdown is populated from \`~/.sandbox/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
 
@@ -608,14 +626,20 @@ sandbox proxy-reload      # regenerates Caddyfile + features.json, reloads Caddy
 
 Caddy routing issue, not an app issue. Try \`sandbox proxy-reload\` first; if Caddy is still misrouting, check \`docker logs sandbox-caddy --tail 50\`.
 
-` : ""}${hasLocal ? `### Containers expected per the table above are missing from \`docker ps\`
+`
+    : ""
+}${
+  hasLocal
+    ? `### Containers expected per the table above are missing from \`docker ps\`
 
 \`sandbox up\` may have partially failed. Re-run from the workspace root:
 \`\`\`bash
 sandbox up                # idempotent — starts missing containers
 docker compose logs -f    # watch startup if something crashes
 \`\`\`
-` : ""}`
+`
+    : ""
+}`
       : "";
 
   return `<!--

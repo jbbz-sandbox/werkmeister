@@ -25,11 +25,7 @@
  *                               (the /sandbox-workspace skill does this in the Claude
  *                               Code desktop app to show the form in its Browser pane).
  */
-import {
-  createWorkspace,
-  fetchIssueFormData,
-  WorkspaceError,
-} from "sandbox-core";
+import { createWorkspace, fetchIssueFormData, WorkspaceError } from "sandbox-core";
 import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {

@@ -3,9 +3,10 @@
 // stops at "connected" reports a dead datastore as healthy. The silent-server
 // test below is that failure, and it is the one that must stay red if someone
 // simplifies checkWireHealth back into a connect check.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import net from "node:net";
+import { test } from "node:test";
 
 import { checkForwardHealth, checkWireHealth } from "./dist/k8s.js";
 
@@ -17,7 +18,9 @@ function fakeForward(reply) {
         if (reply !== null) sock.write(reply);
       });
     });
-    srv.listen(0, "127.0.0.1", () => resolve({ port: srv.address().port, close: () => srv.close() }));
+    srv.listen(0, "127.0.0.1", () =>
+      resolve({ port: srv.address().port, close: () => srv.close() }),
+    );
   });
 }
 
@@ -52,7 +55,9 @@ test("a forward that accepts and never replies is unhealthy", async () => {
 // probe never settled and `sandbox up` exited on an unsettled top-level await.
 // The per-test timeout is the guard, and unref() keeps the server from holding
 // the file open past it: a pending probe fails here instead of hanging the run.
-test("a forward that hangs up without replying is unhealthy, not pending", { timeout: 2_000 }, async () => {
+test("a forward that hangs up without replying is unhealthy, not pending", {
+  timeout: 2_000,
+}, async () => {
   const srv = net.createServer((sock) => sock.on("data", () => sock.destroy()));
   await new Promise((resolve) => srv.listen(0, "127.0.0.1", resolve));
   srv.unref();

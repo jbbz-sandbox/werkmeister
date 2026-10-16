@@ -89,7 +89,10 @@ const propose: Stage = {
       "Write `output/pr-<repo>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`. Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs, the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
       "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],
-    outputs: ["One commit per code repo touched, on that worktree's branch", "`output/pr-<repo>.md` per repo"],
+    outputs: [
+      "One commit per code repo touched, on that worktree's branch",
+      "`output/pr-<repo>.md` per repo",
+    ],
     humanCheck:
       "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then `sandbox close-out`.",
     selfCheck:
@@ -149,7 +152,8 @@ const feature: Stage[] = [
         "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
       ],
       outputs: ["`output/spec.md`", "Any artifact from step 2, in the repo"],
-      humanCheck: "Read `output/spec.md` against the brief. Edit it directly — the next stage builds whatever is on disk.",
+      humanCheck:
+        "Read `output/spec.md` against the brief. Edit it directly — the next stage builds whatever is on disk.",
     }),
   },
   {
@@ -159,7 +163,8 @@ const feature: Stage[] = [
     check: "read the diff; tests green",
     standards: "all",
     contract: (v) => ({
-      oneJob: "One job: make the changes `spec.md` lists, add the tests it names, and prove them against the running service.",
+      oneJob:
+        "One job: make the changes `spec.md` lists, add the tests it names, and prove them against the running service.",
       inputs: [
         `Working (this run): \`${v.at("spec")}/output/spec.md\` and the files it names`,
         `Working (this run): \`${v.at("research")}/output/decisions.md\``,
@@ -175,8 +180,12 @@ const feature: Stage[] = [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`sandbox-context.md\` describes for each service touched, and capture the output.`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, the exercise checks as ${EXERCISE_FORMAT}, and any deviation from \`spec.md\` with its reason.`,
       ],
-      outputs: ["Code changes, uncommitted — the next stage commits after the person reads the diff", "`output/exercise.md`"],
-      humanCheck: "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
+      outputs: [
+        "Code changes, uncommitted — the next stage commits after the person reads the diff",
+        "`output/exercise.md`",
+      ],
+      humanCheck:
+        "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
     }),
   },
   propose,
@@ -197,7 +206,8 @@ const bugfix: Stage[] = [
         `Working (this run): the files in ${v.repos} on the failing path — follow the call chain, don't read whole trees`,
         "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports, logs, test command",
       ],
-      doNotLoad: "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
+      doNotLoad:
+        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
       process: [
         "Reproduce the failure against the running service or with a test. Record the exact command and its output.",
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
@@ -219,13 +229,15 @@ const bugfix: Stage[] = [
       "`stages/01_reproduce/output/repro.md` reads `status: decided` — the flip *is* the approval, do not ask again",
     standards: "all",
     contract: (v) => ({
-      oneJob: "One job: make the failing test pass by changing the code at the root cause, and nothing else.",
+      oneJob:
+        "One job: make the failing test pass by changing the code at the root cause, and nothing else.",
       inputs: [
         `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — must read \`status: decided\`; if not, stop and route back`,
         "Working (this run): the failing test and the files at the root cause",
         "Reference (every run): `../../.sandbox/sandbox-context.md` — test command",
       ],
-      doNotLoad: "`BRIEF.md` (`repro.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
+      doNotLoad:
+        "`BRIEF.md` (`repro.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
@@ -233,7 +245,8 @@ const bugfix: Stage[] = [
         "Write `output/fix.md`: `git diff --stat` per repo, the failing test's name, and the test exit code and summary line.",
       ],
       outputs: ["Code changes plus the test, uncommitted", "`output/fix.md`"],
-      humanCheck: "Read the diff. Confirm the fix sits where `repro.md` put the root cause. Edit in place if not.",
+      humanCheck:
+        "Read the diff. Confirm the fix sits where `repro.md` put the root cause. Edit in place if not.",
     }),
   },
   {
@@ -243,13 +256,15 @@ const bugfix: Stage[] = [
     check: "the original reproduction no longer fails",
     standards: "none",
     contract: (v) => ({
-      oneJob: "One job: show the original failure is gone in the running service, not just in the test.",
+      oneJob:
+        "One job: show the original failure is gone in the running service, not just in the test.",
       inputs: [
         `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — the reproduction steps`,
         `Working (this run): \`${v.at("fix")}/output/fix.md\``,
         "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports",
       ],
-      doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.sandbox/*.yml`.",
+      doNotLoad:
+        "`_shared/standards.md` (no code is written here), source files, `.sandbox/*.yml`.",
       process: [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
@@ -271,12 +286,14 @@ const refactor: Stage[] = [
     check: "agree what must not change",
     standards: "none",
     contract: (v) => ({
-      oneJob: "One job: pin down what the refactor may touch and what behaviour must not change. No code is written in this stage.",
+      oneJob:
+        "One job: pin down what the refactor may touch and what behaviour must not change. No code is written in this stage.",
       inputs: [
         "Working (this run): `../../BRIEF.md`",
         `Working (this run): the files in ${v.repos} that \`BRIEF.md\` names, and their callers`,
       ],
-      doNotLoad: "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
+      doNotLoad:
+        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
       process: [
         "List the files in scope and every caller outside it.",
         "State the invariants: observable behaviour that must be identical after the refactor.",
@@ -297,13 +314,15 @@ const refactor: Stage[] = [
       "`stages/01_scope/output/scope.md` reads `status: decided` — the flip *is* the approval, do not ask again",
     standards: "all",
     contract: (v) => ({
-      oneJob: "One job: carry out the steps `scope.md` settled, keeping every invariant true after each one.",
+      oneJob:
+        "One job: carry out the steps `scope.md` settled, keeping every invariant true after each one.",
       inputs: [
         `Working (this run): \`${v.at("scope")}/output/scope.md\` — must read \`status: decided\``,
         "Working (this run): the files in scope",
         "Reference (every run): `../../.sandbox/sandbox-context.md` — test command",
       ],
-      doNotLoad: "`BRIEF.md` (`scope.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
+      doNotLoad:
+        "`BRIEF.md` (`scope.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
@@ -326,7 +345,8 @@ const spike: Stage[] = [
     check: "agree the questions and what settles them",
     standards: "none",
     contract: () => ({
-      oneJob: "One job: turn the brief into questions, each with the evidence that would settle it. No code is written in this stage.",
+      oneJob:
+        "One job: turn the brief into questions, each with the evidence that would settle it. No code is written in this stage.",
       inputs: ["Working (this run): `../../BRIEF.md`"],
       doNotLoad: "source trees, `_shared/standards.md`, `.sandbox/*.yml`.",
       process: [
@@ -348,7 +368,8 @@ const spike: Stage[] = [
       "`stages/01_questions/output/questions.md` reads `status: decided` — the flip *is* the approval, do not ask again",
     standards: "none",
     contract: (v) => ({
-      oneJob: "One job: answer each settled question with evidence, and recommend what to build next.",
+      oneJob:
+        "One job: answer each settled question with evidence, and recommend what to build next.",
       inputs: [
         `Working (this run): \`${v.at("questions")}/output/questions.md\` — must read \`status: decided\``,
         `Working (this run): whatever each question's method names, in ${v.repos}`,
@@ -367,7 +388,13 @@ const spike: Stage[] = [
   },
 ];
 
-export const ICM_TEMPLATES: Record<string, Stage[]> = { feature, bugfix, incident: bugfix, refactor, spike };
+export const ICM_TEMPLATES: Record<string, Stage[]> = {
+  feature,
+  bugfix,
+  incident: bugfix,
+  refactor,
+  spike,
+};
 
 /** The stage list for *workType*; free text and unknown types get `feature`. */
 export function templateFor(workType: string): Stage[] {

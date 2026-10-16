@@ -16,12 +16,13 @@
  *     localhost server and open the browser — the localhost-callback pattern the
  *     create-workspace form already uses (see localhost-form.ts).
  */
-import express, { type Router } from "express";
+
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import express, { type Router } from "express";
 import { createServer } from "../server.js";
 import { localOnly, openBrowser } from "./localhost-form.js";
 import { subscribeSession } from "./session-stream.js";
@@ -67,7 +68,10 @@ export async function createBrowserUiRouter(): Promise<Router> {
       const html = await fs.readFile(path.join(DIST_DIR, "browser.html"), "utf-8");
       res.type("html").send(html);
     } catch {
-      res.status(500).type("text").send("Browser UI bundle missing — run `npm run build` in apps/sandbox-dashboard.");
+      res
+        .status(500)
+        .type("text")
+        .send("Browser UI bundle missing — run `npm run build` in apps/sandbox-dashboard.");
     }
   });
 
@@ -88,7 +92,8 @@ export async function createBrowserUiRouter(): Promise<Router> {
     // Last-Event-ID header) wins; otherwise the auto-reconnect Last-Event-ID
     // (last-delivered index + 1), re-sent one earlier so a mid-growth last
     // message refreshes on reconnect (index adds are idempotent upserts).
-    const fromQ = typeof req.query.from === "string" ? Number.parseInt(req.query.from, 10) : Number.NaN;
+    const fromQ =
+      typeof req.query.from === "string" ? Number.parseInt(req.query.from, 10) : Number.NaN;
     const lastId = Number(req.headers["last-event-id"] ?? 0) || 0;
     const fromIndex = Number.isFinite(fromQ) && fromQ >= 0 ? fromQ : Math.max(0, lastId - 1);
     // Pin to a specific session (chat panel's picker); absent → follow newest.
@@ -126,7 +131,10 @@ export async function createBrowserUiRouter(): Promise<Router> {
         res.status(400).json({ error: textOf(result) });
         return;
       }
-      res.json({ structuredContent: result.structuredContent ?? null, content: result.content ?? [] });
+      res.json({
+        structuredContent: result.structuredContent ?? null,
+        content: result.content ?? [],
+      });
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });
     }

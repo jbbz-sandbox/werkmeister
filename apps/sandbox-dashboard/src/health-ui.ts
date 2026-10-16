@@ -5,9 +5,10 @@
  * simple row list. This is the itemized detail view behind the top bar's
  * aggregate infra/k8s/kube chips in workspace-ui.ts; it doesn't replace them.
  */
-import type { HostBridge } from "./workspace-ui.js";
-import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
+
 import { el, injectCss } from "./theme.js";
+import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
+import type { HostBridge } from "./workspace-ui.js";
 
 interface InfraService {
   name: string;
@@ -169,7 +170,9 @@ export function initHealthUI(bridge: HostBridge, root: HTMLElement): { reload: (
       .filter((f) => f.total > 0)
       .sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99));
     if (!active.length) {
-      host.appendChild(el("div", "row", "No feature sandboxes up (start one with `sandbox up <feature>`)"));
+      host.appendChild(
+        el("div", "row", "No feature sandboxes up (start one with `sandbox up <feature>`)"),
+      );
       return;
     }
     // Drop cached panels for workspaces no longer active, so the cache doesn't
@@ -199,7 +202,10 @@ export function initHealthUI(bridge: HostBridge, root: HTMLElement): { reload: (
       const usagePanel = getUsagePanel(f.name);
       const usageBtn = el("button", "refresh", "Usage") as HTMLButtonElement;
       usageBtn.addEventListener("click", async () => {
-        if (usagePanel.style.display !== "none") { usagePanel.style.display = "none"; return; }
+        if (usagePanel.style.display !== "none") {
+          usagePanel.style.display = "none";
+          return;
+        }
         usagePanel.style.display = "";
         usagePanel.textContent = "Computing usage…";
         try {
@@ -220,7 +226,9 @@ export function initHealthUI(bridge: HostBridge, root: HTMLElement): { reload: (
     const host = $("infra");
     host.innerHTML = "";
     if (!services.length) {
-      host.appendChild(el("div", "row", "No infra containers found (is `sandbox connect` running?)"));
+      host.appendChild(
+        el("div", "row", "No infra containers found (is `sandbox connect` running?)"),
+      );
       return;
     }
     for (const s of services) host.appendChild(serviceRow(s, false));

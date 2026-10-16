@@ -57,7 +57,8 @@ export const ghBin = () => process.env.SANDBOX_GH_BIN || "gh";
 /** `gh` with its stdout; throws with gh's own message on a non-zero exit. */
 async function gh(args: string[]): Promise<string> {
   const r = await runAsync([ghBin(), ...args], { capture: true, env: childEnv(), timeout: 30 });
-  if (r.status !== 0) throw new Error(r.stderr.trim() || `gh ${args[0]} ${args[1]} exited ${r.status}`);
+  if (r.status !== 0)
+    throw new Error(r.stderr.trim() || `gh ${args[0]} ${args[1]} exited ${r.status}`);
   return r.stdout;
 }
 
@@ -84,14 +85,21 @@ function fromGh(ref: string, i: GhIssue): Issue {
     url: i.url,
     comments: (i.comments ?? [])
       .filter((c) => c.body?.trim())
-      .map((c) => ({ author: c.author?.login ?? "unknown", created: c.createdAt, body: c.body!.trim() })),
+      .map((c) => ({
+        author: c.author?.login ?? "unknown",
+        created: c.createdAt,
+        body: c.body!.trim(),
+      })),
   };
 }
 
 async function view(ref: string, fields: string): Promise<Issue | null> {
   try {
     const [repo, n] = split(ref);
-    return fromGh(ref, JSON.parse(await gh(["issue", "view", n, "-R", repo, "--json", fields])) as GhIssue);
+    return fromGh(
+      ref,
+      JSON.parse(await gh(["issue", "view", n, "-R", repo, "--json", fields])) as GhIssue,
+    );
   } catch {
     return null;
   }
@@ -110,7 +118,11 @@ export const github: IssueTrackerStrategy = {
     if (url) return `${url[1]}#${url[2]}`;
     return /[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+/.exec(ref)?.[0] ?? null;
   },
-  slug: (ref) => (ref.split("/").pop() ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+  slug: (ref) =>
+    (ref.split("/").pop() ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, ""),
   url(ref) {
     const m = FULL_RE.exec(ref);
     return m ? `https://github.com/${m[1]}/issues/${m[2]}` : null;
@@ -131,7 +143,8 @@ export const github: IssueTrackerStrategy = {
       : "that repo's GitHub issues — find it with `git -C <worktree> remote get-url origin`";
     return {
       row: `| app code in a worktree | ${where} | \`gh issue create -R <owner>/<repo> --label <label>\` |`,
-      search: 'Search first: `gh issue list -R <owner>/<repo> --search "<keywords>" --state all`. If it exists, comment on it instead.',
+      search:
+        'Search first: `gh issue list -R <owner>/<repo> --search "<keywords>" --state all`. If it exists, comment on it instead.',
     };
   },
 
@@ -151,13 +164,22 @@ export const github: IssueTrackerStrategy = {
   },
 
   async checkAuth() {
-    const run = (args: string[]) => runAsync([ghBin(), ...args], { capture: true, env: childEnv(), timeout: 15 }).catch(() => null);
+    const run = (args: string[]) =>
+      runAsync([ghBin(), ...args], { capture: true, env: childEnv(), timeout: 15 }).catch(
+        () => null,
+      );
     const s = await run(["auth", "status", "--hostname", "github.com"]);
     if (!s || s.status !== 0) return { ok: false, reason: "not signed in", fix: "gh auth login" };
     const who = /account (\S+)/.exec(`${s.stdout}${s.stderr}`)?.[1];
     for (const repo of githubIssueRepos()) {
       const v = await run(["repo", "view", repo, "--json", "name"]);
-      if (!v || v.status !== 0) return { ok: false, ...(who ? { who } : {}), reason: `can't read ${repo}`, fix: "gh auth refresh -s repo" };
+      if (!v || v.status !== 0)
+        return {
+          ok: false,
+          ...(who ? { who } : {}),
+          reason: `can't read ${repo}`,
+          fix: "gh auth refresh -s repo",
+        };
     }
     return { ok: true, ...(who ? { who } : {}), fix: "" };
   },

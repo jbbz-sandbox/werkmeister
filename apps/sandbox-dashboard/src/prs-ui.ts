@@ -10,10 +10,11 @@
  * Browser surface only (needs the same-origin Express server for its reconcile +
  * live session-stream routes); not mounted by mcp-list.ts or artifact-main.ts.
  */
-import type { HostBridge } from "./workspace-ui.js";
-import { initChatPanel, type ChatPanelHandle } from "./chat-panel.js";
+
 import { renderMarkdown } from "../lib/markdown.js";
+import { type ChatPanelHandle, initChatPanel } from "./chat-panel.js";
 import { el, injectCss } from "./theme.js";
+import type { HostBridge } from "./workspace-ui.js";
 
 interface OpenPr {
   url: string;
@@ -178,7 +179,8 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
 
   function matches(pr: OpenPr): boolean {
     if (!filter) return true;
-    const hay = `${pr.repo} ${pr.number} ${pr.title} ${pr.author} ${pr.labels.join(" ")}`.toLowerCase();
+    const hay =
+      `${pr.repo} ${pr.number} ${pr.title} ${pr.author} ${pr.labels.join(" ")}`.toLowerCase();
     return hay.includes(filter);
   }
 
@@ -195,7 +197,8 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
     const out: HTMLElement[] = [];
     const rs = REVIEW_STATUS[pr.reviewStatus];
     out.push(el("span", `pr-flag ${rs.cls}`, rs.text));
-    if (pr.failingChecks > 0) out.push(el("span", "pr-flag failing", `${pr.failingChecks} failing`));
+    if (pr.failingChecks > 0)
+      out.push(el("span", "pr-flag failing", `${pr.failingChecks} failing`));
     if (pr.outOfDate) out.push(el("span", "pr-flag stale", "out of date"));
     for (const l of pr.labels) out.push(el("span", "lbl", l));
     return out;
@@ -209,7 +212,9 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
   // untouched; a tracker strategy returning markdown would retire this.
   function descriptionToMarkdown(src: string): string {
     if (!/^h[1-6]\.\s|\{code|\{noformat\}|\{\{/m.test(src)) return src;
-    let s = src.replace(/\{code(?::[^}]*)?\}|\{noformat\}/g, "\n```\n").replace(/\{\{([^}]+)\}\}/g, "`$1`");
+    let s = src
+      .replace(/\{code(?::[^}]*)?\}|\{noformat\}/g, "\n```\n")
+      .replace(/\{\{([^}]+)\}\}/g, "`$1`");
     return s
       .split(/\r?\n/)
       .map((line) => {
@@ -371,7 +376,10 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
                 title: "Your call:",
                 options: [
                   { label: "Approve", description: "Approve this PR on GitHub" },
-                  { label: "Request changes", description: "Open the PR on GitHub to leave your review" },
+                  {
+                    label: "Request changes",
+                    description: "Open the PR on GitHub to leave your review",
+                  },
                 ],
                 onSelect: async (i) => {
                   if (i === 0) {

@@ -5,7 +5,12 @@
  */
 import { beforeEach, expect, it, vi } from "vitest";
 
-vi.mock("sandbox-core", () => ({ adoptPr: vi.fn(), gatePrs: vi.fn(), openPrs: vi.fn(), refreshPrStatus: vi.fn() }));
+vi.mock("sandbox-core", () => ({
+  adoptPr: vi.fn(),
+  gatePrs: vi.fn(),
+  openPrs: vi.fn(),
+  refreshPrStatus: vi.fn(),
+}));
 vi.mock("sandbox-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
 
 import { adoptPr, gatePrs, openPrs, refreshPrStatus } from "sandbox-core";
@@ -45,7 +50,11 @@ it("adopt goes to adoptPr with the PR, or with --no-pr's reason", async () => {
   await run({ action: "adopt", pr: "140", noPr: null, repo: "app", json: false });
   expect(adoptPr).toHaveBeenCalledWith("/features/ws", { pr: "140", noPr: undefined, repo: "app" });
   await run({ action: "adopt", pr: null, noPr: "fixed on main", repo: null, json: false });
-  expect(adoptPr).toHaveBeenLastCalledWith("/features/ws", { pr: undefined, noPr: "fixed on main", repo: undefined });
+  expect(adoptPr).toHaveBeenLastCalledWith("/features/ws", {
+    pr: undefined,
+    noPr: "fixed on main",
+    repo: undefined,
+  });
 });
 
 it("outside a workspace it exits 1 without calling core", async () => {

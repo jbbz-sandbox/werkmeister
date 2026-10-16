@@ -1,13 +1,14 @@
 // `proc.run` is spawnSync and cannot be cancelled, so every long-running core
 // path needs this async sibling. The abort contract is what a remote caller
 // gets instead of killing the CLI process.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
-import { runAsync, ProcError } from "./dist/proc.js";
+import { ProcError, runAsync } from "./dist/proc.js";
 
 test("runAsync captures stdout and the exit status", async () => {
   const res = await runAsync(["node", "-e", "process.stdout.write('hi')"], { capture: true });
@@ -24,7 +25,10 @@ test("runAsync rejects with ABORT_ERR promptly when the signal fires", async () 
   });
   setTimeout(() => ac.abort(), 50);
 
-  const err = await promise.then(() => null, (e) => e);
+  const err = await promise.then(
+    () => null,
+    (e) => e,
+  );
   assert.ok(err instanceof ProcError, `expected ProcError, got ${err}`);
   assert.equal(err.code, "ABORT_ERR");
   // Promptness is the contract, not just the verdict: without the signal
@@ -35,8 +39,10 @@ test("runAsync rejects with ABORT_ERR promptly when the signal fires", async () 
 });
 
 test("runAsync rejects with ENOENT for a missing executable", async () => {
-  const err = await runAsync(["definitely-not-a-real-binary-xyz"], { capture: true })
-    .then(() => null, (e) => e);
+  const err = await runAsync(["definitely-not-a-real-binary-xyz"], { capture: true }).then(
+    () => null,
+    (e) => e,
+  );
   assert.ok(err instanceof ProcError, `expected ProcError, got ${err}`);
   assert.equal(err.code, "ENOENT");
 });
@@ -45,8 +51,13 @@ test("runAsync throws on non-zero status only when check is set", async () => {
   const res = await runAsync(["node", "-e", "process.exit(3)"], { capture: true });
   assert.equal(res.status, 3);
 
-  const err = await runAsync(["node", "-e", "process.exit(3)"], { capture: true, check: true })
-    .then(() => null, (e) => e);
+  const err = await runAsync(["node", "-e", "process.exit(3)"], {
+    capture: true,
+    check: true,
+  }).then(
+    () => null,
+    (e) => e,
+  );
   assert.ok(err instanceof ProcError, `expected ProcError, got ${err}`);
   assert.equal(err.status, 3);
 });
@@ -55,7 +66,10 @@ test("runAsync rejects with ETIMEDOUT, distinct from an abort", async () => {
   const err = await runAsync(["node", "-e", "setTimeout(() => {}, 60000)"], {
     capture: true,
     timeout: 1,
-  }).then(() => null, (e) => e);
+  }).then(
+    () => null,
+    (e) => e,
+  );
   assert.ok(err instanceof ProcError, `expected ProcError, got ${err}`);
   assert.equal(err.code, "ETIMEDOUT");
 });
@@ -67,7 +81,11 @@ test("an aborted child is actually dead, not just abandoned", async () => {
   const pidFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "pid-")), "pid");
   const ac = new AbortController();
   const promise = runAsync(
-    ["node", "-e", `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 60000)`],
+    [
+      "node",
+      "-e",
+      `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 60000)`,
+    ],
     { capture: true, signal: ac.signal },
   );
 

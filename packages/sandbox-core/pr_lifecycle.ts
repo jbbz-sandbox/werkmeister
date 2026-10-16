@@ -19,12 +19,33 @@ import { updateNoteStatus } from "./graduate.js";
 import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import { openDecisions } from "./notes.js";
-import { commitAndPush, listRepoWorktrees, removeWorkspace, resolveWorkspaceDir, WorkspaceError, worktreeSources } from "./sandbox.js";
+import {
+  commitAndPush,
+  listRepoWorktrees,
+  removeWorkspace,
+  resolveWorkspaceDir,
+  WorkspaceError,
+  worktreeSources,
+} from "./sandbox.js";
 import { getServicePort } from "./slots.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
-export type PrStatus = "draft" | "approved" | "open" | "merged" | "shipped" | "closed" | "abandoned";
-export type Lifecycle = "working" | "ready" | "pr-open" | "merged" | "shipped" | "closed-out" | "abandoned";
+export type PrStatus =
+  | "draft"
+  | "approved"
+  | "open"
+  | "merged"
+  | "shipped"
+  | "closed"
+  | "abandoned";
+export type Lifecycle =
+  | "working"
+  | "ready"
+  | "pr-open"
+  | "merged"
+  | "shipped"
+  | "closed-out"
+  | "abandoned";
 
 const SETTLED = new Set(["shipped", "closed", "abandoned"]);
 const PAST_MERGE = new Set(["merged", "shipped", "closed", "abandoned"]);
@@ -38,7 +59,11 @@ export interface PrFile {
   body: string;
 }
 
-export type Run = (bin: string, args: string[], cwd?: string) => Promise<{ stdout: string; stderr: string; code: number }>;
+export type Run = (
+  bin: string,
+  args: string[],
+  cwd?: string,
+) => Promise<{ stdout: string; stderr: string; code: number }>;
 
 /** Everything that leaves the process, so tests stub the seam and keep the logic real. */
 export interface Deps {
@@ -51,7 +76,11 @@ export interface Deps {
   tracker: IssueTrackerStrategy;
   doneStatus: string;
   /** Commit and push *paths* (relative to the workspace) on the record branch — nothing else that is dirty. */
-  commitRecord: (ws: string, message: string, paths: string[]) => Promise<{ ok: boolean; message: string }>;
+  commitRecord: (
+    ws: string,
+    message: string,
+    paths: string[],
+  ) => Promise<{ ok: boolean; message: string }>;
   remove: (name: string) => Promise<{ output: string }>;
   /** Terminal sessions still open in the workspace, one line each. */
   terminals: (ws: string) => Promise<string[]>;
@@ -67,7 +96,11 @@ const execRun: Run = (bin, args, cwd) =>
       { cwd, env: childEnv(), maxBuffer: 64 * 1024 * 1024, timeout: 30 * 60_000 },
       (err, stdout, stderr) => {
         const code = err ? (typeof (err as any).code === "number" ? (err as any).code : 1) : 0;
-        resolve({ stdout: String(stdout), stderr: String(stderr) || (err && code === 1 ? err.message : ""), code });
+        resolve({
+          stdout: String(stdout),
+          stderr: String(stderr) || (err && code === 1 ? err.message : ""),
+          code,
+        });
       },
     );
   });
@@ -89,7 +122,9 @@ export function defaultDeps(): Deps {
     archetypes: loadArchetypes(),
     repos: loadReposConfig(),
     tracker: issueTracker(),
-    doneStatus: String(overrides["issue_done_status"] ?? (loadIssueTracker() === "github" ? "closed" : "Done")),
+    doneStatus: String(
+      overrides["issue_done_status"] ?? (loadIssueTracker() === "github" ? "closed" : "Done"),
+    ),
     commitRecord: commitAndPush,
     remove: (name) => removeWorkspace(name, { closedOut: true }),
     terminals: (ws) => openTerminalSessions(ws),
@@ -125,7 +160,9 @@ function parsePrFile(p: string): PrFile {
     yamlError = ` YAML error: ${(e as Error).message}`;
   }
   if (!m || typeof fm !== "object" || fm === null || Array.isArray(fm)) {
-    throw new WorkspaceError(`${p}: PR file needs YAML frontmatter between --- lines (see pr-rules.md).${yamlError}`);
+    throw new WorkspaceError(
+      `${p}: PR file needs YAML frontmatter between --- lines (see pr-rules.md).${yamlError}`,
+    );
   }
   const heading = /^#\s+(.+)$/m.exec(m[2]);
   return {
@@ -141,7 +178,12 @@ export function readPrFiles(ws: string): PrFile[] {
   const dir = prFileDir(ws);
   let names: string[] = [];
   try {
-    names = dir ? fs.readdirSync(dir).filter((n) => /^pr-.+\.md$/.test(n)).sort() : [];
+    names = dir
+      ? fs
+          .readdirSync(dir)
+          .filter((n) => /^pr-.+\.md$/.test(n))
+          .sort()
+      : [];
   } catch {
     /* no dir yet — no PR files */
   }
@@ -181,7 +223,11 @@ function stagesCheck(ws: string): GateCheck {
   const prDir = prFileDir(ws);
   if (!fs.existsSync(path.join(ws, "stages"))) {
     const open = openDecisions(ws).map((n) => path.basename(n.path));
-    return { name: "stages", ok: open.length === 0, detail: open.length ? `open decision notes: ${open.join(", ")}` : "no open decisions" };
+    return {
+      name: "stages",
+      ok: open.length === 0,
+      detail: open.length ? `open decision notes: ${open.join(", ")}` : "no open decisions",
+    };
   }
   const own = prDir ? path.basename(path.dirname(prDir)) : "";
   const empty = fs
@@ -190,12 +236,18 @@ function stagesCheck(ws: string): GateCheck {
     .filter((d) => d < own)
     .filter((d) => {
       try {
-        return !fs.readdirSync(path.join(ws, "stages", d, "output")).some((f) => !f.startsWith("."));
+        return !fs
+          .readdirSync(path.join(ws, "stages", d, "output"))
+          .some((f) => !f.startsWith("."));
       } catch {
         return true;
       }
     });
-  return { name: "stages", ok: empty.length === 0, detail: empty.length ? `no output yet: ${empty.join(", ")}` : "every earlier stage has output" };
+  return {
+    name: "stages",
+    ok: empty.length === 0,
+    detail: empty.length ? `no output yet: ${empty.join(", ")}` : "every earlier stage has output",
+  };
 }
 
 function exerciseFile(ws: string): string | null {
@@ -220,7 +272,10 @@ function exerciseFile(ws: string): string | null {
 export function mapTouched(files: string[], repo: Record<string, any>): string[] {
   const mappings: [string, string | null][] = [
     ...Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>),
-    ...((repo["no_service_paths"] ?? []) as string[]).map((p): [string, null] => [p.replace(/\/+$/, ""), null]),
+    ...((repo["no_service_paths"] ?? []) as string[]).map((p): [string, null] => [
+      p.replace(/\/+$/, ""),
+      null,
+    ]),
   ];
   const out = new Set<string>();
   for (const f of files) {
@@ -246,7 +301,11 @@ function readEnv(ws: string, key: string): string {
   return "";
 }
 
-export async function runGate(ws: string, file: PrFile, deps: Deps = defaultDeps()): Promise<GateResult> {
+export async function runGate(
+  ws: string,
+  file: PrFile,
+  deps: Deps = defaultDeps(),
+): Promise<GateResult> {
   const checks: GateCheck[] = [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
 
@@ -255,19 +314,39 @@ export async function runGate(ws: string, file: PrFile, deps: Deps = defaultDeps
 
   const dir = path.join(ws, file.dir);
   const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
-  add("clean", status.code === 0 && status.stdout.trim() === "", status.code ? status.stderr.trim() : status.stdout.trim() ? `uncommitted:\n${status.stdout.trimEnd()}` : "clean");
+  add(
+    "clean",
+    status.code === 0 && status.stdout.trim() === "",
+    status.code
+      ? status.stderr.trim()
+      : status.stdout.trim()
+        ? `uncommitted:\n${status.stdout.trimEnd()}`
+        : "clean",
+  );
 
   const cfg = loadConfigFile(ws, null);
   const feature = String(cfg["feature"] ?? readEnv(ws, "FEATURE")).trim();
-  const local = new Set(String(cfg["services"] ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+  const local = new Set(
+    String(cfg["services"] ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
   const repo = deps.repos[file.dir] ?? {};
   const ps = await deps.run("docker", ["ps", "--format", "{{.Names}}"]);
-  const running = new Set(ps.stdout.split("\n").map((s) => s.trim()).filter(Boolean));
+  const running = new Set(
+    ps.stdout
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
   const containerFor = (svc: string): string | null => {
     const own = `${feature}-${svc}`;
     if (running.has(own)) return own;
     // Every container of a repo mounts the same worktree at /app with its node_modules.
-    const sibling = ((repo["services"] ?? []) as string[]).map((s) => `${feature}-${s}`).find((c) => running.has(c));
+    const sibling = ((repo["services"] ?? []) as string[])
+      .map((s) => `${feature}-${s}`)
+      .find((c) => running.has(c));
     return sibling ?? null;
   };
 
@@ -282,21 +361,43 @@ export async function runGate(ws: string, file: PrFile, deps: Deps = defaultDeps
     const cmd = serviceTestCommand(svc, deps.services[svc], deps.archetypes);
     const why = reason(skips[svc]);
     if (!cmd) {
-      add(`test ${svc}`, Boolean(why), why ? `skipped: ${why}` : "no test command registered — add `test:` to its registry entry, or `skip_tests: { " + svc + ": <reason> }`");
+      add(
+        `test ${svc}`,
+        Boolean(why),
+        why
+          ? `skipped: ${why}`
+          : "no test command registered — add `test:` to its registry entry, or `skip_tests: { " +
+              svc +
+              ": <reason> }`",
+      );
       continue;
     }
     const container = containerFor(svc);
     if (!container) {
-      add(`test ${svc}`, Boolean(why), why ? `skipped: ${why}` : "no running container for this repo — run `sandbox up`");
+      add(
+        `test ${svc}`,
+        Boolean(why),
+        why ? `skipped: ${why}` : "no running container for this repo — run `sandbox up`",
+      );
       continue;
     }
     const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
-    add(`test ${svc}`, res.code === 0, `${cmd} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-15).join("\n")}` : ""}`);
+    add(
+      `test ${svc}`,
+      res.code === 0,
+      `${cmd} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-15).join("\n")}` : ""}`,
+    );
   }
 
   const evidence = exerciseFile(ws);
   const evidenceProblem = evidence ? passTable(fs.readFileSync(evidence, "utf8")) : "is missing";
-  add("exercise", evidenceProblem === null, evidence ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}` : "no exercise.md — record the exercise checks first");
+  add(
+    "exercise",
+    evidenceProblem === null,
+    evidence
+      ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
+      : "no exercise.md — record the exercise checks first",
+  );
   const slot = Number(readEnv(ws, "SANDBOX_SLOT"));
   for (const svc of touched.filter((s) => local.has(s))) {
     const def = deps.services[svc] ?? {};
@@ -315,12 +416,19 @@ export async function runGate(ws: string, file: PrFile, deps: Deps = defaultDeps
 
   if (repo["ship"] === "tag" && repo["release_check"]) {
     const why = reason(file.fm["skip_release"]);
-    const container = touched.map(containerFor).find(Boolean) ?? containerFor(((repo["services"] ?? []) as string[])[0] ?? "");
+    const container =
+      touched.map(containerFor).find(Boolean) ??
+      containerFor(((repo["services"] ?? []) as string[])[0] ?? "");
     if (why) add("release", true, `skipped: ${why}`);
-    else if (!container) add("release", false, "no running container for this repo — run `sandbox up`");
+    else if (!container)
+      add("release", false, "no running container for this repo — run `sandbox up`");
     else {
       const res = await deps.run("docker", ["exec", container, "sh", "-c", repo["release_check"]]);
-      add("release", res.code === 0, `${repo["release_check"]} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-5).join("\n")}` : ""}`);
+      add(
+        "release",
+        res.code === 0,
+        `${repo["release_check"]} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-5).join("\n")}` : ""}`,
+      );
     }
   }
 
@@ -329,12 +437,21 @@ export async function runGate(ws: string, file: PrFile, deps: Deps = defaultDeps
 }
 
 export function formatGate(dir: string, g: GateResult): string[] {
-  return [`${dir}: gate ${g.ok ? "passed" : "FAILED"}`, ...g.checks.map((c) => `  ${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail.replace(/\n/g, "\n      ")}`)];
+  return [
+    `${dir}: gate ${g.ok ? "passed" : "FAILED"}`,
+    ...g.checks.map(
+      (c) => `  ${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail.replace(/\n/g, "\n      ")}`,
+    ),
+  ];
 }
 
 // ---- open / status ---------------------------------------------------------
 
-export async function gatePrs(ws: string, only?: string, deps: Deps = defaultDeps()): Promise<{ ok: boolean; lines: string[] }> {
+export async function gatePrs(
+  ws: string,
+  only?: string,
+  deps: Deps = defaultDeps(),
+): Promise<{ ok: boolean; lines: string[] }> {
   const files = selectFiles(ws, only, () => true);
   const lines: string[] = [];
   let ok = true;
@@ -351,12 +468,20 @@ function selectFiles(ws: string, only: string | undefined, keep: (f: PrFile) => 
   const files = only ? all.filter((f) => f.dir === only) : all.filter(keep);
   if (!files.length) {
     const where = prFileDir(ws) ?? "this workspace (no propose stage)";
-    throw new WorkspaceError(only ? `No PR file pr-${only}.md in ${where}.` : `No matching PR file in ${where}. See pr-rules.md.`);
+    throw new WorkspaceError(
+      only
+        ? `No PR file pr-${only}.md in ${where}.`
+        : `No matching PR file in ${where}. See pr-rules.md.`,
+    );
   }
   return files;
 }
 
-export async function openPrs(ws: string, only?: string, deps: Deps = defaultDeps()): Promise<{ ok: boolean; lines: string[] }> {
+export async function openPrs(
+  ws: string,
+  only?: string,
+  deps: Deps = defaultDeps(),
+): Promise<{ ok: boolean; lines: string[] }> {
   const files = selectFiles(ws, only, (f) => statusOf(f) === "approved");
   const lines: string[] = [];
   let ok = true;
@@ -376,21 +501,53 @@ export async function openPrs(ws: string, only?: string, deps: Deps = defaultDep
       lines.push(`${f.dir}: push failed — ${push.stderr.trim()}`);
       continue;
     }
-    const existing = await deps.run("gh", ["pr", "list", "--repo", f.fm["repo"], "--head", branch, "--state", "open", "--json", "url", "--jq", ".[0].url // empty"], dir);
+    const existing = await deps.run(
+      "gh",
+      [
+        "pr",
+        "list",
+        "--repo",
+        f.fm["repo"],
+        "--head",
+        branch,
+        "--state",
+        "open",
+        "--json",
+        "url",
+        "--jq",
+        ".[0].url // empty",
+      ],
+      dir,
+    );
     let url = existing.code === 0 ? existing.stdout.trim() : "";
     if (!url) {
       const bodyFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-pr-")), "body.md");
       fs.writeFileSync(bodyFile, f.body);
       const created = await deps.run(
         "gh",
-        ["pr", "create", "--repo", f.fm["repo"], "--base", String(f.fm["base"] ?? "main"), "--head", branch, "--title", f.title, "--body-file", bodyFile],
+        [
+          "pr",
+          "create",
+          "--repo",
+          f.fm["repo"],
+          "--base",
+          String(f.fm["base"] ?? "main"),
+          "--head",
+          branch,
+          "--title",
+          f.title,
+          "--body-file",
+          bodyFile,
+        ],
         dir,
       );
       fs.rmSync(path.dirname(bodyFile), { recursive: true, force: true });
       url = created.stdout.trim().split("\n").pop() ?? "";
       if (created.code !== 0 || !url.startsWith("http")) {
         ok = false;
-        lines.push(`${f.dir}: gh pr create failed — ${created.stderr.trim() || created.stdout.trim()}`);
+        lines.push(
+          `${f.dir}: gh pr create failed — ${created.stderr.trim() || created.stdout.trim()}`,
+        );
         continue;
       }
     }
@@ -406,24 +563,42 @@ export async function openPrs(ws: string, only?: string, deps: Deps = defaultDep
       }
     }
   }
-  if (opened.length) lines.push((await deps.commitRecord(ws, "chore: record opened PR(s)", opened)).message);
+  if (opened.length)
+    lines.push((await deps.commitRecord(ws, "chore: record opened PR(s)", opened)).message);
   return { ok, lines };
 }
 
-export async function refreshPrStatus(ws: string, deps: Deps = defaultDeps()): Promise<{ lines: string[]; changed: boolean }> {
+export async function refreshPrStatus(
+  ws: string,
+  deps: Deps = defaultDeps(),
+): Promise<{ lines: string[]; changed: boolean }> {
   const lines: string[] = [];
   const changed: string[] = [];
   for (const f of readPrFiles(ws)) {
     const before = statusOf(f);
     if (before === "open" && f.fm["url"]) {
-      const v = await deps.run("gh", ["pr", "view", String(f.fm["url"]), "--json", "state,mergeCommit"]);
+      const v = await deps.run("gh", [
+        "pr",
+        "view",
+        String(f.fm["url"]),
+        "--json",
+        "state,mergeCommit",
+      ]);
       if (v.code !== 0) {
         lines.push(`${f.dir}: gh pr view failed — ${v.stderr.trim()}`);
         continue;
       }
-      const view = JSON.parse(v.stdout) as { state?: string; mergeCommit?: { oid?: string } | null };
-      if (view.state === "MERGED") writePrFields(f, { status: "merged", merge_sha: view.mergeCommit?.oid ?? "" });
-      else if (view.state === "CLOSED") writePrFields(f, { status: "closed", reason: reason(f.fm["reason"]) || "closed on GitHub" });
+      const view = JSON.parse(v.stdout) as {
+        state?: string;
+        mergeCommit?: { oid?: string } | null;
+      };
+      if (view.state === "MERGED")
+        writePrFields(f, { status: "merged", merge_sha: view.mergeCommit?.oid ?? "" });
+      else if (view.state === "CLOSED")
+        writePrFields(f, {
+          status: "closed",
+          reason: reason(f.fm["reason"]) || "closed on GitHub",
+        });
     }
     if (statusOf(f) === "merged") {
       const repo = deps.repos[f.dir] ?? {};
@@ -433,16 +608,34 @@ export async function refreshPrStatus(ws: string, deps: Deps = defaultDeps()): P
       } else {
         const dir = path.join(ws, f.dir);
         await deps.run("git", ["-C", dir, "fetch", "-q", "--tags", "origin"]);
-        const tags = await deps.run("git", ["-C", dir, "tag", "--contains", String(f.fm["merge_sha"]), "--list", String(repo["release_tag"]), "--sort=creatordate"]);
-        const tag = tags.code === 0 ? tags.stdout.split("\n").map((t) => t.trim()).find(Boolean) : undefined;
+        const tags = await deps.run("git", [
+          "-C",
+          dir,
+          "tag",
+          "--contains",
+          String(f.fm["merge_sha"]),
+          "--list",
+          String(repo["release_tag"]),
+          "--sort=creatordate",
+        ]);
+        const tag =
+          tags.code === 0
+            ? tags.stdout
+                .split("\n")
+                .map((t) => t.trim())
+                .find(Boolean)
+            : undefined;
         if (tag) writePrFields(f, { status: "shipped", release: tag });
       }
     }
     const after = statusOf(f);
     if (after !== before) changed.push(path.relative(ws, f.path));
-    lines.push(`${f.dir}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`);
+    lines.push(
+      `${f.dir}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`,
+    );
   }
-  if (changed.length) lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
+  if (changed.length)
+    lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
   return { lines, changed: changed.length > 0 };
 }
 
@@ -451,17 +644,25 @@ export async function refreshPrStatus(ws: string, deps: Deps = defaultDeps()): P
  * With *pr*, write the PR from `gh pr view` and let `refreshPrStatus` promote it; with
  * *noPr*, the fix is already on base and the file is `closed` with that reason.
  */
-export async function adoptPr(ws: string, opts: { pr?: string; noPr?: string; repo?: string }, deps: Deps = defaultDeps()): Promise<{ ok: boolean; lines: string[] }> {
+export async function adoptPr(
+  ws: string,
+  opts: { pr?: string; noPr?: string; repo?: string },
+  deps: Deps = defaultDeps(),
+): Promise<{ ok: boolean; lines: string[] }> {
   const dir = prFileDir(ws);
   if (!dir) throw new WorkspaceError("This workspace has no propose stage to hold a PR file.");
   let repo = opts.repo;
   if (!repo) {
     const wts = await listRepoWorktrees(ws);
-    if (wts.length !== 1) throw new WorkspaceError(`Name the repo — this workspace has ${wts.map((w) => w.repo).join(", ") || "no code worktree"}.`);
+    if (wts.length !== 1)
+      throw new WorkspaceError(
+        `Name the repo — this workspace has ${wts.map((w) => w.repo).join(", ") || "no code worktree"}.`,
+      );
     repo = wts[0].repo;
   }
   const file = path.join(dir, `pr-${repo}.md`);
-  if (fs.existsSync(file)) throw new WorkspaceError(`${file} already exists — remove it first to adopt.`);
+  if (fs.existsSync(file))
+    throw new WorkspaceError(`${file} already exists — remove it first to adopt.`);
 
   let fm: Record<string, unknown>;
   let title: string;
@@ -471,10 +672,24 @@ export async function adoptPr(ws: string, opts: { pr?: string; noPr?: string; re
     title = "No PR: the fix is already on base";
   } else {
     if (!opts.pr) throw new WorkspaceError("Give a PR number or URL, or --no-pr <reason>.");
-    const v = await deps.run("gh", ["pr", "view", opts.pr, "--json", "url,headRefName,baseRefName,title,state,mergeCommit"], path.join(ws, repo));
+    const v = await deps.run(
+      "gh",
+      ["pr", "view", opts.pr, "--json", "url,headRefName,baseRefName,title,state,mergeCommit"],
+      path.join(ws, repo),
+    );
     if (v.code !== 0) throw new WorkspaceError(`gh pr view ${opts.pr} failed — ${v.stderr.trim()}`);
-    const pr = JSON.parse(v.stdout) as { url: string; headRefName: string; baseRefName: string; title: string; state: string; mergeCommit?: { oid?: string } | null };
-    if (pr.state !== "MERGED" && pr.state !== "OPEN") throw new WorkspaceError(`${pr.url} is ${pr.state}, not merged — use --no-pr <reason> if the fix landed another way.`);
+    const pr = JSON.parse(v.stdout) as {
+      url: string;
+      headRefName: string;
+      baseRefName: string;
+      title: string;
+      state: string;
+      mergeCommit?: { oid?: string } | null;
+    };
+    if (pr.state !== "MERGED" && pr.state !== "OPEN")
+      throw new WorkspaceError(
+        `${pr.url} is ${pr.state}, not merged — use --no-pr <reason> if the fix landed another way.`,
+      );
     const merged = pr.state === "MERGED";
     fm = {
       repo: /github\.com\/([^/]+\/[^/]+)\/pull\//.exec(pr.url)?.[1] ?? "",
@@ -488,7 +703,10 @@ export async function adoptPr(ws: string, opts: { pr?: string; noPr?: string; re
     title = pr.title;
   }
   // Through the YAML library: a hand-written `release: @scope/pkg@1.0` is invalid YAML.
-  fs.writeFileSync(file, `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`sandbox pr adopt\`: the work landed outside this workspace.\n`);
+  fs.writeFileSync(
+    file,
+    `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`sandbox pr adopt\`: the work landed outside this workspace.\n`,
+  );
   const lines = [`${repo}: adopted as ${fm["status"]}`];
   if (fm["status"] !== "closed") lines.push(...(await refreshPrStatus(ws, deps)).lines);
   // No-op when refreshPrStatus already committed it.
@@ -497,14 +715,21 @@ export async function adoptPr(ws: string, opts: { pr?: string; noPr?: string; re
 }
 
 /** The workspace's place in the lifecycle, from files only — cheap enough for the pane's poll. */
-export function lifecycleOf(ws: string): { state: Lifecycle; prs: Array<{ dir: string; status: string; url: string | null }> } {
+export function lifecycleOf(ws: string): {
+  state: Lifecycle;
+  prs: Array<{ dir: string; status: string; url: string | null }>;
+} {
   let files: PrFile[] = [];
   try {
     files = readPrFiles(ws);
   } catch {
     /* a malformed PR file reads as still working; the gate reports it */
   }
-  const prs = files.map((f) => ({ dir: f.dir, status: statusOf(f), url: f.fm["url"] ? String(f.fm["url"]) : null }));
+  const prs = files.map((f) => ({
+    dir: f.dir,
+    status: statusOf(f),
+    url: f.fm["url"] ? String(f.fm["url"]) : null,
+  }));
   const all = (set: Set<string>) => prs.every((p) => set.has(p.status));
   let state: Lifecycle;
   if (fs.existsSync(path.join(ws, "closeout.md"))) state = "closed-out";
@@ -521,7 +746,11 @@ export function lifecycleOf(ws: string): { state: Lifecycle; prs: Array<{ dir: s
 // ---- remove precondition and close-out -------------------------------------
 
 /** Why removing *ws* would lose unshipped work; empty when it is safe. */
-export async function removalBlockers(ws: string, worktrees: Array<{ repo: string; dir: string }>, run: Run = execRun): Promise<string[]> {
+export async function removalBlockers(
+  ws: string,
+  worktrees: Array<{ repo: string; dir: string }>,
+  run: Run = execRun,
+): Promise<string[]> {
   if (fs.existsSync(path.join(ws, "closeout.md"))) return [];
   const files = readPrFiles(ws);
   const out: string[] = [];
@@ -556,7 +785,10 @@ export function renderCloseout(prs: PrFile[], issue: string, note?: string): str
     "",
     "| repo | PR | status | merge_sha | release | reason |",
     "|---|---|---|---|---|---|",
-    ...prs.map((f) => `| ${cell(f.fm["repo"] ?? f.dir)} | ${cell(f.fm["url"])} | ${statusOf(f)} | ${cell(f.fm["merge_sha"])} | ${cell(f.fm["release"])} | ${cell(f.fm["reason"])} |`),
+    ...prs.map(
+      (f) =>
+        `| ${cell(f.fm["repo"] ?? f.dir)} | ${cell(f.fm["url"])} | ${statusOf(f)} | ${cell(f.fm["merge_sha"])} | ${cell(f.fm["release"])} | ${cell(f.fm["reason"])} |`,
+    ),
     "",
   ].join("\n");
 }
@@ -564,8 +796,12 @@ export function renderCloseout(prs: PrFile[], issue: string, note?: string): str
 /** `--abandon`: record *why* on every unsettled PR file and in closeout.md. */
 export function abandonWorkspace(ws: string, why: string): void {
   const files = readPrFiles(ws);
-  for (const f of files) if (!SETTLED.has(statusOf(f))) writePrFields(f, { status: "abandoned", reason: why });
-  fs.writeFileSync(path.join(ws, "closeout.md"), renderCloseout(files, "not closed (abandoned)", `Abandoned: ${why}`));
+  for (const f of files)
+    if (!SETTLED.has(statusOf(f))) writePrFields(f, { status: "abandoned", reason: why });
+  fs.writeFileSync(
+    path.join(ws, "closeout.md"),
+    renderCloseout(files, "not closed (abandoned)", `Abandoned: ${why}`),
+  );
 }
 
 /**
@@ -578,7 +814,8 @@ export async function openTerminalSessions(ws: string, run: Run = execRun): Prom
   const ttys = new Map<string, string>();
   for (const line of ps.stdout.split("\n")) {
     const m = /^\s*(\d+)\s+(\S+)\s+(.+?)\s*$/.exec(line);
-    if (m && path.basename(m[3]) === "claude" && m[2] !== "??" && m[2] !== "?") ttys.set(m[1], m[2]);
+    if (m && path.basename(m[3]) === "claude" && m[2] !== "??" && m[2] !== "?")
+      ttys.set(m[1], m[2]);
   }
   if (!ttys.size) return [];
   const lsof = await run("lsof", ["-a", "-d", "cwd", "-Fpn", "-p", [...ttys.keys()].join(",")]);
@@ -589,7 +826,8 @@ export async function openTerminalSessions(ws: string, run: Run = execRun): Prom
     if (line.startsWith("p")) pid = line.slice(1);
     else if (line.startsWith("n") && ttys.has(pid)) {
       const cwd = line.slice(1);
-      if (cwd === ws || cwd.startsWith(ws + path.sep)) out.push(`terminal session: pid ${pid} on ${ttys.get(pid)} in ${cwd} — /exit it`);
+      if (cwd === ws || cwd.startsWith(ws + path.sep))
+        out.push(`terminal session: pid ${pid} on ${ttys.get(pid)} in ${cwd} — /exit it`);
     }
   }
   return out;
@@ -607,15 +845,28 @@ export async function closeOut(
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
   const why = opts.abandon?.trim();
   if (opts.abandon !== undefined && !why) {
-    throw new WorkspaceError(`Abandon needs a reason: sandbox close-out ${name} --abandon "<reason>"`);
+    throw new WorkspaceError(
+      `Abandon needs a reason: sandbox close-out ${name} --abandon "<reason>"`,
+    );
   }
   const ws = await resolveWorkspaceDir(name);
   const cfg = loadConfigFile(ws, null);
   if (why) abandonWorkspace(ws, why);
   const life = lifecycleOf(ws);
-  const spikeDone = life.prs.length === 0 && String(cfg["work_type"] ?? "").trim().toLowerCase() === "spike";
+  const spikeDone =
+    life.prs.length === 0 &&
+    String(cfg["work_type"] ?? "")
+      .trim()
+      .toLowerCase() === "spike";
   // closed-out: closeout.md was written but removal failed; running again finishes it.
-  if (!(life.state === "shipped" || life.state === "abandoned" || life.state === "closed-out" || spikeDone)) {
+  if (
+    !(
+      life.state === "shipped" ||
+      life.state === "abandoned" ||
+      life.state === "closed-out" ||
+      spikeDone
+    )
+  ) {
     const detail = life.prs.map((p) => `${p.dir}: ${p.status}`).join(", ") || "no PR files";
     throw new WorkspaceError(
       `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`sandbox pr status\` after the release, ` +
@@ -624,7 +875,10 @@ export async function closeOut(
   }
   // Not from the state alone: shipped + newly abandoned PR files read `shipped`, and a retry reads
   // `closed-out`; neither may post "Shipped:" or delete branches.
-  const abandoned = !!why || life.state === "abandoned" || (life.state === "closed-out" && life.prs.some((p) => p.status === "abandoned"));
+  const abandoned =
+    !!why ||
+    life.state === "abandoned" ||
+    (life.state === "closed-out" && life.prs.some((p) => p.status === "abandoned"));
 
   const lines: string[] = [];
   const ref = issueIdOf(cfg);
@@ -638,18 +892,30 @@ export async function closeOut(
       issueLine = `${ref} already ${current}`;
     } else {
       const files = readPrFiles(ws);
-      const shipped = files.filter((f) => statusOf(f) === "shipped").map((f) => `${f.fm["release"] ?? "merge"} — ${f.fm["url"]}`);
-      await deps.tracker.updateIssue(ref, { status: deps.doneStatus, comment: `Shipped: ${shipped.join("; ") || "no PRs"}` });
+      const shipped = files
+        .filter((f) => statusOf(f) === "shipped")
+        .map((f) => `${f.fm["release"] ?? "merge"} — ${f.fm["url"]}`);
+      await deps.tracker.updateIssue(ref, {
+        status: deps.doneStatus,
+        comment: `Shipped: ${shipped.join("; ") || "no PRs"}`,
+      });
       issueLine = `${ref} → ${deps.doneStatus}`;
     }
     lines.push(`Issue: ${issueLine}`);
   }
 
   const files = readPrFiles(ws);
-  fs.writeFileSync(path.join(ws, "closeout.md"), renderCloseout(files, issueLine, why ? `Abandoned: ${why}` : undefined));
+  fs.writeFileSync(
+    path.join(ws, "closeout.md"),
+    renderCloseout(files, issueLine, why ? `Abandoned: ${why}` : undefined),
+  );
   const branches: Array<{ src: string; branch: string }> = [];
   // An adopted PR's branch was never this workspace's to delete; an abandoned workspace keeps them all.
-  for (const f of abandoned ? [] : files.filter((x) => (statusOf(x) === "merged" || statusOf(x) === "shipped") && !x.fm["adopted"])) {
+  for (const f of abandoned
+    ? []
+    : files.filter(
+        (x) => (statusOf(x) === "merged" || statusOf(x) === "shipped") && !x.fm["adopted"],
+      )) {
     const src = await deps.sourceOf(path.join(ws, f.dir));
     if (src && f.fm["branch"]) branches.push({ src, branch: String(f.fm["branch"]) });
   }
@@ -661,11 +927,23 @@ export async function closeOut(
   // After removal: a branch checked out in a worktree can't be deleted.
   for (const { src, branch } of branches) {
     const local = await deps.run("git", ["-C", src, "branch", "-D", branch]);
-    lines.push(local.code === 0 ? `deleted local ${branch}` : `local ${branch}: ${local.stderr.trim()}`);
-    const remote = await deps.run("git", ["-C", src, "ls-remote", "--exit-code", "--heads", "origin", branch]);
+    lines.push(
+      local.code === 0 ? `deleted local ${branch}` : `local ${branch}: ${local.stderr.trim()}`,
+    );
+    const remote = await deps.run("git", [
+      "-C",
+      src,
+      "ls-remote",
+      "--exit-code",
+      "--heads",
+      "origin",
+      branch,
+    ]);
     if (remote.code === 0) {
       const del = await deps.run("git", ["-C", src, "push", "origin", "--delete", branch]);
-      lines.push(del.code === 0 ? `deleted origin/${branch}` : `origin/${branch}: ${del.stderr.trim()}`);
+      lines.push(
+        del.code === 0 ? `deleted origin/${branch}` : `origin/${branch}: ${del.stderr.trim()}`,
+      );
     } else {
       lines.push(`origin/${branch} already gone`);
     }

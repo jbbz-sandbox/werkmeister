@@ -1,5 +1,5 @@
-import { test, mock } from "node:test";
 import assert from "node:assert/strict";
+import { mock, test } from "node:test";
 import { pollWhileVisible } from "../out/poll.js";
 
 /** A stand-in for vscode.TreeView: flip visibility and the listeners fire. */

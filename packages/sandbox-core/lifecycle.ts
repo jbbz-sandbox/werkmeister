@@ -45,8 +45,6 @@ import { getVolumeBaseNames, loadPorts, loadServices } from "./config.js";
 import { listVolumeNames, removeVolume } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
-import { reconcileGraduating } from "./graduate.js";
-import { latestHandoff, openDecisions, type Note } from "./notes.js";
 import {
   generateCaddyfile,
   generateFeatureCompose,
@@ -56,9 +54,10 @@ import {
   loadWorkspaceEnvVars,
   writeServiceSecretEnvs,
 } from "./generate.js";
+import { reconcileGraduating } from "./graduate.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
+import { latestHandoff, type Note, openDecisions } from "./notes.js";
 import { info, raw, success, warn } from "./reporter.js";
-import { strategyFor } from "./strategies/index.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
   allocateSlot,
@@ -68,6 +67,7 @@ import {
   getSlot,
   releaseSlot,
 } from "./slots.js";
+import { strategyFor } from "./strategies/index.js";
 
 /** Everything `sandbox up` computed, separated from how the CLI renders it. */
 export interface UpResult {
@@ -231,7 +231,7 @@ export async function up(
     .map((h) => `https://${h}`);
   const servicePorts = [...localServices].sort().map((service) => {
     const svcDef = servicesConfig[service] ?? {};
-    const offset = typeof svcDef === "object" && svcDef !== null ? svcDef["port_offset"] ?? 0 : 0;
+    const offset = typeof svcDef === "object" && svcDef !== null ? (svcDef["port_offset"] ?? 0) : 0;
     return { service, port: getServicePort(slot, offset) };
   });
 
@@ -778,7 +778,10 @@ export async function planClean(opts: { all?: boolean } = {}): Promise<CleanPlan
 export async function runClean({
   all = false,
   dryRun = false,
-}: { all?: boolean; dryRun?: boolean } = {}): Promise<CleanResult> {
+}: {
+  all?: boolean;
+  dryRun?: boolean;
+} = {}): Promise<CleanResult> {
   if (dryRun) {
     info("Dry run -- nothing will be removed\n");
   }
@@ -827,7 +830,6 @@ export async function runClean({
   if (!sandboxVolumes.length) {
     raw(`  ${Colors.DIM}No per-feature Docker volumes found${Colors.RESET}\n`);
   } else {
-
     if (activeVolumes.length) {
       raw(`\n  ${Colors.CYAN}Active feature volumes (kept):${Colors.RESET}\n`);
       for (const vol of activeVolumes) {
@@ -884,7 +886,14 @@ export async function runClean({
     }
   }
 
-  return { activeFeatures, activeVolumes, orphanedVolumes, staleSlots, removedVolumes, releasedSlots };
+  return {
+    activeFeatures,
+    activeVolumes,
+    orphanedVolumes,
+    staleSlots,
+    removedVolumes,
+    releasedSlots,
+  };
 }
 
 /**
@@ -902,7 +911,6 @@ async function requireSlot(feature: string): Promise<number> {
   }
   return slot;
 }
-
 
 export interface TeardownNotes {
   workspace: string | null;

@@ -1,12 +1,18 @@
 // Raw manifests, `helm template` output and `kubectl kustomize` output all go
 // through the same k8s reader.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 
-import { detectHelm, detectK8s, detectKustomize, stdoutRunner } from "./dist/fragment_detect/index.js";
+import {
+  detectHelm,
+  detectK8s,
+  detectKustomize,
+  stdoutRunner,
+} from "./dist/fragment_detect/index.js";
 import { ctxFor, fixture } from "./fragment-detect-helpers.mjs";
 
 const DEMO_BACKEND = `
@@ -64,7 +70,9 @@ test("a raw Deployment + Service file", () => {
   assert.equal(v("k8s_port_name"), "http");
   assert.equal(v("memory_limit"), "1G");
   assert.equal(v("memory_reservation"), "256M");
-  assert.deepEqual(v("environment"), { DATABASE_URL: "postgres://postgres:postgres@postgres:5432/postgres" });
+  assert.deepEqual(v("environment"), {
+    DATABASE_URL: "postgres://postgres:postgres@postgres:5432/postgres",
+  });
   assert.deepEqual(v("secrets"), ["API_KEY"]);
   assert.match(f.fields.internal_port.source, /apps\/backend\/k8s\.yaml → containerPort/);
 });
@@ -81,18 +89,36 @@ spec:
           - path: /
             backend: { service: { name: backend, port: { number: 80 } } }
 `;
-  const ctx = ctxFor(fixture({ "deploy/deployment.yaml": deploy, "deploy/service.yaml": svc, "deploy/ingress.yaml": ingress }));
+  const ctx = ctxFor(
+    fixture({
+      "deploy/deployment.yaml": deploy,
+      "deploy/service.yaml": svc,
+      "deploy/ingress.yaml": ingress,
+    }),
+  );
   const [f] = detectK8s(ctx);
   assert.equal(f.fields.k8s_port.value, 80);
   assert.deepEqual(f.fields.feature_router.value, {});
 });
 
 test("a bare Deployment, a List, and YAML that isn't k8s", () => {
-  const bare = "kind: Deployment\nmetadata: { name: lone }\nspec: { template: { spec: { containers: [ { name: c, image: x } ] } } }\n";
-  const list = "kind: List\nitems:\n  - kind: StatefulSet\n    metadata: { name: db, namespace: data }\n    spec: { template: { spec: { containers: [ { name: c, image: postgres:16 } ] } } }\n";
-  const ctx = ctxFor(fixture({ "a.yaml": bare, "b.yaml": list, ".github/x.yml": "kind: Deployment", "ci.yml": "on: push\n" }));
+  const bare =
+    "kind: Deployment\nmetadata: { name: lone }\nspec: { template: { spec: { containers: [ { name: c, image: x } ] } } }\n";
+  const list =
+    "kind: List\nitems:\n  - kind: StatefulSet\n    metadata: { name: db, namespace: data }\n    spec: { template: { spec: { containers: [ { name: c, image: postgres:16 } ] } } }\n";
+  const ctx = ctxFor(
+    fixture({
+      "a.yaml": bare,
+      "b.yaml": list,
+      ".github/x.yml": "kind: Deployment",
+      "ci.yml": "on: push\n",
+    }),
+  );
   const found = detectK8s(ctx);
-  assert.deepEqual(found.map((f) => f.name), ["lone", "db"]);
+  assert.deepEqual(
+    found.map((f) => f.name),
+    ["lone", "db"],
+  );
   assert.equal(found[0].fields.internal_port, undefined);
   assert.equal(found[0].fields.health_endpoint, undefined);
   assert.equal(found[1].fields.k8s_namespace.value, "data");
@@ -107,12 +133,15 @@ test("a manifest that doesn't parse is skipped with its error", () => {
 });
 
 test("chart sources, values files and compose files are not read as raw manifests", () => {
-  const ctx = ctxFor(fixture({
-    "charts/webapp/Chart.yaml": "name: webapp\n",
-    "charts/webapp/templates/deployment.yaml": "kind: Deployment\nmetadata: { name: {{ .Release.Name }} }\n",
-    "charts/backend.values.yaml": "kind: Deployment\n",
-    "docker-compose.yml": "kind: Deployment\n",
-  }));
+  const ctx = ctxFor(
+    fixture({
+      "charts/webapp/Chart.yaml": "name: webapp\n",
+      "charts/webapp/templates/deployment.yaml":
+        "kind: Deployment\nmetadata: { name: {{ .Release.Name }} }\n",
+      "charts/backend.values.yaml": "kind: Deployment\n",
+      "docker-compose.yml": "kind: Deployment\n",
+    }),
+  );
   assert.deepEqual(detectK8s(ctx), []);
   assert.deepEqual(ctx.skipped, []);
 });
@@ -131,12 +160,25 @@ test("helm: each <release>.values.yaml next to a chart is rendered and read", ()
   };
   const ctx = ctxFor(root, runner);
   const [f] = detectHelm(ctx);
-  assert.deepEqual(calls.filter((c) => c[0] === "helm"), [[
-    "helm", "template", "backend", path.join(root, "charts/webapp"), "-f", path.join(root, "charts/backend.values.yaml"),
-  ]]);
+  assert.deepEqual(
+    calls.filter((c) => c[0] === "helm"),
+    [
+      [
+        "helm",
+        "template",
+        "backend",
+        path.join(root, "charts/webapp"),
+        "-f",
+        path.join(root, "charts/backend.values.yaml"),
+      ],
+    ],
+  );
   assert.equal(f.name, "backend");
   assert.equal(f.dir, null);
-  assert.match(f.fields.internal_port.source, /charts\/backend\.values\.yaml \(helm template\) → containerPort/);
+  assert.match(
+    f.fields.internal_port.source,
+    /charts\/backend\.values\.yaml \(helm template\) → containerPort/,
+  );
 });
 
 test("helm: a chart with no sibling values files renders once under its Chart.yaml name", () => {
@@ -155,14 +197,23 @@ test("helm missing: one skipped entry and no findings", () => {
   });
   const ctx = ctxFor(root);
   assert.deepEqual(detectHelm(ctx), []);
-  assert.deepEqual(ctx.skipped, [{ item: "helm charts", reason: "helm is not installed — charts skipped" }]);
+  assert.deepEqual(ctx.skipped, [
+    { item: "helm charts", reason: "helm is not installed — charts skipped" },
+  ]);
 });
 
 test("helm render failure is skipped per values file", () => {
-  const root = fixture({ "charts/webapp/Chart.yaml": "name: webapp\n", "charts/a.values.yaml": "" });
-  const ctx = ctxFor(root, (cmd) => (cmd[0] === "helm" ? [1, "Error: image is required\nmore"] : [128, ""]));
+  const root = fixture({
+    "charts/webapp/Chart.yaml": "name: webapp\n",
+    "charts/a.values.yaml": "",
+  });
+  const ctx = ctxFor(root, (cmd) =>
+    cmd[0] === "helm" ? [1, "Error: image is required\nmore"] : [128, ""],
+  );
   assert.deepEqual(detectHelm(ctx), []);
-  assert.deepEqual(ctx.skipped, [{ item: "charts/a.values.yaml", reason: "helm template failed: Error: image is required" }]);
+  assert.deepEqual(ctx.skipped, [
+    { item: "charts/a.values.yaml", reason: "helm template failed: Error: image is required" },
+  ]);
 });
 
 test("kustomize: each kustomization dir is rendered with kubectl", () => {
@@ -182,22 +233,25 @@ test("real helm renders a real chart the same way (skipped without helm)", (t) =
   };
   write("charts/webapp/Chart.yaml", "apiVersion: v2\nname: webapp\nversion: 0.1.0\n");
   write("charts/webapp/values.yaml", "containerPort: 3000\nprobePath: /\n");
-  write("charts/webapp/templates/deployment.yaml", [
-    "apiVersion: apps/v1",
-    "kind: Deployment",
-    "metadata: { name: {{ .Release.Name }} }",
-    "spec:",
-    "  selector: { matchLabels: { app: {{ .Release.Name }} } }",
-    "  template:",
-    "    metadata: { labels: { app: {{ .Release.Name }} } }",
-    "    spec:",
-    "      containers:",
-    "        - name: app",
-    "          image: {{ .Values.image }}",
-    "          ports: [ { containerPort: {{ .Values.containerPort }} } ]",
-    "          readinessProbe: { httpGet: { path: {{ .Values.probePath }}, port: {{ .Values.containerPort }} } }",
-    "",
-  ].join("\n"));
+  write(
+    "charts/webapp/templates/deployment.yaml",
+    [
+      "apiVersion: apps/v1",
+      "kind: Deployment",
+      "metadata: { name: {{ .Release.Name }} }",
+      "spec:",
+      "  selector: { matchLabels: { app: {{ .Release.Name }} } }",
+      "  template:",
+      "    metadata: { labels: { app: {{ .Release.Name }} } }",
+      "    spec:",
+      "      containers:",
+      "        - name: app",
+      "          image: {{ .Values.image }}",
+      "          ports: [ { containerPort: {{ .Values.containerPort }} } ]",
+      "          readinessProbe: { httpGet: { path: {{ .Values.probePath }}, port: {{ .Values.containerPort }} } }",
+      "",
+    ].join("\n"),
+  );
   write("charts/api.values.yaml", "image: api:local\ncontainerPort: 4000\nprobePath: /health\n");
   const [f] = detectHelm(ctxFor(root, stdoutRunner));
   assert.equal(f.name, "api");
@@ -210,12 +264,16 @@ const KUSTOMIZE_REPO = {
   "k8s/base/deployment.yaml": DEMO_BACKEND,
   "k8s/overlays/dev/kustomization.yaml": "resources:\n  - ../../base\nnamespace: dev\n",
   "k8s/overlays/dev/patch.yaml": "kind: Deployment\nmetadata: { name: backend }\n",
-  "deploy/other.yaml": "kind: Deployment\nmetadata: { name: other }\nspec: { template: { spec: { containers: [ { name: c, image: 'other:1' } ] } } }\n",
+  "deploy/other.yaml":
+    "kind: Deployment\nmetadata: { name: other }\nspec: { template: { spec: { containers: [ { name: c, image: 'other:1' } ] } } }\n",
 };
 
 test("raw YAML under a kustomization dir is left to kustomize", () => {
   const ctx = ctxFor(fixture(KUSTOMIZE_REPO));
-  assert.deepEqual(detectK8s(ctx).map((f) => f.name), ["other"]);
+  assert.deepEqual(
+    detectK8s(ctx).map((f) => f.name),
+    ["other"],
+  );
 });
 
 test("kustomize: a base another kustomization builds on is not rendered on its own", () => {

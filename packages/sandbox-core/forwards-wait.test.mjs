@@ -4,12 +4,13 @@
 // ECONNREFUSED and surfaces as a compose dependency error naming no forward at
 // all. These pin the wait that closes the window: that it actually waits rather
 // than probing once, and that giving up says which forwards never came back.
-import { test, beforeEach, afterEach } from "node:test";
+
 import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import net from "node:net";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { afterEach, beforeEach, test } from "node:test";
 
 import { waitForForwards } from "./dist/k8s.js";
 
@@ -101,7 +102,9 @@ test("names the forwards that never came back", async () => {
   );
 });
 
-test("a forward that hangs up without replying fails the wait instead of hanging it", { timeout: 5_000 }, async () => {
+test("a forward that hangs up without replying fails the wait instead of hanging it", {
+  timeout: 5_000,
+}, async () => {
   // #207: the probe for this forward never settled, so neither did the wait,
   // and `sandbox up` exited mid-run with its containers left in Created.
   const port = await freePort();

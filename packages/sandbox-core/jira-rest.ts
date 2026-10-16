@@ -21,14 +21,27 @@ export interface JiraCreds {
 }
 
 /** Paste-me values from the config template: "not filled in yet". */
-export const JIRA_PLACEHOLDERS = new Set(["PASTE_TOKEN_HERE", "<your-atlassian-login-email>", "https://your-org.atlassian.net"]);
-export const isJiraPlaceholder = (v: string): boolean => JIRA_PLACEHOLDERS.has(v.trim().replace(/\/+$/, ""));
+export const JIRA_PLACEHOLDERS = new Set([
+  "PASTE_TOKEN_HERE",
+  "<your-atlassian-login-email>",
+  "https://your-org.atlassian.net",
+]);
+export const isJiraPlaceholder = (v: string): boolean =>
+  JIRA_PLACEHOLDERS.has(v.trim().replace(/\/+$/, ""));
 
 function normalizeCreds(baseUrl: string, email: string, token: string): JiraCreds | null {
   // Linear trailing-slash strip; `/\/+$/` triggers a backtracking lint.
   let trimmed = baseUrl.trim();
   while (trimmed.endsWith("/")) trimmed = trimmed.slice(0, -1);
-  if (!trimmed || !email || !token || isJiraPlaceholder(trimmed) || isJiraPlaceholder(email) || isJiraPlaceholder(token)) return null;
+  if (
+    !trimmed ||
+    !email ||
+    !token ||
+    isJiraPlaceholder(trimmed) ||
+    isJiraPlaceholder(email) ||
+    isJiraPlaceholder(token)
+  )
+    return null;
   return { baseUrl: trimmed, email, token };
 }
 
@@ -95,7 +108,9 @@ export interface JiraRestIssue {
     status?: { name?: string };
     issuetype?: { name?: string };
     assignee?: { displayName?: string } | null;
-    comment?: { comments?: Array<{ author?: { displayName?: string }; body?: string; created?: string }> };
+    comment?: {
+      comments?: Array<{ author?: { displayName?: string }; body?: string; created?: string }>;
+    };
   };
 }
 
@@ -126,10 +141,9 @@ export async function fetchStatusesRest(keys: string[]): Promise<Record<string, 
   if (!creds) return null;
   const jql = encodeURIComponent(`key in (${keys.join(",")})`);
   try {
-    const data = await jiraGet<{ issues?: Array<{ key?: string; fields?: { status?: { name?: string } } }> }>(
-      creds,
-      `/rest/api/2/search/jql?jql=${jql}&fields=status&maxResults=100`,
-    );
+    const data = await jiraGet<{
+      issues?: Array<{ key?: string; fields?: { status?: { name?: string } } }>;
+    }>(creds, `/rest/api/2/search/jql?jql=${jql}&fields=status&maxResults=100`);
     const out: Record<string, string> = {};
     for (const issue of data.issues ?? []) {
       const name = issue.fields?.status?.name;
@@ -141,28 +155,35 @@ export async function fetchStatusesRest(keys: string[]): Promise<Record<string, 
   }
 }
 
-
 /**
  * Move an issue to the status named `status` (case-insensitive, matched on the
  * transition's target status, then its own name) and/or add a comment. Null
  * when no credentials are configured, so the caller can fall back; throws when
  * Jira refuses or no transition reaches `status`.
  */
-export async function updateIssueRest(key: string, update: { status?: string; comment?: string }): Promise<true | null> {
+export async function updateIssueRest(
+  key: string,
+  update: { status?: string; comment?: string },
+): Promise<true | null> {
   const creds = await jiraCreds();
   if (!creds) return null;
   const path = `/rest/api/2/issue/${encodeURIComponent(key)}`;
   if (update.status) {
     const want = update.status.trim().toLowerCase();
-    const { transitions = [] } = await jiraGet<{ transitions?: Array<{ id: string; name?: string; to?: { name?: string } }> }>(
-      creds,
-      `${path}/transitions`,
-    );
+    const { transitions = [] } = await jiraGet<{
+      transitions?: Array<{ id: string; name?: string; to?: { name?: string } }>;
+    }>(creds, `${path}/transitions`);
     const t =
-      transitions.find((x) => x.to?.name?.toLowerCase() === want) ?? transitions.find((x) => x.name?.toLowerCase() === want);
+      transitions.find((x) => x.to?.name?.toLowerCase() === want) ??
+      transitions.find((x) => x.name?.toLowerCase() === want);
     if (!t) {
-      const names = transitions.map((x) => x.to?.name ?? x.name).filter(Boolean).join(", ");
-      throw new Error(`${key} has no transition to "${update.status}" (available: ${names || "none"})`);
+      const names = transitions
+        .map((x) => x.to?.name ?? x.name)
+        .filter(Boolean)
+        .join(", ");
+      throw new Error(
+        `${key} has no transition to "${update.status}" (available: ${names || "none"})`,
+      );
     }
     await jiraFetch(creds, `${path}/transitions`, { transition: { id: t.id } });
   }

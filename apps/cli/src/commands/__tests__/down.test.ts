@@ -7,10 +7,10 @@
  * separate export instead of a step inside `down`), and the workspace notes are
  * read before the containers they resolve through are removed.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeRecorder } from "./helpers/recorder.js";
 

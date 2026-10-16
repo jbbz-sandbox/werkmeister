@@ -1,13 +1,14 @@
 // context_strategy → strategy. Absent means jit; unknown throws; a malformed
 // workspace.yml reads as jit and prints nothing (notes context feeds a hook).
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { STRATEGY_IDS, readContextStrategy, strategyFor } from "./dist/strategies/index.js";
+import { readContextStrategy, STRATEGY_IDS, strategyFor } from "./dist/strategies/index.js";
 
 function ws(yml) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-reg-"));
@@ -29,11 +30,14 @@ test("icm → the icm strategy", () => {
 });
 
 test("an unknown value throws, naming the choices", () => {
-  assert.throws(() => readContextStrategy(ws("context_strategy: foo\n")), (err) => {
-    assert.equal(err.code, "UNKNOWN_CONTEXT_STRATEGY");
-    assert.match(err.message, /'foo'.*icm, jit/);
-    return true;
-  });
+  assert.throws(
+    () => readContextStrategy(ws("context_strategy: foo\n")),
+    (err) => {
+      assert.equal(err.code, "UNKNOWN_CONTEXT_STRATEGY");
+      assert.match(err.message, /'foo'.*icm, jit/);
+      return true;
+    },
+  );
 });
 
 test("malformed yaml reads as jit and prints nothing", async () => {
@@ -45,7 +49,19 @@ test("malformed yaml reads as jit and prints nothing", async () => {
 
 test("the workspace schema's enum is the registry", () => {
   const schema = JSON.parse(
-    fs.readFileSync(path.join(import.meta.dirname, "..", "..", "apps", "cli", "infra", "schemas", "workspace.schema.json"), "utf8"),
+    fs.readFileSync(
+      path.join(
+        import.meta.dirname,
+        "..",
+        "..",
+        "apps",
+        "cli",
+        "infra",
+        "schemas",
+        "workspace.schema.json",
+      ),
+      "utf8",
+    ),
   );
   assert.deepEqual(schema.properties.context_strategy.enum, [...STRATEGY_IDS]);
 });

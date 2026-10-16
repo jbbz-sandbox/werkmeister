@@ -1,13 +1,18 @@
 // CLAUDE.md is the always-on file, so everything it carries is paid on every
 // turn. These pin what left it: the Feature Testing section, the service-map
 // column, the duplicated phase-entry paragraph, the 'do not load' line.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
-import { buildClaudeMd, buildRoutingTable, buildStandardsRoutingSection } from "./dist/claude_md.js";
+import {
+  buildClaudeMd,
+  buildRoutingTable,
+  buildStandardsRoutingSection,
+} from "./dist/claude_md.js";
 
 // `universal: <n>` is what the loader stamps on UNIVERSAL_STANDARDS modules.
 const MODULES = {
@@ -33,7 +38,10 @@ test("the standards section states the phase chain once, with no inactive list",
   assert.doesNotMatch(out, /workspace root/);
   assert.equal((out.match(/`sb-implement`/g) ?? []).length, 1);
   assert.match(out, /\| Phase \| Invoke first \| Loads \|/);
-  assert.match(out, /universal base \(`ponytail` \+ `sb-comments-standard` \+ `sb-engineering-standard`\)/);
+  assert.match(
+    out,
+    /universal base \(`ponytail` \+ `sb-comments-standard` \+ `sb-engineering-standard`\)/,
+  );
 });
 
 test("the routing table is two columns: one feature row, contract row only for multi-repo", () => {
@@ -43,11 +51,24 @@ test("the routing table is two columns: one feature row, contract row only for m
     const single = buildRoutingTable([["a", "u/x"]], ws, true);
     assert.equal(single.split("\n")[0], "| Task | Read |");
     assert.match(single, /\| Working in a \| a\/CLAUDE\.md \|/);
-    assert.match(single, /\| Running or validating the change[^|]*\| \.sandbox\/sandbox-context\.md \|/);
+    assert.match(
+      single,
+      /\| Running or validating the change[^|]*\| \.sandbox\/sandbox-context\.md \|/,
+    );
     assert.doesNotMatch(single, /Cross-repo/);
     assert.doesNotMatch(single, /service-map/);
-    const multi = buildRoutingTable([["a", "u/x"], ["b", "u/x"]], ws, false);
-    assert.match(multi, /\| Cross-repo contract change \| \.sandbox\/notes\/ \(`contract` notes\) \|/);
+    const multi = buildRoutingTable(
+      [
+        ["a", "u/x"],
+        ["b", "u/x"],
+      ],
+      ws,
+      false,
+    );
+    assert.match(
+      multi,
+      /\| Cross-repo contract change \| \.sandbox\/notes\/ \(`contract` notes\) \|/,
+    );
     assert.doesNotMatch(multi, /Working in b/, "no row for a repo CLAUDE.md that does not exist");
   });
 });
@@ -63,12 +84,28 @@ test("CLAUDE.md carries no Feature Testing section", () => {
       "## Standards routing\n\n(stub)\n",
     );
     assert.doesNotMatch(out, /## Feature Testing/);
-    assert.doesNotMatch(out, /document\.cookie/, "the cookie one-liner lives in sandbox-context.md now");
-    assert.match(out, /Running or validating the change — test commands/, "the routing row still points at it");
+    assert.doesNotMatch(
+      out,
+      /document\.cookie/,
+      "the cookie one-liner lives in sandbox-context.md now",
+    );
+    assert.match(
+      out,
+      /Running or validating the change — test commands/,
+      "the routing row still points at it",
+    );
     assert.match(out, /## Notes/);
     assert.match(out, /## Standards routing/);
-    assert.doesNotMatch(out, /`finding`.*`decision`/s, "the Notes section no longer enumerates the types inline");
-    assert.match(out, /notes-conventions\.md/, "the Notes section still points at the conventions doc");
+    assert.doesNotMatch(
+      out,
+      /`finding`.*`decision`/s,
+      "the Notes section no longer enumerates the types inline",
+    );
+    assert.match(
+      out,
+      /notes-conventions\.md/,
+      "the Notes section still points at the conventions doc",
+    );
   });
 });
 
@@ -79,7 +116,10 @@ const byPhase = (out) => out.slice(out.indexOf("**By phase**"));
 test("refactor has no research row and no note gate", () => {
   const out = section("refactor");
   assert.doesNotMatch(byPhase(out), /`sb-research`/);
-  assert.match(out, /\*\*Work type:\*\* refactor \(bounded path\) — phases: implement → test → review → pr\./);
+  assert.match(
+    out,
+    /\*\*Work type:\*\* refactor \(bounded path\) — phases: implement → test → review → pr\./,
+  );
   assert.doesNotMatch(out, /Gate:[^\n]*note/);
 });
 
@@ -90,9 +130,16 @@ test("spike has no implement, review, or PR row", () => {
 });
 
 test("feature names the decided gate; bugfix names the root cause", () => {
-  assert.match(section("feature"), /`decision` note in `\.sandbox\/notes\/` reads `status: decided`/);
+  assert.match(
+    section("feature"),
+    /`decision` note in `\.sandbox\/notes\/` reads `status: decided`/,
+  );
   assert.match(section("bugfix"), /`finding` note in `\.sandbox\/notes\/` names the root cause/);
-  assert.doesNotMatch(byPhase(section("bugfix")), /^\| review \(/m, "the pr row still names sb-review; the review row is gone");
+  assert.doesNotMatch(
+    byPhase(section("bugfix")),
+    /^\| review \(/m,
+    "the pr row still names sb-review; the review row is gone",
+  );
 });
 
 test("the active table is identical across work types", () => {
@@ -112,8 +159,16 @@ test("an empty or unknown work type renders today's section exactly", () => {
 });
 
 test("an issue replaces the inline link with the issue section", () => {
-  const issue = { ref: "o/r#5", url: "https://github.com/o/r/issues/5", title: "Stale config", fetchedAt: "2026-10-11T18:04:00.000Z" };
+  const issue = {
+    ref: "o/r#5",
+    url: "https://github.com/o/r/issues/5",
+    title: "Stale config",
+    fetchedAt: "2026-10-11T18:04:00.000Z",
+  };
   const md = buildClaudeMd("ws", "/ws", [], "Fix it", { ISSUE_ID: "o/r#5" }, null, issue);
   assert.match(md, /## Current Task\n\nFix it\n\n/);
-  assert.match(md, /## Issue\n\n\[o\/r#5\]\(https:\/\/github.com\/o\/r\/issues\/5\): Stale config\./);
+  assert.match(
+    md,
+    /## Issue\n\n\[o\/r#5\]\(https:\/\/github.com\/o\/r\/issues\/5\): Stale config\./,
+  );
 });

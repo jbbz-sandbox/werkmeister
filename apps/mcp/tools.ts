@@ -11,7 +11,7 @@
 import * as path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
+import { closeOut, createWorkspace, listWorkspaces } from "sandbox-core";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
 import { composeLogs } from "sandbox-core/compose";
@@ -29,30 +29,28 @@ import {
   validateFragment,
   writeFragment,
 } from "sandbox-core/fragment_detect";
+import { graduateNote } from "sandbox-core/graduate";
 import { connectK8s, up as infraUp } from "sandbox-core/infra";
 import {
   down,
   readServicesFromWorkspace,
-  removeService,
   reloadProxy,
+  removeService,
   restart,
   stop,
   up,
 } from "sandbox-core/lifecycle";
+import { listNotes, parseNote } from "sandbox-core/notes";
 import { collectingReporter, raw, withReporter } from "sandbox-core/reporter";
 import { featureServices } from "sandbox-core/slots";
+import { checkStandards } from "sandbox-core/standards";
 import { interceptsSnapshot, statusSnapshot } from "sandbox-core/status";
+import { STRATEGY_IDS, strategyFor } from "sandbox-core/strategies";
 import { leaveIntercept, startIntercept } from "sandbox-core/telepresence";
 import { runFeatureTests } from "sandbox-core/test_run";
-
-import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
-
-import { listNotes, parseNote } from "sandbox-core/notes";
-import { graduateNote } from "sandbox-core/graduate";
-import { closeOut, createWorkspace, listWorkspaces } from "sandbox-core";
-import { checkStandards } from "sandbox-core/standards";
-import { STRATEGY_IDS, strategyFor } from "sandbox-core/strategies";
 import { initWorkspace } from "sandbox-core/workspace_init";
+import { z } from "zod";
+import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
 
 /**
  * What the SDK hands a tool handler. `signal` is aborted when the request is
@@ -221,8 +219,13 @@ function registerLifecycleTools(server: McpServer): void {
         "not settle. Writes only with write: true. Answer questions by passing `answers` " +
         "({ item: <question id>, value, reason, files_read }); answers can only fill those questions.",
       inputSchema: {
-        repo: z.string().describe("Repo directory name under paths.repos_root, or an absolute path."),
-        write: z.boolean().optional().describe("Write the fragment when it is valid and something changed."),
+        repo: z
+          .string()
+          .describe("Repo directory name under paths.repos_root, or an absolute path."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("Write the fragment when it is valid and something changed."),
         answers: z
           .array(
             z.object({
@@ -395,13 +398,19 @@ function registerLifecycleTools(server: McpServer): void {
 const WORKSPACE_FIELDS = {
   repos: z.string().optional().describe("Comma-separated repos to check out."),
   services: z.string().optional().describe("Comma-separated services to run locally."),
-  issue_id: z.string().optional().describe("Issue ID or URL in this machine's issue tracker (see `sandbox setup`)."),
+  issue_id: z
+    .string()
+    .optional()
+    .describe("Issue ID or URL in this machine's issue tracker (see `sandbox setup`)."),
   work_type: z.string().optional().describe("Work type (drives the workspace phases)."),
   task: z.string().optional().describe("One-line task title."),
   description: z.string().optional().describe("Longer description."),
   labels: z.string().optional().describe("Comma-separated labels."),
   test_path: z.string().optional().describe("Default path for `sandbox open` and the suite."),
-  starting_prompt: z.string().optional().describe("Prompt the workspace's first session starts from."),
+  starting_prompt: z
+    .string()
+    .optional()
+    .describe("Prompt the workspace's first session starts from."),
   context_strategy: z
     .enum(STRATEGY_IDS)
     .optional()
@@ -458,8 +467,9 @@ function registerAuthoringTools(server: McpServer): void {
         // issue IDs are the transcript; structuredContent carries the rest.
         raw(
           `${
-            result.workspaces.map((w) => `${w.name}${w.issueId ? `  ${w.issueId}` : ""}`).join("\n") ||
-            "(no workspaces)"
+            result.workspaces
+              .map((w) => `${w.name}${w.issueId ? `  ${w.issueId}` : ""}`)
+              .join("\n") || "(no workspaces)"
           }\n`,
         );
         return { ...result };
@@ -483,12 +493,17 @@ function registerAuthoringTools(server: McpServer): void {
         abandon: z
           .string()
           .optional()
-          .describe("Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files."),
+          .describe(
+            "Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files.",
+          ),
       },
     },
     async (args): Promise<CallToolResult> =>
       adapt(async () => {
-        const result = await closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {});
+        const result = await closeOut(
+          args.name,
+          args.abandon !== undefined ? { abandon: args.abandon } : {},
+        );
         // Same shadowing as sandbox-workspace: removeWorkspace installs its own
         // collecting reporter for the teardown, so re-emit what it captured or
         // the transcript loses the push and down output.
@@ -601,7 +616,9 @@ function registerAuthoringTools(server: McpServer): void {
         const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
         const workspace = resolveWorkspaceDir(feature);
         if (args.action === "context") {
-          return { context: strategyFor(workspace).sessionContext(workspace, { source: "mcp" }) ?? "" };
+          return {
+            context: strategyFor(workspace).sessionContext(workspace, { source: "mcp" }) ?? "",
+          };
         }
         if (args.action === "list") {
           return { notes: listNotes(workspace, args.includeSuperseded ?? false) };
@@ -678,7 +695,9 @@ function registerHostTools(server: McpServer): void {
         path: z
           .string()
           .optional()
-          .describe("Path on the feature's routed host. Defaults to workspace.yml test_path, else /."),
+          .describe(
+            "Path on the feature's routed host. Defaults to workspace.yml test_path, else /.",
+          ),
         size: z.string().optional().describe("Window size as W,H."),
         position: z.string().optional().describe("Window position as X,Y."),
       },
@@ -688,8 +707,7 @@ function registerHostTools(server: McpServer): void {
         const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
         const workspace = resolveWorkspaceDir(feature);
         const url =
-          args.url ??
-          featureUrl(args.path ?? readWorkspaceYaml(workspace)["test_path"] ?? "/");
+          args.url ?? featureUrl(args.path ?? readWorkspaceYaml(workspace)["test_path"] ?? "/");
         if (url === null) {
           throw new SandboxError(
             "No routed hosts in services.yaml (no service declares `feature_router:`) — " +

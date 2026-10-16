@@ -3,11 +3,12 @@
  * moved generateWorkspaceCompose still allocates a slot and writes the expected
  * workspace artifacts. allocateSlot is stubbed to avoid shelling out to Docker.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("sandbox-core/slots", async (importOriginal) => {
   const actual = await importOriginal<typeof import("sandbox-core/slots")>();
@@ -15,7 +16,7 @@ vi.mock("sandbox-core/slots", async (importOriginal) => {
 });
 
 import { generateWorkspaceCompose } from "sandbox-core/generate";
-import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
+import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 

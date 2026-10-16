@@ -96,8 +96,14 @@
           "description": "Legacy: standards keys used only when `archetype` is unset."
         },
         "test": { "type": "string", "description": "Test command, run from the repo root." },
-        "validate": { "type": "string", "description": "How to exercise a change to this service when it has no URL (library, CLI, extension). Overrides the archetype's `validate:`." },
-        "internal_port": { "$ref": "#/definitions/port", "description": "Port the process listens on in-container (Helm containerPort)." },
+        "validate": {
+          "type": "string",
+          "description": "How to exercise a change to this service when it has no URL (library, CLI, extension). Overrides the archetype's `validate:`."
+        },
+        "internal_port": {
+          "$ref": "#/definitions/port",
+          "description": "Port the process listens on in-container (Helm containerPort)."
+        },
         "port_offset": {
           "type": "integer",
           "minimum": 0,
@@ -105,8 +111,14 @@
         },
         "health_endpoint": { "$ref": "#/definitions/healthEndpoint" },
         "image": { "type": "string" },
-        "dockerfile": { "type": "string", "description": "Relative to `path`; only used when no image template applies. Default Dockerfile." },
-        "command": { "type": "string", "description": "Run via `sh -c` from /app (the repo root), not from `path`." },
+        "dockerfile": {
+          "type": "string",
+          "description": "Relative to `path`; only used when no image template applies. Default Dockerfile."
+        },
+        "command": {
+          "type": "string",
+          "description": "Run via `sh -c` from /app (the repo root), not from `path`."
+        },
         "memory_limit": { "$ref": "#/definitions/memory" },
         "memory_reservation": { "$ref": "#/definitions/memory" },
         "setup_service": {
@@ -114,7 +126,10 @@
           "description": "Key in `setup_services:` this service waits on (service_completed_successfully)."
         },
         "monorepo": { "type": ["string", "null"] },
-        "node_modules_volume": { "type": ["string", "null"], "description": "Per-feature named volume mounted over node_modules." },
+        "node_modules_volume": {
+          "type": ["string", "null"],
+          "description": "Per-feature named volume mounted over node_modules."
+        },
         "extra_volumes": { "$ref": "#/definitions/volumes" },
         "environment": { "$ref": "#/definitions/environment" },
         "secrets": {
@@ -145,19 +160,46 @@
           "type": "object",
           "description": "Opts into Caddy ingress at <service>.<local_domain>. `{}` for local-only.",
           "properties": {
-            "hostname": { "type": "string", "description": "Overrides the derived local hostname." },
-            "remote_upstream": { "type": "string", "description": "host:port Caddy dials for the remote route (a k8s-forwards alias, not cluster DNS). Opts into a remote route." },
-            "remote_hostname": { "type": "string", "description": "Overrides the derived remote hostname." }
+            "hostname": {
+              "type": "string",
+              "description": "Overrides the derived local hostname."
+            },
+            "remote_upstream": {
+              "type": "string",
+              "description": "host:port Caddy dials for the remote route (a k8s-forwards alias, not cluster DNS). Opts into a remote route."
+            },
+            "remote_hostname": {
+              "type": "string",
+              "description": "Overrides the derived remote hostname."
+            }
           },
           "additionalProperties": false
         },
-        "k8s_deployment": { "type": "string", "description": "Deployment `sandbox intercept` targets." },
+        "k8s_deployment": {
+          "type": "string",
+          "description": "Deployment `sandbox intercept` targets."
+        },
         "k8s_namespace": { "type": "string" },
-        "k8s_port": { "$ref": "#/definitions/port", "description": "Service port number (Helm service.port)." },
-        "k8s_port_name": { "type": "string", "description": "Named Service port; required by intercept." },
-        "k8s_pod_prefix": { "type": "string", "description": "Pod name prefix the port-forward selects." },
-        "k8s_forward_port": { "$ref": "#/definitions/port", "description": "Host listen port of the k8s-forwards tunnel. Unique across ALL repos." },
-        "k8s_forward_name": { "type": "string", "description": "Network alias for the tunnel when it differs from the service name." }
+        "k8s_port": {
+          "$ref": "#/definitions/port",
+          "description": "Service port number (Helm service.port)."
+        },
+        "k8s_port_name": {
+          "type": "string",
+          "description": "Named Service port; required by intercept."
+        },
+        "k8s_pod_prefix": {
+          "type": "string",
+          "description": "Pod name prefix the port-forward selects."
+        },
+        "k8s_forward_port": {
+          "$ref": "#/definitions/port",
+          "description": "Host listen port of the k8s-forwards tunnel. Unique across ALL repos."
+        },
+        "k8s_forward_name": {
+          "type": "string",
+          "description": "Network alias for the tunnel when it differs from the service name."
+        }
       },
       "additionalProperties": false
     },
@@ -166,7 +208,10 @@
       "required": ["command"],
       "properties": {
         "repo": { "type": "string", "description": "Derived from the checkout's directory name." },
-        "image": { "type": "string", "description": "Must match the image of the services that use its node_modules." },
+        "image": {
+          "type": "string",
+          "description": "Must match the image of the services that use its node_modules."
+        },
         "command": { "type": "string" },
         "node_modules_volume": { "type": ["string", "null"] },
         "extra_volumes": { "$ref": "#/definitions/volumes" },
@@ -185,7 +230,10 @@
       "type": "object",
       "required": ["k8s_forward_port", "internal_port"],
       "properties": {
-        "k8s_forward_port": { "$ref": "#/definitions/port", "description": "Host listen port. Unique across ALL repos." },
+        "k8s_forward_port": {
+          "$ref": "#/definitions/port",
+          "description": "Host listen port. Unique across ALL repos."
+        },
         "k8s_forward_name": { "type": "string" },
         "internal_port": { "$ref": "#/definitions/port" },
         "k8s_namespace": { "type": "string" },

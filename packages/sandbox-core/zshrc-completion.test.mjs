@@ -2,12 +2,13 @@
 // Pinned here because it edits a file the user also owns: re-running must
 // replace its own block and nothing else, and the block must be valid zsh on a
 // machine where `sandbox` is not (yet) on PATH.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 import { ensureZshrcCompletion } from "./dist/global_config.js";
 
 const rcIn = (dir) => path.join(dir, ".zshrc");
@@ -43,6 +44,9 @@ test("the block is valid zsh even with no sandbox on PATH", (t) => {
   // -f: no user rc files, so only the block under test runs. PATH points at an
   // empty dir (absolute zsh, so the spawn itself still resolves) to take the
   // `sandbox`-absent branch, which must still exit clean.
-  const res = spawnSync(zsh, ["-f", "-c", `source ${rc}`], { env: { PATH: dir }, encoding: "utf8" });
+  const res = spawnSync(zsh, ["-f", "-c", `source ${rc}`], {
+    env: { PATH: dir },
+    encoding: "utf8",
+  });
   assert.equal(res.status, 0, res.stderr);
 });

@@ -6,13 +6,20 @@
 //   * intercept DOES need --address. Its 127.0.0.1 default is the daemon
 //     container's own loopback, where the cluster's request dies as
 //     {"error":"EOF"} while the local container sits idle on the host.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { buildConnectArgs, buildInterceptArgs, DAEMON_HOST_ADDRESS } from "./dist/telepresence.js";
 
 test("connect adds --docker and nothing else", () => {
   assert.deepEqual(buildConnectArgs("orbstack", "default", true), [
-    "telepresence", "connect", "--docker", "--context", "orbstack", "--namespace", "default",
+    "telepresence",
+    "connect",
+    "--docker",
+    "--context",
+    "orbstack",
+    "--namespace",
+    "default",
   ]);
   assert.ok(!buildConnectArgs("orbstack", "default", true).includes("--server"));
 });

@@ -1,15 +1,19 @@
 // `overrides.issue_tracker: github` swaps the workspace's ticket prompt, its
 // CLAUDE.md link, and where the issues guide sends app-code issues: the GitHub
 // issues of every repo in the services registry.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
 const dir = mkdtempSync(path.join(tmpdir(), "issue-tracker-"));
-writeFileSync(path.join(dir, "config.yaml"), "overrides:\n  issue_tracker: github\n  github_org: acme\n");
+writeFileSync(
+  path.join(dir, "config.yaml"),
+  "overrides:\n  issue_tracker: github\n  github_org: acme\n",
+);
 writeFileSync(path.join(dir, "services.yaml"), "services: {}\nrepos:\n  web: {}\n  api: {}\n");
 process.env.SANDBOX_CONFIG_FILE = path.join(dir, "config.yaml");
 process.env.SANDBOX_SERVICES_YAML = path.join(dir, "services.yaml");
@@ -32,9 +36,15 @@ test("refs normalize, slug, and link", () => {
   assert.equal(gh.parseRef("api#7"), "acme/api#7");
   assert.equal(gh.parseRef("Refs: acme/api#12 and more"), "acme/api#12");
   assert.equal(gh.parseRef("jayboyer/proj-12-thing"), null);
-  assert.deepEqual(it.issueLink({ ISSUE_ID: "acme/api#7" }), ["acme/api#7", "https://github.com/acme/api/issues/7"]);
+  assert.deepEqual(it.issueLink({ ISSUE_ID: "acme/api#7" }), [
+    "acme/api#7",
+    "https://github.com/acme/api/issues/7",
+  ]);
   // Pre-rename .env keys still link.
-  assert.deepEqual(it.issueLink({ GITHUB_ISSUE: "acme/api#7" }), ["acme/api#7", "https://github.com/acme/api/issues/7"]);
+  assert.deepEqual(it.issueLink({ GITHUB_ISSUE: "acme/api#7" }), [
+    "acme/api#7",
+    "https://github.com/acme/api/issues/7",
+  ]);
   const jira = it.trackerById("jira");
   assert.equal(jira.parseRef("https://x.atlassian.net/browse/proj-12?x=1"), "PROJ-12");
   assert.equal(jira.parseRef("jayboyer/proj-12-thing"), "PROJ-12");
@@ -64,7 +74,10 @@ test("a briefing carries title, meta, description and the non-blank comments", (
     type: "Story",
     assignee: "Jay",
     description: "Long body",
-    comments: [{ author: "A", created: "2026-07-01T00:00:00Z", body: "first" }, { author: "unknown", body: "no date" }],
+    comments: [
+      { author: "A", created: "2026-07-01T00:00:00Z", body: "first" },
+      { author: "unknown", body: "no date" },
+    ],
   });
   assert.match(b, /^PROJ-1: Do the thing/);
   assert.match(b, /Status: In Progress · Type: Story · Assignee: Jay/);
@@ -84,22 +97,48 @@ test("the issues guide maps each type to a label, the tracker's type and a templ
   const md = buildIssuesReportMd("ws", "", it.trackerById("jira"));
   assert.match(md, /^\| bug \| .* \| `--label bug` \| Bug \|$/m);
   assert.match(md, /^\| feature \| .* \| `--label enhancement` \| Story \|$/m);
-  assert.match(md, /^\| task \| .*`--label task`.*`gh label create task -R <owner>\/<repo> --color ededed --force`.* \| Task \|$/m);
+  assert.match(
+    md,
+    /^\| task \| .*`--label task`.*`gh label create task -R <owner>\/<repo> --color ededed --force`.* \| Task \|$/m,
+  );
   assert.match(md, /- \*\*Type:\*\* bug\n/);
-  assert.match(md, /- \*\*Type:\*\* feature \| task\n[\s\S]*\*\*Ask\*\*[\s\S]*\*\*Why\*\*[\s\S]*\*\*Where to change\*\*[\s\S]*\*\*Done when\*\*/);
+  assert.match(
+    md,
+    /- \*\*Type:\*\* feature \| task\n[\s\S]*\*\*Ask\*\*[\s\S]*\*\*Why\*\*[\s\S]*\*\*Where to change\*\*[\s\S]*\*\*Done when\*\*/,
+  );
 });
 
 test("github checkAuth: signed in, signed out, no repo access", async () => {
-  await withSandboxHome(async () => {
-    const t = it.issueTracker();
-    await withFakeGh({ auth: 0 }, async () => assert.deepEqual(await t.checkAuth(), { ok: true, who: "octo", fix: "" }));
-    await withFakeGh({ auth: 1 }, async () => assert.deepEqual(await t.checkAuth(), { ok: false, reason: "not signed in", fix: "gh auth login" }));
-  }, { config: "overrides:\n  issue_tracker: github\n" });
-  await withSandboxHome(async () => {
-    const t = it.issueTracker();
-    await withFakeGh({ auth: 0, repoView: 1 }, async () =>
-      assert.deepEqual(await t.checkAuth(), { ok: false, who: "octo", reason: "can't read acme/api", fix: "gh auth refresh -s repo" }));
-  }, { config: "overrides:\n  issue_tracker: github\n  github_org: acme\n" });
+  await withSandboxHome(
+    async () => {
+      const t = it.issueTracker();
+      await withFakeGh({ auth: 0 }, async () =>
+        assert.deepEqual(await t.checkAuth(), { ok: true, who: "octo", fix: "" }),
+      );
+      await withFakeGh({ auth: 1 }, async () =>
+        assert.deepEqual(await t.checkAuth(), {
+          ok: false,
+          reason: "not signed in",
+          fix: "gh auth login",
+        }),
+      );
+    },
+    { config: "overrides:\n  issue_tracker: github\n" },
+  );
+  await withSandboxHome(
+    async () => {
+      const t = it.issueTracker();
+      await withFakeGh({ auth: 0, repoView: 1 }, async () =>
+        assert.deepEqual(await t.checkAuth(), {
+          ok: false,
+          who: "octo",
+          reason: "can't read acme/api",
+          fix: "gh auth refresh -s repo",
+        }),
+      );
+    },
+    { config: "overrides:\n  issue_tracker: github\n  github_org: acme\n" },
+  );
 });
 
 test("github updateIssue: a status label is created when the repo lacks it, then added (#156)", async () => {
@@ -108,7 +147,9 @@ test("github updateIssue: a status label is created when the repo lacks it, then
     await withFakeGh({ labels }, async (bin) => {
       await t.updateIssue("acme/api#12", { status: "In Development" });
       await t.updateIssue("acme/api#12", { status: "In Development" });
-      const calls = readFileSync(path.join(path.dirname(bin), "calls"), "utf8").trim().split("\n");
+      const calls = readFileSync(path.join(path.dirname(bin), "calls"), "utf8")
+        .trim()
+        .split("\n");
       assert.deepEqual(calls.slice(0, 2), [
         "label create In Development -R acme/api --color 1D76DB --force",
         "issue edit 12 -R acme/api --add-label In Development",
@@ -118,28 +159,45 @@ test("github updateIssue: a status label is created when the repo lacks it, then
 });
 
 test("jira with no REST creds: ok, via the Atlassian MCP fallback", async () => {
-  const saved = Object.fromEntries(["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"].map((k) => [k, process.env[k]]));
+  const saved = Object.fromEntries(
+    ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"].map((k) => [k, process.env[k]]),
+  );
   for (const k of Object.keys(saved)) delete process.env[k];
   try {
-    await withSandboxHome(async () => {
-      assert.deepEqual(await it.issueTracker().checkAuth(), { ok: true, who: "via Atlassian MCP (not checked)", fix: "" });
-    }, { config: "overrides:\n  issue_tracker: jira\n" });
+    await withSandboxHome(
+      async () => {
+        assert.deepEqual(await it.issueTracker().checkAuth(), {
+          ok: true,
+          who: "via Atlassian MCP (not checked)",
+          fix: "",
+        });
+      },
+      { config: "overrides:\n  issue_tracker: jira\n" },
+    );
   } finally {
     for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
   }
 });
 
 test("jira placeholder base_url counts as not configured (#114)", async () => {
-  const saved = Object.fromEntries(["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"].map((k) => [k, process.env[k]]));
+  const saved = Object.fromEntries(
+    ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"].map((k) => [k, process.env[k]]),
+  );
   for (const k of Object.keys(saved)) delete process.env[k];
   try {
-    await withSandboxHome(async () => {
-      const t = it.issueTracker();
-      assert.equal(t.url("PROJ-1"), null);
-      const a = await t.checkAuth();
-      assert.equal(a.ok, false);
-      assert.match(a.fix, /jira-rest-setup\.md/);
-    }, { config: "overrides:\n  issue_tracker: jira\njira:\n  base_url: https://your-org.atlassian.net\n  email: a@b.c\n  api_token: x\n" });
+    await withSandboxHome(
+      async () => {
+        const t = it.issueTracker();
+        assert.equal(t.url("PROJ-1"), null);
+        const a = await t.checkAuth();
+        assert.equal(a.ok, false);
+        assert.match(a.fix, /jira-rest-setup\.md/);
+      },
+      {
+        config:
+          "overrides:\n  issue_tracker: jira\njira:\n  base_url: https://your-org.atlassian.net\n  email: a@b.c\n  api_token: x\n",
+      },
+    );
   } finally {
     for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
   }

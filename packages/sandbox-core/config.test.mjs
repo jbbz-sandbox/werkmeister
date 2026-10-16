@@ -3,11 +3,12 @@
 // YAML override wins over the SANDBOX_* export (env.sh is generated FROM the
 // YAML, so a disagreeing export is the stale one), and the export still beats
 // the built-in default.
-import { test, beforeEach, afterEach } from "node:test";
+
 import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir, homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { afterEach, beforeEach, test } from "node:test";
 import {
   configPath,
   forwardSpecs,

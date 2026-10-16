@@ -23,8 +23,7 @@ import { sandboxRoot } from "./config.js";
 export const PLUGIN_NAME = "sandbox-tools";
 
 export const REFRESH_HINT =
-  "run `sandbox setup` to refresh it so sessions pick up the current " +
-  "sandbox-* ops skills";
+  "run `sandbox setup` to refresh it so sessions pick up the current " + "sandbox-* ops skills";
 
 function defaultRepoPluginDir(): string {
   return path.join(sandboxRoot(), "plugins", PLUGIN_NAME);
@@ -119,7 +118,10 @@ function skillBodies(skillsDir: string): Map<string, string> {
   } catch {
     return bodies;
   }
-  const names = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  const names = entries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
   for (const name of names) {
     try {
       bodies.set(name, fs.readFileSync(path.join(skillsDir, name, "SKILL.md"), "utf8"));

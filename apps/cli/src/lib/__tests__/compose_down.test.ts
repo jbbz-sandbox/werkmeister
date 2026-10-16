@@ -4,13 +4,13 @@
  * (known-issues.md, "Library Rough Edges"). The process boundary is mocked one
  * level down: `docker ps` resolves the workspace, `docker compose` tears down.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   workspace: "",
@@ -68,7 +68,9 @@ describe("composeDown", () => {
   it("reports success when compose succeeds", async () => {
     fs.writeFileSync(path.join(tmp, "docker-compose.yml"), "services: {}\n");
 
-    expect(await withReporter(quiet, async () => composeDown("demo", { removeVolumes: true }))).toBe(true);
+    expect(
+      await withReporter(quiet, async () => composeDown("demo", { removeVolumes: true })),
+    ).toBe(true);
     expect(h.calls.at(-1)).toContain("--volumes");
     // One workspace lookup, not one per layer.
     expect(h.calls.filter((c) => c[1] === "ps")).toHaveLength(1);

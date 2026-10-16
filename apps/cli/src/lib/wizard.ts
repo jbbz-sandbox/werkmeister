@@ -18,18 +18,17 @@ import * as readline from "node:readline/promises";
 
 import {
   checkbox,
-  confirm as inquirerConfirm,
   editor,
   input,
+  confirm as inquirerConfirm,
   password,
-  select,
   Separator,
+  select,
 } from "@inquirer/prompts";
-
-import { info, warn } from "./config.js";
 import { buildFormSchema } from "sandbox-core/form_schema";
 import type { PromptSpec } from "sandbox-core/global_config";
 import { promptEntry } from "sandbox-core/workspace_prompts";
+import { info, warn } from "./config.js";
 
 // Re-exported so the commands and `browser.ts` that drive a wizard keep naming
 // one module for the runner and the shape it runs.
@@ -60,7 +59,7 @@ async function readLine(label: string, defaultValue: string): Promise<string> {
   try {
     return await new Promise<string>((resolve, reject) => {
       rl.on("SIGINT", () => reject(new Error("interrupted"))); // Ctrl-C
-      rl.on("close", () => reject(new Error("eof")));          // Ctrl-D
+      rl.on("close", () => reject(new Error("eof"))); // Ctrl-D
       rl.question(`  ${label}${shown}: `).then(resolve, reject);
     });
   } catch {
@@ -103,7 +102,9 @@ export async function prompt(
       const written = await editor({ message: label, default: defaultValue, postfix: ".md" });
       return written.trim() || defaultValue;
     }
-    return (await input({ message: label, default: defaultValue || undefined })).trim() || defaultValue;
+    return (
+      (await input({ message: label, default: defaultValue || undefined })).trim() || defaultValue
+    );
   } catch (e) {
     abortIfCancelled(e);
   }
@@ -253,7 +254,12 @@ async function pickFromChoices(
   }
   // Multi-value defaults arrive in the same comma-separated form they're stored
   // in, so a re-run pre-checks whatever the last run selected.
-  const preselected = new Set(defaultValue.split(",").map((s) => s.trim()).filter(Boolean));
+  const preselected = new Set(
+    defaultValue
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
   try {
     if (field.multi) {
       const picked = await checkbox({
@@ -267,7 +273,10 @@ async function pickFromChoices(
     }
     const picked = await select<string | symbol>({
       message: field.label,
-      choices: [...choices.map((c) => ({ name: c, value: c })), { name: "Other (type it)", value: OTHER }],
+      choices: [
+        ...choices.map((c) => ({ name: c, value: c })),
+        { name: "Other (type it)", value: OTHER },
+      ],
       default: choices.includes(defaultValue) ? defaultValue : undefined,
     });
     return typeof picked === "string" ? picked : null;
@@ -386,7 +395,10 @@ export async function runFormWizard(
   const defaults: Record<string, string> = {};
   for (const field of fieldsOf(bundle)) {
     if (!(field.key in resolved)) {
-      await askField(defaults[field.key] ? { ...field, default: defaults[field.key] } : field, resolved);
+      await askField(
+        defaults[field.key] ? { ...field, default: defaults[field.key] } : field,
+        resolved,
+      );
     }
     if (afterField && field.key in resolved) {
       Object.assign(defaults, await afterField(field.key, resolved));
@@ -416,7 +428,10 @@ export async function runWizard(
     if (spec.key in resolved) {
       continue;
     }
-    const entry = { ...promptEntry(spec, "", resolved, { defaults: false }), default: resolveDefault(spec) };
+    const entry = {
+      ...promptEntry(spec, "", resolved, { defaults: false }),
+      default: resolveDefault(spec),
+    };
     for (const field of fieldsOf(buildFormSchema({ prompts: [entry] }))) {
       await askField(field, resolved);
     }

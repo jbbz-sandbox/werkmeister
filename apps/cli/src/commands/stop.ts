@@ -8,11 +8,11 @@
  * For shared infrastructure use ``sandbox stop infra``.
  */
 
-import { Colors, error, info } from "../lib/config.js";
 import { SandboxError } from "sandbox-core/errors";
-import { loadDotenv } from "../lib/dotenv.js";
 import { stop as infraStop } from "sandbox-core/infra";
 import { stop as stopFeature } from "sandbox-core/lifecycle";
+import { Colors, error, info } from "../lib/config.js";
+import { loadDotenv } from "../lib/dotenv.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());

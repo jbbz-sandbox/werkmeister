@@ -25,8 +25,14 @@ fs.mkdirSync(projDir, { recursive: true });
 const sessionFile = path.join(projDir, "abc123.jsonl");
 
 const line = (o) => JSON.stringify(o) + "\n";
-const userLine = (t) => line({ type: "user", timestamp: "2026-07-10T00:00:00Z", message: { role: "user", content: t } });
-const asstLine = (t) => line({ type: "assistant", timestamp: "2026-07-10T00:00:01Z", message: { role: "assistant", content: [{ type: "text", text: t }] } });
+const userLine = (t) =>
+  line({ type: "user", timestamp: "2026-07-10T00:00:00Z", message: { role: "user", content: t } });
+const asstLine = (t) =>
+  line({
+    type: "assistant",
+    timestamp: "2026-07-10T00:00:01Z",
+    message: { role: "assistant", content: [{ type: "text", text: t }] },
+  });
 
 // Pre-existing history → must arrive as backfill.
 fs.writeFileSync(sessionFile, userLine("hello") + asstLine("hi there"));
@@ -44,8 +50,13 @@ const waitFor = (pred, ms = 5000) =>
   new Promise((res, rej) => {
     const t0 = Date.now();
     const iv = setInterval(() => {
-      if (pred()) { clearInterval(iv); res(); }
-      else if (Date.now() - t0 > ms) { clearInterval(iv); rej(new Error("timeout: " + JSON.stringify(events))); }
+      if (pred()) {
+        clearInterval(iv);
+        res();
+      } else if (Date.now() - t0 > ms) {
+        clearInterval(iv);
+        rej(new Error("timeout: " + JSON.stringify(events)));
+      }
     }, 50);
   });
 
@@ -53,7 +64,11 @@ const waitFor = (pred, ms = 5000) =>
 await waitFor(() => ready);
 const backfill = events.filter((e) => e.type === "entry");
 assert.equal(backfill.length, 2, "expected 2 backfill entries");
-assert.deepEqual(backfill.map((e) => e.index), [0, 1], "backfill indices contiguous from 0");
+assert.deepEqual(
+  backfill.map((e) => e.index),
+  [0, 1],
+  "backfill indices contiguous from 0",
+);
 assert.equal(backfill[0].message.role, "user");
 assert.equal(backfill[0].message.text, "hello");
 assert.equal(backfill[1].message.text, "hi there");
@@ -80,14 +95,25 @@ assert.equal(demo.claude.waiting, true, "assistant spoke last → waiting for in
 // Flip it: append a user line → Claude no longer spoke last → not waiting.
 fs.appendFileSync(sessionFile, userLine("another question"));
 const { statuses: s2 } = await getWorkspaceStatuses();
-assert.equal(s2.find((s) => s.name === "demo").claude.waiting, false, "user spoke last → not waiting");
+assert.equal(
+  s2.find((s) => s.name === "demo").claude.waiting,
+  false,
+  "user spoke last → not waiting",
+);
 console.log("✓ waiting-for-input signal: true after assistant, false after user");
 
 // 4. Resume cursor: a reconnect from index N skips the backfill it already has.
 // File now holds 4 entries (user, asst, asst, user). Resume from index 2.
 const ev2 = [];
 let ready2 = false;
-const unsub2 = subscribeSession("demo", (e) => { ev2.push(e); if (e.type === "ready") ready2 = true; }, 2);
+const unsub2 = subscribeSession(
+  "demo",
+  (e) => {
+    ev2.push(e);
+    if (e.type === "ready") ready2 = true;
+  },
+  2,
+);
 await waitFor(() => ready2);
 assert.deepEqual(
   ev2.filter((e) => e.type === "entry").map((e) => e.index),
