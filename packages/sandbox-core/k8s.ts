@@ -301,6 +301,9 @@ export function checkWireHealth(
       resolve({ ok: false, detail: "timeout (connected, no reply)" });
     });
     sock.on("error", (e) => resolve({ ok: false, detail: (e as NodeJS.ErrnoException).code ?? e.message }));
+    // A peer that hangs up without a byte (Docker's port proxy before the tunnel
+    // binds) fires none of the above; without this the probe never settles (#207).
+    sock.on("close", () => resolve({ ok: false, detail: "closed without reply" }));
   });
 }
 

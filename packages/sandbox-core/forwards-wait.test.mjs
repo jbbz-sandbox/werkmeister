@@ -101,6 +101,19 @@ test("names the forwards that never came back", async () => {
   );
 });
 
+test("a forward that hangs up without replying fails the wait instead of hanging it", { timeout: 5_000 }, async () => {
+  // #207: the probe for this forward never settled, so neither did the wait,
+  // and `sandbox up` exited mid-run with its containers left in Created.
+  const port = await freePort();
+  const srv = net.createServer((sock) => sock.on("data", () => sock.destroy()));
+  open.push(srv);
+  await new Promise((resolve) => srv.listen(port, "127.0.0.1", resolve));
+  srv.unref();
+  await registry([port]);
+
+  await assert.rejects(() => waitForForwards(300, 50), { code: "FORWARDS_NEVER_READY" });
+});
+
 test("no forwards in the registry is not something to wait for", async () => {
   await registry([]);
   await waitForForwards(200, 50);
