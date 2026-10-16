@@ -154,7 +154,6 @@ export async function up(
     warn(`Slot changed (${preferredSlot} → ${slot}) — regenerating compose...`);
     generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
     generateFeatureEnv(feature, slot, localServices, config, workspace);
-    generateSupergraphConfig(feature, slot, localServices, config, workspace);
   } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
     // Warn rather than regenerate: `up` starting to rewrite workspace files
     // would silently discard hand-edits to the generated compose.
@@ -164,6 +163,9 @@ export async function up(
         "run 'sandbox init-workspace' in the workspace to regenerate it.",
     );
   }
+  // Every `up`, not just on a slot change: the file is fully generated and
+  // nothing reads it, and with no subgraph this removes a stale copy (#120).
+  generateSupergraphConfig(feature, slot, localServices, config, workspace);
 
   // Unprefixed because it always has been — `raw` is what keeps the CLI's bytes
   // identical for a line that sits mid-sequence and so cannot move to the
