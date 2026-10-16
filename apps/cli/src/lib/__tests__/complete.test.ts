@@ -14,9 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 
-/** The hoisted-or-local `tsx` binary. Spawned directly: `npx` costs ~3s a call. */
-const TSX = [path.join(CLI_DIR, "node_modules/.bin/tsx"), path.join(CLI_DIR, "../../node_modules/.bin/tsx")]
-  .find((p) => fs.existsSync(p))!;
+/** Built by the `test` script; a cold `tsx src/main.ts` per case transpiles the whole CLI each time (#206). */
+const MAIN = path.join(CLI_DIR, "dist/main.js");
 
 let wsRoot: string;
 
@@ -28,7 +27,7 @@ afterAll(() => fs.rmSync(wsRoot, { recursive: true, force: true }));
 
 /** Complete *line*, with the cursor at its end. */
 function complete(line: string): string[] {
-  const res = spawnSync(TSX, ["src/main.ts", "__complete"], {
+  const res = spawnSync(process.execPath, [MAIN, "__complete"], {
     cwd: CLI_DIR,
     encoding: "utf-8",
     env: {
@@ -45,9 +44,7 @@ function complete(line: string): string[] {
   return res.stdout.trim().split("\n").filter(Boolean);
 }
 
-// Each case spawns a cold tsx; 5s is not enough when the monorepo suite runs
-// these in parallel with everything else.
-describe("sandbox __complete", { timeout: 30_000 }, () => {
+describe("sandbox __complete", () => {
   it("completes a partial command name", () => {
     expect(complete("sandbox lo")).toEqual(["logs"]);
   });
