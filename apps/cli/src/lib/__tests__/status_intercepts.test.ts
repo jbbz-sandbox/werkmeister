@@ -4,18 +4,18 @@
  * The join under test: every active feature's services × the service registry ×
  * the deployments telepresence reports as intercepted.
  */
-import { describe, expect, it } from "vitest";
 
 import { buildInterceptRows } from "sandbox-core/status";
+import { describe, expect, it } from "vitest";
 
 const REGISTRY = {
-  "frontend": {
+  frontend: {
     k8s_deployment: "frontend",
     k8s_namespace: "default",
     k8s_port: 8080,
     k8s_port_name: "http",
   },
-  "backend": {
+  backend: {
     k8s_deployment: "backend",
     k8s_namespace: "default",
     k8s_port: 80,

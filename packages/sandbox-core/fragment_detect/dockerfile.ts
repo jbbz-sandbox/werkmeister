@@ -2,7 +2,7 @@
 import * as path from "node:path";
 
 import { readText } from "./files.js";
-import { guessed, stated, type DetectContext, type Finding } from "./types.js";
+import { type DetectContext, type Finding, guessed, stated } from "./types.js";
 
 const DOCKERFILE = /^(?!.*\.(md|dockerignore)$)(Dockerfile(\..+)?|.+\.Dockerfile)$/;
 const DEV = /(^|\.)dev(\.|$)/i;

@@ -28,9 +28,15 @@ export function assistOptions(repoRoot: string): Options {
   };
 }
 
-export const claudeResolver: Resolver = async (repoRoot: string, questions: Question[]): Promise<Answer[]> => {
+export const claudeResolver: Resolver = async (
+  repoRoot: string,
+  questions: Question[],
+): Promise<Answer[]> => {
   const { query } = await import("@anthropic-ai/claude-agent-sdk");
-  for await (const message of query({ prompt: assistPrompt(questions), options: assistOptions(repoRoot) })) {
+  for await (const message of query({
+    prompt: assistPrompt(questions),
+    options: assistOptions(repoRoot),
+  })) {
     if (message.type !== "result") continue;
     if (message.subtype === "success" && message.structured_output) {
       return (message.structured_output as { answers: Answer[] }).answers;

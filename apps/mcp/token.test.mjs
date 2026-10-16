@@ -1,11 +1,12 @@
 // The predicate is the whole authentication rule, in one place: a token is
 // required whenever the bind is not loopback, and a present token is always
 // checked. Hermetic -- os.homedir() honours $HOME, so ~/.sandbox moves.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { authorized, isLoopback, readOrCreateToken, tokenPath } from "./dist/lib/token.js";
 

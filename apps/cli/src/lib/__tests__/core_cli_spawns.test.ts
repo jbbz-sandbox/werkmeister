@@ -13,19 +13,24 @@
  * caller rather than core depending on the CLI. What this test forbids is core
  * doing the spawning, which is why it checks call sites rather than exports.
  */
-import { describe, expect, it } from "vitest";
+
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 
-const CORE = path.resolve(fileURLToPath(import.meta.url), "../../../../../../packages/sandbox-core");
+const CORE = path.resolve(
+  fileURLToPath(import.meta.url),
+  "../../../../../../packages/sandbox-core",
+);
 
 /** The function each `resolveSandboxBin()` call in `src` sits inside. */
 function enclosingFunctions(src: string, needle: RegExp): string[] {
   const found: string[] = [];
   let current = "unknown";
   for (const line of src.split("\n")) {
-    const decl = /^export (?:async )?function (\w+)/.exec(line) ?? /^(?:async )?function (\w+)/.exec(line);
+    const decl =
+      /^export (?:async )?function (\w+)/.exec(line) ?? /^(?:async )?function (\w+)/.exec(line);
     if (decl) current = decl[1];
     if (needle.test(line)) found.push(current);
   }
@@ -52,7 +57,9 @@ describe("sandbox-core does not drive the CLI", () => {
     const others = fs
       .readdirSync(CORE)
       .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts") && f !== "sandbox.ts")
-      .filter((f) => /resolveSandboxBin\(|"sandbox"\s*\]/.test(fs.readFileSync(path.join(CORE, f), "utf8")));
+      .filter((f) =>
+        /resolveSandboxBin\(|"sandbox"\s*\]/.test(fs.readFileSync(path.join(CORE, f), "utf8")),
+      );
 
     expect(others).toEqual([]);
   });

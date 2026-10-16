@@ -3,19 +3,20 @@
 // without an installed reporter, and concurrent scopes never see each other's
 // events. The fourth test pins the CLI's own lines byte for byte — the
 // migration is only safe if `sandbox` output cannot drift.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import {
-  info,
-  success,
-  warn,
+  collectingReporter,
   error,
+  info,
   passthrough,
   raw,
-  withReporter,
+  success,
   ttyReporter,
-  collectingReporter,
+  warn,
+  withReporter,
 } from "./dist/reporter.js";
 
 const recorder = () => {
@@ -63,8 +64,14 @@ test("concurrent scopes do not interleave", async () => {
 
   await Promise.all([yielded("a", a), yielded("b", b)]);
 
-  assert.deepEqual(a.events.map((e) => e.msg), ["a-1", "a-2"]);
-  assert.deepEqual(b.events.map((e) => e.msg), ["b-1", "b-2"]);
+  assert.deepEqual(
+    a.events.map((e) => e.msg),
+    ["a-1", "a-2"],
+  );
+  assert.deepEqual(
+    b.events.map((e) => e.msg),
+    ["b-1", "b-2"],
+  );
 });
 
 test("ttyReporter reproduces the CLI's lines byte for byte", async () => {

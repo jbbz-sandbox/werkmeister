@@ -228,7 +228,8 @@ export function removeWorkspaceHooks(workspaceRoot: string): string[] {
     if (!Array.isArray(entries)) continue;
     const kept = entries.filter((entry) => !_isManaged(entry, marker));
     for (const entry of entries) {
-      if (!kept.includes(entry)) removed.push(...entry["hooks"].map((h: any) => String(h["command"])));
+      if (!kept.includes(entry))
+        removed.push(...entry["hooks"].map((h: any) => String(h["command"])));
     }
     if (kept.length) hooks[event] = kept;
     else delete hooks[event];
@@ -245,14 +246,22 @@ export function removeWorkspaceHooks(workspaceRoot: string): string[] {
 // permissions.allow — every strategy
 // ---------------------------------------------------------------------------
 
-export const READ_ONLY_GIT_RULES = ["Bash(git diff:*)", "Bash(git status:*)", "Bash(git ls-files:*)"];
+export const READ_ONLY_GIT_RULES = [
+  "Bash(git diff:*)",
+  "Bash(git status:*)",
+  "Bash(git ls-files:*)",
+];
 
 // `claude -p --permission-mode acceptEdits` (claude-send) refuses any Bash call
 // without a rule and nobody is there to approve it (#175). The PR guard is a
 // PreToolUse deny, which outranks `Bash(gh:*)`, so `gh pr create` stays blocked.
 export const AUTONOMOUS_RULES = [
-  ...["git", "sandbox", "docker", "gh", "node", "npm", "npx", "python3"].map((cmd) => `Bash(${cmd}:*)`),
-  ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map((cmd) => `Bash(${cmd}:*)`),
+  ...["git", "sandbox", "docker", "gh", "node", "npm", "npx", "python3"].map(
+    (cmd) => `Bash(${cmd}:*)`,
+  ),
+  ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map(
+    (cmd) => `Bash(${cmd}:*)`,
+  ),
   // A plugin's pane tests; never `claude plugin:*`, which would also allow install/uninstall.
   "Bash(claude plugin validate:*)",
   "Bash(claude plugin test:*)",
@@ -306,16 +315,23 @@ function _readEnv(workspaceRoot: string): Record<string, string> {
 export function workspaceAllowRules(workspaceRoot: string): string[] {
   const env = _readEnv(workspaceRoot);
   const feature = env["FEATURE"] ?? "";
-  const services = (env["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const services = (env["SERVICES"] ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const rules =
-    feature && services.length ? buildAllowRules(feature, services, loadServices(), loadArchetypes()) : [...READ_ONLY_GIT_RULES];
+    feature && services.length
+      ? buildAllowRules(feature, services, loadServices(), loadArchetypes())
+      : [...READ_ONLY_GIT_RULES];
   return readAutonomous(workspaceRoot) ? [...new Set([...rules, ...AUTONOMOUS_RULES])] : rules;
 }
 
 function _readRecord(recordPath: string): string[] {
   try {
     const data = JSON.parse(fs.readFileSync(recordPath, "utf8"));
-    return _isDict(data) && Array.isArray(data["allow"]) ? data["allow"].filter((r: unknown) => typeof r === "string") : [];
+    return _isDict(data) && Array.isArray(data["allow"])
+      ? data["allow"].filter((r: unknown) => typeof r === "string")
+      : [];
   } catch {
     return [];
   }
@@ -342,7 +358,9 @@ export function writeWorkspacePermissions(workspaceRoot: string, want: string[])
   const previous = _readRecord(recordPath);
   const recorded = new Set(previous);
   const wanted = [...new Set(want)];
-  const kept = allow.filter((rule) => !(typeof rule === "string" && recorded.has(rule) && !wanted.includes(rule)));
+  const kept = allow.filter(
+    (rule) => !(typeof rule === "string" && recorded.has(rule) && !wanted.includes(rule)),
+  );
   const added = wanted.filter((rule) => !kept.includes(rule));
   const record = wanted.filter((rule) => recorded.has(rule) || added.includes(rule));
 

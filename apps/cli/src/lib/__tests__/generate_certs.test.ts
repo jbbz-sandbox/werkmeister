@@ -51,7 +51,10 @@ describe("generate-certs.sh --check", CERT_TIMEOUT, () => {
   it("reports a hosts entry for a host the registry no longer routes", () => {
     expect(run(["keep.local.test"]).rc).toBe(0);
     // Bare lines, as versions before the managed block appended them.
-    fs.writeFileSync(hosts, "127.0.0.1 localhost\n127.0.0.1 keep.local.test\n127.0.0.1 gone.local.test\n");
+    fs.writeFileSync(
+      hosts,
+      "127.0.0.1 localhost\n127.0.0.1 keep.local.test\n127.0.0.1 gone.local.test\n",
+    );
 
     const check = run(["keep.local.test", "--check"]);
 

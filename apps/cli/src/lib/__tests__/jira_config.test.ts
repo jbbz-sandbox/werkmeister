@@ -1,8 +1,9 @@
 /** Jira creds in the global config: `jira:` section + the `sandbox setup` report. */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as YAML from "yaml";
 
 // The config command projects onto ~/.zshenv and the Claude Desktop config;
@@ -12,9 +13,9 @@ vi.mock("sandbox-core/global_config", async (importOriginal) => {
   return { ...actual, ensureZshenvSources: () => false, patchDesktopConfig: () => false };
 });
 
-import { run as runConfig } from "../../commands/config.js";
 import * as gc from "sandbox-core/global_config";
 import { JIRA_CONFIG_SNIPPET, syncJiraToken } from "sandbox-core/machine_setup";
+import { run as runConfig } from "../../commands/config.js";
 
 const FILLED = {
   base_url: "https://example.atlassian.net/",
@@ -82,7 +83,10 @@ describe("syncJiraToken", () => {
   it("the unedited setup snippet counts as not configured", async () => {
     const snippet = YAML.parse(JIRA_CONFIG_SNIPPET).jira;
     const verified = () => [true, "verified"] as [boolean, string]; // never hit the network
-    const step = await stepFor({ ...snippet, email: "dev@example.com", api_token: "real-token" }, verified);
+    const step = await stepFor(
+      { ...snippet, email: "dev@example.com", api_token: "real-token" },
+      verified,
+    );
     expect(step.ok).toBe(true);
     expect(step.detail).toContain("jira.base_url");
   });

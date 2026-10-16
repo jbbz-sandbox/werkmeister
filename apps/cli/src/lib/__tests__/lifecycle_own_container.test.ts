@@ -3,13 +3,13 @@
  * stop or remove kills itself mid-sequence (exit 137) — #198. It refuses
  * before touching compose or the shared infra.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { composeUpAsync, ensurePortForwardsHealthy } = vi.hoisted(() => ({
   composeUpAsync: vi.fn(async () => true),
@@ -46,14 +46,22 @@ describe("insideOwnContainer", () => {
     expect(insideOwnContainer("demo", { SANDBOX_FEATURE: "demo" })).toBe(true);
     expect(insideOwnContainer("demo", { SANDBOX_FEATURE: "other" })).toBe(false);
     expect(insideOwnContainer("demo", {})).toBe(false);
-    expect(insideOwnContainer("demo", { SANDBOX_FEATURE: "demo" }, path.join(os.tmpdir(), "no-such-dockerenv"))).toBe(false);
+    expect(
+      insideOwnContainer(
+        "demo",
+        { SANDBOX_FEATURE: "demo" },
+        path.join(os.tmpdir(), "no-such-dockerenv"),
+      ),
+    ).toBe(false);
   });
 });
 
 describe("lifecycle.up inside the feature's own container", () => {
   it("refuses before checking forwards or running compose", async () => {
     process.env.SANDBOX_FEATURE = "demo";
-    await expect(withReporter(quiet, () => up("demo", root))).rejects.toMatchObject({ code: "INSIDE_OWN_CONTAINER" });
+    await expect(withReporter(quiet, () => up("demo", root))).rejects.toMatchObject({
+      code: "INSIDE_OWN_CONTAINER",
+    });
     expect(ensurePortForwardsHealthy).not.toHaveBeenCalled();
     expect(composeUpAsync).not.toHaveBeenCalled();
   });

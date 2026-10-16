@@ -9,11 +9,15 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cpush-"));
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
 // Process-wide so commitAndPush's own commits have an identity too; containers have no ~/.gitconfig.
 Object.assign(process.env, {
-  GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
+  GIT_AUTHOR_NAME: "t",
+  GIT_AUTHOR_EMAIL: "t@t",
+  GIT_COMMITTER_NAME: "t",
+  GIT_COMMITTER_EMAIL: "t@t",
 });
 const commit = (cwd, file, msg) => {
   fs.writeFileSync(path.join(cwd, file), msg);
@@ -60,9 +64,19 @@ fs.writeFileSync(path.join(feat, "pr-app.md"), "status: open");
 fs.writeFileSync(path.join(feat, "unrelated.txt"), "not mine");
 const r3 = await commitAndPush(feat, "chore: record opened PR(s)", ["pr-app.md"]);
 assert.equal(r3.ok, true, `record push must succeed, got: ${r3.message}`);
-assert.deepEqual(git(feat, "show", "--name-only", "--format=", "HEAD").trim().split("\n"), ["pr-app.md"]);
-assert.match(git(feat, "status", "--porcelain"), /^\?\? unrelated\.txt$/m, "unrelated file left alone");
-assert.match(git(origin, "log", "-1", "--format=%s", "dev/feature-x"), /record opened PR/, "pushed");
+assert.deepEqual(git(feat, "show", "--name-only", "--format=", "HEAD").trim().split("\n"), [
+  "pr-app.md",
+]);
+assert.match(
+  git(feat, "status", "--porcelain"),
+  /^\?\? unrelated\.txt$/m,
+  "unrelated file left alone",
+);
+assert.match(
+  git(origin, "log", "-1", "--format=%s", "dev/feature-x"),
+  /record opened PR/,
+  "pushed",
+);
 console.log("✓ record commit with paths → only those paths committed + pushed");
 
 fs.rmSync(tmp, { recursive: true, force: true });

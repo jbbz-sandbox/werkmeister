@@ -6,8 +6,8 @@
  * dashboard and the MCP surface make; what is left here is the table.
  */
 
-import { Colors } from "../lib/config.js";
 import { listWorkspaces } from "sandbox-core";
+import { Colors } from "../lib/config.js";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {
   const { root, workspaces } = await listWorkspaces();
@@ -29,15 +29,15 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
   for (const { name, issueId, labels } of workspaces) {
     // padEnd counts escape sequences, so the coloured placeholder is padded by
     // hand -- the same reason services.ts spells its Source cells out.
-    const issueCell = issueId ? issueId.padEnd(12) : `${Colors.DIM}--${Colors.RESET}${" ".repeat(10)}`;
+    const issueCell = issueId
+      ? issueId.padEnd(12)
+      : `${Colors.DIM}--${Colors.RESET}${" ".repeat(10)}`;
     console.log(
       `  ${name.padEnd(32)}  ${issueCell}  ${Colors.DIM}${labels.join(", ")}${Colors.RESET}`,
     );
   }
 
   console.log();
-  console.log(
-    `  ${Colors.DIM}End one with: sandbox close-out <name>${Colors.RESET}`,
-  );
+  console.log(`  ${Colors.DIM}End one with: sandbox close-out <name>${Colors.RESET}`);
   console.log();
 }

@@ -93,7 +93,9 @@ export function runBatchOnce(keys: string[], job: (fresh: string[]) => Promise<v
   fresh.forEach((k) => inFlight.add(k));
   void Promise.resolve()
     .then(() => job(fresh))
-    .catch((e) => console.error("[sandbox-workspace] background cache refresh failed:", (e as Error).message))
+    .catch((e) =>
+      console.error("[sandbox-workspace] background cache refresh failed:", (e as Error).message),
+    )
     .finally(() => fresh.forEach((k) => inFlight.delete(k)));
 }
 

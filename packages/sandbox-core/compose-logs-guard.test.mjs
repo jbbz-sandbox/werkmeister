@@ -4,11 +4,11 @@
 //
 // Hermetic: `getSlot` reads the service registry, which does not exist on a
 // clean machine, so the whole test runs against a seeded temp sandbox home.
-import { test } from "node:test";
-import assert from "node:assert/strict";
 
-import { collectingReporter, withReporter } from "./dist/reporter.js";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { composeLogs } from "./dist/compose.js";
+import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
 test("composeLogs warns and does not spawn when the feature holds no slot", async () => {

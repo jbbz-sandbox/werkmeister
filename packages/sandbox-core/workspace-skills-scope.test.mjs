@@ -1,10 +1,11 @@
 // A standard that is not projected cannot be loaded — the same "cannot
 // misbehave" logic as the subagent tool gates, applied to the skill set.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { renderWorkspaceSkills } from "./dist/workspace_skills.js";
 

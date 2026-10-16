@@ -9,8 +9,9 @@
  * keeps that honest lives below — the bind, the Origin refusal, and the bearer
  * token.
  */
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { NextFunction, Request, Response } from "express";

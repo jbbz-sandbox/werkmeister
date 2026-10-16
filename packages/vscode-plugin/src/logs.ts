@@ -12,9 +12,9 @@
  * would arrive as literal `[36m` noise on every line.
  */
 import type { ChildProcess } from "node:child_process";
-import * as vscode from "vscode";
 import { childEnv } from "sandbox-core";
 import { composeLogsStream } from "sandbox-core/compose";
+import * as vscode from "vscode";
 
 interface Tail {
   terminal: vscode.Terminal;

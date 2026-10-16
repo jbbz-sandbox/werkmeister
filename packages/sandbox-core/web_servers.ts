@@ -213,8 +213,15 @@ function distStale(app: WebApp): boolean {
     return true;
   }
   // Everything that feeds `npm run build` (node_modules/dist excluded).
-  const patterns = ["*.ts", "*.html", "package.json", "tsconfig*.json",
-                    "lib/*.ts", "src/*.ts", "src/*.css"];
+  const patterns = [
+    "*.ts",
+    "*.html",
+    "package.json",
+    "tsconfig*.json",
+    "lib/*.ts",
+    "src/*.ts",
+    "src/*.css",
+  ];
   for (const pat of patterns) {
     for (const f of globMatch(dir, pat)) {
       try {
@@ -328,7 +335,11 @@ export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> 
  * an already-running server (so `sandbox connect` picks up code changes);
  * without it, an already-running server is left as-is.
  */
-export async function start(app: WebApp = DASHBOARD, build = true, force = false): Promise<boolean> {
+export async function start(
+  app: WebApp = DASHBOARD,
+  build = true,
+  force = false,
+): Promise<boolean> {
   const [running, pid] = isRunning(app);
 
   // Never bounce ourselves. `sandbox connect` is a tool on apps/mcp, and it

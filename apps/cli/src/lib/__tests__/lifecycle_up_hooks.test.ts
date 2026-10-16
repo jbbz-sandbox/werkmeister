@@ -4,14 +4,14 @@
  * until someone re-ran it by hand (known-issues.md, "Library Rough Edges").
  * Every collaborator of `up` is mocked; only the hook write is real.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import { SESSION_START_COMMAND } from "sandbox-core/hooks_gen";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("sandbox-core/caddy", () => ({
   isCaddyRunning: () => true,
@@ -55,7 +55,9 @@ beforeEach(() => {
   fs.mkdirSync(path.join(root, ".claude"));
   fs.writeFileSync(
     path.join(root, ".claude", "settings.json"),
-    JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: "command", command: PRIOR_COMMAND }] }] } }),
+    JSON.stringify({
+      hooks: { SessionStart: [{ hooks: [{ type: "command", command: PRIOR_COMMAND }] }] },
+    }),
   );
 });
 afterEach(() => {
@@ -66,7 +68,9 @@ describe("lifecycle.up", () => {
   it("reconciles a stale SessionStart hook", async () => {
     await withReporter(quiet, () => up("demo", root));
 
-    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
     expect(settings.hooks.SessionStart).toHaveLength(1);
     expect(settings.hooks.SessionStart[0].hooks[0].command).toBe(SESSION_START_COMMAND);
   });

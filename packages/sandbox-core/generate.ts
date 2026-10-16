@@ -20,20 +20,20 @@ import { candidateServiceNames } from "./archetypes.js";
 import { buildSandboxContextMd } from "./claude_md.js";
 import {
   infraRoot,
-  stateInfraRoot,
   loadPorts,
   loadReposConfig,
   loadServices,
   loadSetupServices,
   resolveWorkspace,
   sandboxRoot,
+  stateInfraRoot,
 } from "./config.js";
-import { info, success, warn } from "./reporter.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "./locks.js";
+import { info, success, warn } from "./reporter.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
-import { ensureSecretEnvsIgnored } from "./worktrees.js";
 import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
+import { ensureSecretEnvsIgnored } from "./worktrees.js";
 
 function isDict(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -287,7 +287,12 @@ function resolveComposeOutPath(
 export function seedWorkspaceMetadataEnv(envPath: string, meta: Record<string, string>): void {
   // One line per key: a multi-line value (a distilled description) would end the entry early.
   const body = Object.entries(meta)
-    .map(([k, v]) => `${k}=${String(v).replace(/\s*\n\s*/g, " ").trim()}\n`)
+    .map(
+      ([k, v]) =>
+        `${k}=${String(v)
+          .replace(/\s*\n\s*/g, " ")
+          .trim()}\n`,
+    )
     .join("");
   fs.writeFileSync(envPath, preservedEnvMetadata(envPath, new Set(Object.keys(meta))) + body);
 }
@@ -343,7 +348,11 @@ function k8sPortForService(
   _portsConfig: Record<string, any>,
 ): number | null {
   const svcDef = servicesConfig[serviceName] ?? {};
-  if (isDict(svcDef) && svcDef["k8s_forward_port"] !== null && svcDef["k8s_forward_port"] !== undefined) {
+  if (
+    isDict(svcDef) &&
+    svcDef["k8s_forward_port"] !== null &&
+    svcDef["k8s_forward_port"] !== undefined
+  ) {
     return Number(svcDef["k8s_forward_port"]);
   }
   return null;
@@ -377,7 +386,7 @@ function resolveServiceRefs(
     if (!isDict(svcDef)) {
       throw new Error(
         `Cannot resolve {${svcName}} in ${quoted(value)}: ` +
-        `${quoted(svcName)} is not a known service in services.yaml`,
+          `${quoted(svcName)} is not a known service in services.yaml`,
       );
     }
 
@@ -393,7 +402,7 @@ function resolveServiceRefs(
     }
     throw new Error(
       `Cannot resolve {${svcName}} in ${quoted(value)}: ` +
-      `${quoted(svcName)} is not local and has no k8s_forward_port in services.yaml`,
+        `${quoted(svcName)} is not local and has no k8s_forward_port in services.yaml`,
     );
   });
 }
@@ -517,7 +526,7 @@ function renderFeatureCompose(
     }
     // Load setup service configs
     let setupConfigs: Record<string, any> =
-      config && "setup_services" in config ? config["setup_services"] ?? {} : loadSetupServices();
+      config && "setup_services" in config ? (config["setup_services"] ?? {}) : loadSetupServices();
     // Copy + annotate each setup config with its worktree gitdir (if the
     // repo checkout is a linked worktree) so the template can mount it.
     setupConfigs = Object.fromEntries(
@@ -563,7 +572,7 @@ function renderFeatureCompose(
   }
   warn(
     "Template 'docker-compose.feature.yml.njk' not found -- " +
-    "falling back to built-in compose generation",
+      "falling back to built-in compose generation",
   );
 
   // ---- Programmatic generation -----------------------------------------
@@ -1143,7 +1152,7 @@ export function generateSupergraphConfig(
   }
   warn(
     "Template 'supergraph-config.yml.njk' not found -- " +
-    "falling back to built-in supergraph config generation",
+      "falling back to built-in supergraph config generation",
   );
 
   // ---- Programmatic generation -----------------------------------------
@@ -1330,7 +1339,7 @@ function buildHostRouters(
       continue;
     }
     const svcDef = servicesConfig[svcName] ?? {};
-    const portOffset = isDict(svcDef) ? svcDef["port_offset"] ?? 0 : 0;
+    const portOffset = isDict(svcDef) ? (svcDef["port_offset"] ?? 0) : 0;
     const candidates = Object.entries(allFeatures)
       .filter(
         ([, fi]) =>

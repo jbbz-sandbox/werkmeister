@@ -1,10 +1,11 @@
 // canonical() decides whether the manifest is stale. Order-independence is the
 // whole point: a re-serialised manifest with reordered keys is not drift.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { canonical, checkSkills, resolveWorkspaceManifest } from "./dist/workspace_skills.js";
 

@@ -31,7 +31,8 @@ export function findRecordRoot(start: string): string | null {
 function prFileDirName(root: string): string {
   try {
     const names = fs.readdirSync(path.join(root, "stages")).sort();
-    const dir = names.find((n) => /^\d+_propose$/.test(n)) ?? names.find((n) => /^\d+_ship$/.test(n));
+    const dir =
+      names.find((n) => /^\d+_propose$/.test(n)) ?? names.find((n) => /^\d+_ship$/.test(n));
     return dir ? `stages/${dir}/output/` : "the propose stage's output/";
   } catch {
     return ".sandbox/notes/";
@@ -51,8 +52,9 @@ export function decide(input: Record<string, any>): string | null {
   if (!opensPr) return null;
   // A workspace generated before the rules file existed has neither path; point at the docs then.
   const rules =
-    ["_shared/pr-rules.md", ".sandbox/pr-rules.md"].find((p) => fs.existsSync(path.join(root, p))) ??
-    "docs/workspace-lifecycle.md in the sandbox repo";
+    ["_shared/pr-rules.md", ".sandbox/pr-rules.md"].find((p) =>
+      fs.existsSync(path.join(root, p)),
+    ) ?? "docs/workspace-lifecycle.md in the sandbox repo";
   return (
     `Inside sandbox workspace \`${path.basename(root)}\`, PRs open only through \`sandbox pr open\`: ` +
     "it runs the pre-PR gate and records the URL. Write the PR file in " +
@@ -67,13 +69,21 @@ export function main(): void {
   try {
     const raw = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
     const parsed = raw.trim() ? JSON.parse(raw) : {};
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) reason = decide(parsed);
-  } catch { // a hook must never break the tool call
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
+      reason = decide(parsed);
+  } catch {
+    // a hook must never break the tool call
     reason = null;
   }
   if (reason) {
-    console.log(JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
-    }));
+    console.log(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: reason,
+        },
+      }),
+    );
   }
 }

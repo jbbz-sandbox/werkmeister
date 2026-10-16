@@ -82,10 +82,10 @@ function currentContextName(configDir: string): string {
 
 function cliContextHost(): string | null {
   try {
-    const result = run(
-      ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
-      { capture: true, timeout: 10 },
-    );
+    const result = run(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"], {
+      capture: true,
+      timeout: 10,
+    });
     if (result.status !== 0) return null;
     return result.stdout.trim() || null;
   } catch (err) {
@@ -213,7 +213,10 @@ export async function containerStats(signal?: AbortSignal): Promise<ContainerSta
 function withTimeout<T>(seconds: number, what: string, work: Promise<T>): Promise<T> {
   let timer: NodeJS.Timeout;
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${what} timed out after ${seconds} seconds`)), seconds * 1000);
+    timer = setTimeout(
+      () => reject(new Error(`${what} timed out after ${seconds} seconds`)),
+      seconds * 1000,
+    );
   });
   return Promise.race([work, deadline]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
@@ -235,7 +238,9 @@ export async function copyFileToContainer(
   await withTimeout(
     30,
     "docker cp",
-    docker().getContainer(container).putArchive(pack, { path: path.dirname(containerPath) }),
+    docker()
+      .getContainer(container)
+      .putArchive(pack, { path: path.dirname(containerPath) }),
   );
 }
 
@@ -253,30 +258,34 @@ export interface ExecResult {
  * before the exit code is readable.
  */
 export async function execCapture(container: string, cmd: string[]): Promise<ExecResult> {
-  return withTimeout(30, cmd.slice(0, 2).join(" "), (async () => {
-    const exec = await docker()
-      .getContainer(container)
-      .exec({ Cmd: cmd, AttachStdout: true, AttachStderr: true });
-    const stream = await exec.start({});
+  return withTimeout(
+    30,
+    cmd.slice(0, 2).join(" "),
+    (async () => {
+      const exec = await docker()
+        .getContainer(container)
+        .exec({ Cmd: cmd, AttachStdout: true, AttachStderr: true });
+      const stream = await exec.start({});
 
-    const out: Buffer[] = [];
-    const err: Buffer[] = [];
-    const outPipe = new PassThrough().on("data", (c: Buffer) => out.push(c));
-    const errPipe = new PassThrough().on("data", (c: Buffer) => err.push(c));
-    docker().modem.demuxStream(stream, outPipe, errPipe);
+      const out: Buffer[] = [];
+      const err: Buffer[] = [];
+      const outPipe = new PassThrough().on("data", (c: Buffer) => out.push(c));
+      const errPipe = new PassThrough().on("data", (c: Buffer) => err.push(c));
+      docker().modem.demuxStream(stream, outPipe, errPipe);
 
-    await new Promise<void>((resolve, reject) => {
-      stream.on("end", resolve);
-      stream.on("error", reject);
-    });
+      await new Promise<void>((resolve, reject) => {
+        stream.on("end", resolve);
+        stream.on("error", reject);
+      });
 
-    const { ExitCode } = await exec.inspect();
-    return {
-      exitCode: ExitCode ?? -1,
-      stdout: Buffer.concat(out).toString("utf8"),
-      stderr: Buffer.concat(err).toString("utf8"),
-    };
-  })());
+      const { ExitCode } = await exec.inspect();
+      return {
+        exitCode: ExitCode ?? -1,
+        stdout: Buffer.concat(out).toString("utf8"),
+        stderr: Buffer.concat(err).toString("utf8"),
+      };
+    })(),
+  );
 }
 
 /** Every volume name known to the daemon, or `null` when it is unreachable. */

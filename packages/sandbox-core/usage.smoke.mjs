@@ -2,6 +2,7 @@
 //   npm run build && node lib/usage.smoke.mjs
 import assert from "node:assert";
 import path from "node:path";
+
 const { reduceUsageLines, estimateUsd, rateFor } = await import("sandbox-core");
 
 const line = (model, u) =>
@@ -9,8 +10,18 @@ const line = (model, u) =>
 
 // Two opus turns + one unknown-model turn, plus a non-assistant line to skip.
 const text =
-  line("claude-opus-4-8", { input_tokens: 100, output_tokens: 200, cache_creation_input_tokens: 300, cache_read_input_tokens: 400 }) +
-  line("claude-opus-4-8", { input_tokens: 10, output_tokens: 20, cache_creation_input_tokens: 30, cache_read_input_tokens: 40 }) +
+  line("claude-opus-4-8", {
+    input_tokens: 100,
+    output_tokens: 200,
+    cache_creation_input_tokens: 300,
+    cache_read_input_tokens: 400,
+  }) +
+  line("claude-opus-4-8", {
+    input_tokens: 10,
+    output_tokens: 20,
+    cache_creation_input_tokens: 30,
+    cache_read_input_tokens: 40,
+  }) +
   '{"type":"user","message":{"role":"user","content":"hi"}}\n' +
   line("mystery-model", { input_tokens: 1, output_tokens: 2 });
 
@@ -32,14 +43,23 @@ assert.strictEqual(estimateUsd(mystery, undefined), null);
 
 // Dated model id (e.g. Claude Code's "claude-haiku-4-5-20251001") resolves to
 // the base id's rate; a truly unknown model still resolves to undefined.
-const haikuPrices = { "claude-haiku-4-5": { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 } };
+const haikuPrices = {
+  "claude-haiku-4-5": { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 },
+};
 const haikuTotals = { input: 100, output: 200, cacheCreation: 0, cacheRead: 0 };
 const datedRate = rateFor(haikuPrices, "claude-haiku-4-5-20251001");
 const baseRate = rateFor(haikuPrices, "claude-haiku-4-5");
 assert.deepStrictEqual(datedRate, baseRate, "dated id should resolve to base rate");
 const datedUsd = estimateUsd(haikuTotals, datedRate);
-assert.ok(datedUsd != null && datedUsd === estimateUsd(haikuTotals, baseRate), "dated id cost matches base id cost");
-assert.strictEqual(rateFor(haikuPrices, "made-up-model"), undefined, "unknown model stays undefined");
+assert.ok(
+  datedUsd != null && datedUsd === estimateUsd(haikuTotals, baseRate),
+  "dated id cost matches base id cost",
+);
+assert.strictEqual(
+  rateFor(haikuPrices, "made-up-model"),
+  undefined,
+  "unknown model stays undefined",
+);
 
 // --- getWorkspaceUsage end-to-end over a fabricated workspace + pricing file ---
 import fs from "node:fs";
@@ -56,11 +76,21 @@ process.env.SANDBOX_WORKSPACES_ROOT = wsRoot;
 const encoded = wsPath.replace(/[^a-zA-Z0-9]/g, "-");
 const projDir = path.join(home, ".claude", "projects", encoded);
 fs.mkdirSync(projDir, { recursive: true });
-fs.writeFileSync(path.join(projDir, "sess1.jsonl"),
-  line("claude-opus-4-8", { input_tokens: 100, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }));
+fs.writeFileSync(
+  path.join(projDir, "sess1.jsonl"),
+  line("claude-opus-4-8", {
+    input_tokens: 100,
+    output_tokens: 200,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  }),
+);
 
 const pricingPath = path.join(tmp, "model-pricing.yaml");
-fs.writeFileSync(pricingPath, "models:\n  claude-opus-4-8: { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 }\n");
+fs.writeFileSync(
+  pricingPath,
+  "models:\n  claude-opus-4-8: { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 }\n",
+);
 process.env.SANDBOX_MODEL_PRICING_YAML = pricingPath;
 
 const { getWorkspaceUsage } = await import("sandbox-core");

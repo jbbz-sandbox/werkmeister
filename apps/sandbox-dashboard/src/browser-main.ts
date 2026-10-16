@@ -14,13 +14,14 @@
  *
  * Built to dist/browser.html and served by lib/browser-ui.ts.
  */
-import { initWorkspaceUI, type HostBridge } from "./workspace-ui.js";
-import { initCreateForm } from "./create-form.js";
-import { initPrsUI } from "./prs-ui.js";
-import { initHealthUI } from "./health-ui.js";
-import { initSandboxLinksUI } from "./sandbox-links-ui.js";
+
 import { renderMarkdown } from "../lib/markdown.js";
+import { initCreateForm } from "./create-form.js";
+import { initHealthUI } from "./health-ui.js";
+import { initPrsUI } from "./prs-ui.js";
+import { initSandboxLinksUI } from "./sandbox-links-ui.js";
 import { injectCss } from "./theme.js";
+import { type HostBridge, initWorkspaceUI } from "./workspace-ui.js";
 
 const bridge: HostBridge = {
   async callTool(name, args) {

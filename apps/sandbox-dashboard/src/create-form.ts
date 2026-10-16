@@ -12,7 +12,6 @@
  * the Desktop app forwards the text to `updateModelContext`.
  */
 import Form, { getDefaultRegistry } from "@rjsf/core";
-import validator from "@rjsf/validator-ajv8";
 import type {
   FormValidation,
   RJSFSchema,
@@ -20,11 +19,12 @@ import type {
   UiSchema,
   WidgetProps,
 } from "@rjsf/utils";
+import validator from "@rjsf/validator-ajv8";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { HostBridge } from "./workspace-ui.js";
-import { injectCss } from "./theme.js";
 import { mergeFormData, repoSelectionError } from "sandbox-core/form_schema";
+import { injectCss } from "./theme.js";
+import type { HostBridge } from "./workspace-ui.js";
 
 // Neutral form styling scoped under `.wsform` so it matches src/workspace-ui.ts
 // (same shared --sd-* tokens, src/theme.ts) and never collides with the list's
@@ -177,8 +177,19 @@ export function GroupedCheckboxesWidget(props: WidgetProps): React.ReactElement<
 /** Textarea widget with the "Refine with Claude" button (opt-in via ui:options.refinable). */
 function makeTextareaWidget(bridge: HostBridge) {
   return function TextareaWidget(props: WidgetProps): React.ReactElement<any> {
-    const { id, value, disabled, readonly, onChange, onBlur, onFocus, options, placeholder, autofocus, formContext } =
-      props;
+    const {
+      id,
+      value,
+      disabled,
+      readonly,
+      onChange,
+      onBlur,
+      onFocus,
+      options,
+      placeholder,
+      autofocus,
+      formContext,
+    } = props;
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
@@ -196,7 +207,9 @@ function makeTextareaWidget(bridge: HostBridge) {
       setBusy(true);
       setErr(null);
       try {
-        const getFormData = (formContext as { getFormData?: () => Record<string, unknown> } | undefined)?.getFormData;
+        const getFormData = (
+          formContext as { getFormData?: () => Record<string, unknown> } | undefined
+        )?.getFormData;
         const liveFormData = getFormData ? getFormData() : {};
         const res = await bridge.callTool("refine-prompt", {
           text,
@@ -226,8 +239,12 @@ function makeTextareaWidget(bridge: HostBridge) {
         autoFocus: autofocus,
         onChange: (ev: React.ChangeEvent<HTMLTextAreaElement>) =>
           onChange(ev.target.value === "" ? opts.emptyValue : ev.target.value),
-        onBlur: onBlur ? (ev: React.FocusEvent<HTMLTextAreaElement>) => onBlur(id, ev.target.value) : undefined,
-        onFocus: onFocus ? (ev: React.FocusEvent<HTMLTextAreaElement>) => onFocus(id, ev.target.value) : undefined,
+        onBlur: onBlur
+          ? (ev: React.FocusEvent<HTMLTextAreaElement>) => onBlur(id, ev.target.value)
+          : undefined,
+        onFocus: onFocus
+          ? (ev: React.FocusEvent<HTMLTextAreaElement>) => onFocus(id, ev.target.value)
+          : undefined,
       }),
       showButton
         ? e(
@@ -257,7 +274,19 @@ function makeTextareaWidget(bridge: HostBridge) {
  */
 function makeIssueWidget(bridge: HostBridge) {
   return function IssueWidget(props: WidgetProps): React.ReactElement<any> {
-    const { id, value, disabled, readonly, onChange, onBlur, onFocus, placeholder, autofocus, formContext, options } = props;
+    const {
+      id,
+      value,
+      disabled,
+      readonly,
+      onChange,
+      onBlur,
+      onFocus,
+      placeholder,
+      autofocus,
+      formContext,
+      options,
+    } = props;
     const trackerLabel = typeof options?.trackerLabel === "string" ? options.trackerLabel : "";
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -271,8 +300,9 @@ function makeIssueWidget(bridge: HostBridge) {
       try {
         const res = await bridge.callTool("issue-form-data", { ref: text });
         const data = ((res?.formData ?? {}) as Record<string, unknown>) || {};
-        const apply = (formContext as { applyIssueData?: (d: Record<string, unknown>) => void } | undefined)
-          ?.applyIssueData;
+        const apply = (
+          formContext as { applyIssueData?: (d: Record<string, unknown>) => void } | undefined
+        )?.applyIssueData;
         if (apply) apply(data);
         const key = typeof data.issue_id === "string" ? data.issue_id : "";
         const filled = Object.keys(data).filter((k) => k !== "issue_id");
@@ -301,9 +331,14 @@ function makeIssueWidget(bridge: HostBridge) {
         disabled,
         readOnly: readonly,
         autoFocus: autofocus,
-        onChange: (ev: React.ChangeEvent<HTMLInputElement>) => onChange(ev.target.value === "" ? undefined : ev.target.value),
-        onBlur: onBlur ? (ev: React.FocusEvent<HTMLInputElement>) => onBlur(id, ev.target.value) : undefined,
-        onFocus: onFocus ? (ev: React.FocusEvent<HTMLInputElement>) => onFocus(id, ev.target.value) : undefined,
+        onChange: (ev: React.ChangeEvent<HTMLInputElement>) =>
+          onChange(ev.target.value === "" ? undefined : ev.target.value),
+        onBlur: onBlur
+          ? (ev: React.FocusEvent<HTMLInputElement>) => onBlur(id, ev.target.value)
+          : undefined,
+        onFocus: onFocus
+          ? (ev: React.FocusEvent<HTMLInputElement>) => onFocus(id, ev.target.value)
+          : undefined,
       }),
       e(
         "div",
@@ -318,7 +353,11 @@ function makeIssueWidget(bridge: HostBridge) {
           },
           busy ? "Fetching…" : trackerLabel ? `⤓ Fetch from ${trackerLabel}` : "⤓ Fetch issue",
         ),
-        err ? e("span", { className: "refine-err" }, err) : note ? e("span", { className: "refine-note" }, note) : null,
+        err
+          ? e("span", { className: "refine-err" }, err)
+          : note
+            ? e("span", { className: "refine-note" }, note)
+            : null,
       ),
     );
   };
@@ -332,10 +371,15 @@ function validateRepoSelection(formData: unknown, errors: FormValidation): FormV
 }
 
 /** Humanize the validator's terse messages; reuse the field's placeholder as the format example. */
-function transformErrors(errors: RJSFValidationError[], uiSchema?: UiSchema): RJSFValidationError[] {
+function transformErrors(
+  errors: RJSFValidationError[],
+  uiSchema?: UiSchema,
+): RJSFValidationError[] {
   return errors.map((err) => {
     const key = (err.property ?? "").replace(/^\./, "");
-    const placeholder = (uiSchema?.[key] as { "ui:placeholder"?: string } | undefined)?.["ui:placeholder"];
+    const placeholder = (uiSchema?.[key] as { "ui:placeholder"?: string } | undefined)?.[
+      "ui:placeholder"
+    ];
     if (err.name === "required" || err.name === "minLength") {
       err.message = "This field is required.";
     } else if (err.name === "pattern") {
@@ -396,14 +440,21 @@ function WorkspaceForm({
   // client-side, so the shared CLI-provided schema needs no browser-only knob.
   const uiSchema: UiSchema = {
     ...bundle.uiSchema,
-    issue_id: { ...(bundle.uiSchema?.issue_id as Record<string, unknown> | undefined), "ui:widget": "issue" },
+    issue_id: {
+      ...(bundle.uiSchema?.issue_id as Record<string, unknown> | undefined),
+      "ui:widget": "issue",
+    },
   };
 
   const actions = e(
     "div",
     { className: "actions" },
     onCancel
-      ? e("button", { type: "button", className: "cancelbtn", disabled: busy, onClick: onCancel }, "Cancel")
+      ? e(
+          "button",
+          { type: "button", className: "cancelbtn", disabled: busy, onClick: onCancel },
+          "Cancel",
+        )
       : null,
     e(
       "label",
@@ -416,7 +467,11 @@ function WorkspaceForm({
       }),
       e("span", null, "Open in VS Code after creating"),
     ),
-    e("button", { type: "submit", className: "submit", disabled: busy || done }, busy ? "Creating…" : "Create workspace"),
+    e(
+      "button",
+      { type: "submit", className: "submit", disabled: busy || done },
+      busy ? "Creating…" : "Create workspace",
+    ),
   );
 
   return e(
@@ -436,7 +491,11 @@ function WorkspaceForm({
             setFormData((prev) => mergeFormData(prev, data)),
         },
         validator,
-        widgets: { textarea: TextareaWidget, issue: IssueWidget, checkboxes: GroupedCheckboxesWidget },
+        widgets: {
+          textarea: TextareaWidget,
+          issue: IssueWidget,
+          checkboxes: GroupedCheckboxesWidget,
+        },
         customValidate: validateRepoSelection,
         transformErrors,
         liveValidate: submitAttempted,
@@ -444,7 +503,8 @@ function WorkspaceForm({
         noHtml5Validate: true,
         disabled: busy || done,
         showErrorList: false,
-        onChange: ({ formData }: { formData?: unknown }) => setFormData((formData as Record<string, unknown>) ?? {}),
+        onChange: ({ formData }: { formData?: unknown }) =>
+          setFormData((formData as Record<string, unknown>) ?? {}),
         onError: () => setSubmitAttempted(true),
         onSubmit,
       },

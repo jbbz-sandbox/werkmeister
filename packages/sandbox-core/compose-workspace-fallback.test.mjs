@@ -8,11 +8,12 @@
 // own feature, and the test runs with cwd inside it. The directory name
 // differs from the feature on purpose — `sandbox workspace` names directories
 // `<repo>-<issue>-<feature>`, so the dir is not the feature.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { workspaceForFeature } from "./dist/compose.js";
 import { withSandboxHome } from "./fixtures.mjs";
@@ -25,10 +26,13 @@ async function insideWorkspace(fn) {
   fs.writeFileSync(path.join(ws, ".env"), "# Workspace metadata\nFEATURE=owner-feature\n");
   const prevCwd = process.cwd();
   try {
-    return await withSandboxHome(async () => {
-      process.chdir(path.join(ws, "repo"));
-      return fn(ws);
-    }, { config: `paths:\n  workspaces_root: ${root}\n` });
+    return await withSandboxHome(
+      async () => {
+        process.chdir(path.join(ws, "repo"));
+        return fn(ws);
+      },
+      { config: `paths:\n  workspaces_root: ${root}\n` },
+    );
   } finally {
     process.chdir(prevCwd);
     fs.rmSync(root, { recursive: true, force: true });

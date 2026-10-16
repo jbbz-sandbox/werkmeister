@@ -14,15 +14,15 @@ import {
   AllocationError,
   applyAnswers,
   collectQuestions,
+  type FieldValue,
+  type Plan,
   planFragment,
   portsPerSlot,
+  type Resolver,
   renderFragment,
   stdoutRunner,
   validateFragment,
   writeFragment,
-  type FieldValue,
-  type Plan,
-  type Resolver,
 } from "sandbox-core/fragment_detect";
 import type { Runner } from "sandbox-core/machine_setup";
 import { RegistryError } from "sandbox-core/registry_sync";
@@ -55,21 +55,29 @@ function mark(fv: FieldValue): string {
 
 function printFields(fields: Record<string, FieldValue>): void {
   for (const [key, fv] of Object.entries(fields)) {
-    console.log(`    ${key}: ${JSON.stringify(fv.value)}${mark(fv)}  ${Colors.DIM}${fv.source}${Colors.RESET}`);
+    console.log(
+      `    ${key}: ${JSON.stringify(fv.value)}${mark(fv)}  ${Colors.DIM}${fv.source}${Colors.RESET}`,
+    );
   }
 }
 
 function printPlan(plan: Plan): void {
   for (const s of plan.services) {
-    console.log(`\n  ${Colors.BOLD}${s.name}${Colors.RESET} ${Colors.DIM}(${s.dir})${Colors.RESET}`);
+    console.log(
+      `\n  ${Colors.BOLD}${s.name}${Colors.RESET} ${Colors.DIM}(${s.dir})${Colors.RESET}`,
+    );
     printFields(s.fields);
   }
   for (const i of plan.infrastructure) {
-    console.log(`\n  ${Colors.BOLD}${i.name}${Colors.RESET} ${Colors.DIM}(infrastructure)${Colors.RESET}`);
+    console.log(
+      `\n  ${Colors.BOLD}${i.name}${Colors.RESET} ${Colors.DIM}(infrastructure)${Colors.RESET}`,
+    );
     printFields(i.fields);
   }
   if (plan.setup) {
-    console.log(`\n  ${Colors.BOLD}${plan.setup.name}${Colors.RESET} ${Colors.DIM}(setup service)${Colors.RESET}`);
+    console.log(
+      `\n  ${Colors.BOLD}${plan.setup.name}${Colors.RESET} ${Colors.DIM}(setup service)${Colors.RESET}`,
+    );
     printFields(plan.setup.fields);
   }
   const conflicts = plan.services.flatMap((s) => s.conflicts);
@@ -77,7 +85,9 @@ function printPlan(plan: Plan): void {
     console.log(`\n  ${Colors.BOLD}Conflicts${Colors.RESET}`);
     for (const c of conflicts) {
       const also = c.also.map((a) => `${JSON.stringify(a.value)} (${a.source})`).join(", ");
-      console.log(`    ${c.service}.${c.key}: ${JSON.stringify(c.chosen.value)} (${c.chosen.source}) over ${also}`);
+      console.log(
+        `    ${c.service}.${c.key}: ${JSON.stringify(c.chosen.value)} (${c.chosen.source}) over ${also}`,
+      );
     }
   }
   if (plan.skipped.length) {
@@ -133,7 +143,11 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   } else if (questions.length) {
     const ask =
       args.assist ??
-      (await confirm(`  ${questions.length} field(s) are guesses — ask Claude to resolve them?`, false, deps.interactive));
+      (await confirm(
+        `  ${questions.length} field(s) are guesses — ask Claude to resolve them?`,
+        false,
+        deps.interactive,
+      ));
     if (ask) {
       try {
         const result = applyAnswers(plan, await deps.resolver(plan.root, questions));
@@ -141,7 +155,9 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
         for (const item of result.accepted) success(`Claude resolved ${item}`);
         for (const r of result.rejected) warn(`Ignored Claude's answer for ${r.item}: ${r.reason}`);
       } catch (e) {
-        warn(`Claude pass failed (${e instanceof Error ? e.message : String(e)}) — keeping the deterministic guesses.`);
+        warn(
+          `Claude pass failed (${e instanceof Error ? e.message : String(e)}) — keeping the deterministic guesses.`,
+        );
       }
     }
   }
@@ -158,7 +174,9 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
     warn("Not written: the generated fragment failed validation.");
     return 1;
   }
-  console.log(plan.existing === null ? `\n${rendered.yaml}` : `\n  Would add: ${rendered.added.join(", ")}`);
+  console.log(
+    plan.existing === null ? `\n${rendered.yaml}` : `\n  Would add: ${rendered.added.join(", ")}`,
+  );
 
   if (args.dryRun) return 0;
   if (!args.yes && !deps.interactive) {
@@ -172,7 +190,9 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   writeFragment(rendered);
   success(`Wrote ${rendered.path}`);
   if (rendered.added.some((a) => a.endsWith(".port_offset"))) {
-    info("port_offset is machine-wide — a collision on another machine shows up at `sandbox registry sync`.");
+    info(
+      "port_offset is machine-wide — a collision on another machine shows up at `sandbox registry sync`.",
+    );
   }
   info("next: sandbox registry sync");
   return 0;

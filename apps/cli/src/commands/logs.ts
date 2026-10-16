@@ -11,10 +11,10 @@
  * what this command has always done.
  */
 
-import { Colors } from "../lib/config.js";
 import { composeLogs } from "sandbox-core/compose";
-import { interruptSignal } from "../lib/interrupt.js";
 import { getSlot } from "sandbox-core/slots";
+import { Colors } from "../lib/config.js";
+import { interruptSignal } from "../lib/interrupt.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;

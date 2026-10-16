@@ -8,13 +8,13 @@
  * carries on, which is correct for a hook that must never block a launch, and
  * is exactly why nothing else can afford to stay quiet about it.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import * as gc from "sandbox-core/global_config";
 import { loadStandardsModules } from "sandbox-core/standards";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 let tmp: string;
 

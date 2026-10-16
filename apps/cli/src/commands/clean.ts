@@ -9,8 +9,8 @@
  * interleave with the sweep's own progress — see `runClean`.
  */
 
-import { Colors } from "../lib/config.js";
 import { planClean, runClean } from "sandbox-core/lifecycle";
+import { Colors } from "../lib/config.js";
 
 /** Execute the ``sandbox clean`` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {

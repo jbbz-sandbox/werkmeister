@@ -134,7 +134,10 @@ export function extractJson(out: string): string | null {
  * `tools` adds --dangerously-skip-permissions: the Atlassian MCP tools are
  * deferred, so --allowedTools cannot pre-approve them in headless mode.
  */
-export async function askClaude(prompt: string, opts: { tools?: boolean } = {}): Promise<string | null> {
+export async function askClaude(
+  prompt: string,
+  opts: { tools?: boolean } = {},
+): Promise<string | null> {
   try {
     const args = opts.tools ? ["-p", prompt, "--dangerously-skip-permissions"] : ["-p", prompt];
     const res = await runCapture(await resolveClaudeBin(), args);
@@ -146,7 +149,10 @@ export async function askClaude(prompt: string, opts: { tools?: boolean } = {}):
 }
 
 /** {@link askClaude}, then the JSON object in its answer; null when there is none. */
-export async function askClaudeJson(prompt: string, opts: { tools?: boolean } = {}): Promise<Record<string, unknown> | null> {
+export async function askClaudeJson(
+  prompt: string,
+  opts: { tools?: boolean } = {},
+): Promise<Record<string, unknown> | null> {
   const out = await askClaude(prompt, opts);
   const json = out === null ? null : extractJson(out);
   if (!json) return null;

@@ -7,15 +7,26 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-
 import { buildForwardRows, renderK8sForwardsOverride } from "sandbox-core/k8s_forwards";
+import { describe, expect, it } from "vitest";
 
 describe("buildForwardRows — infrastructure forwards", () => {
   it("emits a pipe-delimited row per infra entry that declares k8s_forward_port", () => {
     const infra = {
-      redis: { k8s_forward_port: 9050, internal_port: 6379, k8s_namespace: "default", k8s_pod_prefix: "redis", health_endpoint: "" },
-      postgres: { k8s_forward_port: 9051, internal_port: 5432, k8s_namespace: "default", k8s_pod_prefix: "postgres", health_endpoint: "" },
+      redis: {
+        k8s_forward_port: 9050,
+        internal_port: 6379,
+        k8s_namespace: "default",
+        k8s_pod_prefix: "redis",
+        health_endpoint: "",
+      },
+      postgres: {
+        k8s_forward_port: 9051,
+        internal_port: 5432,
+        k8s_namespace: "default",
+        k8s_pod_prefix: "postgres",
+        health_endpoint: "",
+      },
     };
     const rows = buildForwardRows({}, infra);
     // name|listen|remote|namespace|pod_prefix|health
@@ -27,7 +38,13 @@ describe("buildForwardRows — infrastructure forwards", () => {
 
   it("skips infra entries without k8s_forward_port", () => {
     const infra = {
-      redis: { k8s_forward_port: 9050, internal_port: 6379, k8s_namespace: "default", k8s_pod_prefix: "redis", health_endpoint: "" },
+      redis: {
+        k8s_forward_port: 9050,
+        internal_port: 6379,
+        k8s_namespace: "default",
+        k8s_pod_prefix: "redis",
+        health_endpoint: "",
+      },
       search: { note: "external, not forwarded" },
     };
     const rows = buildForwardRows({}, infra);
@@ -40,13 +57,21 @@ describe("buildForwardRows — infrastructure forwards", () => {
 
   it("forwards services to their pod containerPort (internal_port), not the Service port", () => {
     const services = {
-      "backend": {
-        k8s_forward_port: 9052, internal_port: 3000, k8s_port: 80,
-        k8s_namespace: "default", k8s_pod_prefix: "backend", health_endpoint: "/health",
+      backend: {
+        k8s_forward_port: 9052,
+        internal_port: 3000,
+        k8s_port: 80,
+        k8s_namespace: "default",
+        k8s_pod_prefix: "backend",
+        health_endpoint: "/health",
       },
-      "frontend": {
-        k8s_forward_port: 9053, internal_port: 3000, k8s_port: 8080,
-        k8s_namespace: "default", k8s_pod_prefix: "frontend", health_endpoint: "/",
+      frontend: {
+        k8s_forward_port: 9053,
+        internal_port: 3000,
+        k8s_port: 8080,
+        k8s_namespace: "default",
+        k8s_pod_prefix: "frontend",
+        health_endpoint: "/",
       },
     };
     expect(buildForwardRows(services, {})).toEqual([
@@ -58,7 +83,14 @@ describe("buildForwardRows — infrastructure forwards", () => {
 
 describe("renderK8sForwardsOverride", () => {
   const specs = [
-    { name: "backend", listen: 9052, remote: 3000, ns: "default", prefix: "backend", health: "/health" },
+    {
+      name: "backend",
+      listen: 9052,
+      remote: 3000,
+      ns: "default",
+      prefix: "backend",
+      health: "/health",
+    },
     { name: "redis", listen: 9050, remote: 6379, ns: "default", prefix: "redis", health: "" },
   ];
 
@@ -112,7 +144,9 @@ describe("shipped shared-infra.yml", () => {
     expect(text).toContain("${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro");
     expect(text).toContain("${SANDBOX_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro");
     expect(text).toContain("${SANDBOX_STATE_DIR}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro");
-    expect(text).toContain("${SANDBOX_STATE_DIR}/proxy/features.json:/sandbox/proxy/ui/features.json:ro");
+    expect(text).toContain(
+      "${SANDBOX_STATE_DIR}/proxy/features.json:/sandbox/proxy/ui/features.json:ro",
+    );
     expect(text).not.toContain("./k8s-port-forward/tmp/");
     expect(text).not.toContain("../proxy/Caddyfile");
   });

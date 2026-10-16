@@ -32,12 +32,24 @@ import * as YAML from "yaml";
 
 import { presentArchetypes } from "./archetypes.js";
 import { Colors } from "./colors.js";
-import { expandUser, getReposRoot, loadArchetypes, loadMcpServers, loadServices } from "./config.js";
+import {
+  expandUser,
+  getReposRoot,
+  loadArchetypes,
+  loadMcpServers,
+  loadServices,
+} from "./config.js";
 import { SandboxError } from "./errors.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { loadPaths } from "./global_config.js";
+import {
+  fetchIssueSnapshot,
+  IssueFetchError,
+  type IssueSnapshot,
+  readIssueRef,
+  writeIssueCopy,
+} from "./issue_snapshot.js";
 import { issueTracker } from "./issue_tracker.js";
-import { IssueFetchError, fetchIssueSnapshot, readIssueRef, writeIssueCopy, type IssueSnapshot } from "./issue_snapshot.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
@@ -48,8 +60,13 @@ import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { repoDirs } from "./standards.js";
+import {
+  parseStrategyId,
+  reportLeftovers,
+  STRATEGY_IDS,
+  strategyById,
+} from "./strategies/index.js";
 import type { IssueRef } from "./strategies/types.js";
-import { STRATEGY_IDS, parseStrategyId, reportLeftovers, strategyById } from "./strategies/index.js";
 import {
   _INPUT_FIELDS,
   _WORKSPACE_CONFIG_NAMES,
@@ -88,7 +105,6 @@ function fail(message: string): never {
   throw new WorkspaceInitError(message);
 }
 
-
 /** Caller-supplied affordances that a library cannot assume for itself. */
 export interface InitWorkspaceOptions {
   /**
@@ -124,7 +140,10 @@ export async function resolveIssueCopy(
     try {
       writeIssueCopy(root, await fetchIssueSnapshot(issueId));
     } catch (e) {
-      if (e instanceof IssueFetchError) throw new WorkspaceInitError(`${e.message}; run \`sandbox connect\` to check the issue tracker.`);
+      if (e instanceof IssueFetchError)
+        throw new WorkspaceInitError(
+          `${e.message}; run \`sandbox connect\` to check the issue tracker.`,
+        );
       throw e;
     }
   }
@@ -159,7 +178,10 @@ const _LIST_VALUED_FIELDS = new Set<string>(["labels"]);
 
 /** Comma-separated string -> trimmed, non-empty list items. */
 function splitMultiValue(value: string): string[] {
-  return value.split(",").map((s) => s.trim()).filter((s) => s);
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s);
 }
 
 /**
@@ -206,7 +228,10 @@ const _WORKSPACE_CONFIG_HEADER =
  * Keys are sorted and multi-line strings are block-styled, so a rerun that
  * changes nothing produces a byte-identical file.
  */
-export function writeWorkspaceConfig(workspaceRoot: string, resolved: Record<string, string>): void {
+export function writeWorkspaceConfig(
+  workspaceRoot: string,
+  resolved: Record<string, string>,
+): void {
   if (Object.keys(resolved).length === 0) {
     return;
   }
@@ -328,15 +353,22 @@ function commitWorkspaceState(workspaceDir: string, workspaceName: string): void
   }
   try {
     procRun(["git", "-C", workspaceDir, "add", "-A"], { capture: true, check: true });
-    const staged = procRun(
-      ["git", "-C", workspaceDir, "diff", "--cached", "--quiet"],
-      { capture: true },
-    );
+    const staged = procRun(["git", "-C", workspaceDir, "diff", "--cached", "--quiet"], {
+      capture: true,
+    });
     if (staged.status === 0) {
       return; // nothing to commit
     }
     procRun(
-      ["git", "-C", workspaceDir, "commit", "-q", "-m", `chore: initialize workspace ${workspaceName}`],
+      [
+        "git",
+        "-C",
+        workspaceDir,
+        "commit",
+        "-q",
+        "-m",
+        `chore: initialize workspace ${workspaceName}`,
+      ],
       { capture: true, check: true },
     );
     success("Committed initial workspace state (branch not pushed — push when ready).");
@@ -647,7 +679,10 @@ export async function initWorkspace(
   const inputs = resolveInputs(args, workspaceRoot);
   // The layer this run writes, validated before 2a persists it.
   const strategy = strategyById(parseStrategyId(inputs["context_strategy"]));
-  const hasConfig = hasWorkspaceConfig(workspaceRoot, (args["config_file"] as string | null) ?? null);
+  const hasConfig = hasWorkspaceConfig(
+    workspaceRoot,
+    (args["config_file"] as string | null) ?? null,
+  );
   if (!hasConfig && !inputs["feature"]) {
     fail(
       "No .sandbox/workspace.yml found and no --feature given. " +
@@ -661,10 +696,15 @@ export async function initWorkspace(
   writeWorkspaceConfig(workspaceRoot, inputs);
 
   // 2b. The issue copy (.sandbox/issue.md): handed over at creation, refreshed on request, else read back.
-  const issueId = inputs["issue_id"] ? (issueTracker().parseRef(inputs["issue_id"]) ?? inputs["issue_id"]) : "";
+  const issueId = inputs["issue_id"]
+    ? (issueTracker().parseRef(inputs["issue_id"]) ?? inputs["issue_id"])
+    : "";
   let issue: IssueRef | null;
   try {
-    issue = await resolveIssueCopy(workspaceRoot, issueId, { issue: opts.issue, refresh: Boolean(args["refresh_issue"]) });
+    issue = await resolveIssueCopy(workspaceRoot, issueId, {
+      issue: opts.issue,
+      refresh: Boolean(args["refresh_issue"]),
+    });
   } catch (e) {
     if (e instanceof WorkspaceInitError) fail(e.message);
     throw e;
@@ -674,7 +714,11 @@ export async function initWorkspace(
   //    declared. Desired set = union(repos, repos owning `services`).
   if (inputs["repos"]) {
     const [servicesConfig] = loadSandboxServiceConfigs();
-    const [desiredRepos, , unknown] = resolveRepos(inputs["repos"], inputs["services"], servicesConfig);
+    const [desiredRepos, , unknown] = resolveRepos(
+      inputs["repos"],
+      inputs["services"],
+      servicesConfig,
+    );
     if (unknown.length) {
       warn(`Unknown service(s) in workspace.yml (no owning repo): ${unknown.join(", ")}`);
     }
@@ -694,7 +738,10 @@ export async function initWorkspace(
     for (const [name, branch] of repos) {
       info(`  ${name}/ → ${branch}`);
     }
-    writeWorkspaceGitignore(workspaceRoot, repos.map(([name]) => name));
+    writeWorkspaceGitignore(
+      workspaceRoot,
+      repos.map(([name]) => name),
+    );
   }
 
   const [task, meta] = resolveTask(inputs["task"], workspaceName, opts.readStdinTask);
@@ -830,7 +877,11 @@ async function runInitWorkspace(
 ): Promise<number> {
   info(`Running: sandbox init-workspace (feature: ${featureSlug})`);
   try {
-    await initWorkspace({ ...resolved, feature: featureSlug, force: opts.force }, workspaceDir, opts);
+    await initWorkspace(
+      { ...resolved, feature: featureSlug, force: opts.force },
+      workspaceDir,
+      opts,
+    );
     return 0;
   } catch (exc) {
     // A WorkspaceInitError has already emitted its own `[err]` line — the
@@ -878,7 +929,10 @@ export async function provisionWorkspace(
   if (resolved.issue_id) {
     resolved.issue_id = tracker.parseRef(resolved.issue_id) ?? resolved.issue_id;
   }
-  const workspaceName = buildWorkspaceName(feature, resolved.issue_id ? tracker.slug(resolved.issue_id) : null);
+  const workspaceName = buildWorkspaceName(
+    feature,
+    resolved.issue_id ? tracker.slug(resolved.issue_id) : null,
+  );
   if (!_SLUG_RE.test(workspaceName)) {
     fail(
       `Workspace name '${workspaceName}' is not a valid slug ` +

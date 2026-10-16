@@ -1,5 +1,5 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { buildTree, featureOf, interceptView } from "../out/build-tree.js";
 
 const ws = (name, over = {}) => ({
@@ -60,13 +60,22 @@ test("featureOf strips the sandbox- compose prefix", () => {
 // feature === null with a defined row under current code. This test guards against a
 // future refactor of that ternary accidentally reintroducing a null-equals-null match.
 test("a null feature with an intercepted row from an unknown source is not mine", () => {
-  const result = interceptView({ intercepted: true, intercepted_by: null, blocker: null, interceptable: true }, null, false);
+  const result = interceptView(
+    { intercepted: true, intercepted_by: null, blocker: null, interceptable: true },
+    null,
+    false,
+  );
   assert.equal(result.contextValue, "service:intercepted-other");
   assert.equal(result.leave, false);
 });
 
 test("a fully running workspace reads as up", () => {
-  const [node] = buildTree([ws("a")], [st("a", { state: "up", running: 6, total: 6, slot: 2 })], null, []);
+  const [node] = buildTree(
+    [ws("a")],
+    [st("a", { state: "up", running: 6, total: 6, slot: 2 })],
+    null,
+    [],
+  );
   assert.equal(node.kind, "workspace");
   assert.equal(node.icon.id, "circle-filled");
   assert.match(node.description, /6\/6/);
@@ -75,7 +84,12 @@ test("a fully running workspace reads as up", () => {
 });
 
 test("a partially running workspace reads as partial", () => {
-  const [node] = buildTree([ws("a")], [st("a", { state: "partial", running: 2, total: 5 })], null, []);
+  const [node] = buildTree(
+    [ws("a")],
+    [st("a", { state: "partial", running: 2, total: 5 })],
+    null,
+    [],
+  );
   assert.equal(node.contextValue, "workspace:partial");
   assert.match(node.description, /2\/5/);
 });
@@ -100,8 +114,15 @@ test("an issue ID appears in the description and the node carries its URL", () =
 test("an interceptable service with no intercept offers the toggle", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
-    intercepts({ a: { "frontend": {} } }),
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "frontend", state: "healthy" }],
+      }),
+    ],
+    intercepts({ a: { frontend: {} } }),
     [],
   );
   const [svc] = node.children;
@@ -112,8 +133,15 @@ test("an interceptable service with no intercept offers the toggle", () => {
 test("an intercept owned by this feature is mine", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
-    intercepts({ a: { "frontend": { intercepted: true, intercepted_by: "a" } } }),
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "frontend", state: "healthy" }],
+      }),
+    ],
+    intercepts({ a: { frontend: { intercepted: true, intercepted_by: "a" } } }),
     [],
   );
   assert.equal(node.children[0].contextValue, "service:intercepted-mine");
@@ -124,8 +152,15 @@ test("an intercept owned by this feature is mine", () => {
 test("an intercept owned by another feature is not offered as mine", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
-    intercepts({ a: { "frontend": { intercepted: true, intercepted_by: "other" } } }),
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "frontend", state: "healthy" }],
+      }),
+    ],
+    intercepts({ a: { frontend: { intercepted: true, intercepted_by: "other" } } }),
     [],
   );
   const [svc] = node.children;
@@ -137,7 +172,14 @@ test("an intercept owned by another feature is not offered as mine", () => {
 test("a non-interceptable service surfaces the CLI blocker on hover", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "postgres", state: "healthy" }] })],
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "postgres", state: "healthy" }],
+      }),
+    ],
     intercepts({ a: { postgres: { interceptable: false, blocker: "no k8s deployment" } } }),
     [],
   );
@@ -149,7 +191,14 @@ test("a non-interceptable service surfaces the CLI blocker on hover", () => {
 test("a null intercepts payload marks every service unavailable", () => {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "frontend", state: "healthy" }],
+      }),
+    ],
     null,
     [],
   );
@@ -181,12 +230,9 @@ test("when several workspaces match the open folder, the deepest wins", () => {
 });
 
 test("the current workspace sorts to the top, the rest keep their order", () => {
-  const nodes = buildTree(
-    [ws("a"), ws("b"), ws("c")],
-    [st("a"), st("b"), st("c")],
-    null,
-    ["/ws/c"],
-  );
+  const nodes = buildTree([ws("a"), ws("b"), ws("c")], [st("a"), st("b"), st("c")], null, [
+    "/ws/c",
+  ]);
   assert.deepEqual(
     nodes.map((n) => n.label),
     ["c", "a", "b"],
@@ -196,12 +242,10 @@ test("the current workspace sorts to the top, the rest keep their order", () => 
 // A multi-root .code-workspace often lists a tooling checkout first; the feature
 // workspace is some later folder, and used to go unmarked.
 test("any open folder, not just the first, marks its workspace current", () => {
-  const nodes = buildTree(
-    [ws("b", { path: "/ws/b" })],
-    [st("b")],
-    null,
-    ["/repos/sandbox", "/ws/b"],
-  );
+  const nodes = buildTree([ws("b", { path: "/ws/b" })], [st("b")], null, [
+    "/repos/sandbox",
+    "/ws/b",
+  ]);
   assert.match(nodes[0].description, /current/);
 });
 

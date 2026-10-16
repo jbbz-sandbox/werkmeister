@@ -21,10 +21,9 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-
-import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
-import * as gc from "sandbox-core/global_config";
 import type { PromptSpec } from "sandbox-core/global_config";
+import * as gc from "sandbox-core/global_config";
+import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { runWizard } from "../lib/wizard.js";
 
 function show(cfg: Record<string, any>): void {
@@ -53,9 +52,7 @@ function show(cfg: Record<string, any>): void {
     console.log(`  ${k}: ${v}  ${Colors.DIM}(${origin})${Colors.RESET}`);
   }
 
-  const overrides = Object.fromEntries(
-    Object.entries(cfg.overrides || {}).filter(([, v]) => v),
-  );
+  const overrides = Object.fromEntries(Object.entries(cfg.overrides || {}).filter(([, v]) => v));
   if (Object.keys(overrides).length) {
     console.log(`${Colors.BOLD}overrides:${Colors.RESET}`);
     for (const [k, v] of Object.entries(overrides)) {

@@ -1,6 +1,7 @@
 // docker-compose → environment, depends_on, command, port and health path per service.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { containerPort, detectCompose } from "./dist/fragment_detect/index.js";
 import { ctxFor, fixture } from "./fragment-detect-helpers.mjs";
@@ -37,11 +38,14 @@ services:
 test("each compose service becomes a finding", () => {
   const ctx = ctxFor(fixture({ "docker-compose.yml": COMPOSE }));
   const found = detectCompose(ctx);
-  assert.deepEqual(found.map((f) => [f.name, f.dir, f.image ?? null]), [
-    ["api", "apps/api", null],
-    ["web", "apps/web", null],
-    ["redis", null, "redis:7-alpine"],
-  ]);
+  assert.deepEqual(
+    found.map((f) => [f.name, f.dir, f.image ?? null]),
+    [
+      ["api", "apps/api", null],
+      ["web", "apps/web", null],
+      ["redis", null, "redis:7-alpine"],
+    ],
+  );
   const [api, web, redis] = found;
   assert.equal(api.fields.command.value, "npm run dev");
   assert.equal(api.fields.internal_port.value, 3000);
@@ -77,8 +81,9 @@ test("an unparsable compose file is skipped, not thrown", () => {
 });
 
 test("compose merge keys are resolved", () => {
-  const ctx = ctxFor(fixture({
-    "docker-compose.yml": `
+  const ctx = ctxFor(
+    fixture({
+      "docker-compose.yml": `
 x-common: &common
   environment:
     A: "1"
@@ -88,7 +93,8 @@ services:
     <<: *common
     build: ./svc
 `,
-  }));
+    }),
+  );
   const found = detectCompose(ctx);
   assert.equal(found.length, 1);
   assert.deepEqual(found[0].fields.environment.value, { A: "1" });

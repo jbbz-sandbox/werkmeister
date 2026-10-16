@@ -87,29 +87,30 @@ afterEach(() => {
 const SPAWNS_BASH = 30_000;
 
 describe("sandbox wrapper: npx bootstrap", () => {
-  it("installs globally and execs the installed binary when run from npx's cache", () => {
-    const prefix = path.join(tmp, "prefix");
-    fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
-    // Stand-in for the globally installed CLI: prove the wrapper reached it,
-    // and that it forwarded argv.
-    fs.writeFileSync(
-      path.join(prefix, "bin", "sandbox"),
-      `#!/bin/bash\necho "GLOBAL-RAN $*"\n`,
-    );
-    fs.chmodSync(path.join(prefix, "bin", "sandbox"), 0o755);
+  it(
+    "installs globally and execs the installed binary when run from npx's cache",
+    () => {
+      const prefix = path.join(tmp, "prefix");
+      fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
+      // Stand-in for the globally installed CLI: prove the wrapper reached it,
+      // and that it forwarded argv.
+      fs.writeFileSync(path.join(prefix, "bin", "sandbox"), `#!/bin/bash\necho "GLOBAL-RAN $*"\n`);
+      fs.chmodSync(path.join(prefix, "bin", "sandbox"), 0o755);
 
-    const stubs = path.join(tmp, "stubs");
-    stubNpm(stubs, prefix);
-    const wrapper = installWrapper(
-      path.join(tmp, "_npx", "deadbeef", "node_modules", "@jbbz-sandbox", "sandbox-cli"),
-    );
+      const stubs = path.join(tmp, "stubs");
+      stubNpm(stubs, prefix);
+      const wrapper = installWrapper(
+        path.join(tmp, "_npx", "deadbeef", "node_modules", "@jbbz-sandbox", "sandbox-cli"),
+      );
 
-    const out = run(wrapper, ["setup", "--check"], stubs);
-    // Pinned to the version npx resolved (9.9.9 here), not @latest — otherwise
-    // `npx pkg@1.2.3 setup` would onboard the machine onto a different release.
-    expect(out).toContain("STUB-INSTALL install -g @jbbz-sandbox/sandbox-cli@9.9.9");
-    expect(out).toContain("GLOBAL-RAN setup --check");
-  }, SPAWNS_BASH);
+      const out = run(wrapper, ["setup", "--check"], stubs);
+      // Pinned to the version npx resolved (9.9.9 here), not @latest — otherwise
+      // `npx pkg@1.2.3 setup` would onboard the machine onto a different release.
+      expect(out).toContain("STUB-INSTALL install -g @jbbz-sandbox/sandbox-cli@9.9.9");
+      expect(out).toContain("GLOBAL-RAN setup --check");
+    },
+    SPAWNS_BASH,
+  );
 
   it("does not bootstrap from a normal install path", () => {
     const stubs = path.join(tmp, "stubs");

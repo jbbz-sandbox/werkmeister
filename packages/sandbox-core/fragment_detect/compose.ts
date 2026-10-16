@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { readText } from "./files.js";
-import { stated, type DetectContext, type Finding } from "./types.js";
+import { type DetectContext, type Finding, stated } from "./types.js";
 
 export const COMPOSE_FILE = /(^|\/)(docker-)?compose(\.[\w-]+)?\.ya?ml$/;
 
@@ -26,7 +26,10 @@ export function containerPort(spec: unknown): number | undefined {
 function envMap(env: unknown): Record<string, string> {
   if (Array.isArray(env)) {
     return Object.fromEntries(
-      env.map(String).filter((e) => e.includes("=")).map((e) => [e.slice(0, e.indexOf("=")), e.slice(e.indexOf("=") + 1)]),
+      env
+        .map(String)
+        .filter((e) => e.includes("="))
+        .map((e) => [e.slice(0, e.indexOf("=")), e.slice(e.indexOf("=") + 1)]),
     );
   }
   if (env && typeof env === "object") {
@@ -52,7 +55,10 @@ export function detectCompose(ctx: DetectContext): Finding[] {
     try {
       doc = parseYaml(readText(ctx, file), { merge: true });
     } catch (e) {
-      ctx.skipped.push({ item: file, reason: `unparsable YAML: ${e instanceof Error ? e.message : String(e)}` });
+      ctx.skipped.push({
+        item: file,
+        reason: `unparsable YAML: ${e instanceof Error ? e.message : String(e)}`,
+      });
       continue;
     }
     for (const [name, raw] of Object.entries(doc?.services ?? {})) {
@@ -63,7 +69,9 @@ export function detectCompose(ctx: DetectContext): Finding[] {
       const dir =
         context === undefined
           ? null
-          : path.posix.normalize(path.posix.join(path.posix.dirname(file), String(context))).replace(/\/$/, "") || ".";
+          : path.posix
+              .normalize(path.posix.join(path.posix.dirname(file), String(context)))
+              .replace(/\/$/, "") || ".";
       const fields: Finding["fields"] = {};
 
       const env = envMap(s.environment);
@@ -75,14 +83,24 @@ export function detectCompose(ctx: DetectContext): Finding[] {
           : [];
       if (deps.length) fields.depends_on = stated([...deps].sort(), src("depends_on"));
       if (s.command !== undefined) {
-        fields.command = stated(Array.isArray(s.command) ? s.command.join(" ") : String(s.command), src("command"));
+        fields.command = stated(
+          Array.isArray(s.command) ? s.command.join(" ") : String(s.command),
+          src("command"),
+        );
       }
       const port = containerPort(s.ports?.[0]) ?? containerPort(s.expose?.[0]);
       if (port) fields.internal_port = stated(port, src(s.ports ? "ports" : "expose"));
       const health = healthPath(s.healthcheck);
       if (health) fields.health_endpoint = stated(health, src("healthcheck"));
 
-      out.push({ kind: "compose", name, dir, file, ...(s.image ? { image: String(s.image) } : {}), fields });
+      out.push({
+        kind: "compose",
+        name,
+        dir,
+        file,
+        ...(s.image ? { image: String(s.image) } : {}),
+        fields,
+      });
     }
   }
   return out;

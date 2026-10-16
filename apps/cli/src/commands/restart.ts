@@ -4,11 +4,11 @@
  * Restart all containers for a feature's stack.
  */
 
-import { Colors, error, info } from "../lib/config.js";
 import { SandboxError } from "sandbox-core/errors";
-import { loadDotenv } from "../lib/dotenv.js";
 import { restart as infraRestart } from "sandbox-core/infra";
 import { restart as restartFeature } from "sandbox-core/lifecycle";
+import { Colors, error, info } from "../lib/config.js";
+import { loadDotenv } from "../lib/dotenv.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());

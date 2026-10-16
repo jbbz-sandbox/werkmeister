@@ -83,7 +83,10 @@ function substituteVars(value: unknown, vars: Record<string, string>): unknown {
   }
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, substituteVars(v, vars)]),
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+        k,
+        substituteVars(v, vars),
+      ]),
     );
   }
   return value;

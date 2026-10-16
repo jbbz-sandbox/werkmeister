@@ -3,10 +3,11 @@
 // 1024x silently produces absurd recommendations, and a container name that
 // fails to match its service silently reports "no limit set" for a service that
 // has one — so both are pinned here, as the code actually behaves.
-import { test } from "node:test";
-import assert from "node:assert/strict";
 
-import { parseConfigMem, matchService } from "./dist/stats.js";
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { matchService, parseConfigMem } from "./dist/stats.js";
 
 test("parseConfigMem normalises the units services.yaml uses to MiB", () => {
   assert.equal(parseConfigMem("2G"), 2048);

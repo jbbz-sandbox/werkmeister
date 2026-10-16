@@ -168,7 +168,11 @@ export function forwardSpecs(
   const collect = (entries: Record<string, any> | null | undefined, nameKey: boolean) => {
     if (!isDict(entries)) return;
     for (const [key, def] of Object.entries(entries)) {
-      if (!isDict(def) || def["k8s_forward_port"] === null || def["k8s_forward_port"] === undefined) {
+      if (
+        !isDict(def) ||
+        def["k8s_forward_port"] === null ||
+        def["k8s_forward_port"] === undefined
+      ) {
         continue;
       }
       specs.push({
@@ -195,7 +199,8 @@ export function forwardSpecs(
  * Example: slot 1 → [11100, 11119], slot 2 → [11200, 11219].
  */
 export function slotPortRange(slot: number, ports?: Record<string, any> | null): [number, number] {
-  const featureSlots = isDict(ports) && isDict(ports["feature_slots"]) ? ports["feature_slots"] : {};
+  const featureSlots =
+    isDict(ports) && isDict(ports["feature_slots"]) ? ports["feature_slots"] : {};
   const base = featureSlots["base_port"] ?? 11100;
   const span = featureSlots["ports_per_slot"] ?? 20;
   const start = base + (slot - 1) * 100;
@@ -402,8 +407,8 @@ export function getK8sContext(): string {
   if (!context || typeof context !== "string") {
     throw new Error(
       "services.yaml has no top-level `k8s_context` key — add the dev " +
-      "cluster kube context there (e.g. `k8s_context: orbstack`); " +
-      "`kubectl config get-contexts` lists the available names.",
+        "cluster kube context there (e.g. `k8s_context: orbstack`); " +
+        "`kubectl config get-contexts` lists the available names.",
     );
   }
   return context;

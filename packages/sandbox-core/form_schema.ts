@@ -78,7 +78,10 @@ function _shape(
       fieldUi["ui:options"] = { groups: prompt["choice_groups"] };
     }
     if (defaultValue) {
-      return String(defaultValue).split(",").map((s) => s.trim()).filter((s) => s);
+      return String(defaultValue)
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s);
     }
     return null;
   }
@@ -160,7 +163,8 @@ export function buildFormSchema(
     if (isRequired) {
       required.push(key);
     }
-    if (order.length === 1) { // first rendered field
+    if (order.length === 1) {
+      // first rendered field
       fieldUi["ui:autofocus"] = true;
     }
     if (Object.keys(fieldUi).length) {
@@ -210,13 +214,16 @@ export function validateFormData(
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   const required = new Set<string>(bundle.schema["required"] ?? []);
-  for (const [key, prop] of Object.entries<Record<string, any>>(bundle.schema["properties"] ?? {})) {
+  for (const [key, prop] of Object.entries<Record<string, any>>(
+    bundle.schema["properties"] ?? {},
+  )) {
     const v = formData[key];
     if (blank(v)) {
       if (required.has(key)) errors[key] = "required";
       continue;
     }
-    const allowed: unknown[] | undefined = prop["type"] === "array" ? prop["items"]?.["enum"] : prop["enum"];
+    const allowed: unknown[] | undefined =
+      prop["type"] === "array" ? prop["items"]?.["enum"] : prop["enum"];
     const bad = allowed ? (Array.isArray(v) ? v : [v]).filter((x) => !allowed.includes(x)) : [];
     if (bad.length) errors[key] = `not offered: ${bad.join(", ")}`;
     else if (prop["pattern"] && typeof v === "string" && !new RegExp(prop["pattern"]).test(v)) {
@@ -240,6 +247,7 @@ export function mergeFormData(
   for (const [k, v] of Object.entries(incoming)) {
     if (!blank(v) && blank(out[k])) out[k] = v;
   }
-  if (typeof incoming["issue_id"] === "string" && incoming["issue_id"]) out["issue_id"] = incoming["issue_id"];
+  if (typeof incoming["issue_id"] === "string" && incoming["issue_id"])
+    out["issue_id"] = incoming["issue_id"];
   return out;
 }

@@ -6,13 +6,14 @@
  *   node dist/main.js --stdio    # Claude Desktop (stdio)
  *   node dist/main.js            # HTTP on PORT (default 3001)
  */
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import cors from "cors";
 import type { Request, Response } from "express";
-import { createServer } from "./server.js";
 import { createBrowserUiRouter } from "./lib/browser-ui.js";
+import { createServer } from "./server.js";
 
 async function startStdio(): Promise<void> {
   await createServer().connect(new StdioServerTransport());

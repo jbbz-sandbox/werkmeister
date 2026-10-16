@@ -4,7 +4,7 @@
  * the parsed document, so the hand-written bytes are never re-serialised:
  * yaml's toString() pads flow sequences and moves anchors.
  */
-import { isMap, parseDocument, stringify, type Node, type YAMLMap } from "yaml";
+import { isMap, type Node, parseDocument, stringify, type YAMLMap } from "yaml";
 
 import type { Plan } from "./plan.js";
 import type { FieldValue } from "./types.js";
@@ -23,11 +23,36 @@ export const FRAGMENT_HEADER = [
 ].join("\n");
 
 const SERVICE_KEYS = [
-  "path", "type", "archetype", "test", "internal_port", "port_offset", "health_endpoint", "setup_service",
-  "image", "command", "memory_limit", "memory_reservation", "node_modules_volume", "environment", "secrets",
-  "k8s_deployment", "k8s_namespace", "k8s_port", "k8s_port_name", "k8s_pod_prefix", "feature_router", "depends_on",
+  "path",
+  "type",
+  "archetype",
+  "test",
+  "internal_port",
+  "port_offset",
+  "health_endpoint",
+  "setup_service",
+  "image",
+  "command",
+  "memory_limit",
+  "memory_reservation",
+  "node_modules_volume",
+  "environment",
+  "secrets",
+  "k8s_deployment",
+  "k8s_namespace",
+  "k8s_port",
+  "k8s_port_name",
+  "k8s_pod_prefix",
+  "feature_router",
+  "depends_on",
 ];
-const INFRA_KEYS = ["k8s_forward_port", "internal_port", "k8s_namespace", "k8s_pod_prefix", "health_endpoint"];
+const INFRA_KEYS = [
+  "k8s_forward_port",
+  "internal_port",
+  "k8s_namespace",
+  "k8s_pod_prefix",
+  "health_endpoint",
+];
 const SETUP_KEYS = ["image", "command", "node_modules_volume"];
 
 export interface Rendered {
@@ -58,7 +83,9 @@ function commentFor(line: KeyLine): string {
 
 /** `key: value` lines at *indent*, the comment on the first line. */
 function keyBlock(line: KeyLine, indent: string): string {
-  const lines = stringify({ [line.key]: line.fv.value }, { lineWidth: 0 }).trimEnd().split("\n");
+  const lines = stringify({ [line.key]: line.fv.value }, { lineWidth: 0 })
+    .trimEnd()
+    .split("\n");
   lines[0] += commentFor(line);
   return lines.map((l) => indent + l).join("\n") + "\n";
 }
@@ -87,20 +114,31 @@ function indentOf(text: string, map: YAMLMap): string {
 type Entries = [name: string, lines: KeyLine[]][];
 
 function sections(plan: Plan): [string, Entries][] {
-  const pick = (fields: Record<string, FieldValue>, keys: string[], extra: (k: string) => Partial<KeyLine> = () => ({})) =>
-    keys.filter((k) => fields[k]).map((k) => ({ key: k, fv: fields[k], also: [], ...extra(k) }) as KeyLine);
+  const pick = (
+    fields: Record<string, FieldValue>,
+    keys: string[],
+    extra: (k: string) => Partial<KeyLine> = () => ({}),
+  ) =>
+    keys
+      .filter((k) => fields[k])
+      .map((k) => ({ key: k, fv: fields[k], also: [], ...extra(k) }) as KeyLine);
   const services: Entries = plan.services.map((s) => [
     s.name,
     pick(s.fields, SERVICE_KEYS, (k) => ({
       also: s.conflicts.find((c) => c.key === k)?.also ?? [],
-      note: k === "path" && plan.envExample[s.name]
-        ? `.env.example also lists: ${plan.envExample[s.name].join(", ")} — declare required ones under secrets:`
-        : undefined,
+      note:
+        k === "path" && plan.envExample[s.name]
+          ? `.env.example also lists: ${plan.envExample[s.name].join(", ")} — declare required ones under secrets:`
+          : undefined,
     })),
   ]);
   const infra: Entries = plan.infrastructure.map((i) => [i.name, pick(i.fields, INFRA_KEYS)]);
   const setup: Entries = plan.setup ? [[plan.setup.name, pick(plan.setup.fields, SETUP_KEYS)]] : [];
-  return [["services", services], ["infrastructure", infra], ["setup_services", setup]];
+  return [
+    ["services", services],
+    ["infrastructure", infra],
+    ["setup_services", setup],
+  ];
 }
 
 export function renderFragment(plan: Plan): Rendered {
@@ -120,14 +158,21 @@ export function renderFragment(plan: Plan): Rendered {
       // Present but empty, null or flow-styled: extending it means rewriting it, and appending
       // a second `services:` would be a duplicate key. Leave it to the human.
       if (sec !== undefined) {
-        const names = entries.map(([name]) => name).filter((name) => !(isMap(sec) && sec.has(name)));
+        const names = entries
+          .map(([name]) => name)
+          .filter((name) => !(isMap(sec) && sec.has(name)));
         if (names.length) {
-          skipped.push(`${section}: is empty, null or flow-styled in the existing file, so ${names.join(", ")} were not added — add them by hand`);
+          skipped.push(
+            `${section}: is empty, null or flow-styled in the existing file, so ${names.join(", ")} were not added — add them by hand`,
+          );
         }
         continue;
       }
-      appended.push(`${section}:\n` + entries.map(([name, lines]) => entryBlock(name, lines, "  ")).join(""));
-      for (const [name, lines] of entries) added.push(...lines.map((l) => `${section}.${name}.${l.key}`));
+      appended.push(
+        `${section}:\n` + entries.map(([name, lines]) => entryBlock(name, lines, "  ")).join(""),
+      );
+      for (const [name, lines] of entries)
+        added.push(...lines.map((l) => `${section}.${name}.${l.key}`));
       continue;
     }
     const newEntries: string[] = [];
@@ -147,11 +192,19 @@ export function renderFragment(plan: Plan): Rendered {
         routerLine.fv = { ...routerLine.fv, value: { remote_upstream: `k8s-${name}:${forward}` } };
       }
       const indent = indentOf(original, entry);
-      edits.push({ at: endOfLine(original, lastItemEnd(entry)), seq: seq++, text: missing.map((l) => keyBlock(l, indent)).join("") });
+      edits.push({
+        at: endOfLine(original, lastItemEnd(entry)),
+        seq: seq++,
+        text: missing.map((l) => keyBlock(l, indent)).join(""),
+      });
       added.push(...missing.map((l) => `${section}.${name}.${l.key}`));
     }
     if (newEntries.length) {
-      edits.push({ at: endOfLine(original, lastItemEnd(sec)), seq: seq++, text: newEntries.join("") });
+      edits.push({
+        at: endOfLine(original, lastItemEnd(sec)),
+        seq: seq++,
+        text: newEntries.join(""),
+      });
     }
   }
 
@@ -166,7 +219,14 @@ export function renderFragment(plan: Plan): Rendered {
     yaml = yaml.slice(0, e.at) + e.text + yaml.slice(e.at);
   }
   if (appended.length) {
-    const prefix = yaml === "" ? FRAGMENT_HEADER : yaml.endsWith("\n\n") ? yaml : yaml.endsWith("\n") ? `${yaml}\n` : `${yaml}\n\n`;
+    const prefix =
+      yaml === ""
+        ? FRAGMENT_HEADER
+        : yaml.endsWith("\n\n")
+          ? yaml
+          : yaml.endsWith("\n")
+            ? `${yaml}\n`
+            : `${yaml}\n\n`;
     yaml = prefix + appended.join("\n");
   }
   return { path: plan.fragmentPath, yaml, added, changed: yaml !== original, skipped };

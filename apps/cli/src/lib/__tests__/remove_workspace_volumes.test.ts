@@ -5,10 +5,11 @@
  * them for the next `up`. That `removeVolumes` becomes `--volumes` on the
  * compose argv is compose_down.test.ts's job.
  */
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ root: "" }));
 
@@ -24,8 +25,8 @@ vi.mock("sandbox-core/config", async (importOriginal) => ({
   workspacesRoot: () => h.root,
 }));
 
-import { down } from "sandbox-core/lifecycle";
 import { removeWorkspace, runWorkspaceAction } from "sandbox-core";
+import { down } from "sandbox-core/lifecycle";
 
 beforeEach(() => {
   vi.mocked(down).mockClear();

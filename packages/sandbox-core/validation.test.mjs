@@ -1,7 +1,8 @@
 // `validate:` resolves like `test:` (service beats archetype), and the context
 // file says how to validate every service in the workspace, not only the routed ones.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { candidateServiceNames, serviceValidation, validationRows } from "./dist/archetypes.js";
 import { buildSandboxContextMd } from "./dist/claude_md.js";
@@ -11,7 +12,10 @@ import { withSandboxHome } from "./fixtures.mjs";
 const ARCHS = { tool: { validate: "run the tests", test: "npm test" } };
 
 test("serviceValidation: own beats archetype, archetype is the default, none is null", () => {
-  assert.equal(serviceValidation({ archetype: "tool", validate: "run the binary" }, ARCHS), "run the binary");
+  assert.equal(
+    serviceValidation({ archetype: "tool", validate: "run the binary" }, ARCHS),
+    "run the binary",
+  );
   assert.equal(serviceValidation({ archetype: "tool" }, ARCHS), "run the tests");
   assert.equal(serviceValidation({ archetype: "tool" }, { tool: {} }), null);
   assert.equal(serviceValidation(null, ARCHS), null);
@@ -30,7 +34,10 @@ test("validationRows: validate text, URL fallback, unregistered fallback", () =>
     bare: { repo: "r", path: "b" },
   };
   const rows = Object.fromEntries(
-    validationRows(["lib", "web", "bare"], svcs, ARCHS, new Set(["web"])).map((r) => [r.service, r]),
+    validationRows(["lib", "web", "bare"], svcs, ARCHS, new Set(["web"])).map((r) => [
+      r.service,
+      r,
+    ]),
   );
   assert.equal(rows.lib.validate, "run the tests");
   assert.equal(rows.lib.test, "npm test");
@@ -75,11 +82,27 @@ archetypes:
 test("only non-URL services: how to validate, and none of the routing sections", async () => {
   await withSandboxHome(
     async () => {
-      const out = buildSandboxContextMd("t", 1, 11100, 11119, [], loadServices(), "", null, ["core", "cli"]);
+      const out = buildSandboxContextMd("t", 1, 11100, 11119, [], loadServices(), "", null, [
+        "core",
+        "cli",
+      ]);
       assert.match(out, /## How to validate/);
       assert.match(out, /\| `core` \| demo \| `packages\/core` \| `npm test` \| run the tests \|/);
-      assert.match(out, /\| `cli` \| demo \| `apps\/cli` \| `npm test` \| run the built binary against a fixture workspace \|/);
-      for (const absent of [/curl/, /X-Feature/, /Proxy Routing/, /__sandbox/, /Caddy/, /Container Lifecycle/, /Slot & Port Range/, /elsewhere/, /Quick Health Checks/]) {
+      assert.match(
+        out,
+        /\| `cli` \| demo \| `apps\/cli` \| `npm test` \| run the built binary against a fixture workspace \|/,
+      );
+      for (const absent of [
+        /curl/,
+        /X-Feature/,
+        /Proxy Routing/,
+        /__sandbox/,
+        /Caddy/,
+        /Container Lifecycle/,
+        /Slot & Port Range/,
+        /elsewhere/,
+        /Quick Health Checks/,
+      ]) {
         assert.doesNotMatch(out, absent);
       }
     },
@@ -90,11 +113,18 @@ test("only non-URL services: how to validate, and none of the routing sections",
 test("a URL-addressed candidate brings back health checks and routing, scoped to it", async () => {
   await withSandboxHome(
     async () => {
-      const out = buildSandboxContextMd("t", 1, 11100, 11119, [], loadServices(), "", null, ["core", "web"]);
+      const out = buildSandboxContextMd("t", 1, 11100, 11119, [], loadServices(), "", null, [
+        "core",
+        "web",
+      ]);
       assert.match(out, /\| `web` \| demo \| `apps\/web` \| `npm test` \| run the tests \|/);
       assert.match(out, /## Quick Health Checks/);
       assert.match(out, /web\.local\.sandbox\.com/);
-      assert.doesNotMatch(out, /elsewhere\.local\.sandbox\.com\/"/, "health checks skip hosts outside the candidates");
+      assert.doesNotMatch(
+        out,
+        /elsewhere\.local\.sandbox\.com\/"/,
+        "health checks skip hosts outside the candidates",
+      );
       assert.match(out, /## Proxy Routing/);
       assert.doesNotMatch(out, /Container Lifecycle/, "nothing runs locally");
     },

@@ -7,11 +7,11 @@
  * message, so letting a hinted code propagate would reorder the output — which
  * the migration design forbids. Anything unhinted must still propagate.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SandboxError } from "sandbox-core/errors";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeRecorder } from "./helpers/recorder.js";
 

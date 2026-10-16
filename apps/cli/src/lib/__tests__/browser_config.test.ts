@@ -1,11 +1,11 @@
 /** `resolveBrowserBinary` — CHROME_BIN / overrides.browser_path / overrides.browser resolution. */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import { BROWSERS, resolveBrowserBinary } from "sandbox-core/browser";
 import * as gc from "sandbox-core/global_config";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let tmp: string;
 

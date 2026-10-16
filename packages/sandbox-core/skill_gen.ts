@@ -188,9 +188,7 @@ function renderSkill(
 ): string {
   const description = buildDescription(domain, meta);
   const relPath =
-    path.basename(meta["path"]) === "STANDARD.md"
-      ? `${domain}/STANDARD.md`
-      : `${domain}.md`;
+    path.basename(meta["path"]) === "STANDARD.md" ? `${domain}/STANDARD.md` : `${domain}.md`;
   const header = _GENERATED_HEADER.replace("{source}", standardsUrl(src, relPath) || relPath);
   body = rewriteLinks(body, knownDomains, src);
   // JSON.stringify gives a YAML-safe quoted scalar regardless of glob/quote chars.
@@ -353,19 +351,13 @@ export function validateModuleReferences(
       }
       const link = `(references/${refName})`;
       if (!body.includes(link)) {
-        errors.push(
-          `${domain}: references/${refName} is not linked from STANDARD.md`,
-        );
+        errors.push(`${domain}: references/${refName} is not linked from STANDARD.md`);
       } else if (
         refName.startsWith("ap-") &&
-        !new RegExp(
-          `^\\s*[-*] .*\\(references/${escapeRegex(refName)}\\)`,
-          "m",
-        ).test(body)
+        !new RegExp(`^\\s*[-*] .*\\(references/${escapeRegex(refName)}\\)`, "m").test(body)
       ) {
         errors.push(
-          `${domain}: references/${refName} needs ` +
-            `an inline don't-line bullet linking to it`,
+          `${domain}: references/${refName} needs ` + `an inline don't-line bullet linking to it`,
         );
       }
     }

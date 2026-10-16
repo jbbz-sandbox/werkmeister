@@ -10,9 +10,9 @@
  * failing suite is a result the library reports, not an error it throws.
  */
 
+import { runFeatureTests } from "sandbox-core/test_run";
 import { Colors, error, resolveWorkspace, success } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
-import { runFeatureTests } from "sandbox-core/test_run";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;

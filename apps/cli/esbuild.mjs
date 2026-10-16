@@ -38,7 +38,10 @@ const watch = process.argv.includes("--watch");
 // checkout (src/lib/build_freshness.ts). Empty outside a git checkout.
 function git(...args) {
   try {
-    return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
   } catch {
     return "";
   }
@@ -71,7 +74,8 @@ const options = {
   // require ... is not supported". Its shim delegates to a real `require` when
   // one is in scope, so defining one is the whole fix.
   banner: {
-    js: 'import { createRequire as __sandboxCreateRequire } from "node:module";\n' +
+    js:
+      'import { createRequire as __sandboxCreateRequire } from "node:module";\n' +
       "const require = __sandboxCreateRequire(import.meta.url);",
   },
   logLevel: "info",

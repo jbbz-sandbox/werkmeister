@@ -24,14 +24,18 @@ beforeAll(() => {
 });
 afterAll(() => fs.rmSync(cwd, { recursive: true, force: true }));
 
-const sandbox = (...argv: string[]) => spawnSync(process.execPath, [MAIN, ...argv], { cwd, encoding: "utf-8" });
+const sandbox = (...argv: string[]) =>
+  spawnSync(process.execPath, [MAIN, ...argv], { cwd, encoding: "utf-8" });
 
 describe("sandbox up flags", () => {
-  it.each([["-s", "backend"], ["--services", "backend"], ["--force"]])("rejects %s as unknown", (...argv) => {
-    const res = sandbox("up", ...argv);
-    expect(res.status).not.toBe(0);
-    expect(res.stderr).toContain(`unknown option '${argv[0]}'`);
-  });
+  it.each([["-s", "backend"], ["--services", "backend"], ["--force"]])(
+    "rejects %s as unknown",
+    (...argv) => {
+      const res = sandbox("up", ...argv);
+      expect(res.status).not.toBe(0);
+      expect(res.stderr).toContain(`unknown option '${argv[0]}'`);
+    },
+  );
 
   it("no longer lists them in --help", () => {
     const res = sandbox("up", "--help");

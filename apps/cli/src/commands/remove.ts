@@ -8,11 +8,11 @@
  * banner, the two error renderings, and the summary block.
  */
 
-import { Colors, warn } from "../lib/config.js";
 import { SandboxError } from "sandbox-core/errors";
-import { removeService } from "sandbox-core/lifecycle";
 import type { RemoveResult } from "sandbox-core/lifecycle";
+import { removeService } from "sandbox-core/lifecycle";
 import { getAllSlots } from "sandbox-core/slots";
+import { Colors, warn } from "../lib/config.js";
 
 /**
  * The "not running locally" branch: a warning plus the feature's actual local
@@ -33,7 +33,9 @@ async function printNotLocal(feature: string, message: string): Promise<void> {
 function printSummary(result: RemoveResult): void {
   const { feature, removed, remaining } = result;
 
-  console.log(`\n${Colors.GREEN}${Colors.BOLD}Service '${removed}' removed from '${feature}'${Colors.RESET}`);
+  console.log(
+    `\n${Colors.GREEN}${Colors.BOLD}Service '${removed}' removed from '${feature}'${Colors.RESET}`,
+  );
   console.log(`  ${Colors.CYAN}'${removed}' now served via k8s port-forward${Colors.RESET}`);
   if (remaining.length) {
     console.log(`  ${Colors.DIM}Remaining local services: ${remaining.join(", ")}${Colors.RESET}`);
@@ -47,7 +49,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = args.feature as string;
   const service = args.service as string;
 
-  console.log(`\n${Colors.BOLD}=== sandbox remove: ${service} from ${feature} ===${Colors.RESET}\n`);
+  console.log(
+    `\n${Colors.BOLD}=== sandbox remove: ${service} from ${feature} ===${Colors.RESET}\n`,
+  );
 
   let result: RemoveResult;
   try {

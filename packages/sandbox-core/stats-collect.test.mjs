@@ -5,13 +5,16 @@
 // matter what the caller wants. The `timeout` on each test is what turns that
 // hang into a failure; the one-minute request bounds how long a regression
 // wedges the suite for.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { containerStats } from "./dist/docker.js";
 import { runCollection } from "./dist/stats.js";
 
-test("an aborted run stops early and reports what it actually did", { timeout: 20_000 }, async () => {
+test("an aborted run stops early and reports what it actually did", {
+  timeout: 20_000,
+}, async () => {
   const ac = new AbortController();
   setTimeout(() => ac.abort(), 100);
 

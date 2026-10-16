@@ -10,13 +10,13 @@
  * configured, which is not this migration's question (note 070).
  */
 
-import { Colors } from "../lib/config.js";
-import { interruptSignal } from "../lib/interrupt.js";
-import { connectK8s, infraHealth, up as infraUp } from "sandbox-core/infra";
 import * as readline from "node:readline/promises";
+import { connectK8s, infraHealth, up as infraUp } from "sandbox-core/infra";
 import { ghBin, issueTracker, type TrackerAuth } from "sandbox-core/issue_tracker";
 import { run as procRun } from "sandbox-core/proc";
 import { DASHBOARD, MCP, status as webStatus } from "sandbox-core/web_servers";
+import { Colors } from "../lib/config.js";
+import { interruptSignal } from "../lib/interrupt.js";
 
 export function trackerLine(label: string, auth: TrackerAuth): string {
   return auth.ok
@@ -33,7 +33,9 @@ export async function checkTracker(): Promise<void> {
     let auth = await tracker.checkAuth();
     if (!auth.ok && tracker.id === "github" && process.stdin.isTTY) {
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const yes = /^y/i.test(await rl.question(`  GitHub: ${auth.reason}. Sign in now? (${auth.fix}) [y/N] `));
+      const yes = /^y/i.test(
+        await rl.question(`  GitHub: ${auth.reason}. Sign in now? (${auth.fix}) [y/N] `),
+      );
       rl.close();
       if (yes) {
         // The terminal goes to gh; credentials are typed into gh's own prompt, never read here.
@@ -43,7 +45,9 @@ export async function checkTracker(): Promise<void> {
     }
     console.log(trackerLine(tracker.label, auth));
   } catch (e) {
-    console.log(`  ${Colors.YELLOW}issue tracker · ${label ? `${label} · ` : ""}check failed: ${(e as Error).message}${Colors.RESET}`);
+    console.log(
+      `  ${Colors.YELLOW}issue tracker · ${label ? `${label} · ` : ""}check failed: ${(e as Error).message}${Colors.RESET}`,
+    );
   }
 }
 
@@ -78,7 +82,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // k8s-forwards' start_period is 60s; give recreated containers time to
   // converge before reporting so the summary isn't a premature snapshot.
   const health = await infraHealth(90);
-  for (const [name, healthy] of Object.entries(health).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
+  for (const [name, healthy] of Object.entries(health).sort((a, b) =>
+    a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0,
+  )) {
     const status = healthy
       ? `${Colors.GREEN}healthy${Colors.RESET}`
       : `${Colors.RED}down${Colors.RESET}`;
@@ -103,17 +109,27 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log();
   console.log(`  ${Colors.BOLD}Developer tools:${Colors.RESET}`);
-  console.log(`    ${Colors.CYAN}RedisInsight:${Colors.RESET}  https://tools.local.sandbox.com/redisinsight`);
-  console.log(`    ${Colors.CYAN}Jaeger:${Colors.RESET}        https://tools.local.sandbox.com/jaeger`);
-  console.log(`    ${Colors.CYAN}GraphQL:${Colors.RESET}       https://tools.local.sandbox.com/graphql`);
+  console.log(
+    `    ${Colors.CYAN}RedisInsight:${Colors.RESET}  https://tools.local.sandbox.com/redisinsight`,
+  );
+  console.log(
+    `    ${Colors.CYAN}Jaeger:${Colors.RESET}        https://tools.local.sandbox.com/jaeger`,
+  );
+  console.log(
+    `    ${Colors.CYAN}GraphQL:${Colors.RESET}       https://tools.local.sandbox.com/graphql`,
+  );
   // The dashboard is checkout-only (web_servers.start skips it on a package
   // install), so only advertise a URL that is actually being served.
   const dashboard = await webStatus(DASHBOARD);
   if (dashboard.running) {
-    console.log(`    ${Colors.CYAN}Sandbox MCP:${Colors.RESET}   ${dashboard.url}  (workspaces dashboard; MCP at /mcp)`);
+    console.log(
+      `    ${Colors.CYAN}Sandbox MCP:${Colors.RESET}   ${dashboard.url}  (workspaces dashboard; MCP at /mcp)`,
+    );
   }
   const mcp = await webStatus(MCP);
   const mcpState = mcp.running ? "" : `  ${Colors.DIM}(not running)${Colors.RESET}`;
-  console.log(`    ${Colors.CYAN}MCP server:${Colors.RESET}    ${mcp.url}mcp  (headless; bearer token in ~/.sandbox/mcp-token)${mcpState}`);
+  console.log(
+    `    ${Colors.CYAN}MCP server:${Colors.RESET}    ${mcp.url}mcp  (headless; bearer token in ~/.sandbox/mcp-token)${mcpState}`,
+  );
   console.log();
 }

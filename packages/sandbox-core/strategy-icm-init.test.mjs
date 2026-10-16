@@ -1,18 +1,18 @@
 // The icm strategy's init: the files icm-ws2 ran with, generated from
 // InitContext alone, and the write-once rules that protect a run in progress.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { withSandboxHome } from "./fixtures.mjs";
-import { discoverRepos } from "./dist/workspace_init.js";
+import { test } from "node:test";
 import { buildPrGuardEntry, READ_ONLY_GIT_RULES } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { strategyById } from "./dist/strategies/index.js";
 import { templateFor } from "./dist/strategies/icm_templates.js";
+import { strategyById } from "./dist/strategies/index.js";
+import { discoverRepos } from "./dist/workspace_init.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
 const PROMPT = "## Goal\n\nDocument the backend API.\n\n## Open questions\n\n1. UI or raw spec?";
 
@@ -27,25 +27,38 @@ function walk(root, rel = "") {
 }
 
 /** A workspace with one repo and a two-module standards tree; returns [root, ctx]. */
-async function withIcmWorkspace(fn, { inputs = {}, meta = { FEATURE: "demo", SERVICES: "backend" } } = {}) {
+async function withIcmWorkspace(
+  fn,
+  { inputs = {}, meta = { FEATURE: "demo", SERVICES: "backend" } } = {},
+) {
   const std = fs.mkdtempSync(path.join(os.tmpdir(), "icm-std-"));
   fs.mkdirSync(path.join(std, "comments"));
   fs.writeFileSync(
     path.join(std, "comments", "STANDARD.md"),
-    "---\ndomain: comments\nuniversal: 1\napplies_to:\n  - \"**/*\"\nsummary: why not what\n---\n\n# Comments\n",
+    '---\ndomain: comments\nuniversal: 1\napplies_to:\n  - "**/*"\nsummary: why not what\n---\n\n# Comments\n',
   );
   fs.mkdirSync(path.join(std, "ui"));
   fs.writeFileSync(
     path.join(std, "ui", "STANDARD.md"),
-    "---\ndomain: ui\napplies_to:\n  - \"**/*.tsx\"\nsummary: ui\n---\n\n# UI\n",
+    '---\ndomain: ui\napplies_to:\n  - "**/*.tsx"\nsummary: ui\n---\n\n# UI\n',
   );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-ws-"));
   fs.mkdirSync(path.join(root, "demo-repo", ".git"), { recursive: true });
   fs.mkdirSync(path.join(root, ".sandbox"));
-  const allInputs = { context_strategy: "icm", work_type: "feature", starting_prompt: PROMPT, feature: meta.FEATURE, services: meta.SERVICES, ...inputs };
+  const allInputs = {
+    context_strategy: "icm",
+    work_type: "feature",
+    starting_prompt: PROMPT,
+    feature: meta.FEATURE,
+    services: meta.SERVICES,
+    ...inputs,
+  };
   fs.writeFileSync(
     path.join(root, ".sandbox", "workspace.yml"),
-    Object.entries(allInputs).filter(([, v]) => v).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n") + "\n",
+    Object.entries(allInputs)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      .join("\n") + "\n",
   );
   const ctx = {
     workspaceRoot: root,
@@ -91,18 +104,27 @@ test("init writes the icm layer and nothing of jit's", async () => {
       "stages/04_propose/CONTEXT.md",
       "stages/04_propose/output/.gitkeep",
     ]);
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")), {
-      hooks: { PreToolUse: [buildPrGuardEntry()] },
-      permissions: { allow: READ_ONLY_GIT_RULES },
-    });
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
+      {
+        hooks: { PreToolUse: [buildPrGuardEntry()] },
+        permissions: { allow: READ_ONLY_GIT_RULES },
+      },
+    );
     assert.ok(!fs.existsSync(path.join(root, ".sandbox", "notes")));
     assert.ok(!fs.existsSync(path.join(root, ".sandbox", "standards.json")));
 
     assert.ok(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8").endsWith(`\n${PROMPT}\n`));
 
     const standards = fs.readFileSync(path.join(root, "_shared", "standards.md"), "utf8");
-    assert.match(standards, /^\| comments \| `<standards_dir>\/comments\/STANDARD\.md` \| any code edit \|$/m);
-    assert.match(standards, /^`<standards_dir>` is this machine's standards tree: `sandbox standards check` prints its path/m);
+    assert.match(
+      standards,
+      /^\| comments \| `<standards_dir>\/comments\/STANDARD\.md` \| any code edit \|$/m,
+    );
+    assert.match(
+      standards,
+      /^`<standards_dir>` is this machine's standards tree: `sandbox standards check` prints its path/m,
+    );
     assert.ok(!standards.includes(os.tmpdir()) && !standards.includes(os.homedir()), standards);
     assert.match(standards, /^\| ponytail \| already loaded/m);
     assert.match(standards, /do not load\): ui\./);
@@ -111,21 +133,37 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.ok(claude.split("\n").length <= 60, `CLAUDE.md is ${claude.split("\n").length} lines`);
     assert.match(claude, /`docker restart demo-backend`/);
     assert.match(claude, /`stages\/02_spec\/CONTEXT\.md`/);
-    assert.match(claude, /you hit a bug or need to log a feature\/task .*`_shared\/issues-report\.md`/);
-    assert.match(claude, /^\| this folder's git branch \| the run's record .*never open a PR from it or merge it \|$/m);
-    assert.match(claude, /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `sandbox pr open`, then Auto-fix on \(rule 5\) \| PR URL is in the PR file and Auto-fix is on \|/m);
-    assert.match(fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"), /`stages\/04_propose\/output\/pr-<repo>\.md`/);
+    assert.match(
+      claude,
+      /you hit a bug or need to log a feature\/task .*`_shared\/issues-report\.md`/,
+    );
+    assert.match(
+      claude,
+      /^\| this folder's git branch \| the run's record .*never open a PR from it or merge it \|$/m,
+    );
+    assert.match(
+      claude,
+      /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `sandbox pr open`, then Auto-fix on \(rule 5\) \| PR URL is in the PR file and Auto-fix is on \|/m,
+    );
+    assert.match(
+      fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
+      /`stages\/04_propose\/output\/pr-<repo>\.md`/,
+    );
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);
     assert.match(guide, /gh issue create -R jbbz-sandbox\/sandbox --label <label>/);
 
-    const implement = fs.readFileSync(path.join(root, "stages", "03_implement", "CONTEXT.md"), "utf8");
+    const implement = fs.readFileSync(
+      path.join(root, "stages", "03_implement", "CONTEXT.md"),
+      "utf8",
+    );
     assert.match(implement, /rows `comments`, `ponytail`/);
     assert.doesNotMatch(implement, /`ui`/);
     assert.match(implement, /never run `sandbox up`/i);
     for (const f of walk(root)) {
-      if (f.endsWith(".md")) assert.doesNotMatch(fs.readFileSync(path.join(root, f), "utf8"), /undefined/, f);
+      if (f.endsWith(".md"))
+        assert.doesNotMatch(fs.readFileSync(path.join(root, f), "utf8"), /undefined/, f);
     }
   });
 });
@@ -138,7 +176,10 @@ test("rerunning init keeps an edited brief and a stage's output", async () => {
     fs.rmSync(path.join(root, "stages", "01_research", "output", ".gitkeep"));
     icm.init(ctx);
     assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), "edited by a person\n");
-    assert.equal(fs.readFileSync(path.join(root, "stages", "01_research", "output", "x.md"), "utf8"), "artifact\n");
+    assert.equal(
+      fs.readFileSync(path.join(root, "stages", "01_research", "output", "x.md"), "utf8"),
+      "artifact\n",
+    );
     assert.ok(!fs.existsSync(path.join(root, "stages", "01_research", "output", ".gitkeep")));
   });
 });
@@ -192,8 +233,14 @@ test("init leaves a pre-rename stage layout alone: no new stage dirs, no rewritt
       await withReporter(reporter, async () => icm.init(ctx));
       assert.deepEqual(fs.readdirSync(path.join(root, "stages")).sort(), old);
       for (const d of old) {
-        assert.equal(fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8"), `old ${d} contract\n`);
-        assert.equal(fs.readFileSync(path.join(root, "stages", d, "output", "artifact.md"), "utf8"), `${d} done\n`);
+        assert.equal(
+          fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8"),
+          `old ${d} contract\n`,
+        );
+        assert.equal(
+          fs.readFileSync(path.join(root, "stages", d, "output", "artifact.md"), "utf8"),
+          `${d} done\n`,
+        );
       }
       for (const f of kept) assert.equal(fs.readFileSync(path.join(root, f), "utf8"), `old ${f}\n`);
       assert.ok(!fs.existsSync(path.join(root, "_shared", "pr-rules.md")));
@@ -210,7 +257,10 @@ test("an empty starting prompt still gives the brief a body", async () => {
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init(ctx);
-      assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), /No starting prompt was given/);
+      assert.match(
+        fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
+        /No starting prompt was given/,
+      );
     },
     { inputs: { starting_prompt: "" } },
   );
@@ -222,7 +272,10 @@ test("discoverRepos ignores ICM directories when the workspace root itself is a 
     icm.init(ctx);
 
     const repos = discoverRepos(root);
-    assert.deepEqual(repos.map(([name]) => name), ["demo-repo"]);
+    assert.deepEqual(
+      repos.map(([name]) => name),
+      ["demo-repo"],
+    );
     // A rerun with the rediscovered repos must agree with contextFromDisk, or `check` reports drift.
     icm.init({ ...ctx, repos });
     assert.deepEqual(icm.check(root), []);
@@ -237,7 +290,10 @@ test("discoverRepos and contextFromDisk agree on dot-prefixed and symlinked repo
     fs.symlinkSync(real, path.join(root, "linked-repo"));
     try {
       const repos = discoverRepos(root);
-      assert.deepEqual(repos.map(([name]) => name), ["demo-repo", "linked-repo"]);
+      assert.deepEqual(
+        repos.map(([name]) => name),
+        ["demo-repo", "linked-repo"],
+      );
       icm.init({ ...ctx, repos });
       assert.deepEqual(icm.check(root), []);
     } finally {
@@ -284,9 +340,18 @@ test("feature and services both present: the restart sentence uses docker restar
 test("templateFor falls back to feature for free text, and normalises case", () => {
   const feature = templateFor("feature").map((s) => s.name);
   assert.deepEqual(feature, ["research", "spec", "implement", "propose"]);
-  assert.deepEqual(templateFor("constructor").map((s) => s.name), feature);
-  assert.deepEqual(templateFor(" Feature ").map((s) => s.name), feature);
-  assert.deepEqual(templateFor("").map((s) => s.name), feature);
+  assert.deepEqual(
+    templateFor("constructor").map((s) => s.name),
+    feature,
+  );
+  assert.deepEqual(
+    templateFor(" Feature ").map((s) => s.name),
+    feature,
+  );
+  assert.deepEqual(
+    templateFor("").map((s) => s.name),
+    feature,
+  );
 });
 
 test("sessionContext is null and gate is a no-op", () => {
@@ -294,38 +359,63 @@ test("sessionContext is null and gate is a no-op", () => {
   assert.equal(icm.gate(), undefined);
 });
 
-const ISSUE = { ref: "o/r#5", url: "https://github.com/o/r/issues/5", title: "Stale config", fetchedAt: "2026-10-11T18:04:00.000Z" };
+const ISSUE = {
+  ref: "o/r#5",
+  url: "https://github.com/o/r/issues/5",
+  title: "Stale config",
+  fetchedAt: "2026-10-11T18:04:00.000Z",
+};
 
 test("an issue puts the issue section in CLAUDE.md and BRIEF.md", async () => {
-  await withIcmWorkspace(async (root, ctx) => {
-    icm.init({ ...ctx, issue: ISSUE });
-    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
-    assert.match(claude, /\n## Issue\n\n\[o\/r#5\]\(https:\/\/github.com\/o\/r\/issues\/5\): Stale config\./);
-    assert.match(claude, /\| `\.sandbox\/issue\.md` \| the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` \|/);
-    const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
-    assert.match(brief, /^---\nsource: \.sandbox\/workspace\.yml \(description, starting_prompt\), \.sandbox\/issue\.md\n---\n\n# Brief: /);
-    assert.match(brief, /## Issue\n[\s\S]*Fix the thing\.\n\n## Goal/);
-    assert.doesNotMatch(brief, /No starting prompt was given/);
-  }, { inputs: { description: "Fix the thing.", starting_prompt: "## Goal\n\nGone." } });
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init({ ...ctx, issue: ISSUE });
+      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      assert.match(
+        claude,
+        /\n## Issue\n\n\[o\/r#5\]\(https:\/\/github.com\/o\/r\/issues\/5\): Stale config\./,
+      );
+      assert.match(
+        claude,
+        /\| `\.sandbox\/issue\.md` \| the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` \|/,
+      );
+      const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+      assert.match(
+        brief,
+        /^---\nsource: \.sandbox\/workspace\.yml \(description, starting_prompt\), \.sandbox\/issue\.md\n---\n\n# Brief: /,
+      );
+      assert.match(brief, /## Issue\n[\s\S]*Fix the thing\.\n\n## Goal/);
+      assert.doesNotMatch(brief, /No starting prompt was given/);
+    },
+    { inputs: { description: "Fix the thing.", starting_prompt: "## Goal\n\nGone." } },
+  );
 });
 
 test("an issue with no description or prompt tells the agent to read the copy", async () => {
-  await withIcmWorkspace(async (root, ctx) => {
-    icm.init({ ...ctx, issue: ISSUE });
-    assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
-      /_Read `\.sandbox\/issue\.md`, then write the goal, acceptance criteria and open questions here before starting the first stage\._/);
-  }, { inputs: { starting_prompt: "" } });
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init({ ...ctx, issue: ISSUE });
+      assert.match(
+        fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
+        /_Read `\.sandbox\/issue\.md`, then write the goal, acceptance criteria and open questions here before starting the first stage\._/,
+      );
+    },
+    { inputs: { starting_prompt: "" } },
+  );
 });
 
 test("a placeholder brief is rebuilt once an issue exists; an edited brief is kept", async () => {
-  await withIcmWorkspace(async (root, ctx) => {
-    icm.init(ctx); // placeholder brief, as the 2026-10-11 workspaces got
-    icm.init({ ...ctx, issue: ISSUE });
-    assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), /## Issue/);
-    fs.writeFileSync(path.join(root, "BRIEF.md"), "hand edit\n");
-    icm.init({ ...ctx, issue: ISSUE });
-    assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), "hand edit\n");
-  }, { inputs: { starting_prompt: "" } });
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init(ctx); // placeholder brief, as the 2026-10-11 workspaces got
+      icm.init({ ...ctx, issue: ISSUE });
+      assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), /## Issue/);
+      fs.writeFileSync(path.join(root, "BRIEF.md"), "hand edit\n");
+      icm.init({ ...ctx, issue: ISSUE });
+      assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), "hand edit\n");
+    },
+    { inputs: { starting_prompt: "" } },
+  );
 });
 
 test("no issue: CLAUDE.md and BRIEF.md are unchanged from before", async () => {
@@ -333,33 +423,54 @@ test("no issue: CLAUDE.md and BRIEF.md are unchanged from before", async () => {
     icm.init({ ...ctx, issue: null });
     const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
     assert.doesNotMatch(claude, /## Issue|issue\.md/);
-    assert.match(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---/);
+    assert.match(
+      fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
+      /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---/,
+    );
   });
 });
 
 test("same context twice gives byte-identical files", async () => {
   const snap = async (ctxPatch) => {
     let files;
-    await withIcmWorkspace(async (root, ctx) => {
-      icm.init({ ...ctx, ...ctxPatch, issue: ISSUE });
-      files = Object.fromEntries(walk(root).filter((f) => !f.startsWith("demo-repo")).map((f) => [f, fs.readFileSync(path.join(root, f), "utf8").replace(/icm-(ws|std)-[A-Za-z0-9]+/g, "icm-$1-X")]));
-    }, { inputs: { starting_prompt: "## Goal\n\nGone." } });
+    await withIcmWorkspace(
+      async (root, ctx) => {
+        icm.init({ ...ctx, ...ctxPatch, issue: ISSUE });
+        files = Object.fromEntries(
+          walk(root)
+            .filter((f) => !f.startsWith("demo-repo"))
+            .map((f) => [
+              f,
+              fs
+                .readFileSync(path.join(root, f), "utf8")
+                .replace(/icm-(ws|std)-[A-Za-z0-9]+/g, "icm-$1-X"),
+            ]),
+        );
+      },
+      { inputs: { starting_prompt: "## Goal\n\nGone." } },
+    );
     return files;
   };
   assert.deepEqual(await snap({}), await snap({}));
 });
 
 test("a no-copy issue keeps the placeholder brief; a fetched copy then rebuilds it", async () => {
-  await withIcmWorkspace(async (root, ctx) => {
-    const noCopy = { ...ISSUE, title: "", fetchedAt: null };
-    icm.init(ctx);
-    const placeholder = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
-    icm.init({ ...ctx, issue: noCopy });
-    assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), placeholder);
-    assert.doesNotMatch(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), /\| `\.sandbox\/issue\.md` \|/);
-    icm.init({ ...ctx, issue: ISSUE });
-    const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
-    assert.match(brief, /Copy taken 2026-10-11: `\.sandbox\/issue\.md`\./);
-    assert.match(brief, /_Read `\.sandbox\/issue\.md`, then/);
-  }, { inputs: { starting_prompt: "" } });
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      const noCopy = { ...ISSUE, title: "", fetchedAt: null };
+      icm.init(ctx);
+      const placeholder = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+      icm.init({ ...ctx, issue: noCopy });
+      assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), placeholder);
+      assert.doesNotMatch(
+        fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"),
+        /\| `\.sandbox\/issue\.md` \|/,
+      );
+      icm.init({ ...ctx, issue: ISSUE });
+      const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+      assert.match(brief, /Copy taken 2026-10-11: `\.sandbox\/issue\.md`\./);
+      assert.match(brief, /_Read `\.sandbox\/issue\.md`, then/);
+    },
+    { inputs: { starting_prompt: "" } },
+  );
 });

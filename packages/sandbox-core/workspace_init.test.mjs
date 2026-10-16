@@ -4,23 +4,27 @@
 // the CLI's output changes — the line still goes out exactly once, and the
 // throw is the silent kind the argv adapters turn into exit 1 without
 // reprinting (note 086 row 5).
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { withSandboxHome } from "./fixtures.mjs";
-
+import { test } from "node:test";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { createWorkspace } from "./dist/sandbox.js";
-import { WorkspaceInitError, provisionWorkspace } from "./dist/workspace_init.js";
+import { provisionWorkspace, WorkspaceInitError } from "./dist/workspace_init.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
 /** Run `fn`, returning its rejection and everything it printed. */
 async function abort(fn) {
   const collector = collectingReporter();
-  const err = await withReporter(collector, () => fn().then(() => null, (e) => e));
+  const err = await withReporter(collector, () =>
+    fn().then(
+      () => null,
+      (e) => e,
+    ),
+  );
   return { err, text: collector.text() };
 }
 
@@ -57,20 +61,35 @@ test("a non-interactive create with no strategy writes context_strategy: icm (#1
   const seed = path.join(tmp, "seed");
   fs.mkdirSync(seed);
   execFileSync("git", ["-C", seed, "init", "-q", "-b", "main"]);
-  execFileSync("git", ["-C", seed, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"]);
+  execFileSync("git", [
+    "-C",
+    seed,
+    "-c",
+    "user.name=t",
+    "-c",
+    "user.email=t@t",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "init",
+  ]);
   execFileSync("git", ["clone", "-q", seed, path.join(repos, "demo-repo")]);
   const prevRoot = process.env.SANDBOX_ROOT;
   process.env.SANDBOX_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
   try {
-    await withSandboxHome(async () => {
-      const { workspacePath } = await createWorkspace(
-        { feature: "demo", services: "backend", work_type: "feature" },
-        { open: false, cwd: tmp, distill: false },
-      );
-      const yml = fs.readFileSync(path.join(workspacePath, ".sandbox", "workspace.yml"), "utf8");
-      assert.match(yml, /^context_strategy: icm$/m);
-      assert.ok(fs.existsSync(path.join(workspacePath, "stages")), "ICM layout");
-    }, { config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(tmp, "ws")}\n` });
+    await withSandboxHome(
+      async () => {
+        const { workspacePath } = await createWorkspace(
+          { feature: "demo", services: "backend", work_type: "feature" },
+          { open: false, cwd: tmp, distill: false },
+        );
+        const yml = fs.readFileSync(path.join(workspacePath, ".sandbox", "workspace.yml"), "utf8");
+        assert.match(yml, /^context_strategy: icm$/m);
+        assert.ok(fs.existsSync(path.join(workspacePath, "stages")), "ICM layout");
+      },
+      { config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(tmp, "ws")}\n` },
+    );
   } finally {
     if (prevRoot === undefined) delete process.env.SANDBOX_ROOT;
     else process.env.SANDBOX_ROOT = prevRoot;
