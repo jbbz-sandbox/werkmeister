@@ -52,6 +52,7 @@ await new Promise((resolve) => setTimeout(resolve, 4_000));
 assert.ok(output.length > 0, "expected log output");
 assert.match(
   output,
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: asserts the raw ANSI colour code
   /\u001b\[3[0-9]m/,
   "expected ANSI from `--ansi always` — without it the per-service prefix colour is dropped",
 );
