@@ -60,7 +60,7 @@ const REGISTRY = {
     api: { type: "api", port_offset: 2, health_endpoint: "/health", test: "npm test -w api" },
     lib: { type: "library", port_offset: 3 },
   },
-  repos: { app: { services: ["api", "lib"], path_mappings: { "apps/api": "api", "packages/lib": "lib" }, ship: "tag", release_tag: "v*", release_check: "npx changeset status" } },
+  repos: { app: { services: ["api", "lib"], path_mappings: { "apps/api": "api", "packages/lib": "lib" }, no_service_paths: ["docs", ".changeset/", "README.md"], ship: "tag", release_tag: "v*", release_check: "npx changeset status" } },
 };
 
 function deps(table, over = {}) {
@@ -152,6 +152,15 @@ test("mapTouched: longest prefix wins; an unmapped file touches every service", 
   assert.deepEqual(mapTouched(["README.md"], repo), ["a", "b", "c"]);
 });
 
+test("mapTouched: no_service_paths touch nothing; other unmapped files still touch every service", () => {
+  const repo = { services: ["a", "b"], path_mappings: { "apps/a": "a", "docs/a": "a" }, no_service_paths: ["docs", ".changeset/", "README.md"] };
+  assert.deepEqual(mapTouched(["docs/x.md", ".changeset/y.md", "README.md"], repo), []);
+  assert.deepEqual(mapTouched(["docs/x.md", "apps/a/z.ts"], repo), ["a"]);
+  assert.deepEqual(mapTouched(["docs/a/x.md"], repo), ["a"], "a longer path_mappings prefix wins");
+  assert.deepEqual(mapTouched(["docs/x.md", "package.json"], repo), ["a", "b"]);
+  assert.deepEqual(mapTouched(["README.mdx"], repo), ["a", "b"], "a file prefix matches only that file");
+});
+
 const DIFF_API = [/git -C \S+ diff --name-only origin\/main\.\.\.HEAD/, { stdout: "apps/api/x.ts\n" }];
 
 test("gate passes: tests, exercise, baseline, release check, approved", async () => {
@@ -162,6 +171,41 @@ test("gate passes: tests, exercise, baseline, release check, approved", async ()
     assert.deepEqual(failed(g), []);
     assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"));
     assert.ok(d.calls.includes("docker exec feat-api sh -c npx changeset status"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a docs-only diff runs no service tests and passes without skip_tests; the release check still runs", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([[/diff --name-only/, { stdout: "docs/a.md\n.changeset/b.md\nREADME.md\n" }]]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.deepEqual(g.checks.filter((c) => /^(test|baseline) /.test(c.name)), []);
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npx changeset status"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: docs plus code tests only the code's service", async () => {
+  const ws = icmWorkspace();
+  try {
+    const g = await gate(ws, deps([[/diff --name-only/, { stdout: "docs/a.md\napps/api/x.ts\n" }]]));
+    assert.deepEqual(failed(g), []);
+    assert.deepEqual(g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name), ["test api"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: an unmapped non-doc file still touches every service", async () => {
+  const ws = icmWorkspace();
+  try {
+    const g = await gate(ws, deps([[/diff --name-only/, { stdout: "docs/a.md\npackage.json\n" }]]));
+    assert.deepEqual(g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name), ["test api", "test lib"]);
+    assert.deepEqual(failed(g), ["test lib"]);
   } finally {
     clean(ws);
   }

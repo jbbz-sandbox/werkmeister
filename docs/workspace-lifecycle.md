@@ -90,7 +90,7 @@ The first `#` heading is the PR title and the rest is the body. The person sets 
 | release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `sandbox pr status` still waits for the release tag. |
 | approved | `status: approved` |
 
-**Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix. A file under no mapping marks every service in the repo as touched.
+**Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix. A file under one of the repo's `no_service_paths` (registry `repo:`, below) touches no service, so a docs-only diff runs no service tests; the release check still runs. Any other file under no mapping marks every service in the repo as touched.
 
 The test commands also appear in `.sandbox/sandbox-context.md` under "Test commands".
 
@@ -103,6 +103,7 @@ repo:
   ship: tag                                   # merge (default) | tag
   release_tag: "@jbbz-sandbox/sandbox-cli@*"  # glob for git tag --list; required for ship: tag
   release_check: npx changeset status --since=origin/main
+  no_service_paths: [docs, .changeset, .gitignore, README.md]  # prefixes that touch no service in the gate
 ```
 
 `sandbox registry sync` merges this into `repos.<repo>` of `~/.sandbox/services.yaml`.
