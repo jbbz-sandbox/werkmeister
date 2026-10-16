@@ -10,7 +10,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, onTestFinished } from "vitest";
 
 const CLI_ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -22,6 +22,7 @@ it("dist/mcp.js answers initialize over stdio", async () => {
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...process.env, SANDBOX_ROOT: CLI_ROOT },
   });
+  onTestFinished(() => void child.kill());
   let stderr = "";
   child.stderr.on("data", (d) => (stderr += d));
 
@@ -32,8 +33,9 @@ it("dist/mcp.js answers initialize over stdio", async () => {
       const nl = buf.indexOf("\n");
       if (nl >= 0) resolve(buf.slice(0, nl));
     });
+    // No timer of its own: the suite's testTimeout is the one deadline. A 10 s timer here fired
+    // first whenever load slowed the 3.5 MB bundle's boot (#206).
     child.on("exit", (code) => reject(new Error(`exited ${code}: ${stderr}`)));
-    setTimeout(() => reject(new Error(`no response in 10s: ${stderr}`)), 10_000);
   });
 
   child.stdin.write(
@@ -49,10 +51,6 @@ it("dist/mcp.js answers initialize over stdio", async () => {
     }) + "\n",
   );
 
-  try {
-    const reply = JSON.parse(await firstLine);
-    expect(reply.result.serverInfo.name).toBe("sandbox");
-  } finally {
-    child.kill();
-  }
-}, 15_000);
+  const reply = JSON.parse(await firstLine);
+  expect(reply.result.serverInfo.name).toBe("sandbox");
+});
