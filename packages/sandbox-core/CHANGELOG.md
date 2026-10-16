@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.9.1
+
+### Patch Changes
+
+- 304bb5c: `sandbox close-out` and `sandbox remove-workspace` now remove the workspace's per-feature Docker volumes (`docker compose down --volumes`) when they delete it, instead of leaving `<feature>-node-modules` and `<feature>-tools` behind. Plain `sandbox down` still keeps them.
+
 ## 0.9.0
 
 ### Minor Changes
