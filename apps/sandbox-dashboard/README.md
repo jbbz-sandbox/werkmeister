@@ -18,7 +18,7 @@ model's view is tier-independent.
 |------|------|---------|
 | 1 | Claude Desktop | Inline MCP App (`ui://`): `dist/mcp-app.html` (create form), `dist/mcp-list.html` (workspace dashboard) |
 | 2 | Cowork | Live artifact `dist/workspace-list.artifact.html` — manual install via the `install-workspace-dashboard` skill; MCP prefix is read from its own meta block (source: `src/artifact-meta.json`) |
-| 3 | Claude Code CLI / VS Code | Localhost browser: `open-workspaces-ui` serves `dist/browser.html` (Workspaces / New workspace / Open PRs tabs); the `workspace` tool auto-falls-back to `dist/form.html` (blocking create form, `lib/localhost-form.ts`) |
+| 3 | Claude Code CLI / VS Code | Localhost browser: `open-workspaces-ui` serves `dist/browser.html` (Workspaces / New workspace / Open PRs tabs); the `workspace` tool auto-falls-back to `dist/form.html` (blocking create form, `src/lib/localhost-form.ts`) |
 | 4 | Anything else | Markdown/text from the same tools |
 
 All five UI bundles are single-file (`viteSingleFile`) and fully
@@ -54,7 +54,7 @@ The CLI owns the inputs and the create logic:
 
 - **Form fields** come from `getFormSchema` in sandbox-core — a render-ready
   RJSF bundle (`{schema, uiSchema, formData, title}`) built from the same prompt
-  definitions as the terminal wizard (`packages/sandbox-core/workspace_prompts.ts`,
+  definitions as the terminal wizard (`packages/sandbox-core/src/workspace_prompts.ts`,
   converted by `form_schema.ts`). Change a prompt there and every form tracks it.
 - **Creation** runs `sandbox workspace <feature> [--flag value …]`; form keys
   map 1:1 onto CLI flags. The CLI validates, refuses existing branches, and
@@ -64,15 +64,15 @@ The CLI owns the inputs and the create logic:
 
 | File | Role |
 |------|------|
-| `server.ts` | All tool registrations + `ui://` resources + capability routing |
-| `main.ts` | stdio (Desktop / plugin) and HTTP entry; HTTP mode also serves the dashboard |
-| `form-cli.ts` | `sandbox workspace --browser-form` — the no-MCP standalone form path |
-| `lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
-| `lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
-| `lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
-| `lib/markdown.ts` · `lib/workspace-search.ts` | markdown-it config (`html:false`); workspace fuzzy match |
+| `src/server.ts` | All tool registrations + `ui://` resources + capability routing |
+| `src/main.ts` | stdio (Desktop / plugin) and HTTP entry; HTTP mode also serves the dashboard |
+| `src/form-cli.ts` | `sandbox workspace --browser-form` — the no-MCP standalone form path |
+| `src/lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
+| `src/lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
+| `src/lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
+| `src/lib/markdown.ts` · `src/lib/workspace-search.ts` | markdown-it config (`html:false`); workspace fuzzy match |
 | `sandbox-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
-| `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
+| other `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
 
 ## Build & test
 
@@ -80,10 +80,10 @@ The CLI owns the inputs and the create logic:
 npm install                      # at the repo root (npm workspaces)
 cd apps/sandbox-dashboard
 npm run build                    # typecheck + 5 UI bundles + server → dist/
-node lib/localhost-form.smoke.mjs   # and the other lib/*.smoke.mjs
+node test/localhost-form.smoke.mjs  # and the other test/*.smoke.mjs
 ```
 
-All ten `lib/*.smoke.mjs` pass. Seven of them exercise `sandbox-core`, so
+All ten `test/*.smoke.mjs` pass. Seven of them exercise `sandbox-core`, so
 `packages/sandbox-core` must be built first (`npm run build` there, or at the
 repo root) — they import the package by name, never by relative path.
 

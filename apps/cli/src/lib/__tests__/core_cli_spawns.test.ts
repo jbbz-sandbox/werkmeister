@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 
 const CORE = path.resolve(
   fileURLToPath(import.meta.url),
-  "../../../../../../packages/sandbox-core",
+  "../../../../../../packages/sandbox-core/src",
 );
 
 /** The function each `resolveSandboxBin()` call in `src` sits inside. */

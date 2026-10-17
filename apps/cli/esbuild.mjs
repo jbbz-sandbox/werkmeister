@@ -53,7 +53,7 @@ const options = {
     { in: "src/main.ts", out: "main" },
     { in: "src/lib/gate.ts", out: "lib/gate" },
     { in: "src/lib/pr_guard.ts", out: "lib/pr_guard" },
-    { in: "../mcp/main.ts", out: "mcp" },
+    { in: "../mcp/src/main.ts", out: "mcp" },
   ],
   bundle: true,
   outdir: "dist",

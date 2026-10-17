@@ -57,7 +57,7 @@ Single source of truth for all standards content, in its own repo
 in `~/.sandbox/config.yaml` — the CLI is the machinery, the tree is an org's content.
 Defaults to `<sandbox root>/docs/standards` when unset, which no longer exists in this
 repo, so an unconfigured install resolves zero modules. Loader:
-`packages/sandbox-core/standards.ts::loadStandardsModules`. Two recognized shapes:
+`packages/sandbox-core/src/standards.ts::loadStandardsModules`. Two recognized shapes:
 
 - directory: `<domain>/STANDARD.md` (+ optional `references/*.md`)
 - flat: `<key>.md`, where `<key>` is lowercase kebab (so a `README.md` at the tree
@@ -113,11 +113,11 @@ task_signatures:           # optional; case-insensitive substrings matched again
   graduate` scaffolds a standard entry with `TODO(graduate)` markers; the `sb-author` skill
   fills them; the validator blocks committing unfilled markers.
   Eligibility is computed from *content shape* — a STANDARD.md carrying both `## Rules` and
-  `## Don't` (`packages/sandbox-core/graduate.ts::eligibleDomains`), not a fixed list.
+  `## Don't` (`packages/sandbox-core/src/graduate.ts::eligibleDomains`), not a fixed list.
 
 ### 3.3 Universal standards
 
-`UNIVERSAL_STANDARDS = ["comments", "engineering"]` (`packages/sandbox-core/standards.ts`). Tuple
+`UNIVERSAL_STANDARDS = ["comments", "engineering"]` (`packages/sandbox-core/src/standards.ts`). Tuple
 order is semantic (base first). Universals are always active in every workspace, ungated by
 file type (`applies_to: ["**/*"]`), never listed in any archetype's `standards:`, loaded at
 implement-phase entry, and always included in post-compaction re-injection when anything
@@ -152,7 +152,7 @@ services.yaml:  repos.<repo>.services  →  service.archetype  →  archetypes.<
    repo spanning ui+graphql+api would otherwise activate everything for every workspace.
 2. Union each candidate service's archetype `standards:` keys. A legacy bare `standards: [ui]`
    on a service is normalized into an anonymous archetype by
-   `packages/sandbox-core/archetypes.ts` — both forms coexist.
+   `packages/sandbox-core/src/archetypes.ts` — both forms coexist.
 3. Apply `.sandbox/workspace.yml` `standards_override: {add: [...], remove: [...]}` — the
    durable per-workspace edit surface that survives regeneration.
 4. Add `UNIVERSAL_STANDARDS`; intersect with modules that actually exist.
@@ -202,7 +202,7 @@ the task as given is raised to the user, never silently resolved.
 
 ## 5. Delivery artifacts
 
-These artifacts are written by the `jit` context strategy (`packages/sandbox-core/strategies/jit.ts`); `context_strategy: jit` in `workspace.yml` selects it (the default for new workspaces is `icm`).
+These artifacts are written by the `jit` context strategy (`packages/sandbox-core/src/strategies/jit.ts`); `context_strategy: jit` in `workspace.yml` selects it (the default for new workspaces is `icm`).
 
 Everything below is **generated or copied into the workspace** at `sandbox init-workspace` —
 nothing is distributed through a plugin. Projection scopes the skills to the sessions they
@@ -218,7 +218,7 @@ hook runs `sandbox skills check` and, only when it reports drift, `sandbox skill
 
 ### 5.1 Generated domain skills — `.claude/skills/sb-<domain>-standard/`
 
-Rendered on the fly from the standards tree by `packages/sandbox-core/skill_gen.ts`:
+Rendered on the fly from the standards tree by `packages/sandbox-core/src/skill_gen.ts`:
 
 - `description:` is the composed trigger gate: `Sandbox <summary> Use when EDITING,
   IMPLEMENTING[, OR REVIEWING] <domain> code — files matching <applies_to globs>. Not during
@@ -247,7 +247,7 @@ Rendered on the fly from the standards tree by `packages/sandbox-core/skill_gen.
 
 ### 5.3 Workspace `CLAUDE.md` — the compiled routing table
 
-`packages/sandbox-core/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
+`packages/sandbox-core/src/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
 contains the Active table (`| Standard | Skill | Loads on |`, where "Loads on" = `applies_to`
 globs or "any code edit") and the by-phase table (`| Phase | Invoke first | Loads |`), which is
 the only statement of the phase chain. The table's rows come from the workspace's `work_type` (`workspace_prompts.ts::WORK_TYPE_PHASES`,
@@ -267,7 +267,7 @@ The `CLAUDE.md` is a **compiled projection — never hand-edited**, and it holds
 state: it *points* at `.sandbox/notes/` rather than containing handoff content, so
 regeneration can never clobber working state.
 
-### 5.4 Generated agents — `.claude/agents/` (`packages/sandbox-core/agent_gen.ts`)
+### 5.4 Generated agents — `.claude/agents/` (`packages/sandbox-core/src/agent_gen.ts`)
 
 Principle: **phase gates tools, archetype gates context.** They are orthogonal — composed,
 never cross-producted, so a 2-archetype workspace generates ~5–7 agent definitions, not 30.
@@ -296,7 +296,7 @@ user-invoked (no autonomous chaining), every return contract includes open quest
 main agent surfaces before dispatching the next phase, and **implement stays in the main
 agent** where the user watches and corrects live.
 
-### 5.5 MCP projection — `.mcp.json` (`packages/sandbox-core/mcp_gen.ts`)
+### 5.5 MCP projection — `.mcp.json` (`packages/sandbox-core/src/mcp_gen.ts`)
 
 The union of present archetypes' `mcp_servers` is written to a project-scope `.mcp.json` at
 the workspace root — the surface every launch path respects. `mcp_servers` unions across
@@ -308,7 +308,7 @@ Server *definitions* live in the top-level `mcp_servers:` registry in services.y
 generator's managed namespace is the registry's names — added, refreshed, pruned. User-added
 servers under other names are preserved; unparseable files are left untouched.
 
-### 5.6 Generated hooks — `.claude/settings.json` (`packages/sandbox-core/hooks_gen.ts`)
+### 5.6 Generated hooks — `.claude/settings.json` (`packages/sandbox-core/src/hooks_gen.ts`)
 
 Two managed hooks, merged marker-based into the user's settings (stale managed entries are
 replaced, everything else preserved, malformed user JSON left untouched):
@@ -330,7 +330,7 @@ hooks unless `--bare`.
 
 Feature-lifetime working state, not documentation: notes live and die with the workspace. One
 note per file, `NNN-<type>-<slug>.md`, ordered by creation. Conventions in
-[notes-conventions.md](notes-conventions.md); plumbing in `packages/sandbox-core/notes.ts`.
+[notes-conventions.md](notes-conventions.md); plumbing in `packages/sandbox-core/src/notes.ts`.
 
 ```yaml
 ---
@@ -534,7 +534,7 @@ the target — behavioral results are harness-specific and must be re-earned, no
 the target supports R7, deliver each rule with the precedence directive embedded (harness-7:
 content without precedence does not produce compliance).
 
-`packages/sandbox-core/strategies/icm.ts` is a worked example of R2/R3 with no hooks at all: the `icm` strategy delivers the same standards through a staged-folder pipeline the agent walks by itself.
+`packages/sandbox-core/src/strategies/icm.ts` is a worked example of R2/R3 with no hooks at all: the `icm` strategy delivers the same standards through a staged-folder pipeline the agent walks by itself.
 
 ## 12. Conventions when extending
 

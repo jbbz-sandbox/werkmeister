@@ -62,9 +62,9 @@ import {
 import { z } from "zod";
 import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
-// Works both from source (server.ts via tsx) and compiled (dist/server.js).
+// Works both from source (src/server.ts via tsx) and compiled (dist/server.js).
 const DIST_DIR = import.meta.filename.endsWith(".ts")
-  ? path.join(import.meta.dirname, "dist")
+  ? path.join(import.meta.dirname, "..", "dist")
   : import.meta.dirname;
 
 const RESOURCE_URI = "ui://workspace/mcp-app.html";

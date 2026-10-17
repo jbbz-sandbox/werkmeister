@@ -15,9 +15,9 @@
  * Built to dist/browser.html and served by lib/browser-ui.ts.
  */
 
-import { renderMarkdown } from "../lib/markdown.js";
 import { initCreateForm } from "./create-form.js";
 import { initHealthUI } from "./health-ui.js";
+import { renderMarkdown } from "./lib/markdown.js";
 import { initPrsUI } from "./prs-ui.js";
 import { initSandboxLinksUI } from "./sandbox-links-ui.js";
 import { injectCss } from "./theme.js";
