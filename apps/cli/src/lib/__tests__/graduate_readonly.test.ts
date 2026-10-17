@@ -27,7 +27,7 @@ function writeDomain(): void {
 }
 
 /** A `decision` note in the shape `lib/notes.parseNote()` produces. */
-function note(): Record<string, any> {
+function note(): Record<string, unknown> {
   const notePath = path.join(tmp, "003-decision-widget-sizing.md");
   fs.writeFileSync(notePath, "---\ntype: decision\nstatus: open\n---\n\n# Widget sizing\n");
   return {

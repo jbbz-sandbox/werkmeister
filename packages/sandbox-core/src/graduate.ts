@@ -249,7 +249,7 @@ export function graduateNote(
   }
 
   const meta = modules[domain];
-  const standardPath: string = meta["path"];
+  const standardPath = meta["path"] as string;
   let body = fs.readFileSync(standardPath, "utf8");
 
   const resolvedSlug = slug || note["slug"];

@@ -68,7 +68,9 @@ describe("buildInterceptRows", () => {
   it("names the owning feature on another feature's row for the same deployment", () => {
     // One intercept per deployment: feature `other` must not be told it owns this.
     const rows = buildInterceptRows(SLOTS, REGISTRY, state([["frontend", "test-me"]]));
-    const otherRow = rows.find((r) => r.feature === "other" && r.service === "frontend")!;
+    const otherRow = rows.find(
+      (r) => r.feature === "other" && r.service === "frontend",
+    ) as (typeof rows)[number];
     expect(otherRow.intercepted).toBe(true);
     expect(otherRow.intercepted_by).toBe("test-me");
   });

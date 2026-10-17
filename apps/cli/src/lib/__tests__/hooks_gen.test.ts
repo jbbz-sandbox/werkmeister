@@ -11,6 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   buildPrGuardEntry,
+  type HookEntry,
   removeWorkspaceHooks,
   SESSION_START_COMMAND,
   writePrGuardHook,
@@ -33,7 +34,7 @@ function settingsWith(sessionStart: unknown[]): string {
   return root;
 }
 
-function sessionStartOf(root: string): any[] {
+function sessionStartOf(root: string): HookEntry[] {
   const raw = fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8");
   return JSON.parse(raw).hooks.SessionStart;
 }
@@ -90,7 +91,7 @@ describe("writeWorkspaceHooks", () => {
 // The PR guard is the one hook every strategy installs (docs/workspace-lifecycle.md):
 // it must merge idempotently next to user entries and outlive removal of the JIT hooks.
 describe("writePrGuardHook", () => {
-  const preToolUseOf = (root: string): any[] =>
+  const preToolUseOf = (root: string): HookEntry[] =>
     JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")).hooks
       .PreToolUse;
   const mine = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] };

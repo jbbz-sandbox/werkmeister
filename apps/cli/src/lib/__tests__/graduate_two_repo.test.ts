@@ -24,13 +24,13 @@ function git(...args: string[]): void {
   execFileSync("git", ["-C", standardsDir, ...args], { stdio: "ignore" });
 }
 
-function seedNote(): Record<string, any> {
+function seedNote(): Record<string, unknown> {
   const notePath = path.join(workspace, ".sandbox", "notes", "003-decision-widget-sizing.md");
   fs.writeFileSync(
     notePath,
     "---\ntype: decision\nphase: implement\nauthor: main\nstatus: open\n---\n\n# Widget sizing\n",
   );
-  return parseNote(notePath) as unknown as Record<string, any>;
+  return parseNote(notePath) as unknown as Record<string, unknown>;
 }
 
 beforeEach(() => {

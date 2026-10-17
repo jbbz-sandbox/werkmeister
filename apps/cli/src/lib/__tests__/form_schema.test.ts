@@ -1,9 +1,17 @@
 /** buildFormSchema (RJSF bundle). */
 
-import { buildFormSchema } from "sandbox-core/form_schema";
+import {
+  buildFormSchema,
+  type FormBundle,
+  type PromptEntry,
+  type PromptSpecJson,
+} from "sandbox-core/form_schema";
 import { describe, expect, it } from "vitest";
 
-function spec(prompts: Record<string, any>[], name = "demo"): Record<string, any> {
+/** One field's uiSchema entry (`uiSchema` also holds the `ui:order` list, so it is typed `unknown`). */
+const uiOf = (out: FormBundle, key: string) => out.uiSchema[key] as Record<string, unknown>;
+
+function spec(prompts: PromptEntry[], name = "demo"): PromptSpecJson {
   return { workspace_name: name, workspace_root: `/ws/${name}`, prompts };
 }
 
@@ -30,8 +38,8 @@ describe("buildFormSchema", () => {
     expect(prop.type).toBe("string");
     expect(prop.minLength).toBe(1);
     expect(prop.pattern).toBe("^[a-z-]+$"); // required → pattern as-is
-    expect(out.uiSchema.feature["ui:placeholder"]).toBe("mdx-blog");
-    expect(out.uiSchema.feature["ui:autofocus"]).toBe(true); // first field
+    expect(uiOf(out, "feature")["ui:placeholder"]).toBe("mdx-blog");
+    expect(uiOf(out, "feature")["ui:autofocus"]).toBe(true); // first field
     expect(out.formData.feature).toBe("my-feat");
   });
 
@@ -70,8 +78,8 @@ describe("buildFormSchema", () => {
     const prop = out.schema.properties.services;
     expect(prop.type).toBe("array");
     expect(prop.uniqueItems).toBe(true);
-    expect(prop.items.enum).toEqual(["backend", "frontend"]);
-    expect(out.uiSchema.services["ui:widget"]).toBe("checkboxes");
+    expect(prop.items?.enum).toEqual(["backend", "frontend"]);
+    expect(uiOf(out, "services")["ui:widget"]).toBe("checkboxes");
     expect(out.formData.services).toEqual(["frontend"]); // comma split → list
   });
 
@@ -81,7 +89,7 @@ describe("buildFormSchema", () => {
     );
     const prop = out.schema.properties.labels;
     expect(prop.type).toBe("string");
-    expect(!("labels" in out.uiSchema) || out.uiSchema.labels["ui:widget"] !== "checkboxes").toBe(
+    expect(!("labels" in out.uiSchema) || uiOf(out, "labels")["ui:widget"] !== "checkboxes").toBe(
       true,
     );
     expect(out.formData.labels).toBe("one,two");
@@ -102,7 +110,7 @@ describe("buildFormSchema", () => {
     const prop = out.schema.properties.starting_prompt;
     expect(prop.type).toBe("string");
     expect("enum" in prop).toBe(false);
-    expect(out.uiSchema.starting_prompt["ui:widget"]).toBe("textarea");
+    expect(uiOf(out, "starting_prompt")["ui:widget"]).toBe("textarea");
     expect(out.schema.required ?? []).not.toContain("starting_prompt");
   });
 
@@ -150,7 +158,7 @@ describe("buildFormSchema", () => {
         },
       ]),
     );
-    const ui = out.uiSchema.starting_prompt;
+    const ui = uiOf(out, "starting_prompt");
     expect(ui["ui:widget"]).toBe("textarea");
     expect(ui["ui:options"]).toEqual({
       refinable: true,
@@ -164,8 +172,8 @@ describe("buildFormSchema", () => {
         { key: "notes", label: "Notes", multiline: true, accept_empty: true, resolved: false },
       ]),
     );
-    expect(out.uiSchema.notes["ui:widget"]).toBe("textarea");
-    expect("ui:options" in out.uiSchema.notes).toBe(false);
+    expect(uiOf(out, "notes")["ui:widget"]).toBe("textarea");
+    expect("ui:options" in uiOf(out, "notes")).toBe(false);
   });
 
   it("single choice becomes enum dropdown", () => {
