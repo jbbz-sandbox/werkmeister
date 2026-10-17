@@ -11,6 +11,9 @@ import { test } from "node:test";
 import {
   abandonWorkspace,
   adoptPr,
+  callbackFields,
+  callbackMessage,
+  claimCallbacks,
   closeOut,
   lifecycleOf,
   mapTouched,
@@ -21,6 +24,7 @@ import {
   refreshPrStatus,
   removalBlockers,
   runGate,
+  watchPrs,
   writePrFields,
 } from "./dist/pr_lifecycle.js";
 import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
@@ -103,6 +107,7 @@ function deps(table, over = {}) {
     remove: async () => ({ output: "removed" }),
     terminals: async () => [],
     sourceOf: async () => "/src/app",
+    session: async () => ({}),
     ...over,
   };
 }
@@ -376,6 +381,7 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     let updated = null;
     let recorded = null;
     const d = deps([DIFF_API, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]], {
+      session: async () => ({ session: "s-1", host_session: "local_h1" }),
       tracker: {
         fetchIssue: async () => null,
         updateIssue: async (ref, u) => (updated = [ref, u.status]),
@@ -390,6 +396,8 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     const [f] = readPrFiles(ws);
     assert.equal(f.fm.status, "open");
     assert.equal(f.fm.url, "https://github.com/o/app/pull/9");
+    assert.equal(f.fm.session, "s-1", "the callback rides on the PR file (#236)");
+    assert.equal(f.fm.host_session, "local_h1");
     assert.deepEqual(updated, ["o/app#7", "In Development"]);
     assert.deepEqual(
       recorded,
@@ -818,5 +826,185 @@ test("adoptPr: refuses a closed-unmerged PR and an ambiguous repo", async () => 
     assert.deepEqual(readPrFiles(ws), []);
   } finally {
     clean(ws);
+  }
+});
+
+// ---- PR callbacks (#236) ---------------------------------------------------
+
+const URL9 = "https://github.com/o/app/pull/9";
+const MERGED = [
+  /^gh pr view/,
+  { stdout: JSON.stringify({ state: "MERGED", mergeCommit: { oid: "abc123" } }) },
+];
+const NO_TAG = [/tag --contains/, { stdout: "" }];
+const callbackFile = (extra = "") =>
+  prFile({ status: "open", extra: `url: ${URL9}\nsession: s-1\n${extra}` });
+const lockIn = (ws) => path.join(ws, "watch.lock");
+const claim = (ws, d, desktop = false) => claimCallbacks([ws], { desktop }, d, lockIn(ws));
+// Reading GitHub and tags only: never a merge, a close-out or a push.
+const onlyReads = (calls) => calls.every((c) => /^(gh pr view|git -C \S+ (fetch|tag) )/.test(c));
+
+test("callbackFields: both ids from the env, no host id outside the desktop app", async () => {
+  assert.deepEqual(
+    await callbackFields("/nowhere/ws", {
+      CLAUDE_CODE_SESSION_ID: "s-1",
+      CLAUDE_CODE_HOST_SESSION_ID: "local_h1",
+    }),
+    { session: "s-1", host_session: "local_h1" },
+  );
+  assert.deepEqual(await callbackFields("/nowhere/ws", { CLAUDE_CODE_SESSION_ID: "s-1" }), {
+    session: "s-1",
+  });
+});
+
+test("callbackMessage: the issue's texts", () => {
+  assert.equal(
+    callbackMessage("merged", URL9),
+    `PR ${URL9} merged. Run \`sandbox pr status\`, then follow the workspace router.`,
+  );
+  assert.equal(
+    callbackMessage("shipped", URL9, "v1.2.0"),
+    `PR ${URL9} shipped in v1.2.0. Ask the person whether to run \`sandbox close-out\`.`,
+  );
+  assert.equal(callbackMessage("closed", URL9), `PR ${URL9} was closed. Report it to the person.`);
+  assert.equal(callbackMessage("open", URL9), null);
+  assert.equal(callbackMessage("abandoned", URL9), null);
+});
+
+test("claimCallbacks: ship: tag — merged once, then shipped with its tag, then the callback is gone", async () => {
+  const ws = icmWorkspace({ files: { app: callbackFile() } });
+  try {
+    const d1 = deps([MERGED, NO_TAG]);
+    const first = await claim(ws, d1);
+    assert.deepEqual(
+      first.claimed.map((c) => [c.session, c.hostSession, c.message]),
+      [["s-1", null, callbackMessage("merged", URL9)]],
+    );
+    assert.equal(readPrFiles(ws)[0].fm.notified, "merged");
+
+    const d2 = deps([NO_TAG]);
+    assert.deepEqual((await claim(ws, d2)).claimed, [], "no second merged message");
+
+    const d3 = deps([[/tag --contains abc123/, { stdout: "v1.2.0\n" }]]);
+    const shipped = await claim(ws, d3);
+    assert.deepEqual(
+      shipped.claimed.map((c) => c.message),
+      [callbackMessage("shipped", URL9, "v1.2.0")],
+    );
+    const fm = readPrFiles(ws)[0].fm;
+    assert.equal(fm.status, "shipped");
+    assert.ok(!("session" in fm) && !("notified" in fm), "settled: the callback is removed");
+
+    const d4 = deps([]);
+    assert.deepEqual((await claim(ws, d4)).claimed, []);
+    assert.deepEqual(d4.calls, [], "a removed callback costs no gh call");
+    for (const d of [d1, d2, d3]) assert.ok(onlyReads(d.calls), d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: closed without merge tells the session and drops the callback", async () => {
+  const ws = icmWorkspace({ files: { app: callbackFile() } });
+  try {
+    const d = deps([[/^gh pr view/, { stdout: JSON.stringify({ state: "CLOSED" }) }]]);
+    const r = await claim(ws, d);
+    assert.deepEqual(
+      r.claimed.map((c) => c.message),
+      [callbackMessage("closed", URL9)],
+    );
+    assert.ok(!("session" in readPrFiles(ws)[0].fm));
+    assert.ok(onlyReads(d.calls), d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: ship: merge goes open → shipped in one pass and owes one message", async () => {
+  const ws = icmWorkspace({ files: { app: callbackFile() } });
+  try {
+    const d = deps([MERGED], { repos: { app: { ...REGISTRY.repos.app, ship: "merge" } } });
+    const r = await claim(ws, d);
+    assert.deepEqual(
+      r.claimed.map((c) => c.message),
+      [callbackMessage("shipped", URL9)],
+    );
+    assert.ok(!("session" in readPrFiles(ws)[0].fm));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a desktop callback is the mod's alone", async () => {
+  const ws = icmWorkspace({ files: { app: callbackFile("host_session: local_h1\n") } });
+  try {
+    const cli = deps([MERGED]);
+    assert.deepEqual((await claim(ws, cli)).claimed, []);
+    assert.deepEqual(cli.calls, [], "the CLI pass does not even refresh it");
+    assert.equal(readPrFiles(ws)[0].fm.status, "open");
+    const mod = await claim(ws, deps([MERGED, NO_TAG]), true);
+    assert.deepEqual(
+      mod.claimed.map((c) => c.hostSession),
+      ["local_h1"],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a held lock claims nothing; a stale one is taken over", async () => {
+  const ws = icmWorkspace({ files: { app: callbackFile() } });
+  try {
+    fs.writeFileSync(lockIn(ws), "");
+    const held = deps([MERGED]);
+    assert.deepEqual((await claim(ws, held)).claimed, []);
+    assert.deepEqual(held.calls, []);
+    assert.ok(fs.existsSync(lockIn(ws)), "another pass's lock is left alone");
+    const old = new Date(Date.now() - 20 * 60_000);
+    fs.utimesSync(lockIn(ws), old, old);
+    assert.equal((await claim(ws, deps([MERGED, NO_TAG]))).claimed.length, 1);
+    assert.ok(!fs.existsSync(lockIn(ws)), "released after the pass");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("watchPrs: headless claims are sent, desktop ones returned, a failed send is reported", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-watch-"));
+  const prev = process.env.SANDBOX_WORKSPACES_ROOT;
+  process.env.SANDBOX_WORKSPACES_ROOT = root;
+  fs.renameSync(icmWorkspace({ files: { app: callbackFile() } }), path.join(root, "a-ws"));
+  fs.renameSync(
+    icmWorkspace({ files: { app: callbackFile("host_session: local_h1\n") } }),
+    path.join(root, "b-desk"),
+  );
+  try {
+    await withSandboxHome(async () => {
+      const sent = [];
+      const r = await watchPrs({ desktop: true }, deps([MERGED, NO_TAG]), async (cb) => {
+        sent.push(cb.session);
+      });
+      assert.deepEqual(sent, ["s-1"]);
+      assert.deepEqual(
+        r.desktop.map((c) => c.hostSession),
+        ["local_h1"],
+      );
+
+      fs.writeFileSync(
+        path.join(root, "a-ws", "stages", "03_propose", "output", "pr-app.md"),
+        callbackFile(),
+      );
+      const failed = await watchPrs({ desktop: false }, deps([MERGED, NO_TAG]), async () => {
+        throw new Error("session s-1 is gone");
+      });
+      assert.ok(
+        failed.lines.includes(`app: could not resume session s-1: session s-1 is gone`),
+        failed.lines.join("\n"),
+      );
+    });
+  } finally {
+    if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
+    else process.env.SANDBOX_WORKSPACES_ROOT = prev;
+    clean(root);
   }
 });

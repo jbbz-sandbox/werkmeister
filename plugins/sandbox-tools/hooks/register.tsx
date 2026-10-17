@@ -72,6 +72,7 @@ try {
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
     'pr-status': async () => ({ command: (await core.refreshPrStatus(args.path)).lines.join('\\n') || 'no PR files' }),
+    'pr-watch': () => core.watchPrs({ desktop: true }),
     'close-out': () => core.closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {}),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
@@ -131,6 +132,8 @@ async function core<T>(
 export const POLL_MS = 5000;
 /** PRs refresh this often: each workspace × repo is a `gh` network call. */
 export const PR_POLL_MS = 60000;
+/** PR callbacks (#236): every desktop session runs a pass this often; the core's lock lets one through. */
+export const CALLBACK_POLL_MS = 600000;
 
 const ROWS = { plugin: "sandbox-tools", key: "rows" } as const;
 const ERROR = { plugin: "sandbox-tools", key: "error" } as const;
@@ -1115,6 +1118,56 @@ function stopPolling(): void {
   timers = [];
 }
 
+type PrCallback = { dir: string; url: string; hostSession: string; message: string };
+
+let callbackTicking = false;
+
+/**
+ * One `pr-watch` pass: the core resumes terminal sessions itself and hands back the desktop ones,
+ * which only the app's messaging reaches. The core already marked them sent, so a failure is logged, not retried.
+ */
+async function callbackTick($: EngineInterface): Promise<void> {
+  if (callbackTicking) return;
+  callbackTicking = true;
+  try {
+    const r = await core<{ desktop: PrCallback[] }>($, "pr-watch", {}, 120000);
+    if (!r.desktop.length) return;
+    const self = payload<{ sessionId: string }>(
+      await $.mcp.call("ccd_session_mgmt", "get_session", { session_id: "self" }),
+    ).sessionId;
+    for (const cb of r.desktop) {
+      try {
+        // send_message refuses the calling session, so a callback for this one is its own prompt.
+        if (cb.hostSession === self) await $.prompt.submit({ text: cb.message });
+        else {
+          const sent = await $.mcp.call("ccd_session_mgmt", "send_message", {
+            session_id: cb.hostSession,
+            message: cb.message,
+          });
+          const text = sent.content.map((c) => c.text ?? "").join(" ");
+          if (sent.isError || !/delivery: (delivered|queued)/.test(text)) throw new Error(text);
+        }
+      } catch (e) {
+        $.ui.log(
+          `PR callback for ${cb.url} not delivered to ${cb.hostSession}: ${(e as Error).message}`,
+        );
+      }
+    }
+  } catch (e) {
+    $.ui.log(`PR callback pass failed: ${(e as Error).message}`);
+  } finally {
+    callbackTicking = false;
+  }
+}
+
+let callbackTimer: { cancel: () => void } | null = null;
+
+function startCallbacks($: EngineInterface): void {
+  callbackTimer?.cancel();
+  callbackTimer = $.clock.every(CALLBACK_POLL_MS, () => void callbackTick($));
+  void callbackTick($);
+}
+
 async function openPane($: EngineInterface): Promise<void> {
   await $.ui.open({ id: PANE, title: "Sandbox workspaces" });
   await tick($);
@@ -1198,6 +1251,7 @@ export const register: Register = (on) => {
       void prTick($);
     } else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($);
     if (e.surface === "desktop" && (await inWorkspace($, e.cwd))) await fileInGroup($);
+    if (e.surface === "desktop") startCallbacks($);
     return next(e);
   });
 

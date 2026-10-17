@@ -1655,3 +1655,46 @@ test("Create checks the draft with sandbox-core's rules: no service or repo mean
   expect(w.calls.some((c) => c.key === `${WS}/create-workspace`)).toBe(false);
   await ui.unmount();
 });
+
+test("a desktop session runs the PR callback pass at start and every 10 min, and sends each desktop callback", async ($, on) => {
+  const submitted: string[] = [];
+  const w = world(on, {
+    [`${WS}/pr-watch`]: () =>
+      ok({
+        ok: true,
+        lines: [],
+        desktop: [
+          { dir: "app", url: "u1", hostSession: "local_other", message: "PR u1 merged." },
+          { dir: "app", url: "u2", hostSession: "local_me", message: "PR u2 was closed." },
+        ],
+      }),
+    "ccd_session_mgmt/get_session": () => ok(undefined, JSON.stringify({ sessionId: "local_me" })),
+    "ccd_session_mgmt/send_message": () =>
+      ok(undefined, "Message delivered. (delivery: delivered; message_id: m1)"),
+  });
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", () => ({ value: false }));
+  on("prompt.submit", (_$, e) => {
+    submitted.push(e.text);
+    return { text: e.text };
+  });
+  const passes = () => w.calls.filter((c) => c.key === `${WS}/pr-watch`).length;
+  const sends = () => w.calls.filter((c) => c.key === "ccd_session_mgmt/send_message");
+
+  await $.session.start({ cwd: "/elsewhere", surface: "terminal", isInteractive: true });
+  await w.clock.advance(600000);
+  expect(passes()).toBe(0);
+
+  await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
+  await w.clock.advance(0);
+  expect(passes()).toBe(1);
+  expect(sends().map((c) => c.args)).toEqual([
+    { session_id: "local_other", message: "PR u1 merged." },
+  ]);
+  // send_message refuses the calling session: its own callback is a prompt instead.
+  expect(submitted).toEqual(["PR u2 was closed."]);
+
+  await w.clock.advance(600000);
+  expect(passes()).toBe(2);
+});

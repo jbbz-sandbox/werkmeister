@@ -9,13 +9,16 @@
  *   open    gate each `approved` PR file, push, open the PR, record its URL
  *   status  record merged / shipped / closed from GitHub and release tags
  *   adopt   write the PR file for a fix that landed outside the workspace
+ *   watch   from anywhere: resume each terminal session whose PR merged, shipped or closed
+ *           (desktop sessions are the sandbox-tools mod's)
  */
 
-import { adoptPr, gatePrs, openPrs, refreshPrStatus } from "sandbox-core";
+import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "sandbox-core";
 import { findRecordRoot } from "sandbox-core/pr_guard";
 import { error } from "../lib/config.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
+  if (args.action === "watch") return print(await watchPrs({ desktop: false }), args);
   const ws = findRecordRoot(process.cwd());
   if (!ws) {
     error(
@@ -36,6 +39,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
         : args.action === "open"
           ? await openPrs(ws, repo)
           : { ok: true, ...(await refreshPrStatus(ws)) };
+  print(result, args);
+}
+
+function print(result: { ok: boolean; lines: string[] }, args: Record<string, unknown>): void {
   if (args.json) console.log(JSON.stringify(result, null, 2));
   else console.log(result.lines.join("\n"));
   if (!result.ok) process.exit(1);
