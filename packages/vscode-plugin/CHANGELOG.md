@@ -1,5 +1,13 @@
 # vscode-plugin
 
+## 0.11.0
+
+### Patch Changes
+
+- 2f106fc: Workspaces now get `compose.yml`, the Compose v2 preferred name, instead of `docker-compose.yml` (#224). An existing workspace's file is renamed on the next `sandbox init-workspace` or `sandbox up`; until then `down`, `logs` and `close-out` still read `docker-compose.yml`, so a running stack is never orphaned (Compose keys it by project `name:`, which is unchanged).
+- Updated dependencies [2f106fc]
+  - sandbox-core@0.11.0
+
 ## 0.10.1
 
 ### Patch Changes
