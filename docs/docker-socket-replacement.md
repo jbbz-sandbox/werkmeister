@@ -165,7 +165,7 @@ Measured on 2026-10-15 in workspace `sandbox-135-docker-socket-mount`, at `173ac
 - **Four test suites without host access.** A throwaway `node:22` container with only the
   generator's mounts: no socket, no `docker` CLI, no `~/.sandbox`, `~/.kube`, `~/repos` or
   `~/features`, running as root. Command:
-  `npx turbo run test --force --continue --filter=@jbbz-sandbox/sandbox-cli --filter=sandbox-core --filter=vscode-plugin --filter=sandbox-workspace-mcp-app`.
+  `npx turbo run test --force --continue --filter=werkmeister --filter=sandbox-core --filter=vscode-plugin --filter=sandbox-workspace-mcp-app`.
   The first run, with all four suites at once, timed out across the CLI suite under machine load.
   So `sandbox-cli` and `sandbox-core` were rerun alone. The baseline column is one run of all four
   suites at once, in today's `cli` container:

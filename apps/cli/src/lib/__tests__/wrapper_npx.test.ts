@@ -1,5 +1,5 @@
 /**
- * The `sandbox` wrapper's npx-bootstrap branch.
+ * The `werkmeister` wrapper's npx-bootstrap branch.
  *
  * npx resolves the CLI inside ~/.npm/_npx/<hash>/, a cache npm re-hashes on
  * every version change and garbage-collects. `setup`/`config` persist
@@ -19,19 +19,19 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const WRAPPER = path.resolve(fileURLToPath(import.meta.url), "../../../..", "sandbox");
+const WRAPPER = path.resolve(fileURLToPath(import.meta.url), "../../../..", "werkmeister");
 
 let tmp: string;
 
 /** Lay out a package dir at `pkgDir` holding a copy of the real wrapper. */
 function installWrapper(pkgDir: string): string {
   fs.mkdirSync(pkgDir, { recursive: true });
-  const wrapper = path.join(pkgDir, "sandbox");
+  const wrapper = path.join(pkgDir, "werkmeister");
   fs.copyFileSync(WRAPPER, wrapper);
   fs.chmodSync(wrapper, 0o755);
   fs.writeFileSync(
     path.join(pkgDir, "package.json"),
-    JSON.stringify({ name: "@jbbz-sandbox/sandbox-cli", version: "9.9.9" }),
+    JSON.stringify({ name: "werkmeister", version: "9.9.9" }),
   );
   return wrapper;
 }
@@ -86,7 +86,7 @@ afterEach(() => {
 // `turbo run test` -- so vitest's 5s default fails these on load, not on merit.
 const SPAWNS_BASH = 30_000;
 
-describe("sandbox wrapper: npx bootstrap", () => {
+describe("werkmeister wrapper: npx bootstrap", () => {
   it(
     "installs globally and execs the installed binary when run from npx's cache",
     () => {
@@ -94,19 +94,19 @@ describe("sandbox wrapper: npx bootstrap", () => {
       fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
       // Stand-in for the globally installed CLI: prove the wrapper reached it,
       // and that it forwarded argv.
-      fs.writeFileSync(path.join(prefix, "bin", "sandbox"), `#!/bin/bash\necho "GLOBAL-RAN $*"\n`);
-      fs.chmodSync(path.join(prefix, "bin", "sandbox"), 0o755);
+      fs.writeFileSync(path.join(prefix, "bin", "werkmeister"), `#!/bin/bash\necho "GLOBAL-RAN $*"\n`);
+      fs.chmodSync(path.join(prefix, "bin", "werkmeister"), 0o755);
 
       const stubs = path.join(tmp, "stubs");
       stubNpm(stubs, prefix);
       const wrapper = installWrapper(
-        path.join(tmp, "_npx", "deadbeef", "node_modules", "@jbbz-sandbox", "sandbox-cli"),
+        path.join(tmp, "_npx", "deadbeef", "node_modules", "werkmeister"),
       );
 
       const out = run(wrapper, ["setup", "--check"], stubs);
       // Pinned to the version npx resolved (9.9.9 here), not @latest — otherwise
       // `npx pkg@1.2.3 setup` would onboard the machine onto a different release.
-      expect(out).toContain("STUB-INSTALL install -g @jbbz-sandbox/sandbox-cli@9.9.9");
+      expect(out).toContain("STUB-INSTALL install -g werkmeister@9.9.9");
       expect(out).toContain("GLOBAL-RAN setup --check");
     },
     SPAWNS_BASH,
@@ -117,7 +117,7 @@ describe("sandbox wrapper: npx bootstrap", () => {
     stubNpm(stubs, path.join(tmp, "unused"));
     // No _npx in the path, and no dist/ — so it must fall through to the
     // not-built error rather than trying to install anything.
-    const wrapper = installWrapper(path.join(tmp, "lib", "node_modules", "sandbox-cli"));
+    const wrapper = installWrapper(path.join(tmp, "lib", "node_modules", "werkmeister"));
 
     expect(() => run(wrapper, ["--help"], stubs)).toThrowError(/CLI not built/);
   });
