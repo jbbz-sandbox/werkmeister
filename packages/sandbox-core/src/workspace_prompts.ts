@@ -19,6 +19,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
+import { COMPOSE_FILE } from "./compose_file.js";
 import { loadReposConfig, loadServices } from "./config.js";
 import type { PromptSpec } from "./global_config.js";
 import { issueIdOf, issueTracker } from "./issue_tracker.js";
@@ -416,7 +417,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Feature name (lowercase, hyphen-separated)",
     help:
       "Drives sandbox slot routing via the X-Feature cookie. " +
-      "No feature = no docker-compose.yml / sandbox-context.md.",
+      `No feature = no ${COMPOSE_FILE} / sandbox-context.md.`,
     acceptEmpty: false,
     recommended: true,
     pattern: "^[a-z0-9]+(-[a-z0-9]+)*$",

@@ -4,7 +4,7 @@
  * npx resolves the CLI inside ~/.npm/_npx/<hash>/, a cache npm re-hashes on
  * every version change and garbage-collects. `setup`/`config` persist
  * SANDBOX_ROOT into ~/.sandbox, and the compose generator bakes it into each
- * workspace's docker-compose.yml as a bind mount — so running from there pins
+ * workspace's compose.yml as a bind mount — so running from there pins
  * permanent state to a directory that will vanish. The wrapper installs
  * globally and hands off instead.
  *

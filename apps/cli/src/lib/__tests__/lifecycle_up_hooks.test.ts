@@ -8,6 +8,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import { SESSION_START_COMMAND } from "sandbox-core/hooks_gen";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
@@ -50,7 +51,7 @@ let root: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-hooks-"));
-  fs.writeFileSync(path.join(root, "docker-compose.yml"), "services: {}\n");
+  fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
   fs.writeFileSync(path.join(root, ".env"), "SANDBOX_SLOT=3\nSERVICES=\n");
   fs.mkdirSync(path.join(root, ".claude"));
   fs.writeFileSync(

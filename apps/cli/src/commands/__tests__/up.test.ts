@@ -90,10 +90,7 @@ describe("sandbox up", () => {
   it("lets every failure code propagate to main.ts's handler", async () => {
     // Reported once, by the handler — not twice, and not here. `up` has no
     // between-the-lines hint, which is what separates it from stop/restart.
-    const thrown = new SandboxError(
-      "No docker-compose.yml found in workspace: /tmp/ws",
-      "NO_COMPOSE",
-    );
+    const thrown = new SandboxError("No compose.yml found in workspace: /tmp/ws", "NO_COMPOSE");
     vi.mocked(upFeature).mockRejectedValue(thrown);
 
     await expect(go({ feature: "demo" })).rejects.toBe(thrown);

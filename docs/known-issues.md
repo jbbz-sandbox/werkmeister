@@ -472,7 +472,7 @@ The smoke's last assertion is that `composeLogsStream("no-such-feature-hopefully
 (a feature worktree, say): `composeFile()` finds no container for that feature and falls back
 to `resolveWorkspace()`, whose cwd branch returns `<workspaces_root>/<first path segment>`
 **regardless of the feature name** (`config.ts:295-306`). That workspace has a
-`docker-compose.yml`, so a child is spawned and the assertion fails.
+`compose.yml`, so a child is spawned and the assertion fails.
 
 **Symptom:** `npm test` at the repo root ends with `sandbox-core#test` failed and
 `expected null rather than a doomed child when the feature has no compose file`, while the

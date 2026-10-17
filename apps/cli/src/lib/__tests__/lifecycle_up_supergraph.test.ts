@@ -8,6 +8,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,7 +54,7 @@ let supergraph: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-supergraph-"));
-  fs.writeFileSync(path.join(root, "docker-compose.yml"), "services: {}\n");
+  fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
   // Slot 3 matches allocateSlot, so `up` takes the unchanged-slot path.
   fs.writeFileSync(path.join(root, ".env"), "SANDBOX_SLOT=3\nSERVICES=\n");
   fs.mkdirSync(path.join(root, ".sandbox"));

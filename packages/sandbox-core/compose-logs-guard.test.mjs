@@ -21,6 +21,6 @@ test("composeLogs warns and does not spawn when the feature holds no slot", asyn
   assert.match(text, /is not running \(no slot allocated\)/);
   assert.match(text, /Start it with: sandbox up no-such-feature-hopefully/);
   // The point of the guard: no compose invocation is announced, because none
-  // was attempted. Without it the caller gets a bare "no docker-compose.yml".
+  // was attempted. Without it the caller gets a bare "no compose.yml".
   assert.doesNotMatch(text, /Running: docker compose/);
 });

@@ -18,7 +18,7 @@ export SANDBOX_ROOT
 # SANDBOX_ROOT above resolved to ~/.npm/_npx/<hash>/..., which npm garbage-
 # collects and re-hashes on every version change. `setup` and `config` persist
 # that path into ~/.sandbox/config.yaml and env.sh, and the compose generator
-# bakes it into every workspace's docker-compose.yml as a bind mount, so running
+# bakes it into every workspace's compose.yml as a bind mount, so running
 # from the cache pins permanent state to a directory that is going to vanish.
 # Bootstrapping is the one thing npx is right for here: install, then exec the
 # stable copy. The re-exec cannot loop — the global path has no _npx in it.

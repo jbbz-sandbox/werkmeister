@@ -8,6 +8,7 @@
  * `.sandbox/issues-report.md`; each strategy's CLAUDE.md points at its copy.
  */
 
+import { COMPOSE_FILE } from "./compose_file.js";
 import { type IssueTrackerStrategy, issueTracker } from "./issue_tracker.js";
 
 export const SANDBOX_ISSUES_REPO = "jbbz-sandbox/sandbox";
@@ -52,7 +53,7 @@ File one when the person asks for it, or when you find work outside this workspa
 
 | Issue is about | File at | Command |
 |---|---|---|
-| the \`sandbox\` tool: CLI, MCP tools, plugin skills, generated files (\`.sandbox/\`, \`docker-compose.yml\`, \`.env\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | https://github.com/${SANDBOX_ISSUES_REPO}/issues | \`gh issue create -R ${SANDBOX_ISSUES_REPO} --label <label>\` |
+| the \`sandbox\` tool: CLI, MCP tools, plugin skills, generated files (\`.sandbox/\`, \`${COMPOSE_FILE}\`, \`.env\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | https://github.com/${SANDBOX_ISSUES_REPO}/issues | \`gh issue create -R ${SANDBOX_ISSUES_REPO} --label <label>\` |
 ${appRow}
 
 ## How

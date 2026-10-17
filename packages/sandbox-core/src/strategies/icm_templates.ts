@@ -6,6 +6,8 @@
  * quoted from sandbox-context.md rather than restated.
  */
 
+import { COMPOSE_FILE } from "../compose_file.js";
+
 export interface IcmVars {
   /** Path from one stage dir to another stage's dir, by stage name: `../01_research`. */
   at(name: string): string;
@@ -114,8 +116,7 @@ const feature: Stage[] = [
         "Working (this run): `../../BRIEF.md`",
         `Working (this run): the files in ${v.repos} that \`BRIEF.md\` names — grep for call sites, don't read whole trees`,
       ],
-      doNotLoad:
-        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`, `docker-compose.yml`.",
+      doNotLoad: `\`_shared/standards.md\` (nothing is written here), other stages' contracts, \`.sandbox/*.yml\`, \`${COMPOSE_FILE}\`.`,
       process: [
         "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them.",
         "Find the test command in `../../.sandbox/sandbox-context.md` and copy it verbatim — do not restate it from memory.",
@@ -170,8 +171,7 @@ const feature: Stage[] = [
         `Working (this run): \`${v.at("research")}/output/decisions.md\``,
         "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports, test command",
       ],
-      doNotLoad:
-        "`BRIEF.md` (`decisions.md` and `spec.md` carry the settled scope), `inventory.md`, `.sandbox/*.yml`, `docker-compose.yml`, other stages.",
+      doNotLoad: `\`BRIEF.md\` (\`decisions.md\` and \`spec.md\` carry the settled scope), \`inventory.md\`, \`.sandbox/*.yml\`, \`${COMPOSE_FILE}\`, other stages.`,
       process: [
         ...IMPLEMENT_STEPS,
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",

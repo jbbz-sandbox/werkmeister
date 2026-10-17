@@ -39,7 +39,7 @@ Report any workspace that fails it; don't hand-patch files.
 
 The workspace is git worktrees (one per repo, derived from the selected **services**) on a
 `<user>/<workspace>` branch under `$SANDBOX_WORKSPACES_ROOT`, followed by `init-workspace`
-(writes `CLAUDE.md`, `.env`, `docker-compose.yml`, …).
+(writes `CLAUDE.md`, `.env`, `compose.yml`, …).
 
 There is **no hand-maintained schema** — fields are built from the same prompt
 definitions (`_WIZARD_PROMPTS` in `packages/sandbox-core/src/workspace_prompts.ts`) that

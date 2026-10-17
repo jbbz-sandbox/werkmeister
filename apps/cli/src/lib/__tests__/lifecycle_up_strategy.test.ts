@@ -7,6 +7,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { COMPOSE_FILE, LEGACY_COMPOSE_FILE } from "sandbox-core/compose_file";
 import {
   buildPrGuardEntry,
   READ_ONLY_GIT_RULES,
@@ -50,7 +51,7 @@ let root: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-strategy-"));
-  fs.writeFileSync(path.join(root, "docker-compose.yml"), "services: {}\n");
+  fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
   fs.writeFileSync(path.join(root, ".env"), "SANDBOX_SLOT=3\nSERVICES=\n");
   fs.mkdirSync(path.join(root, ".sandbox"));
   fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), "context_strategy: icm\n");
@@ -69,6 +70,13 @@ describe("lifecycle.up in an icm workspace", () => {
       hooks: { PreToolUse: [buildPrGuardEntry()] },
       permissions: { allow: READ_ONLY_GIT_RULES },
     });
+  });
+
+  it("renames a legacy compose file before bringing the stack up", async () => {
+    fs.renameSync(path.join(root, COMPOSE_FILE), path.join(root, LEGACY_COMPOSE_FILE));
+    await withReporter(quiet, () => up("demo", root));
+    expect(fs.existsSync(path.join(root, COMPOSE_FILE))).toBe(true);
+    expect(fs.existsSync(path.join(root, LEGACY_COMPOSE_FILE))).toBe(false);
   });
 
   it("heals a workspace a pre-strategy up polluted", async () => {

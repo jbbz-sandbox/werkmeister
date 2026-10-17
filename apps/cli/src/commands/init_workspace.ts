@@ -13,7 +13,7 @@
  *    union of workspace.yml's `repos` and the repos owning its `services`.
  *    Missing repos are added as worktrees; repos dropped from the config have
  *    their worktrees removed (a dirty worktree aborts the run unless `--force`).
- * 2. Generate/overwrite CLAUDE.md, .env, docker-compose.yml, the projected
+ * 2. Generate/overwrite CLAUDE.md, .env, compose.yml, the projected
  *    .claude/ skills+agents, .mcp.json, and .sandbox/* from that config.
  *
  * It refuses to run against a bare directory (no workspace.yml and no --feature),

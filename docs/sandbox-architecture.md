@@ -420,14 +420,14 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 
 ~/workspaces/                           # Vibe Kanban workspaces
 ├── payment-refactor/
-│   ├── docker-compose.yml              # Generated per-feature compose stack
+│   ├── compose.yml              # Generated per-feature compose stack
 │   ├── .env                            # Generated resolved env vars
 │   ├── .sandbox/
 │   │   └── supergraph-config.yml       # Generated only when a GraphQL subgraph exists
 │   ├── demo-services/                  # git worktree
 │   └── api/                            # git worktree
 ├── auth-redesign/
-│   ├── docker-compose.yml
+│   ├── compose.yml
 │   ├── .env
 │   ├── .sandbox/
 │   │   └── supergraph-config.yml
@@ -465,7 +465,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
    └── If unhealthy/stopped: restart via docker compose -f infra/compose/shared-infra.yml up -d k8s-forwards
 
 5. START CONTAINERS
-   ├── docker compose -f ~/workspaces/payment-refactor/docker-compose.yml up -d
+   ├── docker compose -f ~/workspaces/payment-refactor/compose.yml up -d
    └── Wait for health checks
 
 6. CONFIGURE PROXY
