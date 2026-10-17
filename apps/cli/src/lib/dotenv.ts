@@ -11,12 +11,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-/**
- * Walk up from *start* to the filesystem root, parsing the first `.env` found.
- * Returns `{}` when there is none — an absent file is the normal case outside a
- * workspace, not an error.
- */
-export function loadDotenv(start: string): Record<string, string> {
+/** Walk up from *start* to the filesystem root; the first `.env` file found, or null. */
+export function findDotenv(start: string): string | null {
   let dir = path.resolve(start);
   for (;;) {
     const envFile = path.join(dir, ".env");
@@ -29,25 +25,33 @@ export function loadDotenv(start: string): Record<string, string> {
     } catch {
       isFile = false;
     }
-    if (isFile) {
-      const result: Record<string, string> = {};
-      // \r?\n, not \n: a CRLF .env otherwise leaves a trailing \r on every
-      // value, and `FEATURE=foo\r` resolves no slot and no containers.
-      for (let line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
-        line = line.trim();
-        if (!line || line.startsWith("#") || !line.includes("=")) {
-          continue;
-        }
-        const eq = line.indexOf("=");
-        const key = line.slice(0, eq);
-        const value = line.slice(eq + 1);
-        result[key.trim()] = value.trim();
-      }
-      return result;
-    }
+    if (isFile) return envFile;
     const parent = path.dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) return null;
     dir = parent;
   }
-  return {};
+}
+
+/**
+ * Parse the nearest `.env` at or above *start*.
+ * Returns `{}` when there is none — an absent file is the normal case outside a
+ * workspace, not an error.
+ */
+export function loadDotenv(start: string): Record<string, string> {
+  const envFile = findDotenv(start);
+  if (!envFile) return {};
+  const result: Record<string, string> = {};
+  // \r?\n, not \n: a CRLF .env otherwise leaves a trailing \r on every
+  // value, and `FEATURE=foo\r` resolves no slot and no containers.
+  for (let line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
+    line = line.trim();
+    if (!line || line.startsWith("#") || !line.includes("=")) {
+      continue;
+    }
+    const eq = line.indexOf("=");
+    const key = line.slice(0, eq);
+    const value = line.slice(eq + 1);
+    result[key.trim()] = value.trim();
+  }
+  return result;
 }

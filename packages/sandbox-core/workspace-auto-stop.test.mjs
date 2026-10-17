@@ -1,0 +1,142 @@
+// The opt-in `auto_stop` (#231): workspace.yml → the managed SessionEnd hook in
+// settings.json, the idle check behind `sandbox stop --if-idle` and the create
+// form. sandbox-context.md's line is in sandbox-context.test.mjs.
+
+import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { test } from "node:test";
+
+import { buildFormSchema } from "./dist/form_schema.js";
+import { buildSessionEndEntry, writeWorkspaceSettings } from "./dist/hooks_gen.js";
+import { idleStopFeature } from "./dist/lifecycle.js";
+import { collectingReporter, withReporter } from "./dist/reporter.js";
+import { writeWorkspaceConfig } from "./dist/workspace_init.js";
+import { computePromptSpec, readAutoStop } from "./dist/workspace_prompts.js";
+
+process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+
+function workspace(yml, settings) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ws-auto-stop-"));
+  if (yml !== undefined) setYml(root, yml);
+  if (settings !== undefined) {
+    fs.mkdirSync(path.join(root, ".claude"));
+    fs.writeFileSync(path.join(root, ".claude", "settings.json"), JSON.stringify(settings));
+  }
+  return root;
+}
+
+function setYml(root, yml) {
+  fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), yml);
+}
+
+const readHooks = (root) =>
+  JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")).hooks ?? {};
+
+const USER_END = { hooks: [{ type: "command", command: "echo bye" }] };
+const USER_PRE = { matcher: "Bash", hooks: [{ type: "command", command: "echo pre" }] };
+
+test("auto_stop on: one managed SessionEnd entry, user entries kept, no duplicate on re-init", () => {
+  const root = workspace("feature: f\nauto_stop: true\n", {
+    hooks: { SessionEnd: [USER_END], PreToolUse: [USER_PRE] },
+  });
+  writeWorkspaceSettings(root);
+  writeWorkspaceSettings(root);
+  const hooks = readHooks(root);
+  assert.deepEqual(hooks.SessionEnd, [USER_END, buildSessionEndEntry()]);
+  assert.deepEqual(hooks.PreToolUse, [USER_PRE]);
+  assert.match(hooks.SessionEnd[1].hooks[0].command, /sandbox stop --if-idle/);
+  assert.equal(hooks.SessionEnd[1].hooks[0].timeout, 10);
+});
+
+test("auto_stop off: the managed entry is removed, the user's stays", () => {
+  const root = workspace("feature: f\nauto_stop: true\n", { hooks: { SessionEnd: [USER_END] } });
+  writeWorkspaceSettings(root);
+  setYml(root, "feature: f\nauto_stop: false\n");
+  writeWorkspaceSettings(root);
+  assert.deepEqual(readHooks(root).SessionEnd, [USER_END]);
+});
+
+test("auto_stop missing: no SessionEnd hook is written, and a lone managed one goes", () => {
+  const root = workspace("feature: f\n");
+  writeWorkspaceSettings(root);
+  assert.equal(readHooks(root).SessionEnd, undefined);
+
+  setYml(root, "feature: f\nauto_stop: true\n");
+  writeWorkspaceSettings(root);
+  setYml(root, "feature: f\n");
+  writeWorkspaceSettings(root);
+  assert.equal(readHooks(root).SessionEnd, undefined);
+});
+
+function sessionsDir(sessions) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-sessions-"));
+  for (const [i, s] of sessions.entries())
+    fs.writeFileSync(path.join(dir, `${i}.json`), JSON.stringify(s));
+  fs.writeFileSync(path.join(dir, "garbage.json"), "{not json");
+  return dir;
+}
+
+const ROOT = "/ws/demo";
+const idle = (over) =>
+  idleStopFeature({
+    feature: "demo",
+    workspaceRoot: ROOT,
+    sessionId: "ending",
+    reason: "prompt_input_exit",
+    entrypoint: "claude-desktop",
+    sessionsDir: sessionsDir([]),
+    ...over,
+  });
+
+test("--if-idle stops only when no other live session is in the workspace", () => {
+  const live = process.pid;
+  assert.equal(idle({}), "demo");
+  // the ending session itself, a dead pid, another folder, a sibling prefix: not "other live"
+  const quiet = sessionsDir([
+    { pid: live, sessionId: "ending", cwd: ROOT },
+    { pid: 2 ** 22 + 7, sessionId: "dead", cwd: ROOT },
+    { pid: live, sessionId: "elsewhere", cwd: "/ws/other" },
+    { pid: live, sessionId: "prefix", cwd: "/ws/demo-2" },
+  ]);
+  assert.equal(idle({ sessionsDir: quiet }), "demo");
+  for (const cwd of [ROOT, path.join(ROOT, "sandbox")]) {
+    const busy = sessionsDir([{ pid: live, sessionId: "other", cwd }]);
+    assert.equal(idle({ sessionsDir: busy }), null, cwd);
+  }
+  assert.equal(idle({ sessionsDir: "/nonexistent/sessions" }), "demo");
+});
+
+test("--if-idle leaves the feature up when the session carries on or is headless", () => {
+  assert.equal(idle({ reason: "clear" }), null);
+  assert.equal(idle({ reason: "resume" }), null);
+  assert.equal(idle({ entrypoint: "sdk-cli" }), null);
+  assert.equal(idle({ reason: null, entrypoint: null }), "demo");
+});
+
+test("--if-idle never targets infra, and needs a feature", () => {
+  assert.equal(idle({ feature: "infra" }), null);
+  assert.equal(idle({ feature: undefined }), null);
+  assert.equal(idle({ feature: "" }), null);
+});
+
+test("the form has an auto_stop checkbox, off by default; workspace.yml stores a boolean", async () => {
+  const { schema, formData } = buildFormSchema(
+    computePromptSpec({}, workspace(), { defaults: false }),
+  );
+  assert.equal(schema.properties.auto_stop.type, "boolean");
+  assert.equal(formData.auto_stop, false);
+  assert.ok(!(schema.required ?? []).includes("auto_stop"));
+
+  const root = workspace();
+  await withReporter(collectingReporter(), async () =>
+    writeWorkspaceConfig(root, { feature: "f", auto_stop: "true" }),
+  );
+  assert.match(
+    fs.readFileSync(path.join(root, ".sandbox", "workspace.yml"), "utf8"),
+    /^auto_stop: true$/m,
+  );
+  assert.equal(readAutoStop(root), true);
+});

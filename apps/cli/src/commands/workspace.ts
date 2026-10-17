@@ -138,6 +138,7 @@ const FORM_KEYS = [
   "context_strategy",
   "autonomous",
   "model",
+  "auto_stop",
 ];
 
 /** Form fields that are arrays of choices (checkboxes); their comma-separated flag values are split. */

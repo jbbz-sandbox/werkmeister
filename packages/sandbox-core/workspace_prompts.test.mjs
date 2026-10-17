@@ -43,6 +43,7 @@ test("the spec carries the wizard prompts, with repos spliced after services", (
       "context_strategy",
       "autonomous",
       "model",
+      "auto_stop",
       "services",
       "labels",
       "test_path",
