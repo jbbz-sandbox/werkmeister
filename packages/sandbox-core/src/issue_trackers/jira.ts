@@ -55,13 +55,10 @@ const str = (v: unknown): string | undefined =>
 
 function fromRest(r: JiraRestIssue): Issue {
   const f = r.fields ?? {};
-  const comments: IssueComment[] = (f.comment?.comments ?? [])
-    .filter((c) => c.body?.trim())
-    .map((c) => ({
-      author: c.author?.displayName ?? "unknown",
-      created: c.created,
-      body: c.body!.trim(),
-    }));
+  const comments: IssueComment[] = (f.comment?.comments ?? []).flatMap((c) => {
+    const body = c.body?.trim();
+    return body ? [{ author: c.author?.displayName ?? "unknown", created: c.created, body }] : [];
+  });
   return {
     ref: r.key,
     title: str(f.summary),
@@ -91,15 +88,12 @@ async function fetchViaMcp(key: string): Promise<Issue | null> {
   );
   if (!parsed || !str(parsed.title)) return null;
   const comments = Array.isArray(parsed.comments)
-    ? parsed.comments
-        .filter(
-          (c): c is Record<string, unknown> => typeof c === "object" && c !== null && !!str(c.body),
-        )
-        .map((c) => ({
-          author: str(c.author) ?? "unknown",
-          created: str(c.created),
-          body: str(c.body)!,
-        }))
+    ? parsed.comments.flatMap((c: unknown) => {
+        if (typeof c !== "object" || c === null) return [];
+        const r = c as Record<string, unknown>;
+        const body = str(r.body);
+        return body ? [{ author: str(r.author) ?? "unknown", created: str(r.created), body }] : [];
+      })
     : [];
   return {
     ref: key,
@@ -125,7 +119,10 @@ async function statusesViaMcp(keys: string[]): Promise<Record<string, string>> {
     { tools: true },
   );
   const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(parsed ?? {})) if (str(v)) out[k.toUpperCase()] = str(v)!;
+  for (const [k, v] of Object.entries(parsed ?? {})) {
+    const status = str(v);
+    if (status) out[k.toUpperCase()] = status;
+  }
   return out;
 }
 

@@ -55,7 +55,7 @@ export function sandboxHome(): string {
   return path.dirname(configPath());
 }
 
-function isDict(value: unknown): value is Record<string, any> {
+function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -174,10 +174,10 @@ export interface ForwardSpec {
  */
 export function forwardSpecs(
   services?: ServicesConfig | null,
-  infrastructure?: Record<string, unknown> | null,
+  infrastructure?: ServicesConfig | null,
 ): ForwardSpec[] {
   const specs: ForwardSpec[] = [];
-  const collect = (entries: Record<string, unknown> | null | undefined, nameKey: boolean) => {
+  const collect = (entries: ServicesConfig | null | undefined, nameKey: boolean) => {
     if (!isDict(entries)) return;
     for (const [key, def] of Object.entries(entries)) {
       if (
@@ -190,7 +190,7 @@ export function forwardSpecs(
       specs.push({
         name: (nameKey && def["k8s_forward_name"]) || key,
         listen: Number(def["k8s_forward_port"]),
-        remote: def["internal_port"],
+        remote: def["internal_port"] as number,
         ns: def["k8s_namespace"] || "",
         prefix: def["k8s_pod_prefix"] || "",
         health: def["health_endpoint"] || "",
@@ -210,9 +210,9 @@ export function forwardSpecs(
  * independent of `ports_per_slot` (how many of those 100 a slot actually uses).
  * Example: slot 1 → [11100, 11119], slot 2 → [11200, 11219].
  */
-export function slotPortRange(slot: number, ports?: Record<string, any> | null): [number, number] {
-  const featureSlots =
-    isDict(ports) && isDict(ports["feature_slots"]) ? ports["feature_slots"] : {};
+export function slotPortRange(slot: number, ports?: PortsConfig | null): [number, number] {
+  const featureSlots: NonNullable<PortsConfig["feature_slots"]> =
+    isDict(ports) && isDict(ports.feature_slots) ? ports.feature_slots : {};
   const base = featureSlots["base_port"] ?? 11100;
   const span = featureSlots["ports_per_slot"] ?? 20;
   const start = base + (slot - 1) * 100;
@@ -362,7 +362,7 @@ export function resolveWorkspace(feature: string, workspaceOverride?: string | n
  * deliberate silent-to-loud conversion for DEBT-01/D-02 — required configs
  * must never let generation proceed on empty config.
  */
-function loadYaml(filePath: string, { required = false } = {}): Record<string, any> {
+function loadYaml(filePath: string, { required = false } = {}): Record<string, unknown> {
   if (!fs.existsSync(filePath)) {
     if (required) {
       const msg =
@@ -405,6 +405,9 @@ export interface ServiceEntry {
   internal_port?: number;
   port_offset?: number;
   k8s_forward_port?: number;
+  k8s_forward_name?: string;
+  k8s_namespace?: string;
+  k8s_pod_prefix?: string;
   health_endpoint?: string;
   graphql_path?: string;
   dockerfile?: string;
@@ -427,6 +430,7 @@ export interface ServiceEntry {
 /** One entry under services.yaml `archetypes:` (docs/jit-context-system.md §4.1). */
 export interface Archetype {
   standards?: string[];
+  mcp_servers?: string[];
   test?: string;
   validate?: string;
   [key: string]: unknown;
@@ -435,15 +439,31 @@ export interface Archetype {
 /** One entry under services.yaml `repos:`. */
 export interface RepoEntry {
   services?: string[];
+  path_mappings?: Record<string, string>;
+  no_service_paths?: string[];
+  /** Read by pr_lifecycle.ts: `ship: tag` runs `release_check` in the repo's container. */
+  ship?: string;
+  release_check?: string;
   [key: string]: unknown;
 }
 
 export type ServicesConfig = Record<string, ServiceEntry>;
+
+/** ports.yaml. Only `feature_slots` is read by name; the rest feeds templates as-is. */
+export interface PortsConfig {
+  feature_slots?: {
+    base_port?: number;
+    ports_per_slot?: number;
+    count?: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
 export type ArchetypeRegistry = Record<string, Archetype>;
 export type ReposConfig = Record<string, RepoEntry>;
 
 /** Read `~/.sandbox/services.yaml` (whole document). Required — throws when absent. */
-function servicesDoc({ required = true } = {}): Record<string, any> {
+function servicesDoc({ required = true } = {}): Record<string, unknown> {
   return loadYaml(servicesYamlPath(), { required });
 }
 
@@ -456,7 +476,7 @@ function servicesDoc({ required = true } = {}): Record<string, any> {
  */
 export function loadServices(): ServicesConfig {
   const data = servicesDoc();
-  return data["services"] ?? data;
+  return (data["services"] ?? data) as ServicesConfig;
 }
 
 /**
@@ -488,7 +508,7 @@ export function getK8sContext(): string {
  */
 export function loadSetupServices(): ServicesConfig {
   const data = servicesDoc({ required: false });
-  return data["setup_services"] ?? {};
+  return (data["setup_services"] ?? {}) as ServicesConfig;
 }
 
 /**
@@ -499,9 +519,9 @@ export function loadSetupServices(): ServicesConfig {
  * generator, which reads this alongside loadServices(). Optional: returns `{}`
  * when absent.
  */
-export function loadInfrastructure(): Record<string, any> {
+export function loadInfrastructure(): ServicesConfig {
   const data = servicesDoc({ required: false });
-  return data["infrastructure"] ?? {};
+  return (data["infrastructure"] ?? {}) as ServicesConfig;
 }
 
 /**
@@ -511,7 +531,7 @@ export function loadInfrastructure(): Record<string, any> {
  * of silently proceeding with `{}` (DEBT-01 D-02/D-04) — slot allocation
  * and port math cannot proceed on empty config.
  */
-export function loadPorts(): Record<string, any> {
+export function loadPorts(): PortsConfig {
   return loadYaml(portsYamlPath(), { required: true });
 }
 
@@ -523,7 +543,7 @@ export function loadPorts(): Record<string, any> {
  */
 export function loadReposConfig(): ReposConfig {
   const data = servicesDoc({ required: false });
-  return data["repos"] ?? {};
+  return (data["repos"] ?? {}) as ReposConfig;
 }
 
 /**
@@ -536,7 +556,7 @@ export function loadReposConfig(): ReposConfig {
  */
 export function loadArchetypes(): ArchetypeRegistry {
   const data = servicesDoc({ required: false });
-  return data["archetypes"] ?? {};
+  return (data["archetypes"] ?? {}) as ArchetypeRegistry;
 }
 
 /**
@@ -547,9 +567,9 @@ export function loadArchetypes(): ArchetypeRegistry {
  * unavailable (a checkout that predates the registry): no MCP projection
  * happens.
  */
-export function loadMcpServers(): Record<string, any> {
+export function loadMcpServers(): Record<string, Record<string, unknown>> {
   const data = servicesDoc({ required: false });
-  return data["mcp_servers"] ?? {};
+  return (data["mcp_servers"] ?? {}) as Record<string, Record<string, unknown>>;
 }
 
 /** Return a sorted list of all known service names. */

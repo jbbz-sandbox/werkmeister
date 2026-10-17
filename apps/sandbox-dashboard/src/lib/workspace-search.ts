@@ -20,6 +20,8 @@ export interface RepoPr {
   branch?: string;
   title?: string;
   state?: string;
+  url?: string;
+  labels?: string[];
 }
 
 export interface FilterWorkspacesOptions {

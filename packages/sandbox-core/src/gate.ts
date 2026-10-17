@@ -118,12 +118,12 @@ function _isFile(p: string): boolean {
   }
 }
 
-function _isDict(value: unknown): value is Record<string, any> {
+function _isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** `.sandbox/standards.json` as a dict, or null when missing/unreadable — never throws. */
-export function loadManifest(workspace: string): Record<string, any> | null {
+export function loadManifest(workspace: string): Record<string, unknown> | null {
   const manifestPath = path.join(workspace, ".sandbox", "standards.json");
   if (!_isFile(manifestPath)) {
     return null;
@@ -145,7 +145,7 @@ function _statePath(workspace: string, sessionId: string): string {
  * null is the "unreadable existing file" sentinel — distinct from {} (no
  * state yet, the normal first-ever-edit case). Callers must fail open on null.
  */
-function _loadState(workspace: string, sessionId: string): Record<string, any> | null {
+function _loadState(workspace: string, sessionId: string): Record<string, unknown> | null {
   const statePath = _statePath(workspace, sessionId);
   if (!_isFile(statePath)) {
     return {};
@@ -159,7 +159,7 @@ function _loadState(workspace: string, sessionId: string): Record<string, any> |
   return _isDict(data) ? data : null;
 }
 
-function _saveState(workspace: string, sessionId: string, state: Record<string, any>): boolean {
+function _saveState(workspace: string, sessionId: string, state: Record<string, unknown>): boolean {
   try {
     const statePath = _statePath(workspace, sessionId);
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
@@ -209,7 +209,7 @@ function _noteStatus(text: string): string | null | undefined {
 }
 
 /** True when a live note satisfies *gate*, or when the check cannot be made (fail-open). */
-function _phaseGateSatisfied(workspace: string, gate: Record<string, any>): boolean {
+function _phaseGateSatisfied(workspace: string, gate: Record<string, unknown>): boolean {
   const note = String(gate["note"] ?? "");
   if (!/^[a-z]+$/.test(note)) {
     return true;
@@ -248,7 +248,7 @@ function _phaseGateSatisfied(workspace: string, gate: Record<string, any>): bool
   return false;
 }
 
-function _phaseGateText(gate: Record<string, any>): string {
+function _phaseGateText(gate: Record<string, unknown>): string {
   const note = String(gate["note"]);
   if (gate["status"]) {
     const status = String(gate["status"]);
@@ -311,17 +311,17 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
     return _phaseGateText(phaseGate);
   }
 
-  const delivered = new Set<string>(state["delivered"] || []);
+  const delivered = new Set<string>(Array.isArray(state["delivered"]) ? state["delivered"] : []);
   const needsPhaseEntry = !state["phase_entry_delivered"];
 
   let domain: string | null = null;
-  const domains: Record<string, any> = _isDict(manifest["domains"]) ? manifest["domains"] : {};
+  const domains: Record<string, unknown> = _isDict(manifest["domains"]) ? manifest["domains"] : {};
   for (const name of _sorted(Object.keys(domains))) {
     const meta = domains[name];
     if (delivered.has(name) || !_isDict(meta)) {
       continue;
     }
-    const globs: unknown[] = meta["applies_to"] || [];
+    const globs: unknown[] = Array.isArray(meta["applies_to"]) ? meta["applies_to"] : [];
     if (globs.some((glob) => fnmatch(relPath, String(glob)))) {
       domain = name;
       break;
@@ -339,7 +339,8 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
     parts.push(_PHASE_ENTRY_TEXT);
   }
   if (domain !== null) {
-    const summary = String(domains[domain]?.["summary"] || "").trim();
+    const meta = domains[domain];
+    const summary = String((_isDict(meta) && meta["summary"]) || "").trim();
     let domainText =
       `Standards gate: you are editing a path governed by the \`${domain}\` ` +
       "standard, which has not been loaded this session. Invoke the " +
@@ -369,7 +370,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
  * — this is a hook, it must never block or fail the tool call.
  */
 export function main(): void {
-  let data: Record<string, any>;
+  let data: Record<string, unknown>;
   try {
     const raw = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
     const parsed = raw.trim() ? JSON.parse(raw) : {};
@@ -380,7 +381,8 @@ export function main(): void {
   }
 
   const sessionId = String(data["session_id"] || "");
-  const filePath = String(data["tool_input"]?.["file_path"] || "");
+  const toolInput = data["tool_input"];
+  const filePath = String((_isDict(toolInput) && toolInput["file_path"]) || "");
   const start = String(data["cwd"] || process.cwd());
 
   let reason: string | null;

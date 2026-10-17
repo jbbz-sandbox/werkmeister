@@ -21,6 +21,7 @@ import {
 } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { initCreateForm } from "./create-form.js";
+import { appRoot } from "./theme.js";
 import type { HostBridge } from "./workspace-ui.js";
 
 const app = new App({ name: "Initialize Workspace", version: "0.1.0" });
@@ -47,7 +48,7 @@ const bridge: HostBridge = {
 // Match the other surfaces' page chrome (see src/form-main.ts).
 const BODY_GAP = 16;
 document.body.style.cssText = `margin:0;background:#f7f7f5;padding:${BODY_GAP}px`;
-const root = document.getElementById("app")!;
+const root = appRoot();
 root.style.cssText = "max-width:720px;margin:0 auto";
 
 function handleHostContextChanged(ctx: McpUiHostContext): void {

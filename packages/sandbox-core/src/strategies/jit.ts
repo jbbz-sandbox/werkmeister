@@ -61,7 +61,7 @@ function salvageLegacyHandoffNotes(workspaceRoot: string, claudeMdPath: string):
     if (!match) {
       return;
     }
-    const body = (match.groups!["body"] ?? "").trim();
+    const body = (match.groups?.["body"] ?? "").trim();
     if (!body || body.includes(_LEGACY_HANDOFF_PLACEHOLDER)) {
       return;
     }

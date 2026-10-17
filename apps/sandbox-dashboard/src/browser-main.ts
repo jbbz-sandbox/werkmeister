@@ -20,7 +20,7 @@ import { initHealthUI } from "./health-ui.js";
 import { renderMarkdown } from "./lib/markdown.js";
 import { initPrsUI } from "./prs-ui.js";
 import { initSandboxLinksUI } from "./sandbox-links-ui.js";
-import { injectCss } from "./theme.js";
+import { appRoot, injectCss } from "./theme.js";
 import { type HostBridge, initWorkspaceUI } from "./workspace-ui.js";
 
 const bridge: HostBridge = {
@@ -80,7 +80,7 @@ const SHELL_CSS = `
   body { margin: 0; background: var(--sd-bg); }
 `;
 
-const root = document.getElementById("app")!;
+const root = appRoot();
 injectCss("wsd-shell", SHELL_CSS);
 
 root.innerHTML = `
