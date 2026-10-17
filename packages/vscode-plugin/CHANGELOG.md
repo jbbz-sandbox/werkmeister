@@ -1,5 +1,12 @@
 # vscode-plugin
 
+## 0.12.0
+
+### Patch Changes
+
+- Updated dependencies [aba829c]
+  - sandbox-core@0.12.0
+
 ## 0.11.0
 
 ### Patch Changes
