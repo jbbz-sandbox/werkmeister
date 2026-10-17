@@ -139,6 +139,29 @@ function workspaceFromContainerLabel(feature: string): string | null {
 }
 
 /**
+ * The one way to spell `docker compose` for a workspace's stack.
+ *
+ * `-p`, not just the file's `name:`: a workspace container's `.env` exports
+ * COMPOSE_PROJECT_NAME=sandbox-<caller>, which outranks `name:` and pointed
+ * every compose call at the caller's project (#225, the same leak #198 closed
+ * for infra). Without *composePath* compose reads the file from cwd.
+ */
+export function workspaceComposeArgv(
+  feature: string,
+  args: string[],
+  composePath?: string,
+): string[] {
+  return [
+    "docker",
+    "compose",
+    ...(composePath ? ["-f", composePath] : []),
+    "-p",
+    `sandbox-${feature}`,
+    ...args,
+  ];
+}
+
+/**
  * Run `docker compose -f <file> <args>`.
  *
  * When *capture* is true, capture stdout/stderr and return the result.
@@ -223,7 +246,7 @@ function composeCommand(
     );
     return null;
   }
-  const cmd = ["docker", "compose", "-f", composePath, ...args];
+  const cmd = workspaceComposeArgv(feature, args, composePath);
   info(`Running: ${cmd.join(" ")}`);
   return cmd;
 }
@@ -516,12 +539,13 @@ export function composeLogsStream(
     return null;
   }
 
-  const args = ["compose", "--ansi", "always", "-f", composePath, "logs", "-f", "--tail", "100"];
-  if (service) {
-    args.push(service);
-  }
-
-  const child = spawn("docker", args, { env });
+  const argv = workspaceComposeArgv(
+    feature,
+    ["logs", "-f", "--tail", "100", ...(service ? [service] : [])],
+    composePath,
+  );
+  // `--ansi` is a `compose` flag, so it goes before the `-f`/`-p` flags.
+  const child = spawn("docker", ["compose", "--ansi", "always", ...argv.slice(2)], { env });
   // Compose writes its own diagnostics ("no such service") to stderr; a caller
   // rendering one log surface wants those inline, not discarded.
   child.stdout.on("data", (d) => onData(d.toString()));
