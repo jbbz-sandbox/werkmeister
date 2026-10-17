@@ -17,7 +17,13 @@
  * transcripts measurably lag.
  */
 import fs from "node:fs";
-import { parseSessionLines, resolveSessionSource, getClaudeTurnStatus, turnEvents, type ClaudeMessage } from "sandbox-core";
+import {
+  type ClaudeMessage,
+  getClaudeTurnStatus,
+  parseSessionLines,
+  resolveSessionSource,
+  turnEvents,
+} from "sandbox-core";
 
 export type StreamEvent =
   | { type: "entry"; index: number; message: ClaudeMessage }
@@ -47,7 +53,10 @@ class Tailer {
   private safety: NodeJS.Timeout | null = null;
   private turnListener: (p: { state: "running" | "done" | "failed"; error: string | null }) => void;
 
-  constructor(private name: string, private readonly pinnedSessionId?: string) {
+  constructor(
+    private name: string,
+    private readonly pinnedSessionId?: string,
+  ) {
     this.turnListener = (p) => {
       this.broadcast({ type: "turn", state: p.state, error: p.error ?? null });
       // A send just wrote the user line (and will grow the reply) — pull it in.
@@ -80,10 +89,17 @@ class Tailer {
     for (let i = Math.max(0, fromIndex); i < this.entries.length; i++) {
       sub({ type: "entry", index: i, message: this.entries[i] });
     }
-    sub({ type: "ready", sessionId: this.sessionId, sessionCount: this.sessionCount, updatedAt: this.updatedAt });
+    sub({
+      type: "ready",
+      sessionId: this.sessionId,
+      sessionCount: this.sessionCount,
+      updatedAt: this.updatedAt,
+    });
     // Surface an in-flight turn so a mid-turn (re)connect shows the indicator.
     void getClaudeTurnStatus(this.name)
-      .then((s) => { if (s.state === "running") sub({ type: "turn", state: "running", error: null }); })
+      .then((s) => {
+        if (s.state === "running") sub({ type: "turn", state: "running", error: null });
+      })
       .catch(() => {});
     this.subs.add(sub);
   }
@@ -170,7 +186,12 @@ const tailers = new Map<string, Tailer>();
  * deltas as the JSONL grows. Returns an unsubscribe that tears the tailer down
  * at zero subscribers.
  */
-export function subscribeSession(name: string, onEvent: Subscriber, fromIndex = 0, sessionId?: string): () => void {
+export function subscribeSession(
+  name: string,
+  onEvent: Subscriber,
+  fromIndex = 0,
+  sessionId?: string,
+): () => void {
   // One tailer per (workspace, pinned session). Unpinned key stays `name`, so
   // the default follow-newest path is byte-for-byte unchanged.
   const key = sessionId ? `${name}::${sessionId}` : name;
@@ -180,7 +201,10 @@ export function subscribeSession(name: string, onEvent: Subscriber, fromIndex = 
     tailers.set(key, tailer);
   }
   const t = tailer;
-  void t.start().then(() => t.add(onEvent, fromIndex)).catch(() => onEvent({ type: "ready", sessionId: null, sessionCount: 0, updatedAt: null }));
+  void t
+    .start()
+    .then(() => t.add(onEvent, fromIndex))
+    .catch(() => onEvent({ type: "ready", sessionId: null, sessionCount: 0, updatedAt: null }));
   return () => {
     if (t.remove(onEvent)) {
       t.stop();

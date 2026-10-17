@@ -72,19 +72,21 @@ models:
  * `resolveSecrets`). Add real values here as your services need them.
  */
 export function renderSecretsEnv(): string {
-  return [
-    "# Machine-global secrets — real values, never committed.",
-    "#",
-    "# A service declares the keys it needs via `secrets:` in its services.yaml",
-    "# entry; `sandbox up` writes them, as plain KEY, into that service's own",
-    "# <workspace>/.env.<service>, and fails fast when one is missing or empty.",
-    "#",
-    "# Namespace a key by service as <SERVICE>__KEY (service name uppercased,",
-    "# - -> _), e.g. MOBILE__EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=... It wins over a",
-    "# plain KEY=... line, which stays a shared fallback. Namespaced keys a",
-    "# service doesn't declare (e.g. test logins for agents) reach no container.",
-    "",
-  ].join("\n") + "\n";
+  return (
+    [
+      "# Machine-global secrets — real values, never committed.",
+      "#",
+      "# A service declares the keys it needs via `secrets:` in its services.yaml",
+      "# entry; `sandbox up` writes them, as plain KEY, into that service's own",
+      "# <workspace>/.env.<service>, and fails fast when one is missing or empty.",
+      "#",
+      "# Namespace a key by service as <SERVICE>__KEY (service name uppercased,",
+      "# - -> _), e.g. MOBILE__EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=... It wins over a",
+      "# plain KEY=... line, which stays a shared fallback. Namespaced keys a",
+      "# service doesn't declare (e.g. test logins for agents) reach no container.",
+      "",
+    ].join("\n") + "\n"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +158,11 @@ const SANDBOX_MCP_SERVER = "sandbox";
 
 export const REGISTRY_DEFAULTS: Record<string, any> = {
   archetypes: {
-    "node-web": { standards: ["ui", "config", "testing"], mcp_servers: ["context7"], test: "npm test" },
+    "node-web": {
+      standards: ["ui", "config", "testing"],
+      mcp_servers: ["context7"],
+      test: "npm test",
+    },
     "node-service": { standards: ["service", "testing"], test: "npm test" },
     "node-tool": {
       standards: ["engineering", "testing"],

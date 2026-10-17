@@ -13,45 +13,44 @@
  * The CLI is the single source of truth for both the input prompts and the
  * create logic — this server only renders the form and shells out.
  */
+
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   getUiCapability,
+  RESOURCE_MIME_TYPE,
   registerAppResource,
   registerAppTool,
-  RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { z } from "zod";
-
 import {
   approvePr,
+  closeOut,
   createWorkspace,
-  postSlackReviewRequest,
   fetchIssueCard,
   fetchIssueFormData,
+  gatePrs,
   getClaudeTranscript,
-  listSessions,
   getClaudeTurnStatus,
   getDockerUi,
-  getK8sForwardsHealth,
   getIssueStatuses,
+  getK8sForwardsHealth,
   getKubeContext,
   getOpenPrs,
   getWorkspacePRs,
   getWorkspaceStatuses,
   getWorkspaceUsage,
   launchPrReconcile,
+  listSessions,
   listWorkspaces,
   openFeatureBrowser,
-  openWorkspace,
-  refinePrompt,
-  resolveWorkspaceDir,
-  gatePrs,
   openPrs,
+  openWorkspace,
+  postSlackReviewRequest,
+  refinePrompt,
   refreshPrStatus,
-  closeOut,
+  resolveWorkspaceDir,
   resumeClaudeInTerminal,
   runConnect,
   runWorkspaceAction,
@@ -60,6 +59,7 @@ import {
   WORKSPACE_ACTIONS,
   WorkspaceError,
 } from "sandbox-core";
+import { z } from "zod";
 import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 // Works both from source (server.ts via tsx) and compiled (dist/server.js).
@@ -203,7 +203,10 @@ export function createServer(): McpServer {
         const result = await createWorkspace(filled.formData ?? {}, {
           open: filled.open ?? args?.open,
         });
-        return { content: [{ type: "text", text: formatCreateResult(result) }], structuredContent: result as unknown as Record<string, unknown> };
+        return {
+          content: [{ type: "text", text: formatCreateResult(result) }],
+          structuredContent: result as unknown as Record<string, unknown>,
+        };
       } catch (e) {
         const message =
           e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
@@ -230,7 +233,10 @@ export function createServer(): McpServer {
             "Submitted form fields (feature, services[], issue_id, test_path, task, …). " +
               "Holds the form's fields, same keys as the CLI flags; `feature` is required.",
           ),
-        open: z.boolean().optional().describe("Launch VS Code on the new workspace (default true)."),
+        open: z
+          .boolean()
+          .optional()
+          .describe("Launch VS Code on the new workspace (default true)."),
       },
       outputSchema: z.object({
         command: z.string(),
@@ -307,7 +313,9 @@ export function createServer(): McpServer {
         "(issue_id, feature, task, description, starting_prompt, suggested services) from an issue " +
         "ID or URL. Best-effort; returns just { issue_id } if the lookup fails. Called by the " +
         "form's “Fetch from <tracker>” button.",
-      inputSchema: { ref: z.string().describe("An issue ID or URL, or any string containing one.") },
+      inputSchema: {
+        ref: z.string().describe("An issue ID or URL, or any string containing one."),
+      },
       outputSchema: z.object({ formData: z.record(z.string(), z.unknown()) }),
     },
     async (args): Promise<CallToolResult> => {
@@ -461,7 +469,9 @@ export function createServer(): McpServer {
         "Launch VS Code on a workspace directory under $SANDBOX_WORKSPACES_ROOT. Pass the " +
         "workspace `name` as returned by `list-workspaces`.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
       },
       outputSchema: z.object({ path: z.string() }),
     },
@@ -490,7 +500,9 @@ export function createServer(): McpServer {
         "(sets the X-Feature routing cookie + tags the window). Routing only resolves if the " +
         "feature is `up`; otherwise traffic falls through to k8s. Pass the workspace `name`.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
       },
       outputSchema: z.object({ path: z.string() }),
     },
@@ -498,7 +510,9 @@ export function createServer(): McpServer {
       try {
         const { path: target } = await openFeatureBrowser(args.name);
         return {
-          content: [{ type: "text", text: `Launched a feature-tagged Chrome window for ${args.name}.` }],
+          content: [
+            { type: "text", text: `Launched a feature-tagged Chrome window for ${args.name}.` },
+          ],
           structuredContent: { path: target },
         };
       } catch (e) {
@@ -522,7 +536,9 @@ export function createServer(): McpServer {
         "(stop containers, keep the slot), `restart`, or `down` (tear down + release slot). " +
         "Pass the workspace `name` as returned by `list-workspaces`.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
         action: z.enum(WORKSPACE_ACTIONS).describe("up | stop | restart | down"),
       },
       outputSchema: z.object({ command: z.string(), output: z.string(), path: z.string() }),
@@ -643,7 +659,9 @@ export function createServer(): McpServer {
     assignee: z.string().optional(),
     description: z.string().optional(),
     url: z.string().optional(),
-    comments: z.array(z.object({ author: z.string(), created: z.string().optional(), body: z.string() })).optional(),
+    comments: z
+      .array(z.object({ author: z.string(), created: z.string().optional(), body: z.string() }))
+      .optional(),
   });
 
   // --- Tool: open PRs across the org (dashboard "Open Pull Requests" tab) -----
@@ -699,7 +717,8 @@ export function createServer(): McpServer {
     "pr-approve",
     {
       title: "Approve Pull Request",
-      description: "Approve a pull request via `gh pr review <url> --approve`. Does not change labels.",
+      description:
+        "Approve a pull request via `gh pr review <url> --approve`. Does not change labels.",
       inputSchema: { url: z.string().describe("The pull request URL.") },
       outputSchema: z.object({ ok: z.literal(true) }),
     },
@@ -739,7 +758,9 @@ export function createServer(): McpServer {
         const text = `Review requested${who}: ${args.title ?? ""} ${args.url}`.trim();
         const channel = await postSlackReviewRequest(text);
         return {
-          content: [{ type: "text", text: `Review request sent to Slack (${channel}) for ${args.url}.` }],
+          content: [
+            { type: "text", text: `Review request sent to Slack (${channel}) for ${args.url}.` },
+          ],
           structuredContent: { ok: true },
         };
       } catch (e) {
@@ -759,7 +780,9 @@ export function createServer(): McpServer {
         "Fetch a compact issue card (ref, title, status, type, assignee, description, url, comments) " +
         "from this machine's issue tracker for an issue ID or any string containing one. " +
         "Best-effort: returns `{ ref }` alone if the lookup fails.",
-      inputSchema: { ref: z.string().describe("An issue ID or URL, or any string containing one.") },
+      inputSchema: {
+        ref: z.string().describe("An issue ID or URL, or any string containing one."),
+      },
       outputSchema: issueSchema,
     },
     async (args): Promise<CallToolResult> => {
@@ -790,7 +813,10 @@ export function createServer(): McpServer {
         "the `sessionKey` the dashboard chat panel streams from (a `reconcile:<repo>-<number>` key).",
       inputSchema: {
         url: z.string().describe("The pull request URL to reconcile."),
-        issueRef: z.string().optional().describe("Issue ID hint; inferred from the PR when omitted."),
+        issueRef: z
+          .string()
+          .optional()
+          .describe("Issue ID hint; inferred from the PR when omitted."),
       },
       outputSchema: z.object({
         sessionKey: z.string(),
@@ -802,7 +828,12 @@ export function createServer(): McpServer {
       try {
         const result = await launchPrReconcile(args.url, args.issueRef);
         return {
-          content: [{ type: "text", text: `Launched reconcile session ${result.sessionKey} for ${args.url}.` }],
+          content: [
+            {
+              type: "text",
+              text: `Launched reconcile session ${result.sessionKey} for ${args.url}.`,
+            },
+          ],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
@@ -824,7 +855,9 @@ export function createServer(): McpServer {
         "each PR file at `status: approved`, pushes, opens the PR and records its URL; `status` records " +
         "merged / shipped / closed from GitHub and release tags.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
         action: z.enum(["gate", "open", "status"]),
         repo: z.string().optional().describe("Only this code worktree's PR file."),
       },
@@ -845,7 +878,8 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message = e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
+        const message =
+          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
         return { isError: true, content: [{ type: "text", text: message }] };
       }
     },
@@ -864,23 +898,36 @@ export function createServer(): McpServer {
         "Claude sessions; terminal sessions still open are listed for the person to /exit. Destructive — " +
         "confirm with the person first.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
         abandon: z
           .string()
           .optional()
-          .describe("Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files."),
+          .describe(
+            "Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files.",
+          ),
       },
-      outputSchema: z.object({ command: z.string(), output: z.string(), path: z.string(), terminals: z.array(z.string()) }),
+      outputSchema: z.object({
+        command: z.string(),
+        output: z.string(),
+        path: z.string(),
+        terminals: z.array(z.string()),
+      }),
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const result = await closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {});
+        const result = await closeOut(
+          args.name,
+          args.abandon !== undefined ? { abandon: args.abandon } : {},
+        );
         return {
           content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message = e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
+        const message =
+          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
         // The client only sees `message`; the stack in the MCP stderr log is what a failed teardown is diagnosed from.
         console.error(`[sandbox-workspace] close-out failed: ${(e as Error).stack ?? message}`);
         return { isError: true, content: [{ type: "text", text: message }] };
@@ -972,32 +1019,48 @@ export function createServer(): McpServer {
       outputSchema: {
         name: z.string(),
         totals: z.object({
-          input: z.number(), output: z.number(),
-          cacheCreation: z.number(), cacheRead: z.number(),
+          input: z.number(),
+          output: z.number(),
+          cacheCreation: z.number(),
+          cacheRead: z.number(),
         }),
         estUsd: z.number().nullable(),
-        byModel: z.array(z.object({
-          model: z.string(),
-          totals: z.object({
-            input: z.number(), output: z.number(),
-            cacheCreation: z.number(), cacheRead: z.number(),
+        byModel: z.array(
+          z.object({
+            model: z.string(),
+            totals: z.object({
+              input: z.number(),
+              output: z.number(),
+              cacheCreation: z.number(),
+              cacheRead: z.number(),
+            }),
+            estUsd: z.number().nullable(),
           }),
-          estUsd: z.number().nullable(),
-        })),
-        sessions: z.array(z.object({
-          sessionId: z.string(), title: z.string(), updatedAt: z.string(),
-          totals: z.object({
-            input: z.number(), output: z.number(),
-            cacheCreation: z.number(), cacheRead: z.number(),
+        ),
+        sessions: z.array(
+          z.object({
+            sessionId: z.string(),
+            title: z.string(),
+            updatedAt: z.string(),
+            totals: z.object({
+              input: z.number(),
+              output: z.number(),
+              cacheCreation: z.number(),
+              cacheRead: z.number(),
+            }),
+            estUsd: z.number().nullable(),
           }),
-          estUsd: z.number().nullable(),
-        })),
+        ),
       },
     },
     async ({ name }): Promise<CallToolResult> => {
       try {
         const usage = await getWorkspaceUsage(name);
-        const tot = usage.totals.input + usage.totals.output + usage.totals.cacheCreation + usage.totals.cacheRead;
+        const tot =
+          usage.totals.input +
+          usage.totals.output +
+          usage.totals.cacheCreation +
+          usage.totals.cacheRead;
         const dollars = usage.estUsd == null ? "" : ` · ~$${usage.estUsd.toFixed(2)}`;
         const models = usage.byModel.map((m) => m.model).join(", ") || "none";
         const text = `${name}: ${tot.toLocaleString()} tokens${dollars} across ${usage.sessions.length} session(s) [${models}]`;
@@ -1054,7 +1117,12 @@ export function createServer(): McpServer {
       try {
         const result = await getDockerUi();
         return {
-          content: [{ type: "text", text: `Docker: ${result.provider}${result.url ? ` — ${result.url}` : " (no browser UI)"}` }],
+          content: [
+            {
+              type: "text",
+              text: `Docker: ${result.provider}${result.url ? ` — ${result.url}` : " (no browser UI)"}`,
+            },
+          ],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
@@ -1161,7 +1229,9 @@ export function createServer(): McpServer {
       try {
         const result = await switchKubeContext(args.env ?? "dev");
         return {
-          content: [{ type: "text", text: `Switched kube context to ${result.context} [${result.env}]` }],
+          content: [
+            { type: "text", text: `Switched kube context to ${result.context} [${result.env}]` },
+          ],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
@@ -1185,9 +1255,22 @@ export function createServer(): McpServer {
         "sessionId is null when the workspace has no sessions yet. Pass the workspace `name` " +
         "from `list-workspaces`.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
-        limit: z.number().int().min(1).max(100).optional().describe("Max messages to return (default 20)."),
-        sessionId: z.string().optional().describe("Read this specific session instead of the newest (from `sessions[]`); stale/unknown ids fall back to newest."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Max messages to return (default 20)."),
+        sessionId: z
+          .string()
+          .optional()
+          .describe(
+            "Read this specific session instead of the newest (from `sessions[]`); stale/unknown ids fall back to newest.",
+          ),
       },
       outputSchema: z.object({
         sessionId: z.string().nullable(),
@@ -1201,14 +1284,18 @@ export function createServer(): McpServer {
         ),
         sessionCount: z.number(),
         updatedAt: z.string().nullable(),
-        sessions: z.array(
-          z.object({
-            sessionId: z.string(),
-            title: z.string(),
-            updatedAt: z.string(),
-            isNewest: z.boolean(),
-          }),
-        ).describe("All sessions for this workspace, newest first — drives the chat panel's session picker."),
+        sessions: z
+          .array(
+            z.object({
+              sessionId: z.string(),
+              title: z.string(),
+              updatedAt: z.string(),
+              isNewest: z.boolean(),
+            }),
+          )
+          .describe(
+            "All sessions for this workspace, newest first — drives the chat panel's session picker.",
+          ),
       }),
     },
     async (args): Promise<CallToolResult> => {
@@ -1247,9 +1334,16 @@ export function createServer(): McpServer {
         "`claude-transcript` to watch the reply appear. For a fully interactive session " +
         "use `claude-resume`.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
         message: z.string().describe("The message to send."),
-        sessionId: z.string().optional().describe("Resume this specific session instead of the newest; `--resume` bumps it back to newest afterwards."),
+        sessionId: z
+          .string()
+          .optional()
+          .describe(
+            "Resume this specific session instead of the newest; `--resume` bumps it back to newest afterwards.",
+          ),
       },
       outputSchema: z.object({
         sessionId: z.string().nullable(),
@@ -1287,7 +1381,9 @@ export function createServer(): McpServer {
         "done, failed (with error detail), or idle when no turn was started by this server " +
         "process (fall back to polling `claude-transcript`).",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
       },
       outputSchema: z.object({
         state: z.enum(["idle", "running", "done", "failed"]),
@@ -1300,7 +1396,12 @@ export function createServer(): McpServer {
       try {
         const result = await getClaudeTurnStatus(args.name);
         return {
-          content: [{ type: "text", text: `Turn state for ${args.name}: ${result.state}${result.error ? ` (${result.error})` : ""}` }],
+          content: [
+            {
+              type: "text",
+              text: `Turn state for ${args.name}: ${result.state}${result.error ? ` (${result.error})` : ""}`,
+            },
+          ],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
@@ -1321,8 +1422,13 @@ export function createServer(): McpServer {
         "Code session (`claude --resume <id>`), fully interactive. Starts a fresh session " +
         "when the workspace has none.",
       inputSchema: {
-        name: z.string().describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
-        sessionId: z.string().optional().describe("Resume this specific session instead of the newest."),
+        name: z
+          .string()
+          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        sessionId: z
+          .string()
+          .optional()
+          .describe("Resume this specific session instead of the newest."),
       },
       outputSchema: z.object({
         path: z.string(),

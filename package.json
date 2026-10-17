@@ -14,9 +14,12 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "changeset:version": "changeset version && npm install --package-lock-only",
-    "release": "npm run build && changeset publish"
+    "release": "npm run build && changeset publish",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@changesets/cli": "^2.27.0",
     "turbo": "^2.5.0"
   },

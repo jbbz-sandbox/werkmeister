@@ -1,11 +1,12 @@
 // The CLI carried a second copy of this walk-up in commands/notes.ts, and
 // commands/skills.ts imported it from there -- the one command-to-command
 // import edge in the tree. Pinned here so deleting that copy is provably safe.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { decide, findWorkspaceRoot } from "./dist/gate.js";
 
@@ -108,9 +109,13 @@ test("phase gate: a finding gate accepts any live finding note", () => {
 
 // Review Focus 2: ENOENT is "no notes yet", not "unreadable".
 test("phase gate: a missing notes dir still denies", () => {
-  withGatedWorkspace(DECIDED, (ws) => {
-    assert.match(decide(ws, "s1", src(ws)), /^Phase gate:/);
-  }, { notesDir: false });
+  withGatedWorkspace(
+    DECIDED,
+    (ws) => {
+      assert.match(decide(ws, "s1", src(ws)), /^Phase gate:/);
+    },
+    { notesDir: false },
+  );
 });
 
 // Review Focus 3.

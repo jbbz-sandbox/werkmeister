@@ -48,10 +48,7 @@ export function resolveServiceArchetype(
 }
 
 /** The standards keys a service contributes, via its archetype. */
-export function serviceStandards(
-  svcDef: any,
-  archetypes?: Record<string, any> | null,
-): string[] {
+export function serviceStandards(svcDef: any, archetypes?: Record<string, any> | null): string[] {
   const arch = resolveServiceArchetype(svcDef, archetypes);
   return Array.from((arch ?? {})["standards"] ?? []);
 }
@@ -212,7 +209,10 @@ export function presentArchetypes(
   reposConfig: Record<string, any>,
   archetypes: Record<string, any>,
 ): Record<string, string[]> {
-  const localServices = (meta["SERVICES"] ?? "").split(",").map((s) => s.trim()).filter((s) => s);
+  const localServices = (meta["SERVICES"] ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s);
   return resolvePresentArchetypes(
     repos.map(([name]) => name),
     servicesConfig,

@@ -90,11 +90,15 @@ export function cacheSet<T>(key: string, v: T): Promise<void> {
 export function runBatchOnce(keys: string[], job: (fresh: string[]) => Promise<void>): void {
   const fresh = keys.filter((k) => !inFlight.has(k));
   if (!fresh.length) return;
-  fresh.forEach((k) => inFlight.add(k));
+  for (const k of fresh) inFlight.add(k);
   void Promise.resolve()
     .then(() => job(fresh))
-    .catch((e) => console.error("[sandbox-workspace] background cache refresh failed:", (e as Error).message))
-    .finally(() => fresh.forEach((k) => inFlight.delete(k)));
+    .catch((e) =>
+      console.error("[sandbox-workspace] background cache refresh failed:", (e as Error).message),
+    )
+    .finally(() => {
+      for (const k of fresh) inFlight.delete(k);
+    });
 }
 
 /** Single-key convenience over runBatchOnce. */

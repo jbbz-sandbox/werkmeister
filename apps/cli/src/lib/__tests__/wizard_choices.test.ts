@@ -98,7 +98,13 @@ describe("the Inquirer-backed prompts", () => {
     const groups = { "repo-a": ["web", "worker"], "repo-b": ["api"] };
     await promptOne({ ...MULTI, groups }, "", ["api", "cron", "web", "worker"]);
     expect(seen[0].choices.map((c: any) => c.separator ?? c.value)).toEqual([
-      "── repo-a ──", "web", "worker", "── repo-b ──", "api", "── other ──", "cron",
+      "── repo-a ──",
+      "web",
+      "worker",
+      "── repo-b ──",
+      "api",
+      "── other ──",
+      "cron",
     ]);
   });
 
@@ -106,18 +112,51 @@ describe("the Inquirer-backed prompts", () => {
     const { buildFormSchema } = await import("sandbox-core/form_schema");
     const bundle = buildFormSchema({
       prompts: [
-        { key: "feature", label: "Feature", accept_empty: false, pattern: "^[a-z]+$", default: "blog" },
-        { key: "services", label: "Services", multi: true, choices: ["api", "web"],
-          choice_groups: { r: ["api", "web"] }, default: "web" },
-        { key: "starting_prompt", label: "Prompt", multiline: true, refinable: true, refine_instruction: "tidy" },
+        {
+          key: "feature",
+          label: "Feature",
+          accept_empty: false,
+          pattern: "^[a-z]+$",
+          default: "blog",
+        },
+        {
+          key: "services",
+          label: "Services",
+          multi: true,
+          choices: ["api", "web"],
+          choice_groups: { r: ["api", "web"] },
+          default: "web",
+        },
+        {
+          key: "starting_prompt",
+          label: "Prompt",
+          multiline: true,
+          refinable: true,
+          refine_instruction: "tidy",
+        },
         { key: "done", label: "Done", resolved: true, resolved_value: "x" },
       ],
     });
     const fields = fieldsOf(bundle);
     expect(fields.map((f) => f.key)).toEqual(["feature", "services", "starting_prompt"]);
-    expect(fields[0]).toMatchObject({ required: true, pattern: "^[a-z]+$", default: "blog", multi: false });
-    expect(fields[1]).toMatchObject({ multi: true, choices: ["api", "web"], groups: { r: ["api", "web"] }, default: "web" });
-    expect(fields[2]).toMatchObject({ multiline: true, refinable: true, refineInstruction: "tidy", required: false });
+    expect(fields[0]).toMatchObject({
+      required: true,
+      pattern: "^[a-z]+$",
+      default: "blog",
+      multi: false,
+    });
+    expect(fields[1]).toMatchObject({
+      multi: true,
+      choices: ["api", "web"],
+      groups: { r: ["api", "web"] },
+      default: "web",
+    });
+    expect(fields[2]).toMatchObject({
+      multiline: true,
+      refinable: true,
+      refineInstruction: "tidy",
+      required: false,
+    });
   });
 
   it("off a TTY it types instead, so piped answers still work", async () => {
@@ -152,8 +191,9 @@ describe("the Inquirer-backed prompts", () => {
     vi.stubEnv("EDITOR", "nano");
     typed.push("  Ship the blog index.\n\n- [ ] /blog renders\n  ");
     const spec = { key: "starting_prompt", label: "Starting prompt", help: "h", multiline: true };
-    expect(await promptOne(spec, "draft", null))
-      .toBe("Ship the blog index.\n\n- [ ] /blog renders");
+    expect(await promptOne(spec, "draft", null)).toBe(
+      "Ship the blog index.\n\n- [ ] /blog renders",
+    );
     expect(seen[0]).toMatchObject({ kind: "editor", default: "draft", postfix: ".md" });
   });
 

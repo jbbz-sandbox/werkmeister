@@ -22,7 +22,8 @@ declare const __SANDBOX_BUILD__: BuildStamp | undefined;
 export const BUILD_STAMP: BuildStamp | undefined =
   typeof __SANDBOX_BUILD__ === "undefined" ? undefined : __SANDBOX_BUILD__;
 
-export const REBUILD_COMMAND = "npm run build --workspace sandbox-core && npm run build --workspace apps/cli";
+export const REBUILD_COMMAND =
+  "npm run build --workspace sandbox-core && npm run build --workspace apps/cli";
 
 /**
  * The warning text when *build* came from a commit other than *repoRoot*'s

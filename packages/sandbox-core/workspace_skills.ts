@@ -96,9 +96,7 @@ export function renderWorkspaceSkills(
   if (isDir(source)) {
     const names = fs
       .readdirSync(source, { withFileTypes: true })
-      .filter(
-        (e) => e.isDirectory() && fs.existsSync(path.join(source, e.name, "SKILL.md")),
-      )
+      .filter((e) => e.isDirectory() && fs.existsSync(path.join(source, e.name, "SKILL.md")))
       .map((e) => e.name)
       .sort();
     for (const name of names) {

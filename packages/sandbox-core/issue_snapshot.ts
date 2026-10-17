@@ -6,7 +6,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { issueTracker, type IssueComment, type TrackerId } from "./issue_tracker.js";
+import { type IssueComment, issueTracker, type TrackerId } from "./issue_tracker.js";
 import type { IssueRef } from "./strategies/types.js";
 
 export const ISSUE_COPY = ".sandbox/issue.md";
@@ -25,7 +25,10 @@ export interface IssueSnapshot {
 
 export class IssueFetchError extends Error {}
 
-export async function fetchIssueSnapshot(ref: string, now: () => Date = () => new Date()): Promise<IssueSnapshot> {
+export async function fetchIssueSnapshot(
+  ref: string,
+  now: () => Date = () => new Date(),
+): Promise<IssueSnapshot> {
   const tracker = issueTracker();
   const issue = await tracker.fetchIssue(ref);
   if (!issue) throw new IssueFetchError(`couldn't read ${ref} from ${tracker.label}`);
@@ -57,12 +60,17 @@ export function renderIssueCopy(s: IssueSnapshot): string {
     "",
     s.body,
   ].join("\n");
-  const comments = s.comments.map((c) => `\n### ${c.author} · ${c.created ?? ""}\n\n${c.body}\n`).join("");
+  const comments = s.comments
+    .map((c) => `\n### ${c.author} · ${c.created ?? ""}\n\n${c.body}\n`)
+    .join("");
   return `${head}${COMMENTS}${comments}`;
 }
 
 export function parseIssueCopy(text: string): IssueSnapshot | null {
-  const m = /^---\nref: (.*)\nurl: (.*)\ntracker: (.*)\nstatus: (.*)\nfetched: (.*)\n---\n\n# (.*)\n\n/.exec(text);
+  const m =
+    /^---\nref: (.*)\nurl: (.*)\ntracker: (.*)\nstatus: (.*)\nfetched: (.*)\n---\n\n# (.*)\n\n/.exec(
+      text,
+    );
   if (!m) return null;
   const rest = text.slice(m[0].length);
   // The renderer always writes the Comments heading before the comment blocks; take the final one.
@@ -77,8 +85,14 @@ export function parseIssueCopy(text: string): IssueSnapshot | null {
     comments.push({ author: c[1], ...(c[2] ? { created: c[2] } : {}), body: c[3] });
   }
   return {
-    ref: m[1], url: m[2] || null, tracker: m[3] as TrackerId, status: m[4], fetchedAt: m[5],
-    title: m[6], body: rest.slice(0, at), comments,
+    ref: m[1],
+    url: m[2] || null,
+    tracker: m[3] as TrackerId,
+    status: m[4],
+    fetchedAt: m[5],
+    title: m[6],
+    body: rest.slice(0, at),
+    comments,
   };
 }
 
@@ -96,7 +110,8 @@ export function readIssueRef(root: string, issueId: string): IssueRef | null {
   } catch {
     /* no copy */
   }
-  if (s && s.ref === issueId) return { ref: s.ref, url: s.url, title: s.title, fetchedAt: s.fetchedAt };
+  if (s && s.ref === issueId)
+    return { ref: s.ref, url: s.url, title: s.title, fetchedAt: s.fetchedAt };
   if (!issueId) return null;
   return { ref: issueId, url: issueTracker().url(issueId), title: "", fetchedAt: null };
 }

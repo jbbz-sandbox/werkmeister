@@ -1,11 +1,12 @@
 // The server cannot see the client's cwd, so the feature travels in a header
 // pinned by the workspace's own .mcp.json. An explicit argument still wins --
 // one agent, one container, occasionally two features.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { SandboxError } from "sandbox-core/errors";
 import { withSandboxHome } from "../../packages/sandbox-core/fixtures.mjs";

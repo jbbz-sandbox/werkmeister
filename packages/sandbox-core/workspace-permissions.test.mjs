@@ -1,10 +1,11 @@
 // The workspace's permissions.allow merge: adds once, keeps the person's rules,
 // and removes only what sandbox recorded adding.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import {
   AUTONOMOUS_RULES,
@@ -21,7 +22,10 @@ function workspace(settings) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ws-perms-"));
   if (settings !== undefined) {
     fs.mkdirSync(path.join(root, ".claude"));
-    fs.writeFileSync(settingsPath(root), typeof settings === "string" ? settings : JSON.stringify(settings));
+    fs.writeFileSync(
+      settingsPath(root),
+      typeof settings === "string" ? settings : JSON.stringify(settings),
+    );
   }
   return root;
 }
@@ -112,15 +116,19 @@ for (const [name, body] of [
 }
 
 test("buildAllowRules: container form + bare prefix per command, then git; no rule invented", () => {
-  assert.deepEqual(buildAllowRules("feat", ["svc", "nocmd"], { svc: { test: "npm test" }, nocmd: {} }, {}), [
-    "Bash(docker exec feat-svc sh -c 'npm test')",
-    "Bash(npm test:*)",
-    ...READ_ONLY_GIT_RULES,
-  ]);
+  assert.deepEqual(
+    buildAllowRules("feat", ["svc", "nocmd"], { svc: { test: "npm test" }, nocmd: {} }, {}),
+    ["Bash(docker exec feat-svc sh -c 'npm test')", "Bash(npm test:*)", ...READ_ONLY_GIT_RULES],
+  );
 });
 
 test("buildAllowRules: an archetype's {service} template is expanded", () => {
-  const rules = buildAllowRules("feat", ["api"], { api: { archetype: "node" } }, { node: { test: "npx turbo run test --filter={service}" } });
+  const rules = buildAllowRules(
+    "feat",
+    ["api"],
+    { api: { archetype: "node" } },
+    { node: { test: "npx turbo run test --filter={service}" } },
+  );
   assert.deepEqual(rules.slice(0, 2), [
     "Bash(docker exec feat-api sh -c 'npx turbo run test --filter=api')",
     "Bash(npx turbo run test --filter=api:*)",
@@ -143,7 +151,10 @@ test("jit refresh writes its hooks and the same allow rules", async () => {
 
 function setAutonomous(root, on) {
   fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), `context_strategy: icm\nautonomous: ${on}\n`);
+  fs.writeFileSync(
+    path.join(root, ".sandbox", "workspace.yml"),
+    `context_strategy: icm\nautonomous: ${on}\n`,
+  );
 }
 
 // #175: a headless claude-send run needs these with nobody to approve them.
@@ -156,10 +167,18 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   for (const rule of AUTONOMOUS_RULES) assert.ok(settings.permissions.allow.includes(rule), rule);
   assert.ok(settings.permissions.allow.includes("mcp__plugin_sandbox-tools_sandbox-workspace"));
   assert.ok(settings.permissions.allow.includes("Bash(claude plugin test:*)"));
-  assert.ok(!settings.permissions.allow.some((r) => /^Bash\(claude( plugin)?:\*\)$/.test(r)), "no blanket claude rule");
-  assert.ok(!readRecord(root).allow.includes("Bash(git:*)"), "the person's own rule is not recorded");
   assert.ok(
-    settings.hooks.PreToolUse.some((e) => e.hooks.some((h) => h.command.includes("sandbox hooks pr-guard"))),
+    !settings.permissions.allow.some((r) => /^Bash\(claude( plugin)?:\*\)$/.test(r)),
+    "no blanket claude rule",
+  );
+  assert.ok(
+    !readRecord(root).allow.includes("Bash(git:*)"),
+    "the person's own rule is not recorded",
+  );
+  assert.ok(
+    settings.hooks.PreToolUse.some((e) =>
+      e.hooks.some((h) => h.command.includes("sandbox hooks pr-guard")),
+    ),
     "PR guard still installed",
   );
 

@@ -5,8 +5,9 @@
 // — so `foo-bar-node-modules` is feature `foo-bar`, base `node-modules`. There
 // is no prefix to anchor on, which is exactly why the longest-first ordering of
 // the base names is load-bearing rather than a tidiness rule.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { withSandboxHome } from "./fixtures.mjs";
 

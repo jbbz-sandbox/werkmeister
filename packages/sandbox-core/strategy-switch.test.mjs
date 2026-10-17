@@ -3,18 +3,18 @@
 // strategy also owns. Controller ruling P3: there is no `previous` local —
 // initWorkspace checks every OTHER registered strategy's owned paths after
 // strategy.init runs, since the value read at init start is already the new one.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { withSandboxHome } from "./fixtures.mjs";
+import { test } from "node:test";
 import { buildPrGuardEntry, READ_ONLY_GIT_RULES } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { leftoverPaths, reportLeftovers, strategyById } from "./dist/strategies/index.js";
 import { initWorkspace } from "./dist/workspace_init.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
 const jit = strategyById("jit");
 const icm = strategyById("icm");
@@ -61,7 +61,10 @@ test("without prune: one warning, nothing deleted", async () => {
   try {
     const c = collectingReporter();
     await withReporter(c, async () => reportLeftovers(root, jit, icm, false));
-    assert.match(c.text(), /jit layer still present: .*\.claude\/skills\/sb-research.*--prune-context/);
+    assert.match(
+      c.text(),
+      /jit layer still present: .*\.claude\/skills\/sb-research.*--prune-context/,
+    );
     assert.ok(fs.existsSync(path.join(root, ".claude", "skills", "sb-research")));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -76,8 +79,14 @@ test("prune deletes tracked clean paths only", async () => {
     assert.ok(!fs.existsSync(path.join(root, ".claude", "skills", "sb-research")));
     assert.ok(!fs.existsSync(path.join(root, ".claude", "settings.json")));
     assert.ok(fs.existsSync(path.join(root, ".claude", "skills", "mine", "SKILL.md")), "not jit's");
-    assert.equal(fs.readFileSync(path.join(root, ".claude", "agents", "sb-researcher.md"), "utf8"), "edited\n");
-    assert.ok(fs.existsSync(path.join(root, ".sandbox", "notes", "001-handoff-x.md")), "untracked kept");
+    assert.equal(
+      fs.readFileSync(path.join(root, ".claude", "agents", "sb-researcher.md"), "utf8"),
+      "edited\n",
+    );
+    assert.ok(
+      fs.existsSync(path.join(root, ".sandbox", "notes", "001-handoff-x.md")),
+      "untracked kept",
+    );
     assert.ok(fs.existsSync(path.join(root, "CLAUDE.md")), "icm owns it too");
     assert.match(c.text(), /Kept \.claude\/agents\/sb-researcher\.md/);
   } finally {
@@ -139,11 +148,17 @@ async function jitThenSwitchToIcm(root, std) {
   git("config", "user.name", "t");
 
   fs.mkdirSync(path.join(root, ".sandbox"));
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), "task: Switch test\nwork_type: feature\n");
+  fs.writeFileSync(
+    path.join(root, ".sandbox", "workspace.yml"),
+    "task: Switch test\nwork_type: feature\n",
+  );
 
-  await withSandboxHome(async () => withReporter(collectingReporter(), () => initWorkspace({}, root)), {
-    config: `overrides:\n  standards_dir: ${std}\n`,
-  });
+  await withSandboxHome(
+    async () => withReporter(collectingReporter(), () => initWorkspace({}, root)),
+    {
+      config: `overrides:\n  standards_dir: ${std}\n`,
+    },
+  );
 
   git("add", "-A");
   git("commit", "-qm", "jit init");
@@ -162,10 +177,9 @@ test("initWorkspace warns about jit leftovers after a workspace.yml switch to ic
     await jitThenSwitchToIcm(root, std);
 
     const c = collectingReporter();
-    await withSandboxHome(
-      async () => withReporter(c, () => initWorkspace({}, root)),
-      { config: `overrides:\n  standards_dir: ${std}\n` },
-    );
+    await withSandboxHome(async () => withReporter(c, () => initWorkspace({}, root)), {
+      config: `overrides:\n  standards_dir: ${std}\n`,
+    });
     assert.match(c.text(), /jit layer still present: .*\.claude\/skills\/sb-.*--prune-context/);
     assert.ok(fs.existsSync(path.join(root, ".claude", "skills")), "not pruned without the flag");
   } finally {
@@ -187,7 +201,10 @@ test("initWorkspace after a switch to icm removes jit's managed hooks even witho
 
     const settingsPath = path.join(root, ".claude", "settings.json");
     const before = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    assert.ok(before.hooks?.SessionStart || before.hooks?.PreToolUse, "jit hooks present before the switch");
+    assert.ok(
+      before.hooks?.SessionStart || before.hooks?.PreToolUse,
+      "jit hooks present before the switch",
+    );
 
     await withSandboxHome(
       async () => withReporter(collectingReporter(), () => initWorkspace({}, root)),
@@ -202,7 +219,10 @@ test("initWorkspace after a switch to icm removes jit's managed hooks even witho
       { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } },
       "only the PR guard and the allow rules are left",
     );
-    assert.ok(fs.existsSync(path.join(root, ".claude", "skills")), "unrelated jit leftovers untouched");
+    assert.ok(
+      fs.existsSync(path.join(root, ".claude", "skills")),
+      "unrelated jit leftovers untouched",
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(std, { recursive: true, force: true });

@@ -1,7 +1,8 @@
 // The local-vs-k8s endpoint decision was the only logic in commands/services.ts.
 // It is pinned here so the CLI is left holding nothing but padEnd.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { classifyEndpoint } from "./dist/slots.js";
 import { withSandboxHome } from "./fixtures.mjs";
@@ -10,7 +11,8 @@ import { withSandboxHome } from "./fixtures.mjs";
 // clean machine does not have.
 test("a locally-running service reports its slot port", async () => {
   const e = await withSandboxHome(async () =>
-    classifyEndpoint("backend", { port_offset: 2, type: "api" }, ["backend"], 3));
+    classifyEndpoint("backend", { port_offset: 2, type: "api" }, ["backend"], 3),
+  );
   assert.equal(e.source, "local");
   assert.equal(e.type, "api");
   assert.match(e.endpoint, /^localhost:\d+$/);

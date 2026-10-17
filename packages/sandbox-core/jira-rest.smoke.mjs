@@ -9,8 +9,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.dirname(fileURLToPath(import.meta.url));
-const { jiraCreds, fetchIssueRest, fetchStatusesRest } =
-  await import(path.join(pkgRoot, "dist", "jira-rest.js"));
+const { jiraCreds, fetchIssueRest, fetchStatusesRest } = await import(
+  path.join(pkgRoot, "dist", "jira-rest.js")
+);
 
 // 1. creds from the `jira:` section, trailing slash stripped from base_url
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "jira-smoke-"));
@@ -54,7 +55,9 @@ console.log("jira-rest pure-function smoke: PASS");
 // no default key, since a hardcoded one only exists on one Jira site)
 const creds = await jiraCreds();
 if (!creds || !process.argv[2]) {
-  console.log(`live section: SKIPPED (${creds ? "pass an issue key as argv[2]" : "no credentials"})`);
+  console.log(
+    `live section: SKIPPED (${creds ? "pass an issue key as argv[2]" : "no credentials"})`,
+  );
 } else {
   const key = process.argv[2];
   const issue = await fetchIssueRest(key);
@@ -63,5 +66,7 @@ if (!creds || !process.argv[2]) {
   assert.ok(issue.fields.summary, "live issue has a summary");
   const statuses = await fetchStatusesRest([key]);
   assert.ok(statuses?.[key.toUpperCase()], "batch status returned the key");
-  console.log(`live smoke: PASS (${key}: ${statuses[key.toUpperCase()]} — "${issue.fields.summary}")`);
+  console.log(
+    `live smoke: PASS (${key}: ${statuses[key.toUpperCase()]} — "${issue.fields.summary}")`,
+  );
 }

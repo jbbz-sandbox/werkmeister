@@ -6,7 +6,7 @@ import * as path from "node:path";
 
 import { COMPOSE_FILE } from "./compose.js";
 import { readText, yamlDocs } from "./files.js";
-import { stated, type DetectContext, type Finding } from "./types.js";
+import { type DetectContext, type Finding, stated } from "./types.js";
 
 export interface ManifestSource {
   /** Repo-relative file, or a label such as `x.values.yaml (helm template)`. */
@@ -40,7 +40,9 @@ export function findingsFromManifests(sources: ManifestSource[]): Finding[] {
       .map((doc: any) => ({ doc, source: s })),
   );
   const services = items.filter((i) => i.doc.kind === "Service").map((i) => i.doc);
-  const routed = new Set(items.filter((i) => i.doc.kind === "Ingress").flatMap((i) => ingressBackends(i.doc)));
+  const routed = new Set(
+    items.filter((i) => i.doc.kind === "Ingress").flatMap((i) => ingressBackends(i.doc)),
+  );
 
   const out: Finding[] = [];
   for (const { doc: w, source } of items.filter((i) => WORKLOADS.has(i.doc.kind))) {
@@ -78,7 +80,8 @@ export function findingsFromManifests(sources: ManifestSource[]): Finding[] {
       else if (e.value !== undefined && e.value !== null) env[e.name] = String(e.value);
     }
     if (Object.keys(env).length) fields.environment = stated(env, src("env"));
-    if (secrets.length) fields.secrets = stated([...secrets].sort(), src("env[].valueFrom.secretKeyRef"));
+    if (secrets.length)
+      fields.secrets = stated([...secrets].sort(), src("env[].valueFrom.secretKeyRef"));
 
     const labels: Record<string, string> = w.spec?.template?.metadata?.labels ?? {};
     const svc = services.find((s: any) => {
@@ -87,9 +90,12 @@ export function findingsFromManifests(sources: ManifestSource[]): Finding[] {
     });
     const svcName: string | undefined = svc?.metadata?.name;
     const sp = svc?.spec?.ports?.[0];
-    if (Number.isInteger(sp?.port)) fields.k8s_port = stated(sp.port, src(`Service ${svcName} port`));
-    if (typeof sp?.name === "string") fields.k8s_port_name = stated(sp.name, src(`Service ${svcName} port name`));
-    if (svcName && routed.has(svcName)) fields.feature_router = stated({}, src(`Ingress → Service ${svcName}`));
+    if (Number.isInteger(sp?.port))
+      fields.k8s_port = stated(sp.port, src(`Service ${svcName} port`));
+    if (typeof sp?.name === "string")
+      fields.k8s_port_name = stated(sp.name, src(`Service ${svcName} port name`));
+    if (svcName && routed.has(svcName))
+      fields.feature_router = stated({}, src(`Ingress → Service ${svcName}`));
 
     out.push({
       kind: "k8s",
@@ -105,7 +111,9 @@ export function findingsFromManifests(sources: ManifestSource[]): Finding[] {
 
 /** Every directory holding a Chart.yaml. */
 export function chartDirs(files: string[]): string[] {
-  return files.filter((f) => path.posix.basename(f) === "Chart.yaml").map((f) => path.posix.dirname(f));
+  return files
+    .filter((f) => path.posix.basename(f) === "Chart.yaml")
+    .map((f) => path.posix.dirname(f));
 }
 
 export const KUSTOMIZATION = /(^|\/)kustomization\.ya?ml$/;
@@ -121,17 +129,24 @@ const K8S_KIND = /^\s*kind:\s*(Deployment|StatefulSet|Service|Ingress|List)\b/m;
 
 /** Raw manifests in the repo. Chart sources are left to detectHelm, kustomize dirs to detectKustomize. */
 export function detectK8s(ctx: DetectContext): Finding[] {
-  const owned = [...chartDirs(ctx.files), ...ctx.files.filter((f) => KUSTOMIZATION.test(f)).map((f) => path.posix.dirname(f))];
+  const owned = [
+    ...chartDirs(ctx.files),
+    ...ctx.files.filter((f) => KUSTOMIZATION.test(f)).map((f) => path.posix.dirname(f)),
+  ];
   const ownedElsewhere = (f: string) => owned.some((c) => c === "." || f.startsWith(`${c}/`));
   const sources: ManifestSource[] = [];
   for (const file of ctx.files) {
-    if (!/\.ya?ml$/.test(file) || ownedElsewhere(file) || NOT_RAW.some((r) => r.test(file))) continue;
+    if (!/\.ya?ml$/.test(file) || ownedElsewhere(file) || NOT_RAW.some((r) => r.test(file)))
+      continue;
     const text = readText(ctx, file);
     if (!K8S_KIND.test(text)) continue;
     try {
       sources.push({ file, dir: path.posix.dirname(file), docs: yamlDocs(text) });
     } catch (e) {
-      ctx.skipped.push({ item: file, reason: `unparsable YAML: ${e instanceof Error ? e.message : String(e)}` });
+      ctx.skipped.push({
+        item: file,
+        reason: `unparsable YAML: ${e instanceof Error ? e.message : String(e)}`,
+      });
     }
   }
   return findingsFromManifests(sources);

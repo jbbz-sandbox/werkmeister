@@ -84,7 +84,11 @@ assert.equal(failed.running, 1, "...and drags the workspace to partial");
 // ignored, not counted. The shelled `docker ps` produced these as blank columns;
 // the Engine API produces them as a missing label, mapped to "".
 const withNoise = tallyComposeContainers([row("", "", "running", "Up 1 hour"), ...containers]);
-assert.equal(withNoise.get("sandbox-infra").total, 3, "unlabelled containers don't affect real tallies");
+assert.equal(
+  withNoise.get("sandbox-infra").total,
+  3,
+  "unlabelled containers don't affect real tallies",
+);
 
 console.log(
   "✓ tallyComposeContainers: grouping, running/total tally, per-container detail, setup exclusion (role label + -setup fallback), failed-setup retention, unlabelled containers",

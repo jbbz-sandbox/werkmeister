@@ -3,8 +3,9 @@
  * hand them to the pure builder, and map WsNode → TreeItem. No display logic
  * lives here — that is all in build-tree.ts.
  */
+
+import { getIntercepts, getWorkspaceStatuses, listWorkspaces } from "sandbox-core";
 import * as vscode from "vscode";
-import { listWorkspaces, getWorkspaceStatuses, getIntercepts } from "sandbox-core";
 import { buildTree, cliNotFoundNode, type WsNode } from "./build-tree.js";
 import { pollWhileVisible } from "./poll.js";
 

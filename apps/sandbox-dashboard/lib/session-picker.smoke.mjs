@@ -23,8 +23,14 @@ const projDir = path.join(home, ".claude", "projects", encoded);
 fs.mkdirSync(projDir, { recursive: true });
 
 const line = (o) => JSON.stringify(o) + "\n";
-const userLine = (t) => line({ type: "user", timestamp: "2026-07-10T00:00:00Z", message: { role: "user", content: t } });
-const asstLine = (t) => line({ type: "assistant", timestamp: "2026-07-10T00:00:01Z", message: { role: "assistant", content: [{ type: "text", text: t }] } });
+const userLine = (t) =>
+  line({ type: "user", timestamp: "2026-07-10T00:00:00Z", message: { role: "user", content: t } });
+const asstLine = (t) =>
+  line({
+    type: "assistant",
+    timestamp: "2026-07-10T00:00:01Z",
+    message: { role: "assistant", content: [{ type: "text", text: t }] },
+  });
 const titleLine = (id, t) => line({ type: "ai-title", sessionId: id, aiTitle: t });
 
 // Three sessions with controlled mtimes so ordering is deterministic.
@@ -40,13 +46,20 @@ write(C, asstLine("orphan assistant"), 100);
 write(B, userLine("do the important thing") + asstLine("on it"), 200);
 write(A, titleLine(A, "Newest Session Title") + userLine("hi") + asstLine("hello"), 300);
 
-const { listSessions, getClaudeTranscript, resolveSessionSource } =
-  await import("sandbox-core");
+const { listSessions, getClaudeTranscript, resolveSessionSource } = await import("sandbox-core");
 
 // 1. listSessions: newest first, isNewest flag, three-tier title fallback.
 const sessions = await listSessions("demo");
-assert.deepEqual(sessions.map((s) => s.sessionId), [A, B, C], "newest mtime first");
-assert.deepEqual(sessions.map((s) => s.isNewest), [true, false, false], "only [0] isNewest");
+assert.deepEqual(
+  sessions.map((s) => s.sessionId),
+  [A, B, C],
+  "newest mtime first",
+);
+assert.deepEqual(
+  sessions.map((s) => s.isNewest),
+  [true, false, false],
+  "only [0] isNewest",
+);
 assert.equal(sessions[0].title, "Newest Session Title", "ai-title used when present");
 assert.equal(sessions[1].title, "do the important thing", "first user message when no ai-title");
 assert.equal(sessions[2].title, C.slice(0, 8), "uuid8 fallback when no title/user msg");
@@ -56,7 +69,10 @@ console.log("✓ listSessions: order, isNewest, ai-title → first-user → uuid
 // 2. getClaudeTranscript honours an explicit older sessionId.
 const tB = await getClaudeTranscript("demo", 20, B);
 assert.equal(tB.sessionId, B, "pinned to B");
-assert.ok(tB.messages.some((m) => m.text === "do the important thing"), "B's content");
+assert.ok(
+  tB.messages.some((m) => m.text === "do the important thing"),
+  "B's content",
+);
 
 // 3. Stale id → fall back to newest, no throw.
 const tStale = await getClaudeTranscript("demo", 20, "deadbeef-0000-0000-0000-000000000000");
@@ -76,17 +92,27 @@ const waitFor = (pred, ms = 4000) =>
   new Promise((res, rej) => {
     const t0 = Date.now();
     const iv = setInterval(() => {
-      if (pred()) { clearInterval(iv); res(); }
-      else if (Date.now() - t0 > ms) { clearInterval(iv); rej(new Error("timeout")); }
+      if (pred()) {
+        clearInterval(iv);
+        res();
+      } else if (Date.now() - t0 > ms) {
+        clearInterval(iv);
+        rej(new Error("timeout"));
+      }
     }, 40);
   });
 
 const pinnedEvents = [];
 let pinnedReady = null;
-const unsubPinned = subscribeSession("demo", (e) => {
-  pinnedEvents.push(e);
-  if (e.type === "ready") pinnedReady = e;
-}, 0, B);
+const unsubPinned = subscribeSession(
+  "demo",
+  (e) => {
+    pinnedEvents.push(e);
+    if (e.type === "ready") pinnedReady = e;
+  },
+  0,
+  B,
+);
 await waitFor(() => pinnedReady);
 assert.equal(pinnedReady.sessionId, B, "pinned ready reports B");
 

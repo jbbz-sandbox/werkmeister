@@ -15,8 +15,13 @@ vi.mock("sandbox-core", () => ({
 
 const { offerRefine } = await import("../wizard.js");
 
-const SPEC = { key: "starting_prompt", label: "Starting prompt", help: "h", refinable: true,
-               refineInstruction: "Rewrite as a dev instruction." };
+const SPEC = {
+  key: "starting_prompt",
+  label: "Starting prompt",
+  help: "h",
+  refinable: true,
+  refineInstruction: "Rewrite as a dev instruction.",
+};
 
 /** An `ask` that replays scripted answers in order, then falls back to the default. */
 function asking(...answers: boolean[]) {

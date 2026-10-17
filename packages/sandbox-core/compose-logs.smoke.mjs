@@ -11,10 +11,12 @@ import { composeLogsStream } from "./dist/compose.js";
 
 let projects = [];
 try {
-  projects = JSON.parse(execFileSync("docker", ["compose", "ls", "--format", "json"], {
-    encoding: "utf8",
-    timeout: 15_000,
-  }));
+  projects = JSON.parse(
+    execFileSync("docker", ["compose", "ls", "--format", "json"], {
+      encoding: "utf8",
+      timeout: 15_000,
+    }),
+  );
 } catch {
   console.log("compose-logs.smoke SKIPPED (no reachable daemon)");
   process.exit(0);
@@ -50,6 +52,7 @@ await new Promise((resolve) => setTimeout(resolve, 4_000));
 assert.ok(output.length > 0, "expected log output");
 assert.match(
   output,
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: asserts the raw ANSI colour code
   /\u001b\[3[0-9]m/,
   "expected ANSI from `--ansi always` — without it the per-service prefix colour is dropped",
 );
@@ -64,4 +67,6 @@ assert.equal(
   "expected null rather than a doomed child when the feature has no compose file",
 );
 
-console.log(`compose-logs.smoke: PASS (feature '${feature}', ${output.length} bytes, ANSI present)`);
+console.log(
+  `compose-logs.smoke: PASS (feature '${feature}', ${output.length} bytes, ANSI present)`,
+);

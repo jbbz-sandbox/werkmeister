@@ -10,8 +10,8 @@
  *   sandbox registry --check    # report drift; nonzero exit when stale
  */
 
-import { Colors, success, warn } from "../lib/config.js";
 import { syncRegistry } from "sandbox-core/registry_sync";
+import { Colors, success, warn } from "../lib/config.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const action = String(args.action ?? "sync");
@@ -26,7 +26,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     console.log(`${mark} ${step.label}: ${step.detail}`);
   }
   if (steps.some((s) => !s.ok)) {
-    warn(check ? "Registry is stale — run `sandbox registry sync`." : "Registry was not generated.");
+    warn(
+      check ? "Registry is stale — run `sandbox registry sync`." : "Registry was not generated.",
+    );
     process.exit(1);
   }
   success(check ? "Registry is up to date." : "Registry generated.");

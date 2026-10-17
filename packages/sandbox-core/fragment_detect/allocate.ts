@@ -53,12 +53,17 @@ export function takenPorts(
   for (const f of discoverFragments(reposRoot)) {
     if (path.resolve(f.path) !== path.resolve(fragmentPath)) collect(f.doc, taken);
   }
-  if (fs.existsSync(localPath)) collect(parseYaml(fs.readFileSync(localPath, "utf8")) ?? null, taken);
+  if (fs.existsSync(localPath))
+    collect(parseYaml(fs.readFileSync(localPath, "utf8")) ?? null, taken);
   collect(existing, taken);
   return taken;
 }
 
-export function allocateOffsets(names: string[], taken: Set<number>, limit: number): Map<string, number> {
+export function allocateOffsets(
+  names: string[],
+  taken: Set<number>,
+  limit: number,
+): Map<string, number> {
   const used = new Set(taken);
   const out = new Map<string, number>();
   for (const name of [...names].sort()) {
@@ -75,7 +80,11 @@ export function allocateOffsets(names: string[], taken: Set<number>, limit: numb
   return out;
 }
 
-export function allocateForwards(names: string[], taken: Set<number>, start = 9050): Map<string, number> {
+export function allocateForwards(
+  names: string[],
+  taken: Set<number>,
+  start = 9050,
+): Map<string, number> {
   const used = new Set(taken);
   const out = new Map<string, number>();
   for (const name of [...names].sort()) {
@@ -106,7 +115,10 @@ export function rewriteEnv(
     if (before === undefined) continue;
     let value = before;
     for (const t of tunnels) {
-      value = value.replace(new RegExp(`(?<![\\w.-])${escapeRe(t.host ?? t.name)}:${t.port}\\b`, "g"), `k8s-${t.name}:${t.forward}`);
+      value = value.replace(
+        new RegExp(`(?<![\\w.-])${escapeRe(t.host ?? t.name)}:${t.port}\\b`, "g"),
+        `k8s-${t.name}:${t.forward}`,
+      );
     }
     if (value !== before) {
       out[key] = value;

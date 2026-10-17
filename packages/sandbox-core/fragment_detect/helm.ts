@@ -27,17 +27,25 @@ export function detectHelm(ctx: DetectContext): Finding[] {
   for (const chart of charts) {
     const parent = path.posix.dirname(chart);
     const siblings = charts.filter((c) => path.posix.dirname(c) === parent);
-    const valuesHere = ctx.files.filter((f) => path.posix.dirname(f) === parent && /[^/]\.values\.ya?ml$/.test(f));
+    const valuesHere = ctx.files.filter(
+      (f) => path.posix.dirname(f) === parent && /[^/]\.values\.ya?ml$/.test(f),
+    );
     if (valuesHere.length && siblings.length > 1) {
       if (chart === siblings[0]) {
         for (const v of valuesHere) {
-          ctx.skipped.push({ item: v, reason: `several charts in ${parent}/ — can't tell which one ${v} is for` });
+          ctx.skipped.push({
+            item: v,
+            reason: `several charts in ${parent}/ — can't tell which one ${v} is for`,
+          });
         }
       }
       continue;
     }
     const releases = valuesHere.length
-      ? valuesHere.map((v) => ({ release: path.posix.basename(v).replace(/\.values\.ya?ml$/, ""), values: v as string | null }))
+      ? valuesHere.map((v) => ({
+          release: path.posix.basename(v).replace(/\.values\.ya?ml$/, ""),
+          values: v as string | null,
+        }))
       : [{ release: chartName(ctx, chart), values: null }];
     for (const { release, values } of releases) {
       const cmd = ["helm", "template", release, path.join(ctx.root, chart)];
@@ -53,9 +61,16 @@ export function detectHelm(ctx: DetectContext): Finding[] {
         continue;
       }
       try {
-        out.push(...findingsFromManifests([{ file: `${item} (helm template)`, dir: null, docs: yamlDocs(text) }]));
+        out.push(
+          ...findingsFromManifests([
+            { file: `${item} (helm template)`, dir: null, docs: yamlDocs(text) },
+          ]),
+        );
       } catch (e) {
-        ctx.skipped.push({ item, reason: `unparsable helm output: ${e instanceof Error ? e.message : String(e)}` });
+        ctx.skipped.push({
+          item,
+          reason: `unparsable helm output: ${e instanceof Error ? e.message : String(e)}`,
+        });
       }
     }
   }

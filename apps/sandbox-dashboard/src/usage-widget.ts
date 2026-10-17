@@ -6,10 +6,31 @@
  */
 import { el, injectCss } from "./theme.js";
 
-export interface UsageTotals { input: number; output: number; cacheCreation: number; cacheRead: number; }
-export interface ModelUsage { model: string; totals: UsageTotals; estUsd: number | null; }
-export interface SessionUsage { sessionId: string; title: string; updatedAt: string; totals: UsageTotals; estUsd: number | null; }
-export interface WorkspaceUsage { name: string; totals: UsageTotals; estUsd: number | null; byModel: ModelUsage[]; sessions: SessionUsage[]; }
+export interface UsageTotals {
+  input: number;
+  output: number;
+  cacheCreation: number;
+  cacheRead: number;
+}
+export interface ModelUsage {
+  model: string;
+  totals: UsageTotals;
+  estUsd: number | null;
+}
+export interface SessionUsage {
+  sessionId: string;
+  title: string;
+  updatedAt: string;
+  totals: UsageTotals;
+  estUsd: number | null;
+}
+export interface WorkspaceUsage {
+  name: string;
+  totals: UsageTotals;
+  estUsd: number | null;
+  byModel: ModelUsage[];
+  sessions: SessionUsage[];
+}
 
 // The .usage-panel container (padding, separators) stays with each host's own
 // CSS — these are just the rows inside it, shared by both hosts.
@@ -56,13 +77,21 @@ export function renderUsage(container: HTMLElement, usage: WorkspaceUsage): void
     row.appendChild(el("span", "usage-name", m.model));
     row.appendChild(el("span", "usage-usd", fmtUsd(m.estUsd)));
     row.appendChild(el("span", "usage-tok", fmtTokens(sum(m.totals)) + " tok"));
-    row.appendChild(el("span", "usage-split",
-      `in ${fmtTokens(m.totals.input)} · out ${fmtTokens(m.totals.output)} · cache-r ${fmtTokens(m.totals.cacheRead)}`));
+    row.appendChild(
+      el(
+        "span",
+        "usage-split",
+        `in ${fmtTokens(m.totals.input)} · out ${fmtTokens(m.totals.output)} · cache-r ${fmtTokens(m.totals.cacheRead)}`,
+      ),
+    );
     container.appendChild(row);
   }
 
   // Per-session (newest first). Flag the costliest session as "hot".
-  const hottest = usage.sessions.reduce((a, b) => ((b.estUsd ?? 0) > (a.estUsd ?? 0) ? b : a), usage.sessions[0]);
+  const hottest = usage.sessions.reduce(
+    (a, b) => ((b.estUsd ?? 0) > (a.estUsd ?? 0) ? b : a),
+    usage.sessions[0],
+  );
   container.appendChild(el("div", "usage-h", `Sessions (${usage.sessions.length})`));
   for (const s of usage.sessions) {
     const row = el("div", "usage-row sub");

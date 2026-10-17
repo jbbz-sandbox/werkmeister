@@ -1,11 +1,12 @@
 // The workspace PR lifecycle (docs/workspace-lifecycle.md). PR files, the gate's
 // decisions, lifecycle state and close-out ordering are real; git, gh, docker,
 // HTTP and the issue tracker are stubbed at the `deps` seam.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import {
   abandonWorkspace,
@@ -13,8 +14,8 @@ import {
   closeOut,
   lifecycleOf,
   mapTouched,
-  openTerminalSessions,
   openPrs,
+  openTerminalSessions,
   prFileDir,
   readPrFiles,
   refreshPrStatus,
@@ -32,15 +33,24 @@ function prFile({ status = "approved", body = PASS_BODY, extra = "" } = {}) {
 }
 
 /** A temp ICM workspace: stages 01_research (done), 02_implement (exercise.md), 03_propose. */
-function icmWorkspace({ files = { app: prFile() }, exercise = "| smoke | PASS |\n", researchDone = true } = {}) {
+function icmWorkspace({
+  files = { app: prFile() },
+  exercise = "| smoke | PASS |\n",
+  researchDone = true,
+} = {}) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-life-"));
   const out = (d) => path.join(ws, "stages", d, "output");
-  for (const d of ["01_research", "02_implement", "03_propose"]) fs.mkdirSync(out(d), { recursive: true });
+  for (const d of ["01_research", "02_implement", "03_propose"])
+    fs.mkdirSync(out(d), { recursive: true });
   if (researchDone) fs.writeFileSync(path.join(out("01_research"), "decisions.md"), "x");
   if (exercise !== null) fs.writeFileSync(path.join(out("02_implement"), "exercise.md"), exercise);
-  for (const [dir, text] of Object.entries(files)) fs.writeFileSync(path.join(out("03_propose"), `pr-${dir}.md`), text);
+  for (const [dir, text] of Object.entries(files))
+    fs.writeFileSync(path.join(out("03_propose"), `pr-${dir}.md`), text);
   fs.mkdirSync(path.join(ws, ".sandbox"), { recursive: true });
-  fs.writeFileSync(path.join(ws, ".sandbox", "workspace.yml"), "feature: feat\nservices: api,lib\nissue_id: o/app#7\nwork_type: feature\n");
+  fs.writeFileSync(
+    path.join(ws, ".sandbox", "workspace.yml"),
+    "feature: feat\nservices: api,lib\nissue_id: o/app#7\nwork_type: feature\n",
+  );
   fs.writeFileSync(path.join(ws, ".env"), "FEATURE=feat\nSANDBOX_SLOT=1\n");
   return ws;
 }
@@ -51,7 +61,8 @@ function stubRun(table) {
   const run = async (bin, args) => {
     const line = [bin, ...args].join(" ");
     calls.push(line);
-    for (const [re, res] of table) if (re.test(line)) return { stdout: "", stderr: "", code: 0, ...res };
+    for (const [re, res] of table)
+      if (re.test(line)) return { stdout: "", stderr: "", code: 0, ...res };
     return { stdout: "", stderr: "", code: 0 };
   };
   return { run, calls };
@@ -62,7 +73,16 @@ const REGISTRY = {
     api: { type: "api", port_offset: 2, health_endpoint: "/health", test: "npm test -w api" },
     lib: { type: "library", port_offset: 3 },
   },
-  repos: { app: { services: ["api", "lib"], path_mappings: { "apps/api": "api", "packages/lib": "lib" }, no_service_paths: ["docs", ".changeset/", "README.md"], ship: "tag", release_tag: "v*", release_check: "npx changeset status" } },
+  repos: {
+    app: {
+      services: ["api", "lib"],
+      path_mappings: { "apps/api": "api", "packages/lib": "lib" },
+      no_service_paths: ["docs", ".changeset/", "README.md"],
+      ship: "tag",
+      release_tag: "v*",
+      release_check: "npx changeset status",
+    },
+  },
 };
 
 function deps(table, over = {}) {
@@ -74,7 +94,10 @@ function deps(table, over = {}) {
     services: REGISTRY.services,
     archetypes: {},
     repos: REGISTRY.repos,
-    tracker: { fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }), updateIssue: async () => {} },
+    tracker: {
+      fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+      updateIssue: async () => {},
+    },
     doneStatus: "closed",
     commitRecord: async () => ({ ok: true, message: "record pushed" }),
     remove: async () => ({ output: "removed" }),
@@ -156,15 +179,26 @@ test("mapTouched: longest prefix wins; an unmapped file touches every service", 
 });
 
 test("mapTouched: no_service_paths touch nothing; other unmapped files still touch every service", () => {
-  const repo = { services: ["a", "b"], path_mappings: { "apps/a": "a", "docs/a": "a" }, no_service_paths: ["docs", ".changeset/", "README.md"] };
+  const repo = {
+    services: ["a", "b"],
+    path_mappings: { "apps/a": "a", "docs/a": "a" },
+    no_service_paths: ["docs", ".changeset/", "README.md"],
+  };
   assert.deepEqual(mapTouched(["docs/x.md", ".changeset/y.md", "README.md"], repo), []);
   assert.deepEqual(mapTouched(["docs/x.md", "apps/a/z.ts"], repo), ["a"]);
   assert.deepEqual(mapTouched(["docs/a/x.md"], repo), ["a"], "a longer path_mappings prefix wins");
   assert.deepEqual(mapTouched(["docs/x.md", "package.json"], repo), ["a", "b"]);
-  assert.deepEqual(mapTouched(["README.mdx"], repo), ["a", "b"], "a file prefix matches only that file");
+  assert.deepEqual(
+    mapTouched(["README.mdx"], repo),
+    ["a", "b"],
+    "a file prefix matches only that file",
+  );
 });
 
-const DIFF_API = [/git -C \S+ diff --name-only origin\/main\.\.\.HEAD/, { stdout: "apps/api/x.ts\n" }];
+const DIFF_API = [
+  /git -C \S+ diff --name-only origin\/main\.\.\.HEAD/,
+  { stdout: "apps/api/x.ts\n" },
+];
 
 test("gate passes: tests, exercise, baseline, release check, approved", async () => {
   const ws = icmWorkspace();
@@ -185,7 +219,10 @@ test("gate: a docs-only diff runs no service tests and passes without skip_tests
     const d = deps([[/diff --name-only/, { stdout: "docs/a.md\n.changeset/b.md\nREADME.md\n" }]]);
     const g = await gate(ws, d);
     assert.deepEqual(failed(g), []);
-    assert.deepEqual(g.checks.filter((c) => /^(test|baseline) /.test(c.name)), []);
+    assert.deepEqual(
+      g.checks.filter((c) => /^(test|baseline) /.test(c.name)),
+      [],
+    );
     assert.ok(d.calls.includes("docker exec feat-api sh -c npx changeset status"));
   } finally {
     clean(ws);
@@ -195,9 +232,15 @@ test("gate: a docs-only diff runs no service tests and passes without skip_tests
 test("gate: docs plus code tests only the code's service", async () => {
   const ws = icmWorkspace();
   try {
-    const g = await gate(ws, deps([[/diff --name-only/, { stdout: "docs/a.md\napps/api/x.ts\n" }]]));
+    const g = await gate(
+      ws,
+      deps([[/diff --name-only/, { stdout: "docs/a.md\napps/api/x.ts\n" }]]),
+    );
     assert.deepEqual(failed(g), []);
-    assert.deepEqual(g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name), ["test api"]);
+    assert.deepEqual(
+      g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
+      ["test api"],
+    );
   } finally {
     clean(ws);
   }
@@ -207,7 +250,10 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
   const ws = icmWorkspace();
   try {
     const g = await gate(ws, deps([[/diff --name-only/, { stdout: "docs/a.md\npackage.json\n" }]]));
-    assert.deepEqual(g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name), ["test api", "test lib"]);
+    assert.deepEqual(
+      g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
+      ["test api", "test lib"],
+    );
     assert.deepEqual(failed(g), ["test lib"]);
   } finally {
     clean(ws);
@@ -215,7 +261,11 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
 });
 
 test("gate fails on an unfinished stage, a FAIL row and missing exercise evidence", async () => {
-  const ws = icmWorkspace({ researchDone: false, exercise: null, files: { app: prFile({ body: "| x | FAIL |\n" }) } });
+  const ws = icmWorkspace({
+    researchDone: false,
+    exercise: null,
+    files: { app: prFile({ body: "| x | FAIL |\n" }) },
+  });
   try {
     const g = await gate(ws, deps([DIFF_API]));
     assert.deepEqual(failed(g), ["stages", "acceptance", "exercise"]);
@@ -232,7 +282,9 @@ test("gate: a touched service with no test command fails unless skip_tests gives
   } finally {
     clean(ws);
   }
-  const skipped = icmWorkspace({ files: { app: prFile({ extra: "skip_tests:\n  lib: pure types, covered by api tests\n" }) } });
+  const skipped = icmWorkspace({
+    files: { app: prFile({ extra: "skip_tests:\n  lib: pure types, covered by api tests\n" }) },
+  });
   try {
     const g = await gate(skipped, deps([diffLib]));
     assert.deepEqual(failed(g), []);
@@ -261,20 +313,35 @@ test("gate: a failing release check fails unless skip_release gives a reason", a
 test("gate: a touched service with a test command but no container fails unless skip_tests gives a reason", async () => {
   // #145: the workspace runs other services (k8s), so this repo has no container.
   const noContainers = (ws) => {
-    fs.writeFileSync(path.join(ws, ".sandbox", "workspace.yml"), "feature: feat\nservices: backend,frontend\nissue_id: o/app#7\nwork_type: feature\n");
+    fs.writeFileSync(
+      path.join(ws, ".sandbox", "workspace.yml"),
+      "feature: feat\nservices: backend,frontend\nissue_id: o/app#7\nwork_type: feature\n",
+    );
     const d = deps([]);
     d.run = stubRun([[/^docker ps/, { stdout: "" }], DIFF_API]).run;
     return d;
   };
-  const ws = icmWorkspace({ files: { app: prFile({ extra: "skip_release: changeset committed, checked on host\n" }) } });
+  const ws = icmWorkspace({
+    files: { app: prFile({ extra: "skip_release: changeset committed, checked on host\n" }) },
+  });
   try {
     const g = await gate(ws, noContainers(ws));
     assert.deepEqual(failed(g), ["test api"]);
-    assert.match(g.checks.find((c) => c.name === "test api").detail, /no running container for this repo/);
+    assert.match(
+      g.checks.find((c) => c.name === "test api").detail,
+      /no running container for this repo/,
+    );
   } finally {
     clean(ws);
   }
-  const skipped = icmWorkspace({ files: { app: prFile({ extra: "skip_release: changeset committed, checked on host\nskip_tests:\n  api: ran on host, 12/12 pass\n" }) } });
+  const skipped = icmWorkspace({
+    files: {
+      app: prFile({
+        extra:
+          "skip_release: changeset committed, checked on host\nskip_tests:\n  api: ran on host, 12/12 pass\n",
+      }),
+    },
+  });
   try {
     const g = await gate(skipped, noContainers(skipped));
     assert.deepEqual(failed(g), []);
@@ -287,9 +354,16 @@ test("gate: a touched service with a test command but no container fails unless 
 test("gate: dirty worktree, failing test, down health endpoint, unapproved", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
   try {
-    const d = deps([DIFF_API, [/status --porcelain/, { stdout: " M x.ts\n" }], [/npm test -w api/, { code: 1, stdout: "1 failing" }]], {
-      httpStatus: async () => 502,
-    });
+    const d = deps(
+      [
+        DIFF_API,
+        [/status --porcelain/, { stdout: " M x.ts\n" }],
+        [/npm test -w api/, { code: 1, stdout: "1 failing" }],
+      ],
+      {
+        httpStatus: async () => 502,
+      },
+    );
     assert.deepEqual(failed(await gate(ws, d)), ["clean", "test api", "baseline api", "approved"]);
   } finally {
     clean(ws);
@@ -302,8 +376,13 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     let updated = null;
     let recorded = null;
     const d = deps([DIFF_API, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]], {
-      tracker: { fetchIssue: async () => null, updateIssue: async (ref, u) => (updated = [ref, u.status]) },
-      commitRecord: async (_ws, _msg, paths) => ((recorded = paths), { ok: true, message: "record pushed" }),
+      tracker: {
+        fetchIssue: async () => null,
+        updateIssue: async (ref, u) => (updated = [ref, u.status]),
+      },
+      commitRecord: async (_ws, _msg, paths) => (
+        (recorded = paths), { ok: true, message: "record pushed" }
+      ),
     });
     const r = await open(ws, d);
     assert.ok(r.ok, r.lines.join("\n"));
@@ -311,7 +390,11 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(f.fm.status, "open");
     assert.equal(f.fm.url, "https://github.com/o/app/pull/9");
     assert.deepEqual(updated, ["o/app#7", "In Development"]);
-    assert.deepEqual(recorded, ["stages/03_propose/output/pr-app.md"], "the record commit names only the PR file");
+    assert.deepEqual(
+      recorded,
+      ["stages/03_propose/output/pr-app.md"],
+      "the record commit names only the PR file",
+    );
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
   } finally {
     clean(ws);
@@ -329,13 +412,21 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
 });
 
 test("refreshPrStatus: merged, then shipped once a release tag contains the merge", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) } });
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
   try {
-    const merged = [/^gh pr view/, { stdout: JSON.stringify({ state: "MERGED", mergeCommit: { oid: "abc123" } }) }];
+    const merged = [
+      /^gh pr view/,
+      { stdout: JSON.stringify({ state: "MERGED", mergeCommit: { oid: "abc123" } }) },
+    ];
     await refreshPrStatus(ws, deps([merged, [/tag --contains abc123 --list v\*/, { stdout: "" }]]));
     assert.equal(readPrFiles(ws)[0].fm.status, "merged");
     assert.equal(readPrFiles(ws)[0].fm.merge_sha, "abc123");
-    const r = await refreshPrStatus(ws, deps([[/tag --contains abc123/, { stdout: "v1.2.0\nv1.3.0\n" }]]));
+    const r = await refreshPrStatus(
+      ws,
+      deps([[/tag --contains abc123/, { stdout: "v1.2.0\nv1.3.0\n" }]]),
+    );
     assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
     assert.equal(readPrFiles(ws)[0].fm.release, "v1.2.0");
     assert.ok(r.changed);
@@ -345,9 +436,14 @@ test("refreshPrStatus: merged, then shipped once a release tag contains the merg
 });
 
 test("refreshPrStatus: ship: merge ships on merge", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "merged", extra: "merge_sha: abc\n" }) } });
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "merged", extra: "merge_sha: abc\n" }) },
+  });
   try {
-    await refreshPrStatus(ws, deps([], { repos: { app: { ...REGISTRY.repos.app, ship: "merge" } } }));
+    await refreshPrStatus(
+      ws,
+      deps([], { repos: { app: { ...REGISTRY.repos.app, ship: "merge" } } }),
+    );
     assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
   } finally {
     clean(ws);
@@ -355,7 +451,14 @@ test("refreshPrStatus: ship: merge ships on merge", async () => {
 });
 
 test("refreshPrStatus: ship: tag ignores skip_release and waits for a release tag (#145)", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "merged", extra: "merge_sha: abc\nskip_release: no container, checked on host\n" }) } });
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({
+        status: "merged",
+        extra: "merge_sha: abc\nskip_release: no container, checked on host\n",
+      }),
+    },
+  });
   try {
     await refreshPrStatus(ws, deps([[/tag --contains abc/, { stdout: "" }]]));
     assert.equal(readPrFiles(ws)[0].fm.status, "merged");
@@ -368,10 +471,22 @@ test("refreshPrStatus: ship: tag ignores skip_release and waits for a release ta
 });
 
 test("removalBlockers: an open PR, unmerged commits; merged and closed-out are fine", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }), lib: prFile({ status: "merged" }) } });
-  const trees = [{ repo: "app", dir: "/w/app" }, { repo: "lib", dir: "/w/lib" }, { repo: "other", dir: "/w/other" }];
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "open", extra: "url: u\n" }),
+      lib: prFile({ status: "merged" }),
+    },
+  });
+  const trees = [
+    { repo: "app", dir: "/w/app" },
+    { repo: "lib", dir: "/w/lib" },
+    { repo: "other", dir: "/w/other" },
+  ];
   try {
-    const { run } = stubRun([[/rev-parse --abbrev-ref origin\/HEAD/, { stdout: "origin/main\n" }], [/rev-list --count origin\/main\.\.HEAD/, { stdout: "2\n" }]]);
+    const { run } = stubRun([
+      [/rev-parse --abbrev-ref origin\/HEAD/, { stdout: "origin/main\n" }],
+      [/rev-list --count origin\/main\.\.HEAD/, { stdout: "2\n" }],
+    ]);
     assert.deepEqual(await removalBlockers(ws, trees, run), [
       "app: PR is open (u)",
       "other: 2 commit(s) not on origin/main and no merged PR",
@@ -384,14 +499,19 @@ test("removalBlockers: an open PR, unmerged commits; merged and closed-out are f
 });
 
 test("abandonWorkspace: unsettled files become abandoned with the reason; closeout.md records it", () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "open" }), lib: prFile({ status: "shipped" }) } });
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open" }), lib: prFile({ status: "shipped" }) },
+  });
   try {
     abandonWorkspace(ws, "superseded by #140");
     const byDir = Object.fromEntries(readPrFiles(ws).map((f) => [f.dir, f.fm]));
     assert.equal(byDir.app.status, "abandoned");
     assert.equal(byDir.app.reason, "superseded by #140");
     assert.equal(byDir.lib.status, "shipped");
-    assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /Abandoned: superseded by #140/);
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /Abandoned: superseded by #140/,
+    );
   } finally {
     clean(ws);
   }
@@ -399,13 +519,20 @@ test("abandonWorkspace: unsettled files become abandoned with the reason; closeo
 
 // The machine's config.yaml names its own workspaces_root, so a throwaway one replaces it.
 const inWorkspacesRoot = (ws, fn) =>
-  withSandboxHome(() => fn(path.basename(ws)), { config: `paths:\n  workspaces_root: ${path.dirname(ws)}\n` });
+  withSandboxHome(() => fn(path.basename(ws)), {
+    config: `paths:\n  workspaces_root: ${path.dirname(ws)}\n`,
+  });
 
 test("removeWorkspace refuses while a PR is open, before touching anything", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
   fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
   try {
-    const err = await inWorkspacesRoot(ws, (name) => removeWorkspace(name).then(() => null, (e) => e));
+    const err = await inWorkspacesRoot(ws, (name) =>
+      removeWorkspace(name).then(
+        () => null,
+        (e) => e,
+      ),
+    );
     assert.ok(err instanceof WorkspaceError, String(err));
     assert.match(err.message, /app: PR is open/);
     assert.match(err.message, /--abandon/);
@@ -418,7 +545,12 @@ test("removeWorkspace refuses while a PR is open, before touching anything", asy
 test("closeOut refuses before ship", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "merged" }) } });
   try {
-    const err = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, deps([])).then(() => null, (e) => e));
+    const err = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, {}, deps([])).then(
+        () => null,
+        (e) => e,
+      ),
+    );
     assert.match(String(err), /is merged \(app: merged\)/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
   } finally {
@@ -427,15 +559,28 @@ test("closeOut refuses before ship", async () => {
 });
 
 test("closeOut: closes the issue, records, removes, then deletes merged branches", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped", extra: "url: https://x/pr/9\nmerge_sha: abc\nrelease: v1.2.0\n" }) } });
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({
+        status: "shipped",
+        extra: "url: https://x/pr/9\nmerge_sha: abc\nrelease: v1.2.0\n",
+      }),
+    },
+  });
   try {
     const order = [];
     let issue = null;
     const d = deps([[/ls-remote/, { code: 2 }]], {
-      tracker: { fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }), updateIssue: async (ref, u) => (issue = [ref, u.status]) },
+      tracker: {
+        fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+        updateIssue: async (ref, u) => (issue = [ref, u.status]),
+      },
       remove: async () => {
         order.push("remove");
-        assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /\| o\/app \| https:\/\/x\/pr\/9 \| shipped \| abc \| v1\.2\.0 \|/);
+        assert.match(
+          fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+          /\| o\/app \| https:\/\/x\/pr\/9 \| shipped \| abc \| v1\.2\.0 \|/,
+        );
         return { output: "removed" };
       },
     });
@@ -448,7 +593,10 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
     assert.deepEqual(issue, ["o/app#7", "closed"]);
     assert.deepEqual(order, ["remove", "branch -D"]);
     assert.ok(d.calls.includes("git -C /src/app branch -D me/ws"));
-    assert.ok(!d.calls.some((c) => c.includes("push origin --delete")), "remote already gone (ls-remote exit 2)");
+    assert.ok(
+      !d.calls.some((c) => c.includes("push origin --delete")),
+      "remote already gone (ls-remote exit 2)",
+    );
     assert.match(r.output, /origin\/me\/ws already gone/);
   } finally {
     clean(ws);
@@ -458,7 +606,12 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
 test("closeOut --abandon: needs a reason", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
   try {
-    const err = await inWorkspacesRoot(ws, (name) => closeOut(name, { abandon: "  " }, deps([])).then(() => null, (e) => e));
+    const err = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, { abandon: "  " }, deps([])).then(
+        () => null,
+        (e) => e,
+      ),
+    );
     assert.ok(err instanceof WorkspaceError, String(err));
     assert.match(err.message, /needs a reason/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
@@ -469,20 +622,31 @@ test("closeOut --abandon: needs a reason", async () => {
 
 test("closeOut --abandon: records why, leaves the issue, removes, keeps every branch, lists terminals", async () => {
   const ws = icmWorkspace({
-    files: { app: prFile({ status: "open", extra: "url: u\n" }), lib: prFile({ status: "shipped", extra: "url: https://x/pr/3\n" }) },
+    files: {
+      app: prFile({ status: "open", extra: "url: u\n" }),
+      lib: prFile({ status: "shipped", extra: "url: https://x/pr/3\n" }),
+    },
   });
   try {
     let updated = false;
     const d = deps([], {
-      tracker: { fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }), updateIssue: async () => (updated = true) },
+      tracker: {
+        fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+        updateIssue: async () => (updated = true),
+      },
       terminals: async (dir) => [`terminal session: pid 9 on ttys001 in ${dir} — /exit it`],
     });
-    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, { abandon: "superseded by #170" }, d));
+    const r = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, { abandon: "superseded by #170" }, d),
+    );
     const closeout = fs.readFileSync(path.join(ws, "closeout.md"), "utf8");
     assert.match(closeout, /Abandoned: superseded by #170/);
     assert.match(closeout, /left OPEN \(abandoned\)/);
     assert.equal(updated, false);
-    assert.ok(!d.calls.some((c) => c.includes("branch -D") || c.includes("--delete")), "abandon keeps every branch");
+    assert.ok(
+      !d.calls.some((c) => c.includes("branch -D") || c.includes("--delete")),
+      "abandon keeps every branch",
+    );
     assert.match(r.output, /removed/);
     assert.deepEqual(r.terminals, [`terminal session: pid 9 on ttys001 in ${ws} — /exit it`]);
     assert.equal(r.path, ws);
@@ -493,11 +657,18 @@ test("closeOut --abandon: records why, leaves the issue, removes, keeps every br
 });
 
 test("closeOut retry after an abandon that failed to remove: still abandoned", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "abandoned", extra: "reason: gone\nurl: u\n" }) } });
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "abandoned", extra: "reason: gone\nurl: u\n" }) },
+  });
   fs.writeFileSync(path.join(ws, "closeout.md"), "# Close-out\n");
   try {
     let updated = false;
-    const d = deps([], { tracker: { fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }), updateIssue: async () => (updated = true) } });
+    const d = deps([], {
+      tracker: {
+        fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+        updateIssue: async () => (updated = true),
+      },
+    });
     await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.equal(updated, false);
   } finally {
@@ -506,17 +677,28 @@ test("closeOut retry after an abandon that failed to remove: still abandoned", a
 });
 
 test("openTerminalSessions: TTY claude processes whose cwd is in the workspace", async () => {
-  const ps = "  11 ttys001  /usr/local/bin/claude\n  12 ??       claude\n  13 ttys002  claude\n  14 ttys003  zsh\n  15 ttys004  claude\n";
+  const ps =
+    "  11 ttys001  /usr/local/bin/claude\n  12 ??       claude\n  13 ttys002  claude\n  14 ttys003  zsh\n  15 ttys004  claude\n";
   const lsof = "p11\nfcwd\nn/ws/a/repo\np13\nfcwd\nn/ws/ab\np15\nfcwd\nn/ws/a\n";
-  const r = stubRun([[/^ps /, { stdout: ps }], [/^lsof /, { stdout: lsof, code: 1 }]]);
+  const r = stubRun([
+    [/^ps /, { stdout: ps }],
+    [/^lsof /, { stdout: lsof, code: 1 }],
+  ]);
   const out = await openTerminalSessions("/ws/a", r.run);
-  assert.deepEqual(out, ["terminal session: pid 11 on ttys001 in /ws/a/repo — /exit it", "terminal session: pid 15 on ttys004 in /ws/a — /exit it"]);
+  assert.deepEqual(out, [
+    "terminal session: pid 11 on ttys001 in /ws/a/repo — /exit it",
+    "terminal session: pid 15 on ttys004 in /ws/a — /exit it",
+  ]);
   assert.ok(r.calls.includes("lsof -a -d cwd -Fpn -p 11,13,15"));
   assert.deepEqual(await openTerminalSessions("/ws/a", stubRun([[/^ps /, { code: 1 }]]).run), []);
 });
 
 test("PR file: invalid YAML names the parser's error", () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped", extra: "release: @jbbz-sandbox/sandbox-cli@0.7.0\n" }) } });
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "shipped", extra: "release: @jbbz-sandbox/sandbox-cli@0.7.0\n" }),
+    },
+  });
   try {
     assert.throws(() => readPrFiles(ws), /needs YAML frontmatter.*YAML error: .*reserved/s);
   } finally {
@@ -528,26 +710,64 @@ test("adoptPr: a merged PR from outside is written, shipped by its release tag, 
   const ws = icmWorkspace({ files: {} });
   fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
   try {
-    const view = { url: "https://github.com/o/app/pull/140", headRefName: "other/fix", baseRefName: "main", title: "fix: the thing", state: "MERGED", mergeCommit: { oid: "abc" } };
+    const view = {
+      url: "https://github.com/o/app/pull/140",
+      headRefName: "other/fix",
+      baseRefName: "main",
+      title: "fix: the thing",
+      state: "MERGED",
+      mergeCommit: { oid: "abc" },
+    };
     const committed = [];
-    const d = deps([[/^gh pr view 140 /, { stdout: JSON.stringify(view) }], [/tag --contains abc --list v\*/, { stdout: "v0.7.0\n" }], [/ls-remote/, { code: 2 }]], {
-      commitRecord: async (_ws, _m, paths) => (committed.push(...paths), { ok: true, message: "record pushed" }),
-    });
+    const d = deps(
+      [
+        [/^gh pr view 140 /, { stdout: JSON.stringify(view) }],
+        [/tag --contains abc --list v\*/, { stdout: "v0.7.0\n" }],
+        [/ls-remote/, { code: 2 }],
+      ],
+      {
+        commitRecord: async (_ws, _m, paths) => (
+          committed.push(...paths), { ok: true, message: "record pushed" }
+        ),
+      },
+    );
     const r = await adoptPr(ws, { pr: "140" }, d);
     assert.ok(r.ok);
     const [f] = readPrFiles(ws);
     assert.equal(f.dir, "app");
     assert.equal(f.title, "fix: the thing");
     assert.deepEqual(
-      { repo: f.fm.repo, branch: f.fm.branch, base: f.fm.base, url: f.fm.url, merge_sha: f.fm.merge_sha, status: f.fm.status, release: f.fm.release },
-      { repo: "o/app", branch: "other/fix", base: "main", url: view.url, merge_sha: "abc", status: "shipped", release: "v0.7.0" },
+      {
+        repo: f.fm.repo,
+        branch: f.fm.branch,
+        base: f.fm.base,
+        url: f.fm.url,
+        merge_sha: f.fm.merge_sha,
+        status: f.fm.status,
+        release: f.fm.release,
+      },
+      {
+        repo: "o/app",
+        branch: "other/fix",
+        base: "main",
+        url: view.url,
+        merge_sha: "abc",
+        status: "shipped",
+        release: "v0.7.0",
+      },
     );
     assert.ok(committed.includes("stages/03_propose/output/pr-app.md"));
     await assert.rejects(adoptPr(ws, { pr: "140" }, d), /already exists/);
 
     const out = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
-    assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /\| o\/app \| https:\/\/github\.com\/o\/app\/pull\/140 \| shipped \| abc \| v0\.7\.0 \|/);
-    assert.ok(!d.calls.some((c) => c.includes("branch -D")), "an adopted PR's branch is not the workspace's to delete");
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /\| o\/app \| https:\/\/github\.com\/o\/app\/pull\/140 \| shipped \| abc \| v0\.7\.0 \|/,
+    );
+    assert.ok(
+      !d.calls.some((c) => c.includes("branch -D")),
+      "an adopted PR's branch is not the workspace's to delete",
+    );
     assert.match(out.output, /removed/);
   } finally {
     clean(ws);
@@ -567,7 +787,10 @@ test("adoptPr --no-pr: a closed PR file with the reason; close-out then runs", a
     assert.ok(!d.calls.some((c) => c.startsWith("gh ")));
     assert.equal(lifecycleOf(ws).state, "shipped");
     await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
-    assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /\| app \| — \| closed \| — \| — \| fixed on main by 25957ae \|/);
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /\| app \| — \| closed \| — \| — \| fixed on main by 25957ae \|/,
+    );
   } finally {
     clean(ws);
   }
@@ -578,8 +801,18 @@ test("adoptPr: refuses a closed-unmerged PR and an ambiguous repo", async () => 
   try {
     await assert.rejects(adoptPr(ws, { pr: "9" }, deps([])), /no code worktree/);
     fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
-    const closed = { url: "https://github.com/o/app/pull/9", headRefName: "x", baseRefName: "main", title: "t", state: "CLOSED", mergeCommit: null };
-    await assert.rejects(adoptPr(ws, { pr: "9" }, deps([[/^gh pr view/, { stdout: JSON.stringify(closed) }]])), /is CLOSED, not merged.*--no-pr/);
+    const closed = {
+      url: "https://github.com/o/app/pull/9",
+      headRefName: "x",
+      baseRefName: "main",
+      title: "t",
+      state: "CLOSED",
+      mergeCommit: null,
+    };
+    await assert.rejects(
+      adoptPr(ws, { pr: "9" }, deps([[/^gh pr view/, { stdout: JSON.stringify(closed) }]])),
+      /is CLOSED, not merged.*--no-pr/,
+    );
     assert.deepEqual(readPrFiles(ws), []);
   } finally {
     clean(ws);

@@ -7,7 +7,6 @@
  * `environment` block of the pod's env vars — deliberately NOT reproduced here,
  * since on a real cluster it can contain secrets.
  */
-import { describe, expect, it } from "vitest";
 
 import {
   interceptBlocker,
@@ -15,6 +14,7 @@ import {
   parseInterceptList,
   type Runner,
 } from "sandbox-core/telepresence";
+import { describe, expect, it } from "vitest";
 
 /** Shape of one intercepted deployment, trimmed to the fields we parse. */
 const ACTIVE = JSON.stringify([
@@ -93,14 +93,11 @@ describe("interceptBlocker", () => {
     expect(interceptBlocker(FULL_SVC)).toBeNull();
   });
 
-  it.each(["k8s_deployment", "k8s_namespace", "k8s_port"])(
-    "names %s when it is missing",
-    (key) => {
-      const svc: Record<string, unknown> = { ...FULL_SVC };
-      delete svc[key];
-      expect(interceptBlocker(svc)).toContain(key);
-    },
-  );
+  it.each(["k8s_deployment", "k8s_namespace", "k8s_port"])("names %s when it is missing", (key) => {
+    const svc: Record<string, unknown> = { ...FULL_SVC };
+    delete svc[key];
+    expect(interceptBlocker(svc)).toContain(key);
+  });
 
   it("reports every missing coordinate at once", () => {
     const blocker = interceptBlocker({});

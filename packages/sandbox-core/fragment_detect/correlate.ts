@@ -67,7 +67,11 @@ export function correlate(findings: Finding[], repoName: string): Correlation {
 
   type Rule = (f: Finding, g: ServiceGroup) => boolean;
   const rules: Rule[] = [
-    (f, g) => f.kind === "k8s" && f.dir !== null && g.dir !== "." && (f.dir === g.dir || f.dir.startsWith(`${g.dir}/`)),
+    (f, g) =>
+      f.kind === "k8s" &&
+      f.dir !== null &&
+      g.dir !== "." &&
+      (f.dir === g.dir || f.dir.startsWith(`${g.dir}/`)),
     (f, g) => f.kind === "compose" && f.dir !== null && f.dir === g.dir,
     (f, g) => f.name === g.name,
     (f, g) => Boolean(f.image) && imageRepoName(f.image as string) === g.name,
@@ -97,17 +101,28 @@ export function correlate(findings: Finding[], repoName: string): Correlation {
     } else {
       unmatched.push(f);
       const what = f.kind === "k8s" ? "Deployment" : "compose service";
-      skipped.push({ item: f.file, reason: `found ${what} ${f.name} — no source dir in this repo, skipped` });
+      skipped.push({
+        item: f.file,
+        reason: `found ${what} ${f.name} — no source dir in this repo, skipped`,
+      });
     }
   }
 
   const services = groups.filter((g) => {
     const keep = g.findings.some((f) => f.kind !== "package" || f.runnable);
     if (!keep) {
-      skipped.push({ item: g.dir, reason: "library package (no Dockerfile, deploy config or dev/start script), skipped" });
+      skipped.push({
+        item: g.dir,
+        reason: "library package (no Dockerfile, deploy config or dev/start script), skipped",
+      });
     }
     return keep;
   });
 
-  return { services: services.sort(byName), infrastructure: [...infra.values()].sort(byName), unmatched, skipped };
+  return {
+    services: services.sort(byName),
+    infrastructure: [...infra.values()].sort(byName),
+    unmatched,
+    skipped,
+  };
 }

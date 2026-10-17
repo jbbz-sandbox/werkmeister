@@ -4,8 +4,9 @@
  * cookie) and the local admin UIs served by the shared infra. Dependency-free
  * vanilla DOM, same `el()` + CSS-injection approach as health-ui.ts / prs-ui.ts.
  */
-import type { HostBridge } from "./workspace-ui.js";
+
 import { el, injectCss } from "./theme.js";
+import type { HostBridge } from "./workspace-ui.js";
 
 type LinkKind = "local" | "remote" | "admin";
 interface SandboxLink {

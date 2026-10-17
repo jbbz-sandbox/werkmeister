@@ -9,14 +9,18 @@ import * as path from "node:path";
 import { SandboxError } from "../errors.js";
 import { run as procRun } from "../proc.js";
 import { success, warn } from "../reporter.js";
-import { _WORKSPACE_CONFIG_NAMES, expandUserPath, loadWorkspaceConfig } from "../workspace_prompts.js";
+import {
+  _WORKSPACE_CONFIG_NAMES,
+  expandUserPath,
+  loadWorkspaceConfig,
+} from "../workspace_prompts.js";
 import { icm } from "./icm.js";
 import { jit } from "./jit.js";
-import { STRATEGY_IDS } from "./types.js";
 import type { ContextStrategy, StrategyId } from "./types.js";
+import { STRATEGY_IDS } from "./types.js";
 
-export { STRATEGY_IDS } from "./types.js";
 export type { ContextStrategy, InitContext, StrategyId } from "./types.js";
+export { STRATEGY_IDS } from "./types.js";
 
 const REGISTRY: Record<StrategyId, ContextStrategy> = { jit, icm };
 
@@ -45,7 +49,8 @@ export function readContextStrategy(workspaceRoot: string): StrategyId {
   const candidates: string[] = [];
   const envOverride = process.env["SANDBOX_WORKSPACE_CONFIG"];
   if (envOverride) candidates.push(expandUserPath(envOverride));
-  for (const name of _WORKSPACE_CONFIG_NAMES) candidates.push(path.join(workspaceRoot, ".sandbox", name));
+  for (const name of _WORKSPACE_CONFIG_NAMES)
+    candidates.push(path.join(workspaceRoot, ".sandbox", name));
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
     let data: any;
@@ -96,7 +101,9 @@ export function leftoverPaths(root: string, from: ContextStrategy, to: ContextSt
 // state --prune-context deletes. Untracked, ignored, modified and non-git
 // paths are kept.
 function restorable(root: string, rel: string): boolean {
-  const tracked = procRun(["git", "-C", root, "ls-files", "--error-unmatch", "--", rel], { capture: true });
+  const tracked = procRun(["git", "-C", root, "ls-files", "--error-unmatch", "--", rel], {
+    capture: true,
+  });
   if (tracked.status !== 0) return false;
   const status = procRun(
     ["git", "-C", root, "status", "--porcelain", "--ignored", "--untracked-files=all", "--", rel],
@@ -106,7 +113,12 @@ function restorable(root: string, rel: string): boolean {
 }
 
 /** docs/superpowers/specs/2026-09-27-context-strategy-interface.md §3.6: warn about the old layer, or prune it. */
-export function reportLeftovers(root: string, from: ContextStrategy, to: ContextStrategy, prune: boolean): void {
+export function reportLeftovers(
+  root: string,
+  from: ContextStrategy,
+  to: ContextStrategy,
+  prune: boolean,
+): void {
   const left = leftoverPaths(root, from, to);
   if (!left.length) return;
   if (!prune) {

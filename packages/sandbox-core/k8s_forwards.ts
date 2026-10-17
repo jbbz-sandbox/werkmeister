@@ -19,10 +19,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import {
-  forwardSpecs as specsFrom,
   type ForwardSpec,
   loadInfrastructure,
   loadServices,
+  forwardSpecs as specsFrom,
   stateInfraRoot,
 } from "./config.js";
 import { info } from "./reporter.js";

@@ -14,23 +14,51 @@ const fetched: string[] = [];
 class FakeWorkspaceError extends Error {}
 class FakeInitError extends Error {}
 vi.mock("sandbox-core", () => ({
-  createWorkspace: async (...a: unknown[]) => { calls.push(a); if (createError) throw createError; return { workspacePath: "/ws/x" }; },
+  createWorkspace: async (...a: unknown[]) => {
+    calls.push(a);
+    if (createError) throw createError;
+    return { workspacePath: "/ws/x" };
+  },
   distillIssue: async () => ({ fields: { description: "d" }, warning: null }),
   WorkspaceError: FakeWorkspaceError,
 }));
-vi.mock("sandbox-core/workspace_prompts", () => ({ resolveInputs: (a: Record<string, unknown>) => ({ ...(a.feature ? { feature: a.feature } : {}), ...(a.issue_id ? { issue_id: a.issue_id } : {}), ...presetInputs }), workspacePromptSpec: () => ({}) }));
+vi.mock("sandbox-core/workspace_prompts", () => ({
+  resolveInputs: (a: Record<string, unknown>) => ({
+    ...(a.feature ? { feature: a.feature } : {}),
+    ...(a.issue_id ? { issue_id: a.issue_id } : {}),
+    ...presetInputs,
+  }),
+  workspacePromptSpec: () => ({}),
+}));
 vi.mock("sandbox-core/workspace_init", () => ({ WorkspaceInitError: FakeInitError }));
-vi.mock("sandbox-core/issue_snapshot", () => ({ fetchIssueSnapshot: async (ref: string) => { fetched.push(ref); if (fetchError) throw fetchError; return { title: "t" }; } }));
+vi.mock("sandbox-core/issue_snapshot", () => ({
+  fetchIssueSnapshot: async (ref: string) => {
+    fetched.push(ref);
+    if (fetchError) throw fetchError;
+    return { title: "t" };
+  },
+}));
 vi.mock("sandbox-core/issue_tracker", () => ({
-  issueTracker: () => ({ label: "GitHub", refExample: "o/r#1", parseRef: (r: string) => (/^o\/r#\d+$/.test(r) ? r : /^\d+$/.test(r) ? `o/r#${r}` : null) }),
+  issueTracker: () => ({
+    label: "GitHub",
+    refExample: "o/r#1",
+    parseRef: (r: string) => (/^o\/r#\d+$/.test(r) ? r : /^\d+$/.test(r) ? `o/r#${r}` : null),
+  }),
 }));
 vi.mock("sandbox-core/form_schema", () => ({ buildFormSchema: () => ({}) }));
 vi.mock("sandbox-core/proc", () => ({ run: () => ({ status: 0 }) }));
 vi.mock("../../lib/config.js", () => ({
-  error: (m: string) => errors.push(m), warn: (m: string) => warns.push(m), info: () => {}, getMonorepoRoot: () => "/",
+  error: (m: string) => errors.push(m),
+  warn: (m: string) => warns.push(m),
+  info: () => {},
+  getMonorepoRoot: () => "/",
 }));
 vi.mock("../../lib/wizard.js", () => ({
-  runFormWizard: async (_b: unknown, r: Record<string, string>, o: { afterField: (k: string, r: Record<string, string>) => Promise<unknown> }) => {
+  runFormWizard: async (
+    _b: unknown,
+    r: Record<string, string>,
+    o: { afterField: (k: string, r: Record<string, string>) => Promise<unknown> },
+  ) => {
     Object.assign(r, wizardResolved);
     for (const k of wizardKeys) afterFieldResults.push(await o.afterField(k, r));
     return r;
@@ -40,15 +68,21 @@ vi.mock("../init_workspace.js", () => ({ readStdinTask: async () => "" }));
 
 const { run, browserFormCommand } = await import("../workspace.js");
 
-const tty = (v: boolean) => Object.defineProperty(process.stdin, "isTTY", { value: v, configurable: true });
+const tty = (v: boolean) =>
+  Object.defineProperty(process.stdin, "isTTY", { value: v, configurable: true });
 
 describe("sandbox workspace", () => {
   beforeEach(() => {
     calls.length = errors.length = warns.length = fetched.length = 0;
     createError = fetchError = null;
-    wizardKeys = []; wizardResolved = {}; afterFieldResults = []; presetInputs = {};
+    wizardKeys = [];
+    wizardResolved = {};
+    afterFieldResults = [];
+    presetInputs = {};
     tty(false);
-    vi.spyOn(process, "exit").mockImplementation(((c?: number) => { throw new Error(`exit:${c}`); }) as never);
+    vi.spyOn(process, "exit").mockImplementation(((c?: number) => {
+      throw new Error(`exit:${c}`);
+    }) as never);
   });
 
   it("creates through createWorkspace, live, from the cwd, with --no-distill honoured", async () => {
@@ -71,20 +105,41 @@ describe("sandbox workspace", () => {
   });
 
   it("--browser-form forwards every given flag as --prefill JSON, and --issue", () => {
-    const cmd = browserFormCommand("node", "form-cli.js", { feature: "f", services: "cli", issue_id: "o/r#5", open_vscode: true, browser_form: true });
+    const cmd = browserFormCommand("node", "form-cli.js", {
+      feature: "f",
+      services: "cli",
+      issue_id: "o/r#5",
+      open_vscode: true,
+      browser_form: true,
+    });
     expect(cmd.slice(0, 2)).toEqual(["node", "form-cli.js"]);
     expect(cmd).toContain("--open");
     expect(cmd[cmd.indexOf("--issue") + 1]).toBe("o/r#5");
-    expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({ feature: "f", services: ["cli"], issue_id: "o/r#5" });
+    expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({
+      feature: "f",
+      services: ["cli"],
+      issue_id: "o/r#5",
+    });
   });
 
   it("--browser-form splits comma-separated multi fields into the form's arrays", () => {
-    const cmd = browserFormCommand("node", "form-cli.js", { services: "cli, api", repos: "a,b", labels: "x,y" });
-    expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({ services: ["cli", "api"], repos: ["a", "b"], labels: "x,y" });
+    const cmd = browserFormCommand("node", "form-cli.js", {
+      services: "cli, api",
+      repos: "a,b",
+      labels: "x,y",
+    });
+    expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({
+      services: ["cli", "api"],
+      repos: ["a", "b"],
+      labels: "x,y",
+    });
   });
 
   describe("wizard issue step", () => {
-    beforeEach(() => { tty(true); wizardKeys = ["issue_id"]; });
+    beforeEach(() => {
+      tty(true);
+      wizardKeys = ["issue_id"];
+    });
 
     it("normalises the typed ref, reads it once, and hands the snapshot to createWorkspace", async () => {
       wizardResolved = { issue_id: "5" };
@@ -116,7 +171,9 @@ describe("sandbox workspace", () => {
       wizardResolved = { issue_id: "o/r#5" };
       fetchError = new Error("401");
       await expect(run({ feature: "f" })).rejects.toThrow("exit:1");
-      expect(errors).toEqual(["couldn't read o/r#5 from GitHub; run `sandbox connect` to check the issue tracker."]);
+      expect(errors).toEqual([
+        "couldn't read o/r#5 from GitHub; run `sandbox connect` to check the issue tracker.",
+      ]);
       expect(calls).toEqual([]);
     });
   });

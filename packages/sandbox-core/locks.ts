@@ -115,10 +115,10 @@ export function sandboxLock<T>(
     if (deadline !== null && performance.now() >= deadline) {
       throw new Error(
         `Timed out after ${timeout}s waiting for lock ` +
-        `'${name}' (${lockPath}). The previous holder may ` +
-        "have crashed without releasing it; if no sandbox " +
-        "process is running, it is safe to delete this " +
-        "file and retry.",
+          `'${name}' (${lockPath}). The previous holder may ` +
+          "have crashed without releasing it; if no sandbox " +
+          "process is running, it is safe to delete this " +
+          "file and retry.",
       );
     }
     sleepSync(_RETRY_INTERVAL);

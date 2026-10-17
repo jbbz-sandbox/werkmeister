@@ -10,16 +10,16 @@
  *     sandbox stats --collect 30 -i 5   # 30 minutes, 5-second intervals
  */
 
-import { Colors, info, success, warn } from "../lib/config.js";
 import { containerStats } from "sandbox-core/docker";
-import { interruptSignal } from "../lib/interrupt.js";
 import {
   ContainerStats,
   formatMem,
   halveCpu,
-  runCollection,
   type Recommendation,
+  runCollection,
 } from "sandbox-core/stats";
+import { Colors, info, success, warn } from "../lib/config.js";
+import { interruptSignal } from "../lib/interrupt.js";
 
 // The two table renderers live here rather than in `sandbox-core/stats`:
 // §3 keeps table rendering CLI-side, and 066 split `status` the same way.
@@ -142,7 +142,9 @@ async function runSnapshot(_save: boolean): Promise<void> {
   let totalCpu = 0.0;
   let totalMem = 0.0;
 
-  for (const e of [...sandboxEntries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+  for (const e of [...sandboxEntries].sort((a, b) =>
+    a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+  )) {
     const cpu = e.cpuPercent;
     const mem = e.memMib;
     const limit = e.memLimitMib;

@@ -107,7 +107,8 @@ async function queryLabeledContainers(): Promise<LabelRow[] | null> {
  */
 export function slotCount(): number {
   const featureSlots = loadPorts()["feature_slots"];
-  const isDict = typeof featureSlots === "object" && featureSlots !== null && !Array.isArray(featureSlots);
+  const isDict =
+    typeof featureSlots === "object" && featureSlots !== null && !Array.isArray(featureSlots);
   return (isDict ? featureSlots["count"] : undefined) ?? 12;
 }
 
@@ -126,7 +127,9 @@ function routableServiceNames(): Set<string> {
   const names = new Set<string>();
   for (const [name, defn] of Object.entries(servicesConfig)) {
     if (
-      typeof defn === "object" && defn !== null && !Array.isArray(defn) &&
+      typeof defn === "object" &&
+      defn !== null &&
+      !Array.isArray(defn) &&
       (defn as Record<string, unknown>)["port_offset"] !== null &&
       (defn as Record<string, unknown>)["port_offset"] !== undefined
     ) {
@@ -172,7 +175,7 @@ export async function getAllSlotsFromDocker(): Promise<Record<string, SlotEntry>
     if (entry.slot !== slot) {
       warn(
         `Feature '${feature}' has inconsistent slot labels across containers ` +
-        `(saw ${entry.slot} and ${slot}) -- using ${slot}`,
+          `(saw ${entry.slot} and ${slot}) -- using ${slot}`,
       );
       entry.slot = slot;
     }
@@ -356,7 +359,12 @@ export function classifyEndpoint(
 
   if (localServices.includes(service)) {
     const portOffset = (svcDef["port_offset"] as number | undefined) ?? 0;
-    return { service, source: "local", endpoint: `localhost:${getServicePort(slot, portOffset)}`, type };
+    return {
+      service,
+      source: "local",
+      endpoint: `localhost:${getServicePort(slot, portOffset)}`,
+      type,
+    };
   }
 
   const k8sPort = svcDef["k8s_forward_port"];
@@ -427,13 +435,11 @@ export async function migrateSlotsJson(): Promise<void> {
   const live = (await getAllSlotsFromDocker()) ?? {};
   const orphans = Object.keys(data).filter(
     (f) =>
-      typeof data[f] === "object" && data[f] !== null && !Array.isArray(data[f]) &&
-      !(f in live),
+      typeof data[f] === "object" && data[f] !== null && !Array.isArray(data[f]) && !(f in live),
   );
   if (orphans.length > 0) {
     warn(
-      `~/.sandbox/slots.json had features with no labeled containers: ` +
-      `${orphans.join(", ")}`,
+      `~/.sandbox/slots.json had features with no labeled containers: ` + `${orphans.join(", ")}`,
     );
     warn("These are now forgotten — restart them with 'sandbox up' to re-register.");
   }

@@ -100,7 +100,6 @@ export async function collectStats(
   return aggregated;
 }
 
-
 /** Format MiB as a human-readable string. */
 export function formatMem(mib: number): string {
   if (mib >= 1024) return `${(mib / 1024).toFixed(1)}G`;
@@ -175,7 +174,6 @@ function roundMemory(mib: number): string {
   // Above 8G, round up to next GB
   return `${Math.ceil(mib / 1024)}G`;
 }
-
 
 /**
  * Return half of a CPU string value for reservations.
@@ -347,7 +345,10 @@ export function parseConfigMem(memStr: string): number {
  * - 'feat-myfeature-frontend-1' → 'frontend'
  * - 'sandbox-k8s-forwards' → 'k8s-forwards'
  */
-export function matchService(containerName: string, configured: Record<string, any>): string | null {
+export function matchService(
+  containerName: string,
+  configured: Record<string, any>,
+): string | null {
   // Direct match
   if (containerName in configured) {
     return containerName;
@@ -364,7 +365,8 @@ export function matchService(containerName: string, configured: Record<string, a
   // Try stripping feature name (feat-<feature>-<service>-<N>)
   // and trailing container number
   const lastDash = stripped.lastIndexOf("-");
-  const parts = lastDash === -1 ? [stripped] : [stripped.slice(0, lastDash), stripped.slice(lastDash + 1)];
+  const parts =
+    lastDash === -1 ? [stripped] : [stripped.slice(0, lastDash), stripped.slice(lastDash + 1)];
   if (/^\d+$/.test(parts[parts.length - 1])) {
     stripped = parts[0];
   }

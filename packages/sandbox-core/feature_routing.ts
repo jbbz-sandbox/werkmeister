@@ -32,7 +32,7 @@
  */
 
 import { loadServices } from "./config.js";
-import { loadIngress, type IngressSettings } from "./global_config.js";
+import { type IngressSettings, loadIngress } from "./global_config.js";
 
 export interface FeatureRouter {
   /** Public host Caddy terminates for the local docker feature. */

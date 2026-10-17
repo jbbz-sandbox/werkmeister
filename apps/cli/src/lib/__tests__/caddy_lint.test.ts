@@ -4,9 +4,9 @@
  * lintCaddyfileStructure() is pure text in, findings out — no config or proc
  * mocking needed, so the route-drop signatures are testable as fixtures.
  */
-import { describe, expect, it } from "vitest";
 
 import { lintCaddyfileStructure } from "sandbox-core/caddy";
+import { describe, expect, it } from "vitest";
 
 /** A bare `handle {` next to a path-scoped sibling — the route-drop shape. */
 const BARE_PLUS_SCOPED = `sandbox.local {

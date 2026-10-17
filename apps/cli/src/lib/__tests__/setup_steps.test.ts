@@ -8,22 +8,22 @@
  * All subprocess boundaries are injected, so nothing shells out to brew,
  * openssl or sudo.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
-import { parse as parseYaml } from "yaml";
-
 import {
-  defaultWorkspaceRepo,
   DEMO_SERVICES_REPO,
   DEMO_SERVICES_REPO_URL,
+  defaultWorkspaceRepo,
   githubOwners,
   OPTIONAL_PLUGINS,
+  type Runner,
   resolveCertScript,
   runSetup,
+  type Step,
   syncClaudeStandardsDir,
   syncEditorSchemas,
   syncIngressCerts,
@@ -36,13 +36,17 @@ import {
   syncVscodeExtension,
   vscodeExtensionState,
   WORKSPACE_ROOT_REPO,
-  type Runner,
-  type Step,
 } from "sandbox-core/machine_setup";
-import { PLAYWRIGHT_VERSION } from "sandbox-core/test_run";
-import { REGISTRY_DEFAULTS, renderSecretsEnv, renderServicesLocalYaml } from "sandbox-core/scaffold";
+import {
+  REGISTRY_DEFAULTS,
+  renderSecretsEnv,
+  renderServicesLocalYaml,
+} from "sandbox-core/scaffold";
 import { resolveSecrets } from "sandbox-core/secrets";
-import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
+import { PLAYWRIGHT_VERSION } from "sandbox-core/test_run";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
+import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 let home: SandboxHome;
 
@@ -83,13 +87,17 @@ describe("syncRegistryConfigs", () => {
   it("never overwrites an existing file — hand edits survive a re-run", () => {
     home.write("services.local.yaml", "k8s_context: hand-edited\n");
     const steps = syncRegistryConfigs(false, { legacyDir: null, k8sContext: "orbstack" });
-    expect(fs.readFileSync(path.join(home.dir, "services.local.yaml"), "utf8")).toContain("hand-edited");
+    expect(fs.readFileSync(path.join(home.dir, "services.local.yaml"), "utf8")).toContain(
+      "hand-edited",
+    );
     expect(detail(steps, "config services.local.yaml")).toContain("present");
   });
 
   it("writes the wizard's k8s_context into a fresh services.local.yaml", () => {
     syncRegistryConfigs(false, { legacyDir: null, k8sContext: "kind-dev" });
-    expect(fs.readFileSync(path.join(home.dir, "services.local.yaml"), "utf8")).toContain("k8s_context: kind-dev");
+    expect(fs.readFileSync(path.join(home.dir, "services.local.yaml"), "utf8")).toContain(
+      "k8s_context: kind-dev",
+    );
   });
 
   it("migrates a legacy infra/config checkout instead of scaffolding", () => {
@@ -128,7 +136,12 @@ describe("scaffold content", () => {
   });
 
   it("ships every archetype the self-host and demo fragments reference", () => {
-    expect(Object.keys(REGISTRY_DEFAULTS.archetypes)).toEqual(["node-web", "node-service", "node-tool", "mcp-client"]);
+    expect(Object.keys(REGISTRY_DEFAULTS.archetypes)).toEqual([
+      "node-web",
+      "node-service",
+      "node-tool",
+      "mcp-client",
+    ]);
     expect(Object.keys(REGISTRY_DEFAULTS.mcp_servers)).toEqual(["context7", "sandbox"]);
   });
 
@@ -141,9 +154,9 @@ describe("scaffold content", () => {
 
 describe("resolveSecrets", () => {
   const servicesConfig = {
-    "backend": {},
+    backend: {},
     "web-app": { secrets: ["OAUTH_CLIENT_SECRET", "SESSION_SECRET"] },
-    "mobile": { secrets: ["CLERK_KEY"] },
+    mobile: { secrets: ["CLERK_KEY"] },
   };
 
   it("requires nothing for a workspace whose services declare no secrets", () => {
@@ -163,7 +176,11 @@ describe("resolveSecrets", () => {
   });
 
   it("prefers <SERVICE>__KEY, falling back to plain KEY when it is absent or empty", () => {
-    const all = { MOBILE__CLERK_KEY: "mobile-val", CLERK_KEY: "shared", WEB_APP__OAUTH_CLIENT_SECRET: "" };
+    const all = {
+      MOBILE__CLERK_KEY: "mobile-val",
+      CLERK_KEY: "shared",
+      WEB_APP__OAUTH_CLIENT_SECRET: "",
+    };
     const { byService } = resolveSecrets(
       { ...all, OAUTH_CLIENT_SECRET: "a", SESSION_SECRET: "n" },
       servicesConfig,
@@ -181,7 +198,9 @@ describe("resolveSecrets", () => {
       { CLERK_KEY: "pinned" },
     );
     expect(byService.mobile).toEqual({ CLERK_KEY: "pinned" });
-    expect(resolveSecrets({}, servicesConfig, ["mobile"], { CLERK_KEY: "pinned" }).missing).toEqual([]);
+    expect(resolveSecrets({}, servicesConfig, ["mobile"], { CLERK_KEY: "pinned" }).missing).toEqual(
+      [],
+    );
   });
 });
 
@@ -322,7 +341,11 @@ describe("syncOptionalPlugin", () => {
       path.join(dir, "installed_plugins.json"),
       JSON.stringify(
         installed
-          ? { plugins: { [`${SPEC.name}@${SPEC.marketplace}`]: [{ version: "1.2.3", installPath: dir }] } }
+          ? {
+              plugins: {
+                [`${SPEC.name}@${SPEC.marketplace}`]: [{ version: "1.2.3", installPath: dir }],
+              },
+            }
           : { plugins: {} },
       ),
     );
@@ -480,7 +503,10 @@ describe("syncPlaywright", () => {
   beforeEach(() => {
     browserDir = path.join(home.dir, "ms-playwright", "chromium-1243");
   });
-  const dryRun = (): [number, string] => [0, `Chrome for Testing\n  Install location:    ${browserDir}\n`];
+  const dryRun = (): [number, string] => [
+    0,
+    `Chrome for Testing\n  Install location:    ${browserDir}\n`,
+  ];
   const markInstalled = () => {
     fs.mkdirSync(browserDir, { recursive: true });
     fs.writeFileSync(path.join(browserDir, "INSTALLATION_COMPLETE"), "");
@@ -503,7 +529,9 @@ describe("syncPlaywright", () => {
       markInstalled();
       return 0;
     });
-    expect(installs).toEqual([["npx", "-y", `playwright@${PLAYWRIGHT_VERSION}`, "install", "chromium"]]);
+    expect(installs).toEqual([
+      ["npx", "-y", `playwright@${PLAYWRIGHT_VERSION}`, "install", "chromium"],
+    ]);
     expect(steps[0].ok).toBe(true);
   });
 
@@ -524,7 +552,11 @@ describe("syncPlaywright", () => {
   });
 
   it("never reports present when the dry-run lists no install locations", () => {
-    const steps = syncPlaywright(fakeRunner({ [DRY_RUN]: [0, "npm notice: new version available"] }), false, neverRun);
+    const steps = syncPlaywright(
+      fakeRunner({ [DRY_RUN]: [0, "npm notice: new version available"] }),
+      false,
+      neverRun,
+    );
     expect(steps[0]).toMatchObject({ ok: false, optional: true });
   });
 
@@ -535,7 +567,10 @@ describe("syncPlaywright", () => {
 
   it("pins the same version as the sandbox-feature-test skill, which ships separately", () => {
     const script = fs.readFileSync(
-      path.resolve(fileURLToPath(import.meta.url), "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts/setup_feature.py"),
+      path.resolve(
+        fileURLToPath(import.meta.url),
+        "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts/setup_feature.py",
+      ),
       "utf8",
     );
     expect(script).toContain(`PLAYWRIGHT_VERSION = "${PLAYWRIGHT_VERSION}"`);
@@ -551,12 +586,22 @@ describe("setup_feature.py resolve_workspace", () => {
       const ws = path.join(root, "ws");
       fs.mkdirSync(path.join(ws, ".git"), { recursive: true });
       fs.mkdirSync(path.join(home, ".sandbox"));
-      fs.writeFileSync(path.join(home, ".sandbox", "config.yaml"), `paths:\n  workspaces_root: ${root}\n`);
-      const scripts = path.resolve(fileURLToPath(import.meta.url), "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts");
+      fs.writeFileSync(
+        path.join(home, ".sandbox", "config.yaml"),
+        `paths:\n  workspaces_root: ${root}\n`,
+      );
+      const scripts = path.resolve(
+        fileURLToPath(import.meta.url),
+        "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts",
+      );
       const r = spawnSync(
         "python3",
         ["-c", "import sys, setup_feature; print(setup_feature.resolve_workspace(None))"],
-        { cwd: ws, env: { ...process.env, HOME: home, PYTHONPATH: scripts, WORKSPACE: "" }, encoding: "utf8" },
+        {
+          cwd: ws,
+          env: { ...process.env, HOME: home, PYTHONPATH: scripts, WORKSPACE: "" },
+          encoding: "utf8",
+        },
       );
       expect(r.stderr).toBe("");
       expect(r.stdout.trim()).toBe(ws);
@@ -582,7 +627,9 @@ describe("syncVscodeExtension", () => {
     syncVscodeExtension(checkOnly, install, vscodeExtensionState(runner, root), runner);
 
   it("reports the bundled version, already installed, as ok", () => {
-    const runner = fakeRunner({ [LIST]: [0, "redhat.vscode-yaml@1.15.0\nJBBZ.vscode-plugin@0.3.0\n"] });
+    const runner = fakeRunner({
+      [LIST]: [0, "redhat.vscode-yaml@1.15.0\nJBBZ.vscode-plugin@0.3.0\n"],
+    });
     const steps = sync(runner, false, true);
     expect(steps[0].ok).toBe(true);
     expect(steps[0].detail).toContain("0.3.0");
@@ -594,7 +641,10 @@ describe("syncVscodeExtension", () => {
     const steps = sync(runner, false, true);
     expect(steps[0].ok).toBe(true);
     expect(runner.calls).toContainEqual([
-      "code", "--install-extension", path.join(root, "dist", "sandbox-workspaces.vsix"), "--force",
+      "code",
+      "--install-extension",
+      path.join(root, "dist", "sandbox-workspaces.vsix"),
+      "--force",
     ]);
   });
 
@@ -628,15 +678,21 @@ describe("syncVscodeExtension", () => {
   });
 
   it("marks a failed install optional", () => {
-    const runner = fakeRunner({ [LIST]: [0, ""], "code --install-extension": [1, "Error: corrupt"] });
+    const runner = fakeRunner({
+      [LIST]: [0, ""],
+      "code --install-extension": [1, "Error: corrupt"],
+    });
     const steps = sync(runner, false, true);
     expect(steps[0]).toMatchObject({ ok: false, optional: true });
     expect(steps[0].detail).toContain("corrupt");
   });
 
   it("ships the extension at the CLI's version — setup compares the two", () => {
-    const read = (p: string) => JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "../../../../..", p), "utf8"));
-    expect(read("packages/vscode-plugin/package.json").version).toBe(read("apps/cli/package.json").version);
+    const read = (p: string) =>
+      JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "../../../../..", p), "utf8"));
+    expect(read("packages/vscode-plugin/package.json").version).toBe(
+      read("apps/cli/package.json").version,
+    );
   });
 });
 
@@ -657,7 +713,8 @@ describe("syncRepo", () => {
   const spec = {
     name: DEMO_SERVICES_REPO,
     url: DEMO_SERVICES_REPO_URL,
-    missingConsequence: "The demo backend/frontend services will not start until it is cloned there.",
+    missingConsequence:
+      "The demo backend/frontend services will not start until it is cloned there.",
   };
 
   it("clones the spec's own url, not a hardcoded one", () => {
@@ -668,7 +725,10 @@ describe("syncRepo", () => {
     const steps = syncRepo(home.dir, spec, runner, false);
     expect(steps[0].ok).toBe(true);
     expect(runner.calls[0]).toEqual([
-      "git", "clone", DEMO_SERVICES_REPO_URL, path.join(home.dir, DEMO_SERVICES_REPO),
+      "git",
+      "clone",
+      DEMO_SERVICES_REPO_URL,
+      path.join(home.dir, DEMO_SERVICES_REPO),
     ]);
   });
 
@@ -732,7 +792,9 @@ describe("workspace repo", () => {
     });
     expect(steps.find((s) => s.label === label)?.ok).toBe(true);
     expect(runner.calls).toContainEqual([
-      "git", "clone", "https://github.com/acme/sandbox-workspace.git",
+      "git",
+      "clone",
+      "https://github.com/acme/sandbox-workspace.git",
       path.join(home.dir, WORKSPACE_ROOT_REPO),
     ]);
   });
@@ -801,10 +863,18 @@ describe("demo-services clone gating and registry ordering", () => {
     const fragmentDir = path.join(home.dir, "demo-services", ".sandbox");
     fs.mkdirSync(fragmentDir, { recursive: true });
     fs.mkdirSync(path.join(home.dir, "demo-services", ".git"), { recursive: true });
-    fs.writeFileSync(path.join(fragmentDir, "services.yaml"), "services:\n  backend:\n    path: apps/backend\n");
+    fs.writeFileSync(
+      path.join(fragmentDir, "services.yaml"),
+      "services:\n  backend:\n    path: apps/backend\n",
+    );
     const steps = await runSetup({
-      checkOnly: false, reposRoot: home.dir, runner: fakeRunner({ "git clone": [0, ""], "claude": [0, ""] }),
-      hostnames: [], jira: null, pathDirs: {}, demo: false,
+      checkOnly: false,
+      reposRoot: home.dir,
+      runner: fakeRunner({ "git clone": [0, ""], claude: [0, ""] }),
+      hostnames: [],
+      jira: null,
+      pathDirs: {},
+      demo: false,
       registry: { legacyDir: null, k8sContext: "kind-dev" },
     });
     expect(detail(steps, "config services.yaml")).toContain("generated");
@@ -827,7 +897,9 @@ describe("syncClaudeStandardsDir", () => {
   });
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  const dirs = () => JSON.parse(fs.readFileSync(settings, "utf8").replace(/^\s*\/\/.*$/gm, "")).permissions.additionalDirectories;
+  const dirs = () =>
+    JSON.parse(fs.readFileSync(settings, "utf8").replace(/^\s*\/\/.*$/gm, "")).permissions
+      .additionalDirectories;
 
   it("skips when Claude Code's settings dir is missing, creating nothing", () => {
     const missing = path.join(dir, "nope", "settings.json");
@@ -856,7 +928,10 @@ describe("syncClaudeStandardsDir", () => {
   });
 
   it("appends to an existing list, and a second run changes nothing", () => {
-    fs.writeFileSync(settings, JSON.stringify({ permissions: { additionalDirectories: ["/other"] } }));
+    fs.writeFileSync(
+      settings,
+      JSON.stringify({ permissions: { additionalDirectories: ["/other"] } }),
+    );
     syncClaudeStandardsDir(false, true, settings, standards);
     const text = fs.readFileSync(settings, "utf8");
     expect(dirs()).toEqual(["/other", standards]);
@@ -881,7 +956,10 @@ describe("syncClaudeStandardsDir", () => {
 
   it("never writes without a yes, and --check stays green", () => {
     fs.writeFileSync(settings, "{}");
-    for (const [checkOnly, install] of [[true, true], [false, false]]) {
+    for (const [checkOnly, install] of [
+      [true, true],
+      [false, false],
+    ]) {
       const [step] = syncClaudeStandardsDir(checkOnly, install, settings, standards);
       expect(step).toMatchObject({ ok: true, detail: "not granted (opt in via `sandbox setup`)" });
     }
@@ -917,7 +995,10 @@ describe("syncEditorSchemas", () => {
 
   it("never writes without a yes, and --check stays green", () => {
     fs.writeFileSync(settings, "{}");
-    for (const [checkOnly, install] of [[true, true], [false, false]]) {
+    for (const [checkOnly, install] of [
+      [true, true],
+      [false, false],
+    ]) {
       const [step] = syncEditorSchemas(checkOnly, install, settings, schemas);
       expect(step.ok).toBe(true);
     }
@@ -937,7 +1018,9 @@ describe("syncEditorSchemas", () => {
     expect(text).toContain("// mine");
     expect(text).toContain('"/k8s.json": "*.k8s.yaml"');
     expect(text).not.toContain("/old/");
-    expect(text).toContain(`"${schemas}/services-fragment.schema.json": "**/.sandbox/services.yaml"`);
+    expect(text).toContain(
+      `"${schemas}/services-fragment.schema.json": "**/.sandbox/services.yaml"`,
+    );
     expect(text).toContain(`"${schemas}/workspace.schema.json": "**/.sandbox/workspace.yml"`);
 
     syncEditorSchemas(false, true, settings, schemas);

@@ -21,12 +21,29 @@
 import { load } from "./global_config.js";
 import { github } from "./issue_trackers/github.js";
 import { jira } from "./issue_trackers/jira.js";
-import { TRACKER_IDS, type Issue, type IssueTrackerStrategy, type TrackerId } from "./issue_trackers/types.js";
+import {
+  type Issue,
+  type IssueTrackerStrategy,
+  TRACKER_IDS,
+  type TrackerId,
+} from "./issue_trackers/types.js";
 
-export { TRACKER_IDS } from "./issue_trackers/types.js";
-export type { Issue, IssueComment, IssueTrackerStrategy, IssueUpdate, TrackerAuth, TrackerId } from "./issue_trackers/types.js";
-export { GITHUB_ISSUE_PATTERN, ghBin, githubIssueRepos, normalizeGithubIssue } from "./issue_trackers/github.js";
+export {
+  GITHUB_ISSUE_PATTERN,
+  ghBin,
+  githubIssueRepos,
+  normalizeGithubIssue,
+} from "./issue_trackers/github.js";
 export { jiraSitePhrase, jiraSiteRef } from "./issue_trackers/jira.js";
+export type {
+  Issue,
+  IssueComment,
+  IssueTrackerStrategy,
+  IssueUpdate,
+  TrackerAuth,
+  TrackerId,
+} from "./issue_trackers/types.js";
+export { TRACKER_IDS } from "./issue_trackers/types.js";
 
 const REGISTRY: Record<TrackerId, IssueTrackerStrategy> = { jira, github };
 
@@ -44,7 +61,6 @@ export function loadIssueTracker(cfg?: Record<string, any>): TrackerId {
 export function issueTracker(cfg?: Record<string, any>): IssueTrackerStrategy {
   return REGISTRY[loadIssueTracker(cfg)];
 }
-
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -80,10 +96,14 @@ export function issueBriefing(issue: Issue): string {
     issue.assignee && `Assignee: ${issue.assignee}`,
   ].filter(Boolean);
   if (meta.length) lines.push(meta.join(" · "));
-  if (issue.description) lines.push("", "Description:", issue.description.slice(0, MAX_DESCRIPTION));
+  if (issue.description)
+    lines.push("", "Description:", issue.description.slice(0, MAX_DESCRIPTION));
   const comments = issue.comments ?? [];
   if (comments.length) {
-    lines.push("", `Comments (last ${Math.min(comments.length, MAX_COMMENTS)} of ${comments.length}):`);
+    lines.push(
+      "",
+      `Comments (last ${Math.min(comments.length, MAX_COMMENTS)} of ${comments.length}):`,
+    );
     for (const c of comments.slice(-MAX_COMMENTS)) {
       const when = c.created ? ` ${c.created.slice(0, 10)}` : "";
       lines.push(`- [${c.author}${when}] ${c.body.slice(0, MAX_COMMENT)}`);

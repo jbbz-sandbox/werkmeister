@@ -8,11 +8,11 @@
  * that the four failure codes still reach `main.ts`'s handler rather than being
  * printed a second time here.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SandboxError } from "sandbox-core/errors";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeRecorder } from "./helpers/recorder.js";
 

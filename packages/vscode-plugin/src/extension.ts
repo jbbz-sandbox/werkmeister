@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
-import { SandboxTreeProvider } from "./tree.js";
-import { disposeTerminals } from "./terminal.js";
+import { disposeOutputChannel, registerCommands } from "./commands.js";
 import { disposeLogTerminals } from "./logs.js";
-import { registerCommands, disposeOutputChannel } from "./commands.js";
+import { disposeTerminals } from "./terminal.js";
+import { SandboxTreeProvider } from "./tree.js";
 
 /**
  * The SANDBOX_* values this process inherited, captured before any setting is

@@ -34,11 +34,7 @@
 
 import * as fs from "node:fs";
 
-import {
-  WorkspaceInitError,
-  WorkspaceRootError,
-  initWorkspace,
-} from "sandbox-core/workspace_init";
+import { initWorkspace, WorkspaceInitError, WorkspaceRootError } from "sandbox-core/workspace_init";
 
 /**
  * Read a task title piped on stdin (`echo "…" | sandbox init-workspace`).

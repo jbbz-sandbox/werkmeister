@@ -4,11 +4,12 @@
 //
 // Hermetic: os.homedir() honours $HOME on POSIX, so the whole PID-file state
 // dir moves to a tmpdir.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { ALL, DASHBOARD, MCP, start } from "./dist/web_servers.js";

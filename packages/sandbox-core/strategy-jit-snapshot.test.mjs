@@ -1,15 +1,15 @@
 // Every file JIT init writes, captured on `main` before the context-strategy
 // move and asserted byte-for-byte after it (spec §5 test 5). Regenerate only
 // when a JIT output change is intended: UPDATE_SNAPSHOT=1.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { withSandboxHome } from "./fixtures.mjs";
+import { test } from "node:test";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
 const SNAPSHOT = path.join(import.meta.dirname, "strategy-jit.snapshot.json");
 const REPO = path.resolve(import.meta.dirname, "..", "..");
@@ -31,12 +31,12 @@ function seedStandards(dir) {
   fs.mkdirSync(path.join(dir, "comments"), { recursive: true });
   fs.writeFileSync(
     path.join(dir, "comments", "STANDARD.md"),
-    "---\ndomain: comments\nuniversal: 1\napplies_to:\n  - \"**/*\"\nphase: [implement]\nsummary: Comments explain why.\n---\n\n# Comments\n",
+    '---\ndomain: comments\nuniversal: 1\napplies_to:\n  - "**/*"\nphase: [implement]\nsummary: Comments explain why.\n---\n\n# Comments\n',
   );
   fs.mkdirSync(path.join(dir, "ui"), { recursive: true });
   fs.writeFileSync(
     path.join(dir, "ui", "STANDARD.md"),
-    "---\ndomain: ui\napplies_to:\n  - \"**/*.tsx\"\nphase: [implement]\nsummary: UI rules.\n---\n\n# UI\n",
+    '---\ndomain: ui\napplies_to:\n  - "**/*.tsx"\nphase: [implement]\nsummary: UI rules.\n---\n\n# UI\n',
   );
 }
 

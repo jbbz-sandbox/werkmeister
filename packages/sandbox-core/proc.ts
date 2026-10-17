@@ -82,18 +82,23 @@ export function run(cmd: string[], opts: RunOptions = {}): RunResult {
     if (code === "ETIMEDOUT") {
       throw new ProcError(
         `Command timed out after ${opts.timeout}s: ${cmd.join(" ")}`,
-        cmd, res.status ?? -1, stdout, stderr, "ETIMEDOUT",
+        cmd,
+        res.status ?? -1,
+        stdout,
+        stderr,
+        "ETIMEDOUT",
       );
     }
     if (code === "ENOENT") {
-      throw new ProcError(
-        `Command not found: ${cmd[0]}`,
-        cmd, -1, stdout, stderr, "ENOENT",
-      );
+      throw new ProcError(`Command not found: ${cmd[0]}`, cmd, -1, stdout, stderr, "ENOENT");
     }
     throw new ProcError(
       `Command failed to start: ${cmd.join(" ")} (${res.error.message})`,
-      cmd, res.status ?? -1, stdout, stderr, code,
+      cmd,
+      res.status ?? -1,
+      stdout,
+      stderr,
+      code,
     );
   }
 
@@ -103,7 +108,10 @@ export function run(cmd: string[], opts: RunOptions = {}): RunResult {
   if (opts.check && status !== 0) {
     throw new ProcError(
       `Command failed with exit code ${status}: ${cmd.join(" ")}`,
-      cmd, status, stdout, stderr,
+      cmd,
+      status,
+      stdout,
+      stderr,
     );
   }
   return { status, stdout, stderr };

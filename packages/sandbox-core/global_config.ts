@@ -35,8 +35,8 @@ import {
   portsYamlPath,
   sandboxHome,
   sandboxRoot,
-  servicesYamlPath,
   servicesLocalYamlPath,
+  servicesYamlPath,
 } from "./config.js";
 import { warn } from "./reporter.js";
 
@@ -48,20 +48,20 @@ import { warn } from "./reporter.js";
  * is the one module that cannot leave the CLI.
  */
 export interface PromptSpec {
-  key: string;                                        // config-field name (feature, repos_root, …)
-  label: string;                                      // prompt text shown to the user
-  help: string;                                       // one-line "why it matters"
-  acceptEmpty?: boolean;                              // may the user submit nothing? (default true)
-  multi?: boolean;                                    // comma-separated multi-value (services)
-  multiline?: boolean;                                // free-form prose (form: textarea widget)
-  boolean?: boolean;                                  // on/off (form: checkbox; wizard: yes/no)
-  refinable?: boolean;                                // form: offer a "Refine with Claude" button
-  refineInstruction?: string | null;                  // how Claude should rewrite the field
-  recommended?: boolean;                              // strongly-recommended input (feature)
-  pattern?: string | null;                            // anchored regex a non-empty value must match
-  placeholder?: string | null;                        // example value (UI hint; not a default)
+  key: string; // config-field name (feature, repos_root, …)
+  label: string; // prompt text shown to the user
+  help: string; // one-line "why it matters"
+  acceptEmpty?: boolean; // may the user submit nothing? (default true)
+  multi?: boolean; // comma-separated multi-value (services)
+  multiline?: boolean; // free-form prose (form: textarea widget)
+  boolean?: boolean; // on/off (form: checkbox; wizard: yes/no)
+  refinable?: boolean; // form: offer a "Refine with Claude" button
+  refineInstruction?: string | null; // how Claude should rewrite the field
+  recommended?: boolean; // strongly-recommended input (feature)
+  pattern?: string | null; // anchored regex a non-empty value must match
+  placeholder?: string | null; // example value (UI hint; not a default)
   defaultFn?: ((workspace: string) => string) | null; // derive a default from the workspace
-  choicesFn?: (() => string[]) | null;                // enumerate valid values (services)
+  choicesFn?: (() => string[]) | null; // enumerate valid values (services)
   choiceGroupsFn?: (() => Record<string, string>) | null; // choice → heading it's listed under (service → repo)
 }
 
@@ -75,7 +75,14 @@ const _ABS_PATH = "^/\\S*$"; // absolute path (leading slash, no whitespace)
 // `sandbox-core/config` rather than defined here: the dashboard and MCP servers
 // resolve the same files out-of-process, and two implementations had already
 // drifted apart on precedence. See that module's header.
-export { configPath, sandboxHome, servicesYamlPath, servicesLocalYamlPath, portsYamlPath, modelPricingYamlPath };
+export {
+  configPath,
+  modelPricingYamlPath,
+  portsYamlPath,
+  sandboxHome,
+  servicesLocalYamlPath,
+  servicesYamlPath,
+};
 
 /** Path to the generated shell export file (sibling of the config). */
 export function envShPath(): string {
@@ -208,8 +215,8 @@ export const _CONFIG_PROMPTS: readonly PromptSpec[] = [
   {
     key: "repos_root",
     label: "Repos root (absolute path)",
-    help: "Directory holding the canonical source-repo clones " +
-          "(exported as SANDBOX_REPOS_ROOT).",
+    help:
+      "Directory holding the canonical source-repo clones " + "(exported as SANDBOX_REPOS_ROOT).",
     acceptEmpty: false,
     pattern: _ABS_PATH,
     placeholder: "/Users/you/workspace",
@@ -217,8 +224,9 @@ export const _CONFIG_PROMPTS: readonly PromptSpec[] = [
   {
     key: "workspaces_root",
     label: "Workspaces root (absolute path)",
-    help: "Directory holding per-feature worktree workspaces " +
-          "(exported as SANDBOX_WORKSPACES_ROOT).",
+    help:
+      "Directory holding per-feature worktree workspaces " +
+      "(exported as SANDBOX_WORKSPACES_ROOT).",
     acceptEmpty: false,
     pattern: _ABS_PATH,
     placeholder: "/Users/you/workspace/features",
@@ -263,7 +271,8 @@ export function pathDefault(
     return String(stored);
   }
   const reposRoot =
-    resolved["repos_root"] || String(paths["repos_root"] || process.env[_PATH_ENV["repos_root"]] || "");
+    resolved["repos_root"] ||
+    String(paths["repos_root"] || process.env[_PATH_ENV["repos_root"]] || "");
   return builtinPathDefault(key, reposRoot);
 }
 
@@ -383,10 +392,11 @@ const _REPO_SLUG = "[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$"
 export const _WORKSPACE_REPO_PROMPT: PromptSpec = {
   key: "workspace_repo",
   label: "Workspace config repo (owner/repo)",
-  help: "GitHub repo cloned under the repos root and worktree'd as the root of " +
-        "every feature workspace, so .sandbox/ configs and notes get history. " +
-        "Defaults to your own; point it at a shared <org>/sandbox-workspace to " +
-        "share workspace configs with your team.",
+  help:
+    "GitHub repo cloned under the repos root and worktree'd as the root of " +
+    "every feature workspace, so .sandbox/ configs and notes get history. " +
+    "Defaults to your own; point it at a shared <org>/sandbox-workspace to " +
+    "share workspace configs with your team.",
   acceptEmpty: false,
   pattern: _REPO_SLUG,
   placeholder: "your-org/sandbox-workspace",
@@ -413,23 +423,26 @@ export function loadGithubOrg(cfg?: Record<string, any>): string {
 export const _GITHUB_ORG_PROMPT: PromptSpec = {
   key: "github_org",
   label: "GitHub org for service repos",
-  help: "Owner of the repos in your services registry. Used to link the " +
-        "canonical examples that standards docs cite (github.com/<org>/<repo>).",
+  help:
+    "Owner of the repos in your services registry. Used to link the " +
+    "canonical examples that standards docs cite (github.com/<org>/<repo>).",
   acceptEmpty: false,
   pattern: "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$",
   placeholder: "your-org",
 };
 
 // A DNS domain: dot-separated labels, no scheme, no path, no trailing dot.
-const _DOMAIN = "[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$";
+const _DOMAIN =
+  "[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$";
 
 /** Ingress prompts — driven by `sandbox setup`, alongside `_CONFIG_PROMPTS`. */
 export const _INGRESS_PROMPTS: readonly PromptSpec[] = [
   {
     key: "local_domain",
     label: "Local ingress domain",
-    help: "Base domain for docker features — each routed service is served at " +
-          "<service>.<domain> and Caddy terminates TLS for it.",
+    help:
+      "Base domain for docker features — each routed service is served at " +
+      "<service>.<domain> and Caddy terminates TLS for it.",
     acceptEmpty: false,
     pattern: _DOMAIN,
     placeholder: INGRESS_DEFAULTS.local_domain,
@@ -437,8 +450,9 @@ export const _INGRESS_PROMPTS: readonly PromptSpec[] = [
   {
     key: "remote_domain",
     label: "Remote (K8s) ingress domain",
-    help: "Base domain for services routed to the dev cluster instead of a " +
-          "local container — served at <service>.<domain>.",
+    help:
+      "Base domain for services routed to the dev cluster instead of a " +
+      "local container — served at <service>.<domain>.",
     acceptEmpty: false,
     pattern: _DOMAIN,
     placeholder: INGRESS_DEFAULTS.remote_domain,
@@ -446,8 +460,9 @@ export const _INGRESS_PROMPTS: readonly PromptSpec[] = [
   {
     key: "certs_dir",
     label: "Certificate directory (absolute path)",
-    help: "Where bin/generate-certs.sh writes localhost.crt/.key; bind-mounted " +
-          "into the Caddy container (exported as SANDBOX_CERTS_DIR).",
+    help:
+      "Where bin/generate-certs.sh writes localhost.crt/.key; bind-mounted " +
+      "into the Caddy container (exported as SANDBOX_CERTS_DIR).",
     acceptEmpty: false,
     pattern: _ABS_PATH,
     placeholder: INGRESS_DEFAULTS.certs_dir,
@@ -707,8 +722,7 @@ export function check(cfg: Record<string, any>): string[] {
       for (const body of Object.values(data["mcpServers"] ?? {})) {
         if (isDict(body) && isSandboxServer(body) && "env" in body) {
           problems.push(
-            `${dpath}: sandbox server still has a stale \`env\` block — ` +
-            "run `sandbox config`",
+            `${dpath}: sandbox server still has a stale \`env\` block — ` + "run `sandbox config`",
           );
         }
       }

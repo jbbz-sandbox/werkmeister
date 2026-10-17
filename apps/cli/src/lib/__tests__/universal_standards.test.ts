@@ -8,17 +8,17 @@
  * comment warned that alphabetical agreement was coincidence — so the tests
  * below deliberately pick names where the two disagree.
  */
-import { describe, expect, it } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import {
   buildStandardsManifest,
   resolveActiveStandards,
   universalStandards,
   validateStandardModules,
 } from "sandbox-core/standards";
+import { describe, expect, it } from "vitest";
 
 /** `zebra` sorts after `alpha` alphabetically but is declared to load first. */
 const MODULES = {

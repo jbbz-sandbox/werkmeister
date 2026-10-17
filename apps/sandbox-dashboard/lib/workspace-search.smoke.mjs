@@ -69,5 +69,7 @@ assert.deepEqual(
   "-exclude and a|b OR-group combine with the rest via AND",
 );
 
-console.log("workspace-search smoke: PASS (substring, AND-combine, exclude, OR-group, labels, empty passthrough, order)");
+console.log(
+  "workspace-search smoke: PASS (substring, AND-combine, exclude, OR-group, labels, empty passthrough, order)",
+);
 process.exit(0);

@@ -10,18 +10,20 @@
  * the workspace resolution that depends on cwd, and the summary block.
  */
 
+import type { UpResult } from "sandbox-core/lifecycle";
+import { up as upFeature } from "sandbox-core/lifecycle";
 import { Colors, error, resolveWorkspace } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
-import { up as upFeature } from "sandbox-core/lifecycle";
-import type { UpResult } from "sandbox-core/lifecycle";
 
 /** The "Feature 'x' is ready" block — rendering, so it stays in the CLI. */
 function printSummary(result: UpResult): void {
   const { feature, slot, portRange, localServices, urls, servicePorts } = result;
   const [portStart, portEnd] = portRange;
 
-  console.log(`\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' is ready ===${Colors.RESET}\n`);
+  console.log(
+    `\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' is ready ===${Colors.RESET}\n`,
+  );
   console.log(
     `  ${Colors.CYAN}URL:${Colors.RESET}     ${urls.length ? urls.join(", ") : "(no routed hostname for these services)"}`,
   );

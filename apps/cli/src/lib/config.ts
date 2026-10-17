@@ -46,7 +46,6 @@ export const getMonorepoRoot = monorepoRoot;
 /** The `infra/` tree — compose files, templates, proxy UI, schemas, skills. */
 export const getInfraRoot = infraRoot;
 
-
 // The registry loaders and the workspace resolution live in
 // `sandbox-core/config` now — the dashboard and the extension read the same
 // files through the same precedence instead of shelling out for them. They are
@@ -54,11 +53,11 @@ export const getInfraRoot = infraRoot;
 // kept the config readers' call sites.
 export {
   detectWorkspaceFromCwd,
-  loadArchetypes,
   getK8sContext,
   getReposRoot,
   getServiceNames,
   getVolumeBaseNames,
+  loadArchetypes,
   loadInfrastructure,
   loadMcpServers,
   loadPorts,

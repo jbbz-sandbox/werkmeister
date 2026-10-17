@@ -2,7 +2,7 @@
 import * as path from "node:path";
 
 import { readJson, readText } from "./files.js";
-import { guessed, stated, type DetectContext, type Finding, type Workspace } from "./types.js";
+import { type DetectContext, type Finding, guessed, stated, type Workspace } from "./types.js";
 
 const WEB_DEPS = ["next", "vite", "react", "expo"];
 const API_DEPS = ["express", "fastify", "@nestjs/core", "koa"];
@@ -22,7 +22,12 @@ function testCommand(ws: Workspace, dir: string, pkgName: string | undefined): s
   return `npm test -w ${dir}`;
 }
 
-function nodeMajor(ctx: DetectContext, dir: string, pkg: Record<string, any>, rootPkg: Record<string, any> | null): string {
+function nodeMajor(
+  ctx: DetectContext,
+  dir: string,
+  pkg: Record<string, any>,
+  rootPkg: Record<string, any> | null,
+): string {
   for (const range of [pkg.engines?.node, rootPkg?.engines?.node]) {
     const m = /(\d+)/.exec(String(range ?? ""));
     if (m) return m[1];
@@ -50,9 +55,13 @@ export function detectPackages(ctx: DetectContext, ws: Workspace): Finding[] {
     const script = scripts.dev ? "dev" : scripts.start ? "start" : null;
     if (script) {
       const runIt = `exec ${ws.pm} run ${script}`;
-      fields.command = stated(dir === "." ? runIt : `cd ${dir} && ${runIt}`, `${file} → scripts.${script}`);
+      fields.command = stated(
+        dir === "." ? runIt : `cd ${dir} && ${runIt}`,
+        `${file} → scripts.${script}`,
+      );
     }
-    if (scripts.test) fields.test = stated(testCommand(ws, dir, pkg.name), `${file} → scripts.test`);
+    if (scripts.test)
+      fields.test = stated(testCommand(ws, dir, pkg.name), `${file} → scripts.test`);
 
     const web = WEB_DEPS.find((d) => d in deps);
     const api = API_DEPS.find((d) => d in deps);

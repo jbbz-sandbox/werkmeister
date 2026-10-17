@@ -5,10 +5,11 @@
  * for the first time — including one-shot setup containers, which are supposed
  * to exit.
  */
-import { describe, expect, it } from "vitest";
+
+import type { ContainerStatus } from "sandbox-core/compose";
 
 import { tallied } from "sandbox-core/status";
-import type { ContainerStatus } from "sandbox-core/compose";
+import { describe, expect, it } from "vitest";
 
 const c = (over: Partial<ContainerStatus>): ContainerStatus => ({
   name: "x",

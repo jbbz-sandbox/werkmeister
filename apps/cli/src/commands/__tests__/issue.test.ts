@@ -8,7 +8,13 @@ describe("sandbox issue update arguments", () => {
   });
 
   it("passes either field through", () => {
-    expect(updateFromArgs({ status: "In Development", comment: null })).toEqual({ status: "In Development", comment: undefined });
-    expect(updateFromArgs({ status: null, comment: "hi" })).toEqual({ status: undefined, comment: "hi" });
+    expect(updateFromArgs({ status: "In Development", comment: null })).toEqual({
+      status: "In Development",
+      comment: undefined,
+    });
+    expect(updateFromArgs({ status: null, comment: "hi" })).toEqual({
+      status: undefined,
+      comment: "hi",
+    });
   });
 });

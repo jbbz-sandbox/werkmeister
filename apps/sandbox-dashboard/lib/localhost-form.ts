@@ -20,11 +20,12 @@
  * creating anything — the caller (server.ts or form-cli.ts) feeds the result
  * into the shared `createWorkspace()`.
  */
-import express from "express";
-import fs from "node:fs/promises";
-import path from "node:path";
-import type { AddressInfo } from "node:net";
+
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import type { AddressInfo } from "node:net";
+import path from "node:path";
+import express from "express";
 import type { FormSchemaBundle } from "sandbox-core";
 import { fetchIssueFormData, getFormSchema, refinePrompt, WorkspaceError } from "sandbox-core";
 import { issueTracker } from "sandbox-core/issue_tracker";
@@ -45,7 +46,10 @@ export async function getFormBundle(): Promise<FormSchemaBundle> {
   const bundle = await getFormSchema();
   const ui = (bundle.uiSchema.issue_id ?? {}) as Record<string, unknown>;
   const opts = (ui["ui:options"] ?? {}) as Record<string, unknown>;
-  bundle.uiSchema.issue_id = { ...ui, "ui:options": { ...opts, trackerLabel: issueTracker().label } };
+  bundle.uiSchema.issue_id = {
+    ...ui,
+    "ui:options": { ...opts, trackerLabel: issueTracker().label },
+  };
   return bundle;
 }
 

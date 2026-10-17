@@ -9,9 +9,9 @@
  */
 
 import path from "node:path";
-import { Colors, error, info } from "../lib/config.js";
 import { closeOut } from "sandbox-core";
 import { findRecordRoot } from "sandbox-core/pr_guard";
+import { Colors, error, info } from "../lib/config.js";
 import { confirm } from "../lib/wizard.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
@@ -32,7 +32,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
           : "Records the reason in closeout.md, pushes every branch and keeps them, then removes the workspace."
       }${Colors.RESET}`,
     );
-    if (!(await confirm(abandon === null ? `Close out and remove '${name}'?` : `Abandon and remove '${name}'?`, false))) {
+    if (
+      !(await confirm(
+        abandon === null ? `Close out and remove '${name}'?` : `Abandon and remove '${name}'?`,
+        false,
+      ))
+    ) {
       info("Aborted -- nothing changed.");
       return;
     }
@@ -41,5 +46,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(result.output);
   console.log(`\n${Colors.GREEN}${Colors.BOLD}Workspace '${name}' closed out${Colors.RESET}`);
   // The CLI can't reach the desktop app; the pane and the close-out MCP tool archive these themselves.
-  console.log(`  ${Colors.DIM}Archive this workspace's desktop sessions from the Claude sidebar.${Colors.RESET}\n`);
+  console.log(
+    `  ${Colors.DIM}Archive this workspace's desktop sessions from the Claude sidebar.${Colors.RESET}\n`,
+  );
 }

@@ -3,13 +3,14 @@
 // talk to a different daemon than the CLI unless the endpoint is resolved from
 // the CLI first. That resolution and the two stats conversions are the parts
 // worth pinning; the API calls themselves are integration, not unit, territory.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 
 import { cpuPercent, endpointOptions, memMib, resolveEndpoint } from "./dist/docker.js";
 
@@ -97,9 +98,12 @@ test("resolveEndpoint resolves the context store's precedence without the CLI", 
     withEnv({ DOCKER_CONFIG: dir, DOCKER_HOST: undefined, DOCKER_CONTEXT: "remote" }, () => {
       assert.deepEqual(resolveEndpoint(), { host: "10.0.0.4", port: 2375, protocol: "http" });
     });
-    withEnv({ DOCKER_CONFIG: dir, DOCKER_HOST: "tcp://127.0.0.1:9999", DOCKER_CONTEXT: "remote" }, () => {
-      assert.deepEqual(resolveEndpoint(), { host: "127.0.0.1", port: 9999, protocol: "http" });
-    });
+    withEnv(
+      { DOCKER_CONFIG: dir, DOCKER_HOST: "tcp://127.0.0.1:9999", DOCKER_CONTEXT: "remote" },
+      () => {
+        assert.deepEqual(resolveEndpoint(), { host: "127.0.0.1", port: 9999, protocol: "http" });
+      },
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -155,7 +159,10 @@ test("cpuPercent reports zero rather than a sign error on an empty window", () =
 test("memMib subtracts the page cache, on either cgroup version", () => {
   assert.equal(memMib(SAMPLE).toFixed(2), "12.92");
 
-  const v1 = { ...SAMPLE, memory_stats: { ...SAMPLE.memory_stats, stats: { total_inactive_file: 3510272 } } };
+  const v1 = {
+    ...SAMPLE,
+    memory_stats: { ...SAMPLE.memory_stats, stats: { total_inactive_file: 3510272 } },
+  };
   assert.equal(memMib(v1).toFixed(2), "12.92");
 
   const noStats = { ...SAMPLE, memory_stats: { usage: 17055744, limit: 356515840 } };

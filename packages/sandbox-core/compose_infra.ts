@@ -30,14 +30,18 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv } 
   }
   return {
     argv: [
-      "docker", "compose",
-      "-f", path.join(infraRoot(), "compose", "shared-infra.yml"),
-      "-f", override,
+      "docker",
+      "compose",
+      "-f",
+      path.join(infraRoot(), "compose", "shared-infra.yml"),
+      "-f",
+      override,
       // `-p`, not just the file's `name:`: a workspace container's `.env`
       // exports COMPOSE_PROJECT_NAME=sandbox-<feature>, which outranks `name:`
       // and pointed every infra call at the workspace's project (#198). Last,
       // because callers read the shipped file at argv[3].
-      "-p", INFRA_PROJECT,
+      "-p",
+      INFRA_PROJECT,
     ],
     env: { ...process.env, SANDBOX_STATE_DIR: stateInfraRoot() },
   };
