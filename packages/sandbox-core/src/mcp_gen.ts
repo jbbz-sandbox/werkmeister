@@ -16,11 +16,12 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ArchetypeRegistry } from "./config.js";
 
 /** Union the present archetypes' `mcp_servers:` names, sorted. */
 export function resolveWorkspaceMcpServers(
   presentArchetypes: Record<string, string[]>,
-  archetypes: Record<string, any>,
+  archetypes: ArchetypeRegistry,
 ): string[] {
   const names = new Set<string>();
   for (const archName of Object.keys(presentArchetypes)) {
@@ -38,8 +39,8 @@ export function resolveWorkspaceMcpServers(
  * silently projecting nothing.
  */
 export function validateArchetypeMcpServers(
-  archetypes: Record<string, any>,
-  definitions: Record<string, any>,
+  archetypes: ArchetypeRegistry,
+  definitions: Record<string, unknown>,
 ): string[] {
   const errors: string[] = [];
   for (const name of Object.keys(archetypes).sort()) {
@@ -105,12 +106,12 @@ function substituteVars(value: unknown, vars: Record<string, string>): unknown {
 export function writeWorkspaceMcp(
   workspaceRoot: string,
   serverNames: string[],
-  definitions: Record<string, any>,
+  definitions: Record<string, unknown>,
   vars: Record<string, string> = {},
 ): string | null {
   const mcpPath = path.join(workspaceRoot, ".mcp.json");
   const isFile = fs.existsSync(mcpPath) && fs.statSync(mcpPath).isFile();
-  let config: Record<string, any> = {};
+  let config: Record<string, unknown> = {};
   if (isFile) {
     try {
       const existing = JSON.parse(fs.readFileSync(mcpPath, "utf8"));
@@ -124,7 +125,7 @@ export function writeWorkspaceMcp(
     }
   }
 
-  const wanted: Record<string, any> = {};
+  const wanted: Record<string, unknown> = {};
   for (const name of serverNames) {
     if (name in definitions) wanted[name] = substituteVars(definitions[name], vars);
   }
@@ -135,7 +136,7 @@ export function writeWorkspaceMcp(
   if (!("mcpServers" in config)) {
     config["mcpServers"] = {};
   }
-  const servers = config["mcpServers"];
+  const servers = config["mcpServers"] as Record<string, unknown>;
   for (const name of Object.keys(servers)) {
     if (name in definitions && !(name in wanted)) {
       delete servers[name];

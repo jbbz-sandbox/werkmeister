@@ -16,15 +16,15 @@ type State = { text: string; cursor: number; seen: string };
 /** [line, column] of `cursor` in `text`. */
 function lineCol(text: string, cursor: number): [number, number] {
   const before = text.slice(0, cursor).split("\n");
-  return [before.length - 1, before[before.length - 1]!.length];
+  return [before.length - 1, (before.at(-1) ?? "").length];
 }
 
 /** The cursor index at `col` (clamped) on `line`. */
 function indexAt(text: string, line: number, col: number): number {
   const lines = text.split("\n");
   let i = 0;
-  for (let l = 0; l < line; l++) i += lines[l]!.length + 1;
-  return i + Math.min(col, lines[line]!.length);
+  for (let l = 0; l < line; l++) i += (lines[l] ?? "").length + 1;
+  return i + Math.min(col, (lines[line] ?? "").length);
 }
 
 /** One key applied to the text and cursor; the same object back when the key changes nothing. */

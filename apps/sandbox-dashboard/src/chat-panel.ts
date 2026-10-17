@@ -268,7 +268,8 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
   // widget appears ~2s after the last change. `maybeShowOptions` runs on every
   // render, so streaming keeps pushing the timer out until the reply settles.
   function maybeShowOptions(): void {
-    if (optionsShown || !opts.decisionOptions) return;
+    const { decisionOptions } = opts;
+    if (optionsShown || !decisionOptions) return;
     const ready =
       st && !st.sending && (st.messages || []).some((m: ClaudeMessage) => m.role === "assistant");
     if (!ready) {
@@ -283,7 +284,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       optionsTimer = null;
       if (optionsShown) return;
       optionsShown = true;
-      optionsHost.appendChild(createOptionsInput(opts.decisionOptions!));
+      optionsHost.appendChild(createOptionsInput(decisionOptions));
     }, 2000);
   }
 
@@ -424,7 +425,8 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
         scheduleRender();
       }
       if (unsub) return; // already connected
-      unsub = bridge.streamSession!(name, handlers, Math.max(0, seenIndex), st.pinnedSessionId);
+      unsub =
+        bridge.streamSession?.(name, handlers, Math.max(0, seenIndex), st.pinnedSessionId) ?? null;
     };
     function disconnect(): void {
       if (unsub) {

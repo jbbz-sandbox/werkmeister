@@ -13,7 +13,15 @@ import YAML from "yaml";
 
 import { serviceTestCommand } from "./archetypes.js";
 import { childEnv } from "./claude_cli.js";
-import { loadArchetypes, loadReposConfig, loadServices } from "./config.js";
+import {
+  type ArchetypeRegistry,
+  loadArchetypes,
+  loadReposConfig,
+  loadServices,
+  type RepoEntry,
+  type ReposConfig,
+  type ServicesConfig,
+} from "./config.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { updateNoteStatus } from "./graduate.js";
 import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
@@ -54,7 +62,7 @@ export interface PrFile {
   path: string;
   /** The code worktree's directory name — also its key in the registry `repos:`. */
   dir: string;
-  fm: Record<string, any>;
+  fm: Record<string, unknown>;
   title: string;
   body: string;
 }
@@ -70,9 +78,9 @@ export interface Deps {
   run: Run;
   /** HTTP status of a GET, or 0 when unreachable. */
   httpStatus: (url: string) => Promise<number>;
-  services: Record<string, any>;
-  archetypes: Record<string, any>;
-  repos: Record<string, any>;
+  services: ServicesConfig;
+  archetypes: ArchetypeRegistry;
+  repos: ReposConfig;
   tracker: IssueTrackerStrategy;
   doneStatus: string;
   /** Commit and push *paths* (relative to the workspace) on the record branch — nothing else that is dirty. */
@@ -95,7 +103,7 @@ const execRun: Run = (bin, args, cwd) =>
       args,
       { cwd, env: childEnv(), maxBuffer: 64 * 1024 * 1024, timeout: 30 * 60_000 },
       (err, stdout, stderr) => {
-        const code = err ? (typeof (err as any).code === "number" ? (err as any).code : 1) : 0;
+        const code = err ? (typeof err.code === "number" ? err.code : 1) : 0;
         resolve({
           stdout: String(stdout),
           stderr: String(stderr) || (err && code === 1 ? err.message : ""),
@@ -168,7 +176,7 @@ function parsePrFile(p: string): PrFile {
   return {
     path: p,
     dir: path.basename(p).replace(/^pr-/, "").replace(/\.md$/, ""),
-    fm: fm as Record<string, any>,
+    fm: fm as Record<string, unknown>,
     title: heading ? heading[1].trim() : "",
     body: heading ? m[2].slice(heading.index + heading[0].length).replace(/^\s*\n/, "") : m[2],
   };
@@ -176,18 +184,17 @@ function parsePrFile(p: string): PrFile {
 
 export function readPrFiles(ws: string): PrFile[] {
   const dir = prFileDir(ws);
+  if (!dir) return [];
   let names: string[] = [];
   try {
-    names = dir
-      ? fs
-          .readdirSync(dir)
-          .filter((n) => /^pr-.+\.md$/.test(n))
-          .sort()
-      : [];
+    names = fs
+      .readdirSync(dir)
+      .filter((n) => /^pr-.+\.md$/.test(n))
+      .sort();
   } catch {
     /* no dir yet — no PR files */
   }
-  return names.map((n) => parsePrFile(path.join(dir!, n)));
+  return names.map((n) => parsePrFile(path.join(dir, n)));
 }
 
 export function writePrFields(file: PrFile, fields: Record<string, string>): void {
@@ -269,7 +276,7 @@ function exerciseFile(ws: string): string | null {
  * Services whose files the branch changed, by longest prefix among `path_mappings` and
  * `no_service_paths` (which touch nothing, e.g. docs); any other file touches the whole repo.
  */
-export function mapTouched(files: string[], repo: Record<string, any>): string[] {
+export function mapTouched(files: string[], repo: RepoEntry): string[] {
   const mappings: [string, string | null][] = [
     ...Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>),
     ...((repo["no_service_paths"] ?? []) as string[]).map((p): [string, null] => [
@@ -507,7 +514,7 @@ export async function openPrs(
         "pr",
         "list",
         "--repo",
-        f.fm["repo"],
+        f.fm["repo"] as string,
         "--head",
         branch,
         "--state",
@@ -529,7 +536,7 @@ export async function openPrs(
           "pr",
           "create",
           "--repo",
-          f.fm["repo"],
+          f.fm["repo"] as string,
           "--base",
           String(f.fm["base"] ?? "main"),
           "--head",
@@ -757,8 +764,8 @@ export async function removalBlockers(
   for (const { repo, dir } of worktrees) {
     const f = files.find((x) => x.dir === repo);
     const status = f ? statusOf(f) : "none";
-    if (status === "open") {
-      out.push(`${repo}: PR is open (${f!.fm["url"]})`);
+    if (f && status === "open") {
+      out.push(`${repo}: PR is open (${f.fm["url"]})`);
       continue;
     }
     if (PAST_MERGE.has(status)) continue;

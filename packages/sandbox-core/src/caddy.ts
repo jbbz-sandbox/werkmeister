@@ -181,15 +181,17 @@ export function lintCaddyfileStructure(caddyfileText: string): string[] {
     if (handleMatch) {
       const directive = handleMatch[1];
       const arg = handleMatch[2].trim();
-      if (!handleGroups.has(depth)) handleGroups.set(depth, []);
-      handleGroups.get(depth)!.push([idx, directive, arg, routeDepths.has(depth)]);
+      const group = handleGroups.get(depth) ?? [];
+      handleGroups.set(depth, group);
+      group.push([idx, directive, arg, routeDepths.has(depth)]);
     } else {
       const inlineMatch = _HANDLE_INLINE_RE.exec(codeLine);
       if (inlineMatch) {
         const directive = inlineMatch[1];
         const arg = inlineMatch[2].trim();
-        if (!handleGroups.has(depth)) handleGroups.set(depth, []);
-        handleGroups.get(depth)!.push([idx, directive, arg, routeDepths.has(depth)]);
+        const group = handleGroups.get(depth) ?? [];
+        handleGroups.set(depth, group);
+        group.push([idx, directive, arg, routeDepths.has(depth)]);
         // Self-contained on one line: its own "{" and "}" cancel out.
         continue;
       }

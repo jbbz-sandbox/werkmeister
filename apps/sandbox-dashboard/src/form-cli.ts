@@ -25,7 +25,12 @@
  *                               (the /sandbox-workspace skill does this in the Claude
  *                               Code desktop app to show the form in its Browser pane).
  */
-import { createWorkspace, fetchIssueFormData, WorkspaceError } from "sandbox-core";
+import {
+  createWorkspace,
+  type FormSchemaBundle,
+  fetchIssueFormData,
+  WorkspaceError,
+} from "sandbox-core";
 import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {
@@ -61,7 +66,7 @@ function emit(result: Record<string, unknown>, exitCode: number): never {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
-  let bundle;
+  let bundle: FormSchemaBundle;
   try {
     bundle = await getFormBundle();
     // Explicit CLI values win over the issue's.
@@ -75,7 +80,7 @@ async function main(): Promise<void> {
     emit({ status: "error", message }, 1);
   }
 
-  const filled = await promptViaLocalhostForm(bundle!, {
+  const filled = await promptViaLocalhostForm(bundle, {
     timeoutMs: args.timeoutMs,
     open: !process.env.SANDBOX_FORM_NO_BROWSER,
   });

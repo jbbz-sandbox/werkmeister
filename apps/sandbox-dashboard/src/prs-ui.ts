@@ -355,7 +355,7 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
 
       let issueEl: HTMLElement | null = null;
       reconcileBtn?.addEventListener("click", async () => {
-        reconcileBtn!.disabled = true;
+        if (reconcileBtn) reconcileBtn.disabled = true;
         msg.className = "act-msg";
         msg.textContent = "Gathering issue + PR context…";
         try {
@@ -398,7 +398,7 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
         } catch (e) {
           msg.className = "act-msg err";
           msg.textContent = (e as Error).message || "couldn't start reconcile";
-          reconcileBtn!.disabled = false;
+          if (reconcileBtn) reconcileBtn.disabled = false;
         }
       });
     }
