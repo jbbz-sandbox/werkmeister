@@ -20,11 +20,13 @@
  *   every strategy (`writeWorkspacePermissions`), so a headless session can run
  *   the stage's test step without an approval prompt. An `autonomous` workspace
  *   also gets `AUTONOMOUS_RULES` — everything a run needs to reach `sandbox pr open`.
+ * - `model`: the workspace's `model` input (`writeWorkspaceModel`), so a session
+ *   opened in the folder starts on it.
  *
  * Unlike the other projections, settings.json may legitimately hold user
  * entries (JSON carries no do-not-hand-edit comment), so this generator merges:
  * it owns exactly the hook entries whose command contains each marker below,
- * and the allow rules recorded in `.sandbox/claude-permissions.json`,
+ * and the allow rules and model recorded in `.sandbox/claude-permissions.json`,
  * replacing stale versions and preserving everything else.
  */
 
@@ -38,7 +40,7 @@ import {
   loadServices,
   type ServicesConfig,
 } from "./config.js";
-import { readAutonomous } from "./workspace_prompts.js";
+import { readAutonomous, readModel } from "./workspace_prompts.js";
 
 // Markers doubling as the payload: entries containing them are sandbox-managed.
 const _HOOK_MARKER = "sandbox notes context";
@@ -336,14 +338,37 @@ export function workspaceAllowRules(workspaceRoot: string): string[] {
   return readAutonomous(workspaceRoot) ? [...new Set([...rules, ...AUTONOMOUS_RULES])] : rules;
 }
 
-function _readRecord(recordPath: string): string[] {
+interface PermissionsRecord {
+  allow: string[];
+  model: string | null;
+}
+
+function _readRecord(recordPath: string): PermissionsRecord {
   try {
     const data = JSON.parse(fs.readFileSync(recordPath, "utf8"));
-    return _isDict(data) && Array.isArray(data["allow"])
-      ? data["allow"].filter((r: unknown) => typeof r === "string")
-      : [];
+    if (!_isDict(data)) return { allow: [], model: null };
+    return {
+      allow: Array.isArray(data.allow) ? data.allow.filter((r) => typeof r === "string") : [],
+      model: typeof data.model === "string" ? data.model : null,
+    };
   } catch {
-    return [];
+    return { allow: [], model: null };
+  }
+}
+
+/** Write *record* if it changed, dropping empty keys; remove the file once both are empty. */
+function _writeRecord(recordPath: string, record: PermissionsRecord): void {
+  const body = {
+    ...(record.allow.length ? { allow: record.allow } : {}),
+    ...(record.model ? { model: record.model } : {}),
+  };
+  const previous = _readRecord(recordPath);
+  if (JSON.stringify(record) === JSON.stringify(previous)) return;
+  if (Object.keys(body).length) {
+    fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+    fs.writeFileSync(recordPath, `${JSON.stringify(body, null, 2)}\n`);
+  } else {
+    fs.rmSync(recordPath, { force: true });
   }
 }
 
@@ -365,8 +390,8 @@ export function writeWorkspacePermissions(workspaceRoot: string, want: string[])
   if (!Array.isArray(allow)) return settingsPath;
 
   const recordPath = path.join(workspaceRoot, _PERMISSIONS_RECORD);
-  const previous = _readRecord(recordPath);
-  const recorded = new Set(previous);
+  const stored = _readRecord(recordPath);
+  const recorded = new Set(stored.allow);
   const wanted = [...new Set(want)];
   const kept = allow.filter(
     (rule) => !(typeof rule === "string" && recorded.has(rule) && !wanted.includes(rule)),
@@ -382,18 +407,45 @@ export function writeWorkspacePermissions(workspaceRoot: string, want: string[])
     else delete settings["permissions"];
     _saveSettings(settingsPath, settings);
   }
-  if (JSON.stringify(record) !== JSON.stringify(previous)) {
-    if (record.length) {
-      fs.mkdirSync(path.dirname(recordPath), { recursive: true });
-      fs.writeFileSync(recordPath, JSON.stringify({ allow: record }, null, 2) + "\n");
-    } else {
-      fs.rmSync(recordPath, { force: true });
-    }
-  }
+  _writeRecord(recordPath, { ...stored, allow: record });
   return settingsPath;
 }
 
 /** Remove every allow rule sandbox added, keeping the person's. */
 export function removeWorkspacePermissions(workspaceRoot: string): string {
   return writeWorkspacePermissions(workspaceRoot, []);
+}
+
+/**
+ * Set `.claude/settings.json` `model` to *model*, or remove it when null.
+ *
+ * Only a model sandbox recorded writing is replaced or removed: one the person
+ * set (any value that differs from the record) is left as is and not recorded.
+ * Unparseable JSON is left untouched, record included.
+ */
+export function writeWorkspaceModel(workspaceRoot: string, model: string | null): string {
+  const settingsPath = _settingsPath(workspaceRoot);
+  const settings = _readSettings(settingsPath);
+  if (settings === null) return settingsPath;
+  const recordPath = path.join(workspaceRoot, _PERMISSIONS_RECORD);
+  const stored = _readRecord(recordPath);
+  const current = settings.model;
+
+  if (current !== undefined && current !== stored.model) {
+    _writeRecord(recordPath, { ...stored, model: null });
+    return settingsPath;
+  }
+  if (current !== (model ?? undefined)) {
+    if (model) settings.model = model;
+    else delete settings.model;
+    _saveSettings(settingsPath, settings);
+  }
+  _writeRecord(recordPath, { ...stored, model });
+  return settingsPath;
+}
+
+/** The workspace's allow rules and model, from its `.env`, registry and workspace.yml. */
+export function writeWorkspaceSettings(workspaceRoot: string): void {
+  writeWorkspacePermissions(workspaceRoot, workspaceAllowRules(workspaceRoot));
+  writeWorkspaceModel(workspaceRoot, readModel(workspaceRoot));
 }
