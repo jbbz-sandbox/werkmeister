@@ -17,7 +17,13 @@
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": {
     "rules": {
-      "suspicious": { "noAssignInExpressions": "off", "noImplicitAnyLet": "off" }
+      "suspicious": {
+        "noAssignInExpressions": "off",
+        "noImplicitAnyLet": "off",
+        // The hits are deliberate docker-compose `${VAR}` strings (e.g.
+        // `${SANDBOX_STATE_DIR}/proxy/Caddyfile`), interpolated by compose, not JS.
+        "noTemplateCurlyInString": "off"
+      }
     }
   }
 }
