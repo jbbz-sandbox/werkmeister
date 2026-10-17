@@ -41,6 +41,7 @@ import {
   getContainerStatus,
   workspaceForFeature,
 } from "./compose.js";
+import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import { getVolumeBaseNames, loadPorts, loadServices } from "./config.js";
 import { listVolumeNames, removeVolume } from "./docker.js";
 import { SandboxError } from "./errors.js";
@@ -96,7 +97,7 @@ export interface UpResult {
  * and so would silently point the dashboard at whatever it happened to be
  * running from. The CLI resolves it from argv and hands it over.
  *
- * Throws `NO_COMPOSE` when the workspace has no generated `docker-compose.yml`,
+ * Throws `NO_COMPOSE` when the workspace has no generated compose file,
  * `MISSING_SECRETS` when a secret this workspace's own services require is
  * absent, `SLOT_ALLOC` when no slot can be allocated, `FORWARDS_NEVER_READY`
  * when the forwards are restarted and their tunnels never reconnect, and
@@ -109,10 +110,10 @@ export async function up(
   { signal }: { signal?: AbortSignal } = {},
 ): Promise<UpResult> {
   refuseInsideOwnContainer(feature, "up");
-  const workspaceCompose = path.join(workspace, "docker-compose.yml");
-  if (!fs.existsSync(workspaceCompose)) {
+  migrateWorkspaceCompose(workspace);
+  if (!fs.existsSync(path.join(workspace, COMPOSE_FILE))) {
     throw new SandboxError(
-      `No docker-compose.yml found in workspace: ${workspace}\n` +
+      `No ${COMPOSE_FILE} found in workspace: ${workspace}\n` +
         "       Run 'sandbox init-workspace' first to generate it.",
       "NO_COMPOSE",
     );
@@ -161,7 +162,7 @@ export async function up(
     // would silently discard hand-edits to the generated compose.
     staleCompose = true;
     warn(
-      "docker-compose.yml predates the current service registry — " +
+      `${COMPOSE_FILE} predates the current service registry — ` +
         "run 'sandbox init-workspace' in the workspace to regenerate it.",
     );
   }

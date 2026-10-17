@@ -37,7 +37,7 @@ docker inspect -f 'exit={{.State.ExitCode}} oom={{.State.OOMKilled}} finished={{
 
 Don't use `sandbox logs` here: it follows the log and never exits.
 A feature with `containers_total: 0` has no containers to read: its workspace has no
-`docker-compose.yml` yet (`sandbox init-workspace`, then `sandbox up`, in that workspace).
+`compose.yml` yet (`sandbox init-workspace`, then `sandbox up`, in that workspace).
 
 ## Step 3: Service Health Checks
 

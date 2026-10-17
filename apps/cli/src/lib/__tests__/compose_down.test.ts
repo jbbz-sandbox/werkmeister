@@ -8,6 +8,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { COMPOSE_FILE, LEGACY_COMPOSE_FILE } from "sandbox-core/compose_file";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -59,14 +60,14 @@ afterEach(() => {
 
 describe("composeDown", () => {
   it("reports a failed docker compose down", async () => {
-    fs.writeFileSync(path.join(tmp, "docker-compose.yml"), "services: {}\n");
+    fs.writeFileSync(path.join(tmp, COMPOSE_FILE), "services: {}\n");
     h.composeStatus = 1;
 
     expect(await withReporter(quiet, async () => composeDown("demo"))).toBe(false);
   });
 
   it("reports success when compose succeeds", async () => {
-    fs.writeFileSync(path.join(tmp, "docker-compose.yml"), "services: {}\n");
+    fs.writeFileSync(path.join(tmp, COMPOSE_FILE), "services: {}\n");
 
     expect(
       await withReporter(quiet, async () => composeDown("demo", { removeVolumes: true })),
@@ -74,6 +75,16 @@ describe("composeDown", () => {
     expect(h.calls.at(-1)).toContain("--volumes");
     // One workspace lookup, not one per layer.
     expect(h.calls.filter((c) => c[1] === "ps")).toHaveLength(1);
+  });
+
+  // A workspace generated before #224 keeps its docker-compose.yml until re-inited.
+  it("tears down a workspace that only has the legacy file", async () => {
+    fs.writeFileSync(path.join(tmp, LEGACY_COMPOSE_FILE), "services: {}\n");
+
+    expect(await withReporter(quiet, async () => composeDown("demo"))).toBe(true);
+    expect(h.calls.at(-1)).toEqual(
+      expect.arrayContaining(["compose", "-f", path.join(tmp, LEGACY_COMPOSE_FILE), "down"]),
+    );
   });
 
   it("is down already when the feature has no compose file", async () => {

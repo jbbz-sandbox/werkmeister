@@ -7,6 +7,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,7 +34,7 @@ const saved = process.env.SANDBOX_FEATURE;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-own-container-"));
-  fs.writeFileSync(path.join(root, "docker-compose.yml"), "services: {}\n");
+  fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
 });
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });

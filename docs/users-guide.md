@@ -262,7 +262,7 @@ Each feature runs in an isolated environment:
 - **Container names** — prefixed with the feature name (`<feature>-<service>`)
 - **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-frontend_node_modules`) so concurrent features never share mutable state
 - **Port ranges** — each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
-- **Generated files** — each feature's `docker-compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.sandbox/`
+- **Generated files** — each feature's `compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.sandbox/`
 
 **Single-repo concurrency note:** In single-repo mode (`~/workspace/` with one checkout per repo), all features share the same source code checkout. This means two features modifying the same repo will see each other's uncommitted changes. For true concurrent multi-feature development, use the per-feature workspace layout via `SANDBOX_WORKSPACES_ROOT=<parent>` and place git worktrees under each feature subdir.
 
@@ -383,7 +383,7 @@ The local services come from the workspace's `.sandbox/workspace.yml` (via `sand
 2. Resolves the workspace (default: `~/workspace/`) and reads its local services from the `SERVICES=` line `sandbox init-workspace` wrote to the workspace `.env`
 3. Allocates a slot (1–12) if the feature doesn't already have one
 4. Generates per-feature files in the feature's workspace:
-   - `docker-compose.yml` — Docker Compose stack definition (workspace root)
+   - `compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)
    - `<workspace>/.sandbox/supergraph-config.yml` — GraphQL federation config (only when a service has a GraphQL type: `graphql-subgraph`, `graphql`, `subgraph` or `federation`)
 5. Verifies k8s port-forwards are healthy (restarts if needed)
@@ -432,7 +432,7 @@ The local services come from the workspace's `.sandbox/workspace.yml` (via `sand
 2. Releases the slot back to the pool
 3. Regenerates the Caddyfile (removing this feature's routing rules)
 4. Reloads Caddy if running
-The feature's generated files (`docker-compose.yml`, `.env`, `.sandbox/`) are left in place in its workspace — they're overwritten on the next `sandbox up`.
+The feature's generated files (`compose.yml`, `.env`, `.sandbox/`) are left in place in its workspace — they're overwritten on the next `sandbox up`.
 
 By default, per-feature Docker volumes (node_modules, build caches) are preserved so the next `sandbox up` is faster. Use `--volumes` to remove them for a full cleanup.
 
@@ -1320,9 +1320,11 @@ Registries without a subgraph get no file.
 
 ## Generated Files
 
-When you run `sandbox up <feature>`, `docker-compose.yml` and `.env` are generated at the feature's workspace root, plus `supergraph-config.yml` under `<workspace>/.sandbox/` when the registry has a GraphQL subgraph:
+When you run `sandbox up <feature>`, `compose.yml` and `.env` are generated at the feature's workspace root, plus `supergraph-config.yml` under `<workspace>/.sandbox/` when the registry has a GraphQL subgraph:
 
-### docker-compose.yml
+### compose.yml
+
+Workspaces generated before this name (`docker-compose.yml`) are renamed on the next `sandbox init-workspace` or `sandbox up`; until then `down`, `logs` and `close-out` still read the old name. The running stack is unaffected — Compose keys it by the file's `name:`, not its path.
 
 Per-feature Docker Compose stack containing:
 - **Network**: An isolated bridge network named `sandbox-<feature>`
@@ -1627,13 +1629,13 @@ kubectl cluster-info
 
 ```bash
 # Check the generated compose file (lives at the feature's workspace root)
-cat ~/workspace/PROJ-1234/docker-compose.yml
+cat ~/workspace/PROJ-1234/compose.yml
 
 # Try starting manually for more verbose output
-docker compose -f ~/workspace/PROJ-1234/docker-compose.yml up
+docker compose -f ~/workspace/PROJ-1234/compose.yml up
 
 # Check container logs
-docker compose -f ~/workspace/PROJ-1234/docker-compose.yml logs
+docker compose -f ~/workspace/PROJ-1234/compose.yml logs
 
 # Verify workspace exists
 ls ~/workspace/PROJ-1234/
@@ -1766,7 +1768,7 @@ cat ~/.sandbox/slots.json | jq .
 
 ```
 ~/workspace/PROJ-1234/                  ← feature workspace
-├── docker-compose.yml      ← Generated from infra/templates/
+├── compose.yml      ← Generated from infra/templates/
 ├── .env                    ← Service URLs, DB connections
 └── .sandbox/
     └── supergraph-config.yml   ← GraphQL federation routing (optional)
@@ -1789,7 +1791,7 @@ sandbox up PROJ-1234
     ├── 2. Allocate slot → ~/.sandbox/slots.json
     │
     ├── 3. Generate files → ~/workspace/PROJ-1234/
-    │       ├── docker-compose.yml      (from infra/templates/)
+    │       ├── compose.yml      (from infra/templates/)
     │       ├── .env                    (from infra/templates/)
     │       └── .sandbox/supergraph-config.yml  (if a GraphQL subgraph exists)
     │

@@ -14,6 +14,7 @@
 import type { ChildProcess } from "node:child_process";
 import { childEnv } from "sandbox-core";
 import { composeLogsStream } from "sandbox-core/compose";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import * as vscode from "vscode";
 
 interface Tail {
@@ -64,7 +65,7 @@ export function showLogs(feature: string, service: string | null): void {
       const emit = (chunk: string) => write.fire(chunk.replace(/\r?\n/g, "\r\n"));
       child = composeLogsStream(feature, service, emit, childEnv());
       if (!child) {
-        emit(`No docker-compose.yml found for feature '${feature}'.\n`);
+        emit(`No ${COMPOSE_FILE} found for feature '${feature}'.\n`);
         return;
       }
       child.on("error", (e) => emit(`\ndocker compose: ${e.message}\n`));
