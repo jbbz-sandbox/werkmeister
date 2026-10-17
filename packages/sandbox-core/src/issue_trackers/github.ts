@@ -83,13 +83,10 @@ function fromGh(ref: string, i: GhIssue): Issue {
     assignee: i.assignees?.map((a) => a.login).join(", ") || undefined,
     description: i.body?.trim() || undefined,
     url: i.url,
-    comments: (i.comments ?? [])
-      .filter((c) => c.body?.trim())
-      .map((c) => ({
-        author: c.author?.login ?? "unknown",
-        created: c.createdAt,
-        body: c.body!.trim(),
-      })),
+    comments: (i.comments ?? []).flatMap((c) => {
+      const body = c.body?.trim();
+      return body ? [{ author: c.author?.login ?? "unknown", created: c.createdAt, body }] : [];
+    }),
   };
 }
 

@@ -500,7 +500,7 @@ export function initWorkspaceUI(
     btn: HTMLElement,
     verb: string,
   ): Promise<void> {
-    const siblings = btn.parentElement!.querySelectorAll<HTMLButtonElement>(".btn");
+    const siblings = btn.parentElement?.querySelectorAll<HTMLButtonElement>(".btn") ?? [];
     for (const b of siblings) b.disabled = true;
     msgEl.className = "act-msg";
     msgEl.textContent = verb + "…";
