@@ -176,18 +176,17 @@ function parsePrFile(p: string): PrFile {
 
 export function readPrFiles(ws: string): PrFile[] {
   const dir = prFileDir(ws);
+  if (!dir) return [];
   let names: string[] = [];
   try {
-    names = dir
-      ? fs
-          .readdirSync(dir)
-          .filter((n) => /^pr-.+\.md$/.test(n))
-          .sort()
-      : [];
+    names = fs
+      .readdirSync(dir)
+      .filter((n) => /^pr-.+\.md$/.test(n))
+      .sort();
   } catch {
     /* no dir yet — no PR files */
   }
-  return names.map((n) => parsePrFile(path.join(dir!, n)));
+  return names.map((n) => parsePrFile(path.join(dir, n)));
 }
 
 export function writePrFields(file: PrFile, fields: Record<string, string>): void {
@@ -757,8 +756,8 @@ export async function removalBlockers(
   for (const { repo, dir } of worktrees) {
     const f = files.find((x) => x.dir === repo);
     const status = f ? statusOf(f) : "none";
-    if (status === "open") {
-      out.push(`${repo}: PR is open (${f!.fm["url"]})`);
+    if (f && status === "open") {
+      out.push(`${repo}: PR is open (${f.fm["url"]})`);
       continue;
     }
     if (PAST_MERGE.has(status)) continue;

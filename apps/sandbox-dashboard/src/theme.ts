@@ -70,6 +70,13 @@ export function injectCss(id: string, css: string): void {
   addStyle(id, css);
 }
 
+/** The page's `#app` mount point; every surface's HTML shell provides one. */
+export function appRoot(): HTMLElement {
+  const root = document.getElementById("app");
+  if (!root) throw new Error("this page has no #app element to mount into");
+  return root;
+}
+
 /** The shared vanilla-DOM element helper (see workspace-ui.ts header note). */
 export function el(tag: string, cls?: string | null, txt?: string | null): HTMLElement {
   const e = document.createElement(tag);

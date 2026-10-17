@@ -51,7 +51,7 @@ export function nextNoteNumber(directory: string): number {
   for (const name of fs.readdirSync(directory)) {
     const m = _FILENAME_RE.exec(name);
     if (m && fs.statSync(path.join(directory, name)).isFile()) {
-      numbers.push(parseInt(m.groups!["number"], 10));
+      numbers.push(parseInt(m[1], 10));
     }
   }
   return Math.max(0, ...numbers) + 1;
@@ -92,6 +92,7 @@ export function parseNote(notePath: string): Note | null {
   if (!match) {
     return null;
   }
+  const [, number, type, slug] = match;
   let text: string;
   try {
     text = fs.readFileSync(notePath, "utf8");
@@ -118,9 +119,9 @@ export function parseNote(notePath: string): Note | null {
 
   return {
     path: notePath,
-    number: parseInt(match.groups!["number"], 10),
-    type: frontmatter["type"] ?? match.groups!["type"],
-    slug: match.groups!["slug"],
+    number: parseInt(number, 10),
+    type: frontmatter["type"] ?? type,
+    slug,
     frontmatter,
     body,
   };

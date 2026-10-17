@@ -12,6 +12,7 @@
  * (server.ts `workspace` tool or form-cli.ts) after this page submits.
  */
 import { initCreateForm } from "./create-form.js";
+import { appRoot } from "./theme.js";
 import type { HostBridge } from "./workspace-ui.js";
 
 const bridge: HostBridge = {
@@ -31,7 +32,7 @@ const bridge: HostBridge = {
 };
 
 document.body.style.cssText = "margin:0;background:#f7f7f5";
-const root = document.getElementById("app")!;
+const root = appRoot();
 root.style.cssText = "max-width:720px;margin:0 auto";
 
 initCreateForm(bridge, root, {
