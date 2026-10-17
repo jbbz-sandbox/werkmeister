@@ -1,5 +1,5 @@
 {
-  "name": "@jbbz-sandbox/sandbox-cli",
+  "name": "werkmeister",
   "version": "0.12.0",
   "description": "Multi-feature concurrent development orchestrator CLI tool",
   "type": "module",
@@ -7,6 +7,8 @@
     "node": ">=20"
   },
   "bin": {
+    "werkmeister": "./werkmeister",
+    "w9r": "./w9r",
     "sandbox": "./sandbox"
   },
   "//files": "dist/ is gitignored build output, and npm drops gitignored paths unless an explicit list opts them back in. That opt-in is indiscriminate, so the negations below keep out files an older CLI generated into a maintainer's checkout — above all tmp/kubeconfig, which held live cluster credentials. Current versions generate under ~/.sandbox/infra, so these only guard stale local files at pack time.",
@@ -15,6 +17,8 @@
     "!dist/**/*.map",
     "infra",
     "bin",
+    "werkmeister",
+    "w9r",
     "sandbox",
     "README.md",
     "CONVENTIONS.md",
