@@ -537,7 +537,7 @@ Set the routing cookie in the browser (DevTools console):
 document.cookie = "X-Feature=${feature}; domain=.${proxy.domain}; path=/; SameSite=Lax";
 \`\`\`
 
-or visit https://${proxy.host}/__sandbox and select \`${feature}\` — the selector is served on every routed host and the cookie applies to each host sharing the base domain.
+or visit https://${proxy.host}/__werkmeister and select \`${feature}\` — the selector is served on every routed host and the cookie applies to each host sharing the base domain.
 `
     : "";
 
@@ -614,7 +614,7 @@ ${featureBlock}
 
 ${
   hasUrl
-    ? `### Feature missing from \`/__sandbox\` selector
+    ? `### Feature missing from \`/__werkmeister\` selector
 
 The dropdown is populated from \`~/.sandbox/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
 

@@ -93,7 +93,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log("  Only cluster requests carrying that header are rerouted to your laptop.");
   if (r.remoteHost) {
     console.log(`  Try:  curl -H '${r.header}: ${feature}' https://${r.remoteHost}/`);
-    console.log(`  Or:   open https://${r.remoteHost}/ after selecting '${feature}' at /__sandbox`);
+    console.log(`  Or:   open https://${r.remoteHost}/ after selecting '${feature}' at /__werkmeister`);
   } else {
     console.log(
       `  Send cluster requests with header '${r.header}: ${feature}' to reach your local ${r.service}.`,
