@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 
 const CORE = path.resolve(
   fileURLToPath(import.meta.url),
-  "../../../../../../packages/sandbox-core",
+  "../../../../../../packages/sandbox-core/src",
 );
 const ALLOWED = new Set(["reporter.ts", "cache.ts", "gate.ts", "pr_guard.ts"]);
 

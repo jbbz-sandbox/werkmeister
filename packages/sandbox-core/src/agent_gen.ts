@@ -22,7 +22,7 @@ import type { FeatureRouter } from "./feature_routing.js";
 // one screen line beyond the marker comment for that reason).
 const _GENERATED_NOTICE = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
-  Generator: sandbox init-workspace  (packages/sandbox-core/agent_gen.ts)
+  Generator: sandbox init-workspace  (packages/sandbox-core/src/agent_gen.ts)
   Regenerated on every init-workspace run; edits will be clobbered.
 -->
 `;

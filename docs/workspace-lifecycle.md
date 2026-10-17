@@ -25,7 +25,7 @@ working → ready → pr-open → merged → shipped → closed-out
                      ↘──────── abandoned ────────↗
 ```
 
-The state is read from the PR files alone (`lifecycleOf` in `packages/sandbox-core/pr_lifecycle.ts`), so the workspaces pane shows it without a network call.
+The state is read from the PR files alone (`lifecycleOf` in `packages/sandbox-core/src/pr_lifecycle.ts`), so the workspaces pane shows it without a network call.
 
 | State | When |
 |---|---|
