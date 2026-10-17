@@ -1,8 +1,9 @@
 // One create entry point: apps and plugins call createWorkspace, never provisionWorkspace.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { test } from "node:test";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const SKIP = new Set(["node_modules", "dist", "__tests__", ".turbo"]);
@@ -19,14 +20,18 @@ function sources(dir) {
 }
 
 test("no app or plugin calls provisionWorkspace", () => {
-  const hits = ["apps", "plugins"].flatMap((d) => sources(path.join(REPO, d)))
+  const hits = ["apps", "plugins"]
+    .flatMap((d) => sources(path.join(REPO, d)))
     .filter((f) => /\bprovisionWorkspace\b/.test(fs.readFileSync(f, "utf8")))
     .map((f) => path.relative(REPO, f));
   assert.deepEqual(hits, []);
 });
 
 test("the sandbox-workspace skill states the one rule and the batch check", () => {
-  const skill = fs.readFileSync(path.join(REPO, "plugins/sandbox-tools/skills/sandbox-workspace/SKILL.md"), "utf8");
+  const skill = fs.readFileSync(
+    path.join(REPO, "plugins/sandbox-tools/skills/sandbox-workspace/SKILL.md"),
+    "utf8",
+  );
   assert.match(skill, /Every create goes through `createWorkspace`/);
   assert.match(skill, /\.sandbox\/issue\.md/);
   assert.match(skill, /mcp__plugin_sandbox-tools_sandbox-workspace__workspace/);

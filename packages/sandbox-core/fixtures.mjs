@@ -43,7 +43,10 @@ const PORTS = `feature_slots:
  * `standards_dir`). `services`/`ports` replace the defaults above when a test
  * needs a different registry. Restores the previous env and removes the dir.
  */
-export async function withSandboxHome(fn, { services = SERVICES, ports = PORTS, config = "" } = {}) {
+export async function withSandboxHome(
+  fn,
+  { services = SERVICES, ports = PORTS, config = "" } = {},
+) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-home-"));
   const cfg = path.join(home, "config.yaml");
   fs.writeFileSync(cfg, `version: 1\n${config}`);

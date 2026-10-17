@@ -1,7 +1,8 @@
 /** PreToolUse standards gate. */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as os from "node:os";
 import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // gate.main() reads the hook payload from fd 0 via fs.readFileSync(0). fd 0
 // can't be reassigned and node:fs exports aren't spy-able, so intercept the
@@ -145,7 +146,10 @@ describe("decide — fail-open edges", () => {
 
   it("manifest not a dict allows", () => {
     fs.mkdirSync(path.join(tmp, ".sandbox"));
-    fs.writeFileSync(path.join(tmp, ".sandbox", "standards.json"), JSON.stringify(["not", "a", "dict"]));
+    fs.writeFileSync(
+      path.join(tmp, ".sandbox", "standards.json"),
+      JSON.stringify(["not", "a", "dict"]),
+    );
     expect(gate.decide(tmp, "s1", path.join(tmp, "README.md"))).toBeNull();
   });
 

@@ -15,8 +15,8 @@
  * read, TTY rendering, and the exit code.
  */
 
-import { Colors, info, error, resolveWorkspace, success } from "../lib/config.js";
 import * as tp from "sandbox-core/telepresence";
+import { Colors, error, info, resolveWorkspace, success } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
 
@@ -82,16 +82,22 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     signal: interruptSignal(),
   });
 
-  console.log(`\n${Colors.GREEN}${Colors.BOLD}=== Intercept active: ${r.service} ===${Colors.RESET}\n`);
+  console.log(
+    `\n${Colors.GREEN}${Colors.BOLD}=== Intercept active: ${r.service} ===${Colors.RESET}\n`,
+  );
   console.log(`  ${Colors.CYAN}Cluster:${Colors.RESET} ${r.context}`);
-  console.log(`  ${Colors.CYAN}Target:${Colors.RESET}  ${r.namespace}/${r.deployment} → localhost:${r.localPort}`);
+  console.log(
+    `  ${Colors.CYAN}Target:${Colors.RESET}  ${r.namespace}/${r.deployment} → localhost:${r.localPort}`,
+  );
   console.log(`  ${Colors.CYAN}Filter:${Colors.RESET}  ${r.header}: ${feature}\n`);
   console.log("  Only cluster requests carrying that header are rerouted to your laptop.");
   if (r.remoteHost) {
     console.log(`  Try:  curl -H '${r.header}: ${feature}' https://${r.remoteHost}/`);
     console.log(`  Or:   open https://${r.remoteHost}/ after selecting '${feature}' at /__sandbox`);
   } else {
-    console.log(`  Send cluster requests with header '${r.header}: ${feature}' to reach your local ${r.service}.`);
+    console.log(
+      `  Send cluster requests with header '${r.header}: ${feature}' to reach your local ${r.service}.`,
+    );
   }
   console.log(`  End:  sandbox intercept ${feature} --leave -s ${r.service}`);
   console.log();

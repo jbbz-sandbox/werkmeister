@@ -288,7 +288,8 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
   }
 
   const state = _loadState(workspace, sessionId);
-  if (state === null) { // unreadable existing state file -> behave as delivered=all
+  if (state === null) {
+    // unreadable existing state file -> behave as delivered=all
     return null;
   }
 
@@ -373,7 +374,8 @@ export function main(): void {
     const raw = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
     const parsed = raw.trim() ? JSON.parse(raw) : {};
     data = _isDict(parsed) ? parsed : {};
-  } catch { // a hook must never break the tool call
+  } catch {
+    // a hook must never break the tool call
     data = {};
   }
 
@@ -384,17 +386,20 @@ export function main(): void {
   let reason: string | null;
   try {
     reason = decide(start, sessionId, filePath);
-  } catch { // same doctrine as above
+  } catch {
+    // same doctrine as above
     reason = null;
   }
 
   if (reason) {
-    console.log(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: reason,
-      },
-    }));
+    console.log(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: reason,
+        },
+      }),
+    );
   }
 }

@@ -5,8 +5,8 @@
  * `openWorkspace` -- the same call the dashboard's `open-workspace` tool makes.
  */
 
-import { Colors, error } from "../lib/config.js";
 import { openWorkspace } from "sandbox-core";
+import { Colors, error } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
@@ -17,5 +17,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   const { path } = await openWorkspace(name);
-  console.log(`${Colors.GREEN}Opened '${name}' in VS Code${Colors.RESET}  ${Colors.DIM}${path}${Colors.RESET}`);
+  console.log(
+    `${Colors.GREEN}Opened '${name}' in VS Code${Colors.RESET}  ${Colors.DIM}${path}${Colors.RESET}`,
+  );
 }

@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getVolumeBaseNames } from "../config.js";
-import { useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
+import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 let home: SandboxHome;
 

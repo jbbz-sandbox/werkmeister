@@ -2,13 +2,14 @@
 // so the wiring that used to be proven by `sandbox workspace --print-form-schema`
 // running end-to-end is pinned here instead: the spec carries every wizard field,
 // `repos` lands right after `services`, and the spec still converts to a form.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 
 import { buildFormSchema } from "./dist/form_schema.js";
 import { writeWorkspaceConfig } from "./dist/workspace_init.js";
@@ -16,11 +17,11 @@ import { writeWorkspaceConfig } from "./dist/workspace_init.js";
 import {
   computePromptSpec,
   DEFAULT_PLAN,
+  planFor,
   promptEntry,
   readAutonomous,
   resolveInputs,
   WORK_TYPE_PHASES,
-  planFor,
 } from "./dist/workspace_prompts.js";
 
 // The machine's config.yaml would leak in: `overrides.issue_tracker: github`
@@ -33,19 +34,22 @@ const root = await mkdtemp(path.join(tmpdir(), "prompt-spec-"));
 test("the spec carries the wizard prompts, with repos spliced after services", () => {
   const spec = computePromptSpec({}, root);
   const keys = spec.prompts.map((p) => p.key);
-  assert.deepEqual(keys.filter((k) => k !== "repos"), [
-    "issue_id",
-    "feature",
-    "work_type",
-    "context_strategy",
-    "autonomous",
-    "services",
-    "labels",
-    "test_path",
-    "task",
-    "description",
-    "starting_prompt",
-  ]);
+  assert.deepEqual(
+    keys.filter((k) => k !== "repos"),
+    [
+      "issue_id",
+      "feature",
+      "work_type",
+      "context_strategy",
+      "autonomous",
+      "services",
+      "labels",
+      "test_path",
+      "task",
+      "description",
+      "starting_prompt",
+    ],
+  );
   // `repos` is only offered when repos.yaml lists any, so it may be absent.
   if (keys.includes("repos")) {
     assert.equal(keys.indexOf("repos"), keys.indexOf("services") + 1);
@@ -131,7 +135,10 @@ test("readAutonomous reads workspace.yml; absent is off", () => {
 test("workspace.yml stores autonomous as a YAML boolean", () => {
   const ws = wsWith("feature: x\n");
   writeWorkspaceConfig(ws, { autonomous: "true" });
-  assert.match(readFileSync(path.join(ws, ".sandbox", "workspace.yml"), "utf8"), /^autonomous: true$/m);
+  assert.match(
+    readFileSync(path.join(ws, ".sandbox", "workspace.yml"), "utf8"),
+    /^autonomous: true$/m,
+  );
 });
 
 // `getFormSchema` builds the spec against $HOME and discards every default, so

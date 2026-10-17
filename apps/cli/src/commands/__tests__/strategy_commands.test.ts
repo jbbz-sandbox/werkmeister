@@ -3,14 +3,14 @@
  * a fresh layer and exits 0, `hooks gate` prints nothing, `notes context`
  * prints nothing.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import { collectingReporter, withReporter } from "sandbox-core/reporter";
-import { STRATEGY_IDS, strategyById, strategyFor } from "sandbox-core/strategies";
 import type { StrategyId } from "sandbox-core/strategies";
+import { STRATEGY_IDS, strategyById, strategyFor } from "sandbox-core/strategies";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { run as hooks } from "../hooks.js";
 import { run as notes } from "../notes.js";
@@ -24,14 +24,20 @@ let strategyId: StrategyId;
 
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-cmd-home-"));
-  fs.writeFileSync(path.join(home, "config.yaml"), `version: 1\noverrides:\n  standards_dir: ${path.join(home, "none")}\n`);
+  fs.writeFileSync(
+    path.join(home, "config.yaml"),
+    `version: 1\noverrides:\n  standards_dir: ${path.join(home, "none")}\n`,
+  );
   fs.writeFileSync(path.join(home, "services.yaml"), "services: {}\n");
   prevCfg = process.env.SANDBOX_CONFIG_FILE;
   process.env.SANDBOX_CONFIG_FILE = path.join(home, "config.yaml");
 
   root = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-cmd-ws-"));
   fs.mkdirSync(path.join(root, ".sandbox"));
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), "context_strategy: icm\nwork_type: feature\n");
+  fs.writeFileSync(
+    path.join(root, ".sandbox", "workspace.yml"),
+    "context_strategy: icm\nwork_type: feature\n",
+  );
   const strategy = strategyFor(root);
   strategyId = strategy.id;
   // Pin what this fixture actually resolved to — otherwise a regression in

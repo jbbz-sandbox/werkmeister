@@ -9,8 +9,8 @@
  *     sandbox optimize --collect 5  # Collect for 5 minutes first, then analyze
  */
 
-import { Colors } from "../lib/config.js";
 import { formatMem, optimizeReport, type ServiceUsage } from "sandbox-core/stats";
+import { Colors } from "../lib/config.js";
 
 /** How each status reads in the table — the colour is the whole point of it. */
 const STATUS_LABEL: Record<ServiceUsage["status"], string> = {
@@ -54,9 +54,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log();
 
   // Recommendations section
-  const issues = report.usage.filter(
-    (u) => u.status === "risk" || u.status === "over_provisioned",
-  );
+  const issues = report.usage.filter((u) => u.status === "risk" || u.status === "over_provisioned");
   if (issues.length) {
     console.log(`${Colors.BOLD}--- Recommendations ---${Colors.RESET}\n`);
     for (const u of issues) {

@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { readJson, readText } from "./files.js";
-import { stated, type DetectContext, type PackageManager, type Workspace } from "./types.js";
+import { type DetectContext, type PackageManager, stated, type Workspace } from "./types.js";
 
 const INSTALL: Record<PackageManager, string> = {
   npm: "npm install",
@@ -40,10 +40,17 @@ export function expandWorkspaceGlobs(patterns: string[], files: string[]): strin
  * fragment already uses, so a re-run doesn't add a second install service
  * under a new name.
  */
-export function detectWorkspace(ctx: DetectContext, existingSetupName: string | null = null): Workspace {
+export function detectWorkspace(
+  ctx: DetectContext,
+  existingSetupName: string | null = null,
+): Workspace {
   const has = (f: string) => ctx.files.includes(f);
   const pm: PackageManager =
-    has("pnpm-lock.yaml") || has("pnpm-workspace.yaml") ? "pnpm" : has("yarn.lock") ? "yarn" : "npm";
+    has("pnpm-lock.yaml") || has("pnpm-workspace.yaml")
+      ? "pnpm"
+      : has("yarn.lock")
+        ? "yarn"
+        : "npm";
   const rootPkg = readJson(ctx, "package.json");
   if (!rootPkg) return { pm, packageDirs: [], setupName: null, setupFields: {} };
 
@@ -55,7 +62,11 @@ export function detectWorkspace(ctx: DetectContext, existingSetupName: string | 
     source = "pnpm-workspace.yaml";
   } else {
     const ws = rootPkg["workspaces"];
-    patterns = Array.isArray(ws) ? ws.map(String) : Array.isArray(ws?.packages) ? ws.packages.map(String) : [];
+    patterns = Array.isArray(ws)
+      ? ws.map(String)
+      : Array.isArray(ws?.packages)
+        ? ws.packages.map(String)
+        : [];
     if (patterns.length) source = "package.json → workspaces";
   }
   return {

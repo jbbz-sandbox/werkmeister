@@ -12,8 +12,8 @@ vi.mock("../../lib/wizard.js", () => ({ confirm: vi.fn() }));
 vi.mock("../../lib/config.js", async (orig) => ({ ...(await orig<object>()), warn: vi.fn() }));
 
 import { removeWorkspace } from "sandbox-core";
-import { confirm } from "../../lib/wizard.js";
 import { warn } from "../../lib/config.js";
+import { confirm } from "../../lib/wizard.js";
 import { run as runRemove } from "../remove_workspace.js";
 
 beforeEach(() => {

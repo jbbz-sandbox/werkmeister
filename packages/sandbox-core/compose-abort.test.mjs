@@ -3,16 +3,11 @@
 // same command that drift in what they print. So the assertions here are
 // parity assertions -- the async form must emit byte-identical output to the
 // sync form it shadows, for the same input.
-import { test } from "node:test";
-import assert from "node:assert/strict";
 
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { composeDown, composeDownAsync, composeUp, composeUpAsync } from "./dist/compose.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import {
-  composeDown,
-  composeDownAsync,
-  composeUp,
-  composeUpAsync,
-} from "./dist/compose.js";
 
 const FEATURE = "no-such-feature-hopefully";
 

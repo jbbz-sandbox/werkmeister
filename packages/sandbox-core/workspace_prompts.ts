@@ -149,7 +149,6 @@ export function readAutonomous(workspaceRoot: string): boolean {
   return false;
 }
 
-
 // Workspace config filenames in search-order precedence: preferred YAML first,
 // then legacy JSONC/JSON kept readable for back-compat. workspace.yml is also
 // the canonical write target (the rest are migrated to it on the next write).
@@ -165,7 +164,10 @@ export const _WORKSPACE_CONFIG_NAMES = [
  * resolved path does not exist or is malformed (parse errors warn rather than
  * crash — a typo should never block init-workspace).
  */
-export function loadConfigFile(workspaceRoot: string, override: string | null): Record<string, any> {
+export function loadConfigFile(
+  workspaceRoot: string,
+  override: string | null,
+): Record<string, any> {
   const candidates: string[] = [];
   if (override) {
     candidates.push(expandUserPath(override));
@@ -244,7 +246,10 @@ function loadExistingEnvMetadata(workspaceRoot: string): Record<string, string> 
  * Resolve every input field per the documented precedence
  * (CLI flag > SANDBOX_* env var > config file > existing .env > unset).
  */
-export function resolveInputs(args: Record<string, unknown>, workspaceRoot: string): Record<string, string> {
+export function resolveInputs(
+  args: Record<string, unknown>,
+  workspaceRoot: string,
+): Record<string, string> {
   const configData = loadConfigFile(workspaceRoot, (args["config_file"] as string | null) ?? null);
   const existingEnv = loadExistingEnvMetadata(workspaceRoot);
   const resolved: Record<string, string> = {};
@@ -254,7 +259,11 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
     const envValue = envVar ? (process.env[envVar] ?? null) : null;
     // Workspaces made before the rename hold `jira_id` / `github_issue`: read, never written.
     const cfgValue =
-      configField === "issue_id" ? issueIdOf(configData) || null : configField in configData ? configData[configField] : null;
+      configField === "issue_id"
+        ? issueIdOf(configData) || null
+        : configField in configData
+          ? configData[configField]
+          : null;
     const envFileValue = configField in existingEnv ? existingEnv[configField] : null;
     for (const source of [cliValue, envValue, cfgValue, envFileValue]) {
       if (source === null || source === undefined) {
@@ -277,7 +286,8 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
       }
     }
   }
-  if (resolved.issue_id) resolved.issue_id = issueTracker().parseRef(resolved.issue_id) ?? resolved.issue_id;
+  if (resolved.issue_id)
+    resolved.issue_id = issueTracker().parseRef(resolved.issue_id) ?? resolved.issue_id;
   if (resolved.autonomous) resolved.autonomous = String(isTrue(resolved.autonomous));
 
   return resolved;
@@ -286,7 +296,11 @@ export function resolveInputs(args: Record<string, unknown>, workspaceRoot: stri
 /** Derive a kebab-case feature default from the workspace dir name. */
 function defaultFeatureFromDir(workspaceName: string): string {
   let parts = workspaceName.split("-");
-  if (parts.length && parts[0].length === 4 && [...parts[0].toLowerCase()].every((c) => "0123456789abcdef".includes(c))) {
+  if (
+    parts.length &&
+    parts[0].length === 4 &&
+    [...parts[0].toLowerCase()].every((c) => "0123456789abcdef".includes(c))
+  ) {
     parts = parts.slice(1);
   }
   return parts.length ? parts.join("-") : workspaceName;
@@ -448,7 +462,10 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     choicesFn: () => Object.keys(loadSandboxServiceConfigs()[0]).sort(),
     choiceGroupsFn: () =>
       Object.fromEntries(
-        Object.entries(loadSandboxServiceConfigs()[0]).map(([name, svc]) => [name, String(svc?.repo ?? "other")]),
+        Object.entries(loadSandboxServiceConfigs()[0]).map(([name, svc]) => [
+          name,
+          String(svc?.repo ?? "other"),
+        ]),
       ),
   },
   {
@@ -552,7 +569,9 @@ export function promptEntry(
     for (const choice of entry["choices"] ?? Object.keys(byChoice)) {
       (groups[byChoice[choice] ?? "other"] ??= []).push(choice);
     }
-    entry["choice_groups"] = Object.fromEntries(Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)));
+    entry["choice_groups"] = Object.fromEntries(
+      Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)),
+    );
   }
   return entry;
 }
@@ -588,7 +607,11 @@ export function buildPromptSpec(
 /** Convert a workspace dir name into a human-readable task hint. */
 export function slugToTask(workspaceName: string): string {
   let parts = workspaceName.split("-");
-  if (parts.length && parts[0].length === 4 && [...parts[0].toLowerCase()].every((c) => "0123456789abcdef".includes(c))) {
+  if (
+    parts.length &&
+    parts[0].length === 4 &&
+    [...parts[0].toLowerCase()].every((c) => "0123456789abcdef".includes(c))
+  ) {
     parts = parts.slice(1);
   }
   return parts.length
@@ -604,7 +627,6 @@ export function loadSandboxServiceConfigs(): [Record<string, any>, Record<string
     return [{}, {}];
   }
 }
-
 
 // ---------------------------------------------------------------------------
 // The full spec (wizard prompts + `repos`)

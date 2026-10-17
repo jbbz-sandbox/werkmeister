@@ -149,9 +149,7 @@ export function listNotes(workspaceRoot: string, includeSuperseded = false): Not
     }
   }
   if (!includeSuperseded) {
-    notes = notes.filter(
-      (n) => !["superseded", "graduated"].includes(n.frontmatter["status"]),
-    );
+    notes = notes.filter((n) => !["superseded", "graduated"].includes(n.frontmatter["status"]));
   }
   return notes;
 }

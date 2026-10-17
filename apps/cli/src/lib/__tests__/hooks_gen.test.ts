@@ -5,11 +5,10 @@
  * recognising the existing entry: the merge appends instead of replacing, and
  * every already-inited workspace silently runs two SessionStart hooks.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import {
   buildPrGuardEntry,
   removeWorkspaceHooks,
@@ -17,6 +16,7 @@ import {
   writePrGuardHook,
   writeWorkspaceHooks,
 } from "sandbox-core/hooks_gen";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 /** The shape shipped before skills self-healing — what real workspaces hold. */
 const PRIOR_COMMAND = "command -v sandbox >/dev/null 2>&1 && sandbox notes context || true";
@@ -91,13 +91,17 @@ describe("writeWorkspaceHooks", () => {
 // it must merge idempotently next to user entries and outlive removal of the JIT hooks.
 describe("writePrGuardHook", () => {
   const preToolUseOf = (root: string): any[] =>
-    JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")).hooks.PreToolUse;
+    JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")).hooks
+      .PreToolUse;
   const mine = { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] };
 
   it("is idempotent and keeps a hand-added PreToolUse entry", () => {
     const root = fs.mkdtempSync(path.join(tmp, "ws-"));
     fs.mkdirSync(path.join(root, ".claude"));
-    fs.writeFileSync(path.join(root, ".claude", "settings.json"), JSON.stringify({ hooks: { PreToolUse: [mine] } }));
+    fs.writeFileSync(
+      path.join(root, ".claude", "settings.json"),
+      JSON.stringify({ hooks: { PreToolUse: [mine] } }),
+    );
     writePrGuardHook(root);
     writePrGuardHook(root);
     expect(preToolUseOf(root)).toEqual([mine, buildPrGuardEntry()]);

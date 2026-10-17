@@ -1,8 +1,9 @@
 /** the `config` command. */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as YAML from "yaml";
 
 // Stub the two side-effecting projections so the unit test never touches the
@@ -12,8 +13,8 @@ vi.mock("sandbox-core/global_config", async (importOriginal) => {
   return { ...actual, ensureZshenvSources: () => false, patchDesktopConfig: () => false };
 });
 
-import { run } from "../../commands/config.js";
 import * as gc from "sandbox-core/global_config";
+import { run } from "../../commands/config.js";
 import { getSandboxRoot } from "../config.js";
 
 let tmp: string;

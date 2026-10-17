@@ -12,25 +12,24 @@
  */
 
 import * as fs from "node:fs";
-
+import { type ContainerStatus, getContainerStatus, isOneShotService } from "./compose.js";
 import { composeInvocation } from "./compose_infra.js";
-import { getContainerStatus, isOneShotService, type ContainerStatus } from "./compose.js";
 import { loadServices } from "./config.js";
-import { getPerServiceStatus, type ForwardStatus } from "./k8s.js";
+import { type ForwardStatus, getPerServiceStatus } from "./k8s.js";
 import { ProcError, run as procRun } from "./proc.js";
 // The only core module that reaches into `sandbox.ts`, for a one-line predicate
 // whose other caller already lives there. Splitting it out would touch a second
 // module for no gain.
 
-import { getAllSlots, getPortRange, slotCount, type SlotEntry } from "./slots.js";
+import { getAllSlots, getPortRange, type SlotEntry, slotCount } from "./slots.js";
 import {
   _run,
   connectedNamespace,
+  type InterceptState,
   interceptBlocker,
   listIntercepts,
-  type InterceptState,
 } from "./telepresence.js";
-import { status as webStatus, type WebServerStatus } from "./web_servers.js";
+import { type WebServerStatus, status as webStatus } from "./web_servers.js";
 
 export interface InfraContainer {
   service: string;
@@ -44,10 +43,11 @@ export function getInfraStatus(): InfraContainer[] {
     return [];
   }
   try {
-    const result = procRun(
-      [...argv, "ps", "--format", "json"],
-      { capture: true, timeout: 10, env },
-    );
+    const result = procRun([...argv, "ps", "--format", "json"], {
+      capture: true,
+      timeout: 10,
+      env,
+    });
     if (result.status !== 0 || !result.stdout.trim()) {
       return [];
     }

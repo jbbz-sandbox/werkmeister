@@ -4,24 +4,24 @@
  * Show shared infra, active features, and k8s port-forward health in one view.
  */
 
-import { Colors, loadServices } from "../lib/config.js";
 import { getContainerStatus } from "sandbox-core/compose";
-import { getPerServiceStatus, type ForwardStatus } from "sandbox-core/k8s";
-import { status as webStatus, type WebServerStatus } from "sandbox-core/web_servers";
-import { getAllSlots, slotCount, type SlotEntry } from "sandbox-core/slots";
+import { type ForwardStatus, getPerServiceStatus } from "sandbox-core/k8s";
+import { getAllSlots, type SlotEntry, slotCount } from "sandbox-core/slots";
 import {
   buildInterceptRows,
   featurePortRange,
   finishedSetup,
   getInfraStatus,
+  type InfraContainer,
+  type InterceptRow,
   interceptsSnapshot,
   sortedSlots,
   statusSnapshot,
   tallied,
-  type InfraContainer,
-  type InterceptRow,
 } from "sandbox-core/status";
 import { listIntercepts } from "sandbox-core/telepresence";
+import { type WebServerStatus, status as webStatus } from "sandbox-core/web_servers";
+import { Colors, loadServices } from "../lib/config.js";
 
 function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): void {
   console.log(`  ${Colors.BOLD}Infrastructure${Colors.RESET}`);
@@ -82,8 +82,7 @@ function printVerboseContainers(featureName: string): void {
     const cPorts = c.ports || "";
     const color = cStatus === "running" ? Colors.GREEN : finishedSetup(c) ? Colors.DIM : Colors.RED;
     console.log(
-      `         ${color}  -> ${cName}: ${cStatus}${Colors.RESET}` +
-        (cPorts ? `  [${cPorts}]` : ""),
+      `         ${color}  -> ${cName}: ${cStatus}${Colors.RESET}` + (cPorts ? `  [${cPorts}]` : ""),
     );
   }
 }
@@ -95,7 +94,9 @@ function printVerboseContainers(featureName: string): void {
 function printFeatureIntercepts(rows: InterceptRow[]): void {
   for (const r of rows.filter((x) => x.intercepted)) {
     const owner = r.intercepted_by === null ? "owner unknown" : `x-feature: ${r.intercepted_by}`;
-    console.log(`         ${Colors.GREEN}  ⇄ ${r.service} intercepted${Colors.RESET} ${Colors.DIM}(${owner})${Colors.RESET}`);
+    console.log(
+      `         ${Colors.GREEN}  ⇄ ${r.service} intercepted${Colors.RESET} ${Colors.DIM}(${owner})${Colors.RESET}`,
+    );
   }
 }
 
@@ -164,11 +165,15 @@ async function runInterceptsOnly(asJson: boolean): Promise<void> {
 
   console.log(`\n${Colors.BOLD}=== Telepresence Intercepts ===${Colors.RESET}\n`);
   if (!snapshot.available) {
-    console.log(`  ${Colors.DIM}telepresence unavailable — nothing can be intercepted.${Colors.RESET}`);
+    console.log(
+      `  ${Colors.DIM}telepresence unavailable — nothing can be intercepted.${Colors.RESET}`,
+    );
     console.log();
     return;
   }
-  console.log(`  ${Colors.CYAN}Connected namespace:${Colors.RESET} ${snapshot.connected_namespace ?? "(none)"}\n`);
+  console.log(
+    `  ${Colors.CYAN}Connected namespace:${Colors.RESET} ${snapshot.connected_namespace ?? "(none)"}\n`,
+  );
   printInterceptRows(snapshot.intercepts);
 }
 
@@ -185,7 +190,8 @@ function printInterceptRows(rows: InterceptRow[]): void {
   for (const r of rows) {
     let label: string;
     if (r.intercepted) {
-      label = `${Colors.GREEN}active${Colors.RESET}` +
+      label =
+        `${Colors.GREEN}active${Colors.RESET}` +
         (r.intercepted_by === null
           ? ` ${Colors.DIM}(owner unknown)${Colors.RESET}`
           : ` ${Colors.DIM}(x-feature: ${r.intercepted_by})${Colors.RESET}`);

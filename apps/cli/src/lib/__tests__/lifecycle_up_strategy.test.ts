@@ -3,14 +3,18 @@
  * one (docs/superpowers/specs/2026-09-27-context-strategy-interface.md). It
  * now calls the workspace's strategy's refresh.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { buildPrGuardEntry, READ_ONLY_GIT_RULES, SESSION_START_COMMAND } from "sandbox-core/hooks_gen";
+import {
+  buildPrGuardEntry,
+  READ_ONLY_GIT_RULES,
+  SESSION_START_COMMAND,
+} from "sandbox-core/hooks_gen";
 import type { Reporter } from "sandbox-core/reporter";
 import { withReporter } from "sandbox-core/reporter";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("sandbox-core/caddy", () => ({
   isCaddyRunning: () => true,
@@ -58,8 +62,13 @@ afterEach(() => {
 describe("lifecycle.up in an icm workspace", () => {
   it("installs the PR guard and allow rules, what both strategies share", async () => {
     await withReporter(quiet, () => up("demo", root));
-    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    expect(settings).toEqual({ hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } });
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
+    expect(settings).toEqual({
+      hooks: { PreToolUse: [buildPrGuardEntry()] },
+      permissions: { allow: READ_ONLY_GIT_RULES },
+    });
   });
 
   it("heals a workspace a pre-strategy up polluted", async () => {
@@ -67,10 +76,16 @@ describe("lifecycle.up in an icm workspace", () => {
     fs.mkdirSync(path.join(root, ".claude"));
     fs.writeFileSync(
       path.join(root, ".claude", "settings.json"),
-      JSON.stringify({ hooks: { SessionStart: [hand, { hooks: [{ type: "command", command: SESSION_START_COMMAND }] }] } }),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [hand, { hooks: [{ type: "command", command: SESSION_START_COMMAND }] }],
+        },
+      }),
     );
     await withReporter(quiet, () => up("demo", root));
-    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
     expect(settings).toEqual({
       hooks: { SessionStart: [hand], PreToolUse: [buildPrGuardEntry()] },
       permissions: { allow: READ_ONLY_GIT_RULES },

@@ -20,10 +20,13 @@ import { loadConfigFile } from "sandbox-core/workspace_prompts";
 import { error, success } from "../lib/config.js";
 
 /** The update to send, or the reason the arguments are unusable. */
-export function updateFromArgs(args: Record<string, unknown>): { status?: string; comment?: string } | string {
+export function updateFromArgs(
+  args: Record<string, unknown>,
+): { status?: string; comment?: string } | string {
   const status = (args.status as string | null) || undefined;
   const comment = (args.comment as string | null) || undefined;
-  if (!status && !comment) return "Nothing to update: pass --status <name> and/or --comment <text>.";
+  if (!status && !comment)
+    return "Nothing to update: pass --status <name> and/or --comment <text>.";
   return { status, comment };
 }
 
@@ -41,10 +44,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (!text) {
     const workspace = findWorkspaceRoot(process.cwd());
     if (workspace === null) {
-      fail("No issue given and not inside a sandbox workspace (no .sandbox/ directory found above CWD).");
+      fail(
+        "No issue given and not inside a sandbox workspace (no .sandbox/ directory found above CWD).",
+      );
     }
     text = issueIdOf(loadConfigFile(workspace, null));
-    if (!text) fail("No issue given and this workspace has no issue (issue_id in .sandbox/workspace.yml).");
+    if (!text)
+      fail("No issue given and this workspace has no issue (issue_id in .sandbox/workspace.yml).");
   }
   const ref = tracker.parseRef(text);
   if (!ref) fail(`'${text}' is not a ${tracker.label} issue ID (e.g. ${tracker.refExample}).`);
@@ -55,7 +61,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     } catch (e) {
       fail(`Could not update ${ref}: ${(e as Error).message}`);
     }
-    const what = [update.status && `status → ${update.status}`, update.comment && "comment added"].filter(Boolean);
+    const what = [
+      update.status && `status → ${update.status}`,
+      update.comment && "comment added",
+    ].filter(Boolean);
     success(`Updated ${ref}: ${what.join(", ")}.`);
     return;
   }

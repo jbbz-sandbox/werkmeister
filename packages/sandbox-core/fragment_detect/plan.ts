@@ -14,8 +14,21 @@ import { detectHelm } from "./helm.js";
 import { detectK8s } from "./k8s.js";
 import { detectKustomize } from "./kustomize.js";
 import { detectPackages } from "./package.js";
-import { resolveInfra, resolveService, type ResolvedInfra, type ResolvedService } from "./precedence.js";
-import { guessed, stated, type DetectContext, type FieldValue, type Finding, type Skipped, type Workspace } from "./types.js";
+import {
+  type ResolvedInfra,
+  type ResolvedService,
+  resolveInfra,
+  resolveService,
+} from "./precedence.js";
+import {
+  type DetectContext,
+  type FieldValue,
+  type Finding,
+  guessed,
+  type Skipped,
+  stated,
+  type Workspace,
+} from "./types.js";
 import { detectWorkspace } from "./workspace.js";
 
 export interface SetupPlan {
@@ -51,7 +64,10 @@ function safely<T>(skipped: Skipped[], label: string, fallback: T, fn: () => T):
   try {
     return fn();
   } catch (e) {
-    skipped.push({ item: label, reason: `${label} failed: ${e instanceof Error ? e.message : String(e)}` });
+    skipped.push({
+      item: label,
+      reason: `${label} failed: ${e instanceof Error ? e.message : String(e)}`,
+    });
     return fallback;
   }
 }
@@ -76,16 +92,25 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
   const existing = fs.existsSync(fragmentPath) ? fs.readFileSync(fragmentPath, "utf8") : null;
   // An existing fragment that doesn't parse can't be gap-filled: let the YAML error propagate.
   const existingDoc: Record<string, any> | null = existing ? (parseYaml(existing) ?? null) : null;
-  const ctx: DetectContext = { root: abs, files: listRepoFiles(abs, opts.runner), runner: opts.runner, skipped: [] };
+  const ctx: DetectContext = {
+    root: abs,
+    files: listRepoFiles(abs, opts.runner),
+    runner: opts.runner,
+    skipped: [],
+  };
 
   const existingSetup =
     Object.values(existingDoc?.services ?? {})
       .map((s: any) => s?.setup_service)
       .find((s): s is string => typeof s === "string") ?? null;
   const noWorkspace: Workspace = { pm: "npm", packageDirs: [], setupName: null, setupFields: {} };
-  const ws = safely(ctx.skipped, "workspace detection", noWorkspace, () => detectWorkspace(ctx, existingSetup));
+  const ws = safely(ctx.skipped, "workspace detection", noWorkspace, () =>
+    detectWorkspace(ctx, existingSetup),
+  );
   const findings: Finding[] = [
-    ...safely(ctx.skipped, "package.json detection", [] as Finding[], () => detectPackages(ctx, ws)),
+    ...safely(ctx.skipped, "package.json detection", [] as Finding[], () =>
+      detectPackages(ctx, ws),
+    ),
     ...safely(ctx.skipped, "Dockerfile detection", [] as Finding[], () => detectDockerfiles(ctx)),
     ...safely(ctx.skipped, "k8s manifest detection", [] as Finding[], () => detectK8s(ctx)),
     ...safely(ctx.skipped, "Helm detection", [] as Finding[], () => detectHelm(ctx)),
@@ -99,7 +124,9 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
 
   // An entry the human renamed keeps its name: a service matched by path, infrastructure by pod prefix.
   const adopt = (section: string, key: string, value: unknown) =>
-    Object.entries(existingDoc?.[section] ?? {}).find(([, e]: [string, any]) => e?.[key] === value)?.[0];
+    Object.entries(existingDoc?.[section] ?? {}).find(
+      ([, e]: [string, any]) => e?.[key] === value,
+    )?.[0];
   const renamed = new Map<string, string>();
   for (const s of services) {
     const name = adopt("services", "path", s.dir);
@@ -124,7 +151,8 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
   const names = new Set(services.map((s) => s.name));
 
   // Allocation: never for an entry that already has a value in the file.
-  const inFile = (section: string, name: string, key: string) => existingDoc?.[section]?.[name]?.[key] !== undefined;
+  const inFile = (section: string, name: string, key: string) =>
+    existingDoc?.[section]?.[name]?.[key] !== undefined;
   const taken = takenPorts(opts.reposRoot, fragmentPath, opts.localPath, existingDoc);
   const offsets = allocateOffsets(
     services.filter((s) => !inFile("services", s.name, "port_offset")).map((s) => s.name),
@@ -133,30 +161,45 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
   );
   for (const s of services) {
     const n = offsets.get(s.name);
-    if (n !== undefined) s.fields.port_offset = stated(n, "lowest free offset across registered repos");
+    if (n !== undefined)
+      s.fields.port_offset = stated(n, "lowest free offset across registered repos");
   }
   const forwards = allocateForwards(
-    infrastructure.filter((i) => !inFile("infrastructure", i.name, "k8s_forward_port")).map((i) => i.name),
+    infrastructure
+      .filter((i) => !inFile("infrastructure", i.name, "k8s_forward_port"))
+      .map((i) => i.name),
     taken.forwards,
   );
   for (const i of infrastructure) {
     const n = forwards.get(i.name);
-    if (n !== undefined) i.fields.k8s_forward_port = stated(n, "lowest free forward port from 9050");
+    if (n !== undefined)
+      i.fields.k8s_forward_port = stated(n, "lowest free forward port from 9050");
   }
 
   // k8s env addressed at in-cluster infrastructure → the sandbox tunnel.
   const tunnels = infrastructure.map((i) => ({
     name: i.name,
     host: hosts.get(i.name),
-    port: Number(existingDoc?.infrastructure?.[i.name]?.internal_port ?? i.fields.internal_port.value),
-    forward: Number(existingDoc?.infrastructure?.[i.name]?.k8s_forward_port ?? i.fields.k8s_forward_port?.value),
+    port: Number(
+      existingDoc?.infrastructure?.[i.name]?.internal_port ?? i.fields.internal_port.value,
+    ),
+    forward: Number(
+      existingDoc?.infrastructure?.[i.name]?.k8s_forward_port ?? i.fields.k8s_forward_port?.value,
+    ),
   }));
   for (const s of services) {
     const env = s.fields.environment;
     if (!env) continue;
-    const { env: next, rewritten } = rewriteEnv(env.value as Record<string, string>, s.k8sEnvKeys, tunnels);
+    const { env: next, rewritten } = rewriteEnv(
+      env.value as Record<string, string>,
+      s.k8sEnvKeys,
+      tunnels,
+    );
     if (rewritten.length) {
-      s.fields.environment = guessed(next, `${env.source}; ${rewritten.join(", ")} rewritten from the in-cluster address to the sandbox tunnel`);
+      s.fields.environment = guessed(
+        next,
+        `${env.source}; ${rewritten.join(", ")} rewritten from the in-cluster address to the sandbox tunnel`,
+      );
     }
   }
 
@@ -178,7 +221,10 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
       ? {
           name: ws.setupName,
           fields: {
-            image: { ...nodeServices[0].fields.image, source: `same image as ${nodeServices[0].name}` },
+            image: {
+              ...nodeServices[0].fields.image,
+              source: `same image as ${nodeServices[0].name}`,
+            },
             ...ws.setupFields,
           },
         }
@@ -211,7 +257,12 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
 /** The plan as plain JSON for reports (no raw findings). */
 export function planSummary(plan: Plan) {
   const fields = (f: Record<string, FieldValue>) =>
-    Object.fromEntries(Object.entries(f).map(([k, v]) => [k, { value: v.value, source: v.source, confidence: v.confidence }]));
+    Object.fromEntries(
+      Object.entries(f).map(([k, v]) => [
+        k,
+        { value: v.value, source: v.source, confidence: v.confidence },
+      ]),
+    );
   return {
     repo: plan.repo,
     fragment: plan.fragmentPath,

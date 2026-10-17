@@ -1,6 +1,13 @@
 /** One value per field from a correlated group, in the spec's precedence order (§3). */
 import { DATASTORES, type InfraGroup, type ServiceGroup } from "./correlate.js";
-import { guessed, stated, type FieldValue, type Finding, type FindingKind, type Skipped } from "./types.js";
+import {
+  type FieldValue,
+  type Finding,
+  type FindingKind,
+  guessed,
+  type Skipped,
+  stated,
+} from "./types.js";
 
 export interface Conflict {
   service: string;
@@ -56,7 +63,9 @@ function sortKeys(o: Record<string, string>): Record<string, string> {
 function envOf(findings: Finding[], kind: FindingKind): Record<string, string> {
   return Object.assign(
     {},
-    ...findings.filter((f) => f.kind === kind && f.fields.environment).map((f) => f.fields.environment.value as Record<string, string>),
+    ...findings
+      .filter((f) => f.kind === kind && f.fields.environment)
+      .map((f) => f.fields.environment.value as Record<string, string>),
   );
 }
 
@@ -65,7 +74,9 @@ export function resolveService(group: ServiceGroup): ResolvedService {
   const conflicts: Conflict[] = [];
   for (const [key, kinds] of Object.entries(ORDER)) {
     const candidates = kinds.flatMap((k) =>
-      group.findings.filter((f) => f.kind === k && f.fields[key] !== undefined).map((f) => f.fields[key]),
+      group.findings
+        .filter((f) => f.kind === k && f.fields[key] !== undefined)
+        .map((f) => f.fields[key]),
     );
     if (!candidates.length) continue;
     const chosen = candidates[0];
@@ -90,12 +101,24 @@ export function resolveService(group: ServiceGroup): ResolvedService {
   const composeEnv = envOf(group.findings, "compose");
   const env = { ...k8sEnv, ...composeEnv };
   if (Object.keys(env).length) {
-    const from = [Object.keys(composeEnv).length ? "compose environment" : "", Object.keys(k8sEnv).length ? "k8s env" : ""];
+    const from = [
+      Object.keys(composeEnv).length ? "compose environment" : "",
+      Object.keys(k8sEnv).length ? "k8s env" : "",
+    ];
     fields.environment = stated(sortKeys(env), from.filter(Boolean).join(" + "));
   }
-  const k8sEnvKeys = Object.keys(k8sEnv).filter((k) => !(k in composeEnv)).sort();
+  const k8sEnvKeys = Object.keys(k8sEnv)
+    .filter((k) => !(k in composeEnv))
+    .sort();
 
-  return { name: group.name, dir: group.dir, fields, conflicts, k8sEnvKeys, findings: group.findings };
+  return {
+    name: group.name,
+    dir: group.dir,
+    fields,
+    conflicts,
+    k8sEnvKeys,
+    findings: group.findings,
+  };
 }
 
 /** *skipped* receives one entry per later k8s source that disagrees with the first on port or namespace. */
@@ -115,7 +138,9 @@ export function resolveInfra(group: InfraGroup, skipped: Skipped[] = []): Resolv
       }
     }
   }
-  const port = k8s?.fields.internal_port ?? group.findings.find((f) => f.fields.internal_port)?.fields.internal_port;
+  const port =
+    k8s?.fields.internal_port ??
+    group.findings.find((f) => f.fields.internal_port)?.fields.internal_port;
   const noManifest = "no k8s manifest for this datastore";
   return {
     name: group.name,
@@ -123,7 +148,10 @@ export function resolveInfra(group: InfraGroup, skipped: Skipped[] = []): Resolv
       internal_port: port ?? stated(ds.port, `${group.datastore} default port`),
       k8s_namespace: k8s?.fields.k8s_namespace ?? guessed("default", noManifest),
       k8s_pod_prefix: k8s?.fields.k8s_pod_prefix ?? guessed(group.name, noManifest),
-      health_endpoint: stated(ds.health, ds.health ? `${group.datastore} wire probe` : "no wire probe for this datastore — TCP-only"),
+      health_endpoint: stated(
+        ds.health,
+        ds.health ? `${group.datastore} wire probe` : "no wire probe for this datastore — TCP-only",
+      ),
     },
   };
 }

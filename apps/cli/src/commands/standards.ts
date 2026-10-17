@@ -8,8 +8,8 @@
  * workspace-scoped (projection staleness).
  */
 
-import { error, info, success } from "../lib/config.js";
 import { checkStandards } from "sandbox-core/standards";
+import { error, info, success } from "../lib/config.js";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {
   const { dir, moduleCount, errors } = checkStandards();

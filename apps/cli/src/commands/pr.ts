@@ -11,20 +11,26 @@
  *   adopt   write the PR file for a fix that landed outside the workspace
  */
 
-import { error } from "../lib/config.js";
 import { adoptPr, gatePrs, openPrs, refreshPrStatus } from "sandbox-core";
 import { findRecordRoot } from "sandbox-core/pr_guard";
+import { error } from "../lib/config.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const ws = findRecordRoot(process.cwd());
   if (!ws) {
-    error("Not inside a sandbox workspace (no .sandbox/workspace.yml above the current directory).");
+    error(
+      "Not inside a sandbox workspace (no .sandbox/workspace.yml above the current directory).",
+    );
     process.exit(1);
   }
   const repo = (args.repo as string | null) ?? undefined;
   const result =
     args.action === "adopt"
-      ? await adoptPr(ws, { pr: (args.pr as string | null) ?? undefined, noPr: (args.noPr as string | null) ?? undefined, repo })
+      ? await adoptPr(ws, {
+          pr: (args.pr as string | null) ?? undefined,
+          noPr: (args.noPr as string | null) ?? undefined,
+          repo,
+        })
       : args.action === "gate"
         ? await gatePrs(ws, repo)
         : args.action === "open"

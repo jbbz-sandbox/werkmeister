@@ -1,19 +1,19 @@
 // icm.refresh is the repair path for a workspace a pre-strategy `up` polluted
 // with JIT hooks. It removes exactly the JIT-managed entries and installs the
 // PR guard, the one hook both strategies share.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { collectingReporter, withReporter } from "./dist/reporter.js";
+import { test } from "node:test";
 import {
   buildPrGuardEntry,
   PRE_TOOL_USE_GATE_COMMAND,
   READ_ONLY_GIT_RULES,
   SESSION_START_COMMAND,
 } from "./dist/hooks_gen.js";
+import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
 
 const icm = strategyById("icm");
@@ -24,7 +24,10 @@ function workspace(settings) {
   fs.mkdirSync(path.join(root, ".claude"));
   fs.mkdirSync(path.join(root, ".sandbox", ".gate"), { recursive: true });
   fs.writeFileSync(path.join(root, ".sandbox", ".gate", "s.json"), "{}");
-  fs.writeFileSync(path.join(root, ".claude", "settings.json"), typeof settings === "string" ? settings : JSON.stringify(settings));
+  fs.writeFileSync(
+    path.join(root, ".claude", "settings.json"),
+    typeof settings === "string" ? settings : JSON.stringify(settings),
+  );
   return root;
 }
 
@@ -38,12 +41,16 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
   const root = workspace({
     hooks: {
       SessionStart: [HAND, { hooks: [{ type: "command", command: SESSION_START_COMMAND }] }],
-      PreToolUse: [{ matcher: "Edit|Write", hooks: [{ type: "command", command: PRE_TOOL_USE_GATE_COMMAND }] }],
+      PreToolUse: [
+        { matcher: "Edit|Write", hooks: [{ type: "command", command: PRE_TOOL_USE_GATE_COMMAND }] },
+      ],
     },
   });
   try {
     const log = await refresh(root);
-    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
     assert.deepEqual(settings, {
       hooks: { SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] },
       permissions: { allow: READ_ONLY_GIT_RULES },
@@ -57,11 +64,18 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
 });
 
 test("only JIT hooks: settings.json keeps just the PR guard", async () => {
-  const root = workspace({ hooks: { SessionStart: [{ hooks: [{ type: "command", command: SESSION_START_COMMAND }] }] } });
+  const root = workspace({
+    hooks: { SessionStart: [{ hooks: [{ type: "command", command: SESSION_START_COMMAND }] }] },
+  });
   try {
     await refresh(root);
-    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } });
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
+    assert.deepEqual(settings, {
+      hooks: { PreToolUse: [buildPrGuardEntry()] },
+      permissions: { allow: READ_ONLY_GIT_RULES },
+    });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -71,7 +85,10 @@ test("unparseable settings.json is left untouched", async () => {
   const root = workspace("{ not json");
   try {
     await refresh(root);
-    assert.equal(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"), "{ not json");
+    assert.equal(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+      "{ not json",
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -82,8 +99,13 @@ test("a workspace with no .claude/ gets the PR guard and the allow rules, once, 
   try {
     await refresh(root);
     await refresh(root);
-    const settings = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-    assert.deepEqual(settings, { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } });
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
+    assert.deepEqual(settings, {
+      hooks: { PreToolUse: [buildPrGuardEntry()] },
+      permissions: { allow: READ_ONLY_GIT_RULES },
+    });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -13,12 +13,16 @@
  * to a reporter no consumer of `sandbox.ts` installs, silencing them
  * (.sandbox/notes/033).
  */
-import { describe, expect, it } from "vitest";
+
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 
-const CORE = path.resolve(fileURLToPath(import.meta.url), "../../../../../../packages/sandbox-core");
+const CORE = path.resolve(
+  fileURLToPath(import.meta.url),
+  "../../../../../../packages/sandbox-core",
+);
 const ALLOWED = new Set(["reporter.ts", "cache.ts", "gate.ts", "pr_guard.ts"]);
 
 describe("sandbox-core console writes", () => {
@@ -26,7 +30,8 @@ describe("sandbox-core console writes", () => {
     const files = [
       ...fs.readdirSync(CORE).filter((f) => f.endsWith(".ts")),
       ...(fs.existsSync(path.join(CORE, "fragment_detect"))
-        ? fs.readdirSync(path.join(CORE, "fragment_detect"))
+        ? fs
+            .readdirSync(path.join(CORE, "fragment_detect"))
             .filter((f) => f.endsWith(".ts"))
             .map((f) => `fragment_detect/${f}`)
         : []),

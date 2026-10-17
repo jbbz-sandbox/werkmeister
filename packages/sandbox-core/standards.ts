@@ -246,11 +246,7 @@ function iterStandardFiles(standardsDir: string): string[] {
     .map((e) => path.join(standardsDir, e.name))
     .sort();
   const nested = entries
-    .filter(
-      (e) =>
-        e.isDirectory() &&
-        fs.existsSync(path.join(standardsDir, e.name, "STANDARD.md")),
-    )
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(standardsDir, e.name, "STANDARD.md")))
     .map((e) => path.join(standardsDir, e.name, "STANDARD.md"))
     .sort();
   return [...flat, ...nested];
@@ -555,9 +551,7 @@ export function resolveActiveStandards(
   if (localServices && localServices.length) {
     candidateServices = [...localServices];
   } else {
-    candidateServices = repoNames.flatMap(
-      (repo) => (reposConfig[repo] ?? {})["services"] ?? [],
-    );
+    candidateServices = repoNames.flatMap((repo) => (reposConfig[repo] ?? {})["services"] ?? []);
   }
 
   const active = new Set<string>();

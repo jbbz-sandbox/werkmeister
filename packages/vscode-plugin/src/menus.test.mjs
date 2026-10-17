@@ -8,9 +8,10 @@
  * Every case below feeds a real buildTree node into the real clause from
  * package.json rather than asserting either side alone.
  */
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { test } from "node:test";
 import { buildTree, cliNotFoundNode } from "../out/build-tree.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
@@ -46,7 +47,14 @@ function workspaceContext(state, isCurrent = false) {
 function serviceContext(row) {
   const [node] = buildTree(
     [ws("a")],
-    [st("a", { state: "up", running: 1, total: 1, services: [{ name: "frontend", state: "healthy" }] })],
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "frontend", state: "healthy" }],
+      }),
+    ],
     { available: true, byFeature: new Map([["a", new Map([["frontend", row]])]]) },
     [],
   );
@@ -70,7 +78,9 @@ const interceptRow = (over = {}) => ({
  * inline entry is the state-gated one and so the one worth testing.
  */
 function shows(command, contextValue) {
-  const entries = manifest.contributes.menus["view/item/context"].filter((m) => m.command === command);
+  const entries = manifest.contributes.menus["view/item/context"].filter(
+    (m) => m.command === command,
+  );
   const entry = entries.find((m) => m.group.startsWith("inline")) ?? entries[0];
   assert.ok(entry, `no view/item/context entry for ${command}`);
   assert.match(entry.when, /view == sandboxWorkspaces/, `${command} is not scoped to the view`);
@@ -119,15 +129,24 @@ test("stop shows only where there is something to stop, current or not", () => {
 test("the intercept toggle shows on interceptable and own intercepts only", () => {
   assert.equal(shows("sandbox.toggleIntercept", serviceContext(interceptRow())), true);
   assert.equal(
-    shows("sandbox.toggleIntercept", serviceContext(interceptRow({ intercepted: true, intercepted_by: "a" }))),
+    shows(
+      "sandbox.toggleIntercept",
+      serviceContext(interceptRow({ intercepted: true, intercepted_by: "a" })),
+    ),
     true,
   );
   assert.equal(
-    shows("sandbox.toggleIntercept", serviceContext(interceptRow({ intercepted: true, intercepted_by: "other" }))),
+    shows(
+      "sandbox.toggleIntercept",
+      serviceContext(interceptRow({ intercepted: true, intercepted_by: "other" })),
+    ),
     false,
   );
   assert.equal(
-    shows("sandbox.toggleIntercept", serviceContext(interceptRow({ interceptable: false, blocker: "no deployment" }))),
+    shows(
+      "sandbox.toggleIntercept",
+      serviceContext(interceptRow({ interceptable: false, blocker: "no deployment" })),
+    ),
     false,
   );
   assert.equal(shows("sandbox.toggleIntercept", serviceContext(undefined)), false);
@@ -136,7 +155,13 @@ test("the intercept toggle shows on interceptable and own intercepts only", () =
 test("no workspace action is offered on a service node, or on the CLI-not-found node", () => {
   const service = serviceContext(interceptRow());
   const error = cliNotFoundNode("boom").contextValue;
-  for (const command of ["sandbox.open", "sandbox.switch", "sandbox.up", "sandbox.stop", "sandbox.closeOut"]) {
+  for (const command of [
+    "sandbox.open",
+    "sandbox.switch",
+    "sandbox.up",
+    "sandbox.stop",
+    "sandbox.closeOut",
+  ]) {
     assert.equal(shows(command, service), false, `${command} on a service`);
     assert.equal(shows(command, error), false, `${command} on the error node`);
   }

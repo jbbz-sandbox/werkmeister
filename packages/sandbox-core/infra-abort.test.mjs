@@ -2,11 +2,11 @@
 // A caller that has already cancelled must not have infrastructure started
 // underneath it -- so the guard has to come before any of up()'s setup work,
 // not just before the compose spawn.
-import { test } from "node:test";
-import assert from "node:assert/strict";
 
-import { collectingReporter, withReporter } from "./dist/reporter.js";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { up } from "./dist/infra.js";
+import { collectingReporter, withReporter } from "./dist/reporter.js";
 
 test("up refuses an already-aborted signal before doing any work", async () => {
   const ac = new AbortController();

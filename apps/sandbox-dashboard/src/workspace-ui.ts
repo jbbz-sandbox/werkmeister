@@ -27,9 +27,9 @@
  * safe in the strict-CSP bundle too.
  */
 import { filterWorkspaces } from "../lib/workspace-search.js";
-import { initChatPanel, type ClaudeMessage } from "./chat-panel.js";
-import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
+import { type ClaudeMessage, initChatPanel } from "./chat-panel.js";
 import { el, injectCss } from "./theme.js";
+import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
 
 export interface HostBridge {
   /**
@@ -56,7 +56,11 @@ export interface HostBridge {
     handlers: {
       onEntry(index: number, message: ClaudeMessage): void;
       onTurn(state: "running" | "done" | "failed", error?: string | null): void;
-      onReady(meta?: { sessionId: string | null; sessionCount: number; updatedAt: string | null }): void;
+      onReady(meta?: {
+        sessionId: string | null;
+        sessionCount: number;
+        updatedAt: string | null;
+      }): void;
     },
     /** Resume backfill from this entry index (skips what a reconnect already has). */
     fromIndex?: number,
@@ -227,7 +231,8 @@ export function initWorkspaceUI(
     root.innerHTML = bodyHTML;
   }
   const $ = (id: string) =>
-    (root.querySelector(`[data-id="${id}"]`) ?? headerHost.querySelector(`[data-id="${id}"]`)) as HTMLElement;
+    (root.querySelector(`[data-id="${id}"]`) ??
+      headerHost.querySelector(`[data-id="${id}"]`)) as HTMLElement;
 
   // ---- state ----
   let all: WorkspaceEntry[] = [];
@@ -238,7 +243,10 @@ export function initWorkspaceUI(
   let cstateByWs: Record<string, any> = {};
   const openState: Record<string, boolean> = {};
   const chatState: Record<string, any> = {};
-  const chatCtl: Record<string, { onExpand?: () => void; onVisibility?: (visible: boolean) => void }> = {};
+  const chatCtl: Record<
+    string,
+    { onExpand?: () => void; onVisibility?: (visible: boolean) => void }
+  > = {};
   const panelCache: Record<string, HTMLElement> = {};
   // Usage panels are cached per workspace too (same reason as panelCache): a
   // rebuilt "Usage" button must keep toggling the SAME node, not a fresh one,
@@ -295,11 +303,13 @@ export function initWorkspaceUI(
     try {
       const d = await call("workspace-status", {});
       cstateByWs = {};
-      (d.statuses || []).forEach((s: any) => (cstateByWs[s.name] = s));
+      for (const s of d.statuses || []) cstateByWs[s.name] = s;
       cstateLoaded = true;
       infraState = d.infra || null;
       updateInfraUI();
-    } catch (e) { /* keep stale */ }
+    } catch (e) {
+      /* keep stale */
+    }
   }
 
   // ---- top status bar: infra + connect, k8s forwards health, kube context ----
@@ -331,7 +341,8 @@ export function initWorkspaceUI(
     updateInfraUI = () => {
       if (!infraState) return;
       const s = infraState.state as string;
-      infraDot.className = "dot " + (s === "up" ? "ok" : s === "partial" ? "warn" : s === "down" ? "bad" : "unknown");
+      infraDot.className =
+        "dot " + (s === "up" ? "ok" : s === "partial" ? "warn" : s === "down" ? "bad" : "unknown");
       infraLabel.textContent = infraState.total
         ? `Infra ${s} ${infraState.running}/${infraState.total}`
         : `Infra ${s}`;
@@ -381,7 +392,9 @@ export function initWorkspaceUI(
         k8sLabel.textContent = `k8s forwards ${d.healthy}/${d.total}`;
         const bad = (d.forwards || []).filter((f: any) => !f.healthy);
         k8sItem.title = bad.length
-          ? "Unhealthy: " + bad.map((f: any) => `${f.name} :${f.port} (${f.detail})`).join(", ") + " — click to re-check"
+          ? "Unhealthy: " +
+            bad.map((f: any) => `${f.name} :${f.port} (${f.detail})`).join(", ") +
+            " — click to re-check"
           : "All default k8s port-forwards healthy — click to re-check";
       } catch (e) {
         k8sDot.className = "dot unknown";
@@ -431,7 +444,9 @@ export function initWorkspaceUI(
       try {
         const k = await call("kube-context", {});
         paintKube(k.env ?? "other", k.context ?? null);
-      } catch (e) { /* leave as-is */ }
+      } catch (e) {
+        /* leave as-is */
+      }
     }
 
     kubeSwitch.addEventListener("click", async () => {
@@ -468,7 +483,8 @@ export function initWorkspaceUI(
           applyFilter();
           break;
         } catch (e) {
-          if (attempt === 2) console.warn("issue-statuses chunk failed after retry:", chunk.join(","));
+          if (attempt === 2)
+            console.warn("issue-statuses chunk failed after retry:", chunk.join(","));
         }
       }
     }
@@ -477,9 +493,15 @@ export function initWorkspaceUI(
   }
 
   // ---- actions ----
-  async function runAction(tool: string, args: Record<string, unknown>, msgEl: HTMLElement, btn: HTMLElement, verb: string): Promise<void> {
+  async function runAction(
+    tool: string,
+    args: Record<string, unknown>,
+    msgEl: HTMLElement,
+    btn: HTMLElement,
+    verb: string,
+  ): Promise<void> {
     const siblings = btn.parentElement!.querySelectorAll<HTMLButtonElement>(".btn");
-    siblings.forEach((b) => (b.disabled = true));
+    for (const b of siblings) b.disabled = true;
     msgEl.className = "act-msg";
     msgEl.textContent = verb + "…";
     try {
@@ -494,7 +516,7 @@ export function initWorkspaceUI(
     } catch (e) {
       msgEl.className = "act-msg err";
       msgEl.textContent = verb + " failed";
-      siblings.forEach((b) => (b.disabled = false));
+      for (const b of siblings) b.disabled = false;
     }
   }
 
@@ -504,7 +526,14 @@ export function initWorkspaceUI(
     const state = cs ? cs.state : "down";
     const msg = el("span", "act-msg");
 
-    function addBtn(label: string, cls: string | null, tool: string, args: Record<string, unknown>, verb: string, confirmFirst?: boolean): void {
+    function addBtn(
+      label: string,
+      cls: string | null,
+      tool: string,
+      args: Record<string, unknown>,
+      verb: string,
+      confirmFirst?: boolean,
+    ): void {
       const b = el("button", "btn" + (cls ? " " + cls : ""), label) as HTMLButtonElement;
       b.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -531,8 +560,15 @@ export function initWorkspaceUI(
     if (state === "down") {
       addBtn("Start", "go", "workspace-action", { name: w.name, action: "up" }, "Starting");
     } else {
-      addBtn("Restart", null, "workspace-action", { name: w.name, action: "restart" }, "Restarting");
-      if (state !== "stopped") addBtn("Stop", null, "workspace-action", { name: w.name, action: "stop" }, "Stopping");
+      addBtn(
+        "Restart",
+        null,
+        "workspace-action",
+        { name: w.name, action: "restart" },
+        "Restarting",
+      );
+      if (state !== "stopped")
+        addBtn("Stop", null, "workspace-action", { name: w.name, action: "stop" }, "Stopping");
       else addBtn("Start", "go", "workspace-action", { name: w.name, action: "up" }, "Starting");
       addBtn("Down", null, "workspace-action", { name: w.name, action: "down" }, "Tearing down");
     }
@@ -547,7 +583,10 @@ export function initWorkspaceUI(
     const usageBtn = el("button", "btn", "Usage") as HTMLButtonElement;
     usageBtn.addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      if (usagePanel.style.display !== "none") { usagePanel.style.display = "none"; return; }
+      if (usagePanel.style.display !== "none") {
+        usagePanel.style.display = "none";
+        return;
+      }
       usagePanel.style.display = "";
       usagePanel.textContent = "Computing usage…";
       try {
@@ -581,7 +620,7 @@ export function initWorkspaceUI(
       if (r.url) {
         pr.appendChild(linkEl("", "#" + r.url.split("/").pop(), r.url, r.title || ""));
         if (r.state) pr.appendChild(el("span", "pr-state " + prStateClass(r.state), r.state));
-        (r.labels || []).forEach((l: string) => pr.appendChild(el("span", "lbl", l)));
+        for (const l of r.labels || []) pr.appendChild(el("span", "lbl", l));
       } else {
         pr.appendChild(el("span", "none", "no PR"));
       }
@@ -603,7 +642,7 @@ export function initWorkspaceUI(
       onActivity: ({ waiting, running }) => {
         const cs = cstateByWs[w.name];
         if (!cs) return;
-        cs.claude = { state: running ? "running" : cs.claude?.state ?? "idle", waiting };
+        cs.claude = { state: running ? "running" : (cs.claude?.state ?? "idle"), waiting };
         applyFilter(); // rebuild cards (cached panel + chat survive) so the badge updates
       },
     });
@@ -651,7 +690,8 @@ export function initWorkspaceUI(
         wb.title = "Claude replied and is waiting for your next message";
         meta.appendChild(wb);
       }
-      if (w.issueId && w.issueUrl) meta.appendChild(linkEl("badge b-issue", w.issueId, w.issueUrl, w.issueUrl));
+      if (w.issueId && w.issueUrl)
+        meta.appendChild(linkEl("badge b-issue", w.issueId, w.issueUrl, w.issueUrl));
       if (w.issueId) {
         const st = statuses[w.issueId];
         if (st) meta.appendChild(el("span", "status " + statusClass(st), st));
@@ -660,9 +700,16 @@ export function initWorkspaceUI(
       const repos = prsByWs[w.name];
       if (repos) {
         const openPrs = repos.filter((r: any) => r.state === "OPEN").length;
-        meta.appendChild(el("span", "repo-count",
-          repos.length + " repo" + (repos.length === 1 ? "" : "s") +
-          (openPrs ? " · " + openPrs + " open PR" + (openPrs === 1 ? "" : "s") : "")));
+        meta.appendChild(
+          el(
+            "span",
+            "repo-count",
+            repos.length +
+              " repo" +
+              (repos.length === 1 ? "" : "s") +
+              (openPrs ? " · " + openPrs + " open PR" + (openPrs === 1 ? "" : "s") : ""),
+          ),
+        );
       }
       head.appendChild(meta);
 
@@ -741,7 +788,9 @@ export function initWorkspaceUI(
         refreshStatus(),
         refs.length ? loadIssueStatuses(refs, opts?.refreshIssues) : Promise.resolve(),
         call("workspace-prs", {})
-          .then((d: any) => (d.workspaces || []).forEach((w: any) => (prsByWs[w.name] = w.repos || [])))
+          .then((d: any) => {
+            for (const w of d.workspaces || []) prsByWs[w.name] = w.repos || [];
+          })
           .catch(() => {}),
       ]);
       applyFilter();
@@ -758,7 +807,11 @@ export function initWorkspaceUI(
       s.className = "load-status err";
       s.innerHTML = "";
       s.appendChild(el("div", null, "Couldn’t reach the host: " + (e as Error).message));
-      const hint = el("div", null, "The connection may still be starting up. Wait a moment, then retry.");
+      const hint = el(
+        "div",
+        null,
+        "The connection may still be starting up. Wait a moment, then retry.",
+      );
       hint.style.cssText = "font-size:12px;color:var(--sd-faint);margin:6px 0 10px;";
       s.appendChild(hint);
       const btn = el("button", "btn primary", "Retry");

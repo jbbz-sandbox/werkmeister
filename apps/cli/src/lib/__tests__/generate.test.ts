@@ -10,11 +10,12 @@
  * is never mutated — and assert the redirect took hold before writing anything, because
  * a redirect that silently fails writes into the developer's live infra tree.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ stateInfraRoot: null as string | null }));
 
@@ -26,6 +27,8 @@ vi.mock("sandbox-core/config", async (importOriginal) => {
   return { ...actual, stateInfraRoot: () => h.stateInfraRoot ?? actual.stateInfraRoot() };
 });
 
+import { loadServices, stateInfraRoot } from "sandbox-core/config";
+import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import {
   generateCaddyfile,
   generateFeatureCompose,
@@ -34,10 +37,8 @@ import {
   isFeatureComposeStale,
   seedWorkspaceMetadataEnv,
 } from "sandbox-core/generate";
-import { loadFeatureRouters } from "sandbox-core/feature_routing";
-import { loadServices, stateInfraRoot } from "sandbox-core/config";
 import { getPortRange } from "sandbox-core/slots";
-import { fixtureServicesYaml, useSandboxHome, type SandboxHome } from "./helpers/sandbox_home.js";
+import { fixtureServicesYaml, type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -90,21 +91,33 @@ describe("dev_links", () => {
       "dev_links:\n  frontend:\n" +
         '    - "${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core"\n',
     );
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
+    const content = fs.readFileSync(
+      generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp),
+      "utf8",
+    );
     expect(content).toContain(`- ${tmp}/shared/packages/core:/app/node_modules/@sandbox/core`);
     expect(content).not.toContain("${WORKSPACE}");
   });
 
   it("empty dev_links is byte-identical to none", () => {
-    const baseline = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
+    const baseline = fs.readFileSync(
+      generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp),
+      "utf8",
+    );
     writeWorkspaceYml(tmp, "dev_links: {}\n");
-    const withEmpty = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
+    const withEmpty = fs.readFileSync(
+      generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp),
+      "utf8",
+    );
     expect(withEmpty).toBe(baseline);
   });
 
   it("dev_link for another service does not leak", () => {
     writeWorkspaceYml(tmp, 'dev_links:\n  backend:\n    - "${WORKSPACE}/shared:/app/x"\n');
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
+    const content = fs.readFileSync(
+      generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp),
+      "utf8",
+    );
     expect(content).not.toContain("/app/x");
   });
 });
@@ -121,7 +134,10 @@ describe("generateFeatureCompose", () => {
   });
 
   it("loads the service's own secrets file after the shared .env", () => {
-    const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp), "utf8");
+    const content = fs.readFileSync(
+      generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp),
+      "utf8",
+    );
     expect(content).toMatch(/env_file:\n\s+- \.env\n\s+- \.env\.frontend\n/);
   });
 
@@ -131,7 +147,6 @@ describe("generateFeatureCompose", () => {
     expect(content).not.toContain("backend:");
     expect(content).not.toContain("frontend:");
   });
-
 });
 
 // ---- setup services --------------------------------------------------------
@@ -210,7 +225,9 @@ describe("setup services", () => {
     withSetupService(MINIMAL_SETUP);
     const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
     expect(content).toContain('com.sandbox.local.service: "demo-install"');
-    expect(content).toMatch(/com\.sandbox\.local\.service: "demo-install"\n\s*com\.sandbox\.local\.role: "setup"/);
+    expect(content).toMatch(
+      /com\.sandbox\.local\.service: "demo-install"\n\s*com\.sandbox\.local\.role: "setup"/,
+    );
     // A `{# #}` comment inside the labels block renders as an indented blank
     // line; trim it, or every generated compose carries trailing whitespace.
     expect(content).not.toMatch(/^[ \t]+$/m);
@@ -255,7 +272,10 @@ describe("generateFeatureEnv", () => {
 
   it("preserves workspace metadata across regeneration", () => {
     fs.writeFileSync(path.join(tmp, ".env"), "FEATURE=x\n");
-    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["frontend"], null, tmp), "utf8");
+    const content = fs.readFileSync(
+      generateFeatureEnv("myfeat", 1, ["frontend"], null, tmp),
+      "utf8",
+    );
     expect(content).toContain("Workspace metadata (preserved across regeneration)");
     expect(content).toContain("FEATURE=x");
   });
@@ -268,7 +288,10 @@ describe("generateFeatureEnv", () => {
     const envPath = path.join(tmp, ".env");
     fs.writeFileSync(envPath, "DATABASE_URL=postgres://local/app\n");
     seedWorkspaceMetadataEnv(envPath, { FEATURE: "myfeat", SERVICES: "backend" });
-    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    const content = fs.readFileSync(
+      generateFeatureEnv("myfeat", 1, ["backend"], null, tmp),
+      "utf8",
+    );
     expect(content).toContain("DATABASE_URL=postgres://local/app");
     expect(content).toContain("FEATURE=myfeat");
     // One preserved block, one copy of each key — the seed's own header must
@@ -300,15 +323,24 @@ describe("generateFeatureEnv", () => {
   // and never rendered. So the template's per-workspace section was structurally
   // always empty and there was no config surface for workspace env vars at all.
   it("renders env_vars from workspace.yml", () => {
-    writeWorkspaceYml(tmp, "env_vars:\n  DATABASE_URL: postgres://k8s-postgres:9051/app\n  RETRIES: 3\n");
-    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    writeWorkspaceYml(
+      tmp,
+      "env_vars:\n  DATABASE_URL: postgres://k8s-postgres:9051/app\n  RETRIES: 3\n",
+    );
+    const content = fs.readFileSync(
+      generateFeatureEnv("myfeat", 1, ["backend"], null, tmp),
+      "utf8",
+    );
     expect(content).toContain("DATABASE_URL=postgres://k8s-postgres:9051/app");
     expect(content).toContain("RETRIES=3");
   });
 
   it("env_vars is rendered after service URLs so it wins on a collision", () => {
     writeWorkspaceYml(tmp, "env_vars:\n  BACKEND_URL: http://pinned:9999\n");
-    const content = fs.readFileSync(generateFeatureEnv("myfeat", 1, ["backend"], null, tmp), "utf8");
+    const content = fs.readFileSync(
+      generateFeatureEnv("myfeat", 1, ["backend"], null, tmp),
+      "utf8",
+    );
     expect(content.lastIndexOf("BACKEND_URL=http://pinned:9999")).toBeGreaterThan(
       content.indexOf("BACKEND_URL=http://backend:3000"),
     );
@@ -362,7 +394,9 @@ describe("generateFeatureEnv", () => {
     fs.writeFileSync(path.join(tmp, ".gitignore"), "/sandbox/\n/.env");
     generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
     generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
-    expect(fs.readFileSync(path.join(tmp, ".gitignore"), "utf8")).toBe("/sandbox/\n/.env\n/.env.*\n");
+    expect(fs.readFileSync(path.join(tmp, ".gitignore"), "utf8")).toBe(
+      "/sandbox/\n/.env\n/.env.*\n",
+    );
   });
 
   it("a bare env_vars key does not override a secret with the string 'null'", () => {
@@ -511,7 +545,9 @@ describe("generateCaddyfile", () => {
       );
     }
 
-    const hostnames = Object.values(routers).map((rc) => rc.hostname).filter(Boolean);
+    const hostnames = Object.values(routers)
+      .map((rc) => rc.hostname)
+      .filter(Boolean);
     expect(new Set(hostnames).size).toBe(hostnames.length);
   });
 
@@ -530,7 +566,10 @@ describe("generateCaddyfile", () => {
     );
 
     // Both features get their own matcher + upstream, so neither shadows the other.
-    for (const [name, slot] of [["alpha", 1], ["beta", 2]] as [string, number][]) {
+    for (const [name, slot] of [
+      ["alpha", 1],
+      ["beta", 2],
+    ] as [string, number][]) {
       const port = getPortRange(slot)[0] + offset;
       expect(content).toContain(`X-Feature=${name}(?:\\s*;|\\s*$)`);
       expect(content).toContain(`reverse_proxy host.docker.internal:${port}`);
@@ -579,7 +618,10 @@ describe("compose staleness", () => {
 
   it("is stale once the registry changes under it", () => {
     generateFeatureCompose("f", 1, ["backend"], null, tmp);
-    home.write("services.yaml", fixtureServicesYaml().replace("memory_limit: 256M", "memory_limit: 512M"));
+    home.write(
+      "services.yaml",
+      fixtureServicesYaml().replace("memory_limit: 256M", "memory_limit: 512M"),
+    );
     expect(isFeatureComposeStale("f", 1, ["backend"], null, tmp)).toBe(true);
   });
 

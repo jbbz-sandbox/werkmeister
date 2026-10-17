@@ -35,7 +35,13 @@ const FRAGMENT_KEYS = ["services", "setup_services", "infrastructure"] as const;
 
 /** Top-level order of the generated document; local-only keys follow. */
 const OUTPUT_ORDER = [
-  "archetypes", "mcp_servers", "k8s_context", "services", "infrastructure", "setup_services", "repos",
+  "archetypes",
+  "mcp_servers",
+  "k8s_context",
+  "services",
+  "infrastructure",
+  "setup_services",
+  "repos",
 ];
 
 export class RegistryError extends Error {}
@@ -66,7 +72,8 @@ export function discoverFragments(reposRoot: string): Fragment[] {
     const file = path.join(reposRoot, repo, FRAGMENT_REL);
     if (!fs.existsSync(file)) continue;
     // A linked worktree (`.git` is a file) repeats its main checkout's fragment; every service would collide.
-    if (fs.statSync(path.join(reposRoot, repo, ".git"), { throwIfNoEntry: false })?.isFile()) continue;
+    if (fs.statSync(path.join(reposRoot, repo, ".git"), { throwIfNoEntry: false })?.isFile())
+      continue;
     let doc: unknown;
     try {
       doc = parseYaml(fs.readFileSync(file, "utf8"));
@@ -138,7 +145,12 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record
   for (const fragment of fragments) {
     const doc = expandPlaceholders(fragment.doc, opts.paths);
     for (const key of Object.keys(doc)) {
-      if (key.startsWith("x-") || key === "repo" || (FRAGMENT_KEYS as readonly string[]).includes(key)) continue;
+      if (
+        key.startsWith("x-") ||
+        key === "repo" ||
+        (FRAGMENT_KEYS as readonly string[]).includes(key)
+      )
+        continue;
       throw new RegistryError(
         `${fragment.path}: unexpected top-level key \`${key}\` — a fragment may only ` +
           `contain ${FRAGMENT_KEYS.join(", ")}, repo (and x-* anchor blocks)`,
@@ -147,8 +159,12 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record
     // `repo:` is settings for the fragment's repo as a whole (ship detection,
     // docs/workspace-lifecycle.md), not a map of named entries like the sections below.
     if (doc["repo"] !== undefined) {
-      if (!isDict(doc["repo"])) throw new RegistryError(`${fragment.path}: \`repo:\` must be a map`);
-      Object.assign((merged["repos"][fragment.repo] ??= { services: [], path_mappings: {} }), doc["repo"]);
+      if (!isDict(doc["repo"]))
+        throw new RegistryError(`${fragment.path}: \`repo:\` must be a map`);
+      Object.assign(
+        (merged["repos"][fragment.repo] ??= { services: [], path_mappings: {} }),
+        doc["repo"],
+      );
     }
     for (const section of FRAGMENT_KEYS) {
       const entries = doc[section] ?? {};
@@ -171,17 +187,31 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record
         }
         if (section === "services") {
           if (entry["port_offset"] !== undefined) {
-            claim(owners, `port_offset/${entry["port_offset"]}`, `${fragment.repo}:${name}`,
-              `port_offset ${entry["port_offset"]}`);
+            claim(
+              owners,
+              `port_offset/${entry["port_offset"]}`,
+              `${fragment.repo}:${name}`,
+              `port_offset ${entry["port_offset"]}`,
+            );
           }
-          const repoEntry = (merged["repos"][fragment.repo] ??= { services: [], path_mappings: {} });
+          const repoEntry = (merged["repos"][fragment.repo] ??= {
+            services: [],
+            path_mappings: {},
+          });
           repoEntry.services.push(name);
           const svcPath = String(entry["path"] ?? ".").replace(/^\/+|\/+$/g, "");
           if (svcPath !== "" && svcPath !== ".") repoEntry.path_mappings[svcPath] = name;
         }
-        if ((section === "services" || section === "infrastructure") && entry["k8s_forward_port"] !== undefined) {
-          claim(owners, `k8s_forward_port/${entry["k8s_forward_port"]}`, `${fragment.repo}:${name}`,
-            `k8s_forward_port ${entry["k8s_forward_port"]}`);
+        if (
+          (section === "services" || section === "infrastructure") &&
+          entry["k8s_forward_port"] !== undefined
+        ) {
+          claim(
+            owners,
+            `k8s_forward_port/${entry["k8s_forward_port"]}`,
+            `${fragment.repo}:${name}`,
+            `k8s_forward_port ${entry["k8s_forward_port"]}`,
+          );
         }
         merged[section][name] = entry;
       }
@@ -192,7 +222,11 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record
 }
 
 /** The generated file: marker header, then the document in OUTPUT_ORDER. */
-export function renderRegistry(merged: Record<string, any>, sources: string[], localPath: string): string {
+export function renderRegistry(
+  merged: Record<string, any>,
+  sources: string[],
+  localPath: string,
+): string {
   const ordered: Record<string, any> = {};
   for (const key of OUTPUT_ORDER) if (key in merged) ordered[key] = merged[key];
   for (const key of Object.keys(merged)) if (!(key in ordered)) ordered[key] = merged[key];
@@ -302,20 +336,26 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
     }
     fragments = discoverFragments(reposRoot);
     if (fragments.length === 0) {
-      return [{
-        label,
-        ok: false,
-        detail:
-          `no ${FRAGMENT_REL} found under ${reposRoot} — clone your team's repos there and ` +
-          "re-run `sandbox setup` (or answer yes to the demo apps)",
-      }];
+      return [
+        {
+          label,
+          ok: false,
+          detail:
+            `no ${FRAGMENT_REL} found under ${reposRoot} — clone your team's repos there and ` +
+            "re-run `sandbox setup` (or answer yes to the demo apps)",
+        },
+      ];
     }
     merged = mergeRegistry(fragments, {
       defaults: REGISTRY_DEFAULTS,
       local: readLocalOverlay(localPath),
       paths: placeholderPaths(),
     });
-    text = renderRegistry(merged, fragments.map((f) => f.path), localPath);
+    text = renderRegistry(
+      merged,
+      fragments.map((f) => f.path),
+      localPath,
+    );
   } catch (e) {
     return [{ label, ok: false, detail: e instanceof Error ? e.message : String(e) }];
   }
@@ -326,13 +366,16 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
     return [{ label, ok: true, detail: `up to date (${sources}) at ${target}${seededLocal}` }];
   }
   if (opts.checkOnly) {
-    return [{
-      label,
-      ok: false,
-      detail: existing === null
-        ? `missing — would generate ${target} from ${sources}`
-        : `drift — would regenerate ${target} from ${sources}`,
-    }];
+    return [
+      {
+        label,
+        ok: false,
+        detail:
+          existing === null
+            ? `missing — would generate ${target} from ${sources}`
+            : `drift — would regenerate ${target} from ${sources}`,
+      },
+    ];
   }
 
   let note = "";

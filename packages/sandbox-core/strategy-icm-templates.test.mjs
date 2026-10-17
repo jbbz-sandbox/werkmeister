@@ -1,16 +1,16 @@
 // Every work type the wizard offers (WORK_TYPE_PHASES) has an icm template,
 // and each renders without holes.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-import { withSandboxHome } from "./fixtures.mjs";
+import { test } from "node:test";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { strategyById } from "./dist/strategies/index.js";
 import { ICM_TEMPLATES, templateFor } from "./dist/strategies/icm_templates.js";
+import { strategyById } from "./dist/strategies/index.js";
 import { WORK_TYPE_PHASES } from "./dist/workspace_prompts.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
 const EXPECTED = {
   feature: ["research", "spec", "implement", "propose"],
@@ -23,7 +23,11 @@ const EXPECTED = {
 test("every wizard work type has its template", () => {
   for (const wt of Object.keys(WORK_TYPE_PHASES)) {
     assert.ok(Object.hasOwn(ICM_TEMPLATES, wt), `no icm template for ${wt}`);
-    assert.deepEqual(templateFor(wt).map((s) => s.name), EXPECTED[wt], wt);
+    assert.deepEqual(
+      templateFor(wt).map((s) => s.name),
+      EXPECTED[wt],
+      wt,
+    );
   }
 });
 
@@ -31,7 +35,10 @@ test("every wizard work type has its template", () => {
 // was the only template. Now that `bugfix` exists too, this fails if the
 // normalisation is ever dropped.
 test("templateFor normalises free-text casing and whitespace", () => {
-  assert.deepEqual(templateFor(" Bugfix ").map((s) => s.name), EXPECTED["bugfix"]);
+  assert.deepEqual(
+    templateFor(" Bugfix ").map((s) => s.name),
+    EXPECTED["bugfix"],
+  );
 });
 
 test("each template renders with no undefined and a route per stage", async () => {
@@ -59,7 +66,11 @@ test("each template renders with no undefined and a route per stage", async () =
         { config: `overrides:\n  standards_dir: ${standardsDir}\n` },
       );
       const dirs = fs.readdirSync(path.join(root, "stages")).sort();
-      assert.deepEqual(dirs, EXPECTED[wt].map((n, i) => `0${i + 1}_${n}`), wt);
+      assert.deepEqual(
+        dirs,
+        EXPECTED[wt].map((n, i) => `0${i + 1}_${n}`),
+        wt,
+      );
       const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
       assert.ok(claude.split("\n").length <= 60, `${wt}: CLAUDE.md over 60 lines`);
       for (const d of dirs) {
@@ -111,7 +122,10 @@ test("autonomous renders self-checks and stop points, and turning it off restore
       assert.match(c, /^## Self-check$/m);
       assert.doesNotMatch(c, /## Human check/);
     }
-    assert.match(on.contracts.at(-1), /set `status: approved` yourself and run `sandbox pr open`\. Stop at the PR URL\./);
+    assert.match(
+      on.contracts.at(-1),
+      /set `status: approved` yourself and run `sandbox pr open`\. Stop at the PR URL\./,
+    );
     assert.match(on.contracts[0], /## Recommendations for reviewer/);
     assert.match(on.claude, /## Stop points/);
     assert.doesNotMatch(on.claude, /The one rule|a person has read/);

@@ -1,11 +1,12 @@
 // The feature has to travel per workspace, and the definition registry is one
 // shared free-form blob -- so substitution happens on the way out, over the
 // definition body, rather than as a field the registry schema knows about.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { test } from "node:test";
 
 import { writeWorkspaceMcp } from "./dist/mcp_gen.js";
 

@@ -10,15 +10,14 @@
  */
 
 import * as path from "node:path";
-
-import { Colors, error, info, warn } from "../lib/config.js";
 import { GraduationError } from "sandbox-core/graduate";
-import { down as downFeature, reloadProxy, teardownNotes } from "sandbox-core/lifecycle";
 import type { DownResult } from "sandbox-core/lifecycle";
+import { down as downFeature, reloadProxy, teardownNotes } from "sandbox-core/lifecycle";
 import { type Note } from "sandbox-core/notes";
+import { getAllSlots } from "sandbox-core/slots";
+import { Colors, error, info, warn } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
-import { getAllSlots } from "sandbox-core/slots";
 import { graduateOne, input } from "./notes.js";
 
 function printNote(note: Note, workspace: string): void {
@@ -47,7 +46,9 @@ async function printNotes(feature: string): Promise<void> {
       return;
     }
     for (const done of graduated) {
-      info(`Graduated ${path.basename(done.path)} — ${done.frontmatter["graduated_to"]} is committed.`);
+      info(
+        `Graduated ${path.basename(done.path)} — ${done.frontmatter["graduated_to"]} is committed.`,
+      );
     }
 
     if (handoff !== null) {
@@ -159,7 +160,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const { slot } = await teardown(feature, removeVolumes);
   await reloadProxy();
 
-  console.log(`\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' stopped ===${Colors.RESET}\n`);
+  console.log(
+    `\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' stopped ===${Colors.RESET}\n`,
+  );
   if (slot) {
     console.log(`  ${Colors.DIM}Slot ${slot} released${Colors.RESET}`);
   }

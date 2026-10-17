@@ -11,15 +11,15 @@
  * src/artifact-meta.json — change "serverName" there and rebuild if your MCP
  * server is registered under a different name.
  */
-import { initWorkspaceUI, type HostBridge } from "./workspace-ui.js";
+import { type HostBridge, initWorkspaceUI } from "./workspace-ui.js";
 
 // The meta block is what grants this artifact MCP tool access, so whatever
 // prefix it declares is by definition the one the bridge accepts.
 function serverPrefix(): string {
   try {
-    const meta = JSON.parse(
-      document.getElementById("cowork-artifact-meta")?.textContent ?? "",
-    ) as { mcpTools?: string[] };
+    const meta = JSON.parse(document.getElementById("cowork-artifact-meta")?.textContent ?? "") as {
+      mcpTools?: string[];
+    };
     const tool = meta.mcpTools?.[0] ?? "";
     const end = tool.lastIndexOf("__");
     if (tool.startsWith("mcp__") && end > 3) return tool.slice(0, end + 2);
@@ -34,7 +34,10 @@ const SERVER_PREFIX = serverPrefix();
 declare global {
   interface Window {
     cowork?: {
-      callMcpTool(name: string, args: Record<string, unknown>): Promise<{
+      callMcpTool(
+        name: string,
+        args: Record<string, unknown>,
+      ): Promise<{
         isError?: boolean;
         structuredContent?: unknown;
         content?: Array<{ type: string; text?: string }>;

@@ -1,8 +1,9 @@
 // sandbox-context.md is loaded on demand, but when it loads it should describe
 // this workspace — not every host on the machine and a hardcoded infra table
 // whose ports had already drifted from the registry.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { buildSandboxContextMd } from "./dist/claude_md.js";
 import { loadServices } from "./dist/config.js";
@@ -39,13 +40,23 @@ test("health checks and the feature URL are scoped to the local services", async
       assert.equal(curls.length, 1, curls.join("\n"));
       assert.match(curls[0], /frontend\.local\.sandbox\.com/);
       assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.sandbox\.com\//);
-      assert.match(out, /document\.cookie = "X-Feature=test; domain=\.local\.sandbox\.com; path=\/; SameSite=Lax"/);
+      assert.match(
+        out,
+        /document\.cookie = "X-Feature=test; domain=\.local\.sandbox\.com; path=\/; SameSite=Lax"/,
+      );
       assert.match(out, /frontend\.local\.sandbox\.com\/__sandbox/);
-      assert.match(out, /\| `frontend` \| local \| `apps\/frontend` \| `test-frontend` \| 11101 \|/);
+      assert.match(
+        out,
+        /\| `frontend` \| local \| `apps\/frontend` \| `test-frontend` \| 11101 \|/,
+      );
       assert.match(out, /\| `backend` \| k8s \| `apps\/backend` \| — \| — \|/);
       assert.match(out, /\| `dashboard` \| k8s \| `\.` \|/, "a service without path: renders '.'");
       assert.doesNotMatch(out, /## Infrastructure/);
-      assert.match(out, /- `https:\/\/dashboard\.local\.sandbox\.com`/, "the routed-host list stays machine-wide");
+      assert.match(
+        out,
+        /- `https:\/\/dashboard\.local\.sandbox\.com`/,
+        "the routed-host list stays machine-wide",
+      );
     },
     { services: SERVICES },
   );
@@ -64,9 +75,24 @@ test("no test path means the feature URL is the host root", async () => {
 test("each local service's test command runs in its container; none says so", async () => {
   await withSandboxHome(
     async () => {
-      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend", "backend"], loadServices(), "", {});
-      assert.match(out, /^- `frontend`: `docker exec test-frontend sh -c 'npm test -w frontend'`$/m);
-      assert.match(out, /^- `backend`: no test command registered \(add `test:` to its registry entry\)$/m);
+      const out = buildSandboxContextMd(
+        "test",
+        1,
+        11100,
+        11119,
+        ["frontend", "backend"],
+        loadServices(),
+        "",
+        {},
+      );
+      assert.match(
+        out,
+        /^- `frontend`: `docker exec test-frontend sh -c 'npm test -w frontend'`$/m,
+      );
+      assert.match(
+        out,
+        /^- `backend`: no test command registered \(add `test:` to its registry entry\)$/m,
+      );
     },
     { services: SERVICES },
   );

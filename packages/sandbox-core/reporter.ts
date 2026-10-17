@@ -126,7 +126,9 @@ export const ttyReporter: Reporter = {
  * live half of the same transcript, for a caller streaming progress somewhere
  * (`createWorkspace`'s `onData`) while still wanting the whole text at the end.
  */
-export function collectingReporter(onChunk?: (chunk: string) => void): Reporter & { text(): string } {
+export function collectingReporter(
+  onChunk?: (chunk: string) => void,
+): Reporter & { text(): string } {
   const chunks: string[] = [];
   return {
     passthrough: false,

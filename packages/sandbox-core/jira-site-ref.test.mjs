@@ -1,10 +1,11 @@
 // How Claude prompts address the Jira site for the Atlassian MCP tools:
 // jira.cloud_id, else the jira.base_url hostname, else an instruction to look it up.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 
 const cfg = path.join(mkdtempSync(path.join(tmpdir(), "jira-site-")), "config.yaml");
 process.env.SANDBOX_CONFIG_FILE = cfg;

@@ -1,8 +1,9 @@
 // The follow/tail pair is the whole behavioural difference between the CLI's
 // unbounded tail and the MCP surface's bounded read, and it is unobservable
 // through composeLogs itself without a live docker daemon -- hence the seam.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 import { composeLogsArgs } from "./dist/compose.js";
 

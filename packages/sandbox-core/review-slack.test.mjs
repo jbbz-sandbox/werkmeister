@@ -1,6 +1,7 @@
 // "Request review" posts to Slack only when both the token and the channel are set.
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
+import { test } from "node:test";
 
 process.env.SANDBOX_REVIEW_SLACK_TOKEN = "xoxb-test";
 delete process.env.SANDBOX_REVIEW_SLACK_CHANNEL;

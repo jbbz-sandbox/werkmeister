@@ -1,6 +1,6 @@
 // Shared fixtures for the fragment-detect tests. Not a test file: the
 // `*.test.mjs` glob skips it.
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 

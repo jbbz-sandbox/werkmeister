@@ -9,12 +9,7 @@
   },
   "homepage": "https://github.com/jbbz-sandbox/sandbox",
   "repository": "https://github.com/jbbz-sandbox/sandbox",
-  "keywords": [
-    "sandbox",
-    "caddy",
-    "diagnostics",
-    "routing"
-  ],
+  "keywords": ["sandbox", "caddy", "diagnostics", "routing"],
   "mcpServers": "./.mcp.json",
   "types": "./types/index.d.ts"
 }

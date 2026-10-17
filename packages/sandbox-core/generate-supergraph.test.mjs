@@ -1,11 +1,12 @@
 // generateSupergraphConfig is opt-in: with no graphql-type service in the
 // registry it returns null and must leave the workspace untouched (#119).
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { test } from "node:test";
 
 import { generateSupergraphConfig } from "./dist/generate.js";
 

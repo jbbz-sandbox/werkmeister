@@ -44,14 +44,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
-import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
-import { installDefaultInterrupt } from "./lib/interrupt.js";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
 // pulls in the registry (fs/proc/reporter/jit/icm) — accepted here since
 // sandbox-core is already this CLI's core dependency and every command
 // module loads far more of it on demand.
 import { STRATEGY_IDS } from "sandbox-core/strategies";
+import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
+import { installDefaultInterrupt } from "./lib/interrupt.js";
 
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
 // config loaders.
@@ -119,9 +119,15 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description("Stop containers, release slot, update proxy (use 'infra' for shared infra)")
-        .argument("[feature]", "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.")
+        .argument(
+          "[feature]",
+          "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.",
+        )
         .option("-v, --volumes", "Also remove Docker volumes (node_modules, caches)")
-        .option("--all-features", "Stop and clean up all active features (ignores <feature> argument)");
+        .option(
+          "--all-features",
+          "Stop and clean up all active features (ignores <feature> argument)",
+        );
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
@@ -140,7 +146,10 @@ const SPECS: CommandSpec[] = [
           "-s, --service <name>",
           "Local service to intercept (must be in the workspace's SERVICES and running via `sandbox up`).",
         )
-        .option("--leave", "End the intercept for -s (or all of this feature's intercepts without -s).")
+        .option(
+          "--leave",
+          "End the intercept for -s (or all of this feature's intercepts without -s).",
+        )
         .option("--status", "Show telepresence connection and intercept status.")
         .option(
           "--docker-daemon",
@@ -149,7 +158,10 @@ const SPECS: CommandSpec[] = [
             "In exchange the host loses cluster DNS: nothing on your laptop resolves " +
             "<svc>.<ns> while connected this way.",
         )
-        .option("--workspace <path>", "Explicit workspace path (default: resolve from the feature name).");
+        .option(
+          "--workspace <path>",
+          "Explicit workspace path (default: resolve from the feature name).",
+        );
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
@@ -166,7 +178,10 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description("Restart containers (use 'infra' for shared infra)")
-        .argument("[feature]", "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.");
+        .argument(
+          "[feature]",
+          "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.",
+        );
     },
     namespace: ([feature]) => ({ feature: feature ?? null }),
   },
@@ -178,7 +193,10 @@ const SPECS: CommandSpec[] = [
         .description(
           "Stop containers without removing them or releasing the slot (use 'infra' for shared infra)",
         )
-        .argument("[feature]", "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.");
+        .argument(
+          "[feature]",
+          "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.",
+        );
     },
     namespace: ([feature]) => ({ feature: feature ?? null }),
   },
@@ -189,7 +207,10 @@ const SPECS: CommandSpec[] = [
       cmd
         .description("Show all features, services, resource usage")
         .option("-v, --verbose", "Show individual container details")
-        .option("--k8s", "Show k8s port-forward health only (replaces standalone k8s-status command)")
+        .option(
+          "--k8s",
+          "Show k8s port-forward health only (replaces standalone k8s-status command)",
+        )
         .option(
           "--intercepts",
           "Show Telepresence intercept state only (per feature service; cheap — skips docker and k8s probes).",
@@ -212,13 +233,21 @@ const SPECS: CommandSpec[] = [
           "Generate <repo>/.sandbox/services.yaml from the repo's package manifests, " +
             "Dockerfiles, compose, Helm and k8s files (re-runs only add what is missing)",
         )
-        .argument("[repo]", "Repo directory (default: the git repo containing the current directory)")
+        .argument(
+          "[repo]",
+          "Repo directory (default: the git repo containing the current directory)",
+        )
         .option("--dry-run", "Show the report and the proposed YAML; write nothing")
         .option("-y, --yes", "Write without asking")
         .option("--assist", "Ask Claude to resolve the fields the scan had to guess")
         .option("--no-assist", "Never ask Claude");
     },
-    namespace: ([repo], o) => ({ repo: repo ?? null, dryRun: Boolean(o.dryRun), yes: Boolean(o.yes), assist: o.assist }),
+    namespace: ([repo], o) => ({
+      repo: repo ?? null,
+      dryRun: Boolean(o.dryRun),
+      yes: Boolean(o.yes),
+      assist: o.assist,
+    }),
   },
   {
     name: "services",
@@ -275,7 +304,10 @@ const SPECS: CommandSpec[] = [
           "[feature]",
           "Feature name -> sets X-Feature=<feature>. If omitted, read from FEATURE in a .env file.",
         )
-        .option("--url <url>", "Full start URL (overrides --path). Default: the first routed host's homepage.")
+        .option(
+          "--url <url>",
+          "Full start URL (overrides --path). Default: the first routed host's homepage.",
+        )
         .option(
           "--path <path>",
           "Path appended to the first routed host " +
@@ -408,9 +440,7 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/hooks.js"),
     configure: (cmd) => {
       cmd
-        .description(
-          "PreToolUse hook entrypoints: the standards gate and the PR guard",
-        )
+        .description("PreToolUse hook entrypoints: the standards gate and the PR guard")
         .addArgument(
           new Argument(
             "<action>",
@@ -438,7 +468,10 @@ const SPECS: CommandSpec[] = [
           ).choices(["context", "graduate"]),
         )
         .argument("[note_num]", "graduate: note number to graduate (omit to pick interactively)")
-        .option("--domain <domain>", "graduate: target <domain> in the standards tree (omit to infer from refs, or prompt)")
+        .option(
+          "--domain <domain>",
+          "graduate: target <domain> in the standards tree (omit to infer from refs, or prompt)",
+        )
         .addOption(
           new Option(
             "--kind <kind>",
@@ -490,8 +523,14 @@ const SPECS: CommandSpec[] = [
           "--labels <list>",
           "Comma-separated free-form tags for filtering workspaces in the dashboard search; passed through to init-workspace.",
         )
-        .option("-t, --task <title>", "Task title for the workspace CLAUDE.md; passed through to init-workspace.")
-        .option("--test-path <path>", "URL path for feature testing; passed through to init-workspace.")
+        .option(
+          "-t, --task <title>",
+          "Task title for the workspace CLAUDE.md; passed through to init-workspace.",
+        )
+        .option(
+          "--test-path <path>",
+          "URL path for feature testing; passed through to init-workspace.",
+        )
         .option(
           "--description <text>",
           "Free-form description for the CLAUDE.md header; passed through to init-workspace.",
@@ -524,8 +563,14 @@ const SPECS: CommandSpec[] = [
             "form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a " +
             "localhost page in the default browser and blocks until submit/cancel.",
         )
-        .option("--no-distill", "Store the issue but don't have a model rewrite it into description/starting_prompt.")
-        .option("--open", "With --browser-form: launch VS Code on the new workspace after creating.")
+        .option(
+          "--no-distill",
+          "Store the issue but don't have a model rewrite it into description/starting_prompt.",
+        )
+        .option(
+          "--open",
+          "With --browser-form: launch VS Code on the new workspace after creating.",
+        )
         .option(
           "--force",
           "Delete a <user>/<workspace> branch an earlier workspace of the same name left on " +
@@ -565,14 +610,19 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/issue.js"),
     configure: (cmd) => {
       cmd
-        .description("Read or update an issue in this machine's issue tracker (see `sandbox setup`)")
+        .description(
+          "Read or update an issue in this machine's issue tracker (see `sandbox setup`)",
+        )
         .addArgument(
           new Argument(
             "<action>",
             "view: print the issue; update: change its status and/or add a comment",
           ).choices(["view", "update"]),
         )
-        .argument("[ref]", "Issue ID; omit inside a workspace to use its .sandbox/workspace.yml issue")
+        .argument(
+          "[ref]",
+          "Issue ID; omit inside a workspace to use its .sandbox/workspace.yml issue",
+        )
         .option("--json", "view: print the issue as JSON")
         .option("--status <name>", "update: move the issue to this status")
         .option("--comment <text>", "update: add this comment");
@@ -590,10 +640,15 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/remove_workspace.js"),
     configure: (cmd) => {
       cmd
-        .description("Deprecated: use `sandbox close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace")
+        .description(
+          "Deprecated: use `sandbox close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace",
+        )
         .argument("<name>", "Workspace directory name, as `sandbox list-workspaces` reports it")
         .option("-y, --yes", "Skip the confirmation prompt")
-        .option("--abandon <reason>", "Remove despite unshipped work; records the reason in closeout.md and the PR files");
+        .option(
+          "--abandon <reason>",
+          "Remove despite unshipped work; records the reason in closeout.md and the PR files",
+        );
     },
     namespace: ([name], o) => ({ name, yes: Boolean(o.yes), abandon: o.abandon ?? null }),
   },
@@ -602,14 +657,19 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/pr.js"),
     configure: (cmd) => {
       cmd
-        .description("Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)")
+        .description(
+          "Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)",
+        )
         .addArgument(
           new Argument(
             "<action>",
             "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace",
           ).choices(["gate", "open", "status", "adopt"]),
         )
-        .argument("[args...]", "[repo] — only this code worktree's PR file; adopt: <pr-number|url> [repo]")
+        .argument(
+          "[args...]",
+          "[repo] — only this code worktree's PR file; adopt: <pr-number|url> [repo]",
+        )
         .option("--no-pr <reason>", "adopt: no PR — the fix is already on base")
         .option("--json", "Print the result as JSON");
     },
@@ -632,9 +692,16 @@ const SPECS: CommandSpec[] = [
         )
         .argument("[name]", "Workspace directory name; defaults to the workspace you are in")
         .option("-y, --yes", "Skip the confirmation prompt")
-        .option("--abandon <reason>", "Close out without shipping; the reason goes in closeout.md and the PR files");
+        .option(
+          "--abandon <reason>",
+          "Close out without shipping; the reason goes in closeout.md and the PR files",
+        );
     },
-    namespace: ([name], o) => ({ name: name ?? null, yes: Boolean(o.yes), abandon: o.abandon ?? null }),
+    namespace: ([name], o) => ({
+      name: name ?? null,
+      yes: Boolean(o.yes),
+      abandon: o.abandon ?? null,
+    }),
   },
   {
     name: "code",
@@ -660,7 +727,10 @@ const SPECS: CommandSpec[] = [
             "sandbox-workspace checkout, the TLS certificate and the optional " +
             "issue tracker, Telepresence and VS Code YAML-schema prerequisites",
         )
-        .option("--check", "Report prerequisite state without prompting or running any install/update commands")
+        .option(
+          "--check",
+          "Report prerequisite state without prompting or running any install/update commands",
+        )
         .option("--yes", "Non-interactive: accept every default and skip optional installs");
     },
     namespace: (_a, o) => ({ check: Boolean(o.check), yes: Boolean(o.yes) }),
@@ -719,10 +789,7 @@ const SPECS: CommandSpec[] = [
             "rerun. Inputs resolve as CLI flag > env (SANDBOX_*) > workspace.yml.",
         )
         .option("-t, --task <title>", "Task description / title (env: SANDBOX_TASK; config: task).")
-        .option(
-          "--feature <name>",
-          "Feature name for sandbox slot routing (config: feature).",
-        )
+        .option("--feature <name>", "Feature name for sandbox slot routing (config: feature).")
         .option(
           "--services <list>",
           "Comma-separated list of local services (env: SANDBOX_SERVICES; config: services). " +
@@ -794,7 +861,10 @@ const SPECS: CommandSpec[] = [
           "After a context_strategy change, delete the previous strategy's files that git " +
             "tracks unmodified (anything else is kept and reported).",
         )
-        .option("--refresh-issue", "Re-fetch the workspace's issue into .sandbox/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).");
+        .option(
+          "--refresh-issue",
+          "Re-fetch the workspace's issue into .sandbox/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).",
+        );
     },
     namespace: (_a, o) => ({
       task: o.task ?? null,
@@ -925,9 +995,7 @@ export async function main(): Promise<void> {
       const positionals = actionArgs.slice(0, -2);
       // One wrap per command: everything it and the library call print through
       // this reporter, and nothing outside a command has a sink at all.
-      await withReporter(ttyReporter, () =>
-        dispatch(spec, spec.namespace(positionals, opts)),
-      );
+      await withReporter(ttyReporter, () => dispatch(spec, spec.namespace(positionals, opts)));
     });
   }
 
@@ -938,8 +1006,14 @@ export async function main(): Promise<void> {
   // anyone running dist/main.js directly. Neither takes a transport flag: the
   // wrapper always launches stdio, and `sandbox connect` starts the HTTP modes.
   for (const [name, description] of [
-    ["dashboard", "Launch the workspace dashboard's MCP server over stdio (Claude Desktop, the sandbox-tools plugin)"],
-    ["mcp", "Launch the headless remote MCP surface over stdio (host-local clients; no token needed)"],
+    [
+      "dashboard",
+      "Launch the workspace dashboard's MCP server over stdio (Claude Desktop, the sandbox-tools plugin)",
+    ],
+    [
+      "mcp",
+      "Launch the headless remote MCP surface over stdio (host-local clients; no token needed)",
+    ],
   ] as const) {
     program
       .command(name)
