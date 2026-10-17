@@ -32,7 +32,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { containerTestCommand, serviceTestCommand } from "./archetypes.js";
-import { loadArchetypes, loadServices } from "./config.js";
+import {
+  type ArchetypeRegistry,
+  loadArchetypes,
+  loadServices,
+  type ServicesConfig,
+} from "./config.js";
 import { readAutonomous } from "./workspace_prompts.js";
 
 // Markers doubling as the payload: entries containing them are sandbox-managed.
@@ -280,8 +285,8 @@ const _PERMISSIONS_RECORD = path.join(".sandbox", "claude-permissions.json");
 export function buildAllowRules(
   feature: string,
   services: string[],
-  servicesConfig: Record<string, any>,
-  archetypes: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  archetypes: ArchetypeRegistry,
 ): string[] {
   const rules: string[] = [];
   for (const svc of services) {

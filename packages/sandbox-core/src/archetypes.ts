@@ -14,9 +14,16 @@
  * touches the raw fields.
  */
 
-import { loadArchetypes } from "./config.js";
+import {
+  type Archetype,
+  type ArchetypeRegistry,
+  loadArchetypes,
+  type ReposConfig,
+  type ServiceEntry,
+  type ServicesConfig,
+} from "./config.js";
 
-function isDict(value: unknown): value is Record<string, any> {
+function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -30,9 +37,9 @@ function isDict(value: unknown): value is Record<string, any> {
  * archetype": the service contributes only the universal base.
  */
 export function resolveServiceArchetype(
-  svcDef: any,
-  archetypes?: Record<string, any> | null,
-): Record<string, any> | null {
+  svcDef: ServiceEntry | null | undefined,
+  archetypes?: ArchetypeRegistry | null,
+): Archetype | null {
   if (!isDict(svcDef)) return null;
   const name = svcDef["archetype"];
   if (name !== undefined && name !== null) {
@@ -41,14 +48,17 @@ export function resolveServiceArchetype(
     return isDict(arch) ? arch : null;
   }
   const legacy = svcDef["standards"];
-  if (legacy && (legacy as any).length) {
+  if (legacy?.length) {
     return { standards: Array.from(legacy) };
   }
   return null;
 }
 
 /** The standards keys a service contributes, via its archetype. */
-export function serviceStandards(svcDef: any, archetypes?: Record<string, any> | null): string[] {
+export function serviceStandards(
+  svcDef: ServiceEntry | null | undefined,
+  archetypes?: ArchetypeRegistry | null,
+): string[] {
   const arch = resolveServiceArchetype(svcDef, archetypes);
   return Array.from(arch?.["standards"] ?? []);
 }
@@ -64,8 +74,8 @@ export function serviceStandards(svcDef: any, archetypes?: Record<string, any> |
  */
 export function serviceTestCommand(
   svcName: string,
-  svcDef: any,
-  archetypes?: Record<string, any> | null,
+  svcDef: ServiceEntry | null | undefined,
+  archetypes?: ArchetypeRegistry | null,
 ): string | null {
   if (!isDict(svcDef)) return null;
   const own = svcDef["test"];
@@ -93,8 +103,8 @@ export function containerTestCommand(feature: string, svc: string, cmd: string):
  * Free text, so no `{service}` expansion. `null` means nothing is registered.
  */
 export function serviceValidation(
-  svcDef: any,
-  archetypes?: Record<string, any> | null,
+  svcDef: ServiceEntry | null | undefined,
+  archetypes?: ArchetypeRegistry | null,
 ): string | null {
   if (!isDict(svcDef)) return null;
   const own = svcDef["validate"];
@@ -106,7 +116,7 @@ export function serviceValidation(
 /** Selected services if any, else the services of the workspace's repos. */
 export function candidateServiceNames(
   repoNames: string[],
-  reposConfig: Record<string, any>,
+  reposConfig: ReposConfig,
   localServices?: string[] | null,
 ): string[] {
   if (localServices?.length) return [...localServices];
@@ -129,8 +139,8 @@ export interface ValidationRow {
  */
 export function validationRows(
   candidates: string[],
-  servicesConfig: Record<string, any>,
-  archetypes?: Record<string, any> | null,
+  servicesConfig: ServicesConfig,
+  archetypes?: ArchetypeRegistry | null,
   routedServices: Set<string> = new Set(),
 ): ValidationRow[] {
   if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
@@ -167,10 +177,10 @@ export function validationRows(
  */
 export function resolvePresentArchetypes(
   repoNames: string[],
-  servicesConfig: Record<string, any>,
-  reposConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  reposConfig: ReposConfig,
   localServices?: string[] | null,
-  archetypes?: Record<string, any> | null,
+  archetypes?: ArchetypeRegistry | null,
 ): Record<string, string[]> {
   if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
 
@@ -205,9 +215,9 @@ export function resolvePresentArchetypes(
 export function presentArchetypes(
   repos: Array<[string, string]>,
   meta: Record<string, string>,
-  servicesConfig: Record<string, any>,
-  reposConfig: Record<string, any>,
-  archetypes: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  reposConfig: ReposConfig,
+  archetypes: ArchetypeRegistry,
 ): Record<string, string[]> {
   const localServices = (meta["SERVICES"] ?? "")
     .split(",")
@@ -230,8 +240,8 @@ export function presentArchetypes(
  * at workspace time rather than silently resolving.
  */
 export function validateServiceArchetypes(
-  servicesConfig: Record<string, any>,
-  archetypes: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  archetypes: ArchetypeRegistry,
 ): string[] {
   const errors: string[] = [];
   for (const [svc, svcDef] of Object.entries(servicesConfig)) {
@@ -244,7 +254,7 @@ export function validateServiceArchetypes(
           `'${name}' — no \`archetypes.${name}\` entry`,
       );
     }
-    if (svcDef["standards"] && (svcDef["standards"] as any).length) {
+    if (svcDef["standards"]?.length) {
       errors.push(
         `services.yaml: service '${svc}' declares both \`archetype:\` and ` +
           "legacy `standards:` — drop `standards:` (the archetype wins)",

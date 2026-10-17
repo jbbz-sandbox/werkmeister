@@ -25,6 +25,8 @@ import {
   loadServices,
   loadSetupServices,
   resolveWorkspace,
+  type ServiceEntry,
+  type ServicesConfig,
   sandboxRoot,
   stateInfraRoot,
 } from "./config.js";
@@ -32,21 +34,27 @@ import { loadFeatureRouters } from "./feature_routing.js";
 import { sandboxLock } from "./locks.js";
 import { info, success, warn } from "./reporter.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
-import { allocateSlot, getAllSlots, getPortRange, getServicePort } from "./slots.js";
+import {
+  allocateSlot,
+  getAllSlots,
+  getPortRange,
+  getServicePort,
+  type SlotEntry,
+} from "./slots.js";
 import { ensureSecretEnvsIgnored } from "./worktrees.js";
 
-function isDict(value: unknown): value is Record<string, any> {
+function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** jinja truthiness: empty dicts/lists are falsy (JS objects are always truthy). */
-function jinjaTruthy(value: unknown): boolean {
+function jinjaTruthy<T>(value: T): value is NonNullable<T> {
   if (Array.isArray(value)) return value.length > 0;
   if (value !== null && typeof value === "object") return Object.keys(value).length > 0;
   return Boolean(value);
 }
 
-function setdefault(obj: Record<string, any>, key: string, value: any): void {
+function setdefault(obj: Record<string, unknown>, key: string, value: unknown): void {
   if (!(key in obj)) {
     obj[key] = value;
   }
@@ -89,6 +97,13 @@ function resolveWorktreeGitdir(repoCheckoutPath: string): string | null {
   return null;
 }
 
+/** Registry sections a caller already loaded; an absent or empty one is read from disk. */
+export interface RegistryConfig {
+  services?: ServicesConfig;
+  ports?: Record<string, unknown>;
+  setup_services?: ServicesConfig;
+}
+
 /**
  * Return concrete `[servicesConfig, portsConfig]` dicts.
  *
@@ -98,8 +113,8 @@ function resolveWorktreeGitdir(repoCheckoutPath: string): string | null {
  * `loadPorts` themselves return concrete dicts (DEBT-01).
  */
 function resolveServicesAndPorts(
-  config: Record<string, any> | null | undefined,
-): [Record<string, any>, Record<string, any>] {
+  config: RegistryConfig | null | undefined,
+): [ServicesConfig, Record<string, unknown>] {
   const servicesFromConfig = config ? config["services"] : null;
   const portsFromConfig = config ? config["ports"] : null;
   const servicesConfig = jinjaTruthy(servicesFromConfig) ? servicesFromConfig : loadServices();
@@ -344,8 +359,8 @@ function preservedEnvMetadata(envPath: string, generatedKeys: Set<string>): stri
  */
 function k8sPortForService(
   serviceName: string,
-  servicesConfig: Record<string, any>,
-  _portsConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  _portsConfig: Record<string, unknown>,
 ): number | null {
   const svcDef = servicesConfig[serviceName] ?? {};
   if (
@@ -378,8 +393,8 @@ function quoted(value: string): string {
 function resolveServiceRefs(
   value: string,
   localServices: string[],
-  servicesConfig: Record<string, any>,
-  portsConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  portsConfig: Record<string, unknown>,
 ): string {
   return value.replace(/(?<!\$)\{([a-zA-Z0-9_-]+)\}/g, (_match, svcName: string) => {
     const svcDef = servicesConfig[svcName] ?? {};
@@ -477,7 +492,7 @@ function renderFeatureCompose(
   feature: string,
   slot: number,
   localServices: string[],
-  config: Record<string, any> | null,
+  config: RegistryConfig | null,
   workspaceOverride: string | null,
   source: string,
 ): [outPath: string, content: string, kind: string] {
@@ -492,13 +507,13 @@ function renderFeatureCompose(
   if (template) {
     const [portStart] = getPortRange(slot);
     // Build rich service objects for the template
-    const svcObjects: Record<string, any>[] = [];
+    const svcObjects: ServiceEntry[] = [];
     for (const svcName of [...localServices].sort()) {
       const svcDef = servicesConfig[svcName] ?? {};
       if (!isDict(svcDef)) {
         continue;
       }
-      const svcObj: Record<string, any> = { ...svcDef };
+      const svcObj: ServiceEntry = { ...svcDef };
       svcObj["name"] = svcName;
       setdefault(svcObj, "port_offset", 0);
       setdefault(svcObj, "internal_port", 3000);
@@ -525,7 +540,7 @@ function renderFeatureCompose(
       svcObjects.push(svcObj);
     }
     // Load setup service configs
-    let setupConfigs: Record<string, any> =
+    let setupConfigs: ServicesConfig =
       config && "setup_services" in config ? (config["setup_services"] ?? {}) : loadSetupServices();
     // Copy + annotate each setup config with its worktree gitdir (if the
     // repo checkout is a linked worktree) so the template can mount it.
@@ -544,10 +559,8 @@ function renderFeatureCompose(
           // One-shot: dependents wait on service_completed_successfully, never
           // on health, but the template emits the healthcheck unconditionally.
           healthcheck: "true",
-          ...(cfg as Record<string, any>),
-          worktree_gitdir: resolveWorktreeGitdir(
-            path.join(workspaceRoot, (cfg as Record<string, any>)["repo"] ?? ""),
-          ),
+          ...cfg,
+          worktree_gitdir: resolveWorktreeGitdir(path.join(workspaceRoot, cfg["repo"] ?? "")),
         },
       ]),
     );
@@ -595,7 +608,7 @@ function renderFeatureCompose(
   };
 
   // Collect named volumes that need per-feature isolation
-  const namedVolumes: Record<string, Record<string, any>> = {};
+  const namedVolumes: Record<string, { name: string }> = {};
 
   const sortedServices = [...localServices].sort();
   for (let idx = 0; idx < sortedServices.length; idx++) {
@@ -641,7 +654,7 @@ function renderFeatureCompose(
       }
     }
 
-    const serviceEntry: Record<string, any> = {
+    const serviceEntry: Record<string, unknown> = {
       build: {
         context: contextPath,
         dockerfile,
@@ -776,7 +789,7 @@ export function generateFeatureCompose(
   feature: string,
   slot: number,
   localServices: string[],
-  config: Record<string, any> | null = null,
+  config: RegistryConfig | null = null,
   workspaceOverride: string | null = null,
   source = "sandbox CLI",
 ): string {
@@ -808,7 +821,7 @@ export function isFeatureComposeStale(
   feature: string,
   slot: number,
   localServices: string[],
-  config: Record<string, any> | null,
+  config: RegistryConfig | null,
   workspaceOverride: string | null,
 ): boolean {
   const [outPath, content] = renderFeatureCompose(
@@ -857,7 +870,7 @@ const _BASE_SUFFIX_MAP: Record<string, string> = {
 function avoidComposeEnvShadowing(
   serviceUrls: Record<string, string>,
   localServices: string[],
-  servicesConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
 ): Record<string, string> {
   const overriddenKeys = new Set<string>();
   for (const svcName of localServices) {
@@ -904,7 +917,7 @@ export function generateFeatureEnv(
   feature: string,
   slot: number,
   localServices: string[],
-  config: Record<string, any> | null = null,
+  config: RegistryConfig | null = null,
   workspaceOverride: string | null = null,
 ): string {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
@@ -1022,7 +1035,7 @@ export function generateFeatureEnv(
 export function writeServiceSecretEnvs(
   workspaceRoot: string,
   localServices: string[],
-  servicesConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
 ): void {
   ensureSecretEnvsIgnored(workspaceRoot);
   const { byService } = resolveSecrets(
@@ -1095,7 +1108,7 @@ export function generateSupergraphConfig(
   feature: string,
   _slot: number,
   localServices: string[],
-  config: Record<string, any> | null = null,
+  config: RegistryConfig | null = null,
   workspaceOverride: string | null = null,
 ): string | null {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
@@ -1156,7 +1169,7 @@ export function generateSupergraphConfig(
   );
 
   // ---- Programmatic generation -----------------------------------------
-  const subgraphs: Record<string, any> = {};
+  const subgraphs: Record<string, unknown> = {};
 
   for (const [svcName, svcDef] of Object.entries(servicesConfig)) {
     if (!isDict(svcDef)) {
@@ -1234,8 +1247,8 @@ export function generateSupergraphConfig(
  * Returns the path to the generated Caddyfile.
  */
 export async function generateCaddyfile(
-  allFeatures: Record<string, any> | null = null,
-  config: Record<string, any> | null = null,
+  allFeatures: Record<string, SlotEntry> | null = null,
+  config: RegistryConfig | null = null,
 ): Promise<string> {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
   const proxyDir = path.join(stateInfraRoot(), "proxy");
@@ -1292,6 +1305,14 @@ function featureCookieRegexp(name: string): string {
   return `(?:^|;\\s*)X-Feature=${escaped}(?:\\s*;|\\s*$)`;
 }
 
+/** One Caddy site block; snake_case keys because the Caddyfile template reads them. */
+interface HostRouter {
+  hostname: string;
+  service: string;
+  upstream: string;
+  features?: { name: string; upstream: string; matcher: string; cookie_regexp: string }[];
+}
+
 /**
  * Build the Caddy host routers.
  *
@@ -1320,10 +1341,10 @@ function featureCookieRegexp(name: string): string {
  * feature declares the service so the template renders the static form.
  */
 function buildHostRouters(
-  allFeatures: Record<string, any>,
-  servicesConfig: Record<string, any>,
-): Record<string, any>[] {
-  const routers: Record<string, any>[] = [];
+  allFeatures: Record<string, SlotEntry>,
+  servicesConfig: ServicesConfig,
+): HostRouter[] {
+  const routers: HostRouter[] = [];
   for (const [svcName, rc] of Object.entries(loadFeatureRouters(servicesConfig))) {
     // Remote (K8s) face: static upstream, independent of running features.
     if (rc.remoteHostname && rc.remoteUpstream) {
@@ -1377,7 +1398,7 @@ function buildHostRouters(
 }
 
 /** Render host-router site blocks (built-in fallback path). */
-function hostRouterLines(routers: Record<string, any>[]): string[] {
+function hostRouterLines(routers: HostRouter[]): string[] {
   const lines: string[] = [];
   for (const r of routers) {
     lines.push(`# ${r["service"]} — Caddy terminates ${r["hostname"]} directly`);
@@ -1396,7 +1417,7 @@ function hostRouterLines(routers: Record<string, any>[]): string[] {
     lines.push("        file_server");
     lines.push("    }");
     lines.push("");
-    const features = (r["features"] ?? []) as Record<string, any>[];
+    const features = r["features"] ?? [];
     if (features.length) {
       // One handle per feature, chosen by cookie value -> concurrent workspaces.
       for (const f of features) {
@@ -1432,9 +1453,9 @@ function hostRouterLines(routers: Record<string, any>[]): string[] {
 
 /** Inner Caddyfile generator — called while holding the caddyfile lock. */
 function generateCaddyfileLocked(
-  allFeatures: Record<string, any>,
-  servicesConfig: Record<string, any>,
-  _portsConfig: Record<string, any>,
+  allFeatures: Record<string, SlotEntry>,
+  servicesConfig: ServicesConfig,
+  _portsConfig: Record<string, unknown>,
   _root: string,
   outPath: string,
 ): string {
