@@ -8,7 +8,9 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import {
+  AUTONOMOUS_DENY,
   AUTONOMOUS_RULES,
+  autonomousRules,
   buildAllowRules,
   READ_ONLY_GIT_RULES,
   removeWorkspacePermissions,
@@ -157,6 +159,61 @@ function setAutonomous(root, on) {
   );
 }
 
+test("deny rules: added, the person's kept, and dropped once unwanted", () => {
+  const root = workspace({ permissions: { deny: ["Bash(rm:*)"] } });
+  writeWorkspacePermissions(root, ["a"], ["x", "y"]);
+  assert.deepEqual(readSettings(root).permissions, {
+    deny: ["Bash(rm:*)", "x", "y"],
+    allow: ["a"],
+  });
+  assert.deepEqual(readRecord(root), { allow: ["a"], deny: ["x", "y"] });
+  writeWorkspacePermissions(root, ["a"], ["y"]);
+  assert.deepEqual(readSettings(root).permissions.deny, ["Bash(rm:*)", "y"]);
+  removeWorkspacePermissions(root);
+  assert.deepEqual(readSettings(root), { permissions: { deny: ["Bash(rm:*)"] } });
+  assert.ok(!fs.existsSync(recordPath(root)));
+});
+
+test("autonomousRules: the feature's own sandbox and docker targets, exact where extra args reach others", () => {
+  const rules = autonomousRules("feat", ["api"]);
+  for (const r of [
+    "Bash(sandbox up feat)",
+    "Bash(sandbox restart feat)",
+    "Bash(sandbox logs feat:*)",
+    "Bash(sandbox test feat:*)",
+    "Bash(docker exec feat-api:*)",
+    "Bash(docker restart feat-api)",
+  ])
+    assert.ok(rules.includes(r), r);
+  assert.deepEqual(autonomousRules("", ["api"]), AUTONOMOUS_RULES);
+});
+
+test("autonomous rules reach nothing shared: no blanket command or server, deny covers the shared acts", () => {
+  const blanket = /^Bash\((sandbox|docker|npm|gh|claude|claude plugin):\*\)$/;
+  assert.ok(!AUTONOMOUS_RULES.some((r) => blanket.test(r)), "no blanket rule");
+  assert.ok(
+    !AUTONOMOUS_RULES.includes("mcp__plugin_sandbox-tools_sandbox-workspace"),
+    "no whole server",
+  );
+  assert.ok(!AUTONOMOUS_RULES.some((r) => r.startsWith("Bash(npm install")), "no npm install");
+  for (const r of [
+    "Bash(sandbox proxy-reload:*)",
+    "Bash(sandbox down:*)",
+    "Bash(sandbox remove-workspace:*)",
+    "Bash(docker stop:*)",
+    "Bash(docker rm:*)",
+    "Bash(npm publish:*)",
+    "Bash(npm link:*)",
+    "Bash(npm install -g:*)",
+    "mcp__plugin_sandbox-tools_sandbox-workspace__remove-workspace",
+    "mcp__plugin_sandbox-tools_sandbox-workspace__kube-switch",
+    "mcp__plugin_sandbox-tools_sandbox-workspace__workspace-action",
+  ])
+    assert.ok(AUTONOMOUS_DENY.includes(r), r);
+  const allowed = new Set(autonomousRules("feat", ["api"]));
+  assert.ok(!AUTONOMOUS_DENY.some((r) => allowed.has(r)), "no rule both allowed and denied");
+});
+
 // #175: a headless claude-send run needs these with nobody to approve them.
 test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and turning it off removes them", async () => {
   const { strategyById } = await import("./dist/strategies/index.js");
@@ -165,12 +222,8 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   strategyById("icm").refresh(root);
   let settings = readSettings(root);
   for (const rule of AUTONOMOUS_RULES) assert.ok(settings.permissions.allow.includes(rule), rule);
-  assert.ok(settings.permissions.allow.includes("mcp__plugin_sandbox-tools_sandbox-workspace"));
+  assert.deepEqual(settings.permissions.deny, AUTONOMOUS_DENY);
   assert.ok(settings.permissions.allow.includes("Bash(claude plugin test:*)"));
-  assert.ok(
-    !settings.permissions.allow.some((r) => /^Bash\(claude( plugin)?:\*\)$/.test(r)),
-    "no blanket claude rule",
-  );
   assert.ok(
     !readRecord(root).allow.includes("Bash(git:*)"),
     "the person's own rule is not recorded",
@@ -185,6 +238,27 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   setAutonomous(root, false);
   strategyById("icm").refresh(root);
   settings = readSettings(root);
-  assert.deepEqual(settings.permissions.allow, ["Bash(git:*)", ...READ_ONLY_GIT_RULES]);
+  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...READ_ONLY_GIT_RULES] });
   assert.deepEqual(readRecord(root), { allow: READ_ONLY_GIT_RULES });
+});
+
+// The rules before narrowing, as a record from an earlier release holds them.
+test("a refresh replaces the old broad autonomous rules recorded earlier", async () => {
+  const { strategyById } = await import("./dist/strategies/index.js");
+  const old = [
+    "Bash(sandbox:*)",
+    "Bash(docker:*)",
+    "Bash(npm:*)",
+    "Bash(gh:*)",
+    "mcp__plugin_sandbox-tools_sandbox-workspace",
+  ];
+  const root = workspace({ permissions: { allow: ["mine", ...old] } });
+  fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
+  fs.writeFileSync(recordPath(root), JSON.stringify({ allow: old }));
+  setAutonomous(root, true);
+  strategyById("icm").refresh(root);
+  const { allow, deny } = readSettings(root).permissions;
+  for (const rule of old) assert.ok(!allow.includes(rule), rule);
+  assert.ok(allow.includes("mine"));
+  assert.deepEqual(deny, AUTONOMOUS_DENY);
 });
