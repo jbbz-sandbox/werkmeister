@@ -1,6 +1,7 @@
 # Naming Research — Renaming the sandbox Tool for Open Source
 
-> Exploration notes, not a decision. No name has been chosen.
+> **Decision (2026-10-17): Werkmeister, with `w9r` as the short command.** Reasons are in
+> section 7.8; the rename itself is tracked as an epic in the SW Jira project.
 > Research done 2026-10-12; section 7.8 added 2026-10-17. Registry and web results are
 > as of those dates; names get claimed, so re-check anything here before relying on it.
 
@@ -342,7 +343,30 @@ through `whois.nic.io`, because rdap.org has no data for `.io`.
 | **Leitstelle** | Dispatch or control centre | l8e | taken | free | taken | Nothing found; nearest is Leitstand, a telecom-operations project |
 | **Spielleiter** | Game master, director | s9r | taken | free | free | Nothing found; nearest is Spiel, a terminal-presentation framework |
 
-Trademarks are still not checked for any of the four.
+#### Trademark check (2026-10-17)
+
+Searched the USPTO register through its search API (`tmsearch.uspto.gov`) and TMview
+(`tmdn.org/tmview`), which covers the EU office (EUIPO), Germany (DPMA), the UK,
+Switzerland and most other national registers. Software is Nice class 9 (downloadable
+software) and class 42 (software services). This is a screening, not legal advice.
+
+| Name | USPTO (US) | TMview (EU, Germany, others) | Risk for a software tool |
+|---|---|---|---|
+| **Werkmeister** | No marks; none for the variants Workmeister and Werkmaster either | 27 marks. Live ones: a German hand-tools brand (DPMA, filed 2018; its class 9 covers measuring instruments, safety helmets and spirit levels, not software); building-material and bedding marks (EUIPO and WIPO, classes 17, 20, 24); "Werkmeister System" (medical, classes 10, 41, 44); "Netz-Werkmeister" (DPMA, a figurative mark for business consulting whose class 42 covers only IT consulting); "Webstark Werkmeister" (Paraguay, class 42) | **Low.** Many owners, none in software products. The word is a common German job title, so it is crowded but not owned in this field |
+| **Weichensteller** | No marks | 2 marks, both ended: a German one (2025, classes 35, 41, 45) and a Swiss slogan (2009) | **Very low.** Nothing live |
+| **Leitstelle** | No marks; the near name Leitstand is registered in class 9 by RtBrick (telecom software) | 18 marks containing the word. **"Leitstelle Deutschland" was filed at the DPMA in June 2026 for classes 9, 41 and 42** (pending). Also live: "Tino 24/7 Ihre digitale Leitstelle für Tiernotdienste" (classes 9, 42) and "EDV-Leitstellensystem Dalles" (classes 9, 42) | **Medium.** A pending filing in exactly the software classes, and the word is generic in German emergency-dispatch software |
+| **Spielleiter** | No marks | No marks | **Very low.** Nothing found |
+
+
+#### Decision
+
+**Werkmeister (`w9r`)** was chosen on 2026-10-17. It best matches the idea of one place
+running the building of each feature, passes the connotation rule, is easy enough for
+English speakers to say, has a short command that is free everywhere, and has no
+trademark in the software classes. Spielleiter is the fallback if Werkmeister hits a
+problem. The cost is that `github.com/werkmeister`, `werkmeister.com` and
+`werkmeister.dev` are taken, so the project uses `werkmeister.io` and a repository under
+an existing or new organisation.
 
 ## 8. Summary of every name
 
@@ -360,10 +384,10 @@ Trademarks are still not checked for any of the four.
 | Featurelane, Graftstack | — | Open, not pursued | Free on npm; weaker meaning |
 | Junction | j6n | Open, not searched | |
 | Nebengleis, Baustelle | n8s, b7e | **Ruled out** | Connotation: "sidelined" and "a mess" in everyday German |
-| Werkmeister | w9r | **Shortlist — owner's favourite** | Works foreman; free on every registry; GitHub account, .com and .dev taken; .io free |
-| Weichensteller | w12r | **Shortlist** | Switchman; best fit for per-request routing; long and hard to say; .dev and .io free |
-| Leitstelle | l8e | **Shortlist** | Dispatch centre; free on npm, PyPI, crates.io; .dev free |
-| Spielleiter | s9r | **Shortlist** | Game master; free on npm, PyPI, crates.io; .dev and .io free |
+| Werkmeister | w9r | **Chosen (2026-10-17)** | Works foreman; free on every registry; GitHub account, .com and .dev taken; .io free; trademark risk low (many marks, none for software) |
+| Weichensteller | w12r | **Shortlist** | Switchman; best fit for per-request routing; long and hard to say; .dev and .io free; no live trademarks |
+| Leitstelle | l8e | **Shortlist — weakened** | Dispatch centre; free on npm, PyPI, crates.io; .dev free; "Leitstelle Deutschland" filed in software classes in Germany, June 2026 |
+| Spielleiter | s9r | **Shortlist** | Game master; free on npm, PyPI, crates.io; .dev and .io free; no trademarks found |
 | Taktgeber, Schaltzentrale | t7r, s12e | Open, not searched in depth | Free on npm, PyPI, crates.io |
 | Drahtzieher, Strippenzieher, Fadenzieher, Puppenmeister, Puppenspieler | d9r, s12r, f9r, p11r | **Ruled out** | Connotation: German "puppet master" idioms suggest manipulation or crime |
 | Puppetmaster, Puppeteer, Marionette | — | **Ruled out** | Puppet's server name, Google's browser library, Firefox's automation protocol; "puppet master" also fails the connotation rule |
