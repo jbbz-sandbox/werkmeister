@@ -319,7 +319,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
 
   function renderMsgs(): void {
     msgs.innerHTML = "";
-    if (!st || !st.loaded) {
+    if (!st?.loaded) {
       msgs.appendChild(el("div", "msg-info", "Loading session…"));
       return;
     }
@@ -444,7 +444,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       scheduleRender();
       try {
         await call("claude-send", { name, message: text, sessionId: st.pinnedSessionId });
-      } catch (e) {
+      } catch (_e) {
         st.error =
           "Couldn’t start the turn — check that the session and `claude` CLI are reachable, then retry.";
         st.sending = false;
@@ -479,7 +479,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
 
   // ---- Polling fallback (Desktop-inline + Cowork artifact) ----
   async function loadTranscript(force: boolean): Promise<void> {
-    if (st && st.loaded && !force) {
+    if (st?.loaded && !force) {
       renderMsgs();
       return;
     }
@@ -496,7 +496,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
         loaded: true,
         pinnedSessionId: pinned,
       };
-    } catch (e) {
+    } catch (_e) {
       st = {
         messages: [],
         sessionId: null,
@@ -548,14 +548,14 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
             lastChange = Date.now();
             if (r.lastRole === "assistant") sawAssistant = true;
           }
-        } catch (e) {
+        } catch (_e) {
           /* transient */
         }
       }
       let status: any = null;
       try {
         status = await call("claude-turn-status", { name });
-      } catch (e) {
+      } catch (_e) {
         /* older server — heuristic below */
       }
       if (status && (status.state === "done" || status.state === "failed")) {
@@ -567,7 +567,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
         }
         try {
           await syncTranscript(state);
-        } catch (e) {
+        } catch (_e) {
           /* ignore */
         }
         return true;
@@ -595,7 +595,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       if (!settled)
         st.error =
           "Claude is still working after 30 min — hit Refresh later, or open it with Resume in Terminal.";
-    } catch (e) {
+    } catch (_e) {
       st.error =
         "Couldn’t start the turn — check that the session and `claude` CLI are reachable, then retry.";
     }
@@ -625,12 +625,12 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       visible = v;
     },
     onExpand: async () => {
-      if (!st || !st.loaded || st.sending) return;
+      if (!st?.loaded || st.sending) return;
       let running = false;
       try {
         const s = await call("claude-turn-status", { name });
         running = s.state === "running";
-      } catch (e) {
+      } catch (_e) {
         /* no status tool — plain sync */
       }
       if (running) {
@@ -643,7 +643,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       } else {
         try {
           await syncTranscript(st);
-        } catch (e) {
+        } catch (_e) {
           /* ignore */
         }
       }

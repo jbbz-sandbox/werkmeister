@@ -68,7 +68,7 @@ export interface WsNode {
  * workspace. If a hand-edited .env ever breaks the convention, read the yml.
  */
 export function featureOf(project: string | null): string | null {
-  if (!project || !project.startsWith("sandbox-")) return null;
+  if (!project?.startsWith("sandbox-")) return null;
   return project.slice("sandbox-".length) || null;
 }
 

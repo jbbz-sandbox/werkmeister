@@ -217,7 +217,7 @@ export interface GraduateNoteOptions {
  * function only validates and writes; it never prompts.
  */
 export function graduateNote(
-  workspaceRoot: string,
+  _workspaceRoot: string,
   note: Record<string, any>,
   { domain, kind, slug = null, standardsDir = null }: GraduateNoteOptions,
 ): Record<string, any> {

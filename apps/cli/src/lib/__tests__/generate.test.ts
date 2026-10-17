@@ -252,7 +252,7 @@ describe("setup services", () => {
       "utf8",
     );
     // Declared once — a duplicate top-level key makes compose reject the file.
-    expect(content.match(/^  f-node-modules:$/gm)).toHaveLength(1);
+    expect(content.match(/^ {2}f-node-modules:$/gm)).toHaveLength(1);
     // Mounted by the setup container and both apps.
     expect(content.match(/^ +- f-node-modules:\/app\/node_modules$/gm)).toHaveLength(3);
   });
