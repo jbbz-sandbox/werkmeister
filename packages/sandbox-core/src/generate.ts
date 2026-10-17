@@ -4,7 +4,7 @@
  * Uses nunjucks templates from the templates/ directory when available,
  * otherwise falls back to programmatic generation.
  *
- * As of Phase 3, the per-feature `docker-compose.yml` and `.env` are written
+ * As of Phase 3, the per-feature `compose.yml` and `.env` are written
  * directly to the workspace root, while `supergraph-config.yml` lives in
  * `<workspace>/.sandbox/`. The legacy `<sandbox-root>/generated/` output
  * directory is no longer produced.
@@ -18,6 +18,7 @@ import * as YAML from "yaml";
 
 import { candidateServiceNames } from "./archetypes.js";
 import { buildSandboxContextMd } from "./claude_md.js";
+import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
   infraRoot,
   loadPorts,
@@ -273,7 +274,7 @@ function resolveComposeOutPath(
 ): [string, string] {
   const workspaceRoot = resolveWorkspace(feature, workspaceOverride);
   fs.mkdirSync(workspaceRoot, { recursive: true });
-  return [workspaceRoot, path.join(workspaceRoot, "docker-compose.yml")];
+  return [workspaceRoot, path.join(workspaceRoot, COMPOSE_FILE)];
 }
 
 /**
@@ -768,9 +769,9 @@ function renderFeatureCompose(
 }
 
 /**
- * Generate `<workspace>/docker-compose.yml` for *feature*.
+ * Generate `<workspace>/compose.yml` for *feature*.
  *
- * Returns the path to the generated workspace docker-compose.yml.
+ * Returns the path to the generated workspace compose file.
  */
 export function generateFeatureCompose(
   feature: string,
@@ -794,7 +795,7 @@ export function generateFeatureCompose(
 }
 
 /**
- * Report whether `<workspace>/docker-compose.yml` still matches the registry.
+ * Report whether `<workspace>/compose.yml` still matches the registry.
  *
  * `sandbox up` only ever *reads* the compose file, so a registry edit made
  * after `init-workspace` ran is invisible until a container fails on config
@@ -833,7 +834,7 @@ export function isFeatureComposeStale(
 
 // Suffix mapping used by `avoidComposeEnvShadowing` to rename
 // auto-generated service URL keys that collide with per-service
-// `environment:` overrides in the generated docker-compose.yml.
+// `environment:` overrides in the generated compose.yml.
 const _BASE_SUFFIX_MAP: Record<string, string> = {
   _URL: "_BASE_URL",
   _HOST: "_BASE_HOST",
@@ -1473,7 +1474,7 @@ function generateCaddyfileLocked(
 // ---------------------------------------------------------------------------
 
 /**
- * Allocate a slot and write docker-compose.yml to the workspace root.
+ * Allocate a slot and write compose.yml to the workspace root.
  *
  * Returns the allocated slot number, or null if setup could not complete.
  *
@@ -1491,7 +1492,10 @@ export async function generateWorkspaceCompose(
   testPath = "",
   repoNames: string[] = [],
 ): Promise<number | null> {
-  info("Generating docker-compose.yml...");
+  // Renamed rather than left behind: a stale legacy file beside the new
+  // file makes a bare `docker compose` in the workspace warn about two configs.
+  migrateWorkspaceCompose(workspaceRoot);
+  info(`Generating ${COMPOSE_FILE}...`);
   const servicesConfig = loadServices();
   const portsConfig = loadPorts();
   const config = { services: servicesConfig, ports: portsConfig };

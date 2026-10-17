@@ -2,8 +2,8 @@
  * Docker Compose helpers for the developer sandbox.
  *
  * Wraps `docker compose` commands to manage per-feature container stacks.
- * As of Phase 3 each feature's compose file lives at
- * `<workspace>/docker-compose.yml` (the canonical location).
+ * Each feature's compose file lives at the workspace root under `COMPOSE_FILE`
+ * (see compose_file.ts for the legacy name still read as a fallback).
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { Colors } from "./colors.js";
+import { COMPOSE_FILE, findWorkspaceCompose } from "./compose_file.js";
 import { resolveWorkspace } from "./config.js";
 import { ProcError, RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
@@ -39,7 +40,7 @@ function labelValue(labels: unknown, key: string): string {
 }
 
 /**
- * Resolve the path to a feature's workspace docker-compose.yml.
+ * Resolve the path to a feature's workspace compose file.
  *
  * Looks up the workspace via the `com.docker.compose.project.working_dir`
  * label on any container belonging to *feature*; falls back to
@@ -52,13 +53,13 @@ function composeFile(feature: string): string | null {
   if (workspace === null) {
     return null;
   }
-  return path.join(workspace, "docker-compose.yml");
+  return findWorkspaceCompose(workspace);
 }
 
 /** Return the workspace path for *feature*, or `null` if unresolvable. */
 export function workspaceForFeature(feature: string): string | null {
   const labelWorkspace = workspaceFromContainerLabel(feature);
-  if (labelWorkspace !== null && isFile(path.join(labelWorkspace, "docker-compose.yml"))) {
+  if (labelWorkspace !== null && findWorkspaceCompose(labelWorkspace) !== null) {
     return labelWorkspace;
   }
   let fallback: string;
@@ -69,7 +70,7 @@ export function workspaceForFeature(feature: string): string | null {
   }
   // resolveWorkspace answers "the workspace cwd is in", not "this feature's" —
   // without the ownership check any feature resolves to the enclosing one (#101).
-  if (isFile(path.join(fallback, "docker-compose.yml")) && envNamesFeature(fallback, feature)) {
+  if (findWorkspaceCompose(fallback) !== null && envNamesFeature(fallback, feature)) {
     return fallback;
   }
   return labelWorkspace;
@@ -216,7 +217,7 @@ function composeCommand(
   composePath ??= composeFile(feature);
   if (composePath === null || !isFile(composePath)) {
     error(
-      `No docker-compose.yml found for feature '${feature}'.\n` +
+      `No ${COMPOSE_FILE} found for feature '${feature}'.\n` +
         `       Run 'sandbox init-workspace' (and 'sandbox up') from the ` +
         `feature's workspace first.`,
     );
@@ -287,7 +288,7 @@ function reportComposeFailure(err: unknown): null {
  * Start containers for *feature*.
  *
  * Equivalent to:
- *     docker compose -f <workspace>/docker-compose.yml up -d
+ *     docker compose -f <workspace>/compose.yml up -d
  *
  * Returns true on success.
  */
@@ -318,7 +319,7 @@ export function composeDown(
   // a missing docker binary and a timeout, which are failures, not "down".
   const composePath = composeFile(feature);
   if (composePath === null || !isFile(composePath)) {
-    info(`No docker-compose.yml for '${feature}' -- nothing to tear down`);
+    info(`No ${COMPOSE_FILE} for '${feature}' -- nothing to tear down`);
     return true;
   }
   const args = ["down", "--remove-orphans"];
@@ -359,7 +360,7 @@ export async function composeDownAsync(
   // a timeout and an abort, which are failures rather than "down".
   const composePath = composeFile(feature);
   if (composePath === null || !isFile(composePath)) {
-    info(`No docker-compose.yml for '${feature}' -- nothing to tear down`);
+    info(`No ${COMPOSE_FILE} for '${feature}' -- nothing to tear down`);
     return true;
   }
   const args = ["down", "--remove-orphans"];
@@ -450,7 +451,7 @@ export interface ComposeLogsOptions {
  *
  * The slot guard lives here rather than in the caller so every consumer gets
  * told *why* a tail produced nothing. Without it a feature that was never
- * brought up reports a bare "no docker-compose.yml", which is true but not the
+ * brought up reports a bare "no compose file", which is true but not the
  * useful half of the answer.
  */
 export async function composeLogs(

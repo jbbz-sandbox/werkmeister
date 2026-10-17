@@ -13,6 +13,7 @@
  */
 
 import { workspaceForFeature } from "sandbox-core/compose";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import { SandboxError } from "sandbox-core/errors";
 
 /** Lower-cased: Node lower-cases incoming header names. */
@@ -42,7 +43,7 @@ export function resolveWorkspaceDir(feature: string): string {
     throw new SandboxError(
       `Could not resolve a workspace for feature '${feature}' — no running ` +
         "containers carry its label and no workspace directory holds its " +
-        "docker-compose.yml.",
+        `${COMPOSE_FILE}.`,
       "WORKSPACE",
     );
   }

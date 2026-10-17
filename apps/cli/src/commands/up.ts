@@ -1,7 +1,7 @@
 /**
  * sandbox up <feature>
  *
- * Starts containers for a feature workspace. Expects a docker-compose.yml to
+ * Starts containers for a feature workspace. Expects a compose.yml to
  * have been generated in the workspace root by 'sandbox init-workspace'. If the
  * slot assigned at init time was released and is now taken by another feature,
  * the compose file is regenerated with a new slot before starting.

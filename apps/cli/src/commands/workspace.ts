@@ -18,7 +18,7 @@
  *      the resolved ``repos`` set); and
  *   4. runs ``sandbox init-workspace`` inside it, which creates the nested repo
  *      worktrees from that config and writes CLAUDE.md / .env /
- *      docker-compose.yml / .claude/ / .sandbox/*. The initial state is then
+ *      compose.yml / .claude/ / .sandbox/*. The initial state is then
  *      committed (not pushed).
  *
  * The workspace directory name is derived from the optional issue ID and
