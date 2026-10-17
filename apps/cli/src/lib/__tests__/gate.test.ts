@@ -12,8 +12,10 @@ vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
     ...actual,
-    readFileSync: (fd: any, ...rest: any[]) =>
-      fd === 0 && hh.stdin !== null ? hh.stdin : (actual.readFileSync as any)(fd, ...rest),
+    readFileSync: (fd: unknown, ...rest: unknown[]) =>
+      fd === 0 && hh.stdin !== null
+        ? hh.stdin
+        : (actual.readFileSync as (...args: unknown[]) => unknown)(fd, ...rest),
   };
 });
 
@@ -30,7 +32,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function writeManifest(workspace: string, domains?: Record<string, any> | null): void {
+function writeManifest(workspace: string, domains?: Record<string, unknown> | null): void {
   const manifest = {
     generated_by: "sandbox init-workspace",
     universal: ["comments", "engineering"],
@@ -49,7 +51,7 @@ function writeManifest(workspace: string, domains?: Record<string, any> | null):
   fs.writeFileSync(path.join(sandbox, "standards.json"), JSON.stringify(manifest));
 }
 
-function state(workspace: string, sessionId: string): Record<string, any> | null {
+function state(workspace: string, sessionId: string): Record<string, unknown> | null {
   const p = path.join(workspace, ".sandbox", ".gate", `${sessionId}.json`);
   try {
     if (!fs.statSync(p).isFile()) return null;
@@ -109,7 +111,7 @@ describe("decide — decision table", () => {
     expect(reason).not.toBeNull();
     expect(reason).toContain("sb-implement");
     expect(reason).toContain("sb-ui-standard");
-    expect((reason!.match(/Precedence:/g) || []).length).toBe(1);
+    expect((reason?.match(/Precedence:/g) || []).length).toBe(1);
     expect(state(tmp, "s1")).toEqual({ phase_entry_delivered: true, delivered: ["ui"] });
   });
 
@@ -196,7 +198,7 @@ describe("resetSessionState", () => {
 
 function runMain(stdinText: string): string {
   const logs: string[] = [];
-  vi.spyOn(console, "log").mockImplementation((...a: any[]) => {
+  vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
     logs.push(a.join(" "));
   });
   hh.stdin = stdinText;

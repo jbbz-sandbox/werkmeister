@@ -327,7 +327,9 @@ describe("syncIngressCerts", () => {
 });
 
 describe("syncOptionalPlugin", () => {
-  const SPEC = OPTIONAL_PLUGINS.find((p) => p.name === "superpowers")!;
+  const SPEC = OPTIONAL_PLUGINS.find(
+    (p) => p.name === "superpowers",
+  ) as (typeof OPTIONAL_PLUGINS)[number];
   const LABEL = "plugin superpowers (optional)";
 
   /** A plugins dir where *spec* is registered as installed at *version*. */
@@ -397,7 +399,7 @@ describe("syncOptionalPlugin", () => {
       "claude plugin install": [1, "network unreachable"],
     });
     const steps = syncOptionalPlugin(SPEC, pluginsDir(false), runner, false, true);
-    const failure = steps.find((s) => !s.ok)!;
+    const failure = steps.find((s) => !s.ok) as (typeof steps)[number];
     expect(failure.optional).toBe(true);
     expect(failure.detail).toContain("network unreachable");
   });
@@ -808,7 +810,7 @@ describe("workspace repo", () => {
       jira: null,
       pathDirs: {},
     });
-    const step = steps.find((s) => s.label === label)!;
+    const step = steps.find((s) => s.label === label) as (typeof steps)[number];
     expect([step.ok, step.optional]).toEqual([false, true]);
     expect(step.detail).toContain("overrides.workspace_repo");
   });
