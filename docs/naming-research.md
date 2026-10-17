@@ -1,8 +1,8 @@
 # Naming Research — Renaming the sandbox Tool for Open Source
 
 > Exploration notes, not a decision. No name has been chosen.
-> Research done 2026-10-12. Registry and web results are as of that date; names get
-> claimed, so re-check anything here before relying on it.
+> Research done 2026-10-12; section 7.8 added 2026-10-17. Registry and web results are
+> as of those dates; names get claimed, so re-check anything here before relying on it.
 
 ---
 
@@ -45,6 +45,9 @@ These came out of the discussion. They are preferences, not fixed rules.
 - **Searchable.** A search for the name should be able to find the project.
 - **Easy to say and spell** for English speakers.
 - **German is welcome.** The owner likes German words.
+- **No negative connotation** (added 2026-10-17). A name must not suggest manipulation,
+  crime, being sidelined or a mess, in English or in German. This one is a hard rule,
+  not a preference.
 - **A short numeronym as the command** (see section 6). A numeronym is a word shortened to
   its first letter, the number of letters in between, and its last letter:
   "Kubernetes" → k8s, "internationalization" → i18n, "accessibility" → a11y.
@@ -163,9 +166,9 @@ train onto a track.
 | **Weichenwerk** | VY-khen-vairk | "Switch works": Weiche (track switch) + Werk (works). A made-up compound | free | free | Also free on crates.io and Docker Hub. Not web-searched. Numeronym w9k free in all three registries |
 | **Spurwerk** | SHPOOR-vairk | "Track works": Spur (track, lane) + Werk. "Spur" is also English for a railway branch line | free | free | Also free on crates.io and Docker Hub. Numeronym s6k free |
 | **Abzweig** | AHP-tsvyke | Where a side line splits off the main line | free | free | Nothing found. Numeronym a5g free |
-| **Nebengleis** | NAY-ben-glice | A side track next to the main line | free | free | Nothing found. Numeronym n8s free, but looks like k8s |
+| **Nebengleis** | NAY-ben-glice | A side track next to the main line | free | free | Nothing found. Numeronym n8s free, but looks like k8s. **Ruled out for connotation:** "aufs Nebengleis geraten" means to be sidelined |
 | **Weiche** | VY-kheh | A track switch | free | **taken** | PyPI name belongs to a Deutsche Bahn train-connection lookup tool |
-| **Baustelle** | BOW-shtel-leh | Construction site | free | free | Nothing found. Numeronym b7e free |
+| **Baustelle** | BOW-shtel-leh | Construction site | free | free | Nothing found. Numeronym b7e free. **Ruled out for connotation:** in everyday German "eine Baustelle" is an unsolved problem or a mess |
 | Zweig | | Branch | free | taken | Not pursued |
 | Umleitung | | Detour | free | taken | Not pursued |
 | Gleis | | Track | taken | free | Not pursued |
@@ -196,6 +199,12 @@ Ruled out. Free on npm and PyPI, but:
   shortcut for a full name people already know, and the full name is what clashes. s7k
   also looks like s7t (Stellpult), and starts with "S7", the name of Siemens' S7 line of
   factory controllers.
+- **Re-check 2026-10-17** (from a local machine, where GitHub could be reached): the
+  crates.io placeholder is still there; `github.com/tensorov/stellwerk` returns 404.
+  `github.com/stellwerk` and `github.com/s7k` both exist, so neither account name is
+  available. npm `stellwerk` and `s7k` and PyPI `stellwerk` are still free. The owner
+  keeps Stellwerk as an option despite the clash; the repository could live at
+  `jbbz-sandbox/stellwerk` without a matching account.
 
 ### 7.6 English numeronym round
 
@@ -249,6 +258,92 @@ As of this research, the clearest candidate checked. Unlike the common English w
 both the full name and the numeronym can be searched. Domains, GitHub names and
 trademarks are not checked.
 
+### 7.8 Puppet master, boss and controller names
+
+Added 2026-10-17. The owner liked the "master controller" idea behind Stellwerk: one
+place that pulls the strings for many features and agents. This round tried "puppet
+master" in English and German, then other words for a boss, a foreman or a control
+centre.
+
+This round ran from a local machine, so two checks that were blocked in section 4
+worked: **GitHub** (`github.com/<name>`: 200 = an account or organisation with that name
+exists) and Docker Hub. Domains and trademarks were still not checked.
+
+#### English: all taken
+
+| Name | npm | PyPI | crates.io | Findings |
+|---|---|---|---|---|
+| **Puppetmaster** | free (`puppet-master` taken) | free (`puppet-master` taken) | taken | **Ruled out.** "Puppet master" was the name of the central server in Puppet, the configuration-management tool; its daemon was `puppetmasterd`. Same field (infrastructure tooling) |
+| **Puppeteer** | taken | free | taken | **Ruled out.** Google's headless-Chrome library, very widely used |
+| **Marionette** | taken | taken | taken | **Ruled out.** Firefox's browser-automation protocol has this name |
+| Ringmaster, Mastermind, Overseer, Foreman, Taskmaster, Showrunner, Quartermaster, Maestro, Overlord, Helmsman | taken | taken | taken | Not pursued. Several are existing developer tools (Foreman, a Procfile process runner; Maestro, a mobile UI-testing tool; Helmsman, a Helm-chart tool), known from prior knowledge, not re-searched |
+| **Switchman** | taken | free | free | **Weakened.** English for Weichensteller, the railway worker who sets each switch; fits the per-request choice. npm `switchman` is "the simplest tool to switch env configs" (last changed September 2022), a near neighbour in purpose. RubyGems `switchman` is Instructure's database-sharding gem for Rails (about 1.9 million downloads). GitHub `switchman` exists; Docker Hub taken. Numeronym s7n is free on npm, PyPI, crates.io and Docker Hub, taken on RubyGems, and looks like s7k, s7t and s7x. Gendered word ("-man"), which some open-source projects avoid |
+| Ringleader, Majordomo, Impresario, Kingpin | taken | mixed | mixed | Not pursued. Ringleader, Kingpin, Mastermind, Overlord and Taskmaster also fail the connotation rule (crime, domination, harshness) |
+
+#### German: puppet master
+
+**All ruled out for connotation.** German has an idiom for the person who pulls the
+strings behind the scenes: the *Strippenzieher* or *Drahtzieher*. It means the same as
+"puppet master" in English, and like the English it suggests manipulation, often of a
+crime or a plot. The literal translations (Puppenmeister, Puppenspieler) carry the same
+sense of controlling people. Registry results are kept so nobody re-checks them.
+
+| Name | Literal meaning | npm | PyPI | crates.io | Docker Hub | GitHub | Command | Why ruled out |
+|---|---|---|---|---|---|---|---|---|
+| Drahtzieher | "Wire-puller" | free | free | free | free | taken | d9r (taken on npm) | Usually said of the ringleader of a crime |
+| Strippenzieher | "String-puller" | free | free | free | free | taken | s12r | Someone manipulating events from behind the scenes |
+| Fadenzieher | "Thread-puller" (Swiss usage) | free | free | free | free | free | f9r | Same idiom as Strippenzieher |
+| Puppenmeister | Puppet master | free | free | free | free | taken | p11r | Controlling people; also "Puppen" sounds like "poop" in English |
+| Puppenspieler | Puppeteer | free | free | free | free | taken | p11r | Same as Puppenmeister |
+
+#### German: boss and control centre
+
+| Name | Pronunciation | Literal meaning | npm | PyPI | crates.io | Docker Hub | GitHub | Command | Findings |
+|---|---|---|---|---|---|---|---|---|---|
+| **Weichensteller** | VY-khen-shtel-ler | Switchman: the railway worker who sets each track switch so a train goes the right way. The closest match to the per-request choice (fact 3 in section 2) | free | free | free | free | taken | w12r — free everywhere, GitHub included | Web search found no software with this name. Long: 14 letters |
+| **Werkmeister** | VAIRK-my-ster | Works foreman: the person in charge of a workshop floor | free | free | free | free | taken | w9r — free everywhere, GitHub included | Web search found only unrelated tools named "werk" (a Ruby gem, Checkmk's change-log script, a Crystal task runner) |
+| **Schaltzentrale** | SHALT-tsen-trah-leh | Control centre; also "nerve centre" in the figurative sense | free | free | free | free | taken | s12e — taken on Docker Hub | Web search found no software with this name. Long: 14 letters |
+| **Leitstelle** | LITE-shtel-leh | Dispatch centre, for example for emergency services or a transport network | free | free | free | taken | taken | l8e — free everywhere, GitHub included | Not web-searched |
+| **Taktgeber** | TAHKT-gay-ber | "Beat-giver": the clock in a circuit, or whoever sets the pace | free | free | free | free | taken | t7r — free on npm, PyPI, crates.io, Docker Hub | Not web-searched |
+| **Spielleiter** | SHPEEL-lie-ter | Game master; also a stage director | free | free | free | taken | taken | s9r — free on npm, PyPI, crates.io, Docker Hub | Not web-searched |
+| **Steuerwerk** | SHTOY-er-vairk | The control unit of a processor | free | free | free | taken | taken | s8k — same as Splitstack | Not web-searched |
+| Polier | po-LEER | Foreman on a building site | free | free | free | free | taken | — (6 letters, too short for a numeronym) | Not pursued |
+| Zentrale | tsen-TRAH-leh | Head office, central office | free | free | free | taken | taken | — | Not pursued. Everyday word, so it cannot be searched |
+| Leitwerk | | Control unit (also an aircraft's tail) | free | taken | free | free | taken | l6k | Not pursued |
+| Dirigent, Kapellmeister, Regisseur, Leitstand, Vorarbeiter | | Conductor, bandleader, director, control room, foreman | taken | mixed | mixed | mixed | taken | | Not pursued |
+
+#### Takeaways from this round
+
+- Every English word for a boss or controller is taken and mostly in use by developer
+  tools, so English is a dead end here.
+- Every "puppet master" word, English or German, fails the connotation rule.
+- **Weichensteller** (w12r) fits what the tool does best, but it is long and hard for
+  English speakers to say.
+- **Werkmeister** (w9r) is easier to say than most and free everywhere except the
+  GitHub account name.
+- **Leitstelle** (l8e), **Taktgeber** (t7r) and **Spielleiter** (s9r) are free on all
+  three package registries but still need a web search.
+
+#### Owner's shortlist from this round
+
+The owner picked four names, and prefers **Werkmeister** because a foreman runs the
+building of something, which is what the tool does for each feature. The English
+"Foreman" was also considered and is ruled out: The Foreman (theforeman.org) is a large
+open-source server-provisioning tool, and `foreman` is a well-known Procfile process
+runner.
+
+Domains were checked on 2026-10-17: `.com` and `.dev` through rdap.org, and `.io`
+through `whois.nic.io`, because rdap.org has no data for `.io`.
+
+| Name | Meaning | Command | .com | .dev | .io | Web search |
+|---|---|---|---|---|---|---|
+| **Werkmeister** | Works foreman | w9r | taken | taken (registered April 2025) | free | Only unrelated "werk" tools |
+| **Weichensteller** | Railway switchman | w12r | taken | free | free | Nothing found |
+| **Leitstelle** | Dispatch or control centre | l8e | taken | free | taken | Nothing found; nearest is Leitstand, a telecom-operations project |
+| **Spielleiter** | Game master, director | s9r | taken | free | free | Nothing found; nearest is Spiel, a terminal-presentation framework |
+
+Trademarks are still not checked for any of the four.
+
 ## 8. Summary of every name
 
 | Name | Command | Status | Main reason |
@@ -261,10 +356,20 @@ trademarks are not checked.
 | Stellpult | s7t | Open | Free everywhere checked; minor Siemens S7T overlap |
 | Splitstack | s8k | Open | Free on npm and PyPI; minor compiler-term overlap |
 | Diffstack | d7k | Weakened | NVIDIA DiffStack research project; d7k taken on npm |
-| Abzweig, Nebengleis, Baustelle, Spurwerk | a5g, n8s, b7e, s6k | Open, not pursued | Free; harder to say, or numeronym looks like others |
+| Abzweig, Spurwerk | a5g, s6k | Open, not pursued | Free; harder to say, or numeronym looks like others |
 | Featurelane, Graftstack | — | Open, not pursued | Free on npm; weaker meaning |
 | Junction | j6n | Open, not searched | |
-| Stellwerk | s7k | **Ruled out** | Reserved on crates.io by an AI-agent project; GitHub name probably taken (s7k itself is free) |
+| Nebengleis, Baustelle | n8s, b7e | **Ruled out** | Connotation: "sidelined" and "a mess" in everyday German |
+| Werkmeister | w9r | **Shortlist — owner's favourite** | Works foreman; free on every registry; GitHub account, .com and .dev taken; .io free |
+| Weichensteller | w12r | **Shortlist** | Switchman; best fit for per-request routing; long and hard to say; .dev and .io free |
+| Leitstelle | l8e | **Shortlist** | Dispatch centre; free on npm, PyPI, crates.io; .dev free |
+| Spielleiter | s9r | **Shortlist** | Game master; free on npm, PyPI, crates.io; .dev and .io free |
+| Taktgeber, Schaltzentrale | t7r, s12e | Open, not searched in depth | Free on npm, PyPI, crates.io |
+| Drahtzieher, Strippenzieher, Fadenzieher, Puppenmeister, Puppenspieler | d9r, s12r, f9r, p11r | **Ruled out** | Connotation: German "puppet master" idioms suggest manipulation or crime |
+| Puppetmaster, Puppeteer, Marionette | — | **Ruled out** | Puppet's server name, Google's browser library, Firefox's automation protocol; "puppet master" also fails the connotation rule |
+| Switchman | s7n | Weakened | npm name is an env-config switcher; RubyGems name is a well-known Rails sharding gem; gendered |
+| English boss words (Foreman, Maestro, Overseer, …) | — | **Ruled out** | Taken on all registries; several are existing developer tools (Foreman: theforeman.org and the Procfile runner) |
+| Stellwerk | s7k | **Weakened — owner keeps it as an option** | Reserved on crates.io by an AI-agent project; github.com/stellwerk and /s7k taken; npm names still free |
 | LocalStack | — | **Ruled out** | Funded company in the same field |
 | Mystack | — | **Ruled out** | Everyday phrase; npm name taken; says nothing about the tool |
 | Switchyard, Signalbox, Roundhouse | — | **Ruled out** | Existing developer software with the same name |
