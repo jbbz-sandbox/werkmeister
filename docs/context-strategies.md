@@ -30,7 +30,7 @@ The "context layer" is four of `initWorkspace`'s steps plus one refresh in `up`,
 | 6c hooks | `.claude/settings.json` | `strategies/jit.ts:197`, `hooks_gen.ts:107` |
 | `up` refresh | `.claude/settings.json` again (jit); removes it (icm) | `lifecycle.ts:133` |
 
-The same writers are reachable from `sandbox skills sync`, the SessionStart self-heal, and the MCP tools (`apps/mcp/tools.ts:489`, `:518`). `buildContext` (`notes.ts:282`) and `down` (`teardownNotes`) rewrite note frontmatter regardless. Everything else `initWorkspace` produces (worktrees, `.env`, compose, slot, `sandbox-context.md`, service map) is strategy-neutral and both experiments used it unchanged.
+The same writers are reachable from `sandbox skills sync`, the SessionStart self-heal, and the MCP tools (`apps/mcp/src/tools.ts:489`, `:518`). `buildContext` (`notes.ts:282`) and `down` (`teardownNotes`) rewrite note frontmatter regardless. Everything else `initWorkspace` produces (worktrees, `.env`, compose, slot, `sandbox-context.md`, service map) is strategy-neutral and both experiments used it unchanged.
 
 There is no selector today. `workspace.yml` has `work_type` (picks the seeded handoff's phase) and `standards_override`, nothing that names a strategy. The schema is `additionalProperties: true`, so a new key costs a row in `_INPUT_FIELDS` (`workspace_prompts.ts:107`) and a schema property.
 
@@ -79,7 +79,7 @@ interface ContextStrategy {
 }
 ```
 
-`packages/sandbox-core/strategies/{jit,icm}.ts`, a registry keyed by the same `context_strategy` field. `initWorkspace` and `up` call the strategy; the JIT-specific CLI commands become thin wrappers over `strategy.check()`/`refresh()`. Same field as A, but one dispatch point instead of five guards, and a third strategy (or an ICM variant with a different stage template) is one file plus a registry line. Cost: moving ~150 lines of `workspace_init.ts` into `strategies/jit.ts` and re-pointing four tests (`hooks_gen.test.ts`, `lifecycle_up_hooks.test.ts`, skills/agents tests). No behavior change for existing workspaces.
+`packages/sandbox-core/src/strategies/{jit,icm}.ts`, a registry keyed by the same `context_strategy` field. `initWorkspace` and `up` call the strategy; the JIT-specific CLI commands become thin wrappers over `strategy.check()`/`refresh()`. Same field as A, but one dispatch point instead of five guards, and a third strategy (or an ICM variant with a different stage template) is one file plus a registry line. Cost: moving ~150 lines of `workspace_init.ts` into `strategies/jit.ts` and re-pointing four tests (`hooks_gen.test.ts`, `lifecycle_up_hooks.test.ts`, skills/agents tests). No behavior change for existing workspaces.
 
 ## Option C — Claude Code plugins
 

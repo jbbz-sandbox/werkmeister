@@ -126,7 +126,7 @@ HOST MODE (default)
 
 The right-hand fork is the one thing docker mode gets wrong on its own, so the
 CLI passes `--address host.docker.internal` whenever `--docker-daemon` is set
-(`buildInterceptArgs` in `packages/sandbox-core/telepresence.ts`). Host mode's
+(`buildInterceptArgs` in `packages/sandbox-core/src/telepresence.ts`). Host mode's
 `127.0.0.1` default already names the right machine and is left alone.
 
 | | host mode | `--docker-daemon` |
@@ -150,7 +150,7 @@ Most of it is already handled:
 - The forwards container is fed `kubectl config view --raw --minify --flatten`,
   so certificates and tokens are **inlined**, not left as host paths the
   container cannot see.
-- `shimLocalApiServer` (`packages/sandbox-core/infra.ts`) rewrites a
+- `shimLocalApiServer` (`packages/sandbox-core/src/infra.ts`) rewrites a
   `127.0.0.1` API address to `host.docker.internal` and drops CA verification —
   and no-ops for a remote cluster, which needs neither. Telepresence's docker
   mode does the same rewrite for the same reason. A local cluster is the special

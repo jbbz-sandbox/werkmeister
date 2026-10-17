@@ -27,7 +27,7 @@ Those are the ones that rot — they are listed first.
 | Location | Simplification | Ceiling |
 |---|---|---|
 | [tree.ts:48](../packages/vscode-plugin/src/tree.ts#L48) | skip an overlapping poll rather than queueing | one fewer refresh when `docker ps` is slow |
-| [locks.ts:71](../packages/sandbox-core/locks.ts#L71) | read-then-unlink when stealing a stale lock | narrow race against another stealer; only one wins, "good enough for a dev CLI" |
+| [locks.ts:71](../packages/sandbox-core/src/locks.ts#L71) | read-then-unlink when stealing a stale lock | narrow race against another stealer; only one wins, "good enough for a dev CLI" |
 | [gate.ts:21](../apps/cli/src/lib/gate.ts#L21) | precedence sentence duplicated from `notes.ts`, not imported | must stay import-light for the <200ms fast path; the two wordings drift by hand |
 | [gate.ts:254](../apps/cli/src/lib/gate.ts#L254) | unwritable state dir → allow, not deny | a persistence failure silently stops gating instead of failing loudly |
 | [workspace.ts:150](../apps/cli/src/commands/workspace.ts#L150) | `mkdir -p` on a dir the caller already checked | none stated — the marker records intent, not a limit |
@@ -60,13 +60,13 @@ calls the same file, so a dead forward is now restarted rather than merely repor
 
 | Location | Simplification | Ceiling | Upgrade trigger |
 |---|---|---|---|
-| [worktrees.ts:184](../packages/sandbox-core/worktrees.ts#L184) | "has edits" = working-tree dirtiness only | a worktree whose sole divergence is **committed but unpushed** counts as safe to remove (the branch survives, so nothing is truly lost) | losing committed-but-unpushed work becomes a real risk → check ahead/behind |
+| [worktrees.ts:184](../packages/sandbox-core/src/worktrees.ts#L184) | "has edits" = working-tree dirtiness only | a worktree whose sole divergence is **committed but unpushed** counts as safe to remove (the branch survives, so nothing is truly lost) | losing committed-but-unpushed work becomes a real risk → check ahead/behind |
 | [generate.ts:701](../apps/cli/src/lib/generate.ts#L701) | programmatic compose fallback emits `depends_on` but never renders the setup container | a `setup_service:` config only generates correctly through the template | the fallback path becomes reachable |
-| [docker.ts:111](../packages/sandbox-core/docker.ts#L111) | unix and tcp endpoints only | an `ssh://` context needs dockerode's ssh2 transport, which the VS Code single-file bundle can't carry | a machine actually runs an `ssh://` context |
-| [cache.ts:17](../packages/sandbox-core/cache.ts#L17) | whole-file read-modify-write | separate processes race; last atomic rename wins (worst case re-fetches one key) | entries reach the thousands → SQLite |
-| [locks.ts:21](../packages/sandbox-core/locks.ts#L21) | O_EXCL PID-stamped lock file (Node has no `fcntl.flock`) | a crashed holder leaves the file behind; compensated by probing the recorded PID | the PID probe proves insufficient → real flock binding |
-| [sandbox.ts:1532](../packages/sandbox-core/sandbox.ts#L1532) | no concurrency cap on the `gh` fan-out | unbounded parallel `gh` calls | workspace × repo count grows large |
-| [sandbox.ts:1812](../packages/sandbox-core/sandbox.ts#L1812) | no concurrency cap on the fan-out (matches the row above) | bounded in practice by my-open-PRs + the approval queue | either grows large |
+| [docker.ts:111](../packages/sandbox-core/src/docker.ts#L111) | unix and tcp endpoints only | an `ssh://` context needs dockerode's ssh2 transport, which the VS Code single-file bundle can't carry | a machine actually runs an `ssh://` context |
+| [cache.ts:17](../packages/sandbox-core/src/cache.ts#L17) | whole-file read-modify-write | separate processes race; last atomic rename wins (worst case re-fetches one key) | entries reach the thousands → SQLite |
+| [locks.ts:21](../packages/sandbox-core/src/locks.ts#L21) | O_EXCL PID-stamped lock file (Node has no `fcntl.flock`) | a crashed holder leaves the file behind; compensated by probing the recorded PID | the PID probe proves insufficient → real flock binding |
+| [sandbox.ts:1532](../packages/sandbox-core/src/sandbox.ts#L1532) | no concurrency cap on the `gh` fan-out | unbounded parallel `gh` calls | workspace × repo count grows large |
+| [sandbox.ts:1812](../packages/sandbox-core/src/sandbox.ts#L1812) | no concurrency cap on the fan-out (matches the row above) | bounded in practice by my-open-PRs + the approval queue | either grows large |
 | [SKILL.md:65](../apps/cli/infra/skills/sb-implement/SKILL.md#L65) | the redirect-verbose-output rule is stated once, at phase entry | drifts into low-attention context by mid-session, which is exactly when a session starts dumping full test output | the edit gate ([gate.ts](../apps/cli/src/lib/gate.ts)) already intercepts governed edits — extend it to re-inject on Bash once a session is seen drifting |
 | [standards.ts:194](../apps/cli/src/lib/standards.ts#L194) | fnmatch leaves `/` literal | repo-root files under-match a `**/*.service.ts` glob; worst case one standard not re-injected | root-level matching ever matters → real glob matcher |
 | [generate.ts:204](../apps/cli/src/lib/generate.ts#L204) | non-enumerable `Array.prototype.append` patch for Nunjucks `{% do %}` | global prototype patch | it collides with another `append` → template preprocessor |
@@ -74,7 +74,7 @@ calls the same file, so a dead forward is now restarted rather than merely repor
 | [intercept.ts:211](../apps/cli/src/commands/intercept.ts#L211) | no long-running supervision of an intercept | lives in the telepresence daemon until `--leave`/`sandbox down` | dangling intercepts become a real problem → `--watch` |
 | [commands.ts:145](../packages/vscode-plugin/src/commands.ts#L145) | fire-and-forget launch | a failure after spawn is invisible | it ever matters → status check |
 | [build-tree.ts:67](../packages/vscode-plugin/src/build-tree.ts#L67) | strip the `sandbox-` prefix instead of reading `workspace.yml` per workspace | breaks if a hand-edited `.env` violates the convention | that happens → read the yml |
-| [session-stream.ts:13](../apps/sandbox-dashboard/lib/session-stream.ts#L13) | re-read and re-parse the whole transcript on every change | same cost the 3s poller already paid, but push-triggered | large transcripts measurably lag → byte-offset tailing |
+| [session-stream.ts:13](../apps/sandbox-dashboard/src/lib/session-stream.ts#L13) | re-read and re-parse the whole transcript on every change | same cost the 3s poller already paid, but push-triggered | large transcripts measurably lag → byte-offset tailing |
 
 ## Keeping this current
 

@@ -27,10 +27,10 @@ import { createServer } from "../server.js";
 import { localOnly, openBrowser } from "./localhost-form.js";
 import { subscribeSession } from "./session-stream.js";
 
-// Works both from source (lib/browser-ui.ts via tsx) and compiled
+// Works both from source (src/lib/browser-ui.ts via tsx) and compiled
 // (dist/lib/browser-ui.js) — the built UI always lives at dist/browser.html.
 const DIST_DIR = import.meta.filename.endsWith(".ts")
-  ? path.join(import.meta.dirname, "..", "dist")
+  ? path.join(import.meta.dirname, "..", "..", "dist")
   : path.join(import.meta.dirname, "..");
 
 /** A fresh MCP server + client linked in-process; the client advertises no UI

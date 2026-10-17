@@ -9,9 +9,10 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "src",
     "noEmit": false,
     "types": ["node"]
   },
-  "include": ["server.ts", "main.ts", "form-cli.ts", "lib"]
+  // The server entries only: the rest of src/ is the DOM UI, which vite bundles.
+  "include": ["src/server.ts", "src/main.ts", "src/form-cli.ts", "src/lib"]
 }

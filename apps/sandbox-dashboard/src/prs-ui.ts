@@ -11,8 +11,8 @@
  * live session-stream routes); not mounted by mcp-list.ts or artifact-main.ts.
  */
 
-import { renderMarkdown } from "../lib/markdown.js";
 import { type ChatPanelHandle, initChatPanel } from "./chat-panel.js";
+import { renderMarkdown } from "./lib/markdown.js";
 import { el, injectCss } from "./theme.js";
 import type { HostBridge } from "./workspace-ui.js";
 

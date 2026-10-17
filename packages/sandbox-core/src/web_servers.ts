@@ -88,7 +88,7 @@ export const MCP: WebApp = {
   // Must be reachable from a container with no Docker socket (that's the
   // whole point of this app), and a container's requests arrive over the
   // bridge network, not loopback — so this is the one managed app that
-  // needs a wide bind. On a 0.0.0.0 bind, apps/mcp/lib/token.ts's
+  // needs a wide bind. On a 0.0.0.0 bind, apps/mcp/src/lib/token.ts's
   // authorized() makes the bearer token mandatory (it only accepts a
   // missing header on loopback), so this does not open the surface up —
   // it just makes auth non-optional. DASHBOARD deliberately doesn't set
@@ -218,9 +218,9 @@ function distStale(app: WebApp): boolean {
     "*.html",
     "package.json",
     "tsconfig*.json",
-    "lib/*.ts",
     "src/*.ts",
     "src/*.css",
+    "src/lib/*.ts",
   ];
   for (const pat of patterns) {
     for (const f of globMatch(dir, pat)) {

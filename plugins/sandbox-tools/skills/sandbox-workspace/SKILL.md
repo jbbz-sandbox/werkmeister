@@ -5,7 +5,7 @@ description: "Create a brand-new sandbox workspace (git worktrees on a <user>/<w
 
 # Sandbox Workspace
 
-**Every create goes through `createWorkspace`** (packages/sandbox-core/sandbox.ts) — the CLI,
+**Every create goes through `createWorkspace`** (packages/sandbox-core/src/sandbox.ts) — the CLI,
 the browser form, both MCP servers and the /workspaces pane all call it. Never write
 workspace files by hand.
 
@@ -42,7 +42,7 @@ The workspace is git worktrees (one per repo, derived from the selected **servic
 (writes `CLAUDE.md`, `.env`, `docker-compose.yml`, …).
 
 There is **no hand-maintained schema** — fields are built from the same prompt
-definitions (`_WIZARD_PROMPTS` in `packages/sandbox-core/workspace_prompts.ts`) that
+definitions (`_WIZARD_PROMPTS` in `packages/sandbox-core/src/workspace_prompts.ts`) that
 drive the terminal wizard. So every
 surface shows the same fields, labels, defaults, and validation — and the **same look**:
 every surface (browser form, dashboard tab, Desktop inline) renders the one shared form
