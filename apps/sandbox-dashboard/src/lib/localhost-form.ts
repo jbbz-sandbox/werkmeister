@@ -30,10 +30,10 @@ import type { FormSchemaBundle } from "sandbox-core";
 import { fetchIssueFormData, getFormSchema, refinePrompt, WorkspaceError } from "sandbox-core";
 import { issueTracker } from "sandbox-core/issue_tracker";
 
-// Works both from source (lib/localhost-form.ts via tsx) and compiled
+// Works both from source (src/lib/localhost-form.ts via tsx) and compiled
 // (dist/lib/localhost-form.js) — the built page always lives at dist/form.html.
 const DIST_DIR = import.meta.filename.endsWith(".ts")
-  ? path.join(import.meta.dirname, "..", "dist")
+  ? path.join(import.meta.dirname, "..", "..", "dist")
   : path.join(import.meta.dirname, "..");
 
 /**

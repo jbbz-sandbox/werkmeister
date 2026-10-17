@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/jbbz-sandbox/sandbox/main/apps/cli/infra/schemas/services-fragment.schema.json",
   "title": "Sandbox service-registry fragment (<repo>/.sandbox/services.yaml)",
-  "description": "A repo's slice of the service registry. `sandbox registry sync` (run by `sandbox setup`) merges every fragment under paths.repos_root into ~/.sandbox/services.yaml. `{{home}}`, `{{repos_root}}` and `{{workspaces_root}}` expand in any string at merge time. Mirrors the checks in packages/sandbox-core/registry_sync.ts.",
+  "description": "A repo's slice of the service registry. `sandbox registry sync` (run by `sandbox setup`) merges every fragment under paths.repos_root into ~/.sandbox/services.yaml. `{{home}}`, `{{repos_root}}` and `{{workspaces_root}}` expand in any string at merge time. Mirrors the checks in packages/sandbox-core/src/registry_sync.ts.",
   "type": "object",
   "properties": {
     "services": {

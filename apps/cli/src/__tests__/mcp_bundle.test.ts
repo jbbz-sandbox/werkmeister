@@ -1,5 +1,5 @@
 /**
- * The bundled MCP server (`dist/mcp.js`, built from `../mcp/main.ts` by
+ * The bundled MCP server (`dist/mcp.js`, built from `../mcp/src/main.ts` by
  * esbuild.mjs) answers `initialize` over stdio.
  *
  * This is the one thing an `npm i -g` install relies on that no other test

@@ -26,8 +26,9 @@
  * usage-widget, lib/workspace-search) is itself npm-dependency-free, so it's
  * safe in the strict-CSP bundle too.
  */
-import { filterWorkspaces } from "../lib/workspace-search.js";
+
 import { type ClaudeMessage, initChatPanel } from "./chat-panel.js";
+import { filterWorkspaces } from "./lib/workspace-search.js";
 import { el, injectCss } from "./theme.js";
 import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
 

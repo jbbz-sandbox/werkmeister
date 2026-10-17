@@ -12,9 +12,9 @@
     "watch:ui": "cross-env NODE_ENV=development INPUT=mcp-app.html vite build --watch",
     "serve:stdio": "node dist/main.js --stdio",
     "serve:http": "node dist/main.js",
-    "dev": "cross-env NODE_ENV=development concurrently \"npm run watch:ui\" \"tsx --watch main.ts\"",
-    "start:stdio": "tsx main.ts --stdio",
-    "test": "npm run build:server && for f in lib/*.smoke.mjs; do node \"$f\" || exit 1; done"
+    "dev": "cross-env NODE_ENV=development concurrently \"npm run watch:ui\" \"tsx --watch src/main.ts\"",
+    "start:stdio": "tsx src/main.ts --stdio",
+    "test": "npm run build:server && for f in test/*.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.0",

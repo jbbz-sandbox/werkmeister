@@ -12,7 +12,7 @@ removed — the verbs over HTTP instead of a socket.
 ## Running it
 
 `sandbox connect` starts it, like the dashboard: it is a `WebApp`
-in `packages/sandbox-core/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID
+in `packages/sandbox-core/src/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID
 and log under `~/.sandbox`). A host-local MCP client gets it over stdio instead:
 
     sandbox mcp                            # stdio -- no token, no port

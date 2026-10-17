@@ -10,12 +10,10 @@
     "resolveJsonModule": true,
     "declaration": false,
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "src",
     "noEmit": false,
     "types": ["node"]
   },
-  // A glob, not a list: `tsc` errors TS6053 on a named file that does not
-  // exist, and main.ts/tools.ts arrive a task later than this file does.
-  // Same reasoning as packages/sandbox-core/tsconfig.json.
-  "include": ["*.ts", "lib/*.ts"]
+  // A glob, not a list — same reasoning as packages/sandbox-core/tsconfig.json.
+  "include": ["src/**/*.ts"]
 }

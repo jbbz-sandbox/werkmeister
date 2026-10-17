@@ -56,7 +56,7 @@ First performed: 2026-07-11. Verified working same day.
 
 ## How it's consumed
 
-`apps/sandbox-dashboard/lib/jira-rest.ts` reads `JIRA_BASE_URL` / `JIRA_EMAIL` /
+`packages/sandbox-core/src/jira-rest.ts` reads `JIRA_BASE_URL` / `JIRA_EMAIL` /
 `JIRA_API_TOKEN` from the process env first, then from `~/.sandbox/jira.env`.
 When credentials are absent or a call fails, every caller degrades to the
 original `claude -p` (Atlassian MCP) path — the token is an optimization, not
