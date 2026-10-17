@@ -368,6 +368,12 @@ problem. The cost is that `github.com/werkmeister`, `werkmeister.com` and
 `werkmeister.dev` are taken, so the project uses `werkmeister.io` and a repository under
 an existing or new organisation.
 
+Names claimed on 2026-10-17: npm package `werkmeister` (0.0.0 placeholder) and the npm
+organisation `@werkmeister`. An unscoped npm package `w9r` cannot be published: npm's
+typo-squatting filter rejects it as "too similar to existing packages wd, ws, cpr, swr,
+xhr, tar". That does not affect the command: the `werkmeister` package can install both
+`werkmeister` and `w9r` as commands. Only `npx w9r` will not work; `npx werkmeister` will.
+
 ## 8. Summary of every name
 
 | Name | Command | Status | Main reason |
