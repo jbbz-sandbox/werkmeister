@@ -60,13 +60,25 @@ function isDict(value: unknown): value is Record<string, any> {
 }
 
 /**
+ * `~/.sandbox/config.yaml`. Only the sections the code reads are typed; like
+ * {@link ServiceEntry}, this is a claim about the YAML, not a check.
+ */
+export interface GlobalConfig {
+  paths?: Record<string, string>;
+  overrides?: Record<string, unknown>;
+  jira?: Record<string, unknown>;
+  ingress?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
  * Read and parse the global config YAML.
  *
  * A missing file is normal (unconfigured machine) and yields `{}`; a file that
  * exists but does not parse throws, so callers can tell "nothing configured"
  * from "your config is broken" and report each in their own voice.
  */
-export function loadConfig(): Record<string, any> {
+export function loadConfig(): GlobalConfig {
   const p = configPath();
   if (!fs.existsSync(p)) return {};
   const data = parseYaml(fs.readFileSync(p, "utf8"));

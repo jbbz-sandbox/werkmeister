@@ -30,6 +30,7 @@ import { infraRoot } from "./config.js";
 import { loadManifest } from "./gate.js";
 import { info, success } from "./reporter.js";
 import { generateSkills, skillNameFor, validateModuleReferences } from "./skill_gen.js";
+import type { StandardsManifest } from "./standards.js";
 import {
   buildStandardsManifest,
   loadStandardsModules,
@@ -277,7 +278,7 @@ export function resolveWorkspaceActive(
 export function resolveWorkspaceManifest(
   workspace: string,
   resolved: ReturnType<typeof resolveWorkspaceActive> = resolveWorkspaceActive(workspace),
-): Record<string, any> | null {
+): StandardsManifest | null {
   if (resolved === null) {
     return null;
   }
