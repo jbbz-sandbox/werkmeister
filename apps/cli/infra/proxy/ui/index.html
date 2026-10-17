@@ -177,12 +177,14 @@
         }
 
         function selectFeature(name) {
+            // biome-ignore lint/suspicious/noDocumentCookie: updateCurrent() re-reads the cookie synchronously, and the async Cookie Store API is missing from older Firefox/Safari this dev page must still work in
             document.cookie = `X-Feature=${encodeURIComponent(name)}; path=/; domain=${cookieDomain()}; max-age=${60*60*24*30}`;
             updateCurrent();
             showStatus(`Routing to feature: ${name}`, 'success');
         }
 
         function clearFeature() {
+            // biome-ignore lint/suspicious/noDocumentCookie: updateCurrent() re-reads the cookie synchronously, and the async Cookie Store API is missing from older Firefox/Safari this dev page must still work in
             document.cookie = `X-Feature=; path=/; domain=${cookieDomain()}; max-age=0`;
             updateCurrent();
             showStatus('Cleared — using k8s default routing', 'info');
