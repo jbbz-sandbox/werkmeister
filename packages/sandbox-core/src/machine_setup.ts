@@ -633,7 +633,7 @@ export function syncRegistryConfigs(checkOnly: boolean, options: RegistryOptions
       continue;
     }
     const legacy = legacyDir && legacyName ? path.join(legacyDir, legacyName) : null;
-    const migratable = Boolean(legacy && fs.existsSync(legacy));
+    const migratable = legacy !== null && fs.existsSync(legacy);
 
     if (checkOnly) {
       steps.push({
@@ -649,7 +649,7 @@ export function syncRegistryConfigs(checkOnly: boolean, options: RegistryOptions
     try {
       if (migratable) {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
-        fs.copyFileSync(legacy!, dest);
+        fs.copyFileSync(legacy, dest);
         steps.push({ label, ok: true, detail: `migrated from ${legacy}` });
       } else {
         const result = seedFile(dest, content());
@@ -1251,7 +1251,7 @@ export function syncTelepresence(
   }
 
   const stale = version !== null;
-  const current = stale ? `${version!.join(".")} < required ${need}` : "not installed";
+  const current = stale ? `${version.join(".")} < required ${need}` : "not installed";
 
   if (checkOnly || !options.install) {
     if (stale) {
@@ -1344,7 +1344,7 @@ export function syncPlaywright(
   const missingDirs = (): string[] | null => {
     const [rc, out] = runner(["npx", "-y", pkg, "install", "--dry-run", "chromium"]);
     probeOutput = out;
-    const dirs = [...out.matchAll(/Install location:\s*(\S.*)$/gm)].map((m) => m[1]!.trim());
+    const dirs = [...out.matchAll(/Install location:\s*(\S.*)$/gm)].map((m) => m[1].trim());
     // No locations parsed means the output format moved, not that nothing is needed.
     if (rc !== 0 || dirs.length === 0) return null;
     // A partial download leaves the directory but not Playwright's completion marker.

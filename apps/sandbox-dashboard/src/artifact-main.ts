@@ -11,6 +11,7 @@
  * src/artifact-meta.json — change "serverName" there and rebuild if your MCP
  * server is registered under a different name.
  */
+import { appRoot } from "./theme.js";
 import { type HostBridge, initWorkspaceUI } from "./workspace-ui.js";
 
 // The meta block is what grants this artifact MCP tool access, so whatever
@@ -50,14 +51,15 @@ declare global {
  * The window.cowork bridge is injected asynchronously and may not exist yet
  * when this script first runs (e.g. reopening the artifact in a new session).
  */
-function waitForBridge(timeoutMs = 45000): Promise<void> {
+function waitForBridge(timeoutMs = 45000): Promise<NonNullable<Window["cowork"]>> {
   return new Promise((resolve, reject) => {
-    if (window.cowork && typeof window.cowork.callMcpTool === "function") return resolve();
+    if (window.cowork && typeof window.cowork.callMcpTool === "function")
+      return resolve(window.cowork);
     const start = Date.now();
     const iv = setInterval(() => {
       if (window.cowork && typeof window.cowork.callMcpTool === "function") {
         clearInterval(iv);
-        resolve();
+        resolve(window.cowork);
       } else if (Date.now() - start > timeoutMs) {
         clearInterval(iv);
         reject(new Error("connection to Cowork not available"));
@@ -68,8 +70,8 @@ function waitForBridge(timeoutMs = 45000): Promise<void> {
 
 const bridge: HostBridge = {
   async callTool(name, args) {
-    await waitForBridge();
-    const r = await window.cowork!.callMcpTool(SERVER_PREFIX + name, args ?? {});
+    const cowork = await waitForBridge();
+    const r = await cowork.callMcpTool(SERVER_PREFIX + name, args ?? {});
     if (r.isError) throw new Error(name + " returned an error");
     return r.structuredContent ?? JSON.parse(r.content?.[0]?.text ?? "null");
   },
@@ -85,4 +87,4 @@ const bridge: HostBridge = {
   // claude-transcript polling.
 };
 
-initWorkspaceUI(bridge, document.getElementById("app")!);
+initWorkspaceUI(bridge, appRoot());

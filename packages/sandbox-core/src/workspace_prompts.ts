@@ -20,8 +20,8 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { COMPOSE_FILE } from "./compose_file.js";
-import { loadReposConfig, loadServices } from "./config.js";
-import type { PromptEntry } from "./form_schema.js";
+import { loadReposConfig, loadServices, type ReposConfig, type ServicesConfig } from "./config.js";
+import type { PromptEntry, PromptSpecJson } from "./form_schema.js";
 import type { PromptSpec } from "./global_config.js";
 import { issueIdOf, issueTracker } from "./issue_tracker.js";
 import { ProcError, run as procRun } from "./proc.js";
@@ -98,7 +98,7 @@ function stripJsoncComments(text: string): string {
  * Parse a workspace config file. Dispatches by extension: `.yaml`/`.yml` →
  * yaml parse; `.jsonc`/`.json` → JSONC-strip then JSON.parse.
  */
-export function loadWorkspaceConfig(p: string): any {
+export function loadWorkspaceConfig(p: string): unknown {
   const text = fs.readFileSync(p, "utf8");
   const suffix = path.extname(p);
   if (suffix === ".yaml" || suffix === ".yml") {
@@ -143,7 +143,7 @@ export function readAutonomous(workspaceRoot: string): boolean {
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
     try {
-      return isTrue(loadWorkspaceConfig(p)?.["autonomous"]);
+      return isTrue((loadWorkspaceConfig(p) as Record<string, unknown> | null)?.["autonomous"]);
     } catch {
       return false;
     }
@@ -169,7 +169,7 @@ export const _WORKSPACE_CONFIG_NAMES = [
 export function loadConfigFile(
   workspaceRoot: string,
   override: string | null,
-): Record<string, any> {
+): Record<string, unknown> {
   const candidates: string[] = [];
   if (override) {
     candidates.push(expandUserPath(override));
@@ -187,7 +187,7 @@ export function loadConfigFile(
     if (!fs.existsSync(p)) {
       continue;
     }
-    let data: any;
+    let data: unknown;
     try {
       data = loadWorkspaceConfig(p);
     } catch (exc) {
@@ -199,7 +199,7 @@ export function loadConfigFile(
       return {};
     }
     info(`Loaded workspace config from ${p}`);
-    return data;
+    return data as Record<string, unknown>;
   }
 
   return {};
@@ -598,7 +598,7 @@ export function buildPromptSpec(
   workspaceRoot: string,
   resolved: Record<string, string>,
   opts: PromptSpecOptions = {},
-): Record<string, any> {
+): PromptSpecJson {
   return {
     workspace_root: workspaceRoot,
     workspace_name: path.basename(workspaceRoot),
@@ -622,7 +622,7 @@ export function slugToTask(workspaceName: string): string {
 }
 
 /** Load services and repos config from services.yaml. Both may be empty. */
-export function loadSandboxServiceConfigs(): [Record<string, any>, Record<string, any>] {
+export function loadSandboxServiceConfigs(): [ServicesConfig, ReposConfig] {
   try {
     return [loadServices(), loadReposConfig()];
   } catch {
@@ -660,7 +660,7 @@ export function computePromptSpec(
   args: Record<string, unknown>,
   workspaceRoot: string,
   opts: PromptSpecOptions = {},
-): Record<string, any> {
+): PromptSpecJson {
   return workspacePromptSpec(workspaceRoot, resolveInputs(args, workspaceRoot), opts);
 }
 
@@ -669,14 +669,14 @@ export function workspacePromptSpec(
   workspaceRoot: string,
   resolved: Record<string, string>,
   opts: PromptSpecOptions = {},
-): Record<string, any> {
+): PromptSpecJson {
   const spec = buildPromptSpec(workspaceRoot, resolved, opts);
 
   // workspaceRoot is only consulted for a spec's defaultFn; REPOS_PROMPT has
   // none, so the value passed here is irrelevant.
   const reposEntry = promptEntry(REPOS_PROMPT, "", resolved);
   if ((reposEntry.choices as string[]).length) {
-    const prompts = (spec.prompts as Record<string, unknown>[]) ?? [];
+    const prompts = spec.prompts ?? [];
     let servicesIdx = prompts.findIndex((p) => p.key === "services");
     if (servicesIdx === -1) {
       servicesIdx = prompts.length - 1;

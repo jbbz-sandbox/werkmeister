@@ -148,6 +148,33 @@ const subsetOf = (v: unknown, choices: unknown[]): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string" && choices.includes(x));
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+function applyUnmatched(next: Plan, id: string, value: unknown, reason: string): string | null {
+  if (value === null) return null;
+  const target =
+    typeof value === "string" ? next.services.find((s) => s.name === value) : undefined;
+  const found = next.unmatched.filter((u) => `unmatched.${u.name}` === id);
+  if (!target || !found.length) return "expected one of this repo's services, or null";
+  const fresh = resolveService({
+    name: target.name,
+    dir: target.dir,
+    findings: [...target.findings, ...found],
+  });
+  for (const [k, fv] of Object.entries(fresh.fields)) {
+    if (!(k in target.fields))
+      target.fields[k] = {
+        ...fv,
+        confidence: "inferred",
+        source: `${fv.source}; matched by Claude: ${reason}`,
+      };
+  }
+  target.findings.push(...found);
+  next.unmatched = next.unmatched.filter((u) => !found.includes(u));
+  next.skipped = next.skipped.filter(
+    (s) => !found.some((f) => s.item === f.file && s.reason.includes(` ${f.name} — `)),
+  );
+  return null;
+}
+
 export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
   const next: Plan = structuredClone(plan);
   const questions = new Map(collectQuestions(plan).map((q) => [q.id, q]));
@@ -175,82 +202,56 @@ export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
     const svc = q.service ? next.services.find((s) => s.name === q.service) : undefined;
     let problem: string | null = null;
 
-    switch (q.kind) {
-      case "command":
-        if (typeof a.value === "string" && a.value.trim())
-          svc!.fields.command = inferred(a.value.trim());
-        else problem = "expected a non-empty command string";
-        break;
-      case "health_endpoint":
-        if (typeof a.value === "string" && (a.value === "" || a.value.startsWith("/")))
-          svc!.fields.health_endpoint = inferred(a.value);
-        else problem = 'expected "" or a path starting with /';
-        break;
-      case "environment": {
-        if (!isStringMap(a.value)) {
-          problem = "expected an object of string values";
+    if (q.kind === "unmatched") problem = applyUnmatched(next, q.id, a.value, reason);
+    else if (!svc) problem = `no service named ${q.service} in this plan`;
+    else
+      switch (q.kind) {
+        case "command":
+          if (typeof a.value === "string" && a.value.trim())
+            svc.fields.command = inferred(a.value.trim());
+          else problem = "expected a non-empty command string";
+          break;
+        case "health_endpoint":
+          if (typeof a.value === "string" && (a.value === "" || a.value.startsWith("/")))
+            svc.fields.health_endpoint = inferred(a.value);
+          else problem = 'expected "" or a path starting with /';
+          break;
+        case "environment": {
+          if (!isStringMap(a.value)) {
+            problem = "expected an object of string values";
+            break;
+          }
+          const current = (svc.fields.environment?.value ?? {}) as Record<string, string>;
+          const merged = Object.fromEntries(
+            Object.entries({ ...a.value, ...current }).sort(([x], [y]) => x.localeCompare(y)),
+          );
+          const before = svc.fields.environment?.source;
+          svc.fields.environment = inferred(merged);
+          if (before) svc.fields.environment.source = `${before}; Claude added keys: ${reason}`;
           break;
         }
-        const current = (svc!.fields.environment?.value ?? {}) as Record<string, string>;
-        const merged = Object.fromEntries(
-          Object.entries({ ...a.value, ...current }).sort(([x], [y]) => x.localeCompare(y)),
-        );
-        const before = svc!.fields.environment?.source;
-        svc!.fields.environment = inferred(merged);
-        if (before) svc!.fields.environment.source = `${before}; Claude added keys: ${reason}`;
-        break;
-      }
-      case "secrets":
-        if (subsetOf(a.value, q.choices ?? [])) {
-          if (a.value.length) svc!.fields.secrets = inferred([...a.value].sort());
-        } else problem = "expected a list of keys from .env.example";
-        break;
-      case "depends_on":
-        if (subsetOf(a.value, q.choices ?? [])) {
-          if (a.value.length) svc!.fields.depends_on = inferred([...a.value].sort());
-        } else problem = "expected a list of this repo's other services";
-        break;
-      case "conflict": {
-        const choice = (q.choices ?? []).find((c) => same(c, a.value));
-        if (choice === undefined) {
-          problem = "not one of the conflicting values";
+        case "secrets":
+          if (subsetOf(a.value, q.choices ?? [])) {
+            if (a.value.length) svc.fields.secrets = inferred([...a.value].sort());
+          } else problem = "expected a list of keys from .env.example";
+          break;
+        case "depends_on":
+          if (subsetOf(a.value, q.choices ?? [])) {
+            if (a.value.length) svc.fields.depends_on = inferred([...a.value].sort());
+          } else problem = "expected a list of this repo's other services";
+          break;
+        case "conflict": {
+          const choice = (q.choices ?? []).find((c) => same(c, a.value));
+          if (choice === undefined) {
+            problem = "not one of the conflicting values";
+            break;
+          }
+          const key = q.id.slice(svc.name.length + 1);
+          svc.fields[key] = inferred(choice);
+          svc.conflicts = svc.conflicts.filter((c) => c.key !== key);
           break;
         }
-        const key = q.id.slice(q.service!.length + 1);
-        svc!.fields[key] = inferred(choice);
-        svc!.conflicts = svc!.conflicts.filter((c) => c.key !== key);
-        break;
       }
-      case "unmatched": {
-        if (a.value === null) break;
-        const target =
-          typeof a.value === "string" ? next.services.find((s) => s.name === a.value) : undefined;
-        const found = next.unmatched.filter((u) => `unmatched.${u.name}` === q.id);
-        if (!target || !found.length) {
-          problem = "expected one of this repo's services, or null";
-          break;
-        }
-        const fresh = resolveService({
-          name: target.name,
-          dir: target.dir,
-          findings: [...target.findings, ...found],
-        });
-        for (const [k, fv] of Object.entries(fresh.fields)) {
-          if (!(k in target.fields))
-            target.fields[k] = {
-              ...fv,
-              confidence: "inferred",
-              source: `${fv.source}; matched by Claude: ${reason}`,
-            };
-        }
-        target.findings.push(...found);
-        next.unmatched = next.unmatched.filter((u) => !found.includes(u));
-        next.skipped = next.skipped.filter(
-          (s) => !found.some((f) => s.item === f.file && s.reason.includes(` ${f.name} — `)),
-        );
-        break;
-      }
-    }
     if (problem) rejected.push({ item: a.item, reason: problem });
     else accepted.push(a.item);
   }

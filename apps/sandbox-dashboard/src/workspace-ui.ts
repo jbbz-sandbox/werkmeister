@@ -28,7 +28,7 @@
  */
 
 import { type ClaudeMessage, initChatPanel } from "./chat-panel.js";
-import { filterWorkspaces } from "./lib/workspace-search.js";
+import { filterWorkspaces, type RepoPr } from "./lib/workspace-search.js";
 import { el, injectCss } from "./theme.js";
 import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
 
@@ -186,6 +186,22 @@ const CSS = `
      src/usage-widget.ts. */
 `;
 
+/** One `workspace-status` row; only the fields this UI reads. */
+interface ContainerState {
+  name: string;
+  state?: string;
+  running?: number;
+  total?: number;
+  claude?: { state?: string; waiting?: boolean };
+}
+
+interface ForwardStatus {
+  name: string;
+  port: number;
+  detail: string;
+  healthy: boolean;
+}
+
 interface WorkspaceEntry {
   name: string;
   path: string;
@@ -240,8 +256,8 @@ export function initWorkspaceUI(
   const statuses: Record<string, string> = {}; // issueId -> status name
   let statusesLoading = false;
   let cstateLoaded = false; // false until the first workspace-status resolves
-  const prsByWs: Record<string, any[]> = {};
-  let cstateByWs: Record<string, any> = {};
+  const prsByWs: Record<string, RepoPr[]> = {};
+  let cstateByWs: Record<string, ContainerState> = {};
   const openState: Record<string, boolean> = {};
   const chatCtl: Record<
     string,
@@ -296,7 +312,7 @@ export function initWorkspaceUI(
     return e;
   }
 
-  let infraState: any = null;
+  let infraState: { state?: string; running?: number; total?: number } | null = null;
   let updateInfraUI: () => void = () => {};
 
   async function refreshStatus(): Promise<void> {
@@ -390,10 +406,10 @@ export function initWorkspaceUI(
         const d = await call("k8s-forwards-status", {});
         k8sDot.className = "dot " + dotClassFor(d.healthy, d.total);
         k8sLabel.textContent = `k8s forwards ${d.healthy}/${d.total}`;
-        const bad = (d.forwards || []).filter((f: any) => !f.healthy);
+        const bad: ForwardStatus[] = (d.forwards || []).filter((f: ForwardStatus) => !f.healthy);
         k8sItem.title = bad.length
           ? "Unhealthy: " +
-            bad.map((f: any) => `${f.name} :${f.port} (${f.detail})`).join(", ") +
+            bad.map((f) => `${f.name} :${f.port} (${f.detail})`).join(", ") +
             " — click to re-check"
           : "All default k8s port-forwards healthy — click to re-check";
       } catch (_e) {
@@ -500,7 +516,7 @@ export function initWorkspaceUI(
     btn: HTMLElement,
     verb: string,
   ): Promise<void> {
-    const siblings = btn.parentElement!.querySelectorAll<HTMLButtonElement>(".btn");
+    const siblings = btn.parentElement?.querySelectorAll<HTMLButtonElement>(".btn") ?? [];
     for (const b of siblings) b.disabled = true;
     msgEl.className = "act-msg";
     msgEl.textContent = verb + "…";
@@ -699,7 +715,7 @@ export function initWorkspaceUI(
       }
       const repos = prsByWs[w.name];
       if (repos) {
-        const openPrs = repos.filter((r: any) => r.state === "OPEN").length;
+        const openPrs = repos.filter((r) => r.state === "OPEN").length;
         meta.appendChild(
           el(
             "span",
@@ -788,7 +804,7 @@ export function initWorkspaceUI(
         refreshStatus(),
         refs.length ? loadIssueStatuses(refs, opts?.refreshIssues) : Promise.resolve(),
         call("workspace-prs", {})
-          .then((d: any) => {
+          .then((d: { workspaces?: { name: string; repos?: RepoPr[] }[] }) => {
             for (const w of d.workspaces || []) prsByWs[w.name] = w.repos || [];
           })
           .catch(() => {}),

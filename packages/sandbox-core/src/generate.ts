@@ -146,10 +146,20 @@ function resolveServicesAndPorts(
 //   loader rewrites every if/elif condition to `__truthy(<expr>)` (a template
 //   global) at load time — templates on disk stay byte-identical.
 
+// The slice of nunjucks' undocumented parser API that `{% do %}` uses.
+interface TagParser {
+  nextToken(): { value: string };
+  parseSignature(throwErrors: null, noParens: boolean): unknown;
+  advanceAfterBlockEnd(name: string): void;
+}
+interface TagNodes {
+  CallExtension: new (ext: object, method: string, args: unknown) => unknown;
+}
+
 class DoExtension {
   tags = ["do"];
 
-  parse(parser: any, nodes: any): any {
+  parse(parser: TagParser, nodes: TagNodes): unknown {
     const tok = parser.nextToken();
     const args = parser.parseSignature(null, true);
     parser.advanceAfterBlockEnd(tok.value);
@@ -165,8 +175,8 @@ class DoExtension {
 const _IF_CONDITION_RE = /(\{%-?\s*(?:el)?if\s+)([\s\S]+?)(\s*-?%\})/g;
 
 /** FileSystemLoader that rewrites if-conditions for jinja truthiness. */
-class JinjaCompatLoader extends (nunjucks.FileSystemLoader as any) {
-  getSource(name: string): any {
+class JinjaCompatLoader extends nunjucks.FileSystemLoader {
+  getSource(name: string): nunjucks.LoaderSource {
     const source = super.getSource(name);
     if (source && typeof source.src === "string") {
       source.src = source.src.replace(
@@ -179,10 +189,10 @@ class JinjaCompatLoader extends (nunjucks.FileSystemLoader as any) {
   }
 }
 
-const _DICT_GET = function (this: Record<string, any>, key: string, dflt?: any): any {
+const _DICT_GET = function (this: Record<string, unknown>, key: string, dflt?: unknown): unknown {
   return key in this ? this[key] : dflt;
 };
-const _DICT_ITEMS = function (this: Record<string, any>): Array<[string, any]> {
+const _DICT_ITEMS = function (this: Record<string, unknown>): Array<[string, unknown]> {
   return Object.entries(this);
 };
 
@@ -204,7 +214,7 @@ function jinjaContext<T>(value: T, seen = new WeakSet<object>()): T {
   }
   const proto = Object.getPrototypeOf(obj);
   if (proto === Object.prototype || proto === null) {
-    const record = value as unknown as Record<string, any>;
+    const record = value as unknown as Record<string, unknown>;
     if (!Object.hasOwn(record, "get")) {
       Object.defineProperty(record, "get", { value: _DICT_GET, enumerable: false });
     }
@@ -241,15 +251,15 @@ function getNunjucksEnv(): nunjucks.Environment {
   if (!fs.existsSync(templatesDir) || !fs.statSync(templatesDir).isDirectory()) {
     fs.mkdirSync(templatesDir, { recursive: true });
   }
-  const env = new nunjucks.Environment(new (JinjaCompatLoader as any)(templatesDir), {
+  const env = new nunjucks.Environment(new JinjaCompatLoader(templatesDir), {
     autoescape: false,
   });
-  env.addExtension("do", new DoExtension() as any);
+  env.addExtension("do", new DoExtension());
   env.addGlobal("__truthy", jinjaTruthy);
   // jinja `map(attribute='name')` — the only form the templates use.
-  env.addFilter("map", (arr: any[], kwargs: any) => {
-    const attr = kwargs && typeof kwargs === "object" ? kwargs["attribute"] : undefined;
-    return (arr ?? []).map((item) => (attr === undefined ? item : item[attr]));
+  env.addFilter("map", (arr: Array<Record<string, unknown>> | null, kwargs: unknown) => {
+    const attr = isDict(kwargs) ? kwargs["attribute"] : undefined;
+    return (arr ?? []).map((item) => (attr === undefined ? item : item[String(attr)]));
   });
   return env;
 }
@@ -433,7 +443,7 @@ function resolveServiceRefs(
  * Absent field, missing or malformed file -> `{}` so workspaces that have not
  * opted in render identically.
  */
-function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string, any> {
+function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string, unknown> {
   const configPath = path.join(workspaceRoot, ".sandbox", "workspace.yml");
   let text: string;
   try {
@@ -444,16 +454,13 @@ function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string,
   } catch {
     return {};
   }
-  let data: any;
+  let data: unknown;
   try {
-    data = YAML.parse(text) ?? {};
+    data = YAML.parse(text);
   } catch {
     return {};
   }
-  if (!isDict(data)) {
-    data = {};
-  }
-  const value = field in data ? data[field] : {};
+  const value = isDict(data) && field in data ? data[field] : {};
   return isDict(value) ? value : {};
 }
 
@@ -466,7 +473,7 @@ function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string,
  * service registry (PROJ-1897 — see .sandbox/notes/008).
  */
 function loadDevLinks(workspaceRoot: string): Record<string, string[]> {
-  return loadWorkspaceDict(workspaceRoot, "dev_links");
+  return loadWorkspaceDict(workspaceRoot, "dev_links") as Record<string, string[]>;
 }
 
 /** Per-workspace env overrides from `.sandbox/workspace.yml` (`env_vars:`). */
@@ -593,7 +600,12 @@ function renderFeatureCompose(
   getPortRange(slot);
   const networkName = `sandbox-${feature}`;
 
-  const compose: Record<string, any> = {
+  const compose: {
+    name: string;
+    networks: Record<string, unknown>;
+    services: Record<string, unknown>;
+    volumes?: Record<string, { name: string }>;
+  } = {
     name: `sandbox-${feature}`,
     networks: {
       [`feature-${feature}`]: {
