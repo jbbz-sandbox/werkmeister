@@ -189,10 +189,10 @@ function jinjaContext<T>(value: T, seen = new WeakSet<object>()): T {
   const proto = Object.getPrototypeOf(obj);
   if (proto === Object.prototype || proto === null) {
     const record = value as unknown as Record<string, any>;
-    if (!Object.prototype.hasOwnProperty.call(record, "get")) {
+    if (!Object.hasOwn(record, "get")) {
       Object.defineProperty(record, "get", { value: _DICT_GET, enumerable: false });
     }
-    if (!Object.prototype.hasOwnProperty.call(record, "items")) {
+    if (!Object.hasOwn(record, "items")) {
       Object.defineProperty(record, "items", { value: _DICT_ITEMS, enumerable: false });
     }
     for (const v of Object.values(record)) {
@@ -206,7 +206,7 @@ function installArrayAppend(): void {
   // ponytail: non-enumerable Array.prototype patch so `{% set x = [] %}` +
   // `{% do x.append(y) %}` works; swap for a template preprocessor only if
   // this ever collides with another `append`.
-  if (!Object.prototype.hasOwnProperty.call(Array.prototype, "append")) {
+  if (!Object.hasOwn(Array.prototype, "append")) {
     Object.defineProperty(Array.prototype, "append", {
       value: function append(this: unknown[], item: unknown): void {
         this.push(item);
@@ -739,7 +739,7 @@ function renderFeatureCompose(
         // Check if dependency is an extra_service of a local service
         for (const otherSvc of localServices) {
           const otherDef = servicesConfig[otherSvc] ?? {};
-          if (isDict(otherDef) && (otherDef["extra_services"] ?? {})[dep]) {
+          if (isDict(otherDef) && otherDef["extra_services"]?.[dep]) {
             depIsLocal = true;
             break;
           }
@@ -1093,7 +1093,7 @@ const _GRAPHQL_TYPES = new Set(["graphql-subgraph", "graphql", "subgraph", "fede
  */
 export function generateSupergraphConfig(
   feature: string,
-  slot: number,
+  _slot: number,
   localServices: string[],
   config: Record<string, any> | null = null,
   workspaceOverride: string | null = null,
@@ -1434,7 +1434,7 @@ function hostRouterLines(routers: Record<string, any>[]): string[] {
 function generateCaddyfileLocked(
   allFeatures: Record<string, any>,
   servicesConfig: Record<string, any>,
-  portsConfig: Record<string, any>,
+  _portsConfig: Record<string, any>,
   _root: string,
   outPath: string,
 ): string {

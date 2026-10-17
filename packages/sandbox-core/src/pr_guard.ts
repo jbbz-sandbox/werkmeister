@@ -47,7 +47,7 @@ export function decide(input: Record<string, any>): string | null {
   const root = findRecordRoot(String(input["cwd"] || process.cwd()));
   if (!root) return null;
   const tool = String(input["tool_name"] || "");
-  const command = String((input["tool_input"] || {})["command"] || "");
+  const command = String(input["tool_input"]?.["command"] || "");
   const opensPr = (tool === "Bash" && GH_PR_CREATE.test(command)) || MCP_CREATE_PR.test(tool);
   if (!opensPr) return null;
   // A workspace generated before the rules file existed has neither path; point at the docs then.

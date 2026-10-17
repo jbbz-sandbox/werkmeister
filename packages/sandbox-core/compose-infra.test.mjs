@@ -79,7 +79,7 @@ test("creates the override from the registry when it is missing", () => {
   assert.equal(existsSync(override), false);
   composeInvocation();
   assert.ok(existsSync(override));
-  assert.match(readFileSync(override, "utf8"), /- "9050:9050"   # redis/);
+  assert.match(readFileSync(override, "utf8"), /- "9050:9050" {3}# redis/);
 });
 
 test("leaves an existing override alone", async () => {

@@ -50,7 +50,7 @@ export function resolveServiceArchetype(
 /** The standards keys a service contributes, via its archetype. */
 export function serviceStandards(svcDef: any, archetypes?: Record<string, any> | null): string[] {
   const arch = resolveServiceArchetype(svcDef, archetypes);
-  return Array.from((arch ?? {})["standards"] ?? []);
+  return Array.from(arch?.["standards"] ?? []);
 }
 
 /**
@@ -71,7 +71,7 @@ export function serviceTestCommand(
   const own = svcDef["test"];
   if (own) return String(own);
   const arch = resolveServiceArchetype(svcDef, archetypes);
-  const template = (arch ?? {})["test"];
+  const template = arch?.["test"];
   if (!template) return null;
   return String(template).split("{service}").join(svcName);
 }
@@ -99,7 +99,7 @@ export function serviceValidation(
   if (!isDict(svcDef)) return null;
   const own = svcDef["validate"];
   if (own) return String(own);
-  const text = (resolveServiceArchetype(svcDef, archetypes) ?? {})["validate"];
+  const text = resolveServiceArchetype(svcDef, archetypes)?.["validate"];
   return text ? String(text) : null;
 }
 
@@ -109,8 +109,8 @@ export function candidateServiceNames(
   reposConfig: Record<string, any>,
   localServices?: string[] | null,
 ): string[] {
-  if (localServices && localServices.length) return [...localServices];
-  return repoNames.flatMap((repo) => (reposConfig[repo] ?? {})["services"] ?? []);
+  if (localServices?.length) return [...localServices];
+  return repoNames.flatMap((repo) => reposConfig[repo]?.["services"] ?? []);
 }
 
 export interface ValidationRow {

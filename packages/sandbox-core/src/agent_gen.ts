@@ -192,7 +192,7 @@ ${smokeLines.join("\n")}
     : "";
 
   let standardsLine = "";
-  if (spec["standards"] && spec["standards"].length) {
+  if (spec["standards"]?.length) {
     const skills = (spec["standards"] as string[])
       .map((key) => `\`sb-${key}-standard\``)
       .join(", ");

@@ -114,7 +114,6 @@ const tabs = [...root.querySelectorAll<HTMLButtonElement>(".wsd-tab")];
 const list = initWorkspaceUI(bridge, listPane, { headerRoot: shellHeader, renderMarkdown });
 let createMounted = false;
 let prsMounted = false;
-let prs: { reload: () => void } | null = null;
 let healthMounted = false;
 let health: { reload: () => void } | null = null;
 let linksMounted = false;
@@ -153,7 +152,7 @@ function show(tab: Tab): void {
   }
   if (tab === "prs" && !prsMounted) {
     prsMounted = true;
-    prs = initPrsUI(bridge, prsPane);
+    initPrsUI(bridge, prsPane);
   }
   if (tab === "health") {
     if (!healthMounted) {

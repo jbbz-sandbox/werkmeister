@@ -236,7 +236,7 @@ export async function allocateSlot(
       // both "does this feature already have a slot" and "which slots
       // are taken" from that single result -- no stale cross-call reads.
       const dockerSlots = await getAllSlotsFromDocker();
-      const existingEntry = (dockerSlots ?? {})[feature];
+      const existingEntry = dockerSlots?.[feature];
       if (existingEntry) {
         return existingEntry.slot;
       }

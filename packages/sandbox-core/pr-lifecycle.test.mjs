@@ -380,9 +380,10 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
         fetchIssue: async () => null,
         updateIssue: async (ref, u) => (updated = [ref, u.status]),
       },
-      commitRecord: async (_ws, _msg, paths) => (
-        (recorded = paths), { ok: true, message: "record pushed" }
-      ),
+      commitRecord: async (_ws, _msg, paths) => {
+        recorded = paths;
+        return { ok: true, message: "record pushed" };
+      },
     });
     const r = await open(ws, d);
     assert.ok(r.ok, r.lines.join("\n"));
@@ -726,9 +727,10 @@ test("adoptPr: a merged PR from outside is written, shipped by its release tag, 
         [/ls-remote/, { code: 2 }],
       ],
       {
-        commitRecord: async (_ws, _m, paths) => (
-          committed.push(...paths), { ok: true, message: "record pushed" }
-        ),
+        commitRecord: async (_ws, _m, paths) => {
+          committed.push(...paths);
+          return { ok: true, message: "record pushed" };
+        },
       },
     );
     const r = await adoptPr(ws, { pr: "140" }, d);

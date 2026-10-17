@@ -149,7 +149,7 @@ export function normalizeMulti(value: string, choices: string[] | null): string 
       deduped.push(item);
     }
   }
-  if (choices && choices.length) {
+  if (choices?.length) {
     const unknown = deduped.filter((s) => !choices.includes(s));
     if (unknown.length) {
       warn(`Unknown values will be skipped downstream: ${unknown.join(", ")}`);

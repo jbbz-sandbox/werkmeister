@@ -184,7 +184,11 @@ test("helm: each <release>.values.yaml next to a chart is rendered and read", ()
 test("helm: a chart with no sibling values files renders once under its Chart.yaml name", () => {
   const root = fixture({ "deploy/chart/Chart.yaml": "name: shop\n" });
   const seen = [];
-  const ctx = ctxFor(root, (cmd) => (cmd[0] === "helm" ? (seen.push(cmd[2]), [0, ""]) : [128, ""]));
+  const ctx = ctxFor(root, (cmd) => {
+    if (cmd[0] !== "helm") return [128, ""];
+    seen.push(cmd[2]);
+    return [0, ""];
+  });
   detectHelm(ctx);
   assert.deepEqual(seen, ["shop"]);
 });

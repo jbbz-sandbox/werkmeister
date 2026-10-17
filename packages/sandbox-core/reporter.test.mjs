@@ -107,7 +107,10 @@ test("raw() reproduces a header that already ends in a newline", async () => {
   const realWrite = process.stdout.write.bind(process.stdout);
 
   const viaConsole = [];
-  process.stdout.write = (c) => (viaConsole.push(c), true);
+  process.stdout.write = (c) => {
+    viaConsole.push(c);
+    return true;
+  };
   try {
     console.log(header);
   } finally {
@@ -115,7 +118,10 @@ test("raw() reproduces a header that already ends in a newline", async () => {
   }
 
   const viaRaw = [];
-  process.stdout.write = (c) => (viaRaw.push(c), true);
+  process.stdout.write = (c) => {
+    viaRaw.push(c);
+    return true;
+  };
   try {
     await withReporter(ttyReporter, async () => raw(`${header}\n`));
   } finally {
@@ -130,7 +136,10 @@ test("raw() through ttyReporter is byte-identical to console.log", async () => {
   const realWrite = process.stdout.write.bind(process.stdout);
 
   const viaConsole = [];
-  process.stdout.write = (c) => (viaConsole.push(c), true);
+  process.stdout.write = (c) => {
+    viaConsole.push(c);
+    return true;
+  };
   try {
     console.log(line);
   } finally {
@@ -138,7 +147,10 @@ test("raw() through ttyReporter is byte-identical to console.log", async () => {
   }
 
   const viaRaw = [];
-  process.stdout.write = (c) => (viaRaw.push(c), true);
+  process.stdout.write = (c) => {
+    viaRaw.push(c);
+    return true;
+  };
   try {
     await withReporter(ttyReporter, async () => raw(`${line}\n`));
   } finally {
@@ -178,7 +190,10 @@ test("collectingReporter is byte-identical to what ttyReporter prints", async ()
   const realWrite = process.stdout.write.bind(process.stdout);
   const realLog = console.log;
   const printed = [];
-  process.stdout.write = (c) => (printed.push(c), true);
+  process.stdout.write = (c) => {
+    printed.push(c);
+    return true;
+  };
   console.log = (line) => printed.push(`${line}\n`);
   try {
     await withReporter(ttyReporter, emitAll);

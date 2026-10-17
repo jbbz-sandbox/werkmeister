@@ -146,9 +146,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     // Read after the repo answer above (runWizard prompts in order), so
     // answering `acme/sandbox-workspace` pre-fills the org as `acme`.
     return (
-      ((cfg.overrides ?? {}).github_org as string) ||
-      (resolvedGh.workspace_repo ?? "").split("/")[0] ||
-      ""
+      (cfg.overrides?.github_org as string) || (resolvedGh.workspace_repo ?? "").split("/")[0] || ""
     );
   };
 
@@ -169,7 +167,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   // --- 2. browser -----------------------------------------------------------
   heading("2. Browser");
   const resolvedBrowser: Record<string, string> = {};
-  const browserDefault = () => ((cfg.overrides ?? {}).browser as string) || DEFAULT_BROWSER;
+  const browserDefault = () => (cfg.overrides?.browser as string) || DEFAULT_BROWSER;
 
   if (interactive) {
     await runWizard([BROWSER_PROMPT], resolvedBrowser, browserDefault, {

@@ -87,7 +87,7 @@ export function loadConfig(): Record<string, any> {
  * the one you configured is the worse failure.
  */
 function registryPath(overrideKey: string, envVar: string, basename: string): string {
-  const override = (loadConfig()["overrides"] ?? {})[overrideKey];
+  const override = loadConfig()["overrides"]?.[overrideKey];
   if (override) return path.resolve(expandUser(String(override)));
   const fromEnv = process.env[envVar];
   if (fromEnv) return path.resolve(expandUser(fromEnv));
@@ -127,7 +127,7 @@ export function modelPricingYamlPath(): string {
  * CLI's own concern (it also auto-detects from the git tree).
  */
 export function workspacesRoot(): string {
-  const configured = (loadConfig()["paths"] ?? {})["workspaces_root"];
+  const configured = loadConfig()["paths"]?.["workspaces_root"];
   if (configured) return path.resolve(expandUser(String(configured)));
   const fromEnv = process.env.SANDBOX_WORKSPACES_ROOT;
   if (fromEnv) return path.resolve(expandUser(fromEnv));

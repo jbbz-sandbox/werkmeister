@@ -548,10 +548,10 @@ export function resolveActiveStandards(
   if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
 
   let candidateServices: string[];
-  if (localServices && localServices.length) {
+  if (localServices?.length) {
     candidateServices = [...localServices];
   } else {
-    candidateServices = repoNames.flatMap((repo) => (reposConfig[repo] ?? {})["services"] ?? []);
+    candidateServices = repoNames.flatMap((repo) => reposConfig[repo]?.["services"] ?? []);
   }
 
   const active = new Set<string>();
@@ -613,8 +613,8 @@ export function buildStandardsManifest(
   for (const key of active) {
     if (universal.includes(key)) continue;
     domains[key] = {
-      applies_to: Array.from((modules[key] ?? {})["applies_to"] ?? []),
-      summary: String((modules[key] ?? {})["summary"] ?? "").trim(),
+      applies_to: Array.from(modules[key]?.["applies_to"] ?? []),
+      summary: String(modules[key]?.["summary"] ?? "").trim(),
     };
   }
   const manifest: Record<string, any> = {
