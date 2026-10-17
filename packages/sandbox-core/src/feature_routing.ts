@@ -31,7 +31,7 @@
  * the registry.
  */
 
-import { loadServices } from "./config.js";
+import { loadServices, type ServicesConfig } from "./config.js";
 import { type IngressSettings, loadIngress } from "./global_config.js";
 
 export interface FeatureRouter {
@@ -66,14 +66,14 @@ function hostFor(service: string, domain: string): string {
  * services config and/or ingress settings to avoid re-reading the files.
  */
 export function loadFeatureRouters(
-  servicesConfig?: Record<string, any>,
+  servicesConfig?: ServicesConfig,
   ingress?: IngressSettings,
 ): Record<string, FeatureRouter> {
   const services = servicesConfig ?? loadServices();
   const ing = ingress ?? loadIngress();
   const routers: Record<string, FeatureRouter> = {};
   for (const [svcName, svcDef] of Object.entries(services)) {
-    const fr = svcDef && typeof svcDef === "object" ? (svcDef as any).feature_router : null;
+    const fr = svcDef && typeof svcDef === "object" ? svcDef.feature_router : null;
     if (!fr) {
       continue;
     }
@@ -99,7 +99,7 @@ export function loadFeatureRouters(
  * `/etc/hosts` entries — see the module docstring.
  */
 export function ingressHostnames(
-  servicesConfig?: Record<string, any>,
+  servicesConfig?: ServicesConfig,
   ingress?: IngressSettings,
 ): string[] {
   const hosts = new Set<string>();

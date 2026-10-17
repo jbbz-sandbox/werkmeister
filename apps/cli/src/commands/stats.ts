@@ -12,7 +12,7 @@
 
 import { containerStats } from "sandbox-core/docker";
 import {
-  ContainerStats,
+  type ContainerStats,
   formatMem,
   halveCpu,
   type Recommendation,

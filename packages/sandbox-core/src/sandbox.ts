@@ -1486,7 +1486,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
     ],
     repoDir,
   ).catch(() => null);
-  if (!res || res.code !== 0) return none;
+  if (res?.code !== 0) return none;
   try {
     const arr = JSON.parse(stripAnsi(res.stdout).trim() || "[]") as Array<{
       url?: string;
@@ -1787,7 +1787,7 @@ async function ghPrView(url: string): Promise<ViewResult> {
     "--json",
     "reviewDecision,latestReviews,mergeStateStatus,statusCheckRollup,labels,author,number,title,body,headRefName,updatedAt,url,isDraft",
   ]).catch(() => null);
-  if (!res || res.code !== 0) return { url, unavailable: true };
+  if (res?.code !== 0) return { url, unavailable: true };
   try {
     return JSON.parse(stripAnsi(res.stdout).trim()) as PrView;
   } catch {
@@ -1923,7 +1923,7 @@ export async function commitAndPush(
     const c = await runCapture("git", ["-C", dir, "commit", "-m", message, ...only]).catch(
       () => null,
     );
-    if (!c || c.code !== 0) {
+    if (c?.code !== 0) {
       return {
         ok: false,
         message: `${label}: commit failed — ${c ? gitErrorLine(c.stderr || c.stdout) : "spawn error"}`,
@@ -1957,7 +1957,7 @@ export async function commitAndPush(
   }
 
   const p = await runCapture("git", ["-C", dir, "push", "-u", "origin", branch]).catch(() => null);
-  if (!p || p.code !== 0) {
+  if (p?.code !== 0) {
     return {
       ok: false,
       message: `${label}: push failed — ${p ? gitErrorLine(p.stderr || p.stdout) : "spawn error"}`,
@@ -2987,24 +2987,6 @@ export interface K8sForwardHealth {
   healthy: boolean;
   /** e.g. "HTTP 200", "timeout", "ECONNREFUSED …" */
   detail: string | null;
-}
-
-/** Walk up from this module (works from source and dist) to find a repo file. */
-async function findRepoFile(rel: string): Promise<string | null> {
-  let dir = import.meta.dirname;
-  for (let i = 0; i < 8; i++) {
-    const candidate = path.join(dir, rel);
-    try {
-      await fs.access(candidate);
-      return candidate;
-    } catch {
-      /* keep walking */
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
 }
 
 /**

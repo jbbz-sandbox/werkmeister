@@ -88,6 +88,6 @@ test("a registered validate line sits under the test command; none adds nothing"
   const archs = { tool: { standards: [], test: "npm test" } };
   const [spec] = buildTesterSpecs({ tool: ["bare", "lib"] }, svcs, archs, "test", {}, "");
   const body = buildTesterAgent(spec);
-  assert.match(body, /- lib — run from `demo\/`: `npm test`\n  validate: run the smoke tests/);
+  assert.match(body, /- lib — run from `demo\/`: `npm test`\n {2}validate: run the smoke tests/);
   assert.doesNotMatch(body.split("- lib")[0], /validate:/, "bare service has no validate line");
 });

@@ -212,7 +212,7 @@ export function initPrsUI(bridge: HostBridge, root: HTMLElement): { reload: () =
   // untouched; a tracker strategy returning markdown would retire this.
   function descriptionToMarkdown(src: string): string {
     if (!/^h[1-6]\.\s|\{code|\{noformat\}|\{\{/m.test(src)) return src;
-    let s = src
+    const s = src
       .replace(/\{code(?::[^}]*)?\}|\{noformat\}/g, "\n```\n")
       .replace(/\{\{([^}]+)\}\}/g, "`$1`");
     return s

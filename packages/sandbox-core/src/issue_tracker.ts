@@ -53,7 +53,7 @@ export function trackerById(id: TrackerId): IssueTrackerStrategy {
 
 /** The configured tracker's id; anything unrecognised reads as jira. */
 export function loadIssueTracker(cfg?: Record<string, any>): TrackerId {
-  const id = ((cfg ?? load())["overrides"] ?? {})["issue_tracker"];
+  const id = (cfg ?? load())["overrides"]?.["issue_tracker"];
   return (TRACKER_IDS as readonly string[]).includes(id) ? (id as TrackerId) : "jira";
 }
 

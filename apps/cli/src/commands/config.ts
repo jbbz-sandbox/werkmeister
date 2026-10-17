@@ -48,7 +48,7 @@ function show(cfg: Record<string, any>): void {
   const ingress = gc.loadIngress(cfg);
   console.log(`${Colors.BOLD}ingress:${Colors.RESET}`);
   for (const [k, v] of Object.entries(ingress)) {
-    const origin = (cfg.ingress || {})[k] ? "YAML" : "default";
+    const origin = cfg.ingress?.[k] ? "YAML" : "default";
     console.log(`  ${k}: ${v}  ${Colors.DIM}(${origin})${Colors.RESET}`);
   }
 

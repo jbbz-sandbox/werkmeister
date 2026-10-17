@@ -13,7 +13,7 @@ import * as path from "node:path";
 import { GraduationError } from "sandbox-core/graduate";
 import type { DownResult } from "sandbox-core/lifecycle";
 import { down as downFeature, reloadProxy, teardownNotes } from "sandbox-core/lifecycle";
-import { type Note } from "sandbox-core/notes";
+import type { Note } from "sandbox-core/notes";
 import { getAllSlots } from "sandbox-core/slots";
 import { Colors, error, info, warn } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";

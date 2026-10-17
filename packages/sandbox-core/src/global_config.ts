@@ -111,7 +111,7 @@ export function envShPath(): string {
  * working.
  */
 export function standardsDirPath(): string {
-  const override = (load()["overrides"] ?? {})["standards_dir"];
+  const override = load()["overrides"]?.["standards_dir"];
   if (override) {
     return path.resolve(expandUser(String(override)));
   }
@@ -134,7 +134,7 @@ export function standardsDirProblem(): string {
   if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
     return "";
   }
-  const configured = (load()["overrides"] ?? {})["standards_dir"];
+  const configured = load()["overrides"]?.["standards_dir"];
   return configured
     ? `standards tree not found: ${dir} (overrides.standards_dir in ${configPath()})`
     : `no standards tree: overrides.standards_dir is unset in ${configPath()} and ` +
@@ -381,7 +381,7 @@ export function loadIngress(cfg?: Record<string, any>): IngressSettings {
  * authenticated GitHub user, and warns when it can't.
  */
 export function loadWorkspaceRepo(cfg?: Record<string, any>): string {
-  const value = ((cfg ?? load())["overrides"] ?? {})["workspace_repo"];
+  const value = (cfg ?? load())["overrides"]?.["workspace_repo"];
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -412,7 +412,7 @@ export const _WORKSPACE_REPO_PROMPT: PromptSpec = {
  */
 export function loadGithubOrg(cfg?: Record<string, any>): string {
   const c = cfg ?? load();
-  const explicit = (c["overrides"] ?? {})["github_org"];
+  const explicit = c["overrides"]?.["github_org"];
   if (typeof explicit === "string" && explicit.trim()) {
     return explicit.trim();
   }
@@ -504,7 +504,7 @@ export function renderEnvSh(cfg: Record<string, any>): string {
     "# Sourced by ~/.zshenv and the `sandbox` wrapper for backward compatibility.",
   ];
   for (const [section, key, envVar] of _ENV_MAP) {
-    const value = (cfg[section] ?? {})[key];
+    const value = cfg[section]?.[key];
     if (value === null || value === undefined || value === "") {
       continue;
     }
