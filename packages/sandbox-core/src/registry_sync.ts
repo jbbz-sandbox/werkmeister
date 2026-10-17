@@ -21,6 +21,7 @@ import * as path from "node:path";
 
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
+import type { RepoEntry, ServiceEntry } from "./config.js";
 import { getReposRoot, servicesLocalYamlPath, servicesYamlPath, workspacesRoot } from "./config.js";
 import type { Step } from "./machine_setup.js";
 import { REGISTRY_DEFAULTS, renderServicesLocalYaml, seedFile } from "./scaffold.js";
@@ -46,12 +47,28 @@ const OUTPUT_ORDER = [
 
 export class RegistryError extends Error {}
 
+type YamlMap = Record<string, unknown>;
+
+/** `repos.<repo>` as the merge builds it. */
+type MergedRepo = RepoEntry & { services: string[]; path_mappings: Record<string, string> };
+
+/** The merged registry document; local-overlay keys such as `k8s_context` ride along untyped. */
+export type MergedRegistry = {
+  archetypes: YamlMap;
+  mcp_servers: YamlMap;
+  services: Record<string, ServiceEntry>;
+  infrastructure: Record<string, YamlMap>;
+  setup_services: Record<string, ServiceEntry>;
+  repos: Record<string, MergedRepo>;
+  [key: string]: unknown;
+};
+
 export interface Fragment {
   /** Directory name under repos_root — the service's `repo:`. */
   repo: string;
   /** Absolute path of the fragment file, for messages. */
   path: string;
-  doc: Record<string, any>;
+  doc: YamlMap;
 }
 
 export interface PlaceholderPaths {
@@ -60,7 +77,7 @@ export interface PlaceholderPaths {
   workspaces_root: string;
 }
 
-function isDict(value: unknown): value is Record<string, any> {
+function isDict(value: unknown): value is YamlMap {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -96,7 +113,7 @@ export function expandPlaceholders<T>(value: T, paths: PlaceholderPaths): T {
     return value.map((v) => expandPlaceholders(v, paths)) as T;
   }
   if (isDict(value)) {
-    const out: Record<string, any> = {};
+    const out: YamlMap = {};
     for (const [k, v] of Object.entries(value)) out[k] = expandPlaceholders(v, paths);
     return out as T;
   }
@@ -104,8 +121,8 @@ export function expandPlaceholders<T>(value: T, paths: PlaceholderPaths): T {
 }
 
 /** Maps merge recursively; scalars and lists from *over* replace. */
-function deepMerge(base: Record<string, any>, over: Record<string, any>): Record<string, any> {
-  const out: Record<string, any> = { ...base };
+function deepMerge(base: YamlMap, over: YamlMap): YamlMap {
+  const out: YamlMap = { ...base };
   for (const [k, v] of Object.entries(over)) {
     out[k] = isDict(v) && isDict(out[k]) ? deepMerge(out[k], v) : v;
   }
@@ -122,8 +139,8 @@ function claim(owners: Map<string, string>, key: string, who: string, label: str
 }
 
 export interface MergeOptions {
-  defaults: Record<string, any>;
-  local: Record<string, any>;
+  defaults: { archetypes?: YamlMap; mcp_servers?: YamlMap };
+  local: YamlMap;
   paths: PlaceholderPaths;
 }
 
@@ -131,8 +148,8 @@ export interface MergeOptions {
  * Merge *fragments* into one registry document: defaults, then fragments
  * (collisions fail), then the local overlay (which may override anything).
  */
-export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record<string, any> {
-  const merged: Record<string, any> = {
+export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): MergedRegistry {
+  const merged: MergedRegistry = {
     archetypes: structuredClone(opts.defaults["archetypes"] ?? {}),
     mcp_servers: structuredClone(opts.defaults["mcp_servers"] ?? {}),
     services: {},
@@ -176,7 +193,7 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record
           throw new RegistryError(`${fragment.path}: \`${section}.${name}\` must be a map`);
         }
         claim(owners, `${section}/${name}`, fragment.repo, `${section}.${name}`);
-        let entry: Record<string, any> = raw;
+        let entry: ServiceEntry = raw;
         if (section === "services" || section === "setup_services") {
           if (raw["repo"] !== undefined && raw["repo"] !== fragment.repo) {
             throw new RegistryError(
@@ -218,16 +235,16 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Record
     }
   }
 
-  return deepMerge(merged, opts.local);
+  return deepMerge(merged, opts.local) as MergedRegistry;
 }
 
 /** The generated file: marker header, then the document in OUTPUT_ORDER. */
 export function renderRegistry(
-  merged: Record<string, any>,
+  merged: MergedRegistry,
   sources: string[],
   localPath: string,
 ): string {
-  const ordered: Record<string, any> = {};
+  const ordered: YamlMap = {};
   for (const key of OUTPUT_ORDER) if (key in merged) ordered[key] = merged[key];
   for (const key of Object.keys(merged)) if (!(key in ordered)) ordered[key] = merged[key];
   const header = [
@@ -262,7 +279,7 @@ export function inheritedK8sContext(registryPath: string): string | null {
 }
 
 /** `section.name` for every entry of *oldText*'s three fragment sections that *merged* lacks. */
-function orphanedEntries(oldText: string, merged: Record<string, any>): string[] {
+function orphanedEntries(oldText: string, merged: MergedRegistry): string[] {
   let old: unknown;
   try {
     old = parseYaml(oldText);
@@ -294,7 +311,7 @@ function placeholderPaths(): PlaceholderPaths {
   return { home: os.homedir(), repos_root: getReposRoot(), workspaces_root: workspacesRoot() };
 }
 
-function readLocalOverlay(localPath: string): Record<string, any> {
+function readLocalOverlay(localPath: string): YamlMap {
   if (!fs.existsSync(localPath)) return {};
   let doc: unknown;
   try {
@@ -321,7 +338,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const localPath = servicesLocalYamlPath();
 
   let fragments: Fragment[];
-  let merged: Record<string, any>;
+  let merged: MergedRegistry;
   let text: string;
   // A standalone `sandbox registry sync` on a machine that never ran the new
   // setup would otherwise merge with no overlay and silently drop k8s_context

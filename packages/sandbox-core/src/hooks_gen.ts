@@ -64,13 +64,16 @@ export const SESSION_START_COMMAND = `command -v sandbox >/dev/null 2>&1 && { ${
 export const PRE_TOOL_USE_GATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_GATE_MARKER} || true`;
 export const PR_GUARD_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_PR_GUARD_MARKER} || true`;
 
+/** One matcher group under `hooks.<event>` in `.claude/settings.json`. */
+export type HookEntry = { matcher?: string; hooks: { type: "command"; command: string }[] };
+
 /** The managed SessionStart matcher-group (matcher-less: all sources). */
-export function buildSessionStartEntry(): Record<string, any> {
+export function buildSessionStartEntry(): HookEntry {
   return { hooks: [{ type: "command", command: SESSION_START_COMMAND }] };
 }
 
 /** The managed PreToolUse matcher-group (Edit/Write only). */
-export function buildPreToolUseGateEntry(): Record<string, any> {
+export function buildPreToolUseGateEntry(): HookEntry {
   return {
     matcher: "Edit|Write",
     hooks: [{ type: "command", command: PRE_TOOL_USE_GATE_COMMAND }],
@@ -78,7 +81,7 @@ export function buildPreToolUseGateEntry(): Record<string, any> {
 }
 
 /** The managed PR-guard matcher-group: shell `gh pr create` and the GitHub MCP's create tool. */
-export function buildPrGuardEntry(): Record<string, any> {
+export function buildPrGuardEntry(): HookEntry {
   return {
     matcher: "Bash|mcp__.*create_pull_request",
     hooks: [{ type: "command", command: PR_GUARD_COMMAND }],
@@ -89,7 +92,7 @@ function _isManaged(entry: unknown, marker: string = _HOOK_MARKER): boolean {
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
     return false;
   }
-  const inner = (entry as Record<string, any>)["hooks"];
+  const inner = (entry as Record<string, unknown>)["hooks"];
   if (!Array.isArray(inner)) {
     return false;
   }
@@ -98,7 +101,7 @@ function _isManaged(entry: unknown, marker: string = _HOOK_MARKER): boolean {
       typeof hook === "object" &&
       hook !== null &&
       !Array.isArray(hook) &&
-      String((hook as Record<string, any>)["command"] ?? "").includes(marker),
+      String((hook as Record<string, unknown>)["command"] ?? "").includes(marker),
   );
 }
 
@@ -108,9 +111,9 @@ function _isManaged(entry: unknown, marker: string = _HOOK_MARKER): boolean {
  * value for *event* — a human put something there.
  */
 function _mergeEvent(
-  hooks: Record<string, any>,
+  hooks: Record<string, unknown>,
   event: string,
-  managedEntry: Record<string, any>,
+  managedEntry: HookEntry,
   marker: string,
 ): boolean {
   const existing = event in hooks ? hooks[event] : [];
@@ -123,9 +126,9 @@ function _mergeEvent(
   return true;
 }
 
-type Managed = [event: string, entry: Record<string, any>, marker: string];
+type Managed = [event: string, entry: HookEntry, marker: string];
 
-function _isDict(value: unknown): value is Record<string, any> {
+function _isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -134,7 +137,7 @@ function _settingsPath(workspaceRoot: string): string {
 }
 
 /** The settings object (`{}` when absent), or null when a human left something we must not rewrite. */
-function _readSettings(settingsPath: string): Record<string, any> | null {
+function _readSettings(settingsPath: string): Record<string, unknown> | null {
   if (!fs.existsSync(settingsPath)) return {};
   try {
     const existing = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -145,7 +148,7 @@ function _readSettings(settingsPath: string): Record<string, any> | null {
 }
 
 /** Write *settings*, or remove the file (and `.claude/` if that empties it) once nothing is left. */
-function _saveSettings(settingsPath: string, settings: Record<string, any>): void {
+function _saveSettings(settingsPath: string, settings: Record<string, unknown>): void {
   if (Object.keys(settings).length) {
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
@@ -178,7 +181,7 @@ function _writeManaged(workspaceRoot: string, managed: Managed[]): string {
   if (!("hooks" in settings)) {
     settings["hooks"] = {};
   }
-  const hooks = settings["hooks"];
+  const hooks = settings["hooks"] as Record<string, unknown> | null;
   if (typeof hooks !== "object" || hooks === null || Array.isArray(hooks)) {
     return settingsPath;
   }
@@ -214,13 +217,13 @@ export function writePrGuardHook(workspaceRoot: string): string {
  */
 export function removeWorkspaceHooks(workspaceRoot: string): string[] {
   const settingsPath = _settingsPath(workspaceRoot);
-  let settings: any;
+  let settings: Record<string, unknown>;
   try {
     settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
   } catch {
     return [];
   }
-  const hooks = settings?.["hooks"];
+  const hooks = settings?.["hooks"] as Record<string, unknown> | null | undefined;
   if (typeof hooks !== "object" || hooks === null || Array.isArray(hooks)) {
     return [];
   }
@@ -234,7 +237,9 @@ export function removeWorkspaceHooks(workspaceRoot: string): string[] {
     const kept = entries.filter((entry) => !_isManaged(entry, marker));
     for (const entry of entries) {
       if (!kept.includes(entry))
-        removed.push(...entry["hooks"].map((h: any) => String(h["command"])));
+        removed.push(
+          ...entry["hooks"].map((h: HookEntry["hooks"][number]) => String(h["command"])),
+        );
     }
     if (kept.length) hooks[event] = kept;
     else delete hooks[event];
@@ -356,7 +361,7 @@ export function writeWorkspacePermissions(workspaceRoot: string, want: string[])
   if (settings === null) return settingsPath;
   const permissions = settings["permissions"] ?? {};
   if (!_isDict(permissions)) return settingsPath;
-  const allow: unknown[] = permissions["allow"] ?? [];
+  const allow = (permissions["allow"] as unknown[] | undefined) ?? [];
   if (!Array.isArray(allow)) return settingsPath;
 
   const recordPath = path.join(workspaceRoot, _PERMISSIONS_RECORD);
