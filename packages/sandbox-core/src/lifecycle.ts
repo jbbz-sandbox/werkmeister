@@ -603,8 +603,8 @@ export async function reloadProxy(
     .sort()
     .map((feature) => ({
       feature,
-      slot: allFeatures[feature]!.slot,
-      services: allFeatures[feature]!.services,
+      slot: allFeatures[feature].slot,
+      services: allFeatures[feature].services,
     }));
 
   // Emitted here rather than returned-and-rendered because the block sits

@@ -216,7 +216,7 @@ export function optionGroups(f: FormField): [string, string[]][] {
   const grouped = new Set(Object.values(f.groups).flat());
   const out: [string, string[]][] = headings
     .sort()
-    .map((h) => [h, f.options.filter((o) => f.groups[h]!.includes(o))]);
+    .map((h) => [h, f.options.filter((o) => (f.groups[h] ?? []).includes(o))]);
   const rest = f.options.filter((o) => !grouped.has(o));
   if (rest.length) out.push(["other", rest]);
   return out.filter(([, opts]) => opts.length > 0);
@@ -239,9 +239,9 @@ async function formErrors(
   const known = fields.filter((f) => errors[f.key]).map((f) => `${f.title}: ${errors[f.key]}`);
   return [
     ...known,
-    ...Object.keys(errors)
-      .filter((k) => !fields.some((f) => f.key === k))
-      .map((k) => errors[k]!),
+    ...Object.entries(errors)
+      .filter(([k]) => !fields.some((f) => f.key === k))
+      .map(([, message]) => message),
   ];
 }
 

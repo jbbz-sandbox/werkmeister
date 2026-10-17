@@ -250,7 +250,7 @@ export function resolveWorkspaceActive(
   const repoNames = repoDirs(workspace).map((p) => path.basename(p));
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
   const workspaceConfig = loadConfigFile(workspace, null);
-  let localServices = workspaceConfig["services"] || [];
+  let localServices = (workspaceConfig["services"] || []) as string[] | string;
   if (typeof localServices === "string") {
     localServices = localServices
       .split(",")
