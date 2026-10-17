@@ -32,6 +32,7 @@ import * as YAML from "yaml";
 
 import { presentArchetypes } from "./archetypes.js";
 import { Colors } from "./colors.js";
+import { workspaceComposeArgv } from "./compose.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
   expandUser,
@@ -837,7 +838,7 @@ export async function initWorkspace(
       // inherited stdio. An in-process one owns no TTY (its stdout may be an
       // MCP transport), so capture and replay through the reporter instead.
       const live = passthrough();
-      const result = procRun(["docker", "compose", "up", "--build", "--no-start"], {
+      const result = procRun(workspaceComposeArgv(feature, ["up", "--build", "--no-start"]), {
         cwd: workspaceRoot,
         ...(live ? { stdio: "inherit" as const } : { capture: true }),
       });
