@@ -42,6 +42,7 @@ import {
   getServicePort,
   type SlotEntry,
 } from "./slots.js";
+import { readAutoStop } from "./workspace_prompts.js";
 import { ensureSecretEnvsIgnored } from "./worktrees.js";
 
 function isDict(value: unknown): value is Record<string, unknown> {
@@ -1615,6 +1616,7 @@ export async function generateWorkspaceCompose(
     testPath,
     null,
     candidateServiceNames(repoNames, loadReposConfig(), localServices),
+    readAutoStop(workspaceRoot),
   );
   const sandboxDir = path.join(workspaceRoot, ".sandbox");
   fs.mkdirSync(sandboxDir, { recursive: true });

@@ -31,6 +31,8 @@ With an `issue_id`, `createWorkspace` always:
 
 **`model`** (blank by default = Claude Code's default; `--model <alias|id>`, `SANDBOX_MODEL`, `model:` in `workspace.yml`, or the form's field): an alias (`opus`, `sonnet`, `haiku`) or a full `claude-…` id. Written to the workspace's `.claude/settings.json`, passed as `--model` by `claude-send` / `claude-resume`, and returned by `list-workspaces` / `workspace-status`. A `model` the person set in `settings.json` by hand is never overwritten. Clear it: delete `model:` from `workspace.yml`, then `sandbox init-workspace`.
 
+**`auto_stop`** (off by default; `--auto-stop`, `SANDBOX_AUTO_STOP=1`, `auto_stop: true` in `workspace.yml`, or the form's checkbox): writes a SessionEnd hook to the workspace's `.claude/settings.json` that runs `sandbox stop --if-idle`. When a session in the workspace ends (not `/clear` or `/resume`, not a headless `claude -p` turn) and no other Claude session is open there, the feature's containers stop; the slot and volumes stay, so `sandbox up` resumes fast. Shared infra is never stopped. Off again: `auto_stop: false`, then `sandbox init-workspace` (or `sandbox up`) removes the hook.
+
 **Batch check** — after creating, for each new workspace:
 
 ```bash

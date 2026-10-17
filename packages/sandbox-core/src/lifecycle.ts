@@ -25,6 +25,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import { isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
@@ -355,6 +356,72 @@ function refuseInsideOwnContainer(feature: string, verb: string): void {
 export interface StopResult {
   feature: string;
   slot: number;
+}
+
+/** What `sandbox stop --if-idle` knows when a SessionEnd hook runs it (#231). */
+export interface IdleStopInput {
+  /** FEATURE from the workspace `.env`. */
+  feature: string | undefined;
+  /** The directory holding that `.env`. */
+  workspaceRoot: string;
+  /** The ending session's `session_id` from the hook's stdin. */
+  sessionId: string | null;
+  /** The hook's stdin `reason`. */
+  reason: string | null;
+  /** `CLAUDE_CODE_ENTRYPOINT` (undocumented; `sdk-*` for `claude -p` and SDK runs). */
+  entrypoint: string | null;
+  sessionsDir?: string;
+}
+
+// `/clear` and `/resume` end a session but the same process carries on in the next one.
+const _CONTINUING_REASONS = new Set(["clear", "resume"]);
+
+/**
+ * Pids of the Claude Code sessions other than *sessionId* whose cwd is in
+ * *workspaceRoot*. Claude Code keeps one file per running session in
+ * `~/.claude/sessions/` "to detect concurrent sessions"; the `pid` / `sessionId`
+ * / `cwd` fields are undocumented, so an unreadable file counts as no session,
+ * and a crash leftover is dropped by the pid check.
+ */
+export function otherLiveSessions(
+  workspaceRoot: string,
+  sessionId: string | null,
+  sessionsDir = path.join(os.homedir(), ".claude", "sessions"),
+): number[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(sessionsDir).filter((n) => n.endsWith(".json"));
+  } catch {
+    return [];
+  }
+  const pids: number[] = [];
+  for (const name of names) {
+    try {
+      const s = JSON.parse(fs.readFileSync(path.join(sessionsDir, name), "utf8"));
+      const cwd = String(s.cwd ?? "");
+      const inWorkspace = cwd === workspaceRoot || cwd.startsWith(workspaceRoot + path.sep);
+      if (!inWorkspace || s.sessionId === sessionId || !Number.isInteger(s.pid)) continue;
+      process.kill(s.pid, 0);
+      pids.push(s.pid);
+    } catch {
+      // unparseable, or the pid is gone
+    }
+  }
+  return pids;
+}
+
+/**
+ * The feature `stop --if-idle` should stop, or null to leave it running. Never
+ * `infra`: it is shared by every workspace.
+ */
+export function idleStopFeature(input: IdleStopInput): string | null {
+  const { feature, workspaceRoot, sessionId, reason, entrypoint, sessionsDir } = input;
+  if (!feature || feature === "infra") return null;
+  if (reason && _CONTINUING_REASONS.has(reason)) return null;
+  // A headless turn ends its "session" every turn; the next turn needs the containers.
+  if (entrypoint?.startsWith("sdk")) return null;
+  if (otherLiveSessions(workspaceRoot, sessionId, sessionsDir).length) return null;
+  return feature;
 }
 
 /** A feature that was running, and the slot its restarted containers reuse. */

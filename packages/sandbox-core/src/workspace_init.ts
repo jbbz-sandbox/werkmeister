@@ -267,7 +267,7 @@ export function writeWorkspaceConfig(
         value = splitMultiValue(value);
       }
       // A real YAML boolean, so workspace.schema.json's `type: boolean` holds.
-      if (field === "autonomous") value = value === "true";
+      if (field === "autonomous" || field === "auto_stop") value = value === "true";
       merged[field] = value;
     }
   }
