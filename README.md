@@ -95,7 +95,7 @@ it is running from `~/.npm/_npx/<hash>/`, installs itself globally, and re-execs
 the stable copy before doing any work. It has to — npm re-hashes and garbage-
 collects that cache, while `setup` persists `sandbox_root` into
 `~/.sandbox/config.yaml` and the compose generator bakes it into every
-workspace's `docker-compose.yml` as a bind mount. Running for real from the
+workspace's `compose.yml` as a bind mount. Running for real from the
 cache would pin permanent state to a directory that is going to vanish.
 
 `npm install -g @jbbz-sandbox/sandbox-cli && sandbox setup` is the same thing

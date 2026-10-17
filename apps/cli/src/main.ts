@@ -43,6 +43,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
@@ -785,7 +786,7 @@ const SPECS: CommandSpec[] = [
         .description(
           "Reconcile a sandbox workspace from .sandbox/workspace.yml: create/remove " +
             "repo worktrees to match the `repos`/`services` fields, then (re)generate " +
-            "CLAUDE.md / .env / docker-compose.yml. Idempotent — edit workspace.yml and " +
+            `CLAUDE.md / .env / ${COMPOSE_FILE}. Idempotent — edit workspace.yml and ` +
             "rerun. Inputs resolve as CLI flag > env (SANDBOX_*) > workspace.yml.",
         )
         .option("-t, --task <title>", "Task description / title (env: SANDBOX_TASK; config: task).")

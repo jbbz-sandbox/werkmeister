@@ -46,7 +46,7 @@ services:
     # Infrastructure services don't go here — see shared-infra.yml
 ```
 
-These values are applied as `deploy.resources.limits.memory` and `deploy.resources.reservations.memory` in the generated Compose file at the feature's workspace root (`<workspace>/docker-compose.yml`).
+These values are applied as `deploy.resources.limits.memory` and `deploy.resources.reservations.memory` in the generated Compose file at the feature's workspace root (`<workspace>/compose.yml`).
 
 ### Shared Infrastructure (`infra/compose/shared-infra.yml`)
 

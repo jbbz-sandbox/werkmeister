@@ -15,6 +15,7 @@ import { closeOut, createWorkspace, listWorkspaces } from "sandbox-core";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
 import { composeLogs } from "sandbox-core/compose";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import { getReposRoot, servicesLocalYamlPath } from "sandbox-core/config";
 import { SandboxError } from "sandbox-core/errors";
 import { featureUrl } from "sandbox-core/feature_routing";
@@ -520,7 +521,7 @@ function registerAuthoringTools(server: McpServer): void {
       title: "Reconcile a workspace",
       description:
         "Re-run init-workspace against an existing workspace: reconcile worktrees, regenerate " +
-        "CLAUDE.md, .env, docker-compose.yml, skills, agents, hooks and .mcp.json from " +
+        `CLAUDE.md, .env, ${COMPOSE_FILE}, skills, agents, hooks and .mcp.json from ` +
         ".sandbox/workspace.yml plus any arguments given here.",
       inputSchema: { ...FEATURE_ARG, ...WORKSPACE_FIELDS },
     },

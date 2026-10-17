@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("sandbox-core/slots", async (importOriginal) => {
@@ -40,7 +41,7 @@ describe("generateWorkspaceCompose", () => {
   it("writes the expected files", async () => {
     const slot = await generateWorkspaceCompose("smoke-test-feature", "frontend", tmp);
     expect(typeof slot).toBe("number");
-    expect(fs.statSync(path.join(tmp, "docker-compose.yml")).isFile()).toBe(true);
+    expect(fs.statSync(path.join(tmp, COMPOSE_FILE)).isFile()).toBe(true);
     expect(fs.statSync(path.join(tmp, ".env")).isFile()).toBe(true);
     // The fixture registry has no GraphQL subgraph, so no supergraph config.
     expect(fs.existsSync(path.join(tmp, ".sandbox", "supergraph-config.yml"))).toBe(false);

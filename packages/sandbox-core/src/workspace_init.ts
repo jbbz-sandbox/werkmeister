@@ -15,7 +15,7 @@
  *   `.sandbox/workspace.yml`, hand off to `initWorkspace`, and commit.
  *
  *   {@link initWorkspace} — reconcile the nested per-repo worktrees against
- *   that config and (re)generate CLAUDE.md, .env, docker-compose.yml, the
+ *   that config and (re)generate CLAUDE.md, .env, compose.yml, the
  *   projected .claude/ skills+agents, .mcp.json and .sandbox/*. Idempotent.
  *
  * Nothing here prints or exits: every message goes through the ambient reporter
@@ -32,6 +32,7 @@ import * as YAML from "yaml";
 
 import { presentArchetypes } from "./archetypes.js";
 import { Colors } from "./colors.js";
+import { COMPOSE_FILE } from "./compose_file.js";
 import {
   expandUser,
   getReposRoot,
@@ -210,7 +211,7 @@ const _WORKSPACE_CONFIG_HEADER =
   "# Edit:    Hand-edit `feature`, `repos`, `services`, `issue_id`, `task`,\n" +
   "#          `test_path`, `description`, `labels`, or `starting_prompt` below; rerun\n" +
   "#          `sandbox init-workspace` to propagate changes into\n" +
-  "#          CLAUDE.md / .env / docker-compose.yml / .sandbox/*.\n" +
+  `#          CLAUDE.md / .env / ${COMPOSE_FILE} / .sandbox/*.\n` +
   "#          Adding/removing a repo here reconciles git worktrees on rerun;\n" +
   "#          removing a repo with uncommitted edits needs `--force`.\n" +
   "#          Optional `standards_override: {add: [...], remove: [...]}` tunes\n" +
@@ -819,7 +820,7 @@ export async function initWorkspace(
   seedWorkspaceMetadataEnv(envPath, meta);
   success(`Wrote ${envPath}`);
 
-  // 8. Generate docker-compose.yml, allocate slot, write .sandbox/sandbox-context.md
+  // 8. Generate compose.yml, allocate slot, write .sandbox/sandbox-context.md
   const feature = (meta["FEATURE"] ?? "").trim();
   if (feature) {
     const slot = await generateWorkspaceCompose(

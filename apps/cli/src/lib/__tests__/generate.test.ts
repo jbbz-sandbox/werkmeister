@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ stateInfraRoot: null as string | null }));
@@ -127,7 +128,7 @@ describe("dev_links", () => {
 describe("generateFeatureCompose", () => {
   it("writes header and service block", () => {
     const outPath = generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp);
-    expect(outPath).toBe(path.join(tmp, "docker-compose.yml"));
+    expect(outPath).toBe(path.join(tmp, COMPOSE_FILE));
     const content = fs.readFileSync(outPath, "utf8");
     expect(content).toContain("# Sandbox docker-compose for feature: myfeat");
     expect(content).toContain("frontend:");
