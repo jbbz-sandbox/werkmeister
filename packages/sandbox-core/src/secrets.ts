@@ -14,7 +14,7 @@
  */
 
 import * as fs from "node:fs";
-
+import type { ServicesConfig } from "./config.js";
 import { secretsPath } from "./global_config.js";
 
 /** Same rule as the generated `<PREFIX>_URL` keys: `sandbox-core` → `SANDBOX_CORE`. */
@@ -39,7 +39,7 @@ export interface ResolvedSecrets {
  */
 export function resolveSecrets(
   all: Record<string, string>,
-  servicesConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
   serviceNames: readonly string[],
   overrides: Record<string, string> = {},
 ): ResolvedSecrets {

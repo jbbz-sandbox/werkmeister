@@ -13,7 +13,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { containerTestCommand, serviceTestCommand, validationRows } from "./archetypes.js";
-import { loadArchetypes } from "./config.js";
+import { type ArchetypeRegistry, loadArchetypes, type ServicesConfig } from "./config.js";
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
 import { loadIngress } from "./global_config.js";
 import { issueLink } from "./issue_tracker.js";
@@ -309,8 +309,8 @@ Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's
 function testCommandLine(
   feature: string,
   svc: string,
-  servicesConfig: Record<string, any>,
-  archetypes: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  archetypes: ArchetypeRegistry,
 ): string {
   const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
   return cmd
@@ -331,9 +331,9 @@ export function buildSandboxContextMd(
   portStart: number,
   portEnd: number,
   localServices: string[],
-  servicesConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
   testPath = "",
-  archetypes: Record<string, any> | null = null,
+  archetypes: ArchetypeRegistry | null = null,
   candidates: string[] = localServices,
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the

@@ -161,11 +161,11 @@ export interface ForwardSpec {
  * Service port (`k8s_port`).
  */
 export function forwardSpecs(
-  services?: Record<string, any> | null,
-  infrastructure?: Record<string, any> | null,
+  services?: ServicesConfig | null,
+  infrastructure?: Record<string, unknown> | null,
 ): ForwardSpec[] {
   const specs: ForwardSpec[] = [];
-  const collect = (entries: Record<string, any> | null | undefined, nameKey: boolean) => {
+  const collect = (entries: Record<string, unknown> | null | undefined, nameKey: boolean) => {
     if (!isDict(entries)) return;
     for (const [key, def] of Object.entries(entries)) {
       if (
@@ -376,6 +376,60 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, a
   return data;
 }
 
+/**
+ * One entry under services.yaml `services:` or `setup_services:`. Only the keys
+ * the code reads are typed; the rest pass through to compose untouched. Nothing
+ * validates the YAML against this — it is a claim, not a check.
+ */
+export interface ServiceEntry {
+  repo?: string;
+  path?: string;
+  type?: string;
+  archetype?: string;
+  /** Legacy form of `archetype:` — see archetypes.ts. */
+  standards?: string[];
+  test?: string;
+  validate?: string;
+  internal_port?: number;
+  port_offset?: number;
+  k8s_forward_port?: number;
+  health_endpoint?: string;
+  graphql_path?: string;
+  dockerfile?: string;
+  node_modules_volume?: string;
+  setup_service?: string;
+  extra_volumes?: string[];
+  extra_services?: Record<string, unknown>;
+  depends_on?: string[];
+  environment?: Record<string, string>;
+  /** Read by feature_routing.ts. */
+  feature_router?: {
+    hostname?: string;
+    k8s?: string;
+    remote_hostname?: string;
+    remote_upstream?: string;
+  } | null;
+  [key: string]: unknown;
+}
+
+/** One entry under services.yaml `archetypes:` (docs/jit-context-system.md §4.1). */
+export interface Archetype {
+  standards?: string[];
+  test?: string;
+  validate?: string;
+  [key: string]: unknown;
+}
+
+/** One entry under services.yaml `repos:`. */
+export interface RepoEntry {
+  services?: string[];
+  [key: string]: unknown;
+}
+
+export type ServicesConfig = Record<string, ServiceEntry>;
+export type ArchetypeRegistry = Record<string, Archetype>;
+export type ReposConfig = Record<string, RepoEntry>;
+
 /** Read `~/.sandbox/services.yaml` (whole document). Required — throws when absent. */
 function servicesDoc({ required = true } = {}): Record<string, any> {
   return loadYaml(servicesYamlPath(), { required });
@@ -388,7 +442,7 @@ function servicesDoc({ required = true } = {}): Record<string, any> {
  * instead of silently proceeding with `{}` (DEBT-01 D-02/D-04) — a missing
  * service registry means generation cannot produce correct config.
  */
-export function loadServices(): Record<string, any> {
+export function loadServices(): ServicesConfig {
   const data = servicesDoc();
   return data["services"] ?? data;
 }
@@ -420,7 +474,7 @@ export function getK8sContext(): string {
  * Optional: returns `{}` when the file or the `setup_services` section
  * is absent.
  */
-export function loadSetupServices(): Record<string, any> {
+export function loadSetupServices(): ServicesConfig {
   const data = servicesDoc({ required: false });
   return data["setup_services"] ?? {};
 }
@@ -455,7 +509,7 @@ export function loadPorts(): Record<string, any> {
  * Returns the `repos:` section, which maps each repo name to its list of
  * services and optional path_mappings.  Returns an empty dict if unavailable.
  */
-export function loadReposConfig(): Record<string, any> {
+export function loadReposConfig(): ReposConfig {
   const data = servicesDoc({ required: false });
   return data["repos"] ?? {};
 }
@@ -468,7 +522,7 @@ export function loadReposConfig(): Record<string, any> {
  * unavailable (a checkout that predates the registry): services then
  * resolve only through the legacy per-service `standards:` form.
  */
-export function loadArchetypes(): Record<string, any> {
+export function loadArchetypes(): ArchetypeRegistry {
   const data = servicesDoc({ required: false });
   return data["archetypes"] ?? {};
 }

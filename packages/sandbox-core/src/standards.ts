@@ -24,7 +24,13 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { serviceStandards, validateServiceArchetypes } from "./archetypes.js";
-import { loadArchetypes, loadServices } from "./config.js";
+import {
+  type ArchetypeRegistry,
+  loadArchetypes,
+  loadServices,
+  type ReposConfig,
+  type ServicesConfig,
+} from "./config.js";
 import { standardsDirPath, standardsDirProblem } from "./global_config.js";
 import { run } from "./proc.js";
 import { validateModuleReferences } from "./skill_gen.js";
@@ -320,9 +326,9 @@ export function parseFrontmatter(filePath: string): Record<string, any> {
  * both-forms conflict) via lib/archetypes.
  */
 export function validateServiceStandards(
-  servicesConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
   modules: Record<string, Record<string, any>>,
-  archetypes?: Record<string, any> | null,
+  archetypes?: ArchetypeRegistry | null,
 ): string[] {
   if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
   const errors = validateServiceArchetypes(servicesConfig, archetypes);
@@ -537,12 +543,12 @@ export function domainsMatchingTaskText(
  */
 export function resolveActiveStandards(
   repoNames: string[],
-  servicesConfig: Record<string, any>,
-  reposConfig: Record<string, any>,
+  servicesConfig: ServicesConfig,
+  reposConfig: ReposConfig,
   workspaceConfig?: Record<string, any> | null,
   modules?: Record<string, Record<string, any>> | null,
   localServices?: string[] | null,
-  archetypes?: Record<string, any> | null,
+  archetypes?: ArchetypeRegistry | null,
 ): [string[], string[]] {
   if (modules === undefined || modules === null) modules = loadStandardsModules();
   if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
