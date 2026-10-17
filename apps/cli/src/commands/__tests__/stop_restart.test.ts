@@ -15,10 +15,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeRecorder } from "./helpers/recorder.js";
 
-vi.mock("sandbox-core/lifecycle", () => ({ stop: vi.fn(), restart: vi.fn() }));
-vi.mock("../../lib/dotenv.js", () => ({ loadDotenv: () => ({}) }));
+vi.mock("sandbox-core/lifecycle", () => ({
+  stop: vi.fn(),
+  restart: vi.fn(),
+  idleStopFeature: vi.fn(),
+}));
+vi.mock("../../lib/dotenv.js", () => ({
+  loadDotenv: vi.fn(() => ({})),
+  findDotenv: vi.fn(() => null),
+}));
+vi.mock("node:child_process", () => ({ spawn: vi.fn(() => ({ unref: vi.fn() })) }));
 
-import { restart as restartFeature, stop as stopFeature } from "sandbox-core/lifecycle";
+import { spawn } from "node:child_process";
+import {
+  idleStopFeature,
+  restart as restartFeature,
+  stop as stopFeature,
+} from "sandbox-core/lifecycle";
+import { findDotenv, loadDotenv } from "../../lib/dotenv.js";
 import { run as runRestart } from "../restart.js";
 import { run as runStop } from "../stop.js";
 
@@ -75,6 +89,58 @@ describe("sandbox stop", () => {
 
     await go(() => runStop({ feature: "demo" }));
     expect(lines.join("\n")).toContain("Slot 7 preserved");
+  });
+});
+
+describe("sandbox stop --if-idle", () => {
+  // Every case must leave exit alone: silent, no process.exit, no throw.
+  const ifIdle = async () => {
+    await go(() => runStop({ feature: null, if_idle: true }));
+    expect(lines).toEqual([]);
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(stopFeature).not.toHaveBeenCalled();
+  };
+
+  beforeEach(() => {
+    // The hook's stdin JSON is read only off a pipe; the exercise covers that read.
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+    vi.mocked(spawn).mockClear();
+    vi.mocked(idleStopFeature).mockReset();
+    vi.mocked(findDotenv).mockReturnValue("/ws/demo/.env");
+    vi.mocked(loadDotenv).mockReturnValue({ FEATURE: "demo" });
+  });
+
+  it("does nothing outside a workspace", async () => {
+    vi.mocked(findDotenv).mockReturnValue(null);
+    await ifIdle();
+    expect(idleStopFeature).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the idle check says to keep it (another session, infra, no FEATURE)", async () => {
+    vi.mocked(idleStopFeature).mockReturnValue(null);
+    await ifIdle();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("swallows a failure in the check", async () => {
+    vi.mocked(idleStopFeature).mockImplementation(() => {
+      throw new Error("boom");
+    });
+    await ifIdle();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("hands the stop to a detached `sandbox stop <feature>` rather than waiting on it", async () => {
+    vi.mocked(idleStopFeature).mockReturnValue("demo");
+    await ifIdle();
+    expect(idleStopFeature).toHaveBeenCalledWith(
+      expect.objectContaining({ feature: "demo", workspaceRoot: "/ws/demo" }),
+    );
+    expect(spawn).toHaveBeenCalledOnce();
+    const [, argv, opts] = vi.mocked(spawn).mock.calls[0];
+    expect(argv.slice(1)).toEqual(["stop", "demo"]);
+    expect(opts).toMatchObject({ cwd: "/ws/demo", detached: true, stdio: "ignore" });
   });
 });
 

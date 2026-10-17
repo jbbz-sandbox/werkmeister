@@ -197,9 +197,14 @@ const SPECS: CommandSpec[] = [
         .argument(
           "[feature]",
           "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.",
+        )
+        .option(
+          "--if-idle",
+          "SessionEnd hook mode: stop the workspace's own feature unless another Claude " +
+            "session is open there; silent, always exits 0, never stops infra",
         );
     },
-    namespace: ([feature]) => ({ feature: feature ?? null }),
+    namespace: ([feature], o) => ({ feature: feature ?? null, if_idle: Boolean(o.ifIdle) }),
   },
   {
     name: "status",
@@ -564,6 +569,11 @@ const SPECS: CommandSpec[] = [
             "claude-… id; blank keeps Claude Code's default (env: SANDBOX_MODEL; config: model).",
         )
         .option(
+          "--auto-stop",
+          "Stop this workspace's feature containers when a Claude session in it ends and no " +
+            "other is open (a SessionEnd hook; env: SANDBOX_AUTO_STOP; config: auto_stop).",
+        )
+        .option(
           "--browser-form",
           "Collect inputs through the Sandbox-branded browser form (the same " +
             "form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a " +
@@ -598,6 +608,7 @@ const SPECS: CommandSpec[] = [
       context_strategy: o.contextStrategy ?? null,
       autonomous: o.autonomous ?? null,
       model: o.model ?? null,
+      auto_stop: o.autoStop ?? null,
       browser_form: Boolean(o.browserForm),
       open_vscode: Boolean(o.open),
       no_distill: o.distill === false,
@@ -862,6 +873,11 @@ const SPECS: CommandSpec[] = [
             "claude-… id; blank keeps Claude Code's default (env: SANDBOX_MODEL; config: model).",
         )
         .option(
+          "--auto-stop",
+          "Stop this workspace's feature containers when a Claude session in it ends and no " +
+            "other is open (a SessionEnd hook; env: SANDBOX_AUTO_STOP; config: auto_stop).",
+        )
+        .option(
           "--config <path>",
           "Path to a YAML config file (JSONC/JSON also accepted). Defaults " +
             "to <workspace>/.sandbox/workspace.yml; legacy workspace.yaml / " +
@@ -893,6 +909,7 @@ const SPECS: CommandSpec[] = [
       context_strategy: o.contextStrategy ?? null,
       autonomous: o.autonomous ?? null,
       model: o.model ?? null,
+      auto_stop: o.autoStop ?? null,
       config_file: o.config ?? null,
       prune_context: Boolean(o.pruneContext),
       refresh_issue: Boolean(o.refreshIssue),
@@ -1048,7 +1065,8 @@ export async function main(): Promise<void> {
   }
 
   // Not for `hooks`: they run on every tool call, and git would be a spawn each.
-  if (process.argv[2] !== "hooks") {
+  // Not for `stop --if-idle` either: it runs inside SessionEnd's exit budget.
+  if (process.argv[2] !== "hooks" && !process.argv.includes("--if-idle")) {
     const warning = staleBuildWarning(BUILD_STAMP, path.resolve(_REPO_ROOT, "../.."));
     if (warning) console.error(warning);
   }

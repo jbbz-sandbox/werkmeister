@@ -6,15 +6,57 @@
  * ``sandbox up <feature>``.
  *
  * For shared infrastructure use ``sandbox stop infra``.
+ *
+ * ``sandbox stop --if-idle`` is the SessionEnd hook behind ``auto_stop`` (#231).
  */
 
+import { spawn } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { SandboxError } from "sandbox-core/errors";
 import { stop as infraStop } from "sandbox-core/infra";
-import { stop as stopFeature } from "sandbox-core/lifecycle";
+import { idleStopFeature, stop as stopFeature } from "sandbox-core/lifecycle";
 import { Colors, error, info } from "../lib/config.js";
-import { loadDotenv } from "../lib/dotenv.js";
+import { findDotenv, loadDotenv } from "../lib/dotenv.js";
+
+/**
+ * Stop the workspace's own feature unless another Claude session is open in it.
+ * A SessionEnd hook must never hold up or break exit, so this prints nothing,
+ * never throws, and hands `sandbox stop <feature>` to a detached child instead of
+ * waiting on `docker compose stop`.
+ */
+function stopIfIdle(): void {
+  try {
+    const raw = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
+    const hook = raw.trim() ? JSON.parse(raw) : {};
+    const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+    const start = process.env.CLAUDE_PROJECT_DIR || str(hook?.cwd) || process.cwd();
+    const envFile = findDotenv(start);
+    if (!envFile) return;
+    const workspaceRoot = path.dirname(envFile);
+    const feature = idleStopFeature({
+      feature: loadDotenv(workspaceRoot)["FEATURE"],
+      workspaceRoot,
+      sessionId: str(hook?.session_id),
+      reason: str(hook?.reason),
+      entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT ?? null,
+    });
+    if (!feature) return;
+    spawn(process.execPath, [process.argv[1], "stop", feature], {
+      cwd: workspaceRoot,
+      detached: true,
+      stdio: "ignore",
+    }).unref();
+  } catch {
+    // nothing here may surface at session exit
+  }
+}
 
 export async function run(args: Record<string, unknown>): Promise<void> {
+  if (args.if_idle) {
+    stopIfIdle();
+    return;
+  }
   const dotenv = loadDotenv(process.cwd());
 
   const feature = (args.feature as string | null) || dotenv["FEATURE"];

@@ -15,6 +15,9 @@
  *   pr-guard` denies opening a PR any way but `sandbox pr open`
  *   (docs/workspace-lifecycle.md). Unlike the two above it is installed for
  *   every strategy (`writePrGuardHook`), and `removeWorkspaceHooks` keeps it.
+ * - SessionEnd: `sandbox stop --if-idle` stops the workspace's feature when the
+ *   session ends and no other is open there (#231). Only while `auto_stop` is
+ *   on (`writeAutoStopHook`, every strategy); turning it off removes the entry.
  *
  * - `permissions.allow`: the workspace's test commands and read-only git, for
  *   every strategy (`writeWorkspacePermissions`), so a headless session can run
@@ -40,12 +43,13 @@ import {
   loadServices,
   type ServicesConfig,
 } from "./config.js";
-import { readAutonomous, readModel } from "./workspace_prompts.js";
+import { readAutonomous, readAutoStop, readModel } from "./workspace_prompts.js";
 
 // Markers doubling as the payload: entries containing them are sandbox-managed.
 const _HOOK_MARKER = "sandbox notes context";
 const _GATE_MARKER = "sandbox hooks gate";
 const _PR_GUARD_MARKER = "sandbox hooks pr-guard";
+const _AUTO_STOP_MARKER = "sandbox stop --if-idle";
 
 // Projections lag whenever the standards tree moves on after a workspace was
 // inited, and nothing else re-runs the writer — so the session that would read a
@@ -65,9 +69,18 @@ const _SKILLS_SELF_HEAL =
 export const SESSION_START_COMMAND = `command -v sandbox >/dev/null 2>&1 && { ${_SKILLS_SELF_HEAL}; ${_HOOK_MARKER}; } || true`;
 export const PRE_TOOL_USE_GATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_GATE_MARKER} || true`;
 export const PR_GUARD_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_PR_GUARD_MARKER} || true`;
+export const SESSION_END_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_AUTO_STOP_MARKER} >/dev/null 2>&1 || true`;
+
+// SessionEnd hooks get a 1.5s budget unless one sets `timeout`, and the CLI's own
+// start-up can take most of that. The stop itself runs detached, so this only
+// bounds the idle check.
+const _SESSION_END_TIMEOUT_S = 10;
 
 /** One matcher group under `hooks.<event>` in `.claude/settings.json`. */
-export type HookEntry = { matcher?: string; hooks: { type: "command"; command: string }[] };
+export type HookEntry = {
+  matcher?: string;
+  hooks: { type: "command"; command: string; timeout?: number }[];
+};
 
 /** The managed SessionStart matcher-group (matcher-less: all sources). */
 export function buildSessionStartEntry(): HookEntry {
@@ -87,6 +100,13 @@ export function buildPrGuardEntry(): HookEntry {
   return {
     matcher: "Bash|mcp__.*create_pull_request",
     hooks: [{ type: "command", command: PR_GUARD_COMMAND }],
+  };
+}
+
+/** The managed SessionEnd matcher-group (matcher-less: every exit reason; the command filters). */
+export function buildSessionEndEntry(): HookEntry {
+  return {
+    hooks: [{ type: "command", command: SESSION_END_COMMAND, timeout: _SESSION_END_TIMEOUT_S }],
   };
 }
 
@@ -218,6 +238,27 @@ export function writePrGuardHook(workspaceRoot: string): string {
  * JSON or an unexpected shape is left untouched — the writer's doctrine.
  */
 export function removeWorkspaceHooks(workspaceRoot: string): string[] {
+  return _removeManaged(workspaceRoot, [
+    ["SessionStart", _HOOK_MARKER],
+    ["PreToolUse", _GATE_MARKER],
+  ]);
+}
+
+/** The SessionEnd auto-stop entry while *on*; otherwise remove it, keeping hand-added ones. */
+export function writeAutoStopHook(workspaceRoot: string, on: boolean): string {
+  if (on) {
+    return _writeManaged(workspaceRoot, [
+      ["SessionEnd", buildSessionEndEntry(), _AUTO_STOP_MARKER],
+    ]);
+  }
+  _removeManaged(workspaceRoot, [["SessionEnd", _AUTO_STOP_MARKER]]);
+  return _settingsPath(workspaceRoot);
+}
+
+function _removeManaged(
+  workspaceRoot: string,
+  managed: ReadonlyArray<readonly [event: string, marker: string]>,
+): string[] {
   const settingsPath = _settingsPath(workspaceRoot);
   let settings: Record<string, unknown>;
   try {
@@ -230,10 +271,7 @@ export function removeWorkspaceHooks(workspaceRoot: string): string[] {
     return [];
   }
   const removed: string[] = [];
-  for (const [event, marker] of [
-    ["SessionStart", _HOOK_MARKER],
-    ["PreToolUse", _GATE_MARKER],
-  ] as const) {
+  for (const [event, marker] of managed) {
     const entries = hooks[event];
     if (!Array.isArray(entries)) continue;
     const kept = entries.filter((entry) => !_isManaged(entry, marker));
@@ -444,8 +482,9 @@ export function writeWorkspaceModel(workspaceRoot: string, model: string | null)
   return settingsPath;
 }
 
-/** The workspace's allow rules and model, from its `.env`, registry and workspace.yml. */
+/** The workspace's allow rules, model and auto-stop hook, from its `.env`, registry and workspace.yml. */
 export function writeWorkspaceSettings(workspaceRoot: string): void {
   writeWorkspacePermissions(workspaceRoot, workspaceAllowRules(workspaceRoot));
   writeWorkspaceModel(workspaceRoot, readModel(workspaceRoot));
+  writeAutoStopHook(workspaceRoot, readAutoStop(workspaceRoot));
 }

@@ -335,6 +335,7 @@ export function buildSandboxContextMd(
   testPath = "",
   archetypes: ArchetypeRegistry | null = null,
   candidates: string[] = localServices,
+  autoStop = false,
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the
   // same source Caddy's site blocks are generated from — so this file can never
@@ -567,7 +568,13 @@ sandbox restart     # restart all containers
 sandbox down        # tear down + release slot
 sandbox down -v     # tear down + remove volumes (node_modules, caches)
 \`\`\`
-
+${
+  autoStop
+    ? `
+**Auto-stop is on** (\`auto_stop: true\` in \`.sandbox/workspace.yml\`): when a Claude session here ends and no other session is open in this workspace, a SessionEnd hook runs \`sandbox stop --if-idle\`, which stops this feature's containers (slot and volumes kept — \`sandbox up\` resumes). Shared infra is never stopped.
+`
+    : ""
+}
 > **Fallback:** If \`sandbox\` CLI is unavailable, \`docker compose up -d --build\` / \`docker compose down\` from the workspace root works equivalently. Prefer \`sandbox\` — it also manages slot allocation and Caddy proxy regeneration.
 
 `

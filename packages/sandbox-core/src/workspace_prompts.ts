@@ -124,6 +124,7 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
   ["labels", "SANDBOX_LABELS", "labels"],
   ["autonomous", "SANDBOX_AUTONOMOUS", "autonomous"],
   ["model", "SANDBOX_MODEL", "model"],
+  ["auto_stop", "SANDBOX_AUTO_STOP", "auto_stop"],
 ];
 
 /** A truthy flag value as it arrives from a CLI switch, an env var, YAML or a form. */
@@ -137,6 +138,11 @@ export function isTrue(value: unknown): boolean {
  */
 export function readAutonomous(workspaceRoot: string): boolean {
   return isTrue(readWorkspaceField(workspaceRoot, "autonomous"));
+}
+
+/** The workspace's `auto_stop` input (#231): off unless set. */
+export function readAutoStop(workspaceRoot: string): boolean {
+  return isTrue(readWorkspaceField(workspaceRoot, "auto_stop"));
 }
 
 /** The workspace's `model` input, or null when unset or blank. */
@@ -302,6 +308,7 @@ export function resolveInputs(
   if (resolved.issue_id)
     resolved.issue_id = issueTracker().parseRef(resolved.issue_id) ?? resolved.issue_id;
   if (resolved.autonomous) resolved.autonomous = String(isTrue(resolved.autonomous));
+  if (resolved.auto_stop) resolved.auto_stop = String(isTrue(resolved.auto_stop));
 
   return resolved;
 }
@@ -477,6 +484,15 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     // One token, not an alias list: Claude Code's aliases change, and a bad value fails on first use.
     pattern: "^[A-Za-z0-9][A-Za-z0-9._\\[\\]-]*$",
     placeholder: "sonnet",
+  },
+  {
+    key: "auto_stop",
+    label: "Auto-stop on session end",
+    help:
+      "Off by default. On: when a Claude session in the workspace ends and no other one is open " +
+      "there, a SessionEnd hook runs `sandbox stop --if-idle`, which stops this feature's " +
+      "containers (slot and volumes kept; `sandbox up` resumes). Shared infra is never stopped.",
+    boolean: true,
   },
   {
     key: "services",

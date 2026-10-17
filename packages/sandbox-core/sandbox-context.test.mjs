@@ -97,3 +97,15 @@ test("each local service's test command runs in its container; none says so", as
     { services: SERVICES },
   );
 });
+
+test("Container Lifecycle mentions auto-stop only when it is on (#231)", async () => {
+  await withSandboxHome(
+    async () => {
+      const args = ["test", 1, 11100, 11119, ["frontend"], loadServices()];
+      const on = buildSandboxContextMd(...args, "", null, ["frontend"], true);
+      assert.match(on, /## Container Lifecycle[\s\S]*Auto-stop is on[\s\S]*sandbox stop --if-idle/);
+      assert.doesNotMatch(buildSandboxContextMd(...args), /--if-idle/);
+    },
+    { services: SERVICES },
+  );
+});
