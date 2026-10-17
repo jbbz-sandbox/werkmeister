@@ -5,14 +5,19 @@ let selected: unknown;
 let fault: Error | null = null;
 let checked: string[];
 const typed: string[] = [];
-const seen: Record<string, any>[] = [];
-const record = (kind: string, config: Record<string, any>) => seen.push({ kind, ...config });
+/** What the prompt mocks receive: Inquirer config, with `choices` for select / checkbox. */
+type PromptConfig = {
+  choices?: { value?: unknown; checked?: boolean; separator?: string }[];
+  [key: string]: unknown;
+};
+const seen: (PromptConfig & { kind: string })[] = [];
+const record = (kind: string, config: PromptConfig) => seen.push({ kind, ...config });
 
 vi.mock("@inquirer/prompts", () => ({
   Separator: class {
     constructor(public separator: string) {}
   },
-  select: async (config: Record<string, any>) => {
+  select: async (config: PromptConfig) => {
     record("select", config);
     if (fault) {
       const thrown = fault;
@@ -20,25 +25,25 @@ vi.mock("@inquirer/prompts", () => ({
       throw thrown;
     }
     // "Other" is the last entry; the test asks for it by name, not by symbol.
-    return selected === "OTHER" ? config.choices.at(-1).value : selected;
+    return selected === "OTHER" ? config.choices?.at(-1)?.value : selected;
   },
-  checkbox: async (config: Record<string, any>) => {
+  checkbox: async (config: PromptConfig) => {
     record("checkbox", config);
     return checked;
   },
-  input: async (config: Record<string, any>) => {
+  input: async (config: PromptConfig) => {
     record("input", config);
     return typed.shift() ?? "";
   },
-  editor: async (config: Record<string, any>) => {
+  editor: async (config: PromptConfig) => {
     record("editor", config);
     return typed.shift() ?? "";
   },
-  password: async (config: Record<string, any>) => {
+  password: async (config: PromptConfig) => {
     record("password", config);
     return typed.shift() ?? "";
   },
-  confirm: async (config: Record<string, any>) => {
+  confirm: async (config: PromptConfig) => {
     record("confirm", config);
     return typed.shift() === "y";
   },
@@ -90,14 +95,14 @@ describe("the Inquirer-backed prompts", () => {
   it("multi-value checks the current selection and returns it comma-joined", async () => {
     checked = ["api", "web"];
     expect(await promptOne(MULTI, "web", ["api", "web", "worker"])).toBe("api,web");
-    expect(seen[0].choices.filter((c: any) => c.checked).map((c: any) => c.value)).toEqual(["web"]);
+    expect(seen[0].choices?.filter((c) => c.checked).map((c) => c.value)).toEqual(["web"]);
   });
 
   it("multi-value lists choices under their group headings, ungrouped last", async () => {
     checked = [];
     const groups = { "repo-a": ["web", "worker"], "repo-b": ["api"] };
     await promptOne({ ...MULTI, groups }, "", ["api", "cron", "web", "worker"]);
-    expect(seen[0].choices.map((c: any) => c.separator ?? c.value)).toEqual([
+    expect(seen[0].choices?.map((c) => c.separator ?? c.value)).toEqual([
       "── repo-a ──",
       "web",
       "worker",

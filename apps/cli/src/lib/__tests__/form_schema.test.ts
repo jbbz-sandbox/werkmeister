@@ -1,12 +1,17 @@
 /** buildFormSchema (RJSF bundle). */
 
-import { buildFormSchema, type FormBundle } from "sandbox-core/form_schema";
+import {
+  buildFormSchema,
+  type FormBundle,
+  type PromptEntry,
+  type PromptSpecJson,
+} from "sandbox-core/form_schema";
 import { describe, expect, it } from "vitest";
 
 /** One field's uiSchema entry (`uiSchema` also holds the `ui:order` list, so it is typed `unknown`). */
 const uiOf = (out: FormBundle, key: string) => out.uiSchema[key] as Record<string, unknown>;
 
-function spec(prompts: Record<string, any>[], name = "demo"): Record<string, any> {
+function spec(prompts: PromptEntry[], name = "demo"): PromptSpecJson {
   return { workspace_name: name, workspace_root: `/ws/${name}`, prompts };
 }
 

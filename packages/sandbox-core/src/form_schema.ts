@@ -59,6 +59,7 @@ export type PromptEntry = {
 
 /** A prompt spec: `buildPromptSpec`'s output. */
 export interface PromptSpecJson {
+  workspace_root?: string;
   workspace_name?: string;
   prompts?: PromptEntry[];
 }

@@ -3,7 +3,7 @@
  * picks the core call, and a failed gate is a non-zero exit (scripts and the
  * agent read the exit code). The gate itself is tested in sandbox-core.
  */
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, type MockInstance, vi } from "vitest";
 
 vi.mock("sandbox-core", () => ({
   adoptPr: vi.fn(),
@@ -17,7 +17,7 @@ import { adoptPr, gatePrs, openPrs, refreshPrStatus } from "sandbox-core";
 import { findRecordRoot } from "sandbox-core/pr_guard";
 import { run } from "../pr.js";
 
-let exit: any; // process.exit's `never` return doesn't fit MockInstance's generic
+let exit: MockInstance; // untyped: process.exit's `never` return doesn't fit MockInstance<typeof process.exit>
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "log").mockImplementation(() => {});

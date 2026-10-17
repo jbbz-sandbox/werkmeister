@@ -1,6 +1,7 @@
 import type { On } from "claude-code";
 import type { Engine, Plugin } from "claude-code/testing";
 import { expect, mock, test } from "claude-code/testing";
+import type { FormField } from "../types";
 import { applyFormFields, formFields, optionGroups } from "./register";
 import { edit } from "./textarea";
 
@@ -20,6 +21,12 @@ type McpAnswer = {
   isError: boolean;
   structuredContent?: unknown;
 };
+/** *value*, or a failed test naming what was missing (in place of a `!` assertion). */
+function must<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error(`expected a value, got ${value}`);
+  return value;
+}
+
 type McpStub = Record<string, (args: Record<string, unknown>) => McpAnswer | Promise<McpAnswer>>;
 
 /** Stubs every noun the module calls. `calls` records each mcp.call as `server/tool`. */
@@ -1136,7 +1143,7 @@ test("the multi-line field types across lines and its text reaches the create ca
   await ui.press({ key: "create:go" });
   expect(
     (
-      w.calls.find((c) => c.key === `${WS}/create-workspace`)!.args as {
+      must(w.calls.find((c) => c.key === `${WS}/create-workspace`)).args as {
         formData: Record<string, unknown>;
       }
     ).formData.starting_prompt,
@@ -1159,7 +1166,7 @@ test("text fields are plugin-drawn editors: a click draws the cursor in that fie
   for (const key of ["f:issue_id", "f:feature", "f:task"])
     expect((await ui.find({ key }))?.type).toBe("Client");
   const focusedOf = async (key: string) =>
-    ((await ui.find({ key }))!.props.props as { focused: boolean }).focused;
+    (must(await ui.find({ key })).props.props as { focused: boolean }).focused;
   await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:feature" });
   expect([await focusedOf("f:feature"), await focusedOf("f:task")]).toEqual([true, false]);
   await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:task" });
@@ -1173,7 +1180,7 @@ test("text fields are plugin-drawn editors: a click draws the cursor in that fie
   await ui.press({ key: "create:go" });
   expect(
     (
-      w.calls.find((c) => c.key === `${WS}/create-workspace`)!.args as {
+      must(w.calls.find((c) => c.key === `${WS}/create-workspace`)).args as {
         formData: Record<string, unknown>;
       }
     ).formData.task,
@@ -1343,7 +1350,7 @@ test("a multi-pick draws as checkboxes under its group headings, sorted, each in
   expect((await ui.find({ key: "f:services:api" }))?.text).toBe("☑ api");
   expect((await ui.find({ key: "cell:services:api" }))?.props.width).toBe("20%");
   await ui.unmount();
-  const f = formFields(BUNDLE).find((x) => x.key === "services")!;
+  const f = formFields(BUNDLE).find((x) => x.key === "services") as FormField;
   expect(optionGroups(f)).toEqual([
     ["core", ["api"]],
     ["web", ["web"]],
@@ -1388,7 +1395,7 @@ test('a boolean field is a check; workspace_form takes "true" / "false" for it',
     formData: { autonomous: false },
   };
   const fields = formFields(bundle as never);
-  expect(fields[0]!.kind).toBe("check");
+  expect(fields[0]?.kind).toBe("check");
   expect(applyFormFields(fields, {}, { autonomous: "true" })).toEqual({
     draft: { autonomous: true },
     problems: [],
@@ -1418,7 +1425,7 @@ test("the workspace_form tool opens the Create tab filled, says what is still ne
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect(((await ui.find({ key: "f:feature" }))!.props.props as { value: string }).value).toBe(
+  expect((must(await ui.find({ key: "f:feature" })).props.props as { value: string }).value).toBe(
     "rate-limit",
   );
   await ui.unmount();
@@ -1454,7 +1461,7 @@ test("Refine with Claude rewrites the starting prompt through the session model,
   });
   expect(asked).toEqual([{ model: "sonnet", prompt: "REFINE: add a rate limit" }]);
   expect(
-    ((await ui.find({ key: "f:starting_prompt" }))!.props.props as { value: string }).value,
+    (must(await ui.find({ key: "f:starting_prompt" })).props.props as { value: string }).value,
   ).toBe("## Goal\nadd a rate limit, refined");
   await ui.unmount();
 });
@@ -1479,7 +1486,7 @@ test("a failed Refine completion leaves the field and says why", async ($, on) =
     "Refine failed (empty-reply); the field is unchanged.",
   );
   expect(
-    ((await ui.find({ key: "f:starting_prompt" }))!.props.props as { value: string }).value,
+    (must(await ui.find({ key: "f:starting_prompt" })).props.props as { value: string }).value,
   ).toBe("add a rate limit");
   await ui.unmount();
 });

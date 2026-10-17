@@ -443,7 +443,7 @@ describe("generateSupergraphConfig", () => {
     const config = { services: { orders: { type: "graphql-subgraph", internal_port: 4000 } } };
     const outPath = generateSupergraphConfig("myfeat", 1, ["orders"], config, tmp);
     expect(outPath).toBe(path.join(tmp, ".sandbox", "supergraph-config.yml"));
-    expect(fs.readFileSync(outPath!, "utf8")).toContain("http://orders:4000/graphql");
+    expect(fs.readFileSync(outPath as string, "utf8")).toContain("http://orders:4000/graphql");
   });
 });
 
@@ -485,10 +485,10 @@ describe("generateCaddyfile", () => {
     const rc = loadFeatureRouters()["frontend"];
     expect(rc?.hostname).toBeTruthy();
     expect(rc?.remoteUpstream).toBeTruthy();
-    expect(content).toContain(`${rc!.hostname} {`);
+    expect(content).toContain(`${rc?.hostname} {`);
     // Nothing local is running, so no host.docker.internal upstream anywhere.
     expect(content).not.toContain("host.docker.internal:");
-    expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
+    expect(content).toContain(`reverse_proxy ${rc?.remoteUpstream}`);
   });
 
   it("remote (K8s) router is static — emitted with no running features", async () => {
@@ -497,8 +497,8 @@ describe("generateCaddyfile", () => {
     expect(rc?.remoteUpstream).toBeTruthy();
     const content = fs.readFileSync(await generateCaddyfile({}), "utf8");
     // Terminates the remote host and proxies to the cluster Service upstream...
-    expect(content).toContain(`${rc!.remoteHostname} {`);
-    expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
+    expect(content).toContain(`${rc?.remoteHostname} {`);
+    expect(content).toContain(`reverse_proxy ${rc?.remoteUpstream}`);
     // ...still converting the X-Feature cookie to a header on that upstream.
     expect(content).toContain("header_up X-Feature {re.xf.1}");
   });
@@ -579,7 +579,7 @@ describe("generateCaddyfile", () => {
 
     // Unmatched/absent cookie prefers the always-live remote face over guessing
     // a local feature — that guess is what let a torn-down workspace 502 the host.
-    expect(content).toContain(`reverse_proxy ${rc!.remoteUpstream}`);
+    expect(content).toContain(`reverse_proxy ${rc?.remoteUpstream}`);
   });
 
   it("anchors the cookie matcher so one feature can't match another's prefix", async () => {

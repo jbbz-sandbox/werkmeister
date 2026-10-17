@@ -14,7 +14,7 @@ vi.mock("sandbox-core/global_config", async (importOriginal) => {
 });
 
 import * as gc from "sandbox-core/global_config";
-import { JIRA_CONFIG_SNIPPET, syncJiraToken } from "sandbox-core/machine_setup";
+import { JIRA_CONFIG_SNIPPET, type JiraVerifier, syncJiraToken } from "sandbox-core/machine_setup";
 import { run as runConfig } from "../../commands/config.js";
 
 const FILLED = {
@@ -66,7 +66,7 @@ describe("sandbox config rewrite", () => {
 });
 
 describe("syncJiraToken", () => {
-  const stepFor = async (jira: Parameters<typeof syncJiraToken>[0], verifier?: any) =>
+  const stepFor = async (jira: Parameters<typeof syncJiraToken>[0], verifier?: JiraVerifier) =>
     (await syncJiraToken(jira, false, verifier))[0];
 
   it("absent or placeholder values are ok-with-guidance, never a failure", async () => {
@@ -110,7 +110,7 @@ describe("syncJiraToken", () => {
 
   it("check-only skips the network and names the account", async () => {
     const verifier = vi.fn();
-    const steps = await syncJiraToken(FILLED, true, verifier as any);
+    const steps = await syncJiraToken(FILLED, true, verifier);
     expect(verifier).not.toHaveBeenCalled();
     expect(steps[0]).toMatchObject({ ok: true });
     expect(steps[0].detail).toContain(FILLED.email);
