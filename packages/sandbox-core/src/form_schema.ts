@@ -36,9 +36,60 @@
  *                        when the command runs)
  */
 
-type Prompt = Record<string, any>;
+/** One prompt as `promptEntry` (workspace_prompts.ts) serialises it. */
+export type PromptEntry = {
+  key: string;
+  label?: string;
+  help?: string;
+  accept_empty?: boolean;
+  multi?: boolean;
+  recommended?: boolean;
+  boolean?: boolean;
+  multiline?: boolean;
+  refinable?: boolean;
+  refine_instruction?: string;
+  pattern?: string;
+  placeholder?: string;
+  default?: unknown;
+  resolved?: boolean;
+  resolved_value?: unknown;
+  choices?: string[];
+  choice_groups?: Record<string, string[]>;
+};
 
-function _default(prompt: Prompt): any {
+/** A prompt spec: `buildPromptSpec`'s output. */
+export interface PromptSpecJson {
+  workspace_root?: string;
+  workspace_name?: string;
+  prompts?: PromptEntry[];
+}
+
+/** One field's JSON Schema. */
+export interface SchemaProp {
+  title?: string;
+  description?: string;
+  type?: string;
+  enum?: string[];
+  items?: { type: string; enum?: string[] };
+  uniqueItems?: boolean;
+  pattern?: string;
+  minLength?: number;
+}
+
+/** The RJSF bundle {@link buildFormSchema} returns. */
+export type FormBundle = {
+  schema: {
+    type: "object";
+    title: string;
+    properties: Record<string, SchemaProp>;
+    required?: string[];
+  };
+  uiSchema: Record<string, unknown>;
+  formData: Record<string, unknown>;
+  title: string;
+};
+
+function _default(prompt: PromptEntry): unknown {
   let value = prompt["resolved_value"];
   if (value === null || value === undefined || value === "") {
     value = prompt["default"];
@@ -46,17 +97,17 @@ function _default(prompt: Prompt): any {
   return value || "";
 }
 
-function _required(prompt: Prompt): boolean {
+function _required(prompt: PromptEntry): boolean {
   return prompt["accept_empty"] === false || Boolean(prompt["recommended"]);
 }
 
 /** Apply the type-specific JSON-Schema/uiSchema for one prompt; return formData. */
 function _shape(
-  prompt: Prompt,
-  defaultValue: any,
-  prop: Record<string, any>,
-  fieldUi: Record<string, any>,
-): any {
+  prompt: PromptEntry,
+  defaultValue: unknown,
+  prop: SchemaProp,
+  fieldUi: Record<string, unknown>,
+): unknown {
   const choices = prompt["choices"];
   // An absent or EMPTY choices list falls through to the free-text shape.
   const hasChoices = Array.isArray(choices) && choices.length > 0;
@@ -97,7 +148,7 @@ function _shape(
     // widget when it sees the flag; renderers that don't know it ignore the option.
     fieldUi["ui:widget"] = "textarea";
     if (prompt["refinable"]) {
-      const opts: Record<string, any> = { refinable: true };
+      const opts: Record<string, unknown> = { refinable: true };
       if (prompt["refine_instruction"]) {
         opts["refineInstruction"] = prompt["refine_instruction"];
       }
@@ -108,12 +159,12 @@ function _shape(
 }
 
 /** Build one prompt's (json-schema prop, uiSchema entry, formData value, required). */
-function _field(prompt: Prompt): [Record<string, any>, Record<string, any>, any, boolean] {
-  const prop: Record<string, any> = { title: prompt["label"] || prompt["key"] };
+function _field(prompt: PromptEntry): [SchemaProp, Record<string, unknown>, unknown, boolean] {
+  const prop: SchemaProp = { title: prompt["label"] || prompt["key"] };
   if (prompt["help"]) {
     prop["description"] = prompt["help"];
   }
-  const fieldUi: Record<string, any> = {};
+  const fieldUi: Record<string, unknown> = {};
   const defaultValue = _default(prompt);
   const data = _shape(prompt, defaultValue, prop, fieldUi);
 
@@ -139,15 +190,12 @@ function _field(prompt: Prompt): [Record<string, any>, Record<string, any>, any,
  * command re-resolves them itself). `title` overrides the derived
  * "Initialize <name>".
  */
-export function buildFormSchema(
-  spec: Record<string, any>,
-  title?: string | null,
-): Record<string, any> {
-  const properties: Record<string, any> = {};
+export function buildFormSchema(spec: PromptSpecJson, title?: string | null): FormBundle {
+  const properties: Record<string, SchemaProp> = {};
   const required: string[] = [];
   const order: string[] = [];
-  const uiSchema: Record<string, any> = {};
-  const formData: Record<string, any> = {};
+  const uiSchema: FormBundle["uiSchema"] = {};
+  const formData: Record<string, unknown> = {};
 
   for (const prompt of spec["prompts"] ?? []) {
     if (prompt["resolved"]) {
@@ -174,7 +222,7 @@ export function buildFormSchema(
 
   const name = spec["workspace_name"] || "workspace";
   const resolvedTitle = title || `Initialize ${name}`;
-  const schema: Record<string, any> = {
+  const schema: FormBundle["schema"] = {
     type: "object",
     title: resolvedTitle,
     properties,
@@ -209,14 +257,12 @@ const blank = (v: unknown) => v == null || v === "" || (Array.isArray(v) && v.le
  * (the /workspaces pane); the browser form's AJV covers the schema part and calls `repoSelectionError` itself.
  */
 export function validateFormData(
-  bundle: { schema: Record<string, any> },
+  bundle: { schema: Pick<FormBundle["schema"], "properties" | "required"> },
   formData: Record<string, unknown>,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   const required = new Set<string>(bundle.schema["required"] ?? []);
-  for (const [key, prop] of Object.entries<Record<string, any>>(
-    bundle.schema["properties"] ?? {},
-  )) {
+  for (const [key, prop] of Object.entries(bundle.schema["properties"] ?? {})) {
     const v = formData[key];
     if (blank(v)) {
       if (required.has(key)) errors[key] = "required";

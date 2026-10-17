@@ -36,6 +36,36 @@ import { run } from "./proc.js";
 import { validateModuleReferences } from "./skill_gen.js";
 import type { PhaseGate } from "./workspace_prompts.js";
 
+/** A standards module's frontmatter, plus the `path` / `references_dir` the loader adds. */
+export interface StandardModule {
+  domain?: string;
+  summary?: string;
+  /** Load order among the always-on base; see {@link universalStandards}. */
+  universal?: number;
+  applies_to?: string[];
+  task_signatures?: string[];
+  path?: string;
+  references_dir?: string;
+  [key: string]: unknown;
+}
+
+/** domain → module, as {@link loadStandardsModules} returns them. */
+export type StandardModules = Record<string, StandardModule>;
+
+/** The `workspace.yml` keys standards resolution reads. */
+interface StandardsWorkspaceConfig {
+  standards_override?: { add?: string[]; remove?: string[] };
+  [key: string]: unknown;
+}
+
+/** `.sandbox/standards.json`, the PreToolUse gate's manifest. */
+export type StandardsManifest = {
+  generated_by: string;
+  universal: string[];
+  domains: Record<string, { applies_to: string[]; summary: string }>;
+  phase_gate?: PhaseGate;
+};
+
 /**
  * Universal standards, in load order: always active, ungated by file type,
  * re-injected on any change — they never appear in a service's `standards:`
@@ -50,15 +80,19 @@ import type { PhaseGate } from "./workspace_prompts.js";
  * and that ordering is deliberate rather than alphabetical luck, so it needs
  * somewhere explicit to live.
  */
-export function universalStandards(modules: Record<string, Record<string, any>>): string[] {
+export function universalStandards(modules: StandardModules): string[] {
   return Object.keys(modules)
     .filter((k) => typeof modules[k]["universal"] === "number")
-    .sort((a, b) => modules[a]["universal"] - modules[b]["universal"] || (a < b ? -1 : 1));
+    .sort(
+      (a, b) =>
+        (modules[a]["universal"] as number) - (modules[b]["universal"] as number) ||
+        (a < b ? -1 : 1),
+    );
 }
 
 const _GIT_TIMEOUT = 5; // seconds; this feeds a SessionStart hook — never hang a launch
 
-function isDict(value: unknown): value is Record<string, any> {
+function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -192,7 +226,7 @@ function changedPaths(repo: string): string[] {
  */
 export function standardsMatchingDiff(
   workspace: string,
-  modules?: Record<string, Record<string, any>> | null,
+  modules?: StandardModules | null,
 ): Array<[string, string]> {
   if (modules === undefined || modules === null) modules = loadStandardsModules();
   if (!Object.keys(modules).length) return [];
@@ -267,13 +301,11 @@ function iterStandardFiles(standardsDir: string): string[] {
  * Files without valid frontmatter are skipped (a malformed module should
  * not block workspace init).
  */
-export function loadStandardsModules(
-  standardsDir?: string | null,
-): Record<string, Record<string, any>> {
+export function loadStandardsModules(standardsDir?: string | null): StandardModules {
   if (standardsDir === undefined || standardsDir === null) {
     standardsDir = standardsDirPath();
   }
-  const modules: Record<string, Record<string, any>> = {};
+  const modules: StandardModules = {};
   if (!(fs.existsSync(standardsDir) && fs.statSync(standardsDir).isDirectory())) {
     return modules;
   }
@@ -298,7 +330,7 @@ export function loadStandardsModules(
 }
 
 /** Frontmatter dict of a module file; `{}` on any read/parse failure. */
-export function parseFrontmatter(filePath: string): Record<string, any> {
+export function parseFrontmatter(filePath: string): StandardModule {
   let text: string;
   try {
     text = fs.readFileSync(filePath, "utf8");
@@ -327,7 +359,7 @@ export function parseFrontmatter(filePath: string): Record<string, any> {
  */
 export function validateServiceStandards(
   servicesConfig: ServicesConfig,
-  modules: Record<string, Record<string, any>>,
+  modules: StandardModules,
   archetypes?: ArchetypeRegistry | null,
 ): string[] {
   if (archetypes === undefined || archetypes === null) archetypes = loadArchetypes();
@@ -509,15 +541,12 @@ export function checkStandards(): StandardsCheck {
  * since a Write payload already contains the drafted file. Case-insensitive
  * substring: a coarse net at the gate's altitude, not an import parser.
  */
-export function domainsMatchingTaskText(
-  taskText: string,
-  modules: Record<string, Record<string, any>>,
-): Set<string> {
+export function domainsMatchingTaskText(taskText: string, modules: StandardModules): Set<string> {
   if (!taskText) return new Set();
   const haystack = taskText.toLowerCase();
   const matched = new Set<string>();
   for (const [key, meta] of Object.entries(modules)) {
-    const sigs: any[] = meta["task_signatures"] ?? [];
+    const sigs: unknown[] = meta["task_signatures"] ?? [];
     if (sigs.some((sig) => haystack.includes(String(sig).toLowerCase()))) {
       matched.add(key);
     }
@@ -545,8 +574,8 @@ export function resolveActiveStandards(
   repoNames: string[],
   servicesConfig: ServicesConfig,
   reposConfig: ReposConfig,
-  workspaceConfig?: Record<string, any> | null,
-  modules?: Record<string, Record<string, any>> | null,
+  workspaceConfig?: StandardsWorkspaceConfig | null,
+  modules?: StandardModules | null,
   localServices?: string[] | null,
   archetypes?: ArchetypeRegistry | null,
 ): [string[], string[]] {
@@ -611,11 +640,11 @@ export function resolveActiveStandards(
  */
 export function buildStandardsManifest(
   active: string[],
-  modules: Record<string, Record<string, any>>,
+  modules: StandardModules,
   phaseGate: PhaseGate | null = null,
-): Record<string, any> {
+): StandardsManifest {
   const universal = universalStandards(modules);
-  const domains: Record<string, any> = {};
+  const domains: StandardsManifest["domains"] = {};
   for (const key of active) {
     if (universal.includes(key)) continue;
     domains[key] = {
@@ -623,7 +652,7 @@ export function buildStandardsManifest(
       summary: String(modules[key]?.["summary"] ?? "").trim(),
     };
   }
-  const manifest: Record<string, any> = {
+  const manifest: StandardsManifest = {
     generated_by: "sandbox init-workspace",
     universal: active.filter((key) => universal.includes(key)),
     domains,
@@ -640,10 +669,7 @@ export function buildStandardsManifest(
  * Write the gate manifest to `.sandbox/standards.json` (projected artifact,
  * same do-not-hand-edit contract as the other generated files).
  */
-export function writeStandardsManifest(
-  workspaceRoot: string,
-  manifest: Record<string, any>,
-): string {
+export function writeStandardsManifest(workspaceRoot: string, manifest: StandardsManifest): string {
   const filePath = path.join(workspaceRoot, ".sandbox", "standards.json");
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(manifest, null, 2) + "\n");

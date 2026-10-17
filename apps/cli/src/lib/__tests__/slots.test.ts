@@ -16,12 +16,17 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+/** The `listContainers` row fields slots.ts reads. */
+type ContainerRow = { Names: string[]; Labels: Record<string, string> };
+
 const h = vi.hoisted(() => ({
-  containers: [] as any[] | null, // null → simulate an unreachable daemon
-  portsOverride: null as Record<string, any> | null,
+  containers: [] as ContainerRow[] | null, // null → simulate an unreachable daemon
+  portsOverride: null as Record<string, unknown> | null,
   simulateLockTimeout: false,
-  lastLockOpts: undefined as any,
-  lastListOpts: undefined as any,
+  lastLockOpts: undefined as { timeout?: number } | undefined,
+  lastListOpts: undefined as
+    | { all?: boolean; filters?: unknown; abortSignal?: unknown }
+    | undefined,
 }));
 
 vi.mock("sandbox-core/docker", async (importOriginal) => {
@@ -29,7 +34,7 @@ vi.mock("sandbox-core/docker", async (importOriginal) => {
   return {
     ...actual,
     docker: () => ({
-      listContainers: async (opts: any) => {
+      listContainers: async (opts: typeof h.lastListOpts) => {
         h.lastListOpts = opts;
         // dockerode rejects when it cannot reach the daemon; slots.ts turns
         // that into the `null` that means "occupancy unknown".
@@ -46,7 +51,7 @@ vi.mock("sandbox-core/config", async (importOriginal) => {
 });
 
 vi.mock("sandbox-core/locks", () => ({
-  sandboxLock: (name: string, fn: () => any, opts?: any) => {
+  sandboxLock: (name: string, fn: () => unknown, opts?: { timeout?: number }) => {
     h.lastLockOpts = opts;
     if (h.simulateLockTimeout) {
       throw new Error(`Timed out after ${opts?.timeout}s waiting for lock '${name}'`);
@@ -69,8 +74,8 @@ import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /** {"feat-a": [3, ["frontend"]]} → the `listContainers` rows the daemon returns. */
-function fakeContainers(entries: Record<string, [number, string[]]>): any[] {
-  const rows: any[] = [];
+function fakeContainers(entries: Record<string, [number, string[]]>): ContainerRow[] {
+  const rows: ContainerRow[] = [];
   for (const [feature, [slot, services]] of Object.entries(entries)) {
     for (const service of services) {
       rows.push({
@@ -151,7 +156,7 @@ describe("allocateSlot", () => {
     await expect(allocateSlot("feat-x")).rejects.toThrow(/Timed out/);
     // allocate wires a finite timeout into the lock (the anti-hang guard).
     expect(typeof h.lastLockOpts?.timeout).toBe("number");
-    expect(Number.isFinite(h.lastLockOpts.timeout)).toBe(true);
+    expect(Number.isFinite(h.lastLockOpts?.timeout)).toBe(true);
   });
 });
 
@@ -190,11 +195,11 @@ describe("port math and slot lookups", () => {
     await getAllSlots();
     // `all` matters: a stopped container still owns its slot label, and
     // dropping it would hand a live feature's slot to the next allocation.
-    expect(h.lastListOpts.all).toBe(true);
-    expect(h.lastListOpts.filters).toEqual({ label: ["com.sandbox.local.feature"] });
+    expect(h.lastListOpts?.all).toBe(true);
+    expect(h.lastListOpts?.filters).toEqual({ label: ["com.sandbox.local.feature"] });
     // A daemon that accepts and never replies must not hang the CLI — the
     // shelled path carried `timeout: 10` and this has to keep it.
-    expect(h.lastListOpts.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(h.lastListOpts?.abortSignal).toBeInstanceOf(AbortSignal);
   });
 
   it("strips the API's leading slash from container names", async () => {

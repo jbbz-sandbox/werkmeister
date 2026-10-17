@@ -21,6 +21,7 @@ import * as YAML from "yaml";
 
 import { COMPOSE_FILE } from "./compose_file.js";
 import { loadReposConfig, loadServices } from "./config.js";
+import type { PromptEntry } from "./form_schema.js";
 import type { PromptSpec } from "./global_config.js";
 import { issueIdOf, issueTracker } from "./issue_tracker.js";
 import { ProcError, run as procRun } from "./proc.js";
@@ -530,8 +531,8 @@ export function promptEntry(
   workspaceRoot: string,
   resolved: Record<string, string>,
   opts: PromptSpecOptions = {},
-): Record<string, any> {
-  const entry: Record<string, any> = {
+): PromptEntry {
+  const entry: PromptEntry = {
     key: spec.key,
     label: spec.label,
     help: spec.help,

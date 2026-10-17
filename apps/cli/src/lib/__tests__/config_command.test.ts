@@ -94,7 +94,7 @@ describe("config command", () => {
   it("show reports origin", async () => {
     gc.save({ paths: { repos_root: "/custom/repos" } });
     const logs: string[] = [];
-    vi.spyOn(console, "log").mockImplementation((...a: any[]) => {
+    vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
       logs.push(a.join(" "));
     });
     await run(args({ show: true }));
