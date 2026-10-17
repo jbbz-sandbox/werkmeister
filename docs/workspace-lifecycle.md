@@ -68,6 +68,9 @@ release:                       # the release tag that shipped it, written by san
 reason:                        # required for closed / abandoned
 skip_tests: {}                 # <service>: <reason> — for a service with no test command or no running container
 skip_release:                  # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag
+session:                       # the Claude Code session that ran sandbox pr open (PR callbacks, below)
+host_session:                  # its desktop app id (local_…), only when opened from the desktop app
+notified:                      # the last status that session was told
 ---
 # feat(cli): owner/repo#133 Workspace PR lifecycle
 <body: summary, test and exercise results, acceptance table, Fixes owner/repo#133>
@@ -120,6 +123,7 @@ repo:
 | `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to "In Development" (on GitHub, add an `In Development` label, created if the repo lacks it), commit and push the PR file on the record branch |
 | `sandbox pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`. For `merged` files, write `shipped` (+ `release`) per the registry. Commits and pushes the changed PR files on the record branch. |
 | `sandbox pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
+| `sandbox pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions. Run it from cron: `*/10 * * * * sandbox pr watch` |
 | `sandbox pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
 | `sandbox close-out [name] [--abandon "<reason>"]` | end the workspace (below). The one end-of-workspace verb |
 | `sandbox remove-workspace <name>` | deprecated alias, kept for one release: prints "use `sandbox close-out --abandon`" and removes as before |
@@ -130,6 +134,25 @@ The workspaces pane shows the state on each card. It offers **↻ PRs** (`sandbo
 - **✕ Abandon…** otherwise, with a reason field the second press needs filled.
 
 The sandbox-workspace MCP server has the same actions as `workspace-pr` and `close-out` (with an optional `abandon` reason).
+
+## PR callbacks
+
+`sandbox pr open` records which session opened each PR (`session`, plus `host_session` inside the desktop app), from the `CLAUDE_CODE_SESSION_ID` / `CLAUDE_CODE_HOST_SESSION_ID` Claude Code gives its commands; run by hand, it records the workspace's newest session. Every workspace gets one; there is no flag.
+
+A pass runs `sandbox pr status` for each workspace with a callback and tells the session once per change:
+
+| Status | Message |
+|---|---|
+| merged | PR <url> merged. Run `sandbox pr status`, then follow the workspace router. |
+| shipped | PR <url> shipped in <tag>. Ask the person whether to run `sandbox close-out`. |
+| closed | PR <url> was closed. Report it to the person. |
+
+`notified` is written before the message goes out, so a failed delivery is logged and not repeated. Once the PR is shipped, closed or abandoned the callback fields are removed. A pass never merges and never closes out.
+
+- Desktop sessions: the sandbox-tools mod runs a pass when a desktop session starts and every 10 minutes, and sends each message through the app (a visible turn in that session). While the app is closed they wait.
+- Terminal sessions: `sandbox pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder). A session id the workspace no longer has is reported, never swapped for another session.
+
+One lock file, `~/.sandbox/pr-callbacks.lock`, lets one pass run at a time.
 
 ## The PR guard
 
