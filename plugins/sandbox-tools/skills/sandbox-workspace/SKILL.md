@@ -22,12 +22,14 @@ With an `issue_id`, `createWorkspace` always:
 
 | Situation | Do |
 |---|---|
-| every input known (feature, issue, services) | `sandbox workspace <feature> --issue-id <ref> --services <a,b> [--work-type <t>] [--context-strategy icm] [--autonomous]`. Pass `--task` only to override the issue title |
+| every input known (feature, issue, services) | `sandbox workspace <feature> --issue-id <ref> --services <a,b> [--work-type <t>] [--context-strategy icm] [--autonomous] [--model <alias|id>]`. Pass `--task` only to override the issue title |
 | the person should review the fields first | the /workspaces pane's Create tab, or the browser form (below) |
 | many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check. Before the first: the `sandbox` CLI runs `$SANDBOX_REPOS_ROOT/sandbox/apps/cli/dist`, so check that checkout is on an up-to-date `main` and rebuilt (`npm run build --workspace apps/cli`), or the batch comes out with stale defaults |
-| many issues, run unattended | as above with `--autonomous` on each create. Then start one Claude Code session per workspace folder with the prompt `start the run`, **one at a time**: each new folder raises a trust prompt, and parallel starts collide |
+| many issues, run unattended | as above with `--autonomous` on each create, plus `--model sonnet` (or `haiku`) when the job is mechanical (lint passes, renames, timeout bumps). Then start one Claude Code session per workspace folder with the prompt `start the run`, **one at a time**: each new folder raises a trust prompt, and parallel starts collide. Start each session on the workspace's `model` when it has one (`list-workspaces` returns it) |
 
 **`autonomous`** (off by default; `--autonomous`, `SANDBOX_AUTONOMOUS=1`, `autonomous: true` in `workspace.yml`, or the form's checkbox): an icm workspace runs stage 01 → `sandbox pr open` with self-checks instead of human checks, and `.claude/settings.json` allows the git/sandbox/docker/gh/node/python3 calls a headless `claude-send "start the run"` needs. Set it only when the person asked for an unattended run — they then review only the PR. Off again: `autonomous: false`, then `sandbox init-workspace`.
+
+**`model`** (blank by default = Claude Code's default; `--model <alias|id>`, `SANDBOX_MODEL`, `model:` in `workspace.yml`, or the form's field): an alias (`opus`, `sonnet`, `haiku`) or a full `claude-…` id. Written to the workspace's `.claude/settings.json`, passed as `--model` by `claude-send` / `claude-resume`, and returned by `list-workspaces` / `workspace-status`. A `model` the person set in `settings.json` by hand is never overwritten. Clear it: delete `model:` from `workspace.yml`, then `sandbox init-workspace`.
 
 **Batch check** — after creating, for each new workspace:
 

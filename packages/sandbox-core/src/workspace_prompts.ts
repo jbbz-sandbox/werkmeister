@@ -123,6 +123,7 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
   ["starting_prompt", "SANDBOX_STARTING_PROMPT", "starting_prompt"],
   ["labels", "SANDBOX_LABELS", "labels"],
   ["autonomous", "SANDBOX_AUTONOMOUS", "autonomous"],
+  ["model", "SANDBOX_MODEL", "model"],
 ];
 
 /** A truthy flag value as it arrives from a CLI switch, an env var, YAML or a form. */
@@ -135,7 +136,17 @@ export function isTrue(value: unknown): boolean {
  * through `loadConfigFile`, which logs — the same reason as `readContextStrategy`.
  */
 export function readAutonomous(workspaceRoot: string): boolean {
-  const envOverride = process.env["SANDBOX_WORKSPACE_CONFIG"];
+  return isTrue(readWorkspaceField(workspaceRoot, "autonomous"));
+}
+
+/** The workspace's `model` input, or null when unset or blank. */
+export function readModel(workspaceRoot: string): string | null {
+  const model = readWorkspaceField(workspaceRoot, "model");
+  return typeof model === "string" && model.trim() ? model.trim() : null;
+}
+
+function readWorkspaceField(workspaceRoot: string, field: string): unknown {
+  const envOverride = process.env.SANDBOX_WORKSPACE_CONFIG;
   const candidates = [
     ...(envOverride ? [expandUserPath(envOverride)] : []),
     ..._WORKSPACE_CONFIG_NAMES.map((name) => path.join(workspaceRoot, ".sandbox", name)),
@@ -143,12 +154,12 @@ export function readAutonomous(workspaceRoot: string): boolean {
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
     try {
-      return isTrue((loadWorkspaceConfig(p) as Record<string, unknown> | null)?.["autonomous"]);
+      return (loadWorkspaceConfig(p) as Record<string, unknown> | null)?.[field];
     } catch {
-      return false;
+      return undefined;
     }
   }
-  return false;
+  return undefined;
 }
 
 // Workspace config filenames in search-order precedence: preferred YAML first,
@@ -455,6 +466,17 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
       "allows the git, sandbox, docker, gh, node and python3 calls a headless session needs. " +
       "The person reviews the PR; `sandbox pr gate` still applies.",
     boolean: true,
+  },
+  {
+    key: "model",
+    label: "Model (blank = Claude Code's default)",
+    help:
+      "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a full " +
+      "claude-… id. Written to .claude/settings.json and passed as --model to claude-send and " +
+      "claude-resume. A cheaper model suits mechanical jobs (lint passes, renames).",
+    // One token, not an alias list: Claude Code's aliases change, and a bad value fails on first use.
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._\\[\\]-]*$",
+    placeholder: "sonnet",
   },
   {
     key: "services",

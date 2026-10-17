@@ -559,6 +559,11 @@ const SPECS: CommandSpec[] = [
             "headless session needs (env: SANDBOX_AUTONOMOUS; config: autonomous).",
         )
         .option(
+          "--model <id>",
+          "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a " +
+            "claude-… id; blank keeps Claude Code's default (env: SANDBOX_MODEL; config: model).",
+        )
+        .option(
           "--browser-form",
           "Collect inputs through the Sandbox-branded browser form (the same " +
             "form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a " +
@@ -592,6 +597,7 @@ const SPECS: CommandSpec[] = [
       work_type: o.workType ?? null,
       context_strategy: o.contextStrategy ?? null,
       autonomous: o.autonomous ?? null,
+      model: o.model ?? null,
       browser_form: Boolean(o.browserForm),
       open_vscode: Boolean(o.open),
       no_distill: o.distill === false,
@@ -851,6 +857,11 @@ const SPECS: CommandSpec[] = [
             "headless session needs (env: SANDBOX_AUTONOMOUS; config: autonomous).",
         )
         .option(
+          "--model <id>",
+          "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a " +
+            "claude-… id; blank keeps Claude Code's default (env: SANDBOX_MODEL; config: model).",
+        )
+        .option(
           "--config <path>",
           "Path to a YAML config file (JSONC/JSON also accepted). Defaults " +
             "to <workspace>/.sandbox/workspace.yml; legacy workspace.yaml / " +
@@ -881,6 +892,7 @@ const SPECS: CommandSpec[] = [
       work_type: o.workType ?? null,
       context_strategy: o.contextStrategy ?? null,
       autonomous: o.autonomous ?? null,
+      model: o.model ?? null,
       config_file: o.config ?? null,
       prune_context: Boolean(o.pruneContext),
       refresh_issue: Boolean(o.refreshIssue),
