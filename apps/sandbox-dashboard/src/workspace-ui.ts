@@ -237,13 +237,12 @@ export function initWorkspaceUI(
 
   // ---- state ----
   let all: WorkspaceEntry[] = [];
-  let statuses: Record<string, string> = {}; // issueId -> status name
+  const statuses: Record<string, string> = {}; // issueId -> status name
   let statusesLoading = false;
   let cstateLoaded = false; // false until the first workspace-status resolves
   const prsByWs: Record<string, any[]> = {};
   let cstateByWs: Record<string, any> = {};
   const openState: Record<string, boolean> = {};
-  const chatState: Record<string, any> = {};
   const chatCtl: Record<
     string,
     { onExpand?: () => void; onVisibility?: (visible: boolean) => void }
@@ -308,7 +307,7 @@ export function initWorkspaceUI(
       cstateLoaded = true;
       infraState = d.infra || null;
       updateInfraUI();
-    } catch (e) {
+    } catch (_e) {
       /* keep stale */
     }
   }
@@ -364,7 +363,7 @@ export function initWorkspaceUI(
         await refreshStatus();
         applyFilter();
         void refreshK8s();
-      } catch (e) {
+      } catch (_e) {
         msg.className = "tb-msg err";
         msg.textContent = "Connect failed — see server logs.";
         updateInfraUI(); // re-enable per actual state
@@ -397,7 +396,7 @@ export function initWorkspaceUI(
             bad.map((f: any) => `${f.name} :${f.port} (${f.detail})`).join(", ") +
             " — click to re-check"
           : "All default k8s port-forwards healthy — click to re-check";
-      } catch (e) {
+      } catch (_e) {
         k8sDot.className = "dot unknown";
         k8sLabel.textContent = "k8s forwards ?";
         k8sItem.title = "Couldn’t check k8s forwards — click to retry";
@@ -445,7 +444,7 @@ export function initWorkspaceUI(
       try {
         const k = await call("kube-context", {});
         paintKube(k.env ?? "other", k.context ?? null);
-      } catch (e) {
+      } catch (_e) {
         /* leave as-is */
       }
     }
@@ -458,7 +457,7 @@ export function initWorkspaceUI(
         const k = await call("kube-switch", { env: "dev" });
         paintKube(k.env ?? "dev", k.context ?? null);
         msg.textContent = "Switched to dev.";
-      } catch (e) {
+      } catch (_e) {
         msg.className = "tb-msg err";
         msg.textContent = "Kube switch failed.";
       }
@@ -483,7 +482,7 @@ export function initWorkspaceUI(
           Object.assign(statuses, d.statuses || {});
           applyFilter();
           break;
-        } catch (e) {
+        } catch (_e) {
           if (attempt === 2)
             console.warn("issue-statuses chunk failed after retry:", chunk.join(","));
         }
@@ -514,7 +513,7 @@ export function initWorkspaceUI(
       if (tool === "close-out") all = all.filter((w) => w.name !== args.name);
       await refreshStatus();
       applyFilter();
-    } catch (e) {
+    } catch (_e) {
       msgEl.className = "act-msg err";
       msgEl.textContent = verb + " failed";
       for (const b of siblings) b.disabled = false;

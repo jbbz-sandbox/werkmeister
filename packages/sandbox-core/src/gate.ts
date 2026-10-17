@@ -339,7 +339,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
     parts.push(_PHASE_ENTRY_TEXT);
   }
   if (domain !== null) {
-    const summary = String((domains[domain] || {})["summary"] || "").trim();
+    const summary = String(domains[domain]?.["summary"] || "").trim();
     let domainText =
       `Standards gate: you are editing a path governed by the \`${domain}\` ` +
       "standard, which has not been loaded this session. Invoke the " +
@@ -380,7 +380,7 @@ export function main(): void {
   }
 
   const sessionId = String(data["session_id"] || "");
-  const filePath = String((data["tool_input"] || {})["file_path"] || "");
+  const filePath = String(data["tool_input"]?.["file_path"] || "");
   const start = String(data["cwd"] || process.cwd());
 
   let reason: string | null;

@@ -1237,7 +1237,7 @@ export const register: Register = (on) => {
     };
   });
 
-  on("ui.close", { id: PANE }, async ($, e, next) => {
+  on("ui.close", { id: PANE }, async (_$, e, next) => {
     stopPolling();
     return next(e);
   });

@@ -402,7 +402,7 @@ export function syncPlugin(
     const [rc, out] = runner(["claude", "plugin", "update", `${spec.name}@${spec.marketplace}`]);
     if (rc !== 0) {
       steps.push({ label, ok: false, detail: `update failed: ${out}` });
-    } else if (driftProbe && driftProbe().length) {
+    } else if (driftProbe?.().length) {
       steps.push({
         label,
         ok: false,

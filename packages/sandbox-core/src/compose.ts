@@ -12,7 +12,7 @@ import * as path from "node:path";
 
 import { Colors } from "./colors.js";
 import { resolveWorkspace } from "./config.js";
-import { ProcError, RunResult, run, runAsync } from "./proc.js";
+import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
 
@@ -538,7 +538,7 @@ export function getContainerStatus(feature: string): ContainerStatus[] {
   // `-a`: without it compose lists only running containers, so a crashed service
   // silently vanishes and every caller's running/total tally reads as complete.
   const result = runCompose(feature, ["ps", "-a", "--format", "json"], { capture: true });
-  if (!result || result.status !== 0) {
+  if (result?.status !== 0) {
     return [];
   }
 

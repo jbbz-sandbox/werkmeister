@@ -169,11 +169,11 @@ export const github: IssueTrackerStrategy = {
         () => null,
       );
     const s = await run(["auth", "status", "--hostname", "github.com"]);
-    if (!s || s.status !== 0) return { ok: false, reason: "not signed in", fix: "gh auth login" };
+    if (s?.status !== 0) return { ok: false, reason: "not signed in", fix: "gh auth login" };
     const who = /account (\S+)/.exec(`${s.stdout}${s.stderr}`)?.[1];
     for (const repo of githubIssueRepos()) {
       const v = await run(["repo", "view", repo, "--json", "name"]);
-      if (!v || v.status !== 0)
+      if (v?.status !== 0)
         return {
           ok: false,
           ...(who ? { who } : {}),
