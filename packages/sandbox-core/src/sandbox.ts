@@ -689,12 +689,14 @@ export interface WorkspaceEntry {
   issueUrl: string | null;
   /** Free-form tags from `.sandbox/workspace.yml`'s `labels` list. */
   labels: string[];
+  /** The workspace's Claude model (alias or id), or null for Claude Code's default. */
+  model: string | null;
 }
 
-/** Read the issue ref and `labels` out of a workspace's `.sandbox/workspace.yml`. */
+/** Read the issue ref, `labels` and `model` out of a workspace's `.sandbox/workspace.yml`. */
 async function readWorkspaceConfig(
   workspaceDir: string,
-): Promise<{ issueId: string | null; labels: string[] }> {
+): Promise<{ issueId: string | null; labels: string[]; model: string | null }> {
   try {
     const text = await fs.readFile(path.join(workspaceDir, ".sandbox", "workspace.yml"), "utf-8");
     const data = parseYaml(text) as Record<string, unknown> | null;
@@ -702,9 +704,10 @@ async function readWorkspaceConfig(
     const labels = Array.isArray(data?.labels)
       ? data.labels.filter((l): l is string => typeof l === "string")
       : [];
-    return { issueId, labels };
+    const model = typeof data?.model === "string" && data.model.trim() ? data.model.trim() : null;
+    return { issueId, labels, model };
   } catch {
-    return { issueId: null, labels: [] };
+    return { issueId: null, labels: [], model: null };
   }
 }
 
@@ -729,7 +732,7 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
   const workspaces = await Promise.all(
     names.map(async (name): Promise<WorkspaceEntry> => {
       const p = path.join(root, name);
-      const { issueId, labels } = await readWorkspaceConfig(p);
+      const { issueId, labels, model } = await readWorkspaceConfig(p);
       return {
         name,
         path: p,
@@ -738,6 +741,7 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
         issueId,
         issueUrl: issueId ? issueTracker().url(issueId) : null,
         labels,
+        model,
       };
     }),
   );
@@ -1102,6 +1106,8 @@ export interface WorkspaceStatus {
   services: { name: string; state: ServiceHealth }[];
   /** Claude Code session signal: turn state + whether it's waiting for the human. */
   claude: ClaudeSessionSignal;
+  /** The workspace's Claude model, or null for Claude Code's default. */
+  model: string | null;
 }
 
 export interface ClaudeSessionSignal {
@@ -1324,6 +1330,7 @@ export async function getWorkspaceStatuses(): Promise<{
         project = feature ? `sandbox-${feature}` : null;
       }
       const claude = await claudeSessionSignal(name);
+      const { model } = await readWorkspaceConfig(dir);
       if (projects === null)
         return {
           name,
@@ -1335,6 +1342,7 @@ export async function getWorkspaceStatuses(): Promise<{
           ports: null,
           services: [],
           claude,
+          model,
         };
       const counts = project ? projects.get(project) : undefined;
       let state: WorkspaceStatus["state"];
@@ -1358,6 +1366,7 @@ export async function getWorkspaceStatuses(): Promise<{
         ports,
         services,
         claude,
+        model,
       };
     }),
   );
@@ -2877,6 +2886,25 @@ export async function getClaudeTranscript(
 }
 
 /**
+ * `claude` argv for one headless turn. The workspace's model is passed as a flag
+ * rather than left to settings.json, where a hand-set value would win.
+ */
+export function claudeSendArgs(
+  body: string,
+  sessionId: string | null,
+  model: string | null,
+): string[] {
+  return [
+    "-p",
+    "--permission-mode",
+    "acceptEdits",
+    ...(model ? ["--model", model] : []),
+    ...(sessionId ? ["--resume", sessionId] : []),
+    body,
+  ];
+}
+
+/**
  * Send one message to a workspace's newest Claude Code session via
  * `claude -p --resume <sessionId>` (headless print mode), continuing the same
  * session on disk. When the workspace has no sessions yet, starts a new one
@@ -2902,9 +2930,8 @@ export async function sendToClaudeSession(
   const transcript = await getClaudeTranscript(name, 1, sessionId);
   const bin = await resolveClaudeBin();
 
-  const args = ["-p", "--permission-mode", "acceptEdits"];
-  if (transcript.sessionId) args.push("--resume", transcript.sessionId);
-  args.push(body);
+  const { model } = await readWorkspaceConfig(target);
+  const args = claudeSendArgs(body, transcript.sessionId, model);
 
   const child = spawn(bin, args, {
     cwd: target,
@@ -3091,11 +3118,20 @@ export async function resumeClaudeInTerminal(
 ): Promise<{ path: string; sessionId: string | null }> {
   const target = await resolveSessionDir(name);
   const transcript = await getClaudeTranscript(name, 1, sessionId);
-  const claudeCmd = transcript.sessionId ? `claude --resume ${transcript.sessionId}` : "claude";
-  // Single-quote the path for the shell; escape any embedded single quotes.
-  const shellPath = `'${target.replace(/'/g, `'\\''`)}'`;
-  await openTerminalRunning(`cd ${shellPath} && ${claudeCmd}`);
+  const { model } = await readWorkspaceConfig(target);
+  await openTerminalRunning(
+    `cd ${shellQuote(target)} && ${claudeResumeCommand(transcript.sessionId, model)}`,
+  );
   return { path: target, sessionId: transcript.sessionId };
+}
+
+/** The shell command that reopens a workspace session in a terminal. */
+export function claudeResumeCommand(sessionId: string | null, model: string | null): string {
+  return [
+    "claude",
+    ...(model ? ["--model", shellQuote(model)] : []),
+    ...(sessionId ? ["--resume", sessionId] : []),
+  ].join(" ");
 }
 
 // A canonical GitHub PR URL, e.g. https://github.com/sandbox/sandbox/pull/1234.

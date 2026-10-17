@@ -28,6 +28,11 @@
       "default": false,
       "description": "icm: run stage 01 to `sandbox pr open` with self-checks instead of human checks. Every strategy: add the Bash and sandbox-workspace MCP allow rules a headless session needs to .claude/settings.json (recorded in .sandbox/claude-permissions.json, removed when this turns off)."
     },
+    "model": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\[\\]-]*$",
+      "description": "Claude model for the workspace's sessions: an alias (opus, sonnet, haiku) or a full claude-… id. Written to .claude/settings.json (recorded in .sandbox/claude-permissions.json, so removing it here removes only that value, never a model set by hand) and passed as --model to claude-send / claude-resume. Absent = Claude Code's default."
+    },
     "repos": {
       "type": "string",
       "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `sandbox init-workspace` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."
