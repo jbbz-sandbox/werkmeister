@@ -26,7 +26,7 @@ import * as gc from "sandbox-core/global_config";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { runWizard } from "../lib/wizard.js";
 
-function show(cfg: Record<string, any>): void {
+function show(cfg: ReturnType<typeof gc.load>): void {
   const paths = cfg.paths || {};
   console.log(`${Colors.BOLD}config file:${Colors.RESET} ${gc.configPath()}`);
   console.log(`${Colors.BOLD}env.sh:${Colors.RESET}      ${gc.envShPath()}`);
