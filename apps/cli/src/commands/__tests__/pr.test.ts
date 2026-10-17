@@ -10,10 +10,11 @@ vi.mock("sandbox-core", () => ({
   gatePrs: vi.fn(),
   openPrs: vi.fn(),
   refreshPrStatus: vi.fn(),
+  watchPrs: vi.fn(),
 }));
 vi.mock("sandbox-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
 
-import { adoptPr, gatePrs, openPrs, refreshPrStatus } from "sandbox-core";
+import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "sandbox-core";
 import { findRecordRoot } from "sandbox-core/pr_guard";
 import { run } from "../pr.js";
 
@@ -55,6 +56,14 @@ it("adopt goes to adoptPr with the PR, or with --no-pr's reason", async () => {
     noPr: "fixed on main",
     repo: undefined,
   });
+});
+
+it("watch runs from anywhere and leaves desktop callbacks to the mod", async () => {
+  vi.mocked(findRecordRoot).mockReturnValue(null);
+  vi.mocked(watchPrs).mockResolvedValue({ ok: true, lines: [], desktop: [] });
+  await run({ action: "watch", repo: null, json: false });
+  expect(watchPrs).toHaveBeenCalledWith({ desktop: false });
+  expect(exit).not.toHaveBeenCalled();
 });
 
 it("outside a workspace it exits 1 without calling core", async () => {

@@ -21,6 +21,7 @@ import {
   type RepoEntry,
   type ReposConfig,
   type ServicesConfig,
+  sandboxHome,
 } from "./config.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { updateNoteStatus } from "./graduate.js";
@@ -30,8 +31,11 @@ import { openDecisions } from "./notes.js";
 import {
   commitAndPush,
   listRepoWorktrees,
+  listWorkspaces,
   removeWorkspace,
+  resolveSessionSource,
   resolveWorkspaceDir,
+  sendToClaudeSession,
   WorkspaceError,
   worktreeSources,
 } from "./sandbox.js";
@@ -93,6 +97,8 @@ export interface Deps {
   /** Terminal sessions still open in the workspace, one line each. */
   terminals: (ws: string) => Promise<string[]>;
   sourceOf: (dir: string) => Promise<string | null>;
+  /** The PR file's callback fields for the session running `pr open` (#236). */
+  session: (ws: string) => Promise<Record<string, string>>;
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
@@ -137,6 +143,7 @@ export function defaultDeps(): Deps {
     remove: (name) => removeWorkspace(name, { closedOut: true }),
     terminals: (ws) => openTerminalSessions(ws),
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
+    session: (ws) => callbackFields(ws, process.env),
   };
 }
 
@@ -197,7 +204,8 @@ export function readPrFiles(ws: string): PrFile[] {
   return names.map((n) => parsePrFile(path.join(dir, n)));
 }
 
-export function writePrFields(file: PrFile, fields: Record<string, string>): void {
+/** An `undefined` field is removed from the frontmatter. */
+export function writePrFields(file: PrFile, fields: Record<string, string | undefined>): void {
   updateNoteStatus(file.path, fields);
   Object.assign(file.fm, fields);
 }
@@ -558,7 +566,7 @@ export async function openPrs(
         continue;
       }
     }
-    writePrFields(f, { status: "open", url });
+    writePrFields(f, { status: "open", url, ...(await deps.session(ws)) });
     opened.push(path.relative(ws, f.path));
     lines.push(`${f.dir}: open ${url}`);
     const ref = issueIdOf(loadConfigFile(ws, null));
@@ -644,6 +652,172 @@ export async function refreshPrStatus(
   if (changed.length)
     lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
   return { lines, changed: changed.length > 0 };
+}
+
+// ---- PR callbacks (#236) ---------------------------------------------------
+// `pr open` writes `session` (and `host_session` inside the desktop app) into the PR file;
+// a watch pass tells that session once per status change, tracked by `notified`.
+
+/** One message owed to the session that opened a PR. */
+export interface PrCallback {
+  ws: string;
+  dir: string;
+  url: string;
+  session: string;
+  /** The desktop app's `local_…` id: delivered by the sandbox-tools mod, never headless. */
+  hostSession: string | null;
+  message: string;
+}
+
+const LOCK_STALE_MS = 15 * 60_000;
+
+/**
+ * Claude Code exports both ids to every Bash command, so the session running `pr open`
+ * names itself; a person typing it in a plain shell gets the workspace's newest session.
+ */
+export async function callbackFields(
+  ws: string,
+  env: NodeJS.ProcessEnv,
+): Promise<Record<string, string>> {
+  const session =
+    env["CLAUDE_CODE_SESSION_ID"] ||
+    (await resolveSessionSource(path.basename(ws)).catch(() => null))?.sessionId;
+  if (!session) return {};
+  const host = env["CLAUDE_CODE_HOST_SESSION_ID"];
+  return host ? { session, host_session: host } : { session };
+}
+
+export function callbackMessage(status: string, url: string, release?: string): string | null {
+  if (status === "merged")
+    return `PR ${url} merged. Run \`sandbox pr status\`, then follow the workspace router.`;
+  if (status === "shipped")
+    return `PR ${url} shipped${release ? ` in ${release}` : ""}. Ask the person whether to run \`sandbox close-out\`.`;
+  if (status === "closed") return `PR ${url} was closed. Report it to the person.`;
+  return null;
+}
+
+function takeLock(file: string): boolean {
+  for (let i = 0; i < 2; i++) {
+    try {
+      fs.closeSync(fs.openSync(file, "wx"));
+      return true;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      try {
+        // A pass that died holding it would block every later one.
+        if (Date.now() - fs.statSync(file).mtimeMs < LOCK_STALE_MS) return false;
+        fs.rmSync(file, { force: true });
+      } catch {
+        /* released meanwhile: try again */
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Refresh every workspace's callback PRs and claim the messages their status changes owe.
+ * The claim (`notified`, or dropping the callback once settled) is written before delivery,
+ * so a failed delivery is lost rather than sent twice. Without `desktop`, callbacks with a
+ * `host_session` are left for the mod, which alone can reach the desktop app.
+ */
+export async function claimCallbacks(
+  workspaces: string[],
+  opts: { desktop: boolean },
+  deps: Deps = defaultDeps(),
+  lockFile = path.join(sandboxHome(), "pr-callbacks.lock"),
+): Promise<{ claimed: PrCallback[]; lines: string[] }> {
+  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+  if (!takeLock(lockFile)) return { claimed: [], lines: ["another PR watch pass is running"] };
+  const claimed: PrCallback[] = [];
+  const lines: string[] = [];
+  try {
+    for (const ws of workspaces) {
+      const callbacks = () => {
+        try {
+          return readPrFiles(ws).filter(
+            (f) => f.fm["session"] && (opts.desktop || !f.fm["host_session"]),
+          );
+        } catch {
+          return []; // a malformed PR file: the gate and `pr status` report it
+        }
+      };
+      const before = callbacks();
+      if (!before.length) continue;
+      if (before.some((f) => statusOf(f) === "open" || statusOf(f) === "merged"))
+        for (const l of (await refreshPrStatus(ws, deps)).lines)
+          lines.push(`${path.basename(ws)}/${l}`);
+      const changed: string[] = [];
+      for (const f of callbacks()) {
+        const status = statusOf(f);
+        if (status === (reason(f.fm["notified"]) || "open")) continue;
+        const url = String(f.fm["url"] ?? "");
+        const message = callbackMessage(status, url, reason(f.fm["release"]) || undefined);
+        if (message)
+          claimed.push({
+            ws,
+            dir: f.dir,
+            url,
+            session: String(f.fm["session"]),
+            hostSession: reason(f.fm["host_session"]) || null,
+            message,
+          });
+        writePrFields(
+          f,
+          SETTLED.has(status)
+            ? { session: undefined, host_session: undefined, notified: undefined }
+            : { notified: status },
+        );
+        changed.push(path.relative(ws, f.path));
+      }
+      if (changed.length)
+        lines.push((await deps.commitRecord(ws, "chore: record PR callback", changed)).message);
+    }
+  } finally {
+    fs.rmSync(lockFile, { force: true });
+  }
+  return { claimed, lines };
+}
+
+/** Resume a terminal session headlessly with its message. */
+export async function deliverHeadless(cb: PrCallback): Promise<void> {
+  const name = path.basename(cb.ws);
+  // sendToClaudeSession falls back to the newest session for an unknown id; a callback reaches its own or none.
+  if ((await resolveSessionSource(name, cb.session)).sessionId !== cb.session)
+    throw new WorkspaceError(`session ${cb.session} is gone`);
+  await sendToClaudeSession(name, cb.message, cb.session);
+}
+
+/**
+ * `sandbox pr watch` (desktop: false) and the sandbox-tools mod's timer (desktop: true): one
+ * pass over every workspace. Headless claims are delivered here; desktop claims are returned
+ * for the mod to send through the app. Never merges and never closes out.
+ */
+export async function watchPrs(
+  opts: { desktop: boolean },
+  deps: Deps = defaultDeps(),
+  send: (cb: PrCallback) => Promise<void> = deliverHeadless,
+): Promise<{ ok: boolean; lines: string[]; desktop: PrCallback[] }> {
+  const { workspaces } = await listWorkspaces();
+  const { claimed, lines } = await claimCallbacks(
+    workspaces.map((w) => w.path),
+    opts,
+    deps,
+  );
+  const desktop: PrCallback[] = [];
+  for (const cb of claimed) {
+    if (cb.hostSession) {
+      desktop.push(cb);
+      continue;
+    }
+    try {
+      await send(cb);
+      lines.push(`${cb.dir}: resumed session ${cb.session}: ${cb.message}`);
+    } catch (e) {
+      lines.push(`${cb.dir}: could not resume session ${cb.session}: ${(e as Error).message}`);
+    }
+  }
+  return { ok: true, lines, desktop };
 }
 
 /**

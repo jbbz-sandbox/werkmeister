@@ -70,6 +70,7 @@ import { computePromptSpec, loadConfigFile, resolveInputs } from "./workspace_pr
 
 export {
   adoptPr,
+  callbackMessage,
   closeOut,
   gatePrs,
   type Lifecycle,
@@ -79,6 +80,7 @@ export {
   readPrFiles,
   refreshPrStatus,
   runGate,
+  watchPrs,
 } from "./pr_lifecycle.js";
 
 const execFileAsync = promisify(execFile);

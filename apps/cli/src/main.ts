@@ -681,8 +681,8 @@ const SPECS: CommandSpec[] = [
         .addArgument(
           new Argument(
             "<action>",
-            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace",
-          ).choices(["gate", "open", "status", "adopt"]),
+            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace; watch: resume each opening session once its PR merges, ships or closes (any workspace, for cron)",
+          ).choices(["gate", "open", "status", "adopt", "watch"]),
         )
         .argument(
           "[args...]",
