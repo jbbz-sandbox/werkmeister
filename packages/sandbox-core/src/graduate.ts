@@ -146,7 +146,10 @@ export function matchDomainsForRefs(
 }
 
 /** Rewrite frontmatter fields on a note file; body is preserved exactly. Also used for PR files (pr_lifecycle.ts). */
-export function updateNoteStatus(notePath: string, fields: Record<string, string>): void {
+export function updateNoteStatus(
+  notePath: string,
+  fields: Record<string, string | undefined>,
+): void {
   const text = fs.readFileSync(notePath, "utf8");
   // Split on the first two "---" only: the frontmatter is between them and
   // everything after the second is body (further "---" left intact).
