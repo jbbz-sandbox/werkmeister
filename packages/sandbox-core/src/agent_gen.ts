@@ -116,6 +116,23 @@ export const TESTER_AGENT_PREFIX = "sb-tester-";
  * resolved test command and through-Caddy URL, the archetype's standards
  * keys, and the feature name.
  */
+/** One service line in a tester agent. */
+export interface TesterService {
+  name: string;
+  repo: string | undefined;
+  command: string | null;
+  validate: string | null;
+  url: string | null;
+}
+
+/** What `buildTesterAgent` renders for one archetype. */
+export interface TesterSpec {
+  archetype: string;
+  services: TesterService[];
+  standards: string[];
+  feature: string;
+}
+
 export function buildTesterSpecs(
   presentArchetypes: Record<string, string[]>,
   servicesConfig: ServicesConfig,
@@ -123,11 +140,11 @@ export function buildTesterSpecs(
   feature = "",
   routers: Record<string, FeatureRouter> = {},
   testPath = "",
-): Array<Record<string, any>> {
-  const specs: Array<Record<string, any>> = [];
+): TesterSpec[] {
+  const specs: TesterSpec[] = [];
   for (const [archName, svcNames] of Object.entries(presentArchetypes)) {
     const arch = archetypes[archName] ?? {};
-    const services: Array<Record<string, any>> = [];
+    const services: TesterService[] = [];
     for (const svc of svcNames) {
       const svcDef = servicesConfig[svc] ?? {};
       const host = routers[svc]?.hostname;
@@ -152,9 +169,9 @@ export function buildTesterSpecs(
 }
 
 /** Render one sb-tester-<archetype> definition (§5.4). */
-export function buildTesterAgent(spec: Record<string, any>): string {
+export function buildTesterAgent(spec: TesterSpec): string {
   const archName = spec["archetype"];
-  const services: Array<Record<string, any>> = spec["services"];
+  const services = spec["services"];
   const svcList = services.map((s) => s["name"]).join(", ");
 
   const commandLines: string[] = [];
@@ -241,7 +258,7 @@ RETURN CONTRACT — report, per service tested:
  */
 export function writeWorkspaceAgents(
   workspaceRoot: string,
-  testerSpecs?: Array<Record<string, any>> | null,
+  testerSpecs?: TesterSpec[] | null,
 ): string[] {
   const agentsDir = path.join(workspaceRoot, ".claude", "agents");
   fs.mkdirSync(agentsDir, { recursive: true });
