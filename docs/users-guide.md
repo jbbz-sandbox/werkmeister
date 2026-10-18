@@ -933,7 +933,7 @@ Each service can carry two related keys. They do different jobs, and a change ne
 
 | | `test:` | `validate:` |
 |---|---|---|
-| What it is | A shell command, e.g. `npx turbo run test --filter=sandbox-core` | Plain-language instructions, e.g. "Build, then run the built binary against a temp fixture workspace; assert on exit code, stdout/stderr and the files it writes." Never executed. |
+| What it is | A shell command, e.g. `npx turbo run test --filter=werkmeister-core` | Plain-language instructions, e.g. "Build, then run the built binary against a temp fixture workspace; assert on exit code, stdout/stderr and the files it writes." Never executed. |
 | Who uses it | Tooling: the implement stage's test step, `sandbox pr gate`, `sandbox test`'s fallback message | Whoever exercises the change: an agent in the implement stage, or you |
 | Question it answers | Do the automated tests still pass? | Does the change actually do what was asked, seen from outside? |
 | Evidence it leaves | The exit code and summary line | A `\| check \| result \|` table of PASS/FAIL rows with the captured output (`exercise.md`) |

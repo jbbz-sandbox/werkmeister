@@ -8,14 +8,14 @@
  * requests carrying `x-feature: <feature>` are rerouted; teammates and
  * baseline dev traffic are untouched.
  *
- * Everything below the argv line lives in `sandbox-core/telepresence` —
+ * Everything below the argv line lives in `werkmeister-core/telepresence` —
  * `startIntercept`/`leaveIntercept` are callable in-process, so a host server
  * never has to spawn this CLI. What stays here is the
  * five things a remote caller cannot have: argv, the cwd walk-up, the `.env`
  * read, TTY rendering, and the exit code.
  */
 
-import * as tp from "sandbox-core/telepresence";
+import * as tp from "werkmeister-core/telepresence";
 import { Colors, error, info, resolveWorkspace, success } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";

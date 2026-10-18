@@ -8,9 +8,9 @@
  * strategy) has the same wrapper fast path; this is its manual-run path.
  */
 
-import { findWorkspaceRoot } from "sandbox-core/gate";
-import { main as prGuard } from "sandbox-core/pr_guard";
-import { strategyFor } from "sandbox-core/strategies";
+import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { main as prGuard } from "werkmeister-core/pr_guard";
+import { strategyFor } from "werkmeister-core/strategies";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.action === "pr-guard") {

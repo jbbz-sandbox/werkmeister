@@ -7,14 +7,14 @@ Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 | App | Path | What |
 | --- | --- | --- |
 | `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI. |
-| `sandbox-workspace-mcp-app` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | MCP App + dashboard UI for creating/managing sandbox workspaces. |
+| `werkmeister-dashboard` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | MCP App + dashboard UI for creating/managing sandbox workspaces. |
 
 | Package | Path | What |
 | --- | --- | --- |
-| `sandbox-core` | [packages/sandbox-core](packages/sandbox-core) | Shared library: config/registry resolution, workspace + issue-tracker helpers, typed wrappers over the CLI. |
-| `vscode-plugin` | [packages/vscode-plugin](packages/vscode-plugin) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
+| `werkmeister-core` | [packages/sandbox-core](packages/sandbox-core) | Shared library: config/registry resolution, workspace + issue-tracker helpers, typed wrappers over the CLI. |
+| `werkmeister-vscode` | [packages/vscode-plugin](packages/vscode-plugin) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
 
-`sandbox-core` is the one shared dependency — the CLI, the dashboard and the VS
+`werkmeister-core` is the one shared dependency — the CLI, the dashboard and the VS
 Code extension all read the same machine config through it. Only the CLI
 publishes; everything else is private.
 
@@ -40,7 +40,7 @@ this checkout as `sandbox_root`, so don't move or delete it while it is linked.
 Until you rebuild, it keeps running the old bundle, so the CLI
 prints a one-line stderr warning when `apps/cli/dist` was built from a
 different commit than the checkout's `HEAD`. The warning names both SHAs and
-the rebuild command, `npm run build --workspace sandbox-core && npm run build --workspace apps/cli`.
+the rebuild command, `npm run build --workspace werkmeister-core && npm run build --workspace apps/cli`.
 It never shows on a published install, which has no `.git`, and `sandbox hooks`
 skips it. To skip the global link, run `./sandbox` from the repo root instead. To remove
 the link, run `npm rm -g werkmeister`.
@@ -96,7 +96,7 @@ which falls back to pure JS anyway. Allowing them just adds a `node-gyp` build
 that needs Xcode's tools.
 
 The package is a single esbuild bundle plus `infra/` — the templates, compose
-files, proxy UI and skills the CLI reads at runtime. `sandbox-core` and the
+files, proxy UI and skills the CLI reads at runtime. `werkmeister-core` and the
 CLI's other libraries are bundled in, so the only dependency npm resolves is
 `dockerode`. `sandbox setup` still seeds `~/.sandbox` exactly as it does from a
 checkout, which is what makes the two installs interchangeable. The headless
@@ -120,9 +120,9 @@ npx changeset          # pick a bump, write a one-line description
 ```
 
 That writes `.changeset/<name>.md` — commit it with the PR. **Name
-`werkmeister`, even for work that lives in `sandbox-core`:** the
+`werkmeister`, even for work that lives in `werkmeister-core`:** the
 description lands in the changelog of whichever package the changeset names, and
-the CLI is the one anyone reads. `sandbox-core` is `fixed` to the CLI, so its
+the CLI is the one anyone reads. `werkmeister-core` is `fixed` to the CLI, so its
 version follows either way.
 
 On merge to `main`, the `release` job in `.github/workflows/ci.yml` opens (or

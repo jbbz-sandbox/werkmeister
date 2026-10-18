@@ -25,7 +25,7 @@ const CORE = path.resolve(
 );
 const ALLOWED = new Set(["reporter.ts", "cache.ts", "gate.ts", "pr_guard.ts"]);
 
-describe("sandbox-core console writes", () => {
+describe("werkmeister-core console writes", () => {
   it("routes every log through the reporter, outside the documented exceptions", () => {
     const files = [
       ...fs.readdirSync(CORE).filter((f) => f.endsWith(".ts")),

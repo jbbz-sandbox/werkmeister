@@ -10,18 +10,18 @@
  *     sandbox stats --collect 30 -i 5   # 30 minutes, 5-second intervals
  */
 
-import { containerStats } from "sandbox-core/docker";
+import { containerStats } from "werkmeister-core/docker";
 import {
   type ContainerStats,
   formatMem,
   halveCpu,
   type Recommendation,
   runCollection,
-} from "sandbox-core/stats";
+} from "werkmeister-core/stats";
 import { Colors, info, success, warn } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
 
-// The two table renderers live here rather than in `sandbox-core/stats`:
+// The two table renderers live here rather than in `werkmeister-core/stats`:
 // §3 keeps table rendering CLI-side, and 066 split `status` the same way.
 // `formatMem` stays in the library — `saveReport` writes it into the report
 // file, and `commands/optimize.ts` reads it too.

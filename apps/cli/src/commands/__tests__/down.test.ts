@@ -1,6 +1,6 @@
 /**
  * What `sandbox down` still does now that the teardown lives in
- * `sandbox-core/lifecycle`.
+ * `werkmeister-core/lifecycle`.
  *
  * Two of these guard decisions that would regress silently rather than loudly:
  * the proxy reloads once per *command* (which is why `reloadProxy` is a
@@ -8,28 +8,28 @@
  * read before the containers they resolve through are removed.
  */
 
-import type { Reporter } from "sandbox-core/reporter";
-import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Reporter } from "werkmeister-core/reporter";
+import { withReporter } from "werkmeister-core/reporter";
 
 import { makeRecorder } from "./helpers/recorder.js";
 
-vi.mock("sandbox-core/lifecycle", () => ({
+vi.mock("werkmeister-core/lifecycle", () => ({
   down: vi.fn(),
   reloadProxy: vi.fn(),
   teardownNotes: vi.fn(),
 }));
-vi.mock("sandbox-core/slots", () => ({ getAllSlots: vi.fn() }));
-vi.mock("sandbox-core/compose", () => ({ workspaceForFeature: vi.fn(() => "/ws") }));
-vi.mock("sandbox-core/graduate", () => ({
+vi.mock("werkmeister-core/slots", () => ({ getAllSlots: vi.fn() }));
+vi.mock("werkmeister-core/compose", () => ({ workspaceForFeature: vi.fn(() => "/ws") }));
+vi.mock("werkmeister-core/graduate", () => ({
   GraduationError: class extends Error {},
   reconcileGraduating: () => [],
 }));
 vi.mock("../notes.js", () => ({ graduateOne: vi.fn(), input: vi.fn() }));
 vi.mock("../../lib/dotenv.js", () => ({ loadDotenv: () => ({}) }));
 
-import { down as downFeature, reloadProxy, teardownNotes } from "sandbox-core/lifecycle";
-import { getAllSlots } from "sandbox-core/slots";
+import { down as downFeature, reloadProxy, teardownNotes } from "werkmeister-core/lifecycle";
+import { getAllSlots } from "werkmeister-core/slots";
 import { run as runDown } from "../down.js";
 
 let lines: string[];

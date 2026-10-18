@@ -26,7 +26,7 @@
  * configured root, falling back to a parent-of-.git auto-detect when CWD is
  * not under a configured root.
  *
- * All of that lives in `sandbox-core/workspace_init` (note 086 row 5), where the
+ * All of that lives in `werkmeister-core/workspace_init` (note 086 row 5), where the
  * dashboard reaches it without spawning this CLI. What is left here is the argv
  * adapter: the prompt-spec exports, the interactive wizard driver, the one thing
  * a library may not do (read this process's stdin), and exit codes.
@@ -34,7 +34,11 @@
 
 import * as fs from "node:fs";
 
-import { initWorkspace, WorkspaceInitError, WorkspaceRootError } from "sandbox-core/workspace_init";
+import {
+  initWorkspace,
+  WorkspaceInitError,
+  WorkspaceRootError,
+} from "werkmeister-core/workspace_init";
 
 /**
  * Read a task title piped on stdin (`echo "…" | sandbox init-workspace`).

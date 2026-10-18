@@ -4,9 +4,9 @@
  * Restart all containers for a feature's stack.
  */
 
-import { SandboxError } from "sandbox-core/errors";
-import { restart as infraRestart } from "sandbox-core/infra";
-import { restart as restartFeature } from "sandbox-core/lifecycle";
+import { SandboxError } from "werkmeister-core/errors";
+import { restart as infraRestart } from "werkmeister-core/infra";
+import { restart as restartFeature } from "werkmeister-core/lifecycle";
 import { Colors, error, info } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 

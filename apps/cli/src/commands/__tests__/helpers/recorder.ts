@@ -5,10 +5,10 @@
  * Extracted at the fourth copy, which `stop_restart.test.ts` said would be the
  * trigger. It covers the two command suites only: `lib/__tests__/slots.test.ts`
  * keeps its own because it is testing the library rather than a command, and
- * `sandbox-core/reporter.test.mjs` is another package and plain `.mjs`, so it
+ * `werkmeister-core/reporter.test.mjs` is another package and plain `.mjs`, so it
  * could never have imported this.
  */
-import type { Reporter } from "sandbox-core/reporter";
+import type { Reporter } from "werkmeister-core/reporter";
 
 /**
  * `lines` collects reporter events as `[level] msg`, and `raw` chunks verbatim

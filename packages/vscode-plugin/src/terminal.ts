@@ -10,8 +10,8 @@
  * `sandbox`, which would depend on the integrated terminal's PATH.
  */
 import * as path from "node:path";
-import { resolveSandboxBin } from "sandbox-core";
 import * as vscode from "vscode";
+import { resolveSandboxBin } from "werkmeister-core";
 import { claim, forget, release, type Slot } from "./terminal-pool.js";
 
 /** POSIX single-quote escaping — the integrated terminal is a shell, not execFile. */

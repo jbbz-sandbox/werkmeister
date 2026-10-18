@@ -5,12 +5,12 @@
  * SANDBOX_FEATURE environment variable so the Playwright config can
  * include the correct X-Feature cookie.
  *
- * The run itself is `sandbox-core/test_run`; what is left here is argv, the
+ * The run itself is `werkmeister-core/test_run`; what is left here is argv, the
  * cwd-dependent workspace resolution, the banner, and the exit code — a
  * failing suite is a result the library reports, not an error it throws.
  */
 
-import { runFeatureTests } from "sandbox-core/test_run";
+import { runFeatureTests } from "werkmeister-core/test_run";
 import { Colors, error, resolveWorkspace, success } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
 

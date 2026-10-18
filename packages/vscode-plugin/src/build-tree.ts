@@ -5,7 +5,7 @@
  * Deliberately free of any `vscode` import so it runs under `node --test`
  * without an extension harness; `tree.ts` does nothing but map a WsNode onto a
  * vscode.TreeItem. Input shapes are declared structurally rather than imported
- * from sandbox-core, so the test file needs no sandbox-core build.
+ * from werkmeister-core, so the test file needs no werkmeister-core build.
  */
 
 export interface WorkspaceEntryLike {
@@ -119,7 +119,7 @@ function currentWorkspaceName(
 }
 
 /**
- * Display state for one service's intercept. Mirrors sandbox-core's
+ * Display state for one service's intercept. Mirrors werkmeister-core's
  * `interceptFields`, but returns the presentation triple the tree needs. A
  * missing row is disabled-and-explained rather than hidden, and a failed lookup
  * is distinguished from "not interceptable" — the two mean different things and
@@ -226,7 +226,7 @@ function workspaceNode(
 }
 
 /**
- * Build the whole tree from the three sandbox-core payloads.
+ * Build the whole tree from the three werkmeister-core payloads.
  *
  * The workspace list is authoritative: maps over `workspaces`, joining with
  * `statuses` by name. A workspace with no matching status renders as `unknown`;
@@ -243,7 +243,7 @@ export function buildTree(
   const nodes = workspaces.map((w) =>
     workspaceNode(w, byName.get(w.name), intercepts, w.name === current),
   );
-  // The window's own workspace first; the rest keep sandbox-core's name order.
+  // The window's own workspace first; the rest keep werkmeister-core's name order.
   const i = nodes.findIndex((n) => n.id === current);
   if (i > 0) nodes.unshift(...nodes.splice(i, 1));
   return nodes;

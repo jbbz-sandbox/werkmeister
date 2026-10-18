@@ -3,7 +3,7 @@
  * esbuild.mjs) answers `initialize` over stdio.
  *
  * This is the one thing an `npm i -g` install relies on that no other test
- * covers: that apps/mcp and its deps (express, the MCP SDK, zod, sandbox-core)
+ * covers: that apps/mcp and its deps (express, the MCP SDK, zod, werkmeister-core)
  * bundle into self-contained ESM and boot without the monorepo around them.
  * The `test` script builds first, so the bundle is always current here.
  */

@@ -17,7 +17,7 @@
  * - the return value is a plain object the caller can branch on.
  *
  * *feature* is a real feature throughout. `infra` is a CLI-level target that
- * routes to `sandbox-core/infra` before reaching any of this — passing it here
+ * routes to `werkmeister-core/infra` before reaching any of this — passing it here
  * finds no slot, which `stop`/`restart` reject as `NOT_RUNNING` and `down`
  * merely warns about. `sandbox up infra` is the one that does not even reach
  * `infra`: it means `sandbox connect`, which is still a command module, so that
@@ -648,7 +648,7 @@ export interface ProxyOps {
 
 // Wrapped rather than referenced: a bare `slots: getAllSlots` reads the imported
 // binding when this module is evaluated, which throws under a partial `vi.mock`
-// of `sandbox-core/slots` that does not name `getAllSlots` — two CLI tests do
+// of `werkmeister-core/slots` that does not name `getAllSlots` — two CLI tests do
 // exactly that, and would fail to load. The arrows resolve at call time.
 const REAL_PROXY_OPS: ProxyOps = {
   generate: () => generateCaddyfile(),

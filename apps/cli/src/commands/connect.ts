@@ -4,17 +4,17 @@
  * Start all shared infrastructure: the k8s port-forwards (redis, postgres),
  * caddy, jaeger, and redisinsight.
  *
- * The work is `sandbox-core/infra`; what is left here is the banners, the health
+ * The work is `werkmeister-core/infra`; what is left here is the banners, the health
  * table and the developer-tools block. The three `tools.local.sandbox.com` URLs
  * stay renderer-side deliberately — moving them opens where tool URLs are
  * configured, which is not this migration's question (note 070).
  */
 
 import * as readline from "node:readline/promises";
-import { connectK8s, infraHealth, up as infraUp } from "sandbox-core/infra";
-import { ghBin, issueTracker, type TrackerAuth } from "sandbox-core/issue_tracker";
-import { run as procRun } from "sandbox-core/proc";
-import { DASHBOARD, MCP, status as webStatus } from "sandbox-core/web_servers";
+import { connectK8s, infraHealth, up as infraUp } from "werkmeister-core/infra";
+import { ghBin, issueTracker, type TrackerAuth } from "werkmeister-core/issue_tracker";
+import { run as procRun } from "werkmeister-core/proc";
+import { DASHBOARD, MCP, status as webStatus } from "werkmeister-core/web_servers";
 import { Colors } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
 

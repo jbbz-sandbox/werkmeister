@@ -13,9 +13,9 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { SandboxError } from "sandbox-core/errors";
-import { stop as infraStop } from "sandbox-core/infra";
-import { idleStopFeature, stop as stopFeature } from "sandbox-core/lifecycle";
+import { SandboxError } from "werkmeister-core/errors";
+import { stop as infraStop } from "werkmeister-core/infra";
+import { idleStopFeature, stop as stopFeature } from "werkmeister-core/lifecycle";
 import { Colors, error, info } from "../lib/config.js";
 import { findDotenv, loadDotenv } from "../lib/dotenv.js";
 

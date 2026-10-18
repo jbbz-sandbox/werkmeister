@@ -6,12 +6,12 @@
  * slot assigned at init time was released and is now taken by another feature,
  * the compose file is regenerated with a new slot before starting.
  *
- * The sequence itself is `sandbox-core/lifecycle`; what is left here is argv,
+ * The sequence itself is `werkmeister-core/lifecycle`; what is left here is argv,
  * the workspace resolution that depends on cwd, and the summary block.
  */
 
-import type { UpResult } from "sandbox-core/lifecycle";
-import { up as upFeature } from "sandbox-core/lifecycle";
+import type { UpResult } from "werkmeister-core/lifecycle";
+import { up as upFeature } from "werkmeister-core/lifecycle";
 import { Colors, error, resolveWorkspace } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
@@ -63,7 +63,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   if (feature === "infra") {
     // `sandbox up infra` is `sandbox connect` — the command, not
-    // `sandbox-core/infra`'s `up()`, because this path prints connect's whole
+    // `werkmeister-core/infra`'s `up()`, because this path prints connect's whole
     // rendering (banner, health table, tools block) and `up()` returns before
     // any of it. Imported as a literal so tsc resolves it: this call lived in
     // `infra.up()` behind a hoisted string constant until 353984e, which is

@@ -41,13 +41,13 @@ import * as path from "node:path";
 // The work itself lives in core (note 086 row 5), which is how `createWorkspace`
 // runs it without spawning this CLI. What stays here is the wizard, the
 // browser-form launcher, and exit codes.
-import { createWorkspace, distillIssue, WorkspaceError } from "sandbox-core";
-import { buildFormSchema } from "sandbox-core/form_schema";
-import { fetchIssueSnapshot, type IssueSnapshot } from "sandbox-core/issue_snapshot";
-import { issueTracker } from "sandbox-core/issue_tracker";
-import { run as procRun } from "sandbox-core/proc";
-import { WorkspaceInitError } from "sandbox-core/workspace_init";
-import { resolveInputs, workspacePromptSpec } from "sandbox-core/workspace_prompts";
+import { createWorkspace, distillIssue, WorkspaceError } from "werkmeister-core";
+import { buildFormSchema } from "werkmeister-core/form_schema";
+import { fetchIssueSnapshot, type IssueSnapshot } from "werkmeister-core/issue_snapshot";
+import { issueTracker } from "werkmeister-core/issue_tracker";
+import { run as procRun } from "werkmeister-core/proc";
+import { WorkspaceInitError } from "werkmeister-core/workspace_init";
+import { resolveInputs, workspacePromptSpec } from "werkmeister-core/workspace_prompts";
 import { error, getMonorepoRoot, info } from "../lib/config.js";
 import { runFormWizard } from "../lib/wizard.js";
 // init-workspace owns the piped-stdin reader; the prompt definitions and the

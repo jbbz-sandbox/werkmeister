@@ -2,7 +2,7 @@
  * Bundle the CLI to self-contained ESM, so the published package installs
  * without resolving a private workspace.
  *
- * `sandbox-core` is a private monorepo workspace: an `npm i -g` of this package
+ * `werkmeister-core` is a private monorepo workspace: an `npm i -g` of this package
  * could never resolve it, so it (and `commander`/`yaml`/`nunjucks`/`@inquirer`)
  * are bundled in rather than declared as runtime dependencies. That is what
  * makes the tarball installable from a checkout-free machine.
@@ -13,7 +13,7 @@
  * and hand the gate the whole CLI's import cost on every Edit/Write. `mcp`
  * execs `dist/mcp.js`: the headless MCP server lives in the sibling
  * `apps/mcp` workspace, which is private and not published, so it is bundled
- * here from source — the same reason sandbox-core is. Without it, `sandbox
+ * here from source — the same reason werkmeister-core is. Without it, `sandbox
  * mcp` and the `sandbox-tools` plugin's MCP entry have no target on an
  * `npm i -g` install.
  *
@@ -26,7 +26,7 @@
  * binding fails at build, not at a user's first `sandbox up`.
  *
  * Output stays ESM (the extension's bundle is CJS and has to `define`
- * import.meta away): sandbox-core resolves paths through `import.meta.dirname`,
+ * import.meta away): werkmeister-core resolves paths through `import.meta.dirname`,
  * which is native here.
  */
 import { execFileSync } from "node:child_process";

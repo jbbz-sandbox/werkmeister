@@ -6,10 +6,9 @@
  * to exit.
  */
 
-import type { ContainerStatus } from "sandbox-core/compose";
-
-import { tallied } from "sandbox-core/status";
 import { describe, expect, it } from "vitest";
+import type { ContainerStatus } from "werkmeister-core/compose";
+import { tallied } from "werkmeister-core/status";
 
 const c = (over: Partial<ContainerStatus>): ContainerStatus => ({
   name: "x",

@@ -4,17 +4,17 @@
  * Stop containers, release the feature's slot, update the reverse proxy
  * configuration, and clean up generated files.
  *
- * The teardown itself is `sandbox-core/lifecycle`; what is left here is argv,
+ * The teardown itself is `werkmeister-core/lifecycle`; what is left here is argv,
  * the workspace notes (a TTY prompt loop, so it stays CLI-side), and the
  * banners and summary block.
  */
 
 import * as path from "node:path";
-import { GraduationError } from "sandbox-core/graduate";
-import type { DownResult } from "sandbox-core/lifecycle";
-import { down as downFeature, reloadProxy, teardownNotes } from "sandbox-core/lifecycle";
-import type { Note } from "sandbox-core/notes";
-import { getAllSlots } from "sandbox-core/slots";
+import { GraduationError } from "werkmeister-core/graduate";
+import type { DownResult } from "werkmeister-core/lifecycle";
+import { down as downFeature, reloadProxy, teardownNotes } from "werkmeister-core/lifecycle";
+import type { Note } from "werkmeister-core/notes";
+import { getAllSlots } from "werkmeister-core/slots";
 import { Colors, error, info, warn } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
@@ -151,7 +151,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   if (feature === "infra") {
     console.log(`\n${Colors.BOLD}=== sandbox down: ${feature} ===${Colors.RESET}\n`);
-    const infra = await import("sandbox-core/infra");
+    const infra = await import("werkmeister-core/infra");
     await infra.down(removeVolumes);
     console.log();
     return;

@@ -1,17 +1,17 @@
 /**
  * The confirmation gate on `sandbox remove-workspace`.
  *
- * The teardown itself is `sandbox-core`'s and tested there; what is only here
+ * The teardown itself is `werkmeister-core`'s and tested there; what is only here
  * is the prompt standing between a mistyped name and an `rm -rf`. If that gate
  * ever inverts, nothing else in the repo notices.
  */
 import { beforeEach, expect, it, vi } from "vitest";
 
-vi.mock("sandbox-core", () => ({ removeWorkspace: vi.fn() }));
+vi.mock("werkmeister-core", () => ({ removeWorkspace: vi.fn() }));
 vi.mock("../../lib/wizard.js", () => ({ confirm: vi.fn() }));
 vi.mock("../../lib/config.js", async (orig) => ({ ...(await orig<object>()), warn: vi.fn() }));
 
-import { removeWorkspace } from "sandbox-core";
+import { removeWorkspace } from "werkmeister-core";
 import { warn } from "../../lib/config.js";
 import { confirm } from "../../lib/wizard.js";
 import { run as runRemove } from "../remove_workspace.js";

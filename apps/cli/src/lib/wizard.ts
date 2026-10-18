@@ -25,9 +25,9 @@ import {
   Separator,
   select,
 } from "@inquirer/prompts";
-import { buildFormSchema } from "sandbox-core/form_schema";
-import type { PromptSpec } from "sandbox-core/global_config";
-import { promptEntry } from "sandbox-core/workspace_prompts";
+import { buildFormSchema } from "werkmeister-core/form_schema";
+import type { PromptSpec } from "werkmeister-core/global_config";
+import { promptEntry } from "werkmeister-core/workspace_prompts";
 import { info, warn } from "./config.js";
 
 // Re-exported so the commands and `browser.ts` that drive a wizard keep naming
@@ -314,13 +314,13 @@ export async function promptOne(
 /**
  * Offer a Claude rewrite for a `refinable` field; returns the text to keep.
  *
- * The rewrite runs through `sandbox-core`'s `refinePrompt` — the same
+ * The rewrite runs through `werkmeister-core`'s `refinePrompt` — the same
  * function behind the browser form's "Refine with Claude" button — so the
  * terminal honours the field's `refineInstruction` instead of restating it and
  * drifting. The wizard's answers so far are passed as the form-state context
- * sandbox-core grounds the rewrite in.
+ * werkmeister-core grounds the rewrite in.
  *
- * Every failure path (declined, sandbox-core not built, `claude` missing, empty or
+ * Every failure path (declined, werkmeister-core not built, `claude` missing, empty or
  * rejected rewrite) falls back to what the user typed — refine is an offer, so
  * it must never cost them their text. `ask` is injected for tests.
  */
@@ -336,7 +336,7 @@ export async function offerRefine(
   info("  Refining via the claude CLI — this takes a few seconds…");
   let refined: string;
   try {
-    const { refinePrompt } = await import("sandbox-core");
+    const { refinePrompt } = await import("werkmeister-core");
     refined = (await refinePrompt(value, field.refineInstruction ?? "", context)).trim();
   } catch (e) {
     warn(`Refine failed (${(e as Error).message}) — keeping what you typed.`);
