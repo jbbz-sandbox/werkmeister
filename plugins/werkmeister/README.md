@@ -1,4 +1,4 @@
-# sandbox-tools
+# werkmeister
 
 A Claude Code plugin bundling the diagnostic and operations skills for the
 sandbox environment.
@@ -8,17 +8,17 @@ sandbox environment.
 ### Diagnostics & operations
 | Skill | What it does |
 |-------|--------------|
-| `sandbox-status` | Comprehensive health overview of the whole sandbox (containers, networks, proxy). |
-| `sandbox-diagnose` | Full-stack health checks across containers, networking, Caddy routing, and connectivity. |
-| `sandbox-routing-test` | Trace a single URL through the routing chain to find where it breaks. |
-| `sandbox-caddy-reload` | Validate, reload, and smoke-test the Caddy proxy config safely. |
+| `status` | Comprehensive health overview of the whole sandbox (containers, networks, proxy). |
+| `diagnose` | Full-stack health checks across containers, networking, Caddy routing, and connectivity. |
+| `routing-test` | Trace a single URL through the routing chain to find where it breaks. |
+| `caddy-reload` | Validate, reload, and smoke-test the Caddy proxy config safely. |
 
 ### Workspace lifecycle
 | Skill | What it does |
 |-------|--------------|
-| `sandbox-workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`sandbox-workspace` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
-| `sandbox-feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
-| `sandbox-starting-prompt` | Run the `starting_prompt` defined in the workspace's `.sandbox/workspace.yml`. |
+| `workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`workspaces` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
+| `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
+| `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.sandbox/workspace.yml`. |
 | `install-workspace-dashboard` | Install the Sandbox Workspaces live dashboard as a **Cowork artifact** (`apps/sandbox-dashboard/dist/workspace-list.artifact.html`). |
 
 ### Mods
@@ -40,9 +40,9 @@ standards are **not shipped here**. They are projected into each workspace's
 generated from [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards) by
 `sandbox standards build` (drift-gated by `sandbox standards check`).
 
-## Bundled MCP server (`sandbox-workspace`)
+## Bundled MCP server (`workspaces`)
 
-The plugin's [`.mcp.json`](./.mcp.json) auto-wires an MCP server (`sandbox dashboard`,
+The plugin's [`.mcp.json`](./.mcp.json) auto-wires an MCP server (`w9r dashboard`,
 source in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard)) exposing ~26 tools —
 workspace create/manage, PR review, issue lookups, k8s/kube health, and a Claude
 session bridge — with **one form definition and graceful UI degradation per client**:
@@ -55,7 +55,7 @@ session bridge — with **one form definition and graceful UI degradation per cl
 
 The server detects whether the client renders MCP App UI (`io.modelcontextprotocol/ui`
 capability); every tool also returns markdown/text, so any host degrades gracefully.
-Call the create tool directly: `mcp__plugin_sandbox-tools_sandbox-workspace__workspace` (optionally
+Call the create tool directly: `mcp__plugin_werkmeister_workspaces__workspace` (optionally
 `{ "issue": "<issue ID>" }`). Full tool table in the
 [app README](../../apps/sandbox-dashboard/README.md).
 
@@ -64,14 +64,14 @@ Plugins don't install in Desktop, so add the same server to
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
-{ "mcpServers": { "sandbox-workspace": { "command": "sandbox", "args": ["dashboard"] } } }
+{ "mcpServers": { "workspaces": { "command": "w9r", "args": ["dashboard"] } } }
 ```
 
 ## Dependencies
 
-- **MCP server build:** run `cd apps/sandbox-dashboard && npm run build` once — `sandbox dashboard`
+- **MCP server build:** run `cd apps/sandbox-dashboard && npm run build` once — `w9r dashboard`
   runs the compiled `dist/main.js`. Without it, the server won't start.
-- The `sandbox` CLI must be on `PATH` (e.g. `~/.local/bin/sandbox`), and Docker running.
+- The `w9r` CLI (package `werkmeister` 0.14 or later) must be on `PATH`, and Docker running.
 - **Self-contained:** the workspace form and its "Refine with Claude" / issue-fetch logic
   live in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard) — no external skill is required.
   Issues come from the tracker picked in `sandbox setup`; refine uses the local `claude` CLI.
@@ -84,19 +84,72 @@ every session, not just inside this repo):
 
 ```
 /plugin marketplace add jbbz-sandbox/werkmeister
-/plugin install sandbox-tools@sandbox
+/plugin install werkmeister@werkmeister
 ```
+
+Skills are namespaced by the plugin: `/werkmeister:diagnose`, `/werkmeister:workspace`, …
 
 To develop/test locally from a checkout:
 
 ```
-/plugin marketplace add /path/to/sandbox
-/plugin install sandbox-tools@sandbox
+/plugin marketplace add /path/to/werkmeister
+/plugin install werkmeister@werkmeister
 ```
 
 Validate changes before committing:
 
 ```
-claude plugin validate ./plugins/sandbox-tools
+claude plugin validate ./plugins/werkmeister
 claude plugin validate .   # validates the marketplace manifest
 ```
+
+## Migrating from `sandbox-tools`
+
+SW-9 renamed the plugin, the marketplace, the skills and the MCP servers. Claude Code has no
+alias for a renamed plugin, and an already-added `sandbox` marketplace stops resolving
+`sandbox-tools` once its manifest says `werkmeister` (an update reports success, then
+`Plugin "sandbox-tools" not found`), so an old install does not move on its own.
+
+| Was | Is |
+|-----|----|
+| plugin `sandbox-tools` | `werkmeister` |
+| marketplace `sandbox` | `werkmeister` (install id `werkmeister@werkmeister`) |
+| skills `sandbox-workspace`, `sandbox-diagnose`, `sandbox-feature-test`, `sandbox-status`, `sandbox-caddy-reload`, `sandbox-routing-test`, `sandbox-starting-prompt` | `/werkmeister:workspace`, `:diagnose`, `:feature-test`, `:status`, `:caddy-reload`, `:routing-test`, `:starting-prompt` |
+| plugin MCP server `sandbox-workspace` (`mcp__plugin_sandbox-tools_sandbox-workspace__*`) | `workspaces` (`mcp__plugin_werkmeister_workspaces__*`) |
+| Claude Desktop entry `"sandbox-workspace"` (`mcp__sandbox-workspace__*`) | `"workspaces"` (`mcp__workspaces__*`) |
+| registry MCP server `sandbox`, tools `sandbox-up`, `sandbox-status`, `sandbox-workspace`, … | `werkmeister`, tools `up`, `status`, `workspace`, … (every `sandbox-` prefix dropped) |
+
+**One step:** update the CLI to `werkmeister` 0.14 or later, then run
+
+```
+w9r setup
+```
+
+It adds the `werkmeister` marketplace, installs `werkmeister@werkmeister`, and only then
+uninstalls `sandbox-tools@sandbox` and removes the `sandbox` marketplace.
+`w9r setup --check` lists an old install as a failed step until you do. `init-workspace` also warns
+about it.
+
+**By hand**, in a Claude Code session:
+
+```
+/plugin marketplace add jbbz-sandbox/werkmeister
+/plugin install werkmeister@werkmeister
+/plugin uninstall sandbox-tools@sandbox
+/plugin marketplace remove sandbox
+```
+
+**Checkout installs** that set `CLAUDE_CODE_PLUGIN_DIRS` to `.../plugins/sandbox-tools` keep
+working for one release: that path is now a link to `plugins/werkmeister` and loads the plugin
+under its new name. Point it at `.../plugins/werkmeister`, and rename the `sandbox` entry in
+`extraKnownMarketplaces` to `werkmeister` (or delete it), before the link is removed.
+
+**Also update by hand:**
+- Claude Desktop: in `claude_desktop_config.json`, rename the `sandbox-workspace` server to
+  `workspaces` and set its command to `w9r`.
+- Anything of yours that names the old tools or skills (permission rules in your own settings,
+  prompts that say `/sandbox-diagnose`).
+
+**Compatibility for one release:** the generated workspace permission rules allow both the old
+and the new `mcp__plugin_…` prefixes, so a machine that has not run `w9r setup` yet keeps working. The
+old `sandbox` entry in a workspace's `.mcp.json` is dropped at the next `init-workspace`.

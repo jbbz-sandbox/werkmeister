@@ -19,9 +19,12 @@ import {
   DEMO_SERVICES_REPO_URL,
   defaultWorkspaceRepo,
   githubOwners,
+  LEGACY_PLUGIN,
   OPTIONAL_PLUGINS,
   type Runner,
   resolveCertScript,
+  REQUIRED_PLUGINS,
+  retireLegacyPlugin,
   runSetup,
   type Step,
   syncClaudeStandardsDir,
@@ -142,7 +145,7 @@ describe("scaffold content", () => {
       "node-tool",
       "mcp-client",
     ]);
-    expect(Object.keys(REGISTRY_DEFAULTS.mcp_servers)).toEqual(["context7", "sandbox"]);
+    expect(Object.keys(REGISTRY_DEFAULTS.mcp_servers)).toEqual(["context7", "werkmeister"]);
   });
 
   it("renders a parseable services.local.yaml carrying only k8s_context", () => {
@@ -323,6 +326,61 @@ describe("syncIngressCerts", () => {
       () => 1,
     );
     expect(steps[0].ok).toBe(false);
+  });
+});
+
+describe("retireLegacyPlugin", () => {
+  const OLD = `${LEGACY_PLUGIN.name}@${LEGACY_PLUGIN.marketplace}`;
+
+  /** A plugins dir holding the pre-rename install and marketplace, or nothing. */
+  function pluginsDir(legacy: boolean): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugins-"));
+    fs.writeFileSync(
+      path.join(dir, "known_marketplaces.json"),
+      JSON.stringify(legacy ? { [LEGACY_PLUGIN.marketplace]: {} } : {}),
+    );
+    fs.writeFileSync(
+      path.join(dir, "installed_plugins.json"),
+      JSON.stringify({
+        plugins: legacy ? { [OLD]: [{ version: "0.0.2", installPath: dir }] } : {},
+      }),
+    );
+    return dir;
+  }
+
+  it("does nothing on a machine that never had the old names", () => {
+    const runner = fakeRunner({});
+    expect(retireLegacyPlugin(pluginsDir(false), runner, false)).toEqual([]);
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("uninstalls the old plugin, then removes its marketplace", () => {
+    const runner = fakeRunner({ "claude plugin": [0, ""] });
+    const steps = retireLegacyPlugin(pluginsDir(true), runner, false);
+    expect(steps.every((step) => step.ok)).toBe(true);
+    expect(runner.calls).toEqual([
+      ["claude", "plugin", "uninstall", OLD],
+      ["claude", "plugin", "marketplace", "remove", LEGACY_PLUGIN.marketplace],
+    ]);
+  });
+
+  it("keeps the old marketplace when the uninstall fails", () => {
+    const runner = fakeRunner({ "claude plugin uninstall": [1, "boom"] });
+    const steps = retireLegacyPlugin(pluginsDir(true), runner, false);
+    expect(steps[0].ok).toBe(false);
+    expect(runner.calls).toHaveLength(1);
+  });
+
+  it("--check reports the old install and changes nothing", () => {
+    const runner = fakeRunner({});
+    const steps = retireLegacyPlugin(pluginsDir(true), runner, true);
+    expect(steps[0].ok).toBe(false);
+    expect(steps[0].detail).toContain("w9r setup");
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("is not triggered by the new plugin's own name", () => {
+    expect(REQUIRED_PLUGINS.some((p) => p.name === LEGACY_PLUGIN.name)).toBe(false);
   });
 });
 
@@ -567,11 +625,11 @@ describe("syncPlaywright", () => {
     expect(steps[0]).toMatchObject({ ok: false, optional: true });
   });
 
-  it("pins the same version as the sandbox-feature-test skill, which ships separately", () => {
+  it("pins the same version as the feature-test skill, which ships separately", () => {
     const script = fs.readFileSync(
       path.resolve(
         fileURLToPath(import.meta.url),
-        "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts/setup_feature.py",
+        "../../../../../../plugins/werkmeister/skills/feature-test/scripts/setup_feature.py",
       ),
       "utf8",
     );
@@ -594,7 +652,7 @@ describe("setup_feature.py resolve_workspace", () => {
       );
       const scripts = path.resolve(
         fileURLToPath(import.meta.url),
-        "../../../../../../plugins/sandbox-tools/skills/sandbox-feature-test/scripts",
+        "../../../../../../plugins/werkmeister/skills/feature-test/scripts",
       );
       const r = spawnSync(
         "python3",

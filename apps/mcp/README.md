@@ -43,13 +43,13 @@ was not meant for it.
 ## How a container reaches it
 
 `sandbox init-workspace` projects the workspace's `.mcp.json` from the
-`mcp_servers:` registry in `~/.sandbox/services.yaml`. The `sandbox` entry there
+`mcp_servers:` registry in `~/.sandbox/services.yaml`. The `werkmeister` entry there
 points at `http://host.docker.internal:3002/mcp`, carries the workspace's own
 feature in `X-Sandbox-Feature`, and leaves `${SANDBOX_MCP_TOKEN}` for the MCP
 client to expand from the container's environment. The token is never written
 into that file — it lives inside a git worktree.
 
-**The `sandbox` entry is deliberately not listed in any archetype's
+**The `werkmeister` entry is deliberately not listed in any archetype's
 `mcp_servers:`,** so it is projected into no workspace by default. `.mcp.json`
 is shared by host sessions and container sessions, and on the host
 `host.docker.internal` does not resolve and `SANDBOX_MCP_TOKEN` is unset — so

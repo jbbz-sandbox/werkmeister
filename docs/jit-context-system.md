@@ -207,8 +207,8 @@ These artifacts are written by the `jit` context strategy (`packages/sandbox-cor
 Everything below is **generated or copied into the workspace** at `sandbox init-workspace` —
 nothing is distributed through a plugin. Projection scopes the skills to the sessions they
 apply to and kills plugin-refresh lag: init renders fresh from this repo, so a standards edit
-reaches new workspaces with no marketplace step. The `sandbox-tools` plugin keeps only the
-globally useful `sandbox-*` ops skills. Standards skills are projected only for the workspace's
+reaches new workspaces with no marketplace step. The `werkmeister` plugin keeps only the
+globally useful ops skills. Standards skills are projected only for the workspace's
 active set (§4.1): a skill that is not there cannot be loaded, so the routing table carries no
 "do not load" list.
 
@@ -239,7 +239,7 @@ Rendered on the fly from the standards tree by `packages/sandbox-core/src/skill_
 |-------|-------|----------------------|
 | `sb-research` | research/planning | loads nothing; establishes scope, givens and deliverable shape with the user; spawns the read-only `sb-researcher` agent, which carries the investigation method. `sb-research` ends by work type: architectural work ends in a `decision` note with `status: decided` written only on the user's explicit approval, bounded work in a `finding` naming the root cause, a spike in findings only. |
 | `sb-implement` | coding | universal base (`ponytail` plugin + comments + engineering) at entry; reads routing table + notes; loads Active-row standards matching files about to be edited; re-checks per new file type; recitation rule (restate the governing rule at the edit); output-redirect rule (pipe verbose check output to a file, read back only failures); capture-as-you-go notes contract; precedence tiers |
-| `sb-test` | testing | loads nothing; spawns `sb-tester-<archetype>` agent(s), which run the unit tests and a guarded proxy smoke check; names the plugin's `sandbox-feature-test` skill for headed browser runs |
+| `sb-test` | testing | loads nothing; spawns `sb-tester-<archetype>` agent(s), which run the unit tests and a guarded proxy smoke check; names the plugin's `werkmeister:feature-test` skill for headed browser runs |
 | `sb-review` | review | universal base + standards covering files in the diff; inline anti-pattern one-liners are the checklist; decision-note violations are findings; precedence tiers as severity ladder |
 | `sb-pr` | finishing | pre-PR gate, then `sb-review` |
 | `sb-handoff` | any boundary | writes the structured handoff note |

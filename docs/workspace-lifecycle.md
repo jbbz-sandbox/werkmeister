@@ -133,7 +133,7 @@ The workspaces pane shows the state on each card. It offers **↻ PRs** (`sandbo
 - **✓ Close out** once every PR is shipped (or closed / abandoned), or for a spike with no PR files;
 - **✕ Abandon…** otherwise, with a reason field the second press needs filled.
 
-The sandbox-workspace MCP server has the same actions as `workspace-pr` and `close-out` (with an optional `abandon` reason).
+The workspaces MCP server has the same actions as `workspace-pr` and `close-out` (with an optional `abandon` reason).
 
 ## PR callbacks
 
@@ -149,7 +149,7 @@ A pass runs `sandbox pr status` for each workspace with a callback and tells the
 
 `notified` is written before the message goes out, so a failed delivery is logged and not repeated. Once the PR is shipped, closed or abandoned the callback fields are removed. A pass never merges and never closes out.
 
-- Desktop sessions: the sandbox-tools mod runs a pass when a desktop session starts and every 10 minutes, and sends each message through the app (a visible turn in that session). While the app is closed they wait.
+- Desktop sessions: the werkmeister mod runs a pass when a desktop session starts and every 10 minutes, and sends each message through the app (a visible turn in that session). While the app is closed they wait.
 - Terminal sessions: `sandbox pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder). A session id the workspace no longer has is reported, never swapped for another session.
 
 One lock file, `~/.sandbox/pr-callbacks.lock`, lets one pass run at a time.
@@ -161,7 +161,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `san
 - Inside a workspace (any folder under one holding `.sandbox/workspace.yml`), it denies `gh pr create` in Bash and the GitHub MCP's `create_pull_request`. The deny message points to `sandbox pr open`.
 - This is what stops `/create-pr`, `superpowers:finishing-a-development-branch` or a raw `gh` call from opening a PR on the wrong repo or skipping the gate.
 - `sandbox pr open` runs `gh` itself, not through the Bash tool, so the guard never sees it.
-- The `sandbox-tools:workspace-pr` skill and the `sb-pr` skill steer toward the right path before the guard has to fire.
+- The `werkmeister:workspace-pr` skill and the `sb-pr` skill steer toward the right path before the guard has to fire.
 
 ## Close-out
 
@@ -188,7 +188,7 @@ The `abandoned` PR status is the record of this, not a second way in. A workspac
 
 The workspace's Claude sessions are cleaned up as part of close-out:
 
-- **Desktop sessions.** The pane and the `close-out` MCP tool (through the sandbox-tools plugin) call `archive_session` on every desktop session whose cwd is in the workspace. The desktop app may refuse some, such as a pinned session, the one on screen, or an archive you declined outside auto mode. Each refusal is reported as "left open"; it doesn't fail the close-out. The CLI and VS Code can't reach the app, so they tell you to archive these from the sidebar.
+- **Desktop sessions.** The pane and the `close-out` MCP tool (through the werkmeister plugin) call `archive_session` on every desktop session whose cwd is in the workspace. The desktop app may refuse some, such as a pinned session, the one on screen, or an archive you declined outside auto mode. Each refusal is reported as "left open"; it doesn't fail the close-out. The CLI and VS Code can't reach the app, so they tell you to archive these from the sidebar.
 - **Terminal sessions.** `claude` running in a terminal can't be archived from outside. Every surface lists those still open in the workspace (`terminal session: pid … on ttys… in <dir> — /exit it`) so you can exit them.
 
 ## Spikes

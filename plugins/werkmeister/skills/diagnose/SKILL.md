@@ -1,9 +1,9 @@
 ---
-name: sandbox-diagnose
+name: diagnose
 description: "Diagnose developer sandbox issues by running comprehensive health checks across all layers: containers, networking, Caddy routing, and service connectivity. Use when a sandbox URL isn't working, returns empty responses, shows wrong content, or any sandbox infrastructure issue is suspected. Also use proactively after `sandbox up` or `sandbox proxy-reload` to verify everything is healthy."
 ---
 
-# sandbox-diagnose
+# diagnose
 
 Run the following diagnostic steps in order. Report findings as a structured summary with PASS/FAIL/WARN for each check.
 

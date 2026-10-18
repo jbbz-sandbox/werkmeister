@@ -25,7 +25,7 @@
  * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
  * converges the machine (sandbox-core/machine_setup):
  * seeding the `~/.sandbox` registry files (or migrating them up from a legacy
- * `infra/config/` checkout), the sandbox-tools and ponytail plugins, the
+ * `infra/config/` checkout), the werkmeister and ponytail plugins, the
  * companion sandbox-workspace checkout, the TLS certificate covering every
  * routed hostname, and the four optional prerequisites above.
  *

@@ -668,7 +668,7 @@ export interface PrCallback {
   dir: string;
   url: string;
   session: string;
-  /** The desktop app's `local_…` id: delivered by the sandbox-tools mod, never headless. */
+  /** The desktop app's `local_…` id: delivered by the werkmeister mod, never headless. */
   hostSession: string | null;
   message: string;
 }
@@ -793,7 +793,7 @@ export async function deliverHeadless(cb: PrCallback): Promise<void> {
 }
 
 /**
- * `sandbox pr watch` (desktop: false) and the sandbox-tools mod's timer (desktop: true): one
+ * `sandbox pr watch` (desktop: false) and the werkmeister mod's timer (desktop: true): one
  * pass over every workspace. Headless claims are delivered here; desktop claims are returned
  * for the mod to send through the app. Never merges and never closes out.
  */

@@ -14,7 +14,7 @@
  * execs `dist/mcp.js`: the headless MCP server lives in the sibling
  * `apps/mcp` workspace, which is private and not published, so it is bundled
  * here from source — the same reason sandbox-core is. Without it, `sandbox
- * mcp` and the `sandbox-tools` plugin's MCP entry have no target on an
+ * mcp` and the `werkmeister` plugin's MCP entry have no target on an
  * `npm i -g` install.
  *
  * `dockerode` is the one exception, left external and declared as a real

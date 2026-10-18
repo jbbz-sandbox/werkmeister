@@ -1,9 +1,9 @@
 ---
-name: sandbox-caddy-reload
+name: caddy-reload
 description: "Safely reload the Caddy proxy configuration with validation and smoke testing. Use after editing ~/.sandbox/infra/proxy/Caddyfile, after running `sandbox proxy-reload`, or when the Caddyfile on disk has been updated but Caddy is still serving old config. Validates config, counts compiled routes to detect silent drops, reloads, and smoke tests key URLs."
 ---
 
-# sandbox-caddy-reload
+# caddy-reload
 
 Safely reload Caddy with validation and smoke tests.
 

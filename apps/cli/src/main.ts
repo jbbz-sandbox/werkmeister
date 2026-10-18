@@ -1050,7 +1050,7 @@ export async function main(): Promise<void> {
   for (const [name, description] of [
     [
       "dashboard",
-      "Launch the workspace dashboard's MCP server over stdio (Claude Desktop, the sandbox-tools plugin)",
+      "Launch the workspace dashboard's MCP server over stdio (Claude Desktop, the werkmeister plugin)",
     ],
     [
       "mcp",

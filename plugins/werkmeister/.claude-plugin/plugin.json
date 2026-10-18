@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
-  "name": "sandbox-tools",
-  "displayName": "Sandbox Tools",
-  "version": "0.0.2",
+  "name": "werkmeister",
+  "displayName": "Werkmeister",
+  "version": "0.1.0",
   "description": "Diagnostics and operations skills for the sandbox: full-stack health checks, URL routing tracing, safe Caddy reloads, and status overviews.",
   "author": {
     "name": "Sandboxx DevTools"

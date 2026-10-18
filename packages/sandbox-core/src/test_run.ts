@@ -23,7 +23,7 @@ import { getSlot } from "./slots.js";
 /**
  * The Playwright release `sandbox setup` downloads Chromium for. Each release
  * expects one exact browser build, so a workspace on another version finds no
- * browser. Mirrored in the sandbox-feature-test plugin's setup_feature.py, which
+ * browser. Mirrored in the werkmeister plugin's feature-test setup_feature.py, which
  * ships separately and cannot import this; a parity test keeps them equal.
  */
 export const PLAYWRIGHT_VERSION = "1.63.0";

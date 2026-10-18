@@ -52,5 +52,5 @@ it("dist/mcp.js answers initialize over stdio", async () => {
   );
 
   const reply = JSON.parse(await firstLine);
-  expect(reply.result.serverInfo.name).toBe("sandbox");
+  expect(reply.result.serverInfo.name).toBe("werkmeister");
 });
