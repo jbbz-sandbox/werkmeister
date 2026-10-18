@@ -96,7 +96,7 @@ const propose: Stage = {
       "`output/pr-<repo>.md` per repo",
     ],
     humanCheck:
-      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then `sandbox close-out`.",
+      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then ask the person before `sandbox close-out`.",
     selfCheck:
       "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `sandbox pr open`. Stop at the PR URL. Merging is the person's.",
   }),
