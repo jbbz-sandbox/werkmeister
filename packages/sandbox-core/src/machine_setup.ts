@@ -144,7 +144,7 @@ export const REQUIRED_PLUGINS: readonly PluginSpec[] = [
   {
     name: "sandbox-tools",
     marketplace: "sandbox",
-    source: "jbbz-sandbox/sandbox@main",
+    source: "jbbz-sandbox/werkmeister@main",
   },
   {
     name: "ponytail",
