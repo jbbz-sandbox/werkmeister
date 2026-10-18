@@ -2,7 +2,7 @@ import type { On } from "claude-code";
 import type { Engine, Plugin } from "claude-code/testing";
 import { expect, mock, test } from "claude-code/testing";
 import type { FormField } from "../types";
-import { applyFormFields, formFields, optionGroups } from "./register";
+import { applyFormFields, formFields, interceptControl, optionGroups } from "./register";
 import { edit } from "./textarea";
 
 const SURFACES = ["terminal", "desktop"] as const;
@@ -273,6 +273,7 @@ test("workspace data comes from the node child, not an MCP call", async ($, on) 
       .map((c) => c.key)
       .sort(),
   ).toEqual([
+    `${WS}/intercepts`,
     `${WS}/list-workspaces`,
     `${WS}/tracker-auth`,
     `${WS}/workspace-prs`,
@@ -1697,4 +1698,218 @@ test("a desktop session runs the PR callback pass at start and every 10 min, and
 
   await w.clock.advance(600000);
   expect(passes()).toBe(2);
+});
+
+// --- Intercept toggles (SW-2) -------------------------------------------------
+
+const ODD = "front end; rm -rf /";
+const IX_LIST = {
+  ...LIST,
+  workspaces: LIST.workspaces.map((w) => ({ ...w, feature: w.name === "ab" ? "ab" : null })),
+};
+const IX_STATUS = {
+  ...STATUS,
+  statuses: STATUS.statuses.map((st) =>
+    st.name === "ab"
+      ? {
+          ...st,
+          services: ["frontend", "backend", "api", "worker", ODD].map((name) => ({
+            name,
+            state: "healthy",
+          })),
+        }
+      : st,
+  ),
+};
+const ixRow = (service: string, over: Record<string, unknown> = {}) => ({
+  feature: "ab",
+  service,
+  deployment: service,
+  interceptable: true,
+  blocker: null,
+  intercepted: false,
+  intercepted_by: null,
+  ...over,
+});
+const SNAP = {
+  available: true,
+  connected_namespace: "default",
+  intercepts: [
+    ixRow("frontend"),
+    ixRow("backend", { intercepted: true, intercepted_by: "ab" }),
+    ixRow("api", { intercepted: true, intercepted_by: "other" }),
+    ixRow("worker", { interceptable: false, blocker: "has no k8s_port_name in services.yaml." }),
+    ixRow(ODD),
+  ],
+};
+
+function ixStubs(over: Partial<McpStub> = {}): McpStub {
+  return stubs({
+    [`${WS}/list-workspaces`]: () => ok(IX_LIST),
+    [`${WS}/workspace-status`]: () => ok(IX_STATUS),
+    [`${WS}/intercepts`]: () => ok(SNAP),
+    [`${WS}/intercept-start`]: () => ok({ service: "frontend" }),
+    [`${WS}/intercept-leave`]: () => ok({ left: ["backend"] }),
+    ...over,
+  });
+}
+
+async function mountPane($: Engine) {
+  return $.ui.mount({
+    plugin: "sandbox-tools",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+}
+
+test("interceptControl: one state per rule, and an unreadable owner is never yours", () => {
+  const row = (over: Record<string, unknown> = {}) => ixRow("frontend", over) as never;
+  const kind = (r: never | undefined, feature: string | null, snap: typeof SNAP | null) =>
+    interceptControl(r, feature, snap as never);
+  expect(kind(row(), "ab", null)).toEqual({
+    kind: "unavailable",
+    text: "intercept state unavailable",
+  });
+  expect(kind(row(), "ab", { ...SNAP, available: false }).text).toBe("intercepts unavailable");
+  expect(kind(undefined, "ab", SNAP).kind).toBe("blocked");
+  expect(kind(row({ intercepted: true, intercepted_by: "ab" }), "ab", SNAP).kind).toBe("active");
+  expect(kind(row({ intercepted: true, intercepted_by: null }), "ab", SNAP)).toEqual({
+    kind: "other",
+    text: "⇄ intercepted (owner unknown)",
+  });
+  expect(kind(row({ intercepted: true, intercepted_by: "other" }), "ab", SNAP).text).toBe(
+    "⇄ intercepted by 'other'",
+  );
+  expect(kind(row({ interceptable: false, blocker: "has no k8s_port." }), "ab", SNAP).text).toBe(
+    "not interceptable: has no k8s_port.",
+  );
+  expect(kind(row(), "ab", SNAP).kind).toBe("off");
+  expect(kind(row({ intercepted: true, intercepted_by: null }), null, SNAP).kind).toBe("other");
+});
+
+test("each service line shows its intercept state; only off and yours get a button", async ($, on) => {
+  world(on, ixStubs());
+  await openPane($);
+  const ui = await mountPane($);
+  expect(await ui.find({ key: "intercept:ab/frontend" })).toBeDefined();
+  expect(await ui.find({ key: "leave:ab/backend" })).toBeDefined();
+  expect(await ui.find({ text: "⇄ intercepted by 'other'" })).toBeDefined();
+  expect(await ui.find({ key: "intercept:ab/api" })).toBeUndefined();
+  expect(await ui.find({ key: "leave:ab/api" })).toBeUndefined();
+  expect(await ui.find({ text: /not interceptable: has no k8s_port_name/ })).toBeDefined();
+  expect(await ui.find({ key: "intercept:ab/worker" })).toBeUndefined();
+  await ui.unmount();
+});
+
+test("a failed intercept lookup keeps the rows and service lines", async ($, on) => {
+  world(
+    on,
+    ixStubs({
+      [`${WS}/intercepts`]: () => ({
+        content: [{ type: "text", text: "telepresence hung" }],
+        isError: true,
+      }),
+    }),
+  );
+  await openPane($);
+  const ui = await mountPane($);
+  expect((await ui.find({ key: "row:ab" }))?.text).toBe("ab");
+  expect(await ui.find({ key: "svc:ab/frontend" })).toBeDefined();
+  expect(await ui.find({ text: "intercept state unavailable" })).toBeDefined();
+  expect(await ui.find({ key: "intercept:ab/frontend" })).toBeUndefined();
+  await ui.unmount();
+});
+
+test("an intercept left outside the pane shows on the next poll", async ($, on) => {
+  let left = false;
+  const w = world(
+    on,
+    ixStubs({
+      [`${WS}/intercepts`]: () =>
+        ok(
+          left
+            ? {
+                ...SNAP,
+                intercepts: SNAP.intercepts.map((r) =>
+                  r.service === "backend" ? ixRow("backend") : r,
+                ),
+              }
+            : SNAP,
+        ),
+    }),
+  );
+  await openPane($);
+  const ui = await mountPane($);
+  expect(await ui.find({ key: "leave:ab/backend" })).toBeDefined();
+  left = true;
+  await w.clock.advance(5000);
+  expect(await ui.find({ key: "leave:ab/backend" })).toBeUndefined();
+  expect(await ui.find({ key: "intercept:ab/backend" })).toBeDefined();
+  await ui.unmount();
+});
+
+test("Intercept asks first and starts only on yes; Leave runs at once", async ($, on) => {
+  const w = world(on, ixStubs());
+  await openPane($);
+  const ui = await mountPane($);
+  await ui.press({ key: "intercept:ab/frontend" });
+  expect(w.calls.filter((c) => c.key === `${WS}/intercept-start`)).toHaveLength(0);
+  expect(await ui.find({ text: /Installs a traffic-agent sidecar on frontend/ })).toBeDefined();
+  await ui.press({ key: "intercept-yes:ab/frontend" });
+  const starts = w.calls.filter((c) => c.key === `${WS}/intercept-start`);
+  expect(starts.map((c) => [c.via, c.args])).toEqual([
+    ["process", { name: "ab", feature: "ab", service: "frontend" }],
+  ]);
+  expect((await ui.find({ key: "note" }))?.text).toBe("frontend: intercepted (x-feature: ab)");
+
+  await ui.press({ key: "leave:ab/backend" });
+  const leaves = w.calls.filter((c) => c.key === `${WS}/intercept-leave`);
+  expect(leaves.map((c) => c.args)).toEqual([{ name: "ab", feature: "ab", service: "backend" }]);
+  await ui.unmount();
+});
+
+test("Cancel drops a pending intercept without starting it", async ($, on) => {
+  const w = world(on, ixStubs());
+  await openPane($);
+  const ui = await mountPane($);
+  await ui.press({ key: "intercept:ab/frontend" });
+  await ui.press({ key: "intercept-cancel:ab/frontend" });
+  expect(await ui.find({ key: "intercept-yes:ab/frontend" })).toBeUndefined();
+  expect(w.calls.filter((c) => c.key === `${WS}/intercept-start`)).toHaveLength(0);
+  await ui.unmount();
+});
+
+test("the service reaches sandbox-core verbatim as a JSON field, never through a shell", async ($, on) => {
+  const w = world(on, ixStubs());
+  await openPane($);
+  const ui = await mountPane($);
+  await ui.press({ key: `intercept:ab/${ODD}` });
+  await ui.press({ key: `intercept-yes:ab/${ODD}` });
+  const start = w.calls.find((c) => c.key === `${WS}/intercept-start`);
+  expect(start?.via).toBe("process");
+  expect(start?.args.service).toBe(ODD);
+  await ui.unmount();
+});
+
+test("a failed intercept start shows the error and clears busy", async ($, on) => {
+  world(
+    on,
+    ixStubs({
+      [`${WS}/intercept-start`]: () => ({
+        content: [{ type: "text", text: "frontend is not listening on localhost:11101" }],
+        isError: true,
+      }),
+    }),
+  );
+  await openPane($);
+  const ui = await mountPane($);
+  await ui.press({ key: "intercept:ab/frontend" });
+  await ui.press({ key: "intercept-yes:ab/frontend" });
+  expect((await ui.find({ key: "note" }))?.text).toBe(
+    "frontend is not listening on localhost:11101",
+  );
+  expect(await ui.find({ key: "intercept:ab/frontend" })).toBeDefined();
+  await ui.unmount();
 });

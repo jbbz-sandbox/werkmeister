@@ -200,7 +200,10 @@ export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
   const state = listIntercepts(STATUS_READ);
   // Rows before the namespace probe: `--intercepts` has always shelled out in
   // that order, and both are reads of the same live telepresence state.
-  const intercepts = buildInterceptRows(await getAllSlots(), loadServices(), state);
+  // No telepresence, nothing interceptable: rows would claim `interceptable: true` (SW-2).
+  const intercepts = state.available
+    ? buildInterceptRows(await getAllSlots(), loadServices(), state)
+    : [];
   return {
     available: state.available,
     connected_namespace: state.available ? connectedNamespace(STATUS_READ) : null,
