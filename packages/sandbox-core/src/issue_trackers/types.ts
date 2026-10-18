@@ -39,6 +39,17 @@ export interface IssueUpdate {
   comment?: string;
 }
 
+export type IssueKind = "bug" | "feature" | "task";
+
+/** An issue to file: `type` is the issues guide's type, mapped to the tracker's own. */
+export interface NewIssue {
+  /** Where to file it, in the tracker's terms (a Jira project key). */
+  project: string;
+  type: IssueKind;
+  title: string;
+  body: string;
+}
+
 /** Whether this machine can read issues; `fix` is the one command or doc that repairs it. */
 export interface TrackerAuth {
   ok: boolean;
@@ -54,7 +65,7 @@ export interface IssueTrackerStrategy {
   /** What a ref looks like, for prompts and placeholders: `PROJ-123`. */
   readonly refExample: string;
   /** The tracker's own name for each issue type in the filing guide, when it has types (GitHub uses labels). */
-  readonly issueTypes?: Record<"bug" | "feature" | "task", string>;
+  readonly issueTypes?: Record<IssueKind, string>;
   /** A regex the form and wizard hold a typed ref to, or null for any text. */
   readonly refPattern: string | null;
   /** The first ref in `text` (a bare id, a short form, a URL, a branch name, a PR body), canonical; null when none. */
@@ -68,10 +79,20 @@ export interface IssueTrackerStrategy {
   /** Many issues at once (title, status, url at least). Refs it cannot read are left out; never throws. */
   fetchIssues(refs: string[]): Promise<Record<string, Issue>>;
   /**
-   * The issues guide's app-code routing: the "Where" table row and the
-   * search-first step. `issueId` is the workspace's own issue, "" when none.
+   * The issues guide's routing: the "Where" table's app-code row, the
+   * search-first step, and where and how to file sandbox-tool issues when this
+   * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none.
    */
-  filingGuide(issueId: string): { row: string; search: string };
+  filingGuide(issueId: string): {
+    row: string;
+    search: string;
+    sandbox?: { where: string; command: string };
+  };
+  /**
+   * File a new issue; it comes back with its ref and url. Absent when agents
+   * file with the tracker's own CLI (GitHub: `gh issue create`). Throws with the tracker's reason.
+   */
+  createIssue?(issue: NewIssue): Promise<Issue>;
   /** Move the issue's status and/or add a comment. Throws with the tracker's reason. */
   updateIssue(ref: string, update: IssueUpdate): Promise<void>;
   /** Whether this machine can read issues, and the one command or doc that fixes it. Never throws. */
