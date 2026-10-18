@@ -5,10 +5,47 @@
  * the deployments telepresence reports as intercepted.
  */
 
-import { buildInterceptRows } from "sandbox-core/status";
-import { describe, expect, it } from "vitest";
+import * as fs from "node:fs";
+import { buildInterceptRows, interceptsSnapshot } from "sandbox-core/status";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const REGISTRY = {
+// The snapshot's only seams: the telepresence subprocess, the slot table, the registry.
+const h = vi.hoisted(() => ({ telepresence: true }));
+
+vi.mock("sandbox-core/proc", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("sandbox-core/proc")>();
+  return {
+    ...actual,
+    run: (cmd: string[]) => {
+      if (!h.telepresence) throw new actual.ProcError("not found", cmd, -1, "", "", "ENOENT");
+      if (cmd[1] === "list") {
+        return {
+          status: 0,
+          stdout: fs.readFileSync(
+            new URL("./fixtures/telepresence-list-active.json", import.meta.url),
+            "utf8",
+          ),
+          stderr: "",
+        };
+      }
+      return {
+        status: 0,
+        stdout: JSON.stringify({ daemon: { status: "Connected", namespace: "default" } }),
+        stderr: "",
+      };
+    },
+  };
+});
+vi.mock("sandbox-core/slots", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("sandbox-core/slots")>()),
+  getAllSlots: async () => ({ "test-me": { slot: 1, services: ["frontend"] } }),
+}));
+vi.mock("sandbox-core/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("sandbox-core/config")>()),
+  loadServices: () => REGISTRY,
+}));
+
+const REGISTRY: Record<string, Record<string, unknown>> = {
   frontend: {
     k8s_deployment: "frontend",
     k8s_namespace: "default",
@@ -125,5 +162,39 @@ describe("buildInterceptRows", () => {
     });
     expect(rows[0].interceptable).toBe(true);
     expect(rows[0].intercepted).toBe(false);
+  });
+});
+
+describe("interceptsSnapshot contract (`sandbox status --intercepts --json`)", () => {
+  beforeEach(() => {
+    h.telepresence = true;
+  });
+
+  it("returns {available, connected_namespace, intercepts[]} with the documented row fields", async () => {
+    const snap = await interceptsSnapshot();
+    expect(Object.keys(snap)).toEqual(["available", "connected_namespace", "intercepts"]);
+    expect(snap.available).toBe(true);
+    expect(snap.connected_namespace).toBe("default");
+    for (const row of snap.intercepts) {
+      expect(Object.keys(row)).toEqual([
+        "feature",
+        "service",
+        "deployment",
+        "interceptable",
+        "blocker",
+        "intercepted",
+        "intercepted_by",
+      ]);
+    }
+    expect(snap.intercepts.find((r) => r.service === "frontend")?.intercepted_by).toBe("test-me");
+  });
+
+  it("degrades to available: false with an empty list when telepresence is absent", async () => {
+    h.telepresence = false;
+    await expect(interceptsSnapshot()).resolves.toEqual({
+      available: false,
+      connected_namespace: null,
+      intercepts: [],
+    });
   });
 });
