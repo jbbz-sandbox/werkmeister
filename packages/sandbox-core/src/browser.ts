@@ -31,6 +31,7 @@ import * as path from "node:path";
 import { parse as yamlParse } from "yaml";
 
 import { Colors } from "./colors.js";
+import { dotDir } from "./config.js";
 import type { PromptSpec } from "./global_config.js";
 import * as gc from "./global_config.js";
 import { error, info, raw } from "./reporter.js";
@@ -776,7 +777,7 @@ async function launchChromiumWindow(
  */
 export function readWorkspaceYaml(workspace: string): Record<string, any> {
   for (const name of ["workspace.yml", "workspace.yaml"]) {
-    const p = path.join(workspace, ".sandbox", name);
+    const p = path.join(dotDir(workspace), name);
     if (!(fs.existsSync(p) && fs.statSync(p).isFile())) {
       continue;
     }

@@ -31,6 +31,7 @@ import {
   fetchIssueFormData,
   WorkspaceError,
 } from "sandbox-core";
+import { envVar } from "sandbox-core/config";
 import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {
@@ -82,7 +83,7 @@ async function main(): Promise<void> {
 
   const filled = await promptViaLocalhostForm(bundle, {
     timeoutMs: args.timeoutMs,
-    open: !process.env.SANDBOX_FORM_NO_BROWSER,
+    open: !envVar("FORM_NO_BROWSER"),
   });
   if (filled.status !== "submitted") {
     // cancelled | timeout — nothing was created; not an error exit.

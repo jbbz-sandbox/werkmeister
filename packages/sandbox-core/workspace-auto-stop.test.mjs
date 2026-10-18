@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { dotDir } from "./dist/config.js";
 import { buildFormSchema } from "./dist/form_schema.js";
 import { buildSessionEndEntry, writeWorkspaceSettings } from "./dist/hooks_gen.js";
 import { idleStopFeature } from "./dist/lifecycle.js";
@@ -28,8 +29,8 @@ function workspace(yml, settings) {
 }
 
 function setYml(root, yml) {
-  fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), yml);
+  fs.mkdirSync(dotDir(root), { recursive: true });
+  fs.writeFileSync(path.join(dotDir(root), "workspace.yml"), yml);
 }
 
 const readHooks = (root) =>
@@ -135,7 +136,7 @@ test("the form has an auto_stop checkbox, off by default; workspace.yml stores a
     writeWorkspaceConfig(root, { feature: "f", auto_stop: "true" }),
   );
   assert.match(
-    fs.readFileSync(path.join(root, ".sandbox", "workspace.yml"), "utf8"),
+    fs.readFileSync(path.join(dotDir(root), "workspace.yml"), "utf8"),
     /^auto_stop: true$/m,
   );
   assert.equal(readAutoStop(root), true);

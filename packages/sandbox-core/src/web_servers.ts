@@ -26,7 +26,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { monorepoRoot, sandboxRoot } from "./config.js";
+import { dotDir, monorepoRoot, sandboxRoot } from "./config.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
 
@@ -153,7 +153,7 @@ async function freePort(port: number): Promise<void> {
 }
 
 function stateDir(): string {
-  const d = path.join(os.homedir(), ".sandbox");
+  const d = dotDir(os.homedir());
   fs.mkdirSync(d, { recursive: true });
   return d;
 }

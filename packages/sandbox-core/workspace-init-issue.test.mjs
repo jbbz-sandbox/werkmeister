@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 import { seedWorkspaceMetadataEnv } from "./dist/generate.js";
-import { ISSUE_COPY } from "./dist/issue_snapshot.js";
+import { issueCopyPath } from "./dist/issue_snapshot.js";
 import { resolveIssueCopy } from "./dist/workspace_init.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
@@ -35,14 +35,14 @@ test("refresh writes the copy; a failed refresh keeps the old one", async () => 
     async () => {
       const root = tmp();
       await withFakeGh({ issue: ISSUE }, () => resolveIssueCopy(root, "o/r#5", { refresh: true }));
-      const before = fs.readFileSync(path.join(root, ISSUE_COPY), "utf8");
+      const before = fs.readFileSync(issueCopyPath(root), "utf8");
       await withFakeGh({ issue: null }, async () => {
         await assert.rejects(
           resolveIssueCopy(root, "o/r#5", { refresh: true }),
           /couldn't read o\/r#5/,
         );
       });
-      assert.equal(fs.readFileSync(path.join(root, ISSUE_COPY), "utf8"), before);
+      assert.equal(fs.readFileSync(issueCopyPath(root), "utf8"), before);
     },
     { config: GH },
   );
@@ -51,7 +51,7 @@ test("refresh writes the copy; a failed refresh keeps the old one", async () => 
 test("refresh without issue_id fails cleanly", async () => {
   const root = tmp();
   await assert.rejects(resolveIssueCopy(root, "", { refresh: true }), /no issue_id/);
-  assert.equal(fs.existsSync(path.join(root, ISSUE_COPY)), false);
+  assert.equal(fs.existsSync(issueCopyPath(root)), false);
 });
 
 test("multi-line DESCRIPTION is one .env line", () => {

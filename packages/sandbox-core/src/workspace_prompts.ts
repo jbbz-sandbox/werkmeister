@@ -20,7 +20,14 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { COMPOSE_FILE } from "./compose_file.js";
-import { loadReposConfig, loadServices, type ReposConfig, type ServicesConfig } from "./config.js";
+import {
+  dotDir,
+  envVar,
+  loadReposConfig,
+  loadServices,
+  type ReposConfig,
+  type ServicesConfig,
+} from "./config.js";
 import type { PromptEntry, PromptSpecJson } from "./form_schema.js";
 import type { PromptSpec } from "./global_config.js";
 import { issueIdOf, issueTracker } from "./issue_tracker.js";
@@ -107,24 +114,25 @@ export function loadWorkspaceConfig(p: string): unknown {
   return JSON.parse(stripJsoncComments(text));
 }
 
-// Keys are [cliAttr, envVar, configField], consulted in order CLI > env > config.
+// Keys are [cliAttr, envName, configField], consulted in order CLI > env > config.
+// envName is read as WERKMEISTER_<envName>, then SANDBOX_<envName> (envVar).
 // `feature` has no env source: every workspace container exports SANDBOX_FEATURE
 // as its own identity, which would prefill any workspace created from inside one (#148).
 export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
   ["feature", null, "feature"],
-  ["work_type", "SANDBOX_WORK_TYPE", "work_type"],
-  ["context_strategy", "SANDBOX_CONTEXT_STRATEGY", "context_strategy"],
-  ["repos", "SANDBOX_REPOS", "repos"],
-  ["services", "SANDBOX_SERVICES", "services"],
-  ["issue_id", "SANDBOX_ISSUE_ID", "issue_id"],
-  ["test_path", "SANDBOX_TEST_PATH", "test_path"],
-  ["description", "SANDBOX_DESCRIPTION", "description"],
-  ["task", "SANDBOX_TASK", "task"],
-  ["starting_prompt", "SANDBOX_STARTING_PROMPT", "starting_prompt"],
-  ["labels", "SANDBOX_LABELS", "labels"],
-  ["autonomous", "SANDBOX_AUTONOMOUS", "autonomous"],
-  ["model", "SANDBOX_MODEL", "model"],
-  ["auto_stop", "SANDBOX_AUTO_STOP", "auto_stop"],
+  ["work_type", "WORK_TYPE", "work_type"],
+  ["context_strategy", "CONTEXT_STRATEGY", "context_strategy"],
+  ["repos", "REPOS", "repos"],
+  ["services", "SERVICES", "services"],
+  ["issue_id", "ISSUE_ID", "issue_id"],
+  ["test_path", "TEST_PATH", "test_path"],
+  ["description", "DESCRIPTION", "description"],
+  ["task", "TASK", "task"],
+  ["starting_prompt", "STARTING_PROMPT", "starting_prompt"],
+  ["labels", "LABELS", "labels"],
+  ["autonomous", "AUTONOMOUS", "autonomous"],
+  ["model", "MODEL", "model"],
+  ["auto_stop", "AUTO_STOP", "auto_stop"],
 ];
 
 /** A truthy flag value as it arrives from a CLI switch, an env var, YAML or a form. */
@@ -152,10 +160,10 @@ export function readModel(workspaceRoot: string): string | null {
 }
 
 function readWorkspaceField(workspaceRoot: string, field: string): unknown {
-  const envOverride = process.env.SANDBOX_WORKSPACE_CONFIG;
+  const envOverride = envVar("WORKSPACE_CONFIG");
   const candidates = [
     ...(envOverride ? [expandUserPath(envOverride)] : []),
-    ..._WORKSPACE_CONFIG_NAMES.map((name) => path.join(workspaceRoot, ".sandbox", name)),
+    ..._WORKSPACE_CONFIG_NAMES.map((name) => path.join(dotDir(workspaceRoot), name)),
   ];
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
@@ -191,11 +199,11 @@ export function loadConfigFile(
   if (override) {
     candidates.push(expandUserPath(override));
   }
-  const envOverride = process.env["SANDBOX_WORKSPACE_CONFIG"];
+  const envOverride = envVar("WORKSPACE_CONFIG");
   if (envOverride) {
     candidates.push(expandUserPath(envOverride));
   }
-  const sandbox = path.join(workspaceRoot, ".sandbox");
+  const sandbox = dotDir(workspaceRoot);
   for (const name of _WORKSPACE_CONFIG_NAMES) {
     candidates.push(path.join(sandbox, name));
   }
@@ -273,9 +281,9 @@ export function resolveInputs(
   const existingEnv = loadExistingEnvMetadata(workspaceRoot);
   const resolved: Record<string, string> = {};
 
-  for (const [cliAttr, envVar, configField] of _INPUT_FIELDS) {
+  for (const [cliAttr, envName, configField] of _INPUT_FIELDS) {
     const cliValue = args[cliAttr] ?? null;
-    const envValue = envVar ? (process.env[envVar] ?? null) : null;
+    const envValue = envName ? (envVar(envName) ?? null) : null;
     // Workspaces made before the rename hold `jira_id` / `github_issue`: read, never written.
     const cfgValue =
       configField === "issue_id"

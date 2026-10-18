@@ -39,6 +39,7 @@ import * as path from "node:path";
 import { containerTestCommand, serviceTestCommand } from "./archetypes.js";
 import {
   type ArchetypeRegistry,
+  dotDir,
   loadArchetypes,
   loadServices,
   type ServicesConfig,
@@ -320,7 +321,8 @@ export const AUTONOMOUS_RULES = [
 
 // Permission strings can't carry a marker the way hook commands do, so the rules
 // sandbox inserted are listed here; anything else in `allow` is the person's.
-const _PERMISSIONS_RECORD = path.join(".sandbox", "claude-permissions.json");
+const permissionsRecord = (workspaceRoot: string) =>
+  path.join(dotDir(workspaceRoot), "claude-permissions.json");
 
 /**
  * Allow rules for each local service's registered test command, then read-only
@@ -427,7 +429,7 @@ export function writeWorkspacePermissions(workspaceRoot: string, want: string[])
   const allow = (permissions["allow"] as unknown[] | undefined) ?? [];
   if (!Array.isArray(allow)) return settingsPath;
 
-  const recordPath = path.join(workspaceRoot, _PERMISSIONS_RECORD);
+  const recordPath = permissionsRecord(workspaceRoot);
   const stored = _readRecord(recordPath);
   const recorded = new Set(stored.allow);
   const wanted = [...new Set(want)];
@@ -465,7 +467,7 @@ export function writeWorkspaceModel(workspaceRoot: string, model: string | null)
   const settingsPath = _settingsPath(workspaceRoot);
   const settings = _readSettings(settingsPath);
   if (settings === null) return settingsPath;
-  const recordPath = path.join(workspaceRoot, _PERMISSIONS_RECORD);
+  const recordPath = permissionsRecord(workspaceRoot);
   const stored = _readRecord(recordPath);
   const current = settings.model;
 

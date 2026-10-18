@@ -35,6 +35,8 @@ import { Colors } from "./colors.js";
 import { workspaceComposeArgv } from "./compose.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
+  dotDir,
+  envVar,
   expandUser,
   getReposRoot,
   loadArchetypes,
@@ -194,11 +196,11 @@ function hasWorkspaceConfig(workspaceRoot: string, override: string | null): boo
   if (override && fs.existsSync(expandUserPath(override))) {
     return true;
   }
-  const envOverride = process.env["SANDBOX_WORKSPACE_CONFIG"];
+  const envOverride = envVar("WORKSPACE_CONFIG");
   if (envOverride && fs.existsSync(expandUserPath(envOverride))) {
     return true;
   }
-  const sandbox = path.join(workspaceRoot, ".sandbox");
+  const sandbox = dotDir(workspaceRoot);
   return _WORKSPACE_CONFIG_NAMES.some((name) => fs.existsSync(path.join(sandbox, name)));
 }
 
@@ -237,7 +239,7 @@ export function writeWorkspaceConfig(
   if (Object.keys(resolved).length === 0) {
     return;
   }
-  const sandboxDir = path.join(workspaceRoot, ".sandbox");
+  const sandboxDir = dotDir(workspaceRoot);
   const target = path.join(sandboxDir, _WORKSPACE_CONFIG_NAMES[0]);
   const legacies = _WORKSPACE_CONFIG_NAMES.slice(1).map((name) => path.join(sandboxDir, name));
 

@@ -11,6 +11,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { COMPOSE_FILE } from "../compose_file.js";
+import { dotDir, forDotDir } from "../config.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { removeWorkspaceHooks, writePrGuardHook, writeWorkspaceSettings } from "../hooks_gen.js";
 import { issueIdOfMeta } from "../issue_tracker.js";
@@ -297,7 +298,7 @@ const READ_ISSUE =
 
 /** A brief nobody has touched: what renderBrief wrote with no issue and no prompt. */
 export const PLACEHOLDER_BRIEF_RE =
-  /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---\n\n# Brief: [^\n]*\n\n_No starting prompt was given\. [^\n]*_\n$/;
+  /^---\nsource: \.(?:sandbox|werkmeister)\/workspace\.yml \(starting_prompt\)\n---\n\n# Brief: [^\n]*\n\n_No starting prompt was given\. [^\n]*_\n$/;
 
 function renderBrief(ctx: InitContext): string {
   const prompt = (ctx.inputs["starting_prompt"] ?? "").trim();
@@ -376,7 +377,7 @@ function contextFromDisk(root: string): InitContext {
 function writeRel(root: string, rel: string, body: string): void {
   const p = path.join(root, rel);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, body);
+  fs.writeFileSync(p, forDotDir(body, root));
 }
 
 function drifted(root: string): Array<[string, string]> {
@@ -384,7 +385,7 @@ function drifted(root: string): Array<[string, string]> {
   if (foreignStageDirs(root, templateFor(ctx.inputs["work_type"] ?? "")).length) return [];
   return Object.entries(render(ctx)).filter(([rel, body]) => {
     try {
-      return fs.readFileSync(path.join(root, rel), "utf8") !== body;
+      return fs.readFileSync(path.join(root, rel), "utf8") !== forDotDir(body, root);
     } catch {
       return true;
     }
@@ -445,10 +446,10 @@ export const icm: ContextStrategy = {
     for (const command of removeWorkspaceHooks(root)) {
       info(`Removed JIT hook from .claude/settings.json: ${command}`);
     }
-    const gateDir = path.join(root, ".sandbox", ".gate");
+    const gateDir = path.join(dotDir(root), ".gate");
     if (fs.existsSync(gateDir)) {
       fs.rmSync(gateDir, { recursive: true, force: true });
-      info("Removed .sandbox/.gate/");
+      info(`Removed ${path.basename(dotDir(root))}/.gate/`);
     }
     writePrGuardHook(root);
     writeWorkspaceSettings(root);
