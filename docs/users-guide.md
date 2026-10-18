@@ -134,7 +134,7 @@ In this layout each feature maps to a subdirectory containing its repo worktrees
 
 ```bash
 # Clone the repository
-git clone https://github.com/jbbz-sandbox/sandbox.git
+git clone https://github.com/jbbz-sandbox/werkmeister.git
 cd sandbox
 
 # Build the CLI once, then run it:
@@ -1286,7 +1286,7 @@ and stores it as `overrides.issue_tracker` in `~/.sandbox/config.yaml`. With `gi
 workspace's issue ID is `owner/repo#n` and issues are filed in the registry repos under
 `overrides.github_org`.
 
-Issues about the sandbox tool itself go to GitHub (`jbbz-sandbox/sandbox`) unless, under
+Issues about the sandbox tool itself go to GitHub (`jbbz-sandbox/werkmeister`) unless, under
 `jira`, `overrides.sandbox_issues_project` names a Jira project (e.g. `SW`): the generated
 issues guide then sends them there with `sandbox issue create`.
 

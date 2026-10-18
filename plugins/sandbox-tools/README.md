@@ -83,7 +83,7 @@ This repo doubles as a plugin marketplace. From any Claude Code session
 every session, not just inside this repo):
 
 ```
-/plugin marketplace add jbbz-sandbox/sandbox
+/plugin marketplace add jbbz-sandbox/werkmeister
 /plugin install sandbox-tools@sandbox
 ```
 

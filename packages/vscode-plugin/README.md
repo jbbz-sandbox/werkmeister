@@ -46,7 +46,7 @@ npm run test:integration   # a real extension host (downloads a VS Code build on
 `src/menus.test.mjs` feeds real `buildTree` nodes into the real `when` clauses
 from `package.json`, which is the one place the two can drift apart silently.
 The integration suite covers what only a host can answer — command registration
-and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://github.com/jbbz-sandbox/sandbox/blob/main/packages/vscode-plugin/MANUAL-CHECKLIST.md).
+and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://github.com/jbbz-sandbox/werkmeister/blob/main/packages/vscode-plugin/MANUAL-CHECKLIST.md).
 
 ## Install
 

@@ -27,7 +27,7 @@ in [docs/users-guide.md](docs/users-guide.md).
 To run the CLI you are developing, link the checkout onto your PATH:
 
 ```bash
-git clone https://github.com/jbbz-sandbox/sandbox.git
+git clone https://github.com/jbbz-sandbox/werkmeister.git
 cd sandbox
 npm install && npm run build
 npm link -w apps/cli       # puts `sandbox` on PATH, symlinked to apps/cli/sandbox

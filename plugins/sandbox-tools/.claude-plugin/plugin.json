@@ -7,8 +7,8 @@
   "author": {
     "name": "Sandboxx DevTools"
   },
-  "homepage": "https://github.com/jbbz-sandbox/sandbox",
-  "repository": "https://github.com/jbbz-sandbox/sandbox",
+  "homepage": "https://github.com/jbbz-sandbox/werkmeister",
+  "repository": "https://github.com/jbbz-sandbox/werkmeister",
   "keywords": ["sandbox", "caddy", "diagnostics", "routing"],
   "mcpServers": "./.mcp.json",
   "types": "./types/index.d.ts"

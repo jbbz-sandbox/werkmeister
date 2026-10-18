@@ -13,7 +13,7 @@ import { COMPOSE_FILE } from "./compose_file.js";
 import { type IssueTrackerStrategy, issueTracker } from "./issue_tracker.js";
 import type { IssueKind } from "./issue_trackers/types.js";
 
-export const SANDBOX_ISSUES_REPO = "jbbz-sandbox/sandbox";
+export const SANDBOX_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
 export function buildIssuesReportMd(
   workspaceName: string,
