@@ -59,30 +59,16 @@ true. See the caveat at the end of the next section.
 
 ## Install the CLI without a clone
 
-`werkmeister` publishes to GitHub Packages, so a machine that only
-needs to *run* the CLI never has to clone this repo. Point npm at the registry
-with a `read:packages` token, then install — from **outside** any checkout of
-this repo (see below):
+`werkmeister` is published to npmjs.com, so a machine that only needs to *run*
+the CLI never has to clone this repo, and no token is needed. Install from
+**outside** any checkout of this repo (see below):
 
 ```bash
-npm config set @jbbz-sandbox:registry https://npm.pkg.github.com
-npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
-
 cd ~
 npx werkmeister setup    # installs globally, then runs the wizard
 ```
 
-`gh auth token` needs `read:packages` (`write:packages` includes it);
-`gh auth refresh -h github.com -s read:packages` adds it. A classic PAT with
-`read:packages` works too. `~/.npmrc` stores a **copy** of the token, not a link
-to the `gh` keyring, so after a `gh auth login`, logout or revocation, re-run the
-`npm config set` line. To check the token, run
-`npm view werkmeister version` — it should print a version.
-
-A bad or missing token fails as `401 Unauthorized` or as a `404 Not Found` that
-reads like the package does not exist. A 404 naming a different package — e.g.
-`"sandbox" does not exist under owner "jbbz-sandbox"` — is a wrong name: it is
-`werkmeister`.
+To check what's published, run `npm view werkmeister version`.
 
 **Don't run the `npx` line inside a checkout of this repo.** npx prefers the
 workspace link `node_modules/werkmeister → apps/cli` over the
@@ -141,13 +127,14 @@ version follows either way.
 
 On merge to `main`, the `release` job in `.github/workflows/ci.yml` opens (or
 updates) a **"chore: version packages"** PR carrying the version bumps and
-`CHANGELOG.md`. Merging *that* PR publishes to GitHub Packages and tags the
+`CHANGELOG.md`. Merging *that* PR publishes to npmjs.com and tags the
 release. So a release is one reviewable merge, and `main` never publishes by
 accident.
 
 `release` runs only after the same push's `test` job passes (`needs: test`), so
-nothing publishes untested; GitHub Packages will not accept a re-publish of a
-version.
+nothing publishes untested; npm will not accept a re-publish of a
+version. The job publishes through npm trusted publishing (OIDC): npmjs.com
+trusts `.github/workflows/ci.yml` in this repo, so no npm token is stored anywhere.
 
 The version PR is pushed with a GitHub App's token so its own CI runs without
 anyone approving it. The App needs Contents and Pull requests (read and write)
