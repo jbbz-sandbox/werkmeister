@@ -18,7 +18,8 @@ export const PANE = "workspaces";
 // Workspace reads and actions run sandbox-core in a node child, the way the former /workspace-form mod did:
 // the plugin's own MCP server is not answerable from a hook in the desktop host, a host process is.
 // stdin carries one JSON request { op, ...args }; stdout ends with one JSON line { ok, result | error }.
-// sandbox-core is found from $WERKMEISTER_CORE_PATH or $SANDBOX_CORE_PATH, else from where the `sandbox` binary resolves its dependencies.
+// The core package is found from $WERKMEISTER_CORE_PATH or $SANDBOX_CORE_PATH, else from where the `werkmeister`
+// (or deprecated `sandbox`) binary resolves its dependencies: `werkmeister-core`, or `sandbox-core` before SW-6's rename.
 const SCRIPT = `
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
@@ -33,8 +34,9 @@ try {
   const { op, ...args } = JSON.parse(s)
   let file = process.env.WERKMEISTER_CORE_PATH ?? process.env.SANDBOX_CORE_PATH
   if (!file) {
-    const bin = realpathSync(execFileSync('sh', ['-c', 'command -v sandbox']).toString().trim())
-    file = createRequire(dirname(bin) + '/x').resolve('sandbox-core')
+    const bin = realpathSync(execFileSync('sh', ['-c', 'command -v werkmeister || command -v sandbox']).toString().trim())
+    const req = createRequire(dirname(bin) + '/x')
+    try { file = req.resolve('werkmeister-core') } catch { file = req.resolve('sandbox-core') }
   }
   const core = await import(pathToFileURL(file).href)
   const yaml = createRequire(file)('yaml')
