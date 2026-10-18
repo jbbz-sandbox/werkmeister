@@ -1,6 +1,7 @@
 /**
  * sandbox issue <view|update> [ref] [--json] [--status <name>] [--comment <text>]
  * sandbox issue create --project <key> --type <bug|feature|task> --title <text> --body-file <path|->
+ * sandbox issue start
  *
  * Read or update one issue in this machine's issue tracker (`sandbox setup`
  * picks it). Every call goes through `issueTracker()`, so nothing here names a
@@ -10,6 +11,9 @@
  * update: move its status and/or add a comment; at least one is required.
  * create: file a new issue and print its URL. Only trackers with an API path
  *         (Jira); GitHub issues are filed with `gh issue create`.
+ * start:  inside a workspace, the first stage or phase began: move its issue to
+ *         in progress, forward only (docs/workspace-lifecycle.md § Issue status).
+ *         Exits 0 when the tracker refuses, so a stage never fails on it.
  *
  * `ref` may be omitted inside a workspace: the issue is then read from its
  * `.sandbox/workspace.yml` (the workspace root is the nearest `.sandbox/`
@@ -19,6 +23,7 @@
 import * as fs from "node:fs";
 
 import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { startIssue } from "werkmeister-core/issue_status";
 import {
   type IssueKind,
   issueBriefing,
@@ -28,7 +33,7 @@ import {
 } from "werkmeister-core/issue_tracker";
 import { loadConfigFile } from "werkmeister-core/workspace_prompts";
 
-import { error, success } from "../lib/config.js";
+import { error, success, warn } from "../lib/config.js";
 
 /** The update to send, or the reason the arguments are unusable. */
 export function updateFromArgs(
@@ -87,6 +92,14 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     } catch (e) {
       fail(`Could not create the issue in ${issue.project}: ${(e as Error).message}`);
     }
+    return;
+  }
+  if (args.action === "start") {
+    const workspace = findWorkspaceRoot(process.cwd());
+    if (workspace === null)
+      fail("Not inside a sandbox workspace (no .sandbox/ directory found above CWD).");
+    const line = (await startIssue(workspace)) || "left as is (no in_progress status configured)";
+    (line.includes("not moved") ? warn : success)(`Issue: ${line}`);
     return;
   }
   const update = args.action === "update" ? updateFromArgs(args) : null;

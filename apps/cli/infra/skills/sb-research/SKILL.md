@@ -5,7 +5,9 @@ description: "Begin the research/planning phase in a sandbox workspace. Use when
 
 # sb-research — enter the research phase
 
-- **Step 0 — read workspace notes.** Read relevant `finding` and `attempt` notes in
+- **Step 0 — start the issue, then read workspace notes.** Run `sandbox issue start`:
+  it moves the workspace's issue to In Progress the first time, and does nothing once
+  it is past that or when the tracker refuses. Read relevant `finding` and `attempt` notes in
   `.sandbox/notes/` (skip `status: superseded`); never redo answered
   questions or failed approaches. Continue if empty.
 - Skip code standards (`sb-*-standard`, `ponytail`); they govern writing.

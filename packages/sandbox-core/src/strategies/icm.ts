@@ -168,7 +168,11 @@ function standardsRef(tier: Stage["standards"], r: Resolved): string {
   return `- Reference (every run): \`../../_shared/standards.md\` — rows ${[...rows, "ponytail"].map((d) => `\`${d}\``).join(", ")}`;
 }
 
-function renderContract(dir: string, stage: Stage, v: IcmVars): string {
+// The first stage's start is the one point no code observes, so its contract runs the move (SW-27).
+const START_ISSUE =
+  "Run `sandbox issue start`: it moves the issue to In Progress, and does nothing when the issue is already past that or the tracker refuses.";
+
+function renderContract(dir: string, stage: Stage, v: IcmVars, startsIssue = false): string {
   const c = stage.contract(v);
   return [
     `# ${dir} — ${stage.job}`,
@@ -182,6 +186,8 @@ function renderContract(dir: string, stage: Stage, v: IcmVars): string {
     `Do NOT load: ${c.doNotLoad}`,
     "",
     "## Process",
+    // Step 0, so the contracts' own "steps 1–3" references keep their numbers.
+    ...(startsIssue ? [`0. ${START_ISSUE}`] : []),
     ...c.process.map((p, i) => `${i + 1}. ${p}`),
     "",
     "## Outputs",
@@ -345,10 +351,12 @@ function render(ctx: InitContext): Record<string, string> {
   if (propose)
     files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${propose}/output/`, base.autonomous);
   stages.forEach((stage, i) => {
-    files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(dirs[i], stage, {
-      ...base,
-      standards: standardsRef(stage.standards, r),
-    });
+    files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(
+      dirs[i],
+      stage,
+      { ...base, standards: standardsRef(stage.standards, r) },
+      i === 0 && Boolean(issueIdOfMeta(ctx.meta)),
+    );
   });
   return files;
 }

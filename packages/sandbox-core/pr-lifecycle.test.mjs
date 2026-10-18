@@ -9,6 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { dotDir } from "./dist/config.js";
+import { resolveIssueStatuses } from "./dist/issue_status.js";
 import {
   abandonWorkspace,
   adoptPr,
@@ -103,8 +104,7 @@ function deps(table, over = {}) {
       fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
       updateIssue: async () => {},
     },
-    reviewStatus: "Peer Review",
-    doneStatus: "closed",
+    statuses: resolveIssueStatuses({ issue_review_status: "Peer Review" }, "github"),
     commitRecord: async () => ({ ok: true, message: "record pushed" }),
     remove: async () => ({ output: "removed" }),
     terminals: async () => [],
@@ -385,8 +385,8 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     const d = deps([DIFF_API, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]], {
       session: async () => ({ session: "s-1", host_session: "local_h1" }),
       tracker: {
-        fetchIssue: async () => null,
-        updateIssue: async (ref, u) => (updated = [ref, u.status]),
+        fetchIssue: async () => ({ ref: "o/app#7", status: "Open", labels: [] }),
+        updateIssue: async (ref, u) => (updated = [ref, u.status, u.comment]),
       },
       commitRecord: async (_ws, _msg, paths) => {
         recorded = paths;
@@ -402,8 +402,8 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(f.fm.host_session, "local_h1");
     assert.deepEqual(
       updated,
-      ["o/app#7", "Peer Review"],
-      "the status comes from issue_review_status",
+      ["o/app#7", "Peer Review", "PR opened: https://github.com/o/app/pull/9"],
+      "the status comes from issue_review_status, the comment names the PR",
     );
     assert.deepEqual(
       recorded,
@@ -635,7 +635,7 @@ test("closeOut --abandon: needs a reason", async () => {
   }
 });
 
-test("closeOut --abandon: records why, leaves the issue, removes, keeps every branch, lists terminals", async () => {
+test("closeOut --abandon: records why, comments it and closes the issue as not planned, removes, keeps every branch, lists terminals", async () => {
   const ws = icmWorkspace({
     files: {
       app: prFile({ status: "open", extra: "url: u\n" }),
@@ -643,11 +643,11 @@ test("closeOut --abandon: records why, leaves the issue, removes, keeps every br
     },
   });
   try {
-    let updated = false;
+    let updated = null;
     const d = deps([], {
       tracker: {
         fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
-        updateIssue: async () => (updated = true),
+        updateIssue: async (ref, u) => (updated = [ref, u]),
       },
       terminals: async (dir) => [`terminal session: pid 9 on ttys001 in ${dir} — /exit it`],
     });
@@ -656,8 +656,11 @@ test("closeOut --abandon: records why, leaves the issue, removes, keeps every br
     );
     const closeout = fs.readFileSync(path.join(ws, "closeout.md"), "utf8");
     assert.match(closeout, /Abandoned: superseded by #170/);
-    assert.match(closeout, /left OPEN \(abandoned\)/);
-    assert.equal(updated, false);
+    assert.match(closeout, /Issue: o\/app#7 → not planned/);
+    assert.deepEqual(updated, [
+      "o/app#7",
+      { status: "not planned", comment: "Abandoned: superseded by #170" },
+    ]);
     assert.ok(
       !d.calls.some((c) => c.includes("branch -D") || c.includes("--delete")),
       "abandon keeps every branch",
@@ -686,6 +689,134 @@ test("closeOut retry after an abandon that failed to remove: still abandoned", a
     });
     await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.equal(updated, false);
+  } finally {
+    clean(ws);
+  }
+});
+
+/** A tracker stub whose issue sits at *status* / *labels*; records every update. */
+function issueAt(status, labels = []) {
+  const updates = [];
+  return {
+    updates,
+    fetchIssue: async () => ({
+      ref: "o/app#7",
+      status,
+      labels,
+      ...(status === "Closed" ? { statusCategory: "done" } : {}),
+    }),
+    updateIssue: async (ref, u) => updates.push([ref, u.status, u.comment]),
+  };
+}
+
+const prView = (view) => [/^gh pr view/, { stdout: JSON.stringify(view) }];
+
+test("refreshPrStatus: shipped moves the issue to done with the release (SW-27)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  try {
+    const tracker = issueAt("Open", ["Peer Review"]);
+    const r = await refreshPrStatus(
+      ws,
+      deps(
+        [
+          prView({ state: "MERGED", mergeCommit: { oid: "abc" } }),
+          [/tag --contains abc/, { stdout: "v1.2.0\n" }],
+        ],
+        { tracker },
+      ),
+    );
+    assert.deepEqual(tracker.updates, [["o/app#7", "closed", "Shipped: v1.2.0 — https://x/pr/9"]]);
+    assert.ok(r.lines.includes("issue o/app#7 → closed"), r.lines.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: a PR closed without merging moves the issue back to in progress", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  try {
+    const tracker = issueAt("Open", ["Peer Review"]);
+    await refreshPrStatus(ws, deps([prView({ state: "CLOSED" })], { tracker }));
+    assert.deepEqual(tracker.updates, [
+      ["o/app#7", "status: in progress", "PR closed without merging: https://x/pr/9"],
+    ]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: changes requested moves back once; the review clearing returns it to review", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  try {
+    // A repo with no required review leaves reviewDecision empty; latestReviews still says it.
+    const asked = prView({
+      state: "OPEN",
+      reviewDecision: "",
+      latestReviews: [{ state: "CHANGES_REQUESTED" }],
+    });
+    const inReview = issueAt("Open", ["Peer Review"]);
+    const r = await refreshPrStatus(ws, deps([asked], { tracker: inReview }));
+    assert.deepEqual(inReview.updates, [
+      ["o/app#7", "status: in progress", "Changes requested: https://x/pr/9"],
+    ]);
+    assert.equal(readPrFiles(ws)[0].fm.review, "changes_requested");
+    assert.ok(r.changed, "the review field is recorded");
+
+    const again = issueAt("Open", ["status: in progress"]);
+    await refreshPrStatus(ws, deps([asked], { tracker: again }));
+    assert.deepEqual(again.updates, [], "the same review moves the issue once");
+
+    const back = issueAt("Open", ["status: in progress"]);
+    await refreshPrStatus(
+      ws,
+      deps(
+        [
+          prView({
+            state: "OPEN",
+            reviewDecision: "APPROVED",
+            latestReviews: [{ state: "APPROVED" }],
+          }),
+        ],
+        {
+          tracker: back,
+        },
+      ),
+    );
+    assert.deepEqual(back.updates, [["o/app#7", "Peer Review", "Back in review: https://x/pr/9"]]);
+    assert.equal(readPrFiles(ws)[0].fm.review, undefined);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut: a tracker refusal is a warning, close-out still records and removes", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: https://x/pr/9\nmerge_sha: abc\n" }) },
+  });
+  try {
+    let removed = false;
+    const d = deps([[/ls-remote/, { code: 2 }]], {
+      tracker: {
+        fetchIssue: async () => ({ ref: "o/app#7", status: "Open", labels: [] }),
+        updateIssue: async () => {
+          throw new Error("HTTP 403: Resource not accessible");
+        },
+      },
+      remove: async () => {
+        removed = true;
+        return { output: "removed" };
+      },
+    });
+    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
+    assert.ok(removed);
+    assert.match(r.output, /Issue: o\/app#7 not moved to "closed": HTTP 403/);
+    assert.match(fs.readFileSync(path.join(ws, "closeout.md"), "utf8"), /not moved to "closed"/);
   } finally {
     clean(ws);
   }
