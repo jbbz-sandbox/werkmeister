@@ -120,8 +120,9 @@ repo:
 | Command | Does |
 |---|---|
 | `sandbox pr gate [repo]` | run the gate, change nothing |
-| `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to the review status: `overrides.issue_review_status` in `~/.sandbox/config.yaml`, else `In Review` (on GitHub, a label of that name, created if the repo lacks it), commit and push the PR file on the record branch |
-| `sandbox pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`. For `merged` files, write `shipped` (+ `release`) per the registry. Commits and pushes the changed PR files on the record branch. |
+| `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to `in_review` ([Issue status](#issue-status)), commit and push the PR file on the record branch |
+| `sandbox pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
+| `sandbox issue start` | the first stage or phase began: move the workspace's issue to `in_progress` ([Issue status](#issue-status)) |
 | `sandbox pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
 | `sandbox pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions. Run it from cron: `*/10 * * * * sandbox pr watch` |
 | `sandbox pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
@@ -154,6 +155,46 @@ A pass runs `sandbox pr status` for each workspace with a callback and tells the
 
 One lock file, `~/.sandbox/pr-callbacks.lock`, lets one pass run at a time.
 
+## Issue status
+
+The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the work does (SW-27). Each move happens at one lifecycle point and posts a short comment naming its trigger.
+
+| Lifecycle point | Point | Jira (default) | GitHub (default) | Comment |
+|---|---|---|---|---|
+| Workspace created | — | no change | no change | — |
+| First stage or phase starts: `sandbox issue start`, run by ICM's first stage contract and JIT's `sb-research` | `in_progress` | `In Progress` | label `status: in progress` | `Work started: stage 01_research in workspace <name>.` |
+| `sandbox pr open` | `in_review` | `In Review` | label `status: in review` | `PR opened: <url>` |
+| A review asks for changes (`pr status`: `reviewDecision` or a latest review `CHANGES_REQUESTED`) | `in_progress` (back) | `In Progress` | label `status: in progress` | `Changes requested: <url>` |
+| The changes-requested review clears while the PR is open | `in_review` | `In Review` | label `status: in review` | `Back in review: <url>` |
+| PR closed without merging, and no other PR open | `in_progress` (back) | `In Progress` | label `status: in progress` | `PR closed without merging: <url>` |
+| Every PR merged | `merged` | no change | no change | `Merged: <url>` |
+| Shipped: every PR settled, one shipped (release tag contains the merge, or merged where `ship: merge`) | `done` | `Done` | close as completed | `Shipped: <release> — <url>` |
+| `sandbox close-out` | `done` if not already | `Done` | close if still open | `Shipped: …` |
+| `sandbox close-out --abandon "<reason>"` | `abandoned` | no status, comment only | close as not planned | `Abandoned: <reason>` |
+| Spike | `done` at close-out | `Done` | closed | `Shipped: no PRs` |
+
+`pr status` runs by hand and in every PR watch pass, so the ship move needs no person.
+
+**Config.** One map in `~/.sandbox/config.yaml`; each value is a Jira status name, a GitHub label, or `null` to skip that point:
+
+```yaml
+overrides:
+  issue_statuses:
+    in_progress: In Progress
+    in_review: In Review
+    merged: null
+    done: Done
+    abandoned: Won't Do
+```
+
+A key left out takes its default (table above). `issue_review_status` and `issue_done_status`, the keys before this map, still set `in_review` and `done` when the map doesn't name them. On GitHub, `closed` / `done` / `completed` closes the issue as completed, `not planned` closes it as not planned, and anything else is a label.
+
+**Rules.**
+
+- **Forward only.** The issue's position comes from Jira's status category (`new` / `indeterminate` / `done`) and status name, or GitHub's open/closed state and `status:` label: new < in progress < in review < merged < done. A move applies only when it is ahead of that, apart from the two backward moves to `in_progress` above, which never leave done. Re-running init, a stage or `pr open` never drags an issue back. An issue that can't be read is not moved.
+- **One status label on GitHub.** Adding a `status:` label removes the issue's other `status:` labels, and creates the label if the repo lacks it.
+- **Refusals warn.** No transition, no credentials, a status missing from the workflow: the move prints a warning naming the configured status and, for Jira, the transitions available, and the stage, PR open or close-out carries on.
+
 ## The PR guard
 
 Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `sandbox hooks pr-guard`, with matcher `Bash|mcp__.*create_pull_request`. It is installed by `sandbox up` / `init-workspace` for both strategies.
@@ -169,7 +210,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `san
 
 **Shipped.** Without `--abandon`, it refuses unless the workspace is `shipped` or `abandoned`. A `spike` with no PR files is also allowed, and so is `closed-out` (a `closeout.md` exists but the removal failed), which retries. Then, in order:
 
-1. **Issue.** If the workspace has one and it isn't already done, move it to the done status: `overrides.issue_done_status` in `~/.sandbox/config.yaml`, else `closed` (GitHub) or `Done` (Jira). The comment names the release and PR. A tracker refusal stops close-out before anything is removed.
+1. **Issue.** The safety net: if the workspace has one and it isn't already done (shipping normally moved it), move it to `done` ([Issue status](#issue-status)). The comment names the release and PR. A tracker refusal is a warning in the output and in `closeout.md`; close-out goes on.
 2. **Record.** Write `closeout.md`: one row per PR (repo, URL, status, merge SHA, release, reason) plus the issue line.
 3. **Remove.** `removeWorkspace`, the internal step: commit and push every branch (the record branch now carries `closeout.md`), `sandbox down`, reload the proxy, delete the directory, prune the worktrees. If any push fails, nothing is deleted.
 4. **Branches.** Delete each merged code branch locally, and on origin if it is still there (GitHub's "delete branch on merge" may have done it already). An `adopted` PR's branch was never the workspace's, so it is kept. The record branch is kept.
@@ -177,7 +218,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `san
 **Abandoned.** `sandbox close-out <name> --abandon "<reason>"` ends a workspace whose work won't ship. The reason is required.
 
 1. Every unsettled PR file becomes `abandoned` with the reason.
-2. The issue is left as it is.
+2. The issue gets a comment with the reason and moves to `abandoned` when one is configured (GitHub: closed as not planned). A refusal is a warning.
 3. `closeout.md` records the reason.
 4. Remove, as above: every branch is pushed, so no work is lost.
 5. Every branch is kept.

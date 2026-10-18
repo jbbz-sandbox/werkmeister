@@ -195,6 +195,52 @@ test("github updateIssue: a status label is created when the repo lacks it, then
   }
 });
 
+test("github updateIssue: a status: label replaces the other status: labels and is created if missing (SW-27)", async () => {
+  const t = it.issueTracker();
+  const issue = {
+    labels: [{ name: "bug" }, { name: "status: in progress" }, { name: "Status: Blocked" }],
+  };
+  await withFakeGh({ issue, labels: ["bug", "status: in progress"] }, async (bin) => {
+    await t.updateIssue("acme/api#12", { status: "status: in review" });
+    const calls = readFileSync(path.join(path.dirname(bin), "calls"), "utf8")
+      .trim()
+      .split("\n");
+    assert.deepEqual(calls, [
+      "issue view 12 -R acme/api --json labels",
+      "label create status: in review -R acme/api --color 1D76DB --force",
+      "issue edit 12 -R acme/api --add-label status: in review --remove-label status: in progress,Status: Blocked",
+    ]);
+  });
+});
+
+test("github updateIssue: done closes as completed, not planned closes as not planned", async () => {
+  const t = it.issueTracker();
+  await withFakeGh({}, async (bin) => {
+    await t.updateIssue("acme/api#12", { status: "closed", comment: "Shipped: v1 — u" });
+    await t.updateIssue("acme/api#12", { status: "not planned" });
+    const calls = readFileSync(path.join(path.dirname(bin), "calls"), "utf8")
+      .trim()
+      .split("\n");
+    assert.deepEqual(calls, [
+      "issue close 12 -R acme/api --reason completed",
+      "issue comment 12 -R acme/api --body Shipped: v1 — u",
+      "issue close 12 -R acme/api --reason not planned",
+    ]);
+  });
+});
+
+test("github fetchIssue: labels, and closed reads as the done category", async () => {
+  const t = it.issueTracker();
+  await withFakeGh(
+    { issue: { title: "t", state: "CLOSED", labels: [{ name: "status: in review" }] } },
+    async () => {
+      const i = await t.fetchIssue("acme/api#12");
+      assert.equal(i.statusCategory, "done");
+      assert.deepEqual(i.labels, ["status: in review"]);
+    },
+  );
+});
+
 test("jira with no REST creds: ok, via the Atlassian MCP fallback", async () => {
   const saved = Object.fromEntries(
     ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"].map((k) => [k, process.env[k]]),

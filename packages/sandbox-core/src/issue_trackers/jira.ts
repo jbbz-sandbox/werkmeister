@@ -54,6 +54,10 @@ export function jiraSitePhrase(): string {
 const str = (v: unknown): string | undefined =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
 
+const CATEGORIES = ["new", "indeterminate", "done"] as const;
+const category = (v: unknown): Issue["statusCategory"] =>
+  CATEGORIES.find((c) => c === str(v)?.toLowerCase());
+
 function fromRest(r: JiraRestIssue): Issue {
   const f = r.fields ?? {};
   const comments: IssueComment[] = (f.comment?.comments ?? []).flatMap((c) => {
@@ -64,6 +68,7 @@ function fromRest(r: JiraRestIssue): Issue {
     ref: r.key,
     title: str(f.summary),
     status: str(f.status?.name),
+    statusCategory: category(f.status?.statusCategory?.key),
     type: str(f.issuetype?.name),
     assignee: str(f.assignee?.displayName),
     description: str(f.description),
@@ -81,7 +86,8 @@ async function fetchViaMcp(key: string): Promise<Issue | null> {
       `1. Fetch Jira issue ${key} INCLUDING ITS COMMENTS using getJiraIssue ${jiraSitePhrase()} — request ` +
       'fields ["summary","status","issuetype","assignee","description","comment"].\n' +
       "2. Output ONLY a JSON object between <result> and </result> tags with keys " +
-      '"title","status","type","assignee","description" (strings, "" when unavailable) and ' +
+      '"title","status","statusCategory" (the status category key: new, indeterminate or done),' +
+      ' "type","assignee","description" (strings, "" when unavailable) and ' +
       '"comments" (an array of {"author","created","body"}, oldest first). ' +
       READ_ONLY +
       "\nIf you cannot fetch the issue, output <result>{}</result> and nothing else.",
@@ -100,6 +106,7 @@ async function fetchViaMcp(key: string): Promise<Issue | null> {
     ref: key,
     title: str(parsed.title),
     status: str(parsed.status),
+    statusCategory: category(parsed.statusCategory),
     type: str(parsed.type),
     assignee: str(parsed.assignee),
     description: str(parsed.description),

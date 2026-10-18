@@ -25,6 +25,10 @@ export interface Issue {
   ref: string;
   title?: string;
   status?: string;
+  /** Jira's status category; GitHub: `done` when closed. Where the issue sits, whatever the status is named. */
+  statusCategory?: "new" | "indeterminate" | "done";
+  /** GitHub labels, where its `status:` label lives. */
+  labels?: string[];
   type?: string;
   assignee?: string;
   description?: string;

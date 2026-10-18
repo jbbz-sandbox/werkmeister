@@ -46,7 +46,7 @@ workspace — don't reach for them.
    `status: approved`. Don't set it yourself.
 4. **Open:** run `sandbox pr open`. It runs the gate (tests, exercise evidence,
    release check), pushes, opens the PR, moves the issue to the review status
-   (`overrides.issue_review_status`, default `In Review`; on GitHub a label of that name, created if the repo lacks it),
+   (`overrides.issue_statuses.in_review`, default `In Review`, or the label `status: in review` on GitHub),
    and records the URL in the PR file. A failed gate check names what to fix.
    Then, in the Claude desktop app, turn on Auto-fix without asking: `ccd_pr`
    `get_status` (`bind_pr` with the URL if unbound), then `set_monitor` with
