@@ -12,9 +12,9 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { graduateNote, reconcileGraduating } from "sandbox-core/graduate";
-import { openDecisions, parseNote } from "sandbox-core/notes";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { graduateNote, reconcileGraduating } from "werkmeister-core/graduate";
+import { openDecisions, parseNote } from "werkmeister-core/notes";
 
 let tmp: string;
 let workspace: string;

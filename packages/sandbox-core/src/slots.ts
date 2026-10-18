@@ -103,7 +103,7 @@ async function queryLabeledContainers(): Promise<LabelRow[] | null> {
  *
  * `ports.yaml` is the single source of truth (FRAG-03); the literal default
  * applies only when the key is absent. The port math on the same block lives in
- * `sandbox-core/config` — see {@link getPortRange}.
+ * `werkmeister-core/config` — see {@link getPortRange}.
  */
 export function slotCount(): number {
   const featureSlots = loadPorts()["feature_slots"];
@@ -306,7 +306,7 @@ export async function getAllSlots(): Promise<Record<string, SlotEntry>> {
 /**
  * Return the [start, end] port range for *slot* — e.g. slot 1 -> [11100, 11119].
  *
- * The math lives in `sandbox-core/config` because the dashboard renders the
+ * The math lives in `werkmeister-core/config` because the dashboard renders the
  * same range beside each workspace; this wrapper only supplies `ports.yaml`.
  */
 export function getPortRange(slot: number): [number, number] {

@@ -7,8 +7,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildForwardRows, renderK8sForwardsOverride } from "sandbox-core/k8s_forwards";
 import { describe, expect, it } from "vitest";
+import { buildForwardRows, renderK8sForwardsOverride } from "werkmeister-core/k8s_forwards";
 
 describe("buildForwardRows — infrastructure forwards", () => {
   it("emits a pipe-delimited row per infra entry that declares k8s_forward_port", () => {

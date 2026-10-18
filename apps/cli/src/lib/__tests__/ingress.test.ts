@@ -8,9 +8,9 @@
  * bin/generate-certs.sh, so the two could disagree silently.
  */
 
-import { featureUrl, ingressHostnames, loadFeatureRouters } from "sandbox-core/feature_routing";
-import { INGRESS_DEFAULTS, loadIngress } from "sandbox-core/global_config";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { featureUrl, ingressHostnames, loadFeatureRouters } from "werkmeister-core/feature_routing";
+import { INGRESS_DEFAULTS, loadIngress } from "werkmeister-core/global_config";
 import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 let home: SandboxHome;

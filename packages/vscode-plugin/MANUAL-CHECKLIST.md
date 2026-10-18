@@ -53,7 +53,7 @@ render, or a live editor.
 
 7. **Inline "open workspace" icon.** Hover a workspace node; a folder icon
    appears inline. Click it. The workspace opens in a new VS Code window (via
-   native `vscode.openFolder`, not sandbox-core's `openWorkspace()`).
+   native `vscode.openFolder`, not werkmeister-core's `openWorkspace()`).
 
 7a. **Inline "switch workspace" icon.** Hover the same node; a → icon appears
     next to the folder icon. Click it. The workspace is added to *this* window as
@@ -149,7 +149,7 @@ render, or a live editor.
 
 20. **Install into the real VS Code.**
     ```bash
-    cd packages/vscode-plugin && npm run package && code --install-extension vscode-plugin-0.1.0.vsix
+    cd packages/vscode-plugin && npm run package && code --install-extension werkmeister-vscode-0.1.0.vsix
     ```
     Deliberately not run during implementation — it modifies your live editor.
 
@@ -165,10 +165,10 @@ render, or a live editor.
     - **Dozens of raw repo checkouts** instead of named workspaces —
       `resolveWorkspacesRoot`'s config-file tier regressed and it fell back to
       `~/workspace`, which is the *repos* root.
-    - **The "Could not find the sandbox CLI" node** — sandbox-core couldn't
+    - **The "Could not find the sandbox CLI" node** — werkmeister-core couldn't
       resolve the binary from `~/.sandbox/config.yaml` with no env present.
 
-    Diagnose against sandbox-core directly, bypassing the extension:
+    Diagnose against werkmeister-core directly, bypassing the extension:
     ```bash
     env -u SANDBOX_WORKSPACES_ROOT -u SANDBOX_ROOT node -e '
       const m = await import("/path/to/sandbox/packages/sandbox-core/dist/sandbox.js");

@@ -8,13 +8,17 @@ import * as YAML from "yaml";
 
 // The config command projects onto ~/.zshenv and the Claude Desktop config;
 // stub both so this unit test never touches the real ones.
-vi.mock("sandbox-core/global_config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/global_config")>();
+vi.mock("werkmeister-core/global_config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/global_config")>();
   return { ...actual, ensureZshenvSources: () => false, patchDesktopConfig: () => false };
 });
 
-import * as gc from "sandbox-core/global_config";
-import { JIRA_CONFIG_SNIPPET, type JiraVerifier, syncJiraToken } from "sandbox-core/machine_setup";
+import * as gc from "werkmeister-core/global_config";
+import {
+  JIRA_CONFIG_SNIPPET,
+  type JiraVerifier,
+  syncJiraToken,
+} from "werkmeister-core/machine_setup";
 import { run as runConfig } from "../../commands/config.js";
 
 const FILLED = {

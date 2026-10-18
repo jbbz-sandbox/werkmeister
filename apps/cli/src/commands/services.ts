@@ -5,8 +5,12 @@
  * are running locally (with port) or via k8s port-forward.
  */
 
-import { SandboxError } from "sandbox-core/errors";
-import { type FeatureServices, featureServices, type ServiceEndpoint } from "sandbox-core/slots";
+import { SandboxError } from "werkmeister-core/errors";
+import {
+  type FeatureServices,
+  featureServices,
+  type ServiceEndpoint,
+} from "werkmeister-core/slots";
 import { Colors, info, warn } from "../lib/config.js";
 
 /**

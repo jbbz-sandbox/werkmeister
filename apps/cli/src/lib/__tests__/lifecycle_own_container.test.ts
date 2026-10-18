@@ -7,10 +7,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
-import type { Reporter } from "sandbox-core/reporter";
-import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import type { Reporter } from "werkmeister-core/reporter";
+import { withReporter } from "werkmeister-core/reporter";
 
 const { composeUpAsync, ensurePortForwardsHealthy } = vi.hoisted(() => ({
   composeUpAsync: vi.fn(async () => true),
@@ -23,10 +23,10 @@ vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof import("node:fs")>();
   return { ...real, existsSync: (p: fs.PathLike) => p === "/.dockerenv" || real.existsSync(p) };
 });
-vi.mock("sandbox-core/compose", () => ({ composeUpAsync }));
-vi.mock("sandbox-core/k8s", () => ({ ensurePortForwardsHealthy }));
+vi.mock("werkmeister-core/compose", () => ({ composeUpAsync }));
+vi.mock("werkmeister-core/k8s", () => ({ ensurePortForwardsHealthy }));
 
-import { insideOwnContainer, up } from "sandbox-core/lifecycle";
+import { insideOwnContainer, up } from "werkmeister-core/lifecycle";
 
 const quiet: Reporter = { passthrough: false, emit: () => {} };
 let root: string;

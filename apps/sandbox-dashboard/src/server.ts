@@ -5,7 +5,7 @@
  * Two linked tools:
  *   - `workspace`        — the App tool (carries `_meta.ui.resourceUri`). When the
  *     host calls it, it renders the bundled HTML form and returns the RJSF
- *     bundle from `getFormSchema` (sandbox-core) for the form to render.
+ *     bundle from `getFormSchema` (werkmeister-core) for the form to render.
  *   - `create-workspace` — invoked from the form via `app.callServerTool(...)`.
  *     Runs `sandbox workspace <feature> [flags]` (worktrees + branch +
  *     init-workspace) and optionally opens the result in VS Code.
@@ -58,7 +58,7 @@ import {
   switchKubeContext,
   WORKSPACE_ACTIONS,
   WorkspaceError,
-} from "sandbox-core";
+} from "werkmeister-core";
 import { z } from "zod";
 import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
@@ -650,7 +650,7 @@ export function createServer(): McpServer {
     },
   );
 
-  // An `Issue` (sandbox-core/issue_tracker): the `issue` card and pr-reconcile's issue.
+  // An `Issue` (werkmeister-core/issue_tracker): the `issue` card and pr-reconcile's issue.
   const issueSchema = z.object({
     ref: z.string(),
     title: z.string().optional(),

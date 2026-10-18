@@ -1,6 +1,6 @@
 /**
  * What `sandbox up` still renders now that the sequence lives in
- * `sandbox-core/lifecycle`.
+ * `werkmeister-core/lifecycle`.
  *
  * The summary block used to read `servicesConfig` and recompute each service's
  * port inline, so it could only ever exist inside the command. It now renders
@@ -9,19 +9,19 @@
  * printed a second time here.
  */
 
-import { SandboxError } from "sandbox-core/errors";
-import type { Reporter } from "sandbox-core/reporter";
-import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SandboxError } from "werkmeister-core/errors";
+import type { Reporter } from "werkmeister-core/reporter";
+import { withReporter } from "werkmeister-core/reporter";
 
 import { makeRecorder } from "./helpers/recorder.js";
 
-vi.mock("sandbox-core/lifecycle", () => ({ up: vi.fn() }));
+vi.mock("werkmeister-core/lifecycle", () => ({ up: vi.fn() }));
 vi.mock("../../lib/dotenv.js", () => ({ loadDotenv: () => ({}) }));
 vi.mock("../connect.js", () => ({ run: vi.fn() }));
 
-import type { UpResult } from "sandbox-core/lifecycle";
-import { up as upFeature } from "sandbox-core/lifecycle";
+import type { UpResult } from "werkmeister-core/lifecycle";
+import { up as upFeature } from "werkmeister-core/lifecycle";
 import { run as runConnect } from "../connect.js";
 import { run as runUp } from "../up.js";
 

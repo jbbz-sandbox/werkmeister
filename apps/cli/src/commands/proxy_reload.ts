@@ -4,13 +4,13 @@
  * Regenerate the Caddyfile from all active features and reload the
  * Caddy reverse proxy container.
  *
- * The sequence itself is `sandbox-core/lifecycle`; what is left here is the
+ * The sequence itself is `werkmeister-core/lifecycle`; what is left here is the
  * banner and the closing verdict. The "Features in Caddyfile" block is not
  * rendered here because it lands *between* the generate and the reload — the
  * library emits it, as `up` does with its "Local services" line.
  */
 
-import { reloadProxy } from "sandbox-core/lifecycle";
+import { reloadProxy } from "werkmeister-core/lifecycle";
 import { Colors, error, success } from "../lib/config.js";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {

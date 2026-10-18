@@ -8,7 +8,7 @@
  * the feature down, delete the directory, prune the source repos' worktree
  * registrations.
  *
- * The sequence is `sandbox-core`'s `removeWorkspace` -- the same call the
+ * The sequence is `werkmeister-core`'s `removeWorkspace` -- the same call the
  * dashboard and the MCP surface make. What is left here is the confirmation and
  * the summary. The guard that matters stays in core: an unpushable branch
  * aborts the whole teardown, so no surface can delete unpushed work. The
@@ -18,7 +18,7 @@
  * --abandon records why (docs/workspace-lifecycle.md).
  */
 
-import { removeWorkspace } from "sandbox-core";
+import { removeWorkspace } from "werkmeister-core";
 import { Colors, info, warn } from "../lib/config.js";
 import { confirm } from "../lib/wizard.js";
 

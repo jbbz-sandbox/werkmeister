@@ -12,10 +12,10 @@
  * would arrive as literal `[36m` noise on every line.
  */
 import type { ChildProcess } from "node:child_process";
-import { childEnv } from "sandbox-core";
-import { composeLogsStream } from "sandbox-core/compose";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import * as vscode from "vscode";
+import { childEnv } from "werkmeister-core";
+import { composeLogsStream } from "werkmeister-core/compose";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 
 interface Tail {
   terminal: vscode.Terminal;

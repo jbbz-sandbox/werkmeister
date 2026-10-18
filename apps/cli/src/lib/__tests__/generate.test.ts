@@ -15,21 +15,21 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 
 const h = vi.hoisted(() => ({ stateInfraRoot: null as string | null }));
 
-vi.mock("sandbox-core/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/config")>();
+vi.mock("werkmeister-core/config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/config")>();
   // Redirects only what importers see: generate.ts writes the Caddyfile and
   // features.json under stateInfraRoot(), and that must land in tmp, never in
   // the developer's ~/.sandbox. infraRoot() stays real so the templates load.
   return { ...actual, stateInfraRoot: () => h.stateInfraRoot ?? actual.stateInfraRoot() };
 });
 
-import { dotDir, loadServices, stateInfraRoot } from "sandbox-core/config";
-import { loadFeatureRouters } from "sandbox-core/feature_routing";
+import { dotDir, loadServices, stateInfraRoot } from "werkmeister-core/config";
+import { loadFeatureRouters } from "werkmeister-core/feature_routing";
 import {
   generateCaddyfile,
   generateFeatureCompose,
@@ -37,8 +37,8 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
   seedWorkspaceMetadataEnv,
-} from "sandbox-core/generate";
-import { getPortRange } from "sandbox-core/slots";
+} from "werkmeister-core/generate";
+import { getPortRange } from "werkmeister-core/slots";
 import { fixtureServicesYaml, type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
