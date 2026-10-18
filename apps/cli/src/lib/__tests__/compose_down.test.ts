@@ -8,10 +8,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { COMPOSE_FILE, LEGACY_COMPOSE_FILE } from "sandbox-core/compose_file";
-import type { Reporter } from "sandbox-core/reporter";
-import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COMPOSE_FILE, LEGACY_COMPOSE_FILE } from "werkmeister-core/compose_file";
+import type { Reporter } from "werkmeister-core/reporter";
+import { withReporter } from "werkmeister-core/reporter";
 
 const h = vi.hoisted(() => ({
   workspace: "",
@@ -19,8 +19,8 @@ const h = vi.hoisted(() => ({
   calls: [] as string[][],
 }));
 
-vi.mock("sandbox-core/proc", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/proc")>();
+vi.mock("werkmeister-core/proc", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/proc")>();
   return {
     ...actual,
     run: (cmd: string[]) => {
@@ -33,8 +33,8 @@ vi.mock("sandbox-core/proc", async (importOriginal) => {
   };
 });
 // The cwd/config fallback would otherwise consult this machine's ~/.sandbox.
-vi.mock("sandbox-core/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/config")>();
+vi.mock("werkmeister-core/config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/config")>();
   return {
     ...actual,
     resolveWorkspace: () => {
@@ -43,7 +43,7 @@ vi.mock("sandbox-core/config", async (importOriginal) => {
   };
 });
 
-import { composeDown } from "sandbox-core/compose";
+import { composeDown } from "werkmeister-core/compose";
 
 const quiet: Reporter = { passthrough: false, emit: () => {} };
 let tmp: string;

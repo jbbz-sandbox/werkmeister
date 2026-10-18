@@ -9,6 +9,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   buildPrGuardEntry,
   type HookEntry,
@@ -16,8 +17,7 @@ import {
   SESSION_START_COMMAND,
   writePrGuardHook,
   writeWorkspaceHooks,
-} from "sandbox-core/hooks_gen";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+} from "werkmeister-core/hooks_gen";
 
 /** The shape shipped before skills self-healing — what real workspaces hold. */
 const PRIOR_COMMAND = "command -v sandbox >/dev/null 2>&1 && sandbox notes context || true";

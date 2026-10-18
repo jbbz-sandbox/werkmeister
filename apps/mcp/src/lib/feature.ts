@@ -12,9 +12,9 @@
  * feature by the same `workspaceForFeature` every other consumer uses.
  */
 
-import { workspaceForFeature } from "sandbox-core/compose";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
-import { SandboxError } from "sandbox-core/errors";
+import { workspaceForFeature } from "werkmeister-core/compose";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import { SandboxError } from "werkmeister-core/errors";
 
 /** Lower-cased: Node lower-cases incoming header names. */
 export const FEATURE_HEADER = "x-sandbox-feature";

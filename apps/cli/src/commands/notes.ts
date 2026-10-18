@@ -18,18 +18,18 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
-import { findWorkspaceRoot } from "sandbox-core/gate";
-import { standardsDirPath } from "sandbox-core/global_config";
+import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { standardsDirPath } from "werkmeister-core/global_config";
 import {
   eligibleDomains,
   GraduationError,
   graduateNote,
   KINDS,
   matchDomainsForRefs,
-} from "sandbox-core/graduate";
-import { type Note, openDecisions } from "sandbox-core/notes";
-import { loadStandardsModules } from "sandbox-core/standards";
-import { strategyFor } from "sandbox-core/strategies";
+} from "werkmeister-core/graduate";
+import { type Note, openDecisions } from "werkmeister-core/notes";
+import { loadStandardsModules } from "werkmeister-core/standards";
+import { strategyFor } from "werkmeister-core/strategies";
 import { error, info, success } from "../lib/config.js";
 
 /** Write *promptStr*, read one line (no trailing newline). */

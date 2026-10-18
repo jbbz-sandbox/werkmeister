@@ -114,7 +114,7 @@ describe("the Inquirer-backed prompts", () => {
   });
 
   it("reads fields off the form schema bundle the browser form renders", async () => {
-    const { buildFormSchema } = await import("sandbox-core/form_schema");
+    const { buildFormSchema } = await import("werkmeister-core/form_schema");
     const bundle = buildFormSchema({
       prompts: [
         {

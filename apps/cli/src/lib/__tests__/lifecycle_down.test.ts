@@ -5,18 +5,18 @@
  * (known-issues.md, "Library Rough Edges").
  */
 
-import type { Reporter } from "sandbox-core/reporter";
-import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Reporter } from "werkmeister-core/reporter";
+import { withReporter } from "werkmeister-core/reporter";
 
 import { makeRecorder } from "../../commands/__tests__/helpers/recorder.js";
 
-vi.mock("sandbox-core/compose", () => ({ composeDownAsync: vi.fn() }));
-vi.mock("sandbox-core/slots", () => ({ getSlot: async () => 3, releaseSlot: vi.fn() }));
-vi.mock("sandbox-core/telepresence", () => ({ leaveFeatureIntercepts: () => [] }));
+vi.mock("werkmeister-core/compose", () => ({ composeDownAsync: vi.fn() }));
+vi.mock("werkmeister-core/slots", () => ({ getSlot: async () => 3, releaseSlot: vi.fn() }));
+vi.mock("werkmeister-core/telepresence", () => ({ leaveFeatureIntercepts: () => [] }));
 
-import { composeDownAsync } from "sandbox-core/compose";
-import { down } from "sandbox-core/lifecycle";
+import { composeDownAsync } from "werkmeister-core/compose";
+import { down } from "werkmeister-core/lifecycle";
 
 let lines: string[];
 let recorder: Reporter;

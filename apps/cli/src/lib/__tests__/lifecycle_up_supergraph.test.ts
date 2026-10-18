@@ -8,45 +8,45 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
-import type { Reporter } from "sandbox-core/reporter";
-import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import type { Reporter } from "werkmeister-core/reporter";
+import { withReporter } from "werkmeister-core/reporter";
 
 const registry = vi.hoisted(() => ({ services: {} as Record<string, unknown> }));
 
-vi.mock("sandbox-core/caddy", () => ({
+vi.mock("werkmeister-core/caddy", () => ({
   isCaddyRunning: () => true,
   reloadCaddy: async () => {},
   startCaddy: vi.fn(),
 }));
-vi.mock("sandbox-core/compose", () => ({ composeUp: () => true }));
-vi.mock("sandbox-core/config", async (importOriginal) => ({
+vi.mock("werkmeister-core/compose", () => ({ composeUp: () => true }));
+vi.mock("werkmeister-core/config", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadPorts: () => ({ slots: { start: 11000, size: 20 } }),
   loadServices: () => registry.services,
 }));
-vi.mock("sandbox-core/feature_routing", () => ({ loadFeatureRouters: () => ({}) }));
-vi.mock("sandbox-core/generate", async (importOriginal) => ({
+vi.mock("werkmeister-core/feature_routing", () => ({ loadFeatureRouters: () => ({}) }));
+vi.mock("werkmeister-core/generate", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   generateCaddyfile: async () => {},
   isFeatureComposeStale: () => false,
   loadWorkspaceEnvVars: () => ({}),
   writeServiceSecretEnvs: () => {},
 }));
-vi.mock("sandbox-core/k8s", () => ({ ensurePortForwardsHealthy: () => "healthy" }));
-vi.mock("sandbox-core/secrets", () => ({
+vi.mock("werkmeister-core/k8s", () => ({ ensurePortForwardsHealthy: () => "healthy" }));
+vi.mock("werkmeister-core/secrets", () => ({
   getSecretsPath: () => "/nonexistent/secrets.yaml",
   loadSecrets: () => ({}),
   resolveSecrets: () => ({ byService: {}, missing: [] }),
 }));
-vi.mock("sandbox-core/slots", () => ({
+vi.mock("werkmeister-core/slots", () => ({
   allocateSlot: async () => 3,
   getPortRange: () => [3300, 3399],
   getServicePort: () => 3300,
 }));
 
-import { up } from "sandbox-core/lifecycle";
+import { up } from "werkmeister-core/lifecycle";
 
 const quiet: Reporter = { passthrough: false, emit: () => {} };
 let root: string;

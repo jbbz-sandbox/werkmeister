@@ -5,20 +5,20 @@
  * a collecting reporter, return the transcript as `content` and the typed
  * result as `structuredContent`. Nothing here decides anything a verb should
  * decide — if a registration grows a branch about *what the verb does*, that
- * logic belongs in `sandbox-core` (predecessor spec §4).
+ * logic belongs in `werkmeister-core` (predecessor spec §4).
  */
 
 import * as path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { closeOut, createWorkspace, listWorkspaces } from "sandbox-core";
+import { closeOut, createWorkspace, listWorkspaces } from "werkmeister-core";
 
-import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
-import { composeLogs } from "sandbox-core/compose";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
-import { getReposRoot, servicesLocalYamlPath } from "sandbox-core/config";
-import { SandboxError } from "sandbox-core/errors";
-import { featureUrl } from "sandbox-core/feature_routing";
+import { launchFeatureWindow, readWorkspaceYaml } from "werkmeister-core/browser";
+import { composeLogs } from "werkmeister-core/compose";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import { getReposRoot, servicesLocalYamlPath } from "werkmeister-core/config";
+import { SandboxError } from "werkmeister-core/errors";
+import { featureUrl } from "werkmeister-core/feature_routing";
 import {
   applyAnswers,
   collectQuestions,
@@ -29,9 +29,9 @@ import {
   stdoutRunner,
   validateFragment,
   writeFragment,
-} from "sandbox-core/fragment_detect";
-import { graduateNote } from "sandbox-core/graduate";
-import { connectK8s, up as infraUp } from "sandbox-core/infra";
+} from "werkmeister-core/fragment_detect";
+import { graduateNote } from "werkmeister-core/graduate";
+import { connectK8s, up as infraUp } from "werkmeister-core/infra";
 import {
   down,
   readServicesFromWorkspace,
@@ -40,16 +40,16 @@ import {
   restart,
   stop,
   up,
-} from "sandbox-core/lifecycle";
-import { listNotes, parseNote } from "sandbox-core/notes";
-import { collectingReporter, raw, withReporter } from "sandbox-core/reporter";
-import { featureServices } from "sandbox-core/slots";
-import { checkStandards } from "sandbox-core/standards";
-import { interceptsSnapshot, statusSnapshot } from "sandbox-core/status";
-import { STRATEGY_IDS, strategyFor } from "sandbox-core/strategies";
-import { leaveIntercept, startIntercept } from "sandbox-core/telepresence";
-import { runFeatureTests } from "sandbox-core/test_run";
-import { initWorkspace } from "sandbox-core/workspace_init";
+} from "werkmeister-core/lifecycle";
+import { listNotes, parseNote } from "werkmeister-core/notes";
+import { collectingReporter, raw, withReporter } from "werkmeister-core/reporter";
+import { featureServices } from "werkmeister-core/slots";
+import { checkStandards } from "werkmeister-core/standards";
+import { interceptsSnapshot, statusSnapshot } from "werkmeister-core/status";
+import { STRATEGY_IDS, strategyFor } from "werkmeister-core/strategies";
+import { leaveIntercept, startIntercept } from "werkmeister-core/telepresence";
+import { runFeatureTests } from "werkmeister-core/test_run";
+import { initWorkspace } from "werkmeister-core/workspace_init";
 import { z } from "zod";
 import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
 

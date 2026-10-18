@@ -22,7 +22,7 @@ import type {
 import validator from "@rjsf/validator-ajv8";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { mergeFormData, repoSelectionError } from "sandbox-core/form_schema";
+import { mergeFormData, repoSelectionError } from "werkmeister-core/form_schema";
 import { injectCss } from "./theme.js";
 import type { HostBridge } from "./workspace-ui.js";
 
@@ -363,7 +363,7 @@ function makeIssueWidget(bridge: HostBridge) {
   };
 }
 
-/** A workspace needs at least one repo; the rule lives in sandbox-core so every create form shares it. */
+/** A workspace needs at least one repo; the rule lives in werkmeister-core so every create form shares it. */
 function validateRepoSelection(formData: unknown, errors: FormValidation): FormValidation {
   const message = repoSelectionError((formData ?? {}) as Record<string, unknown>);
   if (message) errors.services?.addError(message);
@@ -486,7 +486,7 @@ function WorkspaceForm({
         formContext: {
           getFormData: () => formDataRef.current,
           // The issue widget calls this to populate fields from an issue without
-          // clobbering anything the user has already filled (see sandbox-core mergeFormData).
+          // clobbering anything the user has already filled (see werkmeister-core mergeFormData).
           applyIssueData: (data: Record<string, unknown>) =>
             setFormData((prev) => mergeFormData(prev, data)),
         },

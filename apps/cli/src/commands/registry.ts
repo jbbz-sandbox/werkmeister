@@ -10,7 +10,7 @@
  *   sandbox registry --check    # report drift; nonzero exit when stale
  */
 
-import { syncRegistry } from "sandbox-core/registry_sync";
+import { syncRegistry } from "werkmeister-core/registry_sync";
 import { Colors, success, warn } from "../lib/config.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {

@@ -13,8 +13,8 @@
  *           (desktop sessions are the werkmeister mod's)
  */
 
-import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "sandbox-core";
-import { findRecordRoot } from "sandbox-core/pr_guard";
+import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
+import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { error } from "../lib/config.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {

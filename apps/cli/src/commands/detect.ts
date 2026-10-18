@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { getReposRoot, servicesLocalYamlPath } from "sandbox-core/config";
+import { getReposRoot, servicesLocalYamlPath } from "werkmeister-core/config";
 import {
   AllocationError,
   applyAnswers,
@@ -23,9 +23,9 @@ import {
   stdoutRunner,
   validateFragment,
   writeFragment,
-} from "sandbox-core/fragment_detect";
-import type { Runner } from "sandbox-core/machine_setup";
-import { RegistryError } from "sandbox-core/registry_sync";
+} from "werkmeister-core/fragment_detect";
+import type { Runner } from "werkmeister-core/machine_setup";
+import { RegistryError } from "werkmeister-core/registry_sync";
 
 import { claudeResolver } from "../lib/assist_resolver.js";
 import { Colors, info, success, warn } from "../lib/config.js";

@@ -4,9 +4,9 @@
  * Show shared infra, active features, and k8s port-forward health in one view.
  */
 
-import { getContainerStatus } from "sandbox-core/compose";
-import { type ForwardStatus, getPerServiceStatus } from "sandbox-core/k8s";
-import { getAllSlots, type SlotEntry, slotCount } from "sandbox-core/slots";
+import { getContainerStatus } from "werkmeister-core/compose";
+import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
+import { getAllSlots, type SlotEntry, slotCount } from "werkmeister-core/slots";
 import {
   buildInterceptRows,
   featurePortRange,
@@ -18,9 +18,9 @@ import {
   sortedSlots,
   statusSnapshot,
   tallied,
-} from "sandbox-core/status";
-import { listIntercepts } from "sandbox-core/telepresence";
-import { type WebServerStatus, status as webStatus } from "sandbox-core/web_servers";
+} from "werkmeister-core/status";
+import { listIntercepts } from "werkmeister-core/telepresence";
+import { type WebServerStatus, status as webStatus } from "werkmeister-core/web_servers";
 import { Colors, loadServices } from "../lib/config.js";
 
 function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): void {

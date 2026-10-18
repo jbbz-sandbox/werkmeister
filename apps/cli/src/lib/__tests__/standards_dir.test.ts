@@ -11,9 +11,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as gc from "sandbox-core/global_config";
-import { loadStandardsModules, validateStandardModules } from "sandbox-core/standards";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as gc from "werkmeister-core/global_config";
+import { loadStandardsModules, validateStandardModules } from "werkmeister-core/standards";
 
 let tmp: string;
 

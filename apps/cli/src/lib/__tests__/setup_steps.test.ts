@@ -14,6 +14,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEMO_SERVICES_REPO,
   DEMO_SERVICES_REPO_URL,
@@ -39,15 +40,14 @@ import {
   syncVscodeExtension,
   vscodeExtensionState,
   WORKSPACE_ROOT_REPO,
-} from "sandbox-core/machine_setup";
+} from "werkmeister-core/machine_setup";
 import {
   REGISTRY_DEFAULTS,
   renderSecretsEnv,
   renderServicesLocalYaml,
-} from "sandbox-core/scaffold";
-import { resolveSecrets } from "sandbox-core/secrets";
-import { PLAYWRIGHT_VERSION } from "sandbox-core/test_run";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+} from "werkmeister-core/scaffold";
+import { resolveSecrets } from "werkmeister-core/secrets";
+import { PLAYWRIGHT_VERSION } from "werkmeister-core/test_run";
 import { parse as parseYaml } from "yaml";
 import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
@@ -688,7 +688,7 @@ describe("syncVscodeExtension", () => {
 
   it("reports the bundled version, already installed, as ok", () => {
     const runner = fakeRunner({
-      [LIST]: [0, "redhat.vscode-yaml@1.15.0\nJBBZ.vscode-plugin@0.3.0\n"],
+      [LIST]: [0, "redhat.vscode-yaml@1.15.0\nJBBZ.werkmeister-vscode@0.3.0\n"],
     });
     const steps = sync(runner, false, true);
     expect(steps[0].ok).toBe(true);
@@ -715,7 +715,7 @@ describe("syncVscodeExtension", () => {
   });
 
   it("warns on a stale extension, and never installs in check mode", () => {
-    const runner = fakeRunner({ [LIST]: [0, "jbbz.vscode-plugin@0.2.0\n"] });
+    const runner = fakeRunner({ [LIST]: [0, "jbbz.werkmeister-vscode@0.2.0\n"] });
     const steps = sync(runner, true, true);
     expect(steps[0]).toMatchObject({ ok: false, optional: true });
     expect(steps[0].detail).toContain("0.2.0");

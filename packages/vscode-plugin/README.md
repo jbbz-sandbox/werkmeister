@@ -5,12 +5,12 @@ A tree view over the developer-sandbox: every workspace under
 the `sandbox` CLI lifecycle — without leaving the editor.
 
 A consumer of `packages/sandbox-core`, alongside the `sandbox-dashboard` MCP
-server. Unlike the dashboard it imports sandbox-core directly: the extension host
+server. Unlike the dashboard it imports werkmeister-core directly: the extension host
 is plain Node, so there is no HTTP or stdio hop.
 
 ## How it works
 
-**Reads** — three sandbox-core calls, whose cost is flat regardless of workspace count:
+**Reads** — three werkmeister-core calls, whose cost is flat regardless of workspace count:
 
 | Data | Call |
 |---|---|
@@ -28,7 +28,7 @@ browser window it launches.
 
 ## Configuration
 
-Normally none: sandbox-core resolves paths from `SANDBOX_*` env vars and falls back
+Normally none: werkmeister-core resolves paths from `SANDBOX_*` env vars and falls back
 to `~/.sandbox/config.yaml`, which `sandbox config` maintains.
 
 | Setting | Use when |
@@ -66,5 +66,5 @@ VS Code windows to pick it up.
 ## Not included
 
 Repos + PR state, a status bar item, the Claude session `waiting` signal, a
-shared-infra node, and token usage — all available in sandbox-core payload and
+shared-infra node, and token usage — all available in werkmeister-core payload and
 additive later.

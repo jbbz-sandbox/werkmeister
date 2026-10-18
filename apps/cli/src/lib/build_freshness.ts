@@ -1,7 +1,7 @@
 /**
  * Warn when `dist/` was bundled from a different commit than the checkout.
  *
- * A linked dev CLI runs `dist/main.js`, a gitignored esbuild bundle (sandbox-core
+ * A linked dev CLI runs `dist/main.js`, a gitignored esbuild bundle (werkmeister-core
  * included), so a pull or a branch switch changes the source but not what runs.
  * On 2026-10-15 that cost an hour: the gate kept rejecting a valid `skip_tests`
  * because dist predated the merged #145 fix. esbuild.mjs stamps the source SHA
@@ -23,7 +23,7 @@ export const BUILD_STAMP: BuildStamp | undefined =
   typeof __SANDBOX_BUILD__ === "undefined" ? undefined : __SANDBOX_BUILD__;
 
 export const REBUILD_COMMAND =
-  "npm run build --workspace sandbox-core && npm run build --workspace apps/cli";
+  "npm run build --workspace werkmeister-core && npm run build --workspace apps/cli";
 
 /**
  * The warning text when *build* came from a commit other than *repoRoot*'s

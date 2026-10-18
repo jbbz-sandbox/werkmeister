@@ -13,20 +13,20 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ root: "" }));
 
-vi.mock("sandbox-core/lifecycle", () => ({
+vi.mock("werkmeister-core/lifecycle", () => ({
   down: vi.fn(async (feature: string) => ({ feature, slot: 1 })),
   reloadProxy: vi.fn(),
   restart: vi.fn(),
   stop: vi.fn(),
   up: vi.fn(),
 }));
-vi.mock("sandbox-core/config", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("sandbox-core/config")>()),
+vi.mock("werkmeister-core/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("werkmeister-core/config")>()),
   workspacesRoot: () => h.root,
 }));
 
-import { removeWorkspace, runWorkspaceAction } from "sandbox-core";
-import { down } from "sandbox-core/lifecycle";
+import { removeWorkspace, runWorkspaceAction } from "werkmeister-core";
+import { down } from "werkmeister-core/lifecycle";
 
 beforeEach(() => {
   vi.mocked(down).mockClear();

@@ -1,12 +1,12 @@
 /** buildFormSchema (RJSF bundle). */
 
+import { describe, expect, it } from "vitest";
 import {
   buildFormSchema,
   type FormBundle,
   type PromptEntry,
   type PromptSpecJson,
-} from "sandbox-core/form_schema";
-import { describe, expect, it } from "vitest";
+} from "werkmeister-core/form_schema";
 
 /** One field's uiSchema entry (`uiSchema` also holds the `ui:order` list, so it is typed `unknown`). */
 const uiOf = (out: FormBundle, key: string) => out.uiSchema[key] as Record<string, unknown>;

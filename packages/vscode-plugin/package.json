@@ -1,5 +1,5 @@
 {
-  "name": "vscode-plugin",
+  "name": "werkmeister-vscode",
   "displayName": "Sandbox Workspaces",
   "description": "Manage developer-sandbox feature workspaces — container state, Telepresence intercepts, and the sandbox CLI lifecycle — from a VS Code tree view.",
   "version": "0.14.0",
@@ -264,7 +264,7 @@
     "package": "vsce package --no-dependencies"
   },
   "dependencies": {
-    "sandbox-core": "*"
+    "werkmeister-core": "*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
