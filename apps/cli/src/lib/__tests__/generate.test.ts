@@ -525,6 +525,20 @@ describe("generateCaddyfile", () => {
     expect(content).toContain("header_up X-Feature {re.xf.1}");
   });
 
+  it.each([
+    ["no running feature", {}],
+    ["a running feature", { myfeat: { slot: 1, services: ["frontend"] } }],
+  ])(
+    "serves the selector at /__werkmeister and the /__sandbox alias with %s",
+    async (_, features) => {
+      const content = fs.readFileSync(await generateCaddyfile(features), "utf8");
+      expect(content).toContain("path /__werkmeister/features.json /__sandbox/features.json");
+      expect(content).toContain("path /__werkmeister* /__sandbox*");
+      // Selector handles must precede the feature/default handles that would shadow them.
+      expect(content.indexOf("/__werkmeister*")).toBeLessThan(content.indexOf("handle /* {"));
+    },
+  );
+
   it("emits one site block per routed service that has a running feature", async () => {
     const svcCfg = loadServices();
     const routers = loadFeatureRouters();

@@ -244,7 +244,7 @@ These ports are internal to the Docker network — other containers reach them v
 Caddy runs as a Docker container (ports 80 and 443) and provides:
 
 1. **HTTPS termination** — Caddy terminates HTTPS on port 443 using locally-trusted certificates
-2. **Feature selector UI** — a web page at `https://frontend.local.sandbox.com/__sandbox` for setting the active feature in your browser
+2. **Feature selector UI** — a web page at `https://frontend.local.sandbox.com/__werkmeister` for setting the active feature in your browser
 3. **Feature resolution** — Caddy matches the `X-Feature` cookie and reverse-proxies to that feature's local container, falling back to the k8s baseline when the service isn't running locally
 4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `frontend.local.sandbox.com`)
 
@@ -311,7 +311,7 @@ A workspace with no services still comes up; all its traffic goes to k8s.
 ### Step 5: Access Your Feature
 
 **Option A: Browser cookie**
-Visit `https://frontend.local.sandbox.com/__sandbox`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
+Visit `https://frontend.local.sandbox.com/__werkmeister`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
 
 **Option B: HTTP header**
 Use a browser extension or curl:
@@ -1386,7 +1386,7 @@ docker compose -f infra/compose/shared-infra.yml logs -f caddy
 
 ### Feature Selector UI
 
-Visit **`https://frontend.local.sandbox.com/__sandbox`** in your browser to:
+Visit **`https://frontend.local.sandbox.com/__werkmeister`** in your browser to:
 - See the currently active feature (from the `X-Feature` cookie)
 - Switch to a different feature by typing the name and clicking "Set Feature"
 - Clear the feature cookie to return to the k8s baseline
@@ -1516,7 +1516,7 @@ cd ~/workspace/sandbox
 ./sandbox up PROJ-1234
 
 # 6. Set the feature in your browser
-# Visit https://frontend.local.sandbox.com/__sandbox and enter "PROJ-1234"
+# Visit https://frontend.local.sandbox.com/__werkmeister and enter "PROJ-1234"
 
 # 7. Develop and iterate
 ./sandbox logs PROJ-1234
@@ -1740,7 +1740,7 @@ cat ~/.sandbox/slots.json | jq .
 │  │  frontend.local.sandbox.com                              │    │
 │  │                                                               │    │
 │  │  1. Terminate HTTPS                                           │    │
-│  │  2. Serve feature selector UI (/__sandbox)                     │    │
+│  │  2. Serve feature selector UI (/__werkmeister)                     │    │
 │  │  3. Read X-Feature cookie/header                              │    │
 │  │  4. Route to feature's local containers (if running)          │    │
 │  │  5. Fall back to k8s baseline (via k8s-forwards)              │    │

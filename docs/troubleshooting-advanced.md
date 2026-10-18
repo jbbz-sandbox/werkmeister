@@ -271,7 +271,7 @@ routing source of truth is the `feature_router:` blocks in `~/.sandbox/services.
 ```
 # frontend (web)
 https://frontend.local.sandbox.com/
-https://frontend.local.sandbox.com/__sandbox
+https://frontend.local.sandbox.com/__werkmeister
 
 # backend (api)
 https://backend.local.sandbox.com/health

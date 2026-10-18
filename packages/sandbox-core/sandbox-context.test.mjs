@@ -44,7 +44,7 @@ test("health checks and the feature URL are scoped to the local services", async
         out,
         /document\.cookie = "X-Feature=test; domain=\.local\.sandbox\.com; path=\/; SameSite=Lax"/,
       );
-      assert.match(out, /frontend\.local\.sandbox\.com\/__sandbox/);
+      assert.match(out, /frontend\.local\.sandbox\.com\/__werkmeister/);
       assert.match(
         out,
         /\| `frontend` \| local \| `apps\/frontend` \| `test-frontend` \| 11101 \|/,
