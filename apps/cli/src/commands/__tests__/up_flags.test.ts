@@ -1,6 +1,6 @@
 /**
  * `sandbox up` rejects the `-s/--services` and `--force` flags it used to
- * declare but never read (jbbz-sandbox/sandbox#153).
+ * declare but never read (jbbz-sandbox/werkmeister#153).
  *
  * Driven as a subprocess like `complete.test.ts`: the rejection is commander's,
  * so it only happens through main(). Runs from an empty temp dir so that, if the

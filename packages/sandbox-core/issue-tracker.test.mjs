@@ -113,7 +113,7 @@ test("by default sandbox-tool issues go to GitHub, with labels, whatever the tra
     const md = buildIssuesReportMd("ws", "PROJ-1", t);
     assert.match(
       md,
-      /^\| the `sandbox` tool: .* \| `gh issue create -R jbbz-sandbox\/sandbox --label <label>` \|$/m,
+      /^\| the `sandbox` tool: .* \| `gh issue create -R jbbz-sandbox\/werkmeister --label <label>` \|$/m,
     );
     assert.match(md, /\| GitHub label \|/);
   }

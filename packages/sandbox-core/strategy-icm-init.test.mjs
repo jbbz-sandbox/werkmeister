@@ -152,7 +152,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);
-    assert.match(guide, /gh issue create -R jbbz-sandbox\/sandbox --label <label>/);
+    assert.match(guide, /gh issue create -R jbbz-sandbox\/werkmeister --label <label>/);
 
     const implement = fs.readFileSync(
       path.join(root, "stages", "03_implement", "CONTEXT.md"),
