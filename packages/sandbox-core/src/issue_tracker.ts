@@ -38,8 +38,10 @@ export { jiraSitePhrase, jiraSiteRef } from "./issue_trackers/jira.js";
 export type {
   Issue,
   IssueComment,
+  IssueKind,
   IssueTrackerStrategy,
   IssueUpdate,
+  NewIssue,
   TrackerAuth,
   TrackerId,
 } from "./issue_trackers/types.js";
