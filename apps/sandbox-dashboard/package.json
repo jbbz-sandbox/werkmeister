@@ -1,6 +1,7 @@
 {
   "name": "werkmeister-dashboard",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "type": "module",
   "private": true,
   "description": "MCP App for creating sandbox multi-repo workspaces from inside Claude Desktop, delegating to the `sandbox workspace` CLI.",

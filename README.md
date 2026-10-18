@@ -242,3 +242,7 @@ kubectl config use-context orbstack
 Shared infra (postgres, redis) is deployed from there too — the sandbox
 `k8s-forwards` container tunnels those Services into the docker world on the
 ports the generated feature `.env` expects.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

@@ -1,6 +1,7 @@
 {
   "name": "werkmeister-monorepo",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "description": "Turborepo monorepo — sandbox CLI and sandbox-dashboard app.",
   "packageManager": "npm@10.9.4",

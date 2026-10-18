@@ -1,6 +1,7 @@
 {
   "name": "werkmeister-core",
   "version": "0.15.0",
+  "license": "Apache-2.0",
   "type": "module",
   "private": true,
   "description": "Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and issue-tracker helpers. Consumed by the `sandbox` CLI itself, sandbox-dashboard, and the VS Code extension.",
