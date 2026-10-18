@@ -27,6 +27,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { DOT_DIRS, dotDir } from "./dot_dir.js";
+
 // ponytail: duplicated (not imported) from notes.ts's active-standards
 // precedence sentence — this module must stay import-light (no config/yaml
 // chain) to hit the <200ms fast-path budget. Keep the wording in sync by
@@ -91,7 +93,7 @@ function fnmatch(name: string, pat: string): boolean {
 export function findWorkspaceRoot(start: string): string | null {
   let directory = path.resolve(start);
   while (true) {
-    if (_isDir(path.join(directory, ".sandbox"))) {
+    if (_isDir(dotDir(directory))) {
       return directory;
     }
     const parent = path.dirname(directory);
@@ -124,7 +126,7 @@ function _isDict(value: unknown): value is Record<string, unknown> {
 
 /** `.sandbox/standards.json` as a dict, or null when missing/unreadable — never throws. */
 export function loadManifest(workspace: string): Record<string, unknown> | null {
-  const manifestPath = path.join(workspace, ".sandbox", "standards.json");
+  const manifestPath = path.join(dotDir(workspace), "standards.json");
   if (!_isFile(manifestPath)) {
     return null;
   }
@@ -138,7 +140,7 @@ export function loadManifest(workspace: string): Record<string, unknown> | null 
 }
 
 function _statePath(workspace: string, sessionId: string): string {
-  return path.join(workspace, ".sandbox", ".gate", `${sessionId}.json`);
+  return path.join(dotDir(workspace), ".gate", `${sessionId}.json`);
 }
 
 /**
@@ -215,7 +217,7 @@ function _phaseGateSatisfied(workspace: string, gate: Record<string, unknown>): 
     return true;
   }
   const want = gate["status"] ? String(gate["status"]).toLowerCase() : null;
-  const dir = path.join(workspace, ".sandbox", "notes");
+  const dir = path.join(dotDir(workspace), "notes");
   let names: string[];
   try {
     names = fs.readdirSync(dir);
@@ -305,7 +307,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
     relPath !== ".." &&
     !relPath.startsWith(".." + path.sep) &&
     !path.isAbsolute(relPath) &&
-    !relPath.startsWith(".sandbox" + path.sep) &&
+    !DOT_DIRS.some((d) => relPath.startsWith(d + path.sep)) &&
     !_phaseGateSatisfied(workspace, phaseGate)
   ) {
     return _phaseGateText(phaseGate);

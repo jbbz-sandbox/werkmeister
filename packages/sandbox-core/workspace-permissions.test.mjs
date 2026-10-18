@@ -7,6 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { dotDir } from "./dist/config.js";
 import {
   AUTONOMOUS_DENY,
   AUTONOMOUS_RULES,
@@ -33,7 +34,7 @@ function workspace(settings) {
 }
 
 const settingsPath = (root) => path.join(root, ".claude", "settings.json");
-const recordPath = (root) => path.join(root, ".sandbox", "claude-permissions.json");
+const recordPath = (root) => path.join(dotDir(root), "claude-permissions.json");
 const readSettings = (root) => JSON.parse(fs.readFileSync(settingsPath(root), "utf8"));
 const readRecord = (root) => JSON.parse(fs.readFileSync(recordPath(root), "utf8"));
 
@@ -152,9 +153,9 @@ test("jit refresh writes its hooks and the same allow rules", async () => {
 });
 
 function setAutonomous(root, on) {
-  fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
+  fs.mkdirSync(dotDir(root), { recursive: true });
   fs.writeFileSync(
-    path.join(root, ".sandbox", "workspace.yml"),
+    path.join(dotDir(root), "workspace.yml"),
     `context_strategy: icm\nautonomous: ${on}\n`,
   );
 }

@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import { ISSUE_COPY } from "./dist/issue_snapshot.js";
+import { issueCopyPath } from "./dist/issue_snapshot.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
 import { withSandboxHome } from "./fixtures.mjs";
@@ -61,7 +61,7 @@ for (const strategy of ["jit", "icm"]) {
       `task: Fix it\nwork_type: bugfix\ncontext_strategy: ${strategy}\nissue_id: o/r#5\n`,
       async (root) => {
         await initWorkspace({}, root, { issue: SNAP });
-        assert.ok(fs.existsSync(path.join(root, ISSUE_COPY)));
+        assert.ok(fs.existsSync(issueCopyPath(root)));
         assert.match(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), /^## Issue$/m);
       },
     );

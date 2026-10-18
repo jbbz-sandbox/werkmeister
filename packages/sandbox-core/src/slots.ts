@@ -27,7 +27,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { loadPorts, loadServices, slotPortRange } from "./config.js";
+import { dotDir, loadPorts, loadServices, slotPortRange } from "./config.js";
 import { docker } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { sandboxLock } from "./locks.js";
@@ -419,7 +419,7 @@ export async function featureServices(feature: string): Promise<FeatureServices>
  * as forgotten -- they have no live state to migrate.
  */
 export async function migrateSlotsJson(): Promise<void> {
-  const legacy = path.join(os.homedir(), ".sandbox", "slots.json");
+  const legacy = path.join(dotDir(os.homedir()), "slots.json");
   if (!fs.existsSync(legacy)) {
     return;
   }

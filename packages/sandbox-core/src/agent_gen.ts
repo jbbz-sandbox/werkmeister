@@ -15,7 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { serviceTestCommand, serviceValidation } from "./archetypes.js";
-import type { ArchetypeRegistry, ServicesConfig } from "./config.js";
+import { type ArchetypeRegistry, forDotDir, type ServicesConfig } from "./config.js";
 import type { FeatureRouter } from "./feature_routing.js";
 
 // Agent files must open with the frontmatter block, so the do-not-hand-edit
@@ -263,11 +263,11 @@ export function writeWorkspaceAgents(
   const agentsDir = path.join(workspaceRoot, ".claude", "agents");
   fs.mkdirSync(agentsDir, { recursive: true });
   const written: string[] = [path.join(agentsDir, `${RESEARCHER_AGENT_NAME}.md`)];
-  fs.writeFileSync(written[0], buildResearcherAgent());
+  fs.writeFileSync(written[0], forDotDir(buildResearcherAgent(), workspaceRoot));
 
   for (const spec of testerSpecs ?? []) {
     const p = path.join(agentsDir, `${TESTER_AGENT_PREFIX}${spec["archetype"]}.md`);
-    fs.writeFileSync(p, buildTesterAgent(spec));
+    fs.writeFileSync(p, forDotDir(buildTesterAgent(spec), workspaceRoot));
     written.push(p);
   }
 

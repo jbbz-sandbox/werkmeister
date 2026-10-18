@@ -6,7 +6,7 @@
  */
 
 import { childEnv } from "../claude_cli.js";
-import { loadReposConfig } from "../config.js";
+import { envVar, loadReposConfig } from "../config.js";
 import { loadGithubOrg } from "../global_config.js";
 import { runAsync } from "../proc.js";
 import type { Issue, IssueTrackerStrategy } from "./types.js";
@@ -52,7 +52,7 @@ function split(ref: string): [string, string] {
 }
 
 /** `gh`, or $SANDBOX_GH_BIN (tests point it at a fake). */
-export const ghBin = () => process.env.SANDBOX_GH_BIN || "gh";
+export const ghBin = () => envVar("GH_BIN") || "gh";
 
 /** `gh` with its stdout; throws with gh's own message on a non-zero exit. */
 async function gh(args: string[]): Promise<string> {
