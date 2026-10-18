@@ -26,6 +26,7 @@ import {
 } from "./config.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { updateNoteStatus } from "./graduate.js";
+import { type IssueStatuses, moveIssue, resolveIssueStatuses } from "./issue_status.js";
 import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import { openDecisions } from "./notes.js";
@@ -87,9 +88,8 @@ export interface Deps {
   archetypes: ArchetypeRegistry;
   repos: ReposConfig;
   tracker: IssueTrackerStrategy;
-  /** Status `pr open` moves the issue to once its PR is open. */
-  reviewStatus: string;
-  doneStatus: string;
+  /** Where each lifecycle point moves the issue (issue_status.ts). */
+  statuses: IssueStatuses;
   /** Commit and push *paths* (relative to the workspace) on the record branch — nothing else that is dirty. */
   commitRecord: (
     ws: string,
@@ -139,10 +139,7 @@ export function defaultDeps(): Deps {
     archetypes: loadArchetypes(),
     repos: loadReposConfig(),
     tracker: issueTracker(),
-    reviewStatus: String(overrides["issue_review_status"] ?? "In Review"),
-    doneStatus: String(
-      overrides["issue_done_status"] ?? (loadIssueTracker() === "github" ? "closed" : "Done"),
-    ),
+    statuses: resolveIssueStatuses(overrides, loadIssueTracker()),
     commitRecord: commitAndPush,
     remove: (name) => removeWorkspace(name, { closedOut: true }),
     terminals: (ws) => openTerminalSessions(ws),
@@ -575,11 +572,10 @@ export async function openPrs(
     lines.push(`${f.dir}: open ${url}`);
     const ref = issueIdOf(loadConfigFile(ws, null));
     if (ref) {
-      try {
-        await deps.tracker.updateIssue(ref, { status: deps.reviewStatus });
-      } catch (e) {
-        lines.push(`  (issue ${ref} not moved to ${deps.reviewStatus}: ${(e as Error).message})`);
-      }
+      const moved = await moveIssue(deps.tracker, ref, "in_review", deps.statuses, {
+        comment: `PR opened: ${url}`,
+      });
+      if (moved) lines.push(`  issue ${moved}`);
     }
   }
   if (opened.length)
@@ -593,15 +589,24 @@ export async function refreshPrStatus(
 ): Promise<{ lines: string[]; changed: boolean }> {
   const lines: string[] = [];
   const changed: string[] = [];
+  // What this pass saw, by PR URL; it picks at most one issue move after the loop.
+  const seen = {
+    shipped: [] as PrFile[],
+    merged: [] as string[],
+    closed: [] as string[],
+    changesRequested: [] as string[],
+    reReview: [] as string[],
+  };
   for (const f of readPrFiles(ws)) {
     const before = statusOf(f);
+    const reviewBefore = f.fm["review"];
     if (before === "open" && f.fm["url"]) {
       const v = await deps.run("gh", [
         "pr",
         "view",
         String(f.fm["url"]),
         "--json",
-        "state,mergeCommit",
+        "state,mergeCommit,reviewDecision,latestReviews",
       ]);
       if (v.code !== 0) {
         lines.push(`${f.dir}: gh pr view failed — ${v.stderr.trim()}`);
@@ -610,14 +615,33 @@ export async function refreshPrStatus(
       const view = JSON.parse(v.stdout) as {
         state?: string;
         mergeCommit?: { oid?: string } | null;
+        reviewDecision?: string;
+        latestReviews?: Array<{ state?: string }>;
       };
-      if (view.state === "MERGED")
+      // reviewDecision stays empty on a repo that requires no review; latestReviews still says it.
+      const changesRequested =
+        view.reviewDecision === "CHANGES_REQUESTED" ||
+        (view.latestReviews ?? []).some((r) => r.state === "CHANGES_REQUESTED");
+      const url = String(f.fm["url"]);
+      if (view.state === "MERGED") {
         writePrFields(f, { status: "merged", merge_sha: view.mergeCommit?.oid ?? "" });
-      else if (view.state === "CLOSED")
+        seen.merged.push(url);
+      } else if (view.state === "CLOSED") {
         writePrFields(f, {
           status: "closed",
           reason: reason(f.fm["reason"]) || "closed on GitHub",
         });
+        seen.closed.push(url);
+      } else if (changesRequested) {
+        // `review` records the decision already acted on, so the move fires once per change.
+        if (reviewBefore !== "changes_requested") {
+          writePrFields(f, { review: "changes_requested" });
+          seen.changesRequested.push(url);
+        }
+      } else if (reviewBefore === "changes_requested") {
+        writePrFields(f, { review: undefined });
+        seen.reReview.push(url);
+      }
     }
     if (statusOf(f) === "merged") {
       const repo = deps.repos[f.dir] ?? {};
@@ -648,14 +672,53 @@ export async function refreshPrStatus(
       }
     }
     const after = statusOf(f);
-    if (after !== before) changed.push(path.relative(ws, f.path));
+    if (after === "shipped" && before !== "shipped") seen.shipped.push(f);
+    if (after !== before || f.fm["review"] !== reviewBefore)
+      changed.push(path.relative(ws, f.path));
     lines.push(
       `${f.dir}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`,
     );
   }
+  const moved = await moveIssueForPrs(ws, seen, deps);
+  if (moved) lines.push(`issue ${moved}`);
   if (changed.length)
     lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
   return { lines, changed: changed.length > 0 };
+}
+
+const shippedComment = (files: PrFile[]): string =>
+  `Shipped: ${files.map((f) => `${f.fm["release"] ?? "merge"} — ${f.fm["url"]}`).join("; ") || "no PRs"}`;
+
+/** The one issue move a `pr status` pass owes, first rule that holds; "" when none. */
+async function moveIssueForPrs(
+  ws: string,
+  seen: {
+    shipped: PrFile[];
+    merged: string[];
+    closed: string[];
+    changesRequested: string[];
+    reReview: string[];
+  },
+  deps: Deps,
+): Promise<string> {
+  const anything = Object.values(seen).some((v) => v.length);
+  const ref = anything ? issueIdOf(loadConfigFile(ws, null)) : "";
+  if (!ref) return "";
+  const files = readPrFiles(ws);
+  const state = lifecycleOf(ws).state;
+  const move = (point: Parameters<typeof moveIssue>[2], comment: string, back = false) =>
+    moveIssue(deps.tracker, ref, point, deps.statuses, { comment, back });
+  // A multi-repo workspace is done only when every PR has settled.
+  if (seen.shipped.length && state === "shipped")
+    return move("done", shippedComment(files.filter((f) => statusOf(f) === "shipped")));
+  if (seen.merged.length && files.every((f) => PAST_MERGE.has(statusOf(f))))
+    return move("merged", `Merged: ${seen.merged.join(", ")}`);
+  if (seen.changesRequested.length)
+    return move("in_progress", `Changes requested: ${seen.changesRequested.join(", ")}`, true);
+  if (seen.closed.length && !files.some((f) => statusOf(f) === "open"))
+    return move("in_progress", `PR closed without merging: ${seen.closed.join(", ")}`, true);
+  if (seen.reReview.length) return move("in_review", `Back in review: ${seen.reReview.join(", ")}`);
+  return "";
 }
 
 // ---- PR callbacks (#236) ---------------------------------------------------
@@ -1069,22 +1132,21 @@ export async function closeOut(
   const ref = issueIdOf(cfg);
   let issueLine = "none";
   if (ref) {
-    const done = deps.doneStatus.toLowerCase();
-    const current = (await deps.tracker.fetchIssue(ref))?.status ?? "";
-    if (abandoned) {
-      issueLine = `${ref} left ${current || "as is"} (abandoned)`;
-    } else if ([done, "closed", "done"].includes(current.toLowerCase())) {
-      issueLine = `${ref} already ${current}`;
-    } else {
-      const files = readPrFiles(ws);
-      const shipped = files
-        .filter((f) => statusOf(f) === "shipped")
-        .map((f) => `${f.fm["release"] ?? "merge"} — ${f.fm["url"]}`);
-      await deps.tracker.updateIssue(ref, {
-        status: deps.doneStatus,
-        comment: `Shipped: ${shipped.join("; ") || "no PRs"}`,
+    // moveIssue never throws: a tracker refusal is a warning here, not a stopped close-out.
+    if (why) {
+      issueLine = await moveIssue(deps.tracker, ref, "abandoned", deps.statuses, {
+        comment: `Abandoned: ${why}`,
+        alwaysComment: true,
       });
-      issueLine = `${ref} → ${deps.doneStatus}`;
+    } else if (abandoned) {
+      // A retry: the first run already commented.
+      const current = (await deps.tracker.fetchIssue(ref))?.status ?? "";
+      issueLine = `${ref} left ${current || "as is"} (abandoned)`;
+    } else {
+      issueLine =
+        (await moveIssue(deps.tracker, ref, "done", deps.statuses, {
+          comment: shippedComment(readPrFiles(ws).filter((f) => statusOf(f) === "shipped")),
+        })) || `${ref} left as is (no done status configured)`;
     }
     lines.push(`Issue: ${issueLine}`);
   }

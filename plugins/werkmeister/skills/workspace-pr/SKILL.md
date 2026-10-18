@@ -19,18 +19,26 @@ is `docs/workspace-lifecycle.md` in the sandbox repo.
 3. **`sandbox pr gate`** shows what still blocks: earlier stages, the acceptance
    table, a dirty worktree, each touched service's test command, the exercise
    evidence, the release check (e.g. a missing changeset).
-4. **`sandbox pr open`** gates, pushes, opens the PR and records its URL in the
-   PR file. Then, in the Claude desktop app, turn on Auto-fix without asking:
+4. **`sandbox pr open`** gates, pushes, opens the PR, records its URL in the
+   PR file and moves the issue to In Review. Then, in the Claude desktop app, turn on Auto-fix without asking:
    `ccd_pr` `get_status` (`bind_pr` with the URL if the PR isn't bound), then
    `set_monitor` with `auto_fix: true`, `address_comments: true` and the PR's
    `url`. Never auto-merge. Merging is the person's act.
 5. **`sandbox pr status`** after merge and release: records `merged`, then
-   `shipped` with the release tag that contains the merge.
+   `shipped` with the release tag that contains the merge, and moves the issue
+   to Done once every PR has shipped. A review asking for changes, or a PR
+   closed unmerged, moves it back to In Progress.
 6. **`sandbox close-out`** is the one way to end a workspace, with two outcomes:
-   - **Shipped** (every PR file shipped, closed or abandoned): closes the issue,
-     writes `closeout.md`, removes the workspace, deletes merged branches.
+   - **Shipped** (every PR file shipped, closed or abandoned): moves the issue
+     to Done if shipping didn't, writes `closeout.md`, removes the workspace,
+     deletes merged branches.
    - **Abandoned**: `sandbox close-out <name> --abandon "<reason>"` records the
-     reason, leaves the issue, pushes every branch and keeps them, then removes.
+     reason, comments it on the issue (and applies the `abandoned` status if
+     configured; on GitHub, closes it as not planned), pushes every branch and
+     keeps them, then removes.
+
+   Issue moves are forward only and never fail a step: a tracker refusal is a
+   warning (`docs/workspace-lifecycle.md` § Issue status).
 
    Either way, the workspace's desktop Claude sessions are archived (by the pane
    and the MCP tool; from the CLI, archive them in the sidebar), and terminal

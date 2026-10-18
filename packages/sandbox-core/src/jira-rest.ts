@@ -109,7 +109,7 @@ export interface JiraRestIssue {
   fields: {
     summary?: string;
     description?: string | null;
-    status?: { name?: string };
+    status?: { name?: string; statusCategory?: { key?: string } };
     issuetype?: { name?: string };
     assignee?: { displayName?: string } | null;
     comment?: {

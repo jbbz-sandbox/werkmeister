@@ -12,6 +12,7 @@ export function renderIssueRef(issue: IssueRef): string {
     "",
     `${name}${title}. ${copy}`,
     "Before each stage, re-read the live issue for newer direction: `sandbox issue view`",
+    "Its status moves by itself (In Progress → In Review → Done): `docs/workspace-lifecycle.md` § Issue status in the sandbox repo.",
     "",
   ].join("\n");
 }

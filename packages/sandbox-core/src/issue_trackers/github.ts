@@ -3,6 +3,7 @@
  * `owner/repo#12`; a bare `repo#12` takes `overrides.github_org` as its owner.
  * GitHub has only open and closed, so a status other than those two becomes a
  * label on the issue, created first since `gh issue edit --add-label` won't (#156).
+ * A `status:` label replaces the issue's other `status:` labels, so one is present (SW-27).
  */
 
 import { childEnv } from "../claude_cli.js";
@@ -15,7 +16,9 @@ import type { Issue, IssueTrackerStrategy } from "./types.js";
 export const GITHUB_ISSUE_PATTERN = "^([A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+#[0-9]+$";
 
 const FULL_RE = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#(\d+)$/;
-const CLOSED = new Set(["closed", "close", "done"]);
+const CLOSED = new Set(["closed", "close", "done", "completed"]);
+const NOT_PLANNED = new Set(["not planned", "abandoned"]);
+const STATUS_PREFIX = "status:";
 const OPEN = new Set(["open", "reopen", "reopened"]);
 // Fixed, or `--force` would give the status label a random color on every update.
 const STATUS_LABEL_COLOR = "1D76DB";
@@ -79,6 +82,8 @@ function fromGh(ref: string, i: GhIssue): Issue {
     ref,
     title: i.title?.trim() || undefined,
     status: titleCase(i.state),
+    ...(i.state?.toUpperCase() === "CLOSED" ? { statusCategory: "done" as const } : {}),
+    labels: i.labels?.map((l) => l.name),
     type: i.labels?.map((l) => l.name).join(", ") || undefined,
     assignee: i.assignees?.map((a) => a.login).join(", ") || undefined,
     description: i.body?.trim() || undefined,
@@ -150,11 +155,27 @@ export const github: IssueTrackerStrategy = {
     const status = update.status?.trim();
     if (status) {
       const s = status.toLowerCase();
-      if (CLOSED.has(s)) await gh(["issue", "close", n, "-R", repo]);
+      if (CLOSED.has(s)) await gh(["issue", "close", n, "-R", repo, "--reason", "completed"]);
+      else if (NOT_PLANNED.has(s))
+        await gh(["issue", "close", n, "-R", repo, "--reason", "not planned"]);
       else if (OPEN.has(s)) await gh(["issue", "reopen", n, "-R", repo]);
       else {
+        const stale = s.startsWith(STATUS_PREFIX)
+          ? ((await view(ref, "labels"))?.labels ?? []).filter(
+              (l) => l.toLowerCase().startsWith(STATUS_PREFIX) && l.toLowerCase() !== s,
+            )
+          : [];
         await gh(["label", "create", status, "-R", repo, "--color", STATUS_LABEL_COLOR, "--force"]);
-        await gh(["issue", "edit", n, "-R", repo, "--add-label", status]);
+        await gh([
+          "issue",
+          "edit",
+          n,
+          "-R",
+          repo,
+          "--add-label",
+          status,
+          ...(stale.length ? ["--remove-label", stale.join(",")] : []),
+        ]);
       }
     }
     if (update.comment) await gh(["issue", "comment", n, "-R", repo, "--body", update.comment]);
