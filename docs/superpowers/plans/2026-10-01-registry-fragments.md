@@ -19,7 +19,7 @@
 - Collisions that fail the merge, naming both owners: duplicate service, setup service or infrastructure name; duplicate `port_offset` across services; duplicate `k8s_forward_port` across services and infrastructure.
 - `~/.sandbox/services.local.yaml` is seeded once by setup via `seedFile` and never overwritten.
 - Setup-step labels follow the existing `config <file>` / `repo <name>` convention; failures are `Step` objects, never thrown.
-- Changesets name `@jbbz-sandbox/sandbox-cli`, never `sandbox-core`.
+- Changesets name `werkmeister`, never `sandbox-core`.
 - Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 
 ## Review Focus
@@ -1359,7 +1359,7 @@ and change the `services.yaml` row's text to `Service registry — GENERATED fro
 Create `.changeset/registry-fragments.md`:
 ```markdown
 ---
-"@jbbz-sandbox/sandbox-cli": minor
+"werkmeister": minor
 ---
 
 `~/.sandbox/services.yaml` is now generated from each repo's `.sandbox/services.yaml` fragment. `sandbox setup` scans `paths.repos_root` after cloning, merges the fragments under the sandbox's archetype/MCP defaults and over a new per-machine `~/.sandbox/services.local.yaml` (which now holds `k8s_context` and any hand edits), and writes the registry. New `sandbox registry sync` / `sandbox registry --check` run that step alone. A pre-existing hand-written registry is backed up to `services.yaml.bak-<ts>` on the first run; move its entries into the owning repos' fragments. The demo and empty registry seeds are gone: with no fragments found, setup says so instead of writing a skeleton.

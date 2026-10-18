@@ -317,7 +317,7 @@ serving `infra/` out of the other one.
 Generated state used to live *inside* that package tree: `apps/cli/infra/proxy/Caddyfile`
 and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under a
 directory that ships in the published package, so reinstalling or upgrading
-`@jbbz-sandbox/sandbox-cli` could discard or stale them. Resolved 2026-10-01: everything
+`werkmeister` could discard or stale them. Resolved 2026-10-01: everything
 `sandbox connect` generates now lives under `~/.sandbox/infra/`
 (`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md`).
 

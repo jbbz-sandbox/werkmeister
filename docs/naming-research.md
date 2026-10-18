@@ -410,7 +410,7 @@ xhr, tar". That does not affect the command: the `werkmeister` package can insta
 When a name is chosen, the rename itself is a separate piece of work. At the time of this
 research, "sandbox" appears 6,792 times in 374 of the repo's 441 tracked files, including:
 
-- the `sandbox` command and the npm package `@jbbz-sandbox/sandbox-cli`
+- the `sandbox` command and the npm package `werkmeister`
 - the `~/.sandbox` machine-config directory
 - the `SANDBOX_*` environment variables
 - the `/__sandbox` feature-selector path served by Caddy
