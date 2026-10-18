@@ -196,11 +196,21 @@ export function retireLegacyPlugin(
       "uninstall",
       `${LEGACY_PLUGIN.name}@${LEGACY_PLUGIN.marketplace}`,
     ]);
-    steps.push({ label, ok: rc === 0, detail: rc === 0 ? "uninstalled" : `uninstall failed: ${out}` });
+    steps.push({
+      label,
+      ok: rc === 0,
+      detail: rc === 0 ? "uninstalled" : `uninstall failed: ${out}`,
+    });
     if (rc !== 0) return steps;
   }
   if (marketplaceKnown) {
-    const [rc, out] = runner(["claude", "plugin", "marketplace", "remove", LEGACY_PLUGIN.marketplace]);
+    const [rc, out] = runner([
+      "claude",
+      "plugin",
+      "marketplace",
+      "remove",
+      LEGACY_PLUGIN.marketplace,
+    ]);
     steps.push({
       label,
       ok: rc === 0,
@@ -1507,8 +1517,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   const reposRoot = options.reposRoot ?? getReposRoot();
   const claudePluginsDir =
     options.claudePluginsDir ?? path.join(os.homedir(), ".claude", "plugins");
-  const repoPluginDir =
-    options.repoPluginDir ?? path.join(sandboxRoot(), "plugins", PLUGIN_NAME);
+  const repoPluginDir = options.repoPluginDir ?? path.join(sandboxRoot(), "plugins", PLUGIN_NAME);
   const runner = options.runner ?? defaultRunner;
   const jira = options.jira ?? loadJira();
 
