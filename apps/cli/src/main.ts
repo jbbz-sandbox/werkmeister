@@ -1022,7 +1022,7 @@ export async function main(): Promise<void> {
 
   const program = new Command();
   program
-    .name("sandbox")
+    .name("werkmeister")
     .description(BANNER)
     .helpOption("-h, --help", "show this help message and exit");
 
@@ -1041,7 +1041,7 @@ export async function main(): Promise<void> {
   }
 
   // `dashboard` and `mcp` name the two sibling apps, each with its own
-  // dist/main.js. The ./sandbox wrapper intercepts both before this file loads
+  // dist/main.js. The ./werkmeister wrapper intercepts both before this file loads
   // (it is the only place that can resolve a node runtime), so these two
   // registrations exist for --help parity and to give a useful message to
   // anyone running dist/main.js directly. Neither takes a transport flag: the
@@ -1064,8 +1064,8 @@ export async function main(): Promise<void> {
         // as JSON-RPC, and printing English onto that channel is what made the
         // previous version of this stub look like a crashed server.
         console.error(
-          `\`sandbox ${name}\` launches a sibling app and must be run through the ` +
-            "./sandbox wrapper, which locates a node runtime and the app's entrypoint.",
+          `\`werkmeister ${name}\` launches a sibling app and must be run through the ` +
+            "./werkmeister wrapper, which locates a node runtime and the app's entrypoint.",
         );
         process.exit(1);
       });

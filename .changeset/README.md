@@ -3,7 +3,7 @@
 A changeset is one file per user-visible change, written in the PR that makes it.
 `npx changeset` writes one interactively.
 
-**Name the CLI, not `sandbox-core`.** `@jbbz-sandbox/sandbox-cli` is the only
+**Name the CLI, not `sandbox-core`.** `werkmeister` is the only
 package that publishes, and the changeset's text lands in the changelog of
 whichever package it names — a changeset naming `sandbox-core` still releases,
 but its description ends up in a private package's changelog while the published

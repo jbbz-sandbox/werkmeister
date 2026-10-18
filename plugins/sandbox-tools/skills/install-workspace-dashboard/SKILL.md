@@ -24,7 +24,7 @@ workspace's newest session.
    in the sandbox checkout. If missing, build it:
    `cd apps/sandbox-dashboard && npm run build:ui` (needs `npm i` at the repo root
    first). This needs the sandbox repo cloned: the dashboard app is not part of
-   the `@jbbz-sandbox/sandbox-cli` npm package, so a machine with only the
+   the `werkmeister` npm package, so a machine with only the
    package installed cannot use this skill.
 
 ## Install steps
