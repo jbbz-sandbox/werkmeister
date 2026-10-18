@@ -1423,12 +1423,15 @@ function hostRouterLines(routers: HostRouter[]): string[] {
     lines.push("    tls internal");
     lines.push("");
     lines.push("    # Sandbox feature selector UI (sets/clears the X-Feature cookie).");
-    lines.push("    handle /__sandbox/features.json {");
+    lines.push("    # /__sandbox is a deprecated alias (SW-8; SW-11 removes it).");
+    lines.push("    @selector_features path /__werkmeister/features.json /__sandbox/features.json");
+    lines.push("    handle @selector_features {");
     lines.push("        root * /sandbox/proxy/ui");
     lines.push("        rewrite * /features.json");
     lines.push("        file_server");
     lines.push("    }");
-    lines.push("    handle /__sandbox* {");
+    lines.push("    @selector path /__werkmeister* /__sandbox*");
+    lines.push("    handle @selector {");
     lines.push("        root * /sandbox/proxy/ui");
     lines.push("        rewrite * /index.html");
     lines.push("        file_server");
@@ -1456,7 +1459,7 @@ function hostRouterLines(routers: HostRouter[]): string[] {
       lines.push("        }");
       lines.push("    }");
     }
-    // `/*` rather than a bare `handle`: the more specific `/__sandbox*` sibling
+    // `/*` rather than a bare `handle`: the more specific selector sibling
     // still wins, and the structural lint's bare-vs-scoped route-drop guard stays
     // meaningful instead of firing on every generated file.
     lines.push("    handle /* {");

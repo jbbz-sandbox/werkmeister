@@ -239,7 +239,7 @@
         }
 
         // Fetch available features
-        fetch('/__sandbox/features.json')
+        fetch('/__werkmeister/features.json')
             .then(r => r.ok ? r.json() : [])
             .then(renderFeatures)
             .catch(() => renderFeatures([]));
