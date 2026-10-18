@@ -19,6 +19,7 @@ import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { parse } from "yaml";
 import {
+  branchRegistry,
   discoverFragments,
   expandPlaceholders,
   GENERATED_MARKER,
@@ -423,4 +424,31 @@ test("syncRegistry names hand-written entries that no fragment carries when it b
     /not in any fragment: services\.orphan-svc, setup_services\.orphan-install, infrastructure\.redis/,
   );
   assert.doesNotMatch(step.detail, /services\.backend/);
+});
+
+test("branchRegistry takes the gated repo's fragment from its worktree, the rest from repos_root, and writes nothing (SW-25)", () => {
+  writeFragment(
+    "app",
+    "services:\n  api:\n    path: apps/api\n    test: npx turbo run test --filter=old-api\n",
+  );
+  writeFragment("other", "services:\n  web:\n    path: apps/web\n    test: npm test\n");
+  const worktree = path.join(root, "features", "ws", "app");
+  mkdirSync(path.join(worktree, ".sandbox"), { recursive: true });
+  writeFileSync(
+    path.join(worktree, ".sandbox", "services.yaml"),
+    "services:\n  api:\n    path: apps/api\n    test: npx turbo run test --filter=new-api\n" +
+      "  worker:\n    path: apps/worker\n",
+  );
+  writeFileSync(path.join(home, "services.local.yaml"), "services:\n  web:\n    test: local\n");
+  const reg = branchRegistry("app", worktree, repos);
+  assert.equal(reg.services.api.test, "npx turbo run test --filter=new-api");
+  assert.equal(reg.services.api.repo, "app");
+  assert.deepEqual(reg.repos.app.path_mappings, { "apps/api": "api", "apps/worker": "worker" });
+  assert.equal(reg.services.web.test, "local", "the machine overlay still wins");
+  assert.equal(existsSync(registryPath()), false, "the shared registry is not written");
+});
+
+test("branchRegistry is null for a worktree without a fragment", () => {
+  writeFragment("app", "services:\n  api: {}\n");
+  assert.equal(branchRegistry("app", path.join(root, "nowhere"), repos), null);
 });
