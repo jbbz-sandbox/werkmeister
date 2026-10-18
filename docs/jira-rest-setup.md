@@ -7,9 +7,9 @@ doc/script; steps marked **[manual]** cannot be scripted, everything else can.
 
 First performed: 2026-07-11. Verified working same day.
 
-> **Automated:** `sandbox setup` now scaffolds `~/.sandbox/jira.env` (chmod
+> **Automated:** `werkmeister setup` now scaffolds `~/.werkmeister/jira.env` (chmod
 > 600) and live-verifies a filled-in token against `/rest/api/2/myself`;
-> `sandbox setup --check` reports its state without touching the network.
+> `werkmeister setup --check` reports its state without touching the network.
 > Only step 1 below (creating the token) remains manual. The step is
 > optional — a missing/unfilled token reports ok-with-guidance, and only a
 > filled token that Jira rejects fails setup.
@@ -29,13 +29,13 @@ First performed: 2026-07-11. Verified working same day.
 2. **Create the credentials file** (scriptable):
 
    ```bash
-   mkdir -p ~/.sandbox
-   cat > ~/.sandbox/jira.env << 'EOF'
+   mkdir -p ~/.werkmeister
+   cat > ~/.werkmeister/jira.env << 'EOF'
    JIRA_BASE_URL=https://your-org.atlassian.net
    JIRA_EMAIL=<your-atlassian-login-email>
    JIRA_API_TOKEN=<paste-token-here>
    EOF
-   chmod 600 ~/.sandbox/jira.env
+   chmod 600 ~/.werkmeister/jira.env
    ```
 
    `JIRA_EMAIL` is the address on your Atlassian *account*. Email aliases may
@@ -45,7 +45,7 @@ First performed: 2026-07-11. Verified working same day.
 3. **Verify** (scriptable — this is the health check):
 
    ```bash
-   source ~/.sandbox/jira.env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+   source ~/.werkmeister/jira.env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
      "$JIRA_BASE_URL/rest/api/2/myself" | jq '{displayName, emailAddress}'
    ```
 
@@ -57,7 +57,7 @@ First performed: 2026-07-11. Verified working same day.
 ## How it's consumed
 
 `packages/sandbox-core/src/jira-rest.ts` reads `JIRA_BASE_URL` / `JIRA_EMAIL` /
-`JIRA_API_TOKEN` from the process env first, then from `~/.sandbox/jira.env`.
+`JIRA_API_TOKEN` from the process env first, then from `~/.werkmeister/jira.env`.
 When credentials are absent or a call fails, every caller degrades to the
 original `claude -p` (Atlassian MCP) path — the token is an optimization, not
 a requirement.
@@ -75,4 +75,4 @@ strings — v3 returns ADF JSON we'd have to walk):
 
 Tokens expire (max 1 year). Symptom: Jira status pills / cards silently fall
 back to the slow path, or `401` in the server log. Fix: repeat step 1, paste
-the new token into `~/.sandbox/jira.env`.
+the new token into `~/.werkmeister/jira.env`.

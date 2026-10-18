@@ -1,6 +1,6 @@
-# sandbox — User's Guide
+# Werkmeister — User's Guide
 
-> Multi-feature concurrent development environment for Sandbox.
+> Multi-feature concurrent development environment (formerly `sandbox`; the CLI is `werkmeister`, or `w9r` for short; the old `sandbox` command is deprecated).
 > Enables up to 12 features to be developed simultaneously, each running only the services that have code changes locally while everything else is served from k8s.
 
 ---
@@ -18,19 +18,19 @@
    - [Which services run locally](#which-services-run-locally)
 5. [Getting Started](#getting-started)
 6. [CLI Reference](#cli-reference)
-   - [sandbox up](#sandbox-up)
-   - [sandbox down](#sandbox-down)
-   - [sandbox restart](#sandbox-restart)
-   - [sandbox status](#sandbox-status)
-   - [sandbox detect](#sandbox-detect)
-   - [sandbox services](#sandbox-services)
-   - [sandbox logs](#sandbox-logs)
-   - [sandbox remove](#sandbox-remove)
-   - [sandbox test](#sandbox-test)
-   - [sandbox intercept](#sandbox-intercept)
-   - [sandbox k8s-connect](#sandbox-k8s-connect)
-   - [sandbox k8s-status](#sandbox-k8s-status)
-   - [sandbox proxy-reload](#sandbox-proxy-reload)
+   - [werkmeister up](#werkmeister-up)
+   - [werkmeister down](#werkmeister-down)
+   - [werkmeister restart](#werkmeister-restart)
+   - [werkmeister status](#werkmeister-status)
+   - [werkmeister detect](#werkmeister-detect)
+   - [werkmeister services](#werkmeister-services)
+   - [werkmeister logs](#werkmeister-logs)
+   - [werkmeister remove](#werkmeister-remove)
+   - [werkmeister test](#werkmeister-test)
+   - [werkmeister intercept](#werkmeister-intercept)
+   - [werkmeister k8s-connect](#werkmeister-k8s-connect)
+   - [werkmeister k8s-status](#werkmeister-k8s-status)
+   - [werkmeister proxy-reload](#werkmeister-proxy-reload)
 7. [Services Reference](#services-reference)
    - [Application Services](#application-services)
    - [Infrastructure Services](#infrastructure-services)
@@ -39,7 +39,7 @@
    - [Feature Slot Ports](#feature-slot-ports)
    - [k8s Forward Ports](#k8s-forward-ports)
 9. [Configuration Files](#configuration-files)
-   - [~/.sandbox/services.yaml (generated)](#sandboxservicesyaml-generated)
+   - [~/.werkmeister/services.yaml (generated)](#werkmeisterservicesyaml-generated)
    - [infra/config/ports.yaml](#infraconfigportsyaml)
    - [k8s forward table (in services.yaml)](#k8s-forward-table-in-servicesyaml)
    - [Optional integrations](#optional-integrations)
@@ -61,7 +61,7 @@
 
 ## Overview
 
-The sandbox is a CLI-driven orchestration layer that enables concurrent feature development across Sandbox's distributed architecture (~15 services across ~9 repos). Instead of running all services locally, each feature runs **only the services with code changes** in Docker containers, while everything else is transparently served from k8s via containerized `kubectl port-forward` processes.
+Werkmeister is a CLI-driven orchestration layer that enables concurrent feature development across the target app's distributed architecture (~15 services across ~9 repos). Instead of running all services locally, each feature runs **only the services with code changes** in Docker containers, while everything else is transparently served from k8s via containerized `kubectl port-forward` processes.
 
 A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and routes each service's public hostname directly. It reads an `X-Feature` cookie or header from incoming requests and routes them to the correct feature's local containers — or falls back to the k8s baseline for services that aren't running locally.
 
@@ -69,7 +69,7 @@ A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and rout
 
 - **Low memory footprint** — a typical feature uses 512MB–1GB (3 local services) instead of 12GB+ for the full stack
 - **Feature isolation** — each feature gets its own Docker network, port range, and compose stack; no cross-contamination
-- **Auto-detection** — `sandbox up` analyzes your git changes to determine which services to run
+- **Auto-detection** — `werkmeister up` analyzes your git changes to determine which services to run
 - **Up to 12 concurrent features** — enough for a full team of Claude Code agents
 
 ---
@@ -87,9 +87,9 @@ A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and rout
 
 ### Cluster Access
 
-The k8s port-forwards need a working kubectl context. The sandbox's default is the
+The k8s port-forwards need a working kubectl context. Werkmeister's default is the
 local OrbStack cluster, named by the top-level `k8s_context` key in
-`~/.sandbox/services.yaml` (e.g. `k8s_context: orbstack`).
+`~/.werkmeister/services.yaml` (e.g. `k8s_context: orbstack`).
 
 ```bash
 kubectl config get-contexts        # list available contexts
@@ -100,17 +100,17 @@ kubectl get nodes                  # confirm the cluster answers
 Authentication is whatever your kubeconfig already carries — OrbStack embeds a
 client cert, so no cloud-provider CLI or auth plugin is required. If you point
 `k8s_context` at a remote cluster, set that context up with your provider's own
-tooling first; the sandbox only reads the resulting kubeconfig.
+tooling first; Werkmeister only reads the resulting kubeconfig.
 
 ### Workspace Directory
 
-The sandbox supports two workspace layouts:
+Werkmeister supports two workspace layouts:
 
 **Standalone layout** (default) — repos checked out flat in `~/workspace/`:
 
 ```
 ~/workspace/
-└── sandbox/            # standard git clone
+└── werkmeister/        # standard git clone
 ```
 
 Feature names are arbitrary labels (not directory names). Override the default path with `--workspace` or the `WORKSPACE` env var.
@@ -120,13 +120,13 @@ Feature names are arbitrary labels (not directory names). Override the default p
 ```
 ~/workspace/         # set SANDBOX_WORKSPACES_ROOT to this
 ├── feature-abc/
-│   └── sandbox/        # git worktree of the sandbox repo
+│   └── werkmeister/    # git worktree of the werkmeister repo
 ├── feature-xyz/
-│   └── sandbox/
+│   └── werkmeister/
 └── ...
 ```
 
-In this layout each feature maps to a subdirectory containing its repo worktrees. This layout is what Vibe Kanban's automation produces by default, but the sandbox itself is layout-agnostic — any directory with worktrees under `SANDBOX_WORKSPACES_ROOT/<feature>/` works.
+In this layout each feature maps to a subdirectory containing its repo worktrees. This layout is what Vibe Kanban's automation produces by default, but Werkmeister itself is layout-agnostic — any directory with worktrees under `SANDBOX_WORKSPACES_ROOT/<feature>/` works.
 
 ---
 
@@ -135,18 +135,18 @@ In this layout each feature maps to a subdirectory containing its repo worktrees
 ```bash
 # Clone the repository
 git clone https://github.com/jbbz-sandbox/werkmeister.git
-cd sandbox
+cd werkmeister
 
 # Build the CLI once, then run it:
 npm install
 npm --prefix apps/cli run build
 
-# ./sandbox resolves a node runtime (SANDBOX_NODE -> PATH -> newest nvm)
+# apps/cli/werkmeister resolves a node runtime (SANDBOX_NODE -> PATH -> newest nvm)
 # and execs apps/cli/dist/main.js.
-./sandbox --help
+apps/cli/werkmeister --help
 ```
 
-After the initial build, `./sandbox` is self-contained — it resolves a node runtime and execs the compiled CLI. Rebuild (`npm --prefix apps/cli run build`) after pulling changes to `apps/cli/src/`.
+After the initial build, `apps/cli/werkmeister` is self-contained — it resolves a node runtime and execs the compiled CLI. Rebuild (`npm --prefix apps/cli run build`) after pulling changes to `apps/cli/src/`.
 
 ### Required Environment Variables
 
@@ -166,17 +166,17 @@ GITHUB_AUTH_TOKEN=ghp_...          # npm registry access for private packages
 
 A **feature** is a named unit of development work. The feature name is an arbitrary label used for slot allocation, container naming, and proxy routing.
 
-By default, the sandbox looks for repos in `~/workspace/`. Override with `--workspace`, the legacy `WORKSPACE` env var, or `SANDBOX_WORKSPACES_ROOT` (preferred) for per-feature workspace nesting.
+By default, Werkmeister looks for repos in `~/workspace/`. Override with `--workspace`, the legacy `WORKSPACE` env var, or `SANDBOX_WORKSPACES_ROOT` (preferred) for per-feature workspace nesting.
 
 **Resolution priority** (see `resolve_workspace` in `apps/cli/src/lib/config.ts`):
 1. `--workspace` flag (explicit path)
 2. `SANDBOX_WORKSPACES_ROOT` env var (preferred)
 3. `SANDBOX_WORKSPACE_ROOT` env var (deprecated alias — removed in v2)
 4. `WORKSPACE` env var (legacy alias, kept for back-compat)
-5. Auto-detect from the current directory — walk up to the nearest `.git` boundary and use its parent, so you can run `sandbox` from inside a repo/worktree
+5. Auto-detect from the current directory — walk up to the nearest `.git` boundary and use its parent, so you can run `werkmeister` from inside a repo/worktree
 6. `~/workspace/` (fallback)
 
-When you run `sandbox up my-feature`, the CLI:
+When you run `werkmeister up my-feature`, the CLI:
 1. Resolves the workspace directory (default: `~/workspace/`, or per the priority above)
 2. Finds repo directories that match entries in `infra/config/services.yaml`
 3. Runs `git diff main..HEAD --name-only` in each to find changed files
@@ -185,22 +185,22 @@ When you run `sandbox up my-feature`, the CLI:
 
 ### Initializing a Workspace
 
-`sandbox init-workspace` writes the per-feature `CLAUDE.md` and `.env` into the workspace root. Each input resolves in this order (first non-empty wins):
+`werkmeister init-workspace` writes the per-feature `CLAUDE.md` and `.env` into the workspace root. Each input resolves in this order (first non-empty wins):
 
 1. **CLI flag** — `--feature`, `--services`, `--issue-id`, `--test-path`, `--description`, `--task`
-2. **`SANDBOX_*` env var** — `SANDBOX_SERVICES`, `SANDBOX_ISSUE_ID`, `SANDBOX_TEST_PATH`, `SANDBOX_DESCRIPTION`, `SANDBOX_TASK`. `SANDBOX_FEATURE` is not an input: every workspace container exports it as its own feature name.
-3. **Config file** — `<workspace>/.sandbox/workspace.yml` (override with `--config <path>` or `SANDBOX_WORKSPACE_CONFIG`; legacy `workspace.jsonc` / `workspace.json` are still read)
+2. **`SANDBOX_*` env var** — `SANDBOX_SERVICES`, `SANDBOX_ISSUE_ID`, `SANDBOX_TEST_PATH`, `SANDBOX_DESCRIPTION`, `SANDBOX_TASK`. `SANDBOX_FEATURE` is not an input: every workspace container exports it as its own feature name. Every `SANDBOX_*` variable the tool reads also accepts a `WERKMEISTER_*` name, which wins when both are set; the names the tool exports (`env.sh`, compose, container env) are still `SANDBOX_*`.
+3. **Config file** — `<workspace>/.werkmeister/workspace.yml` (override with `--config <path>` or `SANDBOX_WORKSPACE_CONFIG`; legacy `workspace.jsonc` / `workspace.json` are still read)
 4. **Stdin / defaults** — piped stdin or a slug-derived hint from the workspace directory name (for `task`)
 
 ```bash
-sandbox init-workspace \
+werkmeister init-workspace \
     --feature blog \
     --services frontend,backend \
     --issue-id <ref>
 ```
 
-`<ref>` is an issue ID in the tracker `sandbox setup` picked; it is stored as `issue_id` in
-`.sandbox/workspace.yml`.
+`<ref>` is an issue ID in the tracker `werkmeister setup` picked; it is stored as `issue_id` in
+`.werkmeister/workspace.yml`.
 
 ### Slots & Port Ranges
 
@@ -220,9 +220,9 @@ Each slot provides 20 ports. A service's host port is calculated as:
 host_port = base_port + (slot - 1) * 100 + port_offset
 ```
 
-Where `port_offset` is defined per service in `~/.sandbox/services.yaml` (in the demo registry: backend = 0, frontend = 1).
+Where `port_offset` is defined per service in `~/.werkmeister/services.yaml` (in the demo registry: backend = 0, frontend = 1).
 
-Slot assignments are persisted in `~/.sandbox/slots.json` and survive terminal restarts.
+Slot assignments are persisted in `~/.werkmeister/slots.json` and survive terminal restarts.
 
 ### k8s Port-Forwards (Baseline)
 
@@ -237,7 +237,7 @@ k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of 
 | 9052 | backend | default |
 | 9053 | frontend | default |
 
-These ports are internal to the Docker network — other containers reach them via `k8s-forwards:9xxx`. k8s forwards must be running before starting features. Start them with `sandbox connect`.
+These ports are internal to the Docker network — other containers reach them via `k8s-forwards:9xxx`. k8s forwards must be running before starting features. Start them with `werkmeister connect`.
 
 ### Caddy Reverse Proxy
 
@@ -248,11 +248,11 @@ Caddy runs as a Docker container (ports 80 and 443) and provides:
 3. **Feature resolution** — Caddy matches the `X-Feature` cookie and reverse-proxies to that feature's local container, falling back to the k8s baseline when the service isn't running locally
 4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `frontend.local.sandbox.com`)
 
-The Caddyfile is regenerated automatically whenever you run `sandbox up`, `sandbox down`, `sandbox remove`, or `sandbox proxy-reload`.
+The Caddyfile is regenerated automatically whenever you run `werkmeister up`, `werkmeister down`, `werkmeister remove`, or `werkmeister proxy-reload`.
 
 ### Which services run locally
 
-`sandbox up` runs the services listed in the workspace's `.sandbox/workspace.yml` `services:` key (or passed with `-s`). Everything else is reached in the cluster through the k8s-forwards tunnels.
+`werkmeister up` runs the services listed in the workspace's `.werkmeister/workspace.yml` `services:` key (or passed with `-s`). Everything else is reached in the cluster through the k8s-forwards tunnels.
 
 ### Concurrency & Isolation
 
@@ -262,7 +262,7 @@ Each feature runs in an isolated environment:
 - **Container names** — prefixed with the feature name (`<feature>-<service>`)
 - **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-frontend_node_modules`) so concurrent features never share mutable state
 - **Port ranges** — each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
-- **Generated files** — each feature's `compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.sandbox/`
+- **Generated files** — each feature's `compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.werkmeister/`
 
 **Single-repo concurrency note:** In single-repo mode (`~/workspace/` with one checkout per repo), all features share the same source code checkout. This means two features modifying the same repo will see each other's uncommitted changes. For true concurrent multi-feature development, use the per-feature workspace layout via `SANDBOX_WORKSPACES_ROOT=<parent>` and place git worktrees under each feature subdir.
 
@@ -275,13 +275,13 @@ Each feature runs in an isolated environment:
 Start all shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy):
 
 ```bash
-./sandbox connect
+werkmeister connect
 ```
 
 Verify k8s forwards are healthy:
 
 ```bash
-./sandbox k8s-status
+werkmeister k8s-status
 ```
 
 ### Step 2: Configure Local DNS
@@ -296,14 +296,14 @@ Add to `/etc/hosts`:
 
 ```bash
 # Auto-detect and start services (scans ~/workspace/ by default)
-./sandbox up my-feature
+werkmeister up my-feature
 
 # Or point to a different repo directory
-./sandbox up my-feature --workspace /path/to/repos
+werkmeister up my-feature --workspace /path/to/repos
 
-# Run another service locally: add it to `services` in .sandbox/workspace.yml, then
-./sandbox init-workspace
-./sandbox up my-feature
+# Run another service locally: add it to `services` in .werkmeister/workspace.yml, then
+werkmeister init-workspace
+werkmeister up my-feature
 ```
 
 A workspace with no services still comes up; all its traffic goes to k8s.
@@ -322,52 +322,52 @@ curl -H "X-Feature: my-feature" https://frontend.local.sandbox.com/
 ### Step 6: View Status
 
 ```bash
-./sandbox status
+werkmeister status
 ```
 
 ### Step 7: Tear Down
 
 ```bash
-./sandbox down my-feature
+werkmeister down my-feature
 ```
 
 ---
 
 ## Creating a workspace
 
-Every entry point — `sandbox workspace`, `--browser-form`, the MCP `workspace` /
+Every entry point — `werkmeister workspace`, `--browser-form`, the MCP `workspace` /
 `create-workspace` tools, and the /workspaces pane — runs the same `createWorkspace`.
 With an issue ID it fetches the issue (failing if it can't), stores it in
-`.sandbox/issue.md`, fills the task from the title, and rewrites the issue into a
+`.werkmeister/issue.md`, fills the task from the title, and rewrites the issue into a
 description and starting prompt for any you left empty (`--no-distill` to skip).
 Both context strategies show the issue in CLAUDE.md and the brief.
 
-The copy is frozen at creation. To update it: `sandbox init-workspace --refresh-issue`
-(the brief is not rewritten, except one that is still the untouched placeholder, which is rebuilt from the issue). `sandbox connect` reports whether this machine can read
+The copy is frozen at creation. To update it: `werkmeister init-workspace --refresh-issue`
+(the brief is not rewritten, except one that is still the untouched placeholder, which is rebuilt from the issue). `werkmeister connect` reports whether this machine can read
 the issue tracker and, on a terminal, offers `gh auth login`.
 
 ---
 
 ## CLI Reference
 
-All commands are invoked via the `./sandbox` wrapper script. Run `./sandbox --help` for a list of commands, or `./sandbox <command> --help` for command-specific help.
+All commands are invoked as `werkmeister` (or `w9r`), which `npm link -w apps/cli` or a global install puts on your PATH; from a bare checkout use the `apps/cli/werkmeister` wrapper script. The examples below write `werkmeister`. Run `werkmeister --help` for a list of commands, or `werkmeister <command> --help` for command-specific help. The old `sandbox` command still works but is deprecated.
 
 ### Debugging
 
 Set the `SANDBOX_DEBUG` environment variable to get full stack traces on errors:
 
 ```bash
-SANDBOX_DEBUG=1 ./sandbox up my-feature
+SANDBOX_DEBUG=1 werkmeister up my-feature
 ```
 
 ---
 
-### sandbox up
+### werkmeister up
 
 **Start a feature's local development environment.**
 
 ```
-./sandbox up <feature> [--workspace <path>]
+werkmeister up <feature> [--workspace <path>]
 ```
 
 | Argument | Required | Description |
@@ -375,20 +375,20 @@ SANDBOX_DEBUG=1 ./sandbox up my-feature
 | `feature` | Yes | Feature name (arbitrary label for slot allocation and proxy routing) |
 | `--workspace`, `-w` | No | Path to directory containing repo checkouts. Default: `~/workspace/`. Also settable via `WORKSPACE` env var. |
 
-The local services come from the workspace's `.sandbox/workspace.yml` (via `sandbox init-workspace`), not from a flag.
+The local services come from the workspace's `.werkmeister/workspace.yml` (via `werkmeister init-workspace`), not from a flag.
 
 **What it does:**
 
 1. Loads service registry and port configuration
-2. Resolves the workspace (default: `~/workspace/`) and reads its local services from the `SERVICES=` line `sandbox init-workspace` wrote to the workspace `.env`
+2. Resolves the workspace (default: `~/workspace/`) and reads its local services from the `SERVICES=` line `werkmeister init-workspace` wrote to the workspace `.env`
 3. Allocates a slot (1–12) if the feature doesn't already have one
 4. Generates per-feature files in the feature's workspace:
    - `compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)
-   - `<workspace>/.sandbox/supergraph-config.yml` — GraphQL federation config (only when a service has a GraphQL type: `graphql-subgraph`, `graphql`, `subgraph` or `federation`)
+   - `<workspace>/.werkmeister/supergraph-config.yml` — GraphQL federation config (only when a service has a GraphQL type: `graphql-subgraph`, `graphql`, `subgraph` or `federation`)
 5. Verifies k8s port-forwards are healthy (restarts if needed)
 6. Starts containers with `docker compose up -d --build --remove-orphans`
-7. Regenerates `~/.sandbox/infra/proxy/Caddyfile` and reloads Caddy
+7. Regenerates `~/.werkmeister/infra/proxy/Caddyfile` and reloads Caddy
 
 **Output example:**
 
@@ -407,18 +407,18 @@ The local services come from the workspace's `.sandbox/workspace.yml` (via `sand
   Services:  backend (:11100), frontend (:11101)
 ```
 
-**If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.sandbox/workspace.yml`, rerun `sandbox init-workspace`, then `sandbox up`.
+**If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.werkmeister/workspace.yml`, rerun `werkmeister init-workspace`, then `werkmeister up`.
 
-**If all 12 slots are occupied**, the command exits with an error. Free a slot by running `sandbox down` on another feature.
+**If all 12 slots are occupied**, the command exits with an error. Free a slot by running `werkmeister down` on another feature.
 
 ---
 
-### sandbox down
+### werkmeister down
 
 **Stop a feature and release its resources.**
 
 ```
-./sandbox down <feature> [--volumes]
+werkmeister down <feature> [--volumes]
 ```
 
 | Argument | Required | Description |
@@ -432,36 +432,36 @@ The local services come from the workspace's `.sandbox/workspace.yml` (via `sand
 2. Releases the slot back to the pool
 3. Regenerates the Caddyfile (removing this feature's routing rules)
 4. Reloads Caddy if running
-The feature's generated files (`compose.yml`, `.env`, `.sandbox/`) are left in place in its workspace — they're overwritten on the next `sandbox up`.
+The feature's generated files (`compose.yml`, `.env`, `.werkmeister/`) are left in place in its workspace — they're overwritten on the next `werkmeister up`.
 
-By default, per-feature Docker volumes (node_modules, build caches) are preserved so the next `sandbox up` is faster. Use `--volumes` to remove them for a full cleanup.
+By default, per-feature Docker volumes (node_modules, build caches) are preserved so the next `werkmeister up` is faster. Use `--volumes` to remove them for a full cleanup.
 
 The command is safe to run even if the feature is already stopped — it will clean up any leftover state.
 
 ---
 
-### sandbox restart
+### werkmeister restart
 
 **Restart a feature's containers without regenerating config.**
 
 ```
-./sandbox restart <feature>
+werkmeister restart <feature>
 ```
 
 | Argument | Required | Description |
 |---|---|---|
 | `feature` | Yes | Feature name |
 
-Useful after making code changes that hot-reload doesn't pick up. If the feature doesn't have a slot, prints an error suggesting `sandbox up` instead.
+Useful after making code changes that hot-reload doesn't pick up. If the feature doesn't have a slot, prints an error suggesting `werkmeister up` instead.
 
 ---
 
-### sandbox status
+### werkmeister status
 
 **Show all active features and their status.**
 
 ```
-./sandbox status [-v]
+werkmeister status [-v]
 ```
 
 | Flag | Description |
@@ -487,12 +487,12 @@ Useful after making code changes that hot-reload doesn't pick up. If the feature
 
 ---
 
-### sandbox detect
+### werkmeister detect
 
 **Generate a repo's `.sandbox/services.yaml` from what the repo already contains.**
 
 ```
-sandbox detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
+werkmeister detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
 ```
 
 | Argument | Description |
@@ -506,19 +506,19 @@ It reads `package.json` and workspaces (npm, pnpm, yarn), Dockerfiles, docker-co
 
 `port_offset` is picked from the offsets no other repo under `paths.repos_root` uses. Infrastructure (redis, postgres and other datastores) gets the next free `k8s_forward_port` from 9050.
 
-Re-running only adds services and keys the file doesn't have yet. Nothing already in the file changes: not values, comments or formatting. After writing, run `sandbox registry sync`.
+Re-running only adds services and keys the file doesn't have yet. Nothing already in the file changes: not values, comments or formatting. After writing, run `werkmeister registry sync`.
 
 `--assist` runs one read-only Claude session (Read, Glob and Grep only) over the repo. It only answers the listed questions: a non-Node service's dev command, health path, environment, secrets, `depends_on`, and which service an unmatched Deployment belongs to. Answers are written with `# inferred by Claude:` and never replace a value the scan read from a file.
 
 
 ---
 
-### sandbox services
+### werkmeister services
 
 **List service endpoints for a running feature.**
 
 ```
-./sandbox services <feature>
+werkmeister services <feature>
 ```
 
 | Argument | Required | Description |
@@ -536,12 +536,12 @@ Shows each service with its source (local container or k8s forward) and endpoint
 
 ---
 
-### sandbox logs
+### werkmeister logs
 
 **Tail Docker Compose logs for a feature.**
 
 ```
-./sandbox logs <feature> [service]
+werkmeister logs <feature> [service]
 ```
 
 | Argument | Required | Description |
@@ -553,29 +553,29 @@ Streams logs in real-time (equivalent to `docker compose logs -f --tail 100`). P
 
 ```bash
 # All services
-./sandbox logs my-feature
+werkmeister logs my-feature
 
 # Just frontend
-./sandbox logs my-feature frontend
+werkmeister logs my-feature frontend
 ```
 
 ---
 
 ### Adding a service to a running feature
 
-There is no `sandbox add` command, and `sandbox up` takes no service list. To run a
+There is no `werkmeister add` command, and `werkmeister up` takes no service list. To run a
 service locally, add it to the `services` field in the workspace's
-`.sandbox/workspace.yml`, rerun `sandbox init-workspace` — this also adds the owning
-repo's worktree if it isn't present yet — then `sandbox up`.
+`.werkmeister/workspace.yml`, rerun `werkmeister init-workspace` — this also adds the owning
+repo's worktree if it isn't present yet — then `werkmeister up`.
 
 ---
 
-### sandbox remove
+### werkmeister remove
 
 **Remove a local service, falling back to k8s.**
 
 ```
-./sandbox remove <feature> <service>
+werkmeister remove <feature> <service>
 ```
 
 | Argument | Required | Description |
@@ -585,20 +585,20 @@ repo's worktree if it isn't present yet — then `sandbox up`.
 
 Removes the service from the feature's local stack. The service will now be served from k8s. Config files are regenerated and Caddy is reloaded.
 
-If removing the last service, the feature's containers are fully stopped (though the slot remains allocated — use `sandbox down` to release it).
+If removing the last service, the feature's containers are fully stopped (though the slot remains allocated — use `werkmeister down` to release it).
 
 ```bash
-./sandbox remove my-feature frontend
+werkmeister remove my-feature frontend
 ```
 
 ---
 
-### sandbox test
+### werkmeister test
 
 **Run Playwright tests against a feature.**
 
 ```
-./sandbox test <feature> [-- extra-args...]
+werkmeister test <feature> [-- extra-args...]
 ```
 
 | Argument | Required | Description |
@@ -608,46 +608,46 @@ If removing the last service, the feature's containers are fully stopped (though
 
 **What it does:**
 
-1. Looks for a `playwright.config.ts` (or `.js`/`.mjs`) in the workspace root, then in each repo worktree under it (`~/workspace/<feature>/<repo>/`). There is no fallback to the sandbox root.
+1. Looks for a `playwright.config.ts` (or `.js`/`.mjs`) in the workspace root, then in each repo worktree under it (`~/workspace/<feature>/<repo>/`). There is no fallback to the Werkmeister root.
 2. If none is found, runs nothing and exits non-zero. The message lists each workspace service's test command and `validate:` guidance. Libraries, CLIs and extensions are validated that way, not with Playwright; see [Test commands and validation guidance](#test-commands-and-validation-guidance).
 3. Otherwise sets `SANDBOX_FEATURE` and `SANDBOX_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
 
 ```bash
 # Run all tests
-./sandbox test my-feature
+werkmeister test my-feature
 
 # Run specific test file
-./sandbox test my-feature -- tests/homepage.spec.ts
+werkmeister test my-feature -- tests/homepage.spec.ts
 
 # Run with headed browser
-./sandbox test my-feature -- --headed
+werkmeister test my-feature -- --headed
 ```
 
 The feature doesn't need to have an active slot — if it doesn't, the command warns but proceeds with just the feature header routing.
 
 ---
 
-### sandbox intercept
+### werkmeister intercept
 
 **Route a header-scoped slice of live cluster traffic to your local container.**
 
 ```
-./sandbox intercept <feature> -s <service> [--docker-daemon]
-./sandbox intercept <feature> --leave [-s <service>]
-./sandbox intercept --status
+werkmeister intercept <feature> -s <service> [--docker-daemon]
+werkmeister intercept <feature> --leave [-s <service>]
+werkmeister intercept --status
 ```
 
 | Argument | Required | Description |
 |---|---|---|
 | `feature` | No | Feature name. Falls back to `FEATURE` in a `.env` file in the current directory tree |
-| `-s, --service` | Yes (to start) | Local service to intercept. Must be in the workspace's `SERVICES` and already running via `sandbox up` |
+| `-s, --service` | Yes (to start) | Local service to intercept. Must be in the workspace's `SERVICES` and already running via `werkmeister up` |
 | `--leave` | No | End the intercept for `-s`, or all of this feature's intercepts without it |
 | `--status` | No | Show the telepresence connection and active intercepts |
 | `--docker-daemon` | No | Run the telepresence daemon in a container instead of on the host — see below |
 
 Only requests carrying `x-feature: <feature>` are rerouted; teammates and baseline dev
 traffic reach the cluster workload untouched. The intercept target is the container
-`sandbox up` already published on the feature's slot port, so hot reload keeps working.
+`werkmeister up` already published on the feature's slot port, so hot reload keeps working.
 
 **Two daemon modes.** Telepresence has to get cluster traffic onto your laptop, and there
 are two places its daemon can live. [docs/topology.md](topology.md) draws the whole picture,
@@ -660,7 +660,7 @@ including what changes when the cluster is a managed one in the cloud.
 | VPN routing conflicts | Possible — both want the routing table | Avoided |
 | Requires a working Docker | Only for your services | Yes, for the daemon too |
 
-The password prompt is telepresence's own `sudo`, not the sandbox's. It comes once per root
+The password prompt is telepresence's own `sudo`, not Werkmeister's. It comes once per root
 daemon lifetime — until `telepresence quit -s` or a reboot — not once per intercept.
 
 Pick host mode when you want to `curl backend.default` or point host-side tooling at cluster
@@ -672,7 +672,7 @@ Switching modes means dropping the current daemon first:
 
 ```bash
 telepresence quit -s
-./sandbox intercept my-feature -s backend --docker-daemon
+werkmeister intercept my-feature -s backend --docker-daemon
 ```
 
 **On OrbStack** (the default `k8s_context`), docker mode works with no extra configuration.
@@ -688,28 +688,28 @@ Two details, both verified live rather than assumed:
 
 ```bash
 # Start the feature first (with backend in workspace.yml's services) — the local container is the intercept target
-./sandbox up my-feature
-./sandbox intercept my-feature -s backend --docker-daemon
+werkmeister up my-feature
+werkmeister intercept my-feature -s backend --docker-daemon
 
 # From inside the cluster: the header reaches your laptop, bare traffic does not
 kubectl run probe --rm -i --restart=Never --image=curlimages/curl:latest --quiet -- \
   curl -s -H "x-feature: my-feature" http://backend.default/
 
-./sandbox intercept my-feature --leave -s backend
+werkmeister intercept my-feature --leave -s backend
 ```
 
 A service can only be intercepted if it declares `k8s_deployment`, `k8s_namespace` and
-`k8s_port` in the registry; `sandbox status --intercepts` reports what is interceptable and
+`k8s_port` in the registry; `werkmeister status --intercepts` reports what is interceptable and
 what is currently intercepted.
 
 ---
 
-### sandbox k8s-connect
+### werkmeister k8s-connect
 
 **Start or check the containerized k8s port-forwards.**
 
 ```
-./sandbox k8s-connect
+werkmeister k8s-connect
 ```
 
 No arguments. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`) which runs all 12 `kubectl port-forward` processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
@@ -725,12 +725,12 @@ After starting, it runs a health check and reports the status.
 
 ---
 
-### sandbox k8s-status
+### werkmeister k8s-status
 
 **Check the health of the k8s port-forwards container.**
 
 ```
-./sandbox k8s-status
+werkmeister k8s-status
 ```
 
 No arguments. Checks the Docker container health of `sandbox-k8s-forwards` and reports the status of each forwarded port:
@@ -747,29 +747,29 @@ No arguments. Checks the Docker container health of `sandbox-k8s-forwards` and r
   frontend             9053   default/frontend:8080               down
 
   11/12 healthy, 1 down
-  Run 'sandbox k8s-connect' to restart the k8s-forwards container
+  Run 'werkmeister k8s-connect' to restart the k8s-forwards container
 ```
 
 ---
 
-### sandbox proxy-reload
+### werkmeister proxy-reload
 
 **Regenerate the Caddyfile and reload Caddy.**
 
 ```
-./sandbox proxy-reload
+werkmeister proxy-reload
 ```
 
-No arguments. Reads all active slot assignments, regenerates `~/.sandbox/infra/proxy/Caddyfile`, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
+No arguments. Reads all active slot assignments, regenerates `~/.werkmeister/infra/proxy/Caddyfile`, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
 
 ---
 
-### sandbox clean
+### werkmeister clean
 
 **Remove orphaned Docker volumes and generated files from stopped features.**
 
 ```
-./sandbox clean [--all] [--dry-run]
+werkmeister clean [--all] [--dry-run]
 ```
 
 | Argument | Required | Description |
@@ -783,64 +783,64 @@ No arguments. Reads all active slot assignments, regenerates `~/.sandbox/infra/p
 2. Removes those orphaned volumes
 3. Releases stale slot entries (features with no running containers or compose file)
 
-With `--all`, it first stops all active features (equivalent to running `sandbox down --volumes` for each), then cleans everything.
+With `--all`, it first stops all active features (equivalent to running `werkmeister down --volumes` for each), then cleans everything.
 
 **When to use:**
 - After extended development with many features started and stopped — volumes accumulate
-- Before a fresh start: `./sandbox clean --all`
-- To check what would be cleaned: `./sandbox clean --dry-run`
+- Before a fresh start: `werkmeister clean --all`
+- To check what would be cleaned: `werkmeister clean --dry-run`
 
 ---
 
-### Workspace lifecycle: sandbox pr, close-out
+### Workspace lifecycle: werkmeister pr, close-out
 
 **Open PRs from a workspace, track them to a release, then close the workspace out.** The full process — PR files, the pre-PR gate, ship detection, the PR guard — is in [workspace-lifecycle.md](workspace-lifecycle.md).
 
 ```
-sandbox pr <gate|open|status> [repo] [--json]
-sandbox close-out [name] [--yes] [--abandon <reason>]
+werkmeister pr <gate|open|status> [repo] [--json]
+werkmeister close-out [name] [--yes] [--abandon <reason>]
 ```
 
 | Command | Description |
 |---|---|
-| `sandbox pr gate` | Run the pre-PR gate for each PR file; change nothing |
-| `sandbox pr open` | Gate, push and open a PR for each PR file at `status: approved`; record its URL |
-| `sandbox pr status` | Record merged / shipped / closed from GitHub and the repo's release tags |
-| `sandbox close-out` | The one way to end a workspace. After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches. With `--abandon "<reason>"`: record the reason, leave the issue, push every branch and keep them, remove the workspace. Lists terminal Claude sessions still open in it |
-| `sandbox remove-workspace` | Deprecated alias, kept for one release: use `sandbox close-out --abandon` |
+| `werkmeister pr gate` | Run the pre-PR gate for each PR file; change nothing |
+| `werkmeister pr open` | Gate, push and open a PR for each PR file at `status: approved`; record its URL |
+| `werkmeister pr status` | Record merged / shipped / closed from GitHub and the repo's release tags |
+| `werkmeister close-out` | The one way to end a workspace. After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches. With `--abandon "<reason>"`: record the reason, leave the issue, push every branch and keep them, remove the workspace. Lists terminal Claude sessions still open in it |
+| `werkmeister remove-workspace` | Deprecated alias, kept for one release: use `werkmeister close-out --abandon` |
 
-Inside a workspace, `gh pr create` (and so `/create-pr`) is blocked by a PreToolUse hook; `sandbox pr open` is the way to open a PR.
+Inside a workspace, `gh pr create` (and so `/create-pr`) is blocked by a PreToolUse hook; `werkmeister pr open` is the way to open a PR.
 
 ---
 
 ## Cleanup & Disk Usage
 
-Running multiple features concurrently creates per-feature Docker volumes for `node_modules` and build caches. These persist after `sandbox down` (by design — to speed up subsequent `sandbox up`).
+Running multiple features concurrently creates per-feature Docker volumes for `node_modules` and build caches. These persist after `werkmeister down` (by design — to speed up subsequent `werkmeister up`).
 
 **Per-feature cleanup:**
 ```bash
 # Stop a feature and keep volumes (faster next startup)
-./sandbox down my-feature
+werkmeister down my-feature
 
 # Stop a feature and remove its volumes
-./sandbox down my-feature --volumes
+werkmeister down my-feature --volumes
 ```
 
 **Bulk cleanup:**
 ```bash
 # See what's orphaned (safe — no changes)
-./sandbox clean --dry-run
+werkmeister clean --dry-run
 
 # Remove orphaned volumes and generated files from stopped features
-./sandbox clean
+werkmeister clean
 
 # Nuclear option: tear down everything
-./sandbox clean --all
+werkmeister clean --all
 ```
 
 **Manual volume inspection:**
 ```bash
-# List all sandbox-related Docker volumes
+# List all Werkmeister-related Docker volumes
 docker volume ls | grep -E '^\S+-(backend|frontend)'
 
 # Remove a specific volume
@@ -855,9 +855,9 @@ Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g.
 
 ### Application Services
 
-The registry is `~/.sandbox/services.yaml`, and it is **generated**: `sandbox setup`
-(or `sandbox registry sync`) merges every `<repo>/.sandbox/services.yaml` found
-under `paths.repos_root`, then applies `~/.sandbox/services.local.yaml` on top.
+The registry is `~/.werkmeister/services.yaml`, and it is **generated**: `werkmeister setup`
+(or `werkmeister registry sync`) merges every `<repo>/.sandbox/services.yaml` found
+under `paths.repos_root`, then applies `~/.werkmeister/services.local.yaml` on top.
 Edit a repo's fragment or the local file, never the generated one. The demo
 registry comes from the `demo-services` repo's own fragment:
 
@@ -866,12 +866,12 @@ registry comes from the `demo-services` repo's own fragment:
 | backend | demo-services | `apps/backend` | api | 3000 | 0 | /health |
 | frontend | demo-services | `apps/frontend` | web | 3000 | 1 | / |
 
-The columns above are the required keys. `sandbox services` lists whatever is registered.
+The columns above are the required keys. `werkmeister services` lists whatever is registered.
 
 ### Writing a fragment
 
-A fragment is a slice of the registry committed at `<repo>/.sandbox/services.yaml`. `sandbox detect` writes a first draft of this file for you; see [sandbox detect](#sandbox-detect).
-Its JSON Schema is `apps/cli/infra/schemas/services-fragment.schema.json`. `sandbox setup`
+A fragment is a slice of the registry committed at `<repo>/.sandbox/services.yaml`. `werkmeister detect` writes a first draft of this file for you; see [werkmeister detect](#werkmeister-detect).
+Its JSON Schema is `apps/cli/infra/schemas/services-fragment.schema.json`. `werkmeister setup`
 offers to map it (and `workspace.schema.json`) in VS Code's user `yaml.schemas` by local
 path, which turns on validation through the redhat.vscode-yaml extension. Don't add a
 `# yaml-language-server` modeline or a `$schema:` key: the repo is private, so the GitHub
@@ -896,7 +896,7 @@ services:
     setup_service: my-install     # optional; a key in setup_services: below
     node_modules_volume: node-modules
     feature_router: {}            # optional; opts into Caddy ingress at <service>.<local_domain>
-    secrets: [MY_API_KEY]         # optional; keys sandbox up requires in ~/.sandbox/secrets.env
+    secrets: [MY_API_KEY]         # optional; keys werkmeister up requires in ~/.werkmeister/secrets.env
 setup_services:
   my-install:
     image: node:22-alpine
@@ -910,8 +910,8 @@ Rules:
   checkout's directory name and `repos:` is derived from each service's `path`.
 - `{{home}}`, `{{repos_root}}` and `{{workspaces_root}}` expand from the developer's
   `config.yaml`; use them instead of absolute paths in `extra_volumes:` and `environment:`.
-- A `secrets:` key resolves from the workspace's `.sandbox/workspace.yml` `env_vars:` first,
-  then `~/.sandbox/secrets.env` as `<SERVICE>__KEY` (service name uppercased, `-` → `_`,
+- A `secrets:` key resolves from the workspace's `.werkmeister/workspace.yml` `env_vars:` first,
+  then `~/.werkmeister/secrets.env` as `<SERVICE>__KEY` (service name uppercased, `-` → `_`,
   e.g. `MY_API__MY_API_KEY`), then plain `KEY`. A value from `secrets.env` reaches only
   that service, as plain `KEY`, through the git-ignored `<workspace>/.env.<service>`; the
   shared workspace `.env` holds no secrets. An `env_vars:` value also sits in that shared
@@ -919,13 +919,13 @@ Rules:
   keys no service declares (e.g. test logins for agents) reach no container.
 - `x-` keys are dropped from the output and exist to hold YAML anchors.
 - A duplicate service name, `port_offset` or `k8s_forward_port` across two repos fails the
-  merge naming both. `sandbox registry --check` reports drift.
+  merge naming both. `werkmeister registry --check` reports drift.
 - Helm charts (`charts/*.values.yaml`) give you `internal_port` (`containerPort`),
   `health_endpoint` (`probePath`) and `k8s_port` (`service.port`); the dev `image`,
-  `command`, `port_offset` and the sandbox-side `environment` are yours to decide.
+  `command`, `port_offset` and the Werkmeister-side `environment` are yours to decide.
 
 Per-machine values (`k8s_context`, a bigger `memory_limit` on your laptop) go in
-`~/.sandbox/services.local.yaml`, which merges last.
+`~/.werkmeister/services.local.yaml`, which merges last.
 
 ### Test commands and validation guidance
 
@@ -934,7 +934,7 @@ Each service can carry two related keys. They do different jobs, and a change ne
 | | `test:` | `validate:` |
 |---|---|---|
 | What it is | A shell command, e.g. `npx turbo run test --filter=werkmeister-core` | Plain-language instructions, e.g. "Build, then run the built binary against a temp fixture workspace; assert on exit code, stdout/stderr and the files it writes." Never executed. |
-| Who uses it | Tooling: the implement stage's test step, `sandbox pr gate`, `sandbox test`'s fallback message | Whoever exercises the change: an agent in the implement stage, or you |
+| Who uses it | Tooling: the implement stage's test step, `werkmeister pr gate`, `werkmeister test`'s fallback message | Whoever exercises the change: an agent in the implement stage, or you |
 | Question it answers | Do the automated tests still pass? | Does the change actually do what was asked, seen from outside? |
 | Evidence it leaves | The exit code and summary line | A `\| check \| result \|` table of PASS/FAIL rows with the captured output (`exercise.md`) |
 
@@ -950,15 +950,15 @@ The shipped archetypes give `node-tool` (libraries) and `mcp-client` (editor ext
 
 **Where each is used, in order:**
 
-1. **`.sandbox/sandbox-context.md`.** The first section, "How to validate", has one row per workspace service: repo, path, test command, validation. Both keys are read from here, not from the registry directly.
+1. **`.werkmeister/sandbox-context.md`.** The first section, "How to validate", has one row per workspace service: repo, path, test command, validation. Both keys are read from here, not from the registry directly.
 2. **Implement stage (ICM)**, or the test phase in JIT (`sb-test` and the tester agents):
    - The **test step** runs each touched service's test command exactly as `sandbox-context.md` states it.
    - The **exercise step** reloads the running code, then checks the change the way the service's validation text says. It records the result in `output/exercise.md` as a `| check | result |` table.
    - `test:` catches regressions; `validate:` shows the new behaviour works. Passing tests are not a substitute for the exercise.
-3. **PR gate** (`sandbox pr gate`, re-run by `sandbox pr open`):
-   - It re-runs `test:` for every service the branch touches, inside a running container of that repo, so the workspace needs one up (`sandbox up`).
-   - It doesn't read `validate:` itself. It checks the exercise evidence: the exercise table must have at least one PASS row and no FAIL row. An ICM workspace keeps it in `stages/*/output/exercise.md` (`verify.md` in workspaces made before the rename); JIT keeps it in `.sandbox/notes/exercise.md`.
-4. **`sandbox test`** runs the Playwright suite if the workspace or one of its repos has one. With no suite, it runs nothing and prints each service's test command and validation text instead, since libraries, CLIs and extensions are checked that way.
+3. **PR gate** (`werkmeister pr gate`, re-run by `werkmeister pr open`):
+   - It re-runs `test:` for every service the branch touches, inside a running container of that repo, so the workspace needs one up (`werkmeister up`).
+   - It doesn't read `validate:` itself. It checks the exercise evidence: the exercise table must have at least one PASS row and no FAIL row. An ICM workspace keeps it in `stages/*/output/exercise.md` (`verify.md` in workspaces made before the rename); JIT keeps it in `.werkmeister/notes/exercise.md`.
+4. **`werkmeister test`** runs the Playwright suite if the workspace or one of its repos has one. With no suite, it runs nothing and prints each service's test command and validation text instead, since libraries, CLIs and extensions are checked that way.
 
 **Writing a good `validate:` value:**
 - Say what to run and what to observe: a command and the output, files or UI state that proves the change, not "verify it works".
@@ -981,15 +981,15 @@ Monorepo services require initialization before the application services can sta
 
 | Setup Service | Repo | Monorepo Type | Memory Limit | Purpose |
 |---|---|---|---|---|
-| _(none)_ | — | — | — | The demo registry defines no setup services. Add them under `setup_services:` in `~/.sandbox/services.yaml` for monorepos that need a shared install/build step before their services start. |
+| _(none)_ | — | — | — | The demo registry defines no setup services. Add them under `setup_services:` in `~/.werkmeister/services.yaml` for monorepos that need a shared install/build step before their services start. |
 
 Setup services are automatically included in generated Docker Compose files when a feature uses services from the corresponding monorepo.
 
-### Self-hosting the sandbox repo
+### Self-hosting the Werkmeister repo
 
 The four workspaces of this repo (`apps/cli`, `apps/sandbox-dashboard`,
 `packages/sandbox-core`, `packages/vscode-plugin`) can be registered as services so a
-feature workspace develops the sandbox itself, each package in its own container. The
+feature workspace develops Werkmeister itself, each package in its own container. The
 registry shape is the one in [Services Reference](#services-reference);
 the pieces that are not obvious from the demo services:
 
@@ -999,70 +999,70 @@ the pieces that are not obvious from the demo services:
   healthcheck is `curl … || exit 0`, so `tsc --watch` containers read healthy with a
   placeholder `internal_port`.
 - **Host access for `cli` and `sandbox-dashboard`.** Those two drive the host:
-  they get `/var/run/docker.sock` plus `~/.sandbox`, `~/repos`, `~/features` and `~/.kube`
+  they get `/var/run/docker.sock` plus `~/.werkmeister`, `~/repos`, `~/features` and `~/.kube`
   bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
   kubectl binaries from the per-feature `tools` volume that
   `infra/compose/scripts/sandbox-install-startup.sh` fills. The generated compose files carry
   host bind-mount paths and the daemon is the host's, so the paths must be identical on both
   sides.
-- **`sandbox` inside the container is the worktree's own build.** `PATH` puts
-  `/app/apps/cli` first. `sandbox_root` in `~/.sandbox/config.yaml` still points at the main
+- **`werkmeister` inside the container is the worktree's own build.** `PATH` puts
+  `/app/apps/cli` first. `sandbox_root` in `~/.werkmeister/config.yaml` still points at the main
   checkout, so templates and `infra/` come from there (see the known issue on machine-global
-  `sandbox_root`). **Never run `sandbox config` or `sandbox setup` from a worktree**, on the
+  `sandbox_root`). **Never run `werkmeister config` or `werkmeister setup` from a worktree**, on the
   host or in the container: it silently repoints the whole machine.
 - **The dashboard binds `HOST`.** It defaults to loopback for the reasons in `main.ts`; the
   registry sets `HOST=0.0.0.0` because the container network is the isolation boundary and
   Docker's published port is the only way in.
 - **New hostnames need `/etc/hosts` entries.** The wildcard certificate already covers
   `*.local.sandbox.com`, but `sandbox-dashboard.local.sandbox.com` only resolves after
-  `sandbox setup` (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
+  `werkmeister setup` (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
   Caddy emits its site block only once a running feature declares the service.
 - **The container's npm rewrites `package-lock.json`.** `node:22` ships npm 10.9.x, which
   strips the `libc` fields a newer host npm writes. Discard that diff in the worktree unless
   you actually changed dependencies.
-- **Inside the container, `sandbox status` shows every k8s forward as dead** and `kubectl`
+- **Inside the container, `werkmeister status` shows every k8s forward as dead** and `kubectl`
   cannot reach OrbStack's API server: both probe `127.0.0.1`, which is the container's own
-  loopback. The forwards are fine; read their state from the host. `sandbox up`, `down`,
+  loopback. The forwards are fine; read their state from the host. `werkmeister up`, `down`,
   `status` (for features) and `workspace` all work from inside. This applies to a container
   running the CLI *directly*. A container that calls the host MCP surface (`apps/mcp`)
   instead is unaffected: `status` runs on the host, so the forward health it reports
   is the real one.
 - **Not covered:** the `gh` and `claude` binaries. Telepresence needs a daemon that owns the
   host's routing (or, with `--docker-daemon`, the Docker socket and a kubeconfig), so
-  `sandbox intercept` and `sandbox connect` must run on the host — either from a host
+  `werkmeister intercept` and `werkmeister connect` must run on the host — either from a host
   terminal, or through the `intercept` and `connect` tools on `apps/mcp`,
   which run host-side with exactly the authority a host terminal has.
 - **A container can instead hold no daemon at all.** `apps/mcp` (port 3002, started by
-  `sandbox connect`) exposes twenty sandbox verbs over authenticated HTTP, so a container
+  `werkmeister connect`) exposes twenty Werkmeister verbs over authenticated HTTP, so a container
   needs only `~/repos`, `~/features` and `SANDBOX_MCP_TOKEN` — no docker socket, no docker
-  CLI, no kubectl, no `sandbox` binary. It is the only managed web server that binds
+  CLI, no kubectl, no `werkmeister` binary. It is the only managed web server that binds
   `0.0.0.0`, via a per-app `env` on its `WebApp` entry; never arrange that by exporting
-  `HOST` before `sandbox connect`, which would also expose the unauthenticated dashboard.
-  Its `mcp_servers.sandbox` registry entry is deliberately in no archetype — `.mcp.json` is
+  `HOST` before `werkmeister connect`, which would also expose the unauthenticated dashboard.
+  Its `mcp_servers.werkmeister` registry entry is deliberately in no archetype — `.mcp.json` is
   shared with host sessions, where `host.docker.internal` does not resolve. See
   `apps/mcp/README.md`.
-- **Wiring a service to drive the sandbox that way** takes four edits to
-  `~/.sandbox/services.yaml`, and the granularity is the *service*, not the workspace —
+- **Wiring a service to drive Werkmeister that way** takes four edits to
+  `~/.werkmeister/services.yaml`, and the granularity is the *service*, not the workspace —
   `services:` entries are machine-global, so a fresh workspace does not isolate a change.
   1. A top-level `x-mcp-client:` block **above** `services:` (YAML resolves anchors in
      document order) holding `mounts: &mcp_client_mounts` — `~/repos` and `~/features` at
      identical host paths — and `env: &mcp_client_env` — `HOME` and the `GIT_CONFIG_*`
      `safe.directory` trio. Loaders read seven top-level keys, so `x-`-prefixed ones are
-     ignored. No socket, no `~/.sandbox`, no `~/.kube`, no tools volume: the host server
+     ignored. No socket, no `~/.werkmeister`, no `~/.kube`, no tools volume: the host server
      holds all of that.
   2. `extra_volumes: *mcp_client_mounts` and `environment: *mcp_client_env` on the service.
-  3. An archetype of its own carrying `mcp_servers: [sandbox]`, worn only by that service.
-     Hand-adding `sandbox` to a workspace's `.mcp.json` does **not** stick — the projection
+  3. An archetype of its own carrying `mcp_servers: [werkmeister]`, worn only by that service.
+     Hand-adding `werkmeister` to a workspace's `.mcp.json` does **not** stick — the projection
      prunes any registry-known server the present archetypes don't want, so the next
      `init-workspace` deletes it.
-  4. `SANDBOX_MCP_TOKEN` in `~/.sandbox/secrets.env` (copy `~/.sandbox/mcp-token`) *and*
+  4. `SANDBOX_MCP_TOKEN` in `~/.werkmeister/secrets.env` (copy `~/.werkmeister/mcp-token`) *and*
      `secrets: [SANDBOX_MCP_TOKEN]` on the service entry, which routes it through the
      service's own `.env.<service>`. Never put `${SANDBOX_MCP_TOKEN}` in the service's `environment:`:
      compose expands it from whichever shell ran it — for the `up` tool, the MCP
      server's own env, where it is unset — and `environment:` beats `env_file:`, so it
      would shadow the real value with an empty string.
 
-  Then `sandbox init-workspace` and `sandbox down <feature> && sandbox up <feature>`. To
+  Then `werkmeister init-workspace` and `werkmeister down <feature> && werkmeister up <feature>`. To
   check it, `docker exec` into the container and POST an MCP `initialize` to
   `http://host.docker.internal:3002/mcp` with `Authorization: Bearer $SANDBOX_MCP_TOKEN`
   and `Accept: application/json, text/event-stream` — and no `Origin` header, which the
@@ -1071,13 +1071,13 @@ the pieces that are not obvious from the demo services:
 
 ### Running the agent itself in isolation
 
-The four-edits recipe above wires a *compose service* that the sandbox manages. The
+The four-edits recipe above wires a *compose service* that Werkmeister manages. The
 same server also lets you put the whole agent — Claude Code, the editor, your shell —
 somewhere isolated from the host, with port 3002 as the only bridge back. Three
 shapes, in order of how much they share with the host.
 
 **What every shape needs.** The server holds the Docker privilege, so the isolated side
-needs none of the socket, `kubectl`, `~/.kube`, `~/.sandbox` or the `sandbox` binary.
+needs none of the socket, `kubectl`, `~/.kube`, `~/.werkmeister` or the `werkmeister` binary.
 It does need:
 
 - `~/repos` and `~/features` mounted at their **host** paths. A worktree's `.git` is a
@@ -1086,11 +1086,11 @@ It does need:
 - `HOME` matching the host user, and `GIT_CONFIG_COUNT=1`,
   `GIT_CONFIG_KEY_0=safe.directory`, `GIT_CONFIG_VALUE_0=*` — the mounts arrive owned by
   a different uid.
-- `SANDBOX_MCP_TOKEN` from `~/.sandbox/mcp-token` and `FEATURE` set to the workspace's
+- `SANDBOX_MCP_TOKEN` from `~/.werkmeister/mcp-token` and `FEATURE` set to the workspace's
   feature, which the projected `.mcp.json` expands into the bearer header and
   `X-Sandbox-Feature`.
 - A route to the host's 3002: `host.docker.internal` resolving to the host gateway.
-- The workspace's archetype carrying `mcp_servers: [sandbox]` (edit 3 above). Nothing
+- The workspace's archetype carrying `mcp_servers: [werkmeister]` (edit 3 above). Nothing
   else makes the entry survive `init-workspace`.
 
 Two things stop working on the isolated side, by design. The `werkmeister` plugin's
@@ -1098,15 +1098,15 @@ MCP entry runs `w9r dashboard` over stdio, and its skills shell out to the CLI; 
 no binary there, use the tools the HTTP server exposes instead. And the
 dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
 
-**1. A plain container, by hand.** Nothing sandbox-managed; the host just has to have
-run `sandbox connect` so the server is up.
+**1. A plain container, by hand.** Nothing Werkmeister-managed; the host just has to have
+run `werkmeister connect` so the server is up.
 
 ```bash
 docker run -it --rm \
   -v "$HOME/repos:$HOME/repos" -v "$HOME/features:$HOME/features" \
   -e HOME="$HOME" \
   -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
-  -e SANDBOX_MCP_TOKEN="$(cat ~/.sandbox/mcp-token)" -e FEATURE=my-feature \
+  -e SANDBOX_MCP_TOKEN="$(cat ~/.werkmeister/mcp-token)" -e FEATURE=my-feature \
   --add-host host.docker.internal:host-gateway \
   -w "$HOME/features/my-feature" node:22 bash
 ```
@@ -1117,7 +1117,7 @@ inside as you would anywhere. The smoke test is the same `initialize` POST as ab
 **2. Docker Sandboxes (`docker sandbox run claude …`) or any other microVM agent runner.**
 Structurally it is shape 1 with a stronger wall: the agent runs in a VM with **its own
 Docker daemon**, so even a socket mount would show it an empty engine, never the host's
-compose containers. Port 3002 is the only way to drive the sandbox from inside. Two
+compose containers. Port 3002 is the only way to drive Werkmeister from inside. Two
 things to check against whatever product you use, since they vary and are not verified
 here: that its network policy lets the VM reach the host gateway (the server refuses
 nothing but a browser `Origin`, so an allow-rule for `host.docker.internal:3002` is all
@@ -1126,17 +1126,17 @@ only the directory you launched it from. `docker sandbox` is a Docker Desktop fe
 on a machine whose Docker context is OrbStack or Colima it is simply absent.
 
 **3. A full VM with its own stack.** An OrbStack Linux machine, Lima, or a cloud box
-running `sandbox setup` end to end: its own `dockerd`, Caddy, `k8s-forwards` and
+running `werkmeister setup` end to end: its own `dockerd`, Caddy, `k8s-forwards` and
 telepresence, with the only shared thing a kubeconfig. The compose files already map
 `host.docker.internal:host-gateway`, so plain Linux `dockerd` works unchanged. This is
 the one shape that isolates you from the host's *containers* as well as its daemon, and
-it is a second complete install: `~/.sandbox`, certificates, `/etc/hosts` and all. To use
+it is a second complete install: `~/.werkmeister`, certificates, `/etc/hosts` and all. To use
 the host's browser against it, point the host's `*.local.sandbox.com` entries at the VM's
 address instead of loopback, and copy the VM's CA into the browser's trust store. The
 apps/mcp server is irrelevant here — the CLI runs natively inside.
 
 Pick 1 when you want the agent off the host's Docker socket and nothing more. Pick 2
-when the runner is already part of your workflow. Pick 3 only when a wrong `sandbox
+when the runner is already part of your workflow. Pick 3 only when a wrong `werkmeister
 clean` or a runaway compose build must not be able to touch the host's engine at all.
 
 ---
@@ -1187,13 +1187,15 @@ Fixed ports shared by all features:
 
 ## Configuration Files
 
-### ~/.sandbox/services.yaml (generated)
+Machine config lives in `~/.werkmeister`, and each workspace's generated state in `<workspace>/.werkmeister/`. A machine or workspace that still has `~/.sandbox` or `.sandbox/` keeps working: the old directory is read in place when the new one is missing, and nothing is moved. A repo's registry fragment is the exception: it is still `<repo>/.sandbox/services.yaml`.
+
+### ~/.werkmeister/services.yaml (generated)
 
 The central service registry. Defines all services, their repos, paths, ports, k8s details, and dependencies.
 
-Generated by `sandbox registry sync` from every `<repo>/.sandbox/services.yaml`
-(see "Writing a fragment"); `archetypes:` and `mcp_servers:` come from the sandbox's
-own defaults, `repos:` is derived, and `~/.sandbox/services.local.yaml` is merged last.
+Generated by `werkmeister registry sync` from every `<repo>/.sandbox/services.yaml`
+(see "Writing a fragment"); `archetypes:` and `mcp_servers:` come from Werkmeister's
+own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is merged last.
 
 **Top-level keys:**
 
@@ -1265,7 +1267,7 @@ A service whose forward/alias name differs from its service key can set
 `k8s_forward_name:` to override it.
 
 Both runtime consumers of this table are **generated** from `services.yaml` by
-`sandbox connect` (`packages/sandbox-core/k8s_forwards.ts`) under `~/.sandbox/infra/`:
+`werkmeister connect` (`packages/sandbox-core/k8s_forwards.ts`) under `~/.werkmeister/infra/`:
 the container's forward list is written to `k8s-port-forward/forwards` (mounted at
 `/tmp/forwards`, read by `entrypoint.sh`), and the `k8s-forwards` service's
 `ports:`/`aliases:` are written to `compose/k8s-forwards.override.yml`, which every
@@ -1273,7 +1275,7 @@ the container's forward list is written to `k8s-port-forward/forwards` (mounted 
 `shared-infra.yml` is never modified.
 `apps/cli/src/lib/__tests__/k8s_forward_drift.test.ts` fails if the committed
 `shared-infra.yml` drifts out of sync. To add or change a forward, edit only
-`services.yaml` and run `sandbox connect`.
+`services.yaml` and run `werkmeister connect`.
 
 ### Optional integrations
 
@@ -1281,14 +1283,14 @@ None of these are required; each turns on only when configured.
 
 #### Issue tracker
 
-`sandbox setup` asks which tracker this machine uses — `jira` (the default) or `github` —
-and stores it as `overrides.issue_tracker` in `~/.sandbox/config.yaml`. With `github`, a
+`werkmeister setup` asks which tracker this machine uses — `jira` (the default) or `github` —
+and stores it as `overrides.issue_tracker` in `~/.werkmeister/config.yaml`. With `github`, a
 workspace's issue ID is `owner/repo#n` and issues are filed in the registry repos under
 `overrides.github_org`.
 
-Issues about the sandbox tool itself go to GitHub (`jbbz-sandbox/werkmeister`) unless, under
+Issues about Werkmeister itself go to GitHub (`jbbz-sandbox/werkmeister`) unless, under
 `jira`, `overrides.sandbox_issues_project` names a Jira project (e.g. `SW`): the generated
-issues guide then sends them there with `sandbox issue create`.
+issues guide then sends them there with `werkmeister issue create`.
 
 For Jira, set `jira.base_url` (e.g. `https://your-org.atlassian.net`) to get issue links in
 CLAUDE.md, the dashboard, and VS Code. Briefings fetched through the Atlassian MCP use
@@ -1298,9 +1300,9 @@ CLAUDE.md, the dashboard, and VS Code. Briefings fetched through the Atlassian M
 Read or update an issue in the configured tracker from the command line:
 
 ```bash
-sandbox issue view [ref] [--json]                                # print the issue (--json: as JSON)
-sandbox issue update [ref] --status <name> --comment <text>      # either option alone works too
-sandbox issue create --project <KEY> --type bug|feature|task --title <text> --body-file <path|->  # Jira: file one, print its URL
+werkmeister issue view [ref] [--json]                                # print the issue (--json: as JSON)
+werkmeister issue update [ref] --status <name> --comment <text>      # either option alone works too
+werkmeister issue create --project <KEY> --type bug|feature|task --title <text> --body-file <path|->  # Jira: file one, print its URL
 ```
 
 `create` needs the Jira REST token and maps `bug`/`feature`/`task` to Bug/Story/Task; a project
@@ -1320,19 +1322,19 @@ is not configured.
 #### GraphQL federation
 
 When a service in the registry has a GraphQL type (`graphql-subgraph`, `graphql`, `subgraph`,
-`federation`), `sandbox up` writes
-`<workspace>/.sandbox/supergraph-config.yml` listing each subgraph's URL for your gateway.
+`federation`), `werkmeister up` writes
+`<workspace>/.werkmeister/supergraph-config.yml` listing each subgraph's URL for your gateway.
 Registries without a subgraph get no file.
 
 ---
 
 ## Generated Files
 
-When you run `sandbox up <feature>`, `compose.yml` and `.env` are generated at the feature's workspace root, plus `supergraph-config.yml` under `<workspace>/.sandbox/` when the registry has a GraphQL subgraph:
+When you run `werkmeister up <feature>`, `compose.yml` and `.env` are generated at the feature's workspace root, plus `supergraph-config.yml` under `<workspace>/.werkmeister/` when the registry has a GraphQL subgraph:
 
 ### compose.yml
 
-Workspaces generated before this name (`docker-compose.yml`) are renamed on the next `sandbox init-workspace` or `sandbox up`; until then `down`, `logs` and `close-out` still read the old name. The running stack is unaffected — Compose keys it by the file's `name:`, not its path.
+Workspaces generated before this name (`docker-compose.yml`) are renamed on the next `werkmeister init-workspace` or `werkmeister up`; until then `down`, `logs` and `close-out` still read the old name. The running stack is unaffected — Compose keys it by the file's `name:`, not its path.
 
 Per-feature Docker Compose stack containing:
 - **Network**: An isolated bridge network named `sandbox-<feature>`
@@ -1367,7 +1369,7 @@ Optional — generated only when a service has a GraphQL type (`graphql-subgraph
 The Caddy proxy runs as part of shared infrastructure (`infra/compose/shared-infra.yml`):
 
 ```bash
-# Start (included in sandbox connect)
+# Start (included in werkmeister connect)
 docker compose -f infra/compose/shared-infra.yml up -d caddy
 
 # Stop
@@ -1448,7 +1450,7 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 
 | Variable | Used By | Default | Purpose |
 |---|---|---|---|
-| `SANDBOX_ROOT` | CLI, all commands | Auto-detected from script location | Root path of the sandbox repository. Set from `~/.zshenv` (not `~/.zshrc`) so non-interactive shells (Claude Code's Bash tool, cron, MCP servers) can see it — see [docs/known-issues.md](known-issues.md#sandbox-env-vars-in-zshrc-are-invisible-to-non-interactive-shells). |
+| `SANDBOX_ROOT` | CLI, all commands | Auto-detected from script location | Root path of the Werkmeister repository. Set from `~/.zshenv` (not `~/.zshrc`) so non-interactive shells (Claude Code's Bash tool, cron, MCP servers) can see it — see [docs/known-issues.md](known-issues.md#sandbox-env-vars-in-zshrc-are-invisible-to-non-interactive-shells). |
 | `SANDBOX_DEBUG` | CLI dispatcher | (not set) | When set to any value, print full stack traces on errors |
 | `SANDBOX_WORKSPACES_ROOT` | config, detect | `~/workspace` | Root directory containing feature workspaces. Set from `~/.zshenv` (not `~/.zshrc`) for the same non-interactive-shell reason as `SANDBOX_ROOT` above. Deprecated aliases (kept for back-compat, removed in v2): `SANDBOX_WORKSPACE_ROOT` (singular form), `WORKSPACE` (legacy), `VIBE_WORKSPACES_ROOT` (pre-VK-decoupling). |
 | `SANDBOX_FEATURE` | test command, .env | (not set) | Set in the environment of Playwright test processes |
@@ -1460,11 +1462,11 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 
 ## File Paths Reference
 
-### Sandbox Repository
+### Werkmeister Repository
 
 | Path | Description |
 |---|---|
-| `sandbox` | Bash entrypoint (runs the CLI via uv; falls back to venv+pip) |
+| `apps/cli/werkmeister` | Launcher: resolves a node runtime and execs `dist/main.js`. `apps/cli/sandbox` (symlinked at the repo root as `./sandbox`) is the deprecated alias |
 | `apps/cli/src/main.ts` | CLI dispatcher |
 | `apps/cli/src/commands/` | Command modules (up, down, status, etc.) |
 | `apps/cli/src/lib/` | Shared libraries (config, detect, slots, generate, docker, k8s, caddy) |
@@ -1474,18 +1476,18 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 | `infra/compose/k8s-port-forward/` | Dockerfile and entrypoint for containerized k8s port-forwards |
 | `infra/templates/` | nunjucks templates for per-feature file generation |
 | `infra/compose/shared-infra.yml` | Shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy) |
-| `~/.sandbox/infra/proxy/Caddyfile` | Generated Caddy config (never inside the package) |
+| `~/.werkmeister/infra/proxy/Caddyfile` | Generated Caddy config (never inside the package) |
 | `infra/proxy/ui/index.html` | Feature selector web UI |
 | `apps/graphql-tools/` & `apps/otel-init/` | Node.js tooling (now an npm-workspaces monorepo with a root `package.json` + single root `package-lock.json`): GraphQL extract/validate scripts and `apps/graphql-tools/queries/` in `apps/graphql-tools/`, OTel source in `apps/otel-init/` |
 | `bin/` | Setup helper scripts (authenticate, generate-certs, generate-env, ...) |
-| `apps/cli/dist/` | Compiled CLI (`tsc` output; `./sandbox` execs `dist/main.js`, gitignored) |
+| `apps/cli/dist/` | Compiled CLI (`tsc` output; `apps/cli/werkmeister` execs `dist/main.js`, gitignored) |
 | `package.json` / `package-lock.json` | Workspace metadata + pinned dependency lock (npm workspaces, root-level) |
 
 ### User Home Directory
 
 | Path | Description |
 |---|---|
-| `~/.sandbox/slots.json` | Active slot assignments for all features |
+| `~/.werkmeister/slots.json` | Active slot assignments for all features |
 | `~/workspace/<feature>/` | Feature workspace containing repo worktrees |
 
 ---
@@ -1496,34 +1498,34 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 
 ```bash
 # 1. Ensure k8s baseline is running
-./sandbox k8s-connect
-./sandbox k8s-status
+werkmeister k8s-connect
+werkmeister k8s-status
 
 # 2. Create your workspace directory (skip if your VK / agent runner already did)
 mkdir -p ~/workspace/PROJ-1234
 cd ~/workspace/PROJ-1234
 
 # 3. Create worktrees for the repos you'll modify
-git -C ~/repos/sandbox worktree add ~/workspace/PROJ-1234/sandbox feature/PROJ-1234
+git -C ~/repos/werkmeister worktree add ~/workspace/PROJ-1234/werkmeister feature/PROJ-1234
 
 # 4. Make your code changes
-cd ~/workspace/PROJ-1234/sandbox
+cd ~/workspace/PROJ-1234/werkmeister
 # ... edit files ...
 git add . && git commit -m "WIP"
 
-# 5. Start the sandbox
-cd ~/workspace/sandbox
-./sandbox up PROJ-1234
+# 5. Start the feature
+cd ~/workspace/werkmeister
+werkmeister up PROJ-1234
 
 # 6. Set the feature in your browser
 # Visit https://frontend.local.sandbox.com/__werkmeister and enter "PROJ-1234"
 
 # 7. Develop and iterate
-./sandbox logs PROJ-1234
-./sandbox restart PROJ-1234  # after code changes if hot-reload doesn't work
+werkmeister logs PROJ-1234
+werkmeister restart PROJ-1234  # after code changes if hot-reload doesn't work
 
 # 8. Tear down when done
-./sandbox down PROJ-1234
+werkmeister down PROJ-1234
 ```
 
 ### Adding a Service Mid-Development
@@ -1532,51 +1534,51 @@ If you started with just `frontend` but now need `backend` running locally:
 
 ```bash
 # Check what's currently running
-./sandbox services PROJ-1234
+werkmeister services PROJ-1234
 
-# Add backend to `services` in .sandbox/workspace.yml, then
-./sandbox init-workspace
-./sandbox up PROJ-1234
+# Add backend to `services` in .werkmeister/workspace.yml, then
+werkmeister init-workspace
+werkmeister up PROJ-1234
 
 # Verify
-./sandbox services PROJ-1234
+werkmeister services PROJ-1234
 ```
 
 ### Running Multiple Features Simultaneously
 
-Each feature is fully isolated. Just `sandbox up` each one:
+Each feature is fully isolated. Just `werkmeister up` each one:
 
 ```bash
-./sandbox up PROJ-1234    # Gets slot 1
-./sandbox up PROJ-5678    # Gets slot 2
-./sandbox up PROJ-9012    # Gets slot 3
+werkmeister up PROJ-1234    # Gets slot 1
+werkmeister up PROJ-5678    # Gets slot 2
+werkmeister up PROJ-9012    # Gets slot 3
 
 # Check all features
-./sandbox status
+werkmeister status
 
 # Switch between features in the browser via the feature selector UI
 # Or use different browser profiles, each with a different X-Feature cookie
 #
 # Easiest: open a dedicated, isolated window per feature with the cookie
 # already set and the window tagged [feature] in its title + a corner badge:
-./sandbox open PROJ-1234
-./sandbox open PROJ-5678 --path /categories/crm
+werkmeister open PROJ-1234
+werkmeister open PROJ-5678 --path /categories/crm
 ```
 
 ### Running Playwright Tests
 
 ```bash
 # Make sure the feature is running
-./sandbox up PROJ-1234
+werkmeister up PROJ-1234
 
 # Run all Playwright tests
-./sandbox test PROJ-1234
+werkmeister test PROJ-1234
 
 # Run a specific test file
-./sandbox test PROJ-1234 -- tests/checkout.spec.ts
+werkmeister test PROJ-1234 -- tests/checkout.spec.ts
 
 # Run in headed mode for debugging
-./sandbox test PROJ-1234 -- --headed --debug
+werkmeister test PROJ-1234 -- --headed --debug
 ```
 
 The test command sets `SANDBOX_FEATURE` and `SANDBOX_SLOT` in the Playwright process environment. Your Playwright config can use these to set the `X-Feature` header on all requests.
@@ -1585,10 +1587,10 @@ The test command sets `SANDBOX_FEATURE` and `SANDBOX_SLOT` in the Playwright pro
 
 ```bash
 # Tail logs for a specific service
-./sandbox logs PROJ-1234 frontend
+werkmeister logs PROJ-1234 frontend
 
 # Check service endpoints
-./sandbox services PROJ-1234
+werkmeister services PROJ-1234
 
 # Access the service directly (bypassing Caddy)
 curl http://localhost:11101/  # frontend at slot 1, offset 1
@@ -1597,10 +1599,10 @@ curl http://localhost:11101/  # frontend at slot 1, offset 1
 curl -H "X-Feature: PROJ-1234" https://frontend.local.sandbox.com/
 
 # Check container status
-./sandbox status -v
+werkmeister status -v
 
 # Restart after fixing
-./sandbox restart PROJ-1234
+werkmeister restart PROJ-1234
 ```
 
 ---
@@ -1612,15 +1614,15 @@ curl -H "X-Feature: PROJ-1234" https://frontend.local.sandbox.com/
 All 12 slots are occupied. Free one by stopping a feature:
 
 ```bash
-./sandbox status          # See which features are active
-./sandbox down old-feature  # Free up a slot
+werkmeister status          # See which features are active
+werkmeister down old-feature  # Free up a slot
 ```
 
 ### k8s Port-Forwards Are Down
 
 ```bash
 # Check container status
-./sandbox k8s-status
+werkmeister k8s-status
 
 # View port-forward logs
 docker logs sandbox-k8s-forwards
@@ -1653,10 +1655,10 @@ ls ~/workspace/PROJ-1234/
 
 ```bash
 # Verify the Caddyfile includes your feature
-cat ~/.sandbox/infra/proxy/Caddyfile | grep -A 5 "PROJ-1234"
+cat ~/.werkmeister/infra/proxy/Caddyfile | grep -A 5 "PROJ-1234"
 
 # Regenerate and reload
-./sandbox proxy-reload
+werkmeister proxy-reload
 
 # Test with explicit header
 curl -v -H "X-Feature: PROJ-1234" https://frontend.local.sandbox.com/
@@ -1669,15 +1671,15 @@ docker compose -f infra/compose/shared-infra.yml ps caddy
 
 ```bash
 # Check that the workspace has committed changes
-cd ~/workspace/PROJ-1234/sandbox
+cd ~/workspace/PROJ-1234/werkmeister
 git diff main..HEAD --name-only
 
 # Verify repo name matches config
 grep -A 3 "repos:" infra/config/services.yaml
 
-# Add the service manually: list it in `services` in .sandbox/workspace.yml, then
-./sandbox init-workspace
-./sandbox up PROJ-1234
+# Add the service manually: list it in `services` in .werkmeister/workspace.yml, then
+werkmeister init-workspace
+werkmeister up PROJ-1234
 ```
 
 ### Build/Dependency Errors
@@ -1687,14 +1689,14 @@ grep -A 3 "repos:" infra/config/services.yaml
 rm -rf node_modules apps/cli/dist
 npm install
 npm --prefix apps/cli run build
-./sandbox --help
+werkmeister --help
 
 # Check the node version — must be 20+
 node --version
 
-# ./sandbox picks a runtime: SANDBOX_NODE, then PATH, then the newest nvm
+# werkmeister picks a runtime: SANDBOX_NODE, then PATH, then the newest nvm
 # install. Pin it explicitly if the wrong one is found:
-SANDBOX_NODE=/opt/homebrew/bin/node ./sandbox --help
+SANDBOX_NODE=/opt/homebrew/bin/node werkmeister --help
 
 # Update a dependency
 #   1. Edit the version in apps/cli/package.json
@@ -1702,20 +1704,20 @@ SANDBOX_NODE=/opt/homebrew/bin/node ./sandbox --help
 #   3. npm --prefix apps/cli run build
 ```
 
-> `sandbox hooks gate` deliberately bypasses the CLI import chain via
+> `werkmeister hooks gate` deliberately bypasses the CLI import chain via
 > `dist/lib/gate.js` for a fast PreToolUse cold start — if the gate misbehaves,
 > confirm `dist/` is built before debugging further.
 
 ### Stale Slot Data
 
-If `~/.sandbox/slots.json` gets out of sync (e.g., containers were removed manually):
+If `~/.werkmeister/slots.json` gets out of sync (e.g., containers were removed manually):
 
 ```bash
 # View current slot data
-cat ~/.sandbox/slots.json | jq .
+cat ~/.werkmeister/slots.json | jq .
 
 # Reset by running down on stale features
-./sandbox down stale-feature
+werkmeister down stale-feature
 
 # Or manually edit the file
 # (delete entries for features that no longer exist)
@@ -1778,7 +1780,7 @@ cat ~/.sandbox/slots.json | jq .
 ~/workspace/PROJ-1234/                  ← feature workspace
 ├── compose.yml      ← Generated from infra/templates/
 ├── .env                    ← Service URLs, DB connections
-└── .sandbox/
+└── .werkmeister/
     └── supergraph-config.yml   ← GraphQL federation routing (optional)
 
 Docker Network: sandbox-PROJ-1234 (isolated)
@@ -1791,21 +1793,21 @@ Containers:
 ### Lifecycle Flow
 
 ```
-sandbox up PROJ-1234
+werkmeister up PROJ-1234
     │
     ├── 1. Scan workspace (~/workspace/PROJ-1234/)
     │       └── git diff main..HEAD in each repo
     │
-    ├── 2. Allocate slot → ~/.sandbox/slots.json
+    ├── 2. Allocate slot → ~/.werkmeister/slots.json
     │
     ├── 3. Generate files → ~/workspace/PROJ-1234/
     │       ├── compose.yml      (from infra/templates/)
     │       ├── .env                    (from infra/templates/)
-    │       └── .sandbox/supergraph-config.yml  (if a GraphQL subgraph exists)
+    │       └── .werkmeister/supergraph-config.yml  (if a GraphQL subgraph exists)
     │
-    ├── 4. Verify k8s forwards → sandbox k8s-status
+    ├── 4. Verify k8s forwards → werkmeister k8s-status
     │
     ├── 5. Start containers → docker compose up -d
     │
-    └── 6. Update proxy → ~/.sandbox/infra/proxy/Caddyfile → caddy reload
+    └── 6. Update proxy → ~/.werkmeister/infra/proxy/Caddyfile → caddy reload
 ```
