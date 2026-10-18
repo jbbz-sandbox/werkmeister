@@ -1,13 +1,14 @@
 /**
  * Intercept-state reads for `sandbox status --intercepts`.
  *
- * The active-intercept fixture below is trimmed from a real
+ * fixtures/telepresence-list-active.json is trimmed from a real (v2.31.0)
  * `telepresence list -i --format json` captured against the OrbStack cluster
  * (frontend intercepted by feature test-me). The live payload also carries an
- * `environment` block of the pod's env vars — deliberately NOT reproduced here,
+ * `environment` block of the pod's env vars — deliberately NOT reproduced there,
  * since on a real cluster it can contain secrets.
  */
 
+import * as fs from "node:fs";
 import {
   interceptBlocker,
   listIntercepts,
@@ -16,32 +17,17 @@ import {
 } from "sandbox-core/telepresence";
 import { describe, expect, it } from "vitest";
 
-/** Shape of one intercepted deployment, trimmed to the fields we parse. */
-const ACTIVE = JSON.stringify([
-  {
-    name: "frontend",
-    namespace: "default",
-    intercept_info: [
-      {
-        spec: {
-          name: "frontend",
-          agent: "frontend",
-          workload_kind: "Deployment",
-          namespace: "default",
-          mechanism: "http",
-          service_port: 8080,
-          target_port: 11101,
-          header_filters: { "x-feature": "test-me" },
-        },
-        id: "8c3b8989-29e2-4bfc-b18d-612e4a95fe75:frontend",
-        pod_name: "frontend-74cb74bb6d-dnxxt",
-        mechanism_args_desc: "HTTP requests with header 'X-Feature: test-me'",
-      },
-    ],
-    workload_resource_type: "DEPLOYMENT",
-    agent_version: "v2.30.1",
-  },
-]);
+const ACTIVE = fs.readFileSync(
+  new URL("./fixtures/telepresence-list-active.json", import.meta.url),
+  "utf8",
+);
+
+/** The fixture with its one intercept's header filters replaced. */
+function withFilters(filters: Record<string, string>): string {
+  const data = JSON.parse(ACTIVE);
+  data[0].intercept_info[0].spec.header_filters = filters;
+  return JSON.stringify(data);
+}
 
 const FULL_SVC = {
   k8s_deployment: "frontend",
@@ -62,16 +48,12 @@ describe("parseInterceptList", () => {
   });
 
   it("matches the header filter case-insensitively", () => {
-    const upper = ACTIVE.replace('"x-feature"', '"X-Feature"');
+    const upper = withFilters({ "X-Feature": "test-me" });
     expect(parseInterceptList(upper).get("frontend")).toBe("test-me");
   });
 
   it("records the deployment with a null feature when no x-feature filter is present", () => {
-    const noFilter = ACTIVE.replace('{"x-feature": "test-me"}', "{}").replace(
-      '{"x-feature":"test-me"}',
-      "{}",
-    );
-    const result = parseInterceptList(noFilter);
+    const result = parseInterceptList(withFilters({}));
     expect(result.has("frontend")).toBe(true);
     expect(result.get("frontend")).toBeNull();
   });

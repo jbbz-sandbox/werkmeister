@@ -22,14 +22,15 @@
  * - `permissions.allow`: the workspace's test commands and read-only git, for
  *   every strategy (`writeWorkspacePermissions`), so a headless session can run
  *   the stage's test step without an approval prompt. An `autonomous` workspace
- *   also gets `AUTONOMOUS_RULES` — everything a run needs to reach `sandbox pr open`.
+ *   also gets `autonomousRules` — what a run needs to reach `sandbox pr open`,
+ *   scoped to its own feature — and `AUTONOMOUS_DENY` in `permissions.deny`.
  * - `model`: the workspace's `model` input (`writeWorkspaceModel`), so a session
  *   opened in the folder starts on it.
  *
  * Unlike the other projections, settings.json may legitimately hold user
  * entries (JSON carries no do-not-hand-edit comment), so this generator merges:
  * it owns exactly the hook entries whose command contains each marker below,
- * and the allow rules and model recorded in `.sandbox/claude-permissions.json`,
+ * and the allow/deny rules and model recorded in `.sandbox/claude-permissions.json`,
  * replacing stale versions and preserving everything else.
  */
 
@@ -304,23 +305,114 @@ export const READ_ONLY_GIT_RULES = [
 ];
 
 // `claude -p --permission-mode acceptEdits` (claude-send) refuses any Bash call
-// without a rule and nobody is there to approve it (#175). The PR guard is a
-// PreToolUse deny, which outranks `Bash(gh:*)`, so `gh pr create` stays blocked.
+// without a rule and nobody is there to approve it (#175). These cover the run
+// from stage 01 to `sandbox pr open` and stop at its own workspace: no
+// `sandbox:*`, `docker:*`, `npm:*`, `gh:*` or whole MCP server, which reached
+// the shared proxy, other features and the linked CLI. The PR guard is a
+// PreToolUse deny, so `gh pr create` stays blocked.
 export const AUTONOMOUS_RULES = [
-  ...["git", "sandbox", "docker", "gh", "node", "npm", "npx", "python3"].map(
-    (cmd) => `Bash(${cmd}:*)`,
+  "Bash(git:*)",
+  // `sandbox pr open` does the push and the PR; gh is read-only here.
+  ...["pr view", "pr checks", "pr diff", "pr list", "issue view", "run view", "run list"].map(
+    (cmd) => `Bash(gh ${cmd}:*)`,
   ),
+  // No-arg forms act on the cwd's FEATURE; `autonomousRules` adds the named ones.
+  "Bash(sandbox up)",
+  "Bash(sandbox restart)",
+  ...["status", "pr", "issue view", "init-workspace", "skills", "standards", "notes context"].map(
+    (cmd) => `Bash(sandbox ${cmd}:*)`,
+  ),
+  "Bash(docker ps:*)",
+  // Local build and test; no `npm install`, so a new dependency waits for a person.
+  ...["npm ci", "npm run", "npm test", "npx", "node", "python3"].map((cmd) => `Bash(${cmd}:*)`),
   ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map(
     (cmd) => `Bash(${cmd}:*)`,
   ),
   // A plugin's pane tests; never `claude plugin:*`, which would also allow install/uninstall.
   "Bash(claude plugin validate:*)",
   "Bash(claude plugin test:*)",
-  "mcp__plugin_sandbox-tools_sandbox-workspace",
+  // Read-only tools; the rest take any workspace's name.
+  ...[
+    "issue",
+    "issue-statuses",
+    "workspace-status",
+    "workspace-prs",
+    "kube-context",
+    "k8s-forwards-status",
+  ].map((tool) => `mcp__plugin_sandbox-tools_sandbox-workspace__${tool}`),
+];
+
+/** AUTONOMOUS_RULES plus the `sandbox` and `docker` commands that name this feature or its containers. */
+export function autonomousRules(feature: string, services: string[]): string[] {
+  if (!feature) return AUTONOMOUS_RULES;
+  return [
+    ...AUTONOMOUS_RULES,
+    // Exact: `sandbox restart <f> infra` and `docker restart <f>-a <other>` stay out.
+    `Bash(sandbox up ${feature})`,
+    `Bash(sandbox restart ${feature})`,
+    ...["logs", "test", "services"].map((cmd) => `Bash(sandbox ${cmd} ${feature}:*)`),
+    ...services.flatMap((svc) => [
+      `Bash(docker exec ${feature}-${svc}:*)`,
+      `Bash(docker logs ${feature}-${svc}:*)`,
+      `Bash(docker restart ${feature}-${svc})`,
+    ]),
+  ];
+}
+
+// Shared infra, other workspaces, the linked CLI and outward-facing acts. Deny
+// outranks allow, including a person's broader user-level rule (`Bash(npm:*)`
+// in ~/.claude/settings.json). Own-workspace acts a person may approve
+// interactively (`close-out`, `workspace-pr`) are left unallowed, not denied.
+// ponytail: prefix rules — `npm install foo -g` or a `node -e` child process
+// still slips past; a container is the upgrade if runs need a hard boundary.
+export const AUTONOMOUS_DENY = [
+  ...[
+    "proxy-reload",
+    "down",
+    "remove",
+    "remove-workspace",
+    "clean",
+    "setup",
+    "registry",
+    "connect",
+    "intercept",
+    "workspace",
+    "notes graduate",
+    "up infra",
+    "restart infra",
+    "stop infra",
+  ].map((cmd) => `Bash(sandbox ${cmd}:*)`),
+  ...["stop", "kill", "rm", "rmi", "compose down", "system prune", "volume rm", "network rm"].map(
+    (cmd) => `Bash(docker ${cmd}:*)`,
+  ),
+  ...[
+    "publish",
+    "link",
+    "unlink",
+    "install -g",
+    "install --global",
+    "i -g",
+    "i --global",
+    "uninstall -g",
+    "uninstall --global",
+  ].map((cmd) => `Bash(npm ${cmd}:*)`),
+  "Bash(gh pr merge:*)",
+  ...[
+    "remove-workspace",
+    "kube-switch",
+    "workspace-action",
+    "create-workspace",
+    "workspace",
+    "pr-approve",
+    "ask-pr-review",
+    "claude-send",
+    "claude-resume",
+    "sandbox-connect",
+  ].map((tool) => `mcp__plugin_sandbox-tools_sandbox-workspace__${tool}`),
 ];
 
 // Permission strings can't carry a marker the way hook commands do, so the rules
-// sandbox inserted are listed here; anything else in `allow` is the person's.
+// sandbox inserted are listed here; anything else in `allow`/`deny` is the person's.
 const permissionsRecord = (workspaceRoot: string) =>
   path.join(dotDir(workspaceRoot), "claude-permissions.json");
 
@@ -375,31 +467,44 @@ export function workspaceAllowRules(workspaceRoot: string): string[] {
     feature && services.length
       ? buildAllowRules(feature, services, loadServices(), loadArchetypes())
       : [...READ_ONLY_GIT_RULES];
-  return readAutonomous(workspaceRoot) ? [...new Set([...rules, ...AUTONOMOUS_RULES])] : rules;
+  return readAutonomous(workspaceRoot)
+    ? [...new Set([...rules, ...autonomousRules(feature, services)])]
+    : rules;
+}
+
+/** The deny rules this workspace should have: AUTONOMOUS_DENY while `autonomous` is on. */
+export function workspaceDenyRules(workspaceRoot: string): string[] {
+  return readAutonomous(workspaceRoot) ? AUTONOMOUS_DENY : [];
 }
 
 interface PermissionsRecord {
   allow: string[];
+  deny: string[];
   model: string | null;
 }
+
+const _strings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((r): r is string => typeof r === "string") : [];
 
 function _readRecord(recordPath: string): PermissionsRecord {
   try {
     const data = JSON.parse(fs.readFileSync(recordPath, "utf8"));
-    if (!_isDict(data)) return { allow: [], model: null };
+    if (!_isDict(data)) return { allow: [], deny: [], model: null };
     return {
-      allow: Array.isArray(data.allow) ? data.allow.filter((r) => typeof r === "string") : [],
+      allow: _strings(data.allow),
+      deny: _strings(data.deny),
       model: typeof data.model === "string" ? data.model : null,
     };
   } catch {
-    return { allow: [], model: null };
+    return { allow: [], deny: [], model: null };
   }
 }
 
-/** Write *record* if it changed, dropping empty keys; remove the file once both are empty. */
+/** Write *record* if it changed, dropping empty keys; remove the file once all are empty. */
 function _writeRecord(recordPath: string, record: PermissionsRecord): void {
   const body = {
     ...(record.allow.length ? { allow: record.allow } : {}),
+    ...(record.deny.length ? { deny: record.deny } : {}),
     ...(record.model ? { model: record.model } : {}),
   };
   const previous = _readRecord(recordPath);
@@ -413,47 +518,59 @@ function _writeRecord(recordPath: string, record: PermissionsRecord): void {
 }
 
 /**
- * Merge *want* into `.claude/settings.json` `permissions.allow`.
+ * Merge *allow* and *deny* into `.claude/settings.json` `permissions`.
  *
  * Adds what is missing, drops rules sandbox added earlier that are no longer
  * wanted, and never touches a rule it didn't add — one the person already had
  * is not recorded, so it survives removal. Unparseable JSON or an unexpected
- * `permissions` / `allow` shape is left untouched, record included.
+ * `permissions` / `allow` / `deny` shape is left untouched, record included.
  */
-export function writeWorkspacePermissions(workspaceRoot: string, want: string[]): string {
+export function writeWorkspacePermissions(
+  workspaceRoot: string,
+  allow: string[],
+  deny: string[] = [],
+): string {
   const settingsPath = _settingsPath(workspaceRoot);
   const settings = _readSettings(settingsPath);
   if (settings === null) return settingsPath;
   const permissions = settings["permissions"] ?? {};
   if (!_isDict(permissions)) return settingsPath;
-  const allow = (permissions["allow"] as unknown[] | undefined) ?? [];
-  if (!Array.isArray(allow)) return settingsPath;
+  const lists = { allow, deny };
+  const keys = ["allow", "deny"] as const;
+  if (keys.some((k) => !Array.isArray(permissions[k] ?? []))) return settingsPath;
 
   const recordPath = permissionsRecord(workspaceRoot);
   const stored = _readRecord(recordPath);
-  const recorded = new Set(stored.allow);
-  const wanted = [...new Set(want)];
-  const kept = allow.filter(
-    (rule) => !(typeof rule === "string" && recorded.has(rule) && !wanted.includes(rule)),
-  );
-  const added = wanted.filter((rule) => !kept.includes(rule));
-  const record = wanted.filter((rule) => recorded.has(rule) || added.includes(rule));
-
-  if (kept.length !== allow.length || added.length) {
+  const record = { ...stored };
+  let changed = false;
+  for (const key of keys) {
+    const have = (permissions[key] as unknown[] | undefined) ?? [];
+    const recorded = new Set(stored[key]);
+    const wanted = [...new Set(lists[key])];
+    const kept = have.filter(
+      (rule) => !(typeof rule === "string" && recorded.has(rule) && !wanted.includes(rule)),
+    );
+    const added = wanted.filter((rule) => !kept.includes(rule));
+    record[key] = wanted.filter((rule) => recorded.has(rule) || added.includes(rule));
+    if (kept.length === have.length && !added.length) continue;
+    changed = true;
     const next = [...kept, ...added];
-    if (next.length) permissions["allow"] = next;
-    else delete permissions["allow"];
+    if (next.length) permissions[key] = next;
+    else delete permissions[key];
+  }
+
+  if (changed) {
     if (Object.keys(permissions).length) settings["permissions"] = permissions;
     else delete settings["permissions"];
     _saveSettings(settingsPath, settings);
   }
-  _writeRecord(recordPath, { ...stored, allow: record });
+  _writeRecord(recordPath, record);
   return settingsPath;
 }
 
-/** Remove every allow rule sandbox added, keeping the person's. */
+/** Remove every allow and deny rule sandbox added, keeping the person's. */
 export function removeWorkspacePermissions(workspaceRoot: string): string {
-  return writeWorkspacePermissions(workspaceRoot, []);
+  return writeWorkspacePermissions(workspaceRoot, [], []);
 }
 
 /**
@@ -484,9 +601,13 @@ export function writeWorkspaceModel(workspaceRoot: string, model: string | null)
   return settingsPath;
 }
 
-/** The workspace's allow rules, model and auto-stop hook, from its `.env`, registry and workspace.yml. */
+/** The workspace's allow and deny rules, model and auto-stop hook, from its `.env`, registry and workspace.yml. */
 export function writeWorkspaceSettings(workspaceRoot: string): void {
-  writeWorkspacePermissions(workspaceRoot, workspaceAllowRules(workspaceRoot));
+  writeWorkspacePermissions(
+    workspaceRoot,
+    workspaceAllowRules(workspaceRoot),
+    workspaceDenyRules(workspaceRoot),
+  );
   writeWorkspaceModel(workspaceRoot, readModel(workspaceRoot));
   writeAutoStopHook(workspaceRoot, readAutoStop(workspaceRoot));
 }
