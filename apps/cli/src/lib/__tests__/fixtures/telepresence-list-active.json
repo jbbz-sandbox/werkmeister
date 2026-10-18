@@ -1,0 +1,27 @@
+[
+  {
+    "name": "frontend",
+    "namespace": "default",
+    "intercept_info": [
+      {
+        "spec": {
+          "name": "frontend",
+          "agent": "frontend",
+          "workload_kind": "Deployment",
+          "namespace": "default",
+          "mechanism": "http",
+          "service_port": 8080,
+          "target_port": 11101,
+          "header_filters": {
+            "x-feature": "test-me"
+          }
+        },
+        "id": "71d3a68f-7009-4327-af30-1ea64f2ccafe:frontend",
+        "pod_name": "frontend-79d848d8dd-fp2jb",
+        "mechanism_args_desc": "HTTP requests with header 'X-Feature: test-me'"
+      }
+    ],
+    "workload_resource_type": "DEPLOYMENT",
+    "agent_version": "v2.31.0"
+  }
+]
