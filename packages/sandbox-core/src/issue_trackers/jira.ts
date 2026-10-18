@@ -5,8 +5,9 @@
  */
 
 import { askClaudeJson } from "../claude_cli.js";
-import { loadJira } from "../global_config.js";
+import { loadJira, loadSandboxIssuesProject } from "../global_config.js";
 import {
+  createIssueRest,
   fetchIssueRest,
   fetchStatusesRest,
   isJiraPlaceholder,
@@ -14,7 +15,7 @@ import {
   jiraMyself,
   updateIssueRest,
 } from "../jira-rest.js";
-import type { Issue, IssueComment, IssueTrackerStrategy, IssueUpdate } from "./types.js";
+import type { Issue, IssueComment, IssueKind, IssueTrackerStrategy, IssueUpdate } from "./types.js";
 
 const KEY_RE = /[A-Za-z][A-Za-z0-9]+-\d+/;
 
@@ -144,15 +145,17 @@ async function updateViaMcp(key: string, update: IssueUpdate): Promise<void> {
     throw new Error(str(parsed?.error) ?? `Could not update ${key} through the Atlassian MCP`);
 }
 
-/** Sandbox-tool issues always go to GitHub, whatever the tracker; issues_report.ts names it too. */
+/** Sandbox-tool issues go to GitHub unless `overrides.sandbox_issues_project` names a Jira project; issues_report.ts names it too. */
 const SANDBOX_ISSUES_REPO = "jbbz-sandbox/sandbox";
+
+const ISSUE_TYPES: Record<IssueKind, string> = { bug: "Bug", feature: "Story", task: "Task" };
 
 export const jira: IssueTrackerStrategy = {
   id: "jira",
   label: "Jira",
   refExample: "PROJ-123",
   refPattern: null,
-  issueTypes: { bug: "Bug", feature: "Story", task: "Task" },
+  issueTypes: ISSUE_TYPES,
   // The first LETTERS-DIGITS token wins: the key in every Jira URL shape, and in a branch name.
   parseRef: (text) => KEY_RE.exec(text ?? "")?.[0].toUpperCase() ?? null,
   slug: (ref) => ref.trim().toLowerCase(),
@@ -174,13 +177,38 @@ export const jira: IssueTrackerStrategy = {
 
   filingGuide(issueId) {
     const project = /^([A-Z][A-Z0-9]+)-\d+$/.exec(issueId)?.[1];
+    const sandboxProject = loadSandboxIssuesProject();
     const rawBase = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
-    const base = isJiraPlaceholder(rawBase) ? "" : rawBase;
-    const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${base ? ` (${base})` : ""}`;
+    const site = isJiraPlaceholder(rawBase) || !rawBase ? "" : ` (${rawBase})`;
+    const command = (key?: string) =>
+      `\`sandbox issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file>\`; ` +
+      "if it fails for want of a Jira API token, the Atlassian MCP tools if connected, otherwise hand the person the title, type and body to file";
+    const jql = (key?: string) =>
+      `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "<keywords>"\``;
+    const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${site}`;
     return {
-      row: `| app code in a worktree | ${where} | the Atlassian MCP tools if connected, with the Jira issue type from the type table; otherwise hand the person the title, type and body to file |`,
-      search: `Search first: JQL \`${project ? `project = ${project} AND ` : ""}text ~ "<keywords>"\`. If it exists, comment on it instead. (Sandbox-tool issues: \`gh issue list -R ${SANDBOX_ISSUES_REPO} --search "<keywords>" --state all\`.)`,
+      row: `| app code in a worktree | ${where} | ${command(project)} |`,
+      sandbox: sandboxProject
+        ? { where: `Jira, project \`${sandboxProject}\`${site}`, command: command(sandboxProject) }
+        : undefined,
+      search: `Search first: ${jql(project)}. If it exists, comment on it instead. (Sandbox-tool issues: ${sandboxProject ? jql(sandboxProject) : `\`gh issue list -R ${SANDBOX_ISSUES_REPO} --search "<keywords>" --state all\``}.)`,
     };
+  },
+
+  async createIssue({ project, type, title, body }) {
+    const created = await createIssueRest({
+      project,
+      issueType: ISSUE_TYPES[type],
+      fallbackLabel: type,
+      summary: title,
+      description: body,
+    });
+    if (!created)
+      throw new Error(
+        "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md), " +
+          "or file it with the Atlassian MCP tools",
+      );
+    return { ref: created.key, title, type: created.issueType, url: created.url };
   },
 
   async updateIssue(ref, update) {

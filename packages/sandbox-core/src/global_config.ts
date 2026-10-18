@@ -420,6 +420,18 @@ export function loadGithubOrg(cfg?: GlobalConfig): string {
   return loadWorkspaceRepo(c).split("/")[0] ?? "";
 }
 
+/**
+ * The Jira project key the sandbox tool's own issues go to
+ * (`overrides.sandbox_issues_project`, e.g. `SW`), upper-cased; "" when unset
+ * or not a key. Only read under `issue_tracker: jira`; unset keeps them on
+ * GitHub (issues_report.ts's SANDBOX_ISSUES_REPO).
+ */
+export function loadSandboxIssuesProject(cfg?: GlobalConfig): string {
+  const value = (cfg ?? load())["overrides"]?.["sandbox_issues_project"];
+  const key = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return /^[A-Z][A-Z0-9]+$/.test(key) ? key : "";
+}
+
 /** GitHub org/user prompt — driven by `sandbox setup`. */
 export const _GITHUB_ORG_PROMPT: PromptSpec = {
   key: "github_org",

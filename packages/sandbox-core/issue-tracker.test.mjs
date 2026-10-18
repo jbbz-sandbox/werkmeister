@@ -108,6 +108,43 @@ test("the issues guide maps each type to a label, the tracker's type and a templ
   );
 });
 
+test("by default sandbox-tool issues go to GitHub, with labels, whatever the tracker", () => {
+  for (const t of [it.trackerById("github"), it.trackerById("jira")]) {
+    const md = buildIssuesReportMd("ws", "PROJ-1", t);
+    assert.match(
+      md,
+      /^\| the `sandbox` tool: .* \| `gh issue create -R jbbz-sandbox\/sandbox --label <label>` \|$/m,
+    );
+    assert.match(md, /\| GitHub label \|/);
+  }
+});
+
+test("sandbox_issues_project sends sandbox-tool issues to that Jira project", async () => {
+  await withSandboxHome(
+    async () => {
+      const md = buildIssuesReportMd("ws", "PROJ-1");
+      assert.match(
+        md,
+        /^\| the `sandbox` tool: .* \| Jira, project `SW` \(https:\/\/x\.atlassian\.net\) \| `sandbox issue create --project SW --type <type> --title "<title>" --body-file <file>`; .* \|$/m,
+      );
+      assert.match(
+        md,
+        /^\| app code in a worktree \| Jira, project `PROJ` .* `sandbox issue create --project PROJ /m,
+      );
+      assert.match(
+        md,
+        /JQL `project = PROJ AND text ~ "<keywords>"`.*\(Sandbox-tool issues: JQL `project = SW AND /,
+      );
+      assert.doesNotMatch(md, /gh issue|GitHub label/);
+      assert.match(md, /^\| bug \| something that is broken \| Bug \|$/m);
+    },
+    {
+      config:
+        "overrides:\n  issue_tracker: jira\n  sandbox_issues_project: sw\njira:\n  base_url: https://x.atlassian.net\n",
+    },
+  );
+});
+
 test("github checkAuth: signed in, signed out, no repo access", async () => {
   await withSandboxHome(
     async () => {

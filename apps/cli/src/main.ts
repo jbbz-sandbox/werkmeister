@@ -26,7 +26,7 @@
  *     sandbox optimize [--collect N]           Analyze usage vs limits, recommend changes
  *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
  *     sandbox list-workspaces                  List workspaces under the workspaces root
- *     sandbox issue <view|update> [ref]        Read or update an issue in the configured tracker
+ *     sandbox issue <view|update|create> [ref] Read, update or file an issue in the configured tracker
  *     sandbox remove-workspace <name>          Deprecated: use `sandbox close-out --abandon <reason>`
  *     sandbox pr <gate|open|status> [repo]     Pre-PR gate, open PRs from approved PR files, record merge/release
  *     sandbox close-out [name]                 End a workspace: after release, or with --abandon <reason>
@@ -629,13 +629,13 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Read or update an issue in this machine's issue tracker (see `sandbox setup`)",
+          "Read, update or file an issue in this machine's issue tracker (see `sandbox setup`)",
         )
         .addArgument(
           new Argument(
             "<action>",
-            "view: print the issue; update: change its status and/or add a comment",
-          ).choices(["view", "update"]),
+            "view: print the issue; update: change its status and/or add a comment; create: file a new issue and print its URL (Jira)",
+          ).choices(["view", "update", "create"]),
         )
         .argument(
           "[ref]",
@@ -643,7 +643,14 @@ const SPECS: CommandSpec[] = [
         )
         .option("--json", "view: print the issue as JSON")
         .option("--status <name>", "update: move the issue to this status")
-        .option("--comment <text>", "update: add this comment");
+        .option("--comment <text>", "update: add this comment")
+        .option("--project <key>", "create: the Jira project to file in")
+        .option(
+          "--type <type>",
+          "create: bug, feature or task (mapped to the tracker's issue type)",
+        )
+        .option("--title <text>", "create: the issue's summary")
+        .option("--body-file <path>", "create: the issue's description, from a file (- for stdin)");
     },
     namespace: ([action, ref], o) => ({
       action,
@@ -651,6 +658,10 @@ const SPECS: CommandSpec[] = [
       json: Boolean(o.json),
       status: o.status ?? null,
       comment: o.comment ?? null,
+      project: o.project ?? null,
+      type: o.type ?? null,
+      title: o.title ?? null,
+      bodyFile: o.bodyFile ?? null,
     }),
   },
   {
