@@ -1,6 +1,16 @@
 import type { EngineInterface, Register } from "claude-code";
 
-import type { Draft, FormBundle, FormField, InfraStatus, RepoPr, WorkspaceRow } from "../types";
+import type {
+  Draft,
+  FormBundle,
+  FormField,
+  InfraStatus,
+  InterceptRow,
+  InterceptsSnapshot,
+  RepoPr,
+  ServiceHealth,
+  WorkspaceRow,
+} from "../types";
 
 export const PLUGIN = "sandbox-tools";
 export const PANE = "workspaces";
@@ -62,11 +72,22 @@ try {
     let newest = null
     try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
     const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
-    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), stage: stageOf(w.path), lifecycle: lifecycleOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
+    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), feature: str(cfg.feature), stage: stageOf(w.path), lifecycle: lifecycleOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
   }
+  // Siblings of the resolved entry: the main entry exports none of the intercept functions.
+  const sibling = name => import(pathToFileURL(join(dirname(file), name)).href)
+  const interceptArgs = async () => ({
+    feature: args.feature,
+    service: args.service,
+    localServices: (await sibling('lifecycle.js')).readServicesFromWorkspace(await core.resolveWorkspaceDir(args.name)),
+  })
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
     'workspace-status': () => core.getWorkspaceStatuses(),
+    // The same snapshot \`sandbox status --intercepts --json\` prints: the CLI stays the one source of intercept state.
+    intercepts: async () => (await sibling('status.js')).interceptsSnapshot(),
+    'intercept-start': async () => (await sibling('telepresence.js')).startIntercept(await interceptArgs()),
+    'intercept-leave': async () => ({ left: await (await sibling('telepresence.js')).leaveIntercept(await interceptArgs()) }),
     'workspace-prs': () => core.getWorkspacePRs(),
     connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
@@ -147,6 +168,9 @@ const TRACKER = { plugin: "sandbox-tools", key: "tracker" } as const;
 export const TRACKER_TTL_MS = 5 * 60 * 1000;
 let trackerAt = 0;
 const INFRA = { plugin: "sandbox-tools", key: "infra" } as const;
+const INTERCEPTS = { plugin: "sandbox-tools", key: "intercepts" } as const;
+/** CONFIRM prefix for a pending intercept ON: `intercept:<workspace>/<service>`. */
+const INTERCEPT = "intercept:";
 const PRS = { plugin: "sandbox-tools", key: "prs" } as const;
 /** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
 const CONNECTING = "(connect)";
@@ -521,6 +545,7 @@ type ListEntry = Pick<
   | "stage"
   | "sessionTitle"
   | "sessionOrigin"
+  | "feature"
 >;
 type ListResult = { workspaces: ListEntry[] };
 type StatusResult = {
@@ -530,6 +555,7 @@ type StatusResult = {
     state: WorkspaceRow["state"];
     running: number;
     total: number;
+    services: ServiceHealth[];
     claude: { state: string; waiting: boolean };
   }[];
 };
@@ -606,6 +632,7 @@ export function buildRows(
       state: s?.state ?? "unknown",
       running: s?.running ?? 0,
       total: s?.total ?? 0,
+      services: s?.services ?? [],
       claude: s?.claude.state === "running" ? "working" : s?.claude.waiting ? "waiting" : null,
       session: sessionFor(w.path, allPaths, sessions),
     };
@@ -779,6 +806,8 @@ async function tick($: EngineInterface): Promise<void> {
   if (ticking) return;
   ticking = true;
   try {
+    // Kept out of the Promise.all: a failed or slow telepresence read must never cost the rows.
+    const intercepts = core<InterceptsSnapshot>($, "intercepts", {}, 20000).catch(() => null);
     const [list, status, sessionsR] = await Promise.all([
       core<ListResult>($, "list-workspaces"),
       core<StatusResult>($, "workspace-status"),
@@ -792,6 +821,7 @@ async function tick($: EngineInterface): Promise<void> {
     }
     await $.state.set(ROWS, buildRows(list, status, sessions));
     await $.state.set(INFRA, status.infra ?? null);
+    await $.state.set(INTERCEPTS, await intercepts);
     await $.state.set(ERROR, "");
     if (Date.now() - trackerAt > TRACKER_TTL_MS) {
       trackerAt = Date.now();
@@ -807,6 +837,80 @@ async function tick($: EngineInterface): Promise<void> {
     ticking = false;
   }
 }
+
+export type InterceptControl = {
+  kind: "off" | "active" | "other" | "blocked" | "unavailable";
+  text: string;
+};
+
+/** One service's toggle. The VS Code tree's `interceptView` rules; this standalone plugin can't import it. */
+export function interceptControl(
+  row: InterceptRow | undefined,
+  feature: string | null,
+  snap: InterceptsSnapshot | null,
+): InterceptControl {
+  if (snap === null) return { kind: "unavailable", text: "intercept state unavailable" };
+  if (!snap.available) return { kind: "unavailable", text: "intercepts unavailable" };
+  if (!row) return { kind: "blocked", text: "not an interceptable service of this workspace" };
+  if (row.intercepted) {
+    // One intercept per deployment: an unreadable owner is never offered a Leave.
+    if (feature !== null && row.intercepted_by === feature)
+      return { kind: "active", text: "⇄ Intercepted" };
+    return {
+      kind: "other",
+      text:
+        row.intercepted_by === null
+          ? "⇄ intercepted (owner unknown)"
+          : `⇄ intercepted by '${row.intercepted_by}'`,
+    };
+  }
+  if (!row.interceptable)
+    return { kind: "blocked", text: `not interceptable: ${row.blocker ?? "unknown reason"}` };
+  return { kind: "off", text: "" };
+}
+
+/** Intercept buttons. ON asks first, as it installs a traffic-agent sidecar on a shared dev cluster; OFF runs at once. */
+async function pressIntercept(
+  $: EngineInterface,
+  kind: "ask" | "yes" | "cancel" | "leave",
+  name: string,
+  service: string,
+): Promise<void> {
+  const { value: busy = "" } = await $.state.get(BUSY);
+  if (busy !== "") return;
+  if (kind === "ask") {
+    await $.state.set(CONFIRM, `${INTERCEPT}${name}/${service}`);
+    return;
+  }
+  await $.state.set(CONFIRM, "");
+  if (kind === "cancel") return;
+  const { value: rows = [] } = await $.state.get(ROWS);
+  const feature = rows.find((r) => r.name === name)?.feature;
+  if (!feature) return;
+  await $.state.set(BUSY, name);
+  await $.state.set(NOTE, `${service}: ${kind === "yes" ? "starting" : "leaving"} intercept…`);
+  try {
+    if (kind === "yes") {
+      await core($, "intercept-start", { name, feature, service }, 180000);
+      await $.state.set(NOTE, `${service}: intercepted (x-feature: ${feature})`);
+    } else {
+      await core($, "intercept-leave", { name, feature, service }, 60000);
+      await $.state.set(NOTE, `${service}: left intercept`);
+    }
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message);
+  } finally {
+    await $.state.set(BUSY, "");
+  }
+  await tick($);
+}
+
+const SERVICE_COLOR: Record<ServiceHealth["state"], "success" | "warning" | "error" | undefined> = {
+  healthy: "success",
+  starting: "warning",
+  running: undefined,
+  down: "error",
+};
 
 export type Action =
   | "up"
@@ -1317,6 +1421,7 @@ export const register: Register = (on) => {
     const { value: confirm = "" } = await $.state.get(CONFIRM);
     const { value: reason = "" } = await $.state.get(REASON);
     const { value: infra = null } = await $.state.get(INFRA);
+    const { value: snap = null } = await $.state.get(INTERCEPTS);
     const { value: tracker = null } = await $.state.get(TRACKER);
     const { value: prs = {} } = await $.state.get(PRS);
     const { value: tab = "list" } = await $.state.get(TAB);
@@ -1618,6 +1723,62 @@ export const register: Register = (on) => {
             {sessionLine(r) && (
               <Box key={`session:${r.name}`}>
                 <Text dimColor>{sessionLine(r)}</Text>
+              </Box>
+            )}
+            {r.services.length > 0 && (
+              <Box key={`services:${r.name}`} flexDirection="column">
+                {r.services.map((svc) => {
+                  const row = snap?.intercepts.find(
+                    (x) => x.feature === r.feature && x.service === svc.name,
+                  );
+                  const c = interceptControl(row, r.feature, snap);
+                  const asking = confirm === `${INTERCEPT}${r.name}/${svc.name}`;
+                  const idle = busy !== r.name;
+                  return (
+                    <Box key={`svc:${r.name}/${svc.name}`} gap={1}>
+                      <Text>
+                        <Text color={SERVICE_COLOR[svc.state]}>●</Text> {svc.name}
+                      </Text>
+                      {c.kind === "off" && idle && !asking && (
+                        <Button
+                          key={`intercept:${r.name}/${svc.name}`}
+                          label="Intercept"
+                          variant="secondary"
+                          onPress={() => void pressIntercept($, "ask", r.name, svc.name)}
+                        />
+                      )}
+                      {c.kind === "off" && idle && asking && (
+                        <Box gap={1}>
+                          <Text color="warning">
+                            {`Intercept ${svc.name}? Installs a traffic-agent sidecar on ${row?.deployment ?? svc.name} in the shared dev cluster.`}
+                          </Text>
+                          <Button
+                            key={`intercept-yes:${r.name}/${svc.name}`}
+                            label="✓ Yes, intercept"
+                            variant="secondary"
+                            onPress={() => void pressIntercept($, "yes", r.name, svc.name)}
+                          />
+                          <Button
+                            key={`intercept-cancel:${r.name}/${svc.name}`}
+                            label="Cancel"
+                            variant="secondary"
+                            onPress={() => void pressIntercept($, "cancel", r.name, svc.name)}
+                          />
+                        </Box>
+                      )}
+                      {c.kind === "active" && <Text color="success">{c.text}</Text>}
+                      {c.kind === "active" && idle && (
+                        <Button
+                          key={`leave:${r.name}/${svc.name}`}
+                          label="Leave"
+                          variant="secondary"
+                          onPress={() => void pressIntercept($, "leave", r.name, svc.name)}
+                        />
+                      )}
+                      {c.kind !== "off" && c.kind !== "active" && <Text dimColor>{c.text}</Text>}
+                    </Box>
+                  );
+                })}
               </Box>
             )}
             {busy === r.name ? (
