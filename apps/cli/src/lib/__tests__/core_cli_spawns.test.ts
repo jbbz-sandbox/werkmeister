@@ -1,5 +1,5 @@
 /**
- * `apps/cli` depends on `sandbox-core`, so core must never spawn the `sandbox`
+ * `apps/cli` depends on `werkmeister-core`, so core must never spawn the `sandbox`
  * binary back — note 087 (.sandbox/notes/087-decision-core-never-drives-the-cli.md).
  *
  * The table is closed: note 086's five `runSandbox` edges are gone (row 5,
@@ -37,7 +37,7 @@ function enclosingFunctions(src: string, needle: RegExp): string[] {
   return found;
 }
 
-describe("sandbox-core does not drive the CLI", () => {
+describe("werkmeister-core does not drive the CLI", () => {
   const src = fs.readFileSync(path.join(CORE, "sandbox.ts"), "utf8");
 
   it("has no CLI spawn helper left", () => {

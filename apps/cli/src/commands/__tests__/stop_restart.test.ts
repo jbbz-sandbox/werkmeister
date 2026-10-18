@@ -1,6 +1,6 @@
 /**
  * What `sandbox stop`/`restart` still print now that the sequences live in
- * `sandbox-core/lifecycle` and fail by throwing instead of exiting.
+ * `werkmeister-core/lifecycle` and fail by throwing instead of exiting.
  *
  * The trap these cover: both commands print their next-step hint *between* the
  * error line and the exit. `main.ts`'s handler only knows how to print the
@@ -8,14 +8,14 @@
  * the migration design forbids. Anything unhinted must still propagate.
  */
 
-import { SandboxError } from "sandbox-core/errors";
-import type { Reporter } from "sandbox-core/reporter";
-import { withReporter } from "sandbox-core/reporter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SandboxError } from "werkmeister-core/errors";
+import type { Reporter } from "werkmeister-core/reporter";
+import { withReporter } from "werkmeister-core/reporter";
 
 import { makeRecorder } from "./helpers/recorder.js";
 
-vi.mock("sandbox-core/lifecycle", () => ({
+vi.mock("werkmeister-core/lifecycle", () => ({
   stop: vi.fn(),
   restart: vi.fn(),
   idleStopFeature: vi.fn(),
@@ -31,7 +31,7 @@ import {
   idleStopFeature,
   restart as restartFeature,
   stop as stopFeature,
-} from "sandbox-core/lifecycle";
+} from "werkmeister-core/lifecycle";
 import { findDotenv, loadDotenv } from "../../lib/dotenv.js";
 import { run as runRestart } from "../restart.js";
 import { run as runStop } from "../stop.js";

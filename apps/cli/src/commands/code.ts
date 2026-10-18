@@ -1,11 +1,11 @@
 /**
  * sandbox code [feature]
  *
- * Open a workspace in VS Code. The lookup and launch are `sandbox-core`'s
+ * Open a workspace in VS Code. The lookup and launch are `werkmeister-core`'s
  * `openWorkspace` -- the same call the dashboard's `open-workspace` tool makes.
  */
 
-import { openWorkspace } from "sandbox-core";
+import { openWorkspace } from "werkmeister-core";
 import { Colors, error } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 

@@ -8,16 +8,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
-import { dotDir } from "sandbox-core/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import { dotDir } from "werkmeister-core/config";
 
-vi.mock("sandbox-core/slots", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/slots")>();
+vi.mock("werkmeister-core/slots", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/slots")>();
   return { ...actual, allocateSlot: async () => 1 };
 });
 
-import { generateWorkspaceCompose } from "sandbox-core/generate";
+import { generateWorkspaceCompose } from "werkmeister-core/generate";
 import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");

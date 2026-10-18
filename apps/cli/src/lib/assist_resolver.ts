@@ -4,8 +4,8 @@
  * lazily so the SDK loads only when the user opts in.
  */
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
-import type { Answer, Question, Resolver } from "sandbox-core/fragment_detect";
-import { ANSWER_SCHEMA, assistPrompt } from "sandbox-core/fragment_detect";
+import type { Answer, Question, Resolver } from "werkmeister-core/fragment_detect";
+import { ANSWER_SCHEMA, assistPrompt } from "werkmeister-core/fragment_detect";
 
 /**
  * Isolated from the scanned repo's and the user's `.claude/` settings (their hooks,

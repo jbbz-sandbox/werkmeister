@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { SandboxError } from "sandbox-core/errors";
+import { SandboxError } from "werkmeister-core/errors";
 import { withSandboxHome } from "../../packages/sandbox-core/fixtures.mjs";
 import { FEATURE_HEADER, resolveFeature, resolveWorkspaceDir } from "./dist/lib/feature.js";
 

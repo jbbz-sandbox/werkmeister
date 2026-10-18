@@ -2,7 +2,7 @@
  * sandbox skills <check|sync>
  *
  * Freshness control for the workspace's context layer: `check` and `sync` are
- * the workspace strategy's (`sandbox-core/strategies`). For jit that is the
+ * the workspace strategy's (`werkmeister-core/strategies`). For jit that is the
  * sb-* skills projected into `.claude/skills/` plus the gate manifest; for
  * icm, `_shared/standards.md` and the stage contracts.
  *
@@ -15,8 +15,8 @@
  * walking up to the nearest `.sandbox/` directory.
  */
 
-import { findWorkspaceRoot } from "sandbox-core/gate";
-import { strategyFor } from "sandbox-core/strategies";
+import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { strategyFor } from "werkmeister-core/strategies";
 
 import { Colors, error, success } from "../lib/config.js";
 

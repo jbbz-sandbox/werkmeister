@@ -22,7 +22,7 @@ const {
   APPROVAL_LABEL,
   isValidPrUrl,
   buildReconcileContext,
-} = await import("sandbox-core");
+} = await import("werkmeister-core");
 const { renderMarkdown } = await import(path.join(pkgRoot, "dist/lib/markdown.js"));
 
 // 1. Failing-checks classifier: bad conclusions count; good/in-progress don't.

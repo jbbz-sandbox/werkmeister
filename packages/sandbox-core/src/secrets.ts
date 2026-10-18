@@ -17,7 +17,7 @@ import * as fs from "node:fs";
 import type { ServicesConfig } from "./config.js";
 import { secretsPath } from "./global_config.js";
 
-/** Same rule as the generated `<PREFIX>_URL` keys: `sandbox-core` → `SANDBOX_CORE`. */
+/** Same rule as the generated `<PREFIX>_URL` keys: `werkmeister-core` → `SANDBOX_CORE`. */
 export function secretPrefix(svcName: string): string {
   return svcName.toUpperCase().replace(/-/g, "_");
 }

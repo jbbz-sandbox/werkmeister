@@ -8,12 +8,12 @@ import * as YAML from "yaml";
 
 // Stub the two side-effecting projections so the unit test never touches the
 // real ~/.zshenv or the Desktop config.
-vi.mock("sandbox-core/global_config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/global_config")>();
+vi.mock("werkmeister-core/global_config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/global_config")>();
   return { ...actual, ensureZshenvSources: () => false, patchDesktopConfig: () => false };
 });
 
-import * as gc from "sandbox-core/global_config";
+import * as gc from "werkmeister-core/global_config";
 import { run } from "../../commands/config.js";
 import { getSandboxRoot } from "../config.js";
 
