@@ -206,6 +206,25 @@ test("a null intercepts payload marks every service unavailable", () => {
   assert.match(node.children[0].tooltip, /intercept state unavailable/);
 });
 
+// Without telepresence the snapshot has no rows; that is "unavailable", not "not interceptable".
+test("an unavailable telepresence marks every service unavailable", () => {
+  const [node] = buildTree(
+    [ws("a")],
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "frontend", state: "healthy" }],
+      }),
+    ],
+    { ...intercepts({}), available: false },
+    [],
+  );
+  assert.equal(node.children[0].contextValue, "service");
+  assert.match(node.children[0].tooltip, /intercept state unavailable/);
+});
+
 test("the workspace containing the open folder is marked current and expanded", () => {
   const nodes = buildTree([ws("a"), ws("b")], [st("a"), st("b")], null, ["/ws/b/trustradius"]);
   const b = nodes.find((n) => n.label === "b");

@@ -82,7 +82,11 @@ async function jiraFetch(creds: JiraCreds, restPath: string, body?: unknown): Pr
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(10_000),
   });
-  if (!res.ok) throw new Error(`Jira REST ${restPath} → HTTP ${res.status}`);
+  if (!res.ok) {
+    // Jira's errorMessages/errors say what it refused (an unknown issue type, a missing field).
+    const why = (await res.text().catch(() => "")).trim().slice(0, 500);
+    throw new Error(`Jira REST ${restPath} → HTTP ${res.status}${why ? `: ${why}` : ""}`);
+  }
   return res;
 }
 
@@ -153,6 +157,41 @@ export async function fetchStatusesRest(keys: string[]): Promise<Record<string, 
   } catch {
     return null;
   }
+}
+
+/**
+ * Create an issue in `project`. `issueType` is a Jira type name; when the
+ * project has no such type (SW has no Bug) it is filed as a Task labelled
+ * `fallbackLabel`. Null when no credentials are configured; throws when Jira
+ * refuses.
+ */
+export async function createIssueRest(fields: {
+  project: string;
+  issueType: string;
+  fallbackLabel: string;
+  summary: string;
+  description: string;
+}): Promise<{ key: string; url: string; issueType: string } | null> {
+  const creds = await jiraCreds();
+  if (!creds) return null;
+  const project = encodeURIComponent(fields.project);
+  const { issueTypes = [] } = await jiraGet<{ issueTypes?: Array<{ name?: string }> }>(
+    creds,
+    `/rest/api/2/issue/createmeta/${project}/issuetypes`,
+  );
+  const has = (n: string) => issueTypes.some((t) => t.name?.toLowerCase() === n.toLowerCase());
+  const issueType = has(fields.issueType) || !has("Task") ? fields.issueType : "Task";
+  const res = await jiraFetch(creds, "/rest/api/2/issue", {
+    fields: {
+      project: { key: fields.project },
+      issuetype: { name: issueType },
+      summary: fields.summary,
+      description: fields.description,
+      ...(issueType === fields.issueType ? {} : { labels: [fields.fallbackLabel] }),
+    },
+  });
+  const { key } = (await res.json()) as { key: string };
+  return { key, url: `${creds.baseUrl}/browse/${key}`, issueType };
 }
 
 /**

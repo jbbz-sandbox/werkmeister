@@ -29,6 +29,7 @@ import * as path from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
+import { DOT_DIRS, dotDir, forDotDir } from "./dot_dir.js";
 import { error, warn } from "./reporter.js";
 
 /** Expand a leading `~` against the current user's home directory. */
@@ -39,15 +40,26 @@ export function expandUser(p: string): string {
 }
 
 /**
+ * `WERKMEISTER_<name>`, else the pre-rename `SANDBOX_<name>` (SW-7). `??`, not
+ * `||`: a set-but-empty new name still wins, and each caller keeps its own
+ * empty-string handling.
+ */
+export function envVar(name: string): string | undefined {
+  return process.env[`WERKMEISTER_${name}`] ?? process.env[`SANDBOX_${name}`];
+}
+
+export { DOT_DIRS, dotDir, forDotDir };
+
+/**
  * Path to the global config YAML.
  *
- * `SANDBOX_CONFIG_FILE` names *which* file to read — a location, not a value —
+ * `$*_CONFIG_FILE` names *which* file to read — a location, not a value —
  * so "the YAML is the single source of truth" stays literally true and tests
  * can point the whole set at a temp dir.
  */
 export function configPath(): string {
-  const override = process.env.SANDBOX_CONFIG_FILE;
-  return override ? expandUser(override) : path.join(os.homedir(), ".sandbox", "config.yaml");
+  const override = envVar("CONFIG_FILE");
+  return override ? expandUser(override) : path.join(dotDir(os.homedir()), "config.yaml");
 }
 
 /** The `~/.sandbox` directory, derived from {@link configPath} so both relocate together. */
@@ -86,7 +98,7 @@ export function loadConfig(): GlobalConfig {
 }
 
 /**
- * Resolve one registry file: `overrides.<overrideKey>` → `$<envVar>` →
+ * Resolve one registry file: `overrides.<overrideKey>` → `$*_<envName>` →
  * `~/.sandbox/<basename>`.
  *
  * The YAML override wins over the env var because env.sh is *generated from*
@@ -98,17 +110,17 @@ export function loadConfig(): GlobalConfig {
  * silently falling through to the default: reading a different registry than
  * the one you configured is the worse failure.
  */
-function registryPath(overrideKey: string, envVar: string, basename: string): string {
+function registryPath(overrideKey: string, envName: string, basename: string): string {
   const override = loadConfig()["overrides"]?.[overrideKey];
   if (override) return path.resolve(expandUser(String(override)));
-  const fromEnv = process.env[envVar];
+  const fromEnv = envVar(envName);
   if (fromEnv) return path.resolve(expandUser(fromEnv));
   return path.join(sandboxHome(), basename);
 }
 
 /** Path to the service registry (`overrides.services_yaml` → `$SANDBOX_SERVICES_YAML` → ~/.sandbox/services.yaml). */
 export function servicesYamlPath(): string {
-  return registryPath("services_yaml", "SANDBOX_SERVICES_YAML", "services.yaml");
+  return registryPath("services_yaml", "SERVICES_YAML", "services.yaml");
 }
 
 /** Per-machine overrides merged LAST into the generated registry — sits beside services.yaml wherever that is. */
@@ -118,12 +130,12 @@ export function servicesLocalYamlPath(): string {
 
 /** Path to the port allocation map (`overrides.ports_yaml` → `$SANDBOX_PORTS_YAML` → ~/.sandbox/ports.yaml). */
 export function portsYamlPath(): string {
-  return registryPath("ports_yaml", "SANDBOX_PORTS_YAML", "ports.yaml");
+  return registryPath("ports_yaml", "PORTS_YAML", "ports.yaml");
 }
 
 /** Path to the model pricing table (`overrides.model_pricing_yaml` → `$SANDBOX_MODEL_PRICING_YAML` → ~/.sandbox/model-pricing.yaml). */
 export function modelPricingYamlPath(): string {
-  return registryPath("model_pricing_yaml", "SANDBOX_MODEL_PRICING_YAML", "model-pricing.yaml");
+  return registryPath("model_pricing_yaml", "MODEL_PRICING_YAML", "model-pricing.yaml");
 }
 
 /**
@@ -141,7 +153,7 @@ export function modelPricingYamlPath(): string {
 export function workspacesRoot(): string {
   const configured = loadConfig()["paths"]?.["workspaces_root"];
   if (configured) return path.resolve(expandUser(String(configured)));
-  const fromEnv = process.env.SANDBOX_WORKSPACES_ROOT;
+  const fromEnv = envVar("WORKSPACES_ROOT");
   if (fromEnv) return path.resolve(expandUser(fromEnv));
   return path.join(os.homedir(), "workspace");
 }
@@ -637,7 +649,7 @@ export function getVolumeBaseNames(): string[] {
  * around it — which is why `SANDBOX_ROOT` ranks first rather than as a fallback.
  */
 export function sandboxRoot(): string {
-  const override = process.env.SANDBOX_ROOT;
+  const override = envVar("ROOT");
   if (override) return path.resolve(expandUser(override));
 
   let dir = import.meta.dirname;

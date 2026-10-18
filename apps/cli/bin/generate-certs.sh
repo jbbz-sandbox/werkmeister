@@ -8,9 +8,9 @@
 # That way the certificate SANs, the /etc/hosts entries and the Caddy site
 # blocks all derive from one list instead of three hand-synced copies.
 #
-# Standalone use (no CLI): pass --domain yourself, or set SANDBOX_INGRESS_HOSTS
+# Standalone use (no CLI): pass --domain yourself, or set WERKMEISTER_INGRESS_HOSTS
 # to a comma/space-separated list. `sandbox setup` is the normal entry point.
-# SANDBOX_HOSTS_FILE overrides /etc/hosts (tests).
+# WERKMEISTER_HOSTS_FILE overrides /etc/hosts (tests). Each WERKMEISTER_* falls back to SANDBOX_*.
 #
 # Usage:
 #   generate-certs.sh [--domain HOST]... [--certs-dir DIR]
@@ -27,8 +27,8 @@
 
 set -euo pipefail
 
-CERTS_DIR="${SANDBOX_CERTS_DIR:-$HOME/.docker/certs}"
-HOSTS_FILE="${SANDBOX_HOSTS_FILE:-/etc/hosts}"
+CERTS_DIR="${WERKMEISTER_CERTS_DIR:-${SANDBOX_CERTS_DIR:-$HOME/.docker/certs}}"
+HOSTS_FILE="${WERKMEISTER_HOSTS_FILE:-${SANDBOX_HOSTS_FILE:-/etc/hosts}}"
 HOSTS_BEGIN="# BEGIN sandbox ingress"
 HOSTS_END="# END sandbox ingress"
 DO_TRUST=true
@@ -39,8 +39,9 @@ DOMAINS=()
 
 # Seed from the env fallback (comma or whitespace separated) before parsing
 # flags, so an explicit --domain adds to it rather than being overridden.
-if [ -n "${SANDBOX_INGRESS_HOSTS:-}" ]; then
-    IFS=', ' read -r -a DOMAINS <<< "$SANDBOX_INGRESS_HOSTS"
+INGRESS_HOSTS="${WERKMEISTER_INGRESS_HOSTS:-${SANDBOX_INGRESS_HOSTS:-}}"
+if [ -n "$INGRESS_HOSTS" ]; then
+    IFS=', ' read -r -a DOMAINS <<< "$INGRESS_HOSTS"
 fi
 
 while [ $# -gt 0 ]; do

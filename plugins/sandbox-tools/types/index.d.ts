@@ -12,6 +12,8 @@ export type WorkspaceRow = {
   description: string | null;
   /** `work_type` from .sandbox/workspace.yml. */
   workType: string | null;
+  /** `feature` from .sandbox/workspace.yml: the key intercept rows and slots are filed under. */
+  feature: string | null;
   /** The first ICM stage whose output/ is still empty; null when not an ICM workspace or every stage has output. */
   stage: { index: number; total: number; name: string } | null;
   /** sandbox-core `lifecycleOf` — PR files only, no network; null when it could not be read. */
@@ -26,6 +28,7 @@ export type WorkspaceRow = {
   state: WorkspaceState;
   running: number;
   total: number;
+  services: ServiceHealth[];
   claude: "working" | "waiting" | null;
   /** The desktop-app session whose cwd lies in this workspace. */
   /** `beside`: this session started it, so the app will open it in split view next to this one. */
@@ -47,12 +50,34 @@ export type RepoPr = {
   title: string | null;
 };
 
+/** One container's health, as workspace-status reports it. */
+export type ServiceHealth = { name: string; state: "healthy" | "starting" | "running" | "down" };
+
 /** Shared infra (`sandbox connect`): the `infra` block of workspace-status. */
 export type InfraStatus = {
   state: "up" | "partial" | "down" | "unknown";
   running: number;
   total: number;
-  services: { name: string; state: "healthy" | "starting" | "running" | "down" }[];
+  services: ServiceHealth[];
+};
+
+/** One feature×service row of `sandbox status --intercepts --json` (sandbox-core `InterceptRow`). */
+export type InterceptRow = {
+  feature: string;
+  service: string;
+  deployment: string | null;
+  interceptable: boolean;
+  blocker: string | null;
+  intercepted: boolean;
+  /** Null when the owning feature can't be read: never treat that intercept as yours. */
+  intercepted_by: string | null;
+};
+
+/** What `sandbox status --intercepts --json` prints (sandbox-core `InterceptsSnapshot`). */
+export type InterceptsSnapshot = {
+  available: boolean;
+  connected_namespace: string | null;
+  intercepts: InterceptRow[];
 };
 
 /** One field of the Create tab's form, from the RJSF bundle getFormSchema builds. */
@@ -101,12 +126,14 @@ declare module "claude-code" {
       rows: WorkspaceRow[];
       error: string;
       busy: string;
-      /** `close-out:<name>` or `abandon:<name>` between an end button's two presses; '' when none is pending. */
+      /** `close-out:<name>`, `abandon:<name>` or `intercept:<name>/<service>` between a button's two presses; '' when none is pending. */
       confirmEnd: string;
       /** The reason typed for a pending abandon. */
       abandonReason: string;
       note: string;
       infra: InfraStatus | null;
+      /** The last intercept read; null when it failed or timed out. */
+      intercepts: InterceptsSnapshot | null;
       /** The configured issue tracker's sign-in check; null until checked or if the check failed. */
       tracker: { ok: boolean; reason?: string; fix: string } | null;
       /** Each workspace's repo PRs by workspace name; refreshed slower than rows, as each is a `gh` call. */

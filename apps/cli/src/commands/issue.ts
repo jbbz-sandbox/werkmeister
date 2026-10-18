@@ -1,5 +1,6 @@
 /**
  * sandbox issue <view|update> [ref] [--json] [--status <name>] [--comment <text>]
+ * sandbox issue create --project <key> --type <bug|feature|task> --title <text> --body-file <path|->
  *
  * Read or update one issue in this machine's issue tracker (`sandbox setup`
  * picks it). Every call goes through `issueTracker()`, so nothing here names a
@@ -7,14 +8,24 @@
  *
  * view:   print the issue's briefing (`--json`: the Issue as JSON).
  * update: move its status and/or add a comment; at least one is required.
+ * create: file a new issue and print its URL. Only trackers with an API path
+ *         (Jira); GitHub issues are filed with `gh issue create`.
  *
  * `ref` may be omitted inside a workspace: the issue is then read from its
  * `.sandbox/workspace.yml` (the workspace root is the nearest `.sandbox/`
  * above CWD).
  */
 
+import * as fs from "node:fs";
+
 import { findWorkspaceRoot } from "sandbox-core/gate";
-import { issueBriefing, issueIdOf, issueTracker } from "sandbox-core/issue_tracker";
+import {
+  type IssueKind,
+  issueBriefing,
+  issueIdOf,
+  issueTracker,
+  type NewIssue,
+} from "sandbox-core/issue_tracker";
 import { loadConfigFile } from "sandbox-core/workspace_prompts";
 
 import { error, success } from "../lib/config.js";
@@ -30,6 +41,31 @@ export function updateFromArgs(
   return { status, comment };
 }
 
+const KINDS: readonly IssueKind[] = ["bug", "feature", "task"];
+
+/** The issue to file, or the reason the arguments are unusable. `--body-file -` reads stdin. */
+export function newIssueFromArgs(
+  args: Record<string, unknown>,
+  read: (path: string | 0) => string = (p) => fs.readFileSync(p, "utf8"),
+): NewIssue | string {
+  const project = ((args.project as string | null) ?? "").trim().toUpperCase();
+  const type = (args.type as string | null) ?? "";
+  const title = ((args.title as string | null) ?? "").trim();
+  const bodyFile = (args.bodyFile as string | null) ?? "";
+  if (!project) return "Pass --project <key> (the Jira project to file in).";
+  if (!(KINDS as readonly string[]).includes(type))
+    return `Pass --type ${KINDS.join("|")} (got '${type}').`;
+  if (!title) return "Pass --title <text>.";
+  if (!bodyFile) return "Pass --body-file <path> (or - for stdin).";
+  let body: string;
+  try {
+    body = read(bodyFile === "-" ? 0 : bodyFile);
+  } catch (e) {
+    return `Could not read --body-file ${bodyFile}: ${(e as Error).message}`;
+  }
+  return { project, type: type as IssueKind, title, body };
+}
+
 function fail(msg: string): never {
   error(msg);
   process.exit(1);
@@ -37,6 +73,22 @@ function fail(msg: string): never {
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const tracker = issueTracker();
+  if (args.action === "create") {
+    if (!tracker.createIssue)
+      fail(
+        `${tracker.label} issues are filed with its own CLI: gh issue create -R <owner>/<repo>.`,
+      );
+    const issue = newIssueFromArgs(args);
+    if (typeof issue === "string") fail(issue);
+    try {
+      const created = await tracker.createIssue(issue);
+      success(`Created ${created.ref} (${created.type}).`);
+      console.log(created.url ?? created.ref);
+    } catch (e) {
+      fail(`Could not create the issue in ${issue.project}: ${(e as Error).message}`);
+    }
+    return;
+  }
   const update = args.action === "update" ? updateFromArgs(args) : null;
   if (typeof update === "string") fail(update);
 

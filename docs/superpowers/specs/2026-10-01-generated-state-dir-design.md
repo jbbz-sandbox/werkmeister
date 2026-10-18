@@ -8,7 +8,7 @@ the skill fixes). This is the second batch.
 
 ## Goal
 
-`sandbox connect` works from an `npm install -g` of `@jbbz-sandbox/sandbox-cli`
+`sandbox connect` works from an `npm install -g` of `werkmeister`
 on any node prefix, and an `npm install -g` upgrade never deletes a file a
 running container is bind-mounting. The CLI package directory becomes
 read-only at runtime; everything the CLI generates lives under `~/.sandbox`,
@@ -17,7 +17,7 @@ next to the registry and the PID files that already live there.
 ## Problem
 
 Five files are generated at runtime into the package's own `infra/` tree,
-which on a global install is `<prefix>/lib/node_modules/@jbbz-sandbox/sandbox-cli/infra/`:
+which on a global install is `<prefix>/lib/node_modules/werkmeister/infra/`:
 
 | File | Writer | Consumer |
 |---|---|---|
@@ -231,7 +231,7 @@ and gain "(now `~/.sandbox/infra/proxy/Caddyfile`)".
 
 ## Rollout
 
-One changeset, `minor`, on `@jbbz-sandbox/sandbox-cli`. Release note: after
+One changeset, `minor`, on `werkmeister`. Release note: after
 upgrading, run `sandbox connect` once; it recreates `sandbox-caddy` and
 `k8s-forwards` on the new mount paths. Mention the credential in `tmp/kubeconfig`
 history to the repo owner separately, not in the changelog.

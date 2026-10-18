@@ -15,6 +15,7 @@ import { serviceTestCommand } from "./archetypes.js";
 import { childEnv } from "./claude_cli.js";
 import {
   type ArchetypeRegistry,
+  dotDir,
   loadArchetypes,
   loadReposConfig,
   loadServices,
@@ -159,7 +160,7 @@ export function prFileDir(ws: string): string | null {
   try {
     names = fs.readdirSync(path.join(ws, "stages")).sort();
   } catch {
-    return path.join(ws, ".sandbox", "notes");
+    return path.join(dotDir(ws), "notes");
   }
   const dir = names.find((n) => /^\d+_propose$/.test(n)) ?? names.find((n) => /^\d+_ship$/.test(n));
   return dir ? path.join(ws, "stages", dir, "output") : null;
@@ -267,7 +268,7 @@ function stagesCheck(ws: string): GateCheck {
 
 function exerciseFile(ws: string): string | null {
   if (!fs.existsSync(path.join(ws, "stages"))) {
-    const p = path.join(ws, ".sandbox", "notes", "exercise.md");
+    const p = path.join(dotDir(ws), "notes", "exercise.md");
     return fs.existsSync(p) ? p : null;
   }
   // `verify.md` is the name before decision 11.

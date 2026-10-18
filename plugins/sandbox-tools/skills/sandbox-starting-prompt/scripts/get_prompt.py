@@ -20,9 +20,10 @@ import sys
 def find_workspace_yml(start: str) -> str | None:
     cur = os.path.abspath(start)
     while True:
-        candidate = os.path.join(cur, ".sandbox", "workspace.yml")
-        if os.path.isfile(candidate):
-            return candidate
+        for dot in (".werkmeister", ".sandbox"):  # new name first (SW-7)
+            candidate = os.path.join(cur, dot, "workspace.yml")
+            if os.path.isfile(candidate):
+                return candidate
         parent = os.path.dirname(cur)
         if parent == cur:
             return None

@@ -952,7 +952,7 @@ These are incident records. Keep the historical text and add the current locatio
   Generated state used to live *inside* that package tree: `apps/cli/infra/proxy/Caddyfile`
   and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under a
   directory that ships in the published package, so reinstalling or upgrading
-  `@jbbz-sandbox/sandbox-cli` could discard or stale them. Resolved 2026-10-01: everything
+  `werkmeister` could discard or stale them. Resolved 2026-10-01: everything
   `sandbox connect` generates now lives under `~/.sandbox/infra/`
   (`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md`).
   ```
@@ -1042,7 +1042,7 @@ Create `.changeset/generated-state-dir.md`:
 
 ```markdown
 ---
-"@jbbz-sandbox/sandbox-cli": minor
+"werkmeister": minor
 ---
 
 Everything `sandbox connect` generates now lives under `~/.sandbox/infra/` instead of inside the CLI package: the Caddyfile, `features.json`, the pinned kubeconfig, the k8s forwards table, and (new) a `compose/k8s-forwards.override.yml` carrying the `k8s-forwards` ports and aliases that used to be rewritten in place inside `shared-infra.yml`. A global `npm install -g` therefore works on a root-owned prefix, and an upgrade no longer deletes a file a running container is mounting. **After upgrading, run `sandbox connect` once**: `docker compose` recreates `sandbox-caddy` and `k8s-forwards` on the new mount paths. The `sandbox-tools` skills read the Caddyfile from the new location.
@@ -1067,20 +1067,20 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 Run from the repo root:
 ```bash
-npx turbo run build typecheck test --filter=sandbox-core --filter=@jbbz-sandbox/sandbox-cli 2>&1 | tail -15
+npx turbo run build typecheck test --filter=sandbox-core --filter=werkmeister 2>&1 | tail -15
 ```
 Expected: all green.
 
 - [ ] **Step 2: Pack and unpack into a fake global install**
 
 ```bash
-S=$(mktemp -d) && mkdir -p "$S/pkg/node_modules/@jbbz-sandbox" "$S/home" && \
+S=$(mktemp -d) && mkdir -p "$S/pkg/node_modules" "$S/home" && \
 (cd apps/cli && npm pack --pack-destination "$S" >/dev/null) && \
-tar -xzf "$S"/jbbz-sandbox-sandbox-cli-*.tgz -C "$S/pkg/node_modules/@jbbz-sandbox" && \
-mv "$S/pkg/node_modules/@jbbz-sandbox/package" "$S/pkg/node_modules/@jbbz-sandbox/sandbox-cli" && \
+tar -xzf "$S"/werkmeister-*.tgz -C "$S/pkg/node_modules" && \
+mv "$S/pkg/node_modules/package" "$S/pkg/node_modules/werkmeister" && \
 ln -s "$PWD/node_modules/dockerode" "$S/pkg/node_modules/dockerode" && \
 cp apps/cli/src/lib/__tests__/fixtures/services.yaml apps/cli/src/lib/__tests__/fixtures/ports.yaml "$S/home/" && \
-PKG="$S/pkg/node_modules/@jbbz-sandbox/sandbox-cli" && \
+PKG="$S/pkg/node_modules/werkmeister" && \
 find "$PKG/infra" -type f | sort > "$S/before.txt" && echo "staged in $S"
 ```
 

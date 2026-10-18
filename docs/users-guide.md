@@ -1286,6 +1286,10 @@ and stores it as `overrides.issue_tracker` in `~/.sandbox/config.yaml`. With `gi
 workspace's issue ID is `owner/repo#n` and issues are filed in the registry repos under
 `overrides.github_org`.
 
+Issues about the sandbox tool itself go to GitHub (`jbbz-sandbox/sandbox`) unless, under
+`jira`, `overrides.sandbox_issues_project` names a Jira project (e.g. `SW`): the generated
+issues guide then sends them there with `sandbox issue create`.
+
 For Jira, set `jira.base_url` (e.g. `https://your-org.atlassian.net`) to get issue links in
 CLAUDE.md, the dashboard, and VS Code. Briefings fetched through the Atlassian MCP use
 `jira.cloud_id` when set, otherwise the `base_url` hostname. The REST token is optional; see
@@ -1296,7 +1300,11 @@ Read or update an issue in the configured tracker from the command line:
 ```bash
 sandbox issue view [ref] [--json]                                # print the issue (--json: as JSON)
 sandbox issue update [ref] --status <name> --comment <text>      # either option alone works too
+sandbox issue create --project <KEY> --type bug|feature|task --title <text> --body-file <path|->  # Jira: file one, print its URL
 ```
+
+`create` needs the Jira REST token and maps `bug`/`feature`/`task` to Bug/Story/Task; a project
+without that type gets a Task labelled with it. GitHub issues are filed with `gh issue create`.
 
 `ref` is optional inside a workspace — it defaults to the workspace's `issue_id`. On GitHub,
 `--status closed` or `done` closes the issue, `open` reopens it, and any other status is added

@@ -9,6 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { COMPOSE_FILE } from "sandbox-core/compose_file";
+import { dotDir } from "sandbox-core/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("sandbox-core/slots", async (importOriginal) => {
@@ -44,7 +45,7 @@ describe("generateWorkspaceCompose", () => {
     expect(fs.statSync(path.join(tmp, COMPOSE_FILE)).isFile()).toBe(true);
     expect(fs.statSync(path.join(tmp, ".env")).isFile()).toBe(true);
     // The fixture registry has no GraphQL subgraph, so no supergraph config.
-    expect(fs.existsSync(path.join(tmp, ".sandbox", "supergraph-config.yml"))).toBe(false);
-    expect(fs.statSync(path.join(tmp, ".sandbox", "sandbox-context.md")).isFile()).toBe(true);
+    expect(fs.existsSync(path.join(dotDir(tmp), "supergraph-config.yml"))).toBe(false);
+    expect(fs.statSync(path.join(dotDir(tmp), "sandbox-context.md")).isFile()).toBe(true);
   });
 });

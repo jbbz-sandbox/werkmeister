@@ -41,6 +41,8 @@ import type Dockerode from "dockerode";
 import { isOneShotService } from "./compose.js";
 import { INFRA_PROJECT } from "./compose_infra.js";
 import {
+  dotDir,
+  envVar,
   forwardSpecs,
   modelPricingYamlPath,
   portsYamlPath,
@@ -153,10 +155,10 @@ async function isFile(p: string): Promise<boolean> {
  * environment a GUI-launched process inherits.
  */
 export async function resolveSandboxBin(opts: { from?: string } = {}): Promise<string> {
-  const explicit = process.env.SANDBOX_BIN;
+  const explicit = envVar("BIN");
   if (explicit && (await isExecutable(explicit))) return explicit;
 
-  const root = process.env.SANDBOX_ROOT;
+  const root = envVar("ROOT");
   if (root) {
     const cand = path.join(root, "sandbox");
     if (await isExecutable(cand)) return cand;
@@ -700,7 +702,7 @@ async function readWorkspaceConfig(
   workspaceDir: string,
 ): Promise<{ issueId: string | null; labels: string[]; model: string | null }> {
   try {
-    const text = await fs.readFile(path.join(workspaceDir, ".sandbox", "workspace.yml"), "utf-8");
+    const text = await fs.readFile(path.join(dotDir(workspaceDir), "workspace.yml"), "utf-8");
     const data = parseYaml(text) as Record<string, unknown> | null;
     const issueId = issueIdOf(data) || null;
     const labels = Array.isArray(data?.labels)
@@ -1027,17 +1029,17 @@ export async function resolveWorkspaceDir(name: string): Promise<string> {
 }
 
 /** Root for throwaway PR-reconcile session dirs (one per `<repo>-<number>`). */
-const RECONCILE_ROOT = path.join(os.homedir(), ".sandbox", "reconcile");
+const reconcileRoot = () => path.join(dotDir(os.homedir()), "reconcile");
 /** A chat-session key that names a PR-reconcile dir instead of a workspace. */
 const RECONCILE_PREFIX = "reconcile:";
 
-/** Map a reconcile key (`reconcile:<slug>`) to its dir under {@link RECONCILE_ROOT}. */
+/** Map a reconcile key (`reconcile:<slug>`) to its dir under {@link reconcileRoot}. */
 function reconcileDirForKey(name: string): string {
   const slug = name.slice(RECONCILE_PREFIX.length);
   if (!slug || slug.includes("/") || slug.includes("\\") || slug.includes("..")) {
     throw new WorkspaceError(`Invalid reconcile session: ${JSON.stringify(name)}`);
   }
-  return path.join(RECONCILE_ROOT, slug);
+  return path.join(reconcileRoot(), slug);
 }
 
 /**
@@ -1084,7 +1086,7 @@ async function readEnvValue(dir: string, key: string): Promise<string | null> {
 /** Read the `feature:` scalar from `.sandbox/workspace.yml`; null if absent. */
 async function readWorkspaceFeature(dir: string): Promise<string | null> {
   try {
-    const text = await fs.readFile(path.join(dir, ".sandbox", "workspace.yml"), "utf-8");
+    const text = await fs.readFile(path.join(dotDir(dir), "workspace.yml"), "utf-8");
     const m = /^feature: *["']?([^"'\s#]+)/m.exec(text);
     return m ? m[1] : null;
   } catch {
@@ -1559,8 +1561,8 @@ export const APPROVAL_LABEL = "ready-for-human-approval";
  * Returns the channel it posted to.
  */
 export async function postSlackReviewRequest(text: string): Promise<string> {
-  const token = process.env.SANDBOX_REVIEW_SLACK_TOKEN;
-  const channel = process.env.SANDBOX_REVIEW_SLACK_CHANNEL;
+  const token = envVar("REVIEW_SLACK_TOKEN");
+  const channel = envVar("REVIEW_SLACK_CHANNEL");
   if (!token || !channel) {
     throw new WorkspaceError(
       "Slack is not configured: set SANDBOX_REVIEW_SLACK_TOKEN (a bot token with chat:write) " +
@@ -3211,7 +3213,7 @@ const RECONCILE_PROMPT =
  * spawn via `-p --append-system-prompt-file`, so the session's first turn needs
  * no tools and runs unattended — which is why the window can open in the
  * background (never steals focus) and be watched entirely from the dashboard's
- * chat panel. The session lives in its own dir under {@link RECONCILE_ROOT}
+ * chat panel. The session lives in its own dir under {@link reconcileRoot}
  * (`<repo>-<number>`), giving it an isolated Claude project dir the tailer keys
  * on cleanly. See the launch call for why it is headless + tool-restricted and
  * deliberately NOT `--bare`.
@@ -3225,7 +3227,7 @@ export async function launchPrReconcile(
   }
   const { repo, number } = parseRepoAndNumber(url);
   const slug = `${repo}-${number}`;
-  const dir = path.join(RECONCILE_ROOT, slug);
+  const dir = path.join(reconcileRoot(), slug);
   await fs.mkdir(dir, { recursive: true });
 
   // Gather everything up front; each piece degrades independently (a missing

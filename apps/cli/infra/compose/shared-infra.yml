@@ -57,7 +57,7 @@ services:
       # Forward table generated from services.yaml by `sandbox connect`.
       - ${SANDBOX_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro
     env_file:
-      - ${HOME}/.sandbox/secrets.env
+      - ${SANDBOX_STATE_DIR}/../secrets.env
     # OrbStack's API server is https://127.0.0.1:26443 on the host; from inside
     # this container 127.0.0.1 is the container itself. connect.ts rewrites the
     # pinned kubeconfig's server to host.docker.internal, which this mapping
@@ -196,4 +196,4 @@ volumes:
 
 secrets:
   corp_ca:
-    file: ${HOME}/.sandbox/corp-ca.crt
+    file: ${SANDBOX_STATE_DIR}/../corp-ca.crt

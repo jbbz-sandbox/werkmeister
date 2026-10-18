@@ -6,7 +6,7 @@ Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 
 | App | Path | What |
 | --- | --- | --- |
-| `@jbbz-sandbox/sandbox-cli` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI. |
+| `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI. |
 | `sandbox-workspace-mcp-app` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | MCP App + dashboard UI for creating/managing sandbox workspaces. |
 
 | Package | Path | What |
@@ -43,7 +43,7 @@ different commit than the checkout's `HEAD`. The warning names both SHAs and
 the rebuild command, `npm run build --workspace sandbox-core && npm run build --workspace apps/cli`.
 It never shows on a published install, which has no `.git`, and `sandbox hooks`
 skips it. To skip the global link, run `./sandbox` from the repo root instead. To remove
-the link, run `npm rm -g @jbbz-sandbox/sandbox-cli`.
+the link, run `npm rm -g werkmeister`.
 
 A linked CLI doesn't offer to install the VS Code extension. Only the published
 package ships the `.vsix`, so build and install it yourself:
@@ -59,7 +59,7 @@ true. See the caveat at the end of the next section.
 
 ## Install the CLI without a clone
 
-`@jbbz-sandbox/sandbox-cli` publishes to GitHub Packages, so a machine that only
+`werkmeister` publishes to GitHub Packages, so a machine that only
 needs to *run* the CLI never has to clone this repo. Point npm at the registry
 with a `read:packages` token, then install — from **outside** any checkout of
 this repo (see below):
@@ -69,7 +69,7 @@ npm config set @jbbz-sandbox:registry https://npm.pkg.github.com
 npm config set //npm.pkg.github.com/:_authToken "$(gh auth token)"
 
 cd ~
-npx @jbbz-sandbox/sandbox-cli setup    # installs globally, then runs the wizard
+npx werkmeister setup    # installs globally, then runs the wizard
 ```
 
 `gh auth token` needs `read:packages` (`write:packages` includes it);
@@ -77,15 +77,15 @@ npx @jbbz-sandbox/sandbox-cli setup    # installs globally, then runs the wizard
 `read:packages` works too. `~/.npmrc` stores a **copy** of the token, not a link
 to the `gh` keyring, so after a `gh auth login`, logout or revocation, re-run the
 `npm config set` line. To check the token, run
-`npm view @jbbz-sandbox/sandbox-cli version` — it should print a version.
+`npm view werkmeister version` — it should print a version.
 
 A bad or missing token fails as `401 Unauthorized` or as a `404 Not Found` that
 reads like the package does not exist. A 404 naming a different package — e.g.
 `"sandbox" does not exist under owner "jbbz-sandbox"` — is a wrong name: it is
-`@jbbz-sandbox/sandbox-cli`.
+`werkmeister`.
 
 **Don't run the `npx` line inside a checkout of this repo.** npx prefers the
-workspace link `node_modules/@jbbz-sandbox/sandbox-cli → apps/cli` over the
+workspace link `node_modules/werkmeister → apps/cli` over the
 registry, so it silently runs your checkout's CLI: nothing is installed,
 `sandbox` stays off your PATH, and `setup` records the checkout as
 `sandbox_root`.
@@ -98,7 +98,7 @@ collects that cache, while `setup` persists `sandbox_root` into
 workspace's `compose.yml` as a bind mount. Running for real from the
 cache would pin permanent state to a directory that is going to vanish.
 
-`npm install -g @jbbz-sandbox/sandbox-cli && sandbox setup` is the same thing
+`npm install -g werkmeister && sandbox setup` is the same thing
 spelled out, if you would rather see the install happen. It is unaffected by the
 current directory.
 
@@ -134,7 +134,7 @@ npx changeset          # pick a bump, write a one-line description
 ```
 
 That writes `.changeset/<name>.md` — commit it with the PR. **Name
-`@jbbz-sandbox/sandbox-cli`, even for work that lives in `sandbox-core`:** the
+`werkmeister`, even for work that lives in `sandbox-core`:** the
 description lands in the changelog of whichever package the changeset names, and
 the CLI is the one anyone reads. `sandbox-core` is `fixed` to the CLI, so its
 version follows either way.

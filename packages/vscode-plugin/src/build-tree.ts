@@ -164,7 +164,7 @@ function serviceNode(
   intercepts: InterceptsLike | null,
 ): WsNode {
   const row = feature ? intercepts?.byFeature.get(feature)?.get(svc.name) : undefined;
-  const view = interceptView(row, feature, intercepts === null);
+  const view = interceptView(row, feature, intercepts === null || !intercepts.available);
   const suffix =
     view.contextValue === "service:intercepted-mine"
       ? " · intercepted (yours)"

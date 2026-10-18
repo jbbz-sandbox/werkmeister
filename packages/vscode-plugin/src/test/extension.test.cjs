@@ -123,7 +123,7 @@ async function clearSettings() {
 
 /**
  * The documented tier order: setting > SANDBOX_* env > ~/.sandbox/config.yaml.
- * The harness launches the host with SANDBOX_ROOT set and SANDBOX_BIN unset
+ * The harness launches the host with WERKMEISTER_ROOT set and WERKMEISTER_BIN unset
  * (.vscode-test.mjs), standing in for the shell-launched editor this used to
  * take a quit-and-relaunch to check by hand (the retired checklist step 22).
  */
@@ -134,28 +134,28 @@ suite("Sandbox settings", () => {
     // Settings are written to the test instance's user-data dir and outlive the
     // run, so a crashed run can leave one behind.
     await clearSettings();
-    inherited = process.env.SANDBOX_ROOT;
-    assert.ok(inherited, "the host must launch with SANDBOX_ROOT set — see .vscode-test.mjs");
+    inherited = process.env.WERKMEISTER_ROOT;
+    assert.ok(inherited, "the host must launch with WERKMEISTER_ROOT set — see .vscode-test.mjs");
   });
 
   suiteTeardown(clearSettings);
 
   test("a setting overrides the inherited env, and clearing it restores it", async () => {
     await setSetting("root", "/tmp/sandbox-setting-wins");
-    assert.equal(process.env.SANDBOX_ROOT, "/tmp/sandbox-setting-wins");
+    assert.equal(process.env.WERKMEISTER_ROOT, "/tmp/sandbox-setting-wins");
 
     // b175d8b: clearing used to delete the variable, silently dropping a
     // shell-launched window from the inherited checkout to whatever
     // ~/.sandbox/config.yaml named — the wrong-checkout bug.
     await setSetting("root", undefined);
-    assert.equal(process.env.SANDBOX_ROOT, inherited);
+    assert.equal(process.env.WERKMEISTER_ROOT, inherited);
   });
 
   test("clearing a setting with nothing inherited deletes the variable", async () => {
     await setSetting("binPath", "/tmp/sandbox-bin-wins");
-    assert.equal(process.env.SANDBOX_BIN, "/tmp/sandbox-bin-wins");
+    assert.equal(process.env.WERKMEISTER_BIN, "/tmp/sandbox-bin-wins");
 
     await setSetting("binPath", undefined);
-    assert.equal(process.env.SANDBOX_BIN, undefined);
+    assert.equal(process.env.WERKMEISTER_BIN, undefined);
   });
 });
