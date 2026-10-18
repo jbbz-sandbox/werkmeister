@@ -3556,7 +3556,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Add the SDK and mark it external**
 
-Run: `npm install @anthropic-ai/claude-agent-sdk@^0.3.288 -w @jbbz-sandbox/sandbox-cli`
+Run: `npm install @anthropic-ai/claude-agent-sdk@^0.3.288 -w werkmeister`
 
 In `apps/cli/esbuild.mjs`, change the `external` line to:
 
@@ -4209,7 +4209,7 @@ Re-running only adds services and keys the file doesn't have yet. Nothing alread
 
 ```markdown
 ---
-"@jbbz-sandbox/sandbox-cli": minor
+"werkmeister": minor
 ---
 
 `sandbox detect` now generates a repo's `.sandbox/services.yaml` from its package manifests, Dockerfiles, docker-compose files, Helm charts, k8s manifests and kustomize overlays, and re-runs only add what is missing. `--assist` asks Claude about the fields the scan had to guess. The old changed-service report is gone; the `sandbox-detect` MCP tool now returns the proposed fragment and writes it with `write: true`.

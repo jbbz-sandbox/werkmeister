@@ -31,7 +31,7 @@
         },
         "release_tag": {
           "type": "string",
-          "description": "Glob for `git tag --list`, e.g. `@jbbz-sandbox/sandbox-cli@*`. Required when `ship: tag`."
+          "description": "Glob for `git tag --list`, e.g. `werkmeister@*`. Required when `ship: tag`."
         },
         "release_check": {
           "type": "string",

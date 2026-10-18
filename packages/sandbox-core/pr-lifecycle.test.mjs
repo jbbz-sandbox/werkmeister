@@ -704,9 +704,10 @@ test("openTerminalSessions: TTY claude processes whose cwd is in the workspace",
 });
 
 test("PR file: invalid YAML names the parser's error", () => {
+  // A plain scalar cannot start with `@` (reserved YAML indicator); that is what makes this invalid.
   const ws = icmWorkspace({
     files: {
-      app: prFile({ status: "shipped", extra: "release: @jbbz-sandbox/sandbox-cli@0.7.0\n" }),
+      app: prFile({ status: "shipped", extra: "release: @scope/pkg@0.7.0\n" }),
     },
   });
   try {
