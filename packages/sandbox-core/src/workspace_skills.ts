@@ -26,7 +26,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { infraRoot } from "./config.js";
+import { forDotDir, infraRoot } from "./config.js";
 import { loadManifest } from "./gate.js";
 import { info, success } from "./reporter.js";
 import { generateSkills, skillNameFor, validateModuleReferences } from "./skill_gen.js";
@@ -135,7 +135,7 @@ export function writeWorkspaceSkills(
   for (const name of Object.keys(rendered).sort()) {
     const bundle = rendered[name];
     for (const relpath of Object.keys(bundle).sort()) {
-      const content = bundle[relpath];
+      const content = forDotDir(bundle[relpath], workspaceRoot);
       const filePath = path.join(target, name, relpath);
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       if (!fs.existsSync(filePath) || fs.readFileSync(filePath, "utf8") !== content) {
@@ -186,7 +186,7 @@ export function checkWorkspaceSkills(
   for (const name of Object.keys(rendered).sort()) {
     const bundle = rendered[name];
     for (const relpath of Object.keys(bundle).sort()) {
-      const content = bundle[relpath];
+      const content = forDotDir(bundle[relpath], workspaceRoot);
       const filePath = path.join(target, name, relpath);
       if (!(fs.existsSync(filePath) && fs.statSync(filePath).isFile())) {
         errors.push(`missing: ${name}/${relpath}`);

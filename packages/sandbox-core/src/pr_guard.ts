@@ -13,6 +13,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { DOT_DIRS, dotDir } from "./dot_dir.js";
+
 /**
  * The workspace root: nearest ancestor holding `.sandbox/workspace.yml`. Not
  * gate.ts's `findWorkspaceRoot` — a code worktree has its own `.sandbox/`
@@ -21,7 +23,7 @@ import * as path from "node:path";
 export function findRecordRoot(start: string): string | null {
   let dir = path.resolve(start);
   for (;;) {
-    if (fs.existsSync(path.join(dir, ".sandbox", "workspace.yml"))) return dir;
+    if (fs.existsSync(path.join(dotDir(dir), "workspace.yml"))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -35,7 +37,7 @@ function prFileDirName(root: string): string {
       names.find((n) => /^\d+_propose$/.test(n)) ?? names.find((n) => /^\d+_ship$/.test(n));
     return dir ? `stages/${dir}/output/` : "the propose stage's output/";
   } catch {
-    return ".sandbox/notes/";
+    return `${path.basename(dotDir(root))}/notes/`;
   }
 }
 
@@ -52,7 +54,7 @@ export function decide(input: Record<string, any>): string | null {
   if (!opensPr) return null;
   // A workspace generated before the rules file existed has neither path; point at the docs then.
   const rules =
-    ["_shared/pr-rules.md", ".sandbox/pr-rules.md"].find((p) =>
+    ["_shared/pr-rules.md", ...DOT_DIRS.map((d) => `${d}/pr-rules.md`)].find((p) =>
       fs.existsSync(path.join(root, p)),
     ) ?? "docs/workspace-lifecycle.md in the sandbox repo";
   return (

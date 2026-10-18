@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { dotDir } from "./dist/config.js";
 import { listNotes } from "./dist/notes.js";
 import { seedStartingHandoff } from "./dist/strategies/jit.js";
 
@@ -56,7 +57,7 @@ test("a prompt seeds one handoff carrying it", () => {
 
 test("a placeholder from an older CLI is superseded when the prompt arrives", () => {
   withWorkspace((ws) => {
-    const dir = path.join(ws, ".sandbox", "notes");
+    const dir = path.join(dotDir(ws), "notes");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "001-handoff-starting-prompt.md"), PLACEHOLDER);
     seedStartingHandoff(ws, "## Goal\nShip it", "feature");
@@ -106,7 +107,7 @@ test("an issue seeds the handoff even with an empty prompt, issue section first"
     title: "T",
     fetchedAt: "2026-10-11T00:00:00.000Z",
   });
-  const [note] = fs.readdirSync(path.join(root, ".sandbox", "notes"));
-  const body = fs.readFileSync(path.join(root, ".sandbox", "notes", note), "utf8");
+  const [note] = fs.readdirSync(path.join(dotDir(root), "notes"));
+  const body = fs.readFileSync(path.join(dotDir(root), "notes", note), "utf8");
   assert.match(body, /# Handoff: workspace creation\n\n## Issue\n\no\/r#5: T\./);
 });

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { dotDir } from "./dist/config.js";
 import { generateSupergraphConfig } from "./dist/generate.js";
 
 const PORTS = { slots: { start: 11000, size: 20 } };
@@ -16,7 +17,7 @@ test("no subgraph: returns null and does not create .sandbox/", async () => {
   const ws = await mkdtemp(path.join(tmpdir(), "sandbox-supergraph-"));
   const config = { services: { web: { type: "node" } }, ports: PORTS };
   assert.equal(generateSupergraphConfig("f", 1, [], config, ws), null);
-  assert.equal(existsSync(path.join(ws, ".sandbox")), false);
+  assert.equal(existsSync(dotDir(ws)), false);
 });
 
 test("subgraph: creates .sandbox/ and writes the supergraph config", async () => {
@@ -26,6 +27,6 @@ test("subgraph: creates .sandbox/ and writes the supergraph config", async () =>
     ports: PORTS,
   };
   const out = generateSupergraphConfig("f", 1, ["api"], config, ws);
-  assert.equal(out, path.join(ws, ".sandbox", "supergraph-config.yml"));
+  assert.equal(out, path.join(dotDir(ws), "supergraph-config.yml"));
   assert.ok(existsSync(out));
 });

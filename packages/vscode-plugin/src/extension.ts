@@ -5,14 +5,15 @@ import { disposeTerminals } from "./terminal.js";
 import { SandboxTreeProvider } from "./tree.js";
 
 /**
- * The SANDBOX_* values this process inherited, captured before any setting is
- * applied. Clearing a setting must restore these, not delete them: the
+ * The WERKMEISTER_* values this process inherited, captured before any setting is
+ * applied. Settings write the new names because they win over SANDBOX_* (SW-7);
+ * an inherited SANDBOX_* is never touched, so it stays the fallback. Clearing a setting must restore these, not delete them: the
  * documented tier order is setting > env > ~/.sandbox/config.yaml, and a
  * shell-launched VS Code legitimately carries env from ~/.sandbox/env.sh.
  */
 const INHERITED_ENV = {
-  SANDBOX_BIN: process.env.SANDBOX_BIN,
-  SANDBOX_ROOT: process.env.SANDBOX_ROOT,
+  WERKMEISTER_BIN: process.env.WERKMEISTER_BIN,
+  WERKMEISTER_ROOT: process.env.WERKMEISTER_ROOT,
 } as const;
 
 /**
@@ -30,8 +31,8 @@ const INHERITED_ENV = {
 export function applySettingsToEnv(): void {
   const cfg = vscode.workspace.getConfiguration("sandbox");
   for (const [key, envVar] of [
-    ["binPath", "SANDBOX_BIN"],
-    ["root", "SANDBOX_ROOT"],
+    ["binPath", "WERKMEISTER_BIN"],
+    ["root", "WERKMEISTER_ROOT"],
   ] as const) {
     const value = cfg.get<string>(key, "").trim();
     if (value) {

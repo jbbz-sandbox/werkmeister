@@ -18,6 +18,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
+import { dotDir } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { standardsDirPath } from "./global_config.js";
 import { listNotes, type Note } from "./notes.js";
@@ -220,7 +221,7 @@ export interface GraduateNoteOptions {
  * function only validates and writes; it never prompts.
  */
 export function graduateNote(
-  _workspaceRoot: string,
+  workspaceRoot: string,
   note: Record<string, any>,
   { domain, kind, slug = null, standardsDir = null }: GraduateNoteOptions,
 ): Record<string, any> {
@@ -256,7 +257,7 @@ export function graduateNote(
   let body = fs.readFileSync(standardPath, "utf8");
 
   const resolvedSlug = slug || note["slug"];
-  const noteRef = `.sandbox/notes/${path.basename(note["path"])}`;
+  const noteRef = `${path.basename(dotDir(workspaceRoot))}/notes/${path.basename(note["path"])}`;
   const marker = `<!-- TODO(graduate): fill from note ${String(note["number"]).padStart(3, "0")}, see ${noteRef} -->`;
 
   let scaffoldPath: string;

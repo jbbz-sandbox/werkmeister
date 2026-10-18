@@ -29,7 +29,7 @@ function walk(root, rel = "") {
 /** A workspace with one repo and a two-module standards tree; returns [root, ctx]. */
 async function withIcmWorkspace(
   fn,
-  { inputs = {}, meta = { FEATURE: "demo", SERVICES: "backend" } } = {},
+  { inputs = {}, meta = { FEATURE: "demo", SERVICES: "backend" }, dot = ".sandbox" } = {},
 ) {
   const std = fs.mkdtempSync(path.join(os.tmpdir(), "icm-std-"));
   fs.mkdirSync(path.join(std, "comments"));
@@ -44,7 +44,7 @@ async function withIcmWorkspace(
   );
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-ws-"));
   fs.mkdirSync(path.join(root, "demo-repo", ".git"), { recursive: true });
-  fs.mkdirSync(path.join(root, ".sandbox"));
+  fs.mkdirSync(path.join(root, dot));
   const allInputs = {
     context_strategy: "icm",
     work_type: "feature",
@@ -54,7 +54,7 @@ async function withIcmWorkspace(
     ...inputs,
   };
   fs.writeFileSync(
-    path.join(root, ".sandbox", "workspace.yml"),
+    path.join(root, dot, "workspace.yml"),
     Object.entries(allInputs)
       .filter(([, v]) => v)
       .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
@@ -472,5 +472,30 @@ test("a no-copy issue keeps the placeholder brief; a fetched copy then rebuilds 
       assert.match(brief, /_Read `\.sandbox\/issue\.md`, then/);
     },
     { inputs: { starting_prompt: "" } },
+  );
+});
+
+// SW-7: a new workspace's dot-dir is .werkmeister/, and the generated docs point there.
+test("a .werkmeister workspace gets docs that name it, and reads as in sync", async () => {
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init(ctx);
+      assert.equal(fs.existsSync(path.join(root, ".sandbox")), false);
+      const docs = walk(root).filter((f) => f.endsWith(".md") && !f.startsWith("demo-repo"));
+      for (const f of docs) {
+        const text = fs.readFileSync(path.join(root, f), "utf8");
+        assert.doesNotMatch(
+          text,
+          /(^|[\s`'"([|]|\.\.\/)\.sandbox\//m,
+          `${f} still names .sandbox/`,
+        );
+      }
+      assert.match(
+        fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"),
+        /\.werkmeister\/sandbox-context\.md/,
+      );
+      assert.deepEqual(icm.check(root), []);
+    },
+    { dot: ".werkmeister" },
   );
 });
