@@ -20,7 +20,7 @@ description: "Begin the test phase in a sandbox workspace. Use when running or w
   assertions with suspected causes, and open questions.
 - **Verifying the running feature.** The tester agents run a proxy smoke check (curl
   through Caddy with the `X-Feature` cookie) when the containers are up. For a headed
-  browser session against the feature URL, use the `sandbox-tools:sandbox-feature-test`
+  browser session against the feature URL, use the `werkmeister:feature-test`
   plugin skill; the URL and cookie are in `.sandbox/sandbox-context.md`. That applies to
   URL-addressed services only; libraries, CLIs and extensions follow the "How to validate"
   section of the same file.

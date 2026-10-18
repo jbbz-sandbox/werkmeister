@@ -1,6 +1,6 @@
 ---
-name: sandbox-workspace
-description: "Create a brand-new sandbox workspace (git worktrees on a <user>/<workspace> branch + init). Use when the user says '/sandbox-workspace', 'create a workspace', 'new sandbox workspace', 'spin up a workspace', 'make a workspace for <TICKET-ID>', or any request to create/bootstrap a new sandbox workspace from scratch."
+name: workspace
+description: "Create a brand-new sandbox workspace (git worktrees on a <user>/<workspace> branch + init). Use when the user says '/werkmeister:workspace', 'create a workspace', 'new sandbox workspace', 'spin up a workspace', 'make a workspace for <TICKET-ID>', or any request to create/bootstrap a new sandbox workspace from scratch."
 ---
 
 # Sandbox Workspace
@@ -98,7 +98,7 @@ pane, so do it in these steps yourself:
    SANDBOX_FORM_NO_BROWSER=1 sandbox workspace --browser-form 2>/tmp/workspace-form.err >/tmp/workspace-form.out
    ```
 
-2. Read the form URL from the stderr file (the line `[sandbox-workspace] workspace form: http://127.0.0.1:<port>/`).
+2. Read the form URL from the stderr file (the line `[workspaces] workspace form: http://127.0.0.1:<port>/`).
 3. Call `mcp__Claude_Browser__preview_start` with `url` set to that URL. The form loads in
    the browser tab, but no browser tool brings the pane into view: check
    `mcp__Claude_Browser__tabs_context`, and when it says the pane is hidden, tell the user to
@@ -110,8 +110,8 @@ Add `--issue-id`/`--open` to step 1 exactly as for the foreground form.
 
 ### Desktop inline alternative — the `workspace` MCP tool
 
-In **Claude Desktop**, the bundled `sandbox-workspace` MCP server renders the form **inline**
-(an MCP App `ui://` resource). Calling `mcp__plugin_sandbox-tools_sandbox-workspace__workspace` there shows the
+In **Claude Desktop**, the bundled `workspaces` MCP server renders the form **inline**
+(an MCP App `ui://` resource). Calling `mcp__plugin_werkmeister_workspaces__workspace` there shows the
 same form in-conversation; on a CLI/VS-Code client it falls back to the same browser
 form as `--browser-form`. Use `--browser-form` from Claude Code; reserve the MCP tool for
 Desktop.

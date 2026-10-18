@@ -18,7 +18,7 @@ import { createServer } from "./server.js";
 async function startStdio(): Promise<void> {
   await createServer().connect(new StdioServerTransport());
   // stdout is the JSON-RPC channel on stdio — diagnostics must go to stderr.
-  console.error("[sandbox-workspace] MCP server running on stdio");
+  console.error("[workspaces] MCP server running on stdio");
 }
 
 async function startHttp(): Promise<void> {
@@ -79,8 +79,8 @@ async function startHttp(): Promise<void> {
       console.error("Failed to start server:", err);
       process.exit(1);
     }
-    console.error(`[sandbox-workspace] MCP server listening on http://localhost:${port}/mcp`);
-    console.error(`[sandbox-workspace] workspaces dashboard: http://localhost:${port}/`);
+    console.error(`[workspaces] MCP server listening on http://localhost:${port}/mcp`);
+    console.error(`[workspaces] workspaces dashboard: http://localhost:${port}/`);
   });
 
   const shutdown = () => httpServer.close(() => process.exit(0));

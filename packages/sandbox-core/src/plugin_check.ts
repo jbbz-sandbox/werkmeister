@@ -2,11 +2,11 @@
  * Plugin-version guard — context-management research doc §5 thread #5
  * (sharpened by the 2026-07-04 gap review).
  *
- * The whole read-side of the JIT context system rides on the `sandbox-tools`
+ * The whole read-side of the JIT context system rides on the `werkmeister`
  * plugin's skills surfacing in sessions, but a user-scope plugin install is a
  * *snapshot*: freshly generated skills in this repo reach no session until the
  * plugin is refreshed, and nothing detects the drift. This module compares the
- * installed plugin against the repo's `plugins/sandbox-tools/` at
+ * installed plugin against the repo's `plugins/werkmeister/` at
  * `sandbox init-workspace` and returns loud warnings when the install lags.
  *
  * Warn-only by design: a stale (or absent) plugin degrades context quality but
@@ -20,10 +20,13 @@ import * as path from "node:path";
 
 import { sandboxRoot } from "./config.js";
 
-export const PLUGIN_NAME = "sandbox-tools";
+export const PLUGIN_NAME = "werkmeister";
+
+/** The plugin's name before SW-9; `w9r setup` migrates an install of it. */
+export const LEGACY_PLUGIN_NAME = "sandbox-tools";
 
 export const REFRESH_HINT =
-  "run `sandbox setup` to refresh it so sessions pick up the current " + "sandbox-* ops skills";
+  "run `w9r setup` to refresh it so sessions pick up the current " + "werkmeister ops skills";
 
 function defaultRepoPluginDir(): string {
   return path.join(sandboxRoot(), "plugins", PLUGIN_NAME);
@@ -71,19 +74,22 @@ function loadRegistry(claudePluginsDir: string): Record<string, unknown> | null 
 }
 
 /**
- * Locate the installed sandbox-tools plugin via installed_plugins.json.
+ * Locate an installed plugin (default: werkmeister) via installed_plugins.json.
  *
  * Returns `[version, installPath]`, or `[null, null]` when the plugin
  * is not installed or the registry is unreadable (callers that need the
  * distinction use `loadRegistry` directly).
  */
-export function installedPlugin(claudePluginsDir: string): [string | null, string | null] {
+export function installedPlugin(
+  claudePluginsDir: string,
+  name: string = PLUGIN_NAME,
+): [string | null, string | null] {
   const plugins = loadRegistry(claudePluginsDir);
   if (plugins === null) {
     return [null, null];
   }
   for (const [key, entries] of Object.entries(plugins)) {
-    if (!key.startsWith(`${PLUGIN_NAME}@`) || !Array.isArray(entries)) {
+    if (!key.startsWith(`${name}@`) || !Array.isArray(entries)) {
       continue;
     }
     for (const entry of entries) {
@@ -193,10 +199,17 @@ export function pluginDriftWarnings(
 
   const [installedVersion, installPath] = installedPlugin(claudePluginsDir);
   if (installPath === null) {
+    if (installedPlugin(claudePluginsDir, LEGACY_PLUGIN_NAME)[1] !== null) {
+      return [
+        `the ${LEGACY_PLUGIN_NAME} plugin was renamed ${PLUGIN_NAME}, and only the old one is ` +
+          `installed — its skills are now ${PLUGIN_NAME}:diagnose, ${PLUGIN_NAME}:status, ` +
+          `${PLUGIN_NAME}:workspace, … Run \`w9r setup\` to switch over.`,
+      ];
+    }
     return [
-      `${PLUGIN_NAME} plugin is not installed — the sandbox-* ops skills ` +
-        `(sandbox-diagnose, sandbox-status, sandbox-workspace, …) will not ` +
-        `surface in Claude Code sessions. Run \`sandbox setup\` to install ` +
+      `${PLUGIN_NAME} plugin is not installed — the ops skills ` +
+        `(${PLUGIN_NAME}:diagnose, ${PLUGIN_NAME}:status, ${PLUGIN_NAME}:workspace, …) will not ` +
+        `surface in Claude Code sessions. Run \`w9r setup\` to install ` +
         `it (or use /plugin in Claude Code). The sb-* skills are ` +
         `unaffected — they are projected into each workspace by ` +
         `init-workspace.`,

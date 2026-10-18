@@ -26,7 +26,7 @@
     "autonomous": {
       "type": "boolean",
       "default": false,
-      "description": "icm: run stage 01 to `sandbox pr open` with self-checks instead of human checks. Every strategy: add the Bash and sandbox-workspace MCP allow rules a headless session needs to .claude/settings.json (recorded in .sandbox/claude-permissions.json, removed when this turns off)."
+      "description": "icm: run stage 01 to `sandbox pr open` with self-checks instead of human checks. Every strategy: add the Bash and werkmeister workspaces MCP allow rules a headless session needs to .claude/settings.json (recorded in .sandbox/claude-permissions.json, removed when this turns off)."
     },
     "model": {
       "type": "string",

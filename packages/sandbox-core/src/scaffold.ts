@@ -154,7 +154,7 @@ export function seedFile(target: string, content: string, mode = 0o644): SeedRes
 // Named so the CLI-argv guard in core_cli_spawns.test.ts (which greps core for
 // a quoted sandbox name closing an array) does not read this MCP-server
 // reference as a CLI spawn.
-const SANDBOX_MCP_SERVER = "sandbox";
+const SANDBOX_MCP_SERVER = "werkmeister";
 
 export const REGISTRY_DEFAULTS: Record<string, any> = {
   archetypes: {

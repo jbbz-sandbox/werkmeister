@@ -6,7 +6,7 @@ import { applyFormFields, formFields, interceptControl, optionGroups } from "./r
 import { edit } from "./textarea";
 
 const SURFACES = ["terminal", "desktop"] as const;
-const WS = "plugin:sandbox-tools:sandbox-workspace";
+const WS = "plugin:werkmeister:workspaces";
 const PANE_PROPS = {
   title: "Sandbox workspaces",
   isFocused: false,
@@ -69,7 +69,7 @@ function world(on: On, stubs: McpStub = {}) {
     return { value: undefined };
   });
   on("command.register", (_$, e) => ({ value: { command: e.name } }));
-  on("tool.register", (_$, e) => ({ value: { tool: `mcp__sandbox-tools__${e.name}` } }));
+  on("tool.register", (_$, e) => ({ value: { tool: `mcp__werkmeister__${e.name}` } }));
   on("mcp.call", async (_$, e) => {
     const key = `${e.server}/${e.tool}`;
     calls.push({ key, args: e.args, via: "mcp" });
@@ -106,7 +106,7 @@ test("empty list draws the empty message", async ($, on) => {
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -286,7 +286,7 @@ test("rows draw name, issue, task, counts and claude note", async ($, on) => {
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -314,7 +314,7 @@ test("cards link the issue and each PR with its state", async ($, on) => {
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -337,7 +337,7 @@ test("the Focus toggle shows only workspaces labelled focus", async ($, on) => {
   world(on, stubs({ [`${WS}/list-workspaces`]: () => ok(list) }));
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "terminal",
     component: "Pane",
     props: PANE_PROPS,
@@ -358,7 +358,7 @@ test("no counts when total is 0", async ($, on) => {
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -375,7 +375,7 @@ test("segment-aware join picks the deepest workspace and the newest session", as
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -400,7 +400,7 @@ test("sessions from text block with no structuredContent still join", async ($, 
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -422,7 +422,7 @@ test("a failed session lookup keeps the workspace list", async ($, on) => {
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -437,7 +437,7 @@ test("a card border follows the state", async ($, on) => {
   world(on, stubs());
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -456,7 +456,7 @@ test("Continue with no desktop session is labelled Terminal and resumes there", 
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -485,7 +485,7 @@ test("Continue on a VS Code session is labelled VS Code and opens the folder the
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -505,7 +505,7 @@ test("every workspace has New session, the one this session sits in too", async 
   on("session.cwd", () => ({ value: "/ws/abc/repo" }));
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -529,7 +529,7 @@ test("a failed list keeps the last rows and shows the error", async ($, on) => {
   fail = true;
   await w.clock.advance(5000);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -545,7 +545,7 @@ test("buttons follow the extension gating", async ($, on) => {
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -582,7 +582,7 @@ test("a lifecycle press calls workspace-action and refreshes", async ($, on) => 
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -613,7 +613,7 @@ test("press while busy is ignored", async ($, on) => {
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -646,7 +646,7 @@ test("abandon asks for a reason in the pane, needs a second press, then closes o
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -685,7 +685,7 @@ test("a press on another row's button clears the pending abandon and its reason"
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -714,12 +714,12 @@ test("the close-out MCP tool archives the desktop sessions once it succeeded", a
     }),
   );
   let failNext = false;
-  on("tool.call", { tool: /sandbox-workspace__close-out$/ }, () =>
+  on("tool.call", { tool: /workspaces__close-out$/ }, () =>
     failNext
       ? { result: "not shipped", isError: true, text: "not shipped" }
       : { result: { command: "sandbox close-out abc" }, text: "sandbox close-out abc" },
   );
-  const tool = "mcp__plugin_sandbox-tools_sandbox-workspace__close-out";
+  const tool = "mcp__plugin_werkmeister_workspaces__close-out";
   const r = await $.tool.call({ tool, name: "abc" } as never);
   expect(r.context).toEqual([
     'Desktop sessions in /ws/abc: archived "Newer in abc"; left open "Older in abc": session is pinned',
@@ -798,7 +798,7 @@ test("New session opens the app's new-session link for the workspace folder", as
   const w = world(on, stubs({ [`${WS}/open-claude-link`]: (a) => ok({ url: a.url }) }));
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -828,7 +828,7 @@ test("Continue in Desktop focuses a session this one started, else opens the ses
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -868,7 +868,7 @@ test("Open beside shows only for a session this one started, and splits it", asy
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -892,7 +892,7 @@ test("without a session this one started, there is no Open beside", async ($, on
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -921,7 +921,7 @@ test("Pin toggles the sidebar pin of the card's session and redraws from the app
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1097,7 +1097,7 @@ test("the Create tab draws the form from the schema: titles without wizard hints
   world(on, formStubs());
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1130,7 +1130,7 @@ test("the multi-line field types across lines and its text reaches the create ca
   const w = world(on, formStubs());
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1157,7 +1157,7 @@ test("text fields are plugin-drawn editors: a click draws the cursor in that fie
   answerIssueModel(on);
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1194,7 +1194,7 @@ test("fetch fills only the empty fields, distilled on the session model, then cr
   const asked = answerIssueModel(on);
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1240,7 +1240,7 @@ test("Create with an issue and empty fields fills from the issue on the session 
   const asked = answerIssueModel(on);
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1280,7 +1280,7 @@ test("a signed-out tracker shows on the infra line", async ($, on) => {
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "terminal",
     component: "Pane",
     props: PANE_PROPS,
@@ -1297,7 +1297,7 @@ test("a failed issue distillation still fills what the lookup found and says why
   }));
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1317,7 +1317,7 @@ test("create with a required field empty or a bad value says why and creates not
   const w = world(on, formStubs());
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1337,7 +1337,7 @@ test("a multi-pick draws as checkboxes under its group headings, sorted, each in
   world(on, formStubs());
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1412,7 +1412,7 @@ test("the workspace_form tool opens the Create tab filled, says what is still ne
   on("fs.list", () => ({ value: [] }));
   await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
   const r = await $.tool.call({
-    tool: "mcp__sandbox-tools__workspace_form",
+    tool: "mcp__werkmeister__workspace_form",
     fields: { feature: "rate-limit", starting_prompt: "Do it.\nThen test." },
   } as never);
   const text = String((r as { result?: unknown }).result);
@@ -1420,7 +1420,7 @@ test("the workspace_form tool opens the Create tab filled, says what is still ne
   expect(text).toMatch(/Still needed before Create:\n- Work type: required/);
   expect(w.calls.some((c) => c.key === `${WS}/create-workspace`)).toBe(false);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1442,7 +1442,7 @@ test("Refine with Claude rewrites the starting prompt through the session model,
   });
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1474,7 +1474,7 @@ test("a failed Refine completion leaves the field and says why", async ($, on) =
   }));
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1512,7 +1512,7 @@ test("Connect runs sandbox connect, refreshes, and the infra line shows status",
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1560,7 +1560,7 @@ test("the lifecycle replaces the stage on the card and picks the lifecycle butto
   await openPane($);
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
-      plugin: "sandbox-tools",
+      plugin: "werkmeister",
       surface,
       component: "Pane",
       props: PANE_PROPS,
@@ -1588,7 +1588,7 @@ test("↻ PRs runs pr-status for that workspace path", async ($, on) => {
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1614,7 +1614,7 @@ test("close-out needs two presses, and a press on another row's button cancels i
   );
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1639,7 +1639,7 @@ test("Create checks the draft with sandbox-core's rules: no service or repo mean
   const w = world(on, formStubs({ [`${WS}/validate-form`]: () => ok({ services: repoRule }) }));
   await openPane($);
   const ui = await $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,
@@ -1756,7 +1756,7 @@ function ixStubs(over: Partial<McpStub> = {}): McpStub {
 
 async function mountPane($: Engine) {
   return $.ui.mount({
-    plugin: "sandbox-tools",
+    plugin: "werkmeister",
     surface: "desktop",
     component: "Pane",
     props: PANE_PROPS,

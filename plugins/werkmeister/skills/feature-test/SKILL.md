@@ -1,6 +1,6 @@
 ---
-name: sandbox-feature-test
-description: "Start a developer sandbox feature environment and open a headed browser for interactive testing. Use when the user says '/sandbox-feature-test', 'start feature NAME', 'spin up feature NAME', 'test my feature', or any request to bring up a named sandbox feature and run or open a browser test against the sandbox ingress host. Feature names must be unique (not already running in the sandbox)."
+name: feature-test
+description: "Start a developer sandbox feature environment and open a headed browser for interactive testing. Use when the user says '/werkmeister:feature-test', 'start feature NAME', 'spin up feature NAME', 'test my feature', or any request to bring up a named sandbox feature and run or open a browser test against the sandbox ingress host. Feature names must be unique (not already running in the sandbox)."
 ---
 
 # Sandbox Feature Test
@@ -44,7 +44,7 @@ If the user has not provided a feature name, ask for one. Feature names must:
 Run the skill's `setup_feature.py` (resolved via the plugin root):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/sandbox-feature-test/scripts/setup_feature.py" --feature <feature-name>
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/feature-test/scripts/setup_feature.py" --feature <feature-name>
 ```
 
 The script will:

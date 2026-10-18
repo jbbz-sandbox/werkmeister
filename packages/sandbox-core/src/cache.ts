@@ -78,7 +78,7 @@ export function cacheSet<T>(key: string, v: T): Promise<void> {
       // only through sandbox.ts, whose consumers (the dashboard, the VS Code
       // extension) install no reporter, so an emitted event would go nowhere
       // and these diagnostics would vanish. See note 033.
-      console.error(`[sandbox-workspace] cache write failed for ${key}:`, (e as Error).message);
+      console.error(`[werkmeister] cache write failed for ${key}:`, (e as Error).message);
     }
   });
   writeChain = run.catch(() => {});
@@ -96,7 +96,7 @@ export function runBatchOnce(keys: string[], job: (fresh: string[]) => Promise<v
   void Promise.resolve()
     .then(() => job(fresh))
     .catch((e) =>
-      console.error("[sandbox-workspace] background cache refresh failed:", (e as Error).message),
+      console.error("[werkmeister] background cache refresh failed:", (e as Error).message),
     )
     .finally(() => {
       for (const k of fresh) inFlight.delete(k);

@@ -192,10 +192,11 @@ test("autonomousRules: the feature's own sandbox and docker targets, exact where
 test("autonomous rules reach nothing shared: no blanket command or server, deny covers the shared acts", () => {
   const blanket = /^Bash\((sandbox|docker|npm|gh|claude|claude plugin):\*\)$/;
   assert.ok(!AUTONOMOUS_RULES.some((r) => blanket.test(r)), "no blanket rule");
-  assert.ok(
-    !AUTONOMOUS_RULES.includes("mcp__plugin_sandbox-tools_sandbox-workspace"),
-    "no whole server",
-  );
+  for (const server of [
+    "mcp__plugin_werkmeister_workspaces",
+    "mcp__plugin_sandbox-tools_sandbox-workspace",
+  ])
+    assert.ok(!AUTONOMOUS_RULES.includes(server), `no whole server: ${server}`);
   assert.ok(!AUTONOMOUS_RULES.some((r) => r.startsWith("Bash(npm install")), "no npm install");
   for (const r of [
     "Bash(sandbox proxy-reload:*)",
@@ -209,6 +210,9 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     "mcp__plugin_sandbox-tools_sandbox-workspace__remove-workspace",
     "mcp__plugin_sandbox-tools_sandbox-workspace__kube-switch",
     "mcp__plugin_sandbox-tools_sandbox-workspace__workspace-action",
+    "mcp__plugin_werkmeister_workspaces__remove-workspace",
+    "mcp__plugin_werkmeister_workspaces__kube-switch",
+    "mcp__plugin_werkmeister_workspaces__workspace-action",
   ])
     assert.ok(AUTONOMOUS_DENY.includes(r), r);
   const allowed = new Set(autonomousRules("feat", ["api"]));

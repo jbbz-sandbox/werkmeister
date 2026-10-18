@@ -38,7 +38,7 @@ const DIST_DIR = import.meta.filename.endsWith(".ts")
 async function connectInMemoryClient(): Promise<Client> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await createServer().connect(serverTransport);
-  const client = new Client({ name: "sandbox-workspace-browser", version: "0.1.0" });
+  const client = new Client({ name: "workspaces-browser", version: "0.1.0" });
   await client.connect(clientTransport);
   return client;
 }
@@ -171,7 +171,7 @@ export async function launchBrowserUi(opts: { open?: boolean } = {}): Promise<{ 
   return await new Promise((resolve, reject) => {
     const httpServer = app.listen(DASHBOARD_PORT, "127.0.0.1", () => {
       launched = { url, close: () => httpServer.close() };
-      console.error(`[sandbox-workspace] workspaces UI: ${url}`);
+      console.error(`[workspaces] workspaces UI: ${url}`);
       if (opts.open !== false) openBrowser(url);
       resolve({ url });
     });

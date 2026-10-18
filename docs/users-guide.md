@@ -1025,12 +1025,12 @@ the pieces that are not obvious from the demo services:
   loopback. The forwards are fine; read their state from the host. `sandbox up`, `down`,
   `status` (for features) and `workspace` all work from inside. This applies to a container
   running the CLI *directly*. A container that calls the host MCP surface (`apps/mcp`)
-  instead is unaffected: `sandbox-status` runs on the host, so the forward health it reports
+  instead is unaffected: `status` runs on the host, so the forward health it reports
   is the real one.
 - **Not covered:** the `gh` and `claude` binaries. Telepresence needs a daemon that owns the
   host's routing (or, with `--docker-daemon`, the Docker socket and a kubeconfig), so
   `sandbox intercept` and `sandbox connect` must run on the host — either from a host
-  terminal, or through the `sandbox-intercept` and `sandbox-connect` tools on `apps/mcp`,
+  terminal, or through the `intercept` and `connect` tools on `apps/mcp`,
   which run host-side with exactly the authority a host terminal has.
 - **A container can instead hold no daemon at all.** `apps/mcp` (port 3002, started by
   `sandbox connect`) exposes twenty sandbox verbs over authenticated HTTP, so a container
@@ -1058,7 +1058,7 @@ the pieces that are not obvious from the demo services:
   4. `SANDBOX_MCP_TOKEN` in `~/.sandbox/secrets.env` (copy `~/.sandbox/mcp-token`) *and*
      `secrets: [SANDBOX_MCP_TOKEN]` on the service entry, which routes it through the
      service's own `.env.<service>`. Never put `${SANDBOX_MCP_TOKEN}` in the service's `environment:`:
-     compose expands it from whichever shell ran it — for the `sandbox-up` tool, the MCP
+     compose expands it from whichever shell ran it — for the `up` tool, the MCP
      server's own env, where it is unset — and `environment:` beats `env_file:`, so it
      would shadow the real value with an empty string.
 
@@ -1093,9 +1093,9 @@ It does need:
 - The workspace's archetype carrying `mcp_servers: [sandbox]` (edit 3 above). Nothing
   else makes the entry survive `init-workspace`.
 
-Two things stop working on the isolated side, by design. The `sandbox-tools` plugin's
-MCP entry runs `sandbox dashboard` over stdio, and its skills shell out to the CLI; with
-no binary there, use the `sandbox-*` tools the HTTP server exposes instead. And the
+Two things stop working on the isolated side, by design. The `werkmeister` plugin's
+MCP entry runs `w9r dashboard` over stdio, and its skills shell out to the CLI; with
+no binary there, use the tools the HTTP server exposes instead. And the
 dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
 
 **1. A plain container, by hand.** Nothing sandbox-managed; the host just has to have
