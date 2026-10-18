@@ -4,6 +4,6 @@
  * because the hook fires on every Bash call and must skip the CLI's import chain.
  */
 
-import { main } from "sandbox-core/pr_guard";
+import { main } from "werkmeister-core/pr_guard";
 
 main();

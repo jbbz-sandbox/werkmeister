@@ -1,4 +1,4 @@
-# sandbox-mcp
+# werkmeister-mcp
 
 The remote MCP surface for the sandbox verbs. Headless, authenticated, and
 host-side: it holds the Docker privilege so a container agent does not have to.

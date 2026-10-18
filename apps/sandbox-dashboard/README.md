@@ -44,7 +44,7 @@ sampling (no host implements it) — prompt refinement goes through the
 | Claude sessions | `claude-transcript`, `claude-send`, `claude-turn-status`, `claude-resume` (Terminal) |
 
 Issue reads and status lookups go through the issue tracker `sandbox setup`
-configured (`issueTracker()` in `sandbox-core/issue_tracker`); the dashboard never
+configured (`issueTracker()` in `werkmeister-core/issue_tracker`); the dashboard never
 names a tracker, and the create form's "Fetch from …" button takes its label from
 the bundle (`ui:options.trackerLabel` on `issue_id`).
 
@@ -52,7 +52,7 @@ the bundle (`ui:options.trackerLabel` on `issue_id`).
 
 The CLI owns the inputs and the create logic:
 
-- **Form fields** come from `getFormSchema` in sandbox-core — a render-ready
+- **Form fields** come from `getFormSchema` in werkmeister-core — a render-ready
   RJSF bundle (`{schema, uiSchema, formData, title}`) built from the same prompt
   definitions as the terminal wizard (`packages/sandbox-core/src/workspace_prompts.ts`,
   converted by `form_schema.ts`). Change a prompt there and every form tracks it.
@@ -71,7 +71,7 @@ The CLI owns the inputs and the create logic:
 | `src/lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `src/lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
 | `src/lib/markdown.ts` · `src/lib/workspace-search.ts` | markdown-it config (`html:false`); workspace fuzzy match |
-| `sandbox-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
+| `werkmeister-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
 | other `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
 
 ## Build & test
@@ -83,7 +83,7 @@ npm run build                    # typecheck + 5 UI bundles + server → dist/
 node test/localhost-form.smoke.mjs  # and the other test/*.smoke.mjs
 ```
 
-All ten `test/*.smoke.mjs` pass. Seven of them exercise `sandbox-core`, so
+All ten `test/*.smoke.mjs` pass. Seven of them exercise `werkmeister-core`, so
 `packages/sandbox-core` must be built first (`npm run build` there, or at the
 repo root) — they import the package by name, never by relative path.
 

@@ -13,11 +13,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
-import { dotDir } from "sandbox-core/config";
-import { featureUrl } from "sandbox-core/feature_routing";
-import { raw } from "sandbox-core/reporter";
-import { getSlot } from "sandbox-core/slots";
+import { launchFeatureWindow, readWorkspaceYaml } from "werkmeister-core/browser";
+import { dotDir } from "werkmeister-core/config";
+import { featureUrl } from "werkmeister-core/feature_routing";
+import { raw } from "werkmeister-core/reporter";
+import { getSlot } from "werkmeister-core/slots";
 import { Colors, error, warn } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 

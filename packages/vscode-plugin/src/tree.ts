@@ -1,11 +1,11 @@
 /**
- * VS Code plumbing for the Workspaces view: fetch the three sandbox-core payloads,
+ * VS Code plumbing for the Workspaces view: fetch the three werkmeister-core payloads,
  * hand them to the pure builder, and map WsNode → TreeItem. No display logic
  * lives here — that is all in build-tree.ts.
  */
 
-import { getIntercepts, getWorkspaceStatuses, listWorkspaces } from "sandbox-core";
 import * as vscode from "vscode";
+import { getIntercepts, getWorkspaceStatuses, listWorkspaces } from "werkmeister-core";
 import { buildTree, cliNotFoundNode, type WsNode } from "./build-tree.js";
 import { pollWhileVisible } from "./poll.js";
 

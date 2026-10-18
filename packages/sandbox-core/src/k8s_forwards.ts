@@ -29,7 +29,7 @@ import { info } from "./reporter.js";
 
 /**
  * The forward table, from the shared registry semantics in
- * `sandbox-core/config` — the dashboard's health checks read the same table,
+ * `werkmeister-core/config` — the dashboard's health checks read the same table,
  * so it is defined once. Loading the registry (and failing loud when it is
  * missing) stays here; the parse does not.
  */

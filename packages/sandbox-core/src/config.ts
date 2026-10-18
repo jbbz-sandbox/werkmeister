@@ -1,12 +1,12 @@
 /**
  * Machine-config locations and the registry semantics derived from them —
- * the layer BOTH the `sandbox` CLI (in-process) and sandbox-core (which also
+ * the layer BOTH the `sandbox` CLI (in-process) and werkmeister-core (which also
  * drives the CLI as a subprocess) read.
  *
  * It exists because the two were resolving the same files independently and
  * disagreeing:
  *
- *  - sandbox-core looked up registry files by `SANDBOX_*_YAML` env var only, so
+ *  - werkmeister-core looked up registry files by `SANDBOX_*_YAML` env var only, so
  *    an `overrides.services_yaml` in config.yaml was invisible to it whenever
  *    env.sh had not been sourced — which is exactly the Claude Desktop / MCP
  *    case, since those servers get a minimal env rather than a login shell;

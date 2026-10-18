@@ -30,8 +30,8 @@ import {
   type FormSchemaBundle,
   fetchIssueFormData,
   WorkspaceError,
-} from "sandbox-core";
-import { envVar } from "sandbox-core/config";
+} from "werkmeister-core";
+import { envVar } from "werkmeister-core/config";
 import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {

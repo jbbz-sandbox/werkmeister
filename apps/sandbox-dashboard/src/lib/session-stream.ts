@@ -23,7 +23,7 @@ import {
   parseSessionLines,
   resolveSessionSource,
   turnEvents,
-} from "sandbox-core";
+} from "werkmeister-core";
 
 export type StreamEvent =
   | { type: "entry"; index: number; message: ClaudeMessage }

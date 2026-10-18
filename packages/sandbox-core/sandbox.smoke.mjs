@@ -4,7 +4,7 @@
 //   npm run build && node lib/sandbox.smoke.mjs
 import assert from "node:assert";
 
-const { tallyComposeContainers } = await import("sandbox-core");
+const { tallyComposeContainers } = await import("werkmeister-core");
 
 // Rows as the Engine API reports them: `state` is `State` ("running"/"exited"),
 // `status` is `Status` ("Up 16 hours (healthy)") and carries both the health

@@ -2,8 +2,8 @@
 
 import * as os from "node:os";
 import * as path from "node:path";
-import { pathDefault } from "sandbox-core/global_config";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { pathDefault } from "werkmeister-core/global_config";
 
 const saved = { ...process.env };
 

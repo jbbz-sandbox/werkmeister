@@ -2,9 +2,15 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { basename, join } from "node:path";
-import { childEnv, closeOut, lifecycleOf, listWorkspaces, resolveSandboxBin } from "sandbox-core";
-import { getReposRoot } from "sandbox-core/config";
 import * as vscode from "vscode";
+import {
+  childEnv,
+  closeOut,
+  lifecycleOf,
+  listWorkspaces,
+  resolveSandboxBin,
+} from "werkmeister-core";
+import { getReposRoot } from "werkmeister-core/config";
 import type { WsNode } from "./build-tree.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
@@ -124,7 +130,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
   return [
     vscode.commands.registerCommand("sandbox.refresh", () => provider.refresh()),
 
-    // Deliberately not sandbox-core's openWorkspace(), which shells out to the
+    // Deliberately not werkmeister-core's openWorkspace(), which shells out to the
     // `code` CLI — from inside VS Code the native command is direct and can't
     // fail on a missing `code` binary.
     vscode.commands.registerCommand("sandbox.open", openWorkspace),
@@ -275,7 +281,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         );
         provider.refresh();
       } catch (e) {
-        // sandbox-core's failure message is a multi-line report (which branch
+        // werkmeister-core's failure message is a multi-line report (which branch
         // failed to push, which PR is unshipped) — a toast squeezes it onto one
         // line, so the full text goes to the output channel and the toast points there.
         channel.appendLine((e as Error).message);

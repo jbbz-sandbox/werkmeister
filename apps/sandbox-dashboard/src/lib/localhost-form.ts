@@ -26,9 +26,9 @@ import fs from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import express from "express";
-import type { FormSchemaBundle } from "sandbox-core";
-import { fetchIssueFormData, getFormSchema, refinePrompt, WorkspaceError } from "sandbox-core";
-import { issueTracker } from "sandbox-core/issue_tracker";
+import type { FormSchemaBundle } from "werkmeister-core";
+import { fetchIssueFormData, getFormSchema, refinePrompt, WorkspaceError } from "werkmeister-core";
+import { issueTracker } from "werkmeister-core/issue_tracker";
 
 // Works both from source (src/lib/localhost-form.ts via tsx) and compiled
 // (dist/lib/localhost-form.js) — the built page always lives at dist/form.html.

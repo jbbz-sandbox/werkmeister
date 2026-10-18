@@ -12,13 +12,13 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 import {
   buildStandardsManifest,
   resolveActiveStandards,
   universalStandards,
   validateStandardModules,
-} from "sandbox-core/standards";
-import { describe, expect, it } from "vitest";
+} from "werkmeister-core/standards";
 
 /** `zebra` sorts after `alpha` alphabetically but is declared to load first. */
 const MODULES = {

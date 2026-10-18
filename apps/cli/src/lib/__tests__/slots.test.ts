@@ -3,10 +3,10 @@
  *
  * The functions this exercises are module-private, so the boundaries around
  * them are mocked one level down instead:
- *   - the Docker query boundary → mock `docker()` in sandbox-core/docker
+ *   - the Docker query boundary → mock `docker()` in werkmeister-core/docker
  *     (queryLabeledContainers asks it for `listContainers`),
  *   - `_slot_config`            → override `loadPorts` in config.js,
- *   - the allocate lock         → mock `sandboxLock` in sandbox-core/locks (also lets us
+ *   - the allocate lock         → mock `sandboxLock` in werkmeister-core/locks (also lets us
  *     drive the lock-timeout path without a real 30s wait).
  * The fixture ports.yaml + services.yaml, staged in a throwaway ~/.sandbox,
  * back the un-overridden cases.
@@ -29,8 +29,8 @@ const h = vi.hoisted(() => ({
     | undefined,
 }));
 
-vi.mock("sandbox-core/docker", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/docker")>();
+vi.mock("werkmeister-core/docker", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/docker")>();
   return {
     ...actual,
     docker: () => ({
@@ -45,12 +45,12 @@ vi.mock("sandbox-core/docker", async (importOriginal) => {
   };
 });
 
-vi.mock("sandbox-core/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/config")>();
+vi.mock("werkmeister-core/config", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/config")>();
   return { ...actual, loadPorts: () => h.portsOverride ?? actual.loadPorts() };
 });
 
-vi.mock("sandbox-core/locks", () => ({
+vi.mock("werkmeister-core/locks", () => ({
   sandboxLock: (name: string, fn: () => unknown, opts?: { timeout?: number }) => {
     h.lastLockOpts = opts;
     if (h.simulateLockTimeout) {
@@ -60,7 +60,7 @@ vi.mock("sandbox-core/locks", () => ({
   },
 }));
 
-import { type Reporter, withReporter } from "sandbox-core/reporter";
+import { type Reporter, withReporter } from "werkmeister-core/reporter";
 import {
   allocateSlot,
   getAllSlots,
@@ -68,7 +68,7 @@ import {
   getServicePort,
   getSlot,
   releaseSlot,
-} from "sandbox-core/slots";
+} from "werkmeister-core/slots";
 import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");

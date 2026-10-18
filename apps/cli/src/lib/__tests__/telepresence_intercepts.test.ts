@@ -9,13 +9,13 @@
  */
 
 import * as fs from "node:fs";
+import { describe, expect, it } from "vitest";
 import {
   interceptBlocker,
   listIntercepts,
   parseInterceptList,
   type Runner,
-} from "sandbox-core/telepresence";
-import { describe, expect, it } from "vitest";
+} from "werkmeister-core/telepresence";
 
 const ACTIVE = fs.readFileSync(
   new URL("./fixtures/telepresence-list-active.json", import.meta.url),

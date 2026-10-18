@@ -1168,7 +1168,7 @@ export function syncClaudeStandardsDir(
 }
 
 /** `<publisher>.<name>` from packages/vscode-plugin/package.json, as `code` lists it. */
-export const VSCODE_EXTENSION_ID = "jbbz.vscode-plugin";
+export const VSCODE_EXTENSION_ID = "jbbz.werkmeister-vscode";
 /** Where the CLI's `prepack` puts the packaged extension inside the tarball. */
 export const BUNDLED_VSIX_REL = path.join("dist", "sandbox-workspaces.vsix");
 

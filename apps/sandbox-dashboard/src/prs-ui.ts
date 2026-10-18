@@ -37,7 +37,7 @@ interface OpenPrsResult {
   mine: OpenPr[];
   others: OpenPr[];
 }
-/** An `Issue` (sandbox-core/issue_tracker), as the `pr-reconcile` tool returns it. */
+/** An `Issue` (werkmeister-core/issue_tracker), as the `pr-reconcile` tool returns it. */
 interface IssueCard {
   ref: string;
   title?: string;

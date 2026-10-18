@@ -6,14 +6,14 @@
  */
 
 import * as fs from "node:fs";
-import { buildInterceptRows, interceptsSnapshot } from "sandbox-core/status";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildInterceptRows, interceptsSnapshot } from "werkmeister-core/status";
 
 // The snapshot's only seams: the telepresence subprocess, the slot table, the registry.
 const h = vi.hoisted(() => ({ telepresence: true }));
 
-vi.mock("sandbox-core/proc", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/proc")>();
+vi.mock("werkmeister-core/proc", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/proc")>();
   return {
     ...actual,
     run: (cmd: string[]) => {
@@ -36,12 +36,12 @@ vi.mock("sandbox-core/proc", async (importOriginal) => {
     },
   };
 });
-vi.mock("sandbox-core/slots", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("sandbox-core/slots")>()),
+vi.mock("werkmeister-core/slots", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("werkmeister-core/slots")>()),
   getAllSlots: async () => ({ "test-me": { slot: 1, services: ["frontend"] } }),
 }));
-vi.mock("sandbox-core/config", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("sandbox-core/config")>()),
+vi.mock("werkmeister-core/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("werkmeister-core/config")>()),
   loadServices: () => REGISTRY,
 }));
 

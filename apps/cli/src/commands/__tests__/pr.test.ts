@@ -1,21 +1,21 @@
 /**
  * `sandbox pr` is argv → core: the workspace comes from the cwd, the action
  * picks the core call, and a failed gate is a non-zero exit (scripts and the
- * agent read the exit code). The gate itself is tested in sandbox-core.
+ * agent read the exit code). The gate itself is tested in werkmeister-core.
  */
 import { beforeEach, expect, it, type MockInstance, vi } from "vitest";
 
-vi.mock("sandbox-core", () => ({
+vi.mock("werkmeister-core", () => ({
   adoptPr: vi.fn(),
   gatePrs: vi.fn(),
   openPrs: vi.fn(),
   refreshPrStatus: vi.fn(),
   watchPrs: vi.fn(),
 }));
-vi.mock("sandbox-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
+vi.mock("werkmeister-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
 
-import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "sandbox-core";
-import { findRecordRoot } from "sandbox-core/pr_guard";
+import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
+import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { run } from "../pr.js";
 
 let exit: MockInstance; // untyped: process.exit's `never` return doesn't fit MockInstance<typeof process.exit>

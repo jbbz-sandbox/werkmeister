@@ -23,7 +23,7 @@
  *                     and the Sandbox Workspaces extension the package ships
  *
  * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
- * converges the machine (sandbox-core/machine_setup):
+ * converges the machine (werkmeister-core/machine_setup):
  * seeding the `~/.sandbox` registry files (or migrating them up from a legacy
  * `infra/config/` checkout), the werkmeister and ponytail plugins, the
  * companion sandbox-workspace checkout, the TLS certificate covering every
@@ -45,12 +45,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "sandbox-core/browser";
-import { expandUser } from "sandbox-core/config";
-import { ingressHostnames } from "sandbox-core/feature_routing";
-import type { PromptSpec } from "sandbox-core/global_config";
-import * as gc from "sandbox-core/global_config";
-import { loadIssueTracker, TRACKER_IDS, trackerById } from "sandbox-core/issue_tracker";
+import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "werkmeister-core/browser";
+import { expandUser } from "werkmeister-core/config";
+import { ingressHostnames } from "werkmeister-core/feature_routing";
+import type { PromptSpec } from "werkmeister-core/global_config";
+import * as gc from "werkmeister-core/global_config";
+import { loadIssueTracker, TRACKER_IDS, trackerById } from "werkmeister-core/issue_tracker";
 import {
   claudeStandardsDirState,
   claudeUserSettingsPath,
@@ -61,8 +61,12 @@ import {
   vscodeExtensionState,
   vscodeSettingsPath,
   WORKSPACE_ROOT_REPO,
-} from "sandbox-core/machine_setup";
-import { discoverFragments, FRAGMENT_REL, inheritedK8sContext } from "sandbox-core/registry_sync";
+} from "werkmeister-core/machine_setup";
+import {
+  discoverFragments,
+  FRAGMENT_REL,
+  inheritedK8sContext,
+} from "werkmeister-core/registry_sync";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
 

@@ -9,7 +9,7 @@
  *     sandbox optimize --collect 5  # Collect for 5 minutes first, then analyze
  */
 
-import { formatMem, optimizeReport, type ServiceUsage } from "sandbox-core/stats";
+import { formatMem, optimizeReport, type ServiceUsage } from "werkmeister-core/stats";
 import { Colors } from "../lib/config.js";
 
 /** How each status reads in the table — the colour is the whole point of it. */

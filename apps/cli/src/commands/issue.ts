@@ -18,15 +18,15 @@
 
 import * as fs from "node:fs";
 
-import { findWorkspaceRoot } from "sandbox-core/gate";
+import { findWorkspaceRoot } from "werkmeister-core/gate";
 import {
   type IssueKind,
   issueBriefing,
   issueIdOf,
   issueTracker,
   type NewIssue,
-} from "sandbox-core/issue_tracker";
-import { loadConfigFile } from "sandbox-core/workspace_prompts";
+} from "werkmeister-core/issue_tracker";
+import { loadConfigFile } from "werkmeister-core/workspace_prompts";
 
 import { error, success } from "../lib/config.js";
 
