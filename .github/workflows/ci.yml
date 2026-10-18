@@ -54,13 +54,13 @@ jobs:
   release:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # GitHub Packages refuses a re-publish of a version, so two overlapping runs
+    # npm refuses a re-publish of a version, so two overlapping runs
     # would not race harmlessly — the loser fails.
     concurrency: release-${{ github.ref }}
     permissions:
       contents: write        # push the version branch and the release tag
       pull-requests: write   # open and update the "version packages" PR
-      packages: write        # publish to npm.pkg.github.com
+      id-token: write        # npm trusted publishing: OIDC instead of a stored token
     runs-on: ubuntu-latest
     steps:
       # A push made with GITHUB_TOKEN gets its CI held for approval, so the
@@ -88,11 +88,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          # Writes the .npmrc the publish authenticates through; NODE_AUTH_TOKEN
-          # below fills its placeholder. The ~/.npmrc a developer writes by hand
-          # (README) does not exist on a runner.
-          registry-url: https://npm.pkg.github.com
-          scope: '@jbbz-sandbox'
       # Restores what `test` just saved, so `npm run release`'s build replays
       # from cache.
       - uses: actions/cache@v4
@@ -112,5 +107,6 @@ jobs:
         env:
           # Opens/updates the version PR and creates the GitHub release.
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          # Publishing to GitHub Packages stays on the job's own token.
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No npm token: `npm publish` (npm >= 11.5.1, bundled with Node 24)
+          # authenticates through the job's OIDC token, which npmjs.com accepts
+          # because this workflow is the package's trusted publisher.
