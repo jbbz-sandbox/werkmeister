@@ -8,7 +8,7 @@
  * workspace-scoped (projection staleness).
  */
 
-import { checkStandards } from "sandbox-core/standards";
+import { checkStandards } from "werkmeister-core/standards";
 import { error, info, success } from "../lib/config.js";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {

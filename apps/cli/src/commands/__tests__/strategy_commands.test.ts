@@ -7,10 +7,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { collectingReporter, withReporter } from "sandbox-core/reporter";
-import type { StrategyId } from "sandbox-core/strategies";
-import { STRATEGY_IDS, strategyById, strategyFor } from "sandbox-core/strategies";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { collectingReporter, withReporter } from "werkmeister-core/reporter";
+import type { StrategyId } from "werkmeister-core/strategies";
+import { STRATEGY_IDS, strategyById, strategyFor } from "werkmeister-core/strategies";
 
 import { run as hooks } from "../hooks.js";
 import { run as notes } from "../notes.js";

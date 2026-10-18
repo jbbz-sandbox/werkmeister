@@ -396,7 +396,7 @@ const FEATURE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /**
  * Narrow a resolved registry path to one that exists, so callers can degrade to
- * a null instead of throwing. Where the file *should* be is `sandbox-core/config`'s
+ * a null instead of throwing. Where the file *should* be is `werkmeister-core/config`'s
  * call (shared with the CLI); whether an absent one is fatal is each caller's.
  */
 async function existing(p: string): Promise<string | null> {
@@ -2187,7 +2187,7 @@ export async function openFeatureBrowser(name: string): Promise<{ path: string }
  * than tailing. Returns the (ANSI-stripped) transcript; throws
  * {@link WorkspaceError} on failure.
  *
- * Calls `sandbox-core/infra` in-process rather than spawning the CLI (note 087).
+ * Calls `werkmeister-core/infra` in-process rather than spawning the CLI (note 087).
  * Health is a second call by design — `infra.up()`'s docstring explains why the
  * split exists — and the summary below is this function's own rendering, since
  * the library emits progress but never lays out a command's output (note 070 §3).
@@ -2255,7 +2255,7 @@ export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
 /**
  * Run a lifecycle action (up/stop/restart/down) against a workspace.
  *
- * Calls `sandbox-core/lifecycle` in-process — the payoff step 5 built the API
+ * Calls `werkmeister-core/lifecycle` in-process — the payoff step 5 built the API
  * for (note 079) — rather than spawning the CLI. The transcript the CLI would
  * have printed is collected through a reporter and returned as `output`, so the
  * `{ command, output, path }` contract the MCP tool renders is unchanged.
@@ -2285,7 +2285,7 @@ export async function runWorkspaceAction(
   }
   if (feature === "infra") {
     // `sandbox up/down infra` means the shared infra stack, which the CLI routes
-    // to `connect`/`sandbox-core/infra` — a different code path entirely. Refuse
+    // to `connect`/`werkmeister-core/infra` — a different code path entirely. Refuse
     // rather than quietly running a feature lifecycle against it.
     throw new WorkspaceError(
       `Workspace '${name}' declares FEATURE=infra; manage the infra stack with the connect tool.`,
@@ -3022,7 +3022,7 @@ export interface K8sForwardHealth {
 
 /**
  * Check every default k8s forward in parallel, each with the probe its
- * health_endpoint names (see `sandbox-core/k8s`'s `WIRE_PROBES`).
+ * health_endpoint names (see `werkmeister-core/k8s`'s `WIRE_PROBES`).
  */
 export async function getK8sForwardsHealth(): Promise<{
   forwards: K8sForwardHealth[];

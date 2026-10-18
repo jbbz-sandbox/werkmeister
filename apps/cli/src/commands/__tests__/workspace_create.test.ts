@@ -13,7 +13,7 @@ const fetched: string[] = [];
 
 class FakeWorkspaceError extends Error {}
 class FakeInitError extends Error {}
-vi.mock("sandbox-core", () => ({
+vi.mock("werkmeister-core", () => ({
   createWorkspace: async (...a: unknown[]) => {
     calls.push(a);
     if (createError) throw createError;
@@ -22,7 +22,7 @@ vi.mock("sandbox-core", () => ({
   distillIssue: async () => ({ fields: { description: "d" }, warning: null }),
   WorkspaceError: FakeWorkspaceError,
 }));
-vi.mock("sandbox-core/workspace_prompts", () => ({
+vi.mock("werkmeister-core/workspace_prompts", () => ({
   resolveInputs: (a: Record<string, unknown>) => ({
     ...(a.feature ? { feature: a.feature } : {}),
     ...(a.issue_id ? { issue_id: a.issue_id } : {}),
@@ -30,23 +30,23 @@ vi.mock("sandbox-core/workspace_prompts", () => ({
   }),
   workspacePromptSpec: () => ({}),
 }));
-vi.mock("sandbox-core/workspace_init", () => ({ WorkspaceInitError: FakeInitError }));
-vi.mock("sandbox-core/issue_snapshot", () => ({
+vi.mock("werkmeister-core/workspace_init", () => ({ WorkspaceInitError: FakeInitError }));
+vi.mock("werkmeister-core/issue_snapshot", () => ({
   fetchIssueSnapshot: async (ref: string) => {
     fetched.push(ref);
     if (fetchError) throw fetchError;
     return { title: "t" };
   },
 }));
-vi.mock("sandbox-core/issue_tracker", () => ({
+vi.mock("werkmeister-core/issue_tracker", () => ({
   issueTracker: () => ({
     label: "GitHub",
     refExample: "o/r#1",
     parseRef: (r: string) => (/^o\/r#\d+$/.test(r) ? r : /^\d+$/.test(r) ? `o/r#${r}` : null),
   }),
 }));
-vi.mock("sandbox-core/form_schema", () => ({ buildFormSchema: () => ({}) }));
-vi.mock("sandbox-core/proc", () => ({ run: () => ({ status: 0 }) }));
+vi.mock("werkmeister-core/form_schema", () => ({ buildFormSchema: () => ({}) }));
+vi.mock("werkmeister-core/proc", () => ({ run: () => ({ status: 0 }) }));
 vi.mock("../../lib/config.js", () => ({
   error: (m: string) => errors.push(m),
   warn: (m: string) => warns.push(m),

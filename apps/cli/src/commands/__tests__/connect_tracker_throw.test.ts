@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 
-vi.mock("sandbox-core/issue_tracker", () => ({
+vi.mock("werkmeister-core/issue_tracker", () => ({
   ghBin: () => "gh",
   issueTracker: () => ({
     id: "jira",

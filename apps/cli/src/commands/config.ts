@@ -21,8 +21,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { PromptSpec } from "sandbox-core/global_config";
-import * as gc from "sandbox-core/global_config";
+import type { PromptSpec } from "werkmeister-core/global_config";
+import * as gc from "werkmeister-core/global_config";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { runWizard } from "../lib/wizard.js";
 

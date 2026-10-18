@@ -5,12 +5,12 @@
  * the issue, write closeout.md, remove the workspace, delete the merged code
  * branches. --abandon: record why, push every branch and keep them, remove.
  * `name` defaults to the workspace the cwd is in. The checks live in
- * sandbox-core's `closeOut`, shared with the pane and the MCP tool.
+ * werkmeister-core's `closeOut`, shared with the pane and the MCP tool.
  */
 
 import path from "node:path";
-import { closeOut } from "sandbox-core";
-import { findRecordRoot } from "sandbox-core/pr_guard";
+import { closeOut } from "werkmeister-core";
+import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { Colors, error, info } from "../lib/config.js";
 import { confirm } from "../lib/wizard.js";
 

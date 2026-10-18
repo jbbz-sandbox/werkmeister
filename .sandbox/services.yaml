@@ -73,7 +73,7 @@ services:
     path: packages/sandbox-core
     type: library
     archetype: node-tool
-    test: "npx turbo run test --filter=sandbox-core"
+    test: "npx turbo run test --filter=werkmeister-core"
     internal_port: 3999
     port_offset: 2
     health_endpoint: /
@@ -96,7 +96,7 @@ services:
     path: packages/vscode-plugin
     type: extension
     archetype: mcp-client
-    test: "npx turbo run test --filter=vscode-plugin"
+    test: "npx turbo run test --filter=werkmeister-vscode"
     internal_port: 3997
     port_offset: 4
     health_endpoint: /
@@ -116,7 +116,7 @@ services:
     path: apps/sandbox-dashboard
     type: web
     archetype: node-web
-    test: "npx turbo run test --filter=sandbox-workspace-mcp-app"
+    test: "npx turbo run test --filter=werkmeister-dashboard"
     internal_port: 3001
     port_offset: 5
     health_endpoint: /

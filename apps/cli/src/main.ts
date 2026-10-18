@@ -43,15 +43,15 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
-import { COMPOSE_FILE } from "sandbox-core/compose_file";
-import { envVar } from "sandbox-core/config";
-import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
-import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
+import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import { envVar } from "werkmeister-core/config";
+import { SandboxError, WORKSPACE_ERROR_CODE } from "werkmeister-core/errors";
+import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
 // pulls in the registry (fs/proc/reporter/jit/icm) — accepted here since
-// sandbox-core is already this CLI's core dependency and every command
+// werkmeister-core is already this CLI's core dependency and every command
 // module loads far more of it on demand.
-import { STRATEGY_IDS } from "sandbox-core/strategies";
+import { STRATEGY_IDS } from "werkmeister-core/strategies";
 import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
 
@@ -933,7 +933,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
   // One-shot migration: remove legacy ~/.sandbox/slots.json on first run
   // after the labels refactor. Idempotent; no-op once the file is gone.
   try {
-    const { migrateSlotsJson } = await import("sandbox-core/slots");
+    const { migrateSlotsJson } = await import("werkmeister-core/slots");
     await migrateSlotsJson();
   } catch {
     // migration must never block the CLI
@@ -1004,7 +1004,7 @@ async function completeLine(program: Command): Promise<void> {
     // argument, or add the slot lookup, if either ever grates.
     candidates = ["infra"];
     try {
-      const { listWorkspaces } = await import("sandbox-core");
+      const { listWorkspaces } = await import("werkmeister-core");
       const { workspaces } = await listWorkspaces();
       candidates.push(...workspaces.map((w) => w.name));
     } catch {

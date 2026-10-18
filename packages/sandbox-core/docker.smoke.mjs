@@ -22,7 +22,7 @@ if (!running.length) {
   process.exit(0);
 }
 
-const body = "sandbox-core smoke\n";
+const body = "werkmeister-core smoke\n";
 const dir = await mkdtemp(path.join(tmpdir(), "sandbox-core-smoke-"));
 const host = path.join(dir, "payload.txt");
 await writeFile(host, body);

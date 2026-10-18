@@ -4,12 +4,12 @@
  * Remove orphaned Docker volumes and stale slot entries from stopped
  * features. With --all, also tears down active features first.
  *
- * The sweep itself is `sandbox-core/lifecycle`; what is left here is the banner
+ * The sweep itself is `werkmeister-core/lifecycle`; what is left here is the banner
  * and the closing block. The volume lists stay in the library because they
  * interleave with the sweep's own progress — see `runClean`.
  */
 
-import { planClean, runClean } from "sandbox-core/lifecycle";
+import { planClean, runClean } from "werkmeister-core/lifecycle";
 import { Colors } from "../lib/config.js";
 
 /** Execute the ``sandbox clean`` command. */

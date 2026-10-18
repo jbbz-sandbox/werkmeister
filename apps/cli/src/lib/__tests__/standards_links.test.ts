@@ -14,9 +14,9 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as gc from "sandbox-core/global_config";
-import { generateSkills, standardsSource, standardsUrl } from "sandbox-core/skill_gen";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as gc from "werkmeister-core/global_config";
+import { generateSkills, standardsSource, standardsUrl } from "werkmeister-core/skill_gen";
 
 let tmp: string;
 

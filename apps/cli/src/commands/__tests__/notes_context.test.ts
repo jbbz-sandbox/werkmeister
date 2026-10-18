@@ -10,16 +10,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("sandbox-core/standards", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/standards")>();
+vi.mock("werkmeister-core/standards", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/standards")>();
   return { ...actual, standardsMatchingDiff: () => [] };
 });
-vi.mock("sandbox-core/graduate", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("sandbox-core/graduate")>();
+vi.mock("werkmeister-core/graduate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("werkmeister-core/graduate")>();
   return { ...actual, reconcileGraduating: () => [] };
 });
 
-import { buildContext } from "sandbox-core/notes";
+import { buildContext } from "werkmeister-core/notes";
 
 let root: string;
 

@@ -1,15 +1,15 @@
 /**
  * The confirmation gate on `sandbox close-out`, which ends in the
- * workspace's `rm -rf`. Close-out's own checks are sandbox-core's.
+ * workspace's `rm -rf`. Close-out's own checks are werkmeister-core's.
  */
 import { beforeEach, expect, it, vi } from "vitest";
 
-vi.mock("sandbox-core", () => ({ closeOut: vi.fn() }));
-vi.mock("sandbox-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
+vi.mock("werkmeister-core", () => ({ closeOut: vi.fn() }));
+vi.mock("werkmeister-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
 vi.mock("../../lib/wizard.js", () => ({ confirm: vi.fn() }));
 
-import { closeOut } from "sandbox-core";
-import { findRecordRoot } from "sandbox-core/pr_guard";
+import { closeOut } from "werkmeister-core";
+import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { confirm } from "../../lib/wizard.js";
 import { run } from "../close_out.js";
 

@@ -6,9 +6,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { Answer, Resolver } from "sandbox-core/fragment_detect";
-import type { Runner } from "sandbox-core/machine_setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Answer, Resolver } from "werkmeister-core/fragment_detect";
+import type { Runner } from "werkmeister-core/machine_setup";
 import { type DetectDeps, runDetect } from "../../commands/detect.js";
 
 const noTools: Runner = (cmd) =>

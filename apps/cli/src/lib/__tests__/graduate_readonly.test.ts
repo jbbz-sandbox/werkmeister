@@ -9,8 +9,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { GraduationError, graduateNote } from "sandbox-core/graduate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { GraduationError, graduateNote } from "werkmeister-core/graduate";
 
 let tmp: string;
 let standardsDir: string;

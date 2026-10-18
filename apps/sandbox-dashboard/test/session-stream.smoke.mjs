@@ -85,7 +85,7 @@ console.log("✓ live append delivered as entry index 2");
 unsub();
 
 // 3. "waiting for input" signal: no tracked turn + Claude spoke last → waiting.
-const { getWorkspaceStatuses } = await import("sandbox-core");
+const { getWorkspaceStatuses } = await import("werkmeister-core");
 const { statuses } = await getWorkspaceStatuses();
 const demo = statuses.find((s) => s.name === "demo");
 assert.ok(demo, "demo workspace in status sweep");

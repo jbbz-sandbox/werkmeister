@@ -4,14 +4,14 @@
  * Remove a local service from a feature, falling back to k8s for that
  * service. Re-generates compose and proxy configuration.
  *
- * The sequence itself is `sandbox-core/lifecycle`; what is left here is the
+ * The sequence itself is `werkmeister-core/lifecycle`; what is left here is the
  * banner, the two error renderings, and the summary block.
  */
 
-import { SandboxError } from "sandbox-core/errors";
-import type { RemoveResult } from "sandbox-core/lifecycle";
-import { removeService } from "sandbox-core/lifecycle";
-import { getAllSlots } from "sandbox-core/slots";
+import { SandboxError } from "werkmeister-core/errors";
+import type { RemoveResult } from "werkmeister-core/lifecycle";
+import { removeService } from "werkmeister-core/lifecycle";
+import { getAllSlots } from "werkmeister-core/slots";
 import { Colors, warn } from "../lib/config.js";
 
 /**

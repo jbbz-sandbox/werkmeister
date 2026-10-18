@@ -1,4 +1,4 @@
-// The precedence rules in config.ts are what stopped the CLI and sandbox-core
+// The precedence rules in config.ts are what stopped the CLI and werkmeister-core
 // resolving different files for the same machine, so they are pinned here: the
 // YAML override wins over the SANDBOX_* export (env.sh is generated FROM the
 // YAML, so a disagreeing export is the stale one), and the export still beats

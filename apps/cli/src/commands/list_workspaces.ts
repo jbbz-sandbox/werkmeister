@@ -2,11 +2,11 @@
  * sandbox list-workspaces
  *
  * The workspaces under $SANDBOX_WORKSPACES_ROOT with their issue and
- * labels. The scan is `sandbox-core`'s `listWorkspaces` -- the same call the
+ * labels. The scan is `werkmeister-core`'s `listWorkspaces` -- the same call the
  * dashboard and the MCP surface make; what is left here is the table.
  */
 
-import { listWorkspaces } from "sandbox-core";
+import { listWorkspaces } from "werkmeister-core";
 import { Colors } from "../lib/config.js";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {

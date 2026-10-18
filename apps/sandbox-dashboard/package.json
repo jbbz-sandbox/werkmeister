@@ -1,5 +1,5 @@
 {
-  "name": "sandbox-workspace-mcp-app",
+  "name": "werkmeister-dashboard",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -27,7 +27,7 @@
     "markdown-it": "^14.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "sandbox-core": "^0.14.0",
+    "werkmeister-core": "^0.14.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },

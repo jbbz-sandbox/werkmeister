@@ -44,10 +44,10 @@ jobs:
         with:
           path: packages/vscode-plugin/.vscode-test
           key: vscode-${{ runner.os }}-1.93.0-${{ hashFiles('packages/vscode-plugin/.vscode-test.mjs') }}
-      - run: xvfb-run -a npm run test:integration --workspace vscode-plugin
+      - run: xvfb-run -a npm run test:integration --workspace werkmeister-vscode
       # `vsce package` fails on a README link it can't rewrite, and is the only
       # check on .vscodeignore — #38 broke packaging and nothing caught it.
-      - run: npm run package --workspace vscode-plugin
+      - run: npm run package --workspace werkmeister-vscode
 
   # Gated on `test` rather than repeating its checks: a publish cannot be taken
   # back, and this used to be a separate workflow that raced CI on every push.
