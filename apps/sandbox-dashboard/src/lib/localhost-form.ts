@@ -208,7 +208,7 @@ export function promptViaLocalhostForm(
     const httpServer = app.listen(0, "127.0.0.1", () => {
       const { port } = httpServer.address() as AddressInfo;
       const url = `http://127.0.0.1:${port}/`;
-      console.error(`[sandbox-workspace] workspace form: ${url}`);
+      console.error(`[workspaces] workspace form: ${url}`);
       if (opts.open !== false) openBrowser(url);
     });
 

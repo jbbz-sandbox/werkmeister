@@ -304,6 +304,16 @@ export const READ_ONLY_GIT_RULES = [
   "Bash(git ls-files:*)",
 ];
 
+// The plugin was `sandbox-tools` with server `sandbox-workspace` (SW-9). A machine that has not
+// run `w9r setup` yet still exposes the old names, so both stay allowed; the old one can go once
+// that release is out of support. Dropping it also prunes it from existing workspaces (see
+// `permissionsRecord`).
+const PLUGIN_MCP_PREFIXES = [
+  "mcp__plugin_werkmeister_workspaces__",
+  "mcp__plugin_sandbox-tools_sandbox-workspace__",
+];
+const pluginTool = (tool: string) => PLUGIN_MCP_PREFIXES.map((prefix) => `${prefix}${tool}`);
+
 // `claude -p --permission-mode acceptEdits` (claude-send) refuses any Bash call
 // without a rule and nobody is there to approve it (#175). These cover the run
 // from stage 01 to `sandbox pr open` and stop at its own workspace: no
@@ -339,7 +349,7 @@ export const AUTONOMOUS_RULES = [
     "workspace-prs",
     "kube-context",
     "k8s-forwards-status",
-  ].map((tool) => `mcp__plugin_sandbox-tools_sandbox-workspace__${tool}`),
+  ].flatMap(pluginTool),
 ];
 
 /** AUTONOMOUS_RULES plus the `sandbox` and `docker` commands that name this feature or its containers. */
@@ -408,7 +418,7 @@ export const AUTONOMOUS_DENY = [
     "claude-send",
     "claude-resume",
     "sandbox-connect",
-  ].map((tool) => `mcp__plugin_sandbox-tools_sandbox-workspace__${tool}`),
+  ].flatMap(pluginTool),
 ];
 
 // Permission strings can't carry a marker the way hook commands do, so the rules

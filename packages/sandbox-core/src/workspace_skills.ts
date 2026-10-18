@@ -3,11 +3,11 @@
  *
  * The sb-* skills are projected into each workspace's `.claude/skills/`
  * at init-workspace, exactly like the generated agents — NOT shipped through
- * the user-scope sandbox-tools plugin. Projection scopes them to the sessions
+ * the user-scope werkmeister plugin. Projection scopes them to the sessions
  * they apply to and kills the plugin-refresh lag for the volatile skills:
  * init always renders fresh from this repo, so a standards edit reaches new
  * workspaces with no marketplace/install step. The plugin keeps only the
- * globally useful sandbox-* ops skills.
+ * globally useful ops skills.
  *
  * Two source kinds, one output:
  * - the five sb-*-standard skills render on the fly from docs/standards/*.md

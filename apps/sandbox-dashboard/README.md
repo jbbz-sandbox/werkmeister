@@ -1,4 +1,4 @@
-# sandbox-workspace MCP server
+# workspaces MCP server
 
 The sandbox **workspace dashboard** (`sandbox dashboard`): ~29 tools for creating and
 operating sandbox workspaces — worktree creation, container lifecycle, PR review,
@@ -90,11 +90,11 @@ repo root) — they import the package by name, never by relative path.
 ## Wiring
 
 - **Claude Code (CLI / VS Code):** installed automatically by the
-  `sandbox-tools` plugin's `.mcp.json` (`sandbox dashboard`).
+  `werkmeister` plugin's `.mcp.json` (`w9r dashboard`).
 - **Claude Desktop** (plugins don't install there):
 
 ```json
-{ "mcpServers": { "sandbox-workspace": { "command": "sandbox", "args": ["dashboard"] } } }
+{ "mcpServers": { "workspaces": { "command": "w9r", "args": ["dashboard"] } } }
 ```
 
 Fully quit and reopen Desktop after changes; rebuild first. The server finds the

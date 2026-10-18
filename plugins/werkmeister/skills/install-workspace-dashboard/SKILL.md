@@ -18,7 +18,7 @@ workspace's newest session.
    Cowork; the same UI is available inline as a fallback in Claude Desktop —
    calling the Sandbox `list-workspaces` tool renders it as an MCP App.
 2. **Sandbox MCP server connected**: check that
-   `mcp__plugin_sandbox-tools_sandbox-workspace__list-workspaces` (or the equivalent under the
+   `mcp__plugin_werkmeister_workspaces__list-workspaces` (or the equivalent under the
    user's server name) is available.
 3. **Built HTML exists**: `apps/sandbox-dashboard/dist/workspace-list.artifact.html`
    in the sandbox checkout. If missing, build it:
@@ -31,7 +31,7 @@ workspace's newest session.
 
 1. Read `apps/sandbox-dashboard/dist/workspace-list.artifact.html`. The MCP server
    name is baked in at build time from
-   `apps/sandbox-dashboard/src/artifact-meta.json` (default `sandbox-workspace`),
+   `apps/sandbox-dashboard/src/artifact-meta.json` (default `workspaces`),
    and the bundled script derives its tool-name prefix from the file's own
    `cowork-artifact-meta` block at runtime. If the session's Sandbox tools are
    named differently than the meta block says, change `serverName` in

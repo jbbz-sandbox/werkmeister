@@ -39,9 +39,9 @@ export interface ContextStrategy {
   init(ctx: InitContext): void;
   /** Called by `up` after secrets are validated and before the slot is allocated. */
   refresh(workspaceRoot: string): void;
-  /** Backs `sandbox skills check` and MCP sandbox-skills. Empty array = fresh. */
+  /** Backs `sandbox skills check` and MCP `skills` tool. Empty array = fresh. */
   check(workspaceRoot: string): string[];
-  /** Backs `sandbox skills sync` and MCP sandbox-skills. */
+  /** Backs `sandbox skills sync` and MCP `skills` tool. */
   sync(workspaceRoot: string): { wrote: string[] };
   /** SessionStart re-injection text, or null. Backs `sandbox notes context`. */
   sessionContext(workspaceRoot: string, hookPayload: Record<string, unknown>): string | null;

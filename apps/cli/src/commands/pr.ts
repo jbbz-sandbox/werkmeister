@@ -10,7 +10,7 @@
  *   status  record merged / shipped / closed from GitHub and release tags
  *   adopt   write the PR file for a fix that landed outside the workspace
  *   watch   from anywhere: resume each terminal session whose PR merged, shipped or closed
- *           (desktop sessions are the sandbox-tools mod's)
+ *           (desktop sessions are the werkmeister mod's)
  */
 
 import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";

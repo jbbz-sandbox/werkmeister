@@ -115,7 +115,7 @@ function renderWorkspaceTable(result: Awaited<ReturnType<typeof listWorkspaces>>
 
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "sandbox-workspace",
+    name: "workspaces",
     version: "0.1.0",
   });
 
@@ -894,7 +894,7 @@ export function createServer(): McpServer {
         "write closeout.md, remove the workspace (commit + push every branch, `sandbox down`, delete the " +
         "folder) and delete the merged code branches. With `abandon` (a reason) when work is unshipped: " +
         "record the reason, leave the issue, remove the workspace and keep every branch. Without `abandon` it " +
-        "refuses while a PR is unshipped. The sandbox-tools plugin then archives the workspace's desktop " +
+        "refuses while a PR is unshipped. The werkmeister plugin then archives the workspace's desktop " +
         "Claude sessions; terminal sessions still open are listed for the person to /exit. Destructive — " +
         "confirm with the person first.",
       inputSchema: {
@@ -929,7 +929,7 @@ export function createServer(): McpServer {
         const message =
           e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
         // The client only sees `message`; the stack in the MCP stderr log is what a failed teardown is diagnosed from.
-        console.error(`[sandbox-workspace] close-out failed: ${(e as Error).stack ?? message}`);
+        console.error(`[workspaces] close-out failed: ${(e as Error).stack ?? message}`);
         return { isError: true, content: [{ type: "text", text: message }] };
       }
     },

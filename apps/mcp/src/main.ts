@@ -20,7 +20,7 @@ import { authorized, readOrCreateToken } from "./lib/token.js";
 import { registerTools } from "./tools.js";
 
 function createServer(): McpServer {
-  const server = new McpServer({ name: "sandbox", version: "0.1.0" });
+  const server = new McpServer({ name: "werkmeister", version: "0.1.0" });
   registerTools(server);
   return server;
 }

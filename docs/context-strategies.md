@@ -63,7 +63,7 @@ The stage template for `feature` is the four-stage research → spec → impleme
 
 - `initWorkspace`: steps 5b–6c run for `jit`; a new `icm_gen.ts` (one module, ~200 lines: five template literals plus the standards table) runs for `icm`; `none` writes nothing but `sandbox-context.md`.
 - `lifecycle.ts:133`: `if (strategy === "jit") writeWorkspaceHooks(...)`.
-- `skills check|sync`, `notes context`, `hooks gate`, MCP `sandbox-skills`/`sandbox-hooks`: read the field, print "not applicable for strategy icm" and exit 0. The gate already fails open when `standards.json` is missing, so it is safe even if a stale hook survives.
+- `skills check|sync`, `notes context`, `hooks gate`, MCP `skills`/`hooks`: read the field, print "not applicable for strategy icm" and exit 0. The gate already fails open when `standards.json` is missing, so it is safe even if a stale hook survives.
 - `down`/`teardownNotes`: skip when there is no notes dir (already effectively true).
 
 Cost: a field, five `if`s, one renderer. Reuses standards resolution, worktrees, compose and slot logic untouched. Risk: the guard is repeated at every writer, so a sixth writer added later will forget it — exactly how `up` came to reinstall hooks in the first place.

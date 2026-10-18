@@ -1,9 +1,9 @@
 ---
-name: sandbox-routing-test
+name: routing-test
 description: "Trace a specific URL through the full sandbox routing chain to identify where it breaks. Use when a specific URL isn't working correctly — wrong content, empty response, wrong service handling it, or unexpected redirect. Takes a URL and traces it through every layer: route-config matching, direct service test, Caddy proxy test, and Caddyfile verification."
 ---
 
-# sandbox-routing-test
+# routing-test
 
 Trace a URL through the full routing chain. The user provides a URL (full or relative path). If no URL is provided, ask for one.
 

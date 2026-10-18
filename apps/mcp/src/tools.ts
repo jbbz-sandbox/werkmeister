@@ -123,7 +123,7 @@ export function registerTools(server: McpServer): void {
 
 function registerLifecycleTools(server: McpServer): void {
   server.registerTool(
-    "sandbox-up",
+    "up",
     {
       title: "Bring a feature up",
       description:
@@ -139,12 +139,12 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-down",
+    "down",
     {
       title: "Tear a feature down",
       description:
         "Leave the feature's k8s intercepts, remove its containers, and release its slot. " +
-        "Does not reload the reverse proxy — call sandbox-proxy-reload after tearing down.",
+        "Does not reload the reverse proxy — call proxy-reload after tearing down.",
       inputSchema: {
         ...FEATURE_ARG,
         removeVolumes: z
@@ -166,12 +166,12 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-stop",
+    "stop",
     {
       title: "Stop a feature's containers",
       description:
-        "Stop the containers, leaving them and the slot in place so sandbox-restart or " +
-        "sandbox-up can resume the feature.",
+        "Stop the containers, leaving them and the slot in place so restart or " +
+        "up can resume the feature.",
       inputSchema: { ...FEATURE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
@@ -181,7 +181,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-restart",
+    "restart",
     {
       title: "Restart a feature's containers",
       description: "Bounce the feature's containers, reusing its slot.",
@@ -194,7 +194,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-status",
+    "status",
     {
       title: "Sandbox status",
       description:
@@ -211,7 +211,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-detect",
+    "detect",
     {
       title: "Generate a repo's service-registry fragment",
       description:
@@ -272,7 +272,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-services",
+    "services",
     {
       title: "Where a feature's services answer",
       description:
@@ -289,7 +289,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-logs",
+    "logs",
     {
       title: "Read a feature's container logs",
       description:
@@ -319,7 +319,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-remove",
+    "remove",
     {
       title: "Drop a service from a feature",
       description:
@@ -340,7 +340,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-test",
+    "test",
     {
       title: "Run a feature's Playwright suite",
       description:
@@ -371,7 +371,7 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-proxy-reload",
+    "proxy-reload",
     {
       title: "Regenerate and reload the reverse proxy",
       description:
@@ -391,7 +391,7 @@ function registerLifecycleTools(server: McpServer): void {
 /**
  * The wizard's fields as tool arguments.
  *
- * `sandbox-workspace` binds to `createWorkspace`, the non-interactive path the
+ * `workspace` binds to `createWorkspace`, the non-interactive path the
  * dashboard already drives — not to the TTY wizard in `commands/workspace.ts`.
  * Every input the wizard would prompt for is here, so nothing has to block on a
  * terminal that does not exist.
@@ -420,7 +420,7 @@ const WORKSPACE_FIELDS = {
 
 function registerAuthoringTools(server: McpServer): void {
   server.registerTool(
-    "sandbox-workspace",
+    "workspace",
     {
       title: "Create a sandbox workspace",
       description:
@@ -436,7 +436,7 @@ function registerAuthoringTools(server: McpServer): void {
     async (args): Promise<CallToolResult> =>
       adapt(async () => {
         // open: false — a container agent has no desktop, and launching an
-        // editor is sandbox-open's job, asked for explicitly.
+        // editor is open's job, asked for explicitly.
         const result = await createWorkspace({ ...args }, { open: false });
         // createWorkspace installs its OWN collecting reporter internally, and
         // AsyncLocalStorage nesting means that inner scope shadows the one
@@ -451,7 +451,7 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-list-workspaces",
+    "list-workspaces",
     {
       title: "List sandbox workspaces",
       description:
@@ -478,7 +478,7 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-close-out",
+    "close-out",
     {
       title: "End a workspace",
       description:
@@ -488,9 +488,7 @@ function registerAuthoringTools(server: McpServer): void {
         "the issue, push and keep every branch, then remove. Destructive, and NOT scoped to your feature — " +
         "it names a workspace. Nothing is deleted if any branch cannot be pushed.",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace directory name, as sandbox-list-workspaces reports it."),
+        name: z.string().describe("Workspace directory name, as list-workspaces reports it."),
         abandon: z
           .string()
           .optional()
@@ -505,7 +503,7 @@ function registerAuthoringTools(server: McpServer): void {
           args.name,
           args.abandon !== undefined ? { abandon: args.abandon } : {},
         );
-        // Same shadowing as sandbox-workspace: removeWorkspace installs its own
+        // Same shadowing as workspace: removeWorkspace installs its own
         // collecting reporter for the teardown, so re-emit what it captured or
         // the transcript loses the push and down output.
         if (result.output) {
@@ -516,7 +514,7 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-init-workspace",
+    "init-workspace",
     {
       title: "Reconcile a workspace",
       description:
@@ -536,7 +534,7 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-skills",
+    "skills",
     {
       title: "Check or sync a workspace's context layer",
       description:
@@ -560,7 +558,7 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-standards",
+    "standards",
     {
       title: "Validate the standards tree",
       description:
@@ -572,7 +570,7 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-hooks",
+    "hooks",
     {
       title: "Refresh a workspace's context layer",
       description:
@@ -592,7 +590,7 @@ function registerAuthoringTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-notes",
+    "notes",
     {
       title: "Read or graduate a workspace's notes",
       description:
@@ -656,7 +654,7 @@ function registerAuthoringTools(server: McpServer): void {
 
 function registerHostTools(server: McpServer): void {
   server.registerTool(
-    "sandbox-connect",
+    "connect",
     {
       title: "Start shared infrastructure",
       description:
@@ -676,14 +674,14 @@ function registerHostTools(server: McpServer): void {
           return { k8s: connectK8s() };
         }
         // Health is deliberately not awaited here: infraHealth() waits up to 90
-        // seconds for the forwards to converge, which is a `sandbox-status`
+        // seconds for the forwards to converge, which is a `status`
         // call away and should not be inside this one.
         return { infraOk: await infraUp({ signal: extra.signal }) };
       }),
   );
 
   server.registerTool(
-    "sandbox-open",
+    "open",
     {
       title: "Open a feature-tagged browser window",
       description:
@@ -736,7 +734,7 @@ function registerHostTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "sandbox-intercept",
+    "intercept",
     {
       title: "Start or leave a k8s traffic intercept",
       description:

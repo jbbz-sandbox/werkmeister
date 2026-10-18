@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "sandbox-workspace": {
-      "command": "sandbox",
+    "workspaces": {
+      "command": "w9r",
       "args": ["dashboard"]
     }
   }
