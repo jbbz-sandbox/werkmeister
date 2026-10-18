@@ -87,6 +87,8 @@ export interface Deps {
   archetypes: ArchetypeRegistry;
   repos: ReposConfig;
   tracker: IssueTrackerStrategy;
+  /** Status `pr open` moves the issue to once its PR is open. */
+  reviewStatus: string;
   doneStatus: string;
   /** Commit and push *paths* (relative to the workspace) on the record branch — nothing else that is dirty. */
   commitRecord: (
@@ -137,6 +139,7 @@ export function defaultDeps(): Deps {
     archetypes: loadArchetypes(),
     repos: loadReposConfig(),
     tracker: issueTracker(),
+    reviewStatus: String(overrides["issue_review_status"] ?? "In Review"),
     doneStatus: String(
       overrides["issue_done_status"] ?? (loadIssueTracker() === "github" ? "closed" : "Done"),
     ),
@@ -573,9 +576,9 @@ export async function openPrs(
     const ref = issueIdOf(loadConfigFile(ws, null));
     if (ref) {
       try {
-        await deps.tracker.updateIssue(ref, { status: "In Development" });
+        await deps.tracker.updateIssue(ref, { status: deps.reviewStatus });
       } catch (e) {
-        lines.push(`  (issue ${ref} not moved to In Development: ${(e as Error).message})`);
+        lines.push(`  (issue ${ref} not moved to ${deps.reviewStatus}: ${(e as Error).message})`);
       }
     }
   }
