@@ -85,3 +85,21 @@ test("fails without recreating when the kubeconfig can't be regenerated", async 
   assert.match(reporter.text(), /Not restarting k8s-forwards without a kubeconfig file/);
   assert.throws(() => statSync(upLog), /ENOENT/, "compose up never ran");
 });
+
+test("skips the forwarder when the cluster doesn't answer (SW-28)", async () => {
+  stub(
+    "kubectl",
+    path.join(home, "bin"),
+    `
+case "$*" in
+  *"config view"*) printf 'clusters:\\n- cluster:\\n    server: https://127.0.0.1:26443\\n' ;;
+  *current-context*) echo orbstack ;;
+  *"get --raw"*) echo 'connection refused' >&2; exit 1 ;;
+esac`,
+  );
+
+  const reporter = collectingReporter();
+  assert.equal(await withReporter(reporter, async () => ensurePortForwardsHealthy()), "failed");
+  assert.match(reporter.text(), /No reachable k8s cluster/);
+  assert.throws(() => statSync(upLog), /ENOENT/, "compose up never ran");
+});
