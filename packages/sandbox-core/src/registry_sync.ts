@@ -91,15 +91,19 @@ export function discoverFragments(reposRoot: string): Fragment[] {
     // A linked worktree (`.git` is a file) repeats its main checkout's fragment; every service would collide.
     if (fs.statSync(path.join(reposRoot, repo, ".git"), { throwIfNoEntry: false })?.isFile())
       continue;
-    let doc: unknown;
-    try {
-      doc = parseYaml(fs.readFileSync(file, "utf8"));
-    } catch (e) {
-      throw new RegistryError(`${file}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    out.push({ repo, path: file, doc: isDict(doc) ? doc : {} });
+    out.push(readFragment(repo, file));
   }
   return out;
+}
+
+function readFragment(repo: string, file: string): Fragment {
+  let doc: unknown;
+  try {
+    doc = parseYaml(fs.readFileSync(file, "utf8"));
+  } catch (e) {
+    throw new RegistryError(`${file}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return { repo, path: file, doc: isDict(doc) ? doc : {} };
 }
 
 const PLACEHOLDER = /\{\{\s*(home|repos_root|workspaces_root)\s*\}\}/g;
@@ -322,6 +326,29 @@ function readLocalOverlay(localPath: string): YamlMap {
   if (doc === null || doc === undefined) return {};
   if (!isDict(doc)) throw new RegistryError(`${localPath}: must be a map of registry keys`);
   return doc;
+}
+
+/**
+ * The registry `syncRegistry` would build if *repo*'s main checkout held
+ * *worktree*'s fragment, so the pre-PR gate tests a branch with the commands
+ * it ships rather than main's (SW-25). Writes nothing: the shared registry
+ * stays main's, so other workspaces are unaffected. Null when the worktree has
+ * no fragment; throws RegistryError like mergeRegistry.
+ */
+export function branchRegistry(
+  repo: string,
+  worktree: string,
+  reposRoot: string = getReposRoot(),
+): MergedRegistry | null {
+  const file = path.join(worktree, FRAGMENT_REL);
+  if (!fs.existsSync(file)) return null;
+  const fragments = discoverFragments(reposRoot).filter((f) => f.repo !== repo);
+  fragments.push(readFragment(repo, file));
+  return mergeRegistry(fragments, {
+    defaults: REGISTRY_DEFAULTS,
+    local: readLocalOverlay(servicesLocalYamlPath()),
+    paths: placeholderPaths(),
+  });
 }
 
 /**
