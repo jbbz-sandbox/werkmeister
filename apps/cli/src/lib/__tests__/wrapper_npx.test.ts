@@ -94,7 +94,10 @@ describe("werkmeister wrapper: npx bootstrap", () => {
       fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
       // Stand-in for the globally installed CLI: prove the wrapper reached it,
       // and that it forwarded argv.
-      fs.writeFileSync(path.join(prefix, "bin", "werkmeister"), `#!/bin/bash\necho "GLOBAL-RAN $*"\n`);
+      fs.writeFileSync(
+        path.join(prefix, "bin", "werkmeister"),
+        `#!/bin/bash\necho "GLOBAL-RAN $*"\n`,
+      );
       fs.chmodSync(path.join(prefix, "bin", "werkmeister"), 0o755);
 
       const stubs = path.join(tmp, "stubs");
