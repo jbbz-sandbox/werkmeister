@@ -329,9 +329,16 @@ export const AUTONOMOUS_RULES = [
   // No-arg forms act on the cwd's FEATURE; `autonomousRules` adds the named ones.
   "Bash(sandbox up)",
   "Bash(sandbox restart)",
-  ...["status", "pr", "issue view", "init-workspace", "skills", "standards", "notes context"].map(
-    (cmd) => `Bash(sandbox ${cmd}:*)`,
-  ),
+  ...[
+    "status",
+    "pr",
+    "issue view",
+    "issue start",
+    "init-workspace",
+    "skills",
+    "standards",
+    "notes context",
+  ].map((cmd) => `Bash(sandbox ${cmd}:*)`),
   "Bash(docker ps:*)",
   // Local build and test; no `npm install`, so a new dependency waits for a person.
   ...["npm ci", "npm run", "npm test", "npx", "node", "python3"].map((cmd) => `Bash(${cmd}:*)`),

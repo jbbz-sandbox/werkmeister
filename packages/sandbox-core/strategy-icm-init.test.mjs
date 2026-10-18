@@ -499,3 +499,24 @@ test("a .werkmeister workspace gets docs that name it, and reads as in sync", as
     { dot: ".werkmeister" },
   );
 });
+
+test("the first stage contract, and only it, starts the issue when there is one (SW-27)", async () => {
+  const start = /^0\. Run `sandbox issue start`/m;
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init(ctx);
+      const contract = (d) => fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8");
+      assert.match(contract("01_research"), start);
+      assert.match(contract("01_research"), /^1\. List what exists/m, "step numbers are kept");
+      assert.doesNotMatch(contract("02_spec"), start);
+    },
+    { meta: { FEATURE: "demo", SERVICES: "backend", ISSUE_ID: "o/r#5" } },
+  );
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init(ctx);
+    assert.doesNotMatch(
+      fs.readFileSync(path.join(root, "stages", "01_research", "CONTEXT.md"), "utf8"),
+      start,
+    );
+  });
+});

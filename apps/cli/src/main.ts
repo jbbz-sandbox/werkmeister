@@ -635,8 +635,8 @@ const SPECS: CommandSpec[] = [
         .addArgument(
           new Argument(
             "<action>",
-            "view: print the issue; update: change its status and/or add a comment; create: file a new issue and print its URL (Jira)",
-          ).choices(["view", "update", "create"]),
+            "view: print the issue; update: change its status and/or add a comment; create: file a new issue and print its URL (Jira); start: move the workspace's issue to in progress (forward only)",
+          ).choices(["view", "update", "create", "start"]),
         )
         .argument(
           "[ref]",
