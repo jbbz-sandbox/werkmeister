@@ -30,7 +30,7 @@ test("WorkspaceError folds in under the WORKSPACE code", () => {
   assert.equal(e.code, "WORKSPACE");
 });
 
-// So sandbox-notes's graduate failures get the coded `structuredContent.code`
+// So the notes tool's graduate failures get the coded `structuredContent.code`
 // adapt() promises instead of falling through the generic-error path.
 test("GraduationError folds in under the GRADUATION code", () => {
   const e = new GraduationError("boom");

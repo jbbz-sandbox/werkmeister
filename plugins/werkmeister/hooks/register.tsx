@@ -12,7 +12,7 @@ import type {
   WorkspaceRow,
 } from "../types";
 
-export const PLUGIN = "sandbox-tools";
+export const PLUGIN = "werkmeister";
 export const PANE = "workspaces";
 
 // Workspace reads and actions run sandbox-core in a node child, the way the former /workspace-form mod did:
@@ -158,34 +158,34 @@ export const PR_POLL_MS = 60000;
 /** PR callbacks (#236): every desktop session runs a pass this often; the core's lock lets one through. */
 export const CALLBACK_POLL_MS = 600000;
 
-const ROWS = { plugin: "sandbox-tools", key: "rows" } as const;
-const ERROR = { plugin: "sandbox-tools", key: "error" } as const;
-const BUSY = { plugin: "sandbox-tools", key: "busy" } as const;
-const CONFIRM = { plugin: "sandbox-tools", key: "confirmEnd" } as const;
-const REASON = { plugin: "sandbox-tools", key: "abandonReason" } as const;
-const NOTE = { plugin: "sandbox-tools", key: "note" } as const;
-const TAB = { plugin: "sandbox-tools", key: "tab" } as const;
-const FOCUS = { plugin: "sandbox-tools", key: "focus" } as const;
-const TRACKER = { plugin: "sandbox-tools", key: "tracker" } as const;
+const ROWS = { plugin: "werkmeister", key: "rows" } as const;
+const ERROR = { plugin: "werkmeister", key: "error" } as const;
+const BUSY = { plugin: "werkmeister", key: "busy" } as const;
+const CONFIRM = { plugin: "werkmeister", key: "confirmEnd" } as const;
+const REASON = { plugin: "werkmeister", key: "abandonReason" } as const;
+const NOTE = { plugin: "werkmeister", key: "note" } as const;
+const TAB = { plugin: "werkmeister", key: "tab" } as const;
+const FOCUS = { plugin: "werkmeister", key: "focus" } as const;
+const TRACKER = { plugin: "werkmeister", key: "tracker" } as const;
 export const TRACKER_TTL_MS = 5 * 60 * 1000;
 let trackerAt = 0;
-const INFRA = { plugin: "sandbox-tools", key: "infra" } as const;
-const INTERCEPTS = { plugin: "sandbox-tools", key: "intercepts" } as const;
+const INFRA = { plugin: "werkmeister", key: "infra" } as const;
+const INTERCEPTS = { plugin: "werkmeister", key: "intercepts" } as const;
 /** CONFIRM prefix for a pending intercept ON: `intercept:<workspace>/<service>`. */
 const INTERCEPT = "intercept:";
-const PRS = { plugin: "sandbox-tools", key: "prs" } as const;
+const PRS = { plugin: "werkmeister", key: "prs" } as const;
 /** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
 const CONNECTING = "(connect)";
 
-const FORM = { plugin: "sandbox-tools", key: "formSchema" } as const;
-const DRAFT = { plugin: "sandbox-tools", key: "draft" } as const;
-const FORM_BUSY = { plugin: "sandbox-tools", key: "formBusy" } as const;
-const FOCUSED = { plugin: "sandbox-tools", key: "focusedField" } as const;
+const FORM = { plugin: "werkmeister", key: "formSchema" } as const;
+const DRAFT = { plugin: "werkmeister", key: "draft" } as const;
+const FORM_BUSY = { plugin: "werkmeister", key: "formBusy" } as const;
+const FOCUSED = { plugin: "werkmeister", key: "focusedField" } as const;
 
 /** Mobile draws no Input or Select, so there the Create tab hands the form to the model instead. */
 export function createPrompt(issueId: string): string {
   const id = issueId.trim();
-  return `Create a new sandbox workspace with the sandbox-workspace skill${id ? `, pre-filled from issue ${id}` : ""}.`;
+  return `Create a new sandbox workspace with the werkmeister:workspace skill${id ? `, pre-filled from issue ${id}` : ""}.`;
 }
 
 /**
@@ -1375,14 +1375,14 @@ export const register: Register = (on) => {
 
   // A regex: the tool-name type only lists tools laid when the types were written, and this one registers at start.
   // The call's input fields arrive on the event itself, beside `tool` and `tool_use_id`.
-  on("tool.call", { tool: /^mcp__sandbox-tools__workspace_form$/ }, async ($, e) => ({
+  on("tool.call", { tool: /^mcp__werkmeister__workspace_form$/ }, async ($, e) => ({
     result: await fillFormTool($, e as unknown as Record<string, unknown>),
   })).catch(() => ({
     deny: "The workspace form could not be filled; open /workspaces and fill it by hand.",
   }));
 
   // The close-out MCP tool runs in its own server, which can't reach the app's session tools: archive here once it succeeded.
-  on("tool.call", { tool: /^mcp__.*sandbox-workspace__close-out$/ }, async ($, e, next) => {
+  on("tool.call", { tool: /^mcp__.*workspaces__close-out$/ }, async ($, e, next) => {
     const name = (e as unknown as { name?: unknown }).name;
     // Resolved first: the folder is gone once the call returns.
     const path =

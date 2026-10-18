@@ -101,7 +101,7 @@ CLI's other libraries are bundled in, so the only dependency npm resolves is
 `dockerode`. `sandbox setup` still seeds `~/.sandbox` exactly as it does from a
 checkout, which is what makes the two installs interchangeable. The headless
 MCP server (`apps/mcp`) is bundled in too, as `dist/mcp.js`: `sandbox mcp`,
-`sandbox connect`'s MCP server on 3002 and the `sandbox-tools` plugin's MCP
+`sandbox connect`'s MCP server on 3002 and the `werkmeister` plugin's MCP
 entry all work from the package. What stays checkout-only is the workspaces
 dashboard (`apps/sandbox-dashboard`: issues, PRs, session and MCP-App UI tools);
 `sandbox dashboard` falls back to the headless server where it is absent.
@@ -159,8 +159,9 @@ npm install && npm run build
 
 The wizard walks through your repo/workspace paths, the ingress base domains,
 and the service registry (generated from each repo's `.sandbox/services.yaml`),
-then converges the rest: the `sandbox-tools` and
-`ponytail` plugins, the companion `sandbox-workspace` checkout, a TLS
+then converges the rest: the `werkmeister` and
+`ponytail` plugins (an old `sandbox-tools` install is swapped out; see
+[Migrating from `sandbox-tools`](plugins/werkmeister/README.md#migrating-from-sandbox-tools)), the companion `sandbox-workspace` checkout, a TLS
 certificate covering every routed hostname, and the issue-tracker and
 Telepresence prerequisites. It is safe to re-run — nothing already configured
 is overwritten.

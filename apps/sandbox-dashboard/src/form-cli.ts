@@ -1,7 +1,7 @@
 /**
  * Standalone browser-form CLI for creating a sandbox workspace.
  *
- * This is the entry point the `/sandbox-workspace` skill (Claude Code) calls via
+ * This is the entry point the `/werkmeister:workspace` skill (Claude Code) calls via
  * `sandbox workspace --browser-form`. It reuses the exact same pieces as the
  * Desktop MCP App and the MCP server's CLI fallback:
  *
@@ -22,7 +22,7 @@
  * Env:
  *   SANDBOX_FORM_NO_BROWSER=1   Serve the form but don't open the system browser; the
  *                               caller reads the URL off stderr and opens it itself
- *                               (the /sandbox-workspace skill does this in the Claude
+ *                               (the /werkmeister:workspace skill does this in the Claude
  *                               Code desktop app to show the form in its Browser pane).
  */
 import {

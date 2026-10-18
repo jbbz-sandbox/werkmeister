@@ -74,7 +74,7 @@ fi
 
 # `dashboard` and `mcp` are sibling apps, not CLI subcommands: each has its own
 # dist/main.js. Both are launched here over stdio, which is what an MCP client
-# (Claude Desktop, the sandbox-tools plugin) needs -- their HTTP modes are
+# (Claude Desktop, the werkmeister plugin) needs -- their HTTP modes are
 # started by `sandbox connect` as managed WebApps, which execs those same
 # entrypoints directly without --stdio. That is why neither verb takes a
 # transport flag; extra args are still forwarded, so an explicit --stdio from an
@@ -85,7 +85,7 @@ fi
 # package as dist/mcp.js (esbuild.mjs), so `mcp` always has a target. The
 # dashboard (Jira, PRs, MCP Apps UI) is checkout-only; where it is missing its
 # verb falls back to the headless server, which carries the same sandbox-*
-# verbs, so the sandbox-tools plugin's `sandbox dashboard` MCP entry keeps
+# verbs, so the werkmeister plugin's `w9r dashboard` MCP entry keeps
 # working on a package install instead of failing at every session start.
 case "${1:-}" in
     dashboard) app_dir="sandbox-dashboard" ;;

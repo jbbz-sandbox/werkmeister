@@ -13,7 +13,7 @@ test("the CLI's tail follows and defaults to 100 lines", () => {
 
 test("a bounded read drops -f so the child exits on its own", () => {
   assert.deepEqual(composeLogsArgs(null, false, 200), ["logs", "--tail", "200"]);
-  // Without this the sandbox-logs tool hangs until the client disconnects and
+  // Without this the logs tool hangs until the client disconnects and
   // the disconnect is the only result.
   assert.ok(!composeLogsArgs(null, false, 200).includes("-f"));
 });

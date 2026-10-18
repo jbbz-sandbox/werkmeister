@@ -1,9 +1,9 @@
 ---
-name: sandbox-status
+name: status
 description: "Comprehensive health overview of the entire developer sandbox environment. Use when the user asks about sandbox status, wants to know what's running, or as a first step before debugging any issue. Also use after `sandbox up`, `sandbox down`, or system restart to verify state."
 ---
 
-# sandbox-status
+# status
 
 Run all of the following checks and present a unified status report.
 

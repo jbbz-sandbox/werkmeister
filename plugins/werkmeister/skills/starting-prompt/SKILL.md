@@ -1,6 +1,6 @@
 ---
-name: sandbox-starting-prompt
-description: "Run the `starting_prompt` defined in the sandbox workspace's `.sandbox/workspace.yml`. Use when the user says '/sandbox-starting-prompt', 'run the starting prompt', 'run my workspace starting prompt', 'kick off the workspace task', or asks to execute the task this sandbox workspace was created for."
+name: starting-prompt
+description: "Run the `starting_prompt` defined in the sandbox workspace's `.sandbox/workspace.yml`. Use when the user says '/werkmeister:starting-prompt', 'run the starting prompt', 'run my workspace starting prompt', 'kick off the workspace task', or asks to execute the task this sandbox workspace was created for."
 ---
 
 # Sandbox Starting Prompt
@@ -10,7 +10,7 @@ Read the `starting_prompt` from the current sandbox workspace's `.sandbox/worksp
 ## Step 1 — Extract the starting prompt
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/sandbox-starting-prompt/scripts/get_prompt.py"
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/starting-prompt/scripts/get_prompt.py"
 ```
 
 The script walks up from the current directory to find `.sandbox/workspace.yml` and prints the `starting_prompt` value to stdout.
