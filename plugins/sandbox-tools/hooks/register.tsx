@@ -8,7 +8,7 @@ export const PANE = "workspaces";
 // Workspace reads and actions run sandbox-core in a node child, the way the former /workspace-form mod did:
 // the plugin's own MCP server is not answerable from a hook in the desktop host, a host process is.
 // stdin carries one JSON request { op, ...args }; stdout ends with one JSON line { ok, result | error }.
-// sandbox-core is found from $SANDBOX_CORE_PATH, else from where the `sandbox` binary resolves its dependencies.
+// sandbox-core is found from $WERKMEISTER_CORE_PATH or $SANDBOX_CORE_PATH, else from where the `sandbox` binary resolves its dependencies.
 const SCRIPT = `
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
@@ -21,7 +21,7 @@ try {
   let s = ''
   for await (const c of process.stdin) s += c
   const { op, ...args } = JSON.parse(s)
-  let file = process.env.SANDBOX_CORE_PATH
+  let file = process.env.WERKMEISTER_CORE_PATH ?? process.env.SANDBOX_CORE_PATH
   if (!file) {
     const bin = realpathSync(execFileSync('sh', ['-c', 'command -v sandbox']).toString().trim())
     file = createRequire(dirname(bin) + '/x').resolve('sandbox-core')
@@ -58,7 +58,9 @@ try {
   const tracker = (await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)).issueTracker()
   const details = async w => {
     let cfg = {}
-    try { cfg = yaml.parse(readFileSync(join(w.path, '.sandbox', 'workspace.yml'), 'utf8')) ?? {} } catch { /* not initialised */ }
+    for (const d of ['.werkmeister', '.sandbox']) {
+      try { cfg = yaml.parse(readFileSync(join(w.path, d, 'workspace.yml'), 'utf8')) ?? {}; break } catch { /* not initialised */ }
+    }
     let newest = null
     try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
     const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
@@ -1178,10 +1180,18 @@ async function openPane($: EngineInterface): Promise<void> {
 /** Sidebar group that desktop sessions started in a workspace are filed under, when the person has made it. */
 export const SESSION_GROUP = "Feature Workspaces";
 
+// sandbox-core's DOT_DIRS (SW-7), new name first; the hook cannot import sandbox-core.
+const DOT_DIRS = [".werkmeister", ".sandbox"];
+
+async function hasWorkspaceYml($: EngineInterface, dir: string): Promise<boolean> {
+  for (const d of DOT_DIRS) if (await $.fs.exists(`${dir}/${d}/workspace.yml`)) return true;
+  return false;
+}
+
 /** A workspace or a folder inside one: `dir` or some ancestor holds `.sandbox/workspace.yml`. */
 async function inWorkspace($: EngineInterface, dir: string): Promise<boolean> {
   for (let d = dir; d.length > 1; d = d.slice(0, d.lastIndexOf("/")) || "/") {
-    if (await $.fs.exists(`${d}/.sandbox/workspace.yml`)) return true;
+    if (await hasWorkspaceYml($, d)) return true;
   }
   return false;
 }
@@ -1207,8 +1217,7 @@ async function fileInGroup($: EngineInterface): Promise<void> {
 async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean> {
   const entries = await $.fs.list(dir).catch(() => []);
   for (const d of entries) {
-    if (d.kind === "dir" && (await $.fs.exists(`${dir}/${d.name}/.sandbox/workspace.yml`)))
-      return true;
+    if (d.kind === "dir" && (await hasWorkspaceYml($, `${dir}/${d.name}`))) return true;
   }
   return false;
 }

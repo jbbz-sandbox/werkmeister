@@ -27,10 +27,12 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import type { GlobalConfig } from "./config.js";
 import {
   configPath,
+  dotDir,
+  envVar,
   expandUser,
+  type GlobalConfig,
   loadConfig,
   modelPricingYamlPath,
   portsYamlPath,
@@ -237,8 +239,8 @@ export const _CONFIG_PROMPTS: readonly PromptSpec[] = [
 // Migration source (currently-exported env) for each path prompt, so a machine
 // configured before the YAML existed migrates by pressing Enter through.
 const _PATH_ENV: Record<string, string> = {
-  repos_root: "SANDBOX_REPOS_ROOT",
-  workspaces_root: "SANDBOX_WORKSPACES_ROOT",
+  repos_root: "REPOS_ROOT",
+  workspaces_root: "WORKSPACES_ROOT",
 };
 
 /**
@@ -267,13 +269,12 @@ export function pathDefault(
   resolved: Record<string, string> = {},
 ): string {
   const paths = (cfg ?? load())["paths"] ?? {};
-  const stored = paths[key] || process.env[_PATH_ENV[key]];
+  const stored = paths[key] || envVar(_PATH_ENV[key]);
   if (stored) {
     return String(stored);
   }
   const reposRoot =
-    resolved["repos_root"] ||
-    String(paths["repos_root"] || process.env[_PATH_ENV["repos_root"]] || "");
+    resolved["repos_root"] || String(paths["repos_root"] || envVar(_PATH_ENV["repos_root"]) || "");
   return builtinPathDefault(key, reposRoot);
 }
 
@@ -530,10 +531,11 @@ export function writeEnvSh(cfg: GlobalConfig): string {
 // ---------------------------------------------------------------------------
 
 function managedBlock(): string {
+  const home = path.basename(dotDir(os.homedir()));
   return (
     `${_ZSH_BEGIN}\n` +
     "# Managed by `sandbox config` — do not edit; regenerated on `sandbox config`.\n" +
-    '[ -f "$HOME/.sandbox/env.sh" ] && . "$HOME/.sandbox/env.sh"\n' +
+    `[ -f "$HOME/${home}/env.sh" ] && . "$HOME/${home}/env.sh"\n` +
     `${_ZSH_END}\n`
   );
 }

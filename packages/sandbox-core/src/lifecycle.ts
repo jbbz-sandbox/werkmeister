@@ -333,7 +333,7 @@ export function insideOwnContainer(
   env: NodeJS.ProcessEnv = process.env,
   dockerenv = "/.dockerenv",
 ): boolean {
-  return env.SANDBOX_FEATURE === feature && fs.existsSync(dockerenv);
+  return (env.WERKMEISTER_FEATURE ?? env.SANDBOX_FEATURE) === feature && fs.existsSync(dockerenv);
 }
 
 /**

@@ -18,6 +18,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
+import { dotDir } from "./config.js";
 import { reconcileGraduating } from "./graduate.js";
 import { skillNameFor } from "./skill_gen.js";
 import { standardsMatchingDiff } from "./standards.js";
@@ -39,7 +40,7 @@ export interface Note {
 
 /** Return the workspace's notes directory (may not exist yet). */
 export function notesDir(workspaceRoot: string): string {
-  return path.join(workspaceRoot, ".sandbox", "notes");
+  return path.join(dotDir(workspaceRoot), "notes");
 }
 
 /** Return the next free NNN sequence number in *directory* (1 if empty/missing). */

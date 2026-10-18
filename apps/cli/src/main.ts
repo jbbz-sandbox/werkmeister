@@ -44,6 +44,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
 import { COMPOSE_FILE } from "sandbox-core/compose_file";
+import { envVar } from "sandbox-core/config";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
@@ -57,7 +58,7 @@ import { installDefaultInterrupt } from "./lib/interrupt.js";
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
 // config loaders.
 const _REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-if (!process.env.SANDBOX_ROOT) {
+if (!envVar("ROOT")) {
   process.env.SANDBOX_ROOT = _REPO_ROOT;
 }
 
@@ -953,7 +954,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
     } else {
       console.log(`${_RED}Error: ${(e as Error).message}${_RESET}`);
     }
-    if (process.env.SANDBOX_DEBUG) {
+    if (envVar("DEBUG")) {
       throw e;
     }
     process.exit(1);

@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { dotDir } from "./dist/config.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { createWorkspace } from "./dist/sandbox.js";
 import { provisionWorkspace, WorkspaceInitError } from "./dist/workspace_init.js";
@@ -85,7 +86,7 @@ test("a non-interactive create with no strategy writes context_strategy: icm (#1
           { feature: "demo", services: "backend", work_type: "feature" },
           { open: false, cwd: tmp, distill: false },
         );
-        const yml = fs.readFileSync(path.join(workspacePath, ".sandbox", "workspace.yml"), "utf8");
+        const yml = fs.readFileSync(path.join(dotDir(workspacePath), "workspace.yml"), "utf8");
         assert.match(yml, /^context_strategy: icm$/m);
         assert.ok(fs.existsSync(path.join(workspacePath, "stages")), "ICM layout");
       },

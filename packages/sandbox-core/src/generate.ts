@@ -20,6 +20,8 @@ import { candidateServiceNames } from "./archetypes.js";
 import { buildSandboxContextMd } from "./claude_md.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
+  dotDir,
+  forDotDir,
   infraRoot,
   loadPorts,
   loadReposConfig,
@@ -445,7 +447,7 @@ function resolveServiceRefs(
  * opted in render identically.
  */
 function loadWorkspaceDict(workspaceRoot: string, field: string): Record<string, unknown> {
-  const configPath = path.join(workspaceRoot, ".sandbox", "workspace.yml");
+  const configPath = path.join(dotDir(workspaceRoot), "workspace.yml");
   let text: string;
   try {
     if (!fs.statSync(configPath).isFile()) {
@@ -1127,7 +1129,7 @@ export function generateSupergraphConfig(
 ): string | null {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
   const workspaceRoot = resolveWorkspace(feature, workspaceOverride);
-  const sandboxDir = path.join(workspaceRoot, ".sandbox");
+  const sandboxDir = dotDir(workspaceRoot);
   const outPath = path.join(sandboxDir, "supergraph-config.yml");
 
   // Federation is opt-in: no graphql-type service in the registry → no file
@@ -1231,7 +1233,8 @@ export function generateSupergraphConfig(
     "# subgraphs fall through to the shared k8s-forwards container.\n";
   fs.writeFileSync(
     outPath,
-    header + YAML.stringify(supergraph, { indentSeq: false, singleQuote: true }),
+    forDotDir(header, workspaceRoot) +
+      YAML.stringify(supergraph, { indentSeq: false, singleQuote: true }),
   );
 
   success(`Generated supergraph config (built-in): ${outPath}`);
@@ -1618,10 +1621,13 @@ export async function generateWorkspaceCompose(
     candidateServiceNames(repoNames, loadReposConfig(), localServices),
     readAutoStop(workspaceRoot),
   );
-  const sandboxDir = path.join(workspaceRoot, ".sandbox");
+  const sandboxDir = dotDir(workspaceRoot);
   fs.mkdirSync(sandboxDir, { recursive: true });
-  fs.writeFileSync(path.join(sandboxDir, "sandbox-context.md"), contextMd);
-  success("Wrote .sandbox/sandbox-context.md");
+  fs.writeFileSync(
+    path.join(sandboxDir, "sandbox-context.md"),
+    forDotDir(contextMd, workspaceRoot),
+  );
+  success(`Wrote ${path.basename(sandboxDir)}/sandbox-context.md`);
 
   return slot;
 }

@@ -29,7 +29,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-const _LOCK_DIR = path.join(os.homedir(), ".sandbox", "locks");
+import { dotDir } from "./config.js";
+
+const lockDir = () => path.join(dotDir(os.homedir()), "locks");
 
 // Poll interval (seconds) for the retry loop.
 const _RETRY_INTERVAL = 0.1;
@@ -107,8 +109,9 @@ export function sandboxLock<T>(
   fn: () => T,
   { timeout }: { timeout?: number } = {},
 ): T {
-  fs.mkdirSync(_LOCK_DIR, { recursive: true });
-  const lockPath = path.join(_LOCK_DIR, `${name}.lock`);
+  const dir = lockDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const lockPath = path.join(dir, `${name}.lock`);
 
   const deadline = timeout !== undefined ? performance.now() + timeout * 1000 : null;
   while (!tryAcquire(lockPath)) {

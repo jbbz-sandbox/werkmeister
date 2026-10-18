@@ -26,6 +26,7 @@ import * as YAML from "yaml";
 import { serviceStandards, validateServiceArchetypes } from "./archetypes.js";
 import {
   type ArchetypeRegistry,
+  dotDir,
   loadArchetypes,
   loadServices,
   type ReposConfig,
@@ -670,7 +671,7 @@ export function buildStandardsManifest(
  * same do-not-hand-edit contract as the other generated files).
  */
 export function writeStandardsManifest(workspaceRoot: string, manifest: StandardsManifest): string {
-  const filePath = path.join(workspaceRoot, ".sandbox", "standards.json");
+  const filePath = path.join(dotDir(workspaceRoot), "standards.json");
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(manifest, null, 2) + "\n");
   return filePath;
