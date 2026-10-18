@@ -120,7 +120,7 @@ repo:
 | Command | Does |
 |---|---|
 | `sandbox pr gate [repo]` | run the gate, change nothing |
-| `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to "In Development" (on GitHub, add an `In Development` label, created if the repo lacks it), commit and push the PR file on the record branch |
+| `sandbox pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to the review status: `overrides.issue_review_status` in `~/.sandbox/config.yaml`, else `In Review` (on GitHub, a label of that name, created if the repo lacks it), commit and push the PR file on the record branch |
 | `sandbox pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`. For `merged` files, write `shipped` (+ `release`) per the registry. Commits and pushes the changed PR files on the record branch. |
 | `sandbox pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
 | `sandbox pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions. Run it from cron: `*/10 * * * * sandbox pr watch` |

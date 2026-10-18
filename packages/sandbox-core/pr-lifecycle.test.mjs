@@ -103,6 +103,7 @@ function deps(table, over = {}) {
       fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
       updateIssue: async () => {},
     },
+    reviewStatus: "Peer Review",
     doneStatus: "closed",
     commitRecord: async () => ({ ok: true, message: "record pushed" }),
     remove: async () => ({ output: "removed" }),
@@ -399,7 +400,11 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(f.fm.url, "https://github.com/o/app/pull/9");
     assert.equal(f.fm.session, "s-1", "the callback rides on the PR file (#236)");
     assert.equal(f.fm.host_session, "local_h1");
-    assert.deepEqual(updated, ["o/app#7", "In Development"]);
+    assert.deepEqual(
+      updated,
+      ["o/app#7", "Peer Review"],
+      "the status comes from issue_review_status",
+    );
     assert.deepEqual(
       recorded,
       ["stages/03_propose/output/pr-app.md"],
