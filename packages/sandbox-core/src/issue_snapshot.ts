@@ -6,10 +6,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { dotDir } from "./config.js";
 import { type IssueComment, issueTracker, type TrackerId } from "./issue_tracker.js";
 import type { IssueRef } from "./strategies/types.js";
 
-export const ISSUE_COPY = ".sandbox/issue.md";
+export const issueCopyPath = (root: string) => path.join(dotDir(root), "issue.md");
 
 export interface IssueSnapshot {
   ref: string;
@@ -97,7 +98,7 @@ export function parseIssueCopy(text: string): IssueSnapshot | null {
 }
 
 export function writeIssueCopy(root: string, s: IssueSnapshot): void {
-  const p = path.join(root, ISSUE_COPY);
+  const p = issueCopyPath(root);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, renderIssueCopy(s));
 }
@@ -106,7 +107,7 @@ export function writeIssueCopy(root: string, s: IssueSnapshot): void {
 export function readIssueRef(root: string, issueId: string): IssueRef | null {
   let s: IssueSnapshot | null = null;
   try {
-    s = parseIssueCopy(fs.readFileSync(path.join(root, ISSUE_COPY), "utf8"));
+    s = parseIssueCopy(fs.readFileSync(issueCopyPath(root), "utf8"));
   } catch {
     /* no copy */
   }

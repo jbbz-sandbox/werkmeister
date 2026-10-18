@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { dotDir } from "./dist/config.js";
 import { buildFormSchema } from "./dist/form_schema.js";
 import { writeWorkspaceModel, writeWorkspacePermissions } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
@@ -27,7 +28,7 @@ function workspace(settings) {
 }
 
 const settingsPath = (root) => path.join(root, ".claude", "settings.json");
-const recordPath = (root) => path.join(root, ".sandbox", "claude-permissions.json");
+const recordPath = (root) => path.join(dotDir(root), "claude-permissions.json");
 const readSettings = (root) => JSON.parse(fs.readFileSync(settingsPath(root), "utf8"));
 const readRecord = (root) => JSON.parse(fs.readFileSync(recordPath(root), "utf8"));
 
@@ -125,11 +126,11 @@ test("workspace.yml persists the model and readModel reads it back", async () =>
     writeWorkspaceConfig(root, { feature: "f", model: "sonnet" }),
   );
   assert.match(
-    fs.readFileSync(path.join(root, ".sandbox", "workspace.yml"), "utf8"),
+    fs.readFileSync(path.join(dotDir(root), "workspace.yml"), "utf8"),
     /^model: sonnet$/m,
   );
   assert.equal(readModel(root), "sonnet");
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), 'feature: f\nmodel: ""\n');
+  fs.writeFileSync(path.join(dotDir(root), "workspace.yml"), 'feature: f\nmodel: ""\n');
   assert.equal(readModel(root), null);
 });
 

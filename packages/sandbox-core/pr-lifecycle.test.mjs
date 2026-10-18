@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { dotDir } from "./dist/config.js";
 import {
   abandonWorkspace,
   adoptPr,
@@ -50,9 +51,9 @@ function icmWorkspace({
   if (exercise !== null) fs.writeFileSync(path.join(out("02_implement"), "exercise.md"), exercise);
   for (const [dir, text] of Object.entries(files))
     fs.writeFileSync(path.join(out("03_propose"), `pr-${dir}.md`), text);
-  fs.mkdirSync(path.join(ws, ".sandbox"), { recursive: true });
+  fs.mkdirSync(dotDir(ws), { recursive: true });
   fs.writeFileSync(
-    path.join(ws, ".sandbox", "workspace.yml"),
+    path.join(dotDir(ws), "workspace.yml"),
     "feature: feat\nservices: api,lib\nissue_id: o/app#7\nwork_type: feature\n",
   );
   fs.writeFileSync(path.join(ws, ".env"), "FEATURE=feat\nSANDBOX_SLOT=1\n");
@@ -138,7 +139,7 @@ test("PR file: title and body split, writePrFields keeps the body", () => {
 test("prFileDir: propose, legacy ship, JIT notes, spike has none", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-dir-"));
   try {
-    assert.equal(prFileDir(ws), path.join(ws, ".sandbox", "notes"));
+    assert.equal(prFileDir(ws), path.join(dotDir(ws), "notes"));
     fs.mkdirSync(path.join(ws, "stages", "01_questions"), { recursive: true });
     assert.equal(prFileDir(ws), null);
     fs.mkdirSync(path.join(ws, "stages", "04_ship"));
@@ -319,7 +320,7 @@ test("gate: a touched service with a test command but no container fails unless 
   // #145: the workspace runs other services (k8s), so this repo has no container.
   const noContainers = (ws) => {
     fs.writeFileSync(
-      path.join(ws, ".sandbox", "workspace.yml"),
+      path.join(dotDir(ws), "workspace.yml"),
       "feature: feat\nservices: backend,frontend\nissue_id: o/app#7\nwork_type: feature\n",
     );
     const d = deps([]);
@@ -703,9 +704,10 @@ test("openTerminalSessions: TTY claude processes whose cwd is in the workspace",
 });
 
 test("PR file: invalid YAML names the parser's error", () => {
+  // A plain scalar cannot start with `@` (reserved YAML indicator); that is what makes this invalid.
   const ws = icmWorkspace({
     files: {
-      app: prFile({ status: "shipped", extra: "release: @jbbz-sandbox/sandbox-cli@0.7.0\n" }),
+      app: prFile({ status: "shipped", extra: "release: @scope/pkg@0.7.0\n" }),
     },
   });
   try {

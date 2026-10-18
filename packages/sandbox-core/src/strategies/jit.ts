@@ -13,7 +13,7 @@ import * as path from "node:path";
 import { buildTesterSpecs, writeWorkspaceAgents } from "../agent_gen.js";
 import { presentArchetypes } from "../archetypes.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../claude_md.js";
-import { loadArchetypes } from "../config.js";
+import { DOT_DIRS, dotDir, forDotDir, loadArchetypes } from "../config.js";
 import { type FeatureRouter, loadFeatureRouters } from "../feature_routing.js";
 import { main as gateMain, resetSessionState } from "../gate.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
@@ -81,7 +81,9 @@ function salvageLegacyHandoffNotes(workspaceRoot: string, claudeMdPath: string):
         "Salvaged from the legacy CLAUDE.md `## Handoff Notes` section on regen.\n\n" +
         `${body}\n`,
     );
-    success(`Salvaged legacy Handoff Notes → .sandbox/notes/${filename}`);
+    success(
+      `Salvaged legacy Handoff Notes → ${path.relative(workspaceRoot, path.join(directory, filename))}`,
+    );
   } catch (exc) {
     warn(`Could not salvage legacy Handoff Notes: ${(exc as Error).message}`);
   }
@@ -161,8 +163,13 @@ export function seedStartingHandoff(
         prompt,
       );
     }
-    fs.writeFileSync(path.join(directory, filename), lines.join("\n") + "\n");
-    success(`Seeded starting handoff → .sandbox/notes/${filename}`);
+    fs.writeFileSync(
+      path.join(directory, filename),
+      forDotDir(lines.join("\n") + "\n", workspaceRoot),
+    );
+    success(
+      `Seeded starting handoff → ${path.relative(workspaceRoot, path.join(directory, filename))}`,
+    );
   } catch (exc) {
     warn(`Could not seed starting handoff: ${(exc as Error).message}`);
   }
@@ -241,15 +248,18 @@ function init(ctx: InitContext): void {
     standardsSection,
     ctx.issue ?? null,
   );
-  fs.writeFileSync(claudeMdPath, content);
+  fs.writeFileSync(claudeMdPath, forDotDir(content, workspaceRoot));
   success(`Wrote ${claudeMdPath}`);
   // CLAUDE.md's "## Issues" section points here.
-  const issuesReportPath = path.join(workspaceRoot, ".sandbox", "issues-report.md");
+  const issuesReportPath = path.join(dotDir(workspaceRoot), "issues-report.md");
   fs.mkdirSync(path.dirname(issuesReportPath), { recursive: true });
-  fs.writeFileSync(issuesReportPath, buildIssuesReportMd(workspaceName, issueIdOfMeta(meta)));
+  fs.writeFileSync(
+    issuesReportPath,
+    forDotDir(buildIssuesReportMd(workspaceName, issueIdOfMeta(meta)), workspaceRoot),
+  );
   success(`Wrote ${issuesReportPath}`);
-  const prRulesPath = path.join(workspaceRoot, ".sandbox", "pr-rules.md");
-  fs.writeFileSync(prRulesPath, buildPrRulesMd(".sandbox/notes/"));
+  const prRulesPath = path.join(dotDir(workspaceRoot), "pr-rules.md");
+  fs.writeFileSync(prRulesPath, forDotDir(buildPrRulesMd(".sandbox/notes/"), workspaceRoot));
   success(`Wrote ${prRulesPath}`);
 
   // 6a. Projected sb-* skills into .claude/skills/.
@@ -324,10 +334,12 @@ export const jit: ContextStrategy = {
     ".claude/settings.json",
     ".claude/skills/sb-*",
     ".claude/agents/sb-*",
-    ".sandbox/notes",
-    ".sandbox/standards.json",
-    ".sandbox/issues-report.md",
-    ".sandbox/pr-rules.md",
-    ".sandbox/.gate",
+    ...DOT_DIRS.flatMap((d) => [
+      `${d}/notes`,
+      `${d}/standards.json`,
+      `${d}/issues-report.md`,
+      `${d}/pr-rules.md`,
+      `${d}/.gate`,
+    ]),
   ],
 };

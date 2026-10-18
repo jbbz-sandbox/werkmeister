@@ -27,7 +27,13 @@ from pathlib import Path
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 
-SANDBOX_DIR = Path.home() / ".sandbox"
+
+def dot_dir(parent: Path) -> Path:
+    """sandbox-core's dotDir (SW-7): .werkmeister if it exists, else .sandbox if it exists, else .werkmeister."""
+    return next((parent / d for d in (".werkmeister", ".sandbox") if (parent / d).is_dir()), parent / ".werkmeister")
+
+
+SANDBOX_DIR = dot_dir(Path.home())
 CONFIG_YAML = SANDBOX_DIR / "config.yaml"
 SERVICES_YAML = SANDBOX_DIR / "services.yaml"
 
@@ -223,7 +229,7 @@ def ensure_playwright(workspace: Path) -> None:
     cmd = ["npm", "install", "--save-dev", f"@playwright/test@{PLAYWRIGHT_VERSION}"]
     # resolve_workspace can land on the workspaces root (the workspace is itself a
     # git repo); never drop a package.json + node_modules there.
-    if not (workspace / ".sandbox").is_dir():
+    if not dot_dir(workspace).is_dir():
         print(f"[error] {workspace} is not a sandbox workspace (no .sandbox/) — pass --workspace,", file=sys.stderr)
         print(f"[error] or install manually there: {' '.join(cmd)}", file=sys.stderr)
         sys.exit(1)

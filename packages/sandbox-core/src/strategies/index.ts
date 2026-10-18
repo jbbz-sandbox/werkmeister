@@ -6,6 +6,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { dotDir, envVar } from "../config.js";
 import { SandboxError } from "../errors.js";
 import { run as procRun } from "../proc.js";
 import { success, warn } from "../reporter.js";
@@ -47,10 +48,10 @@ export function parseStrategyId(value: unknown): StrategyId {
  */
 export function readContextStrategy(workspaceRoot: string): StrategyId {
   const candidates: string[] = [];
-  const envOverride = process.env["SANDBOX_WORKSPACE_CONFIG"];
+  const envOverride = envVar("WORKSPACE_CONFIG");
   if (envOverride) candidates.push(expandUserPath(envOverride));
   for (const name of _WORKSPACE_CONFIG_NAMES)
-    candidates.push(path.join(workspaceRoot, ".sandbox", name));
+    candidates.push(path.join(dotDir(workspaceRoot), name));
   for (const p of candidates) {
     if (!fs.existsSync(p)) continue;
     let data: any;

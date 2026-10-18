@@ -14,7 +14,7 @@
 # a merge has shipped once a sandbox-cli release tag contains it.
 repo:
   ship: tag
-  release_tag: "@jbbz-sandbox/sandbox-cli@*"
+  release_tag: "werkmeister@*"
   release_check: npx changeset status --since=origin/main
   # Changes here touch no service, so the gate runs no service tests for them.
   # Anything else outside a service's `path` still touches every service.
@@ -41,7 +41,7 @@ services:
     path: apps/cli
     type: cli
     archetype: node-tool
-    test: "npx turbo run test --filter=@jbbz-sandbox/sandbox-cli"
+    test: "npx turbo run test --filter=werkmeister"
     validate: "Build, then run the built sandbox binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
     internal_port: 3998
     port_offset: 3

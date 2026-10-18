@@ -26,7 +26,7 @@
  *     sandbox optimize [--collect N]           Analyze usage vs limits, recommend changes
  *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
  *     sandbox list-workspaces                  List workspaces under the workspaces root
- *     sandbox issue <view|update> [ref]        Read or update an issue in the configured tracker
+ *     sandbox issue <view|update|create> [ref] Read, update or file an issue in the configured tracker
  *     sandbox remove-workspace <name>          Deprecated: use `sandbox close-out --abandon <reason>`
  *     sandbox pr <gate|open|status> [repo]     Pre-PR gate, open PRs from approved PR files, record merge/release
  *     sandbox close-out [name]                 End a workspace: after release, or with --abandon <reason>
@@ -44,6 +44,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
 import { COMPOSE_FILE } from "sandbox-core/compose_file";
+import { envVar } from "sandbox-core/config";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "sandbox-core/errors";
 import { error, ttyReporter, withReporter } from "sandbox-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
@@ -57,7 +58,7 @@ import { installDefaultInterrupt } from "./lib/interrupt.js";
 // Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
 // config loaders.
 const _REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-if (!process.env.SANDBOX_ROOT) {
+if (!envVar("ROOT")) {
   process.env.SANDBOX_ROOT = _REPO_ROOT;
 }
 
@@ -629,13 +630,13 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Read or update an issue in this machine's issue tracker (see `sandbox setup`)",
+          "Read, update or file an issue in this machine's issue tracker (see `sandbox setup`)",
         )
         .addArgument(
           new Argument(
             "<action>",
-            "view: print the issue; update: change its status and/or add a comment",
-          ).choices(["view", "update"]),
+            "view: print the issue; update: change its status and/or add a comment; create: file a new issue and print its URL (Jira)",
+          ).choices(["view", "update", "create"]),
         )
         .argument(
           "[ref]",
@@ -643,7 +644,14 @@ const SPECS: CommandSpec[] = [
         )
         .option("--json", "view: print the issue as JSON")
         .option("--status <name>", "update: move the issue to this status")
-        .option("--comment <text>", "update: add this comment");
+        .option("--comment <text>", "update: add this comment")
+        .option("--project <key>", "create: the Jira project to file in")
+        .option(
+          "--type <type>",
+          "create: bug, feature or task (mapped to the tracker's issue type)",
+        )
+        .option("--title <text>", "create: the issue's summary")
+        .option("--body-file <path>", "create: the issue's description, from a file (- for stdin)");
     },
     namespace: ([action, ref], o) => ({
       action,
@@ -651,6 +659,10 @@ const SPECS: CommandSpec[] = [
       json: Boolean(o.json),
       status: o.status ?? null,
       comment: o.comment ?? null,
+      project: o.project ?? null,
+      type: o.type ?? null,
+      title: o.title ?? null,
+      bodyFile: o.bodyFile ?? null,
     }),
   },
   {
@@ -953,7 +965,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
     } else {
       console.log(`${_RED}Error: ${(e as Error).message}${_RESET}`);
     }
-    if (process.env.SANDBOX_DEBUG) {
+    if (envVar("DEBUG")) {
       throw e;
     }
     process.exit(1);
@@ -1011,7 +1023,7 @@ export async function main(): Promise<void> {
 
   const program = new Command();
   program
-    .name("sandbox")
+    .name("werkmeister")
     .description(BANNER)
     .helpOption("-h, --help", "show this help message and exit");
 
@@ -1030,7 +1042,7 @@ export async function main(): Promise<void> {
   }
 
   // `dashboard` and `mcp` name the two sibling apps, each with its own
-  // dist/main.js. The ./sandbox wrapper intercepts both before this file loads
+  // dist/main.js. The ./werkmeister wrapper intercepts both before this file loads
   // (it is the only place that can resolve a node runtime), so these two
   // registrations exist for --help parity and to give a useful message to
   // anyone running dist/main.js directly. Neither takes a transport flag: the
@@ -1053,8 +1065,8 @@ export async function main(): Promise<void> {
         // as JSON-RPC, and printing English onto that channel is what made the
         // previous version of this stub look like a crashed server.
         console.error(
-          `\`sandbox ${name}\` launches a sibling app and must be run through the ` +
-            "./sandbox wrapper, which locates a node runtime and the app's entrypoint.",
+          `\`werkmeister ${name}\` launches a sibling app and must be run through the ` +
+            "./werkmeister wrapper, which locates a node runtime and the app's entrypoint.",
         );
         process.exit(1);
       });

@@ -22,6 +22,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { dotDir, envVar } from "./config.js";
+
 export interface CacheEntry<T> {
   v: T;
   at: number;
@@ -30,7 +32,7 @@ export interface CacheEntry<T> {
 type Store = Record<string, { v: unknown; at: number }>;
 
 function cacheFilePath(): string {
-  return process.env.SANDBOX_CACHE_FILE || path.join(os.homedir(), ".sandbox", "issue-cache.json");
+  return envVar("CACHE_FILE") || path.join(dotDir(os.homedir()), "issue-cache.json");
 }
 
 async function readStore(): Promise<Store> {

@@ -28,7 +28,7 @@ vi.mock("sandbox-core/config", async (importOriginal) => {
   return { ...actual, stateInfraRoot: () => h.stateInfraRoot ?? actual.stateInfraRoot() };
 });
 
-import { loadServices, stateInfraRoot } from "sandbox-core/config";
+import { dotDir, loadServices, stateInfraRoot } from "sandbox-core/config";
 import { loadFeatureRouters } from "sandbox-core/feature_routing";
 import {
   generateCaddyfile,
@@ -60,7 +60,7 @@ afterEach(() => {
 });
 
 function writeWorkspaceYml(workspace: string, mapping: string): void {
-  const sandbox = path.join(workspace, ".sandbox");
+  const sandbox = dotDir(workspace);
   fs.mkdirSync(sandbox, { recursive: true });
   fs.writeFileSync(path.join(sandbox, "workspace.yml"), mapping);
 }
@@ -432,7 +432,7 @@ describe("generateSupergraphConfig", () => {
   // Federation is opt-in: the demo registry has no graphql-subgraph service,
   // so nothing is written and a stale file from an earlier run is removed.
   it("writes nothing when no service is a GraphQL subgraph", () => {
-    const stale = path.join(tmp, ".sandbox", "supergraph-config.yml");
+    const stale = path.join(dotDir(tmp), "supergraph-config.yml");
     fs.mkdirSync(path.dirname(stale), { recursive: true });
     fs.writeFileSync(stale, "subgraphs: {}\n");
     expect(generateSupergraphConfig("myfeat", 1, [], null, tmp)).toBeNull();
@@ -442,7 +442,7 @@ describe("generateSupergraphConfig", () => {
   it("writes the config when a service is a GraphQL subgraph", () => {
     const config = { services: { orders: { type: "graphql-subgraph", internal_port: 4000 } } };
     const outPath = generateSupergraphConfig("myfeat", 1, ["orders"], config, tmp);
-    expect(outPath).toBe(path.join(tmp, ".sandbox", "supergraph-config.yml"));
+    expect(outPath).toBe(path.join(dotDir(tmp), "supergraph-config.yml"));
     expect(fs.readFileSync(outPath as string, "utf8")).toContain("http://orders:4000/graphql");
   });
 });

@@ -14,6 +14,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "sandbox-core/browser";
+import { dotDir } from "sandbox-core/config";
 import { featureUrl } from "sandbox-core/feature_routing";
 import { raw } from "sandbox-core/reporter";
 import { getSlot } from "sandbox-core/slots";
@@ -32,7 +33,7 @@ function loadWorkspaceYaml(start: string): Record<string, any> {
   let dir = path.resolve(start);
   for (;;) {
     for (const name of ["workspace.yml", "workspace.yaml"]) {
-      const p = path.join(dir, ".sandbox", name);
+      const p = path.join(dotDir(dir), name);
       if (fs.existsSync(p) && fs.statSync(p).isFile()) {
         return readWorkspaceYaml(dir);
       }

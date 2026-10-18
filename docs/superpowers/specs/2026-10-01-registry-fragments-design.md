@@ -6,7 +6,7 @@
 ## Goal
 
 A new developer clones the team's repos under `paths.repos_root`, runs
-`npx @jbbz-sandbox/sandbox-cli setup`, and ends up with a
+`npx werkmeister setup`, and ends up with a
 `~/.sandbox/services.yaml` that already knows every service in those repos.
 Nobody copies a teammate's registry; nobody hand-writes entries for a repo
 that already describes itself.
