@@ -1,15 +1,17 @@
 /**
  * The issue-filing guide both context strategies write into a workspace: what
  * type an issue is (bug | feature | task), where it goes — a bug is fixed here
- * if this workspace's changes caused it, otherwise it is filed on the sandbox
- * repo or in the machine's issue tracker (`overrides.issue_tracker`; each tracker's
- * strategy supplies its own routing row) — and the
+ * if this workspace's changes caused it, otherwise it is filed in the machine's
+ * issue tracker (`overrides.issue_tracker`; each tracker's strategy supplies
+ * its own routing rows) or, for the sandbox tool itself, on the sandbox repo
+ * unless the tracker takes those too (`overrides.sandbox_issues_project`) — and the
  * body per type. icm writes it to `_shared/issues-report.md`, jit to
  * `.sandbox/issues-report.md`; each strategy's CLAUDE.md points at its copy.
  */
 
 import { COMPOSE_FILE } from "./compose_file.js";
 import { type IssueTrackerStrategy, issueTracker } from "./issue_tracker.js";
+import type { IssueKind } from "./issue_trackers/types.js";
 
 export const SANDBOX_ISSUES_REPO = "jbbz-sandbox/sandbox";
 
@@ -18,23 +20,29 @@ export function buildIssuesReportMd(
   issueId = "",
   tracker: IssueTrackerStrategy = issueTracker(),
 ): string {
-  const { row: appRow, search: searchStep } = tracker.filingGuide(issueId.trim());
-  // GitHub labels always apply (sandbox-tool issues are GitHub's); a tracker with its own types adds a column.
+  const { row: appRow, search: searchStep, sandbox } = tracker.filingGuide(issueId.trim());
+  const sandboxWhere = sandbox ?? {
+    where: `https://github.com/${SANDBOX_ISSUES_REPO}/issues`,
+    command: `\`gh issue create -R ${SANDBOX_ISSUES_REPO} --label <label>\``,
+  };
+  // GitHub labels apply unless the tracker takes sandbox-tool issues too; a tracker with its own types adds a column.
+  const labels = !sandbox;
   const types = tracker.issueTypes;
-  const col = (k: "bug" | "feature" | "task") => (types ? ` ${types[k]} |` : "");
+  const col = (k: IssueKind) => (types ? ` ${types[k]} |` : "");
+  const label = (text: string) => (labels ? ` ${text} |` : "");
   return `# Filing an issue
 
 Log an issue when you find it, even if the notes are rough. Each issue must stand alone: a later agent should be able to act on it without re-running this workspace or asking follow-up questions.
 
 ## Type
 
-Every issue has one type. It sets the label (GitHub)${types ? ` or issue type (${tracker.label})` : ""} and the body template.
+Every issue has one type. It sets the ${[labels && "label (GitHub)", types && `issue type (${tracker.label})`].filter(Boolean).join(" or ")} and the body template.
 
-| Type | Use for | GitHub label |${types ? ` ${tracker.label} issue type |` : ""}
-|---|---|---|${types ? "---|" : ""}
-| bug | something that is broken | \`--label bug\` |${col("bug")}
-| feature | new or changed behavior | \`--label enhancement\` |${col("feature")}
-| task | setup, cleanup, chores — no behavior change | \`--label task\` (not a GitHub default: run \`gh label create task -R <owner>/<repo> --color ededed --force\` first) |${col("task")}
+| Type | Use for |${label("GitHub label")}${types ? ` ${tracker.label} issue type |` : ""}
+|---|---|${label("---")}${types ? "---|" : ""}
+| bug | something that is broken |${label("`--label bug`")}${col("bug")}
+| feature | new or changed behavior |${label("`--label enhancement`")}${col("feature")}
+| task | setup, cleanup, chores — no behavior change |${label("`--label task` (not a GitHub default: run `gh label create task -R <owner>/<repo> --color ededed --force` first)")}${col("task")}
 
 ## Bugs: new or existing?
 
@@ -53,13 +61,13 @@ File one when the person asks for it, or when you find work outside this workspa
 
 | Issue is about | File at | Command |
 |---|---|---|
-| the \`sandbox\` tool: CLI, MCP tools, plugin skills, generated files (\`.sandbox/\`, \`${COMPOSE_FILE}\`, \`.env\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | https://github.com/${SANDBOX_ISSUES_REPO}/issues | \`gh issue create -R ${SANDBOX_ISSUES_REPO} --label <label>\` |
+| the \`sandbox\` tool: CLI, MCP tools, plugin skills, generated files (\`.sandbox/\`, \`${COMPOSE_FILE}\`, \`.env\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | ${sandboxWhere.where} | ${sandboxWhere.command} |
 ${appRow}
 
 ## How
 
 1. ${searchStep}
-2. Title: one-line summary. Label or issue type: from the type table. Body: the template for its type (with \`gh\`, via \`--body-file\`).
+2. Title: one-line summary. Label or issue type: from the type table. Body: the template for its type, via \`--body-file\`.
 3. Paste exact commands and error output — don't paraphrase.
 4. Tell the person the issue URL, then resume what you were doing.
 
