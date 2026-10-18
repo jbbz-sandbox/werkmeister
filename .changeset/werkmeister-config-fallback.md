@@ -1,6 +1,6 @@
 ---
 "sandbox-core": minor
-"@jbbz-sandbox/sandbox-cli": minor
+"werkmeister": minor
 "vscode-plugin": minor
 "sandbox-mcp": minor
 ---
