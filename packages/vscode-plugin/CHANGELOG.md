@@ -1,5 +1,12 @@
 # vscode-plugin
 
+## 0.15.0
+
+### Patch Changes
+
+- Updated dependencies [dba74e3]
+  - werkmeister-core@0.15.0
+
 ## 0.14.1
 
 ### Patch Changes
