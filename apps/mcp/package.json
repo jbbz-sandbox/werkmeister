@@ -1,6 +1,6 @@
 {
   "name": "werkmeister-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "private": true,
   "description": "Headless, authenticated MCP server exposing the sandbox verbs to a container agent with no Docker access.",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.1.0",
-    "werkmeister-core": "^0.14.0",
+    "werkmeister-core": "^0.15.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
