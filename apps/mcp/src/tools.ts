@@ -488,9 +488,7 @@ function registerAuthoringTools(server: McpServer): void {
         "the issue, push and keep every branch, then remove. Destructive, and NOT scoped to your feature — " +
         "it names a workspace. Nothing is deleted if any branch cannot be pushed.",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace directory name, as list-workspaces reports it."),
+        name: z.string().describe("Workspace directory name, as list-workspaces reports it."),
         abandon: z
           .string()
           .optional()

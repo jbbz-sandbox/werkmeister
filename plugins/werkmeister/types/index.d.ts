@@ -122,7 +122,7 @@ export type Draft = Record<string, string | string[] | boolean>;
 
 declare module "claude-code" {
   interface PluginState {
-    "werkmeister": {
+    werkmeister: {
       rows: WorkspaceRow[];
       error: string;
       busy: string;
