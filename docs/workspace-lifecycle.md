@@ -104,7 +104,7 @@ A repo's registry fragment (`<repo>/.sandbox/services.yaml`) says when its merge
 ```yaml
 repo:
   ship: tag                                   # merge (default) | tag
-  release_tag: "@jbbz-sandbox/sandbox-cli@*"  # glob for git tag --list; required for ship: tag
+  release_tag: "werkmeister@*"  # glob for git tag --list; required for ship: tag
   release_check: npx changeset status --since=origin/main
   no_service_paths: [docs, .changeset, .gitignore, README.md]  # prefixes that touch no service in the gate
 ```

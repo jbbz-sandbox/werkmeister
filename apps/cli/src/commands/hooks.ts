@@ -3,7 +3,7 @@
  *
  * CLI-registered path (`sandbox hooks gate`; manual runs, tests), dispatched to
  * the workspace's strategy. The per-edit hook jit installs is special-cased by
- * the `./sandbox` wrapper to exec the gate module directly, bypassing this —
+ * the `./werkmeister` wrapper to exec the gate module directly, bypassing this —
  * only jit installs that hook, so the fast path stays jit's. `pr-guard` (every
  * strategy) has the same wrapper fast path; this is its manual-run path.
  */
