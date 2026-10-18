@@ -28,7 +28,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jbbz-sandbox/sandbox.git",
+    "url": "git+https://github.com/jbbz-sandbox/werkmeister.git",
     "directory": "apps/cli"
   },
   "publishConfig": {

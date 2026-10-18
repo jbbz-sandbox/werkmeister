@@ -1,7 +1,7 @@
 # Design: replacing the docker socket in the sandbox repo's containers (#135)
 
 **Status:** proposed, awaiting the maintainer's decision. The registry is unchanged. Approving this
-document is acceptance criterion 1 of [#135](https://github.com/jbbz-sandbox/sandbox/issues/135); the
+document is acceptance criterion 1 of [#135](https://github.com/jbbz-sandbox/werkmeister/issues/135); the
 registry change ships in a separate PR afterwards.
 
 ## Problem

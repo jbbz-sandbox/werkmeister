@@ -1,6 +1,6 @@
 # Workspace lifecycle: from first commit to close-out
 
-One process for every workspace, whichever context strategy (`icm` or `jit`) it uses and whichever skill or command was asked to "make a PR". Issue: jbbz-sandbox/sandbox#133 (absorbs #129).
+One process for every workspace, whichever context strategy (`icm` or `jit`) it uses and whichever skill or command was asked to "make a PR". Issue: jbbz-sandbox/werkmeister#133 (absorbs #129).
 
 ## Words
 
@@ -58,7 +58,7 @@ One per code repo touched, named `pr-<repo>.md`, where `<repo>` is the code work
 
 ```markdown
 ---
-repo: jbbz-sandbox/sandbox     # the code repo on GitHub; never the workspace repo
+repo: jbbz-sandbox/werkmeister     # the code repo on GitHub; never the workspace repo
 branch: jayboyer/sandbox-133-workspace-pr-lifecycle
 base: main
 status: draft                  # draft | approved | open | merged | shipped | closed | abandoned

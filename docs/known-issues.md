@@ -457,7 +457,7 @@ which is cheap and needs no supervisor.
 Neither `repository` nor `license` is set, and there is no `LICENSE` file in the package.
 `vsce package` warns on both, and the Marketplace listing renders without a source link.
 
-**Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/sandbox.git", "directory": "packages/vscode-plugin" }`, set `"license"`, and add the LICENSE file.
+**Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/werkmeister.git", "directory": "packages/vscode-plugin" }`, set `"license"`, and add the LICENSE file.
 
 ---
 

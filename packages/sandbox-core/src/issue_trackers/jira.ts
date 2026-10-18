@@ -146,7 +146,7 @@ async function updateViaMcp(key: string, update: IssueUpdate): Promise<void> {
 }
 
 /** Sandbox-tool issues go to GitHub unless `overrides.sandbox_issues_project` names a Jira project; issues_report.ts names it too. */
-const SANDBOX_ISSUES_REPO = "jbbz-sandbox/sandbox";
+const SANDBOX_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
 const ISSUE_TYPES: Record<IssueKind, string> = { bug: "Bug", feature: "Story", task: "Task" };
 
