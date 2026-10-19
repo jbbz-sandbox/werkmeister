@@ -1,4 +1,4 @@
-# Sandbox — Code Style Guide
+# Werkmeister — Code Style Guide
 
 > **Canonical, cross-repo standard — a thin index.** The rubric and per-repo notes that used
 > to live in this file are decomposed into one module per concern under
@@ -8,7 +8,7 @@
 >
 > Living documents. When a code review keeps surfacing the same nit, encode it in the matching
 > module so it only has to be said once. Start small; extend as patterns emerge — the
-> graduation pipeline (`decision` note → `sandbox notes graduate` → `sb-author`) is the
+> graduation pipeline (`decision` note → `werkmeister notes graduate` → `sb-author`) is the
 > sanctioned path.
 
 ## Modules
@@ -33,7 +33,7 @@ standard bodies — they are not loadable standards in their own right.
 ## How standards reach a workspace
 
 Which modules apply to a given ephemeral workspace is computed from the archetype of each
-service in `~/.sandbox/services.yaml` (plus `.sandbox/workspace.yml` `standards_override`) and
+service in `~/.werkmeister/services.yaml` (plus `.werkmeister/workspace.yml` `standards_override`) and
 rendered as a **"Standards routing"** block in the workspace's generated `CLAUDE.md`. The
 universal base is always active.
 

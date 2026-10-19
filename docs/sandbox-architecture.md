@@ -1,4 +1,4 @@
-# sandbox Architecture
+# Werkmeister Architecture
 
 ## Multi-Feature Concurrent Development for Distributed Application
 
@@ -64,12 +64,12 @@ k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052
 **Role**: Caddy is the browser-facing entry point and the only routing layer. It terminates HTTPS, serves the feature selector UI, and reverse-proxies each service's public hostname straight to its upstream — the feature's local container when one is running, otherwise the k8s baseline.
 
 **What Caddy does**:
-- Terminates HTTPS/TLS using local certificates (mounted from the directory named by `ingress.certs_dir` in `~/.sandbox/config.yaml`).
+- Terminates HTTPS/TLS using local certificates (mounted from the directory named by `ingress.certs_dir` in `~/.werkmeister/config.yaml`).
 - Serves the feature selector UI at `/__sandbox` on every host — a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__sandbox/features.json` is matched first (a real file); any other `/__sandbox` path returns the picker.
 - Copies an `X-Feature` cookie value into an `X-Feature` header on the upstream call, so the app can read the selected feature.
 - Proxies to `host.docker.internal:<port>` for a local feature container, or to `k8s-<service>:<forward_port>` for the k8s baseline.
 
-**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`sandbox proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.sandbox/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `apps/cli/src/lib/feature_routing.ts`).
+**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`werkmeister proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.werkmeister/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `apps/cli/src/lib/feature_routing.ts`).
 
 ```
 # Example generated Caddyfile snippet
@@ -139,7 +139,7 @@ in `infra/compose/shared-infra.yml` and managed by Docker Compose.
 A central config maps repos → services → Docker compose files:
 
 ```yaml
-# ~/.sandbox/services.yaml
+# ~/.werkmeister/services.yaml
 repos:
   demo-services:
     services: [backend, frontend]
@@ -187,43 +187,43 @@ For a given feature workspace:
 ```
 
 **Re-detection triggers**:
-- On `sandbox up` (initial)
+- On `werkmeister up` (initial)
 - On Vibe Kanban status change (e.g., moving to "in review")
 - Optionally: file watcher that re-detects when new files are committed
 
-### 4. Orchestrator CLI (`sandbox`)
+### 4. Orchestrator CLI (`werkmeister`)
 
 The core tool that agents and developers invoke.
 
 ```bash
 # Lifecycle
-sandbox up <feature>         # detect services, start containers, configure proxy
-sandbox down <feature>        # stop containers, remove proxy routes
-sandbox restart <feature>     # restart feature's containers
-sandbox status               # show all features, their services, resource usage
+werkmeister up <feature>         # detect services, start containers, configure proxy
+werkmeister down <feature>        # stop containers, remove proxy routes
+werkmeister restart <feature>     # restart feature's containers
+werkmeister status               # show all features, their services, resource usage
 
 # Inspection
-sandbox detect [repo]        # generate the repo's .sandbox/services.yaml (--dry-run to preview)
-sandbox services <feature>   # list services and their endpoints for this feature
-sandbox logs <feature> [svc] # tail logs for a feature's service
+werkmeister detect [repo]        # generate the repo's .sandbox/services.yaml (--dry-run to preview)
+werkmeister services <feature>   # list services and their endpoints for this feature
+werkmeister logs <feature> [svc] # tail logs for a feature's service
 
-# Manual overrides (to run a service locally: add it to .sandbox/workspace.yml, then init-workspace + up)
-sandbox remove <feature> <svc> # stop a local service, fall back to k8s
+# Manual overrides (to run a service locally: add it to .werkmeister/workspace.yml, then init-workspace + up)
+werkmeister remove <feature> <svc> # stop a local service, fall back to k8s
 
 # Testing
-sandbox test <feature>       # run Playwright against this feature's stack
+werkmeister test <feature>       # run Playwright against this feature's stack
 
 # Infrastructure
-sandbox infra-up             # start shared infrastructure (redis, cloud-sql, k8s-forwards, worker, caddy)
-sandbox k8s-status           # check k8s-forwards container health
-sandbox proxy-reload         # regenerate Caddyfile + worker.env, restart worker
+werkmeister infra-up         # start shared infrastructure (redis, cloud-sql, k8s-forwards, worker, caddy)
+werkmeister k8s-status           # check k8s-forwards container health
+werkmeister proxy-reload         # regenerate Caddyfile + worker.env, restart worker
 ```
 
-**Implementation**: A TypeScript CLI that lives in the sandbox repo. Each command is a module in `apps/cli/src/commands/`.
+**Implementation**: A TypeScript CLI that lives in the Werkmeister repo. Each command is a module in `apps/cli/src/commands/`.
 
 ### 5. Per-Feature Docker Compose Generation
 
-When `sandbox up <feature>` runs, it dynamically generates a `docker-compose.feature-<name>.yml`:
+When `werkmeister up <feature>` runs, it dynamically generates a `docker-compose.feature-<name>.yml`:
 
 ```yaml
 # Auto-generated for feature: payment-refactor
@@ -342,7 +342,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 
 **Health checks**: Docker Compose healthcheck probes key ports (`nc -z localhost 9000 && nc -z localhost 9002 && nc -z localhost 9052`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
-**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs sandbox-k8s-forwards`. The `sandbox k8s-status` command checks the container's health status.
+**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs sandbox-k8s-forwards`. The `werkmeister k8s-status` command checks the container's health status.
 
 ### 8. Playwright Integration
 
@@ -363,7 +363,7 @@ export default defineConfig({
 
 **Execution**:
 ```bash
-sandbox test payment-refactor
+werkmeister test payment-refactor
 # Equivalent to:
 # SANDBOX_FEATURE=payment-refactor npx playwright test
 ```
@@ -380,13 +380,13 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 
 ## Routing applies only to front-door services
 
-Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.sandbox/sandbox-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `sandbox test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
+Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.werkmeister/sandbox-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `werkmeister test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
 
 ## Directory Structure
 
 ```
-~/sandbox/                              # sandbox repo
-├── sandbox                             # CLI entrypoint (bash wrapper -> node)
+~/werkmeister/                          # werkmeister repo
+├── apps/cli/werkmeister                 # CLI entrypoint (bash wrapper -> node)
 ├── apps/cli/src/               # CLI command scripts
 │   ├── up.sh
 │   ├── down.sh
@@ -422,23 +422,23 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 ├── payment-refactor/
 │   ├── compose.yml              # Generated per-feature compose stack
 │   ├── .env                            # Generated resolved env vars
-│   ├── .sandbox/
+│   ├── .werkmeister/
 │   │   └── supergraph-config.yml       # Generated only when a GraphQL subgraph exists
 │   ├── demo-services/                  # git worktree
 │   └── api/                            # git worktree
 ├── auth-redesign/
 │   ├── compose.yml
 │   ├── .env
-│   ├── .sandbox/
+│   ├── .werkmeister/
 │   │   └── supergraph-config.yml
-│   ├── sandbox/
+│   ├── werkmeister/
 │   └── standalone-auth/
 └── ...
 ```
 
 ---
 
-## Lifecycle: `sandbox up payment-refactor`
+## Lifecycle: `werkmeister up payment-refactor`
 
 ```
 1. DETECT
@@ -450,7 +450,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 2. ALLOCATE
    ├── Find next available feature slot (e.g., slot 3)
    ├── Assign port range 11300–11319
-   └── Write slot assignment to ~/.sandbox/slots.json
+   └── Write slot assignment to ~/.werkmeister/slots.json
 
 3. GENERATE
    ├── Render docker-compose from template with:
@@ -510,7 +510,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 
 ### Workspace Hooks
 
-In each Vibe Kanban workspace, add a hook in the sandbox repo worktree:
+In each Vibe Kanban workspace, add a hook in the Werkmeister repo worktree:
 
 ```bash
 # .vibe/hooks/on-status-change.sh
@@ -520,34 +520,34 @@ STATUS="$VIBE_NEW_STATUS"
 
 case "$STATUS" in
   "in-progress")
-    sandbox up "$FEATURE"
+    werkmeister up "$FEATURE"
     ;;
   "in-review")
-    sandbox test "$FEATURE"
+    werkmeister test "$FEATURE"
     ;;
   "done"|"cancelled")
-    sandbox down "$FEATURE"
+    werkmeister down "$FEATURE"
     ;;
 esac
 ```
 
 ### Claude Code Agent Integration
 
-Each Claude Code agent operates in its own workspace and can invoke sandbox commands:
+Each Claude Code agent operates in its own workspace and can invoke `werkmeister` commands:
 
 ```bash
 # Agent starting work on a feature
-sandbox up payment-refactor
+werkmeister up payment-refactor
 
 # Agent wants to check its work
-sandbox test payment-refactor
+werkmeister test payment-refactor
 
-# Agent adds a service it now needs (after listing graphql-orders in .sandbox/workspace.yml)
-sandbox init-workspace
-sandbox up payment-refactor
+# Agent adds a service it now needs (after listing graphql-orders in .werkmeister/workspace.yml)
+werkmeister init-workspace
+werkmeister up payment-refactor
 
 # Agent checks what's running
-sandbox status
+werkmeister status
 ```
 
 ---

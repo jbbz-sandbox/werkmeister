@@ -1,11 +1,11 @@
 # Topology: where each piece runs
 
-Which machine, and which container, every part of the sandbox lives in — and what
+Which machine, and which container, every part of Werkmeister lives in — and what
 crosses the boundary between your laptop and the cluster.
 
 The short version: **containers are local, Kubernetes is remote, and telepresence
 is the only piece that can sit on either side.** That last choice is
-`sandbox intercept --docker-daemon`, and it is the only decision in this document.
+`werkmeister intercept --docker-daemon`, and it is the only decision in this document.
 
 The same two diagrams, rendered in colour and easier to read at a glance:
 <https://claude.ai/code/artifact/c4e95b16-b1ef-437c-880c-8ab2867030c4>
@@ -20,7 +20,7 @@ below is the copy of record and stays correct on its own.
 DEVELOPER LAPTOP                                 KUBERNETES (shared, cloud)
                                            internet/VPN
 ┌────────────────────────────────────┐      ┊    ┌────────────────────────────────┐
-│ sandbox · telepresence · kubectl   │ ──(1)────►│ API server                     │
+│ werkmeister, telepresence, kubectl  │ ──(1)────►│ API server                     │
 │ plain binaries — mac/Linux/WSL     │      ┊    │   a real hostname              │
 └────────────────────────────────────┘      ┊    ├────────────────────────────────┤
 ┌────────────────────────────────────┐      ┊    │ traffic-manager                │
@@ -52,7 +52,7 @@ Only three things cross the boundary:
 Everything else is local: compose builds, Caddy routing, file watching, tests,
 and the whole edit loop.
 
-The container runtime is the developer's own choice. The sandbox speaks only the
+The container runtime is the developer's own choice. Werkmeister speaks only the
 Docker API, and `infra/compose/shared-infra.yml` maps
 `host.docker.internal:host-gateway` — the portable form — so plain `dockerd` on
 Linux behaves like Docker Desktop or OrbStack on a Mac.
@@ -90,7 +90,7 @@ root  sudo -b -p [sudo: telepresence network daemon] Password:
 ```
 
 That third line is the password prompt people ask about. It is telepresence's own
-`sudo`, not the sandbox's: root is needed for a TUN device, `/etc/resolver/*` and
+`sudo`, not Werkmeister's: root is needed for a TUN device, `/etc/resolver/*` and
 the routing table. It comes **once per root-daemon lifetime** — until
 `telepresence quit -s` or a reboot — not once per intercept.
 
@@ -171,7 +171,7 @@ expected to run, and the `k8s-forwards` image
 Also worth knowing, none of it blocking:
 
 - **The traffic-manager is per cluster.** Install it once in the cloud cluster
-  before the first intercept. Nothing else in the sandbox needs anything
+  before the first intercept. Nothing else in Werkmeister needs anything
   installed there.
 - **Intercepted requests cross the internet** — cluster to laptop and back on
   every matched request. Fine for a debug loop, visible in a latency-sensitive
@@ -193,6 +193,6 @@ no cloud cluster is available.
 
 ---
 
-**See also:** [`sandbox intercept` in the users guide](users-guide.md#sandbox-intercept)
+**See also:** [`werkmeister intercept` in the users guide](users-guide.md#sandbox-intercept)
 for flags and worked commands; [architecture](sandbox-architecture.md) for how
 Caddy chooses between a local container and the cluster baseline.
