@@ -247,7 +247,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
           "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `sandbox pr open`, then Auto-fix on (rule 5) | PR URL is in the PR file and Auto-fix is on |",
         ]
       : []),
-    "| a PR merged or released, or asked to close out | `sandbox pr status`, then `sandbox close-out` | closed out |",
+    "| a PR merged or released, or asked to close out | `sandbox pr status`, then ask the person before `sandbox close-out` | closed out after the person says yes |",
     "| asked for status | `ls stages/*/output/` | report which stages hold artifacts |",
     "| containers / ports / routing broken | `.sandbox/sandbox-context.md` | — |",
     "| you hit a bug or need to log a feature/task — in the `sandbox` tool or in a repo's code | `_shared/issues-report.md`: if this workspace's changes caused a bug, fix it here; otherwise file an issue where it belongs | fixed, or issue URL reported to the person |",

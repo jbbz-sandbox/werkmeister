@@ -337,6 +337,17 @@ test("feature and services both present: the restart sentence uses docker restar
   );
 });
 
+test("the merged-or-released router row asks the person before close-out (SW-13)", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init(ctx);
+    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+    assert.match(
+      claude,
+      /^\| a PR merged or released, or asked to close out \| `sandbox pr status`, then ask the person before `sandbox close-out` \| .* \|$/m,
+    );
+  });
+});
+
 test("templateFor falls back to feature for free text, and normalises case", () => {
   const feature = templateFor("feature").map((s) => s.name);
   assert.deepEqual(feature, ["research", "spec", "implement", "propose"]);
