@@ -29,6 +29,7 @@ import { updateNoteStatus } from "./graduate.js";
 import { type IssueStatuses, moveIssue, resolveIssueStatuses } from "./issue_status.js";
 import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
+import { idleStopMinutes, lastExecMarker, stop as stopFeature, stopIdle } from "./lifecycle.js";
 import { openDecisions } from "./notes.js";
 import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
 import {
@@ -105,6 +106,10 @@ export interface Deps {
   session: (ws: string) => Promise<Record<string, string>>;
   /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. */
   branchRegistry: (repo: string, worktree: string) => MergedRegistry | null;
+  /** Stop the workspace's feature containers (SW-39); one line, never throws. */
+  stop: (ws: string) => Promise<string>;
+  /** One idle-reaper pass over every workspace (SW-39). */
+  reapIdle: () => Promise<{ lines: string[] }>;
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
@@ -149,7 +154,34 @@ export function defaultDeps(): Deps {
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
     session: (ws) => callbackFields(ws, process.env),
     branchRegistry: (repo, worktree) => branchRegistry(repo, worktree),
+    stop: stopWorkspace,
+    reapIdle: async () => {
+      const minutes = idleStopMinutes();
+      return minutes ? stopIdle(minutes) : { lines: [] };
+    },
   };
+}
+
+/** Stop *ws*'s feature containers, keeping slot and volumes (SW-39). */
+async function stopWorkspace(ws: string): Promise<string> {
+  const feature = readEnv(ws, "FEATURE");
+  if (!feature) return "containers already stopped";
+  try {
+    await stopFeature(feature);
+    return "containers stopped (slot and volumes kept; `werkmeister up` resumes)";
+  } catch (e) {
+    if ((e as { code?: string }).code === "NOT_RUNNING") return "containers already stopped";
+    return `could not stop containers — ${(e as Error).message}`;
+  }
+}
+
+/** Record that the gate is about to `docker exec`, so the idle reaper keeps the containers. */
+function touchExecMarker(ws: string): void {
+  try {
+    fs.writeFileSync(lastExecMarker(ws), "");
+  } catch {
+    // a missing dot-dir must not fail the gate
+  }
 }
 
 // ---- PR files --------------------------------------------------------------
@@ -414,6 +446,7 @@ export async function runGate(
       );
       continue;
     }
+    touchExecMarker(ws);
     const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
     add(
       `test ${svc}`,
@@ -456,6 +489,7 @@ export async function runGate(
     else if (!container)
       add("release", false, "no running container for this repo — run `sandbox up`");
     else {
+      touchExecMarker(ws);
       const res = await deps.run("docker", ["exec", container, "sh", "-c", repo["release_check"]]);
       add(
         "release",
@@ -597,6 +631,8 @@ export async function openPrs(
   }
   if (opened.length)
     lines.push((await deps.commitRecord(ws, "chore: record opened PR(s)", opened)).message);
+  // A failed file still needs the containers to be fixed and re-gated.
+  if (ok && opened.length) lines.push(await deps.stop(ws));
   return { ok, lines };
 }
 
@@ -698,6 +734,7 @@ export async function refreshPrStatus(
   }
   const moved = await moveIssueForPrs(ws, seen, deps);
   if (moved) lines.push(`issue ${moved}`);
+  if (seen.merged.length || seen.shipped.length) lines.push(await deps.stop(ws));
   if (changed.length)
     lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
   return { lines, changed: changed.length > 0 };
@@ -875,12 +912,14 @@ export async function deliverHeadless(cb: PrCallback): Promise<void> {
 /**
  * `sandbox pr watch` (desktop: false) and the werkmeister mod's timer (desktop: true): one
  * pass over every workspace. Headless claims are delivered here; desktop claims are returned
- * for the mod to send through the app. Never merges and never closes out.
+ * for the mod to send through the app, then one idle-reaper pass (SW-39). Never merges and
+ * never closes out.
  */
 export async function watchPrs(
   opts: { desktop: boolean },
   deps: Deps = defaultDeps(),
   send: (cb: PrCallback) => Promise<void> = deliverHeadless,
+  idleLock = path.join(sandboxHome(), "idle-stop.lock"),
 ): Promise<{ ok: boolean; lines: string[]; desktop: PrCallback[] }> {
   const { workspaces } = await listWorkspaces();
   const { claimed, lines } = await claimCallbacks(
@@ -901,6 +940,15 @@ export async function watchPrs(
       lines.push(`${cb.dir}: could not resume session ${cb.session}: ${(e as Error).message}`);
     }
   }
+  // Its own lock: every desktop session's timer runs this pass, and two reapers would race compose.
+  fs.mkdirSync(path.dirname(idleLock), { recursive: true });
+  if (takeLock(idleLock)) {
+    try {
+      lines.push(...(await deps.reapIdle()).lines);
+    } finally {
+      fs.rmSync(idleLock, { force: true });
+    }
+  } else lines.push("another idle-stop pass is running");
   return { ok: true, lines, desktop };
 }
 

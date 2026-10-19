@@ -141,3 +141,31 @@ test("the form has an auto_stop checkbox, off by default; workspace.yml stores a
   );
   assert.equal(readAutoStop(root), true);
 });
+
+test("auto_stop unset follows autonomous; an explicit value wins (SW-39)", () => {
+  assert.equal(readAutoStop(workspace("feature: f\nautonomous: true\n")), true);
+  assert.equal(readAutoStop(workspace("feature: f\nautonomous: false\n")), false);
+  assert.equal(readAutoStop(workspace("feature: f\n")), false);
+  assert.equal(readAutoStop(workspace("feature: f\nautonomous: true\nauto_stop: false\n")), false);
+  assert.equal(readAutoStop(workspace("feature: f\nauto_stop: true\n")), true);
+
+  const root = workspace("feature: f\nautonomous: true\n");
+  writeWorkspaceSettings(root);
+  assert.equal(readHooks(root).SessionEnd.length, 1, "the managed SessionEnd entry is written");
+});
+
+test("an unticked auto_stop leaves a new workspace.yml unset but turns an existing one off (SW-39)", async () => {
+  const yml = (root) => fs.readFileSync(path.join(dotDir(root), "workspace.yml"), "utf8");
+  const fresh = workspace();
+  await withReporter(collectingReporter(), async () =>
+    writeWorkspaceConfig(fresh, { feature: "f", autonomous: "true", auto_stop: "false" }),
+  );
+  assert.doesNotMatch(yml(fresh), /auto_stop/);
+  assert.equal(readAutoStop(fresh), true);
+
+  const on = workspace("feature: f\nauto_stop: true\n");
+  await withReporter(collectingReporter(), async () =>
+    writeWorkspaceConfig(on, { feature: "f", auto_stop: "false" }),
+  );
+  assert.match(yml(on), /^auto_stop: false$/m);
+});
