@@ -400,6 +400,9 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
   return data;
 }
 
+/** Service types whose containers idle (`sleep infinity`) unless `sandbox up --dev` (SW-32). */
+export const IDLE_SERVICE_TYPES = ["cli", "library", "extension"];
+
 /**
  * One entry under services.yaml `services:` or `setup_services:`. Only the keys
  * the code reads are typed; the rest pass through to compose untouched. Nothing

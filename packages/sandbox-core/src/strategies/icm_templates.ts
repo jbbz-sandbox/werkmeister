@@ -2,8 +2,9 @@
  * ICM stage templates, keyed by work_type. Each stage is a contract the agent
  * reads by itself — the pipeline carries sequencing, not a hook. Generalised
  * from the hand-built ~/features/icm-ws2 after its run-2 fixes: a `decided`
- * status is the approval, reloads use `docker restart`, and the test command is
- * quoted from sandbox-context.md rather than restated.
+ * status is the approval, reloads use `docker restart` (`docker exec` for idle
+ * services), and the test command is quoted from sandbox-context.md rather than
+ * restated.
  */
 
 import { COMPOSE_FILE } from "../compose_file.js";
