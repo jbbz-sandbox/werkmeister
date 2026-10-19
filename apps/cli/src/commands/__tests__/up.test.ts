@@ -113,4 +113,17 @@ describe("sandbox up", () => {
       signal: expect.any(AbortSignal),
     });
   });
+
+  it("--dev hands compose SANDBOX_DEV=1, which wakes the idle services' watchers", async () => {
+    vi.mocked(upFeature).mockImplementation(async () => {
+      expect(process.env.SANDBOX_DEV).toBe("1");
+      return result();
+    });
+    try {
+      await go({ feature: "demo", dev: true });
+      expect(vi.mocked(upFeature)).toHaveBeenCalled();
+    } finally {
+      delete process.env.SANDBOX_DEV;
+    }
+  });
 });
