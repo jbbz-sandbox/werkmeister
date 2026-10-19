@@ -1005,6 +1005,13 @@ the pieces that are not obvious from the demo services:
   `infra/compose/scripts/sandbox-install-startup.sh` fills. The generated compose files carry
   host bind-mount paths and the daemon is the host's, so the paths must be identical on both
   sides.
+- **`sandbox-install` reinstalls only when the lockfile changes.** It skips `npm ci` while
+  the lockfile and Node major version match the stamp in the node_modules volume. It also
+  mounts `~/repos` with git's `safe.directory`, so turbo restores the build from the main
+  checkout's shared cache. Installs are queued host-wide through `~/.sandbox/locks`, at most
+  `SANDBOX_INSTALL_SLOTS` (default 2) at a time. To force a reinstall, run
+  `werkmeister down -v`. After upgrading, run `werkmeister registry` so the new command
+  reaches `~/.werkmeister/services.yaml`.
 - **`werkmeister` inside the container is the worktree's own build.** `PATH` puts
   `/app/apps/cli` first. `sandbox_root` in `~/.werkmeister/config.yaml` still points at the main
   checkout, so templates and `infra/` come from there (see the known issue on machine-global
