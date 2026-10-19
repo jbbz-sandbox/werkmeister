@@ -124,7 +124,7 @@ repo:
 | `werkmeister pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
 | `werkmeister issue start` | the first stage or phase began: move the workspace's issue to `in_progress` ([Issue status](#issue-status)) |
 | `werkmeister pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
-| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions. Run it from cron: `*/10 * * * * werkmeister pr watch` |
+| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). Run it from cron: `*/10 * * * * werkmeister pr watch` |
 | `werkmeister pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
 | `werkmeister close-out [name] [--abandon "<reason>"]` | end the workspace (below). The one end-of-workspace verb |
 | `werkmeister remove-workspace <name>` | deprecated alias, kept for one release: prints "use `werkmeister close-out --abandon`" and removes as before |
@@ -154,6 +154,23 @@ A pass runs `werkmeister pr status` for each workspace with a callback and tells
 - Terminal sessions: `werkmeister pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder). A session id the workspace no longer has is reported, never swapped for another session.
 
 One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
+
+## Containers after a PR
+
+A workspace's feature containers stop (SW-39) at these points. Stopping keeps the containers, the slot and the volumes, and `werkmeister up` brings them back. Shared infra is never stopped.
+
+- `werkmeister pr open`: once a pass opens a PR and nothing in it failed. If any file failed its gate or push, the containers stay up so the session can fix it. A session woken for a CI fix runs `werkmeister up` before it re-gates.
+- `werkmeister pr status`: when a pass records a PR as merged or shipped.
+- The idle reaper: `werkmeister stop --idle <minutes> [feature]` stops each feature that nothing has used for that many minutes. Without `[feature]` it covers every workspace. Something counts as use when:
+  - a Claude session in the workspace is busy, or became idle less than N minutes ago (an open session that has sat idle longer does not keep the containers);
+  - a container started less than N minutes ago;
+  - the gate ran a `docker exec` less than N minutes ago (it touches `.werkmeister/last-exec`).
+
+Every PR callback pass (the werkmeister mod's 10-minute timer and `werkmeister pr watch`) ends with one reaper pass, using N from `overrides.idle_stop_minutes` in `~/.werkmeister/config.yaml`. The default is 30, and `0` turns the reaper off. The pass takes its own lock, `~/.werkmeister/idle-stop.lock`.
+
+A `docker exec` typed by hand in a terminal outside Claude is not seen.
+
+`auto_stop` (a SessionEnd hook, `werkmeister stop --if-idle`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
 
 ## Issue status
 
