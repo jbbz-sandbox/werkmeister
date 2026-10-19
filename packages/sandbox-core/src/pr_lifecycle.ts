@@ -30,6 +30,7 @@ import { type IssueStatuses, moveIssue, resolveIssueStatuses } from "./issue_sta
 import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import { openDecisions } from "./notes.js";
+import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
 import {
   commitAndPush,
   listRepoWorktrees,
@@ -102,6 +103,8 @@ export interface Deps {
   sourceOf: (dir: string) => Promise<string | null>;
   /** The PR file's callback fields for the session running `pr open` (#236). */
   session: (ws: string) => Promise<Record<string, string>>;
+  /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. */
+  branchRegistry: (repo: string, worktree: string) => MergedRegistry | null;
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
@@ -145,6 +148,7 @@ export function defaultDeps(): Deps {
     terminals: (ws) => openTerminalSessions(ws),
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
     session: (ws) => callbackFields(ws, process.env),
+    branchRegistry: (repo, worktree) => branchRegistry(repo, worktree),
   };
 }
 
@@ -340,6 +344,20 @@ export async function runGate(
         : "clean",
   );
 
+  // The shared registry holds main's fragment; a branch that renames packages
+  // must be tested with its own `test:` filters and path mappings (SW-25).
+  let services = deps.services;
+  let repo = deps.repos[file.dir] ?? {};
+  try {
+    const own = deps.branchRegistry(file.dir, dir);
+    if (own) {
+      services = own.services;
+      repo = own.repos[file.dir] ?? {};
+    }
+  } catch (e) {
+    add("registry", false, `branch fragment: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   const cfg = loadConfigFile(ws, null);
   const feature = String(cfg["feature"] ?? readEnv(ws, "FEATURE")).trim();
   const local = new Set(
@@ -348,7 +366,6 @@ export async function runGate(
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  const repo = deps.repos[file.dir] ?? {};
   const ps = await deps.run("docker", ["ps", "--format", "{{.Names}}"]);
   const running = new Set(
     ps.stdout
@@ -374,7 +391,7 @@ export async function runGate(
   const touched = diff.code === 0 ? mapTouched(diff.stdout.split("\n").filter(Boolean), repo) : [];
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
   for (const svc of touched) {
-    const cmd = serviceTestCommand(svc, deps.services[svc], deps.archetypes);
+    const cmd = serviceTestCommand(svc, services[svc], deps.archetypes);
     const why = reason(skips[svc]);
     if (!cmd) {
       add(
@@ -416,7 +433,7 @@ export async function runGate(
   );
   const slot = Number(readEnv(ws, "SANDBOX_SLOT"));
   for (const svc of touched.filter((s) => local.has(s))) {
-    const def = deps.services[svc] ?? {};
+    const def = services[svc] ?? {};
     if (!running.has(`${feature}-${svc}`)) {
       add(`baseline ${svc}`, false, "container not running — run `sandbox up`");
       continue;

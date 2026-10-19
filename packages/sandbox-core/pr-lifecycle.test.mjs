@@ -110,6 +110,7 @@ function deps(table, over = {}) {
     terminals: async () => [],
     sourceOf: async () => "/src/app",
     session: async () => ({}),
+    branchRegistry: () => null,
     ...over,
   };
 }
@@ -355,6 +356,45 @@ test("gate: a touched service with a test command but no container fails unless 
     assert.match(g.checks.find((c) => c.name === "test api").detail, /skipped: ran on host/);
   } finally {
     clean(skipped);
+  }
+});
+
+test("gate: runs the branch's own test commands, not the shared registry's (SW-25)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const seen = [];
+    const renamed = { ...REGISTRY.services.api, test: "npm test -w api-renamed" };
+    const d = deps([DIFF_API], {
+      branchRegistry: (repo, worktree) => {
+        seen.push([repo, worktree]);
+        return { services: { ...REGISTRY.services, api: renamed }, repos: REGISTRY.repos };
+      },
+    });
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.deepEqual(seen, [["app", path.join(ws, "app")]]);
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api-renamed"));
+    assert.ok(!d.calls.includes("docker exec feat-api sh -c npm test -w api"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a broken branch fragment fails the gate with its error, not a crash", async () => {
+  const ws = icmWorkspace();
+  try {
+    const g = await gate(
+      ws,
+      deps([DIFF_API], {
+        branchRegistry: () => {
+          throw new Error("app/.sandbox/services.yaml: services.api must be a map");
+        },
+      }),
+    );
+    assert.deepEqual(failed(g), ["registry"]);
+    assert.match(g.checks.find((c) => c.name === "registry").detail, /services\.api must be a map/);
+  } finally {
+    clean(ws);
   }
 });
 
