@@ -1,5 +1,19 @@
 # vscode-plugin
 
+## 0.16.0
+
+### Patch Changes
+
+- 7035cff: Docs sweep for the Werkmeister rename (SW-10). The README and `docs/` now call the tool Werkmeister, show `werkmeister` (or `w9r`) in every command, and use `~/.werkmeister` and `<workspace>/.werkmeister/`, with a note that the old `~/.sandbox` and `.sandbox/` are still read. The clone steps no longer `cd sandbox`. No behaviour change. The `sandbox` bin, `SANDBOX_*` variables, container names and a repo's `.sandbox/services.yaml` fragment keep their names.
+- Updated dependencies [7035cff]
+- Updated dependencies [183a2e9]
+- Updated dependencies [7d121e8]
+- Updated dependencies [4e08dd6]
+- Updated dependencies [fe14381]
+- Updated dependencies [88fb0e3]
+- Updated dependencies [4240fba]
+  - werkmeister-core@0.16.0
+
 ## 0.15.0
 
 ### Patch Changes
