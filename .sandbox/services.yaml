@@ -26,8 +26,9 @@ services:
   # volume; sandbox-install populates it and builds sandbox-core/dist first.
   # 1G each: the pre-PR gate can run the dashboard's build in any of them, and
   # it runs out of heap at 512M.
-  # The three watchers have no listener: the template still publishes a port
-  # and its healthcheck is `curl … || exit 0`, so they read healthy anyway.
+  # cli, sandbox-core and vscode-plugin (types cli/library/extension) idle under
+  # `sleep infinity` with no healthcheck; their `command:` watchers run only under
+  # `sandbox up --dev`. The port is still published, so they keep their slot.
   # See docs/users-guide.md "Self-hosting the sandbox repo" in the sandbox repo.
   # Fully functional CLI: the host's docker socket plus ~/.sandbox, ~/repos,
   # ~/features and ~/.kube mounted at their host paths, because the compose

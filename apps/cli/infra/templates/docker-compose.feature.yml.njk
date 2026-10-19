@@ -116,6 +116,9 @@ services:
 
 {% endfor %}
 {% for svc in local_services %}
+{# SW-32: nothing reads a cli/library/extension watcher's output (the gate only #}
+{# docker-execs the test), so these idle unless `sandbox up --dev`.             #}
+{% set idle = svc.type in idle_types %}
   {{ svc.name }}:
     image: {{ svc.image | default('node:20.16.0') }}
     container_name: {{ feature_name }}-{{ svc.name }}
@@ -125,7 +128,13 @@ services:
       com.sandbox.local.service: "{{ svc.name }}"
       com.sandbox.local.role: "app"
     working_dir: /app
+{% if idle %}
+    restart: on-failure:3
+{# `sleep` as PID 1 ignores SIGTERM, so stop would wait out compose's 10 s. #}
+    init: true
+{% else %}
     restart: unless-stopped
+{% endif %}
     volumes:
       - {{ workspace_path }}/{{ svc.repo }}:/app
 {% if svc.worktree_gitdir %}
@@ -157,7 +166,7 @@ services:
       - "{{ key }}={{ value }}"
 {% endfor %}
 {% endif %}
-{% if svc.command %}
+{% if svc.command or idle %}
     command:
       - /bin/sh
       - -c
@@ -170,7 +179,11 @@ services:
           git config --global --add url."https://$${GITHUB_AUTH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
           git config --global --add url."https://$${GITHUB_AUTH_TOKEN}@github.com/".insteadOf "git+ssh://git@github.com/"
         fi
-        {{ svc.command }}
+{%- if idle %}
+        # SANDBOX_DEV is interpolated by compose from the env of `sandbox up --dev`.
+        [ "${SANDBOX_DEV:-}" = 1 ] || exec sleep infinity
+{%- endif %}
+        {{ svc.command or "exec sleep infinity" }}
 {% endif %}
     deploy:
       resources:
@@ -178,12 +191,14 @@ services:
           memory: {{ svc.memory_limit }}
         reservations:
           memory: {{ svc.memory_reservation }}
+{% if not idle %}
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:{{ svc.internal_port }}{{ svc.health_endpoint }} || exit 0"]
       interval: 15s
       timeout: 10s
       retries: 15
       start_period: 120s
+{% endif %}
 {% set local_svc_names = [] %}
 {% for local_svc in local_services %}
 {% do local_svc_names.append(local_svc.name) %}
@@ -205,7 +220,8 @@ services:
 {% endif %}
 {% for dep in svc_deps %}
       {{ dep }}:
-        condition: service_healthy
+{# An idle service has no healthcheck, and service_healthy on it fails `up`. #}
+        condition: {{ 'service_started' if services_config[dep].type in idle_types else 'service_healthy' }}
 {% endfor %}
 {% endif %}
     networks:

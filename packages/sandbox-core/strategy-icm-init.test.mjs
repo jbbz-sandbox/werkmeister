@@ -337,6 +337,23 @@ test("feature and services both present: the restart sentence uses docker restar
   );
 });
 
+test("an idle-type service is reloaded by docker exec, not restart (SW-32)", async () => {
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      fs.appendFileSync(
+        path.join(process.env.SANDBOX_CONFIG_FILE, "..", "services.yaml"),
+        "  tool:\n    type: cli\n    repo: demo-repo\n",
+      );
+      icm.init(ctx);
+      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      assert.match(claude, /`docker restart demo-backend`/);
+      assert.doesNotMatch(claude, /docker restart demo-tool/);
+      assert.match(claude, /`demo-tool` run no watcher, so a restart rebuilds nothing/);
+    },
+    { meta: { FEATURE: "demo", SERVICES: "backend,tool" } },
+  );
+});
+
 test("the merged-or-released router row asks the person before close-out (SW-13)", async () => {
   await withIcmWorkspace(async (root, ctx) => {
     icm.init(ctx);

@@ -83,7 +83,7 @@ export interface UpResult {
   servicePorts: { service: string; port: number }[];
   /** The reserved slot was taken, so the compose files were rewritten for a new one. */
   regenerated: boolean;
-  /** The compose file predates the service registry — warned about, not rewritten. */
+  /** The compose file predated the current template or registry, so it was rewritten. */
   staleCompose: boolean;
   containersStarted: boolean;
   caddy: "reloaded" | "started";
@@ -159,13 +159,12 @@ export async function up(
     generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
     generateFeatureEnv(feature, slot, localServices, config, workspace);
   } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
-    // Warn rather than regenerate: `up` starting to rewrite workspace files
-    // would silently discard hand-edits to the generated compose.
+    // Rewritten, not just warned about: the file is fully generated, and a
+    // template change (SW-32's idle containers) must reach existing workspaces
+    // without a re-init. Hand-edits belong in the registry or workspace.yml.
     staleCompose = true;
-    warn(
-      `${COMPOSE_FILE} predates the current service registry — ` +
-        "run 'sandbox init-workspace' in the workspace to regenerate it.",
-    );
+    warn(`${COMPOSE_FILE} predates the current template or registry — regenerating...`);
+    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
   }
   // Every `up`, not just on a slot change: the file is fully generated and
   // nothing reads it, and with no subgraph this removes a stale copy (#120).

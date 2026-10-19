@@ -108,11 +108,16 @@ const SPECS: CommandSpec[] = [
         .option(
           "-w, --workspace <path>",
           "Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).",
+        )
+        .option(
+          "--dev",
+          "Run the file watchers in cli/library/extension containers, which otherwise idle.",
         );
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
       workspace: o.workspace ?? null,
+      dev: o.dev ?? false,
     }),
   },
   {
