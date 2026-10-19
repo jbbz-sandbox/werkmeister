@@ -1,4 +1,4 @@
-# Design: replacing the docker socket in the sandbox repo's containers (#135)
+# Design: replacing the docker socket in the Werkmeister repo's containers (#135)
 
 **Status:** proposed, awaiting the maintainer's decision. The registry is unchanged. Approving this
 document is acceptance criterion 1 of [#135](https://github.com/jbbz-sandbox/werkmeister/issues/135); the
@@ -23,10 +23,10 @@ from `.sandbox/services.yaml`, and they run as root. The anchor gives them two s
    ```
 
 2. **Read-write host paths that the host later executes.** `~/repos`, `~/features` and
-   `~/.sandbox` are mounted read-write at their host paths. Code in the container can:
-   - rewrite `~/repos/sandbox/apps/cli/dist/main.js`, the host's own `sandbox` build, which the
+   `~/.werkmeister` are mounted read-write at their host paths. Code in the container can:
+   - rewrite `~/repos/sandbox/apps/cli/dist/main.js`, the host's own `werkmeister` build, which the
      host CLI and `apps/mcp` run;
-   - edit `~/.sandbox/env.sh`, which `apps/cli/sandbox` sources on every host run;
+   - edit `~/.werkmeister/env.sh`, which `apps/cli/sandbox` sources on every host run;
    - add a hook under any `~/repos/*/.git/hooks`, or to any workspace's `.claude/settings.json`
      under `~/features`, which host Claude sessions run.
 
@@ -40,12 +40,12 @@ The code in these containers is untrusted by construction: agent sessions, the p
 
 | Container | Uses host access for | Without it |
 |---|---|---|
-| `cli` | dogfood: the worktree's `sandbox` driving the host daemon | its tests pass, apart from the `generate_certs` timeouts tracked in #178 (see Evidence) |
+| `cli` | dogfood: the worktree's `werkmeister` driving the host daemon | its tests pass, apart from the `generate_certs` timeouts tracked in #178 (see Evidence) |
 | `sandbox-core` | `tsc --watch`; the #134 docker tests | its tests pass once one test skips without docker (see Evidence) |
 | `vscode-plugin` | watch + tests; MCP client bed | its tests pass. The MCP route is HTTP to the host's `apps/mcp` and needs no socket |
 | `sandbox-dashboard` | its MCP tools call `sandbox-core`, which shells out to docker, kubectl and the CLI | its tests pass. Tools that need the daemon have no `docker` binary in the container, so they move to the host (§ 3) |
 
-The pre-PR gate is unaffected: `sandbox pr gate` runs `docker exec` from the host.
+The pre-PR gate is unaffected: `werkmeister pr gate` runs `docker exec` from the host.
 
 ## Recommendation: containers build and test, the host drives
 
@@ -101,7 +101,7 @@ farm outside the worktree:
 
 This was run against the live daemon (see Evidence):
 - **CLI.** The bundle's one runtime external is `dockerode`, so the worktree's
-  `apps/cli/dist/main.js` drives the host daemon with nothing else. `sandbox status` listed every
+  `apps/cli/dist/main.js` drives the host daemon with nothing else. `werkmeister status` listed every
   feature with real container state.
 - **Dashboard.** The worktree's `apps/sandbox-dashboard/dist/main.js`, on top of the worktree's
   `sandbox-core`, answered `workspace-status`, `kube-context` and `docker-ui` over stdio with real
@@ -125,7 +125,7 @@ narrows it to the committed source.
 
 ### 4. Docs
 
-`docs/users-guide.md` "Self-hosting the sandbox repo" loses the "Host access" bullet. That bullet
+`docs/users-guide.md` "Self-hosting the Werkmeister repo" loses the "Host access" bullet. That bullet
 is stale anyway: it names two services, but #137 gave access to four. It gains the host dogfood
 script.
 
@@ -135,7 +135,7 @@ script.
 |---|---|
 | Keep the exception for `cli` only | The escape is still one `docker run` away for anything that runs in `cli`, and the read-write host paths stay |
 | Filtering docker API proxy (e.g. docker-socket-proxy) | An endpoint allowlist still lets `POST /containers/create` ask for `Privileged` or a `/` bind. Filtering request bodies makes the proxy a security boundary this repo has to own. And the compose files the CLI generates bind worktrees under `~/features` read-write, so the proxy has to allow the kind of bind behind the second escape |
-| Container drives the host's `apps/mcp` with a token | Fine for an agent that operates the sandbox (documented in `users-guide.md`), but `apps/mcp` runs the *installed* build, so it can't dogfood a worktree's changes |
+| Container drives the host's `apps/mcp` with a token | Fine for an agent that operates Werkmeister (documented in `users-guide.md`), but `apps/mcp` runs the *installed* build, so it can't dogfood a worktree's changes |
 | Docker-in-Docker / sysbox / rootless docker | dind needs `--privileged`, so it is another escape. sysbox is Linux-only, and rootless dockerd is not a drop-in under OrbStack or Docker Desktop. A second daemon also can't see the host's features, so the dogfood value is gone anyway |
 | A VM with its own stack (`users-guide.md` shape 3) | The strongest isolation, but it is a second full install. Worth it for the agent itself, too heavy for four dev containers |
 
@@ -163,7 +163,7 @@ script.
 Measured on 2026-10-15 in workspace `sandbox-135-docker-socket-mount`, at `173ac96`.
 
 - **Four test suites without host access.** A throwaway `node:22` container with only the
-  generator's mounts: no socket, no `docker` CLI, no `~/.sandbox`, `~/.kube`, `~/repos` or
+  generator's mounts: no socket, no `docker` CLI, no `~/.werkmeister`, `~/.kube`, `~/repos` or
   `~/features`, running as root. Command:
   `npx turbo run test --force --continue --filter=werkmeister --filter=sandbox-core --filter=vscode-plugin --filter=sandbox-workspace-mcp-app`.
   The first run, with all four suites at once, timed out across the CLI suite under machine load.
@@ -174,7 +174,7 @@ Measured on 2026-10-15 in workspace `sandbox-135-docker-socket-mount`, at `173ac
   |---|---|---|
   | `vscode-plugin` | 40 pass, 0 fail | 40 pass, 0 fail |
   | `sandbox-workspace-mcp-app` | pass | pass |
-  | `sandbox-core` | 456 pass, 2 fail: the new guard test (expected), and #190, which needs a `docker` CLI (§ Tests) | 457 pass, 2 fail: the new guard test, and `claude-md.test.mjs` "the active table is identical across work types", which reads the host's standards tree through the `~/.sandbox` mount |
+  | `sandbox-core` | 456 pass, 2 fail: the new guard test (expected), and #190, which needs a `docker` CLI (§ Tests) | 457 pass, 2 fail: the new guard test, and `claude-md.test.mjs` "the active table is identical across work types", which reads the host's standards tree through the `~/.werkmeister` mount |
   | `sandbox-cli` | 421 pass, 2 fail: `generate_certs.test.ts` 5 s timeouts, the subject of #178 | 419 pass, 4 fail: 5 s and 30 s timeouts under load |
 
   Nothing in the CLI, plugin or dashboard suites needs the socket. Removing the host mounts also

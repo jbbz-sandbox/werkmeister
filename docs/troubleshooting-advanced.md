@@ -1,6 +1,6 @@
 # Advanced Troubleshooting Guide
 
-Operational runbook for debugging sandbox infrastructure issues that go beyond the basic troubleshooting in the users guide.
+Operational runbook for debugging Werkmeister infrastructure issues that go beyond the basic troubleshooting in the users guide.
 
 ---
 
@@ -43,7 +43,7 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 
 **Verify:**
 ```bash
-docker cp ~/.sandbox/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
   node --input-type=module -e "
 const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/dist/lib/caddy.js');
@@ -82,7 +82,7 @@ docker logs {container_name} --tail 100 2>&1
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `ECONNREFUSED` to database | postgres forward not ready | `docker restart sandbox-k8s-forwards` or check k8s forwards |
-| `yarn: command not found` | Bad Docker image or missing node_modules volume | `sandbox down --volumes && sandbox up` |
+| `yarn: command not found` | Bad Docker image or missing node_modules volume | `werkmeister down --volumes && werkmeister up` |
 | OOM Killed | Container exceeded memory limit | Increase `memory_limit` in `infra/config/services.yaml` |
 | Port already in use | Another process using the port | `lsof -i :{port}` to find the conflict |
 | `ENOSPC` | Docker disk full | `docker system prune -a` |
@@ -122,14 +122,14 @@ docker inspect sandbox-k8s-forwards --format '{{.State.Health.Status}}'
 ### k8s Auth Issues
 If forwards fail to connect:
 ```bash
-# Check the cluster answers with the context the sandbox uses
+# Check the cluster answers with the context Werkmeister uses
 kubectl config current-context
 kubectl get nodes >/dev/null 2>&1 && echo "Cluster OK" || echo "Cluster unreachable"
 
 # The container reads the generated kubeconfig, not your live one —
-# `sandbox connect` regenerates it (rewriting the API server to
+# `werkmeister connect` regenerates it (rewriting the API server to
 # host.docker.internal so it resolves from inside the container).
-sandbox connect
+werkmeister connect
 
 # Restart forwards afterwards
 docker restart sandbox-k8s-forwards
@@ -141,14 +141,14 @@ docker restart sandbox-k8s-forwards
 
 ### Validate Config
 ```bash
-docker cp ~/.sandbox/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1
 ```
 
 ### Reload After Changes
 ```bash
 # ALWAYS use docker cp — do NOT rely on bind mount sync
-docker cp ~/.sandbox/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
+docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
 ```
 
@@ -163,7 +163,7 @@ if (total < 15) console.log('WARNING: Routes may have been silently dropped!');
 "
 ```
 
-**Expected:** 20+ routes for a standard sandbox. Under 15 means the `handle` vs `route` bug.
+**Expected:** 20+ routes for a standard Werkmeister setup. Under 15 means the `handle` vs `route` bug.
 
 ### Check TLS Certificates
 ```bash
@@ -230,7 +230,7 @@ When everything is broken:
 
 ```bash
 # 1. Stop all feature services
-sandbox down --all
+werkmeister down --all
 
 # 2. Restart shared infrastructure
 cd "$SANDBOX_ROOT"
@@ -242,17 +242,17 @@ sleep 30
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep sandbox
 
 # 4. Re-start your feature
-sandbox up {feature}
+werkmeister up {feature}
 
 # 5. Verify
-sandbox status
+werkmeister status
 ```
 
 ### Nuclear Option (full reset)
 
 ```bash
 # Stop everything
-sandbox down --all --volumes
+werkmeister down --all --volumes
 docker compose -f infra/compose/shared-infra.yml down -v
 
 # Clean up
@@ -260,13 +260,13 @@ docker system prune -a --volumes  # WARNING: removes ALL unused Docker resources
 
 # Start fresh
 docker compose -f infra/compose/shared-infra.yml up -d
-sandbox up {feature}
+werkmeister up {feature}
 ```
 
 ## Canonical test URLs
 
 Known-good URLs for each web tier (salvaged from the retired `~/workspace/CLAUDE.md`;
-routing source of truth is the `feature_router:` blocks in `~/.sandbox/services.yaml`):
+routing source of truth is the `feature_router:` blocks in `~/.werkmeister/services.yaml`):
 
 ```
 # frontend (web)

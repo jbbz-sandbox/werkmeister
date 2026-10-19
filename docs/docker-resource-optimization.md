@@ -1,6 +1,6 @@
 # Docker Resource Optimization Guide
 
-This guide explains how to optimize CPU and memory usage for the sandbox Docker environment.
+This guide explains how to optimize CPU and memory usage for the Werkmeister Docker environment.
 
 ## Overview
 
@@ -10,19 +10,19 @@ By default, Docker containers without resource limits can consume unbounded CPU 
 - Unexpected OOM kills
 - Poor laptop battery life
 
-The sandbox ships with pre-configured resource limits for all services (defined in `infra/config/services.yaml` and `infra/compose/shared-infra.yml`), but you can tune them based on your actual usage patterns.
+Werkmeister ships with pre-configured resource limits for all services (defined in `infra/config/services.yaml` and `infra/compose/shared-infra.yml`), but you can tune them based on your actual usage patterns.
 
 ## Quick Start
 
 ```bash
 # 1. Check current resource usage (snapshot)
-./sandbox stats
+werkmeister stats
 
 # 2. Collect stats over a longer period during typical work
-./sandbox stats --collect 15 --save
+werkmeister stats --collect 15 --save
 
 # 3. Compare usage against configured limits
-./sandbox optimize
+werkmeister optimize
 
 # 4. Adjust limits in infra/config/services.yaml or infra/compose/shared-infra.yml
 ```
@@ -31,7 +31,7 @@ The sandbox ships with pre-configured resource limits for all services (defined 
 
 ### Feature Services (`infra/config/services.yaml`)
 
-Each service in `infra/config/services.yaml` has `memory_limit` and `memory_reservation` fields. The sandbox CLI uses these when generating per-feature Docker Compose files:
+Each service in `infra/config/services.yaml` has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
 
 ```yaml
 # infra/config/services.yaml
@@ -71,10 +71,10 @@ services:
 ### Quick Snapshot
 
 ```bash
-./sandbox stats
+werkmeister stats
 ```
 
-Shows current CPU and memory usage for all sandbox containers, including the configured memory limit and a usage percentage.
+Shows current CPU and memory usage for all Werkmeister containers, including the configured memory limit and a usage percentage.
 
 ### Extended Collection
 
@@ -82,10 +82,10 @@ For more accurate data, collect over a period while doing typical development wo
 
 ```bash
 # Collect for 15 minutes with 10-second intervals (default)
-./sandbox stats --collect 15
+werkmeister stats --collect 15
 
 # Collect for 30 minutes with 5-second intervals, save to stats/
-./sandbox stats --collect 30 -i 5 --save
+werkmeister stats --collect 30 -i 5 --save
 ```
 
 Press `Ctrl+C` at any time to stop collection early — results from samples already taken are still displayed.
@@ -114,7 +114,7 @@ When using `--save`, two files are written to the `stats/` directory:
 ## Step 2: Analyze and Optimize
 
 ```bash
-./sandbox optimize
+werkmeister optimize
 ```
 
 This command:
@@ -155,7 +155,7 @@ services:
 Then restart the affected feature:
 
 ```bash
-./sandbox restart my-feature
+werkmeister restart my-feature
 ```
 
 ### For Shared Infrastructure
@@ -193,7 +193,7 @@ After applying limits, verify containers are running correctly:
 
 ```bash
 # Quick check
-./sandbox stats
+werkmeister stats
 
 # Look for OOM kills
 docker inspect <container> --format='{{.State.OOMKilled}}'
@@ -215,9 +215,9 @@ docker logs <container> 2>&1 | grep -i "memory\|heap\|oom"
 
 | Symptom | Solution |
 |---------|----------|
-| `sandbox optimize` shows OVER-PROVISIONED | Reduce memory limit to max + 50% headroom |
+| `werkmeister optimize` shows OVER-PROVISIONED | Reduce memory limit to max + 50% headroom |
 | CPU consistently low | Reduce CPU limit |
-| Container mostly idle | Consider removing from feature with `sandbox remove` |
+| Container mostly idle | Consider removing from feature with `werkmeister remove` |
 
 ## Reference: Current Default Limits
 
@@ -238,7 +238,7 @@ From `infra/config/services.yaml` and `infra/compose/shared-infra.yml`:
 Your total reservations exceed available Docker memory. Either:
 - Reduce reservations in `infra/config/services.yaml`
 - Increase Docker Desktop memory allocation (Settings > Resources)
-- Run fewer services with `sandbox remove <feature> <service>`
+- Run fewer services with `werkmeister remove <feature> <service>`
 
 ### Container repeatedly restarting
 
@@ -259,15 +259,15 @@ Node.js builds are CPU-intensive. Ensure:
 
 Check if the container is being throttled:
 ```bash
-./sandbox stats
+werkmeister stats
 ```
 
 If CPU is consistently at the limit, increase it.
 
 ## Summary
 
-1. **Monitor** with `./sandbox stats` during real development work
-2. **Analyze** with `./sandbox optimize` to compare usage vs limits
+1. **Monitor** with `werkmeister stats` during real development work
+2. **Analyze** with `werkmeister optimize` to compare usage vs limits
 3. **Adjust** limits in `infra/config/services.yaml` (features) or `infra/compose/shared-infra.yml` (infra)
-4. **Restart** affected containers with `./sandbox restart <feature>`
+4. **Restart** affected containers with `werkmeister restart <feature>`
 5. **Iterate** as your development patterns change

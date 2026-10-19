@@ -7,7 +7,7 @@
 > **Companion docs:** [jit-context-system.md](jit-context-system.md) is the design
 > spec (the *what to build*); [context-management-research.md](context-management-research.md)
 > is the research trail. This is the *how to work inside it*.
-> **Evidence:** distilled from `.sandbox/notes/082-finding-session-cost-savings-and-the-discovery-tax.md`,
+> **Evidence:** distilled from `.werkmeister/notes/082-finding-session-cost-savings-and-the-discovery-tax.md`,
 > which measured one session's context spend.
 
 Context is a budget, and the expensive failure is not running out — it is
