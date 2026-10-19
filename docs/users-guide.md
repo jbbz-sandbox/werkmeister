@@ -995,9 +995,11 @@ the pieces that are not obvious from the demo services:
 
 - **One `node:22` image everywhere.** `better-sqlite3`, `keytar`, `sharp` and the
   esbuild/rollup/swc binaries ship glibc prebuilds only; alpine will not load them.
-- **Watch loops need no listener.** The compose template always publishes a port and its
-  healthcheck is `curl … || exit 0`, so `tsc --watch` containers read healthy with a
-  placeholder `internal_port`.
+- **cli, library and extension services idle.** Their containers run `sleep infinity`
+  under `init: true` with no healthcheck, so they cost almost nothing at rest and stop
+  fast; the gate `docker exec`s their tests. `sandbox up --dev` (or
+  `SANDBOX_DEV=1 docker compose up -d`) runs their `command:` watchers instead. The
+  template still publishes a port, so a placeholder `internal_port` keeps their slot.
 - **Host access for `cli` and `sandbox-dashboard`.** Those two drive the host:
   they get `/var/run/docker.sock` plus `~/.werkmeister`, `~/repos`, `~/features` and `~/.kube`
   bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
