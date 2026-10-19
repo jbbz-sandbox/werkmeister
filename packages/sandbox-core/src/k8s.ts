@@ -137,6 +137,21 @@ export function refreshKubeconfig(): boolean {
   return fs.existsSync(kubeconfig) && fs.statSync(kubeconfig).isFile();
 }
 
+/** True when the current kube context's API server answers within a few seconds. */
+function clusterReachable(): boolean {
+  try {
+    return (
+      run(["kubectl", "--request-timeout=3s", "get", "--raw", "/readyz"], {
+        capture: true,
+        timeout: 20,
+      }).status === 0
+    );
+  } catch (e) {
+    if (e instanceof ProcError) return false;
+    throw e;
+  }
+}
+
 /**
  * Verify the k8s-forwards container is healthy, restarting it if not.
  */
@@ -150,6 +165,16 @@ export function ensurePortForwardsHealthy(): ForwardsOutcome {
   warn("k8s port-forwards container is unhealthy — restarting...");
   if (!refreshKubeconfig()) {
     error("Not restarting k8s-forwards without a kubeconfig file to mount");
+    return "failed";
+  }
+  // A context whose cluster is switched off still yields a kubeconfig, so the
+  // forwarder would restart and `up` would then time out waiting for tunnels
+  // that can't connect. With no cluster there is nothing to forward: report the
+  // non-fatal outcome and let features that need nothing from k8s come up (SW-28).
+  if (!clusterReachable()) {
+    warn(
+      "No reachable k8s cluster — skipping port-forwards; services not run locally are unavailable",
+    );
     return "failed";
   }
   const { argv, env } = composeInvocation();
