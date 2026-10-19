@@ -93,8 +93,10 @@ const REGISTRY = {
 
 function deps(table, over = {}) {
   const r = stubRun([[/^docker ps/, { stdout: "feat-api\nfeat-lib\n" }], ...table]);
+  const stopped = [];
   return {
     calls: r.calls,
+    stopped,
     run: r.run,
     httpStatus: async () => 200,
     services: REGISTRY.services,
@@ -111,6 +113,11 @@ function deps(table, over = {}) {
     sourceOf: async () => "/src/app",
     session: async () => ({}),
     branchRegistry: () => null,
+    stop: async (ws) => {
+      stopped.push(ws);
+      return "containers stopped";
+    },
+    reapIdle: async () => ({ lines: [] }),
     ...over,
   };
 }
@@ -451,6 +458,8 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
       "the record commit names only the PR file",
     );
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
+    assert.deepEqual(d.stopped, [ws], "containers stop once the PR is open (SW-39)");
+    assert.equal(r.lines.at(-1), "containers stopped");
   } finally {
     clean(ws);
   }
@@ -461,8 +470,35 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(r.ok, false);
     assert.ok(!d.calls.some((c) => c.startsWith("gh pr create")));
     assert.equal(readPrFiles(bad)[0].fm.status, "approved");
+    assert.deepEqual(d.stopped, [], "a failed gate keeps the containers for the fix");
   } finally {
     clean(bad);
+  }
+});
+
+test("openPrs: nothing approved is refused and stops nothing (SW-39)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
+  try {
+    const d = deps([DIFF_API]);
+    await assert.rejects(open(ws, d), /No matching PR file/);
+    assert.deepEqual(d.stopped, []);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: touches the idle reaper's exec marker before docker exec (SW-39)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API]);
+    await gate(ws, d);
+    assert.ok(
+      d.calls.some((c) => c.startsWith("docker exec")),
+      d.calls.join("\n"),
+    );
+    assert.ok(fs.existsSync(path.join(dotDir(ws), "last-exec")));
+  } finally {
+    clean(ws);
   }
 });
 
@@ -475,8 +511,14 @@ test("refreshPrStatus: merged, then shipped once a release tag contains the merg
       /^gh pr view/,
       { stdout: JSON.stringify({ state: "MERGED", mergeCommit: { oid: "abc123" } }) },
     ];
-    await refreshPrStatus(ws, deps([merged, [/tag --contains abc123 --list v\*/, { stdout: "" }]]));
+    const stillOpen = deps([[/^gh pr view/, { stdout: JSON.stringify({ state: "OPEN" }) }]]);
+    await refreshPrStatus(ws, stillOpen);
+    assert.deepEqual(stillOpen.stopped, [], "a pass that records nothing new stops nothing");
+    const d = deps([merged, [/tag --contains abc123 --list v\*/, { stdout: "" }]]);
+    const m = await refreshPrStatus(ws, d);
     assert.equal(readPrFiles(ws)[0].fm.status, "merged");
+    assert.deepEqual(d.stopped, [ws], "merged stops the containers (SW-39)");
+    assert.ok(m.lines.includes("containers stopped"), m.lines.join("\n"));
     assert.equal(readPrFiles(ws)[0].fm.merge_sha, "abc123");
     const r = await refreshPrStatus(
       ws,
@@ -1179,6 +1221,37 @@ test("watchPrs: headless claims are sent, desktop ones returned, a failed send i
         failed.lines.includes(`app: could not resume session s-1: session s-1 is gone`),
         failed.lines.join("\n"),
       );
+    });
+  } finally {
+    if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
+    else process.env.SANDBOX_WORKSPACES_ROOT = prev;
+    clean(root);
+  }
+});
+
+test("watchPrs: one idle-reaper pass under its own lock; a held lock skips it (SW-39)", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-watch-idle-"));
+  const prev = process.env.SANDBOX_WORKSPACES_ROOT;
+  process.env.SANDBOX_WORKSPACES_ROOT = root;
+  const lock = path.join(root, "idle-stop.lock");
+  try {
+    await withSandboxHome(async () => {
+      let passes = 0;
+      const d = deps([], {
+        reapIdle: async () => {
+          passes++;
+          return { lines: ["demo: stopped (idle ≥ 30 min)"] };
+        },
+      });
+      const r = await watchPrs({ desktop: false }, d, async () => {}, lock);
+      assert.equal(passes, 1);
+      assert.ok(r.lines.includes("demo: stopped (idle ≥ 30 min)"), r.lines.join("\n"));
+      assert.ok(!fs.existsSync(lock), "released after the pass");
+
+      fs.writeFileSync(lock, "");
+      const held = await watchPrs({ desktop: true }, d, async () => {}, lock);
+      assert.equal(passes, 1);
+      assert.ok(held.lines.includes("another idle-stop pass is running"));
     });
   } finally {
     if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;

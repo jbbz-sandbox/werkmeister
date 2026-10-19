@@ -270,6 +270,9 @@ export function writeWorkspaceConfig(
       }
       // A real YAML boolean, so workspace.schema.json's `type: boolean` holds.
       if (field === "autonomous" || field === "auto_stop") value = value === "true";
+      // The create form sends an unticked auto_stop as false; writing it would
+      // override the autonomous default (SW-39), so only an existing key is turned off.
+      if (field === "auto_stop" && value === false && !(field in existing)) continue;
       merged[field] = value;
     }
   }

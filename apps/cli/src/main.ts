@@ -203,9 +203,19 @@ const SPECS: CommandSpec[] = [
           "--if-idle",
           "SessionEnd hook mode: stop the workspace's own feature unless another Claude " +
             "session is open there; silent, always exits 0, never stops infra",
+        )
+        .option(
+          "--idle <minutes>",
+          "Stop every workspace's feature containers nothing has used for <minutes> (a busy or " +
+            "recently active session, a gate exec or a fresh start all count as use); with " +
+            "[feature], only that one",
         );
     },
-    namespace: ([feature], o) => ({ feature: feature ?? null, if_idle: Boolean(o.ifIdle) }),
+    namespace: ([feature], o) => ({
+      feature: feature ?? null,
+      if_idle: Boolean(o.ifIdle),
+      idle: o.idle ?? null,
+    }),
   },
   {
     name: "status",
