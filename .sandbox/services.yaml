@@ -132,16 +132,27 @@ services:
     feature_router: {}
 
 setup_services:
-  # The sandbox repo's install + build + tools download. `npm run build` runs
-  # so sandbox-core/dist exists before the four services start; startup.sh
-  # (infra/compose/scripts/sandbox-install-startup.sh) fills the `tools`
-  # volume with docker/compose/kubectl for the host-access services. `npm ci`,
-  # not `install`: the image's npm re-serializes package-lock.json (dropping the
+  # The sandbox repo's install + build + tools download, all in startup.sh
+  # (infra/compose/scripts/sandbox-install-startup.sh). The build runs so
+  # sandbox-core/dist exists before the four services start; the `tools` volume
+  # gets docker/compose/kubectl for the host-access services. `npm ci`, not
+  # `install`: the image's npm re-serializes package-lock.json (dropping the
   # `libc` fields a newer host npm writes), dirtying the worktree on every up (#148).
+  # SW-33: npm ci is skipped while the lockfile and Node major are unchanged.
+  # ~/repos and safe.directory give git the same access as the app containers,
+  # so turbo restores the build from the main checkout's shared cache (0-1 s
+  # instead of ~28 s). ~/.sandbox/locks queues installs host-wide,
+  # SANDBOX_INSTALL_SLOTS (default 2) at a time.
   sandbox-install:
     image: node:22
-    command: "npm ci && npm run build && sh /usr/local/bin/startup.sh"
+    command: "sh /usr/local/bin/startup.sh install"
     node_modules_volume: node-modules
     startup_script: true
     extra_volumes:
       - tools:/opt/sandbox-tools
+      - "{{repos_root}}:{{repos_root}}"
+      - "{{home}}/.sandbox/locks:/locks"
+    environment:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
