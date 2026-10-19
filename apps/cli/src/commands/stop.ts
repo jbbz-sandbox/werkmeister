@@ -8,6 +8,7 @@
  * For shared infrastructure use ``sandbox stop infra``.
  *
  * ``sandbox stop --if-idle`` is the SessionEnd hook behind ``auto_stop`` (#231).
+ * ``sandbox stop --idle <minutes> [feature]`` is one idle-reaper pass (SW-39).
  */
 
 import { spawn } from "node:child_process";
@@ -15,7 +16,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { SandboxError } from "werkmeister-core/errors";
 import { stop as infraStop } from "werkmeister-core/infra";
-import { idleStopFeature, stop as stopFeature } from "werkmeister-core/lifecycle";
+import { idleStopFeature, stop as stopFeature, stopIdle } from "werkmeister-core/lifecycle";
 import { Colors, error, info } from "../lib/config.js";
 import { findDotenv, loadDotenv } from "../lib/dotenv.js";
 
@@ -55,6 +56,18 @@ function stopIfIdle(): void {
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.if_idle) {
     stopIfIdle();
+    return;
+  }
+  if (args.idle != null) {
+    // Every workspace by default, so no FEATURE fallback from .env.
+    const minutes = Number(args.idle);
+    if (!Number.isInteger(minutes) || minutes < 1) {
+      error("--idle takes whole minutes ≥ 1");
+      process.exit(1);
+    }
+    const result = await stopIdle(minutes, { only: (args.feature as string | null) ?? undefined });
+    console.log(result.lines.join("\n"));
+    if (!result.ok) process.exit(1);
     return;
   }
   const dotenv = loadDotenv(process.cwd());
