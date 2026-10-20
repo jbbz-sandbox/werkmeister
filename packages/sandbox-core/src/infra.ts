@@ -22,8 +22,9 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { composeInvocation } from "./compose_infra.js";
+import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
 import { sandboxHome } from "./config.js";
+import { projectContainers } from "./docker.js";
 import { generateCaddyfile } from "./generate.js";
 import { configureGitHooksPath } from "./git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy, refreshKubeconfig } from "./k8s.js";
@@ -191,39 +192,18 @@ function checkPort(host: string, port: number, timeoutSec: number): Promise<bool
 /**
  * Check health of all infrastructure containers.
  *
- * Distinct from `status.ts`'s `getInfraStatus`, which reads the same `compose
- * ps` but reports a four-way display string and has no fallback. This one is a
- * healthy/not-healthy verdict that must still answer when compose cannot, so
+ * Distinct from `status.ts`'s `getInfraStatus`, which reads the same containers
+ * but reports a four-way display string and has no fallback. This one is a
+ * healthy/not-healthy verdict that must still answer when the daemon cannot, so
  * `sandbox connect` can say what converged.
  */
 async function checkInfraHealth(): Promise<Record<string, boolean>> {
-  const { argv, env } = composeInvocation();
-
   const services: Record<string, boolean> = {};
-  try {
-    const result = run([...argv, "ps", "--format", "json"], { capture: true, env });
-    if (result.status === 0 && result.stdout.trim()) {
-      for (const line of result.stdout.trim().split("\n")) {
-        try {
-          const svc = JSON.parse(line);
-          const name = svc["Service"] ?? svc["Name"] ?? "unknown";
-          const health = svc["Health"] ?? "";
-          const state = svc["State"] ?? "";
-          services[name] = health === "healthy" || (state === "running" && health === "");
-        } catch {
-          continue;
-        }
-      }
-    }
-  } catch (e) {
-    if (!(e instanceof ProcError && e.code === "ENOENT")) {
-      if (!(e instanceof ProcError)) {
-        throw e;
-      }
-    }
+  for (const c of (await projectContainers(INFRA_PROJECT, undefined, { all: false })) ?? []) {
+    services[c.service || c.name] = c.health === "healthy" || (c.state === "running" && !c.health);
   }
 
-  // Fallback: check key ports if docker compose ps didn't work
+  // Fallback: check key ports if the daemon listed nothing
   if (!Object.keys(services).length) {
     const portChecks: [string, number][] = [
       ["redis", 9050],
@@ -311,13 +291,13 @@ export async function infraHealth(timeoutSec: number): Promise<Record<string, bo
  * Returns whether the forwards are up; the caller turns a false into the
  * recovery hint, which is a next-step and so stays CLI-side.
  */
-export function connectK8s(): boolean {
-  if (checkPortForwardHealth()["k8s-forwards"] ?? false) {
+export async function connectK8s(): Promise<boolean> {
+  if ((await checkPortForwardHealth())["k8s-forwards"] ?? false) {
     success("k8s port-forwards container is already healthy");
     return true;
   }
   info("Attempting to start/restart k8s-forwards container...");
-  const ok = ensurePortForwardsHealthy() !== "failed";
+  const ok = (await ensurePortForwardsHealthy()) !== "failed";
   if (ok) {
     success("k8s port-forwards started");
   }

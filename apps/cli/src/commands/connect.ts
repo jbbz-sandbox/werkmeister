@@ -52,10 +52,10 @@ export async function checkTracker(): Promise<void> {
 }
 
 /** Handle `sandbox connect --k8s`: start/restart the k8s port-forwards container only. */
-function runK8sOnly(): void {
+async function runK8sOnly(): Promise<void> {
   console.log(`\n${Colors.BOLD}=== k8s Connect ===${Colors.RESET}\n`);
 
-  if (!connectK8s()) {
+  if (!(await connectK8s())) {
     console.log(`\n  ${Colors.RED}Failed to start k8s port-forwards.${Colors.RESET}`);
     console.log(
       `  ${Colors.DIM}Ensure Docker is running and your kubeconfig is valid.${Colors.RESET}`,
@@ -69,7 +69,7 @@ function runK8sOnly(): void {
 /** Execute the `sandbox connect` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.k8s) {
-    runK8sOnly();
+    await runK8sOnly();
     return;
   }
 
