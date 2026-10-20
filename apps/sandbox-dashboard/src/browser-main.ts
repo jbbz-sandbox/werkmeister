@@ -111,7 +111,11 @@ const tabs = [...root.querySelectorAll<HTMLButtonElement>(".wsd-tab")];
 
 // Lift the header (title + infra/k8s/kube topbar) into the shell so it persists
 // while filling out the New-workspace form.
-const list = initWorkspaceUI(bridge, listPane, { headerRoot: shellHeader, renderMarkdown });
+const list = initWorkspaceUI(bridge, listPane, {
+  headerRoot: shellHeader,
+  renderMarkdown,
+  onNewWorkspace: () => navigate("new"),
+});
 let createMounted = false;
 let prsMounted = false;
 let healthMounted = false;

@@ -1375,13 +1375,17 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "Open a macOS Terminal window in the workspace directory resuming its newest Claude " +
         "Code session (`claude --resume <id>`), fully interactive. Starts a fresh session " +
-        "when the workspace has none.",
+        "when the workspace has none, or when `new` is set.",
       inputSchema: {
         ...SESSION_ARG,
         sessionId: z
           .string()
           .optional()
           .describe("Resume this specific session instead of the newest."),
+        new: z
+          .boolean()
+          .optional()
+          .describe("Start a fresh session instead of resuming one; ignores `sessionId`."),
       },
       outputSchema: z.object({
         path: z.string(),
@@ -1391,7 +1395,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     async (args, extra): Promise<CallToolResult> => {
       try {
         const name = sessionKey(args.workspace, extra);
-        const result = await resumeClaudeInTerminal(name, args.sessionId);
+        const result = await resumeClaudeInTerminal(name, args.sessionId, args.new === true);
         const text = result.sessionId
           ? `Opened Terminal resuming session ${result.sessionId} in ${result.path}.`
           : `Opened Terminal with a new Claude session in ${result.path}.`;
