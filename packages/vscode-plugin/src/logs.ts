@@ -4,22 +4,19 @@
  * A `Pseudoterminal` instead of `runInTerminal`, because `sandbox logs` is the
  * one command that never exits: sent into a shell terminal it strands that
  * terminal busy forever (terminal-pool's deliberate degrade), and nothing holds
- * the `docker compose` pid, so closing the tab orphans the tail. Here the
- * extension spawns compose itself — closing the tab kills it.
+ * the tail, so closing the tab orphans it. Here the extension owns the tail —
+ * closing the tab stops it.
  *
  * The Output panel was the other candidate and cannot work: VS Code renders a
- * raw `ESC` as a control-character box, so compose's per-service prefix colour
+ * raw `ESC` as a control-character box, so the per-service prefix colour
  * would arrive as literal `[36m` noise on every line.
  */
-import type { ChildProcess } from "node:child_process";
 import * as vscode from "vscode";
-import { childEnv } from "werkmeister-core";
-import { composeLogsStream } from "werkmeister-core/compose";
-import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import { composeLogsStream, type LogTail } from "werkmeister-core/compose";
 
 interface Tail {
   terminal: vscode.Terminal;
-  /** False once compose has exited — a terminal still showing a finished tail. */
+  /** False once the tail has ended — a terminal still showing a finished tail. */
   alive: () => boolean;
 }
 
@@ -43,7 +40,7 @@ const CTRL_C = "\u0003";
 /**
  * Tail `feature`'s containers, optionally narrowed to one `service`, in a
  * dedicated terminal. Re-invoking while the tail is alive reveals it instead of
- * starting a second one; once compose has exited the terminal is replaced, so
+ * starting a second one; once the tail has ended the terminal is replaced, so
  * the command always leaves a live tail on screen.
  */
 export function showLogs(feature: string, service: string | null): void {
@@ -56,39 +53,38 @@ export function showLogs(feature: string, service: string | null): void {
   existing?.terminal.dispose();
 
   const write = new vscode.EventEmitter<string>();
-  let child: ChildProcess | null = null;
+  let tail: LogTail | null = null;
+  let ended = false;
 
   const pty: vscode.Pseudoterminal = {
     onDidWrite: write.event,
     open: () => {
       // xterm needs CRLF; a bare LF only drops a row, staircasing every line.
       const emit = (chunk: string) => write.fire(chunk.replace(/\r?\n/g, "\r\n"));
-      child = composeLogsStream(feature, service, emit, childEnv());
-      if (!child) {
-        emit(`No ${COMPOSE_FILE} found for feature '${feature}'.\n`);
-        return;
-      }
-      child.on("error", (e) => emit(`\ndocker compose: ${e.message}\n`));
-      child.on("close", (code) => emit(`\n[compose logs exited with code ${code}]\n`));
+      tail = composeLogsStream(feature, service, emit);
+      void tail.done.then(() => {
+        ended = true;
+        emit("\n[logs stopped]\n");
+      });
     },
     // Fired when the tab is closed, so the tail never outlives what shows it.
-    close: () => child?.kill(),
+    close: () => tail?.stop(),
     handleInput: (data) => {
-      if (data === CTRL_C) child?.kill();
+      if (data === CTRL_C) tail?.stop();
     },
   };
 
   const terminal = vscode.window.createTerminal({
     name: `logs ${service ?? feature}`,
     iconPath: new vscode.ThemeIcon("output"),
-    // A session restored on reload has no compose process behind it — only a
+    // A session restored on reload has no tail behind it — only a
     // dead terminal that looks live.
     isTransient: true,
     pty,
   });
   tails.set(key, {
     terminal,
-    alive: () => child !== null && child.exitCode === null && child.signalCode === null,
+    alive: () => tail !== null && !ended,
   });
   terminal.show();
 }
