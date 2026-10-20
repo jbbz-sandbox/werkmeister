@@ -39,6 +39,7 @@ export interface InterceptRowLike {
 export interface InterceptsLike {
   available: boolean;
   byFeature: Map<string, Map<string, InterceptRowLike>>;
+  remoteServices: ReadonlySet<string>;
 }
 
 export interface WsNode {
@@ -123,13 +124,16 @@ function currentWorkspaceName(
  * `interceptFields`, but returns the presentation triple the tree needs. A
  * missing row is disabled-and-explained rather than hidden, and a failed lookup
  * is distinguished from "not interceptable" — the two mean different things and
- * only one of them is worth investigating.
+ * only one of them is worth investigating. Null for a service that is never a
+ * cluster service (a CLI, a library): intercepting has no meaning there (SW-21).
  */
 export function interceptView(
   row: InterceptRowLike | undefined,
   feature: string | null,
   lookupFailed: boolean,
-): { contextValue: string; note: string; leave: boolean } {
+  remote: boolean,
+): { contextValue: string; note: string; leave: boolean } | null {
+  if (!remote) return null;
   if (!row) {
     return {
       contextValue: "service",
@@ -164,11 +168,17 @@ function serviceNode(
   intercepts: InterceptsLike | null,
 ): WsNode {
   const row = feature ? intercepts?.byFeature.get(feature)?.get(svc.name) : undefined;
-  const view = interceptView(row, feature, intercepts === null || !intercepts.available);
+  // A failed lookup can't tell remote from local, so it keeps "unavailable" on every row.
+  const view = interceptView(
+    row,
+    feature,
+    intercepts === null || !intercepts.available,
+    intercepts?.remoteServices.has(svc.name) ?? true,
+  );
   const suffix =
-    view.contextValue === "service:intercepted-mine"
+    view?.contextValue === "service:intercepted-mine"
       ? " · intercepted (yours)"
-      : view.contextValue === "service:intercepted-other"
+      : view?.contextValue === "service:intercepted-other"
         ? " · intercepted"
         : "";
   return {
@@ -176,11 +186,11 @@ function serviceNode(
     id: `${ws.name}/${svc.name}`,
     label: svc.name,
     description: `${svc.state}${suffix}`,
-    tooltip: `${svc.name} — ${svc.state}\n${view.note}`,
+    tooltip: view ? `${svc.name} — ${svc.state}\n${view.note}` : `${svc.name} — ${svc.state}`,
     icon: SERVICE_ICONS[svc.state] ?? SERVICE_ICONS.down,
-    contextValue: view.contextValue,
+    contextValue: view?.contextValue ?? "service",
     expanded: false,
-    service: { name: svc.name, workspacePath: ws.path, feature, leave: view.leave },
+    service: { name: svc.name, workspacePath: ws.path, feature, leave: view?.leave ?? false },
     children: [],
   };
 }

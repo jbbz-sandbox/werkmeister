@@ -27,6 +27,7 @@ import {
   connectedNamespace,
   type InterceptState,
   interceptBlocker,
+  isRemoteService,
   listIntercepts,
 } from "./telepresence.js";
 import { type WebServerStatus, status as webStatus } from "./web_servers.js";
@@ -194,20 +195,29 @@ export interface InterceptsSnapshot {
   available: boolean;
   connected_namespace: string | null;
   intercepts: InterceptRow[];
+  /**
+   * Registry services with k8s coordinates, sorted. Present even when telepresence
+   * isn't, so a UI can hide the intercept control on local-only services (SW-21).
+   */
+  remote_services: string[];
 }
 
 export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
   const state = listIntercepts(STATUS_READ);
+  const registry = loadServices();
   // Rows before the namespace probe: `--intercepts` has always shelled out in
   // that order, and both are reads of the same live telepresence state.
   // No telepresence, nothing interceptable: rows would claim `interceptable: true` (SW-2).
   const intercepts = state.available
-    ? buildInterceptRows(await getAllSlots(), loadServices(), state)
+    ? buildInterceptRows(await getAllSlots(), registry, state)
     : [];
   return {
     available: state.available,
     connected_namespace: state.available ? connectedNamespace(STATUS_READ) : null,
     intercepts,
+    remote_services: Object.keys(registry)
+      .filter((name) => isRemoteService(registry[name]))
+      .sort(),
   };
 }
 

@@ -1713,7 +1713,7 @@ const IX_STATUS = {
     st.name === "ab"
       ? {
           ...st,
-          services: ["frontend", "backend", "api", "worker", ODD].map((name) => ({
+          services: ["frontend", "backend", "api", "worker", ODD, "cli"].map((name) => ({
             name,
             state: "healthy",
           })),
@@ -1740,7 +1740,14 @@ const SNAP = {
     ixRow("api", { intercepted: true, intercepted_by: "other" }),
     ixRow("worker", { interceptable: false, blocker: "has no k8s_port_name in services.yaml." }),
     ixRow(ODD),
+    ixRow("cli", {
+      deployment: null,
+      interceptable: false,
+      blocker: "has no k8s_deployment/k8s_namespace/k8s_port in services.yaml — not interceptable.",
+    }),
   ],
+  // cli has no k8s coordinates: a local-only service (SW-21).
+  remote_services: ["api", "backend", "frontend", "worker", ODD],
 };
 
 function ixStubs(over: Partial<McpStub> = {}): McpStub {
@@ -1767,7 +1774,7 @@ async function mountPane($: Engine) {
 test("interceptControl: one state per rule, and an unreadable owner is never yours", () => {
   const row = (over: Record<string, unknown> = {}) => ixRow("frontend", over) as never;
   const kind = (r: never | undefined, feature: string | null, snap: typeof SNAP | null) =>
-    interceptControl(r, feature, snap as never);
+    interceptControl("frontend", r, feature, snap as never);
   expect(kind(row(), "ab", null)).toEqual({
     kind: "unavailable",
     text: "intercept state unavailable",
@@ -1789,6 +1796,17 @@ test("interceptControl: one state per rule, and an unreadable owner is never you
   expect(kind(row({ intercepted: true, intercepted_by: null }), null, SNAP).kind).toBe("other");
 });
 
+test("interceptControl: a local-only service gets no control, connected or not (SW-21)", () => {
+  const cli = ixRow("cli", { interceptable: false, blocker: "has no k8s_deployment." }) as never;
+  expect(interceptControl("cli", cli, "ab", SNAP as never)).toBeNull();
+  expect(
+    interceptControl("cli", undefined, "ab", { ...SNAP, available: false } as never),
+  ).toBeNull();
+  // A cluster service missing k8s_port_name is remote: it keeps its disabled control.
+  const worker = SNAP.intercepts.find((r) => r.service === "worker") as never;
+  expect(interceptControl("worker", worker, "ab", SNAP as never)?.kind).toBe("blocked");
+});
+
 test("each service line shows its intercept state; only off and yours get a button", async ($, on) => {
   world(on, ixStubs());
   await openPane($);
@@ -1800,6 +1818,8 @@ test("each service line shows its intercept state; only off and yours get a butt
   expect(await ui.find({ key: "leave:ab/api" })).toBeUndefined();
   expect(await ui.find({ text: /not interceptable: has no k8s_port_name/ })).toBeDefined();
   expect(await ui.find({ key: "intercept:ab/worker" })).toBeUndefined();
+  expect(await ui.find({ key: "svc:ab/cli" })).toBeDefined();
+  expect(await ui.find({ text: /not interceptable: has no k8s_deployment/ })).toBeUndefined();
   await ui.unmount();
 });
 
