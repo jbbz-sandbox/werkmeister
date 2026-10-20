@@ -92,6 +92,8 @@ Every row reads sandbox-core; no surface computes its own. The shapes and their 
 
 ✗ = the platform can't (a browser page or MCP iframe can't drive Claude Code panes; VS Code has no pin or split for folders). Desktop sessions can't be reached from VS Code.
 
+On the dashboard and MCP App, `↗ Continue in Desktop` opens the workspace folder in Desktop (`claude://code/new?folder=…`): a browser page or MCP iframe can't read the app's session list, so it can't link the previous Desktop session. `＋ New session` there opens a fresh `claude` in Terminal (`claude-resume` with `new: true`).
+
 **Primary action:** Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …`. The bar shows the primary plus two secondaries; everything else goes in `⋯`, in this order: Open beside · Pin · ↻ Refresh PRs · Open feature ↗ · Open issue ↗ · Logs · ✕ Abandon….
 
 ### The two destructive verbs

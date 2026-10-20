@@ -116,7 +116,7 @@ render, or a live editor.
     Each runs in that workspace's terminal.
 
 14. **One terminal per command — the fix for a real bug.** With a `logs`
-    terminal still tailing (see step 15), click ▶ Start on any workspace.
+    terminal still tailing (see step 15), click ▶ Up on any workspace.
     Confirm a **separate, newly created terminal** appears and `sandbox up`
     actually runs.
     - Failure looks like: nothing happens at all, no error, the tree never
