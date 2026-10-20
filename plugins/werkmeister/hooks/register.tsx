@@ -1490,7 +1490,7 @@ export const register: Register = (on) => {
           <Button
             key="focus"
             plain
-            label={`${focus ? "☑" : "☐"} Focus`}
+            label={`${focus ? "☑" : "☐"} Focused only`}
             onPress={() => void $.state.set(FOCUS, !focus)}
           />
         )}

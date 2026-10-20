@@ -335,7 +335,7 @@ test("cards link the issue and each PR with its state", async ($, on) => {
   }
 });
 
-test("the Focus toggle shows only workspaces labelled focus", async ($, on) => {
+test("the Focused only toggle shows only workspaces labelled focus", async ($, on) => {
   const list = {
     ...LIST,
     workspaces: LIST.workspaces.map((w) => (w.name === "abc" ? { ...w, labels: ["focus"] } : w)),
@@ -351,7 +351,9 @@ test("the Focus toggle shows only workspaces labelled focus", async ($, on) => {
   });
   expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
   expect((await ui.find({ key: "row:ab" }))?.text).toBe("ab");
+  expect((await ui.find({ key: "focus" }))?.text).toBe("☐ Focused only");
   await ui.press({ key: "focus" });
+  expect((await ui.find({ key: "focus" }))?.text).toBe("☑ Focused only");
   expect(await ui.find({ key: "row:ab" })).toBeUndefined();
   expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
   await ui.press({ key: "focus" });
