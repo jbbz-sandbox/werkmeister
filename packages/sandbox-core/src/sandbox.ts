@@ -821,17 +821,13 @@ export async function getFormSchema(): Promise<FormSchemaBundle> {
   let bundle: Record<string, unknown>;
   try {
     // Homedir, not the caller's cwd: a stray `./.sandbox/workspace.yml` must not
-    // pre-resolve fields for a brand-new workspace. This is the cwd the CLI was
-    // spawned with when this ran out-of-process. Defaults are skipped because
-    // `formData` below discards them — computing them would `git`-scan $HOME.
+    // pre-resolve fields for a brand-new workspace. `defaults: false` keeps the
+    // static defaults (work type, workflow) but skips those derived from that root —
+    // a feature named after the user, an issue `git`-scanned out of $HOME (SW-51).
     bundle = buildFormSchema(computePromptSpec({}, os.homedir(), { defaults: false }));
   } catch (e) {
     throw new WorkspaceError(`Could not build the workspace form: ${(e as Error).message}`);
   }
-  // Defaults derived from that root (e.g. an issue ref scraped from a branch) reach `formData`
-  // only. For a brand-new workspace there's no meaningful pre-fill, and a stray
-  // derived value could be submitted by accident — so start blank and let the
-  // schema's placeholders/labels guide the user.
   const uiSchema = (bundle.uiSchema ?? {}) as FormSchemaBundle["uiSchema"];
   // The form's "Fetch from <tracker>" button names the tracker without the browser bundle knowing it.
   const issueUi = (uiSchema.issue_id ?? {}) as Record<string, unknown>;
@@ -845,7 +841,7 @@ export async function getFormSchema(): Promise<FormSchemaBundle> {
   return {
     schema: bundle.schema as FormSchemaBundle["schema"],
     uiSchema,
-    formData: {},
+    formData: bundle.formData as Record<string, unknown>,
     title: (bundle.title as string) ?? "Initialize workspace",
   };
 }

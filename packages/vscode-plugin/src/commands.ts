@@ -10,7 +10,7 @@ import {
   listWorkspaces,
   resolveSandboxBin,
 } from "werkmeister-core";
-import { getReposRoot } from "werkmeister-core/config";
+import { getReposRoot, workspacesRoot } from "werkmeister-core/config";
 import type { WsNode } from "./build-tree.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
@@ -236,8 +236,11 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
 
     // The CLI's own interactive wizard does all the prompting (issue ID
     // included); a VS Code terminal is a TTY, so there is nothing to reimplement.
+    // From the workspaces root, not ~, whose name became the feature default (SW-51).
     vscode.commands.registerCommand("sandbox.newWorkspace", async () => {
-      await runInTerminal(["workspace"], os.homedir(), "workspace");
+      const root = workspacesRoot();
+      fs.mkdirSync(root, { recursive: true });
+      await runInTerminal(["workspace"], root, "workspace");
     }),
 
     // `sandbox open` blocks for the whole lifetime of the Chrome window (Ctrl-C

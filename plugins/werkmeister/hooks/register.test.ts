@@ -1262,18 +1262,22 @@ const BUNDLE = {
     properties: {
       issue_id: {
         type: "string",
-        title: "GitHub issue (blank to skip)",
+        title: "Issue",
         pattern: "^$|(?:^([A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+#[0-9]+$)",
       },
       feature: { type: "string", title: "Feature name", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" },
       work_type: { type: "string", title: "Work type", enum: ["feature", "bugfix"] },
-      services: { type: "array", title: "Local services", items: { enum: ["api", "web"] } },
+      services: {
+        type: "array",
+        title: "Services to run locally",
+        items: { enum: ["api", "web"] },
+      },
       task: {
         type: "string",
-        title: "Task title (Enter for default)",
+        title: "Task title",
         description: "Short title for the Current Task section.",
       },
-      starting_prompt: { type: "string", title: "Starting prompt (blank to skip)" },
+      starting_prompt: { type: "string", title: "Starting prompt" },
     },
     required: ["feature", "work_type"],
   },
@@ -1381,7 +1385,7 @@ test("the Create tab draws the form from the schema: titles without wizard hints
   ])
     expect(await ui.find({ key })).toBeDefined();
   expect((await ui.find({ key: "f:starting_prompt" }))?.type).toBe("Client");
-  expect(await ui.find({ text: "GitHub issue" })).toBeDefined();
+  expect(await ui.find({ text: "Issue" })).toBeDefined();
   expect(await ui.find({ text: "Task title" })).toBeDefined();
   expect(await ui.find({ text: "Feature name *" })).toBeDefined();
   expect(await ui.find({ text: "Short title for the Current Task section." })).toBeDefined();
@@ -2001,7 +2005,7 @@ test("Create checks the draft with sandbox-core's rules: no service or repo mean
     bundle: { schema: BUNDLE.schema },
     formData: { feature: "rate-limit" },
   });
-  expect((await ui.find({ key: "note" }))?.text).toBe(`Local services: ${repoRule}`);
+  expect((await ui.find({ key: "note" }))?.text).toBe(`Services to run locally: ${repoRule}`);
   expect(w.calls.some((c) => c.key === `${WS}/create-workspace`)).toBe(false);
   await ui.unmount();
 });
