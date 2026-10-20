@@ -94,3 +94,10 @@ test("focus narrows the sweep to focus workspaces", async () => {
   assert.deepEqual(names(r), ["e-focus"]);
   assert.deepEqual(r.dropped, ["a-gate", "b-decided", "c-waiting", "d-parked"]);
 });
+
+test("the mark's sub-millisecond mtime rounds instead of truncating", async () => {
+  // .8886s is 888.6ms: truncation would report ...888Z, the nearest ms is ...889Z.
+  fs.utimesSync(path.join(root, ".check-in-last"), 1_700_000_000.8886, 1_700_000_000.8886);
+  const r = await checkInTriage();
+  assert.equal(r.since, new Date(1_700_000_000_889).toISOString());
+});
