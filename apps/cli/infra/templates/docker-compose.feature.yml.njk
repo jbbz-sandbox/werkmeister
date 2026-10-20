@@ -121,6 +121,13 @@ services:
 {% set idle = svc.type in idle_types %}
   {{ svc.name }}:
     image: {{ svc.image | default('node:20.16.0') }}
+{# SW-62: a service that needs system packages builds its own image from a Dockerfile #}
+{# in its dir (tagged `image`), instead of installing them by hand in the container.  #}
+{% if svc.dockerfile %}
+    build:
+      context: {{ workspace_path }}/{{ svc.repo }}/{{ svc.path }}
+      dockerfile: {{ svc.dockerfile }}
+{% endif %}
     container_name: {{ container_of(feature_name, svc.name) }}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
