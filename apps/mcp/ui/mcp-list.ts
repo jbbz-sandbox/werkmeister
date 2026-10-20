@@ -17,6 +17,7 @@ import {
   type McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { initCreateForm } from "werkmeister-ui/create-form";
 import { appRoot } from "werkmeister-ui/theme";
 import { type HostBridge, initWorkspaceUI } from "werkmeister-ui/workspace-ui";
 
@@ -57,4 +58,44 @@ await app.connect();
 const ctx = app.getHostContext();
 if (ctx) handleHostContextChanged(ctx);
 
-initWorkspaceUI(bridge, appRoot());
+// ＋ New workspace swaps the list for the create form in this same view: an App can't open
+// another `ui://` view, so it calls `create-workspace-form` for the bundle and draws the
+// form itself, answering `workspace-form-schema` from that bundle as mcp-app.ts does.
+const listRoot = appRoot();
+const formHost = document.createElement("div");
+formHost.hidden = true;
+listRoot.after(formHost);
+const showList = () => {
+  formHost.hidden = true;
+  formHost.replaceChildren();
+  listRoot.hidden = false;
+};
+
+const list = initWorkspaceUI(bridge, listRoot, {
+  onNewWorkspace: async () => {
+    listRoot.hidden = true;
+    formHost.hidden = false;
+    formHost.textContent = "Loading form…";
+    try {
+      const bundle = await bridge.callTool("create-workspace-form", {});
+      const formBridge: HostBridge = {
+        ...bridge,
+        callTool: (name, args) =>
+          name === "workspace-form-schema" ? bundle : bridge.callTool(name, args),
+      };
+      initCreateForm(formBridge, formHost, {
+        onCreated: (text) => {
+          void app.updateModelContext({ content: [{ type: "text", text }] }).catch(() => {});
+          showList();
+          list.reload();
+        },
+        onCancel: showList,
+      });
+    } catch (e) {
+      formHost.textContent = `Couldn’t open the form: ${(e as Error).message}`;
+      formHost.append(
+        Object.assign(document.createElement("button"), { textContent: "Back", onclick: showList }),
+      );
+    }
+  },
+});

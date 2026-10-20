@@ -15,6 +15,8 @@ import type { DisplayInput, Tone, WorkspaceDisplay } from "./display-model.js";
 export type PanelKind = "chat" | "usage" | "logs";
 export type CardAction =
   | "continue"
+  | "continue-desktop"
+  | "new-session"
   | "up"
   | "stop"
   | "restart"
@@ -36,6 +38,8 @@ export interface Btn {
 
 export interface CardProps {
   name: string;
+  /** The workspace folder, for `↗ Continue in Desktop`. */
+  path: string;
   task: string | null;
   workType: string | null;
   issueId: string | null;
@@ -54,8 +58,9 @@ export interface CardProps {
   mountPanel(kind: PanelKind, host: HTMLElement): (() => void) | undefined;
 }
 
-// The DOM surfaces can only resume a session in Terminal (`claude-resume`).
 const CONTINUE: Btn = { label: "↗ Continue in Terminal", action: "continue" };
+const CONTINUE_DESKTOP: Btn = { label: "↗ Continue in Desktop", action: "continue-desktop" };
+const NEW_SESSION: Btn = { label: "＋ New session", action: "new-session" };
 const UP: Btn = { label: "▶ Up", action: "up" };
 const STOP: Btn = { label: "■ Stop", action: "stop" };
 const RESTART: Btn = { label: "↻ Restart", action: "restart" };
@@ -84,11 +89,49 @@ export function barFor(
       ? [RESTART, DOWN]
       : running
         ? [STOP, RESTART]
-        : [UP, CONTINUE].filter((b) => b.action !== primary);
+        : [...[UP, CONTINUE].filter((b) => b.action !== primary), NEW_SESSION];
   const shown = new Set<CardAction>([primary, ...secondary.map((b) => b.action)]);
-  const extra =
-    primary === "close-out" || running ? [CONTINUE, DOWN].filter((b) => !shown.has(b.action)) : [];
+  const extra = [CONTINUE, CONTINUE_DESKTOP, DOWN, NEW_SESSION].filter(
+    (b) => !shown.has(b.action) && (b !== DOWN || running),
+  );
   return { secondary, extra: [...extra, ...PANELS] };
+}
+
+/**
+ * The Desktop link for a workspace folder, the one the app's "New Claude Code Session Here" service opens.
+ * ponytail: opens the folder, not the workspace's last Desktop session; that session's own link needs its
+ * app id, which only the pane can read (list_sessions). Pass it through status if that ever reaches core.
+ */
+export function desktopLink(path: string): string {
+  return `claude://code/new?folder=${encodeURIComponent(path)}&source=services`;
+}
+
+const TOOLS: Partial<Record<CardAction, { tool: string; verb: string }>> = {
+  continue: { tool: "claude-resume", verb: "Opening Terminal" },
+  "new-session": { tool: "claude-resume", verb: "Opening Terminal" },
+  up: { tool: "up", verb: "Starting" },
+  stop: { tool: "stop", verb: "Stopping" },
+  restart: { tool: "restart", verb: "Restarting" },
+  down: { tool: "down", verb: "Tearing down" },
+  "open-feature": { tool: "open-feature", verb: "Opening" },
+  "open-vscode": { tool: "open-workspace", verb: "Opening" },
+  "close-out": { tool: "close-out", verb: "Closing out" },
+  abandon: { tool: "close-out", verb: "Abandoning" },
+};
+
+/** The MCP tool call behind a card action; null for actions that call none, and for an abandon without a reason. */
+export function toolCall(
+  action: CardAction,
+  workspace: string,
+  reason?: string,
+): { tool: string; verb: string; args: Record<string, unknown> } | null {
+  const t = TOOLS[action];
+  if (!t) return null;
+  if (action === "abandon") {
+    const why = reason?.trim();
+    return why ? { ...t, args: { workspace, abandon: why } } : null;
+  }
+  return { ...t, args: { workspace, ...(action === "new-session" ? { new: true } : {}) } };
 }
 
 const isPanel = (a: CardAction): a is PanelKind => a === "chat" || a === "usage" || a === "logs";
@@ -234,7 +277,8 @@ export function WorkspaceCard(p: CardProps) {
     else if (a === "close-out" || a === "abandon") setConfirm(a);
     else if (a === "open-issue") {
       if (p.issueUrl) p.onOpenLink(p.issueUrl);
-    } else p.onAction(a);
+    } else if (a === "continue-desktop") p.onOpenLink(desktopLink(p.path));
+    else p.onAction(a);
   };
   const cancel = () => {
     setConfirm(null);

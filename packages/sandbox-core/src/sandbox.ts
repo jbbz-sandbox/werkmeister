@@ -3478,14 +3478,13 @@ async function openTerminalRunning(script: string, bringToFront = true): Promise
 export async function resumeClaudeInTerminal(
   name: string,
   sessionId?: string,
+  fresh = false,
 ): Promise<{ path: string; sessionId: string | null }> {
   const target = await resolveSessionDir(name);
-  const transcript = await getClaudeTranscript(name, 1, sessionId);
+  const resumeId = fresh ? null : (await getClaudeTranscript(name, 1, sessionId)).sessionId;
   const { model } = await readWorkspaceConfig(target);
-  await openTerminalRunning(
-    `cd ${shellQuote(target)} && ${claudeResumeCommand(transcript.sessionId, model)}`,
-  );
-  return { path: target, sessionId: transcript.sessionId };
+  await openTerminalRunning(`cd ${shellQuote(target)} && ${claudeResumeCommand(resumeId, model)}`);
+  return { path: target, sessionId: resumeId };
 }
 
 /** The shell command that reopens a workspace session in a terminal. */
