@@ -12,7 +12,13 @@ import { afterEach, beforeEach, test } from "node:test";
 import { ensurePortForwardsHealthy } from "./dist/k8s.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 
-const VARS = ["SANDBOX_CONFIG_FILE", "SANDBOX_SERVICES_YAML", "SANDBOX_ROOT", "PATH"];
+const VARS = [
+  "SANDBOX_CONFIG_FILE",
+  "SANDBOX_SERVICES_YAML",
+  "SANDBOX_ROOT",
+  "PATH",
+  "DOCKER_HOST",
+];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 
 let home, kubeconfig, upLog;
@@ -36,12 +42,14 @@ beforeEach(async () => {
 
   const bin = path.join(home, "bin");
   mkdirSync(bin);
+  // The health read goes to the Engine API (SW-59): a dead socket reads as
+  // "not healthy", the state each test starts from, without the real daemon.
+  process.env.DOCKER_HOST = `unix://${path.join(home, "no-daemon.sock")}`;
   stub(
     "docker",
     bin,
     `
 case "$*" in
-  *" ps "*) echo '{"State":"running","Health":"unhealthy"}' ;;
   *" up "*) [ -f "${kubeconfig}" ] && echo file > "${upLog}" || echo notfile > "${upLog}" ;;
 esac`,
   );
@@ -56,7 +64,7 @@ afterEach(() => {
   }
 });
 
-test("replaces a directory kubeconfig with a real file before recreating", () => {
+test("replaces a directory kubeconfig with a real file before recreating", async () => {
   stub(
     "kubectl",
     path.join(home, "bin"),
@@ -67,7 +75,7 @@ case "$*" in
 esac`,
   );
 
-  assert.equal(ensurePortForwardsHealthy(), "restarted");
+  assert.equal(await ensurePortForwardsHealthy(), "restarted");
   assert.ok(statSync(kubeconfig).isFile());
   assert.match(readFileSync(kubeconfig, "utf8"), /server: https:\/\/host\.docker\.internal:26443/);
   assert.equal(

@@ -8,9 +8,9 @@
 import * as fs from "node:fs";
 
 import { Colors } from "./colors.js";
-import { composeInvocation } from "./compose_infra.js";
+import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
 import { stateInfraRoot } from "./config.js";
-import { copyFileToContainer, execCapture } from "./docker.js";
+import { copyFileToContainer, execCapture, projectContainers } from "./docker.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, raw, success, warn } from "./reporter.js";
 
@@ -414,16 +414,7 @@ export function stopCaddy(): boolean {
 }
 
 /** Check if the Caddy container is running. */
-export function isCaddyRunning(): boolean {
-  const { argv, env } = composeInvocation();
-  const cmd = [...argv, "ps", "--status", "running", "-q", "caddy"];
-  try {
-    const result = run(cmd, { capture: true, timeout: 10, env });
-    return Boolean(result.stdout.trim());
-  } catch (e) {
-    if (e instanceof ProcError && (e.code === "ENOENT" || e.code === "ETIMEDOUT")) {
-      return false;
-    }
-    throw e;
-  }
+export async function isCaddyRunning(): Promise<boolean> {
+  const caddy = (await projectContainers(INFRA_PROJECT, "caddy")) ?? [];
+  return caddy.some((c) => c.state === "running");
 }

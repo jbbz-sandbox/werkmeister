@@ -58,8 +58,8 @@ function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): 
   console.log();
 }
 
-function featureStatus(featureName: string): string {
-  const containers = tallied(getContainerStatus(featureName));
+async function featureStatus(featureName: string): Promise<string> {
+  const containers = tallied(await getContainerStatus(featureName));
   if (!containers.length) {
     return `${Colors.DIM}no containers${Colors.RESET}`;
   }
@@ -74,8 +74,8 @@ function featureStatus(featureName: string): string {
   return `${Colors.RED}down (0/${totalC})${Colors.RESET}`;
 }
 
-function printVerboseContainers(featureName: string): void {
-  const containers = getContainerStatus(featureName) ?? [];
+async function printVerboseContainers(featureName: string): Promise<void> {
+  const containers = await getContainerStatus(featureName);
   for (const c of containers) {
     const cName = c.name || "?";
     const cStatus = c.status || "?";
@@ -100,11 +100,11 @@ function printFeatureIntercepts(rows: InterceptRow[]): void {
   }
 }
 
-function printFeaturesSection(
+async function printFeaturesSection(
   allSlots: Record<string, SlotEntry>,
   verbose: boolean,
   interceptRows: InterceptRow[],
-): number {
+): Promise<number> {
   console.log(`  ${Colors.BOLD}Features${Colors.RESET}`);
 
   const entries = Object.entries(allSlots);
@@ -136,11 +136,11 @@ function printFeaturesSection(
         `${featureName.padEnd(25)}  ` +
         `${svcStr.padEnd(35)}  ` +
         `${featurePortRange(slot).padEnd(15)}  ` +
-        `${featureStatus(featureName)}`,
+        `${await featureStatus(featureName)}`,
     );
 
     if (verbose) {
-      printVerboseContainers(featureName);
+      await printVerboseContainers(featureName);
     }
     printFeatureIntercepts(interceptRows.filter((r) => r.feature === featureName));
   }
@@ -305,7 +305,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  const infra = getInfraStatus();
+  const infra = await getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = await getAllSlots();
   const mcp = await webStatus();
@@ -313,7 +313,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== Developer Sandbox Status ===${Colors.RESET}\n`);
 
   printInfraSection(infra, mcp);
-  printFeaturesSection(
+  await printFeaturesSection(
     allSlots,
     Boolean(args.verbose),
     buildInterceptRows(allSlots, loadServices(), listIntercepts()),
