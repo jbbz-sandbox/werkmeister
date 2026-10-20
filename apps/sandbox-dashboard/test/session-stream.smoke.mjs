@@ -84,23 +84,23 @@ console.log("✓ live append delivered as entry index 2");
 
 unsub();
 
-// 3. "waiting for input" signal: no tracked turn + Claude spoke last → waiting.
+// 3. Agent signal with no hook state file: Claude spoke last without asking → done.
 const { getWorkspaceStatuses } = await import("werkmeister-core");
 const { statuses } = await getWorkspaceStatuses();
 const demo = statuses.find((s) => s.name === "demo");
 assert.ok(demo, "demo workspace in status sweep");
 assert.equal(demo.claude.state, "idle", "no server-tracked turn → idle");
-assert.equal(demo.claude.waiting, true, "assistant spoke last → waiting for input");
+assert.equal(demo.claude.agent, "done", "assistant spoke last, no question → done");
 
-// Flip it: append a user line → Claude no longer spoke last → not waiting.
+// Flip it: append a user line → a fresh turn → working.
 fs.appendFileSync(sessionFile, userLine("another question"));
 const { statuses: s2 } = await getWorkspaceStatuses();
 assert.equal(
-  s2.find((s) => s.name === "demo").claude.waiting,
-  false,
-  "user spoke last → not waiting",
+  s2.find((s) => s.name === "demo").claude.agent,
+  "working",
+  "user spoke last → working",
 );
-console.log("✓ waiting-for-input signal: true after assistant, false after user");
+console.log("✓ agent signal: done after assistant, working after user");
 
 // 4. Resume cursor: a reconnect from index N skips the backfill it already has.
 // File now holds 4 entries (user, asst, asst, user). Resume from index 2.

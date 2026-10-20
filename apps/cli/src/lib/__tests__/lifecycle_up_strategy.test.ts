@@ -10,6 +10,8 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COMPOSE_FILE, LEGACY_COMPOSE_FILE } from "werkmeister-core/compose_file";
 import {
+  AGENT_STATE_EVENTS,
+  buildAgentStateEntry,
   buildPrGuardEntry,
   READ_ONLY_GIT_RULES,
   SESSION_START_COMMAND,
@@ -64,6 +66,14 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+/** `hooks` plus the agent-state entry `up` adds on each of its events (SW-46). */
+const withAgentState = (hooks: Record<string, unknown[]>) => {
+  const out = { ...hooks };
+  for (const event of AGENT_STATE_EVENTS)
+    out[event] = [...(out[event] ?? []), buildAgentStateEntry()];
+  return out;
+};
+
 describe("lifecycle.up in an icm workspace", () => {
   it("installs the PR guard and allow rules, what both strategies share", async () => {
     await withReporter(quiet, () => up("demo", root));
@@ -71,7 +81,7 @@ describe("lifecycle.up in an icm workspace", () => {
       fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
     );
     expect(settings).toEqual({
-      hooks: { PreToolUse: [buildPrGuardEntry()] },
+      hooks: withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
       permissions: { allow: READ_ONLY_GIT_RULES },
     });
   });
@@ -99,7 +109,7 @@ describe("lifecycle.up in an icm workspace", () => {
       fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
     );
     expect(settings).toEqual({
-      hooks: { SessionStart: [hand], PreToolUse: [buildPrGuardEntry()] },
+      hooks: withAgentState({ SessionStart: [hand], PreToolUse: [buildPrGuardEntry()] }),
       permissions: { allow: READ_ONLY_GIT_RULES },
     });
   });

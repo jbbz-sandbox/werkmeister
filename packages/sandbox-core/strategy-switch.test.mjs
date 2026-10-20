@@ -14,7 +14,7 @@ import { buildPrGuardEntry, READ_ONLY_GIT_RULES } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { leftoverPaths, reportLeftovers, strategyById } from "./dist/strategies/index.js";
 import { initWorkspace } from "./dist/workspace_init.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { withAgentState, withSandboxHome } from "./fixtures.mjs";
 
 const jit = strategyById("jit");
 const icm = strategyById("icm");
@@ -216,7 +216,10 @@ test("initWorkspace after a switch to icm removes jit's managed hooks even witho
     const after = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
     assert.deepEqual(
       after,
-      { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } },
+      {
+        hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
+        permissions: { allow: READ_ONLY_GIT_RULES },
+      },
       "only the PR guard and the allow rules are left",
     );
     assert.ok(
@@ -246,7 +249,10 @@ test("initWorkspace --prune-context removes tracked jit leftovers after a switch
     );
     assert.deepEqual(
       JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
-      { hooks: { PreToolUse: [buildPrGuardEntry()] }, permissions: { allow: READ_ONLY_GIT_RULES } },
+      {
+        hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
+        permissions: { allow: READ_ONLY_GIT_RULES },
+      },
       "jit-tracked settings pruned; icm wrote back only the PR guard and the allow rules",
     );
     assert.ok(

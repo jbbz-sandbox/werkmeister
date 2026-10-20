@@ -10,7 +10,11 @@ import { test } from "node:test";
 
 import { dotDir } from "./dist/config.js";
 import { buildFormSchema } from "./dist/form_schema.js";
-import { buildSessionEndEntry, writeWorkspaceSettings } from "./dist/hooks_gen.js";
+import {
+  buildAgentStateEntry,
+  buildSessionEndEntry,
+  writeWorkspaceSettings,
+} from "./dist/hooks_gen.js";
 import { idleStopFeature } from "./dist/lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { writeWorkspaceConfig } from "./dist/workspace_init.js";
@@ -38,6 +42,8 @@ const readHooks = (root) =>
 
 const USER_END = { hooks: [{ type: "command", command: "echo bye" }] };
 const USER_PRE = { matcher: "Bash", hooks: [{ type: "command", command: "echo pre" }] };
+// Every workspace also gets the agent-state hook on SessionEnd and PreToolUse (SW-46).
+const AGENT = buildAgentStateEntry();
 
 test("auto_stop on: one managed SessionEnd entry, user entries kept, no duplicate on re-init", () => {
   const root = workspace("feature: f\nauto_stop: true\n", {
@@ -46,8 +52,8 @@ test("auto_stop on: one managed SessionEnd entry, user entries kept, no duplicat
   writeWorkspaceSettings(root);
   writeWorkspaceSettings(root);
   const hooks = readHooks(root);
-  assert.deepEqual(hooks.SessionEnd, [USER_END, buildSessionEndEntry()]);
-  assert.deepEqual(hooks.PreToolUse, [USER_PRE]);
+  assert.deepEqual(hooks.SessionEnd, [USER_END, buildSessionEndEntry(), AGENT]);
+  assert.deepEqual(hooks.PreToolUse, [USER_PRE, AGENT]);
   assert.match(hooks.SessionEnd[1].hooks[0].command, /sandbox stop --if-idle/);
   assert.equal(hooks.SessionEnd[1].hooks[0].timeout, 10);
 });
@@ -57,19 +63,19 @@ test("auto_stop off: the managed entry is removed, the user's stays", () => {
   writeWorkspaceSettings(root);
   setYml(root, "feature: f\nauto_stop: false\n");
   writeWorkspaceSettings(root);
-  assert.deepEqual(readHooks(root).SessionEnd, [USER_END]);
+  assert.deepEqual(readHooks(root).SessionEnd, [USER_END, AGENT]);
 });
 
-test("auto_stop missing: no SessionEnd hook is written, and a lone managed one goes", () => {
+test("auto_stop missing: no auto-stop hook is written, and a lone managed one goes", () => {
   const root = workspace("feature: f\n");
   writeWorkspaceSettings(root);
-  assert.equal(readHooks(root).SessionEnd, undefined);
+  assert.deepEqual(readHooks(root).SessionEnd, [AGENT]);
 
   setYml(root, "feature: f\nauto_stop: true\n");
   writeWorkspaceSettings(root);
   setYml(root, "feature: f\n");
   writeWorkspaceSettings(root);
-  assert.equal(readHooks(root).SessionEnd, undefined);
+  assert.deepEqual(readHooks(root).SessionEnd, [AGENT]);
 });
 
 function sessionsDir(sessions) {
@@ -151,7 +157,11 @@ test("auto_stop unset follows autonomous; an explicit value wins (SW-39)", () =>
 
   const root = workspace("feature: f\nautonomous: true\n");
   writeWorkspaceSettings(root);
-  assert.equal(readHooks(root).SessionEnd.length, 1, "the managed SessionEnd entry is written");
+  assert.deepEqual(
+    readHooks(root).SessionEnd,
+    [buildSessionEndEntry(), AGENT],
+    "auto-stop is written",
+  );
 });
 
 test("an unticked auto_stop leaves a new workspace.yml unset but turns an existing one off (SW-39)", async () => {

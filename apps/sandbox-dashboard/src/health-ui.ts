@@ -22,7 +22,11 @@ interface FeatureStatus {
   slot: number | null;
   ports: string | null;
   services: InfraService[];
-  claude: { state: "running" | "done" | "failed" | "idle"; waiting: boolean };
+  claude: {
+    state: "running" | "done" | "failed" | "idle";
+    agent: "working" | "needs-you" | "done" | "idle";
+    question: string | null;
+  };
 }
 interface WorkspaceStatusResult {
   infra: {
@@ -89,7 +93,8 @@ const CSS = `
   .health .row .slot { color: var(--sd-muted); font-size: 12px; }
   .health .row .claude { margin-left: auto; font-size: 12px; color: var(--sd-muted); }
   .health .row .claude.working { color: var(--sd-ok); font-weight: 600; }
-  .health .row .claude.waiting { color: var(--sd-warn); font-weight: 600; }
+  .health .row .claude.needs-you { color: var(--sd-warn); font-weight: 600; }
+  .health .row .claude.done { color: var(--sd-ok); }
   .health .row .claude.failed { color: var(--sd-err); font-weight: 600; }
   .health .row .detail, .health .kube-row .detail { color: var(--sd-err); font-size: 12px; margin-left: auto; }
   .health .kube-row {
@@ -145,9 +150,14 @@ export function initHealthUI(bridge: HostBridge, root: HTMLElement): { reload: (
   }
 
   function claudeBadge(c: FeatureStatus["claude"]): HTMLElement | null {
-    if (c.waiting) return el("span", "claude waiting", "waiting for input");
-    if (c.state === "running") return el("span", "claude working", "claude: working");
+    if (c.agent === "needs-you") {
+      const badge = el("span", "claude needs-you", "● Needs you");
+      if (c.question) badge.title = c.question;
+      return badge;
+    }
+    if (c.agent === "working") return el("span", "claude working", "◌ Working");
     if (c.state === "failed") return el("span", "claude failed", "claude: failed");
+    if (c.agent === "done") return el("span", "claude done", "✓ Done");
     return null;
   }
 

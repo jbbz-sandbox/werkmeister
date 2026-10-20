@@ -4,6 +4,7 @@ import { expect, mock, test } from "claude-code/testing";
 import type { FormField, WorkspaceRow } from "../types";
 import {
   applyFormFields,
+  buildRows,
   formFields,
   interceptControl,
   optionGroups,
@@ -179,7 +180,7 @@ const STATUS = {
       slot: 1,
       ports: null,
       services: [],
-      claude: { state: "running", waiting: false },
+      claude: { state: "idle", agent: "working" },
     },
     {
       name: "abc",
@@ -190,7 +191,7 @@ const STATUS = {
       slot: 2,
       ports: null,
       services: [],
-      claude: { state: "idle", waiting: true },
+      claude: { state: "idle", agent: "needs-you" },
     },
     {
       name: "empty",
@@ -201,7 +202,7 @@ const STATUS = {
       slot: null,
       ports: null,
       services: [],
-      claude: { state: "idle", waiting: false },
+      claude: { state: "idle", agent: "idle" },
     },
   ],
 };
@@ -287,6 +288,27 @@ test("workspace data comes from the node child, not an MCP call", async ($, on) 
   ]);
 });
 
+test("buildRows: the card's agent flag is core's agent state, idle draws none (SW-46)", () => {
+  const ws = (name: string) => ({ name, path: `/ws/${name}` }) as WorkspaceRow;
+  const st = (name: string, agent: string) => ({
+    name,
+    state: "up" as const,
+    running: 1,
+    total: 1,
+    services: [],
+    claude: { state: "idle", agent: agent as "idle" },
+  });
+  const names = ["w", "n", "d", "i"];
+  const rows = buildRows(
+    { workspaces: names.map(ws) },
+    {
+      statuses: [st("w", "working"), st("n", "needs-you"), st("d", "done"), st("i", "idle")],
+    },
+    [],
+  );
+  expect(rows.map((r) => r.claude)).toEqual(["working", "needs-you", "done", null]);
+});
+
 test("rows draw name, issue, task, counts and claude note", async ($, on) => {
   world(on, stubs());
   await openPane($);
@@ -304,12 +326,12 @@ test("rows draw name, issue, task, counts and claude note", async ($, on) => {
     expect((await ui.find({ key: "task:ab" }))?.text).toBe("BWell");
     expect((await ui.find({ key: "desc:ab" }))?.text).toBe("BWell technologies");
     expect((await ui.find({ key: "meta:ab" }))?.text).toBe("stage 5/6 implement · 3/3");
-    expect((await ui.find({ key: "claude:ab" }))?.text).toBe("◌ working");
+    expect((await ui.find({ key: "claude:ab" }))?.text).toBe("◌ Working");
     expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
     expect(await ui.find({ key: "task:abc" })).toBeUndefined();
     expect(await ui.find({ key: "desc:abc" })).toBeUndefined();
     expect((await ui.find({ key: "meta:abc" }))?.text).toBe("bugfix · 1/3");
-    expect((await ui.find({ key: "claude:abc" }))?.text).toBe("● waiting for you");
+    expect((await ui.find({ key: "claude:abc" }))?.text).toBe("● Needs you");
     expect(await ui.find({ key: "claude:empty" })).toBeUndefined();
     await ui.unmount();
   }

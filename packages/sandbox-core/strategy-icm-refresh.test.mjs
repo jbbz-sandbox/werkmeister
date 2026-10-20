@@ -15,6 +15,7 @@ import {
 } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
+import { withAgentState } from "./fixtures.mjs";
 
 const icm = strategyById("icm");
 const HAND = { hooks: [{ type: "command", command: "echo mine" }] };
@@ -52,7 +53,7 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
       fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
     );
     assert.deepEqual(settings, {
-      hooks: { SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] },
+      hooks: await withAgentState({ SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] }),
       permissions: { allow: READ_ONLY_GIT_RULES },
     });
     assert.ok(!fs.existsSync(path.join(root, ".sandbox", ".gate")));
@@ -73,7 +74,7 @@ test("only JIT hooks: settings.json keeps just the PR guard", async () => {
       fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
     );
     assert.deepEqual(settings, {
-      hooks: { PreToolUse: [buildPrGuardEntry()] },
+      hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
       permissions: { allow: READ_ONLY_GIT_RULES },
     });
   } finally {
@@ -103,7 +104,7 @@ test("a workspace with no .claude/ gets the PR guard and the allow rules, once, 
       fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
     );
     assert.deepEqual(settings, {
-      hooks: { PreToolUse: [buildPrGuardEntry()] },
+      hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
       permissions: { allow: READ_ONLY_GIT_RULES },
     });
   } finally {
