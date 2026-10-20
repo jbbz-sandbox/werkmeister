@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# A newer push to the same PR cancels the run in flight (changesets force-pushes
+# the version PR after every merge to main, so its stale runs piled up). Pushes
+# to main get a group each, so they never cancel or queue behind one another.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -18,12 +25,11 @@ jobs:
         run: |
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
+      - uses: ./.github/actions/install
       # Turbo's local cache, carried across runs so unchanged packages replay
       # instead of rebuilding. Turbo doesn't hash the Node version, hence the key.
+      # Only this job saves it: the others restore and would otherwise race it
+      # for the key with a dir holding fewer builds.
       # ponytail: the dir only grows (each save carries the last); GitHub's 10GB
       # LRU evicts old entries. Prune or move to a remote cache if restores slow.
       - uses: actions/cache@v4
@@ -31,13 +37,15 @@ jobs:
           path: .turbo/cache
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-node24-
-      - run: npm ci
       # SW-63: a new dependency under a licence outside the allowlist fails here.
       - run: npm run licenses
       # Before turbo so a lint or format failure surfaces in seconds, not after the build.
       - run: npx biome ci .
       # One invocation so typecheck runs alongside build instead of before it.
-      - run: npx turbo run typecheck build test
+      # werkmeister-core's tests run sharded in `core-test` below; its build
+      # still runs here as every other package depends on it, and `tsc` there
+      # type-checks the same files its `typecheck` would.
+      - run: npx turbo run typecheck build test --filter='!werkmeister-core'
       # The extension host is an Electron app: it needs a display even headless,
       # and it downloads its own VS Code build on first run. With the build
       # cached for the version pinned in .vscode-test.mjs, vscode-test skips
@@ -51,10 +59,39 @@ jobs:
       # check on .vscodeignore — #38 broke packaging and nothing caught it.
       - run: npm run package --workspace werkmeister-vscode
 
-  # Gated on `test` rather than repeating its checks: a publish cannot be taken
-  # back, and this used to be a separate workflow that raced CI on every push.
+  # The core suite is ~100 files that each spawn a process, CPU-bound on a
+  # 4-vCPU runner: 116s when it shared the runner with every other build. Two
+  # shards on runners of their own, in parallel with `test`.
+  core-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure a git identity for the smoke tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@users.noreply.github.com"
+      - uses: ./.github/actions/install
+      - uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-node24-
+      - run: npx turbo run build --filter=werkmeister-core
+      - run: node --test --test-shard=${{ matrix.shard }}/2 *.test.mjs
+        working-directory: packages/sandbox-core
+      # The smoke files are a few seconds in total; one shard takes them all.
+      - if: matrix.shard == 2
+        run: for f in *.smoke.mjs; do node "$f" || exit 1; done
+        working-directory: packages/sandbox-core
+
+  # Gated on the test jobs rather than repeating their checks: a publish cannot
+  # be taken back, and this used to be a separate workflow that raced CI on
+  # every push.
   release:
-    needs: test
+    needs: [test, core-test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # npm refuses a re-publish of a version, so two overlapping runs
     # would not race harmlessly — the loser fails.
@@ -86,18 +123,14 @@ jobs:
         run: |
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
+      - uses: ./.github/actions/install
       # Restores what `test` just saved, so `npm run release`'s build replays
       # from cache.
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: .turbo/cache
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-node24-
-      - run: npm ci
       # With changesets pending: opens/updates the version PR. With none pending
       # (i.e. that PR just merged): publishes and tags.
       - uses: changesets/action@v1
