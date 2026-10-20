@@ -59,6 +59,12 @@
       "pattern": "^[0-9]+[KMG]?$",
       "description": "Compose memory size, e.g. 512M or 2G."
     },
+    "cpus": {
+      "type": ["number", "string"],
+      "exclusiveMinimum": 0,
+      "pattern": "^(?!0*\\.?0*$)[0-9]*\\.?[0-9]+$",
+      "description": "Compose CPU limit, e.g. 0.5 or \"2.0\". Default 1.0 (2.0 for setup services)."
+    },
     "environment": {
       "type": "object",
       "description": "Compose `environment:`. Beats every env_file (including the service's secrets file), so never put `${SECRET}` here; declare it in `secrets:` instead.",
@@ -121,6 +127,7 @@
         },
         "memory_limit": { "$ref": "#/definitions/memory" },
         "memory_reservation": { "$ref": "#/definitions/memory" },
+        "cpus": { "$ref": "#/definitions/cpus" },
         "setup_service": {
           "type": ["string", "null"],
           "description": "Key in `setup_services:` this service waits on (service_completed_successfully)."
@@ -151,7 +158,8 @@
             "properties": {
               "image": { "type": "string" },
               "command": { "type": "string" },
-              "internal_port": { "$ref": "#/definitions/port" }
+              "internal_port": { "$ref": "#/definitions/port" },
+              "cpus": { "$ref": "#/definitions/cpus" }
             },
             "additionalProperties": false
           }
@@ -218,6 +226,7 @@
         "environment": { "$ref": "#/definitions/environment" },
         "memory_limit": { "$ref": "#/definitions/memory" },
         "memory_reservation": { "$ref": "#/definitions/memory" },
+        "cpus": { "$ref": "#/definitions/cpus" },
         "healthcheck": { "type": "string", "description": "CMD-SHELL test. Default `true`." },
         "startup_script": {
           "type": "boolean",

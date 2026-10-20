@@ -404,6 +404,14 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
 export const IDLE_SERVICE_TYPES = ["cli", "library", "extension"];
 
 /**
+ * CPU limit a generated container gets when services.yaml sets no `cpus:`. One
+ * home so `sandbox stats` shows the value generation rendered (SW-40). Setup
+ * containers get more: a cold `yarn install` is the heaviest single burst.
+ */
+export const DEFAULT_CPUS = "1.0";
+export const DEFAULT_SETUP_CPUS = "2.0";
+
+/**
  * One entry under services.yaml `services:` or `setup_services:`. Only the keys
  * the code reads are typed; the rest pass through to compose untouched. Nothing
  * validates the YAML against this — it is a claim, not a check.
@@ -427,6 +435,8 @@ export interface ServiceEntry {
   graphql_path?: string;
   dockerfile?: string;
   node_modules_volume?: string;
+  /** Compose CPU limit; a positive number or numeric string. */
+  cpus?: number | string;
   setup_service?: string;
   extra_volumes?: string[];
   extra_services?: Record<string, unknown>;
