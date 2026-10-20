@@ -286,7 +286,7 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/logs.js"),
     configure: (cmd) => {
       cmd
-        .description("Tail docker compose logs for a feature")
+        .description("Tail a feature's container logs")
         .argument("<feature>", "Feature name")
         .argument("[service]", "Specific service to tail (optional)");
     },

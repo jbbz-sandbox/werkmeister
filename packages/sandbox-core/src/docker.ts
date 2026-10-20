@@ -15,11 +15,13 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 
 import Dockerode, { type DockerOptions } from "dockerode";
 import * as tar from "tar-fs";
 
+import { BLUE, CYAN, GREEN, MAGENTA, RESET, YELLOW } from "./colors.js";
 import { ProcError, run } from "./proc.js";
 
 /**
@@ -341,6 +343,202 @@ function withTimeout<T>(seconds: number, what: string, work: Promise<T>): Promis
     );
   });
   return Promise.race([work, deadline]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+export type LogStream = "stdout" | "stderr";
+/** One finished, prefixed log line, without its newline. */
+export type OnLogLine = (line: string, stream: LogStream) => void;
+
+/**
+ * The prefix name `compose logs` prints: a default `<project>-<svc>-<n>` name
+ * loses the project, a custom `container_name` is printed whole.
+ */
+export function logName({ name, labels }: Pick<ProjectContainer, "name" | "labels">): string {
+  const project = labels["com.docker.compose.project"];
+  const svcNum = `${labels["com.docker.compose.service"]}-${labels["com.docker.compose.container-number"]}`;
+  return name === `${project}-${svcNum}` ? svcNum : name;
+}
+
+// Compose's own cycle. Picked by a hash of the name rather than compose's
+// first-come order, so a service keeps its colour when another is added.
+const LOG_COLORS = [CYAN, YELLOW, GREEN, MAGENTA, BLUE];
+
+/** `name | ` padded to *width*, as compose prints it, optionally in the name's colour. */
+export function logPrefix(name: string, width: number, color: boolean): string {
+  const text = `${name.padEnd(width)} | `;
+  if (!color) return text;
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return `${LOG_COLORS[hash % LOG_COLORS.length]}${text}${RESET}`;
+}
+
+/** A write target for `demuxStream` that hands out whole lines, holding a partial one until it ends. */
+function lineSink(prefix: string, stream: LogStream, onLine: OnLogLine) {
+  // A multi-byte character can straddle two chunks.
+  const decoder = new StringDecoder("utf8");
+  let partial = "";
+  const emit = (text: string) => {
+    const lines = (partial + text).split("\n");
+    partial = lines.pop() ?? "";
+    for (const line of lines) onLine(prefix + line.replace(/\r$/, ""), stream);
+  };
+  return {
+    write: (chunk: Buffer) => {
+      emit(decoder.write(chunk));
+      return true;
+    },
+    flush: () => {
+      emit(decoder.end());
+      if (partial) onLine(prefix + partial, stream);
+      partial = "";
+    },
+  };
+}
+
+/**
+ * Split one container's log stream into prefixed lines; resolves when it ends.
+ *
+ * A non-TTY container's stream interleaves stdout and stderr in 8-byte-header
+ * frames. A TTY container's is raw bytes, which the demuxer would misread as
+ * headers, so it must not go through it.
+ */
+export function pipeLogLines(
+  raw: NodeJS.ReadableStream,
+  tty: boolean,
+  prefix: string,
+  onLine: OnLogLine,
+): Promise<void> {
+  const out = lineSink(prefix, "stdout", onLine);
+  const err = lineSink(prefix, "stderr", onLine);
+  if (tty) raw.on("data", out.write);
+  // demuxStream only ever calls write(), so the sinks need nothing more.
+  else
+    docker().modem.demuxStream(
+      raw,
+      out as unknown as NodeJS.WritableStream,
+      err as unknown as NodeJS.WritableStream,
+    );
+  return new Promise((resolve) => {
+    let ended = false;
+    const end = () => {
+      if (ended) return;
+      ended = true;
+      out.flush();
+      err.flush();
+      resolve();
+    };
+    raw.once("end", end);
+    raw.once("close", end);
+    // An abort lands here; the lines already read stand.
+    raw.once("error", end);
+  });
+}
+
+export interface ContainerLogsOptions {
+  /** Keep streaming, and attach to containers that start later, until *signal* aborts. */
+  follow: boolean;
+  /** Lines of backlog per container. */
+  tail: number;
+  signal?: AbortSignal;
+  color: boolean;
+}
+
+/**
+ * `docker compose logs [-f] --tail N [service]` over the Engine API: one stream
+ * per container of *project*, merged as they arrive.
+ *
+ * Without `follow` it resolves once every backlog is out. With it, it runs until
+ * *signal* aborts, attaching to each container that starts meanwhile, which is
+ * what keeps a tail alive across `sandbox restart`. No containers, or an unknown
+ * *service*, is one stderr line, as compose prints one.
+ */
+export async function containerLogs(
+  project: string,
+  service: string | null,
+  { follow, tail, signal, color }: ContainerLogsOptions,
+  onLine: OnLogLine,
+): Promise<void> {
+  const label = [
+    `com.docker.compose.project=${project}`,
+    "com.docker.compose.oneoff=False",
+    ...(service ? [`com.docker.compose.service=${service}`] : []),
+  ];
+  // Subscribed before listing, so a container starting in between isn't missed.
+  const events = follow
+    ? await docker()
+        .getEvents({
+          filters: { type: ["container"], event: ["start"], label },
+          abortSignal: signal,
+        } as Dockerode.GetEventsOptions)
+        .catch(() => null)
+    : null;
+
+  const found = await projectContainers(project, service ?? undefined);
+  if (found === null || found.length === 0) {
+    events?.removeAllListeners();
+    (events as Readable | null)?.destroy();
+    onLine(
+      found === null
+        ? "cannot reach the docker daemon"
+        : service
+          ? `no such service: ${service}`
+          : `no containers for project ${project}`,
+      "stderr",
+    );
+    return;
+  }
+
+  let width = Math.max(...found.map((c) => logName(c).length));
+  const attached = new Set<string>();
+  const running = new Set<Promise<void>>();
+
+  const attach = (name: string, prefixName: string, since?: number) => {
+    if (attached.has(name) || signal?.aborted) return;
+    attached.add(name);
+    width = Math.max(width, prefixName.length);
+    const piped = (async () => {
+      const container = docker().getContainer(name);
+      const { Config } = await container.inspect();
+      // A re-attach after a restart reads from the start event on, not the backlog again.
+      const range = since === undefined ? { tail } : { since };
+      const base = { stdout: true, stderr: true, ...range, abortSignal: signal };
+      const raw = follow
+        ? await container.logs({ ...base, follow: true })
+        : Readable.from([await container.logs({ ...base, follow: false })]);
+      await pipeLogLines(raw, Config.Tty, logPrefix(prefixName, width, color), onLine);
+    })()
+      // Aborted, or the container went away between the list and the attach.
+      .catch(() => {})
+      .finally(() => {
+        attached.delete(name);
+        running.delete(piped);
+      });
+    running.add(piped);
+  };
+
+  for (const c of found) attach(c.name, logName(c));
+
+  if (follow) {
+    let pending = "";
+    events?.on("data", (chunk: Buffer) => {
+      const lines = (pending + chunk.toString()).split("\n");
+      pending = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const e = JSON.parse(line);
+        const attrs = e.Actor?.Attributes ?? {};
+        attach(attrs.name, logName({ name: attrs.name, labels: attrs }), e.time);
+      }
+    });
+    events?.on("error", () => {});
+    // No signal follows forever, as `compose logs -f` does; every caller passes one.
+    if (!signal?.aborted) {
+      await new Promise<void>((resolve) =>
+        signal?.addEventListener("abort", () => resolve(), { once: true }),
+      );
+    }
+  }
+  while (running.size > 0) await Promise.all(running);
 }
 
 /**
