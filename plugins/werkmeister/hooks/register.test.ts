@@ -3,10 +3,13 @@ import type { Engine, Plugin } from "claude-code/testing";
 import { expect, mock, test } from "claude-code/testing";
 import type { FormField, WorkspaceRow } from "../types";
 import {
+  actionsFor,
   applyFormFields,
   buildRows,
+  display,
   formFields,
   interceptControl,
+  metaParts,
   optionGroups,
   withLivePrs,
 } from "./register";
@@ -92,6 +95,22 @@ function world(on: On, stubs: McpStub = {}) {
 
 function ok(structuredContent: unknown, text = "ok"): McpAnswer {
   return { content: [{ type: "text", text }], isError: false, structuredContent };
+}
+
+type Mounted = Pick<Awaited<ReturnType<Engine["ui"]["mount"]>>, "find" | "press">;
+
+/** A card button, opening the card's ⋯ menu first when it isn't in the bar. */
+async function seek(ui: Mounted, key: string) {
+  const shown = await ui.find({ key });
+  if (shown) return shown;
+  await ui.press({ key: `more:${key.slice(key.indexOf(":") + 1)}` });
+  return ui.find({ key });
+}
+
+/** Presses a card button wherever it draws: the bar, the confirm, or the ⋯ menu. */
+async function tap(ui: Mounted, key: string) {
+  await seek(ui, key);
+  await ui.press({ key });
 }
 
 async function openPane($: Engine) {
@@ -288,7 +307,7 @@ test("workspace data comes from the node child, not an MCP call", async ($, on) 
   ]);
 });
 
-test("buildRows: the card's agent flag is core's agent state, idle draws none (SW-46)", () => {
+test("buildRows: the card's agent state is core's, with its time and question (SW-46)", () => {
   const ws = (name: string) => ({ name, path: `/ws/${name}` }) as WorkspaceRow;
   const st = (name: string, agent: string) => ({
     name,
@@ -296,9 +315,12 @@ test("buildRows: the card's agent flag is core's agent state, idle draws none (S
     running: 1,
     total: 1,
     services: [],
-    claude: { state: "idle", agent: agent as "idle" },
+    claude: { state: "idle", agent: agent as "idle", at: "2026-10-20T11:48:00Z", question: "Q?" },
+    phase: "implement",
+    autonomous: true,
+    lastActivity: null,
   });
-  const names = ["w", "n", "d", "i"];
+  const names = ["w", "n", "d", "i", "none"];
   const rows = buildRows(
     { workspaces: names.map(ws) },
     {
@@ -306,12 +328,25 @@ test("buildRows: the card's agent flag is core's agent state, idle draws none (S
     },
     [],
   );
-  expect(rows.map((r) => r.claude)).toEqual(["working", "needs-you", "done", null]);
+  expect(rows.map((r) => r.claude.agent)).toEqual(["working", "needs-you", "done", "idle", "idle"]);
+  expect(rows[1]?.claude).toEqual({
+    agent: "needs-you",
+    at: "2026-10-20T11:48:00Z",
+    question: "Q?",
+  });
+  expect([rows[0]?.phase, rows[0]?.autonomous]).toEqual(["implement", true]);
+  // A workspace core reported nothing for reads idle, not working.
+  expect([rows[4]?.claude.question, rows[4]?.phase, rows[4]?.autonomous]).toEqual([
+    null,
+    null,
+    false,
+  ]);
 });
 
-test("rows draw name, issue, task, counts and claude note", async ($, on) => {
-  world(on, stubs());
+test("a card is name and agent chip, work type · task, then the labelled compact line (SW-52)", async ($, on) => {
+  const w = world(on, stubs());
   await openPane($);
+  await w.clock.settle();
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
       plugin: "werkmeister",
@@ -321,25 +356,30 @@ test("rows draw name, issue, task, counts and claude note", async ($, on) => {
       requestId: "workspaces",
     });
     expect((await ui.find({ key: "row:ab" }))?.text).toBe("ab");
-    expect((await ui.find({ key: "issue:ab" }))?.text).toBe("spike: PROJ-1");
-    expect(await ui.find({ key: "issue:abc" })).toBeUndefined();
-    expect((await ui.find({ key: "task:ab" }))?.text).toBe("BWell");
-    expect((await ui.find({ key: "desc:ab" }))?.text).toBe("BWell technologies");
-    expect((await ui.find({ key: "meta:ab" }))?.text).toBe("stage 5/6 implement · 3/3");
     expect((await ui.find({ key: "claude:ab" }))?.text).toBe("◌ Working");
-    expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
-    expect(await ui.find({ key: "task:abc" })).toBeUndefined();
-    expect(await ui.find({ key: "desc:abc" })).toBeUndefined();
-    expect((await ui.find({ key: "meta:abc" }))?.text).toBe("bugfix · 1/3");
     expect((await ui.find({ key: "claude:abc" }))?.text).toBe("● Needs you");
-    expect(await ui.find({ key: "claude:empty" })).toBeUndefined();
+    expect((await ui.find({ key: "claude:empty" }))?.text).toBe("Idle");
+    expect(await ui.find({ key: "auto:ab" })).toBeUndefined();
+    // The subtitle is workspace.yml's work type and task, never the session title or the description.
+    expect((await ui.find({ key: "task:ab" }))?.text).toBe("Spike · BWell");
+    expect((await ui.find({ key: "task:abc" }))?.text).toBe("Bug");
+    expect(await ui.find({ key: "task:empty" })).toBeUndefined();
+    expect(await ui.find({ text: /Demo project|BWell technologies/ })).toBeUndefined();
+    expect(await ui.find({ key: "session:abc" })).toBeUndefined();
+    // Every count names its unit; one fixed order: containers · PRs · workflow.
+    expect((await ui.find({ key: "meta:ab" }))?.text).toBe(
+      "containers 3 of 3 up · PRs sandbox#12 Open, api#7 Merged · stage 5/6 implement",
+    );
+    expect((await ui.find({ key: "meta:abc" }))?.text).toBe("containers 1 of 3 up · PRs None yet");
+    expect((await ui.find({ key: "meta:empty" }))?.text).toBe("containers down · PRs None yet");
     await ui.unmount();
   }
 });
 
-test("cards link the issue and each PR with its state", async ($, on) => {
-  world(on, stubs());
+test("cards link each PR and, from ⋯, the issue", async ($, on) => {
+  const w = world(on, stubs());
   await openPane($);
+  await w.clock.settle();
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
       plugin: "werkmeister",
@@ -348,11 +388,11 @@ test("cards link the issue and each PR with its state", async ($, on) => {
       props: PANE_PROPS,
       requestId: "workspaces",
     });
-    expect((await ui.find({ key: "prs:ab" }))?.text).toMatch(
-      /pr: o\/sandbox#12 ⑂ open.*pr: o\/api#7 ⑂ merged/,
-    );
-    expect((await ui.find({ key: "prs:ab" }))?.text).not.toMatch(/web/);
-    expect(await ui.find({ key: "prs:abc" })).toBeUndefined();
+    expect(await ui.find({ type: "Link", text: "sandbox#12" })).toBeDefined();
+    expect(await ui.find({ type: "Link", text: "api#7" })).toBeDefined();
+    expect((await ui.find({ key: "meta:ab" }))?.text).not.toMatch(/web/);
+    expect((await seek(ui, "issue:ab"))?.text).toBe("Open issue ↗");
+    expect(await seek(ui, "issue:abc")).toBeUndefined();
     await ui.unmount();
   }
 });
@@ -383,39 +423,43 @@ test("the Focused only toggle shows only workspaces labelled focus", async ($, o
   await ui.unmount();
 });
 
-test("no counts when total is 0", async ($, on) => {
-  world(on, stubs());
+test("PRs read loading… until the first poll ends, and PRs unavailable · retry when it failed", async ($, on) => {
+  let fail = false;
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/workspace-prs`]: async () => {
+        await gate;
+        return fail ? { content: [{ type: "text", text: "gh down" }], isError: true } : ok(PRS);
+      },
+    }),
+  );
   await openPane($);
-  for (const surface of SURFACES) {
-    const ui = await $.ui.mount({
-      plugin: "werkmeister",
-      surface,
-      component: "Pane",
-      props: PANE_PROPS,
-      requestId: "workspaces",
-    });
-    expect((await ui.find({ key: "row:empty" }))?.text).toBe("empty");
-    expect(await ui.find({ key: "meta:empty" })).toBeUndefined();
-    await ui.unmount();
-  }
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "meta:abc" }))?.text).toBe("containers 1 of 3 up · PRs loading…");
+  fail = true;
+  release();
+  await w.clock.settle();
+  expect((await ui.find({ key: "meta:abc" }))?.text).toBe(
+    "containers 1 of 3 up · PRs unavailable · retry",
+  );
+  await ui.unmount();
 });
 
-test("segment-aware join picks the deepest workspace and the newest session", async ($, on) => {
-  world(on, stubs());
-  await openPane($);
-  for (const surface of SURFACES) {
-    const ui = await $.ui.mount({
-      plugin: "werkmeister",
-      surface,
-      component: "Pane",
-      props: PANE_PROPS,
-      requestId: "workspaces",
-    });
-    expect((await ui.find({ key: "session:abc" }))?.text).toBe("session · Desktop · Newer in abc");
-    expect((await ui.find({ key: "session:ab" }))?.text).toBe("session · CLI · Demo project");
-    expect(await ui.find({ key: "session:empty" })).toBeUndefined();
-    await ui.unmount();
-  }
+test("segment-aware join picks the deepest workspace and the newest session", () => {
+  // The fixtures leave out list fields this join never reads.
+  const rows = buildRows(LIST as never, STATUS as never, SESSIONS);
+  expect(rows.map((r) => r.session?.id ?? null)).toEqual([null, "local_1", null]);
 });
 
 test("sessions from text block with no structuredContent still join", async ($, on) => {
@@ -436,7 +480,7 @@ test("sessions from text block with no structuredContent still join", async ($, 
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect(await ui.find({ key: "session:abc" })).toBeDefined();
+  expect((await seek(ui, "continue:abc"))?.text).toBe("↗ Continue in Desktop");
   await ui.unmount();
 });
 
@@ -459,11 +503,13 @@ test("a failed session lookup keeps the workspace list", async ($, on) => {
     requestId: "workspaces",
   });
   expect(await ui.find({ key: "row:ab" })).toBeDefined();
-  expect(await ui.find({ key: "session:abc" })).toBeUndefined();
+  // abc's only session was the desktop one: with nothing to continue, New session takes the primary slot.
+  expect(await seek(ui, "continue:abc")).toBeUndefined();
+  expect((await ui.find({ key: "new:abc" }))?.props.variant).toBe("primary");
   await ui.unmount();
 });
 
-test("a card border follows the state", async ($, on) => {
+test("only a Needs you card has the amber border; the ? toggle shows the legend", async ($, on) => {
   world(on, stubs());
   await openPane($);
   const ui = await $.ui.mount({
@@ -473,9 +519,24 @@ test("a card border follows the state", async ($, on) => {
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "ws:ab" }))?.props.borderColor).toBe("success");
-  expect((await ui.find({ key: "ws:abc" }))?.props.borderColor).toBe("warning");
-  expect((await ui.find({ key: "ws:empty" }))?.props.borderDimColor).toBe(true);
+  expect((await ui.find({ key: "ws:abc" }))?.props).toMatchObject({
+    borderColor: "warning",
+    borderStyle: "bold",
+  });
+  for (const name of ["ab", "empty"])
+    expect((await ui.find({ key: `ws:${name}` }))?.props).toMatchObject({
+      borderColor: "inactive",
+      borderDimColor: true,
+      borderStyle: "round",
+    });
+  expect((await ui.find({ key: "tab:list" }))?.props.label).toBe("Workspaces · 1 needs you");
+  expect(await ui.find({ key: "legend-box" })).toBeUndefined();
+  await ui.press({ key: "legend" });
+  expect((await ui.find({ key: "legend-box" }))?.text).toMatch(
+    /● Needs you +agent asked you something; amber border = this, only this/,
+  );
+  await ui.press({ key: "legend" });
+  expect(await ui.find({ key: "legend-box" })).toBeUndefined();
   await ui.unmount();
 });
 
@@ -492,8 +553,8 @@ test("Continue with no desktop session is labelled Terminal and resumes there", 
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "continue:ab" }))?.text).toBe("↗ Continue in Terminal");
-  await ui.press({ key: "continue:ab" });
+  expect((await seek(ui, "continue:ab"))?.text).toBe("↗ Continue in Terminal");
+  await tap(ui, "continue:ab");
   expect(w.calls.find((c) => c.key === `${WS}/claude-resume`)?.args).toEqual({ name: "ab" });
   expect(w.calls.find((c) => c.key === "ccd_window/open_session_in")).toBeUndefined();
   await ui.unmount();
@@ -521,9 +582,8 @@ test("Continue on a VS Code session is labelled VS Code and opens the folder the
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "session:ab" }))?.text).toBe("session · VS Code · Demo project");
-  expect((await ui.find({ key: "continue:ab" }))?.text).toBe("↗ Continue in VS Code");
-  await ui.press({ key: "continue:ab" });
+  expect((await seek(ui, "continue:ab"))?.text).toBe("↗ Continue in VS Code");
+  await tap(ui, "continue:ab");
   expect(w.calls.find((c) => c.key === `${WS}/open-vscode`)?.args).toEqual({ path: "/ws/ab" });
   expect(w.calls.find((c) => c.key === `${WS}/claude-resume`)).toBeUndefined();
   expect(w.toasts).toEqual(["Opening ab in VS Code"]);
@@ -542,7 +602,7 @@ test("every workspace has New session, the one this session sits in too", async 
     requestId: "workspaces",
   });
   for (const name of ["ab", "abc", "empty"])
-    expect((await ui.find({ key: `new:${name}` }))?.text).toBe("＋ New session");
+    expect((await seek(ui, `new:${name}`))?.text).toBe("＋ New session");
   await ui.unmount();
 });
 
@@ -570,7 +630,7 @@ test("a failed list keeps the last rows and shows the error", async ($, on) => {
   await ui.unmount();
 });
 
-test("buttons follow the extension gating", async ($, on) => {
+test("the bar is the primary plus two by state, and ⋯ the rest in ui-spec order", async ($, on) => {
   world(on, stubs());
   await openPane($);
   for (const surface of SURFACES) {
@@ -581,22 +641,158 @@ test("buttons follow the extension gating", async ($, on) => {
       props: PANE_PROPS,
       requestId: "workspaces",
     });
-    expect(await ui.find({ key: "up:ab" })).toBeUndefined();
-    expect(await ui.find({ key: "stop:ab" })).toBeDefined();
-    expect(await ui.find({ key: "up:abc" })).toBeDefined();
-    expect(await ui.find({ key: "stop:abc" })).toBeDefined();
-    expect(await ui.find({ key: "up:empty" })).toBeDefined();
-    expect(await ui.find({ key: "stop:empty" })).toBeUndefined();
-    for (const k of ["restart:ab", "down:ab", "new:ab"])
+    expect((await ui.find({ key: "continue:ab" }))?.props.variant).toBe("primary");
+    for (const k of ["stop:ab", "restart:ab", "more:ab"])
       expect(await ui.find({ key: k })).toBeDefined();
-    // One end button per card (#160): a spike with no PR files closes out; unshipped work abandons; Remove is gone.
-    expect(await ui.find({ key: "closeout:ab" })).toBeDefined();
-    expect(await ui.find({ key: "abandon:ab" })).toBeUndefined();
-    expect(await ui.find({ key: "abandon:abc" })).toBeDefined();
+    expect(await ui.find({ key: "down:ab" })).toBeUndefined();
+    await ui.press({ key: "more:ab" });
+    expect((await ui.find({ key: "menu:ab" }))?.text).toBe(
+      "⏻ Down＋ New session↻ Refresh PRsOpen issue ↗✓ Close out✕ Abandon…",
+    );
+    await ui.press({ key: "more:ab" });
+    expect(await ui.find({ key: "menu:ab" })).toBeUndefined();
+    // Nothing up and nothing to continue: Up leads, New session beside it.
+    expect((await ui.find({ key: "up:empty" }))?.props.variant).toBe("primary");
+    expect(await ui.find({ key: "new:empty" })).toBeDefined();
     for (const n of ["ab", "abc", "empty"])
       expect(await ui.find({ key: `remove:${n}` })).toBeUndefined();
     await ui.unmount();
   }
+});
+
+/** The design's sample workspaces (docs/design/workspace-card/design/data.js) as pane rows. */
+function sample(over: Partial<WorkspaceRow>): WorkspaceRow {
+  return {
+    name: "s",
+    path: "/ws/s",
+    issueId: "jbbz-stellwerk/stellwerk#1",
+    issueUrl: "https://github.com/jbbz-stellwerk/stellwerk/issues/1",
+    labels: [],
+    task: null,
+    description: null,
+    workType: "feature",
+    feature: "s",
+    stage: null,
+    lifecycle: null,
+    sessionTitle: "t",
+    sessionOrigin: "sdk-cli",
+    state: "up",
+    running: 2,
+    total: 2,
+    services: [],
+    claude: { agent: "working", at: null, question: null },
+    phase: null,
+    autonomous: false,
+    lastActivity: null,
+    session: null,
+    ...over,
+  };
+}
+const DESKTOP = { id: "local_9", title: "t", link: null, beside: true, pinned: false };
+
+test("actionsFor and metaParts give the five Pane View samples their design buttons and line", () => {
+  const NOW = new Date("2026-10-20T12:00:00Z");
+  const card = (r: WorkspaceRow, prs: Parameters<typeof display>[1] = []) => {
+    const d = display(r, prs, NOW);
+    const a = actionsFor(r, d, true);
+    return {
+      chip: d.agent.label,
+      line: metaParts(d, true)
+        .map((p) => p.text)
+        .join(""),
+      primary: a.primary,
+      bar: a.bar,
+      menu: a.menu,
+    };
+  };
+  const PR = (
+    n: number,
+    state: "OPEN" | "MERGED",
+    ci: "pass" | "running" | "fail",
+    failingChecks = 0,
+  ) => ({
+    repo: "stellwerk",
+    url: `https://github.com/jbbz-stellwerk/stellwerk/pull/${n}`,
+    state,
+    title: "t",
+    ci,
+    failingChecks,
+  });
+  // 143: needs you, containers down, a Desktop session.
+  expect(
+    card(
+      sample({
+        state: "down",
+        running: 0,
+        services: [
+          { name: "cli", state: "down" },
+          { name: "stellwerk-dashboard", state: "down" },
+        ],
+        stage: { index: 2, total: 4, name: "findings" },
+        claude: { agent: "needs-you", at: "2026-10-20T11:48:00Z", question: "Q?" },
+        session: DESKTOP,
+      }),
+    ),
+  ).toEqual({
+    chip: "● Needs you",
+    line: "containers down · PRs None yet · stage 2/4 findings",
+    primary: "continue",
+    bar: ["up", "new"],
+    menu: ["beside", "pin", "prs", "issue", "abandon"],
+  });
+  // 206: working, autonomous, both up, a draft-or-open PR with CI running, a Terminal session.
+  expect(
+    card(sample({ stage: { index: 4, total: 5, name: "implement" }, autonomous: true }), [
+      PR(231, "OPEN", "running"),
+    ]),
+  ).toEqual({
+    chip: "◌ Working",
+    line: "containers 2 of 2 up · PRs stellwerk#231 Open · CI running · stage 4/5 implement",
+    primary: "continue",
+    bar: ["stop", "restart"],
+    menu: ["down", "new", "prs", "issue", "abandon"],
+  });
+  // 151: done, one service unhealthy, the PR released: Close out leads, Down replaces Stop.
+  expect(
+    card(
+      sample({
+        state: "partial",
+        running: 1,
+        claude: { agent: "done", at: null, question: null },
+        lifecycle: { state: "shipped", prs: [{ dir: "stellwerk", status: "shipped", url: null }] },
+        session: DESKTOP,
+      }),
+      [PR(186, "MERGED", "pass")],
+    ),
+  ).toEqual({
+    chip: "✓ Done",
+    line: "containers 1 of 2 up · PRs stellwerk#186 Merged · CI ✓ · Ready to close out",
+    primary: "closeout",
+    bar: ["restart", "down"],
+    menu: ["continue", "new", "beside", "pin", "prs", "issue", "abandon"],
+  });
+  // bwell: idle, no containers, no issue, JIT, an open PR failing CI: Up leads, Continue beside it.
+  expect(
+    card(
+      sample({
+        state: "down",
+        running: 0,
+        total: 0,
+        issueId: null,
+        issueUrl: null,
+        phase: "implement",
+        claude: { agent: "idle", at: null, question: null },
+        session: DESKTOP,
+      }),
+      [PR(12, "OPEN", "fail", 2)],
+    ),
+  ).toEqual({
+    chip: "Idle",
+    line: "containers down · PRs stellwerk#12 Open · CI ✗ 2 failing · JIT · implement",
+    primary: "up",
+    bar: ["continue", "new"],
+    menu: ["beside", "pin", "prs", "abandon"],
+  });
 });
 
 test("a lifecycle press calls workspace-action and refreshes", async ($, on) => {
@@ -619,7 +815,7 @@ test("a lifecycle press calls workspace-action and refreshes", async ($, on) => 
     requestId: "workspaces",
   });
   const before = w.calls.filter((c) => c.key === `${WS}/list-workspaces`).length;
-  await ui.press({ key: "stop:ab" });
+  await tap(ui, "stop:ab");
   const action = w.calls.find((c) => c.key === `${WS}/workspace-action`);
   expect(action?.args).toEqual({ name: "ab", action: "stop" });
   expect(w.calls.filter((c) => c.key === `${WS}/list-workspaces`).length).toBe(before + 1);
@@ -649,10 +845,10 @@ test("press while busy is ignored", async ($, on) => {
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  const first = ui.press({ key: "stop:ab" });
+  const first = tap(ui, "stop:ab");
   await w.clock.settle();
   expect((await ui.find({ key: "busy:ab" }))?.text).toBe("working…");
-  await ui.press({ key: "up:abc" });
+  await tap(ui, "restart:abc");
   release();
   await first;
   expect(w.calls.filter((c) => c.key === `${WS}/workspace-action`)).toHaveLength(1);
@@ -682,13 +878,13 @@ test("abandon asks for a reason in the pane, needs a second press, then closes o
       props: PANE_PROPS,
       requestId: "workspaces",
     });
-    await ui.press({ key: "abandon:abc" });
-    expect((await ui.find({ key: "abandon:abc" }))?.props.label).toBe("✕ Yes, abandon");
-    await ui.press({ key: "abandon:abc" });
+    await tap(ui, "abandon:abc");
+    expect((await seek(ui, "abandon:abc"))?.props.label).toBe("✕ Yes, abandon");
+    await tap(ui, "abandon:abc");
     expect(w.calls.filter((c) => c.key === `${WS}/close-out`)).toHaveLength(0);
     expect((await ui.find({ key: "note" }))?.text).toBe("Give a reason to abandon");
     await ui.input({ key: "reason:abc", text: "superseded by #170" });
-    await ui.press({ key: "abandon:abc" });
+    await tap(ui, "abandon:abc");
     expect(w.calls.filter((c) => c.key === `${WS}/close-out`).map((c) => c.args)).toEqual([
       { name: "abc", abandon: "superseded by #170" },
     ]);
@@ -699,7 +895,7 @@ test("abandon asks for a reason in the pane, needs a second press, then closes o
     expect((await ui.find({ key: "note" }))?.text).toBe(
       'sandbox close-out abc --abandon\narchived "Newer in abc"\narchived "Older in abc"\nterminal session: pid 9 on ttys001 in /ws/abc — /exit it',
     );
-    expect((await ui.find({ key: "abandon:abc" }))?.props.label).toBe("✕ Abandon…");
+    expect((await seek(ui, "abandon:abc"))?.props.label).toBe("✕ Abandon…");
     await ui.unmount();
     w.calls.length = 0;
   }
@@ -721,13 +917,13 @@ test("a press on another row's button clears the pending abandon and its reason"
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  await ui.press({ key: "abandon:abc" });
+  await tap(ui, "abandon:abc");
   await ui.input({ key: "reason:abc", text: "gone" });
-  await ui.press({ key: "up:empty" });
-  expect((await ui.find({ key: "abandon:abc" }))?.props.label).toBe("✕ Abandon…");
+  await tap(ui, "up:empty");
+  expect((await seek(ui, "abandon:abc"))?.props.label).toBe("✕ Abandon…");
   expect(await ui.find({ key: "reason:abc" })).toBeUndefined();
-  await ui.press({ key: "abandon:abc" });
-  await ui.press({ key: "abandon:abc" });
+  await tap(ui, "abandon:abc");
+  await tap(ui, "abandon:abc");
   expect(w.calls.filter((c) => c.key === `${WS}/close-out`)).toHaveLength(0);
   await ui.unmount();
 });
@@ -834,7 +1030,7 @@ test("New session opens the app's new-session link for the workspace folder", as
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  await ui.press({ key: "new:abc" });
+  await tap(ui, "new:abc");
   expect(w.calls.find((c) => c.key === `${WS}/open-claude-link`)?.args).toEqual({
     url: "claude://code/new?folder=%2Fws%2Fabc&source=services",
   });
@@ -864,8 +1060,8 @@ test("Continue in Desktop focuses a session this one started, else opens the ses
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "continue:abc" }))?.text).toBe("↗ Continue in Desktop");
-  await ui.press({ key: "continue:abc" });
+  expect((await seek(ui, "continue:abc"))?.text).toBe("↗ Continue in Desktop");
+  await tap(ui, "continue:abc");
   expect(w.calls.find((c) => c.key === "ccd_window/open_session_in")?.args).toEqual({
     session_id: "local_1",
     target: "focus",
@@ -904,9 +1100,9 @@ test("Open beside shows only for a session this one started, and splits it", asy
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "beside:abc" }))?.text).toBe("⇆ Open beside");
-  expect(await ui.find({ key: "beside:empty" })).toBeFalsy();
-  await ui.press({ key: "beside:abc" });
+  expect((await seek(ui, "beside:abc"))?.text).toBe("⇆ Open beside");
+  expect(await seek(ui, "beside:empty")).toBeFalsy();
+  await tap(ui, "beside:abc");
   expect(w.calls.find((c) => c.key === "ccd_window/open_session_in")?.args).toEqual({
     session_id: "local_1",
     target: "split",
@@ -928,8 +1124,8 @@ test("without a session this one started, there is no Open beside", async ($, on
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect(await ui.find({ key: "continue:abc" })).toBeTruthy();
-  expect(await ui.find({ key: "beside:abc" })).toBeFalsy();
+  expect(await seek(ui, "continue:abc")).toBeTruthy();
+  expect(await seek(ui, "beside:abc")).toBeFalsy();
   await ui.unmount();
 });
 
@@ -957,14 +1153,14 @@ test("Pin toggles the sidebar pin of the card's session and redraws from the app
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "pin:abc" }))?.text).toBe("📌 Pin");
-  expect(await ui.find({ key: "pin:empty" })).toBeFalsy();
-  await ui.press({ key: "pin:abc" });
+  expect((await seek(ui, "pin:abc"))?.text).toBe("📌 Pin");
+  expect(await seek(ui, "pin:empty")).toBeFalsy();
+  await tap(ui, "pin:abc");
   expect(w.calls.find((c) => c.key === "ccd_sidebar/set_pinned")?.args).toEqual({
     session_id: "local_1",
     pinned: true,
   });
-  expect((await ui.find({ key: "pin:abc" }))?.text).toBe("📌 Unpin");
+  expect((await seek(ui, "pin:abc"))?.text).toBe("📌 Unpin");
   await ui.unmount();
 });
 
@@ -1261,7 +1457,7 @@ test("fetch fills only the empty fields, distilled on the session model, then cr
   });
   expect(w.calls.some((c) => c.key === `${WS}/open-vscode`)).toBe(false);
   expect(w.toasts).toEqual(["Workspace created; opening a new session in it"]);
-  expect(await ui.find({ key: "new:abc" })).toBeDefined();
+  expect(await seek(ui, "new:abc")).toBeDefined();
   await ui.unmount();
 });
 
@@ -1549,7 +1745,7 @@ test("Connect runs sandbox connect, refreshes, and the infra line shows status",
     requestId: "workspaces",
   });
   expect((await ui.find({ key: "infra" }))?.text).toBe(
-    "infra · partial · 2/3 · starting: k8s-forwards",
+    "infra partial · 2 of 3 up · starting: k8s-forwards",
   );
   const before = w.calls.filter((c) => c.key === `${WS}/workspace-status`).length;
   await ui.press({ key: "connect" });
@@ -1596,14 +1792,15 @@ test("the lifecycle replaces the stage on the card and picks the lifecycle butto
       props: PANE_PROPS,
       requestId: "workspaces",
     });
-    // ab has an issue, so its issue line carries the work type, not the meta line.
-    expect((await ui.find({ key: "meta:ab" }))?.text).toBe("PR open (1/2) · 3/3");
-    expect((await ui.find({ key: "meta:abc" }))?.text).toBe("bugfix · shipped — close out · 1/3");
-    expect(await ui.find({ key: "prs:ab" })).toBeTruthy();
-    expect(await ui.find({ key: "closeout:ab" })).toBeFalsy();
-    expect(await ui.find({ key: "abandon:ab" })).toBeTruthy();
-    expect(await ui.find({ key: "closeout:abc" })).toBeTruthy();
-    expect(await ui.find({ key: "prs:empty" })).toBeFalsy();
+    // An open PR has no lifecycle step: the stage stays the Workflow part.
+    expect((await ui.find({ key: "meta:ab" }))?.text).toMatch(/ · stage 5\/6 implement$/);
+    expect((await ui.find({ key: "meta:abc" }))?.text).toMatch(/ · Ready to close out$/);
+    expect(await ui.find({ text: /PR open \(|\d\/\d · |shipped — / })).toBeUndefined();
+    expect(await seek(ui, "closeout:ab")).toBeFalsy();
+    expect(await seek(ui, "abandon:ab")).toBeTruthy();
+    // abc needs you, so Continue leads (ui-spec § Actions) and Close out waits in ⋯.
+    expect(await seek(ui, "closeout:abc")).toBeTruthy();
+    expect(await seek(ui, "prs:empty")).toBeTruthy();
     await ui.unmount();
   }
 });
@@ -1617,7 +1814,7 @@ const SANDBOX_OPEN = {
 };
 
 test("the lifecycle takes each PR's state from the PR poll, so it never contradicts the PR line", async ($, on) => {
-  world(
+  const w = world(
     on,
     stubs({
       [`${WS}/list-workspaces`]: () =>
@@ -1631,6 +1828,7 @@ test("the lifecycle takes each PR's state from the PR poll, so it never contradi
     }),
   );
   await openPane($);
+  await w.clock.settle();
   const ui = await $.ui.mount({
     plugin: "werkmeister",
     surface: "desktop",
@@ -1638,14 +1836,17 @@ test("the lifecycle takes each PR's state from the PR poll, so it never contradi
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "prs:ab" }))?.text).toContain("o/api#7 ⑂ merged");
-  expect((await ui.find({ key: "meta:ab" }))?.text).toBe("merged — awaiting release · 3/3");
-  expect((await ui.find({ key: "meta:abc" }))?.text).toBe("bugfix · PR open (1/2) · 1/3");
+  expect((await ui.find({ key: "meta:ab" }))?.text).toBe(
+    "containers 3 of 3 up · PRs sandbox#12 Open, api#7 Merged · Awaiting release",
+  );
+  expect((await ui.find({ key: "meta:abc" }))?.text).toBe(
+    "containers 1 of 3 up · PRs sandbox#12 Open, api#7 Merged",
+  );
   await ui.unmount();
 });
 
-test("without a PR poll the lifecycle falls back to the PR files", async ($, on) => {
-  world(
+test("a failed PR poll says PRs unavailable on the card, and the lifecycle keeps the PR files", async ($, on) => {
+  const w = world(
     on,
     stubs({
       [`${WS}/list-workspaces`]: () =>
@@ -1664,7 +1865,10 @@ test("without a PR poll the lifecycle falls back to the PR files", async ($, on)
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "meta:ab" }))?.text).toBe("PR open (1/1) · 3/3");
+  await w.clock.settle();
+  expect((await ui.find({ key: "meta:ab" }))?.text).toBe(
+    "containers 3 of 3 up · PRs unavailable · retry · stage 5/6 implement",
+  );
   await ui.unmount();
 });
 
@@ -1700,7 +1904,7 @@ test("↻ PRs runs pr-status for that workspace path", async ($, on) => {
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  await ui.press({ key: "prs:ab" });
+  await tap(ui, "prs:ab");
   expect(w.calls.filter((c) => c.key === `${WS}/pr-status`).map((c) => c.args)).toEqual([
     { path: "/ws/ab" },
   ]);
@@ -1726,12 +1930,12 @@ test("close-out needs two presses, and a press on another row's button cancels i
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  await ui.press({ key: "closeout:abc" });
-  expect((await ui.find({ key: "closeout:abc" }))?.props.label).toBe("✓ Yes, close out");
-  await ui.press({ key: "up:empty" });
-  expect((await ui.find({ key: "closeout:abc" }))?.props.label).toBe("✓ Close out");
-  await ui.press({ key: "closeout:abc" });
-  await ui.press({ key: "closeout:abc" });
+  await tap(ui, "closeout:abc");
+  expect((await seek(ui, "closeout:abc"))?.props.label).toBe("✓ Yes, close out");
+  await tap(ui, "up:empty");
+  expect((await seek(ui, "closeout:abc"))?.props.label).toBe("✓ Close out");
+  await tap(ui, "closeout:abc");
+  await tap(ui, "closeout:abc");
   expect(w.calls.filter((c) => c.key === `${WS}/close-out`).map((c) => c.args)).toEqual([
     { name: "abc" },
   ]);
@@ -1924,7 +2128,8 @@ test("each service line shows its intercept state; only off and yours get a butt
   expect(await ui.find({ key: "leave:ab/api" })).toBeUndefined();
   expect(await ui.find({ text: /not interceptable: has no k8s_port_name/ })).toBeDefined();
   expect(await ui.find({ key: "intercept:ab/worker" })).toBeUndefined();
-  expect(await ui.find({ key: "svc:ab/cli" })).toBeDefined();
+  // A local-only service has no control, so the compact card draws no line for it (SW-52).
+  expect(await ui.find({ key: "svc:ab/cli" })).toBeUndefined();
   expect(await ui.find({ text: /not interceptable: has no k8s_deployment/ })).toBeUndefined();
   await ui.unmount();
 });
