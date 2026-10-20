@@ -155,6 +155,20 @@ A pass runs `werkmeister pr status` for each workspace with a callback and tells
 
 One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
 
+## Check-in
+
+The `check-in` MCP tool (behind the root `/check-in` skill) reports PR and release state for every workspace the label filter keeps, so the root session sees a release without anyone announcing it (SW-65).
+
+Before it reports, it ships merged PRs: for each kept workspace with a `merged` PR file it runs the `pr status` pass without `gh` — the same rule as [Ship detection](#ship-detection-registry-repo) (`git fetch --tags`, then `git tag --contains <merge_sha> --list <release_tag>`), recording `release`, moving the issue and committing the record as `pr status` does. Open → merged stays with `pr status` and the callback pass. A version-bump PR that merged before the changesets release job published its tag stays `merged`. It takes the callback lock above and skips the pass while another one holds it. A PR it ships still gets its callback message from the next pass.
+
+| Field | Holds |
+|---|---|
+| `workspaces[].lifecycle` | the workspace's [state](#states), read after that pass |
+| `workspaces[].prs[]` | one per PR file: `repo` (its worktree dir), `url`, `status`, `release` (the tag that shipped it, or null) |
+| `readyToClose` | lifecycle `shipped` or `abandoned` and no Claude turn working. Listed whether or not the transcript moved, and never also in `candidates`. A workspace the label filter dropped is not listed. |
+
+The skill asks the person before `werkmeister close-out` ([Close-out](#close-out)).
+
 ## Containers after a PR
 
 A workspace's feature containers stop (SW-39) at these points. Stopping keeps the containers, the slot and the volumes, and `werkmeister up` brings them back. Shared infra is never stopped.

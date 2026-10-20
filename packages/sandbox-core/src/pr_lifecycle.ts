@@ -705,6 +705,8 @@ export async function openPrs(
 export async function refreshPrStatus(
   ws: string,
   deps: Deps = defaultDeps(),
+  // `gh: false` is check-in's sweep (SW-65): open → merged stays with `gh` in `pr status`.
+  opts: { gh?: boolean } = {},
 ): Promise<{ lines: string[]; changed: boolean }> {
   const lines: string[] = [];
   const changed: string[] = [];
@@ -719,7 +721,7 @@ export async function refreshPrStatus(
   for (const f of readPrFiles(ws)) {
     const before = statusOf(f);
     const reviewBefore = f.fm["review"];
-    if (before === "open" && f.fm["url"]) {
+    if (opts.gh !== false && before === "open" && f.fm["url"]) {
       const v = await deps.run("gh", [
         "pr",
         "view",
@@ -975,6 +977,37 @@ export async function claimCallbacks(
   return { claimed, lines };
 }
 
+/**
+ * Check-in's freshness pass (SW-65): ship merged PR files by `pr status`'s release-tag rule,
+ * without `gh`. Skipped while a callback pass holds the lock — it is refreshing them already.
+ */
+export async function shipMerged(
+  workspaces: string[],
+  deps?: Deps,
+  lockFile = path.join(sandboxHome(), "pr-callbacks.lock"),
+): Promise<string[]> {
+  const due = workspaces.filter((ws) => {
+    try {
+      return readPrFiles(ws).some((f) => statusOf(f) === "merged");
+    } catch {
+      return false; // a malformed PR file: the gate and `pr status` report it
+    }
+  });
+  if (!due.length) return [];
+  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+  if (!takeLock(lockFile)) return ["another PR watch pass is running"];
+  const lines: string[] = [];
+  try {
+    const d = deps ?? defaultDeps();
+    for (const ws of due)
+      for (const l of (await refreshPrStatus(ws, d, { gh: false })).lines)
+        lines.push(`${path.basename(ws)}/${l}`);
+  } finally {
+    fs.rmSync(lockFile, { force: true });
+  }
+  return lines;
+}
+
 /** Resume a terminal session headlessly with its message. */
 export async function deliverHeadless(cb: PrCallback): Promise<void> {
   const name = path.basename(cb.ws);
@@ -1106,7 +1139,7 @@ export async function adoptPr(
 /** The workspace's place in the lifecycle, from files only — cheap enough for the pane's poll. */
 export function lifecycleOf(ws: string): {
   state: Lifecycle;
-  prs: Array<{ dir: string; status: string; url: string | null }>;
+  prs: Array<{ dir: string; status: string; url: string | null; release: string | null }>;
 } {
   let files: PrFile[] = [];
   try {
@@ -1118,6 +1151,7 @@ export function lifecycleOf(ws: string): {
     dir: f.dir,
     status: statusOf(f),
     url: f.fm["url"] ? String(f.fm["url"]) : null,
+    release: f.fm["release"] ? String(f.fm["release"]) : null,
   }));
   const all = (set: Set<string>) => prs.every((p) => set.has(p.status));
   let state: Lifecycle;
