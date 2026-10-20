@@ -15,6 +15,7 @@ import { serviceTestCommand } from "./archetypes.js";
 import { childEnv } from "./claude_cli.js";
 import {
   type ArchetypeRegistry,
+  containerOf,
   dotDir,
   loadArchetypes,
   loadReposConfig,
@@ -406,11 +407,11 @@ export async function runGate(
       .filter(Boolean),
   );
   const containerFor = (svc: string): string | null => {
-    const own = `${feature}-${svc}`;
+    const own = containerOf(feature, svc);
     if (running.has(own)) return own;
     // Every container of a repo mounts the same worktree at /app with its node_modules.
     const sibling = ((repo["services"] ?? []) as string[])
-      .map((s) => `${feature}-${s}`)
+      .map((s) => containerOf(feature, s))
       .find((c) => running.has(c));
     return sibling ?? null;
   };
@@ -467,7 +468,7 @@ export async function runGate(
   const slot = Number(readEnv(ws, "SANDBOX_SLOT"));
   for (const svc of touched.filter((s) => local.has(s))) {
     const def = services[svc] ?? {};
-    if (!running.has(`${feature}-${svc}`)) {
+    if (!running.has(containerOf(feature, svc))) {
       add(`baseline ${svc}`, false, "container not running — run `sandbox up`");
       continue;
     }

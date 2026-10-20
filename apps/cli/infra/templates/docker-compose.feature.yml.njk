@@ -60,7 +60,7 @@ services:
 {# glibc-built tree will not load under an alpine app image.                     #}
   {{ setup_name }}:
     image: {{ setup.image | default('node:20.16.0') }}
-    container_name: {{ feature_name }}-{{ setup_name }}
+    container_name: {{ container_of(feature_name, setup_name) }}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
       com.sandbox.local.slot: "{{ slot }}"
@@ -121,7 +121,7 @@ services:
 {% set idle = svc.type in idle_types %}
   {{ svc.name }}:
     image: {{ svc.image | default('node:20.16.0') }}
-    container_name: {{ feature_name }}-{{ svc.name }}
+    container_name: {{ container_of(feature_name, svc.name) }}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
       com.sandbox.local.slot: "{{ slot }}"
@@ -236,7 +236,7 @@ services:
 {% for extra_name, extra in svc.extra_services.items() %}
   {{ extra_name }}:
     image: {{ extra.image }}
-    container_name: {{ feature_name }}-{{ extra_name }}
+    container_name: {{ container_of(feature_name, extra_name) }}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
       com.sandbox.local.slot: "{{ slot }}"

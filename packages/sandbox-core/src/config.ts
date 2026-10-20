@@ -695,6 +695,15 @@ export function stateInfraRoot(): string {
 }
 
 /**
+ * The docker container name of a feature's service. Compose generation (template
+ * and built-in fallback) and the PR gate's lookup must agree on it, or the gate
+ * cannot find the containers compose created (SW-36).
+ */
+export function containerOf(feature: string, svc: string): string {
+  return `${feature}-${svc}`;
+}
+
+/**
  * The monorepo root containing the CLI, not the CLI package itself.
  *
  * {@link sandboxRoot} returns `<repo>/apps/cli` — right for `infra/`, wrong for
