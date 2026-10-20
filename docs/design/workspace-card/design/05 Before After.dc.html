@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<main style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;width:2000px;box-sizing:border-box;padding:56px 64px 80px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">05</div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 5 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Before / after</h1></div>
+    <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:520px;text-wrap:pretty">Red numbers mark the problems in today's screenshots. The same numbers in the list mark where the new design fixes each one. The screenshots still show the old name, sandbox.</div>
+  </header>
+
+  <section style="margin-top:40px;display:grid;grid-template-columns:460px 460px 560px 1fr;gap:32px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#b02a1f">BEFORE · CLAUDE CODE PANE (a)</span>
+      <div style="position:relative;width:460px;height:503px;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.15)"><img src="refs/pane-1.png" alt="Current pane, three cards" style="width:100%;display:block"></img>
+        <span style="position:absolute;left:62%;top:10.0%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">1</span>
+        <span style="position:absolute;left:84%;top:32.5%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">3</span>
+        <span style="position:absolute;left:1%;top:44%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">5</span>
+        <span style="position:absolute;left:25%;top:54.5%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">6</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#b02a1f">BEFORE · CLAUDE CODE PANE (b)</span>
+      <div style="position:relative;width:460px;height:367px;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.15)"><img src="refs/pane-3.png" alt="Current pane with waiting labels" style="width:100%;display:block"></img>
+        <span style="position:absolute;left:79%;top:15.5%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">2</span>
+        <span style="position:absolute;left:79%;top:35.5%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">2</span>
+        <span style="position:absolute;left:42%;top:56%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">4</span>
+        <span style="position:absolute;left:16%;top:51%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">7</span>
+        <span style="position:absolute;left:31%;top:53.6%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">7</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#1b7340">AFTER · CLAUDE CODE PANE</span>
+      <dc-import name="Pane View" hint-size="560px,700px"></dc-import>
+    </div>
+    <ol style="margin:22px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.45">
+      <li style="display:grid;grid-template-columns:28px 1fr;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center">1</span><div><b>Unlabelled counts.</b> <span style="color:#5f5d56"><code style="font:500 12px 'IBM Plex Mono',monospace">0/2</code>, <code style="font:500 12px 'IBM Plex Mono',monospace">1/1</code> and <code style="font:500 12px 'IBM Plex Mono',monospace">up 2/2</code> say nothing about what's being counted.</span><div style="color:#1b7340">→ <code style="font:500 12px 'IBM Plex Mono',monospace">containers 0 of 2 up</code>, <code style="font:500 12px 'IBM Plex Mono',monospace">ICM stage 2 of 4</code>. Every count names its unit.</div></div></li>
+      <li style="display:grid;grid-template-columns:28px 1fr;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center">2</span><div><b>“waiting for you” on finished runs.</b> <span style="color:#5f5d56">It shows even when the PR is merged.</span><div style="color:#1b7340">→ Four agent states. A finished run shows <code style="font:500 12px 'IBM Plex Mono',monospace">✓ Done</code>, and only a real question shows <code style="font:500 12px 'IBM Plex Mono',monospace">● Needs you</code>.</div></div></li>
+      <li style="display:grid;grid-template-columns:28px 1fr;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center">3</span><div><b>Cut-off prompt as the session title.</b> <span style="color:#5f5d56">“…walk every stage without s”</span><div style="color:#1b7340">→ The subtitle is <code style="font:500 12px 'IBM Plex Mono',monospace">Work type · task title</code>. The prompt never appears on the card.</div></div></li>
+      <li style="display:grid;grid-template-columns:28px 1fr;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center">4</span><div><b>No autonomous marker.</b> <span style="color:#5f5d56">The only sign of an autonomous run is “(auto)” buried in the prompt text.</span><div style="color:#1b7340">→ <code style="font:500 12px 'IBM Plex Mono',monospace">⚙ Auto</code> on line 1 of the pane, <code style="font:500 12px 'IBM Plex Mono',monospace">⚙ Autonomous</code> on full cards.</div></div></li>
+      <li style="display:grid;grid-template-columns:28px 1fr;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center">5</span><div><b>Unexplained green border.</b> <span style="color:#5f5d56">It means “containers up”, but people read it as “all good”.</span><div style="color:#1b7340">→ Only <code style="font:500 12px 'IBM Plex Mono',monospace">● Needs you</code> changes the border. Container state is written in words, and a legend sits on every surface.</div></div></li>
+      <li style="display:grid;grid-template-columns:28px 1fr;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center">6</span><div><b>Status text changes format between cards.</b> <span style="color:#5f5d56">“stage 1/4 reproduce · 0/2” on one card, “shipped — close out · 1/1” on another.</span><div style="color:#1b7340">→ The same fixed line order on every card: containers · PRs · workflow.</div></div></li>
+      <li style="display:grid;grid-template-columns:28px 1fr;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center">7</span><div><b>“PR open” next to “merged”.</b> <span style="color:#5f5d56">Two statements about one PR that contradict each other.</span><div style="color:#1b7340">→ One state badge per PR: <code style="font:500 12px 'IBM Plex Mono',monospace">stellwerk#186 Released v0.14.0 · CI ✓</code></div></div></li>
+    </ol>
+  </section>
+
+  <section style="margin-top:64px;display:grid;grid-template-columns:600px 1200px;gap:32px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#b02a1f">BEFORE · BROWSER DASHBOARD</span>
+      <div style="position:relative;width:600px;height:240px;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.15)"><img src="refs/dash-list.png" alt="Current dashboard list" style="width:100%;display:block"></img>
+        <span style="position:absolute;left:72%;top:63%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">1</span>
+        <span style="position:absolute;left:1%;top:63%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">5</span>
+        <span style="position:absolute;left:10%;top:13%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">1</span>
+      </div>
+      <p style="margin:6px 0 0;font-size:14px;color:#5f5d56;text-wrap:pretty">Collapsed rows hide the agent, workflow and PR state behind a click. Of the four questions, a glance answers only containers.</p>
+      <p style="margin:0;font-size:14px;color:#1b7340;text-wrap:pretty">→ Cards open by default, all four rows always visible, two columns at 1200px. Search stays. A <b>Needs you</b> filter sits next to it (board <a href="07 Needs You View.dc.html">07</a>).</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#1b7340">AFTER · BROWSER DASHBOARD</span>
+      <div style="border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.08)"><dc-import name="Dashboard View" hint-size="1200px,900px"></dc-import></div>
+    </div>
+  </section>
+</main>
+</x-dc>
+</body>
+</html>

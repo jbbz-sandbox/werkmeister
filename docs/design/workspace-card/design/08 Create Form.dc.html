@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<main style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;width:2640px;box-sizing:border-box;padding:56px 64px 80px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">08</div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 8 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Create form</h1></div>
+    <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:600px;text-wrap:pretty">One form on every surface: the same fields, defaults, validation and words. Work type starts on <b>feature</b> and Workflow on <b>ICM</b>. Labels never carry terminal hints. <span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> Two-column pairs at full width, the services grid inside a tinted well, and a toggle for Autonomous.</div>
+  </header>
+
+  <section style="margin-top:40px;display:grid;grid-template-columns:600px 820px 820px;gap:40px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#b02a1f">BEFORE · dash-new</span>
+      <div style="position:relative;width:600px;height:750px;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.15)"><img src="refs/dash-new.png" alt="Current create form" style="width:100%;display:block"></img>
+        <span style="position:absolute;left:1%;top:17.5%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">1</span>
+        <span style="position:absolute;left:1%;top:45.2%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">1</span>
+        <span style="position:absolute;left:13%;top:33.6%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">2</span>
+        <span style="position:absolute;left:67%;top:36.6%;width:22px;height:22px;border-radius:50%;background:#b02a1f;color:#fff;font:600 12px/22px 'IBM Plex Mono',monospace;text-align:center;box-shadow:0 0 0 2px #fff">3</span>
+      </div>
+      <ol style="margin:8px 0 0;padding:0 0 0 20px;font-size:14px;line-height:1.5;display:flex;flex-direction:column;gap:6px">
+        <li><b>Terminal hints in labels:</b> “(blank to skip)”, “(Enter for default)”. <span style="color:#1b7340">→ Removed. Leaving an optional field empty already means skip.</span></li>
+        <li><b>Required Work type is empty and tiny.</b> <span style="color:#1b7340">→ Preselected to <i>feature</i>, full height, with the options listed in its help.</span></li>
+        <li><b>“Default icm.” while nothing is selected.</b> <span style="color:#1b7340">→ A segmented control with ICM (staged) selected. The help text explains ICM.</span></li>
+      </ol>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#1b7340">AFTER · BROWSER · empty, defaults preselected</span><dc-import name="Create Form" state="empty" hint-size="820px,1200px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#1b7340">AFTER · BROWSER · validation errors on submit</span><dc-import name="Create Form" state="error" hint-size="820px,1200px"></dc-import>
+      <p style="margin:6px 0 0;font-size:13px;color:#5f5d56;max-width:760px">Validation runs on blur and on submit. A field in error gets a 2px err border, with a ▲ and the message underneath, so the error never relies on colour alone. The footer counts the errors, and focus moves to the first one.</p></div>
+  </section>
+
+  <section style="margin-top:48px;display:grid;grid-template-columns:820px 820px 560px;gap:40px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">BROWSER · ⤓ Fill from issue loading · only the fields it will fill</span><dc-import name="Create Form" state="filling" hint-size="820px,1200px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">BROWSER · Creating…</span><dc-import name="Create Form" state="creating" hint-size="820px,1200px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">BROWSER · success</span><dc-import name="Create Form" state="success" hint-size="560px,240px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">MCP APP · narrow · host-themed · empty</span>
+        <div style="--sd-sans:ui-sans-serif,system-ui,sans-serif;--sd-card:#ffffff;--sd-bg:#f5f4ed;--sd-ink:#141413;--sd-muted:#5e5d59;--sd-line:#e3e1d8;--sd-line-soft:#efede5;--sd-ctl:#d6d4ca;--sd-accent:#141413;--sd-on-accent:#ffffff;max-width:560px"><dc-import name="Create Form" state="empty" narrow="{{ true }}" hint-size="560px,1500px"></dc-import></div></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">MCP APP · success</span>
+        <div style="--sd-sans:ui-sans-serif,system-ui,sans-serif;--sd-card:#ffffff;--sd-bg:#f5f4ed;--sd-ink:#141413;--sd-muted:#5e5d59;--sd-line:#e3e1d8;--sd-ctl:#d6d4ca;--sd-accent:#141413;--sd-on-accent:#ffffff;max-width:560px"><dc-import name="Create Form" state="success" narrow="{{ true }}" hint-size="560px,240px"></dc-import></div></div>
+    </div>
+  </section>
+
+  <section style="margin-top:48px;display:grid;grid-template-columns:600px 820px 1fr;gap:40px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">CLAUDE CODE PANE · ＋ Create tab · text widgets · error shown</span>
+      <div style="background:#1a1a19;border:1px solid #3a3a37;border-radius:12px;padding:12px 14px 16px;font:13px/1.5 -apple-system,system-ui,sans-serif;color:#e6e5e0;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:6px;align-items:center"><span style="padding:2px 9px;border-radius:6px;background:#2e2e2b">Workspaces</span><span style="padding:2px 9px;border-radius:6px;background:#f2f1ec;color:#1a1a19;font-weight:500">＋ Create</span><span style="padding:2px 6px">☐ Focused only</span></div>
+        <div style="display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:start">
+          <b>Issue</b><div><div style="display:flex;gap:6px"><span style="flex:1;border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;color:#e6e5e0">jbbz-stellwerk/stellwerk#143</span><span style="padding:1px 9px;border-radius:6px;background:#2e2e2b;white-space:nowrap">⤓ Fill from issue</span></div><div style="color:#8a8984;font-size:12px">Fetched from your issue tracker; fills the empty fields below.</div></div>
+          <b>Feature name *</b><div><span style="display:block;border:1px solid #ff7b72;border-radius:6px;padding:1px 8px">Wizard_Defaults</span><div style="color:#ff7b72;font-size:12px">▲ Use lowercase letters, numbers and single hyphens, e.g. mdx-blog</div></div>
+          <b>Work type *</b><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;justify-self:start">feature ▾</span>
+          <b>Workflow</b><div><span><span style="color:#7aa7f0">◉</span> ICM (staged)   <span style="color:#8a8984">○</span> JIT</span><div style="color:#8a8984;font-size:12px">ICM: numbered stages, each reviewed before the next.</div></div>
+          <b>Autonomous run</b><div><span>☐ off</span><div style="color:#8a8984;font-size:12px">Runs from stage 01 to an open PR with no review gates. You review the PR.</div></div>
+          <b>Services to run locally</b><div style="display:grid;grid-template-columns:100px 1fr;gap:2px 8px;font-size:12px"><span style="color:#8a8984">demo-services</span><span>☐ backend ☐ clickhouse ☐ frontend ☐ mongo ☐ redpanda</span><span style="color:#8a8984">stellwerk</span><span><span style="color:#7aa7f0">☑</span> cli ☐ stellwerk-core <span style="color:#7aa7f0">☑</span> stellwerk-dashboard ☐ vscode-plugin</span><span style="color:#8a8984">wellness</span><span>☐ api ☐ mobile</span></div>
+          <b>Extra repos</b><div><span>☐ demo-services ☐ stellwerk ☐ wellness</span><div style="color:#8a8984;font-size:12px">Worktrees for repos with no local service.</div></div>
+          <b>Labels</b><div><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;display:block">focus ✕</span><div style="color:#8a8984;font-size:12px">For filtering, e.g. focus</div></div>
+          <b>Feature test path</b><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;color:#8a8984">/products/foo</span>
+          <b>Task title</b><div><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;display:block">Restore wizard defaults in the create form</span><div style="color:#8a8984;font-size:12px">Defaults to the feature name in words.</div></div>
+          <b>Description</b><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;color:#8a8984">Adds an MDX-powered blog index under /blog.</span>
+          <b>Starting prompt</b><div><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;display:block;height:48px"></span><span style="display:inline-block;margin-top:6px;padding:1px 9px;border-radius:6px;background:#2e2e2b">✨ Refine with Claude</span></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;border-top:1px solid #3a3a37;padding-top:10px"><span style="color:#ff7b72;font-size:12px">1 field needs attention</span><span style="flex:1"></span><span style="padding:2px 10px;border-radius:6px;background:#2e2e2b;color:#7aa7f0;font-weight:700">＋ Create workspace</span></div>
+        <div style="border:1px solid #5cc177;border-radius:10px;padding:8px 12px"><span style="color:#5cc177;font-weight:700">✓ Workspace created</span> stellwerk-143-wizard-defaults · <span style="color:#7aa7f0">→ show card</span><div style="color:#8a8984;font-size:12px">The success line after submit. It replaces the form, and ＋ Create resets it.</div></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">VS CODE · ＋ New workspace opens a terminal wizard · same questions, same order</span>
+      <div style="background:#181818;border:1px solid #2b2b2b;border-radius:6px;overflow:hidden">
+        <div style="display:flex;gap:16px;padding:6px 14px;font:11px -apple-system,system-ui,sans-serif;color:#9d9d9d;border-bottom:1px solid #2b2b2b;letter-spacing:.04em"><span>PROBLEMS</span><span>OUTPUT</span><span style="color:#e7e7e7;border-bottom:1px solid #0078d4;padding-bottom:4px">TERMINAL</span><span style="flex:1"></span><span>stellwerk: new workspace</span></div>
+        <pre style="margin:0;padding:14px 16px;font:13px/1.65 'IBM Plex Mono',ui-monospace,monospace;color:#cccccc;white-space:pre-wrap"><span style="color:#9d9d9d">~/features $</span> stellwerk new
+<span style="color:#73c991">?</span> <b>Issue</b> <span style="color:#9d9d9d">(owner/repo#12)</span> › jbbz-stellwerk/stellwerk#143
+  <span style="color:#9d9d9d">Fetched from your issue tracker; fills the empty fields below.</span>
+  <span style="color:#cca700">◌</span> ⤓ Fill from issue… fetching jbbz-stellwerk/stellwerk#143
+  <span style="color:#73c991">✓</span> Filled Feature name, Task title, Description
+<span style="color:#73c991">?</span> <b>Feature name</b> › Wizard_Defaults
+  <span style="color:#f14c4c">▲ Use lowercase letters, numbers and single hyphens, e.g. mdx-blog</span>
+<span style="color:#73c991">?</span> <b>Feature name</b> › wizard-defaults
+<span style="color:#73c991">?</span> <b>Work type</b> › <span style="color:#4daafc">❯ feature</span>  bugfix  incident  refactor  spike
+<span style="color:#73c991">?</span> <b>Workflow</b> › <span style="color:#4daafc">❯ ICM (staged)</span>  JIT
+  <span style="color:#9d9d9d">ICM: numbered stages, each reviewed before the next.</span>
+<span style="color:#73c991">?</span> <b>Autonomous run</b> › No
+  <span style="color:#9d9d9d">Runs from stage 01 to an open PR with no review gates. You review the PR.</span>
+<span style="color:#73c991">?</span> <b>Services to run locally</b> <span style="color:#9d9d9d">(space to pick, enter to confirm)</span>
+  stellwerk  <span style="color:#4daafc">◉ cli</span>  ◯ stellwerk-core  <span style="color:#4daafc">◉ stellwerk-dashboard</span>  ◯ vscode-plugin
+<span style="color:#73c991">?</span> <b>Extra repos</b> › <span style="color:#9d9d9d">none</span>
+<span style="color:#73c991">?</span> <b>Labels</b> › focus
+<span style="color:#73c991">?</span> <b>Feature test path</b> › <span style="color:#9d9d9d">(/products/foo)</span>
+<span style="color:#73c991">?</span> <b>Task title</b> › Restore wizard defaults in the create form
+<span style="color:#73c991">?</span> <b>Description</b> › Make the wizard preselect sensible defaults.
+<span style="color:#73c991">?</span> <b>Starting prompt</b> <span style="color:#9d9d9d">(opens $EDITOR · r = ✨ Refine with Claude)</span> › <span style="color:#9d9d9d">skipped</span>
+<span style="color:#73c991">?</span> <b>＋ Create workspace?</b> › Yes
+<span style="color:#cca700">◌</span> Creating…
+<span style="color:#73c991">✓ Workspace created</span> stellwerk-143-wizard-defaults · revealed in the Stellwerk tree</pre>
+      </div>
+      <p style="margin:6px 0 0;font-size:13px;color:#5f5d56;max-width:760px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> The command name <code style="font:500 12px 'IBM Plex Mono',monospace">stellwerk new</code>, and showing the optional fields' placeholders in parentheses. Required prompts don't move on until the input is valid. The error repeats the browser's wording exactly.</p>
+    </div>
+    <aside style="font-size:14px;line-height:1.5;max-width:520px;display:flex;flex-direction:column;gap:10px">
+      <h3 style="margin:0;font:600 17px 'Barlow',sans-serif">Field order (all surfaces)</h3>
+      <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:2px">
+        <li>Issue + ⤓ Fill from issue</li><li>Feature name *</li><li>Work type * (feature)</li><li>Workflow (ICM)</li><li>Autonomous run (off)</li><li>Services to run locally</li><li>Extra repos</li><li>Labels</li><li>Feature test path</li><li>Task title</li><li>Description</li><li>Starting prompt + ✨ Refine with Claude</li><li>Open in VS Code after creating (browser only, on)</li>
+      </ol>
+      <p style="margin:0;color:#5f5d56">The rule “at least one service or repo” is checked across both Services and Extra repos. Its error appears under Services, and both groups get the err border.</p>
+    </aside>
+  </section>
+</main>
+</x-dc>
+</body>
+</html>

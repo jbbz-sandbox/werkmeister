@@ -11,7 +11,9 @@
       "!**/.vscode-test",
       "!**/*.snapshot.json",
       "!apps/cli/infra/compose/scripts/otel-init.bundle.js",
-      "!apps/sandbox-dashboard/workspace-list.artifact.html"
+      "!apps/sandbox-dashboard/workspace-list.artifact.html",
+      // Design references exported from Claude Design; rebuilt in packages/sandbox-ui, never imported
+      "!docs/design"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

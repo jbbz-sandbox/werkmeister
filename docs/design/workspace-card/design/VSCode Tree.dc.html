@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vscode/codicons@0.0.36/dist/codicon.css"></link></helmet>
+<div style="box-sizing:border-box;width:100%;position:relative;background:#181818;color:#cccccc;font-family:-apple-system,BlinkMacSystemFont,'Segoe WPC','Segoe UI',system-ui,sans-serif;font-size:13px;line-height:22px;border:1px solid #2b2b2b;text-align:left;padding-bottom:8px">
+  <div style="display:flex;align-items:center;height:35px;padding:0 8px 0 20px;font-size:11px;font-weight:600;letter-spacing:.02em">
+    <span>STELLWERK: WORKSPACES</span><span style="flex:1"></span>
+    <span style="display:flex;gap:2px;color:#cccccc">
+      <i class="codicon codicon-add" title="＋ New workspace" style="width:22px;height:22px;display:grid;place-items:center;border-radius:4px"></i>
+      <i class="codicon codicon-refresh" title="↻ Refresh PRs" style="width:22px;height:22px;display:grid;place-items:center;border-radius:4px"></i>
+      <i class="codicon codicon-bell-dot" title="Needs you only" style="width:22px;height:22px;display:grid;place-items:center;border-radius:4px;background:{{ bellBg }}"></i>
+      <i class="codicon codicon-question" title="Legend" style="width:22px;height:22px;display:grid;place-items:center;border-radius:4px;background:{{ helpBg }}"></i>
+    </span>
+  </div>
+  <sc-if value="{{ welcome }}">
+    <div style="margin:0 12px 8px 20px;padding:8px 0 10px;border-bottom:1px solid #2b2b2b;font-size:12px;line-height:18px;color:#cccccc;display:grid;grid-template-columns:20px 1fr;gap:3px 6px">
+      <span style="grid-column:1/-1;font-weight:600;margin-bottom:2px">Legend</span>
+      <i class="codicon codicon-circle-filled" style="color:#cca700;line-height:18px"></i><span><b>Needs you</b> · the agent asked you something</span>
+      <i class="codicon codicon-sync" style="color:#73c991;line-height:18px"></i><span><b>Working</b> · agent busy</span>
+      <i class="codicon codicon-pass" style="color:#73c991;line-height:18px"></i><span><b>Done</b> · agent finished</span>
+      <i class="codicon codicon-circle-outline" style="color:#8b8b8b;line-height:18px"></i><span><b>Idle</b> · no live turn, nothing asked</span>
+      <i class="codicon codicon-warning" style="color:#f14c4c;line-height:18px"></i><span>service unhealthy · <span style="color:#9d9d9d">○ down · ◐ starting</span></span>
+      <span style="grid-column:1/-1;color:#9d9d9d">Icon colour follows the agent. The state word is always in the description. ⚙ Auto = autonomous run.</span>
+    </div>
+  </sc-if>
+  <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+    <div style="display:flex;align-items:center;height:22px;padding-left:{{ r.indent }};padding-right:8px;background:{{ r.bg }};outline:{{ r.outline }};outline-offset:-1px;white-space:nowrap;overflow:hidden">
+      <i class="codicon codicon-{{ r.chev }}" style="width:16px;flex:none;color:#cccccc;opacity:{{ r.chevOp }}"></i>
+      <i class="codicon codicon-{{ r.icon }} {{ r.spin }}" style="width:16px;flex:none;margin:0 6px 0 2px;color:{{ r.iconFg }}"></i>
+      <span style="flex:none;color:{{ r.labelFg }}">{{ r.label }}</span>
+      <span style="margin-left:6px;color:#9d9d9d;font-size:12px;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ r.desc }}</span>
+      <span style="flex:1"></span>
+      <sc-if value="{{ r.hover }}"><span style="display:flex;gap:2px;flex:none;padding-left:6px">
+        <i class="codicon codicon-link-external" title="{{ r.cont }}" style="width:22px;text-align:center"></i>
+        <i class="codicon codicon-arrow-right" title="→ Switch to" style="width:22px;text-align:center"></i>
+        <i class="codicon codicon-{{ r.lifeIcon }}" title="{{ r.lifeT }}" style="width:22px;text-align:center"></i>
+      </span></sc-if>
+    </div>
+  </sc-for>
+  <sc-if value="{{ tip }}">
+    <div style="position:absolute;left:{{ tipX }};top:{{ tipY }};z-index:4;width:340px;background:#202020;border:1px solid #454545;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.5);padding:8px 10px;font-size:13px;line-height:19px;color:#cccccc;white-space:normal">
+      <div><b>{{ tip.name }}</b></div>
+      <div><a href="#" style="color:#4daafc;text-decoration:none">{{ tip.issueText }}</a></div>
+      <div style="color:#9d9d9d">{{ tip.subtitle }}</div>
+      <div style="height:1px;background:#454545;margin:6px 0"></div>
+      <div style="display:grid;grid-template-columns:76px 1fr;gap:1px 8px">
+        <span style="color:#9d9d9d">Containers</span><span>{{ tip.containersLine }}</span>
+        <span style="color:#9d9d9d">PRs</span><span>{{ tip.prLine }}</span>
+        <span style="color:#9d9d9d">Workflow</span><span>{{ tip.workflow.text }}</span>
+        <span style="color:#9d9d9d">Agent</span><span>{{ tip.agentLine }}</span>
+      </div>
+      <sc-if value="{{ tip.question }}"><div style="margin-top:6px;padding-left:8px;border-left:3px solid #454545;color:#cccccc">“{{ tip.question }}”</div></sc-if>
+      <div style="height:1px;background:#454545;margin:6px 0"></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap"><a href="#" style="color:#4daafc;text-decoration:none">{{ tip.primary }}</a><a href="#" style="color:#4daafc;text-decoration:none">→ Switch to</a><a href="#" style="color:#4daafc;text-decoration:none">Open feature ↗</a></div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ menu }}">
+    <div style="position:absolute;left:{{ menuX }};top:{{ menuY }};z-index:4;min-width:220px;background:#1f1f1f;border:1px solid #454545;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.55);padding:4px 0;font-size:13px;line-height:24px">
+      <sc-for list="{{ menu }}" as="g">
+        <div style="border-top:{{ g.sep }};margin:{{ g.mg }}">
+          <sc-for list="{{ g.items }}" as="it"><div style="padding:0 24px 0 26px;margin:0 4px;border-radius:4px;background:{{ it.bg }};color:{{ it.fg }}">{{ it.t }}</div></sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:420,&quot;height&quot;:420},&quot;ids&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;143,206,151,bwell,loading&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;expanded&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;151&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;selected&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;hoverFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;tooltipFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;menuFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;welcome&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;needsOnly&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { d: null };
+  componentDidMount() { import(new URL('data.js', document.baseURI).href).then(d => this.setState({ d })); }
+  renderVals() {
+    const p = this.props, d = this.state.d;
+    const VS = { 'var(--vs-yellow)': '#cca700', 'var(--vs-green)': '#73c991', 'var(--vs-disabled)': '#8b8b8b' };
+    const SVCFG = { up: '#73c991', down: '#8b8b8b', unhealthy: '#f14c4c', starting: '#cca700' };
+    const ids = (p.ids || '143,206,151,bwell,loading').split(',').map(s => s.trim());
+    const exp = (p.expanded || '').split(',').map(s => s.trim());
+    const all = d ? ids.map(id => d.model(id)).filter(Boolean) : [];
+    const shown = p.needsOnly ? all.filter(m => m.needs) : all;
+    const rows = []; let tipIdx = -1, menuIdx = -1;
+    shown.forEach(m => {
+      const open = exp.includes(m.id);
+      const sel = p.selected === m.id, hov = p.hoverFor === m.id;
+      if (p.tooltipFor === m.id) tipIdx = rows.length;
+      if (p.menuFor === m.id) menuIdx = rows.length;
+      if (m.loading) { rows.push({ indent: '8px', chev: 'chevron-right', chevOp: .4, icon: 'loading', spin: 'codicon-modifier-spin', iconFg: '#8b8b8b', label: m.name, labelFg: '#cccccc', desc: 'loading…', bg: 'transparent', outline: 'none' }); return; }
+      const life = m.containers.summary === 'down' || m.containers.tone === 'off' ? ['play', '▶ Up'] : ['debug-stop', '■ Stop'];
+      rows.push({ indent: '8px', chev: open ? 'chevron-down' : 'chevron-right', chevOp: 1, icon: m.codicon, spin: m.agent === 'working' ? 'codicon-modifier-spin' : '', iconFg: VS[m.vsColor], label: m.name, labelFg: '#cccccc', desc: m.vsDesc + (m.auto ? ' · ⚙ Auto' : ''), bg: sel ? '#37373d' : hov ? '#2a2d2e' : 'transparent', outline: sel ? '1px solid #0078d4' : 'none', hover: hov || sel, cont: m.primary, lifeIcon: life[0], lifeT: life[1] });
+      if (open) {
+        if (!m.svc.length) rows.push({ indent: '28px', chev: 'blank', chevOp: 0, icon: 'circle-outline', iconFg: '#8b8b8b', label: m.containers.unknown ? 'Containers unknown' : 'no containers running', labelFg: '#9d9d9d', desc: '', bg: 'transparent', outline: 'none' });
+        m.svc.forEach(s => rows.push({ indent: '28px', chev: 'blank', chevOp: 0, icon: s.codicon, spin: s.st === 'starting' ? 'codicon-modifier-spin' : '', iconFg: SVCFG[s.st], label: s.name, labelFg: '#cccccc', desc: s.desc, bg: 'transparent', outline: 'none' }));
+        m.prs.forEach(pr => rows.push({ indent: '28px', chev: 'blank', chevOp: 0, icon: pr.state.startsWith('Merged') || pr.state.startsWith('Released') ? 'git-merge' : 'git-pull-request', iconFg: pr.state.startsWith('Merged') || pr.state.startsWith('Released') ? '#b180d7' : pr.state === 'Open' ? '#73c991' : '#8b8b8b', label: pr.ref, labelFg: '#cccccc', desc: `${pr.state} · ${pr.ci}`, bg: 'transparent', outline: 'none' }));
+      }
+    });
+    const top = (i) => (35 + (p.welcome ? 150 : 0) + (i + 1) * 22 + 4) + 'px';
+    let tip = null;
+    if (tipIdx >= 0) {
+      const m = d.model(p.tooltipFor);
+      tip = { ...m, issueText: m.issue || 'no issue',
+        containersLine: m.containers.summary + (m.svc.length ? ' — ' + m.svc.map(s => s.text).join(' · ') : ''),
+        prLine: m.prError ? 'PRs unavailable · retry' : m.prs.length ? m.prs.map(x => `${x.ref} ${x.state} · ${x.ci}`).join('; ') : 'none yet',
+        agentLine: [m.agentLabel, m.auto ? '⚙ Autonomous' : null, m.time].filter(Boolean).join(' · ') };
+    }
+    let menu = null;
+    if (menuIdx >= 0) {
+      const m = d.model(p.menuFor);
+      const g = (items, i) => ({ sep: i ? '1px solid #454545' : '0', mg: i ? '4px 0 0' : '0', items: items.map((t, j) => ({ t, bg: i === 0 && j === 0 ? '#0078d4' : 'transparent', fg: t.startsWith('✕') ? '#f48771' : '#cccccc' })) });
+      menu = [
+        g([m.primary === '✓ Close out' || m.primary === '▶ Up' ? `↗ Continue in ${m.where}` : m.primary, '→ Switch to'], 0),
+        g(['▶ Up', '■ Stop', '↻ Restart', '⏻ Down'], 1),
+        g(['＋ New session'], 2),
+        g(d.OVERFLOW, 3),
+        g(['✓ Close out', '✕ Abandon…'], 4),
+      ];
+    }
+    return {
+      rows, welcome: !!p.welcome, bellBg: p.needsOnly ? '#37373d' : 'transparent', helpBg: p.welcome ? '#37373d' : 'transparent',
+      tip, tipX: '40px', tipY: tipIdx >= 0 ? top(tipIdx) : '0', menu, menuX: '120px', menuY: menuIdx >= 0 ? top(menuIdx) : '0',
+    };
+  }
+}
+</script>
+</body>
+</html>

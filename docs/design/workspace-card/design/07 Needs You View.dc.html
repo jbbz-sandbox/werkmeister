@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<main style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;width:2000px;box-sizing:border-box;padding:56px 64px 80px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">07</div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 7 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Needs-attention view</h1></div>
+    <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:520px;text-wrap:pretty">The count of waiting workspaces is in the tab label. One click filters the list to <b>● Needs you</b>. Each waiting card can show the agent's last question and answer it with <code style="font:500 12px 'IBM Plex Mono',monospace">↗ Continue in …</code>.</div>
+  </header>
+
+  <section style="margin-top:40px;display:grid;grid-template-columns:1200px 1fr;gap:40px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">DASHBOARD · filter on · first question expanded</span>
+      <div style="border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.08)"><dc-import name="Dashboard View" ids="143,prerr,206,151,bwell" need-ids="143,prerr" needs-only="{{ true }}" show-questions="{{ true }}" q-for="143" hint-size="1200px,640px"></dc-import></div>
+    </div>
+    <aside style="display:flex;flex-direction:column;gap:20px;font-size:14px;line-height:1.5;max-width:560px">
+      <div><h3 style="margin:0 0 6px;font:600 17px 'Barlow',sans-serif">Tab count</h3>
+        <div style="display:flex;gap:4px;border-bottom:1px solid var(--sd-line);background:var(--sd-card);padding:0 8px;border-radius:6px 6px 0 0">
+          <span style="padding:8px 8px 6px;border-bottom:2px solid var(--sd-accent);font-weight:600">Workspaces<span style="color:var(--sd-warn)"> · 2 need you</span></span><span style="padding:8px 8px 6px;color:var(--sd-muted)">New workspace</span></div>
+        <p style="margin:8px 0 0">The count is omitted when it's zero, so the label is just <code style="font:500 12px 'IBM Plex Mono',monospace">Workspaces</code>. Singular is <code style="font:500 12px 'IBM Plex Mono',monospace">1 needs you</code>. <span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> The browser tab title also gets a prefix: <code style="font:500 12px 'IBM Plex Mono',monospace">(2) Stellwerk</code>.</p></div>
+      <div><h3 style="margin:0 0 6px;font:600 17px 'Barlow',sans-serif">Filter</h3><p style="margin:0">A segmented control next to search: <code style="font:500 12px 'IBM Plex Mono',monospace">All · 5</code> / <code style="font:500 12px 'IBM Plex Mono',monospace">● Needs you · 2</code>. While the filter is on, its segment is solid amber, and that solid amber is used nowhere else. The filter can be combined with the search text.</p></div>
+      <div><h3 style="margin:0 0 6px;font:600 17px 'Barlow',sans-serif">Sort</h3><p style="margin:0"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> In the All view, Needs you cards always come first, oldest question first. The rest of the order is unchanged.</p></div>
+      <div><h3 style="margin:0 0 8px;font:600 17px 'Barlow',sans-serif">Question preview · collapsed → expanded</h3>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button style="all:unset;box-sizing:border-box;display:flex;gap:8px;align-items:baseline;padding:7px 10px;border-radius:6px;background:var(--sd-card);border:1px solid var(--sd-attn-bd);font-size:13px"><span style="color:var(--sd-warn);font-weight:600">Last question</span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">“Work type is preselected as feature now. Should Workflow also…”</span><span style="color:var(--sd-muted)">Show ▾</span></button>
+          <p style="margin:0;font-size:13px;color:var(--sd-muted)">Collapsed: one line, cut off with an ellipsis. Expanded: the full question in 15px, the time, and the primary action. The text comes from the session's last <code style="font:500 12px 'IBM Plex Mono',monospace">AskUserQuestion</code> or its final assistant message <span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span>. Answers happen where the session runs, never in the card.</p>
+        </div></div>
+    </aside>
+  </section>
+
+  <section style="margin-top:56px;display:grid;grid-template-columns:560px 480px 1fr;gap:40px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">PANE · click “· 2 need you” to filter · ▸ expands the question</span>
+      <dc-import name="Pane View" ids="143,prerr,206,151,bwell" needs-only="{{ true }}" show-questions="{{ true }}" q-for="143" hint-size="560px,420px"></dc-import></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">VS CODE · bell-dot filter on · tooltip has the question</span>
+      <div style="height:380px"><dc-import name="VSCode Tree" ids="143,prerr,206,151,bwell" needs-only="{{ true }}" hover-for="143" tooltip-for="143" hint-size="480px,120px"></dc-import></div></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">MCP APP · the same filter as a chip in the header</span>
+      <div style="background:var(--sd-bg);border:1px solid var(--sd-line);border-radius:12px;padding:14px;max-width:720px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:14px"><b>Stellwerk workspaces</b><span style="flex:1"></span><span style="padding:2px 10px;border-radius:999px;border:1px solid var(--sd-ctl);font-size:13px">All · 5</span><span style="padding:2px 10px;border-radius:999px;background:var(--sd-warn-solid);color:var(--sd-on-warn-solid);font-size:13px;font-weight:600">● Needs you · 2</span></div>
+        <dc-import name="Workspace Card" ws-id="prerr" show-question="{{ true }}" question-open="{{ true }}" hint-size="100%,300px"></dc-import>
+      </div>
+      <p style="margin:6px 0 0;font-size:13px;color:#5f5d56;max-width:640px">The VS Code tooltip adds one line under Agent: <code style="font:500 12px 'IBM Plex Mono',monospace">&gt; “Work type is preselected…”</code>, quoted in Markdown. The view's badge shows the count, and the view title's bell-dot button toggles the filter.</p>
+    </div>
+  </section>
+</main>
+</x-dc>
+</body>
+</html>

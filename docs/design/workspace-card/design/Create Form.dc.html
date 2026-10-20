@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="box-sizing:border-box;width:100%;background:var(--sd-card);border:1px solid var(--sd-line);border-radius:8px;font-family:var(--sd-sans);color:var(--sd-ink);font-size:14px;line-height:1.45;text-align:left">
+  <sc-if value="{{ success }}">
+    <div style="padding:28px {{ pad }};display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+      <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:12px;font-weight:600;color:var(--sd-ok);background:var(--sd-ok-bg);border:1px solid var(--sd-ok-bd)">✓ Workspace created</span>
+      <div style="font-size:20px;font-weight:600">stellwerk-143-wizard-defaults</div>
+      <div style="color:var(--sd-muted)">Feature · Restore wizard defaults in the create form · ICM stage 1 of 4 · questions</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <a href="#" style="font-size:13px;font-weight:600;padding:5px 12px;border-radius:5px;background:var(--sd-accent);color:var(--sd-on-accent);text-decoration:none">Go to card →</a>
+        <span style="font-size:13px;padding:5px 12px;border-radius:5px;border:1px solid var(--sd-ctl)">＋ New workspace</span>
+      </div>
+      <span style="font-size:13px;color:var(--sd-muted)">{{ successNote }}</span>
+    </div>
+  </sc-if>
+  <sc-if value="{{ form }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:20px {{ pad }} 4px">
+      <h2 style="margin:0;font-size:20px;font-weight:600">New workspace</h2>
+      <p style="margin:2px 0 0;color:var(--sd-muted)">Git worktrees on a new branch, containers for the services you pick, and an agent session.</p>
+    </div>
+    <div style="padding:16px {{ pad }} 8px;display:flex;flex-direction:column;gap:18px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-weight:600">Issue</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="flex:1 1 220px;max-width:420px;height:34px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:{{ issueFg }}">{{ issueVal }}</div>
+          <button style="font:inherit;font-size:13px;font-weight:500;padding:0 12px;height:34px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink);white-space:nowrap;opacity:{{ fillOp }}">{{ fillLabel }}</button>
+        </div>
+        <span style="font-size:13px;color:var(--sd-muted)">{{ issueHelp }}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:{{ cols }};gap:18px 20px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Feature name <span style="color:var(--sd-err)">*</span></label>
+          <sc-if value="{{ loadingFields }}"><div style="height:34px;border-radius:5px;background:var(--sd-line-soft)"></div></sc-if>
+          <sc-if value="{{ notLoading }}"><div style="height:34px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;border-radius:5px;border:{{ nameBd }};background:var(--sd-card);color:{{ nameFg }};font-family:var(--sd-mono);font-size:13px">{{ nameVal }}</div></sc-if>
+          <span style="font-size:13px;color:{{ nameHelpFg }}">{{ nameHelp }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Work type <span style="color:var(--sd-err)">*</span></label>
+          <div style="height:34px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card)"><span style="flex:1">feature</span><span style="color:var(--sd-muted);font-size:11px">▼</span></div>
+          <span style="font-size:13px;color:var(--sd-muted)">feature · bugfix · incident · refactor · spike</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Workflow</label>
+          <div style="display:inline-flex;height:34px;border:1px solid var(--sd-ctl);border-radius:5px;overflow:hidden;align-self:flex-start">
+            <span style="padding:0 14px;display:flex;align-items:center;background:var(--sd-ink);color:var(--sd-card);font-weight:600">ICM (staged)</span>
+            <span style="padding:0 14px;display:flex;align-items:center;border-left:1px solid var(--sd-ctl)">JIT</span>
+          </div>
+          <span style="font-size:13px;color:var(--sd-muted)">ICM: numbered stages, each reviewed before the next.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Autonomous run</label>
+          <div style="display:flex;align-items:center;gap:8px;height:34px"><span style="width:34px;height:20px;border-radius:999px;background:var(--sd-line);position:relative;display:inline-block"><span style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--sd-card);box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></span><span>Off</span></div>
+          <span style="font-size:13px;color:var(--sd-muted)">Runs from stage 01 to an open PR with no review gates. You review the PR.</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-weight:600">Services to run locally</label>
+        <div style="display:grid;grid-template-columns:{{ svcCols }};gap:10px 20px;padding:12px;border-radius:6px;border:{{ svcBd }};background:var(--sd-bg)">
+          <sc-for list="{{ groups }}" as="g">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font:600 11px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">{{ g.repo }}</span>
+              <sc-for list="{{ g.items }}" as="it"><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;box-sizing:border-box;border-radius:3px;border:1.5px solid {{ it.bd }};background:{{ it.bg }};color:var(--sd-on-accent);font-size:10px;line-height:11px;text-align:center">{{ it.mark }}</span>{{ it.name }}</span></sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ svcErr }}"><span style="font-size:13px;color:var(--sd-err);font-weight:500">▲ Pick at least one service or repo</span></sc-if>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-weight:600">Extra repos</label>
+        <div style="display:flex;gap:20px;flex-wrap:wrap"><sc-for list="{{ repos }}" as="r"><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;box-sizing:border-box;border-radius:3px;border:1.5px solid var(--sd-ctl);background:var(--sd-card)"></span>{{ r }}</span></sc-for></div>
+        <span style="font-size:13px;color:var(--sd-muted)">Worktrees for repos with no local service.</span>
+      </div>
+      <div style="display:grid;grid-template-columns:{{ cols }};gap:18px 20px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Labels</label>
+          <div style="min-height:34px;box-sizing:border-box;padding:4px 6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card)"><sc-if value="{{ hasLabel }}"><span style="padding:1px 4px 1px 8px;border-radius:3px;background:var(--sd-off-bg);border:1px solid var(--sd-off-bd);font-size:13px">focus <span style="color:var(--sd-muted)">✕</span></span></sc-if><span style="color:var(--sd-faint);font-size:13px">Add label…</span></div>
+          <span style="font-size:13px;color:var(--sd-muted)">For filtering, e.g. focus</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Feature test path</label>
+          <div style="height:34px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;border-radius:5px;border:{{ pathBd }};background:var(--sd-card);color:{{ pathFg }};font-family:var(--sd-mono);font-size:13px">{{ pathVal }}</div>
+          <span style="font-size:13px;color:{{ pathHelpFg }}">{{ pathHelp }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Task title</label>
+          <sc-if value="{{ loadingFields }}"><div style="height:34px;border-radius:5px;background:var(--sd-line-soft)"></div></sc-if>
+          <sc-if value="{{ notLoading }}"><div style="height:34px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:{{ titleFg }}">{{ titleVal }}</div></sc-if>
+          <span style="font-size:13px;color:var(--sd-muted)">Defaults to the feature name in words.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-weight:600">Description</label>
+          <sc-if value="{{ loadingFields }}"><div style="height:34px;border-radius:5px;background:var(--sd-line-soft)"></div></sc-if>
+          <sc-if value="{{ notLoading }}"><div style="height:34px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-faint);white-space:nowrap;overflow:hidden">Adds an MDX-powered blog index under /blog.</div></sc-if>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-weight:600">Starting prompt</label>
+        <div style="height:88px;box-sizing:border-box;padding:8px 10px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);position:relative;color:var(--sd-faint)"><span style="position:absolute;right:4px;bottom:2px;font-size:10px;color:var(--sd-faint)">◢</span></div>
+        <button style="align-self:flex-start;font:inherit;font-size:13px;font-weight:500;padding:4px 10px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink)">✨ Refine with Claude</button>
+      </div>
+    </div>
+    <footer style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px {{ pad }};border-top:1px solid var(--sd-line);margin-top:8px">
+      <sc-if value="{{ browser }}"><span style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;box-sizing:border-box;border-radius:3px;background:var(--sd-accent);color:var(--sd-on-accent);font-size:10px;line-height:14px;text-align:center">✓</span>Open in VS Code after creating</span></sc-if>
+      <span style="flex:1"></span>
+      <sc-if value="{{ errSummary }}"><span style="font-size:13px;color:var(--sd-err)">3 fields need attention</span></sc-if>
+      <button style="font:inherit;font-size:14px;font-weight:600;padding:7px 16px;border-radius:5px;border:1px solid var(--sd-accent);background:var(--sd-accent);color:var(--sd-on-accent);opacity:{{ submitOp }}">{{ submitLabel }}</button>
+    </footer>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:820,&quot;height&quot;:1100},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;empty&quot;,&quot;filling&quot;,&quot;error&quot;,&quot;filled&quot;,&quot;creating&quot;,&quot;success&quot;],&quot;default&quot;:&quot;empty&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;narrow&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.props.state || 'empty';
+    const narrow = !!this.props.narrow;
+    const filled = st === 'creating' || st === 'filled';
+    const err = st === 'error';
+    const loading = st === 'filling';
+    const picked = filled ? ['cli', 'stellwerk-dashboard'] : [];
+    const G = [['demo-services', ['backend', 'clickhouse', 'frontend', 'mongo', 'redpanda']], ['stellwerk', ['cli', 'stellwerk-core', 'stellwerk-dashboard', 'vscode-plugin']], ['wellness', ['api', 'mobile']]];
+    return {
+      success: st === 'success', form: st !== 'success', browser: !narrow,
+      successNote: narrow ? 'Opens in this chat as a card.' : 'Opening in VS Code…',
+      pad: narrow ? '16px' : '24px', cols: narrow ? '1fr' : 'repeat(2,minmax(0,1fr))', svcCols: narrow ? '1fr 1fr' : 'repeat(3,minmax(0,1fr))',
+      issueVal: st === 'empty' ? 'owner/repo#12' : 'jbbz-stellwerk/stellwerk#143', issueFg: st === 'empty' ? 'var(--sd-faint)' : 'var(--sd-ink)',
+      fillLabel: loading ? '◌ Fetching…' : '⤓ Fill from issue', fillOp: loading ? 0.6 : 1,
+      issueHelp: loading ? 'Fetching jbbz-stellwerk/stellwerk#143…' : 'Fetched from your issue tracker; fills the empty fields below.',
+      loadingFields: loading, notLoading: !loading,
+      nameVal: err ? 'Wizard_Defaults' : filled ? 'wizard-defaults' : 'mdx-blog', nameFg: err || filled ? 'var(--sd-ink)' : 'var(--sd-faint)',
+      nameBd: err ? '2px solid var(--sd-err)' : '1px solid var(--sd-ctl)',
+      nameHelp: err ? '▲ Use lowercase letters, numbers and single hyphens, e.g. mdx-blog' : 'Lowercase letters, numbers and single hyphens.', nameHelpFg: err ? 'var(--sd-err)' : 'var(--sd-muted)',
+      groups: G.map(([repo, items]) => ({ repo, items: items.map(n => { const on = picked.includes(n); return { name: n, mark: on ? '✓' : '', bg: on ? 'var(--sd-accent)' : 'var(--sd-card)', bd: on ? 'var(--sd-accent)' : err ? 'var(--sd-err)' : 'var(--sd-ctl)' }; }) })),
+      svcBd: err ? '2px solid var(--sd-err)' : '1px solid var(--sd-line)', svcErr: err,
+      repos: ['demo-services', 'stellwerk', 'wellness'], hasLabel: filled,
+      pathVal: err ? 'products/foo' : '/products/foo', pathFg: err ? 'var(--sd-ink)' : 'var(--sd-faint)', pathBd: err ? '2px solid var(--sd-err)' : '1px solid var(--sd-ctl)',
+      pathHelp: err ? '▲ Must start with /' : 'URL path for the feature, e.g. /products/foo', pathHelpFg: err ? 'var(--sd-err)' : 'var(--sd-muted)',
+      titleVal: filled ? 'Restore wizard defaults in the create form' : 'Wizard defaults', titleFg: filled ? 'var(--sd-ink)' : 'var(--sd-faint)',
+      errSummary: err, submitLabel: st === 'creating' ? '◌ Creating…' : '＋ Create workspace', submitOp: st === 'creating' ? 0.65 : 1,
+    };
+  }
+}
+</script>
+</body>
+</html>

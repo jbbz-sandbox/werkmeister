@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<main style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;width:1600px;box-sizing:border-box;padding:56px 64px 72px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">02</div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 2 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Card anatomy · full density</h1></div>
+    <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:440px;text-wrap:pretty">The assembled card on the left, then the same card split into layers. Each callout gives the element, its data source and its tokens. Data sources marked <span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> need confirming against the code.</div>
+  </header>
+
+  <div style="display:grid;grid-template-columns:560px 1fr;gap:56px;margin-top:40px;align-items:start">
+    <div style="position:sticky;top:24px;display:flex;flex-direction:column;gap:14px">
+      <span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">ASSEMBLED · 560 × auto · stellwerk-206</span>
+      <dc-import name="Workspace Card" ws-id="206" hint-size="560px,250px"></dc-import>
+      <span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56;margin-top:14px">HIGHLIGHTED · Needs you, with the last question</span>
+      <dc-import name="Workspace Card" ws-id="143" show-question="{{ true }}" hint-size="560px,280px"></dc-import>
+      <div style="margin-top:14px;padding:14px 16px;border:1px solid #d9d5ca;border-radius:6px;background:#fffdf8;font-size:13px;display:grid;grid-template-columns:120px 1fr;gap:4px 12px">
+        <b style="grid-column:1/-1;font-size:14px;margin-bottom:4px">Box model</b>
+        <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">radius</span><span>8px card · 5px buttons · 4px badges</span>
+        <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">padding</span><span>14px top · 16px sides · 14px under the rows</span>
+        <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">rows</span><span>grid 84px label + 1fr · 8px row gap · 12px column gap</span>
+        <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">bar</span><span>10px × 16px · 1px line-soft top border · 6px gap</span>
+        <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">highlight</span><span>1px attn-bd border + 1px attn-bd ring (2px total) · attn-bg fill</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:28px">
+      <div style="display:grid;grid-template-columns:560px 1fr;gap:28px;align-items:start">
+        <div style="border:1px dashed #85827a;border-radius:6px;background:var(--sd-card);padding:14px 16px 4px;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:14px">
+          <span style="position:relative;font-weight:600;font-size:15px">stellwerk-206-pane-turn-state<span style="position:absolute;left:-26px;top:1px;width:18px;height:18px;border-radius:50%;background:#1f4e96;color:#fff;font:600 11px/18px 'IBM Plex Mono',monospace;text-align:center">1</span></span>
+          <a href="#" style="font-size:13px;color:var(--sd-info);text-decoration:none">jbbz-stellwerk/stellwerk#206</a><span style="width:18px;height:18px;border-radius:50%;background:#1f4e96;color:#fff;font:600 11px/18px 'IBM Plex Mono',monospace;text-align:center">2</span>
+          <span style="display:inline-flex;gap:6px;margin-left:auto;align-items:center"><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;color:var(--sd-ok);background:var(--sd-ok-bg);border:1px solid var(--sd-ok-bd)">◌ Working</span><span style="width:18px;height:18px;border-radius:50%;background:#1f4e96;color:#fff;font:600 11px/18px 'IBM Plex Mono',monospace;text-align:center">3</span><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;border:1px solid var(--sd-ctl)">⚙ Autonomous</span><span style="width:18px;height:18px;border-radius:50%;background:#1f4e96;color:#fff;font:600 11px/18px 'IBM Plex Mono',monospace;text-align:center">4</span></span>
+          <div style="width:100%;display:flex;gap:8px;align-items:center;padding:2px 0 10px;color:var(--sd-muted)">Bug · Turn state is lost between pane polls<span style="width:18px;height:18px;border-radius:50%;background:#1f4e96;color:#fff;font:600 11px/18px 'IBM Plex Mono',monospace;text-align:center">5</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+          <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">LAYER A · HEAD</div>
+          <div style="display:grid;grid-template-columns:22px 150px 1fr 1fr;gap:6px 12px;align-items:baseline">
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">1</span><b>Name</b><span style="font:400 12px 'IBM Plex Mono',monospace">workspace dir name</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">15/600 ink · wraps anywhere</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">2</span><b>Issue link</b><span style="font:400 12px 'IBM Plex Mono',monospace">workspace.yml issue</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">13/400 info · “no issue” in faint</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">3</span><b>Agent badge</b><span style="font:400 12px 'IBM Plex Mono',monospace">session turn state</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">badge · tone by state · Needs you is solid</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">4</span><b>⚙ Autonomous</b><span style="font:400 12px 'IBM Plex Mono',monospace">workspace.yml autonomous: true</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">neutral badge · ctl border · ink</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">5</span><b>Subtitle</b><span style="font:400 12px 'IBM Plex Mono',monospace">work type · task title</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">14/400 muted · never the prompt</span>
+          </div>
+          <span style="font-size:12px;color:#5f5d56">The badges group sits at the right edge. When the head is too narrow, the whole group wraps to its own line on the right. The two badges never split.</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:560px 1fr;gap:28px;align-items:start">
+        <div style="border:1px dashed #85827a;border-radius:6px;background:var(--sd-card);padding:14px 16px;display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px 12px;align-items:baseline;font-size:14px">
+          <span style="font-size:12px;color:var(--sd-muted);display:flex;gap:4px;align-items:center">Containers<span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">6</span></span>
+          <span style="display:flex;gap:4px 10px;flex-wrap:wrap;align-items:center"><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;color:var(--sd-ok);background:var(--sd-ok-bg);border:1px solid var(--sd-ok-bd)">2 of 2 up</span><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">7</span><span style="font-size:13px;color:var(--sd-ok)">● cli</span><span style="font-size:13px;color:var(--sd-ok)">● stellwerk-dashboard</span><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">8</span></span>
+          <span style="font-size:12px;color:var(--sd-muted)">PRs</span>
+          <span style="display:flex;gap:4px 8px;flex-wrap:wrap;align-items:center"><a href="#" style="color:var(--sd-info);text-decoration:none">stellwerk#231</a><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">9</span><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;color:var(--sd-off);background:var(--sd-off-bg);border:1px dashed var(--sd-off-bd)">Draft</span><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">10</span><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;color:var(--sd-warn);background:var(--sd-warn-bg);border:1px solid var(--sd-warn-bd)">CI running</span><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">11</span></span>
+          <span style="font-size:12px;color:var(--sd-muted)">Workflow</span>
+          <span style="display:flex;gap:4px 10px;align-items:center">ICM stage 4 of 5 · implement<span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">12</span><span style="display:inline-flex;gap:3px"><span style="width:14px;height:4px;border-radius:1px;background:var(--sd-ink)"></span><span style="width:14px;height:4px;border-radius:1px;background:var(--sd-ink)"></span><span style="width:14px;height:4px;border-radius:1px;background:var(--sd-ink)"></span><span style="width:14px;height:4px;border-radius:1px;background:var(--sd-muted)"></span><span style="width:14px;height:4px;border-radius:1px;background:var(--sd-line)"></span></span><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">13</span></span>
+          <span style="font-size:12px;color:var(--sd-muted)">Agent</span>
+          <span style="display:flex;gap:4px 8px;align-items:center"><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;color:var(--sd-ok);background:var(--sd-ok-bg);border:1px solid var(--sd-ok-bd)">◌ Working</span><span style="color:var(--sd-muted)">last activity 40 s ago</span><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">14</span></span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+          <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">LAYER B · ROWS (the four questions)</div>
+          <div style="display:grid;grid-template-columns:22px 150px 1fr 1fr;gap:6px 12px;align-items:baseline">
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">6</span><b>Row label</b><span style="font:400 12px 'IBM Plex Mono',monospace">static</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">12/400 muted · 84px column</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">7</span><b>Summary pill</b><span style="font:400 12px 'IBM Plex Mono',monospace">docker compose ps</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">badge · all up ok · some warn · none off</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">8</span><b>Service</b><span style="font:400 12px 'IBM Plex Mono',monospace">compose service + health</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">13 · glyph + name (+ word) in tone</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">9</span><b>PR link</b><span style="font:400 12px 'IBM Plex Mono',monospace">gh pr list --head branch</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">14 info · owner dropped for default org</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">10</span><b>PR state</b><span style="font:400 12px 'IBM Plex Mono',monospace">PR state + tag lookup</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">Open ok · Draft off dashed · Merged/Released pr · Closed off</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">11</span><b>CI</b><span style="font:400 12px 'IBM Plex Mono',monospace">check runs on head sha</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">✓ ok · running warn · ✗ N failing err</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">12</span><b>Workflow</b><span style="font:400 12px 'IBM Plex Mono',monospace">stages/NN_name · JIT phase · lifecycle</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">14 ink · lifecycle steps in 600</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">13</span><b>Stage ticks</b> <span style="font:400 12px 'IBM Plex Mono',monospace">same as 12</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">14×4px · done ink · current muted · next line · aria-hidden</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">14</span><b>Agent row</b><span style="font:400 12px 'IBM Plex Mono',monospace">turn state + last event time</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">badge + 14 muted time phrase</span>
+          </div>
+          <span style="font-size:12px;color:#5f5d56"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> Stage ticks (13) give a quick sense of progress. They repeat item 12, so they are hidden from screen readers.</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:560px 1fr;gap:28px;align-items:start">
+        <div style="border:1px dashed #85827a;border-radius:6px;background:var(--sd-card);padding:10px 16px;display:flex;gap:6px;align-items:center;font-size:13px">
+          <button style="font:inherit;font-weight:600;padding:4px 10px;border-radius:5px;border:1px solid var(--sd-accent);background:var(--sd-accent);color:#fff">↗ Continue in Terminal</button><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">15</span>
+          <button style="font:inherit;font-weight:500;padding:4px 10px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink)">■ Stop</button><button style="font:inherit;font-weight:500;padding:4px 10px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink)">↻ Restart</button><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">16</span>
+          <span style="flex:1"></span><span style="width:16px;height:16px;border-radius:50%;background:#1f4e96;color:#fff;font:600 10px/16px 'IBM Plex Mono',monospace;text-align:center">17</span><button style="font:inherit;font-weight:600;width:32px;height:28px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card)">⋯</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+          <div style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">LAYER C · ACTION BAR</div>
+          <div style="display:grid;grid-template-columns:22px 150px 1fr 1fr;gap:6px 12px;align-items:baseline">
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">15</span><b>Primary</b><span style="font:400 12px 'IBM Plex Mono',monospace">derived from state (board 06)</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">13/600 · accent fill · ✓ Close out uses err tone</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">16</span><b>Lifecycle</b><span style="font:400 12px 'IBM Plex Mono',monospace">2–3 by container state</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">13/500 · card bg · ctl border</span>
+            <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1f4e96">17</span><b>⋯ Overflow</b><span style="font:400 12px 'IBM Plex Mono',monospace">everything not on the bar</span><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">32×28 · ✕ Abandon… last, err, after a divider</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</x-dc>
+</body>
+</html>

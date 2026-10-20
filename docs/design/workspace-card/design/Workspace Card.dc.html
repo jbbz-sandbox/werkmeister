@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<article style="box-sizing:border-box;width:100%;position:relative;background:var(--sd-card);border:1px solid {{ cardBd }};box-shadow:{{ cardShadow }};border-radius:10px;font-family:var(--sd-sans);color:var(--sd-ink);font-size:14px;line-height:1.45;text-align:left;font-variant-numeric:tabular-nums">
+  <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ true }}">
+    <div aria-busy="true">
+      <header style="display:flex;flex-direction:column;gap:8px;padding:16px 18px 14px;border-bottom:1px solid var(--sd-line-soft)">
+        <div style="display:flex;align-items:center;gap:12px"><span style="font-weight:600;font-size:15.5px;letter-spacing:-0.01em;flex:1">{{ loadName }}</span><span style="width:92px;height:22px;border-radius:4px;background:var(--sd-line-soft)"></span></div>
+        <div style="display:flex;gap:8px;align-items:center"><span style="width:58px;height:16px;border-radius:3px;background:var(--sd-line-soft)"></span><span style="width:52%;height:12px;border-radius:3px;background:var(--sd-line-soft)"></span></div>
+      </header>
+      <sc-if value="{{ lookRows }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:92px minmax(0,1fr);row-gap:0">
+          <span style="padding:12px 0 12px 18px;font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Containers</span><span style="padding:12px 18px 12px 12px;display:flex;gap:10px;align-items:center"><span style="width:84px;height:12px;border-radius:3px;background:var(--sd-line-soft)"></span><span style="font-size:12px;color:var(--sd-faint)">loading</span></span>
+          <span style="padding:12px 0 12px 18px;border-top:1px solid var(--sd-line-soft);font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">PRs</span><span style="padding:12px 18px 12px 12px;border-top:1px solid var(--sd-line-soft);display:flex;gap:10px;align-items:center"><span style="width:140px;height:12px;border-radius:3px;background:var(--sd-line-soft)"></span><span style="font-size:12px;color:var(--sd-faint)">loading</span></span>
+          <span style="padding:12px 0 12px 18px;border-top:1px solid var(--sd-line-soft);font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Workflow</span><span style="padding:12px 18px 12px 12px;border-top:1px solid var(--sd-line-soft);display:flex;gap:10px;align-items:center"><span style="width:180px;height:12px;border-radius:3px;background:var(--sd-line-soft)"></span><span style="font-size:12px;color:var(--sd-faint)">loading</span></span>
+          <span style="padding:12px 0 12px 18px;border-top:1px solid var(--sd-line-soft);font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Agent</span><span style="padding:12px 18px 12px 12px;border-top:1px solid var(--sd-line-soft);display:flex;gap:10px;align-items:center"><span style="width:110px;height:12px;border-radius:3px;background:var(--sd-line-soft)"></span><span style="font-size:12px;color:var(--sd-faint)">loading</span></span>
+        </div>
+      </sc-if>
+      <sc-if value="{{ lookPanel }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--sd-line-soft)">
+          <sc-for list="{{ skelCells }}" as="c" hint-placeholder-count="4"><div style="background:var(--sd-bg);padding:12px 18px 14px;display:flex;flex-direction:column;gap:8px"><span style="font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">{{ c }}</span><span style="width:60%;height:12px;border-radius:3px;background:var(--sd-line)"></span><span style="font-size:12px;color:var(--sd-faint)">loading</span></div></sc-for>
+        </div>
+      </sc-if>
+      <footer style="display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--sd-line-soft)">
+        <span style="width:160px;height:30px;border-radius:6px;background:var(--sd-line-soft)"></span><span style="width:72px;height:30px;border-radius:6px;background:var(--sd-line-soft)"></span><span style="width:72px;height:30px;border-radius:6px;background:var(--sd-line-soft)"></span><span style="flex:1"></span><span style="width:30px;height:30px;border-radius:6px;background:var(--sd-line-soft)"></span>
+      </footer>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isReady }}" hint-placeholder-val="{{ false }}">
+    <header style="display:flex;flex-direction:column;gap:7px;padding:16px 18px 14px;background:{{ headBg }};border-radius:9px 9px 0 0;border-bottom:1px solid {{ headLine }}">
+      <div style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:8px 12px">
+        <span style="flex:1 1 220px;min-width:0;font-weight:600;font-size:15.5px;letter-spacing:-0.01em;line-height:1.3;overflow-wrap:anywhere">{{ m.name }}</span>
+        <span style="display:inline-flex;gap:6px;margin-left:auto;flex:none">
+          <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:12px;font-weight:600;white-space:nowrap;color:{{ chipFg }};background:{{ chipBg }}">{{ m.agentLabel }}</span>
+          <sc-if value="{{ m.auto }}"><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:12px;font-weight:600;white-space:nowrap;color:var(--sd-ink);border:1px solid var(--sd-ctl)">⚙ Autonomous</span></sc-if>
+        </span>
+      </div>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;font-size:13.5px">
+        <span style="font:600 10.5px/1 var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;padding:4px 6px 3px;border-radius:3px;background:var(--sd-off-bg);color:var(--sd-muted)">{{ m.type }}</span>
+        <span style="color:var(--sd-ink);text-wrap:pretty">{{ m.title }}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font:400 12px var(--sd-mono)">
+        <sc-if value="{{ m.issue }}"><a href="#" style="color:var(--sd-info);text-decoration:none" style-hover="text-decoration:underline">{{ m.issue }}</a></sc-if>
+        <sc-if value="{{ noIssue }}"><span style="color:var(--sd-faint)">no issue</span></sc-if>
+      </div>
+      <sc-if value="{{ qCollapsed }}">
+        <button onClick="{{ openQ }}" style="all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:baseline;margin-top:4px;width:100%;padding:8px 12px;border-radius:6px;background:var(--sd-card);border:1px solid var(--sd-attn-bd);cursor:pointer;font-size:13px">
+          <span style="color:var(--sd-warn);font-weight:600;white-space:nowrap">Last question</span>
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">“{{ m.question }}”</span>
+          <span style="color:var(--sd-muted);white-space:nowrap">Show ▾</span>
+        </button>
+      </sc-if>
+      <sc-if value="{{ qOpen }}">
+        <div style="margin-top:4px;padding:12px 14px 14px;border-radius:6px;background:var(--sd-card);border:1px solid var(--sd-attn-bd)">
+          <div style="display:flex;gap:8px;align-items:baseline;font-size:12px"><span style="color:var(--sd-warn);font-weight:600">Last question</span><span style="color:var(--sd-muted)">{{ m.time }}</span><span style="flex:1"></span><button onClick="{{ closeQ }}" style="all:unset;cursor:pointer;color:var(--sd-muted)">Hide ▴</button></div>
+          <p style="margin:6px 0 12px;font-size:15px;line-height:1.5;text-wrap:pretty">“{{ m.question }}”</p>
+          <button style="font:inherit;font-size:13px;font-weight:600;height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--sd-accent);background:var(--sd-accent);color:var(--sd-on-accent);cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 1px 2px rgba(20,18,12,.14)">{{ m.primary }}</button>
+        </div>
+      </sc-if>
+    </header>
+
+    <sc-if value="{{ lookRows }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:92px minmax(0,1fr)">
+        <span style="padding:12px 0 12px 18px;font:600 10.5px/20px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Containers</span>
+        <div style="padding:12px 18px 12px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;min-width:0">
+          <span style="display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{ m.summaryT.fg }};box-shadow:0 0 0 3px {{ m.summaryT.bg }}"></span>{{ m.containers.summary }}</span>
+          <sc-for list="{{ svcItems }}" as="s" hint-placeholder-count="2"><span style="font-size:13px;white-space:nowrap;color:{{ s.labelFg }}"><span style="color:{{ s.gFg }}">{{ s.g }}</span> {{ s.label }}</span></sc-for>
+          <sc-if value="{{ m.containers.unknown }}"><span style="font-size:13px;color:var(--sd-muted)">Docker unreachable · <a href="#" style="color:var(--sd-info);text-decoration:none">retry</a></span></sc-if>
+        </div>
+        <span style="padding:12px 0 12px 18px;border-top:1px solid var(--sd-line-soft);font:600 10.5px/20px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">PRs</span>
+        <div style="padding:12px 18px 12px 12px;border-top:1px solid var(--sd-line-soft);display:flex;flex-direction:column;gap:6px;min-width:0">
+          <sc-for list="{{ m.prs }}" as="p" hint-placeholder-count="1">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px">
+              <a href="#" style="font:500 12.5px var(--sd-mono);color:var(--sd-info);text-decoration:none" style-hover="text-decoration:underline">{{ p.ref }}</a>
+              <span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:3px;font-size:12px;font-weight:600;white-space:nowrap;color:{{ p.stateT.fg }};background:{{ p.stateT.bg }};border:1px {{ p.bdStyle }} {{ p.stateT.bd }}">{{ p.state }}</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;white-space:nowrap;color:{{ p.ciT.fg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ p.ciT.fg }}"></span>{{ p.ci }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noPrs }}"><span style="color:var(--sd-muted);line-height:20px">None yet</span></sc-if>
+          <sc-if value="{{ m.prError }}"><span style="color:var(--sd-warn);line-height:20px">PRs unavailable · <a href="#" style="color:var(--sd-info);text-decoration:none">retry</a></span></sc-if>
+        </div>
+        <span style="padding:12px 0 12px 18px;border-top:1px solid var(--sd-line-soft);font:600 10.5px/20px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Workflow</span>
+        <div style="padding:12px 18px 12px 12px;border-top:1px solid var(--sd-line-soft);display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;min-width:0">
+          <sc-if value="{{ wfTag }}"><span style="font:600 10.5px/1 var(--sd-mono);letter-spacing:.06em;padding:3px 5px;border-radius:3px;border:1px solid var(--sd-ctl);color:var(--sd-muted)">{{ wfTag }}</span></sc-if>
+          <span style="font-weight:{{ wfWeight }}">{{ wfValue }}</span>
+          <sc-if value="{{ hasStages }}"><span aria-hidden="true" style="display:inline-flex;gap:3px;margin-left:auto"><sc-for list="{{ m.stages }}" as="st"><span style="width:20px;height:6px;border-radius:2px;background:{{ st.c }}"></span></sc-for></span></sc-if>
+        </div>
+        <span style="padding:12px 0 12px 18px;border-top:1px solid var(--sd-line-soft);font:600 10.5px/20px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Agent</span>
+        <div style="padding:12px 18px 12px 12px;border-top:1px solid var(--sd-line-soft);display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-width:0">
+          <span style="display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap;color:{{ agentValFg }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ agentDot }};box-shadow:0 0 0 3px {{ agentHalo }}"></span>{{ agentWord }}</span>
+          <span style="color:var(--sd-muted);font-size:13px">{{ m.time }}</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ lookPanel }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--sd-line-soft)">
+        <div style="background:var(--sd-bg);padding:12px 18px 14px;display:flex;flex-direction:column;gap:6px;min-width:0">
+          <span style="font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Containers</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px"><span style="width:8px;height:8px;border-radius:50%;background:{{ m.summaryT.fg }};box-shadow:0 0 0 3px {{ m.summaryT.bg }}"></span>{{ m.containers.summary }}</span>
+          <span style="display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12.5px">
+            <sc-for list="{{ svcItems }}" as="s" hint-placeholder-count="2"><span style="white-space:nowrap;color:{{ s.labelFg }}"><span style="color:{{ s.gFg }}">{{ s.g }}</span> {{ s.label }}</span></sc-for>
+            <sc-if value="{{ m.containers.unknown }}"><span style="color:var(--sd-muted)">Docker unreachable · <a href="#" style="color:var(--sd-info);text-decoration:none">retry</a></span></sc-if>
+            <sc-if value="{{ noSvc }}"><span style="color:var(--sd-muted)">nothing running</span></sc-if>
+          </span>
+        </div>
+        <div style="background:var(--sd-bg);padding:12px 18px 14px;display:flex;flex-direction:column;gap:6px;min-width:0">
+          <span style="font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Pull requests</span>
+          <sc-for list="{{ m.prs }}" as="p" hint-placeholder-count="1">
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <span style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px"><a href="#" style="font:600 13px var(--sd-mono);color:var(--sd-info);text-decoration:none">{{ p.ref }}</a><span style="display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:3px;font-size:12px;font-weight:600;white-space:nowrap;color:{{ p.stateT.fg }};background:{{ p.stateT.bg }};border:1px {{ p.bdStyle }} {{ p.stateT.bd }}">{{ p.state }}</span></span>
+              <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ p.ciT.fg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ p.ciT.fg }}"></span>{{ p.ci }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noPrs }}"><span style="font-weight:600;font-size:15px;color:var(--sd-muted)">None yet</span></sc-if>
+          <sc-if value="{{ m.prError }}"><span style="font-weight:600;color:var(--sd-warn)">Unavailable · <a href="#" style="color:var(--sd-info);text-decoration:none;font-weight:500">retry</a></span></sc-if>
+        </div>
+        <div style="background:var(--sd-bg);padding:12px 18px 14px;display:flex;flex-direction:column;gap:6px;min-width:0">
+          <span style="display:flex;gap:8px;align-items:center;font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Workflow<sc-if value="{{ wfTag }}"><span style="padding:2px 4px;border-radius:3px;border:1px solid var(--sd-ctl);letter-spacing:.04em">{{ wfTag }}</span></sc-if></span>
+          <span style="font-weight:600;font-size:15px">{{ wfValue }}</span>
+          <sc-if value="{{ hasStages }}"><span aria-hidden="true" style="display:flex;gap:3px;margin-top:2px"><sc-for list="{{ m.stages }}" as="st"><span style="flex:1;max-width:36px;height:6px;border-radius:2px;background:{{ st.c }}"></span></sc-for></span></sc-if>
+        </div>
+        <div style="background:var(--sd-bg);padding:12px 18px 14px;display:flex;flex-direction:column;gap:6px;min-width:0">
+          <span style="font:600 10.5px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-muted)">Agent</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:{{ agentValFg }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ agentDot }};box-shadow:0 0 0 3px {{ agentHalo }}"></span>{{ agentWord }}</span>
+          <span style="font-size:12.5px;color:var(--sd-muted)">{{ m.time }}</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ barIdle }}">
+      <footer style="position:relative;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 18px;border-top:1px solid var(--sd-line-soft)">
+        <button onClick="{{ onPrimary }}" style="font:inherit;font-size:13px;font-weight:600;height:30px;padding:0 12px;border-radius:6px;border:1px solid {{ pBd }};background:{{ pBg }};color:{{ pFg }};cursor:pointer;white-space:nowrap;box-shadow:{{ pShadow }}">{{ m.primary }}</button>
+        <sc-for list="{{ m.bar }}" as="b" hint-placeholder-count="2"><button style="font:inherit;font-size:13px;font-weight:500;height:30px;padding:0 11px;border-radius:6px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink);cursor:pointer;white-space:nowrap;box-shadow:0 1px 0 rgba(20,18,12,.04)" style-hover="background:var(--sd-hover)">{{ b }}</button></sc-for>
+        <span style="flex:1"></span>
+        <button onClick="{{ toggleMenu }}" aria-label="More actions" style="font:inherit;font-size:15px;font-weight:600;width:30px;height:30px;padding:0;border-radius:6px;border:1px solid {{ dotsBd }};background:{{ dotsBg }};color:var(--sd-ink);cursor:pointer" style-hover="background:var(--sd-hover)">⋯</button>
+        <sc-if value="{{ menuOpen }}">
+          <div role="menu" style="position:absolute;right:18px;top:calc(100% - 8px);z-index:5;min-width:220px;padding:5px;border-radius:8px;background:var(--sd-card);border:1px solid var(--sd-line);box-shadow:0 12px 32px rgba(20,18,12,.16),0 2px 6px rgba(20,18,12,.08);font-size:13px">
+            <sc-for list="{{ menuItems }}" as="it"><div role="menuitem" style="padding:7px 10px;border-radius:5px;color:var(--sd-ink);opacity:{{ it.op }};border-bottom:{{ it.sep }}" style-hover="background:var(--sd-hover)">{{ it.t }}</div></sc-for>
+            <div style="height:1px;margin:4px 6px;background:var(--sd-line)"></div>
+            <div role="menuitem" onClick="{{ onAbandon }}" style="padding:7px 10px;border-radius:5px;color:var(--sd-err);font-weight:600;cursor:pointer" style-hover="background:var(--sd-err-bg)">✕ Abandon…</div>
+          </div>
+        </sc-if>
+      </footer>
+    </sc-if>
+    <sc-if value="{{ confirmClose }}">
+      <footer style="display:flex;flex-direction:column;gap:12px;padding:14px 18px 16px;border-top:1px solid var(--sd-err-bd);border-radius:0 0 9px 9px">
+        <div><div style="font-weight:600">Close out {{ m.name }}?</div><div style="font-size:13px;color:var(--sd-muted)">Moves the issue to Done, writes closeout.md, removes the workspace and deletes the merged branches.</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button style="font:inherit;font-size:13px;font-weight:600;height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--sd-err);background:var(--sd-err-bg);color:var(--sd-err);cursor:pointer">✓ Yes, close out</button>
+          <button onClick="{{ cancel }}" style="font:inherit;font-size:13px;height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink);cursor:pointer">Cancel</button>
+        </div>
+      </footer>
+    </sc-if>
+    <sc-if value="{{ confirmAbandon }}">
+      <footer style="display:flex;flex-direction:column;gap:12px;padding:14px 18px 16px;border-top:1px solid var(--sd-err);background:var(--sd-err-bg);border-radius:0 0 9px 9px">
+        <div><div style="font-weight:600;color:var(--sd-err)">Abandon {{ m.name }}?</div><div style="font-size:13px">Posts the reason on the issue and marks it abandoned, then removes the workspace. Every branch is pushed and kept.</div></div>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--sd-muted)">Reason (required)
+          <input value="{{ reason }}" onChange="{{ onReason }}" placeholder="e.g. superseded by stellwerk#240" style="font:inherit;font-size:13px;height:32px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink)"></input>
+        </label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button style="font:inherit;font-size:13px;font-weight:600;height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--sd-err);background:var(--sd-err);color:#fff;cursor:pointer;opacity:{{ abOp }}">✕ Yes, abandon</button>
+          <button onClick="{{ cancel }}" style="font:inherit;font-size:13px;height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink);cursor:pointer">Cancel</button>
+        </div>
+      </footer>
+    </sc-if>
+  </sc-if>
+</article>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:560,&quot;height&quot;:360},&quot;look&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;rows&quot;,&quot;panel&quot;],&quot;default&quot;:&quot;rows&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;wsId&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;143&quot;,&quot;206&quot;,&quot;151&quot;,&quot;bwell&quot;,&quot;loading&quot;,&quot;long&quot;,&quot;twoprs&quot;,&quot;many&quot;,&quot;noissue&quot;,&quot;prerr&quot;,&quot;dockerdown&quot;],&quot;default&quot;:&quot;143&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;menuOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;confirm&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;closeout&quot;,&quot;abandon&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showQuestion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;questionOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;reason&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { d: null, menu: null, confirm: null, q: null, reason: null };
+  componentDidMount() {
+    import(new URL('data.js', document.baseURI).href).then(d => this.setState({ d }));
+  }
+  renderVals() {
+    const p = this.props, d = this.state.d;
+    const look = p.look || 'rows';
+    const m = d ? d.model(p.wsId || '143') : null;
+    const loading = !m || m.loading;
+    const ready = m && !loading;
+    const menuOpen = this.state.menu ?? !!p.menuOpen;
+    const confirm = this.state.confirm ?? p.confirm ?? null;
+    const hasQ = !!(ready && m.question && p.showQuestion);
+    const qOpen = hasQ && (this.state.q ?? !!p.questionOpen);
+    const reason = this.state.reason ?? (p.reason || '');
+    const needs = ready && m.needs;
+    const destr = ready && m.primaryDestructive;
+    const G = { up: '●', down: '○', unhealthy: '▲', starting: '◐' };
+    const W = { unhealthy: ' unhealthy', starting: ' starting' };
+    const wf = ready ? m.workflow : {};
+    const wfTag = '';
+    const wfValue = wf.kind === 'icm' ? `Stage ${wf.n} of ${wf.m} · ${wf.name}` : wf.kind === 'jit' ? wf.text.replace('JIT · ', '') : wf.text;
+    const stages = ready ? m.stages : [];
+    return {
+      m: ready ? { ...m, prs: m.prs.map(x => ({ ...x, bdStyle: x.draft ? 'dashed' : 'solid' })), stages } : m,
+      isLoading: loading, isReady: !loading,
+      lookRows: look === 'rows', lookPanel: look === 'panel',
+      skelCells: ['Containers', 'Pull requests', 'Workflow', 'Agent'],
+      loadName: m ? m.name : '',
+      noIssue: ready && !m.issue,
+      noPrs: ready && !m.prs.length && !m.prError,
+      noSvc: ready && !m.svc.length && !m.containers.unknown,
+      svcItems: ready ? m.svc.map(s => ({ g: G[s.st], gFg: s.fg, label: s.name + (W[s.st] || ''), labelFg: s.st === 'unhealthy' || s.st === 'starting' ? s.fg : 'var(--sd-muted)' })) : [],
+      hasStages: stages.length > 0,
+      wfTag, wfValue, wfWeight: wf.kind === 'life' ? 600 : 500,
+      chipFg: ready ? m.agentT.fg : '', chipBg: ready ? m.agentT.bg : '',
+      agentDot: ready ? m.agentPane.fg : '', agentHalo: ready ? m.agentPane.bg : '',
+      agentValFg: needs ? 'var(--sd-warn)' : 'var(--sd-ink)',
+      agentWord: ready ? m.agentLabel.replace(/^[●◌✓]\s*/, '') : '',
+      cardBd: needs ? 'var(--sd-attn-bd)' : 'var(--sd-line)',
+      cardShadow: needs ? '0 0 0 1px var(--sd-attn-bd), 0 4px 14px -4px rgba(201,138,44,.35)' : '0 1px 2px rgba(20,18,12,.05), 0 4px 12px -6px rgba(20,18,12,.10)',
+      headBg: needs ? 'var(--sd-attn-bg)' : 'transparent',
+      headLine: needs ? 'var(--sd-attn-bd)' : 'var(--sd-line-soft)',
+      pBg: destr ? 'var(--sd-err-bg)' : 'var(--sd-accent)',
+      pFg: destr ? 'var(--sd-err)' : 'var(--sd-on-accent)',
+      pBd: destr ? 'var(--sd-err)' : 'var(--sd-accent)',
+      pShadow: destr ? 'none' : 'inset 0 1px 0 rgba(255,255,255,.14), 0 1px 2px rgba(20,18,12,.14)',
+      dotsBg: menuOpen ? 'var(--sd-hover)' : 'var(--sd-card)',
+      dotsBd: menuOpen ? 'var(--sd-ink)' : 'var(--sd-ctl)',
+      qCollapsed: hasQ && !qOpen, qOpen,
+      openQ: () => this.setState({ q: true }), closeQ: () => this.setState({ q: false }),
+      barIdle: !confirm, menuOpen,
+      menuItems: ready ? m.menu.map((t, i) => ({ t, op: t === 'Open issue ↗' && !m.issue ? 0.45 : 1, sep: i === m.extra.length - 1 ? '1px solid var(--sd-line-soft)' : '0' })) : [],
+      toggleMenu: () => this.setState({ menu: !menuOpen }),
+      onPrimary: () => destr && this.setState({ confirm: 'closeout', menu: false }),
+      onAbandon: () => this.setState({ confirm: 'abandon', menu: false }),
+      confirmClose: confirm === 'closeout', confirmAbandon: confirm === 'abandon',
+      cancel: () => this.setState({ confirm: false, reason: '' }),
+      reason, onReason: e => this.setState({ reason: e.target.value }),
+      abOp: reason.trim() ? 1 : 0.5,
+    };
+  }
+}
+</script>
+</body>
+</html>
