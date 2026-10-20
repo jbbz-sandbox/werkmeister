@@ -17,10 +17,10 @@ export interface SearchableWorkspace {
 
 export interface RepoPr {
   repo?: string;
-  branch?: string;
-  title?: string;
-  state?: string;
-  url?: string;
+  branch?: string | null;
+  title?: string | null;
+  state?: string | null;
+  url?: string | null;
   labels?: string[];
 }
 
