@@ -720,19 +720,19 @@ test("the close-out MCP tool archives the desktop sessions once it succeeded", a
     }),
   );
   let failNext = false;
-  on("tool.call", { tool: /workspaces__close-out$/ }, () =>
+  on("tool.call", { tool: /werkmeister__close-out$/ }, () =>
     failNext
       ? { result: "not shipped", isError: true, text: "not shipped" }
       : { result: { command: "sandbox close-out abc" }, text: "sandbox close-out abc" },
   );
-  const tool = "mcp__plugin_werkmeister_workspaces__close-out";
-  const r = await $.tool.call({ tool, name: "abc" } as never);
+  const tool = "mcp__plugin_werkmeister_werkmeister__close-out";
+  const r = await $.tool.call({ tool, workspace: "abc" } as never);
   expect(r.context).toEqual([
     'Desktop sessions in /ws/abc: archived "Newer in abc"; left open "Older in abc": session is pinned',
   ]);
   failNext = true;
   w.calls.length = 0;
-  const failed = await $.tool.call({ tool, name: "abc" } as never);
+  const failed = await $.tool.call({ tool, workspace: "abc" } as never);
   expect(failed.context ?? []).toEqual([]);
   expect(w.calls.filter((c) => c.key === "ccd_session_mgmt/archive_session")).toHaveLength(0);
 });

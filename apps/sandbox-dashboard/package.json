@@ -4,17 +4,15 @@
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
-  "description": "MCP App for creating sandbox multi-repo workspaces from inside Claude Desktop, delegating to the `sandbox workspace` CLI.",
+  "description": "The localhost workspaces dashboard, the --browser-form page, and the MCP App UI bundles apps/mcp serves.",
   "main": "dist/main.js",
   "scripts": {
     "build:ui": "cross-env INPUT=mcp-app.html vite build && cross-env INPUT=mcp-list.html vite build && cross-env INPUT=workspace-list.artifact.html vite build && cross-env INPUT=browser.html vite build && cross-env INPUT=form.html vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "build": "tsc --noEmit -p tsconfig.json && npm run build:ui && npm run build:server",
     "watch:ui": "cross-env NODE_ENV=development INPUT=mcp-app.html vite build --watch",
-    "serve:stdio": "node dist/main.js --stdio",
     "serve:http": "node dist/main.js",
     "dev": "cross-env NODE_ENV=development concurrently \"npm run watch:ui\" \"tsx --watch src/main.ts\"",
-    "start:stdio": "tsx src/main.ts --stdio",
     "test": "npm run build:server && for f in test/*.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
@@ -23,17 +21,16 @@
     "@rjsf/core": "^5.24.0",
     "@rjsf/utils": "^5.24.0",
     "@rjsf/validator-ajv8": "^5.24.0",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
     "markdown-it": "^14.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "werkmeister-core": "^0.19.0",
+    "werkmeister-mcp": "^0.3.5",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.10.0",

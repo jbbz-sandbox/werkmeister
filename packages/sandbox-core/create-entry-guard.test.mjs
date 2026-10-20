@@ -34,8 +34,8 @@ test("the workspace skill states the one rule and the batch check", () => {
   );
   assert.match(skill, /Every create goes through `createWorkspace`/);
   assert.match(skill, /\.sandbox\/issue\.md/);
-  assert.match(skill, /mcp__plugin_werkmeister_workspaces__workspace/);
-  assert.doesNotMatch(skill, /mcp__workspaces__workspace/);
+  assert.match(skill, /mcp__plugin_werkmeister_werkmeister__create-workspace-form/);
+  assert.doesNotMatch(skill, /mcp__plugin_werkmeister_workspaces__/);
   assert.ok(skill.includes("grep -q '^## Issue$'"));
   assert.match(skill, /--no-distill/);
   assert.match(skill, /fails the create\*\*\s+if the issue can't be read/);

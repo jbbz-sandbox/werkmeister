@@ -42,10 +42,10 @@ generated from [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/
 
 ## Bundled MCP server (`workspaces`)
 
-The plugin's [`.mcp.json`](./.mcp.json) auto-wires an MCP server (`w9r dashboard`,
-source in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard)) exposing ~26 tools —
-workspace create/manage, PR review, issue lookups, k8s/kube health, and a Claude
-session bridge — with **one form definition and graceful UI degradation per client**:
+The plugin's [`.mcp.json`](./.mcp.json) auto-wires the one werkmeister MCP server
+(`werkmeister mcp`, source in [`apps/mcp`](../../apps/mcp)) exposing every tool —
+workspace create/manage and lifecycle, PR review, issue lookups, k8s/kube health, and a
+Claude session bridge — with **one form definition and graceful UI degradation per client**:
 
 | Surface | How it connects | UI |
 |---------|-----------------|----|
@@ -55,22 +55,23 @@ session bridge — with **one form definition and graceful UI degradation per cl
 
 The server detects whether the client renders MCP App UI (`io.modelcontextprotocol/ui`
 capability); every tool also returns markdown/text, so any host degrades gracefully.
-Call the create tool directly: `mcp__plugin_werkmeister_workspaces__workspace` (optionally
+Call the create tool directly: `mcp__plugin_werkmeister_werkmeister__create-workspace-form` (optionally
 `{ "issue": "<issue ID>" }`). Full tool table in the
-[app README](../../apps/sandbox-dashboard/README.md).
+[server README](../../apps/mcp/README.md).
 
 ### Register on Claude Desktop
 Plugins don't install in Desktop, so add the same server to
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
-{ "mcpServers": { "workspaces": { "command": "w9r", "args": ["dashboard"] } } }
+{ "mcpServers": { "werkmeister": { "command": "werkmeister", "args": ["mcp"] } } }
 ```
 
 ## Dependencies
 
-- **MCP server build:** run `cd apps/sandbox-dashboard && npm run build` once — `w9r dashboard`
-  runs the compiled `dist/main.js`. Without it, the server won't start.
+- **UI build (checkout only):** run `cd apps/sandbox-dashboard && npm run build` once — it
+  builds the `ui://` HTML, the browser form and the localhost dashboard that `werkmeister mcp`
+  serves. Without it the server still runs; its App tools fall back to text.
 - The `w9r` CLI (package `werkmeister` 0.14 or later) must be on `PATH`, and Docker running.
 - **Self-contained:** the workspace form and its "Refine with Claude" / issue-fetch logic
   live in [`apps/sandbox-dashboard`](../../apps/sandbox-dashboard) — no external skill is required.
@@ -115,9 +116,9 @@ alias for a renamed plugin, and an already-added `sandbox` marketplace stops res
 | plugin `sandbox-tools` | `werkmeister` |
 | marketplace `sandbox` | `werkmeister` (install id `werkmeister@werkmeister`) |
 | skills `sandbox-workspace`, `sandbox-diagnose`, `sandbox-feature-test`, `sandbox-status`, `sandbox-caddy-reload`, `sandbox-routing-test`, `sandbox-starting-prompt` | `/werkmeister:workspace`, `:diagnose`, `:feature-test`, `:status`, `:caddy-reload`, `:routing-test`, `:starting-prompt` |
-| plugin MCP server `sandbox-workspace` (`mcp__plugin_sandbox-tools_sandbox-workspace__*`) | `workspaces` (`mcp__plugin_werkmeister_workspaces__*`) |
-| Claude Desktop entry `"sandbox-workspace"` (`mcp__sandbox-workspace__*`) | `"workspaces"` (`mcp__workspaces__*`) |
-| registry MCP server `sandbox`, tools `sandbox-up`, `sandbox-status`, `sandbox-workspace`, … | `werkmeister`, tools `up`, `status`, `workspace`, … (every `sandbox-` prefix dropped) |
+| plugin MCP server `sandbox-workspace` (`mcp__plugin_sandbox-tools_sandbox-workspace__*`) | `werkmeister` (`mcp__plugin_werkmeister_werkmeister__*`; it was `workspaces` until SW-48) |
+| Claude Desktop entry `"sandbox-workspace"` (`mcp__sandbox-workspace__*`) | `"werkmeister"` (`mcp__werkmeister__*`; it was `"workspaces"` until SW-48) |
+| registry MCP server `sandbox`, tools `sandbox-up`, `sandbox-status`, `sandbox-workspace`, … | `werkmeister`, tools `up`, `status`, `create-workspace`, … (every `sandbox-` prefix dropped; SW-48 then folded the `workspaces` server in) |
 
 **One step:** update the CLI to `werkmeister` 0.14 or later, then run
 

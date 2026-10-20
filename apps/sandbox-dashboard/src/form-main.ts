@@ -9,7 +9,7 @@
  * `workspace-form-schema` and `refine-prompt`, and intercepts
  * `create-workspace` / `cancel-form` to resolve the caller's
  * promptViaLocalhostForm() promise — the actual create runs in the caller
- * (server.ts `workspace` tool or form-cli.ts) after this page submits.
+ * (form-cli.ts) after this page submits.
  */
 import { initCreateForm } from "./create-form.js";
 import { appRoot } from "./theme.js";

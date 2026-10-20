@@ -18,7 +18,7 @@ workspace's newest session.
    Cowork; the same UI is available inline as a fallback in Claude Desktop —
    calling the Sandbox `list-workspaces` tool renders it as an MCP App.
 2. **Sandbox MCP server connected**: check that
-   `mcp__plugin_werkmeister_workspaces__list-workspaces` (or the equivalent under the
+   `mcp__plugin_werkmeister_werkmeister__list-workspaces` (or the equivalent under the
    user's server name) is available.
 3. **Built HTML exists**: `apps/sandbox-dashboard/dist/workspace-list.artifact.html`
    in the sandbox checkout. If missing, build it:
@@ -43,7 +43,7 @@ workspace's newest session.
    - `id`: `workspace-list`
    - `html_path`: the file you just wrote
    - `mcp_tools`: the fully-qualified tool list from the file's
-     `cowork-artifact-meta` block (all 16 `mcp__<server>__…` names)
+     `cowork-artifact-meta` block (all 19 `mcp__<server>__…` names)
 4. Verify with `mcp__cowork__verify_artifact` (id `workspace-list`) — the debug
    log should show a `load` event and a successful `list-workspaces` call once
    the user opens it.

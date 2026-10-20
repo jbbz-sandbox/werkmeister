@@ -27,7 +27,7 @@ test("every skill dir is named by its frontmatter", () => {
 
 test("the plugin's MCP server is the one the code and the permission rules name", () => {
   const servers = Object.keys(readJson("plugins/werkmeister/.mcp.json").mcpServers);
-  assert.deepEqual(servers, ["workspaces"]);
+  assert.deepEqual(servers, ["werkmeister"]);
 });
 
 test("the old plugin path is a link to the new one, for CLAUDE_CODE_PLUGIN_DIRS installs", () => {

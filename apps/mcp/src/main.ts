@@ -1,8 +1,11 @@
 /**
- * Entry point for the remote sandbox MCP surface.
+ * The one werkmeister MCP server (SW-48): every tool, on every transport.
  *
- *   node dist/main.js --stdio    # a host-local client (Claude Desktop, host CLI)
+ *   node dist/main.js --stdio    # a host-local client (Claude Desktop, the plugin, host CLI)
  *   node dist/main.js            # Streamable HTTP on PORT (default 3002)
+ *
+ * The dashboard imports {@link createServer} for its browser page's `/api/tool`,
+ * so importing this module must not start a server.
  *
  * This server holds the privilege a container is denied: it runs on the host,
  * with the host's Docker daemon, and exposes only the verbs. Everything that
@@ -10,6 +13,8 @@
  * token.
  */
 
+import * as fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -18,10 +23,12 @@ import type { NextFunction, Request, Response } from "express";
 
 import { authorized, readOrCreateToken } from "./lib/token.js";
 import { registerTools } from "./tools.js";
+import { registerWorkspaceTools } from "./workspace_tools.js";
 
-function createServer(): McpServer {
+export function createServer(): McpServer {
   const server = new McpServer({ name: "werkmeister", version: "0.1.0" });
   registerTools(server);
+  registerWorkspaceTools(server);
   return server;
 }
 
@@ -112,7 +119,13 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// realpath on both sides: a launcher may reach this file through a symlink.
+const isEntry =
+  process.argv[1] !== undefined &&
+  fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+if (isEntry) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

@@ -1,7 +1,10 @@
 # werkmeister-mcp
 
-The remote MCP surface for the sandbox verbs. Headless, authenticated, and
-host-side: it holds the Docker privilege so a container agent does not have to.
+The one werkmeister MCP server (SW-48): every tool, one name per verb, over
+stdio (`werkmeister mcp`) and authenticated HTTP on :3002. Host-side: it holds
+the Docker privilege so a container agent does not have to. The dashboard
+(`apps/sandbox-dashboard`) has no MCP server of its own; its browser page calls
+this one's `createServer()` in process.
 
 ## Why it exists
 
@@ -57,7 +60,8 @@ wiring it everywhere would put a permanently failing server into every
 workspace. Add `sandbox` to the archetype or entry of a workspace that is
 actually driven from a container.
 
-Tools take an optional `feature` argument that overrides the header.
+Workspace-scoped tools take one optional `workspace` argument — the workspace
+directory name or its feature name — that overrides the header.
 
 That covers a container the sandbox itself runs. For putting the *agent* in a
 container, a Docker Sandbox microVM, or a full VM — what each needs mounted and
@@ -72,6 +76,30 @@ server. Until that is widened, use:
     lsof -nP -iTCP:3002 -sTCP:LISTEN
     cat ~/.sandbox/sandbox-mcp.pid
     tail ~/.sandbox/sandbox-mcp.log
+
+## Tools
+
+| Group | Tools |
+|-------|-------|
+| Create | `create-workspace-form` (App UI: inline form, or the browser form; `issue` pre-fills), `create-workspace` (`formData` + `open`), `init-workspace`; UI-only: `workspace-form-schema`, `issue-form-data`, `refine-prompt` |
+| List and lifecycle | `list-workspaces` (App UI), `status` (`detail` adds the host snapshot), `up`, `stop`, `restart`, `down`, `close-out`, `services`, `logs`, `test`, `remove-service`, `proxy-reload` |
+| Open | `open-workspace` (VS Code), `open-feature` (tagged browser), `open-workspaces-ui` (the localhost dashboard) |
+| Pull requests | `workspace-pr` (gate / open / status), `workspace-prs`, `open-prs`, `pr-approve`, `ask-pr-review`, `pr-reconcile` |
+| Issues | `issue`; UI-only: `issue-statuses` |
+| Context layer | `skills`, `hooks`, `notes`, `standards`, `detect` |
+| Infra | `connect`, `intercept`, `docker-ui`, `k8s-forwards-status`, `kube-context`, `kube-switch`, `check-in`, `workspace-usage` |
+| Claude sessions | `claude-transcript`, `claude-send`, `claude-resume`; UI-only: `claude-turn-status` |
+
+UI-only tools carry `_meta.ui.visibility: ["app"]`: the MCP App calls them, the
+model does not see them.
+
+**The App UI.** `create-workspace-form` and `list-workspaces` carry
+`_meta.ui.resourceUri` (`ui://workspace/mcp-app.html`, `ui://workspace/mcp-list.html`).
+A client that advertises the `io.modelcontextprotocol/ui` capability (Claude
+Desktop) renders them inline; any other client gets the browser form
+(`form-cli.js`) or a markdown table. The HTML and the form are the dashboard's
+build output, read from `apps/sandbox-dashboard/dist` beside the CLI, so they
+exist in a checkout only; a package install takes the text fallback.
 
 ## What is not here
 
