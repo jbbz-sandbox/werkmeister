@@ -1,5 +1,17 @@
 # vscode-plugin
 
+## 0.18.0
+
+### Patch Changes
+
+- 963da69: The Workspaces pane and the VS Code tree no longer show an intercept control on local-only services such as CLIs and libraries, which Telepresence can never intercept. `sandbox status --intercepts --json` has a new `remote_services` list, present whether or not Telepresence is available, naming the registry services that have `k8s_deployment`, `k8s_namespace` and `k8s_port`. Remote services keep every state they had, including a disabled control when `k8s_port_name` is missing.
+- fc35a8e: Stub dockerode's session-only `@grpc/*` requires in the extension bundle, so the esbuild watch build no longer fails (and crash-loops its container) when they are not installed; the bundle also shrinks by about 2 MB.
+- Updated dependencies [963da69]
+- Updated dependencies [28e39b6]
+- Updated dependencies [cfea47d]
+- Updated dependencies [8a0c8b4]
+  - werkmeister-core@0.18.0
+
 ## 0.17.1
 
 ### Patch Changes
