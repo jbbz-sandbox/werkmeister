@@ -56,7 +56,13 @@ import * as path from "node:path";
 
 import { applyEdits, modify, type ParseError, parse as parseJsonc } from "jsonc-parser";
 
-import { expandUser, getReposRoot, sandboxRoot, servicesLocalYamlPath } from "./config.js";
+import {
+  expandUser,
+  getReposRoot,
+  sandboxHome,
+  sandboxRoot,
+  servicesLocalYamlPath,
+} from "./config.js";
 import {
   configPath,
   type IngressSettings,
@@ -1177,6 +1183,252 @@ export function syncClaudeStandardsDir(
   return [{ label, ok: true, optional: true, detail: `granted in ${settingsPath}` }];
 }
 
+// ---------------------------------------------------------------------------
+// PR watch schedule (SW-14): terminal sessions get PR callbacks only if
+// something runs `pr watch` on a timer — desktop sessions have the mod's.
+// ---------------------------------------------------------------------------
+
+export const PR_WATCH_LABEL = "com.werkmeister.pr-watch";
+export const PR_WATCH_CRON_MARKER = "# werkmeister pr watch";
+const PR_WATCH_INTERVAL_S = 600;
+const PR_WATCH_REMOVE_HINT = "Remove with: werkmeister pr watch --uninstall";
+
+export interface PrWatchScheduleOptions {
+  /** `darwin` → launchd; anything else → crontab. */
+  platform?: NodeJS.Platform;
+  home?: string;
+  logFile?: string;
+  /** The `werkmeister` wrapper the job runs; baked in as an absolute path. */
+  wrapper?: string;
+  /** Baked into the job: launchd and cron start with a PATH that lacks node, gh and docker. */
+  pathEnv?: string;
+  uid?: number;
+  runner?: Runner;
+}
+
+export interface PrWatchScheduleState {
+  kind: "launchd" | "cron";
+  installed: boolean;
+  /** Installed and identical to what an install would write now. */
+  current: boolean;
+  /** The plist path, or `crontab`. */
+  where: string;
+  logFile: string;
+}
+
+function resolvePrWatch(opts: PrWatchScheduleOptions) {
+  const home = opts.home ?? os.homedir();
+  return {
+    kind:
+      (opts.platform ?? process.platform) === "darwin" ? ("launchd" as const) : ("cron" as const),
+    plist: path.join(home, "Library", "LaunchAgents", `${PR_WATCH_LABEL}.plist`),
+    // ponytail: no rotation — a few lines per 10-minute pass; truncate on install or rotate if it grows.
+    logFile: opts.logFile ?? path.join(sandboxHome(), "pr-watch.log"),
+    wrapper: opts.wrapper ?? path.join(sandboxRoot(), "werkmeister"),
+    pathEnv: opts.pathEnv ?? process.env.PATH ?? "",
+    uid: opts.uid ?? process.getuid?.() ?? 0,
+    runner: opts.runner ?? defaultRunner,
+  };
+}
+type ResolvedPrWatch = ReturnType<typeof resolvePrWatch>;
+
+const xmlEscape = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+function prWatchPlist(r: ResolvedPrWatch): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${PR_WATCH_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${xmlEscape(r.wrapper)}</string>
+    <string>pr</string>
+    <string>watch</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>${PR_WATCH_INTERVAL_S}</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${xmlEscape(r.pathEnv)}</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>${xmlEscape(r.logFile)}</string>
+  <key>StandardErrorPath</key>
+  <string>${xmlEscape(r.logFile)}</string>
+</dict>
+</plist>
+`;
+}
+
+// Single-quoted for sh, then `%` escaped: cron turns a bare `%` into a newline.
+const cronQuote = (s: string): string => `'${s.replace(/'/g, "'\\''")}'`.replace(/%/g, "\\%");
+
+function prWatchCronLine(r: ResolvedPrWatch): string {
+  return (
+    `*/${PR_WATCH_INTERVAL_S / 60} * * * * PATH=${cronQuote(r.pathEnv)} ${cronQuote(r.wrapper)} ` +
+    `pr watch >> ${cronQuote(r.logFile)} 2>&1 ${PR_WATCH_CRON_MARKER}`
+  );
+}
+
+const isPrWatchCronLine = (line: string): boolean => line.trimEnd().endsWith(PR_WATCH_CRON_MARKER);
+
+/** The crontab's lines, `[]` for none; `error` when it can't be read. */
+function readCrontab(runner: Runner): { rows: string[] } | { error: string } {
+  const [rc, out] = runner(["crontab", "-l"]);
+  if (rc === 127) return { error: "crontab not found" };
+  if (rc !== 0) {
+    return /no crontab/i.test(out) ? { rows: [] } : { error: `crontab -l: ${briefOutput(out)}` };
+  }
+  return { rows: out ? out.split("\n") : [] };
+}
+
+/** `crontab <file>`, since a {@link Runner} has no stdin for `crontab -`. */
+function writeCrontab(runner: Runner, rows: string[]): string | null {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-crontab-"));
+  const file = path.join(dir, "crontab");
+  try {
+    fs.writeFileSync(file, rows.length ? `${rows.join("\n")}\n` : "");
+    const [rc, out] = runner(["crontab", file]);
+    return rc === 0 ? null : `crontab write failed: ${briefOutput(out)}`;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function prWatchScheduleState(opts: PrWatchScheduleOptions = {}): PrWatchScheduleState {
+  const r = resolvePrWatch(opts);
+  if (r.kind === "launchd") {
+    const existing = fs.existsSync(r.plist) ? fs.readFileSync(r.plist, "utf8") : null;
+    return {
+      kind: r.kind,
+      installed: existing !== null,
+      current: existing === prWatchPlist(r),
+      where: r.plist,
+      logFile: r.logFile,
+    };
+  }
+  const tab = readCrontab(r.runner);
+  const ours = "rows" in tab ? tab.rows.filter(isPrWatchCronLine) : [];
+  return {
+    kind: r.kind,
+    installed: ours.length > 0,
+    current: ours.length === 1 && ours[0] === prWatchCronLine(r),
+    where: "crontab",
+    logFile: r.logFile,
+  };
+}
+
+/**
+ * `werkmeister pr watch --install`, and setup's yes: a launchd agent on macOS,
+ * else one crontab line. Rewrites only when the content would change.
+ */
+export function installPrWatchSchedule(opts: PrWatchScheduleOptions = {}): {
+  ok: boolean;
+  lines: string[];
+} {
+  const r = resolvePrWatch(opts);
+  const done = (where: string, changed: boolean) => ({
+    ok: true,
+    lines: [
+      changed ? `Installed ${where}.` : `Already installed: ${where}.`,
+      `It runs \`werkmeister pr watch\` every ${PR_WATCH_INTERVAL_S / 60} minutes.`,
+      `Logs: ${r.logFile}`,
+      PR_WATCH_REMOVE_HINT,
+    ],
+  });
+  fs.mkdirSync(path.dirname(r.logFile), { recursive: true });
+
+  if (r.kind === "launchd") {
+    const where = `launchd agent ${r.plist}`;
+    const plist = prWatchPlist(r);
+    // ponytail: an unchanged plist booted out by hand stays out until --uninstall + --install.
+    if (fs.existsSync(r.plist) && fs.readFileSync(r.plist, "utf8") === plist) {
+      return done(where, false);
+    }
+    fs.mkdirSync(path.dirname(r.plist), { recursive: true });
+    fs.writeFileSync(r.plist, plist);
+    // Fails when nothing is loaded yet; bootstrap refuses a label that already is.
+    r.runner(["launchctl", "bootout", `gui/${r.uid}/${PR_WATCH_LABEL}`]);
+    const [rc, out] = r.runner(["launchctl", "bootstrap", `gui/${r.uid}`, r.plist]);
+    if (rc !== 0) {
+      return {
+        ok: false,
+        lines: [
+          `launchctl bootstrap failed: ${briefOutput(out)}`,
+          `${r.plist} is written; re-run to retry.`,
+        ],
+      };
+    }
+    return done(where, true);
+  }
+
+  const tab = readCrontab(r.runner);
+  if ("error" in tab) return { ok: false, lines: [tab.error] };
+  const line = prWatchCronLine(r);
+  const ours = tab.rows.filter(isPrWatchCronLine);
+  if (ours.length === 1 && ours[0] === line) return done("crontab line", false);
+  const failed = writeCrontab(r.runner, [...tab.rows.filter((l) => !isPrWatchCronLine(l)), line]);
+  return failed ? { ok: false, lines: [failed] } : done("crontab line", true);
+}
+
+/** `werkmeister pr watch --uninstall`: the one way to remove the schedule. */
+export function uninstallPrWatchSchedule(opts: PrWatchScheduleOptions = {}): {
+  ok: boolean;
+  lines: string[];
+} {
+  const r = resolvePrWatch(opts);
+  const none = { ok: true, lines: ["No PR watch schedule installed."] };
+  if (r.kind === "launchd") {
+    if (!fs.existsSync(r.plist)) return none;
+    r.runner(["launchctl", "bootout", `gui/${r.uid}/${PR_WATCH_LABEL}`]);
+    fs.rmSync(r.plist, { force: true });
+    return { ok: true, lines: [`Removed launchd agent ${r.plist}.`] };
+  }
+  const tab = readCrontab(r.runner);
+  if ("error" in tab) return { ok: false, lines: [tab.error] };
+  if (!tab.rows.some(isPrWatchCronLine)) return none;
+  const failed = writeCrontab(
+    r.runner,
+    tab.rows.filter((l) => !isPrWatchCronLine(l)),
+  );
+  return failed
+    ? { ok: false, lines: [failed] }
+    : { ok: true, lines: ["Removed the crontab line."] };
+}
+
+/** Setup's report line; installs only when the wizard asked and the person said yes. */
+export function syncPrWatchSchedule(
+  checkOnly: boolean,
+  install: boolean,
+  opts: PrWatchScheduleOptions = {},
+): Step[] {
+  const label = "PR watch schedule (optional)";
+  if (install && !checkOnly) {
+    const res = installPrWatchSchedule(opts);
+    if (!res.ok) return [{ label, ok: false, optional: true, detail: res.lines.join(" ") }];
+  }
+  const state = prWatchScheduleState(opts);
+  if (!state.installed) {
+    return [
+      {
+        label,
+        ok: true,
+        detail:
+          "not installed (opt in via `werkmeister setup` or `werkmeister pr watch --install`)",
+      },
+    ];
+  }
+  const stale = state.current ? "" : "; stale — re-run `werkmeister setup`";
+  return [
+    { label, ok: true, detail: `installed (${state.where}), logs → ${state.logFile}${stale}` },
+  ];
+}
+
 /** `<publisher>.<name>` from packages/vscode-plugin/package.json, as `code` lists it. */
 export const VSCODE_EXTENSION_ID = "jbbz.werkmeister-vscode";
 /** Where the CLI's `prepack` puts the packaged extension inside the tarball. */
@@ -1503,6 +1755,8 @@ export interface RunSetupOptions {
   installVscodeExtension?: boolean;
   /** Grant Claude Code read access to the standards dir in its user settings (the wizard asks first). */
   grantStandardsDir?: boolean;
+  /** Install the `pr watch` schedule (the wizard asks first). */
+  installPrWatch?: boolean;
 }
 
 /**
@@ -1621,5 +1875,6 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
       runner,
     ),
   );
+  steps.push(...syncPrWatchSchedule(checkOnly, options.installPrWatch ?? false, { runner }));
   return steps;
 }
