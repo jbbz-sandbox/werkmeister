@@ -65,7 +65,14 @@ import { featureUrl } from "./feature_routing.js";
 import { fetchIssueSnapshot, IssueFetchError, type IssueSnapshot } from "./issue_snapshot.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { listNotes } from "./notes.js";
-import { abandonWorkspace, type Lifecycle, lifecycleOf, removalBlockers } from "./pr_lifecycle.js";
+import {
+  abandonWorkspace,
+  type Deps,
+  type Lifecycle,
+  lifecycleOf,
+  removalBlockers,
+  shipMerged,
+} from "./pr_lifecycle.js";
 import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { provisionWorkspace, WorkspaceInitError } from "./workspace_init.js";
@@ -1506,6 +1513,10 @@ export interface CheckInRow {
   updatedAt: string | null;
   /** The transcript moved since the previous check-in. Always false on a first run. */
   changed: boolean;
+  /** {@link lifecycleOf}'s state, read after the sweep ships merged PRs. */
+  lifecycle: Lifecycle;
+  /** One per PR file; `repo` is its worktree dir, `release` the tag that shipped it. */
+  prs: Array<{ repo: string; url: string | null; status: string; release: string | null }>;
 }
 
 export interface CheckInTriage {
@@ -1521,6 +1532,8 @@ export interface CheckInTriage {
    * first run, Claude spoke last instead). Never one mid claude-send turn.
    */
   candidates: string[];
+  /** Shipped or abandoned with no Claude turn working: ask the person about close-out. */
+  readyToClose: string[];
 }
 
 /** `stages/<stage>/output/*.md` files with a line starting `status: proposed`, relative to `dir`. */
@@ -1542,10 +1555,11 @@ async function proposedGates(dir: string): Promise<string[]> {
 /**
  * Step 1 of the check-in skill in one call: each workspace's labels, container
  * and Claude state, proposed stage gates and whether its transcript moved since
- * the last check-in, filtered by `skip` / `focus`. Marks this sweep as the last
- * check-in, so a second call reports only what moved in between.
+ * the last check-in, filtered by `skip` / `focus`. Merged PRs a release tag now
+ * contains are shipped first (SW-65). Marks this sweep as the last check-in, so
+ * a second call reports only what moved in between.
  */
-export async function checkInTriage(): Promise<CheckInTriage> {
+export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
   // Taken before the sweep: a transcript written during it shows as changed next time.
   const now = new Date();
   const [{ root, workspaces }, { statuses }] = await Promise.all([
@@ -1563,11 +1577,18 @@ export async function checkInTriage(): Promise<CheckInTriage> {
   const keep = (w: WorkspaceEntry) =>
     !w.labels.includes("skip") && (!focus || w.labels.includes("focus"));
   const byName = new Map(statuses.map((s) => [s.name, s]));
+  const kept = workspaces.filter(keep);
+  await shipMerged(
+    kept.map((w) => w.path),
+    deps,
+  );
 
   const rows = await Promise.all(
-    workspaces.filter(keep).map(async (w): Promise<CheckInRow> => {
+    kept.map(async (w): Promise<CheckInRow> => {
       const status = byName.get(w.name);
       const { updatedAt } = await resolveSessionSource(w.name).catch(() => ({ updatedAt: null }));
+      // Not w.lifecycle: listWorkspaces read it before shipMerged ran.
+      const life = lifecycleOf(w.path);
       return {
         name: w.name,
         issueId: w.issueId,
@@ -1577,12 +1598,25 @@ export async function checkInTriage(): Promise<CheckInTriage> {
         gates: await proposedGates(w.path),
         updatedAt,
         changed: sinceMs !== null && updatedAt !== null && Date.parse(updatedAt) > sinceMs,
+        lifecycle: life.state,
+        prs: life.prs.map((p) => ({
+          repo: p.dir,
+          url: p.url,
+          status: p.status,
+          release: p.release,
+        })),
       };
     }),
   );
 
   await fs.writeFile(mark, "", { flag: "a" });
   await fs.utimes(mark, now, now);
+  const readyToClose = rows
+    .filter(
+      (r) =>
+        (r.lifecycle === "shipped" || r.lifecycle === "abandoned") && r.claude.agent !== "working",
+    )
+    .map((r) => r.name);
   return {
     root,
     since: sinceMs === null ? null : new Date(sinceMs).toISOString(),
@@ -1592,11 +1626,13 @@ export async function checkInTriage(): Promise<CheckInTriage> {
       .filter(
         (r) =>
           r.claude.agent !== "working" &&
+          !readyToClose.includes(r.name) &&
           (sinceMs === null
             ? r.claude.agent === "needs-you" || r.claude.agent === "done"
             : r.gates.length > 0 || r.changed),
       )
       .map((r) => r.name),
+    readyToClose,
   };
 }
 
