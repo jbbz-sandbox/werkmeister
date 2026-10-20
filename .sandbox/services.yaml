@@ -102,7 +102,10 @@ services:
     port_offset: 4
     health_endpoint: /
     setup_service: sandbox-install
-    image: node:22
+    # Dockerfile adds xvfb and Electron's libs; the stock image makes
+    # test:integration exit 127 (SW-62). The tag is local, never pulled.
+    image: sandbox-vscode-plugin:local
+    dockerfile: Dockerfile
     command: "cd packages/vscode-plugin && exec npm run watch"
     memory_limit: 1G
     memory_reservation: 128M

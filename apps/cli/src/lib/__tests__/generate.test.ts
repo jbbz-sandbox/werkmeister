@@ -728,3 +728,43 @@ describe("idle service containers", () => {
     expect(web.depends_on.tool.condition).toBe("service_started");
   });
 });
+
+// ---- service image built from a Dockerfile (SW-62) -------------------------
+
+describe("service with a dockerfile", () => {
+  const config = {
+    services: {
+      ext: {
+        repo: "r",
+        path: "packages/ext",
+        type: "extension",
+        image: "sandbox-ext:local",
+        dockerfile: "Dockerfile",
+      },
+      plain: { repo: "r", type: "cli", image: "node:22" },
+    },
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: parsed compose is untyped
+  function render(): Record<string, any> {
+    const outPath = generateFeatureCompose("f", 1, ["ext", "plain"], config, tmp);
+    return YAML.parse(fs.readFileSync(outPath, "utf8")).services;
+  }
+
+  it("builds from the service dir and tags the image, staying idle", () => {
+    const { ext } = render();
+    expect(ext.build).toEqual({
+      context: path.join(tmp, "r", "packages/ext"),
+      dockerfile: "Dockerfile",
+    });
+    expect(ext.image).toBe("sandbox-ext:local");
+    expect(ext.init).toBe(true);
+    expect(ext.healthcheck).toBeUndefined();
+    expect(ext.command[2]).toContain("exec sleep infinity");
+  });
+
+  it("leaves a service without one on its prebuilt image", () => {
+    const { plain } = render();
+    expect(plain.build).toBeUndefined();
+    expect(plain.image).toBe("node:22");
+  });
+});
