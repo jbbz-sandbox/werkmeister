@@ -20,6 +20,7 @@ import { candidateServiceNames } from "./archetypes.js";
 import { buildSandboxContextMd } from "./claude_md.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
+  containerOf,
   dotDir,
   forDotDir,
   IDLE_SERVICE_TYPES,
@@ -260,6 +261,7 @@ function getNunjucksEnv(): nunjucks.Environment {
   });
   env.addExtension("do", new DoExtension());
   env.addGlobal("__truthy", jinjaTruthy);
+  env.addGlobal("container_of", containerOf);
   // jinja `map(attribute='name')` — the only form the templates use.
   env.addFilter("map", (arr: Array<Record<string, unknown>> | null, kwargs: unknown) => {
     const attr = isDict(kwargs) ? kwargs["attribute"] : undefined;
@@ -679,7 +681,7 @@ function renderFeatureCompose(
         dockerfile,
         target: "development",
       },
-      container_name: `sandbox-${feature}-${svcName}`,
+      container_name: containerOf(feature, svcName),
       labels: {
         "com.sandbox.local.feature": feature,
         "com.sandbox.local.slot": String(slot),
