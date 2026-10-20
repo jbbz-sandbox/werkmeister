@@ -68,6 +68,12 @@ services:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
+      # SW-35: one host-wide build cache (same value in sandbox-install below).
+      # Without it turbo shares a worktree's cache with the main checkout, so
+      # builds landed in ~/repos/sandbox/.turbo, unbounded. turbo evicts entries
+      # older than the max age itself, at the start of every `turbo run`.
+      TURBO_CACHE_DIR: "{{home}}/.sandbox/cache/turbo"
+      TURBO_CACHE_MAX_AGE: 14d
       # Read by sandbox-dashboard; harmless for the others.
       HOST: 0.0.0.0
 
@@ -145,9 +151,14 @@ setup_services:
   # `libc` fields a newer host npm writes), dirtying the worktree on every up (#148).
   # SW-33: npm ci is skipped while the lockfile and Node major are unchanged.
   # ~/repos and safe.directory give git the same access as the app containers,
-  # so turbo restores the build from the main checkout's shared cache (0-1 s
-  # instead of ~28 s). ~/.sandbox/locks queues installs host-wide,
-  # SANDBOX_INSTALL_SLOTS (default 2) at a time.
+  # so turbo hashes inputs the same way they do. ~/.sandbox/locks queues
+  # installs host-wide, SANDBOX_INSTALL_SLOTS (default 2) at a time, and builds
+  # one at a time.
+  # SW-35: the build cache is TURBO_CACHE_DIR, shared with the app containers,
+  # so a commit any workspace built restores in ~1 s instead of ~28 s. It is a
+  # host dir, not a named volume: the app containers already mount ~/.sandbox,
+  # the template prefixes every named volume per feature, and the dir can be
+  # inspected or deleted from the host.
   sandbox-install:
     image: node:22
     command: "sh /usr/local/bin/startup.sh install"
@@ -157,7 +168,10 @@ setup_services:
       - tools:/opt/sandbox-tools
       - "{{repos_root}}:{{repos_root}}"
       - "{{home}}/.sandbox/locks:/locks"
+      - "{{home}}/.sandbox/cache/turbo:{{home}}/.sandbox/cache/turbo"
     environment:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
+      TURBO_CACHE_DIR: "{{home}}/.sandbox/cache/turbo"
+      TURBO_CACHE_MAX_AGE: 14d
