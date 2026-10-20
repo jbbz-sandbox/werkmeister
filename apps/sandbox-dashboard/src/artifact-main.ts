@@ -11,8 +11,8 @@
  * src/artifact-meta.json — change "serverName" there and rebuild if your MCP
  * server is registered under a different name.
  */
-import { appRoot } from "./theme.js";
-import { type HostBridge, initWorkspaceUI } from "./workspace-ui.js";
+import { appRoot } from "werkmeister-ui/theme";
+import { type HostBridge, initWorkspaceUI } from "werkmeister-ui/workspace-ui";
 
 // The meta block is what grants this artifact MCP tool access, so whatever
 // prefix it declares is by definition the one the bridge accepts.

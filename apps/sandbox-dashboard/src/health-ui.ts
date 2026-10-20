@@ -6,9 +6,9 @@
  * aggregate infra/k8s/kube chips in workspace-ui.ts; it doesn't replace them.
  */
 
-import { el, injectCss } from "./theme.js";
-import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
-import type { HostBridge } from "./workspace-ui.js";
+import { el, injectCss } from "werkmeister-ui/theme";
+import { renderUsage, type WorkspaceUsage } from "werkmeister-ui/usage-widget";
+import type { HostBridge } from "werkmeister-ui/workspace-ui";
 
 interface InfraService {
   name: string;

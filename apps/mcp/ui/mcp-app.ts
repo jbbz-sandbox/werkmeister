@@ -1,6 +1,6 @@
 /**
  * MCP App (inline `ui://`) entrypoint for the create-workspace form
- * (src/create-form.ts) — rendered inline by hosts that support MCP App UI
+ * (werkmeister-ui/create-form) — rendered inline by hosts that support MCP App UI
  * (Claude Desktop) when the `create-workspace-form` tool is called.
  *
  * Same neutral form as the browser dashboard's "New workspace" tab and the
@@ -20,9 +20,9 @@ import {
   type McpUiHostContext,
 } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { initCreateForm } from "./create-form.js";
-import { appRoot } from "./theme.js";
-import type { HostBridge } from "./workspace-ui.js";
+import { initCreateForm } from "werkmeister-ui/create-form";
+import { appRoot } from "werkmeister-ui/theme";
+import type { HostBridge } from "werkmeister-ui/workspace-ui";
 
 const app = new App({ name: "Initialize Workspace", version: "0.1.0" });
 
@@ -45,7 +45,7 @@ const bridge: HostBridge = {
   },
 };
 
-// Match the other surfaces' page chrome (see src/form-main.ts).
+// Match the other surfaces' page chrome (see apps/sandbox-dashboard/src/form-main.ts).
 const BODY_GAP = 16;
 document.body.style.cssText = `margin:0;background:#f7f7f5;padding:${BODY_GAP}px`;
 const root = appRoot();
