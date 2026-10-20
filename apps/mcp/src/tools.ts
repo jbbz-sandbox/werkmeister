@@ -280,7 +280,7 @@ function registerLifecycleTools(server: McpServer): void {
     {
       title: "Read a feature's container logs",
       description:
-        "A bounded read of `docker compose logs` for the feature, optionally one service. This " +
+        "A bounded read of the feature's container logs, optionally one service. This " +
         "is not a subscription: it never follows, and returns the last `tail` lines.",
       inputSchema: {
         ...WORKSPACE_ARG,
