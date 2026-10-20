@@ -1,6 +1,7 @@
 {
   "name": "werkmeister-mcp",
   "version": "0.3.3",
+  "license": "Apache-2.0",
   "type": "module",
   "private": true,
   "description": "Headless, authenticated MCP server exposing the sandbox verbs to a container agent with no Docker access.",
