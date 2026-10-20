@@ -552,7 +552,7 @@ type StatusResult = {
     running: number;
     total: number;
     services: ServiceHealth[];
-    claude: { state: string; waiting: boolean };
+    claude: { state: string; agent: "working" | "needs-you" | "done" | "idle" };
   }[];
 };
 type SessionInfo = {
@@ -629,7 +629,8 @@ export function buildRows(
       running: s?.running ?? 0,
       total: s?.total ?? 0,
       services: s?.services ?? [],
-      claude: s?.claude.state === "running" ? "working" : s?.claude.waiting ? "waiting" : null,
+      // Idle draws nothing: the card stays quiet until there is a session to report on.
+      claude: s && s.claude.agent !== "idle" ? s.claude.agent : null,
       session: sessionFor(w.path, allPaths, sessions),
     };
   });
@@ -707,13 +708,14 @@ export function cardMeta(r: WorkspaceRow): string {
     .join(" · ");
 }
 
-/** The Claude flag at the header's right edge: waiting on you is the one thing a glance must catch. */
+/** The Claude flag at the header's right edge: needing you is the one thing a glance must catch. */
 const CLAUDE: Record<
   NonNullable<WorkspaceRow["claude"]>,
-  { text: string; color: "warning" | "claude" }
+  { text: string; color: "warning" | "claude" | "success" }
 > = {
-  waiting: { text: "● waiting for you", color: "warning" },
-  working: { text: "◌ working", color: "claude" },
+  "needs-you": { text: "● Needs you", color: "warning" },
+  working: { text: "◌ Working", color: "claude" },
+  done: { text: "✓ Done", color: "success" },
 };
 
 /** The session line's title: the desktop session in the folder, else the newest on-disk session. */

@@ -31,7 +31,8 @@ export type WorkspaceRow = {
   running: number;
   total: number;
   services: ServiceHealth[];
-  claude: "working" | "waiting" | null;
+  /** The agent state core reports (SW-46); null while idle. */
+  claude: "working" | "needs-you" | "done" | null;
   /** The desktop-app session whose cwd lies in this workspace. */
   /** `beside`: this session started it, so the app will open it in split view next to this one. */
   /** `pinned`: the session is pinned in the app's sidebar. */
