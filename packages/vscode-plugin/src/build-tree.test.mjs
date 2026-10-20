@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildTree, featureOf, interceptView } from "../out/build-tree.js";
+import {
+  buildTree,
+  featureOf,
+  interceptView,
+  LEGEND_NODE,
+  TONE_COLORS,
+  TOOLTIP_COMMANDS,
+} from "../out/build-tree.js";
 
 const ws = (name, over = {}) => ({
   name,
@@ -21,6 +28,11 @@ const st = (name, over = {}) => ({
   slot: null,
   ports: null,
   services: [],
+  claude: { state: null, agent: "idle", at: null, question: null },
+  stage: null,
+  phase: null,
+  autonomous: false,
+  lastActivity: null,
   ...over,
 });
 
@@ -82,9 +94,10 @@ test("a fully running workspace reads as up", () => {
     [],
   );
   assert.equal(node.kind, "workspace");
-  assert.equal(node.icon.id, "circle-filled");
-  assert.match(node.description, /6\/6/);
-  assert.match(node.description, /slot 2/);
+  assert.match(node.description, /6 of 6 up/);
+  // Slot and ports are tooltip detail now, not card-face (SW-55).
+  assert.doesNotMatch(node.description, /slot/);
+  assert.match(node.tooltip, /slot 2/);
   assert.equal(node.contextValue, "workspace:up");
 });
 
@@ -96,7 +109,7 @@ test("a partially running workspace reads as partial", () => {
     [],
   );
   assert.equal(node.contextValue, "workspace:partial");
-  assert.match(node.description, /2\/5/);
+  assert.match(node.description, /2 of 5 up/);
 });
 
 test("a down workspace shows no ratio", () => {
@@ -113,6 +126,7 @@ test("an issue ID appears in the description and the node carries its URL", () =
     [],
   );
   assert.match(node.description, /PROJ-1125/);
+  assert.match(node.tooltip, /\[PROJ\\-1125\]\(https:\/\/x\/browse\/PROJ-1125\)/);
   assert.equal(node.workspace.issueUrl, "https://x/browse/PROJ-1125");
 });
 
@@ -344,4 +358,201 @@ test("the first open folder's workspace wins over a deeper one further down", ()
   );
   assert.match(nodes.find((n) => n.label === "a").description, /current/);
   assert.doesNotMatch(nodes.find((n) => n.label === "b").description, /current/);
+});
+
+// --- SW-55: the unified card spec ------------------------------------------
+
+const NOW = new Date("2026-10-20T12:00:00Z");
+const ago = (s) => new Date(NOW.getTime() - s * 1000).toISOString();
+const pr = (repo, n, over = {}) => ({
+  repo,
+  branch: "b",
+  url: `https://github.com/jbbz-stellwerk/${repo}/pull/${n}`,
+  state: "OPEN",
+  title: "t",
+  labels: [],
+  ci: null,
+  failingChecks: 0,
+  ...over,
+});
+
+/** The four rows of `docs/design/workspace-card/design/data.js` SAMPLE (minus `loading`). */
+function sample() {
+  const names = {
+    143: "stellwerk-143-wizard-defaults",
+    206: "stellwerk-206-pane-turn-state",
+    151: "stellwerk-151-close-out-copy",
+    bwell: "bwell",
+  };
+  const workspaces = Object.entries(names).map(([id, name]) =>
+    ws(name, id === "bwell" ? {} : { issueId: `#${id}`, issueUrl: `https://x/issues/${id}` }),
+  );
+  const statuses = [
+    st(names[143], {
+      state: "stopped",
+      total: 2,
+      services: [
+        { name: "cli", state: "down" },
+        { name: "stellwerk-dashboard", state: "down" },
+      ],
+      claude: { state: "waiting", agent: "needs-you", at: ago(12 * 60), question: "ICM or JIT?" },
+      stage: { index: 2, total: 4, name: "findings" },
+    }),
+    st(names[206], {
+      state: "up",
+      running: 2,
+      total: 2,
+      services: [
+        { name: "cli", state: "healthy" },
+        { name: "stellwerk-dashboard", state: "healthy" },
+      ],
+      claude: { state: "busy", agent: "working", at: null, question: null },
+      lastActivity: ago(40),
+      stage: { index: 4, total: 5, name: "implement" },
+      autonomous: true,
+    }),
+    st(names[151], {
+      state: "partial",
+      running: 1,
+      total: 2,
+      services: [
+        { name: "cli", state: "healthy" },
+        { name: "stellwerk-dashboard", state: "unhealthy" },
+      ],
+      claude: { state: null, agent: "done", at: ago(2 * 86400), question: null },
+    }),
+    st("bwell", { phase: "implement" }),
+  ];
+  const prs = new Map([
+    [names[206], [pr("stellwerk", 231, { ci: "running", draft: true })]],
+    [names[151], [pr("stellwerk", 186, { state: "MERGED", ci: "pass", release: "v0.14.0" })]],
+    ["bwell", [pr("wellness", 12, { ci: "fail", failingChecks: 2 })]],
+  ]);
+  const lifecycles = new Map([[names[151], "shipped"]]);
+  const nodes = buildTree(workspaces, statuses, null, [], { prs, lifecycles, now: NOW });
+  return Object.fromEntries(Object.keys(names).map((id, i) => [id, nodes[i]]));
+}
+
+test("the tree matches VSCode Tree.dc.html for the sample data", () => {
+  const n = sample();
+  // The design's vsDesc, plus the issue ref the ticket's example adds.
+  assert.equal(n[143].description, "● Needs you · 0 of 2 up · stage 2/4 · #143");
+  assert.equal(n[206].description, "◌ Working · 2 of 2 up · stage 4/5 · #206 · ⚙ Auto");
+  assert.equal(n[151].description, "✓ Done · 1 of 2 up · Ready to close out · #151");
+  assert.equal(n.bwell.description, "Idle · down · JIT · implement");
+
+  assert.deepEqual(n[143].icon, { id: "circle-filled", color: "charts.yellow" });
+  assert.deepEqual(n[206].icon, { id: "sync~spin", color: "charts.green" });
+  assert.deepEqual(n[151].icon, { id: "pass", color: "charts.green" });
+  assert.deepEqual(n.bwell.icon, { id: "circle-outline", color: "disabledForeground" });
+
+  const prRows = (node) =>
+    node.children
+      .filter((c) => c.kind === "pr")
+      .map((c) => [c.label, c.description, c.icon.id, c.icon.color]);
+  assert.deepEqual(prRows(n[206]), [
+    ["stellwerk#231", "Draft · CI running", "git-pull-request", "disabledForeground"],
+  ]);
+  assert.deepEqual(prRows(n[151]), [
+    ["stellwerk#186", "Released v0.14.0 · CI ✓", "git-merge", "charts.purple"],
+  ]);
+  assert.deepEqual(prRows(n.bwell), [
+    ["wellness#12", "Open · CI ✗ 2 failing", "git-pull-request", "charts.green"],
+  ]);
+  assert.equal(n.bwell.children[0].command, "sandbox.openPr");
+  assert.deepEqual(n.bwell.workspace.prs, [
+    { ref: "wellness#12", url: "https://github.com/jbbz-stellwerk/wellness/pull/12" },
+  ]);
+
+  const svc = n[151].children.find((c) => c.label === "stellwerk-dashboard");
+  assert.deepEqual(svc.icon, { id: "warning", color: "errorForeground" });
+});
+
+test("the tooltip carries the card's rows, the question and the primary action", () => {
+  const n = sample();
+  const tip = n[143].tooltip;
+  for (const row of ["**Containers**", "**PRs**", "**Workflow**", "**Agent**"]) {
+    assert.ok(tip.includes(row), row);
+  }
+  assert.match(tip, /\*\*Workflow\*\* Stage 2 of 4 · findings/);
+  assert.match(tip, /asked a question 12 min ago/);
+  assert.match(tip, /> “ICM or JIT\?”/);
+  assert.match(tip, /\[↗ Continue in Terminal\]\(command:sandbox\.continue\?/);
+  assert.doesNotMatch(tip, /Autonomous/);
+
+  assert.match(n[206].tooltip, /◌ Working · ⚙ Autonomous · last activity 40 s ago/);
+  assert.doesNotMatch(n[206].tooltip, /> “/, "the question is shown only for Needs you");
+  assert.match(n[151].tooltip, /\[✓ Close out\]\(command:sandbox\.closeOut\?/);
+  assert.match(n.bwell.tooltip, /\[▶ Up\]\(command:sandbox\.up\?/);
+  assert.match(n.bwell.tooltip, /no issue/);
+
+  // Every link must be one tree.ts trusts, and carry the node shape pickWorkspace reads.
+  for (const node of Object.values(n)) {
+    for (const [, cmd, arg] of node.tooltip.matchAll(/command:([\w.]+)\?([^)]+)/g)) {
+      assert.ok(TOOLTIP_COMMANDS.includes(cmd), cmd);
+      assert.deepEqual(JSON.parse(decodeURIComponent(arg)), [
+        { workspace: { name: node.workspace.name, path: node.workspace.path } },
+      ]);
+    }
+  }
+});
+
+test("a failed PR fetch reads as PRs unavailable, not as none", () => {
+  const [failed] = buildTree([ws("a")], [st("a")], null, [], { prs: null });
+  assert.match(failed.tooltip, /\*\*PRs\*\* PRs unavailable/);
+  const [none] = buildTree([ws("a")], [st("a")], null, [], { prs: new Map() });
+  assert.match(none.tooltip, /\*\*PRs\*\* None yet/);
+});
+
+test("stopped and down read differently, though both are off", () => {
+  const [stopped, down] = buildTree(
+    [ws("a"), ws("b")],
+    [st("a", { state: "stopped", total: 2 }), st("b")],
+    null,
+    [],
+  );
+  assert.equal(stopped.description, "Idle · 0 of 2 up");
+  assert.equal(down.description, "Idle · down");
+});
+
+test("user text cannot inject Markdown into the tooltip", () => {
+  const [node] = buildTree(
+    [ws("a", { labels: ["[x](command:evil)"] })],
+    [
+      st("a", {
+        claude: { state: null, agent: "needs-you", at: null, question: "*bold* [y](http://z)" },
+      }),
+    ],
+    null,
+    [],
+  );
+  assert.doesNotMatch(node.tooltip, /\]\(command:evil/);
+  assert.match(node.tooltip, /\\\[x\\\]\\\(command:evil\\\)/);
+  assert.match(node.tooltip, /\\\*bold\\\* \\\[y\\\]\\\(http:/);
+});
+
+test("colours come from the board 09 tone map only", () => {
+  assert.deepEqual(TONE_COLORS, {
+    ok: "charts.green",
+    warn: "charts.yellow",
+    err: "errorForeground",
+    off: "disabledForeground",
+    pr: "charts.purple",
+    needs: "charts.yellow",
+  });
+  const colours = new Set(Object.values(TONE_COLORS));
+  const n = sample();
+  const all = Object.values(n).flatMap((w) => [w, ...w.children]);
+  for (const node of [...all, LEGEND_NODE, ...LEGEND_NODE.children]) {
+    if (node.icon.color) assert.ok(colours.has(node.icon.color), `${node.id}: ${node.icon.color}`);
+  }
+});
+
+test("the legend names every agent state, the service marks and autonomous", () => {
+  const labels = LEGEND_NODE.children.map((c) => c.label);
+  for (const word of ["Needs you", "Working", "Done", "Idle", "⚙ Auto"]) {
+    assert.ok(labels.includes(word), word);
+  }
+  assert.ok(LEGEND_NODE.children.some((c) => /○ down/.test(c.description)));
+  assert.equal(LEGEND_NODE.contextValue, "legend");
 });
