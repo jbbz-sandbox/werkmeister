@@ -57,12 +57,12 @@ const CSS = `
   .wsform .required { color: var(--sd-err); margin-left: 2px; }
 
   .wsform input[type="text"], .wsform input[type="number"], .wsform input:not([type]), .wsform textarea {
-    width: 100%; max-width: 560px; padding: 8px 12px; border: 1px solid var(--sd-ctl-border); border-radius: 8px;
+    width: 100%; max-width: 560px; padding: 8px 12px; border: 1px solid var(--sd-ctl); border-radius: 8px;
     background: var(--sd-card); color: var(--sd-ink); font-family: inherit; font-size: 14px;
     transition: border-color 0.12s ease, box-shadow 0.12s ease;
   }
   .wsform textarea { line-height: 1.5; resize: vertical; }
-  .wsform input::placeholder, .wsform textarea::placeholder { color: var(--sd-ghost); }
+  .wsform input::placeholder, .wsform textarea::placeholder { color: var(--sd-faint); }
   .wsform input[type="text"]:focus-visible, .wsform textarea:focus-visible, .wsform input:not([type]):focus-visible {
     outline: none; border-color: var(--sd-accent); box-shadow: 0 0 0 3px rgba(217,119,87,0.2);
   }
@@ -74,7 +74,7 @@ const CSS = `
   .wsform .checkgroup + .checkgroup { margin-top: 10px; }
   .wsform .checkgroup-heading {
     font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
-    color: var(--sd-ghost); margin-bottom: 4px;
+    color: var(--sd-faint); margin-bottom: 4px;
   }
   .wsform .checkbox label, .wsform .radio label {
     display: flex; align-items: center; gap: 6px; font-weight: 400; font-size: 13px; color: var(--sd-ink); margin-bottom: 0;
@@ -84,10 +84,10 @@ const CSS = `
   .wsform .refine-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
   .wsform .refine-btn {
     flex: none; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
-    background: var(--sd-card); color: #b85c3c; border: 1px solid var(--sd-accent); border-radius: 6px;
+    background: var(--sd-card); color: var(--sd-accent); border: 1px solid var(--sd-accent); border-radius: 6px;
   }
-  .wsform .refine-btn:hover { background: #fdf2ee; }
-  .wsform .refine-btn:disabled { color: var(--sd-ghost); border-color: var(--sd-ctl-border); cursor: default; }
+  .wsform .refine-btn:hover { background: var(--sd-hover); }
+  .wsform .refine-btn:disabled { color: var(--sd-faint); border-color: var(--sd-ctl); cursor: default; }
   .wsform .refine-err { color: var(--sd-err); font-size: 12px; font-weight: 500; }
   .wsform .refine-note { color: var(--sd-ok); font-size: 12px; font-weight: 500; }
 
@@ -98,19 +98,19 @@ const CSS = `
   .wsform .field-error label.control-label, .wsform .has-error label.control-label,
   .wsform .field-error .checkboxes > legend, .wsform .has-error .checkboxes > legend { color: var(--sd-err); }
   .wsform .field-error input[type="text"], .wsform .field-error textarea,
-  .wsform .has-error input[type="text"], .wsform .has-error textarea { border-color: #e07a6a; }
+  .wsform .has-error input[type="text"], .wsform .has-error textarea { border-color: var(--sd-err); }
 
   .wsform .actions { margin-top: 18px; display: flex; align-items: center; gap: 14px; }
   .wsform .checkrow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sd-ink); }
   .wsform .checkrow input { accent-color: var(--sd-accent); width: 16px; height: 16px; }
   .wsform button.cancelbtn {
-    font: inherit; font-weight: 600; padding: 8px 18px; border: 1px solid var(--sd-ctl-border); border-radius: 8px;
+    font: inherit; font-weight: 600; padding: 8px 18px; border: 1px solid var(--sd-ctl); border-radius: 8px;
     background: var(--sd-card); color: var(--sd-muted); cursor: pointer;
   }
-  .wsform button.cancelbtn:hover { color: var(--sd-ink); border-color: var(--sd-ghost); }
+  .wsform button.cancelbtn:hover { color: var(--sd-ink); border-color: var(--sd-faint); }
   .wsform button.submit {
     font: inherit; font-weight: 600; padding: 8px 18px; border: 1px solid var(--sd-accent); border-radius: 8px;
-    background: var(--sd-accent); color: #fff; cursor: pointer; margin-left: auto;
+    background: var(--sd-accent); color: var(--sd-on-accent); cursor: pointer; margin-left: auto;
   }
   .wsform button.submit:hover { background: var(--sd-accent-hover); }
   .wsform button.submit:disabled { opacity: 0.55; cursor: default; }
@@ -119,8 +119,8 @@ const CSS = `
     margin-top: 16px; padding: 10px 12px; border-radius: 8px; white-space: pre-wrap;
     font-size: 12px; font-family: var(--sd-mono); border: 1px solid transparent;
   }
-  .wsform .result.ok { background: var(--sd-ok-bg); color: var(--sd-ok); border-color: var(--sd-ok-border); }
-  .wsform .result.err { background: var(--sd-err-bg); color: var(--sd-err); border-color: var(--sd-err-border); }
+  .wsform .result.ok { background: var(--sd-ok-bg); color: var(--sd-ok); border-color: var(--sd-ok-bd); }
+  .wsform .result.err { background: var(--sd-err-bg); color: var(--sd-err); border-color: var(--sd-err-bd); }
 `;
 
 interface FormBundle {
