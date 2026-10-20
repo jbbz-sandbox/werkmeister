@@ -17,6 +17,7 @@ import {
   callbackMessage,
   claimCallbacks,
   closeOut,
+  deliverHeadless,
   lifecycleOf,
   mapTouched,
   openPrs,
@@ -1064,18 +1065,51 @@ const claim = (ws, d, desktop = false) => claimCallbacks([ws], { desktop }, d, l
 // Reading GitHub and tags only: never a merge, a close-out or a push.
 const onlyReads = (calls) => calls.every((c) => /^(gh pr view|git -C \S+ (fetch|tag) )/.test(c));
 
-test("callbackFields: both ids from the env, no host id outside the desktop app", async () => {
-  assert.deepEqual(
-    await callbackFields("/nowhere/ws", {
-      CLAUDE_CODE_SESSION_ID: "s-1",
-      CLAUDE_CODE_HOST_SESSION_ID: "local_h1",
-    }),
-    { session: "s-1", host_session: "local_h1" },
-  );
-  assert.deepEqual(await callbackFields("/nowhere/ws", { CLAUDE_CODE_SESSION_ID: "s-1" }), {
-    session: "s-1",
-  });
-});
+/**
+ * A temp HOME whose `~/.claude/projects` holds one transcript per `{ id: cwd }`, filed the
+ * way Claude Code files them (by start folder), and a fake `claude` that logs `pwd` + argv.
+ */
+async function withClaudeHome(sessions, fn) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "claude-home-"));
+  const prev = { HOME: process.env.HOME, CLAUDE_BIN: process.env.CLAUDE_BIN };
+  for (const [id, cwd] of Object.entries(sessions)) {
+    const dir = path.join(home, ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${id}.jsonl`),
+      `{"type":"summary"}\n${JSON.stringify({ type: "user", cwd, sessionId: id })}\n`,
+    );
+  }
+  const log = path.join(home, "claude.log");
+  const bin = path.join(home, "claude");
+  fs.writeFileSync(bin, `#!/bin/sh\n{ pwd -P; echo "$@"; } >> "${log}"\n`, { mode: 0o755 });
+  process.env.HOME = home;
+  process.env.CLAUDE_BIN = bin;
+  try {
+    return await fn(() =>
+      fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [],
+    );
+  } finally {
+    for (const [k, v] of Object.entries(prev))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    clean(home);
+  }
+}
+
+test("callbackFields: both ids from the env, no host id outside the desktop app", () =>
+  withClaudeHome({}, async () => {
+    assert.deepEqual(
+      await callbackFields("/nowhere/ws", {
+        CLAUDE_CODE_SESSION_ID: "s-1",
+        CLAUDE_CODE_HOST_SESSION_ID: "local_h1",
+      }),
+      { session: "s-1", host_session: "local_h1" },
+    );
+    assert.deepEqual(await callbackFields("/nowhere/ws", { CLAUDE_CODE_SESSION_ID: "s-1" }), {
+      session: "s-1",
+    });
+  }));
 
 test("callbackMessage: the issue's texts", () => {
   assert.equal(
@@ -1222,6 +1256,56 @@ test("watchPrs: headless claims are sent, desktop ones returned, a failed send i
         failed.lines.join("\n"),
       );
     });
+  } finally {
+    if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
+    else process.env.SANDBOX_WORKSPACES_ROOT = prev;
+    clean(root);
+  }
+});
+
+test("deliverHeadless: a session started in a code worktree is resumed from there (SW-16)", async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pr-deliver-")));
+  const prev = process.env.SANDBOX_WORKSPACES_ROOT;
+  process.env.SANDBOX_WORKSPACES_ROOT = root;
+  const ws = path.join(root, "a-ws");
+  fs.renameSync(icmWorkspace(), ws);
+  const sub = path.join(ws, "sandbox");
+  fs.mkdirSync(sub);
+  const cb = (session, sessionDir = null) => ({
+    ws,
+    dir: "app",
+    url: URL9,
+    session,
+    sessionDir,
+    hostSession: null,
+    message: "merged",
+  });
+  const resumed = (dir, id) => [dir, `-p --permission-mode acceptEdits --resume ${id} merged`];
+  try {
+    await withSandboxHome(() =>
+      withClaudeHome({ "s-sub": sub, "s-root": ws }, async (calls) => {
+        assert.deepEqual(await callbackFields(ws, { CLAUDE_CODE_SESSION_ID: "s-sub" }), {
+          session: "s-sub",
+          session_cwd: sub,
+        });
+
+        await deliverHeadless(cb("s-sub", sub));
+        assert.deepEqual(calls().slice(-2), resumed(sub, "s-sub"));
+
+        // Recorded before SW-16: no start folder, found by its id alone.
+        await deliverHeadless(cb("s-sub"));
+        assert.deepEqual(calls().slice(-2), resumed(sub, "s-sub"));
+
+        await deliverHeadless(cb("s-root", ws));
+        assert.deepEqual(calls().slice(-2), resumed(ws, "s-root"));
+
+        // Never another session: not the root's newest, not a wrong recorded folder.
+        const n = calls().length;
+        await assert.rejects(deliverHeadless(cb("s-gone")), /session s-gone is gone/);
+        await assert.rejects(deliverHeadless(cb("s-sub", ws)), /session s-sub is gone/);
+        assert.equal(calls().length, n);
+      }),
+    );
   } finally {
     if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
     else process.env.SANDBOX_WORKSPACES_ROOT = prev;
