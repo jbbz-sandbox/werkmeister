@@ -11,9 +11,9 @@
  * promptViaLocalhostForm() promise — the actual create runs in the caller
  * (form-cli.ts) after this page submits.
  */
-import { initCreateForm } from "./create-form.js";
-import { appRoot } from "./theme.js";
-import type { HostBridge } from "./workspace-ui.js";
+import { initCreateForm } from "werkmeister-ui/create-form";
+import { appRoot } from "werkmeister-ui/theme";
+import type { HostBridge } from "werkmeister-ui/workspace-ui";
 
 const bridge: HostBridge = {
   async callTool(name, args) {
