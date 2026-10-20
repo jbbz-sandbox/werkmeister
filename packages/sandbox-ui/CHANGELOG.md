@@ -1,5 +1,20 @@
 # werkmeister-ui
 
+## 0.3.0
+
+### Minor Changes
+
+- 3fc5287: Per-workspace container vitals (SW-41). `sandbox status`, the Workspaces pane and the VS Code tree show each workspace's CPU and memory (one stats sweep, every 30 s in the pane and the tree), when its containers started and by what (`up`, `gate`, `restart` or `person`, from `.werkmeister/starts.json`), and a crash-looping container as an error with its last log line, within one 5 s poll. The pane and the tree also show a host line: load average and the total CPU of feature containers. Core: `WorkspaceStatus` gains `started` and `crashLoops`, `sandbox status --json` gains `host` and per-feature `cpu_percent`, `mem_mib`, `started_at`, `started_by` and `crash_loops`, and new `getWorkspaceResources()`.
+- 5886cc5: SW-54: the dashboard and MCP App workspace card gains `↗ Continue in Desktop` and `＋ New session`, the top bar gains `＋ New workspace` (the MCP App list opens the create form in place), and the list gains a `☐ Focused only` filter. `claude-resume` takes `new: true` to open a fresh Terminal session.
+
+### Patch Changes
+
+- Updated dependencies [3fc5287]
+- Updated dependencies [3c1a49a]
+- Updated dependencies [5886cc5]
+- Updated dependencies [20f67e7]
+  - werkmeister-core@0.24.0
+
 ## 0.2.0
 
 ### Minor Changes
