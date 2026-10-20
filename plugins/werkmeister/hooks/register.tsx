@@ -849,13 +849,19 @@ export type InterceptControl = {
   text: string;
 };
 
-/** One service's toggle. The VS Code tree's `interceptView` rules; this standalone plugin can't import it. */
+/**
+ * One service's toggle, or null for a local-only service (SW-21). The VS Code tree's
+ * `interceptView` rules; this standalone plugin can't import it.
+ */
 export function interceptControl(
+  service: string,
   row: InterceptRow | undefined,
   feature: string | null,
   snap: InterceptsSnapshot | null,
-): InterceptControl {
+): InterceptControl | null {
+  // A failed lookup can't tell remote from local, so it keeps "unavailable" on every row.
   if (snap === null) return { kind: "unavailable", text: "intercept state unavailable" };
+  if (!snap.remote_services.includes(service)) return null;
   if (!snap.available) return { kind: "unavailable", text: "intercepts unavailable" };
   if (!row) return { kind: "blocked", text: "not an interceptable service of this workspace" };
   if (row.intercepted) {
@@ -1744,7 +1750,7 @@ export const register: Register = (on) => {
                   const row = snap?.intercepts.find(
                     (x) => x.feature === r.feature && x.service === svc.name,
                   );
-                  const c = interceptControl(row, r.feature, snap);
+                  const c = interceptControl(svc.name, row, r.feature, snap);
                   const asking = confirm === `${INTERCEPT}${r.name}/${svc.name}`;
                   const idle = busy !== r.name;
                   return (
@@ -1752,7 +1758,7 @@ export const register: Register = (on) => {
                       <Text>
                         <Text color={SERVICE_COLOR[svc.state]}>●</Text> {svc.name}
                       </Text>
-                      {c.kind === "off" && idle && !asking && (
+                      {c?.kind === "off" && idle && !asking && (
                         <Button
                           key={`intercept:${r.name}/${svc.name}`}
                           label="Intercept"
@@ -1760,7 +1766,7 @@ export const register: Register = (on) => {
                           onPress={() => void pressIntercept($, "ask", r.name, svc.name)}
                         />
                       )}
-                      {c.kind === "off" && idle && asking && (
+                      {c?.kind === "off" && idle && asking && (
                         <Box gap={1}>
                           <Text color="warning">
                             {`Intercept ${svc.name}? Installs a traffic-agent sidecar on ${row?.deployment ?? svc.name} in the shared dev cluster.`}
@@ -1779,8 +1785,8 @@ export const register: Register = (on) => {
                           />
                         </Box>
                       )}
-                      {c.kind === "active" && <Text color="success">{c.text}</Text>}
-                      {c.kind === "active" && idle && (
+                      {c?.kind === "active" && <Text color="success">{c.text}</Text>}
+                      {c?.kind === "active" && idle && (
                         <Button
                           key={`leave:${r.name}/${svc.name}`}
                           label="Leave"
@@ -1788,7 +1794,9 @@ export const register: Register = (on) => {
                           onPress={() => void pressIntercept($, "leave", r.name, svc.name)}
                         />
                       )}
-                      {c.kind !== "off" && c.kind !== "active" && <Text dimColor>{c.text}</Text>}
+                      {c && c.kind !== "off" && c.kind !== "active" && (
+                        <Text dimColor>{c.text}</Text>
+                      )}
                     </Box>
                   );
                 })}

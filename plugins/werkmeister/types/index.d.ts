@@ -80,6 +80,8 @@ export type InterceptsSnapshot = {
   available: boolean;
   connected_namespace: string | null;
   intercepts: InterceptRow[];
+  /** Registry services with k8s coordinates; the rest get no intercept control. */
+  remote_services: string[];
 };
 
 /** One field of the Create tab's form, from the RJSF bundle getFormSchema builds. */

@@ -172,7 +172,14 @@ describe("interceptsSnapshot contract (`sandbox status --intercepts --json`)", (
 
   it("returns {available, connected_namespace, intercepts[]} with the documented row fields", async () => {
     const snap = await interceptsSnapshot();
-    expect(Object.keys(snap)).toEqual(["available", "connected_namespace", "intercepts"]);
+    expect(Object.keys(snap)).toEqual([
+      "available",
+      "connected_namespace",
+      "intercepts",
+      "remote_services",
+    ]);
+    // legacy-worker has no k8s coordinates: never a cluster service (SW-21).
+    expect(snap.remote_services).toEqual(["backend", "frontend"]);
     expect(snap.available).toBe(true);
     expect(snap.connected_namespace).toBe("default");
     for (const row of snap.intercepts) {
@@ -195,6 +202,8 @@ describe("interceptsSnapshot contract (`sandbox status --intercepts --json`)", (
       available: false,
       connected_namespace: null,
       intercepts: [],
+      // Still known without telepresence, so a pane can hide local-only rows (SW-21).
+      remote_services: ["backend", "frontend"],
     });
   });
 });

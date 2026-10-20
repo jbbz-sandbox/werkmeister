@@ -266,9 +266,7 @@ export function interceptBlocker(svcDef: unknown): string | null {
     return "is not defined in ~/.sandbox/services.yaml.";
   }
   const svc = svcDef as Record<string, unknown>;
-  // k8s_port is the intercept --port identifier (the Service port NUMBER); see
-  // buildInterceptArgs re: why the number, not k8s_port_name.
-  const missing = ["k8s_deployment", "k8s_namespace", "k8s_port"].filter((k) => !svc[k]);
+  const missing = missingClusterKeys(svc);
   if (missing.length) {
     return `has no ${missing.join("/")} in services.yaml — not interceptable.`;
   }
@@ -280,6 +278,30 @@ export function interceptBlocker(svcDef: unknown): string | null {
     );
   }
   return null;
+}
+
+// k8s_port is the intercept --port identifier (the Service port NUMBER); see
+// buildInterceptArgs re: why the number, not k8s_port_name.
+const CLUSTER_KEYS = ["k8s_deployment", "k8s_namespace", "k8s_port"];
+
+function missingClusterKeys(svc: Record<string, unknown>): string[] {
+  return CLUSTER_KEYS.filter((k) => !svc[k]);
+}
+
+/**
+ * Whether *svcDef* is a cluster service — one telepresence could ever intercept.
+ *
+ * False for CLIs, libraries and anything else with no Deployment, which a UI
+ * shows no intercept control for (SW-21). True for a cluster service still
+ * blocked on k8s_port_name: that one keeps a disabled control with its reason.
+ */
+export function isRemoteService(svcDef: unknown): boolean {
+  return (
+    typeof svcDef === "object" &&
+    svcDef !== null &&
+    !Array.isArray(svcDef) &&
+    missingClusterKeys(svcDef as Record<string, unknown>).length === 0
+  );
 }
 
 /**
