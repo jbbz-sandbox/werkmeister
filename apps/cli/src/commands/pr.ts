@@ -11,13 +11,26 @@
  *   adopt   write the PR file for a fix that landed outside the workspace
  *   watch   from anywhere: resume each terminal session whose PR merged, shipped or closed
  *           (desktop sessions are the werkmeister mod's)
+ *   watch --install | --uninstall   add / remove the 10-minute schedule (launchd on macOS, else crontab)
  */
 
 import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
+import { installPrWatchSchedule, uninstallPrWatchSchedule } from "werkmeister-core/machine_setup";
 import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { error } from "../lib/config.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
+  if (args.install || args.uninstall) {
+    if (args.action !== "watch") {
+      error("--install/--uninstall go with `pr watch`.");
+      process.exit(1);
+    }
+    if (args.install && args.uninstall) {
+      error("Pick one of --install or --uninstall.");
+      process.exit(1);
+    }
+    return print(args.install ? installPrWatchSchedule() : uninstallPrWatchSchedule(), args);
+  }
   if (args.action === "watch") return print(await watchPrs({ desktop: false }), args);
   const ws = findRecordRoot(process.cwd());
   if (!ws) {

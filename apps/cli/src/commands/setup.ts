@@ -5,7 +5,7 @@
  * prerequisite that lives outside the checkout, writing the machine-global
  * config in `~/.sandbox` and converging the rest:
  *
- * The wizard asks everything up front, in eight sections:
+ * The wizard asks everything up front, in ten sections:
  *
  *   1. paths        — repos root and workspaces root (`paths:`), plus the
  *                     GitHub locations `overrides.workspace_repo` and
@@ -21,6 +21,8 @@
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
  *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings,
  *                     and the Sandbox Workspaces extension the package ships
+ *   9. standards    — OPTIONAL Claude Code read access to the standards dir
+ *  10. pr watch     — OPTIONAL launchd agent / crontab line running `pr watch` every 10 minutes
  *
  * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
  * converges the machine (werkmeister-core/machine_setup):
@@ -56,6 +58,7 @@ import {
   claudeUserSettingsPath,
   editorSchemaState,
   githubOwners,
+  prWatchScheduleState,
   runSetup,
   type Step,
   vscodeExtensionState,
@@ -84,6 +87,7 @@ interface Answers {
   mapEditorSchemas: boolean;
   installVscodeExtension: boolean;
   grantStandardsDir: boolean;
+  installPrWatch: boolean;
   skipSudo: boolean;
 }
 
@@ -394,6 +398,30 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       (await confirm("  Grant Claude Code read access to the standards dir?", true, interactive));
   }
 
+  // --- 10. PR watch schedule (optional) ----------------------------------
+  heading("10. PR watch schedule (optional)");
+  const prWatch = prWatchScheduleState();
+  let installPrWatch: boolean;
+  if (prWatch.installed) {
+    info(
+      `Installed (${prWatch.where}); logs → ${prWatch.logFile}. ` +
+        "Remove with `werkmeister pr watch --uninstall`.",
+    );
+    // Re-converge, even under --yes: rewrites only if the wrapper, PATH or log path moved.
+    installPrWatch = true;
+  } else {
+    info(
+      "Resumes terminal Claude sessions when their PR merges, ships or closes " +
+        "(desktop sessions don't need it).",
+    );
+    installPrWatch = await confirm(
+      `  Install a ${prWatch.kind === "launchd" ? "launchd agent" : "crontab line"} that runs ` +
+        "`werkmeister pr watch` every 10 minutes?",
+      false,
+      interactive,
+    );
+  }
+
   // --- write ---------------------------------------------------------------
   // Rebuilt rather than merged, but every hand-added section is carried across
   // verbatim: dropping an override or a token the wizard never asked about
@@ -454,6 +482,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     mapEditorSchemas,
     installVscodeExtension,
     grantStandardsDir,
+    installPrWatch,
     skipSudo: !interactive,
   };
 }
@@ -538,6 +567,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     mapEditorSchemas: answers.mapEditorSchemas,
     installVscodeExtension: answers.installVscodeExtension,
     grantStandardsDir: answers.grantStandardsDir,
+    installPrWatch: answers.installPrWatch,
   });
 
   const failed = report(steps);

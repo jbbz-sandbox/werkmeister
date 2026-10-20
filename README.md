@@ -172,6 +172,7 @@ is overwritten.
 ```bash
 apps/cli/werkmeister setup --check    # report drift; no prompts, no writes
 apps/cli/werkmeister setup --yes      # non-interactive (CI); accepts defaults, skips optional installs
+apps/cli/werkmeister pr watch --install   # schedule PR callbacks for terminal sessions (setup offers this)
 ```
 
 `werkmeister up` will fail until `~/.werkmeister/services.yaml` exists, and will tell

@@ -708,7 +708,7 @@ const SPECS: CommandSpec[] = [
         .addArgument(
           new Argument(
             "<action>",
-            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace; watch: resume each opening session once its PR merges, ships or closes (any workspace, for cron)",
+            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace; watch: resume each opening session once its PR merges, ships or closes (any workspace; `--install` schedules it)",
           ).choices(["gate", "open", "status", "adopt", "watch"]),
         )
         .argument(
@@ -716,6 +716,11 @@ const SPECS: CommandSpec[] = [
           "[repo] — only this code worktree's PR file; adopt: <pr-number|url> [repo]",
         )
         .option("--no-pr <reason>", "adopt: no PR — the fix is already on base")
+        .option(
+          "--install",
+          "watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes",
+        )
+        .option("--uninstall", "watch: remove that schedule")
         .option("--json", "Print the result as JSON");
     },
     namespace: ([action, rest], o) => {
@@ -723,7 +728,15 @@ const SPECS: CommandSpec[] = [
       // Commander reads `--no-pr <reason>` as `pr`: true by default, the reason when given.
       const noPr = typeof o.pr === "string" ? o.pr : null;
       const pr = action === "adopt" && noPr === null ? (args[0] ?? null) : null;
-      return { action, pr, noPr, repo: args[pr ? 1 : 0] ?? null, json: Boolean(o.json) };
+      return {
+        action,
+        pr,
+        noPr,
+        repo: args[pr ? 1 : 0] ?? null,
+        json: Boolean(o.json),
+        install: Boolean(o.install),
+        uninstall: Boolean(o.uninstall),
+      };
     },
   },
   {
