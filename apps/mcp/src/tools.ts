@@ -1,5 +1,7 @@
 /**
- * The twenty-two tool registrations.
+ * The headless tool registrations: the verbs the CLI also has. The tools that
+ * came from the dashboard (PRs, issues, sessions, the `ui://` App tools) are in
+ * workspace_tools.ts.
  *
  * Every one is a thin adapter: validate with zod, call the core function inside
  * a collecting reporter, return the transcript as `content` and the typed
@@ -11,7 +13,7 @@
 import * as path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { closeOut, createWorkspace, listWorkspaces } from "werkmeister-core";
+import { closeOut } from "werkmeister-core";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "werkmeister-core/browser";
 import { composeLogs } from "werkmeister-core/compose";
@@ -45,13 +47,12 @@ import { listNotes, parseNote } from "werkmeister-core/notes";
 import { collectingReporter, raw, withReporter } from "werkmeister-core/reporter";
 import { featureServices } from "werkmeister-core/slots";
 import { checkStandards } from "werkmeister-core/standards";
-import { interceptsSnapshot, statusSnapshot } from "werkmeister-core/status";
 import { STRATEGY_IDS, strategyFor } from "werkmeister-core/strategies";
 import { leaveIntercept, startIntercept } from "werkmeister-core/telepresence";
 import { runFeatureTests } from "werkmeister-core/test_run";
 import { initWorkspace } from "werkmeister-core/workspace_init";
 import { z } from "zod";
-import { resolveFeature, resolveWorkspaceDir } from "./lib/feature.js";
+import { type ReqHeaders, resolveFeature, resolveWorkspace } from "./lib/feature.js";
 
 /**
  * What the SDK hands a tool handler. `signal` is aborted when the request is
@@ -63,6 +64,8 @@ type Extra = {
   signal: AbortSignal;
   requestInfo?: { headers: Record<string, string | string[] | undefined> };
 };
+
+export const headersOf = (extra: unknown): ReqHeaders => (extra as Extra).requestInfo?.headers;
 
 /**
  * Run one core call and shape it into a tool result.
@@ -101,14 +104,17 @@ async function adapt(fn: () => Promise<Record<string, unknown>>): Promise<CallTo
 }
 
 /**
- * The feature argument every feature-scoped tool shares: optional, defaulting
- * to the connection's `X-Sandbox-Feature` header.
+ * The one identifier every workspace-scoped tool shares: optional, defaulting
+ * to the connection's `X-Sandbox-Feature` header (lib/feature.ts).
  */
-const FEATURE_ARG = {
-  feature: z
+export const WORKSPACE_ARG = {
+  workspace: z
     .string()
     .optional()
-    .describe("Feature name. Defaults to the X-Sandbox-Feature header on the connection."),
+    .describe(
+      "Workspace directory name (as list-workspaces reports it) or feature name. " +
+        "Defaults to the X-Sandbox-Feature header on the connection.",
+    ),
 };
 
 export function registerTools(server: McpServer): void {
@@ -129,12 +135,12 @@ function registerLifecycleTools(server: McpServer): void {
       description:
         "Allocate the feature's slot, start its containers, and point the reverse proxy at " +
         "them. Returns the slot, port range, local services and their URLs.",
-      inputSchema: { ...FEATURE_ARG },
+      inputSchema: { ...WORKSPACE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        return { ...(await up(feature, resolveWorkspaceDir(feature), { signal: extra.signal })) };
+        const { feature, dir } = resolveFeature(args.workspace, headersOf(extra));
+        return { ...(await up(feature, dir, { signal: extra.signal })) };
       }),
   );
 
@@ -143,10 +149,10 @@ function registerLifecycleTools(server: McpServer): void {
     {
       title: "Tear a feature down",
       description:
-        "Leave the feature's k8s intercepts, remove its containers, and release its slot. " +
-        "Does not reload the reverse proxy — call proxy-reload after tearing down.",
+        "Leave the feature's k8s intercepts, remove its containers, release its slot, and " +
+        "reload the reverse proxy so nothing routes to the removed containers.",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         removeVolumes: z
           .boolean()
           .optional()
@@ -155,13 +161,13 @@ function registerLifecycleTools(server: McpServer): void {
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        return {
-          ...(await down(feature, {
-            removeVolumes: args.removeVolumes ?? false,
-            signal: extra.signal,
-          })),
-        };
+        const { feature } = resolveFeature(args.workspace, headersOf(extra));
+        const result = await down(feature, {
+          removeVolumes: args.removeVolumes ?? false,
+          signal: extra.signal,
+        });
+        // As the CLI does: down() leaves Caddy routing to containers that are gone.
+        return { ...result, proxy: await reloadProxy() };
       }),
   );
 
@@ -172,11 +178,11 @@ function registerLifecycleTools(server: McpServer): void {
       description:
         "Stop the containers, leaving them and the slot in place so restart or " +
         "up can resume the feature.",
-      inputSchema: { ...FEATURE_ARG },
+      inputSchema: { ...WORKSPACE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => ({
-        ...(await stop(resolveFeature(args.feature, (extra as Extra).requestInfo?.headers))),
+        ...(await stop(resolveFeature(args.workspace, headersOf(extra)).feature)),
       })),
   );
 
@@ -185,28 +191,11 @@ function registerLifecycleTools(server: McpServer): void {
     {
       title: "Restart a feature's containers",
       description: "Bounce the feature's containers, reusing its slot.",
-      inputSchema: { ...FEATURE_ARG },
+      inputSchema: { ...WORKSPACE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => ({
-        ...(await restart(resolveFeature(args.feature, (extra as Extra).requestInfo?.headers))),
-      })),
-  );
-
-  server.registerTool(
-    "status",
-    {
-      title: "Sandbox status",
-      description:
-        "Everything `sandbox status` knows: infrastructure containers, the host web servers, " +
-        "k8s forwards, every feature's slot and containers, and telepresence intercepts. " +
-        "Host-side, so the k8s forward health reported here is the real one.",
-      inputSchema: {},
-    },
-    async (): Promise<CallToolResult> =>
-      adapt(async () => ({
-        ...(await statusSnapshot()),
-        telepresence: await interceptsSnapshot(),
+        ...(await restart(resolveFeature(args.workspace, headersOf(extra)).feature)),
       })),
   );
 
@@ -278,13 +267,11 @@ function registerLifecycleTools(server: McpServer): void {
       description:
         "Every registered service and its endpoint for this feature — local container, k8s " +
         "forward, or not configured.",
-      inputSchema: { ...FEATURE_ARG },
+      inputSchema: { ...WORKSPACE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => ({
-        ...(await featureServices(
-          resolveFeature(args.feature, (extra as Extra).requestInfo?.headers),
-        )),
+        ...(await featureServices(resolveFeature(args.workspace, headersOf(extra)).feature)),
       })),
   );
 
@@ -296,7 +283,7 @@ function registerLifecycleTools(server: McpServer): void {
         "A bounded read of `docker compose logs` for the feature, optionally one service. This " +
         "is not a subscription: it never follows, and returns the last `tail` lines.",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         service: z.string().optional().describe("Limit to one service's container."),
         tail: z
           .number()
@@ -308,7 +295,7 @@ function registerLifecycleTools(server: McpServer): void {
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
+        const { feature } = resolveFeature(args.workspace, headersOf(extra));
         const service = args.service ?? null;
         const tail = args.tail ?? 200;
         // follow: false is what makes this return at all; the signal still
@@ -319,21 +306,21 @@ function registerLifecycleTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "remove",
+    "remove-service",
     {
       title: "Drop a service from a feature",
       description:
         "Remove one service from the feature's local services so it falls back to k8s: " +
         "regenerate the workspace files, restart (or stop) the containers, re-point the proxy.",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         service: z.string().describe("The local service to drop."),
       },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => ({
         ...(await removeService(
-          resolveFeature(args.feature, (extra as Extra).requestInfo?.headers),
+          resolveFeature(args.workspace, headersOf(extra)).feature,
           args.service,
         )),
       })),
@@ -349,7 +336,7 @@ function registerLifecycleTools(server: McpServer): void {
         "and `message` lists each service's test command and validation guidance. " +
         "A failing suite is a result (non-zero `status`), not an error.",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         extraArgs: z
           .array(z.string())
           .optional()
@@ -358,11 +345,11 @@ function registerLifecycleTools(server: McpServer): void {
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
+        const { feature, dir } = resolveFeature(args.workspace, headersOf(extra));
         return {
           ...(await runFeatureTests({
             feature,
-            workspace: resolveWorkspaceDir(feature),
+            workspace: dir,
             extraArgs: args.extraArgs ?? [],
             signal: extra.signal,
           })),
@@ -389,12 +376,8 @@ function registerLifecycleTools(server: McpServer): void {
 // ---------------------------------------------------------------------------
 
 /**
- * The wizard's fields as tool arguments.
- *
- * `workspace` binds to `createWorkspace`, the non-interactive path the
- * dashboard already drives — not to the TTY wizard in `commands/workspace.ts`.
- * Every input the wizard would prompt for is here, so nothing has to block on a
- * terminal that does not exist.
+ * The wizard's fields as tool arguments, so a reconcile never blocks on a
+ * terminal prompt that does not exist.
  */
 const WORKSPACE_FIELDS = {
   repos: z.string().optional().describe("Comma-separated repos to check out."),
@@ -420,64 +403,6 @@ const WORKSPACE_FIELDS = {
 
 function registerAuthoringTools(server: McpServer): void {
   server.registerTool(
-    "workspace",
-    {
-      title: "Create a sandbox workspace",
-      description:
-        "Create a workspace: git worktrees on a <user>/<workspace> branch under the workspaces " +
-        "root, then init-workspace. Runs `createWorkspace` in this process; with an `issue_id` the " +
-        "issue is fetched and stored in `.sandbox/issue.md` (the create fails if it can't be read). Non-interactive — every wizard input is an argument here. " +
-        "Never opens VS Code.",
-      inputSchema: {
-        feature: z.string().describe("Feature name. Required — this creates the feature."),
-        ...WORKSPACE_FIELDS,
-      },
-    },
-    async (args): Promise<CallToolResult> =>
-      adapt(async () => {
-        // open: false — a container agent has no desktop, and launching an
-        // editor is open's job, asked for explicitly.
-        const result = await createWorkspace({ ...args }, { open: false });
-        // createWorkspace installs its OWN collecting reporter internally, and
-        // AsyncLocalStorage nesting means that inner scope shadows the one
-        // adapt() installed — so nothing it emits during provisioning reaches
-        // our transcript. Re-emit the transcript it captured, or `content`
-        // comes back empty for the one tool that does the most work.
-        if (result.output) {
-          raw(`${result.output}\n`);
-        }
-        return { ...result };
-      }),
-  );
-
-  server.registerTool(
-    "list-workspaces",
-    {
-      title: "List sandbox workspaces",
-      description:
-        "Every workspace directory under the workspaces root, with its path, issue ID, " +
-        "labels and VS Code URI. Not scoped to a feature — this is the whole root, and it " +
-        "lists workspaces that were never brought up.",
-      inputSchema: {},
-    },
-    async (): Promise<CallToolResult> =>
-      adapt(async () => {
-        const result = await listWorkspaces();
-        // listWorkspaces is a directory scan and reports nothing through the
-        // reporter, so `content` would be empty without this. The names and
-        // issue IDs are the transcript; structuredContent carries the rest.
-        raw(
-          `${
-            result.workspaces
-              .map((w) => `${w.name}${w.issueId ? `  ${w.issueId}` : ""}`)
-              .join("\n") || "(no workspaces)"
-          }\n`,
-        );
-        return { ...result };
-      }),
-  );
-
-  server.registerTool(
     "close-out",
     {
       title: "End a workspace",
@@ -485,10 +410,11 @@ function registerAuthoringTools(server: McpServer): void {
         "The one way to end a workspace. After every PR shipped: close the issue, write closeout.md, " +
         "commit and push every branch, tear the feature down, delete the workspace directory and the " +
         "merged code branches. With `abandon` (a reason) when work is unshipped: record the reason, leave " +
-        "the issue, push and keep every branch, then remove. Destructive, and NOT scoped to your feature — " +
-        "it names a workspace. Nothing is deleted if any branch cannot be pushed.",
+        "the issue, push and keep every branch, then remove. Without `abandon` it refuses while a PR is " +
+        "unshipped. Destructive — confirm with the person first. Nothing is deleted if any branch " +
+        "cannot be pushed.",
       inputSchema: {
-        name: z.string().describe("Workspace directory name, as list-workspaces reports it."),
+        ...WORKSPACE_ARG,
         abandon: z
           .string()
           .optional()
@@ -497,15 +423,15 @@ function registerAuthoringTools(server: McpServer): void {
           ),
       },
     },
-    async (args): Promise<CallToolResult> =>
+    async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
         const result = await closeOut(
-          args.name,
+          resolveWorkspace(args.workspace, headersOf(extra)).name,
           args.abandon !== undefined ? { abandon: args.abandon } : {},
         );
-        // Same shadowing as workspace: removeWorkspace installs its own
-        // collecting reporter for the teardown, so re-emit what it captured or
-        // the transcript loses the push and down output.
+        // closeOut installs its own collecting reporter for the teardown, and
+        // that AsyncLocalStorage scope shadows adapt()'s — re-emit what it
+        // captured or the transcript loses the push and down output.
         if (result.output) {
           raw(`${result.output}\n`);
         }
@@ -521,15 +447,15 @@ function registerAuthoringTools(server: McpServer): void {
         "Re-run init-workspace against an existing workspace: reconcile worktrees, regenerate " +
         `CLAUDE.md, .env, ${COMPOSE_FILE}, skills, agents, hooks and .mcp.json from ` +
         ".sandbox/workspace.yml plus any arguments given here.",
-      inputSchema: { ...FEATURE_ARG, ...WORKSPACE_FIELDS },
+      inputSchema: { ...WORKSPACE_ARG, ...WORKSPACE_FIELDS },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        const workspace = resolveWorkspaceDir(feature);
+        const { workspace: _id, ...fields } = args;
+        const { feature, dir } = resolveFeature(_id, headersOf(extra));
         // No readStdinTask: fd 0 here may be the MCP transport.
-        await initWorkspace({ ...args, feature }, workspace);
-        return { feature, workspace };
+        await initWorkspace({ ...fields, feature }, dir);
+        return { feature, workspace: dir };
       }),
   );
 
@@ -542,14 +468,13 @@ function registerAuthoringTools(server: McpServer): void {
         "`sync` rewrites what drifted. The layer is the workspace's `context_strategy` (jit: " +
         "sb-* skills and gate manifest; icm: standards and stage contracts).",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         action: z.enum(["check", "sync"]).describe("check reports drift; sync fixes it."),
       },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        const workspace = resolveWorkspaceDir(feature);
+        const workspace = resolveWorkspace(args.workspace, headersOf(extra)).dir;
         const strategy = strategyFor(workspace);
         return args.action === "sync"
           ? { ...strategy.sync(workspace) }
@@ -577,12 +502,11 @@ function registerAuthoringTools(server: McpServer): void {
         "Refresh the workspace's context layer the way `sandbox up` does: jit re-merges its " +
         "SessionStart and PreToolUse hooks into .claude/settings.json; icm removes any " +
         "sandbox-managed hooks. Never touches hooks it does not own.",
-      inputSchema: { ...FEATURE_ARG },
+      inputSchema: { ...WORKSPACE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        const workspace = resolveWorkspaceDir(feature);
+        const workspace = resolveWorkspace(args.workspace, headersOf(extra)).dir;
         const strategy = strategyFor(workspace);
         strategy.refresh(workspace);
         return { strategy: strategy.id };
@@ -598,7 +522,7 @@ function registerAuthoringTools(server: McpServer): void {
         "workspace's notes. `graduate` scaffolds a decision note into a standards domain — " +
         "domain and kind must be supplied, because the CLI's prompts are not available here.",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         action: z.enum(["context", "list", "graduate"]),
         includeSuperseded: z.boolean().optional().describe("list: include superseded notes."),
         notePath: z.string().optional().describe("graduate: absolute path of the decision note."),
@@ -612,8 +536,7 @@ function registerAuthoringTools(server: McpServer): void {
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        const workspace = resolveWorkspaceDir(feature);
+        const workspace = resolveWorkspace(args.workspace, headersOf(extra)).dir;
         if (args.action === "context") {
           return {
             context: strategyFor(workspace).sessionContext(workspace, { source: "mcp" }) ?? "",
@@ -681,7 +604,7 @@ function registerHostTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "open",
+    "open-feature",
     {
       title: "Open a feature-tagged browser window",
       description:
@@ -689,7 +612,7 @@ function registerHostTools(server: McpServer): void {
         "routing cookie and tagged so it is unmistakably this feature's window. The window " +
         "outlives this call; it closes when the user closes it.",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         url: z.string().optional().describe("Explicit URL. Wins over `path`."),
         path: z
           .string()
@@ -703,10 +626,8 @@ function registerHostTools(server: McpServer): void {
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        const workspace = resolveWorkspaceDir(feature);
-        const url =
-          args.url ?? featureUrl(args.path ?? readWorkspaceYaml(workspace)["test_path"] ?? "/");
+        const { feature, dir } = resolveFeature(args.workspace, headersOf(extra));
+        const url = args.url ?? featureUrl(args.path ?? readWorkspaceYaml(dir)["test_path"] ?? "/");
         if (url === null) {
           throw new SandboxError(
             "No routed hosts in services.yaml (no service declares `feature_router:`) — " +
@@ -742,7 +663,7 @@ function registerHostTools(server: McpServer): void {
         "feature's local container, or stop doing so. Runs host-side, where the telepresence " +
         "root daemon lives — with exactly the authority a host terminal has.",
       inputSchema: {
-        ...FEATURE_ARG,
+        ...WORKSPACE_ARG,
         action: z.enum(["start", "leave"]),
         service: z
           .string()
@@ -752,8 +673,8 @@ function registerHostTools(server: McpServer): void {
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const feature = resolveFeature(args.feature, (extra as Extra).requestInfo?.headers);
-        const localServices = readServicesFromWorkspace(resolveWorkspaceDir(feature));
+        const { feature, dir } = resolveFeature(args.workspace, headersOf(extra));
+        const localServices = readServicesFromWorkspace(dir);
         if (args.action === "leave") {
           return {
             left: await leaveIntercept({
