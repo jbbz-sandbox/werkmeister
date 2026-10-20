@@ -2904,6 +2904,7 @@ export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
 export async function resolveSessionSource(
   name: string,
   sessionId?: string,
+  startDir?: string,
 ): Promise<{
   workspacePath: string;
   projectDir: string | null;
@@ -2913,7 +2914,8 @@ export async function resolveSessionSource(
   updatedAt: string | null;
 }> {
   const target = await resolveSessionDir(name);
-  const projectDir = await findClaudeProjectDir(target);
+  // Claude Code files sessions by the folder they started in, which may be below the workspace.
+  const projectDir = await findClaudeProjectDir(startDir ?? target);
   const none = {
     workspacePath: target,
     projectDir,
@@ -2934,6 +2936,46 @@ export async function resolveSessionSource(
     sessionCount: sessions.length,
     updatedAt: chosen.mtime.toISOString(),
   };
+}
+
+/**
+ * The folder session *sessionId* started in: the `cwd` its transcript records, found by
+ * id in any `~/.claude/projects` dir. Null when no transcript holds one (SW-16).
+ */
+export async function sessionStartDir(sessionId: string): Promise<string | null> {
+  // The id comes from a PR file; it must not walk out of the project dir.
+  if (!/^[\w-]+$/.test(sessionId)) return null;
+  const root = path.join(os.homedir(), ".claude", "projects");
+  let dirs: string[];
+  try {
+    dirs = await fs.readdir(root);
+  } catch {
+    return null;
+  }
+  for (const d of dirs) {
+    const file = path.join(root, d, `${sessionId}.jsonl`);
+    if (!(await isFile(file))) continue;
+    const rl = readline.createInterface({
+      input: createReadStream(file, "utf-8"),
+      crlfDelay: Infinity,
+    });
+    let scanned = 0;
+    try {
+      // Every message line carries `cwd`; only a few header lines come first.
+      for await (const line of rl) {
+        if (++scanned > 50) break;
+        try {
+          const cwd = JSON.parse(line)?.cwd;
+          if (typeof cwd === "string" && cwd) return cwd;
+        } catch {
+          /* a partial last line */
+        }
+      }
+    } finally {
+      rl.close();
+    }
+  }
+  return null;
 }
 
 /**
@@ -3030,18 +3072,20 @@ export async function sendToClaudeSession(
   name: string,
   message: string,
   sessionId?: string,
+  startDir?: string,
 ): Promise<{ sessionId: string | null; started: boolean; startedNew: boolean }> {
   const body = message.trim();
   if (!body) throw new WorkspaceError("Message is empty.");
   const target = await resolveSessionDir(name);
-  const transcript = await getClaudeTranscript(name, 1, sessionId);
+  const transcript = await resolveSessionSource(name, sessionId, startDir);
   const bin = await resolveClaudeBin();
 
   const { model } = await readWorkspaceConfig(target);
   const args = claudeSendArgs(body, transcript.sessionId, model);
 
+  // `--resume` finds a session only from the folder it started in.
   const child = spawn(bin, args, {
-    cwd: target,
+    cwd: startDir ?? target,
     env: childEnv(),
     detached: true,
     stdio: ["ignore", "ignore", "pipe"],
