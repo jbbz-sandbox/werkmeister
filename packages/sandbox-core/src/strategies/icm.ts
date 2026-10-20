@@ -11,7 +11,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { COMPOSE_FILE } from "../compose_file.js";
-import { dotDir, forDotDir } from "../config.js";
+import { dotDir, forDotDir, IDLE_SERVICE_TYPES } from "../config.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { removeWorkspaceHooks, writePrGuardHook, writeWorkspaceSettings } from "../hooks_gen.js";
 import { issueIdOfMeta } from "../issue_tracker.js";
@@ -78,6 +78,26 @@ function proposeDir(stages: Stage[]): string | null {
   return i < 0 ? null : stageDirs(stages)[i];
 }
 
+/**
+ * How to reload each service. Container names follow docker-compose.feature.yml.njk
+ * (<feature>-<service>); idle types run no watcher, so a restart rebuilds nothing (SW-32).
+ */
+function restartLine(feature: string, services: string[]): string {
+  const [servicesConfig] = loadSandboxServiceConfigs();
+  const isIdle = (s: string) => IDLE_SERVICE_TYPES.includes(servicesConfig[s]?.type ?? "");
+  const names = (list: string[]) => list.map((s) => `\`${feature}-${s}\``).join(", ");
+  const restarted = services.filter((s) => !isIdle(s));
+  const idle = services.filter(isIdle);
+  return [
+    restarted.length ? restarted.map((s) => `\`docker restart ${feature}-${s}\``).join(", ") : "",
+    idle.length
+      ? `${names(idle)} run no watcher, so a restart rebuilds nothing: build and test inside them with \`docker exec\` as \`.sandbox/sandbox-context.md\` § Test commands shows`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+}
+
 function vars(ctx: InitContext, stages: Stage[]): IcmVars {
   const dirs = stageDirs(stages);
   const feature = (ctx.meta["FEATURE"] ?? "").trim();
@@ -88,10 +108,9 @@ function vars(ctx: InitContext, stages: Stage[]): IcmVars {
     repos: repos.length
       ? repos.map((r) => `\`../../${r}/\``).join(", ")
       : "the code worktrees in this workspace",
-    // Container names follow docker-compose.feature.yml.njk: <feature>-<service>.
     restart:
       feature && services.length
-        ? services.map((s) => `\`docker restart ${feature}-${s}\``).join(", ")
+        ? restartLine(feature, services)
         : "restart whatever serves the change as `.sandbox/sandbox-context.md` describes",
     standards: "",
     autonomous: isTrue(ctx.inputs["autonomous"]),
@@ -247,7 +266,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
           "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `sandbox pr open`, then Auto-fix on (rule 5) | PR URL is in the PR file and Auto-fix is on |",
         ]
       : []),
-    "| a PR merged or released, or asked to close out | `sandbox pr status`, then `sandbox close-out` | closed out |",
+    "| a PR merged or released, or asked to close out | `sandbox pr status`, then ask the person before `sandbox close-out` | closed out after the person says yes |",
     "| asked for status | `ls stages/*/output/` | report which stages hold artifacts |",
     "| containers / ports / routing broken | `.sandbox/sandbox-context.md` | — |",
     "| you hit a bug or need to log a feature/task — in the `sandbox` tool or in a repo's code | `_shared/issues-report.md`: if this workspace's changes caused a bug, fix it here; otherwise file an issue where it belongs | fixed, or issue URL reported to the person |",

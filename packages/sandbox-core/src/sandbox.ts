@@ -1397,6 +1397,109 @@ export async function getWorkspaceStatuses(): Promise<{
   return { statuses, infra };
 }
 
+/** One workspace in a check-in sweep: the facts that decide whether a courier goes to it. */
+export interface CheckInRow {
+  name: string;
+  issueId: string | null;
+  labels: string[];
+  containers: WorkspaceStatus["state"];
+  claude: ClaudeSessionSignal;
+  /** `stages/<stage>/output/*.md` files (relative to the workspace) with a line starting `status: proposed`. */
+  gates: string[];
+  /** mtime (ISO) of the newest session transcript, or null when there is none. */
+  updatedAt: string | null;
+  /** The transcript moved since the previous check-in. Always false on a first run. */
+  changed: boolean;
+}
+
+export interface CheckInTriage {
+  root: string;
+  /** When the previous check-in ran (`<root>/.check-in-last`), or null on a first run. */
+  since: string | null;
+  /** Workspaces the label filter kept: never `skip`, and only `focus` ones when any carry it. */
+  workspaces: CheckInRow[];
+  /** Names the label filter dropped. */
+  dropped: string[];
+  /**
+   * Names that need a courier: a proposed gate or a changed transcript (on a
+   * first run, Claude spoke last instead). Never one mid claude-send turn.
+   */
+  candidates: string[];
+}
+
+/** `stages/<stage>/output/*.md` files with a line starting `status: proposed`, relative to `dir`. */
+async function proposedGates(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  const stages = await fs.readdir(path.join(dir, "stages")).catch(() => [] as string[]);
+  for (const stage of stages.sort()) {
+    const rel = path.join("stages", stage, "output");
+    const files = await fs.readdir(path.join(dir, rel)).catch(() => [] as string[]);
+    for (const f of files.sort()) {
+      if (!f.endsWith(".md")) continue;
+      const text = await fs.readFile(path.join(dir, rel, f), "utf-8").catch(() => "");
+      if (/^status: proposed/m.test(text)) out.push(path.join(rel, f));
+    }
+  }
+  return out;
+}
+
+/**
+ * Step 1 of the check-in skill in one call: each workspace's labels, container
+ * and Claude state, proposed stage gates and whether its transcript moved since
+ * the last check-in, filtered by `skip` / `focus`. Marks this sweep as the last
+ * check-in, so a second call reports only what moved in between.
+ */
+export async function checkInTriage(): Promise<CheckInTriage> {
+  // Taken before the sweep: a transcript written during it shows as changed next time.
+  const now = new Date();
+  const [{ root, workspaces }, { statuses }] = await Promise.all([
+    listWorkspaces(),
+    getWorkspaceStatuses(),
+  ]);
+  const mark = path.join(root, ".check-in-last");
+  const sinceMs = await fs.stat(mark).then(
+    (s) => s.mtimeMs,
+    () => null,
+  );
+  const focus = workspaces.some((w) => w.labels.includes("focus"));
+  const keep = (w: WorkspaceEntry) =>
+    !w.labels.includes("skip") && (!focus || w.labels.includes("focus"));
+  const byName = new Map(statuses.map((s) => [s.name, s]));
+
+  const rows = await Promise.all(
+    workspaces.filter(keep).map(async (w): Promise<CheckInRow> => {
+      const status = byName.get(w.name);
+      const { updatedAt } = await resolveSessionSource(w.name).catch(() => ({ updatedAt: null }));
+      return {
+        name: w.name,
+        issueId: w.issueId,
+        labels: w.labels,
+        containers: status?.state ?? "unknown",
+        claude: status?.claude ?? { state: "idle", waiting: false },
+        gates: await proposedGates(w.path),
+        updatedAt,
+        changed: sinceMs !== null && updatedAt !== null && Date.parse(updatedAt) > sinceMs,
+      };
+    }),
+  );
+
+  await fs.writeFile(mark, "", { flag: "a" });
+  await fs.utimes(mark, now, now);
+  return {
+    root,
+    since: sinceMs === null ? null : new Date(sinceMs).toISOString(),
+    workspaces: rows,
+    dropped: workspaces.filter((w) => !keep(w)).map((w) => w.name),
+    candidates: rows
+      .filter(
+        (r) =>
+          r.claude.state !== "running" &&
+          (sinceMs === null ? r.claude.waiting : r.gates.length > 0 || r.changed),
+      )
+      .map((r) => r.name),
+  };
+}
+
 // `InterceptRow` is declared once, in status.ts, next to the code that builds it.
 export type { InterceptRow };
 

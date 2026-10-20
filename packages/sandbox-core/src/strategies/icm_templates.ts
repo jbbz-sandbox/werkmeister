@@ -2,8 +2,9 @@
  * ICM stage templates, keyed by work_type. Each stage is a contract the agent
  * reads by itself — the pipeline carries sequencing, not a hook. Generalised
  * from the hand-built ~/features/icm-ws2 after its run-2 fixes: a `decided`
- * status is the approval, reloads use `docker restart`, and the test command is
- * quoted from sandbox-context.md rather than restated.
+ * status is the approval, reloads use `docker restart` (`docker exec` for idle
+ * services), and the test command is quoted from sandbox-context.md rather than
+ * restated.
  */
 
 import { COMPOSE_FILE } from "../compose_file.js";
@@ -96,7 +97,7 @@ const propose: Stage = {
       "`output/pr-<repo>.md` per repo",
     ],
     humanCheck:
-      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then `sandbox close-out`.",
+      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then ask the person before `sandbox close-out`.",
     selfCheck:
       "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `sandbox pr open`. Stop at the PR URL. Merging is the person's.",
   }),

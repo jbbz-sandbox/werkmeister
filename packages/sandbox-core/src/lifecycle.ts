@@ -45,6 +45,7 @@ import {
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import { getVolumeBaseNames, loadPorts, loadServices } from "./config.js";
 import { listVolumeNames, removeVolume } from "./docker.js";
+import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import {
@@ -56,9 +57,11 @@ import {
   loadWorkspaceEnvVars,
   writeServiceSecretEnvs,
 } from "./generate.js";
+import { load as loadGlobalConfig } from "./global_config.js";
 import { reconcileGraduating } from "./graduate.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { latestHandoff, type Note, openDecisions } from "./notes.js";
+import { type RunResult, run } from "./proc.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
@@ -83,7 +86,7 @@ export interface UpResult {
   servicePorts: { service: string; port: number }[];
   /** The reserved slot was taken, so the compose files were rewritten for a new one. */
   regenerated: boolean;
-  /** The compose file predates the service registry — warned about, not rewritten. */
+  /** The compose file predated the current template or registry, so it was rewritten. */
   staleCompose: boolean;
   containersStarted: boolean;
   caddy: "reloaded" | "started";
@@ -159,13 +162,12 @@ export async function up(
     generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
     generateFeatureEnv(feature, slot, localServices, config, workspace);
   } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
-    // Warn rather than regenerate: `up` starting to rewrite workspace files
-    // would silently discard hand-edits to the generated compose.
+    // Rewritten, not just warned about: the file is fully generated, and a
+    // template change (SW-32's idle containers) must reach existing workspaces
+    // without a re-init. Hand-edits belong in the registry or workspace.yml.
     staleCompose = true;
-    warn(
-      `${COMPOSE_FILE} predates the current service registry — ` +
-        "run 'sandbox init-workspace' in the workspace to regenerate it.",
-    );
+    warn(`${COMPOSE_FILE} predates the current template or registry — regenerating...`);
+    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
   }
   // Every `up`, not just on a slot change: the file is fully generated and
   // nothing reads it, and with no subgraph this removes a stale copy (#120).
@@ -376,38 +378,202 @@ export interface IdleStopInput {
 // `/clear` and `/resume` end a session but the same process carries on in the next one.
 const _CONTINUING_REASONS = new Set(["clear", "resume"]);
 
+/** A running Claude Code session, as its `~/.claude/sessions/` file describes it. */
+export interface LiveSession {
+  pid: number;
+  sessionId: string | null;
+  /** `busy` / `idle`; null when the file has no status. */
+  status: string | null;
+  /** Epoch ms of the last status change, or null. */
+  statusUpdatedAt: number | null;
+}
+
 /**
- * Pids of the Claude Code sessions other than *sessionId* whose cwd is in
- * *workspaceRoot*. Claude Code keeps one file per running session in
- * `~/.claude/sessions/` "to detect concurrent sessions"; the `pid` / `sessionId`
- * / `cwd` fields are undocumented, so an unreadable file counts as no session,
- * and a crash leftover is dropped by the pid check.
+ * The Claude Code sessions whose cwd is in *workspaceRoot*. Claude Code keeps one
+ * file per running session in `~/.claude/sessions/` "to detect concurrent
+ * sessions"; its fields are undocumented, so an unreadable file counts as no
+ * session, and a crash leftover is dropped by the pid check.
  */
-export function otherLiveSessions(
+export function liveSessions(
   workspaceRoot: string,
-  sessionId: string | null,
   sessionsDir = path.join(os.homedir(), ".claude", "sessions"),
-): number[] {
+): LiveSession[] {
   let names: string[];
   try {
     names = fs.readdirSync(sessionsDir).filter((n) => n.endsWith(".json"));
   } catch {
     return [];
   }
-  const pids: number[] = [];
+  const sessions: LiveSession[] = [];
   for (const name of names) {
     try {
       const s = JSON.parse(fs.readFileSync(path.join(sessionsDir, name), "utf8"));
       const cwd = String(s.cwd ?? "");
       const inWorkspace = cwd === workspaceRoot || cwd.startsWith(workspaceRoot + path.sep);
-      if (!inWorkspace || s.sessionId === sessionId || !Number.isInteger(s.pid)) continue;
+      if (!inWorkspace || !Number.isInteger(s.pid)) continue;
       process.kill(s.pid, 0);
-      pids.push(s.pid);
+      sessions.push({
+        pid: s.pid,
+        sessionId: typeof s.sessionId === "string" ? s.sessionId : null,
+        status: typeof s.status === "string" ? s.status : null,
+        statusUpdatedAt: Number.isFinite(s.statusUpdatedAt) ? s.statusUpdatedAt : null,
+      });
     } catch {
       // unparseable, or the pid is gone
     }
   }
-  return pids;
+  return sessions;
+}
+
+/** Pids of the sessions in *workspaceRoot* other than *sessionId*. */
+export function otherLiveSessions(
+  workspaceRoot: string,
+  sessionId: string | null,
+  sessionsDir?: string,
+): number[] {
+  return liveSessions(workspaceRoot, sessionsDir)
+    .filter((s) => s.sessionId !== sessionId)
+    .map((s) => s.pid);
+}
+
+/** A feature with running containers, from their compose labels. */
+export interface RunningFeature {
+  feature: string;
+  workspace: string;
+  /** Each running container's `State.StartedAt`, epoch ms. */
+  startedAt: number[];
+}
+
+export interface IdleInput {
+  minutes: number;
+  now: number;
+  running: RunningFeature[];
+  sessions: (workspace: string) => Pick<LiveSession, "status" | "statusUpdatedAt">[];
+  /** Epoch ms the gate last ran `docker exec` in *workspace*, or null. */
+  lastExec: (workspace: string) => number | null;
+}
+
+/** Why a running feature is not idle, or null when it is. */
+function busyReason(f: RunningFeature, input: IdleInput, cutoff: number): string | null {
+  // An open session that has sat idle past the cutoff does not count (SW-39 D3).
+  const active = input
+    .sessions(f.workspace)
+    .some((s) => s.status !== "idle" || (s.statusUpdatedAt ?? Infinity) > cutoff);
+  if (active) return "session active";
+  if (f.startedAt.some((t) => t > cutoff)) return `started < ${input.minutes} min ago`;
+  if ((input.lastExec(f.workspace) ?? 0) > cutoff) return `gate ran < ${input.minutes} min ago`;
+  return null;
+}
+
+/** The features nothing has used for `input.minutes` (SW-39). Never `infra`. */
+export function idleFeatures(input: IdleInput): string[] {
+  const cutoff = input.now - input.minutes * 60_000;
+  return input.running
+    .filter((f) => f.feature !== "infra" && !busyReason(f, input, cutoff))
+    .map((f) => f.feature);
+}
+
+/** `overrides.idle_stop_minutes` from the global config; 30 when unset, 0 turns the reaper off. */
+export function idleStopMinutes(): number {
+  const v = (loadGlobalConfig()["overrides"] as Record<string, unknown> | undefined)?.[
+    "idle_stop_minutes"
+  ];
+  return Number.isInteger(v) && (v as number) >= 0 ? (v as number) : 30;
+}
+
+/** The gate's `docker exec` marker (SW-39), touched by `runGate`. */
+export function lastExecMarker(workspaceRoot: string): string {
+  return path.join(dotDir(workspaceRoot), "last-exec");
+}
+
+function mtimeMs(p: string): number | null {
+  try {
+    return fs.statSync(p).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+const LABEL_FEATURE = "com.sandbox.local.feature";
+const LABEL_WORKDIR = "com.docker.compose.project.working_dir";
+
+/** Running feature containers grouped by feature; null when docker cannot be read. */
+function runningFeatures(runCmd: (cmd: string[]) => RunResult): RunningFeature[] | null {
+  try {
+    const ids = runCmd(["docker", "ps", "-q", "--filter", `label=${LABEL_FEATURE}`]);
+    if (ids.status !== 0) return null;
+    const list = ids.stdout.split("\n").filter(Boolean);
+    if (!list.length) return [];
+    const fmt = `{{index .Config.Labels "${LABEL_FEATURE}"}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}`;
+    const inspect = runCmd(["docker", "inspect", "--format", fmt, ...list]);
+    if (inspect.status !== 0) return null;
+    const byFeature = new Map<string, RunningFeature>();
+    for (const line of inspect.stdout.split("\n").filter(Boolean)) {
+      const [feature, workspace, started] = line.split("\t");
+      if (!feature || !workspace) continue;
+      const f = byFeature.get(feature) ?? { feature, workspace, startedAt: [] };
+      f.startedAt.push(Date.parse(started));
+      byFeature.set(feature, f);
+    }
+    return [...byFeature.values()];
+  } catch {
+    return null; // no docker binary, or it timed out
+  }
+}
+
+export interface StopIdleOptions {
+  /** Only this feature. */
+  only?: string;
+  now?: number;
+  sessionsDir?: string;
+  run?: (cmd: string[]) => RunResult;
+  stop?: (feature: string) => Promise<unknown>;
+}
+
+/**
+ * `werkmeister stop --idle <minutes>` and the `watchPrs` reaper (SW-39): stop each
+ * feature nothing has used for *minutes*. One line per running feature; never
+ * throws, so a watch pass is never failed by it.
+ */
+export async function stopIdle(
+  minutes: number,
+  opts: StopIdleOptions = {},
+): Promise<{ ok: boolean; lines: string[] }> {
+  const runCmd = opts.run ?? ((cmd) => run(cmd, { capture: true, timeout: 20 }));
+  const found = runningFeatures(runCmd);
+  if (!found) return { ok: true, lines: ["docker unavailable — nothing reaped"] };
+  const running = found.filter((f) => !opts.only || f.feature === opts.only);
+  if (!running.length) return { ok: true, lines: ["no running feature containers"] };
+  const input: IdleInput = {
+    minutes,
+    now: opts.now ?? Date.now(),
+    running,
+    sessions: (ws) => liveSessions(ws, opts.sessionsDir),
+    lastExec: (ws) => mtimeMs(lastExecMarker(ws)),
+  };
+  const cutoff = input.now - minutes * 60_000;
+  const lines: string[] = [];
+  let ok = true;
+  for (const f of running) {
+    const why =
+      f.feature === "infra"
+        ? "shared infra"
+        : insideOwnContainer(f.feature)
+          ? "running inside its own container"
+          : busyReason(f, input, cutoff);
+    if (why) {
+      lines.push(`${f.feature}: kept (${why})`);
+      continue;
+    }
+    try {
+      await (opts.stop ?? stop)(f.feature);
+      lines.push(`${f.feature}: stopped (idle ≥ ${minutes} min)`);
+    } catch (e) {
+      ok = false;
+      lines.push(`${f.feature}: stop failed — ${(e as Error).message}`);
+    }
+  }
+  return { ok, lines };
 }
 
 /**
