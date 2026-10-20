@@ -8,8 +8,8 @@ import {
   buildRows,
   display,
   formFields,
-  metaParts,
   interceptControl,
+  metaParts,
   optionGroups,
   withLivePrs,
 } from "./register";
