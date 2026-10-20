@@ -1,6 +1,6 @@
 {
   "name": "werkmeister",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "license": "Apache-2.0",
   "description": "Multi-feature concurrent development orchestrator CLI tool",
   "type": "module",
@@ -54,7 +54,7 @@
     "@types/node": "^22.13.0",
     "commander": "^13.1.0",
     "esbuild": "^0.24.0",
-    "werkmeister-core": "^0.20.0",
+    "werkmeister-core": "^0.21.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
