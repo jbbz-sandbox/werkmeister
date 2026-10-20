@@ -16,6 +16,7 @@
     "test": "turbo run test",
     "changeset:version": "changeset version && npm install --package-lock-only",
     "release": "npm run build && changeset publish",
+    "licenses": "node --test 'scripts/*.test.mjs' && node scripts/check-licenses.mjs",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."
   },
