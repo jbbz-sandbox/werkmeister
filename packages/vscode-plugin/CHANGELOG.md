@@ -1,5 +1,12 @@
 # vscode-plugin
 
+## 0.20.0
+
+### Patch Changes
+
+- Updated dependencies [afc375a]
+  - werkmeister-core@0.20.0
+
 ## 0.19.0
 
 ### Patch Changes
