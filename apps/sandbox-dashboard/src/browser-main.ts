@@ -15,13 +15,13 @@
  * Built to dist/browser.html and served by lib/browser-ui.ts.
  */
 
-import { initCreateForm } from "./create-form.js";
+import { initCreateForm } from "werkmeister-ui/create-form";
+import { renderMarkdown } from "werkmeister-ui/lib/markdown";
+import { appRoot, injectCss } from "werkmeister-ui/theme";
+import { type HostBridge, initWorkspaceUI } from "werkmeister-ui/workspace-ui";
 import { initHealthUI } from "./health-ui.js";
-import { renderMarkdown } from "./lib/markdown.js";
 import { initPrsUI } from "./prs-ui.js";
 import { initSandboxLinksUI } from "./sandbox-links-ui.js";
-import { appRoot, injectCss } from "./theme.js";
-import { type HostBridge, initWorkspaceUI } from "./workspace-ui.js";
 
 const bridge: HostBridge = {
   async callTool(name, args) {

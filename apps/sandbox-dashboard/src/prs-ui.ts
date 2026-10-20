@@ -11,10 +11,10 @@
  * live session-stream routes); not mounted by mcp-list.ts or artifact-main.ts.
  */
 
-import { type ChatPanelHandle, initChatPanel } from "./chat-panel.js";
-import { renderMarkdown } from "./lib/markdown.js";
-import { el, injectCss } from "./theme.js";
-import type { HostBridge } from "./workspace-ui.js";
+import { type ChatPanelHandle, initChatPanel } from "werkmeister-ui/chat-panel";
+import { renderMarkdown } from "werkmeister-ui/lib/markdown";
+import { el, injectCss } from "werkmeister-ui/theme";
+import type { HostBridge } from "werkmeister-ui/workspace-ui";
 
 interface OpenPr {
   url: string;
