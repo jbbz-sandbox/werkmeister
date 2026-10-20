@@ -8,9 +8,11 @@ import * as vscode from "vscode";
 import {
   getIntercepts,
   getWorkspacePRs,
+  getWorkspaceResources,
   getWorkspaceStatuses,
   lifecycleOf,
   listWorkspaces,
+  type WorkspaceResources,
 } from "werkmeister-core";
 import type { PrInput } from "werkmeister-ui";
 import {
@@ -23,6 +25,8 @@ import {
 import { pollWhileVisible } from "./poll.js";
 
 const POLL_MS = 5000;
+/** The stats sweep costs the daemon about a second per run, so CPU/memory refresh on a slower clock (SW-41). */
+const RESOURCE_POLL_MS = 30000;
 
 export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
   private readonly changed = new vscode.EventEmitter<WsNode | undefined>();
@@ -34,6 +38,9 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
   private prs: Map<string, PrInput[]> | null | undefined;
   private prsRequested = false;
   private legend = false;
+  /** Undefined until the first sweep lands; null when it failed. */
+  private resources: WorkspaceResources | null | undefined;
+  private sweeping = false;
 
   toggleLegend(): void {
     this.legend = !this.legend;
@@ -64,7 +71,27 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
    * The scheduling itself lives in poll.ts so it can be unit-tested.
    */
   bind(view: vscode.TreeView<WsNode>): vscode.Disposable {
-    return new vscode.Disposable(pollWhileVisible(view, () => this.refresh(), POLL_MS));
+    const stops = [
+      pollWhileVisible(view, () => this.refresh(), POLL_MS),
+      pollWhileVisible(view, () => void this.sweep(), RESOURCE_POLL_MS),
+    ];
+    return new vscode.Disposable(() => {
+      for (const stop of stops) stop();
+    });
+  }
+
+  /** Kept apart from load(): a slow sweep must never hold up the rows. */
+  private async sweep(): Promise<void> {
+    if (this.sweeping) return;
+    this.sweeping = true;
+    try {
+      this.resources = await getWorkspaceResources();
+    } catch {
+      this.resources = null;
+    } finally {
+      this.sweeping = false;
+    }
+    this.refresh();
   }
 
   private async load(): Promise<void> {
@@ -91,6 +118,8 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
           lifecycles: new Map(
             workspaces.workspaces.map((w) => [w.name, lifecycleOf(w.path).state]),
           ),
+          usage: this.resources?.projects,
+          host: this.resources === undefined ? undefined : (this.resources?.host ?? null),
         },
       );
     } catch (e) {

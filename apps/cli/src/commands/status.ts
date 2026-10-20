@@ -6,10 +6,13 @@
 
 import { getContainerStatus } from "werkmeister-core/compose";
 import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
+import type { HostSummary, ProjectHealth, Usage } from "werkmeister-core/resources";
 import { getAllSlots, type SlotEntry, slotCount } from "werkmeister-core/slots";
 import {
   buildInterceptRows,
+  type FeatureVitals,
   featurePortRange,
+  featureVitals,
   finishedSetup,
   getInfraStatus,
   type InfraContainer,
@@ -74,6 +77,40 @@ async function featureStatus(featureName: string): Promise<string> {
   return `${Colors.RED}down (0/${totalC})${Colors.RESET}`;
 }
 
+/** Elapsed time, coarse: `45 s` · `12 min` · `5 h` · `2 days`. */
+function age(iso: string, now: number): string {
+  const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h`;
+  const d = Math.floor(s / 86400);
+  return `${d} ${d === 1 ? "day" : "days"}`;
+}
+
+/** `12.3% CPU · 410 MiB · started 2 h ago by up`; parts drop out when unknown. */
+export function vitalsText(
+  usage: Usage | undefined,
+  started: ProjectHealth["started"] | undefined,
+  now: number = Date.now(),
+): string {
+  return [
+    usage ? `${usage.cpuPercent}% CPU · ${usage.memMib} MiB` : null,
+    started ? `started ${age(started.at, now)} ago by ${started.by}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The one-line host summary; yellow once the 1-min load passes the core count. */
+export function hostText(host: HostSummary | null): string {
+  if (!host) return `  ${Colors.DIM}Host load n/a${Colors.RESET}`;
+  const color = host.load[0] > host.cores ? Colors.YELLOW : Colors.CYAN;
+  return (
+    `  ${color}Host load ${host.load.join(" ")} (${host.cores} cores)${Colors.RESET}` +
+    `  |  feature containers ${host.featureCpuPercent}% CPU`
+  );
+}
+
 async function printVerboseContainers(featureName: string): Promise<void> {
   const containers = await getContainerStatus(featureName);
   for (const c of containers) {
@@ -104,8 +141,10 @@ async function printFeaturesSection(
   allSlots: Record<string, SlotEntry>,
   verbose: boolean,
   interceptRows: InterceptRow[],
+  vitals: FeatureVitals,
 ): Promise<number> {
   console.log(`  ${Colors.BOLD}Features${Colors.RESET}`);
+  console.log(hostText(vitals.resources?.host ?? null));
 
   const entries = Object.entries(allSlots);
   if (!entries.length) {
@@ -131,13 +170,23 @@ async function printFeaturesSection(
       svcStr = svcStr.slice(0, 30) + "...";
     }
 
+    const project = `sandbox-${featureName}`;
+    const health = vitals.health.get(project);
+    const extra = vitalsText(vitals.resources?.projects[project], health?.started);
     console.log(
       `  ${String(slot).padStart(4)}  ` +
         `${featureName.padEnd(25)}  ` +
         `${svcStr.padEnd(35)}  ` +
         `${featurePortRange(slot).padEnd(15)}  ` +
-        `${await featureStatus(featureName)}`,
+        `${await featureStatus(featureName)}` +
+        (extra ? `  ${Colors.DIM}${extra}${Colors.RESET}` : ""),
     );
+    for (const loop of health?.crashLoops ?? []) {
+      console.log(
+        `         ${Colors.RED}  ✗ ${loop.service} crash-looping (${loop.restarts} restarts)` +
+          `${loop.lastLog ? `: ${loop.lastLog}` : ""}${Colors.RESET}`,
+      );
+    }
 
     if (verbose) {
       await printVerboseContainers(featureName);
@@ -305,6 +354,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
+  // Started first: the stats sweep takes about a second and overlaps the reads below.
+  const vitals = featureVitals();
   const infra = await getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = await getAllSlots();
@@ -317,6 +368,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     allSlots,
     Boolean(args.verbose),
     buildInterceptRows(allSlots, loadServices(), listIntercepts()),
+    await vitals,
   );
   const alive = printK8sSection(k8s);
 

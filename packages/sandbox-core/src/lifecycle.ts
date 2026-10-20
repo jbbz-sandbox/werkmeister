@@ -65,6 +65,7 @@ import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { latestHandoff, type Note, openDecisions } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
 import { info, raw, success, warn } from "./reporter.js";
+import { withStartRecord } from "./resources.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
   allocateSlot,
@@ -180,7 +181,7 @@ export async function up(
   let containersStarted = false;
   if (localServices.length) {
     info("Starting containers...");
-    if (!(await composeUpAsync(feature, signal))) {
+    if (!(await withStartRecord(workspace, "up", () => composeUpAsync(feature, signal)))) {
       throw new SandboxError(
         "Failed to start containers. Check docker compose output above.",
         "COMPOSE_UP_FAILED",
@@ -306,7 +307,10 @@ export async function startService(
   // compose refuses to start a service whose `.env.<svc>` is missing.
   writeServiceSecretEnvs(workspace, [service], config.services);
   await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
-  if (!(await composeUpServiceAsync(feature, service, composePath))) {
+  const started = await withStartRecord(workspace, "gate", () =>
+    composeUpServiceAsync(feature, service, composePath),
+  );
+  if (!started) {
     throw new SandboxError(
       `Failed to start ${service} — see the compose output above`,
       "COMPOSE_UP_FAILED",
@@ -687,7 +691,11 @@ export async function restart(feature: string): Promise<RestartResult> {
   const slot = await requireSlot(feature);
 
   info(`Restarting containers for '${feature}' (slot ${slot})...`);
-  if (!(await composeRestart(feature))) {
+  const workspace = workspaceForFeature(feature);
+  const restarted = workspace
+    ? await withStartRecord(workspace, "restart", () => composeRestart(feature))
+    : await composeRestart(feature);
+  if (!restarted) {
     throw new SandboxError(
       `Failed to restart containers for '${feature}'`,
       "COMPOSE_RESTART_FAILED",

@@ -48,6 +48,7 @@
     "./proc": "./dist/proc.js",
     "./registry_sync": "./dist/registry_sync.js",
     "./reporter": "./dist/reporter.js",
+    "./resources": "./dist/resources.js",
     "./safari": "./dist/safari.js",
     "./scaffold": "./dist/scaffold.js",
     "./secrets": "./dist/secrets.js",
