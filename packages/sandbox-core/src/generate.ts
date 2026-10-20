@@ -21,6 +21,8 @@ import { buildSandboxContextMd } from "./claude_md.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
   containerOf,
+  DEFAULT_CPUS,
+  DEFAULT_SETUP_CPUS,
   dotDir,
   forDotDir,
   IDLE_SERVICE_TYPES,
@@ -546,6 +548,16 @@ function renderFeatureCompose(
       setdefault(svcObj, "command", null);
       setdefault(svcObj, "memory_limit", "2G");
       setdefault(svcObj, "memory_reservation", "512M");
+      setdefault(svcObj, "cpus", DEFAULT_CPUS);
+      if (svcObj["extra_services"]) {
+        // The template reads each sidecar's `cpus` unguarded.
+        svcObj["extra_services"] = Object.fromEntries(
+          Object.entries(svcObj["extra_services"]).map(([n, e]) => [
+            n,
+            { cpus: DEFAULT_CPUS, ...(e as object) },
+          ]),
+        );
+      }
       setdefault(svcObj, "health_endpoint", "/health");
       setdefault(svcObj, "extra_services", null);
       setdefault(svcObj, "depends_on", []);
@@ -565,11 +577,12 @@ function renderFeatureCompose(
         {
           // Setup configs never went through the `setdefault` pass the services
           // above get, but the template dereferences these unguarded: a missing
-          // memory_limit renders `memory:` with no value and compose rejects the
+          // memory_limit renders `memory:` with no value (likewise `cpus:`) and compose rejects the
           // whole file. `image` is not here — the template's own `| default`
           // covers it.
           memory_limit: "2G",
           memory_reservation: "512M",
+          cpus: DEFAULT_SETUP_CPUS,
           extra_volumes: [],
           // One-shot: dependents wait on service_completed_successfully, never
           // on health, but the template emits the healthcheck unconditionally.
@@ -695,6 +708,7 @@ function renderFeatureCompose(
         "shared-network": { aliases: [`${feature}-${svcName}`] },
       },
       restart: "unless-stopped",
+      deploy: { resources: { limits: { cpus: String(svcDef["cpus"] ?? DEFAULT_CPUS) } } },
     };
 
     // Volume mounts — per-feature named volumes for node_modules/caches,

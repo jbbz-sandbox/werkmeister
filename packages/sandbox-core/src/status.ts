@@ -11,12 +11,11 @@
  * type rather than two that can drift apart.
  */
 
-import * as fs from "node:fs";
 import { type ContainerStatus, getContainerStatus, isOneShotService } from "./compose.js";
-import { composeInvocation } from "./compose_infra.js";
+import { INFRA_PROJECT } from "./compose_infra.js";
 import { loadServices } from "./config.js";
+import { projectContainers } from "./docker.js";
 import { type ForwardStatus, getPerServiceStatus } from "./k8s.js";
-import { ProcError, run as procRun } from "./proc.js";
 // The only core module that reaches into `sandbox.ts`, for a one-line predicate
 // whose other caller already lives there. Splitting it out would touch a second
 // module for no gain.
@@ -37,52 +36,22 @@ export interface InfraContainer {
   display: string;
 }
 
-/** Return status of shared-infra containers without noisy logging. */
-export function getInfraStatus(): InfraContainer[] {
-  const { argv, env } = composeInvocation();
-  if (!fs.existsSync(argv[3])) {
-    return [];
-  }
-  try {
-    const result = procRun([...argv, "ps", "--format", "json"], {
-      capture: true,
-      timeout: 10,
-      env,
-    });
-    if (result.status !== 0 || !result.stdout.trim()) {
-      return [];
+/** Return status of the live shared-infra containers, as `compose ps` without `-a` lists them. */
+export async function getInfraStatus(): Promise<InfraContainer[]> {
+  const containers = (await projectContainers(INFRA_PROJECT, undefined, { all: false })) ?? [];
+  return containers.map(({ service, state, health }) => {
+    let display: string;
+    if (health === "healthy") {
+      display = "healthy";
+    } else if (health === "starting") {
+      display = "starting";
+    } else if (state === "running") {
+      display = "running";
+    } else {
+      display = state || "down";
     }
-    const containers: InfraContainer[] = [];
-    for (const line of result.stdout.trim().split("\n")) {
-      try {
-        const data = JSON.parse(line);
-        const state = data["State"] ?? "";
-        const health = data["Health"] ?? "";
-        let display: string;
-        if (health === "healthy") {
-          display = "healthy";
-        } else if (health === "starting") {
-          display = "starting";
-        } else if (state === "running") {
-          display = "running";
-        } else {
-          display = state || "down";
-        }
-        containers.push({
-          service: data["Service"] ?? "unknown",
-          display,
-        });
-      } catch {
-        continue;
-      }
-    }
-    return containers;
-  } catch (e) {
-    if (e instanceof ProcError && (e.code === "ETIMEDOUT" || e.code === "ENOENT")) {
-      return [];
-    }
-    throw e;
-  }
+    return { service: service || "unknown", display };
+  });
 }
 
 /** The port range a slot owns, as the `start-end` string status renders. */
@@ -259,7 +228,7 @@ export interface StatusSnapshot {
 
 /** Everything `sandbox status` knows, in one machine-readable read. */
 export async function statusSnapshot(): Promise<StatusSnapshot> {
-  const infra = getInfraStatus();
+  const infra = await getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = await getAllSlots();
   const mcp = await webStatus();
@@ -271,7 +240,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
 
   const features: FeatureSnapshot[] = [];
   for (const [featureName, featureInfo] of sortedSlots(allSlots)) {
-    const containers = tallied(getContainerStatus(featureName) ?? []);
+    const containers = tallied(await getContainerStatus(featureName));
     features.push({
       name: featureName,
       slot: featureInfo.slot,

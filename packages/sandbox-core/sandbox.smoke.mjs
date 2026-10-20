@@ -4,21 +4,29 @@
 //   npm run build && node lib/sandbox.smoke.mjs
 import assert from "node:assert";
 
-const { tallyComposeContainers } = await import("werkmeister-core");
+const { tallyComposeContainers: tallyRecords } = await import("werkmeister-core");
+const { containerRecord } = await import("werkmeister-core/docker");
 
-// Rows as the Engine API reports them: `state` is `State` ("running"/"exited"),
-// `status` is `Status` ("Up 16 hours (healthy)") and carries both the health
-// verdict and the clean-exit check. Infra containers carry no slot label, and the
-// `-setup` rows deliberately carry no role label — that is what a container
-// created before the label was added looks like.
+// Rows as the Engine API's `listContainers` reports them, through the same
+// record mapping `projectContainers` applies: `Status` ("Up 16 hours (healthy)")
+// carries both the health verdict and the exit code. Infra containers carry no
+// slot label, and the `-setup` rows deliberately carry no role label — that is
+// what a container created before the label was added looks like.
 const row = (project, service, state, status, slot = "", role = "") => ({
-  project,
-  service,
-  state,
-  status,
-  slot,
-  role,
+  Id: `${project}-${service}`,
+  Names: [`/${service}`],
+  State: state,
+  Status: status,
+  Labels: Object.fromEntries(
+    [
+      ["com.docker.compose.project", project],
+      ["com.docker.compose.service", service],
+      ["com.sandbox.local.slot", slot],
+      ["com.sandbox.local.role", role],
+    ].filter(([, v]) => v),
+  ),
 });
+const tallyComposeContainers = (rows) => tallyRecords(rows.map(containerRecord));
 
 const containers = [
   row("sandbox-infra", "redis", "running", "Up 16 hours (healthy)"),

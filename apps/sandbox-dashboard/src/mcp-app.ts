@@ -1,7 +1,7 @@
 /**
  * MCP App (inline `ui://`) entrypoint for the create-workspace form
  * (src/create-form.ts) — rendered inline by hosts that support MCP App UI
- * (Claude Desktop) when the `workspace` tool is called.
+ * (Claude Desktop) when the `create-workspace-form` tool is called.
  *
  * Same neutral form as the browser dashboard's "New workspace" tab and the
  * localhost fallback page; only the transport differs:
@@ -66,7 +66,7 @@ app.onteardown = async () => ({});
 app.onerror = console.error;
 app.onhostcontextchanged = handleHostContextChanged;
 
-// The initial `workspace` tool result delivers the RJSF bundle.
+// The initial `create-workspace-form` result delivers the RJSF bundle.
 app.ontoolresult = (result: CallToolResult) => {
   const data = result.structuredContent as Record<string, unknown> | undefined;
   if (!data?.schema) return;

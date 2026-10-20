@@ -1103,7 +1103,7 @@ It does need:
   else makes the entry survive `init-workspace`.
 
 Two things stop working on the isolated side, by design. The `werkmeister` plugin's
-MCP entry runs `w9r dashboard` over stdio, and its skills shell out to the CLI; with
+MCP entry runs `werkmeister mcp` over stdio, and its skills shell out to the CLI; with
 no binary there, use the tools the HTTP server exposes instead. And the
 dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
 
@@ -1227,6 +1227,7 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
   - `command` (string | null) — Custom startup command
   - `depends_on` (list | null) — Service dependencies
   - `extra_services` (map | null) — Sidecar containers (e.g., Redis instances)
+  - `dockerfile` (string | null) — Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
   - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
   - `extra_volumes` (list | null) — Additional volume mounts
 

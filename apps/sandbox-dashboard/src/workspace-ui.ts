@@ -196,7 +196,7 @@ const AGENT_LABEL: Record<string, string> = {
   done: "Done",
 };
 
-/** One `workspace-status` row; only the fields this UI reads. */
+/** One `status` row; only the fields this UI reads. */
 interface ContainerState {
   name: string;
   state?: string;
@@ -265,7 +265,7 @@ export function initWorkspaceUI(
   let all: WorkspaceEntry[] = [];
   const statuses: Record<string, string> = {}; // issueId -> status name
   let statusesLoading = false;
-  let cstateLoaded = false; // false until the first workspace-status resolves
+  let cstateLoaded = false; // false until the first status resolves
   const prsByWs: Record<string, RepoPr[]> = {};
   let cstateByWs: Record<string, ContainerState> = {};
   const openState: Record<string, boolean> = {};
@@ -327,7 +327,7 @@ export function initWorkspaceUI(
 
   async function refreshStatus(): Promise<void> {
     try {
-      const d = await call("workspace-status", {});
+      const d = await call("status", {});
       cstateByWs = {};
       for (const s of d.statuses || []) cstateByWs[s.name] = s;
       cstateLoaded = true;
@@ -384,7 +384,7 @@ export function initWorkspaceUI(
       msg.className = "tb-msg";
       msg.textContent = "Running sandbox connect…";
       try {
-        await call("sandbox-connect", {});
+        await call("connect", {});
         msg.textContent = "Infrastructure connected.";
         await refreshStatus();
         applyFilter();
@@ -536,7 +536,7 @@ export function initWorkspaceUI(
       msgEl.textContent = verb + " ✓";
       // close-out changes the SET of workspaces, not just a state — drop
       // it from `all` so its card disappears (refreshStatus only updates state).
-      if (tool === "close-out") all = all.filter((w) => w.name !== args.name);
+      if (tool === "close-out") all = all.filter((w) => w.name !== args.workspace);
       await refreshStatus();
       applyFilter();
     } catch (_e) {
@@ -579,27 +579,21 @@ export function initWorkspaceUI(
       wrap.appendChild(b);
     }
 
-    addBtn("Open in VS Code", "primary", "open-workspace", { name: w.name }, "Opening");
+    const ws = { workspace: w.name };
+    addBtn("Open in VS Code", "primary", "open-workspace", ws, "Opening");
     if (state === "up" || state === "partial") {
-      addBtn("Open feature ↗", "go", "open-feature", { name: w.name }, "Opening");
+      addBtn("Open feature ↗", "go", "open-feature", ws, "Opening");
     }
     if (state === "down") {
-      addBtn("Start", "go", "workspace-action", { name: w.name, action: "up" }, "Starting");
+      addBtn("Start", "go", "up", ws, "Starting");
     } else {
-      addBtn(
-        "Restart",
-        null,
-        "workspace-action",
-        { name: w.name, action: "restart" },
-        "Restarting",
-      );
-      if (state !== "stopped")
-        addBtn("Stop", null, "workspace-action", { name: w.name, action: "stop" }, "Stopping");
-      else addBtn("Start", "go", "workspace-action", { name: w.name, action: "up" }, "Starting");
-      addBtn("Down", null, "workspace-action", { name: w.name, action: "down" }, "Tearing down");
+      addBtn("Restart", null, "restart", ws, "Restarting");
+      if (state !== "stopped") addBtn("Stop", null, "stop", ws, "Stopping");
+      else addBtn("Start", "go", "up", ws, "Starting");
+      addBtn("Down", null, "down", ws, "Tearing down");
     }
     // Shipped only: abandoning needs a reason, which the pane, the CLI and the MCP tool take.
-    addBtn("Close out", "danger", "close-out", { name: w.name }, "Closing out", true);
+    addBtn("Close out", "danger", "close-out", ws, "Closing out", true);
 
     // Usage: on-demand token/model breakdown, toggled open below the actions.
     // The panel itself is cached per workspace (see usagePanelCache) — this
@@ -616,7 +610,7 @@ export function initWorkspaceUI(
       usagePanel.style.display = "";
       usagePanel.textContent = "Computing usage…";
       try {
-        const u = (await call("workspace-usage", { name: w.name })) as WorkspaceUsage;
+        const u = (await call("workspace-usage", { workspace: w.name })) as WorkspaceUsage;
         renderUsage(usagePanel, u);
       } catch {
         usagePanel.textContent = "Failed to load usage.";
@@ -700,7 +694,7 @@ export function initWorkspaceUI(
       const ws = el("div", "ws");
       if (openState[w.name]) ws.classList.add("open");
       // Left status rail: colored by container state so the list reads as a
-      // status board at a glance. Absent until workspace-status resolves.
+      // status board at a glance. Absent until status resolves.
       const railState = cstateByWs[w.name]?.state;
       if (railState) ws.classList.add("rail-" + railState);
 
@@ -712,7 +706,7 @@ export function initWorkspaceUI(
       const pill = cstatePill(w);
       if (pill) meta.appendChild(pill);
       // Cold-start skeleton: show a placeholder pill until the first
-      // workspace-status resolves, so a fresh load never looks empty/broken.
+      // status resolves, so a fresh load never looks empty/broken.
       else if (!cstateLoaded) meta.appendChild(el("span", "status st-loading", "…"));
       const claude = cstateByWs[w.name]?.claude;
       const agentLabel = claude?.agent ? AGENT_LABEL[claude.agent] : undefined;

@@ -8,7 +8,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { loadServices, sandboxRoot } from "./config.js";
+import {
+  DEFAULT_CPUS,
+  DEFAULT_SETUP_CPUS,
+  loadServices,
+  loadSetupServices,
+  sandboxRoot,
+} from "./config.js";
 import { containerStats } from "./docker.js";
 import { info, warn } from "./reporter.js";
 
@@ -389,6 +395,24 @@ export function matchService(
   return null;
 }
 
+/** CPU limit per services.yaml and setup_services entry: its `cpus:`, else the default generation renders. */
+export function configuredCpus(): Record<string, string> {
+  const cpus: Record<string, string> = {};
+  for (const [name, cfg] of Object.entries(loadSetupServices())) {
+    cpus[name] = String(cfg?.cpus ?? DEFAULT_SETUP_CPUS);
+  }
+  for (const [name, cfg] of Object.entries(loadServices())) {
+    cpus[name] = String(cfg?.cpus ?? DEFAULT_CPUS);
+  }
+  return cpus;
+}
+
+/** The CPU limit of *container* per *cpus*, or null when it matches no entry. */
+export function cpuLimitOf(container: string, cpus: Record<string, string>): string | null {
+  const service = matchService(container, cpus);
+  return service ? cpus[service] : null;
+}
+
 /** How one container's observed peak compares to the limit it was given. */
 export type UsageStatus = "risk" | "moderate" | "over_provisioned" | "ok" | "no_limit";
 
@@ -400,6 +424,8 @@ export interface ServiceUsage {
   /** The configured `memory_limit`, verbatim; null when the container has none. */
   limit: string | null;
   limitMib: number;
+  /** The configured CPU limit (`cpus:` or the default); null when the container matched no entry. */
+  cpuLimit: string | null;
   /** Peak as a percentage of the limit; 0 when there is no limit to compare to. */
   usagePct: number;
   status: UsageStatus;
@@ -435,6 +461,7 @@ export async function optimizeReport(
   collectMinutes = 0,
   intervalSeconds = 10,
 ): Promise<OptimizeReport> {
+  const cpus = configuredCpus();
   const limits: Record<string, { limit: string; limitMib: number }> = {};
   for (const [svcName, svcCfg] of Object.entries(loadServices())) {
     const memLimit = (svcCfg as Record<string, any>)?.["memory_limit"];
@@ -470,6 +497,7 @@ export async function optimizeReport(
         maxMemMib,
         limit: configured?.limit ?? null,
         limitMib,
+        cpuLimit: cpuLimitOf(container, cpus),
         usagePct,
         status: classifyUsage(limitMib, usagePct),
       };
