@@ -56,9 +56,19 @@ import { buildFormSchema } from "./form_schema.js";
 import { infraHealth, up as infraUp } from "./infra.js";
 import { type Issue, issueBriefing, issueIdOf, issueTracker } from "./issue_tracker.js";
 import { checkForwardHealth } from "./k8s.js";
+import { type CrashLoop, type ProjectHealth, projectHealth, type Started } from "./resources.js";
 import { type InterceptRow, interceptsSnapshot } from "./status.js";
 
 export { mergeFormData, repoSelectionError, validateFormData } from "./form_schema.js";
+export {
+  type CrashLoop,
+  getWorkspaceResources,
+  type HostSummary,
+  type Started,
+  type StartedBy,
+  type Usage,
+  type WorkspaceResources,
+} from "./resources.js";
 
 import { launchFeatureWindow } from "./browser.js";
 import { featureUrl } from "./feature_routing.js";
@@ -1182,6 +1192,10 @@ export interface WorkspaceStatus {
   autoStop: boolean;
   /** mtime (ISO) of the workspace's newest Claude transcript, or null when it has none. */
   lastActivity: string | null;
+  /** The earliest running container's start and what started it (SW-41); null when none runs. */
+  started: Started | null;
+  /** Containers restarting under their restart policy; empty when docker is unreachable. */
+  crashLoops: CrashLoop[];
 }
 
 /** An ICM workspace's current stage: 1-based `index` of `total`, `name` without its `NN_` prefix. */
@@ -1365,13 +1379,18 @@ export function tallyComposeContainers(rows: ProjectContainer[]): Map<string, Co
 
 /**
  * Every compose container, grouped by Compose project → {running, total, services},
- * excluding completed one-shot setup containers. Returns null when docker is
- * unavailable (not installed / daemon down), so callers can report "unknown" rather
- * than a misleading "down".
+ * excluding completed one-shot setup containers, plus each project's start and
+ * crash loops from the same listing. Returns null when docker is unavailable
+ * (not installed / daemon down), so callers can report "unknown" rather than a
+ * misleading "down".
  */
-async function dockerComposeProjects(): Promise<Map<string, ComposeProjectTally> | null> {
+async function dockerComposeProjects(): Promise<{
+  tallies: Map<string, ComposeProjectTally>;
+  health: Map<string, ProjectHealth>;
+} | null> {
   const containers = await projectContainers();
-  return containers && tallyComposeContainers(containers);
+  if (!containers) return null;
+  return { tallies: tallyComposeContainers(containers), health: await projectHealth(containers) };
 }
 
 /**
@@ -1410,7 +1429,8 @@ export async function getWorkspaceStatuses(): Promise<{
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))
     .map((e) => e.name)
     .sort((a, b) => a.localeCompare(b));
-  const projects = await dockerComposeProjects();
+  const swept = await dockerComposeProjects();
+  const projects = swept?.tallies ?? null;
   const portsDoc = await loadPortsDoc();
 
   const statuses = await Promise.all(
@@ -1444,8 +1464,11 @@ export async function getWorkspaceStatuses(): Promise<{
           ports: null,
           services: [],
           ...card,
+          started: null,
+          crashLoops: [],
         };
       const counts = project ? projects.get(project) : undefined;
+      const health = project ? swept?.health.get(project) : undefined;
       let state: WorkspaceStatus["state"];
       if (!counts || counts.total === 0) state = "down";
       else if (counts.running === counts.total) state = "up";
@@ -1467,6 +1490,8 @@ export async function getWorkspaceStatuses(): Promise<{
         ports,
         services,
         ...card,
+        started: health?.started ?? null,
+        crashLoops: health?.crashLoops ?? [],
       };
     }),
   );

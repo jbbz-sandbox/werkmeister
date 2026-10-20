@@ -13,9 +13,12 @@ import {
   type DisplayInput,
   type DisplayOptions,
   displayModel,
+  type HostInput,
+  hostLine,
   type PrInput,
   type ServiceHealth,
   type Tone,
+  type UsageInput,
   type WorkspaceDisplay,
 } from "werkmeister-ui";
 
@@ -42,6 +45,10 @@ export interface TreeExtras {
   prs?: Map<string, PrInput[]> | null;
   lifecycles?: Map<string, DisplayOptions["lifecycle"]>;
   now?: Date;
+  /** Per compose project, from the slower resources sweep; undefined until it lands. */
+  usage?: Record<string, UsageInput> | null;
+  /** Undefined: no sweep yet, so no host row. Null: the sweep failed. */
+  host?: HostInput | null;
 }
 
 export interface InterceptRowLike {
@@ -58,7 +65,7 @@ export interface InterceptsLike {
 }
 
 export interface WsNode {
-  kind: "workspace" | "service" | "pr" | "legend" | "error";
+  kind: "workspace" | "service" | "pr" | "legend" | "host" | "error";
   /** Stable across refreshes so VS Code preserves expansion state. */
   id: string;
   label: string;
@@ -319,9 +326,12 @@ function workspaceTooltip(
           .map((p) => [`${p.ref} ${p.state.text}`, p.ci?.text].filter(Boolean).join(" · "))
           .join("; ");
     const agent = [d.agent.label, d.autonomous?.full, d.agent.time].filter(Boolean).join(" · ");
+    const resources = [d.usage?.text, d.started?.text].filter(Boolean).join(" · ");
     blocks.push(
       [
         `**Containers** ${escapeMd(d.containers.text + (services ? ` — ${services}` : ""))}`,
+        ...(resources ? [`**Resources** ${escapeMd(resources)}`] : []),
+        ...(d.crash ? [`**Crash** ${escapeMd(d.crash.text)}`] : []),
         `**PRs** ${escapeMd(prs)}`,
         `**Workflow** ${escapeMd(d.workflow.text || "—")}`,
         `**Agent** ${escapeMd(agent)}`,
@@ -365,6 +375,7 @@ function workspaceNode(
         // VS Code can't reach desktop sessions (ui-spec § Actions).
         where: "Terminal",
         now: extra.now,
+        usage: status.project ? extra.usage?.[status.project] : null,
       })
     : null;
 
@@ -375,7 +386,7 @@ function workspaceNode(
       : d?.workflow.compact;
   const bits = [
     isCurrent ? "current" : "",
-    ...(d ? [d.agent.label, d.containers.text, workflow ?? ""] : ["unknown"]),
+    ...(d ? [d.agent.label, d.containers.text, d.usage?.text ?? "", workflow ?? ""] : ["unknown"]),
     ws.issueId ?? "",
     d?.autonomous?.compact ?? "",
   ].filter(Boolean);
@@ -435,7 +446,23 @@ export function buildTree(
   // The window's own workspace first; the rest keep werkmeister-core's name order.
   const i = nodes.findIndex((n) => n.id === current);
   if (i > 0) nodes.unshift(...nodes.splice(i, 1));
-  return nodes;
+  return extra.host === undefined ? nodes : [hostNode(extra.host), ...nodes];
+}
+
+/** The load line above the workspaces (SW-41). */
+function hostNode(host: HostInput | null): WsNode {
+  const line = hostLine(host);
+  return {
+    kind: "host",
+    id: "host:",
+    label: "Host",
+    description: line.text.replace(/^host /, ""),
+    tooltip: `${line.text}\nLoad average (1 · 5 · 15 min) and the CPU of every feature container, in % of one core.`,
+    icon: { id: "pulse", color: TONE_COLORS[line.tone] },
+    contextValue: "host",
+    expanded: false,
+    children: [],
+  };
 }
 
 /** The single node shown when the CLI can't be located — never an empty view. */

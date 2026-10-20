@@ -43,6 +43,12 @@ export type WorkspaceRow = {
   autonomous: boolean;
   /** mtime (ISO) of the newest Claude transcript, or null. */
   lastActivity: string | null;
+  /** `sandbox-<feature>`: the key resources are joined on (SW-41). */
+  project: string | null;
+  /** The earliest running container's start and what started it; null when none runs. */
+  started: { at: string; by: "up" | "gate" | "restart" | "person" } | null;
+  /** Containers restarting under their restart policy, with their last log line. */
+  crashLoops: { service: string; restarts: number; lastLog: string | null }[];
   /** The desktop-app session whose cwd lies in this workspace. */
   /** `beside`: this session started it, so the app will open it in split view next to this one. */
   /** `pinned`: the session is pinned in the app's sidebar. */
@@ -78,6 +84,12 @@ export type InfraStatus = {
   running: number;
   total: number;
   services: ServiceHealth[];
+};
+
+/** sandbox-core `getWorkspaceResources`: one stats sweep, CPU in % of one core. */
+export type WorkspaceResources = {
+  projects: Record<string, { cpuPercent: number; memMib: number }>;
+  host: { load: [number, number, number]; cores: number; featureCpuPercent: number };
 };
 
 /** One feature×service row of `sandbox status --intercepts --json` (sandbox-core `InterceptRow`). */
@@ -153,6 +165,8 @@ declare module "claude-code" {
       abandonReason: string;
       note: string;
       infra: InfraStatus | null;
+      /** The last stats sweep, refreshed slower than rows; null when it failed, unset before the first. */
+      resources: WorkspaceResources | null;
       /** The last intercept read; null when it failed or timed out. */
       intercepts: InterceptsSnapshot | null;
       /** The configured issue tracker's sign-in check; null until checked or if the check failed. */
