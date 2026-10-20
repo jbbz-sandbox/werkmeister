@@ -97,9 +97,10 @@ model does not see them.
 `_meta.ui.resourceUri` (`ui://workspace/mcp-app.html`, `ui://workspace/mcp-list.html`).
 A client that advertises the `io.modelcontextprotocol/ui` capability (Claude
 Desktop) renders them inline; any other client gets the browser form
-(`form-cli.js`) or a markdown table. The HTML and the form are the dashboard's
-build output, read from `apps/sandbox-dashboard/dist` beside the CLI, so they
-exist in a checkout only; a package install takes the text fallback.
+(`form-cli.js`) or a markdown table. The HTML is this app's vite build
+(`mcp-app.html`, `mcp-list.html` and `ui/`, from `werkmeister-ui`), read from
+`apps/mcp/dist`; the form is the dashboard's, from `apps/sandbox-dashboard/dist`.
+Both exist in a checkout only; a package install takes the text fallback.
 
 ## What is not here
 

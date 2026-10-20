@@ -35,8 +35,9 @@ const DEFAULTS: Record<TrackerId, IssueStatuses> = {
   },
 };
 
-// The keys before SW-27; still honoured when `issue_statuses` doesn't name the point.
+// The flat keys (pre-SW-27, plus SW-24's); honoured when `issue_statuses` doesn't name the point.
 const ALIASES: Partial<Record<IssuePoint, string>> = {
+  in_progress: "issue_progress_status",
   in_review: "issue_review_status",
   done: "issue_done_status",
 };

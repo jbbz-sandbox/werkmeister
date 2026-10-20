@@ -6,7 +6,6 @@
  * (see compose_file.ts for the legacy name still read as a fallback).
  */
 
-import { type ChildProcess, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -15,7 +14,7 @@ import { parse as parseYaml } from "yaml";
 import { Colors } from "./colors.js";
 import { COMPOSE_FILE, findWorkspaceCompose } from "./compose_file.js";
 import { resolveWorkspace } from "./config.js";
-import { docker, type ProjectContainer, projectContainers } from "./docker.js";
+import { containerLogs, docker, type ProjectContainer, projectContainers } from "./docker.js";
 import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
@@ -528,29 +527,6 @@ export function dependencyOrder(containers: ProjectContainer[]): ProjectContaine
   return ordered;
 }
 
-/**
- * The `docker compose logs` argv tail.
- *
- * Exported for its own test: the follow/tail pair is the only behavioural
- * difference between a CLI tail and a bounded remote read, and inside
- * `composeLogs` it is unobservable without a live daemon.
- */
-export function composeLogsArgs(
-  service: string | null | undefined,
-  follow: boolean,
-  tail: number,
-): string[] {
-  const args = [...ALL_PROFILES, "logs"];
-  if (follow) {
-    args.push("-f");
-  }
-  args.push("--tail", String(tail));
-  if (service) {
-    args.push(service);
-  }
-  return args;
-}
-
 export interface ComposeLogsOptions {
   /** Stream until *signal* aborts (`-f`). Default true — the CLI's behaviour. */
   follow?: boolean;
@@ -560,17 +536,15 @@ export interface ComposeLogsOptions {
 }
 
 /**
- * Tail docker compose logs for *feature*.
+ * Tail the logs of *feature*'s containers, as `docker compose logs` printed them.
  *
  * If *service* is given, only show logs for that container. With `follow`
  * (the default) this streams until *signal* aborts (Ctrl+C, for the CLI); with
- * `follow: false` it returns when the child exits, which is what makes it
- * usable as a request/response tool rather than a subscription.
+ * `follow: false` it returns once every container's backlog is out, which is
+ * what makes it usable as a request/response tool rather than a subscription.
  *
  * The slot guard lives here rather than in the caller so every consumer gets
- * told *why* a tail produced nothing. Without it a feature that was never
- * brought up reports a bare "no compose file", which is true but not the
- * useful half of the answer.
+ * told *why* a tail produced nothing.
  */
 export async function composeLogs(
   feature: string,
@@ -588,64 +562,44 @@ export async function composeLogs(
     raw(`${Colors.DIM}Press Ctrl+C to stop${Colors.RESET}\n`);
   }
 
-  const cmd = composeCommand(feature, composeLogsArgs(service, follow, tail), null);
-  if (cmd === null) {
-    return;
-  }
-  // A TTY caller watches the tail live through inherited stdio. An in-process
-  // one owns no TTY -- its stdout may be an MCP transport -- so capture and
-  // replay through the reporter instead (the workspace_init.ts:1003 rule).
-  const live = passthrough();
-  try {
-    // No timeout: a followed tail runs until the reader stops it, and a bounded
-    // one is already bounded by the child's own exit.
-    const result = await runAsync(cmd, { signal, ...(live ? {} : { capture: true }) });
-    if (!live) {
-      if (result.stdout) raw(result.stdout);
-      if (result.stderr) raw(result.stderr, "stderr");
-    }
-  } catch (err) {
-    reportComposeFailure(err);
-  }
+  // Coloured only onto a terminal, as compose's own auto-detect did: an
+  // in-process caller's reporter (the MCP tool's) owns no TTY.
+  const color = passthrough() && process.stdout.isTTY === true;
+  await containerLogs(
+    `sandbox-${feature}`,
+    service ?? null,
+    { follow, tail, signal, color },
+    (line, stream) => raw(`${line}\n`, stream),
+  );
+}
+
+/** A running tail: `stop()` closes every container stream; `done` settles once they are closed. */
+export interface LogTail {
+  stop(): void;
+  done: Promise<void>;
 }
 
 /**
- * Spawn `docker compose logs -f` for *feature*, streaming stdout and stderr to
- * *onData* and returning the child so the caller can kill it. `null` when the
- * feature has no compose file.
+ * Follow *feature*'s logs (last 100 lines, then live) into *onData*, for a
+ * caller that renders them itself: the VS Code logs pane.
  *
- * The async sibling of {@link composeLogs}, which cannot be reused: it goes
- * through `proc.run` (spawnSync, `stdio: "inherit"`), so its output only ever
- * reaches the parent's own stdio and there is no stream to pipe elsewhere.
- *
- * `--ansi always` because compose prints ANSI only onto a TTY, and a piped
- * stream is not one — without it the per-service prefix colour that tells a
- * six-service tail apart is silently dropped. *env* exists for callers whose
- * PATH cannot find `docker`: a GUI-launched VS Code inherits none.
+ * Always coloured, since the pane is a terminal that renders ANSI. Over the
+ * Engine API, so it needs no `docker` binary on PATH, which a VS Code launched
+ * from the Dock does not have.
  */
 export function composeLogsStream(
   feature: string,
   service: string | null,
   onData: (chunk: string) => void,
-  env?: NodeJS.ProcessEnv,
-): ChildProcess | null {
-  const composePath = composeFile(feature);
-  if (composePath === null || !isFile(composePath)) {
-    return null;
-  }
-
-  const argv = workspaceComposeArgv(
-    feature,
-    [...ALL_PROFILES, "logs", "-f", "--tail", "100", ...(service ? [service] : [])],
-    composePath,
+): LogTail {
+  const controller = new AbortController();
+  const done = containerLogs(
+    `sandbox-${feature}`,
+    service,
+    { follow: true, tail: 100, signal: controller.signal, color: true },
+    (line) => onData(`${line}\n`),
   );
-  // `--ansi` is a `compose` flag, so it goes before the `-f`/`-p` flags.
-  const child = spawn("docker", ["compose", "--ansi", "always", ...argv.slice(2)], { env });
-  // Compose writes its own diagnostics ("no such service") to stderr; a caller
-  // rendering one log surface wants those inline, not discarded.
-  child.stdout.on("data", (d) => onData(d.toString()));
-  child.stderr.on("data", (d) => onData(d.toString()));
-  return child;
+  return { stop: () => controller.abort(), done };
 }
 
 /**

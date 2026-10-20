@@ -13,19 +13,18 @@
 set -eu
 
 TOOLS=${SANDBOX_TOOLS_DIR:-/opt/sandbox-tools}
+LOCKS=${SANDBOX_INSTALL_LOCKS:-/locks}
 
 # Hold one of SANDBOX_INSTALL_SLOTS host-wide lock files (the bind-mounted
 # ~/.sandbox/locks) so workspaces starting together don't all run npm ci at
-# once. fd 9 stays open, so the slot is held until this script exits.
+# once. The slot is held on fd 9 until npm ci finishes.
 take_install_slot() {
-  locks=${SANDBOX_INSTALL_LOCKS:-/locks}
   slots=${SANDBOX_INSTALL_SLOTS:-2}
-  mkdir -p "$locks"
   waiting=""
   while :; do
     i=1
     while [ "$i" -le "$slots" ]; do
-      exec 9>"$locks/install-$i"
+      exec 9>"$LOCKS/install-$i"
       flock -n 9 && return
       i=$((i + 1))
     done
@@ -40,9 +39,10 @@ take_install_slot() {
 # SW-33: npm ci wipes node_modules, so skip it while the lockfile and Node major
 # match the stamp in the node_modules volume. The stamp is removed before and
 # written only after a successful npm ci, so a failed install retries next up.
-# The build always runs: turbo restores it from the main checkout's shared
-# cache (needs the ~/repos mount for git), and dist/ may be stale after a pull.
+# The build always runs: turbo restores it from the shared TURBO_CACHE_DIR, and
+# dist/ may be stale after a pull.
 if [ "${1:-}" = install ]; then
+  mkdir -p "$LOCKS"
   stamp=node_modules/.sandbox-install-hash
   want="$(cat package-lock.json pnpm-lock.yaml 2>/dev/null | sha256sum | cut -d' ' -f1) $(node -v | cut -d. -f1)"
   if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
@@ -52,8 +52,13 @@ if [ "${1:-}" = install ]; then
     rm -f "$stamp"
     npm ci
     echo "$want" >"$stamp"
+    exec 9>&-
   fi
-  npm run build
+  # SW-35: one build at a time host-wide. turbo names its temp cache files by
+  # pid, and identical install containers get identical pids, so two installs
+  # of one commit could write the same temp file. Queued, the first builds and
+  # the rest restore from the cache.
+  flock "$LOCKS/turbo-build" npm run build
 fi
 
 DOCKER_VERSION=27.5.1

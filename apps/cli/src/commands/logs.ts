@@ -1,7 +1,7 @@
 /**
  * sandbox logs <feature> [service]
  *
- * Tail docker compose logs for a feature, optionally filtered to a
+ * Tail a feature's container logs, optionally filtered to a
  * specific service. Streams output until interrupted with Ctrl+C.
  *
  * The tail — and the "is it even running" guard, so every consumer gets told

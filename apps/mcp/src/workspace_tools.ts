@@ -5,9 +5,9 @@
  *
  * Every client gets the same tools. The App tools adapt to the client
  * (`rendersUi`): Desktop gets the bundled HTML, everything else a text or
- * browser fallback. The HTML and the browser form are the dashboard's build
- * output, which ships with a checkout only — a package install takes the
- * fallback.
+ * browser fallback. The HTML is this app's build (vite, from werkmeister-ui) and
+ * the browser form the dashboard's; both ship with a checkout only — a package
+ * install takes the fallback.
  */
 
 import { spawn } from "node:child_process";
@@ -68,10 +68,11 @@ const RESOURCE_URI_LIST = "ui://workspace/mcp-list.html";
 /** UI-only tools: the App's own plumbing, hidden from the model (ui-spec § One MCP server). */
 const APP_ONLY = { ui: { visibility: ["app"] } };
 
-/** A file from the dashboard's build, or null where there is none (a package install, an unbuilt checkout). */
-function dashboardFile(name: string): string | null {
+/** A file from an app's build, or null where there is none (a package install, an unbuilt checkout). */
+function appFile(app: "mcp" | "sandbox-dashboard", name: string): string | null {
   try {
-    const file = path.join(sandboxRoot(), "..", "sandbox-dashboard", "dist", name);
+    // Relative to apps/cli, not this file: the CLI bundles this server into its own dist/.
+    const file = path.join(sandboxRoot(), "..", app, "dist", name);
     return fs.existsSync(file) ? file : null;
   } catch {
     return null;
@@ -86,13 +87,13 @@ function dashboardFile(name: string): string | null {
  */
 function rendersUi(server: McpServer, html: string): boolean {
   const uiCap = getUiCapability(server.server.getClientCapabilities());
-  return Boolean(uiCap?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) && dashboardFile(html) !== null;
+  return Boolean(uiCap?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) && appFile("mcp", html) !== null;
 }
 
-function readDashboardHtml(name: string): string {
-  const file = dashboardFile(name);
+function readAppHtml(name: string): string {
+  const file = appFile("mcp", name);
   if (file === null) {
-    throw new Error(`${name} is not built here — run \`npm run build\` in apps/sandbox-dashboard.`);
+    throw new Error(`${name} is not built here — run \`npm run build\` in apps/mcp.`);
   }
   return fs.readFileSync(file, "utf-8");
 }
@@ -264,7 +265,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           };
         }
 
-        const cli = dashboardFile("form-cli.js");
+        const cli = appFile("sandbox-dashboard", "form-cli.js");
         if (cli === null) {
           return {
             isError: true,
@@ -1405,7 +1406,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     RESOURCE_URI,
     { mimeType: RESOURCE_MIME_TYPE },
     async (): Promise<ReadResourceResult> => {
-      const html = readDashboardHtml("mcp-app.html");
+      const html = readAppHtml("mcp-app.html");
       return {
         contents: [{ uri: RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: html }],
       };
@@ -1419,7 +1420,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     RESOURCE_URI_LIST,
     { mimeType: RESOURCE_MIME_TYPE },
     async (): Promise<ReadResourceResult> => {
-      const html = readDashboardHtml("mcp-list.html");
+      const html = readAppHtml("mcp-list.html");
       return {
         contents: [{ uri: RESOURCE_URI_LIST, mimeType: RESOURCE_MIME_TYPE, text: html }],
       };
