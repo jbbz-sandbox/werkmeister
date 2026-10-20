@@ -2,10 +2,13 @@
  * Engine API access, via `dockerode`.
  *
  * Container state arrives as data instead of as `docker ps` / `docker stats`
- * text that has to be split on tabs and have its units re-parsed. Compose is
- * not here and does not belong here: it is a CLI plugin with no daemon
- * endpoint, and the graph it builds — `depends_on: service_healthy`, profiles,
- * BuildKit, `.env` interpolation — is a project to reimplement, not a refactor.
+ * text that has to be split on tabs and have its units re-parsed. That includes
+ * reading a compose project's containers: compose labels every container it
+ * creates, so state, health and ports are a label filter away, with no compose
+ * file or argv. Compose orchestration is not here and does not belong here: it
+ * is a CLI plugin with no daemon endpoint, and the graph it builds —
+ * `depends_on: service_healthy`, profiles, BuildKit, `.env` interpolation — is a
+ * project to reimplement, not a refactor.
  */
 
 import { createHash } from "node:crypto";
@@ -119,6 +122,125 @@ let client: Dockerode | null = null;
 /** The shared client. The endpoint is resolved once, on first use. */
 export function docker(): Dockerode {
   return (client ??= new Dockerode(resolveEndpoint()));
+}
+
+/** One compose container, with the fields `docker compose ps --format json` reports. */
+export interface ProjectContainer {
+  name: string;
+  state: string;
+  /** `healthy` | `unhealthy` | `starting`, or `""` when the container declares no healthcheck. */
+  health: string;
+  ports: string;
+  service: string;
+  labels: Record<string, string>;
+  /** The `Exited (N)` code; 0 for a container that hasn't exited, as compose reports it. */
+  exitCode: number;
+}
+
+/**
+ * A compose project's containers, found by the labels compose stamps on them.
+ * `null` when the daemon can't be reached.
+ *
+ * No *project* lists every compose project's containers. `all: false` lists only
+ * live ones (running, paused, restarting), the set `compose ps` without `-a` shows.
+ */
+export async function projectContainers(
+  project?: string,
+  service?: string,
+  { all = true }: { all?: boolean } = {},
+): Promise<ProjectContainer[] | null> {
+  const label = [
+    project ? `com.docker.compose.project=${project}` : "com.docker.compose.project",
+    // `compose run` leftovers, which `compose ps` leaves out too.
+    "com.docker.compose.oneoff=False",
+    ...(service ? [`com.docker.compose.service=${service}`] : []),
+  ];
+  try {
+    const found = await withTimeout(
+      10,
+      "docker ps",
+      docker().listContainers({ all, filters: { label } }),
+    );
+    // Newest first from the Engine; compose lists by name.
+    return found
+      .map(containerRecord)
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  } catch {
+    return null;
+  }
+}
+
+/** Split out from {@link projectContainers} so the mapping is testable without a daemon. */
+export function containerRecord(c: Dockerode.ContainerInfo): ProjectContainer {
+  const labels = c.Labels ?? {};
+  // `listContainers` carries no health or exit code fields; both live in the
+  // `Status` text ("Up 2 hours (healthy)", "Exited (137) 5 minutes ago"), which
+  // saves an inspect per container.
+  const status = c.Status ?? "";
+  return {
+    name: c.Names?.[0]?.replace(/^\//, "") ?? c.Id.slice(0, 12),
+    state: c.State ?? "",
+    health: parseHealth(status),
+    ports: displayPorts(c.Ports ?? []),
+    service: labels["com.docker.compose.service"] ?? "",
+    labels,
+    exitCode: Number(/^\s*Exited \((\d+)\)/.exec(status)?.[1] ?? 0),
+  };
+}
+
+function parseHealth(status: string): string {
+  const m = /\((healthy|unhealthy|health: starting)\)/.exec(status);
+  if (!m) return "";
+  return m[1] === "health: starting" ? "starting" : m[1];
+}
+
+/**
+ * The `Ports` column as `docker ps` and `compose ps` print it
+ * (`0.0.0.0:80->80/tcp, [::]:80->80/tcp, 443/udp`), which the CLI and dashboard
+ * display. A port of docker/cli's `DisplayablePorts`, ordering and range
+ * grouping included, so the string doesn't change under them.
+ */
+export function displayPorts(ports: Dockerode.Port[]): string {
+  const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const sorted = [...ports].sort(
+    (a, b) =>
+      a.PrivatePort - b.PrivatePort ||
+      cmp(a.IP ?? "", b.IP ?? "") ||
+      (a.PublicPort ?? 0) - (b.PublicPort ?? 0) ||
+      cmp(a.Type, b.Type),
+  );
+  // Map keeps first-insertion order on re-set, as Go's `groupMapKeys` does.
+  const groups = new Map<string, { first: number; last: number }>();
+  const out: string[] = [];
+  const hostMappings: string[] = [];
+  for (const p of sorted) {
+    const port = p.PrivatePort;
+    if (p.IP && p.PublicPort !== port) {
+      hostMappings.push(`${hostPort(p.IP, String(p.PublicPort))}->${port}/${p.Type}`);
+      continue;
+    }
+    const key = p.IP ? `${p.IP}/${p.Type}` : p.Type;
+    const g = groups.get(key);
+    if (g && port === g.last + 1) {
+      g.last = port;
+      continue;
+    }
+    if (g) out.push(portGroup(key, g));
+    groups.set(key, { first: port, last: port });
+  }
+  for (const [key, g] of groups) out.push(portGroup(key, g));
+  return [...out, ...hostMappings].join(", ");
+}
+
+function portGroup(key: string, { first, last }: { first: number; last: number }): string {
+  const [ip, type] = key.includes("/") ? key.split("/") : ["", key];
+  const range = first === last ? `${first}` : `${first}-${last}`;
+  return ip ? `${hostPort(ip, range)}->${range}/${type}` : `${range}/${type}`;
+}
+
+/** Go's `net.JoinHostPort`: IPv6 addresses get brackets. */
+function hostPort(ip: string, port: string): string {
+  return ip.includes(":") ? `[${ip}]:${port}` : `${ip}:${port}`;
 }
 
 /** True when a container of this exact name exists and is running. */
