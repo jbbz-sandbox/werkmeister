@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="box-sizing:border-box;width:100%;background:var(--sd-bg);color:var(--sd-ink);font-family:var(--sd-sans);font-size:14px;line-height:1.45;text-align:left">
+  <header style="display:flex;align-items:center;gap:16px;padding:16px 32px;border-bottom:1px solid var(--sd-line);background:var(--sd-card)">
+    <span style="display:inline-flex;align-items:center;gap:8px"><span style="display:inline-block;background:var(--sd-accent);color:var(--sd-on-accent);font:700 15px/1 'Barlow Condensed',var(--sd-sans);letter-spacing:.14em;padding:6px 9px 5px 11px;border-radius:3px;box-shadow:inset 0 0 0 2px var(--sd-accent),inset 0 0 0 3px var(--sd-on-accent)">STELLWERK</span><span style="font:600 15px var(--sd-sans);color:var(--sd-ink)">Dashboard</span></span>
+    <span style="font:400 12px var(--sd-mono);color:var(--sd-muted)">~/features</span>
+    <span style="flex:1"></span>
+    <span style="display:flex;align-items:center;gap:14px;font-size:13px;flex-wrap:wrap">
+      <span><span style="color:var(--sd-ok)">●</span> Infra <b style="color:var(--sd-ok)">4 of 4 up</b></span>
+      <span><span style="color:var(--sd-warn)">◐</span> k8s forwards <b style="color:var(--sd-warn)">0 of 4 up</b></span>
+      <span style="display:inline-flex;align-items:center;gap:6px">Kube <span style="font:600 11px var(--sd-mono);letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:3px;color:var(--sd-ok);background:var(--sd-ok-bg);border:1px solid var(--sd-ok-bd)">dev</span></span>
+      <button style="font:inherit;font-size:13px;font-weight:500;padding:4px 10px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink);white-space:nowrap">⚡ Connect infra</button>
+    </span>
+  </header>
+  <nav style="display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--sd-line);background:var(--sd-card)">
+    <span style="padding:10px 10px 8px;border-bottom:2px solid var(--sd-accent);font-weight:600;font-size:14px">Workspaces<span style="color:var(--sd-warn)">{{ needTab }}</span></span>
+    <span style="padding:10px 10px 8px;border-bottom:2px solid transparent;color:var(--sd-muted);font-size:14px">New workspace</span>
+    <span style="padding:10px 10px 8px;border-bottom:2px solid transparent;color:var(--sd-muted);font-size:14px">Open Pull Requests</span>
+    <span style="padding:10px 10px 8px;border-bottom:2px solid transparent;color:var(--sd-muted);font-size:14px">Health</span>
+    <span style="padding:10px 10px 8px;border-bottom:2px solid transparent;color:var(--sd-muted);font-size:14px">Links</span>
+  </nav>
+  <div style="padding:20px 32px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div style="flex:1 1 320px;display:flex;align-items:center;height:34px;padding:0 10px;border-radius:5px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-faint);font-size:14px">Filter by name, issue, state, repo, label…</div>
+    <div style="display:inline-flex;border:1px solid var(--sd-ctl);border-radius:5px;overflow:hidden;font-size:13px">
+      <span onClick="{{ showAll }}" style="padding:6px 12px;cursor:pointer;background:{{ allBg }};color:{{ allFg }};font-weight:600">All · {{ total }}</span>
+      <span onClick="{{ showNeeds }}" style="padding:6px 12px;cursor:pointer;border-left:1px solid var(--sd-ctl);background:{{ needBg }};color:{{ needFg }};font-weight:600">● Needs you · {{ needCount }}</span>
+    </div>
+    <span style="font-size:13px;color:var(--sd-muted)">{{ shownCount }} of {{ total }}</span>
+    <button style="font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:5px;border:1px solid var(--sd-accent);background:var(--sd-accent);color:var(--sd-on-accent)">＋ New workspace</button>
+  </div>
+  <div style="padding:16px 32px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px;align-items:start">
+    <sc-for list="{{ cards }}" as="c" hint-placeholder-count="4">
+      <dc-import name="Workspace Card" ws-id="{{ c.id }}" show-question="{{ c.sq }}" question-open="{{ c.qo }}" menu-open="{{ c.mo }}" hint-size="100%,240px"></dc-import>
+    </sc-for>
+  </div>
+  <footer style="margin:0 32px;padding:14px 0 24px;border-top:1px solid var(--sd-line);display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--sd-muted);align-items:center">
+    <span style="font:600 11px var(--sd-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sd-ink)">Legend</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border:2px solid var(--sd-attn-bd);background:var(--sd-attn-bg);border-radius:2px;vertical-align:-1px"></span> amber border = <b style="color:var(--sd-ink)">● Needs you</b>, nothing else</span>
+    <span><b style="color:var(--sd-ok)">green</b> ok · <b style="color:var(--sd-warn)">amber</b> partial / attention · <b style="color:var(--sd-err)">red</b> failing · <b style="color:var(--sd-off)">grey</b> off</span>
+    <span>◌ Working · ✓ Done · Idle</span>
+    <span>● up · ○ down · ◐ starting · ▲ unhealthy</span>
+    <span><b style="color:var(--sd-pr)">Merged / Released</b> PR shipped</span>
+    <span>⚙ Autonomous = no review gates until the PR</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:900},&quot;ids&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;143,206,151,bwell,loading&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;needIds&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;143&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;needsOnly&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showQuestions&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;qFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;menuFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { needs: null };
+  renderVals() {
+    const p = this.props;
+    const ids = (p.ids || '143,206,151,bwell,loading').split(',').map(s => s.trim());
+    const needIds = (p.needIds || '143').split(',').map(s => s.trim()).filter(Boolean);
+    const needsOnly = this.state.needs ?? !!p.needsOnly;
+    const list = needsOnly ? ids.filter(i => needIds.includes(i)) : ids;
+    return {
+      cards: list.map(id => ({ id, sq: !!p.showQuestions, qo: p.qFor === id, mo: p.menuFor === id })),
+      needTab: (() => { const n = ids.filter(i => needIds.includes(i)).length; return n ? ` · ${n} need${n === 1 ? 's' : ''} you` : ''; })(),
+      total: ids.length, needCount: ids.filter(i => needIds.includes(i)).length, shownCount: list.length,
+      allBg: needsOnly ? 'var(--sd-card)' : 'var(--sd-ink)', allFg: needsOnly ? 'var(--sd-ink)' : 'var(--sd-card)',
+      needBg: needsOnly ? 'var(--sd-warn-solid)' : 'var(--sd-card)', needFg: needsOnly ? 'var(--sd-on-warn-solid)' : 'var(--sd-warn)',
+      showAll: () => this.setState({ needs: false }), showNeeds: () => this.setState({ needs: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>

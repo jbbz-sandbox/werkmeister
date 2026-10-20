@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<main style="width:2560px;box-sizing:border-box;padding:56px 64px 80px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">04</div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 4 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Surface adaptations</h1></div>
+    <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:520px;text-wrap:pretty">The same five workspaces on all four surfaces. Full density for the dashboard and MCP App, compact for the Claude Code pane and VS Code. Same words, same colour meanings.</div>
+  </header>
+
+  <section style="margin-top:40px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1b1a17;color:#f4f2ec;padding:2px 8px;border-radius:3px">A</span><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">Browser dashboard · full · light and dark</h2><span style="font:400 13px 'IBM Plex Mono',monospace;color:#5f5d56">1200px content · 2-column card grid · legend in footer</span></div>
+    <div style="display:grid;grid-template-columns:1200px 1200px;gap:32px">
+      <div style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-soft:#f8f6f0;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;border-radius:8px;overflow:hidden;box-shadow:0 2px 0 rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.08)"><dc-import name="Dashboard View" hint-size="1200px,900px"></dc-import></div>
+      <div style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#141412;--sd-card:#1d1c19;--sd-soft:#22211e;--sd-hover:#2a2925;--sd-ink:#ecebe5;--sd-muted:#a6a39a;--sd-faint:#949189;--sd-line:#34322d;--sd-line-soft:#2a2925;--sd-ctl:#45433d;--sd-accent:#6d9ce8;--sd-on-accent:#0d1626;--sd-info:#8fb4f0;--sd-ok:#63c98a;--sd-ok-bg:#142a1c;--sd-ok-bd:#24563a;--sd-warn:#f0b453;--sd-warn-bg:#2e2310;--sd-warn-bd:#6b4d16;--sd-warn-solid:#f0b453;--sd-on-warn-solid:#241500;--sd-err:#ff8f84;--sd-err-bg:#351814;--sd-err-bd:#6e2a22;--sd-off:#a6a39a;--sd-off-bg:#26251f;--sd-off-bd:#3d3b35;--sd-pr:#c3a4ff;--sd-pr-bg:#241c38;--sd-pr-bd:#4b3a77;--sd-attn-bg:#241d0f;--sd-attn-bd:#c98a2c;border-radius:8px;overflow:hidden;box-shadow:0 2px 0 rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.08)"><dc-import name="Dashboard View" hint-size="1200px,900px"></dc-import></div>
+    </div>
+  </section>
+
+  <section style="margin-top:56px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1b1a17;color:#f4f2ec;padding:2px 8px;border-radius:3px">B</span><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">MCP App · full, narrow · host-themed</h2><span style="font:400 13px 'IBM Plex Mono',monospace;color:#5f5d56">≤720px · one column · legend in footer · no own palette or font</span></div>
+    <div style="display:grid;grid-template-columns:760px 760px 1fr;gap:32px;align-items:start">
+      <div style="background:#faf9f5;border-radius:8px;padding:24px 20px;box-shadow:0 0 0 1px rgba(0,0,0,.08)">
+        <div style="font:400 12px 'IBM Plex Mono',monospace;color:#73726c;margin-bottom:10px">Claude Desktop · light host</div>
+        <div style="font:400 15px/1.5 ui-sans-serif,system-ui,sans-serif;color:#141413;margin-bottom:12px">Which workspaces need me?</div>
+        <div style="--color-background-primary:#ffffff;--color-background-secondary:#f5f4ed;--color-text-primary:#141413;--color-text-secondary:#5e5d59;--color-border-primary:#e3e1d8;--font-sans:ui-sans-serif,system-ui,sans-serif;--sd-sans:var(--font-sans);--sd-mono:ui-monospace,monospace;--sd-bg:var(--color-background-secondary);--sd-card:var(--color-background-primary);--sd-hover:#f0eee6;--sd-ink:var(--color-text-primary);--sd-muted:var(--color-text-secondary);--sd-faint:#83827d;--sd-line:var(--color-border-primary);--sd-line-soft:#efede5;--sd-ctl:#d6d4ca;--sd-accent:var(--color-text-primary);--sd-on-accent:var(--color-background-primary);--sd-info:#2c5fb3;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5e5d59;--sd-off-bg:#efede5;--sd-off-bd:#d6d4ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;background:var(--sd-bg);border:1px solid var(--sd-line);border-radius:12px;padding:14px;max-width:720px;box-sizing:border-box;font-family:var(--sd-sans);color:var(--sd-ink)">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px;font-size:14px"><b>Stellwerk workspaces</b><span style="color:var(--sd-muted)">5 · </span><span style="color:var(--sd-warn);font-weight:600">1 needs you</span><span style="flex:1"></span><span style="font-size:13px;color:var(--sd-info)">＋ New workspace</span></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <dc-import name="Workspace Card" ws-id="143" show-question="{{ true }}" hint-size="100%,250px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="206" hint-size="100%,230px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="151" hint-size="100%,230px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="bwell" hint-size="100%,230px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="loading" hint-size="100%,230px"></dc-import>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sd-line);font-size:12px;color:var(--sd-muted);display:flex;flex-wrap:wrap;gap:4px 14px"><span>Amber border = ● Needs you</span><span>green ok · amber attention · red failing · grey off</span><span>◌ Working · ✓ Done · Idle</span><span>⚙ Autonomous</span></div>
+        </div>
+      </div>
+      <div style="background:#262624;border-radius:8px;padding:24px 20px;box-shadow:0 0 0 1px rgba(0,0,0,.08)">
+        <div style="font:400 12px 'IBM Plex Mono',monospace;color:#a3a29c;margin-bottom:10px">Claude Desktop · dark host</div>
+        <div style="font:400 15px/1.5 ui-sans-serif,system-ui,sans-serif;color:#f5f4ee;margin-bottom:12px">Which workspaces need me?</div>
+        <div style="--color-background-primary:#30302e;--color-background-secondary:#262624;--color-text-primary:#f5f4ee;--color-text-secondary:#b8b6ad;--color-border-primary:#45443f;--font-sans:ui-sans-serif,system-ui,sans-serif;--sd-sans:var(--font-sans);--sd-mono:ui-monospace,monospace;--sd-bg:var(--color-background-secondary);--sd-card:var(--color-background-primary);--sd-hover:#3a3a37;--sd-ink:var(--color-text-primary);--sd-muted:var(--color-text-secondary);--sd-faint:#8d8b84;--sd-line:var(--color-border-primary);--sd-line-soft:#3a3a37;--sd-ctl:#55544e;--sd-accent:var(--color-text-primary);--sd-on-accent:var(--color-background-primary);--sd-info:#8fb4f0;--sd-ok:#63c98a;--sd-ok-bg:#1b3324;--sd-ok-bd:#2b5c40;--sd-warn:#f0b453;--sd-warn-bg:#3a2d14;--sd-warn-bd:#6b4d16;--sd-warn-solid:#f0b453;--sd-on-warn-solid:#241500;--sd-err:#ff8f84;--sd-err-bg:#41201b;--sd-err-bd:#6e2a22;--sd-off:#b8b6ad;--sd-off-bg:#3a3a37;--sd-off-bd:#55544e;--sd-pr:#c3a4ff;--sd-pr-bg:#2e2545;--sd-pr-bd:#4b3a77;--sd-attn-bg:#33291a;--sd-attn-bd:#c98a2c;background:var(--sd-bg);border:1px solid var(--sd-line);border-radius:12px;padding:14px;max-width:720px;box-sizing:border-box;font-family:var(--sd-sans);color:var(--sd-ink)">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px;font-size:14px"><b>Stellwerk workspaces</b><span style="color:var(--sd-muted)">5 · </span><span style="color:var(--sd-warn);font-weight:600">1 needs you</span><span style="flex:1"></span><span style="font-size:13px;color:var(--sd-info)">＋ New workspace</span></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <dc-import name="Workspace Card" ws-id="143" show-question="{{ true }}" hint-size="100%,250px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="206" hint-size="100%,230px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="151" hint-size="100%,230px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="bwell" hint-size="100%,230px"></dc-import>
+            <dc-import name="Workspace Card" ws-id="loading" hint-size="100%,230px"></dc-import>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--sd-line);font-size:12px;color:var(--sd-muted);display:flex;flex-wrap:wrap;gap:4px 14px"><span>Amber border = ● Needs you</span><span>green ok · amber attention · red failing · grey off</span><span>◌ Working · ✓ Done · Idle</span><span>⚙ Autonomous</span></div>
+        </div>
+      </div>
+      <aside style="font:400 14px/1.5 'Barlow',sans-serif;color:#1b1a17;max-width:420px;display:flex;flex-direction:column;gap:14px">
+        <h3 style="margin:0;font:600 17px 'Barlow',sans-serif">How the MCP App inherits the host</h3>
+        <p style="margin:0;text-wrap:pretty">The card reads only <code style="font:500 12px 'IBM Plex Mono',monospace">--sd-*</code> tokens. Inside the iframe the app maps each one to the host's variables, so the card has no colours or font of its own:</p>
+        <pre style="margin:0;padding:12px;background:#1b1a17;color:#ecebe5;border-radius:6px;font:400 12px/1.6 'IBM Plex Mono',monospace;white-space:pre-wrap">--sd-sans    → var(--font-sans)
+--sd-card    → var(--color-background-primary)
+--sd-bg      → var(--color-background-secondary)
+--sd-ink     → var(--color-text-primary)
+--sd-muted   → var(--color-text-secondary)
+--sd-line    → var(--color-border-primary)
+--sd-accent  → var(--color-text-primary)</pre>
+        <p style="margin:0;text-wrap:pretty">Status colours (ok, warn, err, off, pr) are the only values the app ships, with a light and a dark set. It picks between them from the host's colour scheme.</p>
+        <p style="margin:0;text-wrap:pretty"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:1px 6px;border-radius:3px">PROPOSAL</span> The primary button uses host ink rather than Stellwerk blue, so the app looks native in Claude. The dashboard keeps the blue.</p>
+        <p style="margin:0;text-wrap:pretty">Links open through the host's “open link”. <code style="font:500 12px 'IBM Plex Mono',monospace">↗ Continue in Desktop</code> asks the host. It never opens a window itself.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section style="margin-top:56px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1b1a17;color:#f4f2ec;padding:2px 8px;border-radius:3px">C</span><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">Claude Code pane · compact · text only</h2><span style="font:400 13px 'IBM Plex Mono',monospace;color:#5f5d56">named palette only · box borders · glyph + verb buttons · legend behind ?</span></div>
+    <div style="display:grid;grid-template-columns:560px 560px 1fr;gap:32px;align-items:start">
+      <dc-import name="Pane View" hint-size="560px,700px"></dc-import>
+      <dc-import name="Pane View" legend="{{ true }}" show-questions="{{ true }}" ids="143,206" hint-size="560px,500px"></dc-import>
+      <aside style="font:400 14px/1.5 'Barlow',sans-serif;max-width:440px;display:flex;flex-direction:column;gap:10px">
+        <h3 style="margin:0;font:600 17px 'Barlow',sans-serif">Pane rules</h3>
+        <div style="display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:14px">
+          <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">Line 1</span><span>name · agent word in its palette colour · <code style="font:500 12px 'IBM Plex Mono',monospace">⚙ Auto</code></span>
+          <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">Line 2</span><span>dim keys, coloured values: <code style="font:500 12px 'IBM Plex Mono',monospace">containers 2 of 2 up · PRs stellwerk#231 Draft · CI running · stage 4/5 implement</code></span>
+          <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">Buttons</span><span>primary first in bold accent (red for ✓ Close out), then lifecycle buttons, then <code style="font:500 12px 'IBM Plex Mono',monospace">⋯</code></span>
+          <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">Border</span><span>2px warning = Needs you. Every other card has a 1px inactive border.</span>
+          <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">Needs filter</span><span>click <code style="font:500 12px 'IBM Plex Mono',monospace">· 1 needs you</code> in the tab. <code style="font:500 12px 'IBM Plex Mono',monospace">☐ Focused only</code> still filters by the focus label.</span>
+          <span style="font:500 12px 'IBM Plex Mono',monospace;color:#5f5d56">Loading</span><span>same 3-line height, dim <code style="font:500 12px 'IBM Plex Mono',monospace">loading…</code>, placeholder button</span>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section style="margin-top:56px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1b1a17;color:#f4f2ec;padding:2px 8px;border-radius:3px">D</span><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">VS Code · compact · tree view</h2><span style="font:400 13px 'IBM Plex Mono',monospace;color:#5f5d56">codicon + theme colour · label = name · description = state line · tooltip = all rows</span></div>
+    <div style="display:grid;grid-template-columns:480px 480px 480px 1fr;gap:32px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">Default · 151 expanded to services and PRs</span><div style="height:340px"><dc-import name="VSCode Tree" expanded="151" hint-size="480px,240px"></dc-import></div></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">Hover 206 · inline actions + Markdown tooltip</span><div style="height:340px"><dc-import name="VSCode Tree" hover-for="206" tooltip-for="206" hint-size="480px,240px"></dc-import></div></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">Help view open (legend)</span><div style="height:340px"><dc-import name="VSCode Tree" welcome="{{ true }}" hint-size="480px,340px"></dc-import></div></div>
+      <aside style="font:400 14px/1.5 'Barlow',sans-serif;max-width:440px;display:flex;flex-direction:column;gap:10px">
+        <h3 style="margin:0;font:600 17px 'Barlow',sans-serif">Node mapping</h3>
+        <pre style="margin:0;padding:12px;background:#1b1a17;color:#ecebe5;border-radius:6px;font:400 12px/1.6 'IBM Plex Mono',monospace;white-space:pre-wrap">icon        circle-filled  charts.yellow  Needs you
+            sync~spin      charts.green   Working
+            pass           charts.green   Done
+            circle-outline disabledFg     Idle
+label       workspace name
+description ◌ Working · 2 of 2 up · stage 4/5
+tooltip     MarkdownString, all four rows
+children    one per service, then one per PR</pre>
+        <p style="margin:0;text-wrap:pretty">Inline actions on hover: <code style="font:500 12px 'IBM Plex Mono',monospace">↗ Continue in …</code>, <code style="font:500 12px 'IBM Plex Mono',monospace">→ Switch to</code>, then <code style="font:500 12px 'IBM Plex Mono',monospace">▶ Up</code> or <code style="font:500 12px 'IBM Plex Mono',monospace">■ Stop</code>. The verbs live in each icon's title.</p>
+        <p style="margin:0;text-wrap:pretty"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:1px 6px;border-radius:3px">PROPOSAL</span> A <code style="font:500 12px 'IBM Plex Mono',monospace">bell-dot</code> toggle in the view title filters to Needs you. The view badge shows the count.</p>
+      </aside>
+    </div>
+  </section>
+</main>
+</x-dc>
+</body>
+</html>

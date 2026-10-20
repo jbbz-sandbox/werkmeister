@@ -1,0 +1,132 @@
+# UI spec: one experience across the Werkmeister surfaces
+
+The rules every Werkmeister UI follows: the words, the card, the actions, the create form, and the one MCP server behind them. The visual design (tokens, layout, states) is in [`design/workspace-card/`](design/workspace-card/README.md); where the two disagree, this file wins.
+
+Origin: the ui-surfaces spike, tracked in jbbz-sandbox/werkmeister#241. Implementation issues: #243–#254.
+
+## Surfaces
+
+| Surface | Code | Renders with | Density |
+|---|---|---|---|
+| **Dashboard** | `apps/sandbox-dashboard` (browser page, `werkmeister dashboard`) | DOM | full |
+| **MCP App** | the same modules, served as `ui://` resources inside Claude Desktop | DOM, host theme | full (≤720px) |
+| **Pane** | `plugins/werkmeister/hooks/register.tsx` | Claude Code's `Box` / `Text` / `Button` | compact |
+| **VS Code** | `packages/vscode-plugin` | native TreeView: label, description, Markdown tooltip, codicons | compact |
+
+## Decisions
+
+| Decision | Date |
+|---|---|
+| **One spec, two densities.** Full and compact show the same fields, words and colour meanings; compact uses fewer pixels. | 2026-10-16 |
+| **Shared spec, not one shared component.** The pane and VS Code can't render DOM, so they share a non-DOM **display model** (workspace data → label, tone, glyph, primary action) in `packages/sandbox-ui`. The two DOM surfaces also share components. | 2026-10-16 |
+| **React is the UI library.** `packages/sandbox-ui` is a React package; the remaining vanilla-DOM modules convert over time (#254). React is bundled inline (`viteSingleFile`, no CDN), so the Cowork artifact's CSP holds. Moving VS Code to a webview is a separate, open decision. | 2026-10-17 |
+| **One MCP server**, `apps/mcp`, with one name per verb. No backward compatibility for tool names. | 2026-10-16 |
+| **Containers may call every MCP tool.** There is no host-only tier; the bearer token is the only gate. | 2026-10-16 |
+| **No Remove.** The only destructive verbs are Close out and Abandon…. `remove-workspace` is deprecated in favour of `close-out --abandon` (#160). | 2026-10-16 |
+
+## Rules
+
+1. **Every count names its unit:** `2 of 3 up`, never `2/3`.
+2. **Colour is never the only carrier.** Every colour sits next to a word or glyph that says the same thing. WCAG AA in light and dark.
+3. **One colour scale:** green ok · amber partial or attention · red failing · grey off. Purple only for Merged / Released. The accent colour never carries status.
+4. **The highlight means one thing:** an amber border and header mean **Needs you**. Container state is in words, not in the border.
+5. **One legend per surface:** dashboard footer or help popover, MCP App footer, pane `?` toggle, VS Code welcome or help view.
+6. **One verb per action**, the same on every surface (§ Actions).
+7. **A loading state for every row**, so cards don't jump.
+
+## The card
+
+A person must tell, at a glance, for each workspace:
+
+| Question | Row | Canonical text |
+|---|---|---|
+| Are the containers healthy? | **Containers** | `N of M up` or `down`, then one item per service: `● name` up · `○ name` down · `◐ name starting` · `▲ name unhealthy`. Docker unreachable: `Docker unreachable · retry` |
+| What PRs exist? | **PRs** | `repo#N` link, state badge, CI badge. `None yet`. Lookup failed: `PRs unavailable · retry` |
+| Where is the run? | **Workflow** | `Stage n of m · name` (ICM), `JIT · phase`, or the lifecycle step: `Ready to open PR` · `Awaiting release` · `Ready to close out` · `Closed out` · `Abandoned` |
+| What is the agent doing? | **Agent** + header chip | `◌ Working` · `● Needs you` · `✓ Done` · `Idle`, plus a time (`asked a question 12 min ago`). `⚙ Autonomous` (compact: `⚙ Auto`) when the run is autonomous |
+
+- **Header:** name, agent chip, autonomous badge; then the work-type tag and the **task title from `workspace.yml`** (never the session title or a slice of the starting prompt); then the issue as `owner/repo#123`.
+- **Needs you** cards show the last question in the header, with the primary action.
+- The agent state comes from the persisted signal of #243, not from "the assistant spoke last".
+- Compact: name + chip on one line, then `containers 2 of 2 up · PRs sandbox#231 Draft · CI running · stage 4/5 implement`. VS Code: label = name, description = `● Needs you · 2 of 2 up · stage 2/4 · #143`, tooltip = the four rows.
+
+### Badges
+
+| Concept | Canonical | Tone |
+|---|---|---|
+| PR state | `Open` · `Draft` (dashed) · `Merged` · `Released vX.Y.Z` · `Closed` | ok · off · pr · pr · off |
+| CI | `CI ✓` · `CI running` · `CI ✗ N failing` | ok · warn · err |
+| Issue / PR link | `owner/repo#123`; a card may drop the owner for the default org (`werkmeister#231`) | info |
+| Containers summary | all up · some up · none up · unknown | ok · warn · off · off |
+
+## Actions
+
+| Action | Text | Dashboard | MCP App | Pane | VS Code |
+|---|---|---|---|---|---|
+| Start containers | `▶ Up` | ✓ | ✓ | ✓ | ✓ |
+| Stop / restart / tear down | `■ Stop` · `↻ Restart` · `⏻ Down` | ✓ | ✓ | ✓ | ✓ |
+| Continue a session | `↗ Continue in Terminal` · `↗ Continue in Desktop` | ✓ | ✓ | ✓ | Terminal |
+| New session | `＋ New session` | ✓ | ✓ | ✓ | ✓ |
+| Refresh PRs | `↻ Refresh PRs` | ✓ | ✓ | ✓ | ✓ |
+| Open the feature | `Open feature ↗` | ✓ | ✓ | ✓ | ✓ |
+| Open the issue | `Open issue ↗` | ✓ | ✓ | ✓ | ✓ |
+| Logs | `Logs` | ✓ | ✓ | ✓ | ✓ |
+| Connect infra | `⚡ Connect infra` (top bar) | ✓ | ✓ | ✓ | ✓ |
+| Create | `＋ New workspace` | ✓ | ✓ | ✓ | ✓ (terminal wizard) |
+| Open beside · Pin | `⇆ Open beside` · `📌 Pin` | ✗ | ✗ | ✓ | ✗ |
+| Bring into view | `→ Switch to` | ✗ | ✗ | ✓ | ✓ |
+| Filter to `focus`-labelled | `☐ Focused only` | ✓ | ✓ | ✓ | ✗ |
+| Finish settled work | `✓ Close out` | ✓ | ✓ | ✓ | ✓ |
+| Stop unsettled work | `✕ Abandon…` | ✓ | ✓ | ✓ | ✓ |
+
+✗ = the platform can't (a browser page or MCP iframe can't drive Claude Code panes; VS Code has no pin or split for folders). Desktop sessions can't be reached from VS Code.
+
+**Primary action:** Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …`. The bar shows the primary plus two secondaries; everything else goes in `⋯`, in this order: Open beside · Pin · ↻ Refresh PRs · Open feature ↗ · Open issue ↗ · Logs · ✕ Abandon….
+
+### The two destructive verbs
+
+Both confirm inline in the card footer, never in a modal (VS Code: a modal warning message is its only option).
+
+| Verb | Does (`closeOut`, `packages/sandbox-core/src/pr_lifecycle.ts`) | Confirm |
+|---|---|---|
+| `✓ Close out` | Every PR shipped, closed or abandoned: moves the issue to Done with a "Shipped" comment, writes `closeout.md`, removes the workspace, deletes the merged branches | one step: `✓ Yes, close out` |
+| `✕ Abandon…` | The work stops unsettled: posts "Abandoned: <reason>" on the issue and moves it to the abandoned status, pushes every branch and keeps them, removes the workspace | a required reason, then `✕ Yes, abandon` |
+
+## The create form
+
+One form on every surface, built from `_WIZARD_PROMPTS` (`packages/sandbox-core/src/workspace_prompts.ts`): a GUI on the dashboard, MCP App and pane, the terminal wizard in VS Code. GUI labels carry no terminal hints ("blank to skip", "Enter for default").
+
+| Field | GUI label | Widget | Required | Default |
+|---|---|---|---|---|
+| `issue_id` | Issue | text + `⤓ Fill from issue` | no | empty |
+| `feature` | Feature name | text, `^[a-z0-9]+(-[a-z0-9]+)*$` | yes | empty |
+| `work_type` | Work type | select: feature, bugfix, incident, refactor, spike | yes | **feature** |
+| `context_strategy` | Workflow | segmented: ICM (staged) / JIT | no | **icm** |
+| `autonomous` | Autonomous run | toggle | no | off |
+| `model` | Model | text, placeholder `sonnet`; help names the aliases | no | empty (Claude Code's default) |
+| `auto_stop` | Auto-stop on session end | toggle | no | off |
+| `services` + `repos` | Services to run locally · Extra repos | checkboxes grouped by repo | at least one service **or** repo, on every surface including the wizard | none |
+| `labels` | Labels | chip input | no | empty |
+| `test_path` | Feature test path | text, must start with `/` | no | empty |
+| `task` | Task title | text; help "Defaults to the feature name in words." | no | empty |
+| `description` | Description | text | no | empty |
+| `starting_prompt` | Starting prompt | textarea + `✨ Refine with Claude` | no | empty |
+
+Defaults that don't depend on the current directory (`work_type`, `context_strategy`) are preselected in every GUI. The VS Code wizard runs from the workspaces root, not `~`. Submit: `＋ Create workspace` → `Creating…` → a link to the new card.
+
+## One MCP server
+
+`apps/mcp` (server `werkmeister`) becomes the only MCP server. The dashboard's server (`workspaces`, `apps/sandbox-dashboard/src/server.ts`, launched by `plugins/werkmeister/.mcp.json`) goes away; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: #245.
+
+| Merged tool | `workspaces` (dashboard) today | `werkmeister` (apps/mcp) today |
+|---|---|---|
+| `list-workspaces` (App UI) | `list-workspaces` | `list-workspaces` |
+| `create-workspace-form` (App UI) + `create-workspace` | `workspace`, `create-workspace` | `workspace` |
+| `status` | `workspace-status` | `status` |
+| `up` · `stop` · `restart` · `down` | `workspace-action` | `up` · `stop` · `restart` · `down` |
+| `close-out` | `close-out` | `close-out` |
+| `connect` | `sandbox-connect` | `connect` |
+| `open-feature` | `open-feature` | `open` |
+| `remove-service` (drops one service to k8s) | — | `remove` |
+
+Every other tool keeps its name. Tools only the UI calls are marked `_meta.ui.visibility: ["app"]`: `workspace-form-schema`, `issue-form-data`, `refine-prompt`, `issue-statuses`, `claude-turn-status`. Tools take one `workspace` argument; the `X-Sandbox-Feature` header stays the container default.
