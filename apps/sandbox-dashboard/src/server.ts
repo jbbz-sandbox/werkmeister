@@ -26,6 +26,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   approvePr,
+  checkInTriage,
   closeOut,
   createWorkspace,
   fetchIssueCard,
@@ -998,6 +999,35 @@ export function createServer(): McpServer {
         return {
           content: [{ type: "text", text }],
           structuredContent: { statuses, infra } as unknown as Record<string, unknown>,
+        };
+      } catch (e) {
+        const message =
+          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
+        return { isError: true, content: [{ type: "text", text: message }] };
+      }
+    },
+  );
+
+  // --- Tool: check-in triage --------------------------------------------------
+  // The check-in skill's step 1 in one call. Plain JSON on purpose: no `_meta.ui`,
+  // so a sweep from the root session never renders the workspaces table inline.
+  server.registerTool(
+    "check-in",
+    {
+      title: "Check-in Triage",
+      description:
+        "One sweep for the check-in skill: every workspace's labels, container and Claude " +
+        "state, proposed stage gates, and whether its transcript changed since the last " +
+        "check-in. Drops `skip` workspaces (and non-`focus` ones when any carry `focus`) and " +
+        "names the `candidates` that need a courier. Marks now as the last check-in.",
+      inputSchema: {},
+    },
+    async (): Promise<CallToolResult> => {
+      try {
+        const result = await checkInTriage();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
         const message =
