@@ -942,7 +942,7 @@ Each service can carry two related keys. They do different jobs, and a change ne
 
 | Missing | What shows up |
 |---|---|
-| `test:` | The How to validate table shows `—`. The gate fails `test <service>` unless the PR file sets `skip_tests: { <service>: <reason> }`, which is accepted for a service with no test command or no running container. |
+| `test:` | The How to validate table shows `—`. The gate fails `test <service>` unless the PR file sets `skip_tests: { <service>: <reason> }`, which is accepted for a service with no test command or a container the gate could not start. |
 | `validate:`, service has a `feature_router:` | "URL health check (see Quick Health Checks)": the proxy, cookie and health-check sections of `sandbox-context.md` are the validation. |
 | `validate:`, no `feature_router:` | "No validation guidance registered in services.yaml; say so instead of inventing one". Add a `validate:` value rather than leave agents to guess. |
 
@@ -956,7 +956,7 @@ The shipped archetypes give `node-tool` (libraries) and `mcp-client` (editor ext
    - The **exercise step** reloads the running code, then checks the change the way the service's validation text says. It records the result in `output/exercise.md` as a `| check | result |` table.
    - `test:` catches regressions; `validate:` shows the new behaviour works. Passing tests are not a substitute for the exercise.
 3. **PR gate** (`werkmeister pr gate`, re-run by `werkmeister pr open`):
-   - It re-runs `test:` for every service the branch touches, inside a running container of that repo, so the workspace needs one up (`werkmeister up`).
+   - It re-runs `test:` for every service the branch touches, inside a running container of that repo. When none runs, it starts one and stops it afterwards, so a workspace with no services listed still passes. compose.yml carries the repo's other services behind the `on-demand` profile for this.
    - It doesn't read `validate:` itself. It checks the exercise evidence: the exercise table must have at least one PASS row and no FAIL row. An ICM workspace keeps it in `stages/*/output/exercise.md` (`verify.md` in workspaces made before the rename); JIT keeps it in `.werkmeister/notes/exercise.md`.
 4. **`werkmeister test`** runs the Playwright suite if the workspace or one of its repos has one. With no suite, it runs nothing and prints each service's test command and validation text instead, since libraries, CLIs and extensions are checked that way.
 
