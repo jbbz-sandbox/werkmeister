@@ -333,12 +333,12 @@ export const READ_ONLY_GIT_RULES = [
   "Bash(git ls-files:*)",
 ];
 
-// The plugin was `sandbox-tools` with server `sandbox-workspace` (SW-9). A machine that has not
+// The plugin's server is `werkmeister` (SW-48). It was `sandbox-tools` with server `sandbox-workspace` (SW-9). A machine that has not
 // run `w9r setup` yet still exposes the old names, so both stay allowed; the old one can go once
 // that release is out of support. Dropping it also prunes it from existing workspaces (see
 // `permissionsRecord`).
 const PLUGIN_MCP_PREFIXES = [
-  "mcp__plugin_werkmeister_workspaces__",
+  "mcp__plugin_werkmeister_werkmeister__",
   "mcp__plugin_sandbox-tools_sandbox-workspace__",
 ];
 const pluginTool = (tool: string) => PLUGIN_MCP_PREFIXES.map((prefix) => `${prefix}${tool}`);
@@ -381,7 +381,7 @@ export const AUTONOMOUS_RULES = [
   ...[
     "issue",
     "issue-statuses",
-    "workspace-status",
+    "status",
     "workspace-prs",
     "kube-context",
     "k8s-forwards-status",
@@ -446,14 +446,20 @@ export const AUTONOMOUS_DENY = [
   ...[
     "remove-workspace",
     "kube-switch",
-    "workspace-action",
+    "up",
+    "stop",
+    "restart",
+    "down",
     "create-workspace",
-    "workspace",
+    "create-workspace-form",
     "pr-approve",
     "ask-pr-review",
     "claude-send",
     "claude-resume",
-    "sandbox-connect",
+    "connect",
+    "proxy-reload",
+    "remove-service",
+    "intercept",
   ].flatMap(pluginTool),
 ];
 

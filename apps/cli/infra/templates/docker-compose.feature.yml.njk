@@ -95,6 +95,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "{{ setup.cpus }}"
           memory: {{ setup.memory_limit }}
         reservations:
           memory: {{ setup.memory_reservation }}
@@ -121,6 +122,13 @@ services:
 {% set idle = svc.type in idle_types %}
   {{ svc.name }}:
     image: {{ svc.image | default('node:20.16.0') }}
+{# SW-62: a service that needs system packages builds its own image from a Dockerfile #}
+{# in its dir (tagged `image`), instead of installing them by hand in the container.  #}
+{% if svc.dockerfile %}
+    build:
+      context: {{ workspace_path }}/{{ svc.repo }}/{{ svc.path }}
+      dockerfile: {{ svc.dockerfile }}
+{% endif %}
     container_name: {{ container_of(feature_name, svc.name) }}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
@@ -188,6 +196,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "{{ svc.cpus }}"
           memory: {{ svc.memory_limit }}
         reservations:
           memory: {{ svc.memory_reservation }}
@@ -246,6 +255,10 @@ services:
       - "{{ base_port + svc.port_offset + 100 }}:{{ extra.get('internal_port', 6379) }}"
     command: {{ extra.command }}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ extra.cpus }}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

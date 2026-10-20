@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "workspaces": {
-      "command": "w9r",
-      "args": ["dashboard"]
+    "werkmeister": {
+      "command": "werkmeister",
+      "args": ["mcp"]
     }
   }
 }

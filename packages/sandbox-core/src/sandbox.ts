@@ -38,7 +38,6 @@ import {
 export { childEnv } from "./claude_cli.js";
 
 // Type-only: erased at build, so this adds nothing to the bundle.
-import type Dockerode from "dockerode";
 import { isOneShotService } from "./compose.js";
 import { INFRA_PROJECT } from "./compose_infra.js";
 import {
@@ -51,7 +50,7 @@ import {
   slotPortRange,
   workspacesRoot,
 } from "./config.js";
-import { docker } from "./docker.js";
+import { type ProjectContainer, projectContainers } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { buildFormSchema } from "./form_schema.js";
 import { infraHealth, up as infraUp } from "./infra.js";
@@ -788,9 +787,19 @@ export async function getFormSchema(): Promise<FormSchemaBundle> {
   // only. For a brand-new workspace there's no meaningful pre-fill, and a stray
   // derived value could be submitted by accident — so start blank and let the
   // schema's placeholders/labels guide the user.
+  const uiSchema = (bundle.uiSchema ?? {}) as FormSchemaBundle["uiSchema"];
+  // The form's "Fetch from <tracker>" button names the tracker without the browser bundle knowing it.
+  const issueUi = (uiSchema.issue_id ?? {}) as Record<string, unknown>;
+  uiSchema.issue_id = {
+    ...issueUi,
+    "ui:options": {
+      ...((issueUi["ui:options"] ?? {}) as Record<string, unknown>),
+      trackerLabel: issueTracker().label,
+    },
+  };
   return {
     schema: bundle.schema as FormSchemaBundle["schema"],
-    uiSchema: (bundle.uiSchema ?? {}) as FormSchemaBundle["uiSchema"],
+    uiSchema,
     formData: {},
     title: (bundle.title as string) ?? "Initialize workspace",
   };
@@ -1270,11 +1279,6 @@ export interface InfraStatus {
   services: { name: string; state: ServiceHealth }[];
 }
 
-/** A one-shot container that finished its job — `docker ps` `{{.Status}}` of `Exited (0) …`. */
-function exitedCleanly(status: string): boolean {
-  return status.trimStart().startsWith("Exited (0)");
-}
-
 export interface ComposeProjectTally {
   running: number;
   total: number;
@@ -1286,13 +1290,6 @@ export interface ComposeProjectTally {
   services: { name: string; state: string; health: string }[];
   /** Slot from the `com.sandbox.local.slot` label (features only; null for infra). */
   slot: number | null;
-}
-
-/** Extract the healthcheck verdict from a `docker ps` `{{.Status}}` string. */
-function parseHealth(status: string): string {
-  const m = /\((healthy|unhealthy|health: starting)\)/.exec(status);
-  if (!m) return "";
-  return m[1] === "health: starting" ? "starting" : m[1];
 }
 
 /**
@@ -1311,38 +1308,24 @@ function serviceHealthState(s: { state: string; health: string }): ServiceHealth
 }
 
 /**
- * One container's Compose identity and state, built from the Engine API's `Labels`,
- * `State` and `Status`. `status` stays the raw string ("Up 16 hours (healthy)")
- * because both the healthcheck verdict and the clean-exit check are parsed out of it.
- */
-export interface ComposeContainerRow {
-  project: string;
-  service: string;
-  state: string;
-  status: string;
-  slot: string;
-  role: string;
-}
-
-/**
- * Pure tally of container rows by Compose project, excluding completed one-shot setup
+ * Pure tally of container records by Compose project, excluding completed one-shot setup
  * containers. Split out from {@link dockerComposeProjects} so it's unit-testable without
  * touching the daemon.
  */
-export function tallyComposeContainers(
-  rows: ComposeContainerRow[],
-): Map<string, ComposeProjectTally> {
+export function tallyComposeContainers(rows: ProjectContainer[]): Map<string, ComposeProjectTally> {
   const out = new Map<string, ComposeProjectTally>();
-  for (const { project, service, state, status, slot, role } of rows) {
+  for (const { service, state, health, labels, exitCode } of rows) {
+    const project = labels["com.docker.compose.project"];
     if (!project) continue; // no project label → not a compose container
     // A setup job that finished is not a missing service. One that failed or has
     // not finished yet is, and stays in the tally so the workspace reads degraded.
-    if (isOneShotService(service, role) && exitedCleanly(status)) continue;
-    const trimmed = state.trim();
+    const finished = state === "exited" && exitCode === 0;
+    if (isOneShotService(service, labels["com.sandbox.local.role"]) && finished) continue;
     const e = out.get(project) ?? { running: 0, total: 0, services: [], slot: null };
     e.total++;
-    if (trimmed === "running") e.running++;
-    e.services.push({ name: service, state: trimmed, health: parseHealth(status) });
+    if (state === "running") e.running++;
+    e.services.push({ name: service, state, health });
+    const slot = labels["com.sandbox.local.slot"];
     if (e.slot === null && slot) {
       const n = Number.parseInt(slot, 10);
       if (Number.isInteger(n)) e.slot = n;
@@ -1353,28 +1336,14 @@ export function tallyComposeContainers(
 }
 
 /**
- * One `listContainers({all: true})` sweep, grouped by Compose project →
- * {running, total, services}, excluding completed one-shot setup containers. Returns
- * null when docker is unavailable (not installed / daemon down), so callers can report
- * "unknown" rather than a misleading "down".
+ * Every compose container, grouped by Compose project → {running, total, services},
+ * excluding completed one-shot setup containers. Returns null when docker is
+ * unavailable (not installed / daemon down), so callers can report "unknown" rather
+ * than a misleading "down".
  */
 async function dockerComposeProjects(): Promise<Map<string, ComposeProjectTally> | null> {
-  let containers: Dockerode.ContainerInfo[];
-  try {
-    containers = await docker().listContainers({ all: true });
-  } catch {
-    return null; // daemon unreachable — the caller reports "unknown"
-  }
-  return tallyComposeContainers(
-    containers.map((c) => ({
-      project: c.Labels?.["com.docker.compose.project"] ?? "",
-      service: c.Labels?.["com.docker.compose.service"] ?? "",
-      state: c.State ?? "",
-      status: c.Status ?? "",
-      slot: c.Labels?.["com.sandbox.local.slot"] ?? "",
-      role: c.Labels?.["com.sandbox.local.role"] ?? "",
-    })),
-  );
+  const containers = await projectContainers();
+  return containers && tallyComposeContainers(containers);
 }
 
 /**
@@ -2475,7 +2444,7 @@ export async function runConnect(): Promise<{ command: string; output: string }>
       }
 
       const mcp = await webStatus(DASHBOARD);
-      info(`Sandbox MCP:   ${mcp.url}  (workspaces dashboard; MCP at /mcp)`);
+      info(`Dashboard:     ${mcp.url}  (workspaces dashboard)`);
     });
   } catch (e) {
     const detail = stripAnsi(

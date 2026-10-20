@@ -13,6 +13,7 @@ import * as path from "node:path";
 import { Colors } from "./colors.js";
 import { COMPOSE_FILE, findWorkspaceCompose } from "./compose_file.js";
 import { resolveWorkspace } from "./config.js";
+import { projectContainers } from "./docker.js";
 import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
@@ -27,16 +28,6 @@ export interface ContainerStatus {
   role: string;
   /** Meaningful only once `status` is `exited`; compose reports 0 for live containers too. */
   exitCode: number;
-}
-
-/**
- * One label out of compose's `Labels` field, which flattens every label into a
- * single `k=v,k=v` string rather than an object.
- */
-function labelValue(labels: unknown, key: string): string {
-  if (typeof labels !== "string") return "";
-  const m = new RegExp(`(?:^|,)${key.replace(/\./g, "\\.")}=([^,]*)`).exec(labels);
-  return m ? m[1] : "";
 }
 
 /**
@@ -554,51 +545,23 @@ export function composeLogsStream(
 }
 
 /**
- * Every container belonging to *feature*, stopped ones included. Empty when the
- * feature has no compose file or the `ps` call fails — indistinguishable from a
- * feature that has never been brought up, which is why callers treat both as
- * "nothing to report" rather than as an error.
+ * Every container belonging to *feature*, stopped ones included (`-a`: without
+ * it a crashed service silently vanishes and every caller's running/total tally
+ * reads as complete). Empty when the daemon can't be reached — indistinguishable
+ * from a feature that has never been brought up, which is why callers treat both
+ * as "nothing to report" rather than as an error.
  */
-export function getContainerStatus(feature: string): ContainerStatus[] {
-  // `-a`: without it compose lists only running containers, so a crashed service
-  // silently vanishes and every caller's running/total tally reads as complete.
-  const result = runCompose(feature, ["ps", "-a", "--format", "json"], { capture: true });
-  if (result?.status !== 0) {
-    return [];
-  }
-
-  const containers: ContainerStatus[] = [];
-  for (const rawLine of result.stdout.trim().split("\n")) {
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-    try {
-      const data = JSON.parse(line);
-      containers.push({
-        name: data["Name"] ?? data["name"] ?? "unknown",
-        status: data["State"] ?? data["state"] ?? "unknown",
-        health: data["Health"] ?? data["health"] ?? "",
-        ports: data["Ports"] ?? data["ports"] ?? "",
-        service: data["Service"] ?? data["service"] ?? "",
-        role: labelValue(data["Labels"] ?? data["labels"], "com.sandbox.local.role"),
-        exitCode: data["ExitCode"] ?? data["exitCode"] ?? 0,
-      });
-    } catch {
-      // Fallback: treat the line as plain text
-      containers.push({
-        name: line,
-        status: "unknown",
-        health: "",
-        ports: "",
-        service: "",
-        role: "",
-        exitCode: 0,
-      });
-    }
-  }
-
-  return containers;
+export async function getContainerStatus(feature: string): Promise<ContainerStatus[]> {
+  const containers = (await projectContainers(`sandbox-${feature}`)) ?? [];
+  return containers.map((c) => ({
+    name: c.name,
+    status: c.state,
+    health: c.health,
+    ports: c.ports,
+    service: c.service,
+    role: c.labels["com.sandbox.local.role"] ?? "",
+    exitCode: c.exitCode,
+  }));
 }
 
 /**

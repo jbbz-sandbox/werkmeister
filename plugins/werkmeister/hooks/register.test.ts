@@ -357,7 +357,7 @@ test("cards link the issue and each PR with its state", async ($, on) => {
   }
 });
 
-test("the Focus toggle shows only workspaces labelled focus", async ($, on) => {
+test("the Focused only toggle shows only workspaces labelled focus", async ($, on) => {
   const list = {
     ...LIST,
     workspaces: LIST.workspaces.map((w) => (w.name === "abc" ? { ...w, labels: ["focus"] } : w)),
@@ -373,7 +373,9 @@ test("the Focus toggle shows only workspaces labelled focus", async ($, on) => {
   });
   expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
   expect((await ui.find({ key: "row:ab" }))?.text).toBe("ab");
+  expect((await ui.find({ key: "focus" }))?.text).toBe("☐ Focused only");
   await ui.press({ key: "focus" });
+  expect((await ui.find({ key: "focus" }))?.text).toBe("☑ Focused only");
   expect(await ui.find({ key: "row:ab" })).toBeUndefined();
   expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
   await ui.press({ key: "focus" });
@@ -742,19 +744,19 @@ test("the close-out MCP tool archives the desktop sessions once it succeeded", a
     }),
   );
   let failNext = false;
-  on("tool.call", { tool: /workspaces__close-out$/ }, () =>
+  on("tool.call", { tool: /werkmeister__close-out$/ }, () =>
     failNext
       ? { result: "not shipped", isError: true, text: "not shipped" }
       : { result: { command: "sandbox close-out abc" }, text: "sandbox close-out abc" },
   );
-  const tool = "mcp__plugin_werkmeister_workspaces__close-out";
-  const r = await $.tool.call({ tool, name: "abc" } as never);
+  const tool = "mcp__plugin_werkmeister_werkmeister__close-out";
+  const r = await $.tool.call({ tool, workspace: "abc" } as never);
   expect(r.context).toEqual([
     'Desktop sessions in /ws/abc: archived "Newer in abc"; left open "Older in abc": session is pinned',
   ]);
   failNext = true;
   w.calls.length = 0;
-  const failed = await $.tool.call({ tool, name: "abc" } as never);
+  const failed = await $.tool.call({ tool, workspace: "abc" } as never);
   expect(failed.context ?? []).toEqual([]);
   expect(w.calls.filter((c) => c.key === "ccd_session_mgmt/archive_session")).toHaveLength(0);
 });

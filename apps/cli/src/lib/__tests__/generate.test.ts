@@ -260,6 +260,43 @@ describe("setup services", () => {
   });
 });
 
+// ---- cpu limits (SW-40) ----------------------------------------------------
+
+/** Rewrite the fixture registry through *edit*, then generate backend's compose and parse it. */
+function composeServices(edit: (doc: any) => void = () => {}): Record<string, any> {
+  const doc = YAML.parse(fixtureServicesYaml());
+  doc.services.backend.setup_service = "demo-install";
+  doc.services.backend.extra_services = { cache: { image: "redis:7", command: "redis-server" } };
+  doc.setup_services = { "demo-install": { repo: "demo-services", command: "npm install" } };
+  edit(doc);
+  home.write("services.yaml", YAML.stringify(doc));
+  const out = generateFeatureCompose("f", 1, ["backend"], null, tmp);
+  return YAML.parse(fs.readFileSync(out, "utf8")).services;
+}
+
+const cpusOf = (svc: any): unknown => svc.deploy.resources.limits.cpus;
+
+describe("cpu limits", () => {
+  it("caps every container, setup and sidecar included, at the default", () => {
+    const services = composeServices();
+    expect(Object.keys(services).sort()).toEqual(["backend", "cache", "demo-install"]);
+    expect(cpusOf(services.backend)).toBe("1.0");
+    expect(cpusOf(services.cache)).toBe("1.0");
+    expect(cpusOf(services["demo-install"])).toBe("2.0");
+  });
+
+  it("uses a per-entry `cpus:` from services.yaml over the default", () => {
+    const services = composeServices((doc) => {
+      doc.services.backend.cpus = 0.5;
+      doc.services.backend.extra_services.cache.cpus = "0.25";
+      doc.setup_services["demo-install"].cpus = 4;
+    });
+    expect(cpusOf(services.backend)).toBe("0.5");
+    expect(cpusOf(services.cache)).toBe("0.25");
+    expect(cpusOf(services["demo-install"])).toBe("4");
+  });
+});
+
 describe("generateFeatureEnv", () => {
   it("writes feature, slot, and a local service DNS URL", () => {
     // Demo services have no k8s forward, so a local service is reached over the
@@ -689,5 +726,45 @@ describe("idle service containers", () => {
     expect(web.healthcheck.test[1]).toContain("curl -sf");
     expect(web.command[2]).not.toContain("SANDBOX_DEV");
     expect(web.depends_on.tool.condition).toBe("service_started");
+  });
+});
+
+// ---- service image built from a Dockerfile (SW-62) -------------------------
+
+describe("service with a dockerfile", () => {
+  const config = {
+    services: {
+      ext: {
+        repo: "r",
+        path: "packages/ext",
+        type: "extension",
+        image: "sandbox-ext:local",
+        dockerfile: "Dockerfile",
+      },
+      plain: { repo: "r", type: "cli", image: "node:22" },
+    },
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: parsed compose is untyped
+  function render(): Record<string, any> {
+    const outPath = generateFeatureCompose("f", 1, ["ext", "plain"], config, tmp);
+    return YAML.parse(fs.readFileSync(outPath, "utf8")).services;
+  }
+
+  it("builds from the service dir and tags the image, staying idle", () => {
+    const { ext } = render();
+    expect(ext.build).toEqual({
+      context: path.join(tmp, "r", "packages/ext"),
+      dockerfile: "Dockerfile",
+    });
+    expect(ext.image).toBe("sandbox-ext:local");
+    expect(ext.init).toBe(true);
+    expect(ext.healthcheck).toBeUndefined();
+    expect(ext.command[2]).toContain("exec sleep infinity");
+  });
+
+  it("leaves a service without one on its prebuilt image", () => {
+    const { plain } = render();
+    expect(plain.build).toBeUndefined();
+    expect(plain.image).toBe("node:22");
   });
 });

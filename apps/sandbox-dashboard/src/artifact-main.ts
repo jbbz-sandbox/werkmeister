@@ -27,7 +27,7 @@ function serverPrefix(): string {
   } catch {
     // fall through to default
   }
-  return "mcp__workspaces__";
+  return "mcp__werkmeister__";
 }
 
 const SERVER_PREFIX = serverPrefix();

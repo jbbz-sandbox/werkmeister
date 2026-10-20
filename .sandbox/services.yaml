@@ -42,7 +42,8 @@ services:
     path: apps/cli
     type: cli
     archetype: node-tool
-    test: "npx turbo run test --filter=werkmeister"
+    # apps/mcp ships inside the CLI (dist/mcp.js), so its tests run here.
+    test: "npx turbo run test --filter=werkmeister --filter=werkmeister-mcp"
     validate: "Build, then run the built sandbox binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
     internal_port: 3998
     port_offset: 3
@@ -102,7 +103,10 @@ services:
     port_offset: 4
     health_endpoint: /
     setup_service: sandbox-install
-    image: node:22
+    # Dockerfile adds xvfb and Electron's libs; the stock image makes
+    # test:integration exit 127 (SW-62). The tag is local, never pulled.
+    image: sandbox-vscode-plugin:local
+    dockerfile: Dockerfile
     command: "cd packages/vscode-plugin && exec npm run watch"
     memory_limit: 1G
     memory_reservation: 128M

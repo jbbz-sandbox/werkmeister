@@ -72,42 +72,39 @@ if [ -z "$node_bin" ] || [ ! -x "$node_bin" ]; then
     exit 1
 fi
 
-# `dashboard` and `mcp` are sibling apps, not CLI subcommands: each has its own
-# dist/main.js. Both are launched here over stdio, which is what an MCP client
-# (Claude Desktop, the werkmeister plugin) needs -- their HTTP modes are
-# started by `sandbox connect` as managed WebApps, which execs those same
-# entrypoints directly without --stdio. That is why neither verb takes a
-# transport flag; extra args are still forwarded, so an explicit --stdio from an
-# older .mcp.json stays harmless.
+# `mcp` and `dashboard` are sibling apps, not CLI subcommands: each has its own
+# dist/main.js. `mcp` is the one MCP server, launched here over stdio, which is
+# what an MCP client (Claude Desktop, the werkmeister plugin) needs; its HTTP
+# mode is started by `werkmeister connect` as a managed WebApp. Extra args are
+# forwarded, so an explicit --stdio from an older .mcp.json stays harmless.
+# `dashboard` runs the localhost browser dashboard in the foreground (the same
+# server `connect` starts on 3001).
 #
 # Only apps/cli is published to npm (see its package.json `files`), so on a
 # global install these siblings are absent. apps/mcp is bundled into this
 # package as dist/mcp.js (esbuild.mjs), so `mcp` always has a target. The
-# dashboard (Jira, PRs, MCP Apps UI) is checkout-only; where it is missing its
-# verb falls back to the headless server, which carries the same sandbox-*
-# verbs, so the werkmeister plugin's `w9r dashboard` MCP entry keeps
-# working on a package install instead of failing at every session start.
+# dashboard is checkout-only.
 case "${1:-}" in
-    dashboard) app_dir="sandbox-dashboard" ;;
-    mcp)       app_dir="mcp" ;;
-    *)         app_dir="" ;;
-esac
-if [ -n "$app_dir" ]; then
-    app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/$app_dir/dist/main.js"
-    bundled="$SANDBOX_ROOT/dist/mcp.js"
-    if [ ! -f "$app_entry" ]; then
-        if [ ! -f "$bundled" ]; then
-            echo "Error: '$1' is not available -- missing $app_entry and $bundled (run 'npm run build')." >&2
+    mcp)
+        app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/mcp/dist/main.js"
+        [ -f "$app_entry" ] || app_entry="$SANDBOX_ROOT/dist/mcp.js"
+        if [ ! -f "$app_entry" ]; then
+            echo "Error: 'mcp' is not available -- missing $app_entry (run 'npm run build')." >&2
             exit 1
         fi
-        if [ "$1" = dashboard ]; then
-            echo "sandbox dashboard: the workspaces dashboard ships with the checkout only; serving the headless MCP server ($bundled) instead." >&2
+        shift
+        exec "$node_bin" "$app_entry" --stdio "$@"
+        ;;
+    dashboard)
+        app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/sandbox-dashboard/dist/main.js"
+        if [ ! -f "$app_entry" ]; then
+            echo "Error: the workspaces dashboard ships with a werkmeister checkout only -- missing $app_entry." >&2
+            exit 1
         fi
-        app_entry="$bundled"
-    fi
-    shift
-    exec "$node_bin" "$app_entry" --stdio "$@"
-fi
+        shift
+        exec "$node_bin" "$app_entry" "$@"
+        ;;
+esac
 
 # `hooks gate` is the PreToolUse standards gate — it fires on every Edit/Write,
 # so it skips the commander/yaml import chain via a dedicated entrypoint.

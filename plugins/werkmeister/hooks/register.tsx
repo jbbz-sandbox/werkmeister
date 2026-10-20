@@ -1415,8 +1415,8 @@ export const register: Register = (on) => {
   }));
 
   // The close-out MCP tool runs in its own server, which can't reach the app's session tools: archive here once it succeeded.
-  on("tool.call", { tool: /^mcp__.*workspaces__close-out$/ }, async ($, e, next) => {
-    const name = (e as unknown as { name?: unknown }).name;
+  on("tool.call", { tool: /^mcp__.*werkmeister__close-out$/ }, async ($, e, next) => {
+    const name = (e as unknown as { workspace?: unknown }).workspace;
     // Resolved first: the folder is gone once the call returns.
     const path =
       typeof name === "string"
@@ -1492,7 +1492,7 @@ export const register: Register = (on) => {
           <Button
             key="focus"
             plain
-            label={`${focus ? "☑" : "☐"} Focus`}
+            label={`${focus ? "☑" : "☐"} Focused only`}
             onPress={() => void $.state.set(FOCUS, !focus)}
           />
         )}

@@ -13,9 +13,9 @@ import * as path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { Colors } from "./colors.js";
-import { composeInvocation } from "./compose_infra.js";
+import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
 import { stateInfraRoot } from "./config.js";
-import { containerRunning } from "./docker.js";
+import { containerRunning, projectContainers } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { type ForwardSpec, forwardSpecs } from "./k8s_forwards.js";
 import { ProcError, run } from "./proc.js";
@@ -27,42 +27,16 @@ import { error, info, success, warn } from "./reporter.js";
 // probe a service the container isn't actually forwarding.
 
 /**
- * Check the health of the containerized k8s-forwards service.
- *
- * Queries Docker to determine the container's health status and
- * returns a dict with the container name and its health state.
+ * Check the health of the containerized k8s-forwards service: healthy, or
+ * running with no healthcheck declared.
  */
-export function checkPortForwardHealth(): Record<string, boolean> {
-  const { argv, env } = composeInvocation();
-  const results: Record<string, boolean> = {};
-
-  try {
-    const result = run([...argv, "ps", "--format", "json", "k8s-forwards"], {
-      capture: true,
-      timeout: 10,
-      env,
-    });
-    if (result.status === 0 && result.stdout.trim()) {
-      for (const line of result.stdout.trim().split("\n")) {
-        try {
-          const svc = JSON.parse(line);
-          const health = svc["Health"] ?? "";
-          const state = svc["State"] ?? "";
-          results["k8s-forwards"] = health === "healthy" || (state === "running" && health === "");
-        } catch {
-          continue;
-        }
-      }
-    }
-  } catch (err) {
-    if (!(err instanceof ProcError)) throw err; // timeout / missing docker → fall through
-  }
-
-  if (!("k8s-forwards" in results)) {
-    results["k8s-forwards"] = false;
-  }
-
-  return results;
+export async function checkPortForwardHealth(): Promise<Record<string, boolean>> {
+  const live = (await projectContainers(INFRA_PROJECT, "k8s-forwards", { all: false })) ?? [];
+  return {
+    "k8s-forwards": live.some(
+      (c) => c.health === "healthy" || (c.state === "running" && !c.health),
+    ),
+  };
 }
 
 /**
@@ -155,8 +129,8 @@ function clusterReachable(): boolean {
 /**
  * Verify the k8s-forwards container is healthy, restarting it if not.
  */
-export function ensurePortForwardsHealthy(): ForwardsOutcome {
-  const health = checkPortForwardHealth();
+export async function ensurePortForwardsHealthy(): Promise<ForwardsOutcome> {
+  const health = await checkPortForwardHealth();
   if (health["k8s-forwards"] ?? false) {
     success("k8s port-forwards container is healthy");
     return "healthy";
@@ -256,8 +230,8 @@ export async function waitForForwards(timeoutMs = 30_000, pollMs = 500): Promise
 }
 
 /** Return a human-readable status string for the k8s-forwards container. */
-export function getForwardsStatus(): string {
-  const health = checkPortForwardHealth();
+export async function getForwardsStatus(): Promise<string> {
+  const health = await checkPortForwardHealth();
   if (health["k8s-forwards"] ?? false) {
     return `${Colors.GREEN}healthy${Colors.RESET}`;
   }

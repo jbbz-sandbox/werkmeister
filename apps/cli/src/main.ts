@@ -1077,15 +1077,12 @@ export async function main(): Promise<void> {
   // (it is the only place that can resolve a node runtime), so these two
   // registrations exist for --help parity and to give a useful message to
   // anyone running dist/main.js directly. Neither takes a transport flag: the
-  // wrapper always launches stdio, and `sandbox connect` starts the HTTP modes.
+  // wrapper launches `mcp` over stdio, and `sandbox connect` starts the HTTP modes.
   for (const [name, description] of [
-    [
-      "dashboard",
-      "Launch the workspace dashboard's MCP server over stdio (Claude Desktop, the werkmeister plugin)",
-    ],
+    ["dashboard", "Run the localhost workspaces dashboard in the foreground (checkout only)"],
     [
       "mcp",
-      "Launch the headless remote MCP surface over stdio (host-local clients; no token needed)",
+      "Launch the werkmeister MCP server over stdio (Claude Desktop, the werkmeister plugin; no token needed)",
     ],
   ] as const) {
     program
