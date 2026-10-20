@@ -13,6 +13,8 @@
 import { containerStats } from "werkmeister-core/docker";
 import {
   type ContainerStats,
+  configuredCpus,
+  cpuLimitOf,
   formatMem,
   halveCpu,
   type Recommendation,
@@ -27,7 +29,10 @@ import { interruptSignal } from "../lib/interrupt.js";
 // file, and `commands/optimize.ts` reads it too.
 
 /** Format stats as a human-readable table. */
-function formatStatsTable(stats: Record<string, ContainerStats>): string {
+function formatStatsTable(
+  stats: Record<string, ContainerStats>,
+  cpus: Record<string, string>,
+): string {
   if (Object.keys(stats).length === 0) return "  No container data collected.";
 
   const lines: string[] = [];
@@ -35,9 +40,9 @@ function formatStatsTable(stats: Record<string, ContainerStats>): string {
     `  ${Colors.BOLD}${"Container".padEnd(35)}  ` +
     `${"Avg CPU".padStart(8)}  ${"Max CPU".padStart(8)}  ` +
     `${"Avg Mem".padStart(8)}  ${"Max Mem".padStart(8)}  ` +
-    `${"Samples".padStart(7)}${Colors.RESET}`;
+    `${"Samples".padStart(7)}  ${"CPU Lim".padStart(7)}${Colors.RESET}`;
   lines.push(header);
-  lines.push(`  ${"─".repeat(85)}`);
+  lines.push(`  ${"─".repeat(94)}`);
 
   for (const name of Object.keys(stats).sort()) {
     const s = stats[name];
@@ -45,7 +50,7 @@ function formatStatsTable(stats: Record<string, ContainerStats>): string {
       `  ${name.padEnd(35)}  ` +
         `${s.avgCpu.toFixed(1).padStart(7)}%  ${s.maxCpu.toFixed(1).padStart(7)}%  ` +
         `${formatMem(s.avgMem).padStart(8)}  ${formatMem(s.maxMem).padStart(8)}  ` +
-        `${String(s.samples).padStart(7)}`,
+        `${String(s.samples).padStart(7)}  ${(cpuLimitOf(name, cpus) ?? "n/a").padStart(7)}`,
     );
   }
 
@@ -116,6 +121,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 /** Show a one-shot snapshot of current container stats. */
 async function runSnapshot(_save: boolean): Promise<void> {
   const snapshot = await containerStats();
+  const cpus = configuredCpus();
 
   if (!snapshot.length) {
     warn("No running containers found. Start your sandbox first.");
@@ -135,9 +141,9 @@ async function runSnapshot(_save: boolean): Promise<void> {
   const header =
     `  ${Colors.BOLD}${"Container".padEnd(35)}  ` +
     `${"CPU".padStart(8)}  ${"Memory".padStart(10)}  ` +
-    `${"Limit".padStart(10)}${Colors.RESET}`;
+    `${"Limit".padStart(10)}  ${"CPU Lim".padStart(7)}${Colors.RESET}`;
   console.log(header);
-  console.log(`  ${"─".repeat(70)}`);
+  console.log(`  ${"─".repeat(79)}`);
 
   let totalCpu = 0.0;
   let totalMem = 0.0;
@@ -168,11 +174,11 @@ async function runSnapshot(_save: boolean): Promise<void> {
       `  ${e.name.padEnd(35)}  ` +
         `${cpu.toFixed(1).padStart(7)}%  ` +
         `${memColor}${memStr.padStart(10)}${memColor ? Colors.RESET : ""}  ` +
-        `${limitStr.padStart(10)}`,
+        `${limitStr.padStart(10)}  ${(cpuLimitOf(e.name, cpus) ?? "n/a").padStart(7)}`,
     );
   }
 
-  console.log(`  ${"─".repeat(70)}`);
+  console.log(`  ${"─".repeat(79)}`);
   console.log(
     `  ${Colors.BOLD}${"Total".padEnd(35)}  ` +
       `${totalCpu.toFixed(1).padStart(7)}%  ` +
@@ -210,7 +216,7 @@ async function renderCollection(
 
   // Show stats
   console.log(`\n${Colors.BOLD}--- Collected Statistics ---${Colors.RESET}\n`);
-  console.log(formatStatsTable(collected.stats));
+  console.log(formatStatsTable(collected.stats, configuredCpus()));
 
   // Show recommendations
   console.log(`\n${Colors.BOLD}--- Recommended Resource Limits ---${Colors.RESET}\n`);
