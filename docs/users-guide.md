@@ -1227,6 +1227,7 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
   - `command` (string | null) — Custom startup command
   - `depends_on` (list | null) — Service dependencies
   - `extra_services` (map | null) — Sidecar containers (e.g., Redis instances)
+  - `dockerfile` (string | null) — Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
   - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
   - `extra_volumes` (list | null) — Additional volume mounts
 

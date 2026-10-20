@@ -12,6 +12,7 @@ tsconfig.json
 .remember/**
 .turbo/**
 MANUAL-CHECKLIST.md
+Dockerfile
 .vscode-test.mjs
 .vscode-test/**
 .gitignore
