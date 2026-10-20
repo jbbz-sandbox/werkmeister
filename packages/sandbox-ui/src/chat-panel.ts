@@ -178,7 +178,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
   head.appendChild(refresh);
   // Open the *picked* session (or newest) in a real Terminal for a fully
   // interactive session. Honors the session selector via st.pinnedSessionId.
-  const resume = el("button", "btn", "Resume in Terminal") as HTMLButtonElement;
+  const resume = el("button", "btn", "↗ Continue in Terminal") as HTMLButtonElement;
   head.appendChild(resume);
   resume.addEventListener("click", async () => {
     const orig = resume.textContent;
@@ -395,7 +395,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
           st.error =
             "Turn failed — " +
             (error || "unknown error") +
-            ". You can retry, or open it with Resume in Terminal.";
+            ". You can retry, or open it with ↗ Continue in Terminal.";
         }
         scheduleRender();
       },
@@ -569,7 +569,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
           state.error =
             "Turn failed — " +
             (status.error || "unknown error") +
-            ". You can retry, or open it with Resume in Terminal.";
+            ". You can retry, or open it with ↗ Continue in Terminal.";
         }
         try {
           await syncTranscript(state);
@@ -600,7 +600,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       const settled = await pollForReply(st);
       if (!settled)
         st.error =
-          "Claude is still working after 30 min — hit Refresh later, or open it with Resume in Terminal.";
+          "Claude is still working after 30 min — hit Refresh later, or open it with ↗ Continue in Terminal.";
     } catch (_e) {
       st.error =
         "Couldn’t start the turn — check that the session and `claude` CLI are reachable, then retry.";

@@ -22,7 +22,13 @@ import { type DisplayInput, displayModel, type Tone } from "./display-model.js";
 import { filterWorkspaces } from "./lib/workspace-search.js";
 import { injectCss } from "./theme.js";
 import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
-import { CARD_CSS, type CardAction, type PanelKind, WorkspaceCard } from "./workspace-card.js";
+import {
+  CARD_CSS,
+  type CardAction,
+  type PanelKind,
+  toolCall,
+  WorkspaceCard,
+} from "./workspace-card.js";
 
 export interface HostBridge {
   /**
@@ -82,18 +88,6 @@ interface Counted {
   healthy?: number;
 }
 
-const ACTIONS: Partial<Record<CardAction, { tool: string; verb: string }>> = {
-  continue: { tool: "claude-resume", verb: "Opening Terminal" },
-  up: { tool: "up", verb: "Starting" },
-  stop: { tool: "stop", verb: "Stopping" },
-  restart: { tool: "restart", verb: "Restarting" },
-  down: { tool: "down", verb: "Tearing down" },
-  "open-feature": { tool: "open-feature", verb: "Opening" },
-  "open-vscode": { tool: "open-workspace", verb: "Opening" },
-  "close-out": { tool: "close-out", verb: "Closing out" },
-  abandon: { tool: "close-out", verb: "Abandoning" },
-};
-
 const CSS = `
   .wsui, .wsui * { box-sizing: border-box; }
   .wsui {
@@ -140,6 +134,7 @@ const CSS = `
   .wsui .seg button.needs.on { background: var(--sd-warn-solid); color: var(--sd-on-warn-solid); }
   .wsui .seg button:focus-visible { outline: 2px solid var(--sd-accent); outline-offset: -2px; }
   .wsui .count { font-size: 13px; color: var(--sd-muted); white-space: nowrap; }
+  .wsui .focus-only { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 
   .wsui .cards {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(min(440px, 100%), 1fr));
@@ -189,12 +184,14 @@ function TopBar({
   infra,
   onConnected,
   onRefresh,
+  onNewWorkspace,
 }: {
   bridge: HostBridge;
   root: string;
   infra: Counted | null;
   onConnected(): void;
   onRefresh(): void;
+  onNewWorkspace?: () => void;
 }) {
   const [k8s, setK8s] = useState<(Counted & { title: string }) | null>(null);
   const [kube, setKube] = useState<{ env: string; context: string | null } | null>(null);
@@ -294,6 +291,11 @@ function TopBar({
             </button>
           )}
         </span>
+        {onNewWorkspace && (
+          <button type="button" className="btn tb-btn" onClick={onNewWorkspace}>
+            ＋ New workspace
+          </button>
+        )}
         <button
           type="button"
           className="btn tb-btn"
@@ -347,11 +349,13 @@ function WorkspaceList({
   headerRoot,
   renderMarkdown,
   reloadRef,
+  onNewWorkspace,
 }: {
   bridge: HostBridge;
   headerRoot: HTMLElement | null;
   renderMarkdown?: (src: string) => string;
   reloadRef: { current: () => void };
+  onNewWorkspace?: () => void;
 }) {
   const [all, setAll] = useState<WorkspaceEntry[] | null>(null);
   const [root, setRoot] = useState("");
@@ -365,6 +369,7 @@ function WorkspaceList({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [needsOnly, setNeedsOnly] = useState(false);
+  const [focusOnly, setFocusOnly] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -426,15 +431,12 @@ function WorkspaceList({
   const onAction = async (w: WorkspaceEntry, action: CardAction, reason?: string) => {
     if (action === "retry-status") return void refreshStatus();
     if (action === "refresh-prs") return void refreshPrs();
-    const a = ACTIONS[action];
+    const a = toolCall(action, w.name, reason);
     if (!a) return;
     setBusy((b) => ({ ...b, [w.name]: `${a.verb}…` }));
     setErrors(({ [w.name]: _, ...rest }) => rest);
     try {
-      await bridge.callTool(a.tool, {
-        workspace: w.name,
-        ...(action === "abandon" ? { abandon: reason } : {}),
-      });
+      await bridge.callTool(a.tool, a.args);
       // close-out changes the set of workspaces, not just a state.
       if (a.tool === "close-out") setAll((list) => list?.filter((x) => x.name !== w.name) ?? null);
       await refreshStatus();
@@ -487,14 +489,16 @@ function WorkspaceList({
   const shown = useMemo(() => {
     if (!all) return [];
     const needs = (w: WorkspaceEntry) => statuses?.[w.name]?.claude.agent === "needs-you";
-    const base = needsOnly ? all.filter(needs) : all;
+    const base = all.filter(
+      (w) => (!needsOnly || needs(w)) && (!focusOnly || w.labels.includes("focus")),
+    );
     return query.trim()
       ? filterWorkspaces(base, query.trim(), {
           cstateByWs: statuses ?? {},
           prsByWs: prs ?? {},
         })
       : base;
-  }, [all, statuses, prs, needsOnly, query]);
+  }, [all, statuses, prs, needsOnly, focusOnly, query]);
   const needCount =
     all?.filter((w) => statuses?.[w.name]?.claude.agent === "needs-you").length ?? 0;
 
@@ -505,6 +509,7 @@ function WorkspaceList({
       infra={infra}
       onConnected={() => void refreshStatus()}
       onRefresh={() => void load()}
+      onNewWorkspace={onNewWorkspace}
     />
   );
 
@@ -556,6 +561,14 @@ function WorkspaceList({
               ● Needs you · {needCount}
             </button>
           </fieldset>
+          <label className="focus-only">
+            <input
+              type="checkbox"
+              checked={focusOnly}
+              onChange={(e) => setFocusOnly(e.target.checked)}
+            />
+            Focused only
+          </label>
           <span className="count">
             {shown.length} of {all.length}
           </span>
@@ -567,6 +580,7 @@ function WorkspaceList({
               <WorkspaceCard
                 key={w.name}
                 name={w.name}
+                path={w.path}
                 task={w.task ?? null}
                 workType={w.workType ?? null}
                 issueId={w.issueId}
@@ -623,7 +637,12 @@ const UNREACHABLE: DisplayInput = {
 export function initWorkspaceUI(
   bridge: HostBridge,
   root: HTMLElement,
-  opts?: { headerRoot?: HTMLElement; renderMarkdown?: (src: string) => string },
+  opts?: {
+    headerRoot?: HTMLElement;
+    renderMarkdown?: (src: string) => string;
+    /** Shows `＋ New workspace` in the top bar; the surface decides where the create form opens. */
+    onNewWorkspace?: () => void;
+  },
 ): { reload: () => void } {
   injectCss("wsui", CSS + CARD_CSS);
   root.classList.add("wsui");
@@ -635,6 +654,7 @@ export function initWorkspaceUI(
       headerRoot={opts?.headerRoot ?? null}
       renderMarkdown={opts?.renderMarkdown}
       reloadRef={reloadRef}
+      onNewWorkspace={opts?.onNewWorkspace}
     />,
   );
   // Let the dashboard shell refresh the list after a workspace is created.

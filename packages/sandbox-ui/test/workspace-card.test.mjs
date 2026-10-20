@@ -7,7 +7,9 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const { displayModel } = await import("../dist/display-model.js");
-const { WorkspaceCard, ConfirmFooter, barFor } = await import("../dist/workspace-card.js");
+const { WorkspaceCard, ConfirmFooter, barFor, desktopLink, toolCall } = await import(
+  "../dist/workspace-card.js"
+);
 
 const status = (over = {}) => ({
   state: "up",
@@ -36,6 +38,7 @@ const card = ({ ws = {}, prs = [], lifecycle = null, ...props } = {}) =>
   renderToStaticMarkup(
     h(WorkspaceCard, {
       name: "sandbox-53-react-card",
+      path: "/ws/sandbox-53-react-card",
       task: "Build the card in React",
       workType: "feature",
       issueId: "SW-53",
@@ -152,11 +155,11 @@ test("barFor: primary + two secondaries, the rest in ⋯", () => {
   const panels = ["Chat", "Usage", "Open in VS Code"];
   assert.deepEqual(labels(barFor(d({}), "up")), [
     ["■ Stop", "↻ Restart"],
-    ["⏻ Down", ...panels],
+    ["↗ Continue in Desktop", "⏻ Down", "＋ New session", ...panels],
   ]);
   assert.deepEqual(labels(barFor(d({ state: "down" }), "down")), [
-    ["↗ Continue in Terminal"],
-    panels,
+    ["↗ Continue in Terminal", "＋ New session"],
+    ["↗ Continue in Desktop", ...panels],
   ]);
   assert.deepEqual(
     labels(
@@ -165,13 +168,52 @@ test("barFor: primary + two secondaries, the rest in ⋯", () => {
         "down",
       ),
     ),
-    [["▶ Up"], panels],
+    [
+      ["▶ Up", "＋ New session"],
+      ["↗ Continue in Desktop", ...panels],
+    ],
   );
   assert.deepEqual(
     labels(barFor(d({ claude: { agent: "done", at: null, question: null } }, "shipped"), "up")),
     [
       ["↻ Restart", "⏻ Down"],
-      ["↗ Continue in Terminal", ...panels],
+      ["↗ Continue in Terminal", "↗ Continue in Desktop", "＋ New session", ...panels],
     ],
   );
+});
+
+test("SW-54: Abandon goes through close-out with the reason, and never without one", () => {
+  assert.deepEqual(toolCall("abandon", "ws", "  superseded by SW-60 "), {
+    tool: "close-out",
+    verb: "Abandoning",
+    args: { workspace: "ws", abandon: "superseded by SW-60" },
+  });
+  for (const blank of [undefined, "", "   "]) assert.equal(toolCall("abandon", "ws", blank), null);
+  assert.deepEqual(toolCall("close-out", "ws").args, { workspace: "ws" });
+});
+
+test("SW-54: New session opens a fresh Terminal session; Continue resumes", () => {
+  assert.deepEqual(toolCall("new-session", "ws"), {
+    tool: "claude-resume",
+    verb: "Opening Terminal",
+    args: { workspace: "ws", new: true },
+  });
+  assert.deepEqual(toolCall("continue", "ws").args, { workspace: "ws" });
+  assert.equal(toolCall("up", "ws").tool, "up");
+  for (const linkOnly of ["continue-desktop", "open-issue", "chat"])
+    assert.equal(toolCall(linkOnly, "ws"), null, linkOnly);
+});
+
+test("SW-54: Continue in Desktop opens the folder's claude:// link", () => {
+  assert.equal(
+    desktopLink("/Users/me/ws/a b&c"),
+    "claude://code/new?folder=%2FUsers%2Fme%2Fws%2Fa%20b%26c&source=services",
+  );
+});
+
+test("SW-54: the card draws New session in the bar when containers are down; no Remove", () => {
+  const down = card({ ws: { state: "down", running: 0, services: [] } });
+  assert.match(down, /class="btn"[^>]*>＋ New session</);
+  assert.match(down, />▶ Up</);
+  for (const html of [down, card()]) assert.doesNotMatch(html, /Remove|Resume in|>Start</);
 });
