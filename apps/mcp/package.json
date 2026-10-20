@@ -1,6 +1,6 @@
 {
   "name": "werkmeister-mcp",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
@@ -19,8 +19,8 @@
     "@modelcontextprotocol/ext-apps": "^1.7.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.1.0",
-    "werkmeister-core": "^0.22.0",
-    "werkmeister-ui": "^0.1.1",
+    "werkmeister-core": "^0.23.0",
+    "werkmeister-ui": "^0.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
