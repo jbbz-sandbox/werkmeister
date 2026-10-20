@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="box-sizing:border-box;width:100%;background:#1a1a19;border:1px solid #3a3a37;border-radius:12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5;color:#e6e5e0;padding:12px 14px 16px;text-align:left">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:14px;color:#c8c7c1">Stellwerk workspaces</span><span style="flex:1"></span><span style="color:#9a9993">⤢</span><span style="color:#9a9993">✕</span></div>
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+    <span style="padding:2px 9px;border-radius:6px;background:{{ tabListBg }};color:{{ tabListFg }};font-weight:500">Workspaces<span onClick="{{ toggleNeeds }}" style="color:{{ needsTabFg }};font-weight:600;cursor:pointer;text-decoration:{{ needsUl }}">{{ needsTab }}</span></span>
+    <span style="padding:2px 9px;border-radius:6px;background:{{ tabCreateBg }};color:{{ tabCreateFg }}">＋ Create</span>
+    <span style="padding:2px 6px;color:#e6e5e0">☐ Focused only</span>
+    <span style="flex:1"></span>
+    <span onClick="{{ toggleLegend }}" style="padding:2px 8px;border-radius:6px;background:{{ legendBg }};color:#e6e5e0;cursor:pointer;font-weight:600">?</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px">
+    <span><span style="color:#8a8984">infra</span> <span style="color:#5cc177">4 of 4 up</span> <span style="color:#8a8984">· k8s forwards</span> <span style="color:#e5a03a">0 of 4 up</span></span>
+    <span style="flex:1"></span>
+    <span style="padding:1px 8px;border-radius:6px;background:#2e2e2b;color:#e6e5e0;white-space:nowrap">⚡ Connect infra</span>
+  </div>
+  <sc-if value="{{ legend }}">
+    <div style="border:1px solid #4a4a46;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:grid;grid-template-columns:auto 1fr;gap:2px 14px">
+      <span style="font-weight:700;grid-column:1/-1;margin-bottom:2px">Legend</span>
+      <span style="color:#e5a03a;font-weight:700">● Needs you</span><span style="color:#b5b4ae">agent asked you something; amber border = this, only this</span>
+      <span style="color:#5cc177">◌ Working · ✓ Done</span><span style="color:#b5b4ae">agent busy · agent finished</span>
+      <span style="color:#8a8984">Idle</span><span style="color:#b5b4ae">no live turn, nothing asked</span>
+      <span>⚙ Auto</span><span style="color:#b5b4ae">autonomous run, no review gates until the PR</span>
+      <span><span style="color:#5cc177">●</span> <span style="color:#8a8984">○</span> <span style="color:#e5a03a">◐</span> <span style="color:#ff7b72">▲</span></span><span style="color:#b5b4ae">service up · down · starting · unhealthy</span>
+      <span><span style="color:#5cc177">green</span> <span style="color:#e5a03a">amber</span> <span style="color:#ff7b72">red</span> <span style="color:#8a8984">grey</span></span><span style="color:#b5b4ae">ok · partial or attention · failing · off</span>
+      <span style="color:#b796ff">Merged · Released</span><span style="color:#b5b4ae">PR shipped</span>
+    </div>
+  </sc-if>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <sc-for list="{{ cards }}" as="c" hint-placeholder-count="3">
+      <div style="border:{{ c.bw }} solid {{ c.bd }};border-radius:10px;padding:8px 12px 10px">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+          <span style="font-weight:700;overflow-wrap:anywhere;min-width:0">{{ c.name }}</span>
+          <span style="margin-left:auto;display:inline-flex;gap:10px;white-space:nowrap"><span style="color:{{ c.agentFg }};font-weight:{{ c.agentW }}">{{ c.agent }}</span><span style="color:#e6e5e0">{{ c.auto }}</span></span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:0 4px;margin-top:2px">
+          <sc-for list="{{ c.line }}" as="p"><span style="color:{{ p.fg }};white-space:nowrap">{{ p.t }}</span></sc-for>
+        </div>
+        <sc-if value="{{ c.qShort }}"><div onClick="{{ c.openQ }}" style="margin-top:6px;color:#b5b4ae;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer"><span style="color:#e5a03a">▸ asked:</span> “{{ c.question }}”</div></sc-if>
+        <sc-if value="{{ c.qLong }}"><div onClick="{{ c.closeQ }}" style="margin-top:6px;padding-left:10px;border-left:2px solid #e5a03a;color:#e6e5e0;cursor:pointer"><span style="color:#e5a03a">▾ asked {{ c.time }}:</span><br></br>“{{ c.question }}”</div></sc-if>
+        <sc-if value="{{ c.showBar }}">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            <sc-for list="{{ c.btns }}" as="b"><span onClick="{{ b.on }}" style="padding:2px 9px;border-radius:6px;background:{{ b.bg }};color:{{ b.fg }};font-weight:{{ b.w }};white-space:nowrap;cursor:pointer">{{ b.t }}</span></sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ c.menu }}">
+          <div style="margin-top:6px;border:1px solid #4a4a46;border-radius:8px;padding:4px 0;max-width:240px">
+            <sc-for list="{{ c.menuItems }}" as="mi"><div onClick="{{ mi.on }}" style="padding:1px 10px;color:{{ mi.fg }};font-weight:{{ mi.w }};cursor:pointer">{{ mi.t }}</div></sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ c.closing }}">
+          <div style="margin-top:8px"><div style="color:#ff7b72;font-weight:700">Close out {{ c.name }}?</div><div style="color:#b5b4ae">Issue → Done, closeout.md, workspace removed, merged branches deleted.</div>
+            <div style="display:flex;gap:6px;margin-top:6px"><span style="padding:2px 9px;border-radius:6px;background:#2e2e2b;color:#ff7b72;font-weight:700">✓ Yes, close out</span><span onClick="{{ c.cancel }}" style="padding:2px 9px;border-radius:6px;background:#2e2e2b;cursor:pointer">Cancel</span></div></div>
+        </sc-if>
+        <sc-if value="{{ c.abandoning }}">
+          <div style="margin-top:8px"><div style="color:#ff7b72;font-weight:700">✕ Abandon {{ c.name }}?</div><div style="color:#b5b4ae">Reason posted on the issue; workspace removed, branches kept.</div>
+            <div style="margin-top:6px;color:#8a8984;font-size:12px">Reason (required)</div>
+            <div style="border:1px solid #ff7b72;border-radius:6px;padding:3px 8px;color:#e6e5e0">superseded by stellwerk#240<span style="color:#e6e5e0">▏</span></div>
+            <div style="display:flex;gap:6px;margin-top:6px"><span style="padding:2px 9px;border-radius:6px;background:#5a1f1a;color:#ffd7d3;font-weight:700">✕ Yes, abandon</span><span onClick="{{ c.cancel }}" style="padding:2px 9px;border-radius:6px;background:#2e2e2b;cursor:pointer">Cancel</span></div></div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:520,&quot;height&quot;:760},&quot;ids&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;143,206,151,bwell,loading&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;needsOnly&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;legend&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showQuestions&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;qFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;menuFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;confirmFor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;confirmKind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;closeout&quot;,&quot;abandon&quot;],&quot;default&quot;:&quot;closeout&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;tab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;list&quot;,&quot;create&quot;],&quot;default&quot;:&quot;list&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { d: null, needs: null, legend: null, menu: null, confirm: null, q: {} };
+  componentDidMount() { import(new URL('data.js', document.baseURI).href).then(d => this.setState({ d })); }
+  renderVals() {
+    const p = this.props, d = this.state.d;
+    const PAL = { 'var(--sd-ok)': '#5cc177', 'var(--sd-warn)': '#e5a03a', 'var(--sd-err)': '#ff7b72', 'var(--sd-off)': '#8a8984', 'var(--sd-pr)': '#b796ff', 'var(--sd-info)': '#7aa7f0', 'var(--sd-ink)': '#e6e5e0', 'var(--sd-on-warn-solid)': '#e5a03a' };
+    const col = v => PAL[v] || '#e6e5e0';
+    const ids = (p.ids || '143,206,151,bwell,loading').split(',').map(s => s.trim());
+    const needsOnly = this.state.needs ?? !!p.needsOnly;
+    const legend = this.state.legend ?? !!p.legend;
+    const menuFor = this.state.menu ?? p.menuFor ?? null;
+    const confirm = this.state.confirm ?? (p.confirmFor ? { id: p.confirmFor, k: p.confirmKind || 'closeout' } : null);
+    const all = d ? ids.map(id => d.model(id)).filter(Boolean) : [];
+    const needCount = all.filter(m => m.needs).length;
+    const shown = needsOnly ? all.filter(m => m.needs) : all;
+    const cards = shown.map(m => {
+      if (m.loading) return { name: m.name, bw: '1px', bd: '#4a4a46', agent: 'loading', agentFg: '#8a8984', agentW: 400, auto: '', line: [{ t: 'containers · PRs · stage loading…', fg: '#8a8984' }], showBar: true, btns: [{ t: '· · ·', bg: '#262624', fg: '#6a6964', w: 400 }] };
+      const line = [];
+      m.compact.forEach((g, gi) => {
+        if (gi) line.push({ t: '·', fg: '#8a8984' });
+        if (g.k) line.push({ t: g.k, fg: '#8a8984' });
+        g.parts.forEach((x, i) => { if (i && g.k === 'PRs' && i % 3 === 2) line.push({ t: '·', fg: '#8a8984' }); line.push({ t: x.t, fg: col(x.fg) }); });
+      });
+      const qOpen = this.state.q[m.id] ?? (p.qFor === m.id);
+      const hasQ = !!(m.question && p.showQuestions);
+      const destr = m.primaryDestructive;
+      const btns = [
+        { t: m.primary, bg: '#2e2e2b', fg: destr ? '#ff7b72' : '#7aa7f0', w: 700, on: () => destr && this.setState({ confirm: { id: m.id, k: 'closeout' } }) },
+        ...m.bar.map(t => ({ t, bg: '#2e2e2b', fg: '#e6e5e0', w: 400 })),
+        { t: '⋯', bg: menuFor === m.id ? '#4a4a46' : '#2e2e2b', fg: '#e6e5e0', w: 700, on: () => this.setState({ menu: menuFor === m.id ? false : m.id }) },
+      ];
+      const items = [...m.extra, ...d.PANE_ONLY, ...d.OVERFLOW].map(t => ({ t, fg: t === 'Open issue ↗' && !m.issue ? '#6a6964' : '#e6e5e0', w: 400 }));
+      items.push({ t: '✕ Abandon…', fg: '#ff7b72', w: 700, on: () => this.setState({ confirm: { id: m.id, k: 'abandon' }, menu: false }) });
+      const cf = confirm && confirm.id === m.id ? confirm.k : null;
+      return {
+        name: m.name, bw: m.needs ? '2px' : '1px', bd: m.needs ? '#e5a03a' : '#4a4a46',
+        agent: m.agentLabel, agentFg: col(m.agentPane.fg), agentW: m.needs ? 700 : 500, auto: m.auto ? '⚙ Auto' : '',
+        line, question: m.question, time: m.time, qShort: hasQ && !qOpen, qLong: hasQ && qOpen,
+        openQ: () => this.setState(s => ({ q: { ...s.q, [m.id]: true } })), closeQ: () => this.setState(s => ({ q: { ...s.q, [m.id]: false } })),
+        showBar: !cf, btns, menu: !cf && menuFor === m.id, menuItems: items,
+        closing: cf === 'closeout', abandoning: cf === 'abandon', cancel: () => this.setState({ confirm: false }),
+      };
+    });
+    const create = p.tab === 'create';
+    return {
+      cards, legend, needsTab: needCount ? ` · ${needCount} need${needCount === 1 ? 's' : ''} you` : '',
+      needsTabFg: create ? '#e5a03a' : '#8f5600',
+      tabListBg: create ? '#2e2e2b' : '#f2f1ec', tabListFg: create ? '#e6e5e0' : '#1a1a19',
+      tabCreateBg: create ? '#f2f1ec' : '#2e2e2b', tabCreateFg: create ? '#1a1a19' : '#e6e5e0',
+      needsUl: needsOnly ? 'underline' : 'none', legendBg: legend ? '#4a4a46' : '#2e2e2b',
+      toggleNeeds: () => this.setState({ needs: !needsOnly }), toggleLegend: () => this.setState({ legend: !legend }),
+    };
+  }
+}
+</script>
+</body>
+</html>

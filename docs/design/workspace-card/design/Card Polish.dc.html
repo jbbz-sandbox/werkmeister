@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<section style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;width:1900px;box-sizing:border-box;padding:56px 64px 80px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:flex;align-items:end;gap:24px;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · card polish · turn 1</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Workspace card: two polished directions</h1></div>
+    <p style="margin:0 0 0 auto;max-width:620px;font-size:15px;line-height:1.45;color:#5f5d56;text-wrap:pretty">Both keep the four questions, the words and the colour scale. What changes: fewer boxed pills, lamp-style status dots, mono IDs, a type tag, real button sizing and depth, and the question moved into the amber header. Pick <a href="#1a">1a</a> or <a href="#1b">1b</a> and I'll roll it into every board.</p>
+  </header>
+  <div style="display:grid;grid-template-columns:repeat(3,560px);gap:40px;margin-top:36px;align-items:start">
+    <div id="v1" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#85827a;color:#fff;padding:2px 8px;border-radius:3px">v1</span><b style="font-size:18px">Current</b><span style="color:#5f5d56;font-size:14px">label/value rows, pill per value</span></div>
+      <dc-import name="Workspace Card v1" ws-id="143" show-question="{{ true }}" hint-size="560px,280px"></dc-import>
+      <dc-import name="Workspace Card v1" ws-id="206" hint-size="560px,250px"></dc-import>
+      <dc-import name="Workspace Card v1" ws-id="151" hint-size="560px,250px"></dc-import>
+      <dc-import name="Workspace Card v1" ws-id="bwell" hint-size="560px,250px"></dc-import>
+    </div>
+    <div id="1a" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1f4e96;color:#fff;padding:2px 8px;border-radius:3px">1a</span><b style="font-size:18px">Refined rows</b><span style="color:#5f5d56;font-size:14px">same structure, ruled like a timetable</span></div>
+      <dc-import name="Workspace Card" look="rows" ws-id="143" show-question="{{ true }}" hint-size="560px,330px"></dc-import>
+      <dc-import name="Workspace Card" look="rows" ws-id="206" hint-size="560px,290px"></dc-import>
+      <dc-import name="Workspace Card" look="rows" ws-id="151" hint-size="560px,290px"></dc-import>
+      <dc-import name="Workspace Card" look="rows" ws-id="bwell" hint-size="560px,290px"></dc-import>
+    </div>
+    <div id="1b" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1f4e96;color:#fff;padding:2px 8px;border-radius:3px">1b</span><b style="font-size:18px">Instrument panel</b><span style="color:#5f5d56;font-size:14px">2 × 2 readouts in an inset well</span></div>
+      <dc-import name="Workspace Card" look="panel" ws-id="143" show-question="{{ true }}" hint-size="560px,330px"></dc-import>
+      <dc-import name="Workspace Card" look="panel" ws-id="206" hint-size="560px,290px"></dc-import>
+      <dc-import name="Workspace Card" look="panel" ws-id="151" hint-size="560px,290px"></dc-import>
+      <dc-import name="Workspace Card" look="panel" ws-id="bwell" hint-size="560px,290px"></dc-import>
+    </div>
+  </div>
+  <div style="margin-top:48px;display:flex;align-items:baseline;gap:12px"><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">Dark · edge cases</h2><span style="font:400 13px 'IBM Plex Mono',monospace;color:#5f5d56">1a left · 1b right</span></div>
+  <div style="--sd-bg:#141412;--sd-card:#1d1c19;--sd-hover:#2a2925;--sd-ink:#ecebe5;--sd-muted:#a6a39a;--sd-faint:#949189;--sd-line:#34322d;--sd-line-soft:#2a2925;--sd-ctl:#45433d;--sd-accent:#6d9ce8;--sd-on-accent:#0d1626;--sd-info:#8fb4f0;--sd-ok:#63c98a;--sd-ok-bg:#142a1c;--sd-ok-bd:#24563a;--sd-warn:#f0b453;--sd-warn-bg:#2e2310;--sd-warn-bd:#6b4d16;--sd-warn-solid:#f0b453;--sd-on-warn-solid:#241500;--sd-err:#ff8f84;--sd-err-bg:#351814;--sd-err-bd:#6e2a22;--sd-off:#a6a39a;--sd-off-bg:#26251f;--sd-off-bd:#3d3b35;--sd-pr:#c3a4ff;--sd-pr-bg:#241c38;--sd-pr-bd:#4b3a77;--sd-attn-bg:#241d0f;--sd-attn-bd:#c98a2c;background:var(--sd-bg);margin-top:16px;padding:32px;border-radius:8px;display:grid;grid-template-columns:repeat(2,560px);gap:20px 32px;align-items:start">
+    <dc-import name="Workspace Card" look="rows" ws-id="prerr" hint-size="560px,300px"></dc-import>
+    <dc-import name="Workspace Card" look="panel" ws-id="prerr" hint-size="560px,300px"></dc-import>
+    <dc-import name="Workspace Card" look="rows" ws-id="twoprs" hint-size="560px,300px"></dc-import>
+    <dc-import name="Workspace Card" look="panel" ws-id="twoprs" hint-size="560px,300px"></dc-import>
+    <dc-import name="Workspace Card" look="rows" ws-id="many" hint-size="560px,300px"></dc-import>
+    <dc-import name="Workspace Card" look="panel" ws-id="many" hint-size="560px,300px"></dc-import>
+    <dc-import name="Workspace Card" look="rows" ws-id="loading" hint-size="560px,300px"></dc-import>
+    <dc-import name="Workspace Card" look="panel" ws-id="loading" hint-size="560px,300px"></dc-import>
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

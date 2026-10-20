@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<main style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;width:1440px;box-sizing:border-box;padding:56px 64px 72px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">01</div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 1 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Principles</h1></div>
+    <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:420px;text-wrap:pretty">Seven rules that every surface follows. Each one has a don't (left) and a do (right). A design that breaks one of these is wrong, however good it looks.</div>
+  </header>
+
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:36px">
+
+    <section style="background:#fffdf8;border:1px solid #d9d5ca;border-radius:6px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:14px;align-items:baseline"><span style="font:700 34px/1 'Barlow Condensed',sans-serif;color:#1f4e96">1</span><h2 style="margin:0;font:600 20px 'Barlow',sans-serif">Every count names its unit</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="border:1px solid var(--sd-err-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-err)">✕ DON'T</span><div style="display:flex;gap:8px;flex-wrap:wrap;font-size:13px"><span style="padding:1px 7px;border-radius:999px;background:#e9f7ef;color:#1e7a46;font-weight:600">● up 0/2</span><span style="color:var(--sd-muted)">PR open (1/1) · 1/1</span></div></div>
+        <div style="border:1px solid var(--sd-ok-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-ok)">✓ DO</span><div style="display:flex;gap:8px;flex-wrap:wrap;font-size:13px"><span style="padding:0 7px;border-radius:4px;background:var(--sd-off-bg);border:1px solid var(--sd-off-bd);color:var(--sd-off);font-weight:600">0 of 2 up</span><span>ICM stage 2 of 4 · findings</span></div></div>
+      </div>
+    </section>
+
+    <section style="background:#fffdf8;border:1px solid #d9d5ca;border-radius:6px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:14px;align-items:baseline"><span style="font:700 34px/1 'Barlow Condensed',sans-serif;color:#1f4e96">2</span><h2 style="margin:0;font:600 20px 'Barlow',sans-serif">Colour is never the only carrier</h2><span style="font:400 12px 'IBM Plex Mono',monospace;color:#5f5d56">AA in light and dark</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="border:1px solid var(--sd-err-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-err)">✕ DON'T</span><div style="display:flex;gap:10px;align-items:center;font-size:13px"><span style="width:10px;height:10px;border-radius:50%;background:#29a35a"></span><span style="width:10px;height:10px;border-radius:50%;background:#c0392b"></span><span style="color:var(--sd-muted)">cli  stellwerk-dashboard</span></div></div>
+        <div style="border:1px solid var(--sd-ok-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-ok)">✓ DO</span><div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px"><span style="color:var(--sd-ok)">● cli</span><span style="color:var(--sd-err)">▲ stellwerk-dashboard unhealthy</span></div></div>
+      </div>
+    </section>
+
+    <section style="background:#fffdf8;border:1px solid #d9d5ca;border-radius:6px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:14px;align-items:baseline"><span style="font:700 34px/1 'Barlow Condensed',sans-serif;color:#1f4e96">3</span><h2 style="margin:0;font:600 20px 'Barlow',sans-serif">One colour scale for everything</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="border:1px solid var(--sd-err-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-err)">✕ DON'T</span><div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px;font-weight:600"><span style="padding:0 7px;border-radius:4px;color:#1d5fd6;border:1px solid #1d5fd6">◌ Working</span><span style="padding:0 7px;border-radius:4px;color:#d97757;border:1px solid #d97757">CI running</span><span style="padding:0 7px;border-radius:4px;color:#6b46c1;border:1px solid #6b46c1">Open</span></div><span style="font-size:12px;color:var(--sd-muted)">Each row has its own colours, and purple is used for an open PR</span></div>
+        <div style="border:1px solid var(--sd-ok-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-ok)">✓ DO</span><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:11px;font-weight:600;text-align:center"><span style="padding:6px 0;border-radius:3px;background:var(--sd-ok-bg);color:var(--sd-ok);border:1px solid var(--sd-ok-bd)">ok</span><span style="padding:6px 0;border-radius:3px;background:var(--sd-warn-bg);color:var(--sd-warn);border:1px solid var(--sd-warn-bd)">partial</span><span style="padding:6px 0;border-radius:3px;background:var(--sd-err-bg);color:var(--sd-err);border:1px solid var(--sd-err-bd)">failing</span><span style="padding:6px 0;border-radius:3px;background:var(--sd-off-bg);color:var(--sd-off);border:1px solid var(--sd-off-bd)">off</span><span style="padding:6px 0;border-radius:3px;background:var(--sd-pr-bg);color:var(--sd-pr);border:1px dashed var(--sd-pr-bd)">shipped</span></div><span style="font-size:12px;color:var(--sd-muted)">Containers, CI and the agent all use this scale. Purple is only for Merged and Released.</span></div>
+      </div>
+    </section>
+
+    <section style="background:#fffdf8;border:1px solid #d9d5ca;border-radius:6px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:14px;align-items:baseline"><span style="font:700 34px/1 'Barlow Condensed',sans-serif;color:#1f4e96">4</span><h2 style="margin:0;font:600 20px 'Barlow',sans-serif">The highlight means one thing: Needs you</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="border:1px solid var(--sd-err-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-err)">✕ DON'T</span><div style="border:1.5px solid #29a35a;border-radius:6px;padding:8px 10px;font-size:13px"><b>stellwerk-151-close-out-copy</b><div style="color:var(--sd-muted);font-size:12px">green border = “containers up”?</div></div></div>
+        <div style="border:1px solid var(--sd-ok-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-ok)">✓ DO</span><div style="border:1px solid var(--sd-attn-bd);box-shadow:0 0 0 1px var(--sd-attn-bd);background:var(--sd-attn-bg);border-radius:6px;padding:8px 10px;font-size:13px;display:flex;gap:8px;align-items:center"><b>stellwerk-143-wizard-defaults</b><span style="margin-left:auto;padding:0 7px;border-radius:4px;background:var(--sd-warn-solid);color:var(--sd-on-warn-solid);font-size:12px;font-weight:600">● Needs you</span></div><span style="font-size:12px;color:var(--sd-muted)">Every other card has a neutral border. The Containers row says the container state in words.</span></div>
+      </div>
+    </section>
+
+    <section style="background:#fffdf8;border:1px solid #d9d5ca;border-radius:6px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:14px;align-items:baseline"><span style="font:700 34px/1 'Barlow Condensed',sans-serif;color:#1f4e96">5</span><h2 style="margin:0;font:600 20px 'Barlow',sans-serif">One legend per surface</h2></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:13px">
+        <div style="border:1px solid var(--sd-line);border-radius:5px;padding:10px"><div style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-muted)">DASHBOARD</div><div style="margin-top:4px">Footer strip + help popover</div></div>
+        <div style="border:1px solid var(--sd-line);border-radius:5px;padding:10px"><div style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-muted)">MCP APP</div><div style="margin-top:4px">Footer under the list</div></div>
+        <div style="border:1px solid var(--sd-line);border-radius:5px;padding:10px;background:#1a1a19;color:#e6e5e0"><div style="font:600 11px 'IBM Plex Mono',monospace;color:#8a8984">PANE</div><div style="margin-top:4px"><span style="padding:0 6px;border-radius:5px;background:#4a4a46;font-weight:700">?</span> toggle above the list</div></div>
+        <div style="border:1px solid var(--sd-line);border-radius:5px;padding:10px;background:#181818;color:#cccccc"><div style="font:600 11px 'IBM Plex Mono',monospace;color:#9d9d9d">VS CODE</div><div style="margin-top:4px">Help view, from the ? in the view title</div></div>
+      </div>
+      <span style="font-size:12px;color:var(--sd-muted)">Same content and order everywhere: highlight, colour scale, agent glyphs, service glyphs, PR states, ⚙. See board <a href="09 Tokens and Legend.dc.html">09</a>.</span>
+    </section>
+
+    <section style="background:#fffdf8;border:1px solid #d9d5ca;border-radius:6px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:14px;align-items:baseline"><span style="font:700 34px/1 'Barlow Condensed',sans-serif;color:#1f4e96">6</span><h2 style="margin:0;font:600 20px 'Barlow',sans-serif">One verb per action, on every surface</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="border:1px solid var(--sd-err-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-err)">✕ DON'T</span><div style="display:flex;gap:6px;flex-wrap:wrap;font-size:13px"><span style="padding:2px 8px;border:1px solid var(--sd-ctl);border-radius:5px">Start</span><span style="padding:2px 8px;border:1px solid var(--sd-ctl);border-radius:5px">Launch</span><span style="padding:2px 8px;border:1px solid var(--sd-ctl);border-radius:5px">✕ Remove</span></div></div>
+        <div style="border:1px solid var(--sd-ok-bd);border-radius:5px;padding:14px;display:flex;flex-direction:column;gap:10px"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-ok)">✓ DO</span><div style="display:flex;gap:6px;flex-wrap:wrap;font-size:13px"><span style="padding:2px 8px;border:1px solid var(--sd-ctl);border-radius:5px">▶ Up</span><span style="padding:2px 8px;border:1px solid var(--sd-err);color:var(--sd-err);background:var(--sd-err-bg);border-radius:5px;font-weight:600">✓ Close out</span><span style="padding:2px 8px;border-radius:5px;background:var(--sd-err);color:#fff;font-weight:600">✕ Abandon…</span></div><span style="font-size:12px;color:var(--sd-muted)">There is no Remove. The only destructive verbs are Close out and Abandon, and Abandon looks more destructive.</span></div>
+      </div>
+    </section>
+
+    <section style="background:#fffdf8;border:1px solid #d9d5ca;border-radius:6px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px;grid-column:1/-1">
+      <div style="display:flex;gap:14px;align-items:baseline"><span style="font:700 34px/1 'Barlow Condensed',sans-serif;color:#1f4e96">7</span><h2 style="margin:0;font:600 20px 'Barlow',sans-serif">Every row has a loading state, so the card never jumps</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="border:1px solid var(--sd-err-bd);border-radius:5px;padding:14px;display:flex;gap:16px;align-items:flex-start"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-err)">✕ DON'T</span><div style="flex:1;border:1px solid var(--sd-line);border-radius:6px;padding:8px 10px;font-size:13px;height:28px"><b>stellwerk-220-starting</b> <span style="color:var(--sd-faint)">…</span></div><span style="font-size:22px;color:var(--sd-muted)">→</span><div style="flex:1;border:1px solid var(--sd-line);border-radius:6px;padding:8px 10px;font-size:13px;height:96px"><b>stellwerk-220-starting</b><div style="color:var(--sd-muted)">rows appear, list shifts 68px</div></div></div>
+        <div style="border:1px solid var(--sd-ok-bd);border-radius:5px;padding:14px;display:flex;gap:16px;align-items:flex-start"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--sd-ok)">✓ DO</span><div style="flex:1;border:1px solid var(--sd-line);border-radius:6px;padding:8px 10px;font-size:12px;height:96px;box-sizing:border-box;display:grid;grid-template-columns:70px 1fr;gap:4px 8px;align-content:start"><b style="grid-column:1/-1;font-size:13px">stellwerk-220-starting</b><span style="color:var(--sd-muted)">Containers</span><span style="color:var(--sd-faint)">▭ loading</span><span style="color:var(--sd-muted)">PRs</span><span style="color:var(--sd-faint)">▭ loading</span><span style="color:var(--sd-muted)">Workflow</span><span style="color:var(--sd-faint)">▭ loading</span></div><span style="font-size:22px;color:var(--sd-muted)">→</span><div style="flex:1;border:1px solid var(--sd-line);border-radius:6px;padding:8px 10px;font-size:12px;height:96px;box-sizing:border-box;display:grid;grid-template-columns:70px 1fr;gap:4px 8px;align-content:start"><b style="grid-column:1/-1;font-size:13px">stellwerk-220-starting</b><span style="color:var(--sd-muted)">Containers</span><span style="color:var(--sd-ok)">1 of 1 up</span><span style="color:var(--sd-muted)">PRs</span><span style="color:var(--sd-off)">none yet</span><span style="color:var(--sd-muted)">Workflow</span><span>ICM stage 1 of 4 · questions</span></div></div>
+      </div>
+    </section>
+  </div>
+</main>
+</x-dc>
+</body>
+</html>

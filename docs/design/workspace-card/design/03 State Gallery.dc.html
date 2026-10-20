@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"></meta><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:wght@600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap"></link><style>body{margin:0;background:#e9e6dd}a{color:#1f4e96}a:hover{color:#173d78}</style></helmet>
+<main style="width:1440px;box-sizing:border-box;padding:56px 64px 72px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
+  <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
+    <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">03</div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 3 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">State gallery</h1></div>
+    <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:380px;text-wrap:pretty">One card per sample workspace, then the edge cases. Full density, at the dashboard's two-column width (560px).</div>
+  </header>
+
+  <section style="margin-top:40px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1b1a17;color:#f4f2ec;padding:2px 8px;border-radius:3px">A</span><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">Sample data · light</h2></div>
+    <div style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-soft:#f8f6f0;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;background:var(--sd-bg);padding:28px;border-radius:6px;display:grid;grid-template-columns:repeat(2,560px);gap:16px;align-items:start;justify-content:start">
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">143 · Needs you · containers down · no PR</span><dc-import name="Workspace Card" ws-id="143" show-question="{{ true }}" hint-size="560px,260px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">206 · Working · Autonomous · Draft PR, CI running</span><dc-import name="Workspace Card" ws-id="206" hint-size="560px,240px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">151 · Done · one service unhealthy · Released · primary is ✓ Close out</span><dc-import name="Workspace Card" ws-id="151" hint-size="560px,240px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">bwell · Idle · down · no issue · CI failing · primary is ▶ Up</span><dc-import name="Workspace Card" ws-id="bwell" hint-size="560px,240px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">220 · loading · every row reserves its height</span><dc-import name="Workspace Card" ws-id="loading" hint-size="560px,240px"></dc-import></div>
+    </div>
+  </section>
+
+  <section style="margin-top:48px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1b1a17;color:#f4f2ec;padding:2px 8px;border-radius:3px">B</span><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">Sample data · dark</h2></div>
+    <div style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#141412;--sd-card:#1d1c19;--sd-soft:#22211e;--sd-hover:#2a2925;--sd-ink:#ecebe5;--sd-muted:#a6a39a;--sd-faint:#949189;--sd-line:#34322d;--sd-line-soft:#2a2925;--sd-ctl:#45433d;--sd-accent:#6d9ce8;--sd-on-accent:#0d1626;--sd-info:#8fb4f0;--sd-ok:#63c98a;--sd-ok-bg:#142a1c;--sd-ok-bd:#24563a;--sd-warn:#f0b453;--sd-warn-bg:#2e2310;--sd-warn-bd:#6b4d16;--sd-warn-solid:#f0b453;--sd-on-warn-solid:#241500;--sd-err:#ff8f84;--sd-err-bg:#351814;--sd-err-bd:#6e2a22;--sd-off:#a6a39a;--sd-off-bg:#26251f;--sd-off-bd:#3d3b35;--sd-pr:#c3a4ff;--sd-pr-bg:#241c38;--sd-pr-bd:#4b3a77;--sd-attn-bg:#241d0f;--sd-attn-bd:#c98a2c;background:var(--sd-bg);padding:28px;border-radius:6px;display:grid;grid-template-columns:repeat(2,560px);gap:16px;align-items:start;justify-content:start">
+      <dc-import name="Workspace Card" ws-id="143" hint-size="560px,240px"></dc-import>
+      <dc-import name="Workspace Card" ws-id="206" hint-size="560px,240px"></dc-import>
+      <dc-import name="Workspace Card" ws-id="151" hint-size="560px,240px"></dc-import>
+      <dc-import name="Workspace Card" ws-id="bwell" hint-size="560px,240px"></dc-import>
+    </div>
+  </section>
+
+  <section style="margin-top:48px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px"><span style="font:600 13px 'IBM Plex Mono',monospace;background:#1b1a17;color:#f4f2ec;padding:2px 8px;border-radius:3px">C</span><h2 style="margin:0;font:600 22px 'Barlow',sans-serif">Edge cases</h2><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:1px 6px;border-radius:3px">PROPOSAL · sample names invented</span></div>
+    <div style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-soft:#f8f6f0;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;background:var(--sd-bg);padding:28px;border-radius:6px;display:grid;grid-template-columns:repeat(2,560px);gap:16px;align-items:start;justify-content:start">
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">Long name · wraps anywhere; never truncated, the name is the identity</span><dc-import name="Workspace Card" ws-id="long" hint-size="560px,240px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">Two PRs in different states · one line per PR</span><dc-import name="Workspace Card" ws-id="twoprs" hint-size="560px,260px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">7 services · services wrap; the summary pill stays first</span><dc-import name="Workspace Card" ws-id="many" hint-size="560px,260px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">No issue · “no issue” keeps the head’s rhythm · Open issue ↗ disabled in ⋯</span><dc-import name="Workspace Card" ws-id="noissue" menu-open="{{ true }}" hint-size="560px,240px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">Error fetching PRs · amber, with retry</span><dc-import name="Workspace Card" ws-id="prerr" hint-size="560px,240px"></dc-import></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#5f5d56">Docker unreachable · grey, never green</span><dc-import name="Workspace Card" ws-id="dockerdown" hint-size="560px,240px"></dc-import></div>
+    </div>
+  </section>
+</main>
+</x-dc>
+</body>
+</html>
