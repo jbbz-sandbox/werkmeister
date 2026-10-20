@@ -22,6 +22,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { stopOrRestart } from "./compose.js";
 import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
 import { sandboxHome } from "./config.js";
 import { projectContainers } from "./docker.js";
@@ -323,17 +324,20 @@ export async function down(volumes = false): Promise<void> {
 /** Stop shared infrastructure containers without removing them. */
 export async function stop(): Promise<void> {
   await stopAll();
-  if (composeCmd(["stop"])) {
-    success(
-      "Shared infrastructure stopped (containers preserved, resumable with 'sandbox up infra')",
-    );
+  const err = await stopOrRestart("stop", INFRA_PROJECT);
+  if (err) {
+    error(err);
+    return;
   }
+  success(
+    "Shared infrastructure stopped (containers preserved, resumable with 'sandbox up infra')",
+  );
 }
 
 /** Restart shared infrastructure containers. */
 export async function restart(): Promise<void> {
-  if (composeCmd(["restart"])) {
-    success("Shared infrastructure restarted");
-  }
+  const err = await stopOrRestart("restart", INFRA_PROJECT);
+  if (err) error(err);
+  else success("Shared infrastructure restarted");
   await restartAll();
 }
