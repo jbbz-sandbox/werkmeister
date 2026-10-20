@@ -23,7 +23,7 @@ export type WorkspaceRow = {
     state: "working" | "ready" | "pr-open" | "merged" | "shipped" | "closed-out" | "abandoned";
     prs: { dir: string; status: string; url: string | null }[];
   } | null;
-  /** Title of the workspace's newest on-disk Claude session. */
+  /** Title of the workspace's newest on-disk Claude session; the card shows none (SW-52), Continue needs one. */
   sessionTitle: string | null;
   /** That session's transcript `entrypoint`: claude-vscode, claude-desktop, sdk-cli, ...; null when unknown. */
   sessionOrigin: string | null;
@@ -31,8 +31,18 @@ export type WorkspaceRow = {
   running: number;
   total: number;
   services: ServiceHealth[];
-  /** The agent state core reports (SW-46); null while idle. */
-  claude: "working" | "needs-you" | "done" | null;
+  /** The agent state core reports (SW-46): idle with no status, `at` and `question` null when unknown. */
+  claude: {
+    agent: "working" | "needs-you" | "done" | "idle";
+    at: string | null;
+    question: string | null;
+  };
+  /** JIT phase from the newest live note (SW-47), or null. */
+  phase: string | null;
+  /** `autonomous` in workspace.yml. */
+  autonomous: boolean;
+  /** mtime (ISO) of the newest Claude transcript, or null. */
+  lastActivity: string | null;
   /** The desktop-app session whose cwd lies in this workspace. */
   /** `beside`: this session started it, so the app will open it in split view next to this one. */
   /** `pinned`: the session is pinned in the app's sidebar. */
@@ -51,10 +61,16 @@ export type RepoPr = {
   url: string | null;
   state: "OPEN" | "MERGED" | "CLOSED" | null;
   title: string | null;
+  /** Absent from a core older than SW-47. */
+  ci?: "pass" | "running" | "fail" | null;
+  failingChecks?: number;
 };
 
 /** One container's health, as workspace-status reports it. */
-export type ServiceHealth = { name: string; state: "healthy" | "starting" | "running" | "down" };
+export type ServiceHealth = {
+  name: string;
+  state: "healthy" | "starting" | "unhealthy" | "running" | "down";
+};
 
 /** Shared infra (`sandbox connect`): the `infra` block of workspace-status. */
 export type InfraStatus = {
@@ -141,8 +157,14 @@ declare module "claude-code" {
       intercepts: InterceptsSnapshot | null;
       /** The configured issue tracker's sign-in check; null until checked or if the check failed. */
       tracker: { ok: boolean; reason?: string; fix: string } | null;
-      /** Each workspace's repo PRs by workspace name; refreshed slower than rows, as each is a `gh` call. */
+      /** Each workspace's repo PRs by workspace name; unset before the first poll (cards say `loading…`), refreshed slower than rows, as each is a `gh` call. */
       prs: Record<string, RepoPr[]>;
+      /** How the last PR poll ended; `failed` reads `PRs unavailable · retry` on the cards. */
+      prsPoll: "ok" | "failed";
+      /** The card whose ⋯ menu is open, by workspace name; '' when none. */
+      menu: string;
+      /** The ? legend is shown. */
+      legend: boolean;
       /** The pane's open tab. */
       tab: "list" | "create";
       /** List only workspaces labelled `focus`. */

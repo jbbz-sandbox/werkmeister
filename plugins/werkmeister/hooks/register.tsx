@@ -1,4 +1,4 @@
-import type { EngineInterface, Register } from "claude-code";
+import type { Color, EngineInterface, Register } from "claude-code";
 
 import type {
   Draft,
@@ -11,6 +11,7 @@ import type {
   ServiceHealth,
   WorkspaceRow,
 } from "../types";
+import { displayModel, type Tone, type WorkspaceDisplay } from "./display-model";
 
 export const PLUGIN = "werkmeister";
 export const PANE = "workspaces";
@@ -166,6 +167,9 @@ const INTERCEPTS = { plugin: "werkmeister", key: "intercepts" } as const;
 /** CONFIRM prefix for a pending intercept ON: `intercept:<workspace>/<service>`. */
 const INTERCEPT = "intercept:";
 const PRS = { plugin: "werkmeister", key: "prs" } as const;
+const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
+const MENU = { plugin: "werkmeister", key: "menu" } as const;
+const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
 /** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
 const CONNECTING = "(connect)";
 
@@ -552,7 +556,15 @@ type StatusResult = {
     running: number;
     total: number;
     services: ServiceHealth[];
-    claude: { state: string; agent: "working" | "needs-you" | "done" | "idle" };
+    claude: {
+      state: string;
+      agent: "working" | "needs-you" | "done" | "idle";
+      at?: string | null;
+      question?: string | null;
+    };
+    phase?: string | null;
+    autonomous?: boolean;
+    lastActivity?: string | null;
   }[];
 };
 type SessionInfo = {
@@ -629,8 +641,14 @@ export function buildRows(
       running: s?.running ?? 0,
       total: s?.total ?? 0,
       services: s?.services ?? [],
-      // Idle draws nothing: the card stays quiet until there is a session to report on.
-      claude: s && s.claude.agent !== "idle" ? s.claude.agent : null,
+      claude: {
+        agent: s?.claude.agent ?? "idle",
+        at: s?.claude.at ?? null,
+        question: s?.claude.question ?? null,
+      },
+      phase: s?.phase ?? null,
+      autonomous: s?.autonomous ?? false,
+      lastActivity: s?.lastActivity ?? null,
       session: sessionFor(w.path, allPaths, sessions),
     };
   });
@@ -640,15 +658,6 @@ export function buildRows(
 export function visibleRows(rows: WorkspaceRow[], focus: boolean): WorkspaceRow[] {
   return focus ? rows.filter((r) => r.labels.includes("focus")) : rows;
 }
-
-/** The card border carries the state; nothing else in the card repeats it. */
-const BORDER: Record<WorkspaceRow["state"], "success" | "warning" | "inactive"> = {
-  up: "success",
-  partial: "warning",
-  stopped: "inactive",
-  down: "inactive",
-  unknown: "warning",
-};
 
 /** PR file statuses that say more than gh can: shipped is merged and released, abandoned is the workspace's call. */
 const PAST_GH = new Set(["shipped", "abandoned"]);
@@ -681,57 +690,82 @@ export function withLivePrs(r: WorkspaceRow, live: RepoPr[]): WorkspaceRow {
   return { ...r, lifecycle: { state, prs } };
 }
 
-/** Past `working`, the lifecycle says more than the stage does (every stage has output by then). */
-export function lifecycleLabel(r: WorkspaceRow): string | null {
-  const l = r.lifecycle;
-  if (!l || l.state === "working") return null;
-  if (l.state === "pr-open")
-    return `PR open (${l.prs.filter((p) => p.status === "open").length}/${l.prs.length})`;
-  return {
-    ready: "ready to open",
-    merged: "merged — awaiting release",
-    shipped: "shipped — close out",
-    "closed-out": "closed out",
-    abandoned: "abandoned",
-  }[l.state];
-}
-
-/** The card's detail line: work type (when no issue line carries it), lifecycle or ICM stage, running/total; '' when none. */
-export function cardMeta(r: WorkspaceRow): string {
-  return [
-    r.issueId ? null : r.workType,
-    lifecycleLabel(r) ??
-      (r.stage ? `stage ${r.stage.index}/${r.stage.total} ${r.stage.name}` : null),
-    r.total > 0 ? `${r.running}/${r.total}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-/** The Claude flag at the header's right edge: needing you is the one thing a glance must catch. */
-const CLAUDE: Record<
-  NonNullable<WorkspaceRow["claude"]>,
-  { text: string; color: "warning" | "claude" | "success" }
-> = {
-  "needs-you": { text: "● Needs you", color: "warning" },
-  working: { text: "◌ Working", color: "claude" },
-  done: { text: "✓ Done", color: "success" },
+/** The display model's tones in the pane's named colours: the pane has no solid amber, so Needs you is bold warning. */
+const TONE: Record<Tone, Color> = {
+  ok: "success",
+  warn: "warning",
+  err: "error",
+  off: "inactive",
+  pr: "merged",
+  needs: "warning",
 };
 
-/** The session line's title: the desktop session in the folder, else the newest on-disk session. */
-export function sessionTitle(r: WorkspaceRow): string | null {
-  return r.session?.title ?? r.sessionTitle;
+/** The shared display model (docs/ui-spec.md § The card) for one row; `prs` null when the PR poll failed. */
+export function display(r: WorkspaceRow, prs: RepoPr[] | null, now: Date): WorkspaceDisplay {
+  return displayModel(r, {
+    // Not `prs?.map`: null (lookup failed) must reach the model as null, not as undefined (no PRs).
+    prs:
+      prs === null
+        ? null
+        : prs.map((p) => ({
+            url: p.url,
+            state: p.state,
+            ci: p.ci ?? null,
+            failingChecks: p.failingChecks ?? 0,
+          })),
+    lifecycle: r.lifecycle?.state ?? null,
+    now,
+  });
 }
 
-/** Where the session shown started: Desktop, VS Code, or CLI. */
-export function sessionOrigin(r: WorkspaceRow): "Desktop" | "VS Code" | "CLI" | null {
-  if (r.session) return "Desktop";
-  if (r.sessionOrigin === null) return null;
-  return r.sessionOrigin === "claude-vscode"
-    ? "VS Code"
-    : r.sessionOrigin === "claude-desktop"
-      ? "Desktop"
-      : "CLI";
+/** One run of the compact status line: `key` parts are the dim labels, `href` makes it a link. */
+export type Part = { text: string; tone?: Tone; key?: true; href?: string };
+
+/**
+ * The compact line, always containers · PRs · workflow (ui-spec § The card → Compact). `loaded` is false
+ * before the first PR poll, which would otherwise read as `None yet`.
+ */
+export function metaParts(d: WorkspaceDisplay, loaded: boolean): Part[] {
+  const sep: Part = { text: " · ", key: true };
+  const prs: Part[] =
+    d.prsEmpty?.tone === "warn"
+      ? [{ text: `${d.prsEmpty.text} · retry`, tone: "warn" }]
+      : [
+          { text: "PRs ", key: true },
+          ...(!loaded
+            ? [{ text: "loading…", key: true } as const]
+            : d.prsEmpty
+              ? [{ text: d.prsEmpty.text, tone: d.prsEmpty.tone }]
+              : d.prs.flatMap((p, i): Part[] => [
+                  ...(i ? [{ text: ", ", key: true } as const] : []),
+                  { text: p.ref, href: p.url },
+                  { text: ` ${p.state.text}`, tone: p.state.tone },
+                  ...(p.ci ? [sep, { text: p.ci.text, tone: p.ci.tone }] : []),
+                ])),
+        ];
+  return [
+    { text: "containers ", key: true },
+    { text: d.containers.text, tone: d.containers.tone },
+    sep,
+    ...prs,
+    ...(d.workflow.kind === "none" ? [] : [sep, { text: d.workflow.compact }]),
+  ];
+}
+
+/** The subtitle: work type · task title from workspace.yml, never the session title (SW-52). */
+export function subtitle(r: WorkspaceRow): string {
+  const type = r.workType
+    ? (WORK_TYPE[r.workType] ?? r.workType.charAt(0).toUpperCase() + r.workType.slice(1))
+    : null;
+  return [type, r.task].filter(Boolean).join(" · ");
+}
+
+/** The design's type tags (Bug, Feature, …); the wizard's `bugfix` reads as Bug. */
+const WORK_TYPE: Record<string, string> = { bugfix: "Bug" };
+
+/** A session Continue can pick up: one the app lists, or the newest on disk. */
+function hasSession(r: WorkspaceRow): boolean {
+  return r.session !== null || r.sessionTitle !== null;
 }
 
 /**
@@ -749,13 +783,7 @@ export function newSessionLink(path: string): string {
   return `claude://code/new?folder=${encodeURIComponent(path)}&source=services`;
 }
 
-/** The session line: `session · VS Code · title`. */
-export function sessionLine(r: WorkspaceRow): string | null {
-  const title = sessionTitle(r);
-  return title ? ["session", sessionOrigin(r), title].filter(Boolean).join(" · ") : null;
-}
-
-/** The infra line: `infra · partial · 4/5 · down: caddy`; services not healthy or running are named. */
+/** The infra line: `infra partial · 4 of 5 up · down: caddy`; services not healthy or running are named. */
 export function infraLine(
   i: InfraStatus | null,
   t: { ok: boolean; reason?: string; fix: string } | null = null,
@@ -765,40 +793,10 @@ export function infraLine(
   const bad = i.services
     .filter((s) => s.state !== "healthy" && s.state !== "running")
     .map((s) => `${s.state}: ${s.name}`);
-  return ["infra", i.state, i.total > 0 ? `${i.running}/${i.total}` : null, ...bad, tracker]
+  return [`infra ${i.state}`, i.total > 0 ? `${i.running} of ${i.total} up` : null, ...bad, tracker]
     .filter(Boolean)
     .join(" · ");
 }
-
-/** The issue line's prefix: the work type, as the issue's kind. */
-export function issueKind(r: WorkspaceRow): string {
-  return r.workType ?? "issue";
-}
-
-/** The PRs worth a link: those that exist. Label `org/repo#N`, as GitHub refs are written, from the PR URL. */
-export function prLinks(
-  prs: RepoPr[],
-): { key: string; href: string; label: string; state: RepoPr["state"] }[] {
-  return prs.flatMap((p) => {
-    if (!p.url) return [];
-    const m = p.url.match(/^https:\/\/[^/]+\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-    return [
-      {
-        key: p.url,
-        href: p.url,
-        label: m ? `${m[1]}#${m[2]}` : `${p.repo}#${p.url.split("/").pop()}`,
-        state: p.state,
-      },
-    ];
-  });
-}
-
-/** GitHub's state colours for the merge icon and state after the link: green open, purple merged, red closed. */
-const PR_COLOR: Record<NonNullable<RepoPr["state"]>, "success" | "merged" | "error"> = {
-  OPEN: "success",
-  MERGED: "merged",
-  CLOSED: "error",
-};
 
 const INFRA_COLOR: Record<InfraStatus["state"], "success" | "warning" | "error"> = {
   up: "success",
@@ -940,13 +938,6 @@ async function pressIntercept(
   await tick($);
 }
 
-const SERVICE_COLOR: Record<ServiceHealth["state"], "success" | "warning" | "error" | undefined> = {
-  healthy: "success",
-  starting: "warning",
-  running: undefined,
-  down: "error",
-};
-
 export type Action =
   | "up"
   | "stop"
@@ -958,18 +949,10 @@ export type Action =
   | "pin"
   | "prs"
   | "closeout"
-  | "abandon";
+  | "abandon"
+  | "cancel";
 type Lifecycle = "up" | "stop" | "restart" | "down";
 const LIFECYCLE = new Set<Action>(["up", "stop", "restart", "down"]);
-
-/** Mirrors the VS Code extension's `view/item/context` when-clauses. */
-export function buttonsFor(state: WorkspaceRow["state"]): Action[] {
-  const out: Action[] = [];
-  if (state === "down" || state === "stopped" || state === "partial") out.push("up");
-  if (state === "up" || state === "partial") out.push("stop");
-  out.push("restart", "down", "new");
-  return out;
-}
 
 const LABEL: Record<Exclude<Action, "continue" | "pin">, string> = {
   up: "▶ Up",
@@ -978,31 +961,63 @@ const LABEL: Record<Exclude<Action, "continue" | "pin">, string> = {
   down: "⏻ Down",
   new: "＋ New session",
   beside: "⇆ Open beside",
-  prs: "↻ PRs",
+  prs: "↻ Refresh PRs",
   closeout: "✓ Close out",
   abandon: "✕ Abandon…",
+  cancel: "Cancel",
 };
 
-/** The lifecycle buttons a row offers: refresh PR state while one is in flight. */
-export function lifecycleButtonsFor(r: WorkspaceRow): "prs"[] {
-  const s = r.lifecycle?.state;
-  return s === "pr-open" || s === "merged" ? ["prs"] : [];
-}
+/** What a card offers, in the order the bar and the ⋯ menu draw it; `issue` is the Open issue link. */
+export type CardActions = { primary: Action; bar: Action[]; menu: (Action | "issue")[] };
+
+/** The ⋯ menu's leftover lifecycle and session buttons, in this order (06 Actions). */
+const EXTRAS: Action[] = ["continue", "stop", "restart", "down", "new"];
 
 /**
- * The card's one end-of-workspace button (#160): Close out once every PR settled (or a spike with none, or a
- * retry after a failed removal), else Abandon, which needs a typed reason, so none where no Input draws.
+ * ui-spec § Actions: the display model's primary, two secondaries, and everything else in ⋯ in the spec's order.
+ * The secondaries follow the containers (06 Actions): Up and New while nothing runs, else Stop and Restart, with
+ * Down in Stop's place once the work shipped; when the primary is one of them, Continue takes its slot.
  */
-export function endActionFor(r: WorkspaceRow, canType: boolean): "closeout" | "abandon" | null {
+export function actionsFor(r: WorkspaceRow, d: WorkspaceDisplay, canType: boolean): CardActions {
+  const session = hasSession(r);
+  const off = r.state === "down" || r.state === "stopped";
+  const shipped = r.lifecycle?.state === "shipped";
+  const want: Action = d.primary.action === "close-out" ? "closeout" : d.primary.action;
+  // Continue with no session would resume nothing: New session takes its place.
+  const primary: Action = want === "continue" && !session ? "new" : want;
+  const pair: Action[] = off ? ["up", "new"] : shipped ? ["restart", "down"] : ["stop", "restart"];
+  const bar = pair.flatMap((a): Action[] => (a !== primary ? [a] : session ? ["continue"] : []));
+  const allowed = (a: Action) =>
+    a === "continue"
+      ? session
+      : off
+        ? a === "new" || (a === "down" && r.state === "stopped")
+        : !(shipped && a === "stop");
+  return {
+    primary,
+    bar,
+    menu: [
+      ...EXTRAS.filter((a) => allowed(a) && a !== primary && !bar.includes(a)),
+      ...(r.session?.beside ? (["beside"] as const) : []),
+      ...(r.session ? (["pin"] as const) : []),
+      "prs",
+      ...(r.issueUrl ? (["issue"] as const) : []),
+      ...(canCloseOut(r) && primary !== "closeout" ? (["closeout"] as const) : []),
+      // Abandon needs a typed reason, so none where no Input draws.
+      ...(canType ? (["abandon"] as const) : []),
+    ],
+  };
+}
+
+/** Close out applies (#160) once every PR settled, to a spike with none, or as a retry after a failed removal. */
+export function canCloseOut(r: WorkspaceRow): boolean {
   const s = r.lifecycle?.state;
-  if (
+  return (
     s === "shipped" ||
     s === "abandoned" ||
     s === "closed-out" ||
     (r.workType === "spike" && !r.lifecycle?.prs.length)
-  )
-    return "closeout";
-  return canType ? "abandon" : null;
+  );
 }
 
 /** CONFIRM holds `close-out:<name>` or `abandon:<name>` between the two presses. */
@@ -1081,6 +1096,8 @@ async function runAction(
               600000,
             );
       await $.state.set(NOTE, r.command.split("\n")[0]?.trim() || "done");
+      // ↻ Refresh PRs is also the retry for `PRs unavailable`.
+      if (action === "prs") await prTick($);
     }
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message);
@@ -1095,11 +1112,16 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   const { value: busy = "" } = await $.state.get(BUSY);
   if (busy !== "") return;
 
+  await $.state.set(MENU, "");
   const { value: pending = "" } = await $.state.get(CONFIRM);
-  if (pending !== "" && pending !== CLOSE_OUT + name && pending !== ABANDON + name) {
+  if (
+    action === "cancel" ||
+    (pending !== "" && pending !== CLOSE_OUT + name && pending !== ABANDON + name)
+  ) {
     await $.state.set(CONFIRM, "");
     await $.state.set(REASON, "");
   }
+  if (action === "cancel") return;
 
   if (action === "new") {
     const { value: rows = [] } = await $.state.get(ROWS);
@@ -1228,15 +1250,18 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
 }
 
 let prTicking = false;
-/** Refreshes PRs once; a failure keeps the last ones shown. */
+/** Refreshes PRs once; a failure marks every card `PRs unavailable` until a poll succeeds. */
 async function prTick($: EngineInterface): Promise<void> {
   if (prTicking) return;
   prTicking = true;
   try {
     const r = await core<{ name: string; repos: RepoPr[] }[]>($, "workspace-prs", {}, 120000);
+    const { value: poll } = await $.state.get(PRS_POLL);
     await $.state.set(PRS, Object.fromEntries(r.map((w) => [w.name, w.repos])));
+    if (poll === "failed") await $.state.set(PRS_POLL, "ok");
   } catch {
-    // gh missing or offline: keep what's shown.
+    // The failure may be this environment ending (a reload, a closed pane), which refuses the write too.
+    await $.state.set(PRS_POLL, "failed").catch(() => undefined);
   } finally {
     prTicking = false;
   }
@@ -1456,7 +1481,8 @@ export const register: Register = (on) => {
 
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Link } = $.ui.resolve(e);
-    const { value: rows = [] } = await $.state.get(ROWS);
+    const { value: loadedRows } = await $.state.get(ROWS);
+    const rows = loadedRows ?? [];
     const { value: error = "" } = await $.state.get(ERROR);
     const { value: note = "" } = await $.state.get(NOTE);
     const { value: busy = "" } = await $.state.get(BUSY);
@@ -1465,10 +1491,16 @@ export const register: Register = (on) => {
     const { value: infra = null } = await $.state.get(INFRA);
     const { value: snap = null } = await $.state.get(INTERCEPTS);
     const { value: tracker = null } = await $.state.get(TRACKER);
-    const { value: prs = {} } = await $.state.get(PRS);
+    const { value: polled } = await $.state.get(PRS);
+    const prs = polled ?? {};
     const { value: tab = "list" } = await $.state.get(TAB);
     const { value: focus = false } = await $.state.get(FOCUS);
+    const { value: menu = "" } = await $.state.get(MENU);
+    const { value: legend = false } = await $.state.get(LEGEND);
+    const { value: prsPoll } = await $.state.get(PRS_POLL);
+    const now = new Date(await $.clock.now());
     const shown = visibleRows(rows, focus).map((r) => withLivePrs(r, prs[r.name] ?? []));
+    const needing = rows.filter((r) => r.claude.agent === "needs-you").length;
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e);
     const Input = "Input" in els ? els.Input : null;
@@ -1478,7 +1510,7 @@ export const register: Register = (on) => {
       <Box key="tabs" gap={1} marginBottom={1}>
         <Button
           key="tab:list"
-          label="Workspaces"
+          label={`Workspaces${needing ? ` · ${needing} need${needing === 1 ? "s" : ""} you` : ""}`}
           variant={tab === "list" ? "primary" : "secondary"}
           onPress={() => void $.state.set(TAB, "list")}
         />
@@ -1495,6 +1527,9 @@ export const register: Register = (on) => {
             label={`${focus ? "☑" : "☐"} Focused only`}
             onPress={() => void $.state.set(FOCUS, !focus)}
           />
+        )}
+        {tab === "list" && (
+          <Button key="legend" plain label="?" onPress={() => void $.state.set(LEGEND, !legend)} />
         )}
       </Box>
     );
@@ -1686,6 +1721,226 @@ export const register: Register = (on) => {
       );
     }
 
+    const canType = Input !== null;
+    const part = (p: Part, i: number) =>
+      p.href ? (
+        <Link key={`p${i}`} href={p.href} label={p.text} />
+      ) : (
+        <Text key={`p${i}`} color={p.tone && TONE[p.tone]} dimColor={p.key}>
+          {p.text}
+        </Text>
+      );
+    const card = (r: WorkspaceRow) => {
+      const d = display(r, prsPoll === "failed" ? null : (prs[r.name] ?? []), now);
+      const acts = actionsFor(r, d, canType);
+      const label = (a: Action) =>
+        a === "continue"
+          ? `↗ Continue in ${continueTarget(r)}`
+          : a === "pin"
+            ? r.session?.pinned
+              ? "📌 Unpin"
+              : "📌 Pin"
+            : LABEL[a];
+      const button = (a: Action, variant: "primary" | "secondary", plain?: true) => (
+        <Button
+          key={`${a}:${r.name}`}
+          label={label(a)}
+          variant={variant}
+          plain={plain}
+          // Buttons take no colour; Abandon's label turns red under the pointer.
+          {...(a === "abandon"
+            ? { dimColor: true, hover: { color: "error", dimColor: false } }
+            : {})}
+          onPress={() => void press($, a, r.name)}
+        />
+      );
+      const sub = subtitle(r);
+      const confirming =
+        confirm === CLOSE_OUT + r.name
+          ? "closeout"
+          : confirm === ABANDON + r.name
+            ? "abandon"
+            : null;
+      return (
+        <Box
+          key={`ws:${r.name}`}
+          flexDirection="column"
+          // The highlight means one thing (ui-spec rule 4): only Needs you changes the border.
+          borderStyle={d.needs ? "bold" : "round"}
+          borderColor={d.needs ? "warning" : "inactive"}
+          borderDimColor={d.needs ? undefined : true}
+          paddingX={1}
+          marginBottom={1}
+        >
+          <Box key={`head:${r.name}`} justifyContent="space-between" gap={1}>
+            <Box key={`row:${r.name}`}>
+              <Text bold>{r.name}</Text>
+            </Box>
+            <Box key={`chips:${r.name}`} gap={2}>
+              <Box key={`claude:${r.name}`}>
+                <Text color={TONE[d.agent.tone]} bold={d.needs}>
+                  {d.agent.label}
+                </Text>
+              </Box>
+              {d.autonomous && (
+                <Box key={`auto:${r.name}`}>
+                  <Text>{d.autonomous.compact}</Text>
+                </Box>
+              )}
+            </Box>
+          </Box>
+          {sub !== "" && (
+            <Box key={`task:${r.name}`}>
+              <Text>{sub}</Text>
+            </Box>
+          )}
+          <Box key={`meta:${r.name}`}>
+            <Text>{metaParts(d, polled !== undefined || prsPoll === "failed").map(part)}</Text>
+          </Box>
+          {d.question && (
+            <Box key={`question:${r.name}`}>
+              <Text>
+                <Text color="warning">{"▸ asked: "}</Text>
+                <Text dimColor>{`“${d.question}”`}</Text>
+              </Text>
+            </Box>
+          )}
+          {r.services.map((svc, i) => {
+            const row = snap?.intercepts.find(
+              (x) => x.feature === r.feature && x.service === svc.name,
+            );
+            const c = interceptControl(svc.name, row, r.feature, snap);
+            if (!c) return null;
+            const glyph = d.services[i];
+            const asking = confirm === `${INTERCEPT}${r.name}/${svc.name}`;
+            const idle = busy !== r.name;
+            return (
+              <Box key={`svc:${r.name}/${svc.name}`} gap={1}>
+                <Text>
+                  <Text color={glyph ? TONE[glyph.tone] : undefined}>{glyph?.glyph ?? "●"}</Text>{" "}
+                  {svc.name}
+                </Text>
+                {c.kind === "off" && idle && !asking && (
+                  <Button
+                    key={`intercept:${r.name}/${svc.name}`}
+                    label="Intercept"
+                    variant="secondary"
+                    onPress={() => void pressIntercept($, "ask", r.name, svc.name)}
+                  />
+                )}
+                {c.kind === "off" && idle && asking && (
+                  <Box gap={1}>
+                    <Text color="warning">
+                      {`Intercept ${svc.name}? Installs a traffic-agent sidecar on ${row?.deployment ?? svc.name} in the shared dev cluster.`}
+                    </Text>
+                    <Button
+                      key={`intercept-yes:${r.name}/${svc.name}`}
+                      label="✓ Yes, intercept"
+                      variant="secondary"
+                      onPress={() => void pressIntercept($, "yes", r.name, svc.name)}
+                    />
+                    <Button
+                      key={`intercept-cancel:${r.name}/${svc.name}`}
+                      label="Cancel"
+                      variant="secondary"
+                      onPress={() => void pressIntercept($, "cancel", r.name, svc.name)}
+                    />
+                  </Box>
+                )}
+                {c.kind === "active" && <Text color="success">{c.text}</Text>}
+                {c.kind === "active" && idle && (
+                  <Button
+                    key={`leave:${r.name}/${svc.name}`}
+                    label="Leave"
+                    variant="secondary"
+                    onPress={() => void pressIntercept($, "leave", r.name, svc.name)}
+                  />
+                )}
+                {c.kind !== "off" && c.kind !== "active" && <Text dimColor>{c.text}</Text>}
+              </Box>
+            );
+          })}
+          {busy === r.name ? (
+            <Box key={`busy:${r.name}`}>
+              <Text dimColor>working…</Text>
+            </Box>
+          ) : confirming === "closeout" ? (
+            <Box key={`confirm:${r.name}`} flexDirection="column" marginTop={1}>
+              <Text color="error" bold>{`Close out ${r.name}?`}</Text>
+              <Text dimColor>
+                Issue → Done, closeout.md, workspace removed, merged branches deleted.
+              </Text>
+              <Box key={`confirm-buttons:${r.name}`} gap={1} marginTop={1}>
+                <Button
+                  key={`closeout:${r.name}`}
+                  label="✓ Yes, close out"
+                  variant="secondary"
+                  onPress={() => void press($, "closeout", r.name)}
+                />
+                {button("cancel", "secondary")}
+              </Box>
+            </Box>
+          ) : confirming === "abandon" ? (
+            <Box key={`confirm:${r.name}`} flexDirection="column" marginTop={1}>
+              <Text color="error" bold>{`✕ Abandon ${r.name}?`}</Text>
+              <Text dimColor>Reason posted on the issue; workspace removed, branches kept.</Text>
+              {Input && (
+                <Input
+                  key={`reason:${r.name}`}
+                  placeholder="Why abandon? (required)"
+                  value={reason}
+                  submitLabel="save"
+                  onInput={(v) => void $.state.set(REASON, v)}
+                  onSubmit={(v) => void $.state.set(REASON, v)}
+                />
+              )}
+              <Box key={`confirm-buttons:${r.name}`} gap={1} marginTop={1}>
+                <Button
+                  key={`abandon:${r.name}`}
+                  label="✕ Yes, abandon"
+                  variant="secondary"
+                  onPress={() => void press($, "abandon", r.name)}
+                />
+                {button("cancel", "secondary")}
+              </Box>
+            </Box>
+          ) : (
+            <Box key={`actions:${r.name}`} flexDirection="column" marginTop={1}>
+              <Box key={`bar:${r.name}`} gap={1}>
+                {button(acts.primary, "primary")}
+                {acts.bar.map((a) => button(a, "secondary"))}
+                <Button
+                  key={`more:${r.name}`}
+                  label="⋯"
+                  variant="secondary"
+                  onPress={() => void $.state.set(MENU, menu === r.name ? "" : r.name)}
+                />
+              </Box>
+              {menu === r.name && (
+                <Box
+                  key={`menu:${r.name}`}
+                  flexDirection="column"
+                  borderStyle="round"
+                  borderColor="inactive"
+                  paddingX={1}
+                >
+                  {acts.menu.map((a) =>
+                    a === "issue" ? (
+                      <Box key={`issue:${r.name}`}>
+                        <Link href={r.issueUrl ?? ""} label="Open issue ↗" />
+                      </Box>
+                    ) : (
+                      button(a, "secondary", true)
+                    ),
+                  )}
+                </Box>
+              )}
+            </Box>
+          )}
+        </Box>
+      );
+    };
+
     return (
       <Box flexDirection="column">
         {tabs}
@@ -1700,237 +1955,62 @@ export const register: Register = (on) => {
           ) : (
             <Button
               key="connect"
-              label="⚡ Connect"
+              label="⚡ Connect infra"
               variant="secondary"
               onPress={() => void connect($)}
             />
           )}
         </Box>
-        {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
-        {shown.map((r) => (
+        {legend && (
           <Box
-            key={`ws:${r.name}`}
+            key="legend-box"
             flexDirection="column"
             borderStyle="round"
-            borderColor={BORDER[r.state]}
-            borderDimColor={BORDER[r.state] === "inactive" ? true : undefined}
+            borderColor="inactive"
             paddingX={1}
             marginBottom={1}
           >
-            <Box key={`head:${r.name}`} justifyContent="space-between">
-              <Box key={`row:${r.name}`}>
-                <Text bold>{r.name}</Text>
-              </Box>
-              {r.claude && (
-                <Box key={`claude:${r.name}`}>
-                  <Text color={CLAUDE[r.claude].color}>{CLAUDE[r.claude].text}</Text>
-                </Box>
-              )}
-            </Box>
-            {r.issueId && (
-              <Box key={`issue:${r.name}`}>
-                <Text>
-                  {`${issueKind(r)}: `}
-                  {r.issueUrl ? <Link href={r.issueUrl} label={r.issueId} /> : r.issueId}
-                </Text>
-              </Box>
-            )}
-            {r.task && (
-              <Box key={`task:${r.name}`}>
-                <Text>{r.task}</Text>
-              </Box>
-            )}
-            {r.description && (
-              <Box key={`desc:${r.name}`}>
-                <Text dimColor>{r.description}</Text>
-              </Box>
-            )}
-            {cardMeta(r) !== "" && (
-              <Box key={`meta:${r.name}`}>
-                <Text dimColor>{cardMeta(r)}</Text>
-              </Box>
-            )}
-            {prLinks(prs[r.name] ?? []).length > 0 && (
-              <Box key={`prs:${r.name}`} flexDirection="column">
-                {prLinks(prs[r.name] ?? []).map((p) => (
-                  <Text key={`pr:${p.key}`}>
-                    {"pr: "}
-                    <Link href={p.href} label={p.label} />
-                    {p.state && (
-                      <Text color={PR_COLOR[p.state]}>{` ⑂ ${p.state.toLowerCase()}`}</Text>
-                    )}
-                  </Text>
-                ))}
-              </Box>
-            )}
-            {sessionLine(r) && (
-              <Box key={`session:${r.name}`}>
-                <Text dimColor>{sessionLine(r)}</Text>
-              </Box>
-            )}
-            {r.services.length > 0 && (
-              <Box key={`services:${r.name}`} flexDirection="column">
-                {r.services.map((svc) => {
-                  const row = snap?.intercepts.find(
-                    (x) => x.feature === r.feature && x.service === svc.name,
-                  );
-                  const c = interceptControl(svc.name, row, r.feature, snap);
-                  const asking = confirm === `${INTERCEPT}${r.name}/${svc.name}`;
-                  const idle = busy !== r.name;
-                  return (
-                    <Box key={`svc:${r.name}/${svc.name}`} gap={1}>
-                      <Text>
-                        <Text color={SERVICE_COLOR[svc.state]}>●</Text> {svc.name}
-                      </Text>
-                      {c?.kind === "off" && idle && !asking && (
-                        <Button
-                          key={`intercept:${r.name}/${svc.name}`}
-                          label="Intercept"
-                          variant="secondary"
-                          onPress={() => void pressIntercept($, "ask", r.name, svc.name)}
-                        />
-                      )}
-                      {c?.kind === "off" && idle && asking && (
-                        <Box gap={1}>
-                          <Text color="warning">
-                            {`Intercept ${svc.name}? Installs a traffic-agent sidecar on ${row?.deployment ?? svc.name} in the shared dev cluster.`}
-                          </Text>
-                          <Button
-                            key={`intercept-yes:${r.name}/${svc.name}`}
-                            label="✓ Yes, intercept"
-                            variant="secondary"
-                            onPress={() => void pressIntercept($, "yes", r.name, svc.name)}
-                          />
-                          <Button
-                            key={`intercept-cancel:${r.name}/${svc.name}`}
-                            label="Cancel"
-                            variant="secondary"
-                            onPress={() => void pressIntercept($, "cancel", r.name, svc.name)}
-                          />
-                        </Box>
-                      )}
-                      {c?.kind === "active" && <Text color="success">{c.text}</Text>}
-                      {c?.kind === "active" && idle && (
-                        <Button
-                          key={`leave:${r.name}/${svc.name}`}
-                          label="Leave"
-                          variant="secondary"
-                          onPress={() => void pressIntercept($, "leave", r.name, svc.name)}
-                        />
-                      )}
-                      {c && c.kind !== "off" && c.kind !== "active" && (
-                        <Text dimColor>{c.text}</Text>
-                      )}
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
-            {busy === r.name ? (
-              <Box key={`busy:${r.name}`}>
-                <Text dimColor>working…</Text>
-              </Box>
-            ) : (
-              <Box marginTop={1} justifyContent="space-between">
-                <Box gap={1}>
-                  {buttonsFor(r.state)
-                    .filter((a): a is Lifecycle => LIFECYCLE.has(a))
-                    .map((a) => (
-                      <Button
-                        key={`${a}:${r.name}`}
-                        label={LABEL[a]}
-                        variant="secondary"
-                        onPress={() => void press($, a, r.name)}
-                      />
-                    ))}
-                  <Box marginLeft={2} gap={1}>
-                    <Button
-                      key={`new:${r.name}`}
-                      label={LABEL.new}
-                      variant="secondary"
-                      onPress={() => void press($, "new", r.name)}
-                    />
-                    {sessionTitle(r) && (
-                      <Button
-                        key={`continue:${r.name}`}
-                        label={`↗ Continue in ${continueTarget(r)}`}
-                        variant="secondary"
-                        onPress={() => void press($, "continue", r.name)}
-                      />
-                    )}
-                    {r.session?.beside && (
-                      <Button
-                        key={`beside:${r.name}`}
-                        label={LABEL.beside}
-                        variant="secondary"
-                        onPress={() => void press($, "beside", r.name)}
-                      />
-                    )}
-                    {r.session && (
-                      <Button
-                        key={`pin:${r.name}`}
-                        label={r.session.pinned ? "📌 Unpin" : "📌 Pin"}
-                        variant="secondary"
-                        onPress={() => void press($, "pin", r.name)}
-                      />
-                    )}
-                  </Box>
-                </Box>
-                {/* Buttons take no colour; Abandon's label turns red under the pointer and its confirm prompt is red text beside it. */}
-                <Box gap={1}>
-                  {lifecycleButtonsFor(r).map((a) => (
-                    <Button
-                      key={`${a}:${r.name}`}
-                      label={LABEL[a]}
-                      variant="secondary"
-                      onPress={() => void press($, a, r.name)}
-                    />
-                  ))}
-                  {confirm === CLOSE_OUT + r.name && (
-                    <Box key={`closeout-confirm:${r.name}`}>
-                      <Text color="warning">{"Close out and remove this workspace?"}</Text>
-                    </Box>
-                  )}
-                  {confirm === ABANDON + r.name && Input && (
-                    <Input
-                      key={`reason:${r.name}`}
-                      placeholder="Why abandon? (required)"
-                      value={reason}
-                      submitLabel="save"
-                      onInput={(v) => void $.state.set(REASON, v)}
-                      onSubmit={(v) => void $.state.set(REASON, v)}
-                    />
-                  )}
-                  {confirm === ABANDON + r.name && (
-                    <Box key={`abandon-confirm:${r.name}`}>
-                      <Text color="error">
-                        {"Abandon: pushes and keeps every branch, removes the workspace"}
-                      </Text>
-                    </Box>
-                  )}
-                  {endActionFor(r, Input !== null) === "closeout" && (
-                    <Button
-                      key={`closeout:${r.name}`}
-                      label={confirm === CLOSE_OUT + r.name ? "✓ Yes, close out" : LABEL.closeout}
-                      variant="secondary"
-                      onPress={() => void press($, "closeout", r.name)}
-                    />
-                  )}
-                  {endActionFor(r, Input !== null) === "abandon" && (
-                    <Button
-                      key={`abandon:${r.name}`}
-                      label={confirm === ABANDON + r.name ? "✕ Yes, abandon" : LABEL.abandon}
-                      variant="secondary"
-                      dimColor
-                      hover={{ color: "error", dimColor: false }}
-                      onPress={() => void press($, "abandon", r.name)}
-                    />
-                  )}
-                </Box>
-              </Box>
-            )}
+            <Text bold>Legend</Text>
+            <Text>
+              <Text color="warning" bold>
+                ● Needs you
+              </Text>
+              <Text dimColor>{"  agent asked you something; amber border = this, only this"}</Text>
+            </Text>
+            <Text>
+              <Text color="success">◌ Working · ✓ Done</Text>
+              <Text dimColor>{"  agent busy · agent finished"}</Text>
+            </Text>
+            <Text>
+              <Text color="inactive">Idle</Text>
+              <Text dimColor>{"  no live turn, nothing asked"}</Text>
+            </Text>
+            <Text>
+              ⚙ Auto<Text dimColor>{"  autonomous run, no review gates until the PR"}</Text>
+            </Text>
+            <Text>
+              <Text color="success">●</Text> <Text color="inactive">○</Text>{" "}
+              <Text color="warning">◐</Text> <Text color="error">▲</Text>
+              <Text dimColor>{"  service up · down · starting · unhealthy"}</Text>
+            </Text>
+            <Text>
+              <Text color="success">green</Text> <Text color="warning">amber</Text>{" "}
+              <Text color="error">red</Text> <Text color="inactive">grey</Text>
+              <Text dimColor>{"  ok · partial or attention · failing · off"}</Text>
+            </Text>
+            <Text>
+              <Text color="merged">Merged · Released</Text>
+              <Text dimColor>{"  PR shipped"}</Text>
+            </Text>
           </Box>
-        ))}
+        )}
+        {loadedRows === undefined && (
+          <Text key="loading" dimColor>
+            Loading workspaces…
+          </Text>
+        )}
+        {loadedRows !== undefined && rows.length === 0 && <Text dimColor>No workspaces.</Text>}
+        {shown.map(card)}
         {messages}
       </Box>
     );
