@@ -2,7 +2,7 @@
 // substring matching, AND-combined multi-term queries, `-exclude` and
 // `a|b` OR groups, the labels field, and empty-query passthrough with
 // original-order preservation.
-// Run: npm run build:server && node lib/workspace-search.smoke.mjs
+// Run: npm run build && node test/workspace-search.smoke.mjs
 import assert from "node:assert";
 
 const { filterWorkspaces } = await import("../dist/lib/workspace-search.js");

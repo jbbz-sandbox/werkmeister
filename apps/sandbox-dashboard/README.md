@@ -15,14 +15,15 @@ model's view is tier-independent.
 
 | Tier | Host | Surface |
 |------|------|---------|
-| 1 | Claude Desktop | Inline MCP App (`ui://`): `dist/mcp-app.html` (create form), `dist/mcp-list.html` (workspace dashboard) |
+| 1 | Claude Desktop | Inline MCP App (`ui://`): `mcp-app.html` (create form), `mcp-list.html` (workspace dashboard), built and served by `apps/mcp` |
 | 2 | Cowork | Live artifact `dist/workspace-list.artifact.html` — manual install via the `install-workspace-dashboard` skill; MCP prefix is read from its own meta block (source: `src/artifact-meta.json`) |
 | 3 | Claude Code CLI / VS Code | Localhost browser: `open-workspaces-ui` opens `dist/browser.html` (Workspaces / New workspace / Open PRs tabs); `create-workspace-form` falls back to `dist/form.html` (blocking create form, `src/form-cli.ts`) |
 | 4 | Anything else | Markdown/text from the same tools |
 
-All five UI bundles are single-file (`viteSingleFile`) and fully
+All UI bundles are single-file (`viteSingleFile`) and fully
 self-contained — no CDN fetches. One neutral look everywhere: the list UI
-(`src/workspace-ui.ts`) and the create form (`src/create-form.ts`) are each a
+(`werkmeister-ui/workspace-ui`) and the create form (`werkmeister-ui/create-form`),
+both in `packages/sandbox-ui`, are each a
 single implementation shared across tiers 1–3 — only the `HostBridge`
 transport differs per entrypoint (`mcp-app`/`mcp-list` via ext-apps,
 `artifact-main` via the Cowork bridge, `browser-main`/`form-main` via fetch).
@@ -61,16 +62,16 @@ The CLI owns the inputs and the create logic:
 | `src/lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
 | `src/lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `src/lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
-| `src/lib/markdown.ts` · `src/lib/workspace-search.ts` | markdown-it config (`html:false`); workspace fuzzy match |
+| `werkmeister-ui` (`packages/sandbox-ui`) | The shared UI modules (workspace list, create form, chat panel, theme, usage widget, markdown) and the display model |
 | `werkmeister-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
-| other `src/*.ts` + `*.html` | The five vite inputs: `mcp-app`, `mcp-list`, `workspace-list.artifact`, `browser`, `form` |
+| other `src/*.ts` + `*.html` | The three vite inputs: `workspace-list.artifact`, `browser`, `form` |
 
 ## Build & test
 
 ```bash
 npm install                      # at the repo root (npm workspaces)
 cd apps/sandbox-dashboard
-npm run build                    # typecheck + 5 UI bundles + dashboard server → dist/
+npm run build                    # typecheck + 3 UI bundles + dashboard server → dist/
 node test/localhost-form.smoke.mjs  # and the other test/*.smoke.mjs
 ```
 

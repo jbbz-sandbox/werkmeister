@@ -23,7 +23,7 @@ const {
   isValidPrUrl,
   buildReconcileContext,
 } = await import("werkmeister-core");
-const { renderMarkdown } = await import(path.join(pkgRoot, "dist/lib/markdown.js"));
+const { renderMarkdown } = await import("werkmeister-ui/lib/markdown");
 
 // 1. Failing-checks classifier: bad conclusions count; good/in-progress don't.
 assert.equal(countFailingChecks([{ conclusion: "FAILURE" }]), 1, "FAILURE counts");
