@@ -17,6 +17,7 @@ import {
   type ArchetypeRegistry,
   containerOf,
   dotDir,
+  IDLE_SERVICE_TYPES,
   loadArchetypes,
   loadReposConfig,
   loadServices,
@@ -30,7 +31,13 @@ import { updateNoteStatus } from "./graduate.js";
 import { type IssueStatuses, moveIssue, resolveIssueStatuses } from "./issue_status.js";
 import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
-import { idleStopMinutes, lastExecMarker, stop as stopFeature, stopIdle } from "./lifecycle.js";
+import {
+  idleStopMinutes,
+  lastExecMarker,
+  startService,
+  stop as stopFeature,
+  stopIdle,
+} from "./lifecycle.js";
 import { openDecisions } from "./notes.js";
 import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
 import {
@@ -112,6 +119,8 @@ export interface Deps {
   stop: (ws: string) => Promise<string>;
   /** One idle-reaper pass over every workspace (SW-39). */
   reapIdle: () => Promise<{ lines: string[] }>;
+  /** Start one of the feature's services and wait for it (SW-34); throws on failure. */
+  startService: (ws: string, feature: string, service: string) => Promise<void>;
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
@@ -161,6 +170,7 @@ export function defaultDeps(): Deps {
       const minutes = idleStopMinutes();
       return minutes ? stopIdle(minutes) : { lines: [] };
     },
+    startService: (ws, feature, service) => startService(feature, ws, service),
   };
 }
 
@@ -355,10 +365,39 @@ function readEnv(ws: string, key: string): string {
   return "";
 }
 
+/**
+ * The pre-PR gate for one repo. A container it had to start for the repo's
+ * tests is stopped again, pass or fail; what was running before stays (SW-34).
+ */
 export async function runGate(
   ws: string,
   file: PrFile,
   deps: Deps = defaultDeps(),
+): Promise<GateResult> {
+  const started: string[] = [];
+  let result!: GateResult;
+  try {
+    result = await gateChecks(ws, file, deps, started);
+  } finally {
+    if (started.length) {
+      const stop = await deps.run("docker", ["stop", ...started]);
+      result?.checks.push({
+        name: "containers",
+        ok: true,
+        detail: stop.code
+          ? `started ${started.join(", ")}; could not stop — ${stop.stderr.trim()}`
+          : `started ${started.join(", ")} for the gate, stopped again`,
+      });
+    }
+  }
+  return result;
+}
+
+async function gateChecks(
+  ws: string,
+  file: PrFile,
+  deps: Deps,
+  started: string[],
 ): Promise<GateResult> {
   const checks: GateCheck[] = [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
@@ -424,6 +463,34 @@ export async function runGate(
   }
   const touched = diff.code === 0 ? mapTouched(diff.stdout.split("\n").filter(Boolean), repo) : [];
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
+  const releaseRuns =
+    repo["ship"] === "tag" && Boolean(repo["release_check"]) && !reason(file.fm["skip_release"]);
+
+  const repoServices = (repo["services"] ?? []) as string[];
+  const needsContainer =
+    releaseRuns ||
+    touched.some((s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes));
+  if (needsContainer && !repoServices.some(containerFor)) {
+    // Any one container serves the whole repo (containerFor's sibling fallback); an
+    // idle one only sleeps, where a web service would start its dev server.
+    const pick =
+      [...touched, ...repoServices].find((s) =>
+        IDLE_SERVICE_TYPES.includes(services[s]?.["type"] ?? ""),
+      ) ??
+      touched[0] ??
+      repoServices[0];
+    if (pick) {
+      touchExecMarker(ws);
+      try {
+        await deps.startService(ws, feature, pick);
+        running.add(containerOf(feature, pick));
+        started.push(containerOf(feature, pick));
+      } catch (e) {
+        add(`start ${pick}`, false, e instanceof Error ? e.message : String(e));
+      }
+    }
+  }
+
   for (const svc of touched) {
     const cmd = serviceTestCommand(svc, services[svc], deps.archetypes);
     const why = reason(skips[svc]);
@@ -467,14 +534,12 @@ export async function runGate(
       : "no exercise.md — record the exercise checks first",
   );
   const slot = Number(readEnv(ws, "SANDBOX_SLOT"));
-  for (const svc of touched.filter((s) => local.has(s))) {
+  // Only a served endpoint has a baseline; the test check already proved a container ran the rest.
+  const isServed = (s: string) => ["api", "web"].includes(services[s]?.["type"] ?? "");
+  for (const svc of touched.filter((s) => local.has(s) && isServed(s))) {
     const def = services[svc] ?? {};
     if (!running.has(containerOf(feature, svc))) {
       add(`baseline ${svc}`, false, "container not running — run `sandbox up`");
-      continue;
-    }
-    if (def["type"] !== "api" && def["type"] !== "web") {
-      add(`baseline ${svc}`, true, "container running");
       continue;
     }
     const url = `http://localhost:${getServicePort(slot, def["port_offset"] ?? 0)}${def["health_endpoint"] ?? "/"}`;
@@ -485,8 +550,7 @@ export async function runGate(
   if (repo["ship"] === "tag" && repo["release_check"]) {
     const why = reason(file.fm["skip_release"]);
     const container =
-      touched.map(containerFor).find(Boolean) ??
-      containerFor(((repo["services"] ?? []) as string[])[0] ?? "");
+      touched.map(containerFor).find(Boolean) ?? containerFor(repoServices[0] ?? "");
     if (why) add("release", true, `skipped: ${why}`);
     else if (!container)
       add("release", false, "no running container for this repo — run `sandbox up`");

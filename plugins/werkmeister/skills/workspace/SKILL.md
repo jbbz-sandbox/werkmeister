@@ -22,10 +22,12 @@ With an `issue_id`, `createWorkspace` always:
 
 | Situation | Do |
 |---|---|
-| every input known (feature, issue, services) | `sandbox workspace <feature> --issue-id <ref> --services <a,b> [--work-type <t>] [--context-strategy icm] [--autonomous] [--model <alias|id>]`. Pass `--task` only to override the issue title |
+| every input known (feature, issue, repos) | `sandbox workspace <feature> --issue-id <ref> --repos <r1,r2> [--services <a,b>] [--work-type <t>] [--context-strategy icm] [--autonomous] [--model <alias|id>]`. Pass `--task` only to override the issue title. Leave `--services` out unless the ticket names services to run (see **Services** below) |
 | the person should review the fields first | the /workspaces pane's Create tab, or the browser form (below) |
 | many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check. Before the first: the `sandbox` CLI runs `$SANDBOX_REPOS_ROOT/sandbox/apps/cli/dist`, so check that checkout is on an up-to-date `main` and rebuilt (`npm run build --workspace apps/cli`), or the batch comes out with stale defaults |
 | many issues, run unattended | as above with `--autonomous` on each create, plus `--model sonnet` (or `haiku`) when the job is mechanical (lint passes, renames, timeout bumps). Then start one Claude Code session per workspace folder with the prompt `start the run`, **one at a time**: each new folder raises a trust prompt, and parallel starts collide. Start each session on the workspace's `model` when it has one (`list-workspaces` returns it) |
+
+**Services** (none by default): list only the services the ticket says to run locally, e.g. a web app it changes and someone will click through. Never list every service "so the gate has containers". `sandbox pr gate` starts one container for each touched repo that has none running, and stops it afterwards (SW-34). Each listed service is a container that `sandbox up` starts.
 
 **`autonomous`** (off by default; `--autonomous`, `SANDBOX_AUTONOMOUS=1`, `autonomous: true` in `workspace.yml`, or the form's checkbox): an icm workspace runs stage 01 → `sandbox pr open` with self-checks instead of human checks, and `.claude/settings.json` allows the git/sandbox/docker/gh/node/python3 calls a headless `claude-send "start the run"` needs. Set it only when the person asked for an unattended run — they then review only the PR. Off again: `autonomous: false`, then `sandbox init-workspace`.
 
@@ -126,9 +128,9 @@ Desktop.
 ## Common pitfalls
 
 - **Issue can't be read.** The create fails before anything is made; run `sandbox connect`, fix sign-in, retry.
-- **No repos resolvable.** The form derives worktree repos from **services**; if none are
-  picked, `sandbox workspace` has nothing to make worktrees from and exits nonzero. Pick
-  services, or pass `--repos r1,r2` (the form has no repos field).
+- **No repos resolvable.** Worktree repos come from `--repos` plus the repos owning the
+  selected **services**; with neither, `sandbox workspace` has nothing to make worktrees from
+  and exits nonzero. Pass `--repos r1,r2` (the form's "Additional repos" field).
 - **Source repo missing.** Worktrees are cut from `$SANDBOX_REPOS_ROOT/<repo>`; a missing
   checkout fails the create.
 - **Workspace already exists.** `sandbox workspace` skips worktree creation and just re-runs
