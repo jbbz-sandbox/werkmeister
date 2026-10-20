@@ -543,10 +543,12 @@ type ListEntry = Pick<
   | "path"
   | "issueId"
   | "issueUrl"
+  | "labels"
   | "task"
   | "description"
   | "workType"
   | "stage"
+  | "lifecycle"
   | "sessionTitle"
   | "sessionOrigin"
   | "feature"
@@ -953,7 +955,7 @@ const LABEL: Record<Exclude<Action, "continue" | "pin">, string> = {
 };
 
 /** The lifecycle buttons a row offers: refresh PR state while one is in flight. */
-export function lifecycleButtonsFor(r: WorkspaceRow): Action[] {
+export function lifecycleButtonsFor(r: WorkspaceRow): "prs"[] {
   const s = r.lifecycle?.state;
   return s === "pr-open" || s === "merged" ? ["prs"] : [];
 }
