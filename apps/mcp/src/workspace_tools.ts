@@ -1,20 +1,17 @@
 /**
- * MCP App server: create a sandbox workspace from inside Claude
- * Desktop, delegating to the `sandbox workspace` CLI.
+ * The tools that came from the dashboard's `workspaces` server (SW-48): issues,
+ * PRs, Claude sessions, cluster and Docker probes, and the two MCP App tools
+ * whose `ui://` resources Claude Desktop renders inline.
  *
- * Two linked tools:
- *   - `workspace`        — the App tool (carries `_meta.ui.resourceUri`). When the
- *     host calls it, it renders the bundled HTML form and returns the RJSF
- *     bundle from `getFormSchema` (werkmeister-core) for the form to render.
- *   - `create-workspace` — invoked from the form via `app.callServerTool(...)`.
- *     Runs `sandbox workspace <feature> [flags]` (worktrees + branch +
- *     init-workspace) and optionally opens the result in VS Code.
- *
- * The CLI is the single source of truth for both the input prompts and the
- * create logic — this server only renders the form and shells out.
+ * Every client gets the same tools. The App tools adapt to the client
+ * (`rendersUi`): Desktop gets the bundled HTML, everything else a text or
+ * browser fallback. The HTML and the browser form are the dashboard's build
+ * output, which ships with a checkout only — a package install takes the
+ * fallback.
  */
 
-import fs from "node:fs/promises";
+import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import {
   getUiCapability,
@@ -22,12 +19,12 @@ import {
   registerAppResource,
   registerAppTool,
 } from "@modelcontextprotocol/ext-apps/server";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   approvePr,
+  type CreateResult,
   checkInTriage,
-  closeOut,
   createWorkspace,
   fetchIssueCard,
   fetchIssueFormData,
@@ -35,6 +32,7 @@ import {
   getClaudeTranscript,
   getClaudeTurnStatus,
   getDockerUi,
+  getFormSchema,
   getIssueStatuses,
   getK8sForwardsHealth,
   getKubeContext,
@@ -45,45 +43,86 @@ import {
   launchPrReconcile,
   listSessions,
   listWorkspaces,
-  openFeatureBrowser,
   openPrs,
   openWorkspace,
   postSlackReviewRequest,
   refinePrompt,
   refreshPrStatus,
-  resolveWorkspaceDir,
   resumeClaudeInTerminal,
-  runConnect,
-  runWorkspaceAction,
   sendToClaudeSession,
   switchKubeContext,
-  WORKSPACE_ACTIONS,
   WorkspaceError,
 } from "werkmeister-core";
+import { sandboxRoot } from "werkmeister-core/config";
+import { SandboxError } from "werkmeister-core/errors";
+import { collectingReporter, withReporter } from "werkmeister-core/reporter";
+import { interceptsSnapshot, statusSnapshot } from "werkmeister-core/status";
+import { DASHBOARD, start as startWebApp } from "werkmeister-core/web_servers";
 import { z } from "zod";
-import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
-
-// Works both from source (src/server.ts via tsx) and compiled (dist/server.js).
-const DIST_DIR = import.meta.filename.endsWith(".ts")
-  ? path.join(import.meta.dirname, "..", "dist")
-  : import.meta.dirname;
+import { resolveWorkspace, workspaceId } from "./lib/feature.js";
+import { headersOf, WORKSPACE_ARG } from "./tools.js";
 
 const RESOURCE_URI = "ui://workspace/mcp-app.html";
 const RESOURCE_URI_LIST = "ui://workspace/mcp-list.html";
 
+/** UI-only tools: the App's own plumbing, hidden from the model (ui-spec § One MCP server). */
+const APP_ONLY = { ui: { visibility: ["app"] } };
+
+/** A file from the dashboard's build, or null where there is none (a package install, an unbuilt checkout). */
+function dashboardFile(name: string): string | null {
+  try {
+    const file = path.join(sandboxRoot(), "..", "sandbox-dashboard", "dist", name);
+    return fs.existsSync(file) ? file : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Does the connected client render MCP App `ui://` resources? True only when the
- * client advertised the `io.modelcontextprotocol/ui` capability (with our HTML
- * profile) during initialize — i.e. Claude Desktop. Claude Code CLI / the VS
- * Code extension return `undefined`, so we fall back to the localhost form.
+ * Does the connected client render this App's `ui://` resource? Only when it
+ * advertised the `io.modelcontextprotocol/ui` capability with our HTML profile
+ * during initialize — Claude Desktop — and the HTML exists to serve. Claude
+ * Code CLI and the VS Code extension advertise nothing and get the fallback.
  */
-function hostRendersUi(server: McpServer): boolean {
+function rendersUi(server: McpServer, html: string): boolean {
   const uiCap = getUiCapability(server.server.getClientCapabilities());
-  return Boolean(uiCap?.mimeTypes?.includes(RESOURCE_MIME_TYPE));
+  return Boolean(uiCap?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) && dashboardFile(html) !== null;
+}
+
+function readDashboardHtml(name: string): string {
+  const file = dashboardFile(name);
+  if (file === null) {
+    throw new Error(`${name} is not built here — run \`npm run build\` in apps/sandbox-dashboard.`);
+  }
+  return fs.readFileSync(file, "utf-8");
+}
+
+function fail(e: unknown): CallToolResult {
+  const message =
+    e instanceof WorkspaceError || e instanceof SandboxError
+      ? e.message
+      : `Unexpected error: ${(e as Error).message}`;
+  return { isError: true, content: [{ type: "text", text: message }] };
+}
+
+/** The session tools also take the PR chat's `reconcile:<repo>-<number>` keys, which name no workspace. */
+const SESSION_ARG = {
+  workspace: z
+    .string()
+    .optional()
+    .describe(
+      "Workspace directory name or feature name, or a `reconcile:<repo>-<number>` key from " +
+        "pr-reconcile. Defaults to the X-Sandbox-Feature header on the connection.",
+    ),
+};
+
+function sessionKey(explicit: string | undefined, extra: unknown): string {
+  const id = workspaceId(explicit, headersOf(extra));
+  return id.startsWith("reconcile:") ? id : resolveWorkspace(id, undefined).name;
 }
 
 /** Render a {@link createWorkspace} result as the text shown back to the model. */
-function formatCreateResult(result: Awaited<ReturnType<typeof createWorkspace>>): string {
+function formatCreateResult(result: CreateResult): string {
   let openLine: string;
   if (result.opened) {
     openLine = "Launched VS Code on the workspace.";
@@ -114,35 +153,73 @@ function renderWorkspaceTable(result: Awaited<ReturnType<typeof listWorkspaces>>
   );
 }
 
-export function createServer(): McpServer {
-  const server = new McpServer({
-    name: "workspaces",
-    version: "0.1.0",
-  });
+/** Open the user's default browser at `url`, detached and best-effort. */
+function openBrowser(url: string): void {
+  const [cmd, args] =
+    process.platform === "darwin"
+      ? ["open", [url]]
+      : process.platform === "win32"
+        ? ["cmd", ["/c", "start", "", url]]
+        : ["xdg-open", [url]];
+  spawn(cmd, args, { detached: true, stdio: "ignore" })
+    .on("error", () => {})
+    .unref();
+}
 
+type FormCliOutcome =
+  | { status: "cancelled" | "timeout" }
+  | { status: "error"; message: string }
+  | {
+      status: "submitted";
+      create: { ok: true; result: CreateResult } | { ok: false; error: string };
+    };
+
+/**
+ * The browser form for a client that can't render `ui://`: the dashboard's
+ * `form-cli.js` (what `werkmeister workspace --browser-form` runs) serves the
+ * form on localhost, waits for submit or cancel, creates the workspace and
+ * prints one JSON outcome.
+ */
+function runFormCli(
+  cli: string,
+  issue: string,
+  open: boolean | undefined,
+): Promise<FormCliOutcome> {
+  const args = [cli, ...(issue ? ["--issue", issue] : []), ...(open ? ["--open"] : [])];
+  return new Promise((resolve) => {
+    // stdout carries the outcome; its progress goes to our stderr, never to a stdio JSON-RPC stdout.
+    const child = spawn(process.execPath, args, { stdio: ["ignore", "pipe", "inherit"] });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.on("error", (e) => resolve({ status: "error", message: e.message }));
+    child.on("close", () => {
+      try {
+        resolve(JSON.parse(out.trim().split("\n").pop() ?? ""));
+      } catch {
+        resolve({ status: "error", message: `The form exited without an outcome: ${out.trim()}` });
+      }
+    });
+  });
+}
+
+export function registerWorkspaceTools(server: McpServer): void {
   // --- App tool: collect inputs, then create -------------------------------
-  // A single tool that adapts to the connecting client (see `hostRendersUi`):
-  //   • Hosts that render MCP App UI (Claude Desktop) get the form rendered
-  //     INLINE — the tool returns the RJSF bundle and the `ui://` resource (via
-  //     `_meta.ui`) draws it; the form then calls `create-workspace` itself.
-  //   • Hosts that DON'T (Claude Code CLI, VS Code extension) ignore `_meta.ui`,
-  //     so the tool instead opens the SAME form in the user's browser over
-  //     localhost, blocks until submit, and creates the workspace in-line.
-  // One form definition (`getFormSchema`), one create
-  // path (`createWorkspace`), graceful degradation across surfaces.
+  // Desktop draws the bundled form inline from the RJSF bundle this returns, and
+  // the form calls `create-workspace` itself. Other clients get the same form in
+  // the browser through form-cli.js, which creates the workspace on submit.
   registerAppTool(
     server,
-    "workspace",
+    "create-workspace-form",
     {
       title: "New Sandbox Workspace",
       description:
-        "Create a new sandbox workspace through `createWorkspace` in this process " +
-        "(git worktrees on a <user>/<workspace> branch under $SANDBOX_WORKSPACES_ROOT, " +
-        "then init-workspace). With an `issue_id` the issue is fetched and stored in " +
-        "`.sandbox/issue.md` (the create fails if it can't be read). Opens a form to collect the inputs — inline if the " +
-        "client renders MCP App UI (Claude Desktop), otherwise in the user's " +
-        "browser (Claude Code CLI / VS Code). Fields come from the same prompt " +
-        "definitions as the terminal wizard. Pass an issue ID or URL as `issue` to pre-fill.",
+        "Open the New Sandbox Workspace form and create the workspace from it (git worktrees on a " +
+        "<user>/<workspace> branch under $SANDBOX_WORKSPACES_ROOT, then init-workspace). With an " +
+        "`issue_id` the issue is fetched and stored in `.sandbox/issue.md` (the create fails if it " +
+        "can't be read). The form renders inline where the client supports MCP App UI (Claude " +
+        "Desktop), otherwise in the user's browser. Fields come from the same prompt definitions " +
+        "as the terminal wizard. Pass an issue ID or URL as `issue` to pre-fill. To create without " +
+        "a form, call `create-workspace`.",
       inputSchema: {
         issue: z
           .string()
@@ -161,21 +238,18 @@ export function createServer(): McpServer {
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const bundle = await getFormBundle();
-        let note = "";
         const issueRef = typeof args?.issue === "string" ? args.issue.trim() : "";
-        if (issueRef) {
-          const issueData = await fetchIssueFormData(issueRef);
-          bundle.formData = { ...bundle.formData, ...issueData };
-          const filledKey = typeof issueData.issue_id === "string" ? issueData.issue_id : "";
-          note = filledKey
-            ? ` Pre-filled from ${filledKey}; review before creating.`
-            : ` Couldn't read an issue from “${issueRef}”.`;
-        }
-
-        // Inline-UI hosts (Desktop): hand the bundle to the `ui://` form, which
-        // calls `create-workspace` on submit.
-        if (hostRendersUi(server)) {
+        if (rendersUi(server, "mcp-app.html")) {
+          const bundle = await getFormSchema();
+          let note = "";
+          if (issueRef) {
+            const issueData = await fetchIssueFormData(issueRef);
+            bundle.formData = { ...bundle.formData, ...issueData };
+            const filledKey = typeof issueData.issue_id === "string" ? issueData.issue_id : "";
+            note = filledKey
+              ? ` Pre-filled from ${filledKey}; review before creating.`
+              : ` Couldn't read an issue from “${issueRef}”.`;
+          }
           return {
             content: [
               {
@@ -190,28 +264,50 @@ export function createServer(): McpServer {
           };
         }
 
-        // No inline UI (CLI / VS Code): collect via the localhost browser form,
-        // then create the workspace here.
-        const filled = await promptViaLocalhostForm(bundle);
-        if (filled.status !== "submitted") {
-          const text =
-            filled.status === "cancelled"
-              ? "Workspace creation cancelled — nothing was created."
-              : "The workspace form timed out — nothing was created. Re-run to try again.";
-          return { content: [{ type: "text", text }] };
+        const cli = dashboardFile("form-cli.js");
+        if (cli === null) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text:
+                  "The browser form ships with a werkmeister checkout (apps/sandbox-dashboard), " +
+                  "not this install. Call `create-workspace` with the fields as `formData`.",
+              },
+            ],
+          };
         }
-        // The form's "Open in VS Code" checkbox wins over the tool arg default.
-        const result = await createWorkspace(filled.formData ?? {}, {
-          open: filled.open ?? args?.open,
-        });
+        // The form's "Open in VS Code" checkbox wins over this default.
+        const outcome = await runFormCli(cli, issueRef, args?.open ?? true);
+        switch (outcome.status) {
+          case "cancelled":
+            return {
+              content: [
+                { type: "text", text: "Workspace creation cancelled — nothing was created." },
+              ],
+            };
+          case "timeout":
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "The workspace form timed out — nothing was created. Re-run to try again.",
+                },
+              ],
+            };
+          case "error":
+            return { isError: true, content: [{ type: "text", text: outcome.message }] };
+        }
+        if (!outcome.create.ok) {
+          return { isError: true, content: [{ type: "text", text: outcome.create.error }] };
+        }
         return {
-          content: [{ type: "text", text: formatCreateResult(result) }],
-          structuredContent: result as unknown as Record<string, unknown>,
+          content: [{ type: "text", text: formatCreateResult(outcome.create.result) }],
+          structuredContent: outcome.create.result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -237,7 +333,7 @@ export function createServer(): McpServer {
         open: z
           .boolean()
           .optional()
-          .describe("Launch VS Code on the new workspace (default true)."),
+          .describe("Launch VS Code on the new workspace (default false)."),
       },
       outputSchema: z.object({
         command: z.string(),
@@ -249,22 +345,21 @@ export function createServer(): McpServer {
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const result = await createWorkspace(args.formData ?? {}, { open: args.open });
+        // false by default: a headless or container caller has no desktop to open it on.
+        const result = await createWorkspace(args.formData ?? {}, { open: args.open ?? false });
         return {
           content: [{ type: "text", text: formatCreateResult(result) }],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
 
   // --- Worker tool: hand the RJSF form bundle to the browser dashboard -------
-  // Data-only sibling of the `workspace` tool: returns the exact same bundle
-  // (`getFormBundle`) as structuredContent, with no UI
+  // Data-only sibling of `create-workspace-form`: returns the exact same bundle
+  // (`getFormSchema`) as structuredContent, with no UI
   // of its own. The browser dashboard's "New workspace" tab fetches this, then
   // renders the form and calls `create-workspace` on submit — so create + list
   // live on one page without the localhost-form's separate throwaway server.
@@ -283,18 +378,17 @@ export function createServer(): McpServer {
         formData: z.record(z.string(), z.unknown()),
         title: z.string(),
       }),
+      _meta: APP_ONLY,
     },
     async (): Promise<CallToolResult> => {
       try {
-        const bundle = await getFormBundle();
+        const bundle = await getFormSchema();
         return {
           content: [{ type: "text", text: `Loaded the New Workspace form (${bundle.title}).` }],
           structuredContent: bundle as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -302,7 +396,7 @@ export function createServer(): McpServer {
   // --- Worker tool: map an issue to New-workspace form fields ---------------
   // The browser dashboard's create form calls this from its "Fetch from
   // <tracker>" button to populate fields live. Reuses the exact
-  // fetchIssueFormData the `workspace` tool uses for open-time `issue` prefill,
+  // fetchIssueFormData `create-workspace-form` uses for open-time `issue` prefill,
   // so button and arg agree. Best-effort: returns { issue_id } alone when the
   // lookup fails.
   server.registerTool(
@@ -318,6 +412,7 @@ export function createServer(): McpServer {
         ref: z.string().describe("An issue ID or URL, or any string containing one."),
       },
       outputSchema: z.object({ formData: z.record(z.string(), z.unknown()) }),
+      _meta: APP_ONLY,
     },
     async (args): Promise<CallToolResult> => {
       try {
@@ -326,9 +421,7 @@ export function createServer(): McpServer {
         const text = key ? `Loaded form fields from ${key}.` : `No issue found in “${args.ref}”.`;
         return { content: [{ type: "text", text }], structuredContent: { formData } };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -359,6 +452,7 @@ export function createServer(): McpServer {
           ),
       },
       outputSchema: z.object({ refined: z.string() }),
+      _meta: APP_ONLY,
     },
     async (args): Promise<CallToolResult> => {
       try {
@@ -368,15 +462,13 @@ export function createServer(): McpServer {
           structuredContent: { refined },
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
 
   // --- App tool: list workspaces (inline table UI, or markdown fallback) -----
-  // Like `workspace`, this adapts to the client (see `hostRendersUi`):
+  // Like `create-workspace-form`, this adapts to the client (see `rendersUi`):
   //   • Desktop renders the bundled table UI (mcp-list.html) inline via `_meta.ui`;
   //     rows open in VS Code (`open-workspace`) or link to their issue.
   //   • Claude Code CLI / VS Code get a markdown table instead (their link
@@ -413,7 +505,7 @@ export function createServer(): McpServer {
         const result = await listWorkspaces();
         // Inline-UI hosts (Desktop): the `ui://` table reads structuredContent;
         // keep the text terse. Others get the full markdown table.
-        const text = hostRendersUi(server)
+        const text = rendersUi(server, "mcp-list.html")
           ? `${result.workspaces.length} workspace(s) in ${result.root}.`
           : renderWorkspaceTable(result);
         return {
@@ -421,17 +513,15 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
 
   // --- Tool: open the workspaces dashboard in a browser ---------------------
   // Browser fallback for the inline table UI: hosts that can't render `ui://`
-  // (Claude Code CLI, VS Code) call this to get the full interactive dashboard
-  // in an ordinary browser tab. See lib/browser-ui.ts.
+  // (Claude Code CLI, VS Code) get the full dashboard in a browser tab. It is
+  // the managed server `connect` starts, so the URL is always the same one.
   server.registerTool(
     "open-workspaces-ui",
     {
@@ -439,24 +529,24 @@ export function createServer(): McpServer {
       description:
         "Open the interactive Sandbox Workspaces dashboard in the user's default browser — the " +
         "same UI Claude Desktop renders inline, as a fallback for hosts that don't render MCP App " +
-        "UI. Starts a localhost server (reused across calls) and returns its URL.",
+        "UI. Starts the localhost dashboard on port 3001 if it isn't running, and returns its URL.",
       inputSchema: {},
       outputSchema: z.object({ url: z.string() }),
     },
     async (): Promise<CallToolResult> => {
       try {
-        // Dynamic import: browser-ui.ts imports createServer from here, so a
-        // static import would form a cycle at module load.
-        const { launchBrowserUi } = await import("./lib/browser-ui.js");
-        const { url } = await launchBrowserUi({ open: true });
+        const reporter = collectingReporter();
+        if (!(await withReporter(reporter, () => startWebApp(DASHBOARD, false)))) {
+          throw new WorkspaceError(`Could not start the workspaces dashboard:\n${reporter.text()}`);
+        }
+        const url = `http://127.0.0.1:${DASHBOARD.port}/`;
+        openBrowser(url);
         return {
           content: [{ type: "text", text: `Opened the workspaces dashboard at ${url}` }],
           structuredContent: { url },
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -466,95 +556,23 @@ export function createServer(): McpServer {
     "open-workspace",
     {
       title: "Open Workspace in VS Code",
-      description:
-        "Launch VS Code on a workspace directory under $SANDBOX_WORKSPACES_ROOT. Pass the " +
-        "workspace `name` as returned by `list-workspaces`.",
+      description: "Launch VS Code on a workspace directory under $SANDBOX_WORKSPACES_ROOT. ",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        ...WORKSPACE_ARG,
       },
       outputSchema: z.object({ path: z.string() }),
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
-        const { path: opened } = await openWorkspace(args.name);
+        const { path: opened } = await openWorkspace(
+          resolveWorkspace(args.workspace, headersOf(extra)).name,
+        );
         return {
           content: [{ type: "text", text: `Opened ${opened} in VS Code.` }],
           structuredContent: { path: opened },
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
-      }
-    },
-  );
-
-  // --- Tool: open a feature-tagged Chrome window for a workspace ------------
-  server.registerTool(
-    "open-feature",
-    {
-      title: "Open Feature in Chrome",
-      description:
-        "Launch a feature-tagged incognito Chrome window for a workspace via `sandbox open` " +
-        "(sets the X-Feature routing cookie + tags the window). Routing only resolves if the " +
-        "feature is `up`; otherwise traffic falls through to k8s. Pass the workspace `name`.",
-      inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
-      },
-      outputSchema: z.object({ path: z.string() }),
-    },
-    async (args): Promise<CallToolResult> => {
-      try {
-        const { path: target } = await openFeatureBrowser(args.name);
-        return {
-          content: [
-            { type: "text", text: `Launched a feature-tagged Chrome window for ${args.name}.` },
-          ],
-          structuredContent: { path: target },
-        };
-      } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
-      }
-    },
-  );
-
-  // --- Tool: run a container-lifecycle action on a workspace ----------------
-  // Called by the workspaces table's up/stop/restart/down buttons; can also be
-  // invoked directly. Runs `sandbox <action>` in the workspace dir so FEATURE
-  // and the slot resolve from that workspace's .env.
-  server.registerTool(
-    "workspace-action",
-    {
-      title: "Workspace Container Action",
-      description:
-        "Run a container-lifecycle command on a workspace's stack: `up` (start), `stop` " +
-        "(stop containers, keep the slot), `restart`, or `down` (tear down + release slot). " +
-        "Pass the workspace `name` as returned by `list-workspaces`.",
-      inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
-        action: z.enum(WORKSPACE_ACTIONS).describe("up | stop | restart | down"),
-      },
-      outputSchema: z.object({ command: z.string(), output: z.string(), path: z.string() }),
-    },
-    async (args): Promise<CallToolResult> => {
-      try {
-        const result = await runWorkspaceAction(args.name, args.action);
-        return {
-          content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
-          structuredContent: result as unknown as Record<string, unknown>,
-        };
-      } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -606,9 +624,7 @@ export function createServer(): McpServer {
           structuredContent: { workspaces } as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -631,6 +647,7 @@ export function createServer(): McpServer {
           .describe("Bypass the cache and re-fetch every issue from the tracker."),
       },
       outputSchema: z.object({ statuses: z.record(z.string(), z.string()) }),
+      _meta: APP_ONLY,
     },
     async (args): Promise<CallToolResult> => {
       try {
@@ -644,9 +661,7 @@ export function createServer(): McpServer {
           structuredContent: { statuses } as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -706,9 +721,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -731,9 +744,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -765,9 +776,7 @@ export function createServer(): McpServer {
           structuredContent: { ok: true },
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -795,9 +804,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -838,9 +845,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -856,17 +861,15 @@ export function createServer(): McpServer {
         "each PR file at `status: approved`, pushes, opens the PR and records its URL; `status` records " +
         "merged / shipped / closed from GitHub and release tags.",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        ...WORKSPACE_ARG,
         action: z.enum(["gate", "open", "status"]),
         repo: z.string().optional().describe("Only this code worktree's PR file."),
       },
       outputSchema: z.object({ ok: z.boolean(), lines: z.array(z.string()) }),
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
-        const ws = await resolveWorkspaceDir(args.name);
+        const ws = resolveWorkspace(args.workspace, headersOf(extra)).dir;
         const result =
           args.action === "gate"
             ? await gatePrs(ws, args.repo)
@@ -879,73 +882,32 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
-      }
-    },
-  );
-
-  server.registerTool(
-    "close-out",
-    {
-      title: "Close Out Workspace",
-      description:
-        "The one way to end a workspace. After every PR shipped (or was closed/abandoned): close the issue, " +
-        "write closeout.md, remove the workspace (commit + push every branch, `sandbox down`, delete the " +
-        "folder) and delete the merged code branches. With `abandon` (a reason) when work is unshipped: " +
-        "record the reason, leave the issue, remove the workspace and keep every branch. Without `abandon` it " +
-        "refuses while a PR is unshipped. The werkmeister plugin then archives the workspace's desktop " +
-        "Claude sessions; terminal sessions still open are listed for the person to /exit. Destructive — " +
-        "confirm with the person first.",
-      inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
-        abandon: z
-          .string()
-          .optional()
-          .describe(
-            "Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files.",
-          ),
-      },
-      outputSchema: z.object({
-        command: z.string(),
-        output: z.string(),
-        path: z.string(),
-        terminals: z.array(z.string()),
-      }),
-    },
-    async (args): Promise<CallToolResult> => {
-      try {
-        const result = await closeOut(
-          args.name,
-          args.abandon !== undefined ? { abandon: args.abandon } : {},
-        );
-        return {
-          content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
-          structuredContent: result as unknown as Record<string, unknown>,
-        };
-      } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        // The client only sees `message`; the stack in the MCP stderr log is what a failed teardown is diagnosed from.
-        console.error(`[workspaces] close-out failed: ${(e as Error).stack ?? message}`);
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
 
   // --- Tool: live container status for all workspaces -----------------------
-  // One `docker ps` sweep; used by the workspaces table to show up/stopped/down.
+  // One `docker ps` sweep; the dashboard polls it every 5 s. The host snapshot
+  // probes every k8s forward in turn, so it waits for `detail`.
   server.registerTool(
-    "workspace-status",
+    "status",
     {
-      title: "Workspace Container Status",
+      title: "Sandbox status",
       description:
-        "Report live container status for every workspace (up / partial / stopped / down), " +
-        "from a single `docker ps` sweep matched to each workspace's Compose project.",
-      inputSchema: {},
+        "Report live container status for every workspace (up / partial / stopped / down) and the " +
+        "shared infra, from a single `docker ps` sweep matched to each workspace's Compose project, " +
+        "with each workspace's agent state. With `detail: true`, also everything `sandbox status` " +
+        "knows (as `host`): infrastructure containers, the host web servers, k8s forward health, " +
+        "every feature's slot and containers, and telepresence intercepts.",
+      inputSchema: {
+        detail: z
+          .boolean()
+          .optional()
+          .describe(
+            "Add the host-wide `sandbox status` snapshot. Slower: it probes every k8s forward.",
+          ),
+      },
       outputSchema: z.object({
         infra: z.object({
           state: z.enum(["up", "partial", "down", "unknown"]),
@@ -979,11 +941,15 @@ export function createServer(): McpServer {
             }),
           }),
         ),
+        host: z.record(z.string(), z.unknown()).optional(),
       }),
     },
-    async (): Promise<CallToolResult> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const { statuses, infra } = await getWorkspaceStatuses();
+        const host = args.detail
+          ? { ...(await statusSnapshot()), telepresence: await interceptsSnapshot() }
+          : undefined;
         const claudeNote = (c: { state: string; waiting: boolean }): string => {
           if (c.state === "running") return " · claude: working";
           if (c.waiting) return " · claude: waiting for input";
@@ -997,13 +963,11 @@ export function createServer(): McpServer {
           .join("\n");
         const text = `infra: ${infra.state}${infra.total ? ` (${infra.running}/${infra.total})` : ""}\n${wsText || "No workspaces."}`;
         return {
-          content: [{ type: "text", text }],
-          structuredContent: { statuses, infra } as unknown as Record<string, unknown>,
+          content: [{ type: "text", text: host ? `${text}\n\n${JSON.stringify(host)}` : text }],
+          structuredContent: { statuses, infra, host } as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1030,9 +994,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1045,7 +1007,7 @@ export function createServer(): McpServer {
       description:
         "Sum a workspace's Claude Code token usage by model and session, with a " +
         "rough USD estimate (rates from ~/.sandbox/model-pricing.yaml). On-demand.",
-      inputSchema: { name: z.string().describe("Workspace name") },
+      inputSchema: { ...WORKSPACE_ARG },
       outputSchema: {
         name: z.string(),
         totals: z.object({
@@ -1083,8 +1045,9 @@ export function createServer(): McpServer {
         ),
       },
     },
-    async ({ name }): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
+        const { name } = resolveWorkspace(args.workspace, headersOf(extra));
         const usage = await getWorkspaceUsage(name);
         const tot =
           usage.totals.input +
@@ -1099,35 +1062,7 @@ export function createServer(): McpServer {
           structuredContent: usage as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
-      }
-    },
-  );
-
-  // --- Tool: start shared infrastructure ------------------------------------
-  server.registerTool(
-    "sandbox-connect",
-    {
-      title: "Connect Shared Infrastructure",
-      description:
-        "Run `sandbox connect` to start shared infrastructure (local services, k8s " +
-        "port-forwards). Returns once infra is up.",
-      inputSchema: {},
-      outputSchema: z.object({ command: z.string(), output: z.string() }),
-    },
-    async (): Promise<CallToolResult> => {
-      try {
-        const result = await runConnect();
-        return {
-          content: [{ type: "text", text: `${result.command}\n\n${result.output}`.trim() }],
-          structuredContent: result as unknown as Record<string, unknown>,
-        };
-      } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1156,9 +1091,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1200,9 +1133,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1229,9 +1160,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1265,9 +1194,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1282,12 +1209,10 @@ export function createServer(): McpServer {
       description:
         "Return the newest Claude Code session for a workspace: session ID plus the last N " +
         "user/assistant messages, with tool calls included as compact `tool` activity rows. " +
-        "sessionId is null when the workspace has no sessions yet. Pass the workspace `name` " +
+        "sessionId is null when the workspace has no sessions yet. Pass the `workspace` " +
         "from `list-workspaces`.",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        ...SESSION_ARG,
         limit: z
           .number()
           .int()
@@ -1328,23 +1253,22 @@ export function createServer(): McpServer {
           ),
       }),
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
+        const name = sessionKey(args.workspace, extra);
         const [result, sessions] = await Promise.all([
-          getClaudeTranscript(args.name, args.limit ?? 20, args.sessionId),
-          listSessions(args.name),
+          getClaudeTranscript(name, args.limit ?? 20, args.sessionId),
+          listSessions(name),
         ]);
         const text = result.sessionId
           ? `Session ${result.sessionId} (${result.messages.length} recent messages, ${result.sessionCount} session(s) total).`
-          : `No Claude Code sessions found for ${args.name}.`;
+          : `No Claude Code sessions found for ${name}.`;
         return {
           content: [{ type: "text", text }],
           structuredContent: { ...result, sessions } as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1364,9 +1288,7 @@ export function createServer(): McpServer {
         "`claude-transcript` to watch the reply appear. For a fully interactive session " +
         "use `claude-resume`.",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        ...SESSION_ARG,
         message: z.string().describe("The message to send."),
         sessionId: z
           .string()
@@ -1381,9 +1303,10 @@ export function createServer(): McpServer {
         startedNew: z.boolean(),
       }),
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
-        const result = await sendToClaudeSession(args.name, args.message, args.sessionId);
+        const name = sessionKey(args.workspace, extra);
+        const result = await sendToClaudeSession(name, args.message, args.sessionId);
         const text = result.startedNew
           ? "Started a new session; poll claude-transcript for the reply."
           : `Turn started on session ${result.sessionId}; poll claude-transcript for the reply.`;
@@ -1392,9 +1315,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1411,9 +1332,7 @@ export function createServer(): McpServer {
         "done, failed (with error detail), or idle when no turn was started by this server " +
         "process (fall back to polling `claude-transcript`).",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        ...SESSION_ARG,
       },
       outputSchema: z.object({
         state: z.enum(["idle", "running", "done", "failed"]),
@@ -1421,23 +1340,23 @@ export function createServer(): McpServer {
         exitCode: z.number().nullable(),
         error: z.string().nullable(),
       }),
+      _meta: APP_ONLY,
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
-        const result = await getClaudeTurnStatus(args.name);
+        const name = sessionKey(args.workspace, extra);
+        const result = await getClaudeTurnStatus(name);
         return {
           content: [
             {
               type: "text",
-              text: `Turn state for ${args.name}: ${result.state}${result.error ? ` (${result.error})` : ""}`,
+              text: `Turn state for ${name}: ${result.state}${result.error ? ` (${result.error})` : ""}`,
             },
           ],
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1452,9 +1371,7 @@ export function createServer(): McpServer {
         "Code session (`claude --resume <id>`), fully interactive. Starts a fresh session " +
         "when the workspace has none.",
       inputSchema: {
-        name: z
-          .string()
-          .describe("Workspace name (an immediate subdir of $SANDBOX_WORKSPACES_ROOT)."),
+        ...SESSION_ARG,
         sessionId: z
           .string()
           .optional()
@@ -1465,9 +1382,10 @@ export function createServer(): McpServer {
         sessionId: z.string().nullable(),
       }),
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
-        const result = await resumeClaudeInTerminal(args.name, args.sessionId);
+        const name = sessionKey(args.workspace, extra);
+        const result = await resumeClaudeInTerminal(name, args.sessionId);
         const text = result.sessionId
           ? `Opened Terminal resuming session ${result.sessionId} in ${result.path}.`
           : `Opened Terminal with a new Claude session in ${result.path}.`;
@@ -1476,9 +1394,7 @@ export function createServer(): McpServer {
           structuredContent: result as unknown as Record<string, unknown>,
         };
       } catch (e) {
-        const message =
-          e instanceof WorkspaceError ? e.message : `Unexpected error: ${(e as Error).message}`;
-        return { isError: true, content: [{ type: "text", text: message }] };
+        return fail(e);
       }
     },
   );
@@ -1490,7 +1406,7 @@ export function createServer(): McpServer {
     RESOURCE_URI,
     { mimeType: RESOURCE_MIME_TYPE },
     async (): Promise<ReadResourceResult> => {
-      const html = await fs.readFile(path.join(DIST_DIR, "mcp-app.html"), "utf-8");
+      const html = readDashboardHtml("mcp-app.html");
       return {
         contents: [{ uri: RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: html }],
       };
@@ -1504,12 +1420,10 @@ export function createServer(): McpServer {
     RESOURCE_URI_LIST,
     { mimeType: RESOURCE_MIME_TYPE },
     async (): Promise<ReadResourceResult> => {
-      const html = await fs.readFile(path.join(DIST_DIR, "mcp-list.html"), "utf-8");
+      const html = readDashboardHtml("mcp-list.html");
       return {
         contents: [{ uri: RESOURCE_URI_LIST, mimeType: RESOURCE_MIME_TYPE, text: html }],
       };
     },
   );
-
-  return server;
 }

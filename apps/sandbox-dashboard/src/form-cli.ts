@@ -5,7 +5,7 @@
  * `sandbox workspace --browser-form`. It reuses the exact same pieces as the
  * Desktop MCP App and the MCP server's CLI fallback:
  *
- *   getFormBundle()  →  promptViaLocalhostForm()  →  createWorkspace()
+ *   getFormSchema()  →  promptViaLocalhostForm()  →  createWorkspace()
  *
  * so there is ONE form and ONE create path across every surface. Unlike
  * the MCP server, this needs no MCP client connection — it just opens the
@@ -29,10 +29,11 @@ import {
   createWorkspace,
   type FormSchemaBundle,
   fetchIssueFormData,
+  getFormSchema,
   WorkspaceError,
 } from "werkmeister-core";
 import { envVar } from "werkmeister-core/config";
-import { getFormBundle, promptViaLocalhostForm } from "./lib/localhost-form.js";
+import { promptViaLocalhostForm } from "./lib/localhost-form.js";
 
 interface CliArgs {
   issue?: string;
@@ -69,7 +70,7 @@ async function main(): Promise<void> {
 
   let bundle: FormSchemaBundle;
   try {
-    bundle = await getFormBundle();
+    bundle = await getFormSchema();
     // Explicit CLI values win over the issue's.
     if (args.issue) {
       const issueData = await fetchIssueFormData(args.issue);

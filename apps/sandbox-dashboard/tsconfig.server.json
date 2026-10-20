@@ -14,5 +14,5 @@
     "types": ["node"]
   },
   // The server entries only: the rest of src/ is the DOM UI, which vite bundles.
-  "include": ["src/server.ts", "src/main.ts", "src/form-cli.ts", "src/lib"]
+  "include": ["src/main.ts", "src/form-cli.ts", "src/lib"]
 }

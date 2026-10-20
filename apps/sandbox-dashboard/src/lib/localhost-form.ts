@@ -3,10 +3,11 @@
  * MCP App resources (Claude Code CLI, the VS Code extension).
  *
  * The Desktop flow renders the RJSF form inline via ext-apps. Hosts without the
- * `io.modelcontextprotocol/ui` capability can't do that — so for them the
- * `workspace` tool spins up a tiny localhost HTTP server, serves the bundled
- * create-form page (`dist/form.html`, the same src/create-form.ts the browser
- * dashboard's "New workspace" tab renders — fully self-contained, no CDN),
+ * `io.modelcontextprotocol/ui` capability can't do that — so for them
+ * apps/mcp's `create-workspace-form` tool runs form-cli.js, which spins up a
+ * tiny localhost HTTP server, serves the bundled create-form page
+ * (`dist/form.html`, the same src/create-form.ts the browser dashboard's
+ * "New workspace" tab renders — fully self-contained, no CDN),
  * opens the user's browser, and blocks until they submit or cancel. It's the
  * localhost-callback (OAuth loopback) pattern: server + browser are both on the
  * user's machine, so collecting input never depends on the MCP client
@@ -17,8 +18,8 @@
  * but this throwaway server dispatches only what the form calls:
  * `workspace-form-schema` (the bundle), `refine-prompt`, and the intercepted
  * `create-workspace` / `cancel-form`, which resolve the promise instead of
- * creating anything — the caller (server.ts or form-cli.ts) feeds the result
- * into the shared `createWorkspace()`.
+ * creating anything — the caller (form-cli.ts) feeds the result into the
+ * shared `createWorkspace()`.
  */
 
 import { spawn } from "node:child_process";
@@ -27,31 +28,13 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import express from "express";
 import type { FormSchemaBundle } from "werkmeister-core";
-import { fetchIssueFormData, getFormSchema, refinePrompt, WorkspaceError } from "werkmeister-core";
-import { issueTracker } from "werkmeister-core/issue_tracker";
+import { fetchIssueFormData, refinePrompt, WorkspaceError } from "werkmeister-core";
 
 // Works both from source (src/lib/localhost-form.ts via tsx) and compiled
 // (dist/lib/localhost-form.js) — the built page always lives at dist/form.html.
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "..", "..", "dist")
   : path.join(import.meta.dirname, "..");
-
-/**
- * `getFormSchema()` with the configured tracker's label on `issue_id`'s
- * `ui:options.trackerLabel`, so the form's "Fetch from <tracker>" button names
- * the tracker without the browser bundle knowing it. Every surface that hands
- * the form a bundle (server.ts, form-cli.ts) builds it here.
- */
-export async function getFormBundle(): Promise<FormSchemaBundle> {
-  const bundle = await getFormSchema();
-  const ui = (bundle.uiSchema.issue_id ?? {}) as Record<string, unknown>;
-  const opts = (ui["ui:options"] ?? {}) as Record<string, unknown>;
-  bundle.uiSchema.issue_id = {
-    ...ui,
-    "ui:options": { ...opts, trackerLabel: issueTracker().label },
-  };
-  return bundle;
-}
 
 export type LocalhostFormStatus = "submitted" | "cancelled" | "timeout";
 

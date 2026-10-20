@@ -1103,7 +1103,7 @@ It does need:
   else makes the entry survive `init-workspace`.
 
 Two things stop working on the isolated side, by design. The `werkmeister` plugin's
-MCP entry runs `w9r dashboard` over stdio, and its skills shell out to the CLI; with
+MCP entry runs `werkmeister mcp` over stdio, and its skills shell out to the CLI; with
 no binary there, use the tools the HTTP server exposes instead. And the
 dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
 

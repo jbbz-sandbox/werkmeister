@@ -7,14 +7,7 @@
  * UI (`dist/browser.html`) as an ordinary web page and proxies its tool calls
  * back into the real MCP tool handlers over an in-memory transport. No dispatch
  * table to keep in sync: the browser talks to the exact tools every other host
- * does, via a `Client` linked to `createServer()`.
- *
- * Two consumers:
- *   • main.ts (HTTP mode) mounts {@link createBrowserUiRouter} so
- *     `node dist/main.js` also serves the dashboard alongside `/mcp`.
- *   • The `open-workspaces-ui` tool calls {@link launchBrowserUi} to spin up a
- *     localhost server and open the browser — the localhost-callback pattern the
- *     create-workspace form already uses (see localhost-form.ts).
+ * does, via a `Client` linked to apps/mcp's `createServer()`.
  */
 
 import fs from "node:fs/promises";
@@ -23,8 +16,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express, { type Router } from "express";
-import { createServer } from "../server.js";
-import { localOnly, openBrowser } from "./localhost-form.js";
+import { createServer } from "werkmeister-mcp";
+import { localOnly } from "./localhost-form.js";
 import { subscribeSession } from "./session-stream.js";
 
 // Works both from source (src/lib/browser-ui.ts via tsx) and compiled
@@ -56,7 +49,7 @@ function textOf(result: CallToolResult): string {
 /**
  * Express router serving the dashboard at `GET /` and dispatching tool calls at
  * `POST /api/tool`. Mount at the app root (not a sub-path) so the page's
- * same-origin `fetch("/api/tool")` resolves — `/mcp` stays a distinct route.
+ * same-origin `fetch("/api/tool")` resolves.
  */
 export async function createBrowserUiRouter(): Promise<Router> {
   const client = await connectInMemoryClient();
@@ -141,49 +134,4 @@ export async function createBrowserUiRouter(): Promise<Router> {
   });
 
   return router;
-}
-
-let launched: { url: string; close: () => void } | undefined;
-
-// The one canonical dashboard URL. Matches the durable standalone server's port
-// (main.ts `PORT`, default 3001, which `sandbox connect` starts) so the dashboard
-// always lives at the SAME address no matter which surface opens it — never a
-// random per-session port. Overridable via PORT only to track a non-default
-// standalone server.
-const DASHBOARD_PORT = Number(process.env.PORT) || 3001;
-
-/**
- * Open the dashboard, always at {@link DASHBOARD_PORT}. If a server is already
- * bound there — the durable one from `sandbox connect`, or another session's —
- * we DON'T start a second one; we just open the browser to it (it serves the
- * same app). We only bind the port ourselves as a fallback when nothing's there,
- * and that server dies with this process. Either way the URL is identical, so a
- * bookmarked tab keeps working. Idempotent: repeated calls just re-open it.
- */
-export async function launchBrowserUi(opts: { open?: boolean } = {}): Promise<{ url: string }> {
-  const url = `http://127.0.0.1:${DASHBOARD_PORT}/`;
-  if (launched) {
-    if (opts.open !== false) openBrowser(launched.url);
-    return { url: launched.url };
-  }
-  const app = express();
-  app.use(await createBrowserUiRouter());
-  return await new Promise((resolve, reject) => {
-    const httpServer = app.listen(DASHBOARD_PORT, "127.0.0.1", () => {
-      launched = { url, close: () => httpServer.close() };
-      console.error(`[workspaces] workspaces UI: ${url}`);
-      if (opts.open !== false) openBrowser(url);
-      resolve({ url });
-    });
-    httpServer.on("error", (e) => {
-      // Port already bound → a dashboard is already serving here (the durable
-      // server, or another session). Reuse it: just open the browser.
-      if ((e as NodeJS.ErrnoException).code === "EADDRINUSE") {
-        if (opts.open !== false) openBrowser(url);
-        resolve({ url });
-      } else {
-        reject(e);
-      }
-    });
-  });
 }

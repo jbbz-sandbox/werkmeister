@@ -62,7 +62,7 @@ export interface WebApp {
 }
 
 export const DASHBOARD: WebApp = {
-  label: "MCP web server",
+  label: "Workspaces dashboard",
   dir: "sandbox-dashboard",
   port: 3001,
   stem: "mcp-server",
