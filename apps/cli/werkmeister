@@ -118,5 +118,9 @@ fi
 if [ "${1:-}" = "hooks" ] && [ "${2:-}" = "pr-guard" ]; then
     exec "$node_bin" "$SANDBOX_ROOT/dist/lib/pr_guard.js"
 fi
+# `hooks agent-state` runs on every tool call too (PreToolUse and PostToolUse).
+if [ "${1:-}" = "hooks" ] && [ "${2:-}" = "agent-state" ]; then
+    exec "$node_bin" "$SANDBOX_ROOT/dist/lib/agent_state.js"
+fi
 
 exec "$node_bin" "$entry" "$@"

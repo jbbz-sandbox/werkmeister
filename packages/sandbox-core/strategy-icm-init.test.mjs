@@ -12,7 +12,7 @@ import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { templateFor } from "./dist/strategies/icm_templates.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { discoverRepos } from "./dist/workspace_init.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { withAgentState, withSandboxHome } from "./fixtures.mjs";
 
 const PROMPT = "## Goal\n\nDocument the backend API.\n\n## Open questions\n\n1. UI or raw spec?";
 
@@ -107,7 +107,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.deepEqual(
       JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
       {
-        hooks: { PreToolUse: [buildPrGuardEntry()] },
+        hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
         permissions: { allow: READ_ONLY_GIT_RULES },
       },
     );

@@ -975,7 +975,9 @@ export function createServer(): McpServer {
             ),
             claude: z.object({
               state: z.enum(["running", "done", "failed", "idle"]),
-              waiting: z.boolean(),
+              agent: z.enum(["working", "needs-you", "done", "idle"]),
+              at: z.string().nullable(),
+              question: z.string().nullable(),
             }),
           }),
         ),
@@ -984,11 +986,8 @@ export function createServer(): McpServer {
     async (): Promise<CallToolResult> => {
       try {
         const { statuses, infra } = await getWorkspaceStatuses();
-        const claudeNote = (c: { state: string; waiting: boolean }): string => {
-          if (c.state === "running") return " · claude: working";
-          if (c.waiting) return " · claude: waiting for input";
-          return "";
-        };
+        const claudeNote = (c: { agent: string }): string =>
+          c.agent === "idle" ? "" : ` · claude: ${c.agent === "needs-you" ? "needs you" : c.agent}`;
         const wsText = statuses
           .map((s) => {
             const counts = s.total ? ` (${s.running}/${s.total})` : "";

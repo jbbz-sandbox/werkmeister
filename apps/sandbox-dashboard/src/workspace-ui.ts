@@ -118,8 +118,11 @@ const CSS = `
   .wsui .c-partial { background: #fdf0e6; color: #c05621; } .wsui .c-partial .dot { background: #dd6b20; }
   .wsui .c-down { background: var(--sd-line-soft); color: var(--sd-faint); } .wsui .c-down .dot { background: var(--sd-ghost); }
 
-  .wsui .waiting { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--sd-warn-bg); color: var(--sd-warn); white-space: nowrap; }
-  .wsui .waiting .dot { background: var(--sd-warn-dot); animation: wsui-pulse 1.4s ease-in-out infinite; }
+  .wsui .agent { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .wsui .a-needs-you { background: var(--sd-warn-bg); color: var(--sd-warn); }
+  .wsui .a-needs-you .dot { background: var(--sd-warn-dot); animation: wsui-pulse 1.4s ease-in-out infinite; }
+  .wsui .a-working { background: var(--sd-ok-bg); color: var(--sd-ok); } .wsui .a-working .dot { background: var(--sd-ok-dot); }
+  .wsui .a-done { background: var(--sd-line-soft); color: var(--sd-muted); } .wsui .a-done .dot { background: var(--sd-ok-dot); }
   @keyframes wsui-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
   .wsui .panel { display: none; border-top: 1px solid var(--sd-line-soft); }
@@ -186,13 +189,20 @@ const CSS = `
      src/usage-widget.ts. */
 `;
 
+/** The agent pill's text per `claude.agent`; idle shows no pill. */
+const AGENT_LABEL: Record<string, string> = {
+  "needs-you": "Needs you",
+  working: "Working",
+  done: "Done",
+};
+
 /** One `workspace-status` row; only the fields this UI reads. */
 interface ContainerState {
   name: string;
   state?: string;
   running?: number;
   total?: number;
-  claude?: { state?: string; waiting?: boolean };
+  claude?: { state?: string; agent?: string; question?: string | null };
 }
 
 interface ForwardStatus {
@@ -649,17 +659,22 @@ export function initWorkspaceUI(
   // ---- Claude chat panel ----
   // The embedded Claude chat panel (src/chat-panel.ts) — shared verbatim with
   // the Open-Pull-Requests tab. We pass the list-badge hook so a workspace's
-  // "waiting for input" pill stays live; the PR tab omits it.
+  // agent pill stays live; the PR tab omits it.
   function buildChat(w: WorkspaceEntry): HTMLElement {
     const handle = initChatPanel(w.name, {
       bridge,
       placeholder: "Message this workspace\u2019s Claude session\u2026",
       renderMarkdown: opts?.renderMarkdown,
-      onActivity: ({ waiting, running }) => {
+      onActivity: ({ running }) => {
         const cs = cstateByWs[w.name];
         if (!cs) return;
-        cs.claude = { state: running ? "running" : (cs.claude?.state ?? "idle"), waiting };
-        applyFilter(); // rebuild cards (cached panel + chat survive) so the badge updates
+        if (running) {
+          cs.claude = { ...cs.claude, state: "running", agent: "working" };
+          applyFilter(); // rebuild cards (cached panel + chat survive) so the badge updates
+          return;
+        }
+        // Done or a question is the Stop hook's call, so read it back rather than guess.
+        void refreshStatus().then(applyFilter);
       },
     });
     chatCtl[w.name] = { onExpand: handle.onExpand, onVisibility: handle.onVisibility };
@@ -699,11 +714,13 @@ export function initWorkspaceUI(
       // Cold-start skeleton: show a placeholder pill until the first
       // workspace-status resolves, so a fresh load never looks empty/broken.
       else if (!cstateLoaded) meta.appendChild(el("span", "status st-loading", "…"));
-      if (cstateByWs[w.name]?.claude?.waiting) {
-        const wb = el("span", "waiting");
+      const claude = cstateByWs[w.name]?.claude;
+      const agentLabel = claude?.agent ? AGENT_LABEL[claude.agent] : undefined;
+      if (claude && agentLabel) {
+        const wb = el("span", "agent a-" + claude.agent);
         wb.appendChild(el("span", "dot"));
-        wb.appendChild(el("span", null, "waiting for input"));
-        wb.title = "Claude replied and is waiting for your next message";
+        wb.appendChild(el("span", null, agentLabel));
+        if (claude.question) wb.title = claude.question;
         meta.appendChild(wb);
       }
       if (w.issueId && w.issueUrl)

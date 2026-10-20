@@ -27,6 +27,7 @@
     "./generate": "./dist/generate.js",
     "./gate": "./dist/gate.js",
     "./pr_guard": "./dist/pr_guard.js",
+    "./agent_state": "./dist/agent_state.js",
     "./pr_lifecycle": "./dist/pr_lifecycle.js",
     "./git_hooks": "./dist/git_hooks.js",
     "./global_config": "./dist/global_config.js",

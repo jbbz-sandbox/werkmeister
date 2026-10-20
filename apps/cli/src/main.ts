@@ -462,12 +462,15 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/hooks.js"),
     configure: (cmd) => {
       cmd
-        .description("PreToolUse hook entrypoints: the standards gate and the PR guard")
+        .description(
+          "Claude Code hook entrypoints: the standards gate, the PR guard and the agent state",
+        )
         .addArgument(
           new Argument(
             "<action>",
-            "gate: deny or allow an Edit/Write per the standards gate; pr-guard: deny opening a PR except via `sandbox pr open`",
-          ).choices(["gate", "pr-guard"]),
+            "gate: deny or allow an Edit/Write per the standards gate; pr-guard: deny opening a PR except via `sandbox pr open`; " +
+              "agent-state: record working / needs-you / done for the workspace pane and dashboard",
+          ).choices(["gate", "pr-guard", "agent-state"]),
         );
     },
     namespace: ([action]) => ({ action }),
