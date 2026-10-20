@@ -71,6 +71,17 @@ suite("Sandbox Workspaces", () => {
     );
   });
 
+  // ⚡ Connect infra is view-wide (SW-55): no workspace cwd to name its terminal after.
+  test("Connect infra runs `sandbox connect` in a terminal named for it", async () => {
+    process.env.SANDBOX_BIN = fixture("unused").bin;
+
+    await vscode.commands.executeCommand("sandbox.connect");
+    assert.deepEqual(
+      vscode.window.terminals.map((t) => t.name),
+      ["sandbox connect"],
+    );
+  });
+
   // sandbox.configure is a passthrough to a built-in, so what can break is the
   // passthrough: a renamed built-in or a typo'd id, which registration alone
   // would not catch. The `sandbox.` filter it passes is not readable back

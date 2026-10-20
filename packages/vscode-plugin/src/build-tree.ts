@@ -4,9 +4,20 @@
  *
  * Deliberately free of any `vscode` import so it runs under `node --test`
  * without an extension harness; `tree.ts` does nothing but map a WsNode onto a
- * vscode.TreeItem. Input shapes are declared structurally rather than imported
- * from werkmeister-core, so the test file needs no werkmeister-core build.
+ * vscode.TreeItem. Words, tones and glyphs come from werkmeister-ui's display
+ * model (SW-49), shared with the pane and the React card, so they are never
+ * re-derived here; this file only maps tones to VS Code theme colours.
  */
+
+import {
+  type DisplayInput,
+  type DisplayOptions,
+  displayModel,
+  type PrInput,
+  type ServiceHealth,
+  type Tone,
+  type WorkspaceDisplay,
+} from "werkmeister-ui";
 
 export interface WorkspaceEntryLike {
   name: string;
@@ -16,17 +27,21 @@ export interface WorkspaceEntryLike {
   labels: string[];
 }
 
-export type ServiceHealthLike = "healthy" | "starting" | "unhealthy" | "running" | "down";
+export type ServiceHealthLike = ServiceHealth;
 
-export interface WorkspaceStatusLike {
+export interface WorkspaceStatusLike extends DisplayInput {
   name: string;
   project: string | null;
-  state: "up" | "partial" | "stopped" | "down" | "unknown";
-  running: number;
-  total: number;
   slot: number | null;
   ports: string | null;
-  services: { name: string; state: ServiceHealthLike }[];
+}
+
+/** What the tree knows beyond the status sweep. */
+export interface TreeExtras {
+  /** Per workspace name. Undefined until the first `getWorkspacePRs` lands; null when it failed. */
+  prs?: Map<string, PrInput[]> | null;
+  lifecycles?: Map<string, DisplayOptions["lifecycle"]>;
+  now?: Date;
 }
 
 export interface InterceptRowLike {
@@ -43,17 +58,25 @@ export interface InterceptsLike {
 }
 
 export interface WsNode {
-  kind: "workspace" | "service" | "error";
+  kind: "workspace" | "service" | "pr" | "legend" | "error";
   /** Stable across refreshes so VS Code preserves expansion state. */
   id: string;
   label: string;
   description: string;
+  /** Markdown on a workspace node, plain text elsewhere. */
   tooltip: string;
   icon: { id: string; color?: string };
   contextValue: string;
   expanded: boolean;
-  workspace?: { name: string; path: string; feature: string | null; issueUrl: string | null };
+  workspace?: {
+    name: string;
+    path: string;
+    feature: string | null;
+    issueUrl: string | null;
+    prs: { ref: string; url: string }[];
+  };
   service?: { name: string; workspacePath: string; feature: string | null; leave: boolean };
+  pr?: { url: string };
   /** Command id to run when the node is clicked, if any. */
   command?: string;
   children: WsNode[];
@@ -73,21 +96,79 @@ export function featureOf(project: string | null): string | null {
   return project.slice("sandbox-".length) || null;
 }
 
-const WORKSPACE_ICONS: Record<WorkspaceStatusLike["state"], { id: string; color?: string }> = {
-  up: { id: "circle-filled", color: "charts.green" },
-  partial: { id: "circle-filled", color: "charts.yellow" },
-  stopped: { id: "circle-outline", color: "descriptionForeground" },
-  down: { id: "circle-outline", color: "descriptionForeground" },
-  unknown: { id: "question", color: "descriptionForeground" },
+/** Board 09 §E. `needs` is a solid chip elsewhere; a tree icon can only be yellow. */
+export const TONE_COLORS: Record<Tone, string> = {
+  ok: "charts.green",
+  warn: "charts.yellow",
+  err: "errorForeground",
+  off: "disabledForeground",
+  pr: "charts.purple",
+  needs: "charts.yellow",
 };
 
-const SERVICE_ICONS: Record<ServiceHealthLike, { id: string; color?: string }> = {
-  healthy: { id: "pass", color: "charts.green" },
-  starting: { id: "loading~spin" },
-  unhealthy: { id: "warning", color: "charts.red" },
-  running: { id: "circle-filled", color: "charts.blue" },
-  down: { id: "circle-outline", color: "descriptionForeground" },
+/** The only commands a workspace tooltip may link to; tree.ts trusts exactly these. */
+export const TOOLTIP_COMMANDS = [
+  "sandbox.continue",
+  "sandbox.closeOut",
+  "sandbox.up",
+  "sandbox.switch",
+  "sandbox.openFeature",
+];
+
+const PRIMARY_COMMAND: Record<WorkspaceDisplay["primary"]["action"], string> = {
+  continue: "sandbox.continue",
+  "close-out": "sandbox.closeOut",
+  up: "sandbox.up",
 };
+
+/**
+ * Board 09 §F as tree rows, toggled by the view's `?`. Rows rather than
+ * `TreeView.message`, which VS Code sets as plain textContent: no line breaks,
+ * no codicons, no colour.
+ */
+export const LEGEND_NODE: WsNode = legendGroup([
+  ["circle-filled", "needs", "Needs you", "the agent asked you something"],
+  ["sync", "ok", "Working", "agent busy"],
+  ["pass", "ok", "Done", "agent finished"],
+  ["circle-outline", "off", "Idle", "no live turn, nothing asked"],
+  ["warning", "err", "▲ unhealthy", "service · ● up · ○ down · ◐ starting"],
+  ["git-merge", "pr", "Merged · Released", "PR state · Open is green"],
+  ["gear", "off", "⚙ Auto", "autonomous run"],
+]);
+
+function legendGroup(rows: [string, Tone, string, string][]): WsNode {
+  const leaf = { contextValue: "legend", expanded: false, children: [] };
+  return {
+    ...leaf,
+    kind: "legend",
+    id: "legend:",
+    label: "Legend",
+    description: "icon colour follows the agent",
+    tooltip: "Icon colour follows the agent. The state word is always in the description.",
+    icon: { id: "question" },
+    expanded: true,
+    children: rows.map(([id, tone, label, description]) => ({
+      ...leaf,
+      kind: "legend",
+      id: `legend:${label}`,
+      label,
+      description,
+      tooltip: `${label}: ${description}`,
+      icon: { id, color: TONE_COLORS[tone] },
+    })),
+  };
+}
+
+/** Hovers render Markdown, so names, labels and the agent's question must not inject any. */
+function escapeMd(s: string): string {
+  return s.replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, "\\$&");
+}
+
+function commandLink(label: string, command: string, ws: WorkspaceEntryLike): string {
+  // pickWorkspace() reads only `workspace.name` / `workspace.path` off its argument.
+  const arg = encodeURIComponent(JSON.stringify([{ workspace: { name: ws.name, path: ws.path } }]));
+  return `[${escapeMd(label)}](command:${command}?${arg})`;
+}
 
 /** True when `child` is `parent` or sits inside it. Segment-aware: /ws/ab is not an ancestor of /ws/abc. */
 function contains(parent: string, child: string): boolean {
@@ -166,6 +247,7 @@ function serviceNode(
   ws: WorkspaceEntryLike,
   feature: string | null,
   intercepts: InterceptsLike | null,
+  look: { codicon: string; tone: Tone },
 ): WsNode {
   const row = feature ? intercepts?.byFeature.get(feature)?.get(svc.name) : undefined;
   // A failed lookup can't tell remote from local, so it keeps "unavailable" on every row.
@@ -187,7 +269,10 @@ function serviceNode(
     label: svc.name,
     description: `${svc.state}${suffix}`,
     tooltip: view ? `${svc.name} — ${svc.state}\n${view.note}` : `${svc.name} — ${svc.state}`,
-    icon: SERVICE_ICONS[svc.state] ?? SERVICE_ICONS.down,
+    icon: {
+      id: look.codicon === "loading" ? "loading~spin" : look.codicon,
+      color: TONE_COLORS[look.tone],
+    },
     contextValue: view?.contextValue ?? "service",
     expanded: false,
     service: { name: svc.name, workspacePath: ws.path, feature, leave: view?.leave ?? false },
@@ -195,48 +280,141 @@ function serviceNode(
   };
 }
 
+function prNode(ws: WorkspaceEntryLike, pr: WorkspaceDisplay["prs"][number]): WsNode {
+  return {
+    kind: "pr",
+    id: `${ws.name}/pr/${pr.url}`,
+    label: pr.ref,
+    description: [pr.state.text, pr.ci?.text].filter(Boolean).join(" · "),
+    tooltip: pr.url,
+    icon: {
+      id: pr.state.tone === "pr" ? "git-merge" : "git-pull-request",
+      color: TONE_COLORS[pr.state.tone],
+    },
+    contextValue: "pr",
+    expanded: false,
+    pr: { url: pr.url },
+    command: "sandbox.openPr",
+    children: [],
+  };
+}
+
+/** The card's rows as a hover: Containers / PRs / Workflow / Agent, the question, then actions. */
+function workspaceTooltip(
+  ws: WorkspaceEntryLike,
+  status: WorkspaceStatusLike | undefined,
+  d: WorkspaceDisplay | null,
+): string {
+  const issue = ws.issueId
+    ? ws.issueUrl
+      ? `[${escapeMd(ws.issueId)}](${ws.issueUrl})`
+      : escapeMd(ws.issueId)
+    : "no issue";
+  const blocks = [`**${escapeMd(ws.name)}**  \n${issue}`];
+  if (d) {
+    const services = d.services.map((s) => s.text).join(" · ");
+    const prs = d.prsEmpty
+      ? d.prsEmpty.text
+      : d.prs
+          .map((p) => [`${p.ref} ${p.state.text}`, p.ci?.text].filter(Boolean).join(" · "))
+          .join("; ");
+    const agent = [d.agent.label, d.autonomous?.full, d.agent.time].filter(Boolean).join(" · ");
+    blocks.push(
+      [
+        `**Containers** ${escapeMd(d.containers.text + (services ? ` — ${services}` : ""))}`,
+        `**PRs** ${escapeMd(prs)}`,
+        `**Workflow** ${escapeMd(d.workflow.text || "—")}`,
+        `**Agent** ${escapeMd(agent)}`,
+      ].join("  \n"),
+    );
+    if (d.question) blocks.push(`> “${escapeMd(d.question)}”`);
+    blocks.push(
+      [
+        commandLink(d.primary.label, PRIMARY_COMMAND[d.primary.action], ws),
+        commandLink("→ Switch to", "sandbox.switch", ws),
+        commandLink("Open feature ↗", "sandbox.openFeature", ws),
+      ].join(" · "),
+    );
+  }
+  const footer = [
+    `\`${ws.path}\``,
+    status?.slot != null
+      ? escapeMd(`slot ${status.slot}${status.ports ? ` (${status.ports})` : ""}`)
+      : null,
+    status?.project ? escapeMd(`compose project ${status.project}`) : null,
+    ws.labels.length ? escapeMd(`labels: ${ws.labels.join(", ")}`) : null,
+  ].filter((l): l is string => l !== null);
+  blocks.push(footer.join(" · "));
+  return blocks.join("\n\n");
+}
+
 function workspaceNode(
   ws: WorkspaceEntryLike,
   status: WorkspaceStatusLike | undefined,
   intercepts: InterceptsLike | null,
   isCurrent: boolean,
+  extra: TreeExtras,
 ): WsNode {
   const state = status?.state ?? "unknown";
   const feature = featureOf(status?.project ?? null);
+  const prs = extra.prs && (extra.prs.get(ws.name) ?? []);
+  const d = status
+    ? displayModel(status, {
+        prs,
+        lifecycle: extra.lifecycles?.get(ws.name) ?? null,
+        // VS Code can't reach desktop sessions (ui-spec § Actions).
+        where: "Terminal",
+        now: extra.now,
+      })
+    : null;
 
-  const bits: string[] = [];
-  if (isCurrent) bits.push("current");
-  if (state === "unknown") bits.push("unknown");
-  else if (status && status.total > 0) bits.push(`${status.running}/${status.total}`);
-  else bits.push("down");
-  if (status?.slot != null) bits.push(`slot ${status.slot}`);
-  if (ws.issueId) bits.push(ws.issueId);
-
-  const tip = [
-    ws.path,
-    status?.project ? `compose project: ${status.project}` : null,
-    status?.ports ? `ports: ${status.ports}` : null,
-    ws.labels.length ? `labels: ${ws.labels.join(", ")}` : null,
-  ].filter((l): l is string => l !== null);
+  // The design drops the stage name to keep the row short; the tooltip spells it out.
+  const workflow =
+    d?.workflow.kind === "icm" && status?.stage
+      ? `stage ${status.stage.index}/${status.stage.total}`
+      : d?.workflow.compact;
+  const bits = [
+    isCurrent ? "current" : "",
+    ...(d ? [d.agent.label, d.containers.text, workflow ?? ""] : ["unknown"]),
+    ws.issueId ?? "",
+    d?.autonomous?.compact ?? "",
+  ].filter(Boolean);
 
   return {
     kind: "workspace",
     id: ws.name,
     label: ws.name,
     description: bits.join(" · "),
-    tooltip: tip.join("\n"),
-    icon: WORKSPACE_ICONS[state],
+    tooltip: workspaceTooltip(ws, status, d),
+    // The icon follows the agent (design data.js `AGENT.vs`); the container state is in the words.
+    icon: d
+      ? {
+          id: d.agent.codicon + (status?.claude.agent === "working" ? "~spin" : ""),
+          color: TONE_COLORS[d.agent.dot],
+        }
+      : { id: "question", color: TONE_COLORS.off },
     // The `:current` suffix is how the menus hide "switch to workspace" on the
     // window's own workspace; every workspace `when` regex tolerates it.
     contextValue: `workspace:${state}${isCurrent ? ":current" : ""}`,
     expanded: isCurrent,
-    workspace: { name: ws.name, path: ws.path, feature, issueUrl: ws.issueUrl },
-    children: (status?.services ?? []).map((s) => serviceNode(s, ws, feature, intercepts)),
+    workspace: {
+      name: ws.name,
+      path: ws.path,
+      feature,
+      issueUrl: ws.issueUrl,
+      prs: (d?.prs ?? []).map((p) => ({ ref: p.ref, url: p.url })),
+    },
+    children: [
+      ...(status && d
+        ? status.services.map((s, i) => serviceNode(s, ws, feature, intercepts, d.services[i]))
+        : []),
+      ...(d?.prs ?? []).map((p) => prNode(ws, p)),
+    ],
   };
 }
 
 /**
- * Build the whole tree from the three werkmeister-core payloads.
+ * Build the whole tree from the werkmeister-core payloads.
  *
  * The workspace list is authoritative: maps over `workspaces`, joining with
  * `statuses` by name. A workspace with no matching status renders as `unknown`;
@@ -247,11 +425,12 @@ export function buildTree(
   statuses: WorkspaceStatusLike[],
   intercepts: InterceptsLike | null,
   currentPaths: string[],
+  extra: TreeExtras = {},
 ): WsNode[] {
   const byName = new Map(statuses.map((s) => [s.name, s]));
   const current = currentWorkspaceName(workspaces, currentPaths);
   const nodes = workspaces.map((w) =>
-    workspaceNode(w, byName.get(w.name), intercepts, w.name === current),
+    workspaceNode(w, byName.get(w.name), intercepts, w.name === current, extra),
   );
   // The window's own workspace first; the rest keep werkmeister-core's name order.
   const i = nodes.findIndex((n) => n.id === current);
@@ -267,7 +446,7 @@ export function cliNotFoundNode(message: string): WsNode {
     label: "Could not find the sandbox CLI",
     description: "click to configure",
     tooltip: `${message}\n\nSet sandbox.binPath or sandbox.root, or run \`sandbox config\`.`,
-    icon: { id: "error", color: "charts.red" },
+    icon: { id: "error", color: TONE_COLORS.err },
     contextValue: "error",
     expanded: false,
     command: "sandbox.configure",

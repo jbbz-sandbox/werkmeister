@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { buildTree, cliNotFoundNode } from "../out/build-tree.js";
+import { buildTree, cliNotFoundNode, LEGEND_NODE } from "../out/build-tree.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
 
@@ -34,6 +34,11 @@ const st = (name, over = {}) => ({
   slot: null,
   ports: null,
   services: [],
+  claude: { state: null, agent: "idle", at: null, question: null },
+  stage: null,
+  phase: null,
+  autonomous: false,
+  lastActivity: null,
   ...over,
 });
 
@@ -165,9 +170,48 @@ test("no workspace action is offered on a service node, or on the CLI-not-found 
     "sandbox.up",
     "sandbox.stop",
     "sandbox.closeOut",
+    "sandbox.abandon",
+    "sandbox.continue",
+    "sandbox.newSession",
+    "sandbox.openPr",
   ]) {
     assert.equal(shows(command, service), false, `${command} on a service`);
     assert.equal(shows(command, error), false, `${command} on the error node`);
+    assert.equal(shows(command, prContext()), false, `${command} on a PR row`);
+    assert.equal(shows(command, LEGEND_NODE.contextValue), false, `${command} on the legend`);
+  }
+});
+
+/** The contextValue of a PR row under a workspace. */
+function prContext() {
+  const [node] = buildTree([ws("a")], [st("a")], null, [], {
+    prs: new Map([
+      ["a", [{ url: "https://github.com/o/r/pull/1", state: "OPEN", ci: null, failingChecks: 0 }]],
+    ]),
+  });
+  return node.children[0].contextValue;
+}
+
+// SW-55: the card's per-workspace verbs are on every workspace, current or not.
+test("continue, new session, PRs and both end verbs show on every workspace", () => {
+  for (const command of [
+    "sandbox.continue",
+    "sandbox.newSession",
+    "sandbox.refreshPrs",
+    "sandbox.openPr",
+    "sandbox.closeOut",
+    "sandbox.abandon",
+  ]) {
+    for (const state of ["up", "partial", "stopped", "down", "unknown"]) {
+      assert.equal(shows(command, workspaceContext(state)), true, `${command} ${state}`);
+      assert.equal(shows(command, workspaceContext(state, true)), true, `${command} ${state}`);
+    }
+  }
+});
+
+test("there is no Remove action", () => {
+  for (const { command, title } of manifest.contributes.commands) {
+    assert.doesNotMatch(`${command} ${title}`, /remove/i);
   }
 });
 
@@ -177,7 +221,12 @@ test("the node-only commands are hidden from the palette", () => {
   const hidden = manifest.contributes.menus.commandPalette
     .filter((m) => m.when === "false")
     .map((m) => m.command);
-  assert.deepEqual(hidden.sort(), ["sandbox.logs", "sandbox.openIssue", "sandbox.toggleIntercept"]);
+  assert.deepEqual(hidden.sort(), [
+    "sandbox.logs",
+    "sandbox.openIssue",
+    "sandbox.openPr",
+    "sandbox.toggleIntercept",
+  ]);
 });
 
 test("every command a menu references is declared", () => {
