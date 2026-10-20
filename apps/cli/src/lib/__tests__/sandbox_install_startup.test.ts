@@ -1,7 +1,7 @@
 /**
  * sandbox-install-startup.sh `install` mode (SW-33): skip npm ci while the
  * lockfile and Node major match the stamp in node_modules, and queue installs
- * host-wide through flock'd slot files.
+ * host-wide through flock'd slot files. SW-35: builds run one at a time.
  *
  * Drives the real script: stub `npm` and `node` on PATH, and stub tool binaries
  * in SANDBOX_TOOLS_DIR so the download steps are skipped. Needs `flock` and
@@ -47,6 +47,8 @@ function env(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
     LOG: path.join(tmp, "npm.log"),
     INFLIGHT: path.join(tmp, "inflight"),
     PEAKS: path.join(tmp, "peaks"),
+    BUILD_INFLIGHT: path.join(tmp, "build-inflight"),
+    BUILD_PEAKS: path.join(tmp, "build-peaks"),
     NODE_V: "v22.1.0",
     ...extra,
   };
@@ -79,6 +81,12 @@ beforeEach(() => {
       '  ls "$INFLIGHT" | wc -l >> "$PEAKS"',
       '  sleep "${CI_SECONDS:-0}"',
       '  rmdir "$INFLIGHT/$$"',
+      "fi",
+      'if [ "$1" = run ]; then',
+      '  mkdir -p "$BUILD_INFLIGHT/$$"',
+      '  ls "$BUILD_INFLIGHT" | wc -l >> "$BUILD_PEAKS"',
+      '  sleep "${BUILD_SECONDS:-0}"',
+      '  rmdir "$BUILD_INFLIGHT/$$"',
       "fi",
     ].join("\n"),
   );
@@ -163,5 +171,23 @@ describe.skipIf(!hasFlock)("sandbox-install-startup.sh install", () => {
     );
     // > 1 shows it is a queue of 2, not a single global mutex.
     expect(peak).toBe(2);
+  });
+
+  it("builds one workspace at a time, so they share the turbo cache safely (SW-35)", async () => {
+    const runs = [1, 2, 3, 4, 5].map(
+      (n) =>
+        new Promise<number | null>((resolve) => {
+          const child = spawn("sh", [SCRIPT, "install"], {
+            cwd: makeApp(`ws${n}`),
+            env: env({ BUILD_SECONDS: "1", SANDBOX_INSTALL_SLOTS: "5" }),
+            stdio: "ignore",
+          });
+          child.on("close", resolve);
+        }),
+    );
+    expect(await Promise.all(runs)).toEqual([0, 0, 0, 0, 0]);
+    const peaks = fs.readFileSync(path.join(tmp, "build-peaks"), "utf8").trim().split("\n");
+    expect(peaks).toHaveLength(5);
+    expect(Math.max(...peaks.map(Number))).toBe(1);
   });
 });
