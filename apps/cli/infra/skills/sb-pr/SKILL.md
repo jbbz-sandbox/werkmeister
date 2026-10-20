@@ -52,4 +52,4 @@ workspace — don't reach for them.
    `get_status` (`bind_pr` with the URL if unbound), then `set_monitor` with
    `auto_fix: true`, `address_comments: true` and the PR's `url`. Never auto-merge.
 5. **Checkpoint:** suggest `sb-handoff` so the PR state survives into the next
-   session. After merge and release: `sandbox pr status`, then `sandbox close-out`.
+   session. After merge and release: `sandbox pr status`, then ask the person before `sandbox close-out`.

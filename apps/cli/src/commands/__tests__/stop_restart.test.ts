@@ -19,6 +19,7 @@ vi.mock("werkmeister-core/lifecycle", () => ({
   stop: vi.fn(),
   restart: vi.fn(),
   idleStopFeature: vi.fn(),
+  stopIdle: vi.fn(),
 }));
 vi.mock("../../lib/dotenv.js", () => ({
   loadDotenv: vi.fn(() => ({})),
@@ -31,6 +32,7 @@ import {
   idleStopFeature,
   restart as restartFeature,
   stop as stopFeature,
+  stopIdle,
 } from "werkmeister-core/lifecycle";
 import { findDotenv, loadDotenv } from "../../lib/dotenv.js";
 import { run as runRestart } from "../restart.js";
@@ -141,6 +143,33 @@ describe("sandbox stop --if-idle", () => {
     const [, argv, opts] = vi.mocked(spawn).mock.calls[0];
     expect(argv.slice(1)).toEqual(["stop", "demo"]);
     expect(opts).toMatchObject({ cwd: "/ws/demo", detached: true, stdio: "ignore" });
+  });
+});
+
+describe("sandbox stop --idle (SW-39)", () => {
+  it("runs one reaper pass over every workspace and prints its lines", async () => {
+    vi.mocked(stopIdle).mockResolvedValue({ ok: true, lines: ["demo: stopped (idle ≥ 30 min)"] });
+    await go(() => runStop({ feature: null, idle: "30" }));
+    expect(stopIdle).toHaveBeenCalledWith(30, { only: undefined });
+    expect(lines).toContain("demo: stopped (idle ≥ 30 min)");
+  });
+
+  it("limits the pass to [feature]", async () => {
+    vi.mocked(stopIdle).mockResolvedValue({ ok: true, lines: [] });
+    await go(() => runStop({ feature: "demo", idle: "5" }));
+    expect(stopIdle).toHaveBeenCalledWith(5, { only: "demo" });
+  });
+
+  it("rejects minutes that are not a whole number ≥ 1", async () => {
+    vi.mocked(stopIdle).mockClear();
+    for (const idle of ["0", "x", "1.5"])
+      await expect(go(() => runStop({ feature: null, idle }))).rejects.toThrow(Exited);
+    expect(stopIdle).not.toHaveBeenCalled();
+  });
+
+  it("exits 1 when a stop failed", async () => {
+    vi.mocked(stopIdle).mockResolvedValue({ ok: false, lines: ["demo: stop failed — no"] });
+    await expect(go(() => runStop({ feature: null, idle: "30" }))).rejects.toThrow(Exited);
   });
 });
 

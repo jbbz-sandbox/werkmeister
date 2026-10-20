@@ -77,6 +77,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const workspace = resolveWorkspace(feature, (args.workspace as string | null) ?? null);
 
   console.log(`\n${Colors.BOLD}=== sandbox up: ${feature} ===${Colors.RESET}\n`);
+  // The compose child inherits it; the template's idle gate reads it (SW-32).
+  if (args.dev) process.env.SANDBOX_DEV = "1";
 
   // Every failure propagates: none of up's four codes carries a hint that has
   // to print between the error line and the exit, so main.ts's handler renders

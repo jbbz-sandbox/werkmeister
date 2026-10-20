@@ -148,9 +148,12 @@ export function readAutonomous(workspaceRoot: string): boolean {
   return isTrue(readWorkspaceField(workspaceRoot, "autonomous"));
 }
 
-/** The workspace's `auto_stop` input (#231): off unless set. */
+/** The workspace's `auto_stop` input (#231); unset follows `autonomous` (SW-39). */
 export function readAutoStop(workspaceRoot: string): boolean {
-  return isTrue(readWorkspaceField(workspaceRoot, "auto_stop"));
+  const value = readWorkspaceField(workspaceRoot, "auto_stop");
+  return value === undefined || value === null || value === ""
+    ? readAutonomous(workspaceRoot)
+    : isTrue(value);
 }
 
 /** The workspace's `model` input, or null when unset or blank. */
@@ -497,7 +500,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "auto_stop",
     label: "Auto-stop on session end",
     help:
-      "Off by default. On: when a Claude session in the workspace ends and no other one is open " +
+      "On by default for autonomous workspaces, off otherwise. On: when a Claude session in the workspace ends and no other one is open " +
       "there, a SessionEnd hook runs `sandbox stop --if-idle`, which stops this feature's " +
       "containers (slot and volumes kept; `sandbox up` resumes). Shared infra is never stopped.",
     boolean: true,

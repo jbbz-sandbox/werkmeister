@@ -17,6 +17,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COMPOSE_FILE } from "werkmeister-core/compose_file";
+import * as YAML from "yaml";
 
 const h = vi.hoisted(() => ({ stateInfraRoot: null as string | null }));
 
@@ -643,5 +644,50 @@ describe("compose staleness", () => {
   it("reports a missing compose as not stale, leaving that error to the caller", () => {
     // `up` already fails with its own 'run init-workspace first' message.
     expect(isFeatureComposeStale("f", 1, ["backend"], null, tmp)).toBe(false);
+  });
+});
+
+// ---- idle service containers (SW-32) --------------------------------------
+// Nothing reads a cli/library/extension watcher's output, so those containers
+// idle unless `sandbox up --dev` sets SANDBOX_DEV.
+
+describe("idle service containers", () => {
+  const config = {
+    services: {
+      tool: { repo: "r", type: "cli", command: "exec npm run watch", depends_on: [] },
+      lib: { repo: "r", type: "library" },
+      web: { repo: "r", type: "web", command: "npm run dev", depends_on: ["tool"] },
+    },
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: parsed compose is untyped
+  function render(): Record<string, any> {
+    const outPath = generateFeatureCompose("f", 1, ["lib", "tool", "web"], config, tmp);
+    return YAML.parse(fs.readFileSync(outPath, "utf8")).services;
+  }
+
+  it("idles a cli service under init, gating its watcher on SANDBOX_DEV", () => {
+    const tool = render().tool;
+    expect(tool.init).toBe(true);
+    expect(tool.restart).toBe("on-failure:3");
+    expect(tool.healthcheck).toBeUndefined();
+    const script: string = tool.command[2];
+    expect(script).toContain(
+      '[ "${SANDBOX_DEV:-}" = 1 ] || exec sleep infinity\nexec npm run watch',
+    );
+  });
+
+  it("gives a library with no command a sleep of its own", () => {
+    const lib = render().lib;
+    expect(lib.init).toBe(true);
+    expect(lib.command[2].trimEnd()).toMatch(/exec sleep infinity$/);
+  });
+
+  it("leaves a web service as it was, waiting only for an idle dependency to start", () => {
+    const web = render().web;
+    expect(web.init).toBeUndefined();
+    expect(web.restart).toBe("unless-stopped");
+    expect(web.healthcheck.test[1]).toContain("curl -sf");
+    expect(web.command[2]).not.toContain("SANDBOX_DEV");
+    expect(web.depends_on.tool.condition).toBe("service_started");
   });
 });

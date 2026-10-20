@@ -1,6 +1,6 @@
 # JIT Context System
 
-Just-in-time context for ephemeral sandbox workspaces: coding standards, tools, and working
+Just-in-time context for ephemeral Werkmeister workspaces: coding standards, tools, and working
 notes surface **only when the work matches** — scoped to the workspace's actual services and
 the current phase — instead of one always-on monolithic guide.
 
@@ -54,8 +54,8 @@ Governing principles (each anchored to an internal measurement; the harnesses ar
 
 Single source of truth for all standards content, in its own repo
 ([jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards)), resolved through `overrides.standards_dir`
-in `~/.sandbox/config.yaml` — the CLI is the machinery, the tree is an org's content.
-Defaults to `<sandbox root>/docs/standards` when unset, which no longer exists in this
+in `~/.werkmeister/config.yaml` — the CLI is the machinery, the tree is an org's content.
+Defaults to `<werkmeister root>/docs/standards` when unset, which no longer exists in this
 repo, so an unconfigured install resolves zero modules. Loader:
 `packages/sandbox-core/src/standards.ts::loadStandardsModules`. Two recognized shapes:
 
@@ -109,7 +109,7 @@ task_signatures:           # optional; case-insensitive substrings matched again
   `validateModuleReferences`. A reference may carry a `canonical: <repo>:<path>` frontmatter
   pointer to an exemplar file; when present it renders as a "Full file" link footer, and the
   literal placeholder `canonical: TODO` is rejected.
-- **Authoring / graduation flow:** review findings become `decision` notes; `sandbox notes
+- **Authoring / graduation flow:** review findings become `decision` notes; `werkmeister notes
   graduate` scaffolds a standard entry with `TODO(graduate)` markers; the `sb-author` skill
   fills them; the validator blocks committing unfilled markers.
   Eligibility is computed from *content shape* — a STANDARD.md carrying both `## Rules` and
@@ -127,7 +127,7 @@ changed.
 
 ### 4.1 Workspace activation (init time) — `resolveActiveStandards`
 
-The registry is `~/.sandbox/services.yaml`, whose `archetypes:` block is the single control
+The registry is `~/.werkmeister/services.yaml`, whose `archetypes:` block is the single control
 surface. An archetype bundles what a service *type* contributes to a workspace:
 
 ```yaml
@@ -138,7 +138,7 @@ archetypes:
     test: "npm test"                     # → sb-tester-<archetype> ({service} expands)
 
 services:
-  backend: { repo: sandbox, archetype: node-web, ... }
+  backend: { repo: werkmeister, archetype: node-web, ... }
 ```
 
 Resolution:
@@ -153,7 +153,7 @@ services.yaml:  repos.<repo>.services  →  service.archetype  →  archetypes.<
 2. Union each candidate service's archetype `standards:` keys. A legacy bare `standards: [ui]`
    on a service is normalized into an anonymous archetype by
    `packages/sandbox-core/src/archetypes.ts` — both forms coexist.
-3. Apply `.sandbox/workspace.yml` `standards_override: {add: [...], remove: [...]}` — the
+3. Apply `.werkmeister/workspace.yml` `standards_override: {add: [...], remove: [...]}` — the
    durable per-workspace edit surface that survives regeneration.
 4. Add `UNIVERSAL_STANDARDS`; intersect with modules that actually exist.
 5. Output `(active, notActive)`, universals first in tuple order.
@@ -204,7 +204,7 @@ the task as given is raised to the user, never silently resolved.
 
 These artifacts are written by the `jit` context strategy (`packages/sandbox-core/src/strategies/jit.ts`); `context_strategy: jit` in `workspace.yml` selects it (the default for new workspaces is `icm`).
 
-Everything below is **generated or copied into the workspace** at `sandbox init-workspace` —
+Everything below is **generated or copied into the workspace** at `werkmeister init-workspace` —
 nothing is distributed through a plugin. Projection scopes the skills to the sessions they
 apply to and kills plugin-refresh lag: init renders fresh from this repo, so a standards edit
 reaches new workspaces with no marketplace step. The `werkmeister` plugin keeps only the
@@ -214,7 +214,7 @@ active set (§4.1): a skill that is not there cannot be loaded, so the routing t
 
 Consequence: **sessions must start at the workspace root** — project skills and hooks resolve
 from the session's project directory. Freshness mid-feature is self-healing: the SessionStart
-hook runs `sandbox skills check` and, only when it reports drift, `sandbox skills sync`.
+hook runs `werkmeister skills check` and, only when it reports drift, `werkmeister skills sync`.
 
 ### 5.1 Generated domain skills — `.claude/skills/sb-<domain>-standard/`
 
@@ -256,15 +256,15 @@ read through `planFor`): a `refactor` has no research row, a `spike` has only re
 path (spike / bounded / architectural) and phase sequence, and a **Gate** line naming the note
 that must exist before the first source edit (§6). An empty or unknown work type renders all
 five rows and no gate. The rest of the file is Current Task, Layout, the
-two-column Routing table (a repo's own `CLAUDE.md` when it exists; `.sandbox/sandbox-context.md`
+two-column Routing table (a repo's own `CLAUDE.md` when it exists; `.werkmeister/sandbox-context.md`
 for everything about the running feature — URL, `X-Feature` cookie, ports, lifecycle, health
 checks; `contract` notes for multi-repo workspaces), the Context Budget rule (≤3 files/step), and
-the Notes pointer. `.sandbox/sandbox-context.md` is written by the compose generator and is
+the Notes pointer. `.werkmeister/sandbox-context.md` is written by the compose generator and is
 scoped to the workspace: through-Caddy health checks only for its local services' hosts, the
 feature URL and browser cookie, and a Services table carrying each service's path in its repo.
 
 The `CLAUDE.md` is a **compiled projection — never hand-edited**, and it holds no durable
-state: it *points* at `.sandbox/notes/` rather than containing handoff content, so
+state: it *points* at `.werkmeister/notes/` rather than containing handoff content, so
 regeneration can never clobber working state.
 
 ### 5.4 Generated agents — `.claude/agents/` (`packages/sandbox-core/src/agent_gen.ts`)
@@ -273,7 +273,7 @@ Principle: **phase gates tools, archetype gates context.** They are orthogonal �
 never cross-producted, so a 2-archetype workspace generates ~5–7 agent definitions, not 30.
 
 - `sb-researcher`: `tools: Read, Grep, Glob, Write` (Write solely for the finding note).
-  Return contract: write `.sandbox/notes/NNN-finding-<slug>.md`, return a 2–3 sentence summary
+  Return contract: write `.werkmeister/notes/NNN-finding-<slug>.md`, return a 2–3 sentence summary
   + note path + open questions.
   Its body carries the investigation method (present options, tag claims
   verified/inferred/assumed, hold givens, bound the investigation, validate against named
@@ -313,7 +313,7 @@ servers under other names are preserved; unparseable files are left untouched.
 Two managed hooks, merged marker-based into the user's settings (stale managed entries are
 replaced, everything else preserved, malformed user JSON left untouched):
 
-- **SessionStart**, matcher-less: `sandbox notes context`. Fires on every new context window —
+- **SessionStart**, matcher-less: `werkmeister notes context`. Fires on every new context window —
   startup, resume, clear, and **post-compaction** (`source: compact`). See §5.8.
 - **PreToolUse**, matcher `Edit|Write`: the standards gate. See §6.
 
@@ -326,7 +326,7 @@ Trust gotcha: project-scope `.claude/settings.json` hooks only fire after the us
 workspace folder. Acceptable, since the user creates these workspaces. Headless `-p` runs load
 hooks unless `--bare`.
 
-### 5.7 Notes — `.sandbox/notes/` (filesystem, harness-independent)
+### 5.7 Notes — `.werkmeister/notes/` (filesystem, harness-independent)
 
 Feature-lifetime working state, not documentation: notes live and die with the workspace. One
 note per file, `NNN-<type>-<slug>.md`, ordered by creation. Conventions in
@@ -343,7 +343,7 @@ status: open | decided | superseded | graduated
 ```
 
 `decided` marks a `decision` note as user-approved. `openDecisions()` keeps decided notes, so
-`sandbox notes context` re-injects the approved spec every session.
+`werkmeister notes context` re-injects the approved spec every session.
 
 - **finding** — research output: root cause, evidence with `file:line` refs, proposed fix.
 - **decision** — settled choices + why. Workspace-scoped "don't re-litigate." Binding.
@@ -363,11 +363,11 @@ older CLI (author `workspace-creation`, no prompt) is superseded by the next ini
 one. Any other handoff note blocks re-seeding — including its own prior seed: once a prompt
 has been seeded, a later edit to `starting_prompt` does not update the note.
 
-`sandbox down` prints the latest `handoff` and all open `decision` notes to the terminal
+`werkmeister down` prints the latest `handoff` and all open `decision` notes to the terminal
 before removing the workspace, and offers graduation of decision notes into the standards
 tree. No automatic writes to PR bodies or tickets — the human decides what graduates.
 
-### 5.8 Session re-injection — `sandbox notes context`
+### 5.8 Session re-injection — `werkmeister notes context`
 
 `apps/cli/src/commands/notes.ts`, run by the SessionStart hook. Ordered output:
 
@@ -394,11 +394,11 @@ after. The denial is not an error — the model follows the instructions and ret
 
 Decision table (`decide`):
 
-1. Resolve the workspace root; load the manifest `.sandbox/standards.json`; load session state
-   `.sandbox/.gate/<sessionId>.json`.
+1. Resolve the workspace root; load the manifest `.werkmeister/standards.json`; load session state
+   `.werkmeister/.gate/<sessionId>.json`.
 2. **Phase gate.** If the manifest carries `phase_gate` (compiled at init from the work type,
    `workspace_prompts.ts::WORK_TYPE_PHASES`) and the edited path is inside the workspace and
-   not under `.sandbox/`: scan `.sandbox/notes/NNN-<note>-*.md`. A note satisfies the gate when
+   not under `.werkmeister/`: scan `.werkmeister/notes/NNN-<note>-*.md`. A note satisfies the gate when
    its `status` is not `superseded`/`graduated` and, if the gate names a status (`decided` for
    `feature`), equals it. No satisfying note → deny with the phase-gate text.
 3. Find the first not-yet-delivered domain whose `applies_to` globs fnmatch the edited path.
@@ -415,26 +415,26 @@ exits 0.
 
 **Two deliberate departures for the phase gate.** It is *deny-until*, not deny-once: it is an
 approval gate, and a once-only deny would mean "acknowledge you skipped approval, then
-proceed". The note is the only key. And it keeps *no state* in `.sandbox/.gate/`. A missing
+proceed". The note is the only key. And it keeps *no state* in `.werkmeister/.gate/`. A missing
 notes directory counts as "no notes" and denies; every other read failure, and a note with no
 frontmatter block, fails open. Status is read with a regex, not YAML, to keep the module
 builtins-only.
 
 **The manifest is a compilation, not a second source of truth.**
-`buildStandardsManifest`/`writeStandardsManifest` emit `.sandbox/standards.json` (`domain →
+`buildStandardsManifest`/`writeStandardsManifest` emit `.werkmeister/standards.json` (`domain →
 {applies_to, summary}` for every active non-universal standard, the active universal keys, and
 `phase_gate` when the work type has one) from the same `resolveActiveStandards` output that
 produces the CLAUDE.md routing table. It cannot diverge from the table. The one exception is
-`phase_gate`: only `sandbox init-workspace` introduces it, alongside the CLAUDE.md that explains
-it. `sandbox skills sync` recompiles `phase_gate` from `.sandbox/workspace.yml`'s `work_type`
+`phase_gate`: only `werkmeister init-workspace` introduces it, alongside the CLAUDE.md that explains
+it. `werkmeister skills sync` recompiles `phase_gate` from `.werkmeister/workspace.yml`'s `work_type`
 only when the on-disk manifest already carries one — so a gate survives sync, and a work type
 without a gate (`refactor`) drops it — and never adds one to a workspace whose manifest has
-none; `sandbox skills check` does not call such a workspace stale.
+none; `werkmeister skills check` does not call such a workspace stale.
 
 **Latency.** The gate fires on every `Edit`/`Write`, so the module is deliberately
 dependency-light — node builtins only, no commander/yaml/nunjucks, nothing touching the
 config/YAML chain. The hook runs `node dist/lib/gate.js` directly, bypassing the argparse-heavy
-main entrypoint (measured at 250–460ms cold, well past the <200ms budget). `sandbox hooks gate`
+main entrypoint (measured at 250–460ms cold, well past the <200ms budget). `werkmeister hooks gate`
 imports the same module for manual runs and tests — one implementation either way.
 
 One deliberate duplication: the precedence sentence is copied from `notes.ts` rather than
@@ -442,14 +442,14 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
 
 ## 7. Validation gates
 
-- **`sandbox standards check`** — structural regression gate over the standards *source* tree.
+- **`werkmeister standards check`** — structural regression gate over the standards *source* tree.
   `validateStandardModules` (frontmatter integrity, summary/applies_to/phase shape,
   domain-matches-location) + `validateModuleReferences` (dead pointers, lingering
   `TODO(graduate)` markers, placeholder `canonical: TODO`, unlinked references) +
   `validateServiceStandards` (services.yaml ↔ standards drift). Scans files directly, upstream
   of the forgiving loader, so silent-drop breakage is caught. Exits 1 on any malformed
   standard.
-- **`sandbox skills check` / `sync`** — per-workspace projection freshness: missing, stale, or
+- **`werkmeister skills check` / `sync`** — per-workspace projection freshness: missing, stale, or
   orphaned `sb-*` skills. Also run from the SessionStart hook, so a workspace repairs its own
   projection before the session reads it.
 
@@ -457,7 +457,7 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
 gate; `packages/sandbox-core/agent-gen.test.mjs`, `claude-md.test.mjs`, and
 `workspace-skills-scope.test.mjs` cover agent generation, CLAUDE.md generation, and skill
 scoping. Standards resolution, archetype normalization, notes, hooks, and MCP projection still
-have **no unit tests** — they are exercised only by running `sandbox init-workspace` and the two
+have **no unit tests** — they are exercised only by running `werkmeister init-workspace` and the two
 check commands above. Treat
 `standards check` and `skills check` as the regression gates, and run them after any change to
 the standards tree or the generators.
@@ -552,7 +552,7 @@ content without precedence does not produce compliance).
   So **do not add `sb-design` / `sb-plan` phases** — they gate nothing new. Design and plan are
   represented by their *artifacts*, which already flow through existing machinery: decisions →
   `decision` notes (binding, read by `sb-implement`), specs and plans → ordinary docs.
-- **New standards rules graduate through the pipeline** (`decision` note → `sandbox notes
+- **New standards rules graduate through the pipeline** (`decision` note → `werkmeister notes
   graduate` → `sb-author`). Repo docs are the deep-reference tier those rules link to, never a
   second rules channel.
 - **Point, never copy.** The system's own rule applies to its own docs: this file states
