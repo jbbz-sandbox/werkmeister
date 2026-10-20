@@ -434,9 +434,9 @@ const WORK_TYPES: string[] = Object.keys(WORK_TYPE_PHASES);
 
 export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   {
-    // Label, pattern and placeholder come from the configured tracker: see wizardPrompts().
+    // Pattern and placeholder come from the configured tracker: see wizardPrompts().
     key: "issue_id",
-    label: "Issue ID (blank to skip)",
+    label: "Issue",
     help:
       "Issue ID in this machine's issue tracker. The issue is fetched and stored in " +
       "the workspace; empty fields are filled from it.",
@@ -444,9 +444,9 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   },
   {
     key: "feature",
-    label: "Feature name (lowercase, hyphen-separated)",
+    label: "Feature name",
     help:
-      "Drives sandbox slot routing via the X-Feature cookie. " +
+      "Lowercase, hyphen-separated. Drives sandbox slot routing via the X-Feature cookie. " +
       `No feature = no ${COMPOSE_FILE} / sandbox-context.md.`,
     acceptEmpty: false,
     recommended: true,
@@ -462,17 +462,17 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
       "pre-implementation gate in CLAUDE.md.",
     acceptEmpty: false,
     pattern: "^(" + Object.keys(WORK_TYPE_PHASES).join("|") + ")$",
-    defaultFn: () => "feature",
+    default: "feature",
     choicesFn: () => [...WORK_TYPES],
   },
   {
     key: "context_strategy",
-    label: "Context strategy",
+    label: "Workflow",
     help:
       "Which context layer init-workspace generates: jit (sb-* skills, hooks, notes) " +
-      "or icm (staged folders the agent walks by itself). Default icm.",
+      "or icm (staged folders the agent walks by itself).",
     pattern: "^(" + STRATEGY_IDS.join("|") + ")$",
-    defaultFn: () => STRATEGY_IDS[0],
+    default: STRATEGY_IDS[0],
     choicesFn: () => [...STRATEGY_IDS],
   },
   {
@@ -487,10 +487,10 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   },
   {
     key: "model",
-    label: "Model (blank = Claude Code's default)",
+    label: "Model",
     help:
       "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a full " +
-      "claude-… id. Written to .claude/settings.json and passed as --model to claude-send and " +
+      "claude-… id; empty = Claude Code's default. Written to .claude/settings.json and passed as --model to claude-send and " +
       "claude-resume. A cheaper model suits mechanical jobs (lint passes, renames).",
     // One token, not an alias list: Claude Code's aliases change, and a bad value fails on first use.
     pattern: "^[A-Za-z0-9][A-Za-z0-9._\\[\\]-]*$",
@@ -507,7 +507,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   },
   {
     key: "services",
-    label: "Local services (comma-separated, blank = none)",
+    label: "Services to run locally",
     help: "Services to run locally with hot-reload; the rest fall through to k8s port-forwards.",
     multi: true,
     choicesFn: () => Object.keys(loadSandboxServiceConfigs()[0]).sort(),
@@ -521,26 +521,26 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   },
   {
     key: "labels",
-    label: "Labels (comma-separated, blank = none)",
-    help: "Free-form tags for filtering workspaces in the dashboard search.",
+    label: "Labels",
+    help: "Comma-separated free-form tags for filtering workspaces in the dashboard search.",
     multi: true,
   },
   {
     key: "test_path",
-    label: "Feature test path (blank to skip)",
+    label: "Feature test path",
     help: "URL path for the feature entry point, appended to the routed host.",
     pattern: "^/\\S*$",
     placeholder: "/products/foo",
   },
   {
     key: "task",
-    label: "Task title (Enter for default)",
-    help: "Short title for the Current Task section; derived from the workspace dir name if blank.",
+    label: "Task title",
+    help: "Short title for the Current Task section. Defaults to the feature name in words.",
     defaultFn: (ws) => slugToTask(path.basename(ws)),
   },
   {
     key: "description",
-    label: "Task description (blank to skip)",
+    label: "Description",
     help:
       "1-2 sentences on what the feature does and the user-visible outcome; " +
       "rendered under Current Task in CLAUDE.md.",
@@ -548,7 +548,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
   },
   {
     key: "starting_prompt",
-    label: "Starting prompt (blank to skip)",
+    label: "Starting prompt",
     help:
       "The first instruction to hand the agent in this workspace; " +
       "persisted to .sandbox/workspace.yml.",
@@ -567,9 +567,10 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
 
 export interface PromptSpecOptions {
   /**
-   * `false` skips every prompt's `defaultFn`. The issue default scans
-   * *workspaceRoot*'s subdirectories with `git`, so a caller that discards
-   * defaults anyway (the create form, built against `$HOME`) opts out.
+   * `false` skips every prompt's `defaultFn` (static `default`s still apply). Those
+   * derive from *workspaceRoot* — the issue default even scans its subdirectories
+   * with `git` — so a caller whose root isn't the new workspace (the create form,
+   * built against `$HOME`) opts out.
    */
   defaults?: boolean;
 }
@@ -588,7 +589,10 @@ export function promptEntry(
     accept_empty: spec.acceptEmpty ?? true,
     multi: spec.multi ?? false,
     recommended: spec.recommended ?? false,
-    default: spec.defaultFn && opts.defaults !== false ? spec.defaultFn(workspaceRoot) : "",
+    default:
+      spec.defaultFn && opts.defaults !== false
+        ? spec.defaultFn(workspaceRoot)
+        : (spec.default ?? ""),
     resolved: spec.key in resolved,
     resolved_value: spec.key in resolved ? resolved[spec.key] : null,
   };
@@ -627,14 +631,13 @@ export function promptEntry(
   return entry;
 }
 
-/** `_WIZARD_PROMPTS` with the issue prompt worded and validated for the configured tracker. */
+/** `_WIZARD_PROMPTS` with the issue prompt's example and validation for the configured tracker. */
 export function wizardPrompts(): PromptSpec[] {
   const tracker = issueTracker();
   return _WIZARD_PROMPTS.map((spec) =>
     spec.key === "issue_id"
       ? {
           ...spec,
-          label: `${tracker.label} issue (blank to skip)`,
           placeholder: tracker.refExample,
           ...(tracker.refPattern ? { pattern: tracker.refPattern } : {}),
         }
@@ -689,7 +692,7 @@ export function loadSandboxServiceConfigs(): [ServicesConfig, ReposConfig] {
  */
 export const REPOS_PROMPT: PromptSpec = {
   key: "repos",
-  label: "Additional repos (optional)",
+  label: "Extra repos",
   help:
     "Extra repos to create worktrees for. The final set is the union of " +
     "these and the repos owning the services selected above.",

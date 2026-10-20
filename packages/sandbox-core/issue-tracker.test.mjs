@@ -58,10 +58,12 @@ test("workspace.yml issue refs: issue_id, else the pre-rename keys", () => {
   assert.equal(it.issueIdOf(null), "");
 });
 
-test("the wizard's issue prompt takes the tracker's wording and pattern", () => {
+// The label stays "Issue" on every tracker (docs/ui-spec.md); the example names the format.
+test("the wizard's issue prompt takes the tracker's example and pattern", () => {
   const p = wizardPrompts();
   assert.equal(p[0].key, "issue_id");
-  assert.match(p[0].label, /^GitHub issue/);
+  assert.equal(p[0].label, "Issue");
+  assert.equal(p[0].placeholder, it.issueTracker().refExample);
   assert.equal(p[0].pattern, it.GITHUB_ISSUE_PATTERN);
   assert.ok(!p.some((x) => x.key === "jira_id" || x.key === "github_issue"));
 });
