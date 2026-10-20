@@ -41,17 +41,6 @@ try {
   const core = await import(pathToFileURL(file).href)
   const yaml = createRequire(file)('yaml')
   const str = v => (typeof v === 'string' && v.trim() ? v.trim() : null)
-  // The first ICM stage whose output/ is still empty; null when no stages/ dir or every stage has output.
-  const stageOf = dir => {
-    let names
-    try { names = readdirSync(join(dir, 'stages')).filter(n => /^\\d+_/.test(n)).sort() } catch { return null }
-    for (let i = 0; i < names.length; i++) {
-      let files = []
-      try { files = readdirSync(join(dir, 'stages', names[i], 'output')).filter(f => !f.startsWith('.')) } catch { /* no output dir yet */ }
-      if (files.length === 0) return { index: i + 1, total: names.length, name: names[i].replace(/^\\d+_/, '') }
-    }
-    return null
-  }
   const lifecycleOf = dir => { try { return core.lifecycleOf(dir) } catch { return null } }
   // The transcript's "entrypoint" field (claude-vscode, claude-desktop, sdk-cli, ...) from its first 64 KiB; null when unknown.
   const originOf = (dir, sessionId) => {
@@ -68,6 +57,7 @@ try {
     } catch { return null } finally { if (fd !== null) closeSync(fd) }
   }
   const tracker = (await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)).issueTracker()
+  // core.icmStage is absent from a core older than SW-47: show no stage rather than fail the list.
   const details = async w => {
     let cfg = {}
     for (const d of ['.werkmeister', '.sandbox']) {
@@ -76,7 +66,7 @@ try {
     let newest = null
     try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
     const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
-    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), feature: str(cfg.feature), stage: stageOf(w.path), lifecycle: lifecycleOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
+    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), feature: str(cfg.feature), stage: core.icmStage ? await core.icmStage(w.path) : null, lifecycle: lifecycleOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
   }
   // Siblings of the resolved entry: the main entry exports none of the intercept functions.
   const sibling = name => import(pathToFileURL(join(dirname(file), name)).href)
