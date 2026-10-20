@@ -57,30 +57,30 @@ const CSS = `
   .prs .controls { display: flex; align-items: center; gap: 10px; margin: 4px 0 16px; }
   .prs .controls input[type=search] {
     flex: 1; font: inherit; font-size: 13px; padding: 7px 10px;
-    border: 1px solid var(--sd-ctl-border); border-radius: 8px; background: var(--sd-card);
+    border: 1px solid var(--sd-ctl); border-radius: 8px; background: var(--sd-card);
   }
   .prs .refresh {
     font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
-    padding: 7px 12px; border: 1px solid var(--sd-ctl-border); border-radius: 8px; background: var(--sd-card); color: var(--sd-ink);
+    padding: 7px 12px; border: 1px solid var(--sd-ctl); border-radius: 8px; background: var(--sd-card); color: var(--sd-ink);
   }
   .prs .refresh:hover { background: var(--sd-hover); }
   .prs .load-status { color: var(--sd-muted); font-size: 13px; padding: 8px 0; }
   .prs .load-status.err { color: var(--sd-err); }
   .prs .sec-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
     color: var(--sd-muted); margin: 20px 0 8px; }
-  .prs .sec-h .count { color: var(--sd-ghost); font-weight: 600; margin-left: 6px; }
+  .prs .sec-h .count { color: var(--sd-faint); font-weight: 600; margin-left: 6px; }
   .prs .sec-empty { color: var(--sd-faint); font-size: 13px; padding: 4px 0 8px; }
   /* Card + expandable head follow the Workspaces-tab list-item pattern
      (workspace-ui.ts .ws / .ws-head): left status rail, caret, right-aligned
      pill meta. Rail color = review status (draft overrides to neutral). */
   .prs .card { border: 1px solid var(--sd-line); border-left: 3px solid var(--sd-line); border-radius: 10px; background: var(--sd-card); margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); overflow: hidden; }
-  .prs .card.rail-approved { border-left-color: var(--sd-ok-dot); }
+  .prs .card.rail-approved { border-left-color: var(--sd-ok); }
   .prs .card.rail-changes, .prs .card.rail-failing { border-left-color: var(--sd-err); }
-  .prs .card.rail-pending { border-left-color: var(--sd-warn-dot); }
-  .prs .card.rail-dismissed, .prs .card.rail-draft { border-left-color: var(--sd-ghost); }
+  .prs .card.rail-pending { border-left-color: var(--sd-warn); }
+  .prs .card.rail-dismissed, .prs .card.rail-draft { border-left-color: var(--sd-faint); }
   .prs .head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; user-select: none; }
-  .prs .head:hover { background: var(--sd-soft); }
-  .prs .caret { color: var(--sd-ghost); font-size: 12px; transition: transform 0.15s; width: 10px; flex: none; }
+  .prs .head:hover { background: var(--sd-hover); }
+  .prs .caret { color: var(--sd-faint); font-size: 12px; transition: transform 0.15s; width: 10px; flex: none; }
   .prs .card.open .caret { transform: rotate(90deg); }
   .prs .repo { font-weight: 600; font-size: 14px; white-space: nowrap; }
   .prs .num { color: var(--sd-muted); font-size: 13px; }
@@ -93,7 +93,7 @@ const CSS = `
   }
   .prs .draft-badge { background: var(--sd-line-soft); color: var(--sd-muted); }
   /* .issue-key: the same badge with no tracker URL, so no hover underline. */
-  .prs .issue-link, .prs .issue-key { background: var(--sd-info-bg); color: var(--sd-info); }
+  .prs .issue-link, .prs .issue-key { background: var(--sd-hover); color: var(--sd-info); }
   .prs .issue-link:hover { text-decoration: underline; }
   .prs .gh-link { background: var(--sd-line-soft); color: var(--sd-muted); }
   .prs .gh-link:hover { text-decoration: underline; }
@@ -114,7 +114,7 @@ const CSS = `
   .prs .actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
   .prs .btn {
     font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
-    padding: 6px 12px; border-radius: 7px; border: 1px solid var(--sd-ctl-border); background: var(--sd-card); color: var(--sd-ink);
+    padding: 6px 12px; border-radius: 7px; border: 1px solid var(--sd-ctl); background: var(--sd-card); color: var(--sd-ink);
   }
   .prs .btn:hover { background: var(--sd-hover); }
   .prs .btn.primary { background: var(--sd-accent); border-color: var(--sd-accent); color: #fff; }
@@ -126,7 +126,7 @@ const CSS = `
   .prs .issue-card { margin-top: 12px; border: 1px solid #dbe4f0; border-radius: 8px;
     background: #f4f8fd; padding: 10px 12px; font-size: 12px; }
   .prs .issue-card .k { font-weight: 700; }
-  .prs .issue-card .st { font-size: 10px; background: var(--sd-info-bg); color: var(--sd-info);
+  .prs .issue-card .st { font-size: 10px; background: var(--sd-hover); color: var(--sd-info);
     padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
   .prs .issue-card .meta { color: var(--sd-muted); margin-top: 4px; }
   .prs .issue-card .desc { margin-top: 6px; color: var(--sd-ink); max-height: 260px; overflow-y: auto; line-height: 1.45; }

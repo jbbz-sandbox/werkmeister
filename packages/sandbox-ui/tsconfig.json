@@ -13,6 +13,7 @@
     "rootDir": "src",
     "noEmit": false,
     "types": ["node"],
+    "jsx": "react-jsx",
     // npm hoists @rjsf/* to the repo root but can keep our @types/react here, so
     // @rjsf's own .d.ts files can't find React's types — its `Form` then loses
     // its Component base class and fails to typecheck as a component. Point

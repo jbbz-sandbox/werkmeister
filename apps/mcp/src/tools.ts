@@ -300,8 +300,14 @@ function registerLifecycleTools(server: McpServer): void {
         const tail = args.tail ?? 200;
         // follow: false is what makes this return at all; the signal still
         // covers a client that hangs up mid-read.
-        await composeLogs(feature, service, { follow: false, tail, signal: extra.signal });
-        return { feature, service, tail };
+        // Collected separately so the lines also reach structuredContent: the
+        // dashboard's HostBridge reads only that (SW-53).
+        const logs = collectingReporter();
+        await withReporter(logs, () =>
+          composeLogs(feature, service, { follow: false, tail, signal: extra.signal }),
+        );
+        raw(logs.text());
+        return { feature, service, tail, output: logs.text() };
       }),
   );
 
