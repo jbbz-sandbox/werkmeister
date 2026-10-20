@@ -24,10 +24,14 @@ const st = (name, over = {}) => ({
   ...over,
 });
 
-/** An InterceptsResult-shaped object from a plain {feature: {service: row}} literal. */
-const intercepts = (spec) => ({
+/**
+ * An InterceptsResult-shaped object from a plain {feature: {service: row}} literal.
+ * Every service in *spec* is remote unless *remote* says otherwise.
+ */
+const intercepts = (spec, remote = Object.values(spec).flatMap(Object.keys)) => ({
   available: true,
   connectedNamespace: "default",
+  remoteServices: new Set(remote),
   byFeature: new Map(
     Object.entries(spec).map(([feat, svcs]) => [
       feat,
@@ -64,6 +68,7 @@ test("a null feature with an intercepted row from an unknown source is not mine"
     { intercepted: true, intercepted_by: null, blocker: null, interceptable: true },
     null,
     false,
+    true,
   );
   assert.equal(result.contextValue, "service:intercepted-other");
   assert.equal(result.leave, false);
@@ -218,11 +223,40 @@ test("an unavailable telepresence marks every service unavailable", () => {
         services: [{ name: "frontend", state: "healthy" }],
       }),
     ],
-    { ...intercepts({}), available: false },
+    { ...intercepts({}, ["frontend"]), available: false },
     [],
   );
   assert.equal(node.children[0].contextValue, "service");
   assert.match(node.children[0].tooltip, /intercept state unavailable/);
+});
+
+// SW-21: a CLI or library is never a cluster service, so it gets no intercept state at all.
+test("a local-only service shows no intercept state, connected or not", () => {
+  const blocker =
+    "has no k8s_deployment/k8s_namespace/k8s_port in services.yaml — not interceptable.";
+  const row = { interceptable: false, blocker, intercepted: false, intercepted_by: null };
+  assert.equal(interceptView(row, "a", false, false), null);
+  assert.equal(interceptView(undefined, "a", true, false), null);
+  for (const ix of [
+    intercepts({ a: { cli: { interceptable: false, blocker } } }, []),
+    { ...intercepts({}, []), available: false },
+  ]) {
+    const [node] = buildTree(
+      [ws("a")],
+      [
+        st("a", {
+          state: "up",
+          running: 1,
+          total: 1,
+          services: [{ name: "cli", state: "healthy" }],
+        }),
+      ],
+      ix,
+      [],
+    );
+    assert.equal(node.children[0].contextValue, "service");
+    assert.equal(node.children[0].tooltip, "cli — healthy");
+  }
 });
 
 test("the workspace containing the open folder is marked current and expanded", () => {

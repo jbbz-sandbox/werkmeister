@@ -55,7 +55,11 @@ function serviceContext(row) {
         services: [{ name: "frontend", state: "healthy" }],
       }),
     ],
-    { available: true, byFeature: new Map([["a", new Map([["frontend", row]])]]) },
+    {
+      available: true,
+      byFeature: new Map([["a", new Map([["frontend", row]])]]),
+      remoteServices: new Set(["frontend"]),
+    },
     [],
   );
   return node.children[0].contextValue;
