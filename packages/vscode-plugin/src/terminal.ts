@@ -73,7 +73,7 @@ function whenReady(term: vscode.Terminal): Promise<void> {
  * FEATURE/slot from the .env there, so the name is derived from cwd too: a
  * reused terminal keeps the name it was created with, and naming it after the
  * first command would leave `sandbox stop foo` running every later up/down.
- * `name` is for the one caller whose cwd says nothing useful (the `~` wizard).
+ * `name` is for the callers whose cwd says nothing useful (the wizard, `connect`).
  */
 export async function runInTerminal(args: string[], cwd: string, name?: string): Promise<void> {
   let bin: string;

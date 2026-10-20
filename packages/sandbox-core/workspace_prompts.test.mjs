@@ -159,6 +159,23 @@ test("defaults: false skips the issue scan of the root's repos", () => {
   assert.equal(issueDefault({ defaults: false }), "");
 });
 
+// Work type and workflow don't depend on the root, so the create form keeps them (SW-51).
+test("defaults: false keeps the static defaults and drops the root-derived ones", () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "jay-"));
+  const defaults = Object.fromEntries(
+    computePromptSpec({}, ws, { defaults: false }).prompts.map((p) => [p.key, p.default]),
+  );
+  assert.equal(defaults.work_type, "feature");
+  assert.equal(defaults.context_strategy, "icm");
+  for (const key of ["issue_id", "feature", "task", "model"]) assert.equal(defaults[key], "", key);
+});
+
+// GUI labels carry no terminal hints (docs/ui-spec.md § The create form).
+test("no prompt label mentions blank, Enter or a parenthetical", () => {
+  for (const p of computePromptSpec({}, root).prompts)
+    assert.doesNotMatch(p.label, /blank|enter|\(/i, p.key);
+});
+
 const PHASES = ["research", "implement", "test", "review", "pr"];
 
 test("every work type has phases, all drawn from the five", () => {

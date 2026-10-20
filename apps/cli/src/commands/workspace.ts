@@ -42,14 +42,15 @@ import * as path from "node:path";
 // runs it without spawning this CLI. What stays here is the wizard, the
 // browser-form launcher, and exit codes.
 import { createWorkspace, distillIssue, WorkspaceError } from "werkmeister-core";
-import { buildFormSchema } from "werkmeister-core/form_schema";
+import { workspacesRoot } from "werkmeister-core/config";
+import { buildFormSchema, repoSelectionError } from "werkmeister-core/form_schema";
 import { fetchIssueSnapshot, type IssueSnapshot } from "werkmeister-core/issue_snapshot";
 import { issueTracker } from "werkmeister-core/issue_tracker";
 import { run as procRun } from "werkmeister-core/proc";
 import { WorkspaceInitError } from "werkmeister-core/workspace_init";
 import { resolveInputs, workspacePromptSpec } from "werkmeister-core/workspace_prompts";
-import { error, getMonorepoRoot, info } from "../lib/config.js";
-import { runFormWizard } from "../lib/wizard.js";
+import { error, getMonorepoRoot, info, warn } from "../lib/config.js";
+import { askField, fieldsOf, runFormWizard } from "../lib/wizard.js";
 // init-workspace owns the piped-stdin reader; the prompt definitions and the
 // form schema built from them live in core, where the dashboard reaches them
 // without spawning this CLI (note 087).
@@ -59,7 +60,19 @@ import { readStdinTask } from "./init_workspace.js";
 // Input resolution
 // ---------------------------------------------------------------------------
 
-async function resolveWorkspaceInputs(
+/** True when *dir* sits inside the workspaces root, i.e. is a workspace someone made by hand. */
+function insideWorkspacesRoot(dir: string): boolean {
+  const rel = path.relative(workspacesRoot(), path.resolve(dir));
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+/** `repoSelectionError` over the wizard's comma-separated answers. */
+function wizardRepoError(resolved: Record<string, string>): string | null {
+  const list = (v?: string) => (v ?? "").split(",").filter((s) => s.trim());
+  return repoSelectionError({ services: list(resolved.services), repos: list(resolved.repos) });
+}
+
+export async function resolveWorkspaceInputs(
   args: Record<string, unknown>,
 ): Promise<{ resolved: Record<string, string>; issue?: IssueSnapshot }> {
   const base = process.cwd();
@@ -72,8 +85,14 @@ async function resolveWorkspaceInputs(
   // that one prompt rather than the whole wizard. Piped/non-TTY invocations
   // fall through to flags + config only.
   if (process.stdin.isTTY) {
-    resolved = await runFormWizard(buildFormSchema(workspacePromptSpec(base, resolved)), resolved, {
-      intro: "Interactive wizard — press Ctrl-C to abort. Defaults shown in [brackets].",
+    // Defaults derived from the cwd (feature, task, issue) only mean something in a
+    // workspace dir; from ~ or the workspaces root they'd name the user or the root (SW-51).
+    const bundle = buildFormSchema(
+      workspacePromptSpec(base, resolved, { defaults: insideWorkspacesRoot(base) }),
+    );
+    resolved = await runFormWizard(bundle, resolved, {
+      intro:
+        "Interactive wizard — press Ctrl-C to abort. Defaults shown in [brackets]; leave a field blank to skip it.",
       // Typed in the wizard: read the issue now so later prompts default to it.
       afterField: async (key, r): Promise<Record<string, string>> => {
         // An issue from flag/env/config is createWorkspace's to read.
@@ -99,6 +118,13 @@ async function resolveWorkspaceInputs(
         return { task: issue.title, ...fields };
       },
     });
+    // The GUIs' rule: at least one service or repo. Re-ask just those two fields.
+    const repoFields = fieldsOf(bundle).filter((f) => f.key === "services" || f.key === "repos");
+    for (let err = wizardRepoError(resolved); err; err = wizardRepoError(resolved)) {
+      if (!repoFields.length) throw new WorkspaceError(err);
+      warn(err);
+      for (const field of repoFields) await askField(field, resolved);
+    }
   }
   return { resolved, issue };
 }

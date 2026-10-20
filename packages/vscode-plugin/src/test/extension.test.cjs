@@ -82,6 +82,22 @@ suite("Sandbox Workspaces", () => {
     );
   });
 
+  // From ~ the wizard's feature and task defaults were the username (SW-51).
+  test("New Workspace runs the wizard from the workspaces root, creating it", async () => {
+    process.env.SANDBOX_BIN = fixture("unused").bin;
+    const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-vsce-")), "workspaces");
+    // The YAML outranks the env var, so point it at nothing.
+    process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+    process.env.WERKMEISTER_WORKSPACES_ROOT = root;
+
+    await vscode.commands.executeCommand("sandbox.newWorkspace");
+    assert.deepEqual(
+      vscode.window.terminals.map((t) => [t.name, t.creationOptions.cwd]),
+      [["sandbox workspace", root]],
+    );
+    assert.ok(fs.statSync(root).isDirectory());
+  });
+
   // sandbox.configure is a passthrough to a built-in, so what can break is the
   // passthrough: a renamed built-in or a typo'd id, which registration alone
   // would not catch. The `sandbox.` filter it passes is not readable back

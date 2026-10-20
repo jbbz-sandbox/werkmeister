@@ -63,6 +63,7 @@ export interface PromptSpec {
   recommended?: boolean; // strongly-recommended input (feature)
   pattern?: string | null; // anchored regex a non-empty value must match
   placeholder?: string | null; // example value (UI hint; not a default)
+  default?: string | null; // a default that doesn't depend on the workspace (shown when no defaultFn runs)
   defaultFn?: ((workspace: string) => string) | null; // derive a default from the workspace
   choicesFn?: (() => string[]) | null; // enumerate valid values (services)
   choiceGroupsFn?: (() => Record<string, string>) | null; // choice → heading it's listed under (service → repo)
