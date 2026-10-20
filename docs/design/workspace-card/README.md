@@ -142,7 +142,7 @@ This replaces today's "Click again to confirm" double-click arming.
 | done | `✓ Done` | ok | ok |
 | idle | `Idle` | off | off |
 
-`needs` comes from the agent-state signal added by jbbz-sandbox/werkmeister#243, **not** `claude.waiting`: that flag is true for every run whose transcript ends with assistant text, finished runs included, and would light the solid-amber chip on them.
+`needs` comes from the agent-state signal added by SW-46, **not** `claude.waiting`: that flag is true for every run whose transcript ends with assistant text, finished runs included, and would light the solid-amber chip on them.
 
 - **Service glyphs:** up ● ok · down ○ off · starting ◐ warn · unhealthy ▲ err.
 - **Container summary tone:** all up → ok · some up → warn · none up → off · unknown → off.

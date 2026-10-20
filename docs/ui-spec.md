@@ -2,7 +2,7 @@
 
 The rules every Werkmeister UI follows: the words, the card, the actions, the create form, and the one MCP server behind them. The visual design (tokens, layout, states) is in [`design/workspace-card/`](design/workspace-card/README.md); where the two disagree, this file wins.
 
-Origin: the ui-surfaces spike, tracked in jbbz-sandbox/werkmeister#241. Implementation issues: #243–#254.
+Origin: the ui-surfaces spike, tracked in Jira [SW-43](https://jory-group.atlassian.net/browse/SW-43). Implementation issues: SW-46 – SW-57.
 
 ## Surfaces
 
@@ -19,7 +19,7 @@ Origin: the ui-surfaces spike, tracked in jbbz-sandbox/werkmeister#241. Implemen
 |---|---|
 | **One spec, two densities.** Full and compact show the same fields, words and colour meanings; compact uses fewer pixels. | 2026-10-16 |
 | **Shared spec, not one shared component.** The pane and VS Code can't render DOM, so they share a non-DOM **display model** (workspace data → label, tone, glyph, primary action) in `packages/sandbox-ui`. The two DOM surfaces also share components. | 2026-10-16 |
-| **React is the UI library.** `packages/sandbox-ui` is a React package; the remaining vanilla-DOM modules convert over time (#254). React is bundled inline (`viteSingleFile`, no CDN), so the Cowork artifact's CSP holds. Moving VS Code to a webview is a separate, open decision. | 2026-10-17 |
+| **React is the UI library.** `packages/sandbox-ui` is a React package; the remaining vanilla-DOM modules convert over time (SW-57). React is bundled inline (`viteSingleFile`, no CDN), so the Cowork artifact's CSP holds. Moving VS Code to a webview is a separate, open decision. | 2026-10-17 |
 | **One MCP server**, `apps/mcp`, with one name per verb. No backward compatibility for tool names. | 2026-10-16 |
 | **Containers may call every MCP tool.** There is no host-only tier; the bearer token is the only gate. | 2026-10-16 |
 | **No Remove.** The only destructive verbs are Close out and Abandon…. `remove-workspace` is deprecated in favour of `close-out --abandon` (#160). | 2026-10-16 |
@@ -47,7 +47,7 @@ A person must tell, at a glance, for each workspace:
 
 - **Header:** name, agent chip, autonomous badge; then the work-type tag and the **task title from `workspace.yml`** (never the session title or a slice of the starting prompt); then the issue as `owner/repo#123`.
 - **Needs you** cards show the last question in the header, with the primary action.
-- The agent state comes from the persisted signal of #243, not from "the assistant spoke last".
+- The agent state comes from the persisted signal of SW-46, not from "the assistant spoke last".
 - Compact: name + chip on one line, then `containers 2 of 2 up · PRs sandbox#231 Draft · CI running · stage 4/5 implement`. VS Code: label = name, description = `● Needs you · 2 of 2 up · stage 2/4 · #143`, tooltip = the four rows.
 
 ### Badges
@@ -116,7 +116,7 @@ Defaults that don't depend on the current directory (`work_type`, `context_strat
 
 ## One MCP server
 
-`apps/mcp` (server `werkmeister`) becomes the only MCP server. The dashboard's server (`workspaces`, `apps/sandbox-dashboard/src/server.ts`, launched by `plugins/werkmeister/.mcp.json`) goes away; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: #245.
+`apps/mcp` (server `werkmeister`) becomes the only MCP server. The dashboard's server (`workspaces`, `apps/sandbox-dashboard/src/server.ts`, launched by `plugins/werkmeister/.mcp.json`) goes away; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: SW-48.
 
 | Merged tool | `workspaces` (dashboard) today | `werkmeister` (apps/mcp) today |
 |---|---|---|
