@@ -62,7 +62,7 @@ const CSS = `
   .health .controls { display: flex; align-items: center; gap: 10px; margin: 4px 0 4px; }
   .health .refresh {
     font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
-    padding: 7px 12px; border: 1px solid var(--sd-ctl-border); border-radius: 8px; background: var(--sd-card); color: var(--sd-ink);
+    padding: 7px 12px; border: 1px solid var(--sd-ctl); border-radius: 8px; background: var(--sd-card); color: var(--sd-ink);
   }
   .health .refresh:hover { background: var(--sd-hover); }
   .health .refresh[disabled] { opacity: .55; cursor: default; }
@@ -76,17 +76,17 @@ const CSS = `
     display: flex; align-items: center; gap: 8px; padding: 7px 12px;
     border: 1px solid var(--sd-line); border-radius: 8px; background: var(--sd-card); margin-bottom: 6px; font-size: 13px;
   }
-  .health .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sd-ghost); flex: none; }
-  .health .dot.ok { background: var(--sd-ok-dot); }
-  .health .dot.warn { background: var(--sd-warn-dot); }
+  .health .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sd-faint); flex: none; }
+  .health .dot.ok { background: var(--sd-ok); }
+  .health .dot.warn { background: var(--sd-warn); }
   .health .dot.bad { background: var(--sd-err); }
   .health .row .name { font-weight: 600; }
   .health .row .state { color: var(--sd-muted); }
   .health .row .port {
-    color: var(--sd-ghost); font-family: var(--sd-mono); font-size: 12px;
+    color: var(--sd-faint); font-family: var(--sd-mono); font-size: 12px;
   }
   .health .row.sub {
-    margin-left: 22px; padding: 5px 12px; font-size: 12px; border-color: var(--sd-line-soft); background: var(--sd-soft);
+    margin-left: 22px; padding: 5px 12px; font-size: 12px; border-color: var(--sd-line-soft); background: var(--sd-hover);
   }
   .health .row.sub .dot { width: 6px; height: 6px; }
   .health .row.sub .name { font-weight: 500; }
@@ -104,7 +104,7 @@ const CSS = `
   .health .kube-ctx { font-family: var(--sd-mono); font-size: 12px; color: var(--sd-muted); }
   .health .btn {
     font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
-    padding: 6px 12px; border-radius: 7px; border: 1px solid var(--sd-ctl-border); background: var(--sd-card); color: var(--sd-ink);
+    padding: 6px 12px; border-radius: 7px; border: 1px solid var(--sd-ctl); background: var(--sd-card); color: var(--sd-ink);
     margin-left: auto;
   }
   .health .btn:hover { background: var(--sd-hover); }

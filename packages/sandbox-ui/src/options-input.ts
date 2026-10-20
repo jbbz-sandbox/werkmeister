@@ -27,25 +27,25 @@ export interface OptionsInputOpts {
 }
 
 const CSS = `
-  .opt-input { margin-top: 10px; border-top: 1px solid #3a3a38; padding-top: 10px; }
+  .opt-input { margin-top: 10px; border-top: 1px solid var(--sd-chat-line); padding-top: 10px; }
   .opt-input .opt-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.05em; color: #a0a09a; margin: 0 0 8px; }
+    letter-spacing: 0.05em; color: var(--sd-chat-title); margin: 0 0 8px; }
   .opt-input .opt-row { display: flex; align-items: flex-start; gap: 10px; width: 100%;
     text-align: left; font: inherit; cursor: pointer; padding: 8px 10px; margin: 4px 0;
-    background: #2c2c2a; border: 1px solid #4a4a47; border-radius: 8px; color: #e8e8e3; }
-  .opt-input .opt-row:hover:not(:disabled) { background: #3a3a38; border-color: #6a6a66; }
+    background: var(--sd-chat-surface); border: 1px solid var(--sd-chat-ctl); border-radius: 8px; color: var(--sd-chat-ink); }
+  .opt-input .opt-row:hover:not(:disabled) { background: var(--sd-chat-line); border-color: var(--sd-chat-ctl-hover); }
   .opt-input .opt-row:disabled { opacity: 0.6; cursor: default; }
   .opt-input .opt-box { flex: none; width: 16px; height: 16px; margin-top: 1px;
-    border: 1.5px solid #7a7a74; border-radius: 4px; display: inline-flex;
-    align-items: center; justify-content: center; font-size: 12px; color: #fff; }
+    border: 1.5px solid var(--sd-chat-faint); border-radius: 4px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 12px; color: var(--sd-on-accent); }
   .opt-input .opt-row.done .opt-box { background: var(--sd-ok); border-color: var(--sd-ok); }
-  .opt-input .opt-row.err .opt-box { background: #b23b2e; border-color: #b23b2e; }
+  .opt-input .opt-row.err .opt-box { background: var(--sd-chat-err-solid); border-color: var(--sd-chat-err-solid); }
   .opt-input .opt-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .opt-input .opt-label { font-size: 13px; font-weight: 600; }
-  .opt-input .opt-desc { font-size: 11px; color: #9a9a92; }
+  .opt-input .opt-desc { font-size: 11px; color: var(--sd-chat-desc); }
   .opt-input .opt-status { font-size: 11px; margin-top: 2px; }
-  .opt-input .opt-status.ok { color: #7bc99a; }
-  .opt-input .opt-status.err { color: #e07a6a; }
+  .opt-input .opt-status.ok { color: var(--sd-chat-ok); }
+  .opt-input .opt-status.err { color: var(--sd-chat-err); }
 `;
 
 export function createOptionsInput(opts: OptionsInputOpts): HTMLElement {

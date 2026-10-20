@@ -65,7 +65,7 @@ import { featureUrl } from "./feature_routing.js";
 import { fetchIssueSnapshot, IssueFetchError, type IssueSnapshot } from "./issue_snapshot.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
 import { listNotes } from "./notes.js";
-import { abandonWorkspace, removalBlockers } from "./pr_lifecycle.js";
+import { abandonWorkspace, type Lifecycle, lifecycleOf, removalBlockers } from "./pr_lifecycle.js";
 import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { provisionWorkspace, WorkspaceInitError } from "./workspace_init.js";
@@ -696,6 +696,12 @@ export interface WorkspaceEntry {
   labels: string[];
   /** The workspace's Claude model (alias or id), or null for Claude Code's default. */
   model: string | null;
+  /** `workspace.yml`'s `task` title, or null if unset. */
+  task: string | null;
+  /** `workspace.yml`'s `work_type` (`feature`, `bugfix`, …), or null if unset. */
+  workType: string | null;
+  /** {@link lifecycleOf}'s state: PR files only, no network. */
+  lifecycle: Lifecycle;
 }
 
 interface WorkspaceConfigFields {
@@ -704,10 +710,12 @@ interface WorkspaceConfigFields {
   model: string | null;
   autonomous: boolean;
   autoStop: boolean;
+  task: string | null;
+  workType: string | null;
 }
 
 /**
- * Read the issue ref, `labels`, `model`, `autonomous` and `auto_stop` out of a
+ * Read the issue ref, `labels`, `model`, `autonomous`, `auto_stop`, `task` and `work_type` out of a
  * workspace's own `.sandbox/workspace.yml`. Not `readAutonomous` / `readAutoStop`:
  * they honour the `WORKSPACE_CONFIG` override, which would give every workspace in
  * a sweep the same answer.
@@ -720,7 +728,8 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
     const labels = Array.isArray(data?.labels)
       ? data.labels.filter((l): l is string => typeof l === "string")
       : [];
-    const model = typeof data?.model === "string" && data.model.trim() ? data.model.trim() : null;
+    const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+    const model = str(data?.model);
     const autonomous = isTrue(data?.autonomous);
     // Unset follows `autonomous`, as readAutoStop does (SW-39).
     const rawAutoStop = data?.auto_stop;
@@ -728,9 +737,25 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
       rawAutoStop === undefined || rawAutoStop === null || rawAutoStop === ""
         ? autonomous
         : isTrue(rawAutoStop);
-    return { issueId, labels, model, autonomous, autoStop };
+    return {
+      issueId,
+      labels,
+      model,
+      autonomous,
+      autoStop,
+      task: str(data?.task),
+      workType: str(data?.work_type),
+    };
   } catch {
-    return { issueId: null, labels: [], model: null, autonomous: false, autoStop: false };
+    return {
+      issueId: null,
+      labels: [],
+      model: null,
+      autonomous: false,
+      autoStop: false,
+      task: null,
+      workType: null,
+    };
   }
 }
 
@@ -755,7 +780,7 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
   const workspaces = await Promise.all(
     names.map(async (name): Promise<WorkspaceEntry> => {
       const p = path.join(root, name);
-      const { issueId, labels, model } = await readWorkspaceConfig(p);
+      const { issueId, labels, model, task, workType } = await readWorkspaceConfig(p);
       return {
         name,
         path: p,
@@ -765,6 +790,9 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
         issueUrl: issueId ? issueTracker().url(issueId) : null,
         labels,
         model,
+        task,
+        workType,
+        lifecycle: lifecycleOf(p).state,
       };
     }),
   );
@@ -1625,6 +1653,8 @@ export interface RepoPr {
   ci: CiStatus["ci"];
   /** Failing checks in that rollup (0 when none / no PR). */
   failingChecks: number;
+  /** True for a draft PR; absent when there is no PR. */
+  draft?: boolean;
 }
 export interface WorkspacePrs {
   name: string;
@@ -1686,7 +1716,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       "--state",
       "all",
       "--json",
-      "url,state,title,labels,statusCheckRollup",
+      "url,state,title,labels,statusCheckRollup,isDraft",
       "--limit",
       "1",
     ],
@@ -1700,6 +1730,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       title?: string;
       labels?: Array<{ name?: string }>;
       statusCheckRollup?: unknown;
+      isDraft?: boolean;
     }>;
     if (!arr.length) return none;
     const s = (arr[0].state ?? "").toUpperCase();
@@ -1712,6 +1743,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       title: arr[0].title ?? null,
       labels,
       ...ciOf(arr[0].statusCheckRollup),
+      draft: arr[0].isDraft === true,
     };
   } catch {
     return none;

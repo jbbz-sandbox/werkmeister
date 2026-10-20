@@ -1,0 +1,156 @@
+/* Stellwerk tokens (docs/design/workspace-card/tokens.css) — the only colours in
+   werkmeister-ui; components read them as var(--sd-*). */
+:root {
+  --sd-sans: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sd-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces */
+  --sd-bg: #f4f2ec;
+  --sd-card: #fffdf8;
+  --sd-hover: #efece4;
+  /* Text */
+  --sd-ink: #1b1a17;
+  --sd-muted: #5f5d56; /* 6.5:1 on bg */
+  --sd-faint: #716e67; /* 5.0:1, replaces #8a8a84 (failed AA) */
+  /* Lines */
+  --sd-line: #e2ded3;
+  --sd-line-soft: #ece9e0;
+  --sd-ctl: #d3cfc3; /* replaces --sd-ctl-border */
+  /* Brand: signal blue. Primary action, links, focus, active tab. Never status. */
+  --sd-accent: #1f4e96;
+  --sd-accent-hover: #173d78;
+  --sd-on-accent: #ffffff;
+  --sd-info: #1f4e96;
+  /* Status scale: fg / bg / bd */
+  --sd-ok: #1b7340;
+  --sd-ok-bg: #e6f4ea;
+  --sd-ok-bd: #b5dcc1;
+  --sd-warn: #8f5600;
+  --sd-warn-bg: #fdf1dc;
+  --sd-warn-bd: #ecc98a;
+  --sd-err: #b02a1f;
+  --sd-err-bg: #fbe9e6;
+  --sd-err-bd: #f0bdb5;
+  --sd-off: #5f5d56;
+  --sd-off-bg: #eeebe3;
+  --sd-off-bd: #d9d5ca;
+  --sd-pr: #6236b8;
+  --sd-pr-bg: #f1ebfb;
+  --sd-pr-bd: #d3c3f0;
+  /* Needs-you (the only solid amber) */
+  --sd-warn-solid: #e9a23b;
+  --sd-on-warn-solid: #241500;
+  --sd-attn-bg: #fdf5e6;
+  --sd-attn-bd: #e9a23b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sd-bg: #141412;
+    --sd-card: #1d1c19;
+    --sd-hover: #2a2925;
+    --sd-ink: #ecebe5;
+    --sd-muted: #a6a39a;
+    --sd-faint: #949189;
+    --sd-line: #34322d;
+    --sd-line-soft: #2a2925;
+    --sd-ctl: #45433d;
+    --sd-accent: #6d9ce8;
+    --sd-accent-hover: #8fb4f0;
+    --sd-on-accent: #0d1626;
+    --sd-info: #8fb4f0;
+    --sd-ok: #63c98a;
+    --sd-ok-bg: #142a1c;
+    --sd-ok-bd: #24563a;
+    --sd-warn: #f0b453;
+    --sd-warn-bg: #2e2310;
+    --sd-warn-bd: #6b4d16;
+    --sd-err: #ff8f84;
+    --sd-err-bg: #351814;
+    --sd-err-bd: #6e2a22;
+    --sd-off: #a6a39a;
+    --sd-off-bg: #26251f;
+    --sd-off-bd: #3d3b35;
+    --sd-pr: #c3a4ff;
+    --sd-pr-bg: #241c38;
+    --sd-pr-bd: #4b3a77;
+    --sd-warn-solid: #f0b453;
+    --sd-on-warn-solid: #241500;
+    --sd-attn-bg: #241d0f;
+    --sd-attn-bd: #c98a2c;
+  }
+}
+
+/* Chat panel: always dark, whatever the page theme (chat-panel.ts, options-input.ts). */
+:root {
+  --sd-chat-bg: #1e1e1c;
+  --sd-chat-code-bg: #1a1a18;
+  --sd-chat-input-off: #262624;
+  --sd-chat-surface: #2c2c2a;
+  --sd-chat-line: #3a3a38;
+  --sd-chat-line-soft: #3f3f3c;
+  --sd-chat-ctl: #4a4a47;
+  --sd-chat-ctl-hover: #6a6a66;
+  --sd-chat-faint: #7a7a74;
+  --sd-chat-muted: #8a8a84;
+  --sd-chat-desc: #9a9a92;
+  --sd-chat-title: #a0a09a;
+  --sd-chat-quote: #b0b0aa;
+  --sd-chat-btn-ink: #d0d0cb;
+  --sd-chat-ink: #e8e8e3;
+  --sd-chat-heading: #f0f0eb;
+  --sd-chat-strong: #f6f6f1;
+  --sd-chat-link: #e0a892;
+  --sd-chat-err: #e07a6a;
+  --sd-chat-err-solid: #b23b2e;
+  --sd-chat-ok: #7bc99a;
+}
+
+/* Shadows */
+:root {
+  --sd-shadow-card: 0 1px 2px rgba(20, 18, 12, 0.05), 0 4px 12px -6px rgba(20, 18, 12, 0.1);
+  --sd-shadow-card-attn: 0 0 0 1px var(--sd-attn-bd), 0 4px 14px -4px rgba(201, 138, 44, 0.35);
+  --sd-shadow-btn-primary:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 2px rgba(20, 18, 12, 0.14);
+  --sd-shadow-btn: 0 1px 0 rgba(20, 18, 12, 0.04);
+  --sd-shadow-menu: 0 12px 32px rgba(20, 18, 12, 0.16), 0 2px 6px rgba(20, 18, 12, 0.08);
+}
+
+/* Barlow + IBM Plex Mono, latin subset (OFL, fonts/OFL.txt). viteSingleFile inlines the
+   woff2 files as data: URIs, so no surface requests a font over the network. */
+@font-face {
+  font-family: "Barlow";
+  font-weight: 400;
+  font-display: swap;
+  src: url(./fonts/barlow-latin-400-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-weight: 500;
+  font-display: swap;
+  src: url(./fonts/barlow-latin-500-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-weight: 600;
+  font-display: swap;
+  src: url(./fonts/barlow-latin-600-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-weight: 400;
+  font-display: swap;
+  src: url(./fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-weight: 500;
+  font-display: swap;
+  src: url(./fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-weight: 600;
+  font-display: swap;
+  src: url(./fonts/ibm-plex-mono-latin-600-normal.woff2) format("woff2");
+}

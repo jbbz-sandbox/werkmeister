@@ -12,7 +12,7 @@
     "./*": "./dist/*.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/tokens.css dist/ && cp -R src/fonts dist/",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.mjs"
   },
