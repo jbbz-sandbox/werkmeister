@@ -9,9 +9,10 @@ import type {
   InterceptsSnapshot,
   RepoPr,
   ServiceHealth,
+  WorkspaceResources,
   WorkspaceRow,
 } from "../types";
-import { displayModel, type Tone, type WorkspaceDisplay } from "./display-model";
+import { displayModel, hostLine, type Tone, type WorkspaceDisplay } from "./display-model";
 
 export const PLUGIN = "werkmeister";
 export const PANE = "workspaces";
@@ -79,6 +80,7 @@ try {
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
     'workspace-status': () => core.getWorkspaceStatuses(),
+    'workspace-resources': () => core.getWorkspaceResources(),
     // The same snapshot \`sandbox status --intercepts --json\` prints: the CLI stays the one source of intercept state.
     intercepts: async () => (await sibling('status.js')).interceptsSnapshot(),
     'intercept-start': async () => (await sibling('telepresence.js')).startIntercept(await interceptArgs()),
@@ -148,6 +150,8 @@ async function core<T>(
 export const POLL_MS = 5000;
 /** PRs refresh this often: each workspace × repo is a `gh` network call. */
 export const PR_POLL_MS = 60000;
+/** CPU/memory refresh this often: the stats sweep costs the daemon about a second (SW-41). */
+export const RESOURCE_POLL_MS = 30000;
 /** PR callbacks (#236): every desktop session runs a pass this often; the core's lock lets one through. */
 export const CALLBACK_POLL_MS = 600000;
 
@@ -163,6 +167,7 @@ const TRACKER = { plugin: "werkmeister", key: "tracker" } as const;
 export const TRACKER_TTL_MS = 5 * 60 * 1000;
 let trackerAt = 0;
 const INFRA = { plugin: "werkmeister", key: "infra" } as const;
+const RESOURCES = { plugin: "werkmeister", key: "resources" } as const;
 const INTERCEPTS = { plugin: "werkmeister", key: "intercepts" } as const;
 /** CONFIRM prefix for a pending intercept ON: `intercept:<workspace>/<service>`. */
 const INTERCEPT = "intercept:";
@@ -565,6 +570,9 @@ type StatusResult = {
     phase?: string | null;
     autonomous?: boolean;
     lastActivity?: string | null;
+    project?: string | null;
+    started?: WorkspaceRow["started"];
+    crashLoops?: WorkspaceRow["crashLoops"];
   }[];
 };
 type SessionInfo = {
@@ -649,6 +657,9 @@ export function buildRows(
       phase: s?.phase ?? null,
       autonomous: s?.autonomous ?? false,
       lastActivity: s?.lastActivity ?? null,
+      project: s?.project ?? null,
+      started: s?.started ?? null,
+      crashLoops: s?.crashLoops ?? [],
       session: sessionFor(w.path, allPaths, sessions),
     };
   });
@@ -701,7 +712,12 @@ const TONE: Record<Tone, Color> = {
 };
 
 /** The shared display model (docs/ui-spec.md § The card) for one row; `prs` null when the PR poll failed. */
-export function display(r: WorkspaceRow, prs: RepoPr[] | null, now: Date): WorkspaceDisplay {
+export function display(
+  r: WorkspaceRow,
+  prs: RepoPr[] | null,
+  now: Date,
+  resources: WorkspaceResources | null = null,
+): WorkspaceDisplay {
   return displayModel(r, {
     // Not `prs?.map`: null (lookup failed) must reach the model as null, not as undefined (no PRs).
     prs:
@@ -715,7 +731,13 @@ export function display(r: WorkspaceRow, prs: RepoPr[] | null, now: Date): Works
           })),
     lifecycle: r.lifecycle?.state ?? null,
     now,
+    usage: r.project ? resources?.projects[r.project] : null,
   });
+}
+
+/** The card's resources line, `12.3% CPU · 410 MiB · started 2 h ago by up`; '' when neither is known. */
+export function resourcesLine(d: WorkspaceDisplay): string {
+  return [d.usage?.text, d.started?.text].filter(Boolean).join(" · ");
 }
 
 /** One run of the compact status line: `key` parts are the dim labels, `href` makes it a link. */
@@ -1267,6 +1289,20 @@ async function prTick($: EngineInterface): Promise<void> {
   }
 }
 
+let resourceTicking = false;
+/** One stats sweep; kept off the row tick so a slow daemon never costs the rows. */
+async function resourceTick($: EngineInterface): Promise<void> {
+  if (resourceTicking) return;
+  resourceTicking = true;
+  try {
+    await $.state.set(RESOURCES, await core<WorkspaceResources>($, "workspace-resources"));
+  } catch {
+    await $.state.set(RESOURCES, null).catch(() => undefined);
+  } finally {
+    resourceTicking = false;
+  }
+}
+
 let timers: { cancel: () => void }[] = [];
 
 function startPolling($: EngineInterface): void {
@@ -1274,6 +1310,7 @@ function startPolling($: EngineInterface): void {
   timers = [
     $.clock.every(POLL_MS, () => void tick($)),
     $.clock.every(PR_POLL_MS, () => void prTick($)),
+    $.clock.every(RESOURCE_POLL_MS, () => void resourceTick($)),
   ];
 }
 
@@ -1336,6 +1373,7 @@ async function openPane($: EngineInterface): Promise<void> {
   await $.ui.open({ id: PANE, title: "Sandbox workspaces" });
   await tick($);
   void prTick($);
+  void resourceTick($);
   startPolling($);
 }
 
@@ -1420,6 +1458,7 @@ export const register: Register = (on) => {
     if (panes.some((p) => p.id === PANE)) {
       startPolling($);
       void prTick($);
+      void resourceTick($);
     } else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($);
     if (e.surface === "desktop" && (await inWorkspace($, e.cwd))) await fileInGroup($);
     if (e.surface === "desktop") startCallbacks($);
@@ -1489,6 +1528,9 @@ export const register: Register = (on) => {
     const { value: confirm = "" } = await $.state.get(CONFIRM);
     const { value: reason = "" } = await $.state.get(REASON);
     const { value: infra = null } = await $.state.get(INFRA);
+    const { value: resources } = await $.state.get(RESOURCES);
+    // No line before the first sweep lands, `host load n/a` once one failed.
+    const host = resources === undefined ? null : hostLine(resources?.host ?? null);
     const { value: snap = null } = await $.state.get(INTERCEPTS);
     const { value: tracker = null } = await $.state.get(TRACKER);
     const { value: polled } = await $.state.get(PRS);
@@ -1731,7 +1773,8 @@ export const register: Register = (on) => {
         </Text>
       );
     const card = (r: WorkspaceRow) => {
-      const d = display(r, prsPoll === "failed" ? null : (prs[r.name] ?? []), now);
+      const d = display(r, prsPoll === "failed" ? null : (prs[r.name] ?? []), now, resources);
+      const vitals = resourcesLine(d);
       const acts = actionsFor(r, d, canType);
       const label = (a: Action) =>
         a === "continue"
@@ -1797,6 +1840,16 @@ export const register: Register = (on) => {
           <Box key={`meta:${r.name}`}>
             <Text>{metaParts(d, polled !== undefined || prsPoll === "failed").map(part)}</Text>
           </Box>
+          {vitals !== "" && (
+            <Box key={`vitals:${r.name}`}>
+              <Text dimColor>{vitals}</Text>
+            </Box>
+          )}
+          {d.crash && (
+            <Box key={`crash:${r.name}`}>
+              <Text color={TONE.err}>{d.crash.text}</Text>
+            </Box>
+          )}
           {d.question && (
             <Box key={`question:${r.name}`}>
               <Text>
@@ -1945,8 +1998,17 @@ export const register: Register = (on) => {
       <Box flexDirection="column">
         {tabs}
         <Box key="infra-bar" justifyContent="space-between" marginBottom={1}>
-          <Box key="infra">
-            <Text color={INFRA_COLOR[infra?.state ?? "unknown"]}>{infraLine(infra, tracker)}</Text>
+          <Box key="infra-col" flexDirection="column">
+            <Box key="infra">
+              <Text color={INFRA_COLOR[infra?.state ?? "unknown"]}>
+                {infraLine(infra, tracker)}
+              </Text>
+            </Box>
+            {host && (
+              <Box key="host">
+                <Text color={TONE[host.tone]}>{host.text}</Text>
+              </Box>
+            )}
           </Box>
           {busy === CONNECTING ? (
             <Box key="connecting">

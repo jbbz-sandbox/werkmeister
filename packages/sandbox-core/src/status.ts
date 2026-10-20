@@ -16,6 +16,15 @@ import { INFRA_PROJECT } from "./compose_infra.js";
 import { loadServices } from "./config.js";
 import { projectContainers } from "./docker.js";
 import { type ForwardStatus, getPerServiceStatus } from "./k8s.js";
+import {
+  type CrashLoop,
+  getWorkspaceResources,
+  type HostSummary,
+  type ProjectHealth,
+  projectHealth,
+  type StartedBy,
+  type WorkspaceResources,
+} from "./resources.js";
 // The only core module that reaches into `sandbox.ts`, for a one-line predicate
 // whose other caller already lives there. Splitting it out would touch a second
 // module for no gain.
@@ -208,9 +217,17 @@ export interface FeatureSnapshot {
   containers_running: number;
   containers_total: number;
   intercepts: InterceptRow[];
+  /** Null when the stats sweep failed or the feature runs nothing. */
+  cpu_percent: number | null;
+  mem_mib: number | null;
+  started_at: string | null;
+  started_by: StartedBy | null;
+  crash_loops: CrashLoop[];
 }
 
 export interface StatusSnapshot {
+  /** Null when the stats sweep failed. */
+  host: HostSummary | null;
   infrastructure: InfraContainer[];
   mcp_web_server: WebServerStatus;
   k8s_forwards: ForwardStatus[];
@@ -226,8 +243,25 @@ export interface StatusSnapshot {
   };
 }
 
+/** Feature vitals keyed by compose project; `projects` keys are `sandbox-<feature>`. */
+export interface FeatureVitals {
+  health: Map<string, ProjectHealth>;
+  /** Null when the sweep failed. */
+  resources: WorkspaceResources | null;
+}
+
+/** One listing for health and one stats sweep for every feature, run side by side. */
+export async function featureVitals(): Promise<FeatureVitals> {
+  const [health, resources] = await Promise.all([
+    projectContainers().then((all) => projectHealth(all ?? [])),
+    getWorkspaceResources().catch(() => null),
+  ]);
+  return { health, resources };
+}
+
 /** Everything `sandbox status` knows, in one machine-readable read. */
 export async function statusSnapshot(): Promise<StatusSnapshot> {
+  const vitals = featureVitals();
   const infra = await getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = await getAllSlots();
@@ -238,9 +272,13 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
   const interceptState = listIntercepts(STATUS_READ);
   const interceptRows = buildInterceptRows(allSlots, loadServices(), interceptState);
 
+  const { health, resources } = await vitals;
   const features: FeatureSnapshot[] = [];
   for (const [featureName, featureInfo] of sortedSlots(allSlots)) {
     const containers = tallied(await getContainerStatus(featureName));
+    const project = `sandbox-${featureName}`;
+    const usage = resources?.projects[project];
+    const h = health.get(project);
     features.push({
       name: featureName,
       slot: featureInfo.slot,
@@ -250,10 +288,16 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
       containers_running: containers.filter((c) => c.status === "running").length,
       containers_total: containers.length,
       intercepts: interceptRows.filter((r) => r.feature === featureName),
+      cpu_percent: usage?.cpuPercent ?? null,
+      mem_mib: usage?.memMib ?? null,
+      started_at: h?.started?.at ?? null,
+      started_by: h?.started?.by ?? null,
+      crash_loops: h?.crashLoops ?? [],
     });
   }
 
   return {
+    host: resources?.host ?? null,
     infrastructure: infra,
     mcp_web_server: mcp,
     k8s_forwards: k8s,

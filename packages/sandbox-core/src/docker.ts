@@ -262,6 +262,7 @@ export interface ContainerStat {
   cpuPercent: number;
   memMib: number;
   memLimitMib: number;
+  labels: Record<string, string>;
 }
 
 const MIB = 1024 * 1024;
@@ -319,6 +320,7 @@ export async function containerStats(signal?: AbortSignal): Promise<ContainerSta
           cpuPercent: cpuPercent(s),
           memMib: memMib(s),
           memLimitMib: (s.memory_stats.limit ?? 0) / MIB,
+          labels: c.Labels ?? {},
         };
       } catch {
         return null; // container exited between the list and the sample
@@ -326,6 +328,53 @@ export async function containerStats(signal?: AbortSignal): Promise<ContainerSta
     }),
   );
   return stats.filter((s): s is ContainerStat => s !== null);
+}
+
+/** What only `inspect` knows about a container: the listing carries none of it. */
+export interface ContainerRuntime {
+  /** `State.StartedAt`, epoch ms. */
+  startedAt: number;
+  /** Restart-policy restarts since the last explicit start; the daemon resets it on `docker start`. */
+  restartCount: number;
+  tty: boolean;
+}
+
+/** One concurrent `inspect` per name; a container that can't be inspected is left out. */
+export async function containerRuntime(names: string[]): Promise<Map<string, ContainerRuntime>> {
+  const found = await Promise.all(
+    names.map(async (name) => {
+      try {
+        const i = await withTimeout(10, "docker inspect", docker().getContainer(name).inspect());
+        const rt: ContainerRuntime = {
+          startedAt: Date.parse(i.State.StartedAt),
+          restartCount: i.RestartCount ?? 0,
+          tty: i.Config.Tty,
+        };
+        return [name, rt] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return new Map(found.filter((e) => e !== null));
+}
+
+/** The container's last log line (stdout or stderr), at most 200 chars; null when there is none. */
+export async function lastLogLine(name: string, tty: boolean): Promise<string | null> {
+  try {
+    const buf = await withTimeout(
+      10,
+      "docker logs",
+      docker().getContainer(name).logs({ stdout: true, stderr: true, tail: 1, follow: false }),
+    );
+    let last: string | null = null;
+    await pipeLogLines(Readable.from([buf]), tty, "", (line) => {
+      if (line.trim()) last = line.trim().slice(0, 200);
+    });
+    return last;
+  } catch {
+    return null;
+  }
 }
 
 /**
