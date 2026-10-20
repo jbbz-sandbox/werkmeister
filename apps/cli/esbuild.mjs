@@ -30,6 +30,8 @@
  * which is native here.
  */
 import { execFileSync } from "node:child_process";
+import { copyFileSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import * as esbuild from "esbuild";
 
 const watch = process.argv.includes("--watch");
@@ -69,6 +71,7 @@ const options = {
   target: "node20",
   define: { __SANDBOX_BUILD__: JSON.stringify(buildStamp) },
   sourcemap: true,
+  metafile: true,
   // SW-58: smaller package, faster load. keepNames keeps function/class names in
   // stack traces and `constructor.name`; legalComments stays at the bundling default
   // (`eof`) — `none` would drop the MIT/Apache notices the bundled deps require.
@@ -86,9 +89,36 @@ const options = {
   logLevel: "info",
 };
 
+/**
+ * SW-63: the tarball carries this repo's LICENSE and NOTICE, and the licence file
+ * of every package the bundle inlined. Minified output keeps only the `/*!`
+ * comments a few deps have, and MIT/ISC/BSD all require the full notice.
+ */
+function writeLicenses({ outputs }) {
+  const dirs = new Set();
+  // Output-side inputs, not metafile.inputs: a package esbuild read but tree-shook
+  // to nothing ships no code, so it needs no notice.
+  for (const file of Object.values(outputs).flatMap((o) => Object.keys(o.inputs))) {
+    const m = file.match(/^(.*node_modules\/(?:@[^/]+\/)?[^/]+)\//);
+    if (m) dirs.add(m[1]);
+  }
+  const notices = [...dirs].sort().map((dir) => {
+    const { name, version, license } = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+    const file = readdirSync(dir).find((f) => /^(licen[cs]e|copying)/i.test(f));
+    if (!file) throw new Error(`${name}@${version} is bundled but ships no licence file`);
+    return `${name}@${version} (${license})\n\n${readFileSync(join(dir, file), "utf8").trim()}\n`;
+  });
+  writeFileSync(
+    "dist/THIRD-PARTY-LICENSES.txt",
+    "Third-party packages bundled into dist/*.js, with their licence text. See NOTICE.\n\n" +
+      [...new Set(notices)].join(`\n${"-".repeat(72)}\n\n`),
+  );
+  for (const f of ["LICENSE", "NOTICE"]) copyFileSync(join("../..", f), join("dist", f));
+}
+
 if (watch) {
   const ctx = await esbuild.context(options);
   await ctx.watch();
 } else {
-  await esbuild.build(options);
+  writeLicenses((await esbuild.build(options)).metafile);
 }

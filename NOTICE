@@ -1,4 +1,14 @@
-werkmeister
 Copyright 2026 Jay Boyer
 
 This product includes software developed by Jay Boyer.
+
+The werkmeister npm package bundles third-party packages into dist/*.js under
+the MIT, ISC, BSD-2-Clause and BSD-3-Clause licences. Their names, versions and
+licence texts are in dist/THIRD-PARTY-LICENSES.txt. The bundled VS Code
+extension (dist/sandbox-workspaces.vsix) and infra/compose/scripts/otel-init.bundle.js
+also contain Apache-2.0, BSD-3-Clause, ISC, MIT and Unlicense code. None of these
+packages carries an Apache NOTICE file.
+
+Every dependency, required program, container image and optional integration,
+with its licence: docs/third-party.md
+https://github.com/jbbz-sandbox/werkmeister/blob/main/docs/third-party.md
