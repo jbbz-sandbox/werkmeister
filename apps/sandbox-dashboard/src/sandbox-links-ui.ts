@@ -61,7 +61,7 @@ const GROUPS: LinkGroup[] = [
       },
       {
         label: "Sandbox dashboard",
-        desc: "Workspaces dashboard + MCP endpoint (/mcp)",
+        desc: "Workspaces dashboard",
         url: "http://localhost:3001/",
         kind: "admin",
       },

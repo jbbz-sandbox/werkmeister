@@ -786,9 +786,19 @@ export async function getFormSchema(): Promise<FormSchemaBundle> {
   // only. For a brand-new workspace there's no meaningful pre-fill, and a stray
   // derived value could be submitted by accident — so start blank and let the
   // schema's placeholders/labels guide the user.
+  const uiSchema = (bundle.uiSchema ?? {}) as FormSchemaBundle["uiSchema"];
+  // The form's "Fetch from <tracker>" button names the tracker without the browser bundle knowing it.
+  const issueUi = (uiSchema.issue_id ?? {}) as Record<string, unknown>;
+  uiSchema.issue_id = {
+    ...issueUi,
+    "ui:options": {
+      ...((issueUi["ui:options"] ?? {}) as Record<string, unknown>),
+      trackerLabel: issueTracker().label,
+    },
+  };
   return {
     schema: bundle.schema as FormSchemaBundle["schema"],
-    uiSchema: (bundle.uiSchema ?? {}) as FormSchemaBundle["uiSchema"],
+    uiSchema,
     formData: {},
     title: (bundle.title as string) ?? "Initialize workspace",
   };
@@ -2416,7 +2426,7 @@ export async function runConnect(): Promise<{ command: string; output: string }>
       }
 
       const mcp = await webStatus(DASHBOARD);
-      info(`Sandbox MCP:   ${mcp.url}  (workspaces dashboard; MCP at /mcp)`);
+      info(`Dashboard:     ${mcp.url}  (workspaces dashboard)`);
     });
   } catch (e) {
     const detail = stripAnsi(

@@ -10,7 +10,8 @@ Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
 | App | Path | What |
 | --- | --- | --- |
 | `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI. |
-| `werkmeister-dashboard` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | MCP App + dashboard UI for creating/managing Werkmeister workspaces. |
+| `werkmeister-mcp` | [apps/mcp](apps/mcp) | The one MCP server: every tool, over stdio and authenticated HTTP. Bundled into the CLI. |
+| `werkmeister-dashboard` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | The localhost dashboard and the MCP App UI bundles for creating/managing Werkmeister workspaces. |
 
 | Package | Path | What |
 | --- | --- | --- |
@@ -102,12 +103,12 @@ The package is a single esbuild bundle plus `infra/` — the templates, compose
 files, proxy UI and skills the CLI reads at runtime. `werkmeister-core` and the
 CLI's other libraries are bundled in, so the only dependency npm resolves is
 `dockerode`. `werkmeister setup` still seeds `~/.werkmeister` exactly as it does from a
-checkout, which is what makes the two installs interchangeable. The headless
-MCP server (`apps/mcp`) is bundled in too, as `dist/mcp.js`: `werkmeister mcp`,
+checkout, which is what makes the two installs interchangeable. The MCP server
+(`apps/mcp`, every tool) is bundled in too, as `dist/mcp.js`: `werkmeister mcp`,
 `werkmeister connect`'s MCP server on 3002 and the `werkmeister` plugin's MCP
 entry all work from the package. What stays checkout-only is the workspaces
-dashboard (`apps/sandbox-dashboard`: issues, PRs, session and MCP-App UI tools);
-`werkmeister dashboard` falls back to the headless server where it is absent.
+dashboard (`apps/sandbox-dashboard`): the localhost browser page and the MCP App
+UI bundles, so on a package install the App tools answer in text.
 
 One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins
 in `~/.werkmeister/env.sh`, so whichever CLI you last ran `werkmeister config` from owns

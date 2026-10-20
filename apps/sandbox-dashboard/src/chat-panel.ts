@@ -185,7 +185,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
     resume.disabled = true;
     resume.textContent = "Opening…";
     try {
-      await call("claude-resume", { name, sessionId: st?.pinnedSessionId });
+      await call("claude-resume", { workspace: name, sessionId: st?.pinnedSessionId });
     } catch {
       if (st) {
         st.error = "Couldn’t open Terminal — is the session reachable?";
@@ -235,7 +235,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
         isNewest: boolean;
       }>;
       try {
-        sessions = (await call("claude-transcript", { name, limit: 1 })).sessions || [];
+        sessions = (await call("claude-transcript", { workspace: name, limit: 1 })).sessions || [];
       } catch {
         return;
       }
@@ -445,7 +445,11 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       st.sending = true; // typing indicator until the stream reports the turn
       scheduleRender();
       try {
-        await call("claude-send", { name, message: text, sessionId: st.pinnedSessionId });
+        await call("claude-send", {
+          workspace: name,
+          message: text,
+          sessionId: st.pinnedSessionId,
+        });
       } catch (_e) {
         st.error =
           "Couldn’t start the turn — check that the session and `claude` CLI are reachable, then retry.";
@@ -489,7 +493,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
     st = { messages: [], sessionId: null, loaded: false, pinnedSessionId: pinned };
     renderMsgs();
     try {
-      const d = await call("claude-transcript", { name, limit: 20, sessionId: pinned });
+      const d = await call("claude-transcript", { workspace: name, limit: 20, sessionId: pinned });
       st = {
         messages: d.messages || [],
         sessionId: d.sessionId,
@@ -515,7 +519,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
     state: any,
   ): Promise<{ changed: boolean; lastRole: string | null }> {
     const d = await call("claude-transcript", {
-      name,
+      workspace: name,
       limit: 30,
       sessionId: state.pinnedSessionId,
     });
@@ -556,7 +560,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       }
       let status: any = null;
       try {
-        status = await call("claude-turn-status", { name });
+        status = await call("claude-turn-status", { workspace: name });
       } catch (_e) {
         /* older server — heuristic below */
       }
@@ -592,7 +596,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
     st.sending = true;
     renderMsgs();
     try {
-      await call("claude-send", { name, message: text, sessionId: st.pinnedSessionId });
+      await call("claude-send", { workspace: name, message: text, sessionId: st.pinnedSessionId });
       const settled = await pollForReply(st);
       if (!settled)
         st.error =
@@ -630,7 +634,7 @@ export function initChatPanel(name: string, opts: ChatPanelOpts): ChatPanelHandl
       if (!st?.loaded || st.sending) return;
       let running = false;
       try {
-        const s = await call("claude-turn-status", { name });
+        const s = await call("claude-turn-status", { workspace: name });
         running = s.state === "running";
       } catch (_e) {
         /* no status tool — plain sync */

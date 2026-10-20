@@ -1,24 +1,23 @@
-# workspaces MCP server
+# workspaces dashboard
 
-The sandbox **workspace dashboard** (`sandbox dashboard`): ~29 tools for creating and
-operating sandbox workspaces — worktree creation, container lifecycle, PR review,
-issue lookups, k8s/kube health, and an embedded Claude Code session bridge — plus
-interactive UIs for every kind of MCP host. It delegates all real work to the
-`sandbox` CLI, `gh`, `kubectl`, and the local `claude` CLI; the server renders,
-routes, and shells out.
+The localhost **workspaces dashboard** (`werkmeister dashboard`, and the server
+`werkmeister connect` keeps on :3001), the `--browser-form` create page, and the
+MCP App UI bundles. It has no MCP server: every tool lives in
+[`apps/mcp`](../mcp) (`werkmeister mcp`), and this app's `/api/tool` calls that
+server's `createServer()` over an in-memory transport.
 
 ## UI degradation ladder
 
 Every host gets the richest surface it can render. Capability detection is
-`hostRendersUi()` (server.ts): the `io.modelcontextprotocol/ui` capability at
-initialize. Every tool **always** returns `structuredContent` + text, so the
+`rendersUi()` (`apps/mcp/src/workspace_tools.ts`): the `io.modelcontextprotocol/ui`
+capability at initialize. Every tool **always** returns `structuredContent` + text, so the
 model's view is tier-independent.
 
 | Tier | Host | Surface |
 |------|------|---------|
 | 1 | Claude Desktop | Inline MCP App (`ui://`): `dist/mcp-app.html` (create form), `dist/mcp-list.html` (workspace dashboard) |
 | 2 | Cowork | Live artifact `dist/workspace-list.artifact.html` — manual install via the `install-workspace-dashboard` skill; MCP prefix is read from its own meta block (source: `src/artifact-meta.json`) |
-| 3 | Claude Code CLI / VS Code | Localhost browser: `open-workspaces-ui` serves `dist/browser.html` (Workspaces / New workspace / Open PRs tabs); the `workspace` tool auto-falls-back to `dist/form.html` (blocking create form, `src/lib/localhost-form.ts`) |
+| 3 | Claude Code CLI / VS Code | Localhost browser: `open-workspaces-ui` opens `dist/browser.html` (Workspaces / New workspace / Open PRs tabs); `create-workspace-form` falls back to `dist/form.html` (blocking create form, `src/form-cli.ts`) |
 | 4 | Anything else | Markdown/text from the same tools |
 
 All five UI bundles are single-file (`viteSingleFile`) and fully
@@ -34,14 +33,7 @@ sampling (no host implements it) — prompt refinement goes through the
 
 ## Tools
 
-| Group | Tools |
-|-------|-------|
-| Create workspace | `workspace` (App tool: inline form or localhost fallback; `issue` arg pre-fills), `create-workspace`, `workspace-form-schema`, `issue-form-data`, `refine-prompt` |
-| List & manage | `list-workspaces` (App tool), `workspace-status`, `workspace-action` (start/stop/restart/down), `close-out` (end a workspace: shipped, or `abandon` with a reason), `open-workspace` (VS Code), `open-feature` (tagged browser), `open-workspaces-ui` |
-| Pull requests | `workspace-prs`, `open-prs`, `pr-approve`, `pr-reconcile` |
-| Issues | `issue`, `issue-statuses` |
-| Infra | `sandbox-connect`, `docker-ui`, `k8s-forwards-status`, `kube-context`, `kube-switch` |
-| Claude sessions | `claude-transcript`, `claude-send`, `claude-turn-status`, `claude-resume` (Terminal) |
+The tool table is in [`apps/mcp/README.md`](../mcp/README.md#tools).
 
 Issue reads and status lookups go through the issue tracker `sandbox setup`
 configured (`issueTracker()` in `werkmeister-core/issue_tracker`); the dashboard never
@@ -64,8 +56,7 @@ The CLI owns the inputs and the create logic:
 
 | File | Role |
 |------|------|
-| `src/server.ts` | All tool registrations + `ui://` resources + capability routing |
-| `src/main.ts` | stdio (Desktop / plugin) and HTTP entry; HTTP mode also serves the dashboard |
+| `src/main.ts` | The localhost dashboard: `GET /` and `/api/*` on `PORT` (default 3001) |
 | `src/form-cli.ts` | `sandbox workspace --browser-form` — the no-MCP standalone form path |
 | `src/lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
 | `src/lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
@@ -79,34 +70,20 @@ The CLI owns the inputs and the create logic:
 ```bash
 npm install                      # at the repo root (npm workspaces)
 cd apps/sandbox-dashboard
-npm run build                    # typecheck + 5 UI bundles + server → dist/
+npm run build                    # typecheck + 5 UI bundles + dashboard server → dist/
 node test/localhost-form.smoke.mjs  # and the other test/*.smoke.mjs
 ```
 
-All ten `test/*.smoke.mjs` pass. Seven of them exercise `werkmeister-core`, so
+Most `test/*.smoke.mjs` exercise `werkmeister-core`, so
 `packages/sandbox-core` must be built first (`npm run build` there, or at the
 repo root) — they import the package by name, never by relative path.
 
 ## Wiring
 
-- **Claude Code (CLI / VS Code):** installed automatically by the
-  `werkmeister` plugin's `.mcp.json` (`w9r dashboard`).
-- **Claude Desktop** (plugins don't install there):
-
-```json
-{ "mcpServers": { "workspaces": { "command": "w9r", "args": ["dashboard"] } } }
-```
-
-Fully quit and reopen Desktop after changes; rebuild first. The server finds the
-`sandbox` wrapper via `$SANDBOX_BIN`, then `$SANDBOX_ROOT/sandbox`, then by
-walking up from the app directory, then `~/.local/bin/sandbox`, and augments
-`PATH` (Homebrew, `~/.local/bin`, `~/.cargo/bin`) because Desktop launches
-servers with a minimal environment. `SANDBOX_ROOT` outranks the last two because
-it names the checkout you are actually running, which the walk-up and the global
-symlink both get wrong from a feature worktree.
-
-### Local testing without a host
+The MCP wiring is `werkmeister mcp` (see `apps/mcp/README.md`). This app only
+needs building: `werkmeister mcp` reads its `dist/` for the `ui://` HTML and the
+browser form.
 
 ```bash
-npm run serve:http          # http://localhost:3001/mcp + the dashboard at /
+npm run serve:http          # the dashboard at http://localhost:3001/
 ```

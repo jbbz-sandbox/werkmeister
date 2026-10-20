@@ -108,10 +108,10 @@ pane, so do it in these steps yourself:
 
 Add `--issue-id`/`--open` to step 1 exactly as for the foreground form.
 
-### Desktop inline alternative — the `workspace` MCP tool
+### Desktop inline alternative — the `create-workspace-form` MCP tool
 
-In **Claude Desktop**, the bundled `workspaces` MCP server renders the form **inline**
-(an MCP App `ui://` resource). Calling `mcp__plugin_werkmeister_workspaces__workspace` there shows the
+In **Claude Desktop**, the bundled `werkmeister` MCP server renders the form **inline**
+(an MCP App `ui://` resource). Calling `mcp__plugin_werkmeister_werkmeister__create-workspace-form` there shows the
 same form in-conversation; on a CLI/VS-Code client it falls back to the same browser
 form as `--browser-form`. Use `--browser-form` from Claude Code; reserve the MCP tool for
 Desktop.

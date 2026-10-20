@@ -209,7 +209,7 @@ export function initHealthUI(bridge: HostBridge, root: HTMLElement): { reload: (
         usagePanel.style.display = "";
         usagePanel.textContent = "Computing usage…";
         try {
-          const u = (await call("workspace-usage", { name: f.name })) as WorkspaceUsage;
+          const u = (await call("workspace-usage", { workspace: f.name })) as WorkspaceUsage;
           renderUsage(usagePanel, u);
         } catch {
           usagePanel.textContent = "Failed to load usage.";
@@ -287,7 +287,7 @@ export function initHealthUI(bridge: HostBridge, root: HTMLElement): { reload: (
     const refresh = $("refresh") as HTMLButtonElement;
     refresh.disabled = true;
     const [ws, k8s, kube] = await Promise.allSettled([
-      call("workspace-status", {}) as Promise<WorkspaceStatusResult>,
+      call("status", {}) as Promise<WorkspaceStatusResult>,
       call("k8s-forwards-status", {}) as Promise<K8sForwardsResult>,
       call("kube-context", {}) as Promise<KubeContextResult>,
     ]);
