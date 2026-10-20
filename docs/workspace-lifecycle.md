@@ -124,7 +124,7 @@ repo:
 | `werkmeister pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
 | `werkmeister issue start` | the first stage or phase began: move the workspace's issue to `in_progress` ([Issue status](#issue-status)) |
 | `werkmeister pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
-| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). Run it from cron: `*/10 * * * * werkmeister pr watch` |
+| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). `werkmeister setup` offers to run it every 10 minutes (launchd on macOS, a crontab line elsewhere). `werkmeister pr watch --install` / `--uninstall` add or remove that schedule directly. Logs: `~/.werkmeister/pr-watch.log` |
 | `werkmeister pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
 | `werkmeister close-out [name] [--abandon "<reason>"]` | end the workspace (below). The one end-of-workspace verb |
 | `werkmeister remove-workspace <name>` | deprecated alias, kept for one release: prints "use `werkmeister close-out --abandon`" and removes as before |
@@ -151,7 +151,7 @@ A pass runs `werkmeister pr status` for each workspace with a callback and tells
 `notified` is written before the message goes out, so a failed delivery is logged and not repeated. Once the PR is shipped, closed or abandoned the callback fields are removed. A pass never merges and never closes out.
 
 - Desktop sessions: the werkmeister mod runs a pass when a desktop session starts and every 10 minutes, and sends each message through the app (a visible turn in that session). While the app is closed they wait.
-- Terminal sessions: `werkmeister pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder). A session id the workspace no longer has is reported, never swapped for another session.
+- Terminal sessions: `werkmeister pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder), on the schedule `werkmeister setup` installs ([Commands](#commands)). A session id the workspace no longer has is reported, never swapped for another session.
 
 One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
 
