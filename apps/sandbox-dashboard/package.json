@@ -19,9 +19,9 @@
     "@modelcontextprotocol/ext-apps": "^1.7.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^5.1.0",
-    "werkmeister-core": "^0.22.0",
-    "werkmeister-mcp": "^0.3.8",
-    "werkmeister-ui": "^0.1.1",
+    "werkmeister-core": "^0.23.0",
+    "werkmeister-mcp": "^0.3.9",
+    "werkmeister-ui": "^0.2.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
