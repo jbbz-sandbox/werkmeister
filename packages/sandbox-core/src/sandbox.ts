@@ -64,11 +64,12 @@ import { launchFeatureWindow } from "./browser.js";
 import { featureUrl } from "./feature_routing.js";
 import { fetchIssueSnapshot, IssueFetchError, type IssueSnapshot } from "./issue_snapshot.js";
 import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
+import { listNotes } from "./notes.js";
 import { abandonWorkspace, removalBlockers } from "./pr_lifecycle.js";
 import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { provisionWorkspace, WorkspaceInitError } from "./workspace_init.js";
-import { computePromptSpec, loadConfigFile, resolveInputs } from "./workspace_prompts.js";
+import { computePromptSpec, isTrue, loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 
 export {
   adoptPr,
@@ -697,10 +698,21 @@ export interface WorkspaceEntry {
   model: string | null;
 }
 
-/** Read the issue ref, `labels` and `model` out of a workspace's `.sandbox/workspace.yml`. */
-async function readWorkspaceConfig(
-  workspaceDir: string,
-): Promise<{ issueId: string | null; labels: string[]; model: string | null }> {
+interface WorkspaceConfigFields {
+  issueId: string | null;
+  labels: string[];
+  model: string | null;
+  autonomous: boolean;
+  autoStop: boolean;
+}
+
+/**
+ * Read the issue ref, `labels`, `model`, `autonomous` and `auto_stop` out of a
+ * workspace's own `.sandbox/workspace.yml`. Not `readAutonomous` / `readAutoStop`:
+ * they honour the `WORKSPACE_CONFIG` override, which would give every workspace in
+ * a sweep the same answer.
+ */
+async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfigFields> {
   try {
     const text = await fs.readFile(path.join(dotDir(workspaceDir), "workspace.yml"), "utf-8");
     const data = parseYaml(text) as Record<string, unknown> | null;
@@ -709,9 +721,16 @@ async function readWorkspaceConfig(
       ? data.labels.filter((l): l is string => typeof l === "string")
       : [];
     const model = typeof data?.model === "string" && data.model.trim() ? data.model.trim() : null;
-    return { issueId, labels, model };
+    const autonomous = isTrue(data?.autonomous);
+    // Unset follows `autonomous`, as readAutoStop does (SW-39).
+    const rawAutoStop = data?.auto_stop;
+    const autoStop =
+      rawAutoStop === undefined || rawAutoStop === null || rawAutoStop === ""
+        ? autonomous
+        : isTrue(rawAutoStop);
+    return { issueId, labels, model, autonomous, autoStop };
   } catch {
-    return { issueId: null, labels: [], model: null };
+    return { issueId: null, labels: [], model: null, autonomous: false, autoStop: false };
   }
 }
 
@@ -1106,12 +1125,65 @@ export interface WorkspaceStatus {
   slot: number | null;
   /** Port range for the slot, e.g. "11200-11219", or null when no slot. */
   ports: string | null;
-  /** Per-container health, for the Health tab's per-feature breakdown. Same buckets as {@link InfraStatus}. */
+  /**
+   * Per-container health: the card's Containers row and the Health tab's breakdown.
+   * Same buckets as {@link InfraStatus}. Empty when docker is unreachable or nothing runs.
+   */
   services: { name: string; state: ServiceHealth }[];
   /** Claude Code session signal: turn state + whether it's waiting for the human. */
   claude: ClaudeSessionSignal;
   /** The workspace's Claude model, or null for Claude Code's default. */
   model: string | null;
+  /** ICM run position (the card's Workflow row), or null for a JIT workspace or a finished run. */
+  stage: IcmStage | null;
+  /** JIT phase from the newest live note (`research` · `implement` · `test` · `review`), or null. */
+  phase: string | null;
+  /** `autonomous` in workspace.yml. */
+  autonomous: boolean;
+  /** `auto_stop` in workspace.yml; unset follows `autonomous`. */
+  autoStop: boolean;
+  /** mtime (ISO) of the workspace's newest Claude transcript, or null when it has none. */
+  lastActivity: string | null;
+}
+
+/** An ICM workspace's current stage: 1-based `index` of `total`, `name` without its `NN_` prefix. */
+export interface IcmStage {
+  index: number;
+  total: number;
+  name: string;
+}
+
+/**
+ * The first `stages/NN_*` whose `output/` holds no non-dot file (so a lone `.gitkeep`
+ * is still empty); null when there is no `stages/` dir or every stage has output.
+ */
+export async function icmStage(dir: string): Promise<IcmStage | null> {
+  const names = await fs.readdir(path.join(dir, "stages")).catch(() => null);
+  if (!names) return null;
+  const stages = names.filter((n) => /^\d+_/.test(n)).sort();
+  for (let i = 0; i < stages.length; i++) {
+    const files = await fs
+      .readdir(path.join(dir, "stages", stages[i], "output"))
+      .catch(() => [] as string[]);
+    if (!files.some((f) => !f.startsWith(".")))
+      return { index: i + 1, total: stages.length, name: stages[i].replace(/^\d+_/, "") };
+  }
+  return null;
+}
+
+/** The `phase` of the newest live JIT note that names one. ICM workspaces have no notes → null. */
+function jitPhase(dir: string): string | null {
+  let notes: ReturnType<typeof listNotes>;
+  try {
+    notes = listNotes(dir);
+  } catch {
+    return null; // an unreadable notes dir must not cost the status sweep
+  }
+  for (const n of notes.reverse()) {
+    const phase = n.frontmatter.phase;
+    if (typeof phase === "string" && phase.trim()) return phase.trim();
+  }
+  return null;
 }
 
 export interface ClaudeSessionSignal {
@@ -1150,20 +1222,23 @@ async function readFileTail(file: string, maxBytes = 131072): Promise<string> {
  * on a permission prompt* from one mid-execution — that needs Claude Code's
  * Notification hook, out of scope for the transcript tail.)
  */
-async function claudeSessionSignal(name: string): Promise<ClaudeSessionSignal> {
+async function claudeSessionSignal(
+  name: string,
+): Promise<{ signal: ClaudeSessionSignal; lastActivity: string | null }> {
   const state = claudeTurns.get(name)?.state ?? "idle";
-  if (state === "running") return { state, waiting: false };
+  const src = await resolveSessionSource(name).catch(() => null);
+  const lastActivity = src?.updatedAt ?? null;
+  if (state === "running") return { signal: { state, waiting: false }, lastActivity };
   let lastRole: string | null = null;
   try {
-    const src = await resolveSessionSource(name);
-    if (src.sessionFile) {
+    if (src?.sessionFile) {
       const entries = parseSessionLines(await readFileTail(src.sessionFile));
       if (entries.length) lastRole = entries[entries.length - 1].role;
     }
   } catch {
     /* best-effort — no signal */
   }
-  return { state, waiting: lastRole === "assistant" };
+  return { signal: { state, waiting: lastRole === "assistant" }, lastActivity };
 }
 
 /** Shared-infrastructure (`sandbox connect`) container state — the `sandbox-infra` Compose project. */
@@ -1333,8 +1408,18 @@ export async function getWorkspaceStatuses(): Promise<{
         const feature = await readWorkspaceFeature(dir);
         project = feature ? `sandbox-${feature}` : null;
       }
-      const claude = await claudeSessionSignal(name);
-      const { model } = await readWorkspaceConfig(dir);
+      const { signal: claude, lastActivity } = await claudeSessionSignal(name);
+      const { model, autonomous, autoStop } = await readWorkspaceConfig(dir);
+      // Docker-independent card fields, the same in both returns below.
+      const card = {
+        claude,
+        model,
+        stage: await icmStage(dir),
+        phase: jitPhase(dir),
+        autonomous,
+        autoStop,
+        lastActivity,
+      };
       if (projects === null)
         return {
           name,
@@ -1345,8 +1430,7 @@ export async function getWorkspaceStatuses(): Promise<{
           slot: null,
           ports: null,
           services: [],
-          claude,
-          model,
+          ...card,
         };
       const counts = project ? projects.get(project) : undefined;
       let state: WorkspaceStatus["state"];
@@ -1369,8 +1453,7 @@ export async function getWorkspaceStatuses(): Promise<{
         slot,
         ports,
         services,
-        claude,
-        model,
+        ...card,
       };
     }),
   );
@@ -1549,6 +1632,10 @@ export interface RepoPr {
   title: string | null;
   /** PR label names ([] if none / no PR). */
   labels: string[];
+  /** CI verdict from the PR's `statusCheckRollup`; null when there is no PR or it has no checks. */
+  ci: CiStatus["ci"];
+  /** Failing checks in that rollup (0 when none / no PR). */
+  failingChecks: number;
 }
 export interface WorkspacePrs {
   name: string;
@@ -1590,7 +1677,14 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
     () => null,
   );
   if (br && br.code === 0) branch = stripAnsi(br.stdout).trim() || null;
-  const none = { branch, url: null, state: null, title: null, labels: [] as string[] };
+  const none = {
+    branch,
+    url: null,
+    state: null,
+    title: null,
+    labels: [] as string[],
+    ...ciOf(undefined),
+  };
   if (!branch || branch === "HEAD") return none;
 
   const res = await runCapture(
@@ -1603,7 +1697,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       "--state",
       "all",
       "--json",
-      "url,state,title,labels",
+      "url,state,title,labels,statusCheckRollup",
       "--limit",
       "1",
     ],
@@ -1616,12 +1710,20 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       state?: string;
       title?: string;
       labels?: Array<{ name?: string }>;
+      statusCheckRollup?: unknown;
     }>;
     if (!arr.length) return none;
     const s = (arr[0].state ?? "").toUpperCase();
     const state = s === "OPEN" || s === "MERGED" || s === "CLOSED" ? (s as RepoPr["state"]) : null;
     const labels = (arr[0].labels ?? []).map((l) => l.name ?? "").filter(Boolean);
-    return { branch, url: arr[0].url ?? null, state, title: arr[0].title ?? null, labels };
+    return {
+      branch,
+      url: arr[0].url ?? null,
+      state,
+      title: arr[0].title ?? null,
+      labels,
+      ...ciOf(arr[0].statusCheckRollup),
+    };
   } catch {
     return none;
   }
@@ -1775,6 +1877,31 @@ export function countFailingChecks(rollup: unknown): number {
     if (FAILING_CONCLUSIONS.has(verdict)) n++;
   }
   return n;
+}
+
+/** A PR's CI badge: `fail` (N failing) · `running` · `pass`, or null when it has no checks. */
+export interface CiStatus {
+  ci: "pass" | "running" | "fail" | null;
+  failingChecks: number;
+}
+
+/**
+ * Map a `statusCheckRollup` to the CI badge. A failure wins over checks still
+ * running, as GitHub's own rollup does; NEUTRAL and SKIPPED count as passing.
+ * CheckRuns carry `status` (COMPLETED once done), StatusContexts carry `state`.
+ */
+export function ciOf(rollup: unknown): CiStatus {
+  if (!Array.isArray(rollup) || rollup.length === 0) return { ci: null, failingChecks: 0 };
+  const failingChecks = countFailingChecks(rollup);
+  if (failingChecks > 0) return { ci: "fail", failingChecks };
+  const pending = rollup.some((c) => {
+    const e = (c ?? {}) as { status?: unknown; state?: unknown };
+    const status = String(e.status ?? "").toUpperCase();
+    if (status) return status !== "COMPLETED";
+    const state = String(e.state ?? "").toUpperCase();
+    return state === "PENDING" || state === "EXPECTED";
+  });
+  return { ci: pending ? "running" : "pass", failingChecks: 0 };
 }
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;

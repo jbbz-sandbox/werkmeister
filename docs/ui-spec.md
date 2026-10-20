@@ -50,6 +50,17 @@ A person must tell, at a glance, for each workspace:
 - The agent state comes from the persisted signal of SW-46, not from "the assistant spoke last".
 - Compact: name + chip on one line, then `containers 2 of 2 up · PRs sandbox#231 Draft · CI running · stage 4/5 implement`. VS Code: label = name, description = `● Needs you · 2 of 2 up · stage 2/4 · #143`, tooltip = the four rows.
 
+### Data
+
+Every row reads sandbox-core; no surface computes its own. The shapes and their edge cases are the TSDoc on `WorkspaceStatus` and `RepoPr` (`packages/sandbox-core/src/sandbox.ts`).
+
+| Row | Field |
+|---|---|
+| **Containers** | `getWorkspaceStatuses()` → `state`, `running` / `total`, and per-service health `services[] {name, state}` (`healthy` · `starting` · `unhealthy` · `running` · `down`) |
+| **PRs** | `getWorkspacePRs()` → per repo `url`, `state`, `ci` (`pass` · `running` · `fail` · null = no checks) and `failingChecks` |
+| **Workflow** | `stage {index, total, name}` (ICM) · `phase` (JIT, from the newest note) · `lifecycleOf()` for the lifecycle step |
+| **Agent** | `claude {state, waiting}`, `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
+
 ### Badges
 
 | Concept | Canonical | Tone |
