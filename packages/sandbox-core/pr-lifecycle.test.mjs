@@ -95,9 +95,11 @@ const REGISTRY = {
 function deps(table, over = {}) {
   const r = stubRun([[/^docker ps/, { stdout: "feat-api\nfeat-lib\n" }], ...table]);
   const stopped = [];
+  const started = [];
   return {
     calls: r.calls,
     stopped,
+    started,
     run: r.run,
     httpStatus: async () => 200,
     services: REGISTRY.services,
@@ -119,6 +121,9 @@ function deps(table, over = {}) {
       return "containers stopped";
     },
     reapIdle: async () => ({ lines: [] }),
+    startService: async (_ws, feature, service) => {
+      started.push(`${feature}-${service}`);
+    },
     ...over,
   };
 }
@@ -327,7 +332,8 @@ test("gate: a failing release check fails unless skip_release gives a reason", a
 });
 
 test("gate: a touched service with a test command but no container fails unless skip_tests gives a reason", async () => {
-  // #145: the workspace runs other services (k8s), so this repo has no container.
+  // #145: the workspace runs other services (k8s), so this repo has no container,
+  // and here the gate cannot start one either (SW-34).
   const noContainers = (ws) => {
     fs.writeFileSync(
       path.join(dotDir(ws), "workspace.yml"),
@@ -335,6 +341,10 @@ test("gate: a touched service with a test command but no container fails unless 
     );
     const d = deps([]);
     d.run = stubRun([[/^docker ps/, { stdout: "" }], DIFF_API]).run;
+    d.startService = async (_ws, _feature, service) => {
+      d.started.push(service);
+      throw new Error("compose up failed");
+    };
     return d;
   };
   const ws = icmWorkspace({
@@ -342,7 +352,7 @@ test("gate: a touched service with a test command but no container fails unless 
   });
   try {
     const g = await gate(ws, noContainers(ws));
-    assert.deepEqual(failed(g), ["test api"]);
+    assert.deepEqual(failed(g), ["start lib", "test api"]);
     assert.match(
       g.checks.find((c) => c.name === "test api").detail,
       /no running container for this repo/,
@@ -359,11 +369,105 @@ test("gate: a touched service with a test command but no container fails unless 
     },
   });
   try {
-    const g = await gate(skipped, noContainers(skipped));
+    const d = noContainers(skipped);
+    const g = await gate(skipped, d);
     assert.deepEqual(failed(g), []);
     assert.match(g.checks.find((c) => c.name === "test api").detail, /skipped: ran on host/);
+    assert.deepEqual(d.started, [], "nothing needs a container, so none is started");
   } finally {
     clean(skipped);
+  }
+});
+
+/** No container of the repo runs; the workspace lists no services (SW-34). */
+function noServices(ws, table = []) {
+  fs.writeFileSync(
+    path.join(dotDir(ws), "workspace.yml"),
+    "feature: feat\nservices: \nissue_id: o/app#7\nwork_type: feature\n",
+  );
+  const d = deps([]);
+  const r = stubRun([[/^docker ps/, { stdout: "" }], ...table, DIFF_API]);
+  d.run = r.run;
+  d.calls = r.calls;
+  return d;
+}
+
+test("gate starts one idle container for a repo with none, tests through it, then stops it (SW-34)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = noServices(ws);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.deepEqual(d.started, ["feat-lib"], "the idle lib, not the touched api's server");
+    assert.ok(d.calls.includes("docker exec feat-lib sh -c npm test -w api"), d.calls.join("\n"));
+    assert.ok(d.calls.includes("docker exec feat-lib sh -c npx changeset status"));
+    assert.equal(d.calls.at(-1), "docker stop feat-lib");
+    assert.match(g.checks.find((c) => c.name === "containers").detail, /started feat-lib/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate stops the container it started when a test fails (SW-34)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = noServices(ws, [[/npm test -w api/, { code: 1, stdout: "1 failing" }]]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["test api"]);
+    assert.equal(d.calls.at(-1), "docker stop feat-lib");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a docs-only diff starts a container only for the release check (SW-34)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = noServices(ws, [[/diff --name-only/, { stdout: "docs/a.md\n" }]]);
+    assert.deepEqual(failed(await gate(ws, d)), []);
+    assert.deepEqual(d.started, ["feat-lib"]);
+  } finally {
+    clean(ws);
+  }
+  const skipped = icmWorkspace({ files: { app: prFile({ extra: "skip_release: docs only\n" }) } });
+  try {
+    const d = noServices(skipped, [[/diff --name-only/, { stdout: "docs/a.md\n" }]]);
+    assert.deepEqual(failed(await gate(skipped, d)), []);
+    assert.deepEqual(d.started, []);
+    assert.ok(!d.calls.some((c) => c.startsWith("docker stop")));
+  } finally {
+    clean(skipped);
+  }
+});
+
+test("gate: starts and stops nothing when the repo's containers already run (SW-34)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API]);
+    const g = await gate(ws, d);
+    assert.deepEqual(d.started, []);
+    assert.ok(!d.calls.some((c) => c.startsWith("docker stop")));
+    assert.ok(!g.checks.some((c) => c.name === "containers"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: baseline checks only touched local api/web services (SW-34)", async () => {
+  const ws = icmWorkspace();
+  const diffLib = [/diff --name-only/, { stdout: "packages/lib/y.ts\n" }];
+  const baselines = (g) =>
+    g.checks.filter((c) => c.name.startsWith("baseline ")).map((c) => c.name);
+  try {
+    assert.deepEqual(baselines(await gate(ws, deps([diffLib]))), []);
+    assert.deepEqual(baselines(await gate(ws, deps([DIFF_API]))), ["baseline api"]);
+    const libOnly = deps([]);
+    libOnly.run = stubRun([[/^docker ps/, { stdout: "feat-lib\n" }], DIFF_API]).run;
+    const g = await gate(ws, libOnly);
+    assert.deepEqual(failed(g), ["baseline api"]);
+    assert.deepEqual(libOnly.started, [], "a running sibling serves the tests");
+  } finally {
+    clean(ws);
   }
 });
 

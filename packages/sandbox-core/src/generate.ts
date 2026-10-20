@@ -521,15 +521,28 @@ function renderFeatureCompose(
   const template = getTemplateOrNull(jinjaEnv, "docker-compose.feature.yml.njk");
   if (template) {
     const [portStart] = getPortRange(slot);
+    // SW-34: the rest of the checked-out repos' services, behind a compose profile,
+    // so the PR gate can start one for a repo with no container running.
+    const onDemand = Object.entries(servicesConfig)
+      .filter(
+        ([name, def]) =>
+          !localServices.includes(name) &&
+          isDict(def) &&
+          Boolean(def["repo"]) &&
+          fs.existsSync(path.join(workspaceRoot, String(def["repo"]))),
+      )
+      .map(([name]) => name)
+      .sort();
     // Build rich service objects for the template
     const svcObjects: ServiceEntry[] = [];
-    for (const svcName of [...localServices].sort()) {
+    for (const svcName of [...[...localServices].sort(), ...onDemand]) {
       const svcDef = servicesConfig[svcName] ?? {};
       if (!isDict(svcDef)) {
         continue;
       }
       const svcObj: ServiceEntry = { ...svcDef };
       svcObj["name"] = svcName;
+      svcObj["on_demand"] = onDemand.includes(svcName);
       setdefault(svcObj, "port_offset", 0);
       setdefault(svcObj, "internal_port", 3000);
       setdefault(svcObj, "setup_service", null);

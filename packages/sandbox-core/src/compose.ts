@@ -307,6 +307,9 @@ function reportComposeFailure(err: unknown): null {
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Plain `stop`/`down`/`logs` skip a container whose profile is off, e.g. one the PR gate started (SW-34). */
+const ALL_PROFILES = ["--profile", "*"];
+
 /**
  * Start containers for *feature*.
  *
@@ -345,7 +348,7 @@ export function composeDown(
     info(`No ${COMPOSE_FILE} for '${feature}' -- nothing to tear down`);
     return true;
   }
-  const args = ["down", "--remove-orphans"];
+  const args = [...ALL_PROFILES, "down", "--remove-orphans"];
   if (removeVolumes) {
     args.push("--volumes");
   }
@@ -374,6 +377,25 @@ export async function composeUpAsync(feature: string, signal?: AbortSignal): Pro
   return false;
 }
 
+/**
+ * Start one service and wait until it runs (healthy, when it has a healthcheck).
+ *
+ * Its setup service's `service_completed_successfully` holds the start until the
+ * install finishes. An on-demand service starts without its profile enabled,
+ * because it is named (SW-34).
+ */
+export async function composeUpServiceAsync(
+  feature: string,
+  service: string,
+  composePath: string,
+): Promise<boolean> {
+  const result = await runComposeAsync(feature, ["up", "-d", "--wait", service], {
+    capture: true,
+    composePath,
+  });
+  return result !== null && result.status === 0;
+}
+
 /** Cancellable {@link composeDown}. */
 export async function composeDownAsync(
   feature: string,
@@ -386,7 +408,7 @@ export async function composeDownAsync(
     info(`No ${COMPOSE_FILE} for '${feature}' -- nothing to tear down`);
     return true;
   }
-  const args = ["down", "--remove-orphans"];
+  const args = [...ALL_PROFILES, "down", "--remove-orphans"];
   if (removeVolumes) {
     args.push("--volumes");
   }
@@ -411,7 +433,7 @@ export async function composeDownAsync(
  * Returns true on success.
  */
 export function composeStop(feature: string): boolean {
-  const result = runCompose(feature, ["stop"], { capture: true });
+  const result = runCompose(feature, [...ALL_PROFILES, "stop"], { capture: true });
   if (result && result.status === 0) {
     success(`Containers for '${feature}' stopped (not removed)`);
     return true;
@@ -445,7 +467,7 @@ export function composeLogsArgs(
   follow: boolean,
   tail: number,
 ): string[] {
-  const args = ["logs"];
+  const args = [...ALL_PROFILES, "logs"];
   if (follow) {
     args.push("-f");
   }
@@ -541,7 +563,7 @@ export function composeLogsStream(
 
   const argv = workspaceComposeArgv(
     feature,
-    ["logs", "-f", "--tail", "100", ...(service ? [service] : [])],
+    [...ALL_PROFILES, "logs", "-f", "--tail", "100", ...(service ? [service] : [])],
     composePath,
   );
   // `--ansi` is a `compose` flag, so it goes before the `-f`/`-p` flags.

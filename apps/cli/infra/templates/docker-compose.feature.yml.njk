@@ -1,6 +1,9 @@
 # Auto-generated for feature: {{ feature_name }}
 # Slot: {{ slot }} | Port range: {{ base_port }}-{{ base_port + 19 }}
-# Local services: {{ local_services | map(attribute='name') | join(', ') }}
+# Local services: {{ local_services | rejectattr('on_demand') | map(attribute='name') | join(', ') }}
+{% if local_services | selectattr('on_demand') | length %}
+# On-demand services (the PR gate starts these): {{ local_services | selectattr('on_demand') | map(attribute='name') | join(', ') }}
+{% endif %}
 
 name: sandbox-{{ feature_name }}
 
@@ -12,9 +15,13 @@ networks:
     name: sandbox-shared
 
 {% set setup_services_needed = [] %}
+{% set setup_services_local = [] %}
 {% for svc in local_services %}
 {% if svc.setup_service and svc.setup_service not in setup_services_needed %}
 {% do setup_services_needed.append(svc.setup_service) %}
+{% endif %}
+{% if svc.setup_service and not svc.on_demand and svc.setup_service not in setup_services_local %}
+{% do setup_services_local.append(svc.setup_service) %}
 {% endif %}
 {% endfor %}
 
@@ -61,6 +68,10 @@ services:
   {{ setup_name }}:
     image: {{ setup.image | default('node:20.16.0') }}
     container_name: {{ container_of(feature_name, setup_name) }}
+{# SW-34: an install only on-demand services need stays out of a plain `up`. #}
+{% if setup_name not in setup_services_local %}
+    profiles: ["on-demand"]
+{% endif %}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
       com.sandbox.local.slot: "{{ slot }}"
@@ -122,6 +133,11 @@ services:
   {{ svc.name }}:
     image: {{ svc.image | default('node:20.16.0') }}
     container_name: {{ container_of(feature_name, svc.name) }}
+{# SW-34: not in the workspace's services, so a plain `up` skips it; the PR gate #}
+{# starts it by name (`up -d <svc>`) when its repo has no container running.    #}
+{% if svc.on_demand %}
+    profiles: ["on-demand"]
+{% endif %}
     labels:
       com.sandbox.local.feature: "{{ feature_name }}"
       com.sandbox.local.slot: "{{ slot }}"
@@ -159,7 +175,14 @@ services:
       - "{{ base_port + svc.port_offset }}:{{ svc.internal_port }}"
     env_file:
       - .env
+{# Naming one on-demand service enables the profile, and compose then checks every #}
+{# on-demand service's env files; only the started one's is written (SW-34).        #}
+{% if svc.on_demand %}
+      - path: .env.{{ svc.name }}
+        required: false
+{% else %}
       - .env.{{ svc.name }}
+{% endif %}
 {% if svc.environment %}
     environment:
 {% for key, value in svc.environment.items() %}
@@ -200,7 +223,7 @@ services:
       start_period: 120s
 {% endif %}
 {% set local_svc_names = [] %}
-{% for local_svc in local_services %}
+{% for local_svc in local_services | rejectattr('on_demand') %}
 {% do local_svc_names.append(local_svc.name) %}
 {% endfor %}
 {% set svc_deps = [] %}
