@@ -662,14 +662,14 @@ export interface RestartResult {
  * `restart`/`up` can resume it.
  *
  * Throws `NOT_RUNNING` when the feature holds no slot, and
- * `COMPOSE_STOP_FAILED` when `docker compose stop` reports failure.
+ * `COMPOSE_STOP_FAILED` when a container fails to stop.
  */
 export async function stop(feature: string): Promise<StopResult> {
   refuseInsideOwnContainer(feature, "stop");
   const slot = await requireSlot(feature);
 
   info(`Stopping containers for '${feature}' (slot ${slot})...`);
-  if (!composeStop(feature)) {
+  if (!(await composeStop(feature))) {
     throw new SandboxError(`Failed to stop containers for '${feature}'`, "COMPOSE_STOP_FAILED");
   }
 
@@ -680,14 +680,14 @@ export async function stop(feature: string): Promise<StopResult> {
  * Restart *feature*'s containers in place.
  *
  * Throws `NOT_RUNNING` when the feature holds no slot, and
- * `COMPOSE_RESTART_FAILED` when `docker compose restart` reports failure.
+ * `COMPOSE_RESTART_FAILED` when a container fails to restart.
  */
 export async function restart(feature: string): Promise<RestartResult> {
   refuseInsideOwnContainer(feature, "restart");
   const slot = await requireSlot(feature);
 
   info(`Restarting containers for '${feature}' (slot ${slot})...`);
-  if (!composeRestart(feature)) {
+  if (!(await composeRestart(feature))) {
     throw new SandboxError(
       `Failed to restart containers for '${feature}'`,
       "COMPOSE_RESTART_FAILED",

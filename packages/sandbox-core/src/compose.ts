@@ -9,10 +9,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { parse as parseYaml } from "yaml";
+
 import { Colors } from "./colors.js";
 import { COMPOSE_FILE, findWorkspaceCompose } from "./compose_file.js";
 import { resolveWorkspace } from "./config.js";
-import { containerLogs, projectContainers } from "./docker.js";
+import { containerLogs, docker, type ProjectContainer, projectContainers } from "./docker.js";
 import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
@@ -422,13 +424,14 @@ export async function composeDownAsync(
  *
  * Returns true on success.
  */
-export function composeStop(feature: string): boolean {
-  const result = runCompose(feature, [...ALL_PROFILES, "stop"], { capture: true });
-  if (result && result.status === 0) {
-    success(`Containers for '${feature}' stopped (not removed)`);
-    return true;
+export async function composeStop(feature: string): Promise<boolean> {
+  const err = await stopOrRestart("stop", `sandbox-${feature}`);
+  if (err) {
+    error(err);
+    return false;
   }
-  return false;
+  success(`Containers for '${feature}' stopped (not removed)`);
+  return true;
 }
 
 /**
@@ -436,13 +439,92 @@ export function composeStop(feature: string): boolean {
  *
  * Returns true on success.
  */
-export function composeRestart(feature: string): boolean {
-  const result = runCompose(feature, ["restart"], { capture: true });
-  if (result && result.status === 0) {
-    success(`Containers for '${feature}' restarted`);
-    return true;
+export async function composeRestart(feature: string): Promise<boolean> {
+  const err = await stopOrRestart("restart", `sandbox-${feature}`);
+  if (err) {
+    error(err);
+    return false;
   }
-  return false;
+  success(`Containers for '${feature}' restarted`);
+  return true;
+}
+
+/**
+ * `compose stop` / `compose restart` for one project, on the Engine API (SW-60).
+ *
+ * Stop takes every live container, whatever its profile, as `--profile *` did;
+ * restart takes stopped ones too, as compose does, except a finished setup
+ * container, which would run the install again. Returns the message to report,
+ * or null on success.
+ */
+export async function stopOrRestart(
+  action: "stop" | "restart",
+  project: string,
+  service?: string,
+): Promise<string | null> {
+  const containers = await projectContainers(project, service, { all: action === "restart" });
+  if (containers === null) return "docker not found / not running";
+  const ordered = dependencyOrder(containers);
+  if (action === "stop") ordered.reverse();
+  const profiled = action === "restart" ? profiledServices(containers) : new Set<string>();
+  for (const c of ordered) {
+    const finishedSetup =
+      c.state === "exited" && isOneShotService(c.service, c.labels["com.sandbox.local.role"]);
+    // `compose restart` loads the default profiles only, so it never started
+    // an on-demand container the PR gate had stopped (SW-34).
+    const offProfile = c.state !== "running" && profiled.has(c.service);
+    if (finishedSetup || offProfile) continue;
+    try {
+      await docker().getContainer(c.name)[action]();
+    } catch (e) {
+      // 304: it stopped between the list and the call, which is the goal.
+      if ((e as { statusCode?: number }).statusCode === 304) continue;
+      const daemon = (e as { json?: { message?: string } }).json?.message;
+      return `docker ${action} ${c.name} failed: ${daemon ?? (e as Error).message}`;
+    }
+  }
+  return null;
+}
+
+/** Services behind a compose profile, read from the files compose labels each container with. */
+function profiledServices(containers: ProjectContainer[]): Set<string> {
+  const files = containers[0]?.labels["com.docker.compose.project.config_files"]?.split(",") ?? [];
+  const profiled = new Set<string>();
+  for (const file of files) {
+    try {
+      const services: Record<string, { profiles?: string[] } | null> =
+        parseYaml(fs.readFileSync(file, "utf8"))?.services ?? {};
+      for (const [name, def] of Object.entries(services)) {
+        if (def?.profiles?.length) profiled.add(name);
+      }
+    } catch {
+      // ponytail: an unreadable file (workspace moved) reads as no profiles, so
+      // a stopped on-demand container restarts too; warn here if that bites.
+    }
+  }
+  return profiled;
+}
+
+/**
+ * Dependencies before dependents, from the `com.docker.compose.depends_on`
+ * label compose stamps on each container (`svc:condition:restart,…`).
+ */
+export function dependencyOrder(containers: ProjectContainer[]): ProjectContainer[] {
+  const byService = new Map<string, ProjectContainer[]>();
+  for (const c of containers) byService.set(c.service, [...(byService.get(c.service) ?? []), c]);
+  const ordered: ProjectContainer[] = [];
+  const seen = new Set<string>();
+  const visit = (service: string) => {
+    const group = byService.get(service);
+    if (!group || seen.has(service)) return;
+    seen.add(service); // before the deps, so a cycle ends instead of recursing
+    for (const dep of (group[0].labels["com.docker.compose.depends_on"] ?? "").split(",")) {
+      visit(dep.split(":")[0]);
+    }
+    ordered.push(...group);
+  };
+  for (const service of byService.keys()) visit(service);
+  return ordered;
 }
 
 export interface ComposeLogsOptions {
