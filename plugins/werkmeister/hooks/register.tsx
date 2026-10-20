@@ -659,6 +659,37 @@ const BORDER: Record<WorkspaceRow["state"], "success" | "warning" | "inactive"> 
   unknown: "warning",
 };
 
+/** PR file statuses that say more than gh can: shipped is merged and released, abandoned is the workspace's call. */
+const PAST_GH = new Set(["shipped", "abandoned"]);
+
+/**
+ * The row with each PR file's status replaced by the PR poll's live state for its repo, and the lifecycle state
+ * recomputed as sandbox-core's `lifecycleOf` does, so the meta line and buttons never contradict the card's
+ * `⑂` PR line (SW-50). A repo the poll has no PR for, or no poll yet, keeps its file status.
+ */
+export function withLivePrs(r: WorkspaceRow, live: RepoPr[]): WorkspaceRow {
+  const l = r.lifecycle;
+  if (!l || l.state === "closed-out") return r;
+  const prs = l.prs.map((p) => {
+    const state = live.find((x) => x.repo === p.dir)?.state?.toLowerCase();
+    return state && state !== p.status && !PAST_GH.has(p.status) ? { ...p, status: state } : p;
+  });
+  if (prs.every((p, i) => p === l.prs[i])) return r;
+  const all = (s: string[]) => prs.every((p) => s.includes(p.status));
+  const state = all(["abandoned"])
+    ? "abandoned"
+    : all(["shipped", "closed", "abandoned"])
+      ? "shipped"
+      : all(["merged", "shipped", "closed", "abandoned"])
+        ? "merged"
+        : prs.some((p) => p.status === "open")
+          ? "pr-open"
+          : all(["approved"])
+            ? "ready"
+            : "working";
+  return { ...r, lifecycle: { state, prs } };
+}
+
 /** Past `working`, the lifecycle says more than the stage does (every stage has output by then). */
 export function lifecycleLabel(r: WorkspaceRow): string | null {
   const l = r.lifecycle;
@@ -1439,6 +1470,7 @@ export const register: Register = (on) => {
     const { value: prs = {} } = await $.state.get(PRS);
     const { value: tab = "list" } = await $.state.get(TAB);
     const { value: focus = false } = await $.state.get(FOCUS);
+    const shown = visibleRows(rows, focus).map((r) => withLivePrs(r, prs[r.name] ?? []));
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e);
     const Input = "Input" in els ? els.Input : null;
@@ -1677,7 +1709,7 @@ export const register: Register = (on) => {
           )}
         </Box>
         {rows.length === 0 && <Text dimColor>No workspaces.</Text>}
-        {visibleRows(rows, focus).map((r) => (
+        {shown.map((r) => (
           <Box
             key={`ws:${r.name}`}
             flexDirection="column"
