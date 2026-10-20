@@ -46,19 +46,19 @@
       },
       {
         "command": "sandbox.open",
-        "title": "Open Workspace",
+        "title": "Open in New Window",
         "category": "Sandbox",
         "icon": "$(folder-opened)"
       },
       {
         "command": "sandbox.switch",
-        "title": "Switch to Workspace",
+        "title": "→ Switch to",
         "category": "Sandbox",
         "icon": "$(arrow-right)"
       },
       {
         "command": "sandbox.openIssue",
-        "title": "Open Issue",
+        "title": "Open issue ↗",
         "category": "Sandbox",
         "icon": "$(link-external)"
       },
@@ -70,25 +70,25 @@
       },
       {
         "command": "sandbox.up",
-        "title": "Start",
+        "title": "▶ Up",
         "category": "Sandbox",
         "icon": "$(play)"
       },
       {
         "command": "sandbox.stop",
-        "title": "Stop",
+        "title": "■ Stop",
         "category": "Sandbox",
         "icon": "$(debug-pause)"
       },
       {
         "command": "sandbox.restart",
-        "title": "Restart",
+        "title": "↻ Restart",
         "category": "Sandbox",
         "icon": "$(debug-restart)"
       },
       {
         "command": "sandbox.down",
-        "title": "Down",
+        "title": "⏻ Down",
         "category": "Sandbox",
         "icon": "$(debug-stop)"
       },
@@ -112,7 +112,7 @@
       },
       {
         "command": "sandbox.openFeature",
-        "title": "Open in Browser",
+        "title": "Open feature ↗",
         "category": "Sandbox",
         "icon": "$(globe)"
       },
@@ -130,9 +130,51 @@
       },
       {
         "command": "sandbox.closeOut",
-        "title": "Close Out Workspace...",
+        "title": "✓ Close out",
         "category": "Sandbox",
-        "icon": "$(trash)"
+        "icon": "$(check)"
+      },
+      {
+        "command": "sandbox.continue",
+        "title": "↗ Continue in Terminal",
+        "category": "Sandbox",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "sandbox.newSession",
+        "title": "＋ New session",
+        "category": "Sandbox",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sandbox.refreshPrs",
+        "title": "↻ Refresh PRs",
+        "category": "Sandbox",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sandbox.openPr",
+        "title": "Open PR ↗",
+        "category": "Sandbox",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "sandbox.connect",
+        "title": "⚡ Connect infra",
+        "category": "Sandbox",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "sandbox.abandon",
+        "title": "✕ Abandon…",
+        "category": "Sandbox",
+        "icon": "$(close)"
+      },
+      {
+        "command": "sandbox.legend",
+        "title": "Legend",
+        "category": "Sandbox",
+        "icon": "$(question)"
       }
     ],
     "menus": {
@@ -143,9 +185,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "sandbox.refresh",
+          "command": "sandbox.refreshPrs",
           "when": "view == sandboxWorkspaces",
           "group": "navigation@2"
+        },
+        {
+          "command": "sandbox.connect",
+          "when": "view == sandboxWorkspaces",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sandbox.legend",
+          "when": "view == sandboxWorkspaces",
+          "group": "navigation@4"
         },
         {
           "command": "sandbox.detect",
@@ -160,29 +212,44 @@
       ],
       "view/item/context": [
         {
-          "command": "sandbox.up",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(down|stopped|partial)(:|$)/",
-          "group": "inline@1"
-        },
-        {
-          "command": "sandbox.stop",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)(:|$)/",
-          "group": "inline@1"
-        },
-        {
-          "command": "sandbox.open",
+          "command": "sandbox.continue",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "inline@2"
+          "group": "inline@1"
         },
         {
           "command": "sandbox.switch",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:[^:]+$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "sandbox.up",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(down|stopped|partial)(:|$)/",
+          "group": "inline@3"
+        },
+        {
+          "command": "sandbox.stop",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)(:|$)/",
           "group": "inline@3"
         },
         {
           "command": "sandbox.toggleIntercept",
           "when": "view == sandboxWorkspaces && viewItem =~ /^service:(interceptable|intercepted-mine)$/",
           "group": "inline@1"
+        },
+        {
+          "command": "sandbox.continue",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "0_primary@1"
+        },
+        {
+          "command": "sandbox.switch",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:[^:]+$/",
+          "group": "0_primary@2"
+        },
+        {
+          "command": "sandbox.open",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "0_primary@3"
         },
         {
           "command": "sandbox.up",
@@ -205,24 +272,44 @@
           "group": "1_lifecycle@4"
         },
         {
-          "command": "sandbox.logs",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^(workspace|service)/",
-          "group": "2_inspect@1"
+          "command": "sandbox.newSession",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "2_session@1"
+        },
+        {
+          "command": "sandbox.refreshPrs",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "3_inspect@1"
+        },
+        {
+          "command": "sandbox.openPr",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "3_inspect@2"
         },
         {
           "command": "sandbox.openFeature",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "2_inspect@2"
+          "group": "3_inspect@3"
         },
         {
           "command": "sandbox.openIssue",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "2_inspect@3"
+          "group": "3_inspect@4"
+        },
+        {
+          "command": "sandbox.logs",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^(workspace|service)/",
+          "group": "3_inspect@5"
         },
         {
           "command": "sandbox.closeOut",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
           "group": "9_danger@1"
+        },
+        {
+          "command": "sandbox.abandon",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "9_danger@2"
         }
       ],
       "commandPalette": [
@@ -236,6 +323,10 @@
         },
         {
           "command": "sandbox.logs",
+          "when": "false"
+        },
+        {
+          "command": "sandbox.openPr",
           "when": "false"
         }
       ]
@@ -265,7 +356,8 @@
     "package": "vsce package --no-dependencies"
   },
   "dependencies": {
-    "werkmeister-core": "*"
+    "werkmeister-core": "*",
+    "werkmeister-ui": "*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

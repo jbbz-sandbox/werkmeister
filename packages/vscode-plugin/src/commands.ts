@@ -126,6 +126,51 @@ async function pickRepo(): Promise<string | null> {
   return choice?.path ?? null;
 }
 
+async function claudeIn(node: WsNode | undefined, command: string): Promise<void> {
+  const ws = await pickWorkspace(node);
+  if (!ws) return;
+  const term = vscode.window.createTerminal({ name: `claude ${ws.name}`, cwd: ws.path });
+  term.sendText(command, true);
+  term.show();
+}
+
+/** Close out (no reason) or abandon (with one) through werkmeister-core's `closeOut`. */
+async function endWorkspace(
+  provider: SandboxTreeProvider,
+  ws: { name: string; path: string },
+  abandon?: string,
+): Promise<void> {
+  const channel = getOutputChannel();
+  try {
+    // Not cancellable: this commits/pushes every worktree branch then tears
+    // down containers and deletes the directory — interrupting a partial
+    // teardown is worse than waiting out the (up to minutes-long) call.
+    const result = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `${abandon ? "Abandoning" : "Closing out"} workspace '${ws.name}'…`,
+        cancellable: false,
+      },
+      () => (abandon ? closeOut(ws.name, { abandon }) : closeOut(ws.name)),
+    );
+    // VS Code can't reach the desktop app's sessions; the output names the terminal ones to /exit.
+    channel.appendLine(`${result.command}\n${result.output}`);
+    void vscode.window.showInformationMessage(
+      `Closed out ${result.path}. Archive its desktop Claude sessions from the sidebar.`,
+    );
+    provider.refresh();
+  } catch (e) {
+    // werkmeister-core's failure message is a multi-line report (which branch
+    // failed to push, which PR is unshipped) — a toast squeezes it onto one
+    // line, so the full text goes to the output channel and the toast points there.
+    channel.appendLine((e as Error).message);
+    channel.show();
+    void vscode.window.showErrorMessage(
+      `Failed to close out workspace '${ws.name}' — see the "Sandbox Workspaces" output channel for details.`,
+    );
+  }
+}
+
 export function registerCommands(provider: SandboxTreeProvider): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("sandbox.refresh", () => provider.refresh()),
@@ -232,64 +277,87 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       await runInTerminal(["registry", "sync"], getReposRoot(), "registry");
     }),
 
-    // The one end-of-workspace verb (#160): close out once every PR settled, else abandon with a reason.
+    // SW-55 splits #160's one verb back in two, as every surface shows them:
+    // ✓ Close out once every PR settled, ✕ Abandon… with a reason otherwise.
     vscode.commands.registerCommand("sandbox.closeOut", async (node?: WsNode) => {
       const ws = await pickWorkspace(node);
       if (!ws) return;
       const state = lifecycleOf(ws.path).state;
-      const settled = state === "shipped" || state === "abandoned" || state === "closed-out";
-      let abandon: string | undefined;
-      if (!settled) {
-        abandon = (
-          await vscode.window.showInputBox({
-            title: `Abandon workspace '${ws.name}'`,
-            prompt: `Its work is ${state}, not shipped. Why abandon it? Recorded in closeout.md and the PR files.`,
-            ignoreFocusOut: true,
-          })
-        )?.trim();
-        if (!abandon) return;
+      if (state !== "shipped" && state !== "abandoned" && state !== "closed-out") {
+        const pick = await vscode.window.showWarningMessage(
+          `'${ws.name}' is ${state}, not shipped. Close out needs every PR shipped or closed.`,
+          "✕ Abandon…",
+        );
+        if (pick) await vscode.commands.executeCommand("sandbox.abandon", { workspace: ws });
+        return;
       }
-      const verb = settled ? "Close out" : "Abandon";
       const confirm = await vscode.window.showWarningMessage(
-        `${verb} workspace '${ws.name}'?`,
+        `Close out workspace '${ws.name}'?`,
         {
           modal: true,
-          detail: settled
-            ? `Closes the issue, writes closeout.md, pushes every branch, tears down containers, deletes ${ws.path}, then deletes the merged branches.`
-            : `Records the reason, pushes every branch and keeps them, tears down containers and deletes ${ws.path}. The delete is aborted if any push fails.`,
+          detail: `Closes the issue, writes closeout.md, pushes every branch, tears down containers, deletes ${ws.path}, then deletes the merged branches.`,
         },
-        verb,
+        "Close out",
       );
-      if (confirm !== verb) return;
-      const channel = getOutputChannel();
-      try {
-        // Not cancellable: this commits/pushes every worktree branch then tears
-        // down containers and deletes the directory — interrupting a partial
-        // teardown is worse than waiting out the (up to minutes-long) call.
-        const result = await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: `${settled ? "Closing out" : "Abandoning"} workspace '${ws.name}'…`,
-            cancellable: false,
-          },
-          () => (abandon ? closeOut(ws.name, { abandon }) : closeOut(ws.name)),
-        );
-        // VS Code can't reach the desktop app's sessions; the output names the terminal ones to /exit.
-        channel.appendLine(`${result.command}\n${result.output}`);
-        void vscode.window.showInformationMessage(
-          `Closed out ${result.path}. Archive its desktop Claude sessions from the sidebar.`,
-        );
-        provider.refresh();
-      } catch (e) {
-        // werkmeister-core's failure message is a multi-line report (which branch
-        // failed to push, which PR is unshipped) — a toast squeezes it onto one
-        // line, so the full text goes to the output channel and the toast points there.
-        channel.appendLine((e as Error).message);
-        channel.show();
-        void vscode.window.showErrorMessage(
-          `Failed to close out workspace '${ws.name}' — see the "Sandbox Workspaces" output channel for details.`,
-        );
+      if (confirm === "Close out") await endWorkspace(provider, ws);
+    }),
+
+    vscode.commands.registerCommand("sandbox.abandon", async (node?: WsNode) => {
+      const ws = await pickWorkspace(node);
+      if (!ws) return;
+      const reason = (
+        await vscode.window.showInputBox({
+          title: `Abandon workspace '${ws.name}'`,
+          prompt: "Why abandon it? Recorded in closeout.md and the PR files.",
+          ignoreFocusOut: true,
+        })
+      )?.trim();
+      if (!reason) return;
+      const confirm = await vscode.window.showWarningMessage(
+        `Abandon workspace '${ws.name}'?`,
+        {
+          modal: true,
+          detail: `Records the reason, pushes every branch and keeps them, tears down containers and deletes ${ws.path}. The delete is aborted if any push fails.`,
+        },
+        "Abandon",
+      );
+      if (confirm === "Abandon") await endWorkspace(provider, ws, reason);
+    }),
+
+    // A Claude session never exits, so it gets its own terminal rather than a
+    // pooled `sandbox` one it would hold busy forever.
+    vscode.commands.registerCommand("sandbox.continue", (node?: WsNode) =>
+      claudeIn(node, "claude --continue"),
+    ),
+    vscode.commands.registerCommand("sandbox.newSession", (node?: WsNode) =>
+      claudeIn(node, "claude"),
+    ),
+
+    vscode.commands.registerCommand("sandbox.refreshPrs", () => provider.refreshPrs()),
+
+    // Menu-only: a PR row carries its URL, a workspace row the PRs last fetched.
+    vscode.commands.registerCommand("sandbox.openPr", async (node?: WsNode) => {
+      const prs = node?.pr
+        ? [{ ref: node.pr.url, url: node.pr.url }]
+        : (node?.workspace?.prs ?? []);
+      if (!prs.length) {
+        void vscode.window.showInformationMessage("No PR yet. Try ↻ Refresh PRs.");
+        return;
       }
+      const pick =
+        prs.length === 1
+          ? prs[0]
+          : await vscode.window.showQuickPick(
+              prs.map((p) => ({ label: p.ref, detail: p.url, url: p.url })),
+              { placeHolder: "Select a PR to open" },
+            );
+      if (pick) await vscode.env.openExternal(vscode.Uri.parse(pick.url));
+    }),
+
+    vscode.commands.registerCommand("sandbox.legend", () => provider.toggleLegend()),
+
+    vscode.commands.registerCommand("sandbox.connect", async () => {
+      await runInTerminal(["connect"], os.homedir(), "connect");
     }),
   ];
 }
