@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { matchService, parseConfigMem } from "./dist/stats.js";
+import { cpuLimitOf, matchService, parseConfigMem } from "./dist/stats.js";
 
 test("parseConfigMem normalises the units services.yaml uses to MiB", () => {
   assert.equal(parseConfigMem("2G"), 2048);
@@ -39,4 +39,16 @@ test("matchService finds the configured service inside a compose container name"
 test("matchService reports no match rather than guessing", () => {
   assert.equal(matchService("sandbox-demo-unknown-1", { backend: {} }), null);
   assert.equal(matchService("sandbox-jaeger", {}), null);
+});
+
+test("cpuLimitOf resolves a container to its configured limit, null when unmatched", () => {
+  const cpus = { backend: "0.5", "sandbox-install": "2.0" };
+
+  assert.equal(cpuLimitOf("feat-myfeature-backend-1", cpus), "0.5");
+  assert.equal(
+    cpuLimitOf("myfeature-sandbox-install", cpus),
+    "2.0",
+    "setup containers resolve too",
+  );
+  assert.equal(cpuLimitOf("sandbox-jaeger", cpus), null);
 });

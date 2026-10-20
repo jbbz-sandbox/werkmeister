@@ -260,6 +260,43 @@ describe("setup services", () => {
   });
 });
 
+// ---- cpu limits (SW-40) ----------------------------------------------------
+
+/** Rewrite the fixture registry through *edit*, then generate backend's compose and parse it. */
+function composeServices(edit: (doc: any) => void = () => {}): Record<string, any> {
+  const doc = YAML.parse(fixtureServicesYaml());
+  doc.services.backend.setup_service = "demo-install";
+  doc.services.backend.extra_services = { cache: { image: "redis:7", command: "redis-server" } };
+  doc.setup_services = { "demo-install": { repo: "demo-services", command: "npm install" } };
+  edit(doc);
+  home.write("services.yaml", YAML.stringify(doc));
+  const out = generateFeatureCompose("f", 1, ["backend"], null, tmp);
+  return YAML.parse(fs.readFileSync(out, "utf8")).services;
+}
+
+const cpusOf = (svc: any): unknown => svc.deploy.resources.limits.cpus;
+
+describe("cpu limits", () => {
+  it("caps every container, setup and sidecar included, at the default", () => {
+    const services = composeServices();
+    expect(Object.keys(services).sort()).toEqual(["backend", "cache", "demo-install"]);
+    expect(cpusOf(services.backend)).toBe("1.0");
+    expect(cpusOf(services.cache)).toBe("1.0");
+    expect(cpusOf(services["demo-install"])).toBe("2.0");
+  });
+
+  it("uses a per-entry `cpus:` from services.yaml over the default", () => {
+    const services = composeServices((doc) => {
+      doc.services.backend.cpus = 0.5;
+      doc.services.backend.extra_services.cache.cpus = "0.25";
+      doc.setup_services["demo-install"].cpus = 4;
+    });
+    expect(cpusOf(services.backend)).toBe("0.5");
+    expect(cpusOf(services.cache)).toBe("0.25");
+    expect(cpusOf(services["demo-install"])).toBe("4");
+  });
+});
+
 describe("generateFeatureEnv", () => {
   it("writes feature, slot, and a local service DNS URL", () => {
     // Demo services have no k8s forward, so a local service is reached over the
