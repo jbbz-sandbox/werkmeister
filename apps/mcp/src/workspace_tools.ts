@@ -988,8 +988,11 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "One sweep for the check-in skill: every workspace's labels, container and Claude " +
         "state, proposed stage gates, and whether its transcript changed since the last " +
-        "check-in. Drops `skip` workspaces (and non-`focus` ones when any carry `focus`) and " +
-        "names the `candidates` that need a courier. Marks now as the last check-in.",
+        "check-in, plus its `lifecycle` and `prs` (repo, url, status, `release`). First ships " +
+        "merged PRs a release tag now contains, as `pr status` does. Drops `skip` workspaces " +
+        "(and non-`focus` ones when any carry `focus`), names the `candidates` that need a " +
+        "courier and the `readyToClose` ones (shipped or abandoned, no Claude turn working). " +
+        "Marks now as the last check-in.",
       inputSchema: {},
     },
     async (): Promise<CallToolResult> => {
