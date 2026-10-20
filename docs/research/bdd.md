@@ -66,6 +66,7 @@ Rules for scenarios:
 2. **A scenario that needs a live service runs inside that service's test command**, so it lands in the container the gate already uses. It costs what the service's tests cost now; it does not add a container. Tag these `@service` so they can be filtered out of a quick local run.
 3. **A scenario must never start containers of its own** from inside the gate's container. The container has the host Docker socket, so a nested `compose up` would create real host containers.
 4. **The spike's measured cost:** two scenarios take 1.9 s, and the second Vitest invocation about 3.3 s wall in all. That runs on top of a CLI suite of 505 tests.
+5. **Unchanged scenarios cost nothing in the gate.** They are part of a turbo `test` task, so the shared turbo cache (SW-35) replays them when their inputs haven't changed. In the spike's gate run, `test cli` replayed the host run's result. An uncached run with the rule broken failed in the container (`/app/apps/cli/bdd`), which held the gate. This only holds while scenarios are hermetic, which is one more reason they must not depend on live state outside their fixture.
 
 One gap the spike hit: a scenario can't stand in for a *running* container. The gate looks up `docker` through `childEnv()`, which puts `/opt/homebrew/bin` and `/usr/local/bin` ahead of `PATH`, so a stub `docker` on `PATH` is never reached. GitHub already has a seam for this (`SANDBOX_GH_BIN`); Docker needs the same (follow-up 2).
 
