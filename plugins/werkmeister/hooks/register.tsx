@@ -1192,14 +1192,19 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     if (!row) return;
     try {
       if (row.session) {
+        // Split, not focus: the session opens beside this chat, which stays in place with the pane.
         const r = await $.mcp.call("ccd_window", "open_session_in", {
           session_id: row.session.id,
-          target: "focus",
+          target: "split",
         });
         if (!r.isError) return;
-        // open_session_in focuses only sessions this one started; the session's own link opens any.
-        if (row.session.link) await core($, "open-claude-link", { url: row.session.link });
-        else $.ui.toast(`Open "${row.session.title}" from the sidebar`);
+        // open_session_in splits only sessions this one started; the session's own link opens any, in this chat's place.
+        if (row.session.link) {
+          await core($, "open-claude-link", { url: row.session.link });
+          $.ui.toast(
+            `To keep this chat in sight: right-click "${row.session.title}" in the sidebar → Open in → Split view`,
+          );
+        } else $.ui.toast(`Open "${row.session.title}" from the sidebar`);
         return;
       }
       if (continueTarget(row) === "VS Code") {

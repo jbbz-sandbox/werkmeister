@@ -1041,12 +1041,39 @@ test("New session opens the app's new-session link for the workspace folder", as
   await ui.unmount();
 });
 
-test("Continue in Desktop focuses a session this one started, else opens the session's own link", async ($, on) => {
+test("Continue in Desktop splits a session this one started beside this chat", async ($, on) => {
+  const sessions = [{ ...SESSIONS[0], startedBy: "local_self" }, ...SESSIONS.slice(1)];
+  const w = world(
+    on,
+    stubs({
+      "ccd_session_mgmt/list_sessions": () => ok(undefined, JSON.stringify(sessions)),
+      "ccd_window/open_session_in": () => ok({}),
+      [`${WS}/open-claude-link`]: (a) => ok({ url: a.url }),
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  await tap(ui, "continue:abc");
+  expect(w.calls.filter((c) => c.key === "ccd_window/open_session_in").map((c) => c.args)).toEqual([
+    { session_id: "local_1", target: "split" },
+  ]);
+  expect(w.calls.some((c) => c.key === `${WS}/open-claude-link`)).toBe(false);
+  expect(w.toasts).toEqual([]);
+  await ui.unmount();
+});
+
+test("Continue in Desktop opens the session's own link when the app won't split it", async ($, on) => {
   const w = world(
     on,
     stubs({
       "ccd_window/open_session_in": () => ({
-        content: [{ type: "text", text: "Only sessions this session started can be focused." }],
+        content: [{ type: "text", text: "Only sessions this session started can be shown." }],
         isError: true,
       }),
       [`${WS}/open-claude-link`]: (a) => ok({ url: a.url }),
@@ -1064,11 +1091,12 @@ test("Continue in Desktop focuses a session this one started, else opens the ses
   await tap(ui, "continue:abc");
   expect(w.calls.find((c) => c.key === "ccd_window/open_session_in")?.args).toEqual({
     session_id: "local_1",
-    target: "focus",
+    target: "split",
   });
   expect(w.calls.find((c) => c.key === `${WS}/open-claude-link`)?.args).toEqual({
     url: "claude://x/local_1",
   });
+  expect(w.toasts.join(" ")).toContain("Open in → Split view");
   await ui.unmount();
 });
 
