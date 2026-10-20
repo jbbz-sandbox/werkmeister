@@ -68,7 +68,11 @@ const options = {
   target: "node20",
   define: { __SANDBOX_BUILD__: JSON.stringify(buildStamp) },
   sourcemap: true,
-  minify: false,
+  // SW-58: smaller package, faster load. keepNames keeps function/class names in
+  // stack traces and `constructor.name`; legalComments stays at the bundling default
+  // (`eof`) — `none` would drop the MIT/Apache notices the bundled deps require.
+  minify: true,
+  keepNames: true,
   // commander and nunjucks are CJS, and ESM output has no `require` for their
   // internal `require("node:events")` calls — esbuild's shim throws "Dynamic
   // require ... is not supported". Its shim delegates to a real `require` when
