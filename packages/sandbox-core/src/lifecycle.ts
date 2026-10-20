@@ -194,7 +194,7 @@ export async function up(
   // reported itself. Tunnels that never return after a successful restart mean
   // forwards this machine does run are broken; `waitForForwards` throws, which
   // says so far better than the compose error it replaces.
-  if (ensurePortForwardsHealthy() === "restarted") {
+  if ((await ensurePortForwardsHealthy()) === "restarted") {
     await waitForForwards();
   }
 
@@ -216,7 +216,7 @@ export async function up(
   await generateCaddyfile(null, config);
 
   let caddy: "reloaded" | "started";
-  if (isCaddyRunning()) {
+  if (await isCaddyRunning()) {
     await reloadCaddy();
     caddy = "reloaded";
   } else {
@@ -755,7 +755,7 @@ export async function removeService(feature: string, service: string): Promise<R
   info("Updating reverse proxy...");
   await generateCaddyfile(null, config);
   let proxyReloaded = false;
-  if (isCaddyRunning()) {
+  if (await isCaddyRunning()) {
     await reloadCaddy();
     proxyReloaded = true;
   }
@@ -807,7 +807,7 @@ export interface ProxyOps {
   /** Returns the written path; `reloadProxy` ignores it. */
   generate: () => Promise<unknown>;
   slots: () => Promise<Record<string, { slot: number; services: string[] }>>;
-  running: () => boolean;
+  running: () => Promise<boolean>;
   reload: () => Promise<boolean>;
   start: () => boolean;
 }
@@ -858,7 +858,7 @@ export async function reloadProxy(
 
   let started = false;
   let ok = true;
-  if (ops.running()) {
+  if (await ops.running()) {
     if (start) {
       info("Reloading Caddy...");
     }
@@ -1046,7 +1046,7 @@ export async function runClean({
     }
     if (!dryRun) {
       await generateCaddyfile();
-      if (isCaddyRunning()) {
+      if (await isCaddyRunning()) {
         await reloadCaddy();
       }
     }
@@ -1097,7 +1097,7 @@ export async function runClean({
   const releasedSlots: string[] = [];
   if (!all) {
     for (const feature of remaining) {
-      const running = getContainerStatus(feature).filter((c) => c.status === "running");
+      const running = (await getContainerStatus(feature)).filter((c) => c.status === "running");
       if (!running.length && workspaceForFeature(feature) === null) {
         staleSlots.push(feature);
       }

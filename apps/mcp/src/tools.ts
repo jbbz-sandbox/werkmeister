@@ -671,7 +671,7 @@ function registerHostTools(server: McpServer): void {
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
         if (args.k8sOnly) {
-          return { k8s: connectK8s() };
+          return { k8s: await connectK8s() };
         }
         // Health is deliberately not awaited here: infraHealth() waits up to 90
         // seconds for the forwards to converge, which is a `status`
