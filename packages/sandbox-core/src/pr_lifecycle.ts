@@ -41,6 +41,7 @@ import {
   resolveSessionSource,
   resolveWorkspaceDir,
   sendToClaudeSession,
+  sessionStartDir,
   WorkspaceError,
   worktreeSources,
 } from "./sandbox.js";
@@ -786,6 +787,8 @@ export interface PrCallback {
   dir: string;
   url: string;
   session: string;
+  /** The folder the session started in, which `--resume` needs; null in callbacks from before SW-16. */
+  sessionDir: string | null;
   /** The desktop app's `local_…` id: delivered by the werkmeister mod, never headless. */
   hostSession: string | null;
   message: string;
@@ -806,7 +809,8 @@ export async function callbackFields(
     (await resolveSessionSource(path.basename(ws)).catch(() => null))?.sessionId;
   if (!session) return {};
   const host = env["CLAUDE_CODE_HOST_SESSION_ID"];
-  return host ? { session, host_session: host } : { session };
+  const cwd = await sessionStartDir(session);
+  return { session, ...(host && { host_session: host }), ...(cwd && { session_cwd: cwd }) };
 }
 
 export function callbackMessage(status: string, url: string, release?: string): string | null {
@@ -881,13 +885,19 @@ export async function claimCallbacks(
             dir: f.dir,
             url,
             session: String(f.fm["session"]),
+            sessionDir: reason(f.fm["session_cwd"]) || null,
             hostSession: reason(f.fm["host_session"]) || null,
             message,
           });
         writePrFields(
           f,
           SETTLED.has(status)
-            ? { session: undefined, host_session: undefined, notified: undefined }
+            ? {
+                session: undefined,
+                session_cwd: undefined,
+                host_session: undefined,
+                notified: undefined,
+              }
             : { notified: status },
         );
         changed.push(path.relative(ws, f.path));
@@ -904,10 +914,11 @@ export async function claimCallbacks(
 /** Resume a terminal session headlessly with its message. */
 export async function deliverHeadless(cb: PrCallback): Promise<void> {
   const name = path.basename(cb.ws);
+  const dir = cb.sessionDir ?? (await sessionStartDir(cb.session)) ?? cb.ws;
   // sendToClaudeSession falls back to the newest session for an unknown id; a callback reaches its own or none.
-  if ((await resolveSessionSource(name, cb.session)).sessionId !== cb.session)
+  if ((await resolveSessionSource(name, cb.session, dir)).sessionId !== cb.session)
     throw new WorkspaceError(`session ${cb.session} is gone`);
-  await sendToClaudeSession(name, cb.message, cb.session);
+  await sendToClaudeSession(name, cb.message, cb.session, dir);
 }
 
 /**
