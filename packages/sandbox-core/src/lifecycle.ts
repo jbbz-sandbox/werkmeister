@@ -39,6 +39,7 @@ import {
   composeStop,
   composeUp,
   composeUpAsync,
+  composeUpServiceAsync,
   getContainerStatus,
   workspaceForFeature,
 } from "./compose.js";
@@ -55,6 +56,7 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
   loadWorkspaceEnvVars,
+  type RegistryConfig,
   writeServiceSecretEnvs,
 } from "./generate.js";
 import { load as loadGlobalConfig } from "./global_config.js";
@@ -139,36 +141,13 @@ export async function up(
   // strips any a pre-strategy `up` installed.
   strategyFor(workspace).refresh(workspace);
 
-  info("Allocating feature slot...");
-  const preferredSlot = readSlotFromWorkspace(workspace);
-  let slot: number;
-  try {
-    slot = await allocateSlot(feature, localServices, preferredSlot);
-  } catch (e) {
-    // Rewrapped rather than left to propagate: allocation reports failure as a
-    // plain Error, whose message already carries the stale-lock recovery
-    // guidance, and `main.ts` prints a bare Error as `Error: <msg>` instead of
-    // the `[err] <msg>` this site has always produced.
-    throw new SandboxError(e instanceof Error ? e.message : String(e), "SLOT_ALLOC");
-  }
-
+  const { slot, regenerated, staleCompose } = await prepareSlot(
+    feature,
+    workspace,
+    config,
+    localServices,
+  );
   const [portStart, portEnd] = getPortRange(slot);
-  info(`Slot ${slot} -> port range ${portStart}-${portEnd}`);
-
-  const regenerated = preferredSlot !== null && slot !== preferredSlot;
-  let staleCompose = false;
-  if (regenerated) {
-    warn(`Slot changed (${preferredSlot} → ${slot}) — regenerating compose...`);
-    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
-    generateFeatureEnv(feature, slot, localServices, config, workspace);
-  } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
-    // Rewritten, not just warned about: the file is fully generated, and a
-    // template change (SW-32's idle containers) must reach existing workspaces
-    // without a re-init. Hand-edits belong in the registry or workspace.yml.
-    staleCompose = true;
-    warn(`${COMPOSE_FILE} predates the current template or registry — regenerating...`);
-    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
-  }
   // Every `up`, not just on a slot change: the file is fully generated and
   // nothing reads it, and with no subgraph this removes a stale copy (#120).
   generateSupergraphConfig(feature, slot, localServices, config, workspace);
@@ -251,6 +230,88 @@ export async function up(
     containersStarted,
     caddy,
   };
+}
+
+/**
+ * Allocate *feature*'s slot, preferring the one in `.env`, and rewrite the
+ * compose file when the slot moved or the file predates the template or registry.
+ *
+ * Throws `SLOT_ALLOC` when no slot can be allocated.
+ */
+async function prepareSlot(
+  feature: string,
+  workspace: string,
+  config: RegistryConfig,
+  localServices: string[],
+): Promise<{ slot: number; regenerated: boolean; staleCompose: boolean }> {
+  info("Allocating feature slot...");
+  const preferredSlot = readSlotFromWorkspace(workspace);
+  let slot: number;
+  try {
+    slot = await allocateSlot(feature, localServices, preferredSlot);
+  } catch (e) {
+    // Rewrapped rather than left to propagate: allocation reports failure as a
+    // plain Error, whose message already carries the stale-lock recovery
+    // guidance, and `main.ts` prints a bare Error as `Error: <msg>` instead of
+    // the `[err] <msg>` this site has always produced.
+    throw new SandboxError(e instanceof Error ? e.message : String(e), "SLOT_ALLOC");
+  }
+
+  const [portStart, portEnd] = getPortRange(slot);
+  info(`Slot ${slot} -> port range ${portStart}-${portEnd}`);
+
+  const regenerated = preferredSlot !== null && slot !== preferredSlot;
+  let staleCompose = false;
+  if (regenerated) {
+    warn(`Slot changed (${preferredSlot} → ${slot}) — regenerating compose...`);
+    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
+    generateFeatureEnv(feature, slot, localServices, config, workspace);
+  } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
+    // Rewritten, not just warned about: the file is fully generated, and a
+    // template change (SW-32's idle containers) must reach existing workspaces
+    // without a re-init. Hand-edits belong in the registry or workspace.yml.
+    staleCompose = true;
+    warn(`${COMPOSE_FILE} predates the current template or registry — regenerating...`);
+    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
+  }
+  return { slot, regenerated, staleCompose };
+}
+
+/**
+ * Start one of *feature*'s services and wait for it, without the rest of `up`
+ * (no Caddy, no port-forward check). The PR gate calls this for a repo with no
+ * container running (SW-34). *service* may be outside the workspace's services:
+ * compose.yml carries those behind the `on-demand` profile.
+ *
+ * Throws `INSIDE_OWN_CONTAINER`, `NO_COMPOSE`, `MISSING_SECRETS`, `SLOT_ALLOC`
+ * or `COMPOSE_UP_FAILED`.
+ */
+export async function startService(
+  feature: string,
+  workspace: string,
+  service: string,
+): Promise<void> {
+  refuseInsideOwnContainer(feature, "pr gate");
+  migrateWorkspaceCompose(workspace);
+  const composePath = path.join(workspace, COMPOSE_FILE);
+  if (!fs.existsSync(composePath)) {
+    throw new SandboxError(
+      `No ${COMPOSE_FILE} found in workspace: ${workspace}\n` +
+        "       Run 'sandbox init-workspace' first to generate it.",
+      "NO_COMPOSE",
+    );
+  }
+  const config = { services: loadServices(), ports: loadPorts() };
+  requireSecrets(config.services, [service], workspace);
+  // compose refuses to start a service whose `.env.<svc>` is missing.
+  writeServiceSecretEnvs(workspace, [service], config.services);
+  await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
+  if (!(await composeUpServiceAsync(feature, service, composePath))) {
+    throw new SandboxError(
+      `Failed to start ${service} — see the compose output above`,
+      "COMPOSE_UP_FAILED",
+    );
+  }
 }
 
 // ponytail: two hand-rolled parsers over the same file, because `loadDotenv`

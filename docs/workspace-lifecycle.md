@@ -87,9 +87,9 @@ The first `#` heading is the PR title and the rest is the body. The person sets 
 | stages | ICM: every stage before propose has output. JIT: no open decision notes. |
 | acceptance | the PR body has a `PASS` table cell and no `FAIL` cell |
 | clean | `git status --porcelain` in the code worktree is empty |
-| test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, because the worktree is mounted at `/app` with its `node_modules`. A service with no command, or with no running container for its repo, fails unless `skip_tests` names it with a reason. |
+| test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, or in any running container of its repo, because they all mount the worktree at `/app` with its `node_modules`. When the repo has none running, the gate starts one (`docker compose up -d --wait <svc>`, preferring a cli/library/extension service, which only sleeps) and stops it when the gate ends, pass or fail. A service with no command, or one whose container could not be started, fails unless `skip_tests` names it with a reason. |
 | exercise | `exercise.md` (ICM: any stage output; JIT: `.werkmeister/notes/`) has a `PASS` cell and no `FAIL` |
-| baseline `<svc>` | the touched local service's container is running; for `api`/`web` services, its `health_endpoint` also answers below 400 |
+| baseline `<svc>` | for a touched local `api`/`web` service: its own container is running and its `health_endpoint` answers below 400 |
 | release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `werkmeister pr status` still waits for the release tag. |
 | approved | `status: approved` |
 
