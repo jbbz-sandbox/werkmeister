@@ -59,7 +59,7 @@ Every row reads sandbox-core; no surface computes its own. The shapes and their 
 | **Containers** | `getWorkspaceStatuses()` → `state`, `running` / `total`, and per-service health `services[] {name, state}` (`healthy` · `starting` · `unhealthy` · `running` · `down`) |
 | **PRs** | `getWorkspacePRs()` → per repo `url`, `state`, `ci` (`pass` · `running` · `fail` · null = no checks) and `failingChecks` |
 | **Workflow** | `stage {index, total, name}` (ICM) · `phase` (JIT, from the newest note) · `lifecycleOf()` for the lifecycle step |
-| **Agent** | `claude {state, waiting}`, `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
+| **Agent** | `claude {state, agent, at, question}` (agent from the hooks' `agent-state.json`, SW-46), `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
 
 ### Badges
 

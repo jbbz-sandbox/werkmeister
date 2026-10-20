@@ -11,10 +11,15 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  AGENT_STATE_EVENTS,
+  buildAgentStateEntry,
   buildPrGuardEntry,
+  buildSessionEndEntry,
   type HookEntry,
   removeWorkspaceHooks,
   SESSION_START_COMMAND,
+  writeAgentStateHooks,
+  writeAutoStopHook,
   writePrGuardHook,
   writeWorkspaceHooks,
 } from "werkmeister-core/hooks_gen";
@@ -114,5 +119,24 @@ describe("writePrGuardHook", () => {
     expect(preToolUseOf(root)).toContainEqual(buildPrGuardEntry());
     removeWorkspaceHooks(root);
     expect(preToolUseOf(root)).toEqual([buildPrGuardEntry()]);
+  });
+});
+
+// SW-46: one matcher-less entry per event; the event name reaches the hook on stdin.
+describe("writeAgentStateHooks", () => {
+  it("adds one entry on each event, idempotently, beside the auto-stop and PR guard", () => {
+    const root = fs.mkdtempSync(path.join(tmp, "ws-"));
+    writePrGuardHook(root);
+    writeAutoStopHook(root, true);
+    writeAgentStateHooks(root);
+    writeAgentStateHooks(root);
+    const hooks = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"))
+      .hooks as Record<string, HookEntry[]>;
+    for (const event of AGENT_STATE_EVENTS)
+      expect(hooks[event].filter((e) => e.hooks[0].command.includes("agent-state"))).toEqual([
+        buildAgentStateEntry(),
+      ]);
+    expect(hooks.PreToolUse[0]).toEqual(buildPrGuardEntry());
+    expect(hooks.SessionEnd[0]).toEqual(buildSessionEndEntry());
   });
 });

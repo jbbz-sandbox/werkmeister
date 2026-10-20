@@ -148,7 +148,7 @@ test("jit refresh writes its hooks and the same allow rules", async () => {
   strategyById("jit").refresh(root);
   const settings = readSettings(root);
   assert.ok(settings.hooks.SessionStart, "JIT SessionStart hook");
-  assert.equal(settings.hooks.PreToolUse.length, 2, "standards gate + PR guard");
+  assert.equal(settings.hooks.PreToolUse.length, 3, "standards gate + PR guard + agent state");
   assert.deepEqual(settings.permissions.allow, READ_ONLY_GIT_RULES);
 });
 

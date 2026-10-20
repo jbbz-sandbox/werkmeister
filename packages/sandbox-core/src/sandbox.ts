@@ -22,6 +22,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
+import { type AgentState, asksQuestion, questionOf, readAgentState } from "./agent_state.js";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
 import {
   askClaude,
@@ -1139,7 +1140,7 @@ export interface WorkspaceStatus {
    * Same buckets as {@link InfraStatus}. Empty when docker is unreachable or nothing runs.
    */
   services: { name: string; state: ServiceHealth }[];
-  /** Claude Code session signal: turn state + whether it's waiting for the human. */
+  /** Claude Code session signal: claude-send turn state + what the agent is doing. */
   claude: ClaudeSessionSignal;
   /** The workspace's Claude model, or null for Claude Code's default. */
   model: string | null;
@@ -1198,9 +1199,16 @@ function jitPhase(dir: string): string | null {
 export interface ClaudeSessionSignal {
   /** Most recent claude-send turn state this server tracked (idle = none / after restart). */
   state: "running" | "done" | "failed" | "idle";
-  /** True when the session is idle and Claude spoke last — i.e. waiting for your next message. */
-  waiting: boolean;
+  /** Working, needs you (a question or permission prompt), done or idle (SW-46). */
+  agent: AgentState;
+  /** When `agent` began, or the transcript's mtime when it is inferred from the tail; null with no session. */
+  at: string | null;
+  /** What `needs-you` is waiting on, when known. */
+  question: string | null;
 }
+
+/** Past this, a turn whose transcript ends mid-turn has died rather than gone quiet on a long tool call. */
+const LIVE_TURN_MS = 10 * 60 * 1000;
 
 /** Read the last `maxBytes` of a file, dropping a leading partial line. Cheap enough
  *  to run per-workspace in the status sweep without reading whole transcripts. */
@@ -1223,31 +1231,39 @@ async function readFileTail(file: string, maxBytes = 131072): Promise<string> {
 }
 
 /**
- * Cheap "is this session waiting for me?" signal for the workspace list.
- * `waiting` = no live turn AND Claude's last transcript entry is an assistant
- * message (the ball's in the human's court). A running turn, or a last entry
- * that is a tool row / user message, is NOT waiting. Best-effort: any read
- * failure degrades to `waiting: false`. (Can't distinguish a session *blocked
- * on a permission prompt* from one mid-execution — that needs Claude Code's
- * Notification hook, out of scope for the transcript tail.)
+ * The workspace list's agent signal. A live claude-send turn this process runs
+ * is working; otherwise the state file the workspace's hooks write (agent_state.ts)
+ * says what the session last did. A workspace whose hooks predate it falls back
+ * to the transcript tail: Claude spoke last → needs-you if it asked, else done;
+ * a fresh tool row or user message → working; anything else → idle. The tail
+ * can't see a permission prompt; only the Notification hook can.
  */
 async function claudeSessionSignal(
   name: string,
+  dir: string,
 ): Promise<{ signal: ClaudeSessionSignal; lastActivity: string | null }> {
-  const state = claudeTurns.get(name)?.state ?? "idle";
   const src = await resolveSessionSource(name).catch(() => null);
   const lastActivity = src?.updatedAt ?? null;
-  if (state === "running") return { signal: { state, waiting: false }, lastActivity };
-  let lastRole: string | null = null;
+  const state: ClaudeSessionSignal["state"] = claudeTurns.get(name)?.state ?? "idle";
+  const signal = (agent: AgentState, at = lastActivity, question: string | null = null) => ({
+    signal: { state, agent, at, question },
+    lastActivity,
+  });
+  if (state === "running") return signal("working");
+  const recorded = readAgentState(dir);
+  if (recorded) return signal(recorded.state, recorded.at, recorded.question ?? null);
+  let last: ClaudeMessage | undefined;
   try {
-    if (src?.sessionFile) {
-      const entries = parseSessionLines(await readFileTail(src.sessionFile));
-      if (entries.length) lastRole = entries[entries.length - 1].role;
-    }
+    if (src?.sessionFile) last = parseSessionLines(await readFileTail(src.sessionFile)).at(-1);
   } catch {
     /* best-effort — no signal */
   }
-  return { signal: { state, waiting: lastRole === "assistant" }, lastActivity };
+  if (!last || !lastActivity) return signal("idle");
+  if (last.role === "assistant")
+    return asksQuestion(last.text)
+      ? signal("needs-you", lastActivity, questionOf(last.text))
+      : signal("done");
+  return signal(Date.now() - Date.parse(lastActivity) < LIVE_TURN_MS ? "working" : "idle");
 }
 
 /** Shared-infrastructure (`sandbox connect`) container state — the `sandbox-infra` Compose project. */
@@ -1377,7 +1393,7 @@ export async function getWorkspaceStatuses(): Promise<{
         const feature = await readWorkspaceFeature(dir);
         project = feature ? `sandbox-${feature}` : null;
       }
-      const { signal: claude, lastActivity } = await claudeSessionSignal(name);
+      const { signal: claude, lastActivity } = await claudeSessionSignal(name, dir);
       const { model, autonomous, autoStop } = await readWorkspaceConfig(dir);
       // Docker-independent card fields, the same in both returns below.
       const card = {
@@ -1529,7 +1545,7 @@ export async function checkInTriage(): Promise<CheckInTriage> {
         issueId: w.issueId,
         labels: w.labels,
         containers: status?.state ?? "unknown",
-        claude: status?.claude ?? { state: "idle", waiting: false },
+        claude: status?.claude ?? { state: "idle", agent: "idle", at: null, question: null },
         gates: await proposedGates(w.path),
         updatedAt,
         changed: sinceMs !== null && updatedAt !== null && Date.parse(updatedAt) > sinceMs,
@@ -1547,8 +1563,10 @@ export async function checkInTriage(): Promise<CheckInTriage> {
     candidates: rows
       .filter(
         (r) =>
-          r.claude.state !== "running" &&
-          (sinceMs === null ? r.claude.waiting : r.gates.length > 0 || r.changed),
+          r.claude.agent !== "working" &&
+          (sinceMs === null
+            ? r.claude.agent === "needs-you" || r.claude.agent === "done"
+            : r.gates.length > 0 || r.changed),
       )
       .map((r) => r.name),
   };

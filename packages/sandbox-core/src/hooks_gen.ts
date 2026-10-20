@@ -18,6 +18,10 @@
  * - SessionEnd: `sandbox stop --if-idle` stops the workspace's feature when the
  *   session ends and no other is open there (#231). Only while `auto_stop` is
  *   on (`writeAutoStopHook`, every strategy); turning it off removes the entry.
+ * - UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop, SessionEnd:
+ *   `sandbox hooks agent-state` records working / needs-you / done in
+ *   `.sandbox/agent-state.json` for the pane and dashboard (SW-46). Every
+ *   strategy (`writeAgentStateHooks`); the event name arrives on stdin.
  *
  * - `permissions.allow`: the workspace's test commands and read-only git, for
  *   every strategy (`writeWorkspacePermissions`), so a headless session can run
@@ -52,6 +56,7 @@ const _HOOK_MARKER = "sandbox notes context";
 const _GATE_MARKER = "sandbox hooks gate";
 const _PR_GUARD_MARKER = "sandbox hooks pr-guard";
 const _AUTO_STOP_MARKER = "sandbox stop --if-idle";
+const _AGENT_STATE_MARKER = "sandbox hooks agent-state";
 
 // Projections lag whenever the standards tree moves on after a workspace was
 // inited, and nothing else re-runs the writer — so the session that would read a
@@ -72,6 +77,17 @@ export const SESSION_START_COMMAND = `command -v sandbox >/dev/null 2>&1 && { ${
 export const PRE_TOOL_USE_GATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_GATE_MARKER} || true`;
 export const PR_GUARD_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_PR_GUARD_MARKER} || true`;
 export const SESSION_END_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_AUTO_STOP_MARKER} >/dev/null 2>&1 || true`;
+export const AGENT_STATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_AGENT_STATE_MARKER} || true`;
+
+/** The events whose hooks tell working, needs-you and done apart (agent_state.ts `nextState`). */
+export const AGENT_STATE_EVENTS = [
+  "UserPromptSubmit",
+  "PreToolUse",
+  "PostToolUse",
+  "Notification",
+  "Stop",
+  "SessionEnd",
+] as const;
 
 // SessionEnd hooks get a 1.5s budget unless one sets `timeout`, and the CLI's own
 // start-up can take most of that. The stop itself runs detached, so this only
@@ -110,6 +126,11 @@ export function buildSessionEndEntry(): HookEntry {
   return {
     hooks: [{ type: "command", command: SESSION_END_COMMAND, timeout: _SESSION_END_TIMEOUT_S }],
   };
+}
+
+/** The managed agent-state matcher-group, the same for every event in {@link AGENT_STATE_EVENTS}. */
+export function buildAgentStateEntry(): HookEntry {
+  return { hooks: [{ type: "command", command: AGENT_STATE_COMMAND }] };
 }
 
 function _isManaged(entry: unknown, marker: string = _HOOK_MARKER): boolean {
@@ -226,6 +247,14 @@ export function writeWorkspaceHooks(workspaceRoot: string): string {
     ["PreToolUse", buildPreToolUseGateEntry(), _GATE_MARKER],
     ["PreToolUse", buildPrGuardEntry(), _PR_GUARD_MARKER],
   ]);
+}
+
+/** The agent-state hook on each of its events. */
+export function writeAgentStateHooks(workspaceRoot: string): string {
+  return _writeManaged(
+    workspaceRoot,
+    AGENT_STATE_EVENTS.map((event) => [event, buildAgentStateEntry(), _AGENT_STATE_MARKER]),
+  );
 }
 
 /** The PR guard alone — what a non-JIT workspace gets. */
@@ -624,7 +653,7 @@ export function writeWorkspaceModel(workspaceRoot: string, model: string | null)
   return settingsPath;
 }
 
-/** The workspace's allow and deny rules, model and auto-stop hook, from its `.env`, registry and workspace.yml. */
+/** The workspace's allow and deny rules, model, auto-stop and agent-state hooks, from its `.env`, registry and workspace.yml. */
 export function writeWorkspaceSettings(workspaceRoot: string): void {
   writeWorkspacePermissions(
     workspaceRoot,
@@ -633,4 +662,5 @@ export function writeWorkspaceSettings(workspaceRoot: string): void {
   );
   writeWorkspaceModel(workspaceRoot, readModel(workspaceRoot));
   writeAutoStopHook(workspaceRoot, readAutoStop(workspaceRoot));
+  writeAgentStateHooks(workspaceRoot);
 }
