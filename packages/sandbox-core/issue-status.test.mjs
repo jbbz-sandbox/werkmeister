@@ -60,6 +60,25 @@ test("issue_statuses beats the aliases, the aliases beat the defaults, null or b
   assert.equal(resolveIssueStatuses({ issue_done_status: "Released" }, "github").done, "Released");
 });
 
+test("issue_progress_status sets in_progress (SW-24) unless issue_statuses names it", () => {
+  assert.equal(
+    resolveIssueStatuses({ issue_progress_status: "Doing" }, "jira").in_progress,
+    "Doing",
+  );
+  assert.equal(
+    resolveIssueStatuses({ issue_progress_status: "wip" }, "github").in_progress,
+    "wip",
+    "on GitHub, a label",
+  );
+  assert.equal(
+    resolveIssueStatuses(
+      { issue_progress_status: "Doing", issue_statuses: { in_progress: "Started" } },
+      "jira",
+    ).in_progress,
+    "Started",
+  );
+});
+
 test("issuePosition: Jira category and name, GitHub state and status: label", () => {
   const p = (issue, s = JIRA) => issuePosition({ ref: "X-1", ...issue }, s);
   assert.equal(p({ status: "To Do", statusCategory: "new" }), 0);

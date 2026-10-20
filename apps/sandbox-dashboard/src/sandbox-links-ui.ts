@@ -5,8 +5,8 @@
  * vanilla DOM, same `el()` + CSS-injection approach as health-ui.ts / prs-ui.ts.
  */
 
-import { el, injectCss } from "./theme.js";
-import type { HostBridge } from "./workspace-ui.js";
+import { el, injectCss } from "werkmeister-ui/theme";
+import type { HostBridge } from "werkmeister-ui/workspace-ui";
 
 type LinkKind = "local" | "remote" | "admin";
 interface SandboxLink {
