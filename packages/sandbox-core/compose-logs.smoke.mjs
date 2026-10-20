@@ -57,9 +57,15 @@ assert.match(
   "expected ANSI from `--ansi always` — without it the per-service prefix colour is dropped",
 );
 
+// `close` fires once: if the tail already exited on its own, waiting for it would
+// never settle and Node exits 13 on the unsettled await (SW-37).
+const hasExited = () => child.exitCode !== null || child.signalCode !== null;
 child.kill();
-await new Promise((resolve) => child.once("close", resolve));
-assert.equal(child.killed, true, "expected the tail to die with its caller");
+if (!hasExited()) {
+  await new Promise((resolve) => child.once("close", resolve));
+}
+// Not `child.killed`: that stays false when the child had already exited.
+assert.ok(hasExited(), "expected the tail to die with its caller");
 
 assert.equal(
   composeLogsStream("no-such-feature-hopefully", null, () => {}),

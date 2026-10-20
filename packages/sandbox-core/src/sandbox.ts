@@ -1541,7 +1541,9 @@ export async function checkInTriage(): Promise<CheckInTriage> {
   ]);
   const mark = path.join(root, ".check-in-last");
   const sinceMs = await fs.stat(mark).then(
-    (s) => s.mtimeMs,
+    // mtimeMs is fractional on filesystems with sub-ms stamps; `new Date()` below
+    // truncates it, so a mark set to 889ms stored as 888.9 would read back as 888 (SW-37).
+    (s) => Math.round(s.mtimeMs),
     () => null,
   );
   const focus = workspaces.some((w) => w.labels.includes("focus"));
