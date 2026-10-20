@@ -18,6 +18,11 @@ With an `issue_id`, `createWorkspace` always:
 4. renders the issue section (link, copy date, `sandbox issue view`) in CLAUDE.md and the
    brief, for both JIT and ICM.
 
+The create leaves the issue's status alone (a workspace can be created and parked). From
+there it moves by itself, forward only: To Do → In Progress when the first stage or phase
+runs `sandbox issue start` → In Review at `sandbox pr open` → Done at ship
+(docs/workspace-lifecycle.md § Issue status; `overrides.issue_statuses` renames each status).
+
 ## Pick the path
 
 | Situation | Do |
