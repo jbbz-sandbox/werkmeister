@@ -1507,6 +1507,8 @@ export interface InterceptsResult {
   available: boolean;
   connectedNamespace: string | null;
   byFeature: Map<string, Map<string, InterceptRow>>;
+  /** Services telepresence could ever intercept; the rest get no intercept state. */
+  remoteServices: Set<string>;
 }
 
 /**
@@ -1524,7 +1526,12 @@ export async function getIntercepts(): Promise<InterceptsResult> {
     if (!svcs) byFeature.set(row.feature, (svcs = new Map()));
     svcs.set(row.service, row);
   }
-  return { available: parsed.available, connectedNamespace: parsed.connected_namespace, byFeature };
+  return {
+    available: parsed.available,
+    connectedNamespace: parsed.connected_namespace,
+    byFeature,
+    remoteServices: new Set(parsed.remote_services),
+  };
 }
 
 // --- Repos & pull requests --------------------------------------------------
