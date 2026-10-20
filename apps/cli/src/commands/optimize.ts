@@ -36,16 +36,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   const header =
     `  ${Colors.BOLD}${"Service".padEnd(30)}  ` +
-    `${"Max Mem".padStart(8)}  ${"Limit".padStart(8)}  ` +
+    `${"Max Mem".padStart(8)}  ${"Limit".padStart(8)}  ${"CPU Lim".padStart(7)}  ` +
     `${"Usage".padStart(7)}  ${"Status".padEnd(20)}${Colors.RESET}`;
   console.log(header);
-  console.log(`  ${"─".repeat(82)}`);
+  console.log(`  ${"─".repeat(91)}`);
 
   for (const u of report.usage) {
     console.log(
       `  ${u.container.padEnd(30)}  ` +
         `${formatMem(u.maxMemMib).padStart(8)}  ` +
-        `${(u.limit ?? "n/a").padStart(8)}  ` +
+        `${(u.limit ?? "n/a").padStart(8)}  ${(u.cpuLimit ?? "n/a").padStart(7)}  ` +
         `${u.usagePct.toFixed(0).padStart(6)}%  ` +
         `${STATUS_LABEL[u.status]}`,
     );
@@ -88,7 +88,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     }
     console.log();
     console.log(
-      `  ${Colors.DIM}To update: edit config/services.yaml (memory_limit, memory_reservation)${Colors.RESET}`,
+      `  ${Colors.DIM}To update: edit config/services.yaml (memory_limit, memory_reservation, cpus)${Colors.RESET}`,
     );
     console.log(
       `  ${Colors.DIM}For shared infra: edit compose/shared-infra.yml (deploy.resources)${Colors.RESET}`,
