@@ -1,5 +1,17 @@
 # sandbox-core
 
+## 0.24.0
+
+### Minor Changes
+
+- 3fc5287: Per-workspace container vitals (SW-41). `sandbox status`, the Workspaces pane and the VS Code tree show each workspace's CPU and memory (one stats sweep, every 30 s in the pane and the tree), when its containers started and by what (`up`, `gate`, `restart` or `person`, from `.werkmeister/starts.json`), and a crash-looping container as an error with its last log line, within one 5 s poll. The pane and the tree also show a host line: load average and the total CPU of feature containers. Core: `WorkspaceStatus` gains `started` and `crashLoops`, `sandbox status --json` gains `host` and per-feature `cpu_percent`, `mem_mib`, `started_at`, `started_by` and `crash_loops`, and new `getWorkspaceResources()`.
+- 5886cc5: SW-54: the dashboard and MCP App workspace card gains `↗ Continue in Desktop` and `＋ New session`, the top bar gains `＋ New workspace` (the MCP App list opens the create form in place), and the list gains a `☐ Focused only` filter. `claude-resume` takes `new: true` to open a fresh Terminal session.
+
+### Patch Changes
+
+- 3c1a49a: Create form (SW-51): Work type and Workflow are preselected on every GUI, labels drop the terminal hints ("blank to skip", "Enter for default") and follow docs/ui-spec.md, VS Code's New Workspace runs the wizard from the workspaces root instead of ~, and the terminal wizard requires at least one service or repo.
+- 20f67e7: SW-65: the `check-in` MCP tool reports each workspace's `lifecycle` and `prs` (repo, url, status, `release`), and names the shipped or abandoned workspaces with no Claude turn working as `readyToClose`. Before reporting, it ships merged PRs a release tag now contains, with the same rule and code as `werkmeister pr status` and no `gh` call.
+
 ## 0.23.0
 
 ### Minor Changes

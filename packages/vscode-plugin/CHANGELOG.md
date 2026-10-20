@@ -1,5 +1,21 @@
 # vscode-plugin
 
+## 0.24.0
+
+### Minor Changes
+
+- 3fc5287: Per-workspace container vitals (SW-41). `sandbox status`, the Workspaces pane and the VS Code tree show each workspace's CPU and memory (one stats sweep, every 30 s in the pane and the tree), when its containers started and by what (`up`, `gate`, `restart` or `person`, from `.werkmeister/starts.json`), and a crash-looping container as an error with its last log line, within one 5 s poll. The pane and the tree also show a host line: load average and the total CPU of feature containers. Core: `WorkspaceStatus` gains `started` and `crashLoops`, `sandbox status --json` gains `host` and per-feature `cpu_percent`, `mem_mib`, `started_at`, `started_by` and `crash_loops`, and new `getWorkspaceResources()`.
+
+### Patch Changes
+
+- 3c1a49a: Create form (SW-51): Work type and Workflow are preselected on every GUI, labels drop the terminal hints ("blank to skip", "Enter for default") and follow docs/ui-spec.md, VS Code's New Workspace runs the wizard from the workspaces root instead of ~, and the terminal wizard requires at least one service or repo.
+- Updated dependencies [3fc5287]
+- Updated dependencies [3c1a49a]
+- Updated dependencies [5886cc5]
+- Updated dependencies [20f67e7]
+  - werkmeister-core@0.24.0
+  - werkmeister-ui@0.3.0
+
 ## 0.23.0
 
 ### Minor Changes
