@@ -6,6 +6,8 @@ export type WorkspaceRow = {
   issueId: string | null;
   /** The issue's page in the configured tracker; null when it can't be built from config. */
   issueUrl: string | null;
+  /** Free-form tags from `.sandbox/workspace.yml`'s `labels` list; `focus` drives the pane's Focus toggle. */
+  labels: string[];
   /** `task` from .sandbox/workspace.yml. */
   task: string | null;
   /** `description` from .sandbox/workspace.yml. */
