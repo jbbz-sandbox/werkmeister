@@ -1,8 +1,14 @@
 import type { On } from "claude-code";
 import type { Engine, Plugin } from "claude-code/testing";
 import { expect, mock, test } from "claude-code/testing";
-import type { FormField } from "../types";
-import { applyFormFields, formFields, interceptControl, optionGroups } from "./register";
+import type { FormField, WorkspaceRow } from "../types";
+import {
+  applyFormFields,
+  formFields,
+  interceptControl,
+  optionGroups,
+  withLivePrs,
+} from "./register";
 import { edit } from "./textarea";
 
 const SURFACES = ["terminal", "desktop"] as const;
@@ -1576,6 +1582,82 @@ test("the lifecycle replaces the stage on the card and picks the lifecycle butto
     expect(await ui.find({ key: "prs:empty" })).toBeFalsy();
     await ui.unmount();
   }
+});
+
+// SW-50: a PR file still says `open` after the PR merged; the card's lifecycle follows the PR poll, not the file.
+const API_OPEN = { dir: "api", status: "open", url: "https://github.com/o/api/pull/7" };
+const SANDBOX_OPEN = {
+  dir: "sandbox",
+  status: "open",
+  url: "https://github.com/o/sandbox/pull/12",
+};
+
+test("the lifecycle takes each PR's state from the PR poll, so it never contradicts the PR line", async ($, on) => {
+  world(
+    on,
+    stubs({
+      [`${WS}/list-workspaces`]: () =>
+        ok(
+          lifecycleList(
+            { state: "pr-open", prs: [API_OPEN] },
+            { state: "pr-open", prs: [API_OPEN, SANDBOX_OPEN] },
+          ),
+        ),
+      [`${WS}/workspace-prs`]: () => ok([PRS[0], { name: "abc", repos: PRS[0].repos }]),
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "prs:ab" }))?.text).toContain("o/api#7 ⑂ merged");
+  expect((await ui.find({ key: "meta:ab" }))?.text).toBe("merged — awaiting release · 3/3");
+  expect((await ui.find({ key: "meta:abc" }))?.text).toBe("bugfix · PR open (1/2) · 1/3");
+  await ui.unmount();
+});
+
+test("without a PR poll the lifecycle falls back to the PR files", async ($, on) => {
+  world(
+    on,
+    stubs({
+      [`${WS}/list-workspaces`]: () =>
+        ok(lifecycleList({ state: "pr-open", prs: [API_OPEN] }, null)),
+      [`${WS}/workspace-prs`]: () => ({
+        content: [{ type: "text", text: "gh: not logged in" }],
+        isError: true,
+      }),
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "meta:ab" }))?.text).toBe("PR open (1/1) · 3/3");
+  await ui.unmount();
+});
+
+test("withLivePrs: shipped and abandoned outrank gh, a closed PR settles, an unpolled repo keeps its file", () => {
+  const live = (state: "OPEN" | "MERGED" | "CLOSED") => [
+    { repo: "api", branch: "b", url: API_OPEN.url, state, title: "t", labels: [] },
+  ];
+  const row = (prs: { dir: string; status: string; url: string | null }[]) =>
+    ({ lifecycle: { state: "pr-open", prs } }) as unknown as WorkspaceRow;
+  const r = row([{ ...API_OPEN, status: "shipped" }]);
+  expect(withLivePrs(r, live("MERGED"))).toBe(r);
+  expect(withLivePrs(row([API_OPEN]), live("CLOSED")).lifecycle?.state).toBe("shipped");
+  expect(withLivePrs(row([API_OPEN, SANDBOX_OPEN]), live("MERGED")).lifecycle?.state).toBe(
+    "pr-open",
+  );
+  const none = row([API_OPEN]);
+  expect(withLivePrs(none, [])).toBe(none);
 });
 
 test("↻ PRs runs pr-status for that workspace path", async ($, on) => {
