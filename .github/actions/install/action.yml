@@ -1,0 +1,23 @@
+name: Install
+description: Node 24 and node_modules, restored from cache when the lockfile is unchanged.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: npm
+    # node_modules itself, not just the npm download cache: `npm ci` extracts
+    # and runs install scripts for ~660MB every run, 30-60s. The lockfile
+    # changes on every version PR, so those runs still pay for the install.
+    - uses: actions/cache@v4
+      id: node-modules
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+        key: node-modules-${{ runner.os }}-node24-${{ hashFiles('package-lock.json') }}
+    - if: steps.node-modules.outputs.cache-hit != 'true'
+      run: npm ci
+      shell: bash

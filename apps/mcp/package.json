@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "serve:stdio": "node dist/main.js --stdio",
     "serve:http": "node dist/main.js",
-    "test": "tsc && node --test *.test.mjs"
+    "test": "node --test *.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.0",

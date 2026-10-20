@@ -40,7 +40,7 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node esbuild.mjs && vitest run && vitest run -c bdd/vitest.config.ts",
+    "test": "vitest run && vitest run -c bdd/vitest.config.ts",
     "prepack": "cd ../../packages/vscode-plugin && npm run build && npm run package -- --out ../../apps/cli/dist/sandbox-workspaces.vsix"
   },
   "//prepack": "Ships the VS Code extension in the tarball for `sandbox setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build.",
