@@ -251,3 +251,5 @@ ports the generated feature `.env` expects.
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Third-party libraries, required software, container images, optional integrations
+and their licences: [docs/third-party.md](docs/third-party.md).
