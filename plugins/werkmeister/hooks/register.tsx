@@ -188,9 +188,7 @@ export function createPrompt(issueId: string): string {
  * The create form's fields from the same RJSF bundle the browser form renders
  * (getFormSchema: the terminal wizard's prompts), in its `ui:order`. An array
  * with choices is a multi-pick; a string with choices a select; a boolean a
- * checkbox; a `textarea` widget a multi-line field; the rest one line. Titles lose the wizard's
- * terminal hints, `(blank to skip)` and the like: the form marks required
- * fields itself and the description says the rest.
+ * checkbox; a `textarea` widget a multi-line field; the rest one line.
  */
 export function formFields(bundle: FormBundle): FormField[] {
   const props = bundle.schema.properties ?? {};
@@ -203,7 +201,7 @@ export function formFields(bundle: FormBundle): FormField[] {
     const options = (p.type === "array" ? p.items?.enum : p.enum) ?? [];
     return {
       key: k,
-      title: (p.title ?? k).replace(/\s*\([^)]*\)\s*$/, ""),
+      title: p.title ?? k,
       help: p.description ?? "",
       kind:
         p.type === "boolean"

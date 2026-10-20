@@ -351,7 +351,10 @@ export async function offerRefine(
 }
 
 /** Ask one field and record the answer in *resolved*. */
-async function askField(field: WizardField, resolved: Record<string, string>): Promise<void> {
+export async function askField(
+  field: WizardField,
+  resolved: Record<string, string>,
+): Promise<void> {
   if (field.boolean) {
     resolved[field.key] = String(await confirm(field.label, field.default === "true"));
     return;
