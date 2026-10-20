@@ -8,6 +8,7 @@
 import * as fs from "node:fs";
 
 import { Colors } from "./colors.js";
+import { stopOrRestart } from "./compose.js";
 import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
 import { stateInfraRoot } from "./config.js";
 import { copyFileToContainer, execCapture, projectContainers } from "./docker.js";
@@ -379,7 +380,9 @@ export async function reloadCaddy(): Promise<boolean> {
         "bind-mounted /etc/caddy/Caddyfile which may lag behind the latest copy.",
     );
     info("Attempting to restart Caddy container instead...");
-    return _runCaddyCompose(["restart", "caddy"], { capture: true });
+    const err = await stopOrRestart("restart", INFRA_PROJECT, "caddy");
+    if (err) error(err);
+    return err === null;
   }
   success("Caddy configuration reloaded");
   return true;
@@ -404,13 +407,15 @@ export function startCaddy(): boolean {
  *
  * Returns True on success.
  */
-export function stopCaddy(): boolean {
+export async function stopCaddy(): Promise<boolean> {
   info("Stopping Caddy reverse proxy...");
-  const ok = _runCaddyCompose(["stop", "caddy"], { capture: true });
-  if (ok) {
-    success("Caddy reverse proxy stopped");
+  const err = await stopOrRestart("stop", INFRA_PROJECT, "caddy");
+  if (err) {
+    error(err);
+    return false;
   }
-  return ok;
+  success("Caddy reverse proxy stopped");
+  return true;
 }
 
 /** Check if the Caddy container is running. */
