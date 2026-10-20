@@ -11,6 +11,7 @@ import {
   interceptControl,
   metaParts,
   optionGroups,
+  resourcesLine,
   withLivePrs,
 } from "./register";
 import { edit } from "./textarea";
@@ -285,9 +286,15 @@ function stubs(over: Partial<McpStub> = {}): McpStub {
     "ccd_session_mgmt/list_sessions": () => ok(undefined, JSON.stringify(SESSIONS)),
     [`${WS}/workspace-prs`]: () => ok(PRS),
     [`${WS}/tracker-auth`]: () => ok({ ok: true, fix: "" }),
+    [`${WS}/workspace-resources`]: () => ok(RESOURCES),
     ...over,
   };
 }
+
+const RESOURCES = {
+  projects: { "sandbox-ab": { cpuPercent: 12.3, memMib: 410 } },
+  host: { load: [3.2, 2.8, 2.1], cores: 10, featureCpuPercent: 45 },
+};
 
 test("workspace data comes from the node child, not an MCP call", async ($, on) => {
   const w = world(on, stubs());
@@ -303,6 +310,7 @@ test("workspace data comes from the node child, not an MCP call", async ($, on) 
     `${WS}/list-workspaces`,
     `${WS}/tracker-auth`,
     `${WS}/workspace-prs`,
+    `${WS}/workspace-resources`,
     `${WS}/workspace-status`,
   ]);
 });
@@ -684,6 +692,9 @@ function sample(over: Partial<WorkspaceRow>): WorkspaceRow {
     phase: null,
     autonomous: false,
     lastActivity: null,
+    project: "sandbox-s",
+    started: null,
+    crashLoops: [],
     session: null,
     ...over,
   };
@@ -2270,5 +2281,95 @@ test("a failed intercept start shows the error and clears busy", async ($, on) =
     "frontend is not listening on localhost:11101",
   );
   expect(await ui.find({ key: "intercept:ab/frontend" })).toBeDefined();
+  await ui.unmount();
+});
+
+test("SW-41: buildRows carries the start reason and crash loops; a missing status reads as none", () => {
+  const started = { at: "2026-10-20T10:00:00Z", by: "gate" as const };
+  const crashLoops = [{ service: "api", restarts: 3, lastLog: "boom" }];
+  const rows = buildRows(
+    {
+      workspaces: [
+        { name: "a", path: "/ws/a" },
+        { name: "b", path: "/ws/b" },
+      ] as never,
+    },
+    {
+      statuses: [
+        {
+          name: "a",
+          project: "sandbox-a",
+          state: "up",
+          running: 1,
+          total: 1,
+          services: [],
+          claude: { state: "idle", agent: "idle" },
+          started,
+          crashLoops,
+        },
+      ],
+    },
+    [],
+  );
+  expect([rows[0]?.project, rows[0]?.started, rows[0]?.crashLoops]).toEqual([
+    "sandbox-a",
+    started,
+    crashLoops,
+  ]);
+  expect([rows[1]?.project, rows[1]?.started, rows[1]?.crashLoops]).toEqual([null, null, []]);
+});
+
+test("SW-41: the card's vitals join on the project, and a crash loop is an error", () => {
+  const NOW = new Date("2026-10-20T12:00:00Z");
+  const r = sample({
+    project: "sandbox-ab",
+    services: [{ name: "api", state: "running" }],
+    started: { at: "2026-10-20T10:00:00Z", by: "up" },
+    crashLoops: [{ service: "api", restarts: 5, lastLog: "Error: EADDRINUSE" }],
+  });
+  const d = display(r, [], NOW, RESOURCES as never);
+  expect(resourcesLine(d)).toBe("12.3% CPU · 410 MiB · started 2 h ago by up");
+  expect(d.containers).toEqual({ text: "api crash-looping", tone: "err" });
+  expect(d.crash?.text).toBe("✗ api crash-looping · 5 restarts · Error: EADDRINUSE");
+  expect(resourcesLine(display(sample({}), [], NOW))).toBe("");
+});
+
+test("SW-41: the pane shows the host line and each card's vitals and crash line", async ($, on) => {
+  const [ab, ...rest] = STATUS.statuses;
+  world(
+    on,
+    stubs({
+      [`${WS}/workspace-status`]: () =>
+        ok({
+          ...STATUS,
+          statuses: [
+            {
+              ...ab,
+              started: { at: "2026-10-20T10:00:00Z", by: "gate" },
+              crashLoops: [{ service: "api", restarts: 2, lastLog: "exit 1" }],
+            },
+            ...rest,
+          ],
+        }),
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "host" }))?.text).toBe(
+    "host load 3.2 · 2.8 · 2.1 / 10 cores · features 45% CPU",
+  );
+  expect((await ui.find({ key: "vitals:ab" }))?.text).toMatch(
+    /^12\.3% CPU · 410 MiB · started .+ ago by gate$/,
+  );
+  expect((await ui.find({ key: "crash:ab" }))?.text).toBe(
+    "✗ api crash-looping · 2 restarts · exit 1",
+  );
+  expect(await ui.find({ key: "crash:abc" })).toBeUndefined();
   await ui.unmount();
 });

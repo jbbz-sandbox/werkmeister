@@ -556,3 +556,68 @@ test("the legend names every agent state, the service marks and autonomous", () 
   assert.ok(LEGEND_NODE.children.some((c) => /○ down/.test(c.description)));
   assert.equal(LEGEND_NODE.contextValue, "legend");
 });
+
+test("SW-41: CPU and memory join the row by compose project; the start reason is in the hover", () => {
+  const now = new Date("2026-10-20T12:00:00Z");
+  const [node] = buildTree(
+    [ws("a")],
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "api", state: "running" }],
+        started: { at: "2026-10-20T10:00:00Z", by: "gate" },
+        crashLoops: [],
+      }),
+    ],
+    null,
+    [],
+    { now, usage: { "sandbox-a": { cpuPercent: 12.3, memMib: 410 } } },
+  );
+  assert.match(node.description, /1 of 1 up · 12\.3% CPU · 410 MiB/);
+  assert.match(node.tooltip, /\*\*Resources\*\* 12\\\.3% CPU · 410 MiB · started 2 h ago by gate/);
+  assert.doesNotMatch(node.tooltip, /\*\*Crash\*\*/);
+});
+
+test("SW-41: a crash loop reads as an error on the row and the service, with the last log line", () => {
+  const [node] = buildTree(
+    [ws("a")],
+    [
+      st("a", {
+        state: "up",
+        running: 2,
+        total: 2,
+        services: [
+          { name: "api", state: "running" },
+          { name: "web", state: "healthy" },
+        ],
+        started: null,
+        crashLoops: [{ service: "api", restarts: 7, lastLog: "Error: EADDRINUSE" }],
+      }),
+    ],
+    null,
+    [],
+  );
+  assert.match(node.description, /api crash-looping/);
+  assert.doesNotMatch(node.description, /2 of 2 up/, "a crash loop no longer hides behind up");
+  assert.match(
+    node.tooltip,
+    /\*\*Crash\*\* ✗ api crash\\-looping · 7 restarts · Error: EADDRINUSE/,
+  );
+  const [api, web] = node.children;
+  assert.deepEqual(api.icon, { id: "error", color: TONE_COLORS.err });
+  assert.equal(web.icon.color, TONE_COLORS.ok);
+});
+
+test("SW-41: the host row leads once a sweep has landed, and only then", () => {
+  const host = { load: [401, 380, 300], cores: 10, featureCpuPercent: 845.2 };
+  const [first, second] = buildTree([ws("a")], [st("a")], null, [], { host });
+  assert.equal(first.kind, "host");
+  assert.equal(first.description, "load 401 · 380 · 300 / 10 cores · features 845.2% CPU");
+  assert.equal(first.icon.color, TONE_COLORS.warn, "load past the core count warns");
+  assert.equal(second.id, "a");
+  const failed = buildTree([ws("a")], [st("a")], null, [], { host: null });
+  assert.equal(failed[0].description, "load n/a");
+  assert.equal(buildTree([ws("a")], [st("a")], null, [])[0].id, "a", "no sweep yet, no row");
+});

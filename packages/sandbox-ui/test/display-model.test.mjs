@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
 
-const { displayModel, ago } = await import("../dist/display-model.js");
+const { displayModel, ago, hostLine } = await import("../dist/display-model.js");
 
 const NOW = new Date("2026-10-20T12:00:00Z");
 const minsAgo = (m) => new Date(NOW.getTime() - m * 60_000).toISOString();
@@ -179,4 +179,57 @@ test("ago", () => {
   assert.equal(ago(minsAgo(5 * 60), NOW), "5 h ago");
   assert.equal(ago(minsAgo(24 * 60), NOW), "1 day ago");
   assert.equal(ago(minsAgo(2 * 24 * 60), NOW), "2 days ago");
+});
+
+test("SW-41: a crash loop turns the containers and the service red, with the last log line", () => {
+  const one = model({
+    services: [
+      { name: "api", state: "running" },
+      { name: "web", state: "healthy" },
+    ],
+    crashLoops: [{ service: "api", restarts: 4, lastLog: "Error: EADDRINUSE" }],
+  });
+  assert.deepEqual(one.containers, { text: "api crash-looping", tone: "err" });
+  assert.deepEqual(one.crash, {
+    text: "✗ api crash-looping · 4 restarts · Error: EADDRINUSE",
+    tone: "err",
+  });
+  assert.deepEqual(
+    one.services.map((s) => [s.text, s.tone, s.codicon]),
+    [
+      ["✗ api crash-looping", "err", "error"],
+      ["● web", "ok", "circle-filled"],
+    ],
+  );
+  const two = model({
+    crashLoops: [
+      { service: "a", restarts: 0, lastLog: null },
+      { service: "b", restarts: 2, lastLog: null },
+    ],
+  });
+  assert.equal(two.containers.text, "2 crash-looping");
+  assert.equal(two.crash.text, "✗ a crash-looping; ✗ b crash-looping · 2 restarts");
+  assert.equal(model().crash, null, "no loops, no crash line");
+});
+
+test("SW-41: usage and start reason", () => {
+  const d = model(
+    { started: { at: minsAgo(120), by: "gate" } },
+    { usage: { cpuPercent: 12.3, memMib: 410 } },
+  );
+  assert.deepEqual(d.usage, { text: "12.3% CPU · 410 MiB", tone: "ok" });
+  assert.deepEqual(d.started, { text: "started 2 h ago by gate", tone: "off" });
+  assert.equal(model({}, { usage: { cpuPercent: 140, memMib: 1 } }).usage.tone, "warn");
+  const none = model();
+  assert.equal(none.usage, null);
+  assert.equal(none.started, null);
+});
+
+test("SW-41: hostLine", () => {
+  assert.deepEqual(hostLine({ load: [3.2, 2.8, 2.1], cores: 10, featureCpuPercent: 45 }), {
+    text: "host load 3.2 · 2.8 · 2.1 / 10 cores · features 45% CPU",
+    tone: "ok",
+  });
+  assert.equal(hostLine({ load: [401, 300, 200], cores: 10, featureCpuPercent: 900 }).tone, "warn");
+  assert.deepEqual(hostLine(null), { text: "host load n/a", tone: "off" });
 });

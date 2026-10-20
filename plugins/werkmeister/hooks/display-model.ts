@@ -42,6 +42,22 @@ export interface DisplayInput {
   phase: string | null;
   autonomous: boolean;
   lastActivity: string | null;
+  /** SW-41; optional so a core older than it still renders. */
+  started?: { at: string; by: string } | null;
+  crashLoops?: { service: string; restarts: number; lastLog: string | null }[];
+}
+
+/** One project's share of the stats sweep (core `Usage`). */
+export interface UsageInput {
+  cpuPercent: number;
+  memMib: number;
+}
+
+/** Core `HostSummary`. */
+export interface HostInput {
+  load: number[];
+  cores: number;
+  featureCpuPercent: number;
 }
 
 /** A `RepoPr` satisfies it. Core reports neither drafts nor releases yet, so callers that know pass them. */
@@ -62,6 +78,8 @@ export interface DisplayOptions {
   /** Where the newest session runs, for `↗ Continue in …`. */
   where?: "Desktop" | "Terminal";
   now?: Date;
+  /** From the slower resources poll; omitted or null until one lands. */
+  usage?: UsageInput | null;
 }
 
 export interface Text {
@@ -94,6 +112,12 @@ export interface WorkspaceDisplay {
   autonomous: { full: string; compact: string } | null;
   containers: Text;
   services: (Text & { name: string; glyph: string; codicon: string })[];
+  /** `12.3% CPU · 410 MiB`. */
+  usage: Text | null;
+  /** `started 2 h ago by gate`. */
+  started: Text | null;
+  /** `✗ api crash-looping · 4 restarts · <last log line>`, one per service joined by `; `. */
+  crash: Text | null;
   /** The PRs row when there is no PR to list: `None yet` or `PRs unavailable`. */
   prsEmpty: Text | null;
   prs: PrDisplay[];
@@ -131,6 +155,8 @@ const SERVICE: Record<ServiceHealth, { glyph: string; tone: Tone; word: string; 
     unhealthy: { glyph: "▲", tone: "err", word: " unhealthy", codicon: "warning" },
   };
 
+const CRASH_LOOP = { glyph: "✗", tone: "err", word: " crash-looping", codicon: "error" } as const;
+
 const LIFECYCLE: Partial<Record<Lifecycle, string>> = {
   ready: "Ready to open PR",
   merged: "Awaiting release",
@@ -159,12 +185,45 @@ function agentTime(ws: DisplayInput, now: Date): string {
 }
 
 function containers(ws: DisplayInput): Text {
+  const loops = ws.crashLoops ?? [];
+  if (loops.length === 1) return { text: `${loops[0].service} crash-looping`, tone: "err" };
+  if (loops.length > 1) return { text: `${loops.length} crash-looping`, tone: "err" };
   const count = `${ws.running} of ${ws.total} up`;
   if (ws.state === "up") return { text: count, tone: "ok" };
   if (ws.state === "partial") return { text: count, tone: "warn" };
   if (ws.state === "stopped") return { text: count, tone: "off" };
   if (ws.state === "down") return { text: "down", tone: "off" };
   return { text: "Docker unreachable", tone: "off" };
+}
+
+function crash(ws: DisplayInput): Text | null {
+  const loops = ws.crashLoops ?? [];
+  if (!loops.length) return null;
+  const text = loops
+    .map((l) =>
+      [`✗ ${l.service} crash-looping`, l.restarts ? `${l.restarts} restarts` : null, l.lastLog]
+        .filter(Boolean)
+        .join(" · "),
+    )
+    .join("; ");
+  return { text, tone: "err" };
+}
+
+function usage(u: UsageInput | null | undefined): Text | null {
+  if (!u) return null;
+  return {
+    text: `${u.cpuPercent}% CPU · ${u.memMib} MiB`,
+    tone: u.cpuPercent >= 100 ? "warn" : "ok",
+  };
+}
+
+/** The pane's host line: `host load 3.2 · 2.8 · 2.1 / 10 cores · features 45% CPU`. */
+export function hostLine(h: HostInput | null): Text {
+  if (!h) return { text: "host load n/a", tone: "off" };
+  return {
+    text: `host load ${h.load.join(" · ")} / ${h.cores} cores · features ${h.featureCpuPercent}% CPU`,
+    tone: h.load[0] > h.cores ? "warn" : "ok",
+  };
 }
 
 /** `https://github.com/o/repo/pull/12` → `repo#12`; the URL itself when it isn't one. */
@@ -240,7 +299,7 @@ export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): Works
     autonomous: ws.autonomous ? { full: "⚙ Autonomous", compact: "⚙ Auto" } : null,
     containers: containers(ws),
     services: ws.services.map(({ name, state }) => {
-      const s = SERVICE[state];
+      const s = ws.crashLoops?.some((l) => l.service === name) ? CRASH_LOOP : SERVICE[state];
       return {
         name,
         glyph: s.glyph,
@@ -249,6 +308,11 @@ export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): Works
         text: `${s.glyph} ${name}${s.word}`,
       };
     }),
+    usage: usage(opts.usage),
+    started: ws.started
+      ? { text: `started ${ago(ws.started.at, now)} by ${ws.started.by}`, tone: "off" }
+      : null,
+    crash: crash(ws),
     prsEmpty:
       opts.prs === null
         ? { text: "PRs unavailable", tone: "warn" }
