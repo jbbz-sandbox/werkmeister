@@ -17,7 +17,7 @@ import { getK8sContext, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { ProcError, run, runAsync } from "./proc.js";
-import { info } from "./reporter.js";
+import { info, warn } from "./reporter.js";
 import { getServicePort, getSlot } from "./slots.js";
 
 export const MIN_VERSION: [number, number, number] = [2, 30, 0];
@@ -241,6 +241,15 @@ export function buildLeaveArgs(deployment: string): string[] {
   // `detach <attachment_name>`). Name kept as buildLeaveArgs to match the `--leave`
   // user-facing verb and its callers.
   return ["telepresence", "detach", deployment];
+}
+
+export function buildUninstallArgs(deployments: string[]): string[] {
+  return ["telepresence", "uninstall", ...deployments];
+}
+
+/** `-s` stops every local daemon, containerized ones included (telepresence >= 2.18). */
+export function buildQuitArgs(): string[] {
+  return ["telepresence", "quit", "-s"];
 }
 
 /** The header the CLI scopes every intercept by (see buildInterceptArgs). */
@@ -495,6 +504,61 @@ export function leaveFeatureIntercepts(feature: string, runner: Runner = _run): 
   return left;
 }
 
+/**
+ * After *left* were detached, uninstall the traffic agent of each one no other
+ * intercept still uses, and quit every local daemon when no intercept remains
+ * (SW-42; SW-2 left an agent at ~27% CPU and duplicate daemons). An unreadable
+ * intercept list does neither: guessing could end another feature's intercept.
+ * Never throws for a telepresence failure; the leave itself already succeeded.
+ */
+export async function releaseIdleTelepresence(
+  left: string[],
+  runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
+): Promise<{ uninstalled: string[]; quit: boolean }> {
+  const result = { uninstalled: [] as string[], quit: false };
+  if (!left.length) {
+    return result;
+  }
+  // ponytail: `list -i` sees the connected namespace only, so an intercept in
+  // another namespace doesn't hold off the quit. The registry uses one today.
+  const [rc, out] = await runner(buildListInterceptsArgs());
+  // parseInterceptList maps unparseable output to "no intercepts", which here
+  // would quit someone else's daemons, so anything but a JSON array is unreadable.
+  let listed: unknown = [];
+  try {
+    listed = out.trim() ? JSON.parse(out) : [];
+  } catch {
+    listed = null;
+  }
+  if (rc !== 0 || !Array.isArray(listed)) {
+    warn("Could not read telepresence intercepts -- leaving traffic agents and daemons in place");
+    return result;
+  }
+  const remaining = parseInterceptList(out);
+
+  const idle = left.filter((d) => !remaining.has(d));
+  if (idle.length) {
+    const [urc, uout] = await runner(buildUninstallArgs(idle));
+    if (urc === 0) {
+      result.uninstalled = idle;
+      info(`Uninstalled traffic agent(s): ${idle.join(", ")}`);
+    } else {
+      warn(`Could not uninstall traffic agent(s) ${idle.join(", ")}: ${uout || "no output"}`);
+    }
+  }
+
+  if (remaining.size === 0) {
+    const [qrc, qout] = await runner(buildQuitArgs());
+    if (qrc === 0) {
+      result.quit = true;
+      info("Stopped telepresence daemons");
+    } else {
+      warn(`Could not stop telepresence daemons: ${qout || "no output"}`);
+    }
+  }
+  return result;
+}
+
 /** The k8s deployment behind a services.yaml entry, or undefined. */
 function deploymentOf(svcDef: unknown): string | undefined {
   return typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef)
@@ -654,6 +718,7 @@ export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
         "INTERCEPT_FAILED",
       );
     }
+    await releaseIdleTelepresence([deployment], runner);
     return [deployment];
   }
   const registry = loadServices();
@@ -668,5 +733,6 @@ export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
       left.push(deployment);
     }
   }
+  await releaseIdleTelepresence(left, runner);
   return left;
 }

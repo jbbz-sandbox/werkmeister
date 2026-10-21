@@ -13,10 +13,14 @@ import { makeRecorder } from "../../commands/__tests__/helpers/recorder.js";
 
 vi.mock("werkmeister-core/compose", () => ({ composeDownAsync: vi.fn() }));
 vi.mock("werkmeister-core/slots", () => ({ getSlot: async () => 3, releaseSlot: vi.fn() }));
-vi.mock("werkmeister-core/telepresence", () => ({ leaveFeatureIntercepts: () => [] }));
+vi.mock("werkmeister-core/telepresence", () => ({
+  leaveFeatureIntercepts: vi.fn(() => []),
+  releaseIdleTelepresence: vi.fn(async () => ({ uninstalled: [], quit: false })),
+}));
 
 import { composeDownAsync } from "werkmeister-core/compose";
 import { down } from "werkmeister-core/lifecycle";
+import { leaveFeatureIntercepts, releaseIdleTelepresence } from "werkmeister-core/telepresence";
 
 let lines: string[];
 let recorder: Reporter;
@@ -44,5 +48,15 @@ describe("lifecycle.down", () => {
       true,
     );
     expect(result).toEqual({ feature: "demo", slot: 3 });
+  });
+
+  it("releases idle telepresence after leaving, and a failure there doesn't block teardown", async () => {
+    vi.mocked(leaveFeatureIntercepts).mockReturnValueOnce(["frontend"]);
+    vi.mocked(releaseIdleTelepresence).mockRejectedValueOnce(new Error("boom"));
+
+    await withReporter(recorder, () => down("demo"));
+
+    expect(releaseIdleTelepresence).toHaveBeenCalledWith(["frontend"]);
+    expect(composeDownAsync).toHaveBeenCalled();
   });
 });
