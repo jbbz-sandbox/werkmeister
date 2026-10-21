@@ -169,6 +169,36 @@ test("hooks: a Desktop wrap_up ask is needs-you even when the closing message as
   assert.equal(readAgentState(dir).state, "done", "a recap with no ask is a finished run");
 });
 
+test("hooks: the permission prompt for a question keeps the question, not the prompt text", () => {
+  const dir = workspace("h-ask-permission", null);
+  const fire = (event, extra = {}) => record({ hook_event_name: event, cwd: dir, ...extra });
+  const permission = (tool) =>
+    fire("Notification", {
+      notification_type: "permission_prompt",
+      message: `Claude needs your permission to use ${tool}`,
+    });
+
+  fire("UserPromptSubmit");
+  fire("PreToolUse", {
+    tool_name: "AskUserQuestion",
+    tool_input: { questions: [{ question: "Connect with --docker or host mode?" }] },
+  });
+  permission("AskUserQuestion");
+  assert.deepEqual(
+    [readAgentState(dir).state, readAgentState(dir).question],
+    ["needs-you", "Connect with --docker or host mode?"],
+  );
+
+  fire("PostToolUse", { tool_name: "AskUserQuestion" });
+  fire("PreToolUse", { tool_name: "Bash" });
+  permission("Bash");
+  assert.equal(
+    readAgentState(dir).question,
+    "Claude needs your permission to use Bash",
+    "a plain permission prompt still says what it wants",
+  );
+});
+
 test("hooks: outside a workspace, or on junk input, nothing is written", () => {
   assert.equal(record({ hook_event_name: "Stop", cwd: os.tmpdir() }), null);
   const dir = workspace("i-junk", null);
