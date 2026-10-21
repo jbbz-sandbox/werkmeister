@@ -1,6 +1,6 @@
 /**
  * THE create-workspace form — the single implementation every surface renders:
- *   • the browser dashboard's "New workspace" tab (src/browser-main.ts),
+ *   • the browser dashboard's "New workspace" tab (apps/sandbox-dashboard/src/browser-main.tsx),
  *   • the localhost fallback page (src/form-main.ts), and
  *   • the Desktop inline MCP App (src/mcp-app.ts).
  * All three differ only in the {@link HostBridge} they pass in; the form and
@@ -20,10 +20,10 @@ import type {
   WidgetProps,
 } from "@rjsf/utils";
 import validator from "@rjsf/validator-ajv8";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { mergeFormData, repoSelectionError } from "werkmeister-core/form_schema";
-import { injectCss } from "./theme.js";
+import { Css } from "./theme.js";
 import type { HostBridge } from "./workspace-ui.js";
 
 // Neutral form styling scoped under `.wsform` so it matches src/workspace-ui.ts
@@ -514,43 +514,62 @@ function WorkspaceForm({
   );
 }
 
+interface CreateFormProps {
+  bridge: HostBridge;
+  onCreated: (resultText: string) => void;
+  onCancel?: () => void;
+}
+
 /**
- * Mount the create-workspace form into `root`. Fetches the RJSF bundle via the
- * bridge, then renders it. `onCreated` fires once a workspace is created (the
- * shell flips to the Workspaces tab and reloads the list).
+ * The create-workspace card. Fetches the RJSF bundle via the bridge, then renders
+ * the form. `onCreated` fires once a workspace is created (the shell flips to the
+ * Workspaces tab and reloads the list).
  */
+export function CreateForm({ bridge, onCreated, onCancel }: CreateFormProps) {
+  const [bundle, setBundle] = useState<FormBundle | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    bridge.callTool("workspace-form-schema").then(
+      (b: FormBundle) => (b?.schema ? setBundle(b) : setError("The form schema was empty.")),
+      (err) => setError((err as Error).message),
+    );
+  }, [bridge]);
+
+  const body = bundle
+    ? e(WorkspaceForm, { bundle, bridge, onCreated, onCancel })
+    : e(
+        "p",
+        { className: error ? "err" : "boot" },
+        error ? `Couldn’t load the form: ${error}` : "Loading form…",
+      );
+  return e(
+    "div",
+    { className: "wsform" },
+    e(Css, { id: "wsform", css: CSS }),
+    e(
+      "div",
+      { className: "card" },
+      e("h1", null, "New workspace"),
+      e(
+        "p",
+        { className: "subtitle" },
+        "Create a sandbox workspace — git worktrees on a ",
+        e("code", null, "<user>/<workspace>"),
+        " branch, then init.",
+      ),
+      body,
+    ),
+  );
+}
+
+/** Mount the create form into `root`, replacing what it holds. */
 export function initCreateForm(
   bridge: HostBridge,
   root: HTMLElement,
   opts: { onCreated: (resultText: string) => void; onCancel?: () => void },
 ): void {
-  injectCss("wsform", CSS);
-
-  root.classList.add("wsform");
-  root.innerHTML = `
-    <div class="card">
-      <h1>New workspace</h1>
-      <p class="subtitle">Create a sandbox workspace — git worktrees on a <code>&lt;user&gt;/&lt;workspace&gt;</code> branch, then init.</p>
-      <div id="wsform-root"><p class="boot">Loading form…</p></div>
-    </div>
-  `;
-  const mount = root.querySelector("#wsform-root") as HTMLElement;
-
-  (async () => {
-    try {
-      const bundle = (await bridge.callTool("workspace-form-schema")) as FormBundle;
-      if (!bundle?.schema) throw new Error("The form schema was empty.");
-      createRoot(mount).render(
-        e(WorkspaceForm, { bundle, bridge, onCreated: opts.onCreated, onCancel: opts.onCancel }),
-      );
-    } catch (err) {
-      mount.innerHTML = "";
-      mount.appendChild(
-        Object.assign(document.createElement("p"), {
-          className: "err",
-          textContent: "Couldn’t load the form: " + (err as Error).message,
-        }),
-      );
-    }
-  })();
+  // A fresh mount node per call: mcp-list.ts reopens the form in the same host.
+  const mount = document.createElement("div");
+  root.replaceChildren(mount);
+  createRoot(mount).render(e(CreateForm, { bridge, ...opts }));
 }

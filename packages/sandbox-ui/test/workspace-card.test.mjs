@@ -50,7 +50,7 @@ const card = ({ ws = {}, prs = [], lifecycle = null, ...props } = {}) =>
       error: null,
       onAction: noop,
       onOpenLink: noop,
-      mountPanel: noop,
+      renderPanel: noop,
       ...props,
     }),
   );

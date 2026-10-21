@@ -19,6 +19,8 @@
     "@modelcontextprotocol/ext-apps": "^1.7.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^5.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "werkmeister-core": "^0.24.0",
     "werkmeister-mcp": "^0.4.0",
     "werkmeister-ui": "^0.3.0",
@@ -28,6 +30,8 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "tsx": "^4.19.0",
