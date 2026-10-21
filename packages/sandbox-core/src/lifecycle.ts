@@ -28,7 +28,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
+import { ensureSharedNetwork, isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
 import {
   // Both spellings: `up`/`down` take an AbortSignal and use the async pair;
@@ -44,7 +44,7 @@ import {
   workspaceForFeature,
 } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
-import { getVolumeBaseNames, loadPorts, loadServices } from "./config.js";
+import { getVolumeBaseNames, loadPorts, loadServices, needsCluster } from "./config.js";
 import { listVolumeNames, removeVolume } from "./docker.js";
 import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
@@ -92,12 +92,14 @@ export interface UpResult {
   /** The compose file predated the current template or registry, so it was rewritten. */
   staleCompose: boolean;
   containersStarted: boolean;
-  caddy: "reloaded" | "started";
+  /** "skipped": Caddy was stopped and nothing in this workspace is routed (SW-42). */
+  caddy: "reloaded" | "started" | "skipped";
 }
 
 /**
  * Bring *feature* up: allocate its slot, start its containers, and point the
- * proxy at them.
+ * proxy at them. The k8s port-forwards are checked, and Caddy started, only when
+ * a local service needs them (SW-42).
  *
  * *workspace* is passed in rather than resolved here: `resolveWorkspace` falls
  * back to the current directory, which is the caller's for an in-process caller
@@ -162,24 +164,37 @@ export async function up(
       `${Colors.RESET}\n\n`,
   );
 
-  info("Checking k8s port-forwards...");
-  // A restart returns when the container runs, not when its tunnels carry
-  // traffic. Starting containers in that window is what produces a compose
-  // dependency failure that never mentions a port-forward — so wait, and only
-  // after a restart, leaving the healthy path costing exactly what it did.
-  //
-  // The two failures are deliberately not the same. A restart that *fails* may
-  // just mean this machine runs no cluster, and a feature needing nothing from
-  // one has always come up regardless, so it stays non-fatal and already
-  // reported itself. Tunnels that never return after a successful restart mean
-  // forwards this machine does run are broken; `waitForForwards` throws, which
-  // says so far better than the compose error it replaces.
-  if ((await ensurePortForwardsHealthy()) === "restarted") {
-    await waitForForwards();
+  const routers = loadFeatureRouters(servicesConfig);
+  // Cluster fall-through routes through Caddy, so a cluster-backed workspace is routed too.
+  const cluster = needsCluster(localServices, servicesConfig);
+  const routed = cluster || localServices.some((s) => routers[s]);
+
+  // Only a workspace that needs the cluster may inspect or restart the shared
+  // forwarder: on 2026-10-18 a werkmeister-only `up` restarted it for everyone
+  // while Kubernetes was being taken down (SW-42).
+  if (cluster) {
+    info("Checking k8s port-forwards...");
+    // A restart returns when the container runs, not when its tunnels carry
+    // traffic. Starting containers in that window is what produces a compose
+    // dependency failure that never mentions a port-forward — so wait, and only
+    // after a restart, leaving the healthy path costing exactly what it did.
+    //
+    // The two failures are deliberately not the same. A restart that *fails* may
+    // just mean this machine runs no cluster, and a feature needing nothing from
+    // one has always come up regardless, so it stays non-fatal and already
+    // reported itself. Tunnels that never return after a successful restart mean
+    // forwards this machine does run are broken; `waitForForwards` throws, which
+    // says so far better than the compose error it replaces.
+    if ((await ensurePortForwardsHealthy()) === "restarted") {
+      await waitForForwards();
+    }
+  } else {
+    info("No local service needs the cluster -- skipping k8s port-forwards");
   }
 
   let containersStarted = false;
   if (localServices.length) {
+    requireSharedNetwork();
     info("Starting containers...");
     if (!(await withStartRecord(workspace, "up", () => composeUpAsync(feature, signal)))) {
       throw new SandboxError(
@@ -195,20 +210,22 @@ export async function up(
   info("Configuring reverse proxy...");
   await generateCaddyfile(null, config);
 
-  let caddy: "reloaded" | "started";
+  let caddy: UpResult["caddy"];
   if (await isCaddyRunning()) {
     await reloadCaddy();
     caddy = "reloaded";
-  } else {
+  } else if (routed) {
     info("Caddy not running -- starting it...");
     startCaddy();
     caddy = "started";
+  } else {
+    info("Caddy not running and nothing here is routed -- leaving it stopped");
+    caddy = "skipped";
   }
 
   // Derivations, not rendering: they exist only inside the summary's
   // `console.log` today, which is why an in-process caller could never get at
   // the URL a feature is reachable on.
-  const routers = loadFeatureRouters(servicesConfig);
   const urls = localServices
     .map((s) => routers[s]?.hostname)
     .filter((h): h is string => Boolean(h))
@@ -307,6 +324,7 @@ export async function startService(
   // compose refuses to start a service whose `.env.<svc>` is missing.
   writeServiceSecretEnvs(workspace, [service], config.services);
   await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
+  requireSharedNetwork();
   const started = await withStartRecord(workspace, "gate", () =>
     composeUpServiceAsync(feature, service, composePath),
   );
@@ -315,6 +333,13 @@ export async function startService(
       `Failed to start ${service} — see the compose output above`,
       "COMPOSE_UP_FAILED",
     );
+  }
+}
+
+/** Throws `COMPOSE_UP_FAILED` when the external network every feature compose joins can't be made. */
+function requireSharedNetwork(): void {
+  if (!ensureSharedNetwork()) {
+    throw new SandboxError("Could not create the sandbox-shared network", "COMPOSE_UP_FAILED");
   }
 }
 
@@ -733,11 +758,12 @@ export async function down(
   // Best-effort, and before composeDown: leaveFeatureIntercepts resolves the
   // workspace from compose labels on the still-running containers.
   try {
-    const { leaveFeatureIntercepts } = await import("./telepresence.js");
+    const { leaveFeatureIntercepts, releaseIdleTelepresence } = await import("./telepresence.js");
     const left = leaveFeatureIntercepts(feature);
     if (left.length) {
       info(`Left k8s intercept(s): ${left.join(", ")}`);
     }
+    await releaseIdleTelepresence(left);
   } catch (exc) {
     // teardown must never block on telepresence
     warn(`Could not clean up k8s intercepts: ${exc instanceof Error ? exc.message : String(exc)}`);

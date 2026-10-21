@@ -418,6 +418,49 @@ export async function stopCaddy(): Promise<boolean> {
   return true;
 }
 
+const SHARED_NETWORK = "sandbox-shared";
+
+/**
+ * Create `sandbox-shared` when absent, labelled so the infra stack's compose
+ * adopts it. Every feature compose declares it external, and `up` no longer
+ * starts Caddy (which used to create it) for an unrouted workspace (SW-42).
+ */
+export function ensureSharedNetwork(): boolean {
+  try {
+    if (
+      run(["docker", "network", "inspect", SHARED_NETWORK], { capture: true, timeout: 30 })
+        .status === 0
+    ) {
+      return true;
+    }
+    const result = run(
+      [
+        "docker",
+        "network",
+        "create",
+        "--label",
+        `com.docker.compose.project=${INFRA_PROJECT}`,
+        "--label",
+        "com.docker.compose.network=shared-network",
+        SHARED_NETWORK,
+      ],
+      { capture: true, timeout: 30 },
+    );
+    if (result.status !== 0) {
+      error(`Could not create the ${SHARED_NETWORK} network: ${result.stderr.trim()}`);
+      return false;
+    }
+  } catch (e) {
+    if (e instanceof ProcError) {
+      error(`Could not create the ${SHARED_NETWORK} network: ${e.message}`);
+      return false;
+    }
+    throw e;
+  }
+  info(`Created the ${SHARED_NETWORK} network`);
+  return true;
+}
+
 /** Check if the Caddy container is running. */
 export async function isCaddyRunning(): Promise<boolean> {
   const caddy = (await projectContainers(INFRA_PROJECT, "caddy")) ?? [];

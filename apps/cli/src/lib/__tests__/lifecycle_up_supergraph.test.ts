@@ -16,6 +16,7 @@ import { withReporter } from "werkmeister-core/reporter";
 const registry = vi.hoisted(() => ({ services: {} as Record<string, unknown> }));
 
 vi.mock("werkmeister-core/caddy", () => ({
+  ensureSharedNetwork: () => true,
   isCaddyRunning: () => true,
   reloadCaddy: async () => {},
   startCaddy: vi.fn(),
