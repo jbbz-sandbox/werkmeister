@@ -88,3 +88,32 @@ browser form.
 ```bash
 npm run serve:http          # the dashboard at http://localhost:3001/
 ```
+
+## GitHub webhook relay
+
+Optional. Without it the PR polls (60 s cards, 10 min callbacks) still run; with it a
+merged PR or a published release reaches werkmeister within seconds. The dashboard
+holds a [smee.io](https://smee.io) channel open, checks GitHub's signature, runs the
+headless PR watch pass, then signals `GET /api/github/events` (loopback SSE) so the
+harness plugins run their own refresh. It starts only on the host's loopback
+dashboard, never in a `HOST=0.0.0.0` container instance.
+
+1. Create a channel at https://smee.io/new.
+2. Add it and a secret (`openssl rand -hex 32`) to the global config:
+
+   ```yaml
+   github_relay:
+     smee_url: https://smee.io/<channel>
+     secret: <secret>
+   ```
+
+3. Add the repo webhook:
+
+   ```bash
+   gh api repos/OWNER/REPO/hooks -f name=web -F active=true -f 'events[]=pull_request' -f 'events[]=release' -f config[url]=SMEE_URL -f config[content_type]=json -f config[secret]=SECRET
+   ```
+
+4. Restart the dashboard; it logs `github relay: connected to smee`.
+
+Anyone with the channel URL can read the payloads, and events sent while nothing
+is connected are lost (the polls catch up).

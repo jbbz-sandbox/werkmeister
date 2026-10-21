@@ -104,4 +104,53 @@ assert.equal(n, 2);
 assert.deepEqual(got, [{ event: "release", repo: "jbbz-sandbox/sandbox" }]);
 r2.stop();
 
+// relayHandler: watchPrs runs headless, then broadcast; broadcast still happens when watchPrs throws
+const { relayHandler, createGithubEventsRouter } = await import(
+  path.join(pkgRoot, "dist/lib/github-relay.js")
+);
+const seen = [];
+const h = relayHandler({
+  watchPrs: async (o) => {
+    seen.push(["watch", o]);
+    return { lines: ["app: merged"] };
+  },
+  broadcast: (e) => seen.push(["broadcast", e]),
+  log: () => {},
+});
+await h([{ event: "pull_request", repo: "r" }]);
+assert.deepEqual(seen, [
+  ["watch", { desktop: false }],
+  ["broadcast", [{ event: "pull_request", repo: "r" }]],
+]);
+
+const logs = [];
+const b = [];
+await relayHandler({
+  watchPrs: async () => {
+    throw new Error("gh missing");
+  },
+  broadcast: (e) => b.push(e),
+  log: (l) => logs.push(l),
+})([{ event: "release", repo: "r" }]);
+assert.equal(b.length, 1);
+assert.ok(logs.some((l) => l.includes("gh missing")));
+
+// router: a subscriber on an ephemeral port receives one frame per broadcast
+const { default: express } = await import("express");
+const { router, broadcast } = createGithubEventsRouter();
+const app = express();
+app.use(router);
+const server = app.listen(0, "127.0.0.1");
+await new Promise((r) => server.once("listening", r));
+const res = await fetch(`http://127.0.0.1:${server.address().port}/api/github/events`);
+assert.equal(res.headers.get("content-type"), "text/event-stream");
+broadcast([{ event: "release", repo: "r" }]);
+const reader = res.body.getReader();
+let text = "";
+while (!/data:.*\n\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value);
+assert.match(text, /data: \{"events":\[\{"event":"release","repo":"r"\}\],"at":\d+\}/);
+await reader.cancel();
+server.closeAllConnections();
+server.close();
+
 console.log("github-relay smoke: ok");

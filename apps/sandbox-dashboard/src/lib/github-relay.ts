@@ -5,6 +5,8 @@
  */
 
 import crypto from "node:crypto";
+import express, { type Router } from "express";
+import { localOnly } from "./localhost-form.js";
 
 export type RelayEvent = { event: "pull_request" | "release"; repo: string };
 
@@ -170,4 +172,57 @@ export class SseParser {
     }
     return out;
   }
+}
+
+/**
+ * The relay's pass: `watchPrs` for terminal sessions (desktop ones are left to the
+ * plugins), then always the broadcast, so plugins refresh even when the pass failed.
+ */
+export function relayHandler(deps: {
+  watchPrs: (o: { desktop: boolean }) => Promise<{ lines: string[] }>;
+  broadcast: (events: RelayEvent[]) => void;
+  log: (line: string) => void;
+}): (events: RelayEvent[]) => Promise<void> {
+  return async (events) => {
+    try {
+      for (const l of (await deps.watchPrs({ desktop: false })).lines)
+        deps.log(`github relay: ${l}`);
+    } catch (e) {
+      deps.log(`github relay: PR watch pass failed: ${(e as Error).message}`);
+    }
+    deps.broadcast(events);
+  };
+}
+
+/**
+ * `GET /api/github/events`: loopback-only SSE that harness plugins listen on. One
+ * `data: {"events":[...],"at":<ms>}` frame per broadcast; a comment every 25 s keeps it open.
+ */
+export function createGithubEventsRouter(): {
+  router: Router;
+  broadcast(events: RelayEvent[]): void;
+} {
+  const subscribers = new Set<express.Response>();
+  const router = express.Router();
+  router.get("/api/github/events", localOnly, (req, res) => {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    res.write(": ok\n\n");
+    subscribers.add(res);
+    const keepalive = setInterval(() => res.write(": keepalive\n\n"), 25000);
+    req.on("close", () => {
+      clearInterval(keepalive);
+      subscribers.delete(res);
+    });
+  });
+  return {
+    router,
+    broadcast(events) {
+      const frame = `data: ${JSON.stringify({ events, at: Date.now() })}\n\n`;
+      for (const res of subscribers) res.write(frame);
+    },
+  };
 }
