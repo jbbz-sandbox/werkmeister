@@ -20,11 +20,16 @@ export interface AgentStateFile {
   state: AgentState;
   at: string;
   question?: string;
+  /** Set when `question` is a Desktop wrap_up ask, which outlasts its turn's Stop. */
+  via?: "wrap_up";
 }
 
 const STATES = new Set<AgentState>(["working", "needs-you", "done", "idle"]);
 // Tools that block on the person even though PreToolUse fired for them.
 const ASKS = new Set(["AskUserQuestion", "ExitPlanMode"]);
+// Claude Desktop's end-of-turn box: its `ask` is the run's question, and the
+// closing message after it is told not to repeat it.
+const WRAP_UP = "mcp__ccd_turn__wrap_up";
 // idle_prompt repeats a Stop that already happened; auth_success needs nothing.
 const BLOCKING_NOTIFICATIONS = new Set(["permission_prompt", "elicitation_dialog"]);
 
@@ -35,9 +40,10 @@ export function readAgentState(root: string): AgentStateFile | null {
   try {
     const o = JSON.parse(fs.readFileSync(stateFile(root), "utf8"));
     if (!STATES.has(o?.state) || typeof o.at !== "string") return null;
-    return typeof o.question === "string"
-      ? { state: o.state, at: o.at, question: o.question }
-      : { state: o.state, at: o.at };
+    const file: AgentStateFile = { state: o.state, at: o.at };
+    if (typeof o.question === "string") file.question = o.question;
+    if (o.via === "wrap_up") file.via = "wrap_up";
+    return file;
   } catch {
     return null;
   }
@@ -89,16 +95,23 @@ function lastAssistantText(transcript: string): string | null {
   return null;
 }
 
-type Next = { state: AgentState; question?: string } | null;
+type Next = Omit<AgentStateFile, "at"> | null;
 
 /** The state this hook event moves to, or null to leave the file as it is. */
 export function nextState(input: Record<string, any>, current: AgentStateFile | null): Next {
   switch (input["hook_event_name"]) {
     case "UserPromptSubmit":
-    case "PostToolUse":
       return { state: "working" };
+    case "PostToolUse":
+      // wrap_up returns at once; its ask still waits on the person.
+      return input["tool_name"] === WRAP_UP && current?.via === "wrap_up"
+        ? null
+        : { state: "working" };
     case "PreToolUse": {
       const tool = String(input["tool_name"] ?? "");
+      const ask = input["tool_input"]?.["ask"];
+      if (tool === WRAP_UP && typeof ask === "string" && ask.trim())
+        return { state: "needs-you", question: ask.trim(), via: "wrap_up" };
       if (!ASKS.has(tool)) return { state: "working" };
       const asked = input["tool_input"]?.["questions"]?.[0]?.["question"];
       return {
@@ -122,9 +135,8 @@ export function nextState(input: Record<string, any>, current: AgentStateFile | 
         text = input["last_assistant_message"];
       else if (typeof input["transcript_path"] === "string")
         text = lastAssistantText(input["transcript_path"]);
-      return text && asksQuestion(text)
-        ? { state: "needs-you", question: questionOf(text) }
-        : { state: "done" };
+      if (text && asksQuestion(text)) return { state: "needs-you", question: questionOf(text) };
+      return current?.via === "wrap_up" ? null : { state: "done" };
     }
     case "SessionEnd":
       // A turn cut off by the exit is not live any more; done and needs-you still hold.
@@ -141,9 +153,16 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   const current = readAgentState(root);
   const next = nextState(input, current);
   if (!next) return null;
-  if (current && current.state === next.state && current.question === next.question) return null;
+  if (
+    current &&
+    current.state === next.state &&
+    current.question === next.question &&
+    current.via === next.via
+  )
+    return null;
   const body: AgentStateFile = { state: next.state, at: now.toISOString() };
   if (next.question) body.question = next.question;
+  if (next.via) body.via = next.via;
   const file = stateFile(root);
   // Rename so the status sweep never reads half a file.
   const tmp = `${file}.${process.pid}.tmp`;
