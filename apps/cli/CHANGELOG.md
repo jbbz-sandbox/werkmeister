@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.24.1
+
+### Patch Changes
+
+- fedf530: A workspace card waiting on an `AskUserQuestion` now shows the question itself instead of "Claude needs your permission to use AskUserQuestion".
+- ec26a3e: Workspace cards no longer read Done when a Claude Desktop run is waiting on you. The agent-state hook now records a `wrap_up` box's question as needs-you, even when the closing message after it asks nothing.
+
 ## 0.24.0
 
 ### Minor Changes
