@@ -205,9 +205,9 @@ console.log("✓ buildReconcileContext");
 
 // 8. PR row: an unlinked issue key (no tracker URL) must not reuse the link's
 // class, or it underlines on hover like a dead link (#116). No DOM here, so
-// check prs-ui.ts source: the unlinked span's class is styled but has no :hover.
-const prsUi = readFileSync(path.join(pkgRoot, "src/prs-ui.ts"), "utf8");
-const unlinkedCls = /:\s*el\("span",\s*"([^"]+)",\s*pr\.issueId\)/.exec(prsUi)?.[1];
+// check prs-ui.tsx source: the unlinked span's class is styled but has no :hover.
+const prsUi = readFileSync(path.join(pkgRoot, "src/prs-ui.tsx"), "utf8");
+const unlinkedCls = /:\s*\(?\s*<span className="([^"]+)">\{pr\.issueId\}<\/span>/.exec(prsUi)?.[1];
 assert.ok(unlinkedCls, "unlinked issue key is rendered as a span");
 assert.notEqual(unlinkedCls, "issue-link", "unlinked key does not reuse the link class");
 assert.ok(new RegExp(`\\.prs \\.${unlinkedCls}\\b(?!:)`).test(prsUi), "unlinked key is styled");
