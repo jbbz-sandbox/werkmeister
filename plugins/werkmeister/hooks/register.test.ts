@@ -8,6 +8,8 @@ import {
   buildRows,
   display,
   formFields,
+  GITHUB_EVENTS_URL,
+  GITHUB_RETRY_MS,
   interceptControl,
   metaParts,
   optionGroups,
@@ -2051,6 +2053,45 @@ test("a desktop session runs the PR callback pass at start and every 10 min, and
 
   await w.clock.advance(600000);
   expect(passes()).toBe(2);
+});
+
+test("a desktop session runs the PR callback pass on each dashboard GitHub event", async ($, on) => {
+  const w = world(on, { [`${WS}/pr-watch`]: () => ok({ ok: true, lines: [], desktop: [] }) });
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", () => ({ value: false }));
+  const spawned: string[][] = [];
+  on("process.spawn", async function* (_$, e) {
+    spawned.push([...e.argv]);
+    yield {
+      stream: "stdout" as const,
+      text: ': ok\n\ndata: {"events":[{"event":"pull_request","repo":"r"}],',
+    };
+    yield { stream: "stdout" as const, text: '"at":1}\n\n' };
+    return { value: { code: 0, signal: null } };
+  });
+  const passes = () => w.calls.filter((c) => c.key === `${WS}/pr-watch`).length;
+  await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
+  await w.clock.advance(0);
+  expect(spawned[0]).toEqual(["curl", "-sN", "--fail", GITHUB_EVENTS_URL]);
+  expect(passes()).toBe(2); // start pass + one for the split frame
+  await w.clock.advance(GITHUB_RETRY_MS);
+  expect(spawned.length).toBe(2); // respawned after the stream ended
+});
+
+test("a terminal session never subscribes to dashboard GitHub events", async ($, on) => {
+  world(on);
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", () => ({ value: false }));
+  let spawns = 0;
+  on("process.spawn", async function* () {
+    spawns++;
+    yield { stream: "stderr" as const, text: "curl: (7) Failed to connect" };
+    return { value: { code: 7, signal: null } };
+  });
+  await $.session.start({ cwd: "/elsewhere", surface: "terminal", isInteractive: true });
+  expect(spawns).toBe(0);
 });
 
 // --- Intercept toggles (SW-2) -------------------------------------------------

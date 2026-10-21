@@ -1325,13 +1325,18 @@ function stopPolling(): void {
 type PrCallback = { dir: string; url: string; hostSession: string; message: string };
 
 let callbackTicking = false;
+let callbackRerun = false;
 
 /**
  * One `pr-watch` pass: the core resumes terminal sessions itself and hands back the desktop ones,
  * which only the app's messaging reaches. The core already marked them sent, so a failure is logged, not retried.
  */
 async function callbackTick($: EngineInterface): Promise<void> {
-  if (callbackTicking) return;
+  // A GitHub event during a pass may postdate what that pass read: run once more after it.
+  if (callbackTicking) {
+    callbackRerun = true;
+    return;
+  }
   callbackTicking = true;
   try {
     const r = await core<{ desktop: PrCallback[] }>($, "pr-watch", {}, 120000);
@@ -1361,6 +1366,10 @@ async function callbackTick($: EngineInterface): Promise<void> {
     $.ui.log(`PR callback pass failed: ${(e as Error).message}`);
   } finally {
     callbackTicking = false;
+    if (callbackRerun) {
+      callbackRerun = false;
+      void callbackTick($);
+    }
   }
 }
 
@@ -1370,6 +1379,45 @@ function startCallbacks($: EngineInterface): void {
   callbackTimer?.cancel();
   callbackTimer = $.clock.every(CALLBACK_POLL_MS, () => void callbackTick($));
   void callbackTick($);
+  startGithubEvents($);
+}
+
+/** The dashboard's GitHub relay (apps/sandbox-dashboard): one SSE frame per merge or release. */
+export const GITHUB_EVENTS_URL = "http://127.0.0.1:3001/api/github/events";
+/** How long to wait before listening again when the dashboard is down or the stream ends. */
+export const GITHUB_RETRY_MS = 30000;
+
+let githubListen = 0;
+
+/**
+ * Listens to the dashboard's GitHub events for the module's life and runs the PR passes
+ * on each, so a merge or release lands in seconds; the timers stay the fallback. Quiet
+ * while the dashboard is down. A second call replaces the first listener.
+ */
+function startGithubEvents($: EngineInterface): void {
+  const listen = ++githubListen;
+  void (async () => {
+    while (listen === githubListen) {
+      try {
+        let buf = "";
+        for await (const c of $.process.spawn({
+          argv: ["curl", "-sN", "--fail", GITHUB_EVENTS_URL],
+        })) {
+          if (listen !== githubListen) return;
+          if (c.stream !== "stdout") continue;
+          const frames = (buf + c.text).split("\n\n");
+          buf = frames.pop() ?? "";
+          if (!frames.some((f) => f.split("\n").some((l) => l.startsWith("data:")))) continue;
+          void callbackTick($);
+          if (timers.length) void prTick($);
+        }
+      } catch (e) {
+        $.ui.log(`GitHub events listener: ${(e as Error).message}`, { to: "debug" });
+      }
+      if (listen !== githubListen) return;
+      await $.clock.sleep(GITHUB_RETRY_MS);
+    }
+  })().catch(() => undefined);
 }
 
 async function openPane($: EngineInterface): Promise<void> {
