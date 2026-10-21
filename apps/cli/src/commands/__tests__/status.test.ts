@@ -90,7 +90,8 @@ describe("run", () => {
         [
           "sandbox-a",
           {
-            started: { at: twoHoursAgo, by: "up" },
+            // run() reads the real clock, so the start is relative to it, not NOW.
+            started: { at: new Date(Date.now() - 2 * 3_600_000).toISOString(), by: "up" },
             crashLoops: [{ service: "worker", restarts: 5, lastLog: "Error: EADDRINUSE :3000" }],
           },
         ],
@@ -104,7 +105,7 @@ describe("run", () => {
     const text = out.join("\n");
     expect(text).toContain("Host load 401 380 300 (10 cores)");
     expect(text).toContain("feature containers 845.2% CPU");
-    expect(text).toMatch(/12\.3% CPU · 410 MiB · started \d+ h ago by up/);
+    expect(text).toContain("12.3% CPU · 410 MiB · started 2 h ago by up");
     expect(text).toContain("✗ worker crash-looping (5 restarts): Error: EADDRINUSE :3000");
   });
 
