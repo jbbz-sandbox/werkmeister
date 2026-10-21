@@ -127,7 +127,10 @@ export function nextState(input: Record<string, any>, current: AgentStateFile | 
         typeof type === "string"
           ? BLOCKING_NOTIFICATIONS.has(type)
           : !/waiting for your input/i.test(message);
-      return blocks ? { state: "needs-you", question: message || undefined } : null;
+      if (!blocks) return null;
+      // The prompt to approve AskUserQuestion follows its PreToolUse: keep the real question.
+      if (current?.state === "needs-you" && current.question) return null;
+      return { state: "needs-you", question: message || undefined };
     }
     case "Stop": {
       let text: string | null = null;
