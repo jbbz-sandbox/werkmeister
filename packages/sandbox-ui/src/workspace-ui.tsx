@@ -9,19 +9,19 @@
  * the {@link HostBridge} the entrypoint supplies. It renders the top bar, the
  * filter (text + Needs you) and one always-expanded {@link WorkspaceCard} per
  * workspace (SW-53). React is bundled inline by each surface's viteSingleFile
- * build, so the Cowork artifact's strict CSP still holds. The chat panel and
- * the usage widget are still vanilla DOM (SW-57); cards mount them on demand.
+ * build, so the Cowork artifact's strict CSP still holds. Cards open the chat
+ * panel, usage and logs on demand.
  */
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { Lifecycle, RepoPr, WorkspaceStatus } from "werkmeister-core";
-import { type ClaudeMessage, initChatPanel } from "./chat-panel.js";
+import { ChatPanel, type ClaudeMessage } from "./chat-panel.js";
 import { type DisplayInput, displayModel, type Tone } from "./display-model.js";
 import { filterWorkspaces } from "./lib/workspace-search.js";
-import { injectCss } from "./theme.js";
-import { renderUsage, type WorkspaceUsage } from "./usage-widget.js";
+import { Css } from "./theme.js";
+import { Usage, type WorkspaceUsage } from "./usage-widget.js";
 import {
   CARD_CSS,
   type CardAction,
@@ -344,7 +344,8 @@ function Legend() {
   );
 }
 
-function WorkspaceList({
+/** The list, its filter and the top bar (portalled into `headerRoot` when given). */
+export function WorkspaceList({
   bridge,
   headerRoot,
   renderMarkdown,
@@ -446,45 +447,21 @@ function WorkspaceList({
     setBusy(({ [w.name]: _, ...rest }) => rest);
   };
 
-  const mountPanel = (
-    name: string,
-    kind: PanelKind,
-    host: HTMLElement,
-  ): (() => void) | undefined => {
-    if (kind === "chat") {
-      const chat = initChatPanel(name, {
-        bridge,
-        placeholder: "Message this workspace’s Claude session…",
-        renderMarkdown,
+  const renderPanel = (name: string, kind: PanelKind) =>
+    kind === "chat" ? (
+      <ChatPanel
+        name={name}
+        bridge={bridge}
+        placeholder="Message this workspace’s Claude session…"
+        renderMarkdown={renderMarkdown}
         // Done or a question is the Stop hook's call, so read it back rather than guess.
-        onActivity: ({ running }) => {
+        onActivity={({ running }) => {
           if (!running) void refreshStatus();
-        },
-      });
-      host.appendChild(chat.el);
-      const onVisible = () => chat.onVisibility?.(!document.hidden);
-      document.addEventListener("visibilitychange", onVisible);
-      return () => {
-        document.removeEventListener("visibilitychange", onVisible);
-        chat.onVisibility?.(false);
-        host.replaceChildren();
-      };
-    }
-    host.textContent = kind === "usage" ? "Computing usage…" : "Reading logs…";
-    const tool = kind === "usage" ? "workspace-usage" : "logs";
-    bridge.callTool(tool, { workspace: name, ...(kind === "logs" ? { tail: 200 } : {}) }).then(
-      (d) => {
-        if (kind === "usage") return renderUsage(host, d as WorkspaceUsage);
-        const pre = document.createElement("pre");
-        pre.textContent = d?.output?.trim() || "No log lines.";
-        host.replaceChildren(pre);
-      },
-      (e) => {
-        host.textContent = `${kind === "usage" ? "Failed to load usage" : "Failed to read logs"}: ${(e as Error).message}`;
-      },
+        }}
+      />
+    ) : (
+      <ToolPanel kind={kind} name={name} bridge={bridge} />
     );
-    return undefined;
-  };
 
   const shown = useMemo(() => {
     if (!all) return [];
@@ -599,7 +576,7 @@ function WorkspaceList({
                 error={errors[w.name] ?? null}
                 onAction={(a, r) => void onAction(w, a, r)}
                 onOpenLink={(url) => bridge.openLink(url)}
-                mountPanel={(kind, host) => mountPanel(w.name, kind, host)}
+                renderPanel={(kind) => renderPanel(w.name, kind)}
               />
             );
           })}
@@ -615,10 +592,36 @@ function WorkspaceList({
 
   return (
     <>
+      <Css id="wsui" css={CSS + CARD_CSS} />
       {headerRoot ? createPortal(header, headerRoot) : header}
       {body}
     </>
   );
+}
+
+/** Usage or the last 200 log lines, fetched once per opening. */
+function ToolPanel({
+  kind,
+  name,
+  bridge,
+}: {
+  kind: "usage" | "logs";
+  name: string;
+  bridge: HostBridge;
+}) {
+  const [result, setResult] = useState<{ data: any } | { error: string } | null>(null);
+  useEffect(() => {
+    const args = kind === "logs" ? { workspace: name, tail: 200 } : { workspace: name };
+    bridge.callTool(kind === "usage" ? "workspace-usage" : "logs", args).then(
+      (data) => setResult({ data }),
+      (e) => setResult({ error: (e as Error).message }),
+    );
+  }, [bridge, kind, name]);
+  if (!result) return kind === "usage" ? "Computing usage…" : "Reading logs…";
+  if ("error" in result)
+    return `${kind === "usage" ? "Failed to load usage" : "Failed to read logs"}: ${result.error}`;
+  if (kind === "usage") return <Usage usage={result.data as WorkspaceUsage} />;
+  return <pre>{result.data?.output?.trim() || "No log lines."}</pre>;
 }
 
 /** A workspace `status` didn't report: no containers known, no live agent. */
@@ -644,7 +647,6 @@ export function initWorkspaceUI(
     onNewWorkspace?: () => void;
   },
 ): { reload: () => void } {
-  injectCss("wsui", CSS + CARD_CSS);
   root.classList.add("wsui");
   opts?.headerRoot?.classList.add("wsui");
   const reloadRef = { current: () => {} };
