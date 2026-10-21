@@ -1,16 +1,16 @@
 /**
  * Generic, reusable "options input" widget — a vertical checklist of selectable
  * actions (the shape the reconcile chat shows after its analysis: Approve /
- * Request changes). Dependency-free vanilla DOM with its own injected CSS, so any
- * surface can drop it in with `createOptionsInput({ options, onSelect })` and know
- * nothing about its internals.
+ * Request changes), with its own CSS, so any surface can drop in
+ * `<OptionsInput options onSelect />` and know nothing about its internals.
  *
  * Each option is an independent action: clicking a row runs its `onSelect`
  * (sync or async), shows an inline ✓ / ✗ + message, and stays clickable (so e.g.
  * you can Approve and then open the PR). It does NOT assume a single terminal
  * choice — callers that want radio-style exclusivity can disable in `onSelect`.
  */
-import { injectCss } from "./theme.js";
+import { useState } from "react";
+import { Css } from "./style.js";
 
 export interface OptionSpec {
   label: string;
@@ -48,65 +48,45 @@ const CSS = `
   .opt-input .opt-status.err { color: var(--sd-chat-err); }
 `;
 
-export function createOptionsInput(opts: OptionsInputOpts): HTMLElement {
-  injectCss("opt-input", CSS);
-  const box = document.createElement("div");
-  box.className = "opt-input";
-  if (opts.title) {
-    const h = document.createElement("div");
-    h.className = "opt-title";
-    h.textContent = opts.title;
-    box.appendChild(h);
-  }
+export function OptionsInput({ options, onSelect, title }: OptionsInputOpts) {
+  return (
+    <div className="opt-input">
+      <Css id="opt-input" css={CSS} />
+      {title && <div className="opt-title">{title}</div>}
+      {options.map((option, i) => (
+        <OptionRow key={option.label} option={option} run={() => onSelect(i, option)} />
+      ))}
+    </div>
+  );
+}
 
-  opts.options.forEach((option, i) => {
-    const row = document.createElement("button");
-    row.className = "opt-row";
-    row.type = "button";
-
-    const boxEl = document.createElement("span");
-    boxEl.className = "opt-box";
-    row.appendChild(boxEl);
-
-    const main = document.createElement("div");
-    main.className = "opt-main";
-    const label = document.createElement("span");
-    label.className = "opt-label";
-    label.textContent = option.label;
-    main.appendChild(label);
-    if (option.description) {
-      const desc = document.createElement("span");
-      desc.className = "opt-desc";
-      desc.textContent = option.description;
-      main.appendChild(desc);
+function OptionRow({ option, run }: { option: OptionSpec; run(): void | Promise<void> }) {
+  const [state, setState] = useState<"idle" | "busy" | "done" | "err">("idle");
+  const [error, setError] = useState("");
+  const click = async () => {
+    setState("busy");
+    setError("");
+    try {
+      await run();
+      setState("done");
+    } catch (e) {
+      setState("err");
+      setError((e as Error).message || "failed");
     }
-    const status = document.createElement("span");
-    status.className = "opt-status";
-    main.appendChild(status);
-    row.appendChild(main);
-
-    row.addEventListener("click", async () => {
-      row.classList.remove("err");
-      status.className = "opt-status";
-      status.textContent = "";
-      row.disabled = true;
-      boxEl.textContent = "…";
-      try {
-        await opts.onSelect(i, option);
-        row.classList.add("done");
-        boxEl.textContent = "✓";
-      } catch (e) {
-        row.classList.add("err");
-        boxEl.textContent = "✗";
-        status.className = "opt-status err";
-        status.textContent = (e as Error).message || "failed";
-      } finally {
-        row.disabled = false;
-      }
-    });
-
-    box.appendChild(row);
-  });
-
-  return box;
+  };
+  return (
+    <button
+      type="button"
+      className={state === "done" || state === "err" ? `opt-row ${state}` : "opt-row"}
+      disabled={state === "busy"}
+      onClick={() => void click()}
+    >
+      <span className="opt-box">{{ idle: "", busy: "…", done: "✓", err: "✗" }[state]}</span>
+      <div className="opt-main">
+        <span className="opt-label">{option.label}</span>
+        {option.description && <span className="opt-desc">{option.description}</span>}
+        <span className={state === "err" ? "opt-status err" : "opt-status"}>{error}</span>
+      </div>
+    </button>
+  );
 }

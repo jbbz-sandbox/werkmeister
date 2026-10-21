@@ -1,12 +1,10 @@
 /**
  * "Links" dashboard tab. A short static, grouped list of useful local URLs:
  * the sandbox feature-selector pages (`/__sandbox`, which set the X-Feature
- * cookie) and the local admin UIs served by the shared infra. Dependency-free
- * vanilla DOM, same `el()` + CSS-injection approach as health-ui.ts / prs-ui.ts.
+ * cookie) and the local admin UIs served by the shared infra.
  */
 
-import { el, injectCss } from "werkmeister-ui/theme";
-import type { HostBridge } from "werkmeister-ui/workspace-ui";
+import { Css } from "werkmeister-ui/theme";
 
 type LinkKind = "local" | "remote" | "admin";
 interface SandboxLink {
@@ -95,39 +93,35 @@ const CSS = `
   .sbl .go { margin-left: auto; flex: none; color: var(--sd-muted); font-size: 13px; }
 `;
 
-export function initSandboxLinksUI(_bridge: HostBridge, root: HTMLElement): { reload: () => void } {
-  injectCss("sbl", CSS);
-
-  function card(link: SandboxLink): HTMLAnchorElement {
-    const a = el("a", "card") as HTMLAnchorElement;
-    a.href = link.url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.appendChild(el("span", `tag ${link.kind}`, link.kind));
-    const body = el("div", "body");
-    body.appendChild(el("div", "label", link.label));
-    body.appendChild(el("div", "desc", link.desc));
-    body.appendChild(el("div", "url", link.url));
-    a.appendChild(body);
-    a.appendChild(el("span", "go", "↗"));
-    return a;
-  }
-
-  function render(): void {
-    root.classList.add("sbl");
-    root.innerHTML = "";
-    for (const group of GROUPS) {
-      const section = el("div", "group");
-      section.appendChild(el("h2", null, group.title));
-      section.appendChild(el("p", "note", group.note));
-      const cards = el("div", "cards");
-      for (const link of group.links) cards.appendChild(card(link));
-      section.appendChild(cards);
-      root.appendChild(section);
-    }
-  }
-
-  render();
-  // Static content — reload just re-renders (kept for a uniform tab API).
-  return { reload: () => render() };
+export function LinksTab() {
+  return (
+    <div className="sbl">
+      <Css id="sbl" css={CSS} />
+      {GROUPS.map((group) => (
+        <div className="group" key={group.title}>
+          <h2>{group.title}</h2>
+          <p className="note">{group.note}</p>
+          <div className="cards">
+            {group.links.map((link) => (
+              <a
+                className="card"
+                key={link.url}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className={`tag ${link.kind}`}>{link.kind}</span>
+                <div className="body">
+                  <div className="label">{link.label}</div>
+                  <div className="desc">{link.desc}</div>
+                  <div className="url">{link.url}</div>
+                </div>
+                <span className="go">↗</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }

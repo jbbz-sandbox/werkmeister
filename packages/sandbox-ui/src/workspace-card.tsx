@@ -4,12 +4,13 @@
  * action bar with its ⋯ menu, and the inline Close out / Abandon… confirms.
  *
  * Presentational only: data arrives as a display model, every side effect goes out
- * through `onAction` / `onOpenLink` / `mountPanel`. It imports nothing that touches
- * the DOM at load, so `react-dom/server` can render it under plain `node` in tests.
- * Its styles are `CARD_CSS`, injected by workspace-ui.tsx; colours are tokens only.
+ * through `onAction` / `onOpenLink`, and its panels come from `renderPanel`. It imports
+ * nothing that touches the DOM at load, so `react-dom/server` can render it under plain
+ * `node` in tests. Its styles are `CARD_CSS`, added by workspace-ui.tsx; colours are
+ * tokens only.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { DisplayInput, Tone, WorkspaceDisplay } from "./display-model.js";
 
 export type PanelKind = "chat" | "usage" | "logs";
@@ -54,8 +55,8 @@ export interface CardProps {
   /** `abandon` carries the reason. */
   onAction(action: CardAction, reason?: string): void;
   onOpenLink(url: string): void;
-  /** Fill `host` with a vanilla panel (chat-panel, usage-widget, logs); may return a cleanup. */
-  mountPanel(kind: PanelKind, host: HTMLElement): (() => void) | undefined;
+  /** The open panel's content (chat, usage, logs). It mounts fresh each time the panel opens. */
+  renderPanel(kind: PanelKind): ReactNode;
 }
 
 const CONTINUE: Btn = { label: "↗ Continue in Terminal", action: "continue" };
@@ -250,16 +251,6 @@ export function CardSkeleton({ name }: { name: string }) {
       </footer>
     </article>
   );
-}
-
-function Panel({ kind, mount }: { kind: PanelKind; mount: CardProps["mountPanel"] }) {
-  const host = useRef<HTMLDivElement>(null);
-  const latest = useRef(mount);
-  latest.current = mount;
-  // One mount per opening (the parent keys Panel by kind). mountPanel is read through
-  // a ref: it is a fresh closure on every list render, and a live chat must not remount.
-  useEffect(() => (host.current ? latest.current(kind, host.current) : undefined), [kind]);
-  return <div className={`ws-panel panel-${kind}`} ref={host} />;
 }
 
 export function WorkspaceCard(p: CardProps) {
@@ -494,7 +485,11 @@ export function WorkspaceCard(p: CardProps) {
           )}
         </footer>
       )}
-      {panel && <Panel key={panel} kind={panel} mount={p.mountPanel} />}
+      {panel && (
+        <div key={panel} className={`ws-panel panel-${panel}`}>
+          {p.renderPanel(panel)}
+        </div>
+      )}
     </article>
   );
 }
