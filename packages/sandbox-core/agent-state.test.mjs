@@ -146,6 +146,29 @@ test("hooks: each event writes the state the pane shows, `at` only when it chang
   assert.equal(readAgentState(dir).state, "idle", "a turn cut off by the exit is not live");
 });
 
+test("hooks: a Desktop wrap_up ask is needs-you even when the closing message asks nothing", () => {
+  const dir = workspace("h-wrap-up", null);
+  const fire = (event, extra = {}) => record({ hook_event_name: event, cwd: dir, ...extra });
+  const wrapUp = (input) => {
+    fire("PreToolUse", { tool_name: "mcp__ccd_turn__wrap_up", tool_input: input });
+    fire("PostToolUse", { tool_name: "mcp__ccd_turn__wrap_up", tool_input: input });
+    fire("Stop", {
+      last_assistant_message: "Research is finished: decisions.md has 8 open items.",
+    });
+  };
+
+  fire("UserPromptSubmit");
+  wrapUp({ recap: "Research is written.", ask: "Is the spec approved for 03_implement?" });
+  assert.deepEqual(
+    [readAgentState(dir).state, readAgentState(dir).question],
+    ["needs-you", "Is the spec approved for 03_implement?"],
+  );
+
+  fire("UserPromptSubmit");
+  wrapUp({ recap: "PR #12 is open." });
+  assert.equal(readAgentState(dir).state, "done", "a recap with no ask is a finished run");
+});
+
 test("hooks: outside a workspace, or on junk input, nothing is written", () => {
   assert.equal(record({ hook_event_name: "Stop", cwd: os.tmpdir() }), null);
   const dir = workspace("i-junk", null);
