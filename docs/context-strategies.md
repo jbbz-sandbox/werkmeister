@@ -1,6 +1,6 @@
 # Context strategies: making JIT and ICM selectable
 
-Status: option B implemented — spec docs/superpowers/specs/2026-09-27-context-strategy-interface.md. The rest of this page is the exploration that chose it.
+Status: option B implemented — spec docs/superpowers/specs/2026-09-27-context-strategy-interface.md at 66703fc. The rest of this page is the exploration that chose it.
 
 ## Using it
 

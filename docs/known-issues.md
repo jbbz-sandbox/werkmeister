@@ -319,7 +319,7 @@ and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under
 directory that ships in the published package, so reinstalling or upgrading
 `werkmeister` could discard or stale them. Resolved 2026-10-01: everything
 `werkmeister connect` generates now lives under `~/.werkmeister/infra/`
-(`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md`).
+(`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md` at 66703fc).
 
 **Fix direction:** generated artifacts belong under `~/.werkmeister/` (like `services.yaml` and
 `ports.yaml` already do), leaving the package tree read-only; `sandbox_root` then only has to
