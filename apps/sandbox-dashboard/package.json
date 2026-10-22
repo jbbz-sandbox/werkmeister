@@ -9,10 +9,10 @@
   "scripts": {
     "build:ui": "cross-env INPUT=workspace-list.artifact.html vite build && cross-env INPUT=browser.html vite build && cross-env INPUT=form.html vite build",
     "build:server": "tsc -p tsconfig.server.json",
-    "build": "tsc --noEmit -p tsconfig.json && npm run build:ui && npm run build:server",
+    "build": "tsc --noEmit -p tsconfig.json && pnpm run build:ui && pnpm run build:server",
     "watch:ui": "cross-env NODE_ENV=development INPUT=mcp-app.html vite build --watch",
     "serve:http": "node dist/main.js",
-    "dev": "cross-env NODE_ENV=development concurrently \"npm run watch:ui\" \"tsx --watch src/main.ts\"",
+    "dev": "cross-env NODE_ENV=development concurrently \"pnpm run watch:ui\" \"tsx --watch src/main.ts\"",
     "test": "for f in test/*.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
@@ -21,9 +21,9 @@
     "express": "^5.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "werkmeister-core": "^0.24.1",
-    "werkmeister-mcp": "^0.4.1",
-    "werkmeister-ui": "^0.4.0",
+    "werkmeister-core": "workspace:*",
+    "werkmeister-mcp": "workspace:*",
+    "werkmeister-ui": "workspace:*",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },

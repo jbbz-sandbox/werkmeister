@@ -69,14 +69,14 @@ The CLI owns the inputs and the create logic:
 ## Build & test
 
 ```bash
-npm install                      # at the repo root (npm workspaces)
+pnpm install                     # at the repo root (pnpm workspaces)
 cd apps/sandbox-dashboard
-npm run build                    # typecheck + 3 UI bundles + dashboard server → dist/
+pnpm run build                   # typecheck + 3 UI bundles + dashboard server → dist/
 node test/localhost-form.smoke.mjs  # and the other test/*.smoke.mjs
 ```
 
 Most `test/*.smoke.mjs` exercise `werkmeister-core`, so
-`packages/sandbox-core` must be built first (`npm run build` there, or at the
+`packages/sandbox-core` must be built first (`pnpm run build` there, or at the
 repo root) — they import the package by name, never by relative path.
 
 ## Wiring
@@ -86,5 +86,5 @@ needs building: `werkmeister mcp` reads its `dist/` for the `ui://` HTML and the
 browser form.
 
 ```bash
-npm run serve:http          # the dashboard at http://localhost:3001/
+pnpm run serve:http         # the dashboard at http://localhost:3001/
 ```

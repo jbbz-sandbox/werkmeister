@@ -11,11 +11,11 @@ obvious — what a failure looks like.
 
 | Covered by | What it asserts |
 |---|---|
-| `npm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), that the card verbs (Continue, New session, PRs, Close out, Abandon) show on every workspace and on no service, PR or legend row, that no Remove action exists, and that `Logs` / `Open issue` / `Open PR` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
-| `npm test` → `src/build-tree.test.mjs` | The tree against the design's sample data (`VSCode Tree.dc.html`): descriptions, agent icons and colours, PR rows, the Markdown tooltip's rows and command links, Markdown escaping, the board 09 tone map, the legend rows, plus service health, the `current` marker (multi-root included), top-sorting, node id stability. |
-| `npm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
-| `npm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
-| `npm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `sandbox <workspace>`, `⚡ Connect infra` runs in a `sandbox connect` terminal, the config tier order — a `sandbox.*` setting overrides the inherited `SANDBOX_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. |
+| `pnpm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), that the card verbs (Continue, New session, PRs, Close out, Abandon) show on every workspace and on no service, PR or legend row, that no Remove action exists, and that `Logs` / `Open issue` / `Open PR` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
+| `pnpm test` → `src/build-tree.test.mjs` | The tree against the design's sample data (`VSCode Tree.dc.html`): descriptions, agent icons and colours, PR rows, the Markdown tooltip's rows and command links, Markdown escaping, the board 09 tone map, the legend rows, plus service health, the `current` marker (multi-root included), top-sorting, node id stability. |
+| `pnpm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
+| `pnpm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
+| `pnpm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `sandbox <workspace>`, `⚡ Connect infra` runs in a `sandbox connect` terminal, the config tier order — a `sandbox.*` setting overrides the inherited `SANDBOX_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. |
 
 What is left below needs a human: real container/Telepresence state, the visual
 render, or a live editor.
@@ -174,7 +174,7 @@ render, or a live editor.
 
 20. **Install into the real VS Code.**
     ```bash
-    cd packages/vscode-plugin && npm run package && code --install-extension werkmeister-vscode-0.1.0.vsix
+    cd packages/vscode-plugin && pnpm run package && code --install-extension werkmeister-vscode-0.1.0.vsix
     ```
     Deliberately not run during implementation — it modifies your live editor.
 

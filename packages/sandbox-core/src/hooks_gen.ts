@@ -369,8 +369,11 @@ export const AUTONOMOUS_RULES = [
     "notes context",
   ].map((cmd) => `Bash(sandbox ${cmd}:*)`),
   "Bash(docker ps:*)",
-  // Local build and test; no `npm install`, so a new dependency waits for a person.
+  // Local build and test; no `npm install` or `pnpm add`, so a new dependency waits for a person.
   ...["npm ci", "npm run", "npm test", "npx", "node", "python3"].map((cmd) => `Bash(${cmd}:*)`),
+  ...["install --frozen-lockfile", "run", "test", "exec", "turbo"].map(
+    (cmd) => `Bash(pnpm ${cmd}:*)`,
+  ),
   ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map(
     (cmd) => `Bash(${cmd}:*)`,
   ),
@@ -431,17 +434,20 @@ export const AUTONOMOUS_DENY = [
   ...["stop", "kill", "rm", "rmi", "compose down", "system prune", "volume rm", "network rm"].map(
     (cmd) => `Bash(docker ${cmd}:*)`,
   ),
-  ...[
-    "publish",
-    "link",
-    "unlink",
-    "install -g",
-    "install --global",
-    "i -g",
-    "i --global",
-    "uninstall -g",
-    "uninstall --global",
-  ].map((cmd) => `Bash(npm ${cmd}:*)`),
+  ...["npm", "pnpm"].flatMap((pm) =>
+    [
+      "publish",
+      "link",
+      "unlink",
+      "install -g",
+      "install --global",
+      "i -g",
+      "i --global",
+      "uninstall -g",
+      "uninstall --global",
+    ].map((cmd) => `Bash(${pm} ${cmd}:*)`),
+  ),
+  ...["add -g", "add --global", "remove -g", "remove --global"].map((cmd) => `Bash(pnpm ${cmd}:*)`),
   "Bash(gh pr merge:*)",
   ...[
     "remove-workspace",

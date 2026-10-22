@@ -64,7 +64,7 @@ export async function createBrowserUiRouter(): Promise<Router> {
       res
         .status(500)
         .type("text")
-        .send("Browser UI bundle missing — run `npm run build` in apps/sandbox-dashboard.");
+        .send("Browser UI bundle missing — run `pnpm run build` in apps/sandbox-dashboard.");
     }
   });
 

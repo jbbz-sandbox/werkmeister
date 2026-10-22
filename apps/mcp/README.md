@@ -24,8 +24,8 @@ There is no transport flag on that verb: stdio is the only thing a client
 launching a subprocess can use, and the HTTP mode is `sandbox connect`'s job.
 `sandbox dashboard` is the same arrangement for the other app. By hand:
 
-    npm run build && npm run serve:http    # Streamable HTTP on :3002
-    npm run serve:stdio                    # what `sandbox mcp` execs
+    pnpm run build && pnpm run serve:http    # Streamable HTTP on :3002
+    pnpm run serve:stdio                     # what `sandbox mcp` execs
 
 **It binds `0.0.0.0`, deliberately and uniquely.** `WebApp` carries an optional
 per-app `env`, and only this app sets `HOST=0.0.0.0` — a container reaches the

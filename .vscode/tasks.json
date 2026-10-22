@@ -4,7 +4,7 @@
     {
       "label": "build vscode-plugin",
       "type": "shell",
-      "command": "npm run build -w werkmeister-vscode"
+      "command": "pnpm --filter werkmeister-vscode run build"
     },
     {
       // F5's debugger attach can fail (ECONNREFUSED ::1), leaving the dev host
@@ -18,7 +18,7 @@
     {
       "label": "watch vscode-plugin",
       "type": "shell",
-      "command": "npm run watch -w werkmeister-vscode",
+      "command": "pnpm --filter werkmeister-vscode run watch",
       "isBackground": true,
       "problemMatcher": {
         "owner": "esbuild",
