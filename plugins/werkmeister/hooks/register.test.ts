@@ -2160,6 +2160,48 @@ test("interceptControl: a local-only service gets no control, connected or not (
   expect(interceptControl("worker", worker, "ab", SNAP as never)?.kind).toBe("blocked");
 });
 
+test("interceptControl: not installed stays unavailable; installed but disconnected is off (SW-12)", () => {
+  const frontend = ixRow("frontend") as never;
+  const ctl = (snap: Record<string, unknown>) =>
+    interceptControl("frontend", frontend, "ab", { ...SNAP, ...snap } as never);
+  expect(ctl({ available: false, installed: false })?.text).toBe("intercepts unavailable");
+  expect(ctl({ available: false, installed: true })?.kind).toBe("off");
+  // A core older than SW-12 sends no `installed`: unavailable, as before.
+  expect(ctl({ available: false })?.text).toBe("intercepts unavailable");
+  for (const snap of [{ installed: false }, { installed: true }, {}]) {
+    expect(
+      interceptControl("cli", undefined, "ab", { ...SNAP, available: false, ...snap } as never),
+    ).toBeNull();
+  }
+});
+
+/** Telepresence on PATH, daemon not connected: rows present, nothing intercepted. */
+const DISCONNECTED = {
+  ...SNAP,
+  available: false,
+  installed: true,
+  connected_namespace: null,
+  intercepts: SNAP.intercepts.map((r) => ({ ...r, intercepted: false, intercepted_by: null })),
+};
+
+test("disconnected: Intercept says it connects first, then starts in docker mode (SW-12)", async ($, on) => {
+  const w = world(on, ixStubs({ [`${WS}/intercepts`]: () => ok(DISCONNECTED) }));
+  await openPane($);
+  const ui = await mountPane($);
+  await ui.press({ key: "intercept:ab/frontend" });
+  expect(await ui.find({ text: /Connects telepresence \(docker\) first\./ })).toBeDefined();
+  await ui.press({ key: "intercept-yes:ab/frontend" });
+  const start = w.calls.find((c) => c.key === `${WS}/intercept-start`);
+  expect(start?.args).toEqual({
+    name: "ab",
+    feature: "ab",
+    service: "frontend",
+    dockerDaemon: true,
+  });
+  expect((await ui.find({ key: "note" }))?.text).toBe("frontend: intercepted (x-feature: ab)");
+  await ui.unmount();
+});
+
 test("each service line shows its intercept state; only off and yours get a button", async ($, on) => {
   world(on, ixStubs());
   await openPane($);
@@ -2231,16 +2273,19 @@ test("Intercept asks first and starts only on yes; Leave runs at once", async ($
   await ui.press({ key: "intercept:ab/frontend" });
   expect(w.calls.filter((c) => c.key === `${WS}/intercept-start`)).toHaveLength(0);
   expect(await ui.find({ text: /Installs a traffic-agent sidecar on frontend/ })).toBeDefined();
+  expect(await ui.find({ text: /Connects telepresence/ })).toBeUndefined();
   await ui.press({ key: "intercept-yes:ab/frontend" });
   const starts = w.calls.filter((c) => c.key === `${WS}/intercept-start`);
   expect(starts.map((c) => [c.via, c.args])).toEqual([
-    ["process", { name: "ab", feature: "ab", service: "frontend" }],
+    ["process", { name: "ab", feature: "ab", service: "frontend", dockerDaemon: true }],
   ]);
   expect((await ui.find({ key: "note" }))?.text).toBe("frontend: intercepted (x-feature: ab)");
 
   await ui.press({ key: "leave:ab/backend" });
   const leaves = w.calls.filter((c) => c.key === `${WS}/intercept-leave`);
-  expect(leaves.map((c) => c.args)).toEqual([{ name: "ab", feature: "ab", service: "backend" }]);
+  expect(leaves.map((c) => c.args)).toEqual([
+    { name: "ab", feature: "ab", service: "backend", dockerDaemon: true },
+  ]);
   await ui.unmount();
 });
 
