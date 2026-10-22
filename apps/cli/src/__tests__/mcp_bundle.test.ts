@@ -16,7 +16,7 @@ const CLI_ROOT = path.resolve(import.meta.dirname, "../..");
 
 it("dist/mcp.js answers initialize over stdio", async () => {
   const entry = path.join(CLI_ROOT, "dist", "mcp.js");
-  expect(fs.existsSync(entry), `${entry} missing — run npm run build`).toBe(true);
+  expect(fs.existsSync(entry), `${entry} missing — run pnpm run build`).toBe(true);
 
   const child = spawn(process.execPath, [entry, "--stdio"], {
     stdio: ["pipe", "pipe", "pipe"],

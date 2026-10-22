@@ -352,12 +352,12 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "tsc && node --test src/*.test.mjs",
-    "test:integration": "npm run build && vscode-test",
+    "test:integration": "pnpm run build && vscode-test",
     "package": "vsce package --no-dependencies"
   },
   "dependencies": {
-    "werkmeister-core": "*",
-    "werkmeister-ui": "*"
+    "werkmeister-core": "workspace:*",
+    "werkmeister-ui": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

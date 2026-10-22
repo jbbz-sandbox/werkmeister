@@ -137,16 +137,17 @@ In this layout each feature maps to a subdirectory containing its repo worktrees
 git clone https://github.com/jbbz-sandbox/werkmeister.git
 cd werkmeister
 
-# Build the CLI once, then run it:
-npm install
-npm --prefix apps/cli run build
+# Build the CLI once, then run it (pnpm via corepack, at the version package.json pins):
+corepack enable
+pnpm install
+pnpm turbo run build --filter=werkmeister
 
 # apps/cli/werkmeister resolves a node runtime (SANDBOX_NODE -> PATH -> newest nvm)
 # and execs apps/cli/dist/main.js.
 apps/cli/werkmeister --help
 ```
 
-After the initial build, `apps/cli/werkmeister` is self-contained — it resolves a node runtime and execs the compiled CLI. Rebuild (`npm --prefix apps/cli run build`) after pulling changes to `apps/cli/src/`.
+After the initial build, `apps/cli/werkmeister` is self-contained — it resolves a node runtime and execs the compiled CLI. Rebuild (`pnpm turbo run build --filter=werkmeister`) after pulling changes to `apps/cli/src/`.
 
 ### Required Environment Variables
 
@@ -350,7 +351,7 @@ the issue tracker and, on a terminal, offers `gh auth login`.
 
 ## CLI Reference
 
-All commands are invoked as `werkmeister` (or `w9r`), which `npm link -w apps/cli` or a global install puts on your PATH; from a bare checkout use the `apps/cli/werkmeister` wrapper script. The examples below write `werkmeister`. Run `werkmeister --help` for a list of commands, or `werkmeister <command> --help` for command-specific help. The old `sandbox` command still works but is deprecated.
+All commands are invoked as `werkmeister` (or `w9r`), which `pnpm link --global` (run in `apps/cli`) or a global install puts on your PATH; from a bare checkout use the `apps/cli/werkmeister` wrapper script. The examples below write `werkmeister`. Run `werkmeister --help` for a list of commands, or `werkmeister <command> --help` for command-specific help. The old `sandbox` command still works but is deprecated.
 
 ### Debugging
 
@@ -933,7 +934,7 @@ Each service can carry two related keys. They do different jobs, and a change ne
 
 | | `test:` | `validate:` |
 |---|---|---|
-| What it is | A shell command, e.g. `npx turbo run test --filter=werkmeister-core` | Plain-language instructions, e.g. "Build, then run the built binary against a temp fixture workspace; assert on exit code, stdout/stderr and the files it writes." Never executed. |
+| What it is | A shell command, e.g. `pnpm turbo run test --filter=werkmeister-core` | Plain-language instructions, e.g. "Build, then run the built binary against a temp fixture workspace; assert on exit code, stdout/stderr and the files it writes." Never executed. |
 | Who uses it | Tooling: the implement stage's test step, `werkmeister pr gate`, `werkmeister test`'s fallback message | Whoever exercises the change: an agent in the implement stage, or you |
 | Question it answers | Do the automated tests still pass? | Does the change actually do what was asked, seen from outside? |
 | Evidence it leaves | The exit code and summary line | A `\| check \| result \|` table of PASS/FAIL rows with the captured output (`exercise.md`) |
@@ -1007,7 +1008,8 @@ the pieces that are not obvious from the demo services:
   `infra/compose/scripts/sandbox-install-startup.sh` fills. The generated compose files carry
   host bind-mount paths and the daemon is the host's, so the paths must be identical on both
   sides.
-- **`sandbox-install` reinstalls only when the lockfile changes.** It skips `npm ci` while
+- **`sandbox-install` reinstalls only when the lockfile changes.** It skips
+  `pnpm install --frozen-lockfile` (`npm ci` on a branch still on `package-lock.json`) while
   the lockfile and Node major version match the stamp in the node_modules volume. It also
   mounts `~/repos` with git's `safe.directory`, so turbo hashes inputs the same way the app
   containers do. Installs are queued host-wide through `~/.sandbox/locks`, at most
@@ -1022,6 +1024,13 @@ the pieces that are not obvious from the demo services:
   `du -sh ~/.sandbox/cache/turbo` shows its size and deleting it is safe. Before this, turbo
   shared each worktree's cache with the main checkout, in `~/repos/sandbox/.turbo/cache`.
   Nothing writes there any more, so you can delete it by hand.
+- **One pnpm store for every workspace.** `sandbox-install` installs from
+  `~/.sandbox/cache/pnpm-store` (`npm_config_store_dir`), so each package version downloads
+  once per machine, not once per workspace. node_modules is a per-feature volume on another
+  filesystem, so pnpm copies files out of the store instead of hard-linking them. Deleting the
+  dir is safe; the next install refills it. `pnpm` itself is corepack's shim in the `tools`
+  volume, with the pnpm build it fetches kept there too (`COREPACK_HOME`), so the four services
+  can run `pnpm turbo …` without an install of their own.
 - **`werkmeister` inside the container is the worktree's own build.** `PATH` puts
   `/app/apps/cli` first. `sandbox_root` in `~/.werkmeister/config.yaml` still points at the main
   checkout, so templates and `infra/` come from there (see the known issue on machine-global
@@ -1034,9 +1043,6 @@ the pieces that are not obvious from the demo services:
   `*.local.sandbox.com`, but `sandbox-dashboard.local.sandbox.com` only resolves after
   `werkmeister setup` (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
   Caddy emits its site block only once a running feature declares the service.
-- **The container's npm rewrites `package-lock.json`.** `node:22` ships npm 10.9.x, which
-  strips the `libc` fields a newer host npm writes. Discard that diff in the worktree unless
-  you actually changed dependencies.
 - **Inside the container, `werkmeister status` shows every k8s forward as dead** and `kubectl`
   cannot reach OrbStack's API server: both probe `127.0.0.1`, which is the container's own
   loopback. The forwards are fine; read their state from the host. `werkmeister up`, `down`,
@@ -1499,7 +1505,7 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 | `apps/graphql-tools/` & `apps/otel-init/` | Node.js tooling (now an npm-workspaces monorepo with a root `package.json` + single root `package-lock.json`): GraphQL extract/validate scripts and `apps/graphql-tools/queries/` in `apps/graphql-tools/`, OTel source in `apps/otel-init/` |
 | `bin/` | Setup helper scripts (authenticate, generate-certs, generate-env, ...) |
 | `apps/cli/dist/` | Compiled CLI (`tsc` output; `apps/cli/werkmeister` execs `dist/main.js`, gitignored) |
-| `package.json` / `package-lock.json` | Workspace metadata + pinned dependency lock (npm workspaces, root-level) |
+| `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` | Workspace metadata, the workspace globs and the pinned dependency lock (pnpm workspaces, root-level) |
 
 ### User Home Directory
 
@@ -1704,9 +1710,9 @@ werkmeister up PROJ-1234
 
 ```bash
 # Reinstall dependencies and rebuild the CLI
-rm -rf node_modules apps/cli/dist
-npm install
-npm --prefix apps/cli run build
+rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/cli/dist
+pnpm install
+pnpm turbo run build --filter=werkmeister
 werkmeister --help
 
 # Check the node version — must be 20+
@@ -1718,8 +1724,8 @@ SANDBOX_NODE=/opt/homebrew/bin/node werkmeister --help
 
 # Update a dependency
 #   1. Edit the version in apps/cli/package.json
-#   2. npm install   # re-resolve and update package-lock.json
-#   3. npm --prefix apps/cli run build
+#   2. pnpm install   # re-resolve and update pnpm-lock.yaml
+#   3. pnpm turbo run build --filter=werkmeister
 ```
 
 > `werkmeister hooks gate` deliberately bypasses the CLI import chain via

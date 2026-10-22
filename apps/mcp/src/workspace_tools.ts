@@ -93,7 +93,7 @@ function rendersUi(server: McpServer, html: string): boolean {
 function readAppHtml(name: string): string {
   const file = appFile("mcp", name);
   if (file === null) {
-    throw new Error(`${name} is not built here — run \`npm run build\` in apps/mcp.`);
+    throw new Error(`${name} is not built here — run \`pnpm run build\` in apps/mcp.`);
   }
   return fs.readFileSync(file, "utf-8");
 }
