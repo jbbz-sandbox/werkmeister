@@ -64,6 +64,15 @@ test("argv names the shipped file then the override, env carries SANDBOX_STATE_D
   assert.equal(env.PATH, process.env.PATH, "inherits the process env");
 });
 
+// Compose v5 builds through `buildx bake`, which refuses a secret file outside
+// the working directory without `--allow=fs.read=…`. shared-infra.yml's corp_ca
+// secret is `${SANDBOX_STATE_DIR}/../corp-ca.crt`, so compose runs from there.
+test("cwd is the directory holding corp-ca.crt, so bake can read the secret", () => {
+  const { cwd, env } = composeInvocation();
+  assert.equal(cwd, path.dirname(env.SANDBOX_STATE_DIR));
+  assert.equal(cwd, home);
+});
+
 // Inside a workspace container the generated `.env` exports
 // COMPOSE_PROJECT_NAME=sandbox-<feature>, which beats shared-infra.yml's
 // `name:` — the shared stack was then addressed as the workspace's project

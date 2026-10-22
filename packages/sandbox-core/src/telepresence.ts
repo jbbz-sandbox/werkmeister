@@ -17,7 +17,7 @@ import { getK8sContext, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { ProcError, run, runAsync } from "./proc.js";
-import { info } from "./reporter.js";
+import { info, warn } from "./reporter.js";
 import { getServicePort, getSlot } from "./slots.js";
 
 export const MIN_VERSION: [number, number, number] = [2, 30, 0];
@@ -208,6 +208,16 @@ export function buildConnectArgs(context: string, namespace: string, docker = fa
  */
 export const DAEMON_HOST_ADDRESS = "host.docker.internal";
 
+/**
+ * The name `connect --docker` gives its daemon (2.31, observed). Docker-mode
+ * commands pass it as `--use`: any unqualified telepresence call (an older
+ * `list -i` poller's implicit connect) starts a host user daemon beside it, and
+ * with two daemons an unqualified command refuses to pick one (SW-12).
+ */
+export function dockerDaemonName(context: string, namespace: string): string {
+  return `${context}-${namespace}-cn`;
+}
+
 export function buildInterceptArgs(
   deployment: string,
   localPort: number,
@@ -241,6 +251,15 @@ export function buildLeaveArgs(deployment: string): string[] {
   // `detach <attachment_name>`). Name kept as buildLeaveArgs to match the `--leave`
   // user-facing verb and its callers.
   return ["telepresence", "detach", deployment];
+}
+
+export function buildUninstallArgs(deployments: string[]): string[] {
+  return ["telepresence", "uninstall", ...deployments];
+}
+
+/** `-s` stops every local daemon, containerized ones included (telepresence >= 2.18). */
+export function buildQuitArgs(): string[] {
+  return ["telepresence", "quit", "-s"];
 }
 
 /** The header the CLI scopes every intercept by (see buildInterceptArgs). */
@@ -356,8 +375,12 @@ function featureOf(info: unknown): string | null {
 }
 
 export interface InterceptState {
-  /** False when telepresence couldn't be asked at all (absent, or errored). */
+  /** False only when the binary is missing; a too-old or broken client still counts. */
+  installed: boolean;
+  /** False when telepresence couldn't be asked (absent, disconnected, or errored). */
   available: boolean;
+  /** The namespace the daemon is connected to, or null. */
+  namespace: string | null;
   /** Deployment name → owning feature (null if unreadable). */
   intercepts: Map<string, string | null>;
 }
@@ -366,15 +389,35 @@ export interface InterceptState {
  * Read active intercepts. Never throws.
  *
  * No `which()` pre-check: a missing binary is ENOENT, which {@link _run} already
- * turns into rc 127 at effectively zero cost — so "telepresence not installed"
- * and "telepresence failed" collapse into one `available: false` branch.
+ * turns into rc 127 at effectively zero cost. Status runs before `list` because
+ * `list` on a disconnected daemon implicitly connects — a daemon launch on every
+ * status poll (SW-12). Upstream documents `user_daemon` as the host-mode status
+ * key, which {@link parseConnectedNamespace} reads.
  */
 export function listIntercepts(runner: Runner = _run): InterceptState {
-  const [rc, out] = runner(buildListInterceptsArgs());
-  if (rc !== 0) {
-    return { available: false, intercepts: new Map() };
+  const [rc, out] = runner(STATUS_ARGS);
+  const none = new Map<string, string | null>();
+  if (rc === 127) {
+    return { installed: false, available: false, namespace: null, intercepts: none };
   }
-  return { available: true, intercepts: parseInterceptList(out) };
+  let namespace = parseConnectedNamespace(rc, out);
+  let use: string[] = [];
+  // Several daemons (see dockerDaemonName): read the one that is connected.
+  for (const name of namespace === null ? daemonChoices(out) : []) {
+    namespace = parseConnectedNamespace(...runner([...STATUS_ARGS, "--use", name]));
+    if (namespace !== null) {
+      use = ["--use", name];
+      break;
+    }
+  }
+  if (namespace === null) {
+    return { installed: true, available: false, namespace, intercepts: none };
+  }
+  const [lrc, lout] = runner([...buildListInterceptsArgs(), ...use]);
+  if (lrc !== 0) {
+    return { installed: true, available: false, namespace, intercepts: none };
+  }
+  return { installed: true, available: true, namespace, intercepts: parseInterceptList(lout) };
 }
 
 /**
@@ -393,6 +436,12 @@ export function connectedNamespace(runner: Runner = _run): string | null {
 }
 
 const STATUS_ARGS = ["telepresence", "status", "--format", "json"];
+
+/** The daemon names in telepresence's "multiple daemons are running, please select a or b" refusal. */
+function daemonChoices(out: string): string[] {
+  const m = /please select (.+?) using the --use/.exec(out);
+  return m ? m[1].split(/, | or /) : [];
+}
 
 /** The parse half of {@link connectedNamespace}, shared with the async path. */
 function parseConnectedNamespace(rc: number, out: string): string | null {
@@ -424,7 +473,8 @@ export async function ensureConnected(
   docker = false,
   runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
 ): Promise<void> {
-  const current = parseConnectedNamespace(...(await runner(STATUS_ARGS)));
+  const use = docker ? ["--use", dockerDaemonName(context, namespace)] : [];
+  const current = parseConnectedNamespace(...(await runner([...STATUS_ARGS, ...use])));
   if (current === namespace) {
     return;
   }
@@ -493,6 +543,61 @@ export function leaveFeatureIntercepts(feature: string, runner: Runner = _run): 
     }
   }
   return left;
+}
+
+/**
+ * After *left* were detached, uninstall the traffic agent of each one no other
+ * intercept still uses, and quit every local daemon when no intercept remains
+ * (SW-42; SW-2 left an agent at ~27% CPU and duplicate daemons). An unreadable
+ * intercept list does neither: guessing could end another feature's intercept.
+ * Never throws for a telepresence failure; the leave itself already succeeded.
+ */
+export async function releaseIdleTelepresence(
+  left: string[],
+  runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
+): Promise<{ uninstalled: string[]; quit: boolean }> {
+  const result = { uninstalled: [] as string[], quit: false };
+  if (!left.length) {
+    return result;
+  }
+  // ponytail: `list -i` sees the connected namespace only, so an intercept in
+  // another namespace doesn't hold off the quit. The registry uses one today.
+  const [rc, out] = await runner(buildListInterceptsArgs());
+  // parseInterceptList maps unparseable output to "no intercepts", which here
+  // would quit someone else's daemons, so anything but a JSON array is unreadable.
+  let listed: unknown = [];
+  try {
+    listed = out.trim() ? JSON.parse(out) : [];
+  } catch {
+    listed = null;
+  }
+  if (rc !== 0 || !Array.isArray(listed)) {
+    warn("Could not read telepresence intercepts -- leaving traffic agents and daemons in place");
+    return result;
+  }
+  const remaining = parseInterceptList(out);
+
+  const idle = left.filter((d) => !remaining.has(d));
+  if (idle.length) {
+    const [urc, uout] = await runner(buildUninstallArgs(idle));
+    if (urc === 0) {
+      result.uninstalled = idle;
+      info(`Uninstalled traffic agent(s): ${idle.join(", ")}`);
+    } else {
+      warn(`Could not uninstall traffic agent(s) ${idle.join(", ")}: ${uout || "no output"}`);
+    }
+  }
+
+  if (remaining.size === 0) {
+    const [qrc, qout] = await runner(buildQuitArgs());
+    if (qrc === 0) {
+      result.quit = true;
+      info("Stopped telepresence daemons");
+    } else {
+      warn(`Could not stop telepresence daemons: ${qout || "no output"}`);
+    }
+  }
+  return result;
 }
 
 /** The k8s deployment behind a services.yaml entry, or undefined. */
@@ -596,15 +701,16 @@ export async function startIntercept(a: InterceptArgs): Promise<InterceptResult>
   await ensureConnected(context, namespace, Boolean(a.dockerDaemon), runner);
 
   info(`Intercepting ${deployment} → localhost:${localPort} (x-feature=${a.feature})...`);
-  const [rc, out] = await runner(
-    buildInterceptArgs(
+  const [rc, out] = await runner([
+    ...buildInterceptArgs(
       deployment,
       localPort,
       svcDef["k8s_port"],
       a.feature,
       Boolean(a.dockerDaemon),
     ),
-  );
+    ...(a.dockerDaemon ? ["--use", dockerDaemonName(context, namespace)] : []),
+  ]);
   if (rc !== 0) {
     throw new SandboxError(
       `telepresence intercept failed: ${out || "no output"}`,
@@ -632,6 +738,8 @@ export interface LeaveInterceptArgs {
   /** One service, or null/absent for every local service of the feature. */
   service?: string | null;
   localServices: string[];
+  /** Leave through the containerized daemon `startIntercept({ dockerDaemon })` connected. */
+  dockerDaemon?: boolean;
   signal?: AbortSignal;
 }
 
@@ -644,9 +752,18 @@ export interface LeaveInterceptArgs {
  * `sandbox down` calls where a failure must never block teardown.
  */
 export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
-  const runner: AsyncRunner = (cmd) => runAsyncRunner(cmd, a.signal);
+  // Every call, the post-leave cleanup included, goes to the daemon the intercept used.
+  const runnerIn =
+    (namespace: string): AsyncRunner =>
+    (cmd) =>
+      runAsyncRunner(
+        a.dockerDaemon ? [...cmd, "--use", dockerDaemonName(getK8sContext(), namespace)] : cmd,
+        a.signal,
+      );
   if (a.service) {
-    const deployment = resolveServiceDef(a.service, a.localServices)["k8s_deployment"];
+    const svcDef = resolveServiceDef(a.service, a.localServices);
+    const deployment = svcDef["k8s_deployment"];
+    const runner = runnerIn(svcDef["k8s_namespace"]);
     const [rc, out] = await runner(buildLeaveArgs(deployment));
     if (rc !== 0) {
       throw new SandboxError(
@@ -654,19 +771,25 @@ export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
         "INTERCEPT_FAILED",
       );
     }
+    await releaseIdleTelepresence([deployment], runner);
     return [deployment];
   }
   const registry = loadServices();
   const left: string[] = [];
+  // Releasing goes through the last service's daemon: the registry uses one
+  // namespace today. The initial runner only ever sees an empty `left`, a no-op.
+  let runner = runnerIn("default");
   for (const svc of a.localServices) {
     const deployment = deploymentOf(registry[svc]);
     if (!deployment) {
       continue;
     }
+    runner = runnerIn(registry[svc]["k8s_namespace"] ?? "default");
     const [rc] = await runner(buildLeaveArgs(deployment));
     if (rc === 0) {
       left.push(deployment);
     }
   }
+  await releaseIdleTelepresence(left, runner);
   return left;
 }

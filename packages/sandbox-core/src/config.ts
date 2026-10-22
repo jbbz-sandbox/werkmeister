@@ -404,6 +404,42 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
 export const IDLE_SERVICE_TYPES = ["cli", "library", "extension"];
 
 /**
+ * Whether any of *localServices* needs the shared k8s-forwards container (SW-42):
+ * it is a cluster workload (`k8s_deployment`), its environment names a forward
+ * alias (`k8s-<name>`, `k8s-forwards`) or a `{svc}` ref to a non-local service,
+ * or it `depends_on` a non-local service. Generated `<SVC>_URL`s don't count:
+ * every container gets those whether it uses them or not.
+ */
+export function needsCluster(localServices: string[], services: ServicesConfig): boolean {
+  const remote = (name: string): boolean => !localServices.includes(name);
+  return localServices.some((name) => {
+    const def = services[name];
+    if (!isDict(def)) {
+      return false;
+    }
+    if (def.k8s_deployment) {
+      return true;
+    }
+    const env = isDict(def.environment) ? Object.values(def.environment) : [];
+    for (const value of env) {
+      if (typeof value !== "string") {
+        continue;
+      }
+      if (/\bk8s-[a-z0-9-]+/.test(value)) {
+        return true;
+      }
+      // Same `{svc}` syntax and `${VAR}` exclusion as generate.ts resolveServiceRefs.
+      for (const [, ref] of value.matchAll(/(?<!\$)\{([a-zA-Z0-9_-]+)\}/g)) {
+        if (remote(ref)) {
+          return true;
+        }
+      }
+    }
+    return (def.depends_on ?? []).some(remote);
+  });
+}
+
+/**
  * CPU limit a generated container gets when services.yaml sets no `cpus:`. One
  * home so `sandbox stats` shows the value generation rendered (SW-40). Setup
  * containers get more: a cold `yarn install` is the heaviest single burst.

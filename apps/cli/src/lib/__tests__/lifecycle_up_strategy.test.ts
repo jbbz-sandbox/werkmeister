@@ -20,6 +20,7 @@ import type { Reporter } from "werkmeister-core/reporter";
 import { withReporter } from "werkmeister-core/reporter";
 
 vi.mock("werkmeister-core/caddy", () => ({
+  ensureSharedNetwork: () => true,
   isCaddyRunning: () => true,
   reloadCaddy: async () => {},
   startCaddy: vi.fn(),

@@ -28,7 +28,12 @@ vi.mock("werkmeister-core/slots", () => ({
 }));
 vi.mock("werkmeister-core/telepresence", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/telepresence")>()),
-  listIntercepts: vi.fn(() => ({ available: false, intercepts: new Map() })),
+  listIntercepts: vi.fn(() => ({
+    installed: false,
+    available: false,
+    namespace: null,
+    intercepts: new Map(),
+  })),
 }));
 vi.mock("werkmeister-core/web_servers", () => ({
   status: vi.fn(async () => ({ running: false, healthy: false })),

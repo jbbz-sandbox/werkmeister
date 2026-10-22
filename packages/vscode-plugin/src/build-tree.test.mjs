@@ -42,6 +42,7 @@ const st = (name, over = {}) => ({
  */
 const intercepts = (spec, remote = Object.values(spec).flatMap(Object.keys)) => ({
   available: true,
+  installed: true,
   connectedNamespace: "default",
   remoteServices: new Set(remote),
   byFeature: new Map(
@@ -237,11 +238,32 @@ test("an unavailable telepresence marks every service unavailable", () => {
         services: [{ name: "frontend", state: "healthy" }],
       }),
     ],
-    { ...intercepts({}, ["frontend"]), available: false },
+    { ...intercepts({}, ["frontend"]), available: false, installed: false },
     [],
   );
   assert.equal(node.children[0].contextValue, "service");
   assert.match(node.children[0].tooltip, /intercept state unavailable/);
+});
+
+// SW-12: installed but disconnected still offers the toggle; the CLI connects first.
+test("a disconnected telepresence keeps interceptable services interceptable", () => {
+  const [node] = buildTree(
+    [ws("a")],
+    [
+      st("a", {
+        state: "up",
+        running: 1,
+        total: 1,
+        services: [{ name: "frontend", state: "healthy" }],
+      }),
+    ],
+    { ...intercepts({ a: { frontend: {} } }), available: false, connectedNamespace: null },
+    [],
+  );
+  assert.equal(node.children[0].contextValue, "service:interceptable");
+  assert.match(node.children[0].tooltip, /interceptable \(telepresence not connected\)/);
+  const row = { interceptable: true, blocker: null, intercepted: false, intercepted_by: null };
+  assert.equal(interceptView(row, "a", false, true).note, "interceptable");
 });
 
 // SW-21: a CLI or library is never a cluster service, so it gets no intercept state at all.
@@ -253,6 +275,7 @@ test("a local-only service shows no intercept state, connected or not", () => {
   assert.equal(interceptView(undefined, "a", true, false), null);
   for (const ix of [
     intercepts({ a: { cli: { interceptable: false, blocker } } }, []),
+    { ...intercepts({}, []), available: false, installed: false },
     { ...intercepts({}, []), available: false },
   ]) {
     const [node] = buildTree(
