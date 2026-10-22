@@ -69,7 +69,7 @@ This is idempotent — safe to run even if infra is already up. It starts Caddy,
 sandbox up <feature-name>
 ```
 
-Auto-detects which services have local changes (via `git diff main..HEAD`) and starts only those containers. The rest are forwarded from k8s. Wait for the command to complete before proceeding.
+Starts containers only for the services in the workspace's `.env` `SERVICES=` list (from `workspace.yml`'s `services`). The rest are forwarded from k8s. Wait for the command to complete before proceeding.
 
 ### Step 5 — Run the test
 

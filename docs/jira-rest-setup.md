@@ -7,12 +7,12 @@ doc/script; steps marked **[manual]** cannot be scripted, everything else can.
 
 First performed: 2026-07-11. Verified working same day.
 
-> **Automated:** `werkmeister setup` now scaffolds `~/.werkmeister/jira.env` (chmod
-> 600) and live-verifies a filled-in token against `/rest/api/2/myself`;
-> `werkmeister setup --check` reports its state without touching the network.
+> **Automated:** `werkmeister setup` asks "Configure Jira credentials now?" and
+> writes them to the `jira:` section of `~/.werkmeister/config.yaml`;
+> `werkmeister connect` live-verifies them against `/rest/api/3/myself`.
 > Only step 1 below (creating the token) remains manual. The step is
-> optional — a missing/unfilled token reports ok-with-guidance, and only a
-> filled token that Jira rejects fails setup.
+> optional — with no credentials reads go through the Atlassian MCP, and only
+> placeholder values or a token Jira rejects are reported as a fault.
 
 ## Steps
 
@@ -26,38 +26,37 @@ First performed: 2026-07-11. Verified working same day.
      the date; you'll repeat this step then.
    - Copy the token immediately (it is shown once).
 
-2. **Create the credentials file** (scriptable):
+2. **Add the credentials** to `~/.werkmeister/config.yaml` (or answer
+   `werkmeister setup`'s prompts):
 
-   ```bash
-   mkdir -p ~/.werkmeister
-   cat > ~/.werkmeister/jira.env << 'EOF'
-   JIRA_BASE_URL=https://your-org.atlassian.net
-   JIRA_EMAIL=<your-atlassian-login-email>
-   JIRA_API_TOKEN=<paste-token-here>
-   EOF
-   chmod 600 ~/.werkmeister/jira.env
+   ```yaml
+   jira:
+     base_url: https://your-org.atlassian.net
+     email: <your-atlassian-login-email>
+     api_token: <paste-token-here>
    ```
 
-   `JIRA_EMAIL` is the address on your Atlassian *account*. Email aliases may
+   `email` is the address on your Atlassian *account*. Email aliases may
    authenticate too, but use the canonical one if in doubt — check your
    avatar menu in Jira.
 
 3. **Verify** (scriptable — this is the health check):
 
    ```bash
-   source ~/.werkmeister/jira.env && curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-     "$JIRA_BASE_URL/rest/api/2/myself" | jq '{displayName, emailAddress}'
+   curl -s -u "<email>:<api_token>" \
+     "https://your-org.atlassian.net/rest/api/2/myself" | jq '{displayName, emailAddress}'
    ```
 
    Your display name back = working. A `401` mentioning policy = the org has
-   disabled API tokens via SSO policy; the sandbox-dashboard server then falls
+   disabled API tokens via SSO policy; Werkmeister then falls
    back to its previous path (Jira via the local `claude` CLI + Atlassian
    MCP), so nothing breaks — you just don't get the fast path.
 
 ## How it's consumed
 
 `packages/sandbox-core/src/jira-rest.ts` reads `JIRA_BASE_URL` / `JIRA_EMAIL` /
-`JIRA_API_TOKEN` from the process env first, then from `~/.werkmeister/jira.env`.
+`JIRA_API_TOKEN` from the process env first, then from the `jira:` section of
+`~/.werkmeister/config.yaml`.
 When credentials are absent or a call fails, every caller degrades to the
 original `claude -p` (Atlassian MCP) path — the token is an optimization, not
 a requirement.
@@ -65,14 +64,18 @@ a requirement.
 Endpoints used (API v2, which returns rich-text fields as plain wiki-markup
 strings — v3 returns ADF JSON we'd have to walk):
 
-- `GET /rest/api/2/myself` — verify only
+- `GET /rest/api/3/myself` — verify only
 - `GET /rest/api/2/issue/<KEY>?fields=…` — issue card, briefing, form prefill
 - `GET /rest/api/2/search/jql?jql=key in (…)&fields=status` — batch status
   lookup (the old `/rest/api/2/search` endpoint is deprecated/removed; use
   `/search/jql`)
+- `GET /rest/api/2/issue/createmeta/<PROJECT>/issuetypes`, `POST /rest/api/2/issue`
+  — `issue create`
+- `GET`/`POST /rest/api/2/issue/<KEY>/transitions`, `POST …/comment` — status
+  moves and comments
 
 ## Renewal
 
 Tokens expire (max 1 year). Symptom: Jira status pills / cards silently fall
 back to the slow path, or `401` in the server log. Fix: repeat step 1, paste
-the new token into `~/.werkmeister/jira.env`.
+the new token into `jira.api_token` in `~/.werkmeister/config.yaml`.

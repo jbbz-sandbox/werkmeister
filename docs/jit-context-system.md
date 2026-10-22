@@ -385,7 +385,7 @@ Never raises; silently empty outside a workspace. Total output is bounded by the
 
 ## 6. Enforcement — the PreToolUse standards gate
 
-`apps/cli/src/lib/gate.ts`. Everything in §5 is *voluntary*: nothing structurally guarantees
+`packages/sandbox-core/src/gate.ts` (built entry: `apps/cli/src/lib/gate.ts`). Everything in §5 is *voluntary*: nothing structurally guarantees
 `sb-implement` ran before the first edit. The gate closes that hole.
 
 **Deny-once-with-payload.** On each `Edit`/`Write` it denies the first governed edit per
@@ -453,12 +453,14 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
   orphaned `sb-*` skills. Also run from the SessionStart hook, so a workspace repairs its own
   projection before the session reads it.
 
-**Automated test coverage is thin.** `src/lib/__tests__/gate.test.ts` (22 tests) covers the
-gate; `packages/sandbox-core/agent-gen.test.mjs`, `claude-md.test.mjs`, and
+**Automated test coverage is thin.** `apps/cli/src/lib/__tests__/gate.test.ts` (22 tests) and
+`packages/sandbox-core/gate.test.mjs` (phase gate) cover the gate;
+`packages/sandbox-core/agent-gen.test.mjs`, `claude-md.test.mjs`, and
 `workspace-skills-scope.test.mjs` cover agent generation, CLAUDE.md generation, and skill
-scoping. Standards resolution, archetype normalization, notes, hooks, and MCP projection still
-have **no unit tests** — they are exercised only by running `werkmeister init-workspace` and the two
-check commands above. Treat
+scoping; `apps/cli/src/lib/__tests__/universal_standards.test.ts` covers standards resolution
+and the manifest, `hooks_gen.test.ts` the hooks, `packages/sandbox-core/notes-context.test.mjs`
+notes re-injection, and `mcp-gen-vars.test.mjs` MCP variable handling. Everything else is
+exercised only by running `werkmeister init-workspace` and the two check commands above. Treat
 `standards check` and `skills check` as the regression gates, and run them after any change to
 the standards tree or the generators.
 

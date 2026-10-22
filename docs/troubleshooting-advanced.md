@@ -46,13 +46,13 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/dist/lib/caddy.js');
+const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/sandbox-core/dist/caddy.js');
 const json = await new Response(process.stdin).text();
 console.log(countCompiledRoutes(JSON.parse(json)), 'compiled routes');
 "
 ```
 
-> Needs `npm --prefix apps/cli run build` first — `dist/` is gitignored.
+> Needs `pnpm --filter werkmeister-core run build` first — `dist/` is gitignored.
 
 **Fix:** Ensure the Caddyfile uses `route { ... }` instead of multiple `handle` blocks. See `docs/known-issues.md` for the full explanation.
 
@@ -83,7 +83,7 @@ docker logs {container_name} --tail 100 2>&1
 |-------|-------|-----|
 | `ECONNREFUSED` to database | postgres forward not ready | `docker restart sandbox-k8s-forwards` or check k8s forwards |
 | `yarn: command not found` | Bad Docker image or missing node_modules volume | `werkmeister down --volumes && werkmeister up` |
-| OOM Killed | Container exceeded memory limit | Increase `memory_limit` in `infra/config/services.yaml` |
+| OOM Killed | Container exceeded memory limit | Increase `memory_limit` in the repo's `.sandbox/services.yaml` |
 | Port already in use | Another process using the port | `lsof -i :{port}` to find the conflict |
 | `ENOSPC` | Docker disk full | `docker system prune -a` |
 
@@ -156,7 +156,7 @@ docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
 ```bash
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>/dev/null | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/dist/lib/caddy.js');
+const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/sandbox-core/dist/caddy.js');
 const total = countCompiledRoutes(JSON.parse(await new Response(process.stdin).text()));
 console.log('Total compiled routes:', total);
 if (total < 15) console.log('WARNING: Routes may have been silently dropped!');

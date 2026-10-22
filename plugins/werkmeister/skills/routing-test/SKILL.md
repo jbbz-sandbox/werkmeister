@@ -42,7 +42,7 @@ The ingress host is configured per machine — never hardcode it. Derive it from
 (`sandbox services <feature>` lists them):
 
 ```bash
-DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.sandbox/config.yaml | head -1)
+DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
 BASE="https://${SERVICE}.${DOMAIN}"   # SERVICE = the routed service under test
 
 curl -sk -D - -o /tmp/sandbox-route-test-caddy "${BASE}{path}" 2>&1 | head -15
@@ -61,16 +61,16 @@ Check for discrepancies:
 ## Step 5: Verify Caddy Route Exists
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 grep -n "path.*{relevant_pattern}" "$CADDYFILE"
 ```
 
 Also check compiled config:
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | python3 -c "
 import json, sys

@@ -54,7 +54,7 @@ status: open
 ---
 ```
 
-`sandbox down` will offer to graduate it into `docs/standards/`.
+`sandbox down` will offer to graduate it into the standards tree (`overrides.standards_dir`).
 
 If the workspace `CLAUDE.md` has no "Standards routing" block (not a
 sandbox-initialized workspace), load `sb-comments-standard` +

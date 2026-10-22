@@ -150,7 +150,7 @@ Most of it is already handled:
 - The forwards container is fed `kubectl config view --raw --minify --flatten`,
   so certificates and tokens are **inlined**, not left as host paths the
   container cannot see.
-- `shimLocalApiServer` (`packages/sandbox-core/src/infra.ts`) rewrites a
+- `shimLocalApiServer` (`packages/sandbox-core/src/k8s.ts`) rewrites a
   `127.0.0.1` API address to `host.docker.internal` and drops CA verification —
   and no-ops for a remote cluster, which needs neither. Telepresence's docker
   mode does the same rewrite for the same reason. A local cluster is the special
@@ -160,7 +160,7 @@ Most of it is already handled:
 through one — `aws eks get-token`, `gke-gcloud-auth-plugin`, `az`, an OIDC
 helper. That stanza survives `--flatten` as a command the *container* is then
 expected to run, and the `k8s-forwards` image
-(`infra/compose/k8s-port-forward/Dockerfile`) ships `kubectl` and nothing else.
+(`infra/compose/k8s-port-forward/Dockerfile`) ships `kubectl`, a shell and probe clients, but no auth plugin.
 
 - Host side: fine. Your `kubectl`, and telepresence in host mode, run where the
   plugin and its credentials already live.
@@ -193,6 +193,6 @@ no cloud cluster is available.
 
 ---
 
-**See also:** [`werkmeister intercept` in the users guide](users-guide.md#sandbox-intercept)
+**See also:** [`werkmeister intercept` in the users guide](users-guide.md#werkmeister-intercept)
 for flags and worked commands; [architecture](sandbox-architecture.md) for how
 Caddy chooses between a local container and the cluster baseline.

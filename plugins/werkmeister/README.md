@@ -16,7 +16,7 @@ sandbox environment.
 ### Workspace lifecycle
 | Skill | What it does |
 |-------|--------------|
-| `workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`workspaces` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
+| `workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`werkmeister` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
 | `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.sandbox/workspace.yml`. |
 | `install-workspace-dashboard` | Install the Sandbox Workspaces live dashboard as a **Cowork artifact** (`apps/sandbox-dashboard/dist/workspace-list.artifact.html`). |
@@ -37,10 +37,11 @@ The `sb-implement` / `sb-research` entry skills and the `sb-*-standard` code
 standards are **not shipped here**. They are projected into each workspace's
 `.claude/skills/` by `sandbox init-workspace`: entry-skill sources live in
 [`apps/cli/infra/skills/`](../../apps/cli/infra/skills), and the standards are
-generated from [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards) by
-`sandbox standards build` (drift-gated by `sandbox standards check`).
+rendered at the same step from the tree `overrides.standards_dir` points at (e.g. a
+[jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards) checkout),
+which `sandbox standards check` validates.
 
-## Bundled MCP server (`workspaces`)
+## Bundled MCP server (`werkmeister`)
 
 The plugin's [`.mcp.json`](./.mcp.json) auto-wires the one werkmeister MCP server
 (`werkmeister mcp`, source in [`apps/mcp`](../../apps/mcp)) exposing every tool —
@@ -147,7 +148,7 @@ under its new name. Point it at `.../plugins/werkmeister`, and rename the `sandb
 
 **Also update by hand:**
 - Claude Desktop: in `claude_desktop_config.json`, rename the `sandbox-workspace` server to
-  `workspaces` and set its command to `w9r`.
+  `werkmeister`, as in [Register on Claude Desktop](#register-on-claude-desktop).
 - Anything of yours that names the old tools or skills (permission rules in your own settings,
   prompts that say `/sandbox-diagnose`).
 

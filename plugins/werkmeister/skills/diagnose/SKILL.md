@@ -54,7 +54,7 @@ The ingress host is configured per machine — never hardcode it. It derives fro
 declares a `feature_router:` block in `~/.sandbox/services.yaml`:
 
 ```bash
-DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.sandbox/config.yaml | head -1)
+DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
 SERVICE=frontend   # the routed service under test; `sandbox services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
@@ -65,7 +65,7 @@ Then probe the paths that actually matter for this service — the `test_path` i
 `.sandbox/workspace.yml`, plus whatever routes the feature touches:
 
 ```bash
-for path in / "$(sed -n 's/^test_path:[[:space:]]*//p' .sandbox/workspace.yml)"; do
+for path in / "$(sed -n 's/^test_path:[[:space:]]*//p' .werkmeister/workspace.yml .sandbox/workspace.yml 2>/dev/null | head -1)"; do
   [ -n "$path" ] || continue
   curl -sk -o /dev/null -w "${path}: HTTP %{http_code} | Size: %{size_download}\n" "${BASE}${path}"
 done
@@ -76,8 +76,8 @@ done
 ## Step 4: Caddyfile Validation
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | \
   node --input-type=module -e "
@@ -131,8 +131,8 @@ not `localhost:4321`.
 ## Step 7: Docker Desktop File Sync
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 HOST_SIZE=$(wc -c < "$CADDYFILE" | tr -d " ")  # macOS wc pads the count with spaces
 CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
 if [ "$HOST_SIZE" = "$CONTAINER_SIZE" ]; then
