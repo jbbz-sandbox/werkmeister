@@ -25,7 +25,8 @@ networks:
 {% endif %}
 {% endfor %}
 
-{# Collect all named volumes and prefix with feature name for isolation #}
+{# Collect all named volumes and prefix with feature name for isolation; #}
+{# a `^name` volume is shared by every feature, so it stays unprefixed and external #}
 {% set volume_names = [] %}
 {% for setup_name in setup_services_needed %}
 {% set setup = setup_configs[setup_name] %}
@@ -53,8 +54,14 @@ networks:
 {% if volume_names %}
 volumes:
 {% for vol_name in volume_names %}
+{% if vol_name[0] == '^' %}
+  {{ vol_name | replace('^', '') }}:
+    name: {{ vol_name | replace('^', '') }}
+    external: true
+{% else %}
   {{ feature_name }}-{{ vol_name }}:
     name: {{ feature_name }}-{{ vol_name }}
+{% endif %}
 {% endfor %}
 {% endif %}
 
@@ -92,6 +99,8 @@ services:
 {% set vol_parts = vol.split(':') %}
 {% if '/' in vol_parts[0] %}
       - {{ vol | replace('${REPO}', workspace_path + '/' + setup.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+{% elif vol[0] == '^' %}
+      - {{ vol | replace('^', '') }}
 {% else %}
       - {{ feature_name }}-{{ vol }}
 {% endif %}
@@ -171,6 +180,8 @@ services:
 {% set vol_parts = vol.split(':') %}
 {% if '/' in vol_parts[0] %}
       - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+{% elif vol[0] == '^' %}
+      - {{ vol | replace('^', '') }}
 {% else %}
       - {{ feature_name }}-{{ vol }}
 {% endif %}

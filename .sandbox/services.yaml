@@ -61,6 +61,7 @@ services:
       - "{{workspaces_root}}:{{workspaces_root}}"
       - "{{home}}/.kube:{{home}}/.kube:ro"
       - tools:/opt/sandbox-tools
+      - ^sandbox-pnpm-store:/pnpm-store
     environment: &host_env
       HOME: "{{home}}"
       PATH: /app/apps/cli:/opt/sandbox-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -81,7 +82,7 @@ services:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       # The shared store (same value in sandbox-install below), so a `pnpm
       # install` here matches the one node_modules was built with.
-      npm_config_store_dir: "{{home}}/.sandbox/cache/pnpm-store"
+      npm_config_store_dir: /pnpm-store
       # Read by sandbox-dashboard; harmless for the others.
       HOST: 0.0.0.0
 
@@ -168,9 +169,11 @@ setup_services:
   # host dir, not a named volume: the app containers already mount ~/.sandbox,
   # the template prefixes every named volume per feature, and the dir can be
   # inspected or deleted from the host.
-  # SW-31: the pnpm store is a host dir for the same reasons, shared by every
-  # feature's install. node_modules is a per-feature volume, so pnpm copies from
-  # the store rather than hard-linking; it still downloads each package once.
+  # SW-31: the pnpm store is shared by every feature's install. It is a shared
+  # named volume (`^`), not a host dir: over the VM's file share a warm install
+  # took 15.5 s against 5.6 s from a volume. node_modules is a per-feature
+  # volume, so pnpm copies from the store rather than hard-linking; it still
+  # downloads each package once. Clear it with `docker volume rm sandbox-pnpm-store`.
   sandbox-install:
     image: node:22
     command: "sh /usr/local/bin/startup.sh install"
@@ -181,7 +184,7 @@ setup_services:
       - "{{repos_root}}:{{repos_root}}"
       - "{{home}}/.sandbox/locks:/locks"
       - "{{home}}/.sandbox/cache/turbo:{{home}}/.sandbox/cache/turbo"
-      - "{{home}}/.sandbox/cache/pnpm-store:{{home}}/.sandbox/cache/pnpm-store"
+      - ^sandbox-pnpm-store:/pnpm-store
     environment:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
@@ -190,4 +193,4 @@ setup_services:
       TURBO_CACHE_MAX_AGE: 14d
       COREPACK_HOME: /opt/sandbox-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
-      npm_config_store_dir: "{{home}}/.sandbox/cache/pnpm-store"
+      npm_config_store_dir: /pnpm-store
