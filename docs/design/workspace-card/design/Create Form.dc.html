@@ -11,7 +11,7 @@
   <sc-if value="{{ success }}">
     <div style="padding:28px {{ pad }};display:flex;flex-direction:column;gap:12px;align-items:flex-start">
       <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:4px;font-size:12px;font-weight:600;color:var(--sd-ok);background:var(--sd-ok-bg);border:1px solid var(--sd-ok-bd)">✓ Workspace created</span>
-      <div style="font-size:20px;font-weight:600">stellwerk-143-wizard-defaults</div>
+      <div style="font-size:20px;font-weight:600">werkmeister-143-wizard-defaults</div>
       <div style="color:var(--sd-muted)">Feature · Restore wizard defaults in the create form · ICM stage 1 of 4 · questions</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
         <a href="#" style="font-size:13px;font-weight:600;padding:5px 12px;border-radius:5px;background:var(--sd-accent);color:var(--sd-on-accent);text-decoration:none">Go to card →</a>
@@ -123,22 +123,22 @@ class Component extends DCLogic {
     const filled = st === 'creating' || st === 'filled';
     const err = st === 'error';
     const loading = st === 'filling';
-    const picked = filled ? ['cli', 'stellwerk-dashboard'] : [];
-    const G = [['demo-services', ['backend', 'clickhouse', 'frontend', 'mongo', 'redpanda']], ['stellwerk', ['cli', 'stellwerk-core', 'stellwerk-dashboard', 'vscode-plugin']], ['wellness', ['api', 'mobile']]];
+    const picked = filled ? ['cli', 'werkmeister-dashboard'] : [];
+    const G = [['demo-services', ['backend', 'clickhouse', 'frontend', 'mongo', 'redpanda']], ['werkmeister', ['cli', 'werkmeister-core', 'werkmeister-dashboard', 'vscode-plugin']], ['wellness', ['api', 'mobile']]];
     return {
       success: st === 'success', form: st !== 'success', browser: !narrow,
       successNote: narrow ? 'Opens in this chat as a card.' : 'Opening in VS Code…',
       pad: narrow ? '16px' : '24px', cols: narrow ? '1fr' : 'repeat(2,minmax(0,1fr))', svcCols: narrow ? '1fr 1fr' : 'repeat(3,minmax(0,1fr))',
-      issueVal: st === 'empty' ? 'owner/repo#12' : 'jbbz-stellwerk/stellwerk#143', issueFg: st === 'empty' ? 'var(--sd-faint)' : 'var(--sd-ink)',
+      issueVal: st === 'empty' ? 'owner/repo#12' : 'jbbz-sandbox/werkmeister#143', issueFg: st === 'empty' ? 'var(--sd-faint)' : 'var(--sd-ink)',
       fillLabel: loading ? '◌ Fetching…' : '⤓ Fill from issue', fillOp: loading ? 0.6 : 1,
-      issueHelp: loading ? 'Fetching jbbz-stellwerk/stellwerk#143…' : 'Fetched from your issue tracker; fills the empty fields below.',
+      issueHelp: loading ? 'Fetching jbbz-sandbox/werkmeister#143…' : 'Fetched from your issue tracker; fills the empty fields below.',
       loadingFields: loading, notLoading: !loading,
       nameVal: err ? 'Wizard_Defaults' : filled ? 'wizard-defaults' : 'mdx-blog', nameFg: err || filled ? 'var(--sd-ink)' : 'var(--sd-faint)',
       nameBd: err ? '2px solid var(--sd-err)' : '1px solid var(--sd-ctl)',
       nameHelp: err ? '▲ Use lowercase letters, numbers and single hyphens, e.g. mdx-blog' : 'Lowercase letters, numbers and single hyphens.', nameHelpFg: err ? 'var(--sd-err)' : 'var(--sd-muted)',
       groups: G.map(([repo, items]) => ({ repo, items: items.map(n => { const on = picked.includes(n); return { name: n, mark: on ? '✓' : '', bg: on ? 'var(--sd-accent)' : 'var(--sd-card)', bd: on ? 'var(--sd-accent)' : err ? 'var(--sd-err)' : 'var(--sd-ctl)' }; }) })),
       svcBd: err ? '2px solid var(--sd-err)' : '1px solid var(--sd-line)', svcErr: err,
-      repos: ['demo-services', 'stellwerk', 'wellness'], hasLabel: filled,
+      repos: ['demo-services', 'werkmeister', 'wellness'], hasLabel: filled,
       pathVal: err ? 'products/foo' : '/products/foo', pathFg: err ? 'var(--sd-ink)' : 'var(--sd-faint)', pathBd: err ? '2px solid var(--sd-err)' : '1px solid var(--sd-ctl)',
       pathHelp: err ? '▲ Must start with /' : 'URL path for the feature, e.g. /products/foo', pathHelpFg: err ? 'var(--sd-err)' : 'var(--sd-muted)',
       titleVal: filled ? 'Restore wizard defaults in the create form' : 'Wizard defaults', titleFg: filled ? 'var(--sd-ink)' : 'var(--sd-faint)',

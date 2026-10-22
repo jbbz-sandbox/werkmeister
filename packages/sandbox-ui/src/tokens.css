@@ -1,4 +1,4 @@
-/* Stellwerk tokens (docs/design/workspace-card/tokens.css) — the only colours in
+/* Werkmeister tokens (docs/design/workspace-card/tokens.css) — the only colours in
    werkmeister-ui; components read them as var(--sd-*). */
 :root {
   --sd-sans: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

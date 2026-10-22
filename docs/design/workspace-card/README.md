@@ -1,4 +1,4 @@
-# Handoff: Stellwerk workspace card + tokens
+# Handoff: Werkmeister workspace card + tokens
 
 Target repo: `jbbz-sandbox/werkmeister` (branch `main`). Rules, vocabulary and decisions: [`docs/ui-spec.md`](../../ui-spec.md); where this README and the spec disagree, the spec wins.
 

@@ -162,7 +162,7 @@
       <footer style="display:flex;flex-direction:column;gap:12px;padding:14px 18px 16px;border-top:1px solid var(--sd-err);background:var(--sd-err-bg);border-radius:0 0 9px 9px">
         <div><div style="font-weight:600;color:var(--sd-err)">Abandon {{ m.name }}?</div><div style="font-size:13px">Posts the reason on the issue and marks it abandoned, then removes the workspace. Every branch is pushed and kept.</div></div>
         <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--sd-muted)">Reason (required)
-          <input value="{{ reason }}" onChange="{{ onReason }}" placeholder="e.g. superseded by stellwerk#240" style="font:inherit;font-size:13px;height:32px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink)"></input>
+          <input value="{{ reason }}" onChange="{{ onReason }}" placeholder="e.g. superseded by werkmeister#240" style="font:inherit;font-size:13px;height:32px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:1px solid var(--sd-ctl);background:var(--sd-card);color:var(--sd-ink)"></input>
         </label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button style="font:inherit;font-size:13px;font-weight:600;height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--sd-err);background:var(--sd-err);color:#fff;cursor:pointer;opacity:{{ abOp }}">✕ Yes, abandon</button>
