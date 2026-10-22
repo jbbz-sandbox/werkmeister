@@ -151,7 +151,7 @@ export async function ensurePortForwardsHealthy(): Promise<ForwardsOutcome> {
     );
     return "failed";
   }
-  const { argv, env } = composeInvocation();
+  const { argv, env, cwd } = composeInvocation();
 
   try {
     // --force-recreate, because plain `up -d` cannot repair the case this
@@ -165,6 +165,7 @@ export async function ensurePortForwardsHealthy(): Promise<ForwardsOutcome> {
       capture: true,
       timeout: 60,
       env,
+      cwd,
     });
     if (result.status !== 0) {
       error(`Failed to restart k8s-forwards: ${result.stderr.trim()}`);

@@ -287,13 +287,13 @@ function _runCaddyCompose(
   args: string[],
   { capture = false }: { capture?: boolean } = {},
 ): boolean {
-  const { argv, env } = composeInvocation();
+  const { argv, env, cwd } = composeInvocation();
   const cmd = [...argv, ...args];
   info(`Running: ${cmd.join(" ")}`);
 
   let result;
   try {
-    result = run(cmd, { capture, timeout: 60, env });
+    result = run(cmd, { capture, timeout: 60, env, cwd });
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
       error("docker compose not found. Ensure Docker Desktop is installed.");
