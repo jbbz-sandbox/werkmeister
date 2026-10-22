@@ -8,7 +8,7 @@
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.ui.json && npm run build:ui",
+    "build": "tsc && tsc -p tsconfig.ui.json && pnpm run build:ui",
     "build:ui": "cross-env INPUT=mcp-app.html vite build && cross-env INPUT=mcp-list.html vite build",
     "typecheck": "tsc --noEmit",
     "serve:stdio": "node dist/main.js --stdio",
@@ -19,14 +19,16 @@
     "@modelcontextprotocol/ext-apps": "^1.7.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.1.0",
-    "werkmeister-core": "^0.24.1",
-    "werkmeister-ui": "^0.4.0",
+    "werkmeister-core": "workspace:*",
+    "werkmeister-ui": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
     "cross-env": "^10.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
     "vite-plugin-singlefile": "^2.3.0"

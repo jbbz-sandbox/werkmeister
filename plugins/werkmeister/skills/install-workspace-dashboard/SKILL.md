@@ -22,7 +22,7 @@ workspace's newest session.
    user's server name) is available.
 3. **Built HTML exists**: `apps/sandbox-dashboard/dist/workspace-list.artifact.html`
    in the sandbox checkout. If missing, build it:
-   `cd apps/sandbox-dashboard && npm run build:ui` (needs `npm i` at the repo root
+   `cd apps/sandbox-dashboard && pnpm run build:ui` (needs `pnpm install` at the repo root
    first). This needs the sandbox repo cloned: the dashboard app is not part of
    the `werkmeister` npm package, so a machine with only the
    package installed cannot use this skill.
@@ -35,7 +35,7 @@ workspace's newest session.
    and the bundled script derives its tool-name prefix from the file's own
    `cowork-artifact-meta` block at runtime. If the session's Sandbox tools are
    named differently than the meta block says, change `serverName` in
-   `src/artifact-meta.json` and rebuild (`npm run build:ui`) — do not hand-edit
+   `src/artifact-meta.json` and rebuild (`pnpm run build:ui`) — do not hand-edit
    the HTML.
 2. Write the HTML to a file in your scratch/outputs directory, e.g.
    `workspace-list.html`.
@@ -68,7 +68,7 @@ Tell the user:
   artifact workspace-list.html" so Claude surfaces it each session. Point it at
   the copy in the connected folder so the open needs no re-copy.
 - The connected-folder copy is a snapshot. If the dashboard is rebuilt
-  (`npm run build:ui`) or its server name changes, refresh the copy from
+  (`pnpm run build:ui`) or its server name changes, refresh the copy from
   `apps/sandbox-dashboard/dist/workspace-list.artifact.html` so it stays in sync.
 - Chat sends run headless `claude -p` turns in the workspace directory with
   `--permission-mode acceptEdits`; tool activity streams into the panel while
@@ -78,7 +78,7 @@ Tell the user:
 ## Updating the dashboard
 
 When the dashboard source changes — after a rebuild
-(`cd apps/sandbox-dashboard && npm run build:ui`) or a server-name change — both
+(`cd apps/sandbox-dashboard && pnpm run build:ui`) or a server-name change — both
 copies must be refreshed, or the user will keep seeing the old UI:
 
 1. Read the rebuilt `apps/sandbox-dashboard/dist/workspace-list.artifact.html`

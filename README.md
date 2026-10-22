@@ -3,7 +3,12 @@
 Werkmeister (formerly `sandbox`) is a multi-feature concurrent development orchestrator.
 Its CLI is `werkmeister`, or `w9r` for short.
 
-Turborepo monorepo (npm workspaces + [Turbo](https://turbo.build)).
+Turborepo monorepo ([pnpm](https://pnpm.io) workspaces + [Turbo](https://turbo.build)).
+
+pnpm is for working on this repo. To *use* Werkmeister, nothing changes: the
+published package doesn't depend on the repo's package manager, so
+`npx werkmeister setup` and `npm install -g werkmeister` work as they always have
+(see "Install the CLI without a clone").
 
 ## Workspaces
 
@@ -33,28 +38,31 @@ To run the CLI you are developing, link the checkout onto your PATH:
 ```bash
 git clone https://github.com/jbbz-sandbox/werkmeister.git
 cd werkmeister
-npm install && npm run build
-npm link -w apps/cli       # puts `werkmeister` and `w9r` on PATH, symlinked into apps/cli
+corepack enable            # pnpm, at the version package.json pins
+pnpm install && pnpm run build
+pnpm setup                 # once per machine: a global bin dir on PATH (open a new shell after)
+(cd apps/cli && pnpm link --global)   # puts `werkmeister` and `w9r` on PATH, pointing into apps/cli
 werkmeister setup
 ```
 
 The global `werkmeister` is a symlink into this checkout, not a copy, so a rebuild
-(`npm run build`) after a pull is all it takes to update it. `setup` records
+(`pnpm run build`) after a pull is all it takes to update it. `setup` records
 this checkout as `sandbox_root`, so don't move or delete it while it is linked.
 Until you rebuild, it keeps running the old bundle, so the CLI
 prints a one-line stderr warning when `apps/cli/dist` was built from a
 different commit than the checkout's `HEAD`. The warning names both SHAs and
-the rebuild command, `npm run build --workspace werkmeister-core && npm run build --workspace apps/cli`.
+the rebuild command, `pnpm turbo run build --filter=werkmeister`.
 It never shows on a published install, which has no `.git`, and `werkmeister hooks`
 skips it. To skip the global link, run `apps/cli/werkmeister` from the checkout instead. To remove
-the link, run `npm rm -g werkmeister`.
+the link, delete its shims: `rm "$PNPM_HOME"/{werkmeister,w9r,sandbox}`
+(pnpm 10's `pnpm remove --global` refuses with `ERR_PNPM_GLOBAL_BIN_DIR_NOT_IN_PATH`).
 
 A linked CLI doesn't offer to install the VS Code extension. Only the published
 package ships the `.vsix`, so build and install it yourself:
 
 ```bash
 cd packages/vscode-plugin
-npm run build && npm run package -- --out werkmeister-vscode.vsix
+pnpm run build && pnpm run package --out werkmeister-vscode.vsix
 code --install-extension werkmeister-vscode.vsix --force
 ```
 
@@ -74,9 +82,9 @@ npx werkmeister setup    # installs globally, then runs the wizard
 
 To check what's published, run `npm view werkmeister version`.
 
-**Don't run the `npx` line inside a checkout of this repo.** npx prefers the
-workspace link `node_modules/werkmeister → apps/cli` over the
-registry, so it silently runs your checkout's CLI: nothing is installed,
+**Don't run the `npx` line inside a checkout of this repo.** npx can pick the
+checkout's own `werkmeister` package over the registry (in `apps/cli` it always
+does), so it silently runs your checkout's CLI: nothing is installed,
 `werkmeister` stays off your PATH, and `setup` records the checkout as
 `sandbox_root`.
 
@@ -117,10 +125,10 @@ that pointer. Pick one per machine.
 ### Releasing
 
 Releases run on [Changesets](https://github.com/changesets/changesets); nobody
-runs `npm publish` by hand. In a PR that changes anything user-visible:
+publishes by hand. In a PR that changes anything user-visible:
 
 ```bash
-npx changeset          # pick a bump, write a one-line description
+pnpm changeset         # pick a bump, write a one-line description
 ```
 
 That writes `.changeset/<name>.md` — commit it with the PR. **Name
@@ -139,6 +147,9 @@ accident.
 nothing publishes untested; npm will not accept a re-publish of a
 version. The job publishes through npm trusted publishing (OIDC): npmjs.com
 trusts `.github/workflows/ci.yml` in this repo, so no npm token is stored anywhere.
+Changesets runs `pnpm publish`, which packs the tarball (turning `workspace:*`
+into real versions) and hands it to the npm CLI for the upload, so the OIDC
+exchange is npm's (≥ 11.5.1, bundled with the job's Node 24).
 
 The version PR is pushed with a GitHub App's token so its own CI runs without
 anyone approving it. The App needs Contents and Pull requests (read and write)
@@ -157,7 +168,7 @@ hostnames the ingress terminates), so it is not something the repo can ship.
 On a fresh clone, seed it before anything else:
 
 ```bash
-npm install && npm run build
+corepack enable && pnpm install && pnpm run build
 apps/cli/werkmeister setup            # guided wizard
 ```
 
@@ -223,11 +234,12 @@ blocks, the certificate SANs and your `/etc/hosts` entries together. Set
 Run from the repo root — Turbo fans each task out across the workspaces that define it:
 
 ```bash
-npm install        # install all workspace deps (one root node_modules)
-npm run build      # turbo run build
-npm run typecheck  # turbo run typecheck
-npm run test       # turbo run test
-npm run dev        # turbo run dev (dashboard watch/serve)
+pnpm install        # install all workspace deps (each package gets its own node_modules)
+pnpm run build      # turbo run build
+pnpm run typecheck  # turbo run typecheck
+pnpm run test       # turbo run test
+pnpm run dev        # turbo run dev (dashboard watch/serve)
+pnpm turbo run test --filter=werkmeister   # one package (and what it depends on)
 ```
 
 The CLI launcher lives at [apps/cli/werkmeister](apps/cli/werkmeister). The old `sandbox` launcher ([apps/cli/sandbox](apps/cli/sandbox), also symlinked at the repo root as `./sandbox`) still works but is deprecated and goes away in SW-11.

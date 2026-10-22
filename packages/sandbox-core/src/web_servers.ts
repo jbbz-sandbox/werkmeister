@@ -195,7 +195,7 @@ function globMatch(dir: string, pattern: string): string[] {
 /**
  * True if the build is missing or any source file is newer than it.
  *
- * `buildRef` is the reference: `npm run build` regenerates it (tsc) after
+ * `buildRef` is the reference: `pnpm run build` regenerates it (tsc) after
  * the UI bundles, so it's the newest artifact after a successful build. Any
  * source edit afterwards makes that source newer → stale.
  */
@@ -212,7 +212,7 @@ function distStale(app: WebApp): boolean {
   } catch {
     return true;
   }
-  // Everything that feeds `npm run build` (node_modules/dist excluded).
+  // Everything that feeds `pnpm run build` (node_modules/dist excluded).
   const patterns = [
     "*.ts",
     "*.html",
@@ -240,7 +240,7 @@ function distStale(app: WebApp): boolean {
  * True if the build was refreshed after the current server was launched.
  *
  * `start()` rewrites the PID file on every launch, so its mtime marks when the
- * live process began. A direct `npm run build` (outside `sandbox connect`)
+ * live process began. A direct `pnpm run build` (outside `sandbox connect`)
  * updates `dist/` without bouncing the server, leaving it serving a stale
  * bundle — this catches that: the build artifact newer than the PID file means
  * the running process predates the build. Best-effort: unknown → false (don't
@@ -371,10 +371,10 @@ export async function start(
     info(`Building ${app.label} (sources changed)...`);
     let result;
     try {
-      result = run(["npm", "run", "build"], { cwd: dir, capture: true, timeout: 300 });
+      result = run(["pnpm", "run", "build"], { cwd: dir, capture: true, timeout: 300 });
     } catch (err) {
       if (err instanceof ProcError && err.code === "ENOENT") {
-        warn(`npm not found; skipping ${app.label}`);
+        warn(`pnpm not found; skipping ${app.label}`);
         return false;
       }
       if (err instanceof ProcError && err.code === "ETIMEDOUT") {
@@ -394,7 +394,7 @@ export async function start(
     info(`${app.label} build up to date; skipping build`);
   }
 
-  // A direct `npm run build` can refresh dist without bouncing the server,
+  // A direct `pnpm run build` can refresh dist without bouncing the server,
   // leaving it serving a stale bundle. Treat that like an explicit force so the
   // bounce path below reloads it.
   if (running && !rebuilt && buildNewerThanRunning(app, buildRef)) {
