@@ -12,7 +12,7 @@ Every external library, program, container image and service Werkmeister depends
 | dev-only | needed to build, test or release from a checkout. Never shipped |
 | optional | an integration Werkmeister works without. The person opts in ([Optional integrations](#optional-integrations)) |
 
-Versions: `range` is what package.json declares, `→ x.y.z` is what package-lock.json resolves to.
+Versions: `range` is what package.json declares, `→ x.y.z` is what pnpm-lock.yaml resolves to.
 
 ## What the published package contains
 
@@ -99,7 +99,8 @@ The code checks only Node (via `engines`; the wrapper fails with "could not loca
 | Software | Minimum | SPDX / terms | Used for |
 |---|---|---|---|
 | Node.js | `>=20` (`engines`). CI runs 24, the vscode image 22. Node 20 has been EOL since 2026-04 (follow-up 5) | MIT | runs `dist/main.js` |
-| npm | ships with Node (`packageManager: npm@10.9.4`; CI publish needs ≥11.5.1) | Artistic-2.0 | install, `npm run build`, npx bootstrap |
+| pnpm | contributors and CI only, via corepack (`packageManager: pnpm@10.34.7`) | MIT | install, `pnpm run build`, `pnpm publish` |
+| npm | ships with Node (CI publish needs ≥11.5.1) | Artistic-2.0 | the upload `pnpm publish` hands it, npx bootstrap, users' `npm install -g` |
 | Docker Engine | not checked. Reached through dockerode on `DOCKER_HOST` or the context socket | Apache-2.0 (Moby). Docker Desktop is proprietary (Docker Subscription Service Agreement) | every container |
 | Docker Compose v2 plugin | not checked ("docker compose not found…" if absent) | Apache-2.0 | `docker compose` for features and shared infra |
 | OrbStack (macOS, the default `k8s_context`) | not checked | proprietary (free for personal use, paid commercial licence) | Docker + local k8s on macOS. Any Docker Engine works for containers |
@@ -118,7 +119,7 @@ Found by grepping for the process helpers: `run([…])`, `runCapture`, `runCmd`,
 |---|---|---|---|
 | git | required | `sandbox-core/src/{worktrees,sandbox,pr_lifecycle,git_hooks,graduate,workspace_init,machine_setup}.ts`, `apps/cli/esbuild.mjs`, `build_freshness.ts` | GPL-2.0-only |
 | docker (`docker compose`) | required | `sandbox-core/src/{compose,compose_infra,lifecycle,pr_lifecycle,docker,caddy,infra}.ts` | Apache-2.0 |
-| node, npm, npx | required | `web_servers.ts` (`node`, `npm run build`), wrapper npx bootstrap, `test_run.ts` (`npx playwright`), `scaffold.ts` (`npx @upstash/context7-mcp` in generated MCP config) | MIT, Artistic-2.0 |
+| node, npm, npx | required | `web_servers.ts` (`node`; `pnpm run build` in a checkout), wrapper npx bootstrap, `test_run.ts` (`npx playwright`), `scaffold.ts` (`npx @upstash/context7-mcp` in generated MCP config) | MIT, Artistic-2.0 |
 | claude | required for setup | `claude_cli.ts`, `machine_setup.ts`, `sandbox.ts` (`CLAUDE_BIN` override) | proprietary (Anthropic) |
 | sh / bash | required | wrappers, `machine_setup.ts` (`bash generate-certs.sh`), `plugins/werkmeister/hooks/register.tsx` | GPL-3.0-or-later |
 | openssl | feature | `apps/cli/bin/generate-certs.sh` | Apache-2.0 |
@@ -169,7 +170,7 @@ Werkmeister runs without each of these. The person turns one on.
 | Telepresence | `sandbox intercept` | setup step "Install/upgrade the OSS client via Homebrew" (`telepresenceio/telepresence/telepresence-oss`), then `bin/setup-telepresence-cluster.sh` once per cluster | setup ok "not installed (needed only for `sandbox intercept`)". Below `MIN_VERSION` 2.30.0, `intercept` refuses. `down` skips it | Apache-2.0 |
 | Claude Code plugin (`plugins/werkmeister`): skills, `werkmeister mcp` server, Workspaces pane mod | in-session tools, the Workspaces pane | `sandbox setup` installs it via `claude plugin`. The pane finds core through `WERKMEISTER_CORE_PATH` or `command -v werkmeister` | the CLI works alone. Without a UI build, App tools return text | Apache-2.0 (ours); Claude Code under Anthropic terms |
 | Claude Desktop | MCP App UI in Desktop | manual `claude_desktop_config.json` entry (`plugins/werkmeister/README.md`) | hosts without App support get markdown | Anthropic Consumer / Commercial Terms |
-| Cowork artifact | live dashboard artifact | `install-workspace-dashboard` skill (needs a checkout + `npm run build:ui`) | falls back to the Desktop MCP App | Anthropic terms |
+| Cowork artifact | live dashboard artifact | `install-workspace-dashboard` skill (needs a checkout + `pnpm run build:ui`) | falls back to the Desktop MCP App | Anthropic terms |
 | VS Code + extension | workspace and intercept tree view | setup prompt → `code --install-extension <bundled .vsix>` | "`code` not on PATH — skipped". A checkout bundles no .vsix | extension Apache-2.0; VS Code Microsoft Software License (Code - OSS MIT); `redhat.vscode-yaml` MIT for schema mapping |
 | `pr watch` scheduler | resumes sessions when a PR merges, ships or closes | `werkmeister pr watch --install` or the setup prompt. macOS: launchd `com.werkmeister.pr-watch`. Elsewhere: a crontab line every 600s | not installed is fine. "launchctl bootstrap failed" / "crontab not found" when installing | Apple macOS component; cron (system) |
 | Jaeger + Redis Insight | tracing UI and OTLP endpoints (16686/4317/4318); Redis UI (5540) | started with shared infra by `connect`. **No off switch today** (follow-up 4) | — (always on) | Apache-2.0; **SSPL-1.0** |
@@ -196,9 +197,9 @@ None of the bundled npm packages ships an Apache `NOTICE` file, so Werkmeister's
 
 ## Checking npm licences
 
-`npm run licenses` runs `scripts/check-licenses.mjs` (after its unit test). It runs in CI right after `npm ci`, and it fails when any package in `package-lock.json` has a licence outside the allowlist.
+`pnpm run licenses` runs `scripts/check-licenses.mjs` (after its unit test). It runs in CI right after `pnpm install`, and it fails when any installed package has a licence outside the allowlist.
 
-**Why this approach:** it reads the lockfile with plain Node. That covers every platform's optional binaries (an installed tree only has the host's), adds no dependency (`license-checker` is unmaintained and only walks `node_modules`), and fails CI the moment a dependency change lands. npm's lockfile drops the legacy `licenses` array, so for the few packages that still use it the script reads the installed `package.json`. That's why it runs after `npm ci`.
+**Why this approach:** it reads `pnpm licenses list --json`, which pnpm builds from each installed package's own `package.json` (legacy `licenses` arrays included). It adds no dependency (`license-checker` is unmaintained), and fails CI the moment a dependency change lands. `pnpm-lock.yaml` carries no licences, so unlike the old `package-lock.json` reader it only sees what this platform installed: another platform's optional binaries (`@esbuild/darwin-arm64` and the like) aren't listed. Each is a twin of a listed package with the same terms; if one ever differs, run the check with pnpm's `supportedArchitectures` set to every platform.
 
 **Policy:** `ALLOWED` lists permissive SPDX ids (OSI-approved, plus CC0-1.0). An `OR` expression passes if any branch is allowed, and an `AND` expression only if every term is. Anything else needs an entry in `REVIEWED`: the package name (platform packages `name-<platform>` match it) and why its terms are acceptable.
 

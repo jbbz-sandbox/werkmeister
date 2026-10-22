@@ -7,8 +7,8 @@ ingress hostnames.
 ## Quick start
 
 ```sh
-npm install
-npm run build
+pnpm install
+pnpm run build
 ./sandbox --help
 ```
 

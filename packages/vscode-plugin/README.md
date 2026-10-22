@@ -39,8 +39,8 @@ to `~/.sandbox/config.yaml`, which `sandbox config` maintains.
 ## Tests
 
 ```bash
-npm test              # pure logic + the package.json menu clauses, ~100ms, no VS Code
-npm run test:integration   # a real extension host (downloads a VS Code build on first run)
+pnpm test             # pure logic + the package.json menu clauses, ~100ms, no VS Code
+pnpm run test:integration  # a real extension host (downloads a VS Code build on first run)
 ```
 
 `src/menus.test.mjs` feeds real `buildTree` nodes into the real `when` clauses
@@ -52,11 +52,11 @@ and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://
 
 `sandbox setup` installs it (section 8): the published CLI package ships the
 `.vsix`, at the CLI's version. A CLI run from a checkout (`./sandbox` or
-`npm link -w apps/cli`) has no `.vsix`, so `setup` skips it. Build and install
+`pnpm link --global` in `apps/cli`) has no `.vsix`, so `setup` skips it. Build and install
 it yourself from this directory:
 
 ```bash
-npm run build && npm run package -- --out sandbox-workspaces.vsix
+pnpm run build && pnpm run package --out sandbox-workspaces.vsix
 code --install-extension sandbox-workspaces.vsix --force
 ```
 
