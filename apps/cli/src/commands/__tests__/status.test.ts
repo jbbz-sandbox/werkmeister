@@ -49,6 +49,7 @@ vi.mock("werkmeister-core/status", async (orig) => ({
   statusSnapshot: vi.fn(),
 }));
 
+import { getPerServiceStatus } from "werkmeister-core/k8s";
 import { featureVitals, statusSnapshot } from "werkmeister-core/status";
 import { hostText, run, vitalsText } from "../status.js";
 
@@ -143,5 +144,49 @@ describe("run, paused (SW-70)", () => {
     vi.mocked(featureVitals).mockResolvedValue({ health: new Map(), resources: null } as never);
     await run({});
     expect(out.join("\n")).toContain("paused (0/1)");
+  });
+});
+
+// SW-42: `sandbox up` starts the forwarder only for a cluster-backed workspace,
+// so a stopped one is a fault only when a running workspace needs it.
+describe("a stopped k8s-forwards container", () => {
+  const forward = (status: string) => ({
+    name: "redis",
+    listen_port: 9050,
+    remote_port: 6379,
+    health_path: "redis",
+    status,
+  });
+  beforeEach(() => {
+    vi.mocked(featureVitals).mockResolvedValue({ health: new Map(), resources: null });
+  });
+
+  it("reads neutral, with no restart hint, when nothing running needs it", async () => {
+    vi.mocked(getPerServiceStatus).mockResolvedValue([forward("stopped")]);
+    await run({});
+    const text = out.join("\n");
+    expect(text).toContain(
+      "container sandbox-k8s-forwards stopped — not needed by any running workspace",
+    );
+    expect(text).toContain("k8s: \x1b[2mstopped");
+    expect(text).not.toContain("is down");
+    expect(text).not.toContain("docker restart sandbox-k8s-forwards");
+
+    out = [];
+    await run({ k8s: true });
+    expect(out.join("\n")).not.toContain("docker restart sandbox-k8s-forwards");
+  });
+
+  it("stays a red warning with the restart hint when a running workspace needs it", async () => {
+    vi.mocked(getPerServiceStatus).mockResolvedValue([forward("container_down")]);
+    await run({});
+    const text = out.join("\n");
+    expect(text).toContain("\x1b[31mcontainer sandbox-k8s-forwards is down");
+    expect(text).toContain("0/1 alive");
+    expect(text).toContain("docker restart sandbox-k8s-forwards");
+
+    out = [];
+    await run({ k8s: true });
+    expect(out.join("\n")).toContain("docker restart sandbox-k8s-forwards");
   });
 });

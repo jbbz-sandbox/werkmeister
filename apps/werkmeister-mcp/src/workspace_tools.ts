@@ -1122,7 +1122,8 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "Check every default k8s port-forward (from ~/.sandbox/services.yaml): HTTP GET " +
         "on each forward's health endpoint (2xx/3xx = healthy), or a TCP connect when it has " +
-        "none. Returns per-forward health plus healthy/total counts.",
+        "none. Returns per-forward health plus healthy/total counts; `stopped` when the " +
+        "forwarder is down and no running workspace needs the cluster (normal, not a fault).",
       inputSchema: {},
       outputSchema: z.object({
         forwards: z.array(
@@ -1135,15 +1136,17 @@ export function registerWorkspaceTools(server: McpServer): void {
         ),
         healthy: z.number(),
         total: z.number(),
+        stopped: z.boolean(),
       }),
     },
     async (): Promise<CallToolResult> => {
       try {
         const result = await getK8sForwardsHealth();
         const bad = result.forwards.filter((f) => !f.healthy).map((f) => `${f.name} (${f.detail})`);
-        const text =
-          `${result.healthy}/${result.total} k8s forwards healthy` +
-          (bad.length ? ` — unhealthy: ${bad.join(", ")}` : ".");
+        const text = result.stopped
+          ? "k8s-forwards stopped — not needed by any running workspace."
+          : `${result.healthy}/${result.total} k8s forwards healthy` +
+            (bad.length ? ` — unhealthy: ${bad.join(", ")}` : ".");
         return {
           content: [{ type: "text", text }],
           structuredContent: result as unknown as Record<string, unknown>,

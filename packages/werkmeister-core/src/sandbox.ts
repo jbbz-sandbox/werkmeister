@@ -60,12 +60,12 @@ import {
   slotPortRange,
   workspacesRoot,
 } from "./config.js";
-import { type ProjectContainer, projectContainers } from "./docker.js";
+import { containerRunning, type ProjectContainer, projectContainers } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { buildFormSchema } from "./form_schema.js";
 import { infraHealth, up as infraUp } from "./infra.js";
 import { type Issue, issueBriefing, issueIdOf, issueTracker } from "./issue_tracker.js";
-import { checkForwardHealth } from "./k8s.js";
+import { checkForwardHealth, forwarderNeeded } from "./k8s.js";
 import { type CrashLoop, type ProjectHealth, projectHealth, type Started } from "./resources.js";
 import { type InterceptRow, interceptsSnapshot } from "./status.js";
 
@@ -1418,12 +1418,17 @@ export function tallyComposeContainers(rows: ProjectContainer[]): Map<string, Co
  * misleading "down".
  */
 async function dockerComposeProjects(): Promise<{
+  containers: ProjectContainer[];
   tallies: Map<string, ComposeProjectTally>;
   health: Map<string, ProjectHealth>;
 } | null> {
   const containers = await projectContainers();
   if (!containers) return null;
-  return { tallies: tallyComposeContainers(containers), health: await projectHealth(containers) };
+  return {
+    containers,
+    tallies: tallyComposeContainers(containers),
+    health: await projectHealth(containers),
+  };
 }
 
 /**
@@ -1540,13 +1545,24 @@ export async function getWorkspaceStatuses(): Promise<{
     infra = { state: "unknown", running: 0, total: 0, services: [] };
   } else {
     const c = projects.get(INFRA_PROJECT);
-    const running = c?.running ?? 0;
-    const total = c?.total ?? 0;
+    // A stopped forwarder no running workspace needs is how `sandbox up` leaves
+    // it (SW-42), not a fault: leave it out so infra doesn't read partial.
+    let infraServices = c?.services ?? [];
+    const forwarder = infraServices.find((s) => s.name === "k8s-forwards");
+    if (
+      forwarder &&
+      forwarder.state !== "running" &&
+      !(await forwarderNeeded(swept?.containers ?? null))
+    ) {
+      infraServices = infraServices.filter((s) => s !== forwarder);
+    }
+    const running = infraServices.filter((s) => s.state === "running").length;
+    const total = infraServices.length;
     const state =
       total === 0 ? "down" : running === total ? "up" : running > 0 ? "partial" : "down";
     // Same buckets as `sandbox status` (_get_infra_status): healthcheck wins,
     // then falls back to the raw container state.
-    const services = (c?.services ?? []).map((s) => ({
+    const services = infraServices.map((s) => ({
       name: s.name,
       state: serviceHealthState(s),
     }));
@@ -3474,6 +3490,8 @@ export async function getK8sForwardsHealth(): Promise<{
   forwards: K8sForwardHealth[];
   healthy: number;
   total: number;
+  /** The forwarder is down and no running workspace needs it (SW-42): neutral, not a fault. */
+  stopped: boolean;
 }> {
   const file = await resolveServicesYaml();
   if (!file) {
@@ -3488,7 +3506,13 @@ export async function getK8sForwardsHealth(): Promise<{
       return { name: d.name, port: d.listen, healthy: r.ok, detail: r.detail };
     }),
   );
-  return { forwards, healthy: forwards.filter((f) => f.healthy).length, total: forwards.length };
+  const stopped = !(await containerRunning("sandbox-k8s-forwards")) && !(await forwarderNeeded());
+  return {
+    forwards,
+    healthy: forwards.filter((f) => f.healthy).length,
+    total: forwards.length,
+    stopped,
+  };
 }
 
 export interface ClaudeTurnState {
