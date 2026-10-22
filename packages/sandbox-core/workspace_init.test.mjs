@@ -15,7 +15,7 @@ import { dotDir } from "./dist/config.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { createWorkspace } from "./dist/sandbox.js";
 import { provisionWorkspace, WorkspaceInitError } from "./dist/workspace_init.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { dockerAvailable, withSandboxHome } from "./fixtures.mjs";
 
 /** Run `fn`, returning its rejection and everything it printed. */
 async function abort(fn) {
@@ -84,11 +84,22 @@ test("a non-interactive create with no strategy writes context_strategy: icm (#1
       async () => {
         const { workspacePath } = await createWorkspace(
           { feature: "demo", services: "backend", work_type: "feature" },
-          { open: false, cwd: tmp, distill: false },
+          { open: false, cwd: tmp, distill: false, build: false },
         );
         const yml = fs.readFileSync(path.join(dotDir(workspacePath), "workspace.yml"), "utf8");
         assert.match(yml, /^context_strategy: icm$/m);
         assert.ok(fs.existsSync(path.join(workspacePath, "stages")), "ICM layout");
+        // SW-66: a container built here outlives the tmp dir and crash-loops on the real daemon.
+        if (await dockerAvailable()) {
+          const { docker } = await import("./dist/docker.js");
+          const made = (await docker().listContainers({ all: true })).filter((c) =>
+            c.Labels["com.docker.compose.project.working_dir"]?.includes(path.basename(tmp)),
+          );
+          assert.deepEqual(
+            made.map((c) => c.Names[0]),
+            [],
+          );
+        }
       },
       { config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(tmp, "ws")}\n` },
     );
