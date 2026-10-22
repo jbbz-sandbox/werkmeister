@@ -20,6 +20,7 @@
     "./compose_file": "./dist/compose_file.js",
     "./config": "./dist/config.js",
     "./docker": "./dist/docker.js",
+    "./dot_dir": "./dist/dot_dir.js",
     "./errors": "./dist/errors.js",
     "./feature_routing": "./dist/feature_routing.js",
     "./form_schema": "./dist/form_schema.js",
