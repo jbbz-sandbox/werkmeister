@@ -1,6 +1,6 @@
 /**
  * `up` used to re-install the JIT hooks into every workspace, including an ICM
- * one (docs/superpowers/specs/2026-09-27-context-strategy-interface.md). It
+ * one (docs/superpowers/specs/2026-09-27-context-strategy-interface.md at 66703fc). It
  * now calls the workspace's strategy's refresh.
  */
 

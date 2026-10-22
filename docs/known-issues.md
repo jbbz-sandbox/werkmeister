@@ -277,11 +277,11 @@ the scan without changing what the form shows.
 
 **Severity:** Moderate (silently drops the newest decisions, which is the opposite of what you want)
 **Status:** Resolved — the decision list is budgeted, newest first
-**Affects:** `apps/cli/src/commands/notes.ts` — `buildContext()`, via the SessionStart hook
+**Affects:** `packages/sandbox-core/src/notes.ts` — `buildContext()`, via the SessionStart hook
 
-`buildContext()` now renders decisions into a `_CONTEXT_CHAR_CAP` (9000 chars) budget, keeping
+`buildContext()` now renders decisions into a `CONTEXT_CHAR_CAP` (9000 chars) budget, keeping
 the newest and listing the elided older ones by path so a session can still read them
-(`renderDecisions` in `apps/cli/src/commands/notes.ts`). Standards and the handoff always print.
+(`renderDecisions` in `packages/sandbox-core/src/notes.ts`). Standards and the handoff always print.
 
 `buildContext()` renders the latest handoff plus **every** open `decision` note. The hook
 harness truncates its combined output at ~10k characters — the function's own docstring says
@@ -319,7 +319,7 @@ and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under
 directory that ships in the published package, so reinstalling or upgrading
 `werkmeister` could discard or stale them. Resolved 2026-10-01: everything
 `werkmeister connect` generates now lives under `~/.werkmeister/infra/`
-(`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md`).
+(`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md` at 66703fc).
 
 **Fix direction:** generated artifacts belong under `~/.werkmeister/` (like `services.yaml` and
 `ports.yaml` already do), leaving the package tree read-only; `sandbox_root` then only has to
@@ -395,12 +395,12 @@ Left over from the final review of the work-type phase gate
 
 | Where | What |
 |---|---|
-| `gate.ts:290` — `decide()` | The phase-gate step runs after `_loadState`, so an unreadable `.werkmeister/.gate/<session>.json` returns null and **silently disables the phase gate** too, although the phase gate uses no state. Fix: move the phase-gate block above `_loadState`. |
-| `gate.ts:207` — `_noteStatus()` | `status:\s*` can run past the newline, so an empty `status:` line captures the next line's first token as the status. The result matches "no status" today (that token is never `decided`/`superseded`), but `[ \t]*` would be exact. |
-| `gate.ts:203` — `_noteStatus()` | A note whose frontmatter is an empty `---`/`---` block does not match the block regex, counts as unparseable, and fails open, so it satisfies a `decided` gate. Fail-open is deliberate for unparseable notes; an empty block is arguably "no status" instead. |
-| `workspace_skills.ts:324` — `checkStandardsManifest()` | Reads `.werkmeister/standards.json` twice per call: once in `resolveWorkspaceManifest` to see whether a gate exists, and once for `onDisk`. CLI path only, not the per-edit gate. |
+| `gate.ts:292` — `decide()` | The phase-gate step runs after `_loadState`, so an unreadable `.werkmeister/.gate/<session>.json` returns null and **silently disables the phase gate** too, although the phase gate uses no state. Fix: move the phase-gate block above `_loadState`. |
+| `gate.ts:209` — `_noteStatus()` | `status:\s*` can run past the newline, so an empty `status:` line captures the next line's first token as the status. The result matches "no status" today (that token is never `decided`/`superseded`), but `[ \t]*` would be exact. |
+| `gate.ts:205` — `_noteStatus()` | A note whose frontmatter is an empty `---`/`---` block does not match the block regex, counts as unparseable, and fails open, so it satisfies a `decided` gate. Fail-open is deliberate for unparseable notes; an empty block is arguably "no status" instead. |
+| `workspace_skills.ts:315` — `checkStandardsManifest()` | Reads `.werkmeister/standards.json` twice per call: once in `resolveWorkspaceManifest` to see whether a gate exists, and once for `onDisk`. CLI path only, not the per-edit gate. |
 | Gate latency | The 79ms measurement (50 notes) exited on the first matching note. The worst case, a `decided` gate with many `open` decision notes that reads every file, was not timed. |
-| Cosmetic | `gate.ts:297` labels the step "2a" while `jit-context-system.md` §6 numbers it 2; the §5.3 work-type paragraph is wrapped wider than its neighbours; in "Answers Given in Chat" above, the **Fix:** paragraph follows **Related:** rather than **Likely fix:**. |
+| Cosmetic | `gate.ts:300` labels the step "2a" while `jit-context-system.md` §6 numbers it 2; the §5.3 work-type paragraph is wrapped wider than its neighbours; in "Answers Given in Chat" above, the **Fix:** paragraph follows **Related:** rather than **Likely fix:**. |
 
 ---
 
@@ -454,18 +454,22 @@ which is cheap and needs no supervisor.
 **Status:** Open
 **Affects:** `packages/vscode-plugin/package.json`
 
-Neither `repository` nor `license` is set, and there is no `LICENSE` file in the package.
-`vsce package` warns on both, and the Marketplace listing renders without a source link.
+`repository` is not set, and there is no `LICENSE` file in the package (`license` is
+`Apache-2.0` since SW-17). `vsce package` warns on both, and the Marketplace listing renders without a source link.
 
-**Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/werkmeister.git", "directory": "packages/vscode-plugin" }`, set `"license"`, and add the LICENSE file.
+**Fix:** add `"repository": { "type": "git", "url": "https://github.com/jbbz-sandbox/werkmeister.git", "directory": "packages/vscode-plugin" }`, and add the LICENSE file.
 
 ---
 
 ## `compose-logs.smoke.mjs` Fails When Run From Inside a Workspace
 
 **Severity:** Low (a false red on `npm test`; CI's clean checkout never hits it)
-**Status:** Open
+**Status:** Resolved — the fallback checks ownership (311debb)
 **Affects:** `packages/sandbox-core/compose-logs.smoke.mjs`; `workspaceForFeature()` in `packages/sandbox-core/src/compose.ts`, via `resolveWorkspace()` in `config.ts`
+
+`workspaceForFeature()` now trusts the cwd fallback only when that workspace's `.env` names the
+feature (`envNamesFeature`), so an unrelated feature no longer resolves to the enclosing workspace.
+The smoke's negative case has since moved to a missing *service* (SW-61).
 
 The smoke's last assertion is that `composeLogsStream("no-such-feature-hopefully")` returns
 `null`. It does not when the test runs from a checkout that sits under `paths.workspaces_root`
@@ -556,7 +560,7 @@ cd packages/sandbox-core
 EMPTY=$(mktemp -d) SANDBOX_CONFIG_FILE="$EMPTY/.werkmeister/config.yaml" node --test *.test.mjs
 ```
 
-A test that genuinely needs a live stack should skip on `machineConfigured()` rather than
+A test that genuinely needs a live stack should skip on `dockerAvailable()` (`fixtures.mjs`) rather than
 borrow the developer's registry.
 
 ---
@@ -572,7 +576,7 @@ Every workspace container installs and builds its repo, so warm caches decide ho
 | Cache | How it is shared today | Where |
 |---|---|---|
 | turbo (monorepo task cache) | host dir `{{home}}/.sandbox/cache/turbo`, `TURBO_CACHE_DIR` + `TURBO_CACHE_MAX_AGE: 14d` (SW-35) | `services.yaml` env on each service and `sandbox-install` |
-| pnpm store | host dir `{{home}}/.sandbox/cache/pnpm-store` (SW-31); #351 moves it to the shared named volume `^sandbox-pnpm-store:/pnpm-store`. Both set `npm_config_store_dir` | `services.yaml` `extra_volumes` (`*host_mounts`) and `sandbox-install` |
+| pnpm store | shared named volume `^sandbox-pnpm-store:/pnpm-store` (#351; was host dir `{{home}}/.sandbox/cache/pnpm-store`, SW-31), `npm_config_store_dir` | `services.yaml` `extra_volumes` (`*host_mounts`) and `sandbox-install` |
 | npm, yarn, bun, nx, and non-JS toolchains (cargo, Go modules, pip/uv, Maven/Gradle) | not shared: each workspace downloads and builds cold | none |
 
 **What goes wrong as more repos and tools arrive:**

@@ -1,4 +1,4 @@
-/* Stellwerk tokens — drop-in replacement for the :root block in
+/* Werkmeister tokens — drop-in replacement for the :root block in
    apps/sandbox-dashboard/src/theme.ts (THEME_CSS). Keep the --sd- prefix. */
 :root {
   --sd-sans: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

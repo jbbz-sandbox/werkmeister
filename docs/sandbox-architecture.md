@@ -36,7 +36,7 @@ cluster — see [docs/topology.md](topology.md). This section is the request pat
 │  Caddy  (one site block per service hostname, :443)                 │
 │                                                                     │
 │  • TLS termination (local certs)                                    │
-│  • Serves feature selector UI at /__sandbox                         │
+│  • Serves feature selector UI at /__werkmeister                     │
 │  • Copies the X-Feature cookie onto the upstream as a header        │
 │  • Match X-Feature cookie → local container, else k8s baseline      │
 └──────────┬──────────────────────────────────┬───────────────────────┘
@@ -65,11 +65,11 @@ k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052
 
 **What Caddy does**:
 - Terminates HTTPS/TLS using local certificates (mounted from the directory named by `ingress.certs_dir` in `~/.werkmeister/config.yaml`).
-- Serves the feature selector UI at `/__sandbox` on every host — a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__sandbox/features.json` is matched first (a real file); any other `/__sandbox` path returns the picker.
+- Serves the feature selector UI at `/__werkmeister` on every host (`/__sandbox` is a deprecated alias) — a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__werkmeister/features.json` is matched first (a real file); any other `/__werkmeister` path returns the picker.
 - Copies an `X-Feature` cookie value into an `X-Feature` header on the upstream call, so the app can read the selected feature.
 - Proxies to `host.docker.internal:<port>` for a local feature container, or to `k8s-<service>:<forward_port>` for the k8s baseline.
 
-**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`werkmeister proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.werkmeister/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `apps/cli/src/lib/feature_routing.ts`).
+**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`werkmeister proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.werkmeister/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `packages/sandbox-core/src/feature_routing.ts`).
 
 ```
 # Example generated Caddyfile snippet
@@ -77,12 +77,14 @@ frontend.remote.sandbox.com {
     tls internal
 
     # Feature selector UI
-    handle /__sandbox/features.json {
+    @selector_features path /__werkmeister/features.json /__sandbox/features.json
+    handle @selector_features {
         root * /sandbox/proxy/ui
         rewrite * /features.json
         file_server
     }
-    handle /__sandbox* {
+    @selector path /__werkmeister* /__sandbox*
+    handle @selector {
         root * /sandbox/proxy/ui
         rewrite * /index.html
         file_server
@@ -214,16 +216,16 @@ werkmeister remove <feature> <svc> # stop a local service, fall back to k8s
 werkmeister test <feature>       # run Playwright against this feature's stack
 
 # Infrastructure
-werkmeister infra-up         # start shared infrastructure (redis, cloud-sql, k8s-forwards, worker, caddy)
-werkmeister k8s-status           # check k8s-forwards container health
-werkmeister proxy-reload         # regenerate Caddyfile + worker.env, restart worker
+werkmeister up infra             # start shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy)
+werkmeister status --k8s         # check k8s-forwards container health
+werkmeister proxy-reload         # regenerate Caddyfile and reload Caddy
 ```
 
 **Implementation**: A TypeScript CLI that lives in the Werkmeister repo. Each command is a module in `apps/cli/src/commands/`.
 
 ### 5. Per-Feature Docker Compose Generation
 
-When `werkmeister up <feature>` runs, it dynamically generates a `docker-compose.feature-<name>.yml`:
+When `werkmeister up <feature>` runs, it dynamically generates the workspace's `compose.yml`:
 
 ```yaml
 # Auto-generated for feature: payment-refactor
@@ -321,7 +323,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 
 **Container details**:
 - Built from `infra/compose/k8s-port-forward/Dockerfile` (based on a digest-pinned `alpine`).
-- Installs `kubectl`, `bash`, and `netcat-openbsd` for port-forwarding and health probes. No cloud-provider auth plugin is needed — the cluster authenticates via the client cert embedded in the mounted kubeconfig.
+- Installs `kubectl`, `bash`, `netcat-openbsd`, `redis` and `postgresql-client` for port-forwarding and health probes. No cloud-provider auth plugin is needed — the cluster authenticates via the client cert embedded in the mounted kubeconfig.
 - Entrypoint script (`infra/compose/k8s-port-forward/entrypoint.sh`) runs all port-forwards as background processes with auto-restart loops.
 - Mounts `~/.kube` (read-only) and the generated kubeconfig for `kubectl` authentication.
 
@@ -340,9 +342,9 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 | 9052 | backend | default | 80 |
 | 9053 | frontend | default | 8080 |
 
-**Health checks**: Docker Compose healthcheck probes key ports (`nc -z localhost 9000 && nc -z localhost 9002 && nc -z localhost 9052`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
+**Health checks**: Docker Compose healthcheck runs `/usr/local/bin/probe.sh` (`infra/compose/k8s-port-forward/probe.sh`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
-**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs sandbox-k8s-forwards`. The `werkmeister k8s-status` command checks the container's health status.
+**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs sandbox-k8s-forwards`. The `werkmeister status --k8s` command checks the container's health status.
 
 ### 8. Playwright Integration
 
@@ -387,36 +389,31 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 ```
 ~/werkmeister/                          # werkmeister repo
 ├── apps/cli/werkmeister                 # CLI entrypoint (bash wrapper -> node)
-├── apps/cli/src/               # CLI command scripts
-│   ├── up.sh
-│   ├── down.sh
-│   ├── detect.sh
-│   ├── status.sh
-│   ├── test.sh
-│   └── proxy-reload.sh
-├── infra/config/
-│   ├── services.yaml                   # Service registry
-│   └── ports.yaml                      # Port allocation map
-├── infra/compose/                      # Docker Compose files
+├── apps/cli/src/               # CLI source
+│   ├── main.ts
+│   └── commands/                       # one module per command (up.ts, down.ts, ...)
+├── apps/cli/infra/compose/             # Docker Compose files
 │   ├── shared-infra.yml                # Shared infrastructure (jaeger, redisinsight,
-│   │                                   #   k8s-forwards, sb-sandbox-proxy worker, caddy)
-│   ├── k8s-port-forward/               # Containerized k8s port-forwards
-│   │   ├── Dockerfile                  # Based on alpine (kubectl only)
-│   │   └── entrypoint.sh              # Port-forward supervisor script
-│   ├── backend.yml                  # Per-service compose files
-│   └── frontend.yml
-├── infra/templates/
+│   │                                   #   k8s-forwards, caddy)
+│   └── k8s-port-forward/               # Containerized k8s port-forwards
+│       ├── Dockerfile                  # Based on alpine (kubectl only)
+│       ├── entrypoint.sh              # Port-forward supervisor script
+│       └── probe.sh                    # Healthcheck
+├── apps/cli/infra/templates/
 │   ├── docker-compose.feature.yml.njk  # nunjucks template for per-feature compose
 │   ├── Caddyfile.njk                   # Template for proxy config
 │   └── supergraph-config.yml.njk       # Template for the optional GraphQL gateway
-├── infra/proxy/
-│   ├── Caddyfile                       # Generated — do not edit
-│   └── ui/                             # Feature selector web UI
-│       ├── index.html
-│       └── features.json               # Generated feature list for UI
+├── apps/cli/infra/proxy/ui/            # Feature selector web UI
+│   └── index.html
 └── docs/
     ├── users-guide.md
     └── known-issues.md
+
+~/.werkmeister/                         # machine config + generated state
+├── config.yaml, services.yaml, ports.yaml
+└── infra/proxy/
+    ├── Caddyfile                       # Generated — do not edit
+    └── features.json                   # Generated feature list for UI
 
 ~/workspaces/                           # Vibe Kanban workspaces
 ├── payment-refactor/
@@ -450,7 +447,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 2. ALLOCATE
    ├── Find next available feature slot (e.g., slot 3)
    ├── Assign port range 11300–11319
-   └── Write slot assignment to ~/.werkmeister/slots.json
+   └── Slot is recorded as a container label (com.sandbox.local.slot) on compose up
 
 3. GENERATE
    ├── Render docker-compose from template with:
@@ -470,7 +467,6 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 
 6. CONFIGURE PROXY
    ├── Regenerate Caddyfile with new feature routes
-   ├── Regenerate infra/proxy/worker.env with per-feature endpoint overrides
    └── Caddy hot-reloads Caddyfile changes automatically
 
 7. REPORT

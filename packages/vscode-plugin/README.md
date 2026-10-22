@@ -4,8 +4,8 @@ A tree view over the developer-sandbox: every workspace under
 `paths.workspaces_root`, its container state, its Telepresence intercepts, and
 the `sandbox` CLI lifecycle — without leaving the editor.
 
-A consumer of `packages/sandbox-core`, alongside the `sandbox-dashboard` MCP
-server. Unlike the dashboard it imports werkmeister-core directly: the extension host
+A consumer of `packages/sandbox-core`, alongside the `werkmeister-mcp`
+server and the dashboard. Unlike the dashboard it imports werkmeister-core directly: the extension host
 is plain Node, so there is no HTTP or stdio hop.
 
 ## How it works
@@ -16,7 +16,7 @@ is plain Node, so there is no HTTP or stdio hop.
 |---|---|
 | Names, paths, issue IDs, labels | `listWorkspaces()` |
 | State, slot, ports, per-service health | `getWorkspaceStatuses()` — one `docker ps -a` sweep |
-| Per-service intercept state | `getIntercepts()` — one `sandbox status --intercepts --json` |
+| Per-service intercept state | `getIntercepts()` — in process, what `werkmeister status --intercepts --json` prints |
 
 Polled every 5s **only while the view is visible**.
 
@@ -29,7 +29,7 @@ browser window it launches.
 ## Configuration
 
 Normally none: werkmeister-core resolves paths from `SANDBOX_*` env vars and falls back
-to `~/.sandbox/config.yaml`, which `sandbox config` maintains.
+to `~/.werkmeister/config.yaml`, which `werkmeister config` maintains.
 
 | Setting | Use when |
 |---|---|
@@ -50,14 +50,14 @@ and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://
 
 ## Install
 
-`sandbox setup` installs it (section 8): the published CLI package ships the
-`.vsix`, at the CLI's version. A CLI run from a checkout (`./sandbox` or
+`werkmeister setup` installs it (section 8): the published CLI package ships the
+`.vsix`, at the CLI's version. A CLI run from a checkout (`./werkmeister` or
 `pnpm link --global` in `apps/cli`) has no `.vsix`, so `setup` skips it. Build and install
 it yourself from this directory:
 
 ```bash
-pnpm run build && pnpm run package --out sandbox-workspaces.vsix
-code --install-extension sandbox-workspaces.vsix --force
+pnpm run build && pnpm run package --out werkmeister-vscode.vsix
+code --install-extension werkmeister-vscode.vsix --force
 ```
 
 `--force` replaces an installed copy, even one at the same version. Reload

@@ -64,7 +64,7 @@ noise: it reports a clean run on a suite that failed.
 
 ## 5. Delegate fan-out; read what you reason against
 
-> Normative home: `sb-research`, "Delegate fan-out, read what you reason against".
+> Normative home: `sb-research`, "Read what you reason against".
 > This was the one practice here that no skill encoded; it does now.
 
 Subagents keep exploration bulk out of the parent window and return a conclusion

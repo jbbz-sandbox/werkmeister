@@ -31,7 +31,7 @@ workspace's newest session.
 
 1. Read `apps/sandbox-dashboard/dist/workspace-list.artifact.html`. The MCP server
    name is baked in at build time from
-   `apps/sandbox-dashboard/src/artifact-meta.json` (default `workspaces`),
+   `apps/sandbox-dashboard/src/artifact-meta.json` (default `werkmeister`),
    and the bundled script derives its tool-name prefix from the file's own
    `cowork-artifact-meta` block at runtime. If the session's Sandbox tools are
    named differently than the meta block says, change `serverName` in
@@ -43,7 +43,7 @@ workspace's newest session.
    - `id`: `workspace-list`
    - `html_path`: the file you just wrote
    - `mcp_tools`: the fully-qualified tool list from the file's
-     `cowork-artifact-meta` block (all 19 `mcp__<server>__…` names)
+     `cowork-artifact-meta` block (all 21 `mcp__<server>__…` names)
 4. Verify with `mcp__cowork__verify_artifact` (id `workspace-list`) — the debug
    log should show a `load` event and a successful `list-workspaces` call once
    the user opens it.
