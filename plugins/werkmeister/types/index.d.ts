@@ -107,6 +107,8 @@ export type InterceptRow = {
 /** What `sandbox status --intercepts --json` prints (sandbox-core `InterceptsSnapshot`). */
 export type InterceptsSnapshot = {
   available: boolean;
+  /** On PATH, connected or not. Absent from a core older than SW-12: fall back to `available`. */
+  installed?: boolean;
   connected_namespace: string | null;
   intercepts: InterceptRow[];
   /** Registry services with k8s coordinates; the rest get no intercept control. */

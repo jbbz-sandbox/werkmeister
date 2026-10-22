@@ -59,7 +59,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // Every SandboxError below reaches main.ts, which prints `[err] <msg>` and
   // exits 1 — the same two lines `fail()` used to run inline.
   if (args.leave) {
-    const left = await tp.leaveIntercept({ feature, service, localServices });
+    const left = await tp.leaveIntercept({
+      feature,
+      service,
+      localServices,
+      dockerDaemon: Boolean(args.docker_daemon),
+    });
     if (service) {
       success(`Left intercept for ${service}.`);
     } else if (left.length) {
