@@ -21,9 +21,9 @@
     "express": "^5.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "werkmeister-core": "^0.24.1",
-    "werkmeister-mcp": "^0.4.1",
-    "werkmeister-ui": "^0.4.0",
+    "werkmeister-core": "^0.25.0",
+    "werkmeister-mcp": "^0.4.2",
+    "werkmeister-ui": "^0.4.1",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
