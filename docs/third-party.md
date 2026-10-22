@@ -187,7 +187,7 @@ Werkmeister runs without each of these. The person turns one on.
 |---|---|---|
 | `@anthropic-ai/claude-agent-sdk` | Not an OSI licence: "SEE LICENSE IN README.md" → Anthropic Commercial Terms. The platform package says "© Anthropic PBC. All rights reserved". Werkmeister doesn't redistribute it: esbuild keeps it external, and the user's npm fetches it from the registry under Anthropic's terms | Never bundle it. Move it to `optionalDependencies` so every install isn't charged ~240 MB for a flag few people use, and have `detect --assist` say how to install it when it's absent (follow-up 1) |
 | Redis Insight image | SSPL-1.0, not OSI. Pulled, not redistributed. SSPL's obligations bite when you offer the software as a service, which local use doesn't do. But it starts for everyone with no off switch | Make it opt-in, e.g. a compose profile (follow-up 4) |
-| `infra/compose/scripts/otel-init.bundle.js` | A 2.6 MB third-party bundle (OpenTelemetry JS and @grpc/grpc-js, Apache-2.0; protobufjs, BSD-3-Clause; yaml, ISC; …) published in the npm package. Its source (`apps/otel-init`) is gone and nothing references the file | Delete it, or restore its source and ship its licence texts (follow-up 3) |
+| `infra/compose/scripts/otel-init.bundle.js` | A 2.6 MB third-party bundle (OpenTelemetry JS and @grpc/grpc-js, Apache-2.0; protobufjs, BSD-3-Clause; yaml, ISC; …) published in the npm package. Its source (`apps/otel-init`) is gone and nothing references the file | Delete it, or restore its source and ship its licence texts (follow-up 3) <!-- docs-check: ignore --> |
 | The .vsix | redistributes Apache-2.0, BSD and MIT code with no licence texts (vsce: "LICENSE not found") | Ship LICENSE and generated third-party licences in the .vsix (follow-up 2) |
 | OrbStack, Docker Desktop, Claude Code, Claude Desktop, VS Code (Microsoft build), Chrome | proprietary host software the person installs under its own terms | Fine. Werkmeister neither bundles nor requires the proprietary editions: any Docker Engine works, and Code - OSS / Chromium work where the code allows a path |
 | `@vscode/vsce-sign` | Microsoft licence terms (use only with Visual Studio products). dev-only | Fine for packaging the extension. Listed in `REVIEWED` |
@@ -200,7 +200,7 @@ None of the bundled npm packages ships an Apache `NOTICE` file, so Werkmeister's
 
 `pnpm run licenses` runs `scripts/check-licenses.mjs` (after its unit test). It runs in CI right after `pnpm install`, and it fails when any installed package has a licence outside the allowlist.
 
-**Why this approach:** it reads `pnpm licenses list --json`, which pnpm builds from each installed package's own `package.json` (legacy `licenses` arrays included). It adds no dependency (`license-checker` is unmaintained), and fails CI the moment a dependency change lands. `pnpm-lock.yaml` carries no licences, so unlike the old `package-lock.json` reader it only sees what this platform installed: another platform's optional binaries (`@esbuild/darwin-arm64` and the like) aren't listed. Each is a twin of a listed package with the same terms; if one ever differs, run the check with pnpm's `supportedArchitectures` set to every platform.
+**Why this approach:** it reads `pnpm licenses list --json`, which pnpm builds from each installed package's own `package.json` (legacy `licenses` arrays included). It adds no dependency (`license-checker` is unmaintained), and fails CI the moment a dependency change lands. `pnpm-lock.yaml` carries no licences, so unlike the old `package-lock.json` reader it only sees what this platform installed: another platform's optional binaries (`@esbuild/darwin-arm64` and the like) aren't listed. Each is a twin of a listed package with the same terms; if one ever differs, run the check with pnpm's `supportedArchitectures` set to every platform. <!-- docs-check: ignore -->
 
 **Policy:** `ALLOWED` lists permissive SPDX ids (OSI-approved, plus CC0-1.0). An `OR` expression passes if any branch is allowed, and an `AND` expression only if every term is. Anything else needs an entry in `REVIEWED`: the package name (platform packages `name-<platform>` match it) and why its terms are acceptable.
 
@@ -208,7 +208,7 @@ None of the bundled npm packages ships an Apache `NOTICE` file, so Werkmeister's
 
 ## How NOTICE was checked
 
-At 0.22.0: build `apps/cli` (`npm run build`), run `npm pack --dry-run`, and compare three lists. The packages named in the `dist/*.js.map` sourcemaps (`sources` paths under `node_modules/`), the entries in `dist/THIRD-PARTY-LICENSES.txt`, and the licences NOTICE names (MIT, ISC, BSD-2-Clause, BSD-3-Clause) all agree. The tarball carries `dist/LICENSE`, `dist/NOTICE` and `dist/THIRD-PARTY-LICENSES.txt`, and the `/*!` banners SW-58 kept are still in `dist/mcp.js`.
+At 0.22.0: build `apps/cli` (`npm run build`), run `npm pack --dry-run`, and compare three lists. The packages named in the `dist/*.js.map` sourcemaps (`sources` paths under `node_modules/`), the entries in `dist/THIRD-PARTY-LICENSES.txt`, and the licences NOTICE names (MIT, ISC, BSD-2-Clause, BSD-3-Clause) all agree. The tarball carries `dist/LICENSE`, `dist/NOTICE` and `dist/THIRD-PARTY-LICENSES.txt`, and the `/*!` banners SW-58 kept are still in `dist/mcp.js`. <!-- docs-check: ignore -->
 
 ## Follow-ups
 
