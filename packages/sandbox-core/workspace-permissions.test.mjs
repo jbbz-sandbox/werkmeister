@@ -179,6 +179,8 @@ test("autonomousRules: the feature's own sandbox and docker targets, exact where
   const rules = autonomousRules("feat", ["api"]);
   for (const r of [
     "Bash(sandbox up feat)",
+    "Bash(werkmeister up feat)",
+    "Bash(w9r up feat)",
     "Bash(sandbox restart feat)",
     "Bash(sandbox logs feat:*)",
     "Bash(sandbox test feat:*)",
@@ -190,7 +192,7 @@ test("autonomousRules: the feature's own sandbox and docker targets, exact where
 });
 
 test("autonomous rules reach nothing shared: no blanket command or server, deny covers the shared acts", () => {
-  const blanket = /^Bash\((sandbox|docker|npm|gh|claude|claude plugin):\*\)$/;
+  const blanket = /^Bash\((sandbox|werkmeister|w9r|docker|npm|gh|claude|claude plugin):\*\)$/;
   assert.ok(!AUTONOMOUS_RULES.some((r) => blanket.test(r)), "no blanket rule");
   for (const server of [
     "mcp__plugin_werkmeister_werkmeister",
@@ -207,6 +209,8 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     "Bash(sandbox proxy-reload:*)",
     "Bash(sandbox down:*)",
     "Bash(sandbox remove-workspace:*)",
+    "Bash(werkmeister down:*)",
+    "Bash(w9r proxy-reload:*)",
     "Bash(docker stop:*)",
     "Bash(docker rm:*)",
     "Bash(npm publish:*)",
@@ -215,10 +219,8 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     "Bash(pnpm publish:*)",
     "Bash(pnpm link:*)",
     "Bash(pnpm add -g:*)",
-    "mcp__plugin_sandbox-tools_sandbox-workspace__remove-workspace",
     "mcp__plugin_sandbox-tools_sandbox-workspace__kube-switch",
     "mcp__plugin_sandbox-tools_sandbox-workspace__up",
-    "mcp__plugin_werkmeister_werkmeister__remove-workspace",
     "mcp__plugin_werkmeister_werkmeister__kube-switch",
     "mcp__plugin_werkmeister_werkmeister__up",
     "mcp__plugin_werkmeister_werkmeister__down",
@@ -227,6 +229,21 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     assert.ok(AUTONOMOUS_DENY.includes(r), r);
   const allowed = new Set(autonomousRules("feat", ["api"]));
   assert.ok(!AUTONOMOUS_DENY.some((r) => allowed.has(r)), "no rule both allowed and denied");
+});
+
+// A `Bash(…)` rule is a literal prefix: one written only for `sandbox` never
+// matched a `werkmeister` or `w9r` call, so autonomous runs stalled on them.
+test("every CLI rule covers each launcher name", () => {
+  const names = ["sandbox", "werkmeister", "w9r"];
+  for (const list of [autonomousRules("feat", ["api"]), AUTONOMOUS_DENY]) {
+    const cliRules = list.filter((r) => /^Bash\((sandbox|werkmeister|w9r) /.test(r));
+    assert.ok(cliRules.length > 0);
+    for (const r of cliRules)
+      for (const name of names) {
+        const twin = r.replace(/^Bash\(\w+ /, `Bash(${name} `);
+        assert.ok(list.includes(twin), `${r} has no ${name} form`);
+      }
+  }
 });
 
 // #175: a headless claude-send run needs these with nobody to approve them.

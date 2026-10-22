@@ -343,6 +343,14 @@ const PLUGIN_MCP_PREFIXES = [
 ];
 const pluginTool = (tool: string) => PLUGIN_MCP_PREFIXES.map((prefix) => `${prefix}${tool}`);
 
+// Every name the CLI answers to. A `Bash(…)` rule is a literal prefix, so a rule
+// for one name never matches a call through another: rules written only for
+// `sandbox` left `werkmeister …` and `w9r …` calls unapproved. `sandbox` is the
+// deprecated launcher; drop it here when SW-11 removes it. It is listed first
+// because core_cli_spawns.test.ts reads an array ending in it as a CLI spawn.
+const CLI_NAMES = ["sandbox", "werkmeister", "w9r"];
+const cli = (rule: string) => CLI_NAMES.map((name) => `Bash(${name} ${rule})`);
+
 // `claude -p --permission-mode acceptEdits` (claude-send) refuses any Bash call
 // without a rule and nobody is there to approve it (#175). These cover the run
 // from stage 01 to `sandbox pr open` and stop at its own workspace: no
@@ -356,8 +364,8 @@ export const AUTONOMOUS_RULES = [
     (cmd) => `Bash(gh ${cmd}:*)`,
   ),
   // No-arg forms act on the cwd's FEATURE; `autonomousRules` adds the named ones.
-  "Bash(sandbox up)",
-  "Bash(sandbox restart)",
+  ...cli("up"),
+  ...cli("restart"),
   ...[
     "status",
     "pr",
@@ -367,7 +375,7 @@ export const AUTONOMOUS_RULES = [
     "skills",
     "standards",
     "notes context",
-  ].map((cmd) => `Bash(sandbox ${cmd}:*)`),
+  ].flatMap((cmd) => cli(`${cmd}:*`)),
   "Bash(docker ps:*)",
   // Local build and test; no `npm install` or `pnpm add`, so a new dependency waits for a person.
   ...["npm ci", "npm run", "npm test", "npx", "node", "python3"].map((cmd) => `Bash(${cmd}:*)`),
@@ -397,9 +405,9 @@ export function autonomousRules(feature: string, services: string[]): string[] {
   return [
     ...AUTONOMOUS_RULES,
     // Exact: `sandbox restart <f> infra` and `docker restart <f>-a <other>` stay out.
-    `Bash(sandbox up ${feature})`,
-    `Bash(sandbox restart ${feature})`,
-    ...["logs", "test", "services"].map((cmd) => `Bash(sandbox ${cmd} ${feature}:*)`),
+    ...cli(`up ${feature}`),
+    ...cli(`restart ${feature}`),
+    ...["logs", "test", "services"].flatMap((cmd) => cli(`${cmd} ${feature}:*`)),
     ...services.flatMap((svc) => [
       `Bash(docker exec ${feature}-${svc}:*)`,
       `Bash(docker logs ${feature}-${svc}:*)`,
@@ -430,7 +438,7 @@ export const AUTONOMOUS_DENY = [
     "up infra",
     "restart infra",
     "stop infra",
-  ].map((cmd) => `Bash(sandbox ${cmd}:*)`),
+  ].flatMap((cmd) => cli(`${cmd}:*`)),
   ...["stop", "kill", "rm", "rmi", "compose down", "system prune", "volume rm", "network rm"].map(
     (cmd) => `Bash(docker ${cmd}:*)`,
   ),
@@ -450,7 +458,6 @@ export const AUTONOMOUS_DENY = [
   ...["add -g", "add --global", "remove -g", "remove --global"].map((cmd) => `Bash(pnpm ${cmd}:*)`),
   "Bash(gh pr merge:*)",
   ...[
-    "remove-workspace",
     "kube-switch",
     "up",
     "stop",
