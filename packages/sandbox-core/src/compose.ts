@@ -13,7 +13,7 @@ import { parse as parseYaml } from "yaml";
 
 import { Colors } from "./colors.js";
 import { COMPOSE_FILE, findWorkspaceCompose } from "./compose_file.js";
-import { resolveWorkspace } from "./config.js";
+import { getSharedVolumeNames, resolveWorkspace } from "./config.js";
 import { containerLogs, docker, type ProjectContainer, projectContainers } from "./docker.js";
 import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
@@ -238,9 +238,33 @@ function composeCommand(
     );
     return null;
   }
+  if (args.includes("up")) {
+    ensureSharedVolumes();
+  }
   const cmd = workspaceComposeArgv(feature, args, composePath);
   info(`Running: ${cmd.join(" ")}`);
   return cmd;
+}
+
+/**
+ * Create every shared (`^name`) volume the registry declares.
+ *
+ * Generated compose marks them `external` so no feature's `down --volumes`
+ * removes them, and compose will not start a project whose external volume is
+ * missing. `docker volume create` leaves an existing volume as it is. A failure
+ * only warns: compose's own error about the missing volume follows.
+ */
+export function ensureSharedVolumes(): void {
+  try {
+    for (const name of getSharedVolumeNames()) {
+      const result = run(["docker", "volume", "create", name], { capture: true });
+      if (result.status !== 0) {
+        warn(`Could not create shared volume '${name}': ${result.stderr.trim()}`);
+      }
+    }
+  } catch (e) {
+    warn(`Could not create shared volumes: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /** Report a completed compose run. Shared so both paths say the same thing. */
