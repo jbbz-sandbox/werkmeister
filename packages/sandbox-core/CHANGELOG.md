@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.28.1
+
+### Patch Changes
+
+- fecad45: SW-66: `createWorkspace` and `initWorkspace` take `build: false` to skip the image build, so the core suite's create test no longer leaves a crash-looping `demo-backend` container and `demo` slot on the real Docker daemon.
+
 ## 0.28.0
 
 ## 0.27.0
