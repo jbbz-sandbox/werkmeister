@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 /**
- * SW-63: fail when any npm package in package-lock.json carries a licence outside
- * the allowlist below. Reads the lockfile rather than node_modules, so every
- * platform's optional binaries are covered. See docs/third-party.md § Checking
- * npm licences.
+ * SW-63: fail when any installed package carries a licence outside the allowlist
+ * below, as `pnpm licenses list` reports it (run after `pnpm install`). See
+ * docs/third-party.md § Checking npm licences.
  *
- * npm copies a package's `license` into the lockfile but drops the legacy
- * `licenses` array, so for those few it falls back to the installed package.json:
- * run it after `npm ci`.
+ * ponytail: pnpm lists only what this platform installed, so another platform's
+ * optional binaries (@esbuild/darwin-arm64 …) go unchecked; each is a twin of a
+ * listed package with the same terms. Check with `supportedArchitectures` set if
+ * a twin's terms ever differ.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 /** Permissive licences (SPDX ids) any dependency may carry: OSI-approved, plus CC0-1.0. */
@@ -52,30 +51,25 @@ function reviewedName(name) {
   return Object.keys(REVIEWED).find((r) => name === r || name.startsWith(`${r}-`));
 }
 
-function licenseOf(root, path, entry) {
-  if (entry.license) return entry.license;
-  const pj = join(root, path, "package.json");
-  if (!existsSync(pj)) return null;
-  const { license, licenses } = JSON.parse(readFileSync(pj, "utf8"));
-  return license ?? licenses?.map((l) => l.type ?? l).join(" OR ") ?? null;
-}
-
-export function check(root) {
-  const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
+/** `listing` is `pnpm licenses list --json`: packages grouped by licence, "Unknown" when none. */
+export function check(listing) {
   const bad = [];
-  for (const [path, entry] of Object.entries(lock.packages)) {
-    if (!path.includes("node_modules/") || entry.link) continue;
-    const name = path.slice(path.lastIndexOf("node_modules/") + "node_modules/".length);
-    const license = licenseOf(root, path, entry);
-    if (license && allowed(license)) continue;
-    if (reviewedName(name)) continue;
-    bad.push(`${name}@${entry.version}: ${license ?? "no licence field"}`);
+  for (const [license, pkgs] of Object.entries(listing)) {
+    if (allowed(license)) continue;
+    for (const { name, versions } of pkgs) {
+      if (reviewedName(name)) continue;
+      bad.push(
+        `${name}@${versions.join(", ")}: ${license === "Unknown" ? "no licence field" : license}`,
+      );
+    }
   }
-  return bad;
+  return bad.sort();
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const bad = check(process.cwd());
+  const bad = check(
+    JSON.parse(execFileSync("pnpm", ["licenses", "list", "--json"], { encoding: "utf8" })),
+  );
   if (bad.length) {
     console.error(
       `Licences outside the allowlist in scripts/check-licenses.mjs:\n  ${bad.join("\n  ")}\n` +

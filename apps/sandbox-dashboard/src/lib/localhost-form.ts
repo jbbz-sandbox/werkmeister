@@ -134,7 +134,7 @@ export function promptViaLocalhostForm(
         res
           .status(500)
           .type("text")
-          .send("Form UI bundle missing — run `npm run build` in apps/sandbox-dashboard.");
+          .send("Form UI bundle missing — run `pnpm run build` in apps/sandbox-dashboard.");
       }
     });
 

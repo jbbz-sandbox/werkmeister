@@ -15,7 +15,7 @@
 repo:
   ship: tag
   release_tag: "werkmeister@*"
-  release_check: npx changeset status --since=origin/main
+  release_check: pnpm changeset status --since=origin/main
   # Changes here touch no service, so the gate runs no service tests for them.
   # Anything else outside a service's `path` still touches every service.
   no_service_paths: [docs, .changeset, .gitignore, README.md]
@@ -43,14 +43,14 @@ services:
     type: cli
     archetype: node-tool
     # apps/mcp ships inside the CLI (dist/mcp.js), so its tests run here.
-    test: "npx turbo run test --filter=werkmeister --filter=werkmeister-mcp"
+    test: "pnpm turbo run test --filter=werkmeister --filter=werkmeister-mcp"
     validate: "Build, then run the built sandbox binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
     setup_service: sandbox-install
     image: node:22
-    command: "cd apps/cli && exec npm run watch"
+    command: "cd apps/cli && exec pnpm run watch"
     memory_limit: 1G
     memory_reservation: 128M
     node_modules_volume: node-modules
@@ -74,6 +74,14 @@ services:
       # older than the max age itself, at the start of every `turbo run`.
       TURBO_CACHE_DIR: "{{home}}/.sandbox/cache/turbo"
       TURBO_CACHE_MAX_AGE: 14d
+      # SW-31: pnpm is corepack's shim in the tools volume (sandbox-install puts
+      # it there); the pnpm version it fetches lives there too, so it downloads
+      # once per feature, without the prompt that would hang a container.
+      COREPACK_HOME: /opt/sandbox-tools/corepack
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      # The shared store (same value in sandbox-install below), so a `pnpm
+      # install` here matches the one node_modules was built with.
+      npm_config_store_dir: "{{home}}/.sandbox/cache/pnpm-store"
       # Read by sandbox-dashboard; harmless for the others.
       HOST: 0.0.0.0
 
@@ -81,13 +89,13 @@ services:
     path: packages/sandbox-core
     type: library
     archetype: node-tool
-    test: "npx turbo run test --filter=werkmeister-core"
+    test: "pnpm turbo run test --filter=werkmeister-core"
     internal_port: 3999
     port_offset: 2
     health_endpoint: /
     setup_service: sandbox-install
     image: node:22
-    command: "cd packages/sandbox-core && exec npx tsc --watch --preserveWatchOutput"
+    command: "cd packages/sandbox-core && exec pnpm exec tsc --watch --preserveWatchOutput"
     memory_limit: 1G
     memory_reservation: 128M
     node_modules_volume: node-modules
@@ -104,7 +112,7 @@ services:
     path: packages/vscode-plugin
     type: extension
     archetype: mcp-client
-    test: "npx turbo run test --filter=werkmeister-vscode"
+    test: "pnpm turbo run test --filter=werkmeister-vscode"
     internal_port: 3997
     port_offset: 4
     health_endpoint: /
@@ -113,7 +121,7 @@ services:
     # test:integration exit 127 (SW-62). The tag is local, never pulled.
     image: sandbox-vscode-plugin:local
     dockerfile: Dockerfile
-    command: "cd packages/vscode-plugin && exec npm run watch"
+    command: "cd packages/vscode-plugin && exec pnpm run watch"
     memory_limit: 1G
     memory_reservation: 128M
     node_modules_volume: node-modules
@@ -127,13 +135,13 @@ services:
     path: apps/sandbox-dashboard
     type: web
     archetype: node-web
-    test: "npx turbo run test --filter=werkmeister-dashboard"
+    test: "pnpm turbo run test --filter=werkmeister-dashboard"
     internal_port: 3001
     port_offset: 5
     health_endpoint: /
     setup_service: sandbox-install
     image: node:22
-    command: "cd apps/sandbox-dashboard && exec npm run dev"
+    command: "cd apps/sandbox-dashboard && exec pnpm run dev"
     memory_limit: 1G
     memory_reservation: 256M
     node_modules_volume: node-modules
@@ -146,10 +154,11 @@ setup_services:
   # The sandbox repo's install + build + tools download, all in startup.sh
   # (infra/compose/scripts/sandbox-install-startup.sh). The build runs so
   # sandbox-core/dist exists before the four services start; the `tools` volume
-  # gets docker/compose/kubectl for the host-access services. `npm ci`, not
-  # `install`: the image's npm re-serializes package-lock.json (dropping the
-  # `libc` fields a newer host npm writes), dirtying the worktree on every up (#148).
-  # SW-33: npm ci is skipped while the lockfile and Node major are unchanged.
+  # gets docker/compose/kubectl and the pnpm shim for the host-access services.
+  # SW-31: `pnpm install --frozen-lockfile` (`npm ci` for a branch still on
+  # package-lock.json) never rewrites the lockfile, so an up can't dirty the
+  # worktree (#148).
+  # SW-33: the install is skipped while the lockfile and Node major are unchanged.
   # ~/repos and safe.directory give git the same access as the app containers,
   # so turbo hashes inputs the same way they do. ~/.sandbox/locks queues
   # installs host-wide, SANDBOX_INSTALL_SLOTS (default 2) at a time, and builds
@@ -159,6 +168,9 @@ setup_services:
   # host dir, not a named volume: the app containers already mount ~/.sandbox,
   # the template prefixes every named volume per feature, and the dir can be
   # inspected or deleted from the host.
+  # SW-31: the pnpm store is a host dir for the same reasons, shared by every
+  # feature's install. node_modules is a per-feature volume, so pnpm copies from
+  # the store rather than hard-linking; it still downloads each package once.
   sandbox-install:
     image: node:22
     command: "sh /usr/local/bin/startup.sh install"
@@ -169,9 +181,13 @@ setup_services:
       - "{{repos_root}}:{{repos_root}}"
       - "{{home}}/.sandbox/locks:/locks"
       - "{{home}}/.sandbox/cache/turbo:{{home}}/.sandbox/cache/turbo"
+      - "{{home}}/.sandbox/cache/pnpm-store:{{home}}/.sandbox/cache/pnpm-store"
     environment:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
       TURBO_CACHE_DIR: "{{home}}/.sandbox/cache/turbo"
       TURBO_CACHE_MAX_AGE: 14d
+      COREPACK_HOME: /opt/sandbox-tools/corepack
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      npm_config_store_dir: "{{home}}/.sandbox/cache/pnpm-store"
