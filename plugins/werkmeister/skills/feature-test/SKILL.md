@@ -13,7 +13,7 @@ Spins up a named sandbox feature, scaffolds test files if needed, and opens a he
 
 - `sandbox` CLI on PATH (its checkout is `paths.sandbox_root` in `~/.werkmeister/config.yaml`)
 - `npx` / Node.js available
-- `sandbox setup` run once on this machine — it downloads the Chromium build for the pinned Playwright (`setup_feature.py` installs the matching `@playwright/test` in the workspace)
+- `sandbox setup` run once on this machine — it downloads the Chromium build for the pinned Playwright (`sandbox test --scaffold` installs the matching `@playwright/test` in the workspace)
 - Shared infra may or may not be running — this skill ensures it is
 
 ## Routing model (important)
@@ -23,7 +23,7 @@ This skill is for front-door services (those with a `feature_router:`). A librar
 The ingress host is configured per machine, not hardcoded here: it derives from
 `ingress.local_domain` in `~/.werkmeister/config.yaml` joined to a service that
 declares a `feature_router:` block in `~/.werkmeister/services.yaml`. `sandbox setup`
-owns those values, and `setup_feature.py` resolves them when it scaffolds the
+owns those values, and `sandbox test --scaffold` resolves them when it scaffolds the
 test files (override with `--base-url`).
 
 Every request to that host is routed to a feature's containers via:
@@ -43,19 +43,17 @@ If the user has not provided a feature name, ask for one. Feature names must:
 
 ### Step 2 — Validate and scaffold
 
-Run the skill's `setup_feature.py` (resolved via the plugin root):
-
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/feature-test/scripts/setup_feature.py" --feature <feature-name>
+sandbox test <feature-name> --scaffold
 ```
 
-The script will:
+This will:
 - Exit non-zero if the feature name is already allocated → stop and tell the user
 - Create `playwright.config.ts` in the workspace if missing
 - Create `<feature>.spec.ts` in the workspace if missing
 - Print `WORKSPACE_PATH=<path>` as the last line — capture this
 
-Parse `WORKSPACE_PATH` from the script output. All subsequent file operations and test runs use this path.
+Parse `WORKSPACE_PATH` from the output. All subsequent file operations and test runs use this path.
 
 ### Step 3 — Ensure shared infrastructure
 
@@ -79,11 +77,11 @@ Starts containers only for the services in the workspace's `.env` `SERVICES=` li
 cd <WORKSPACE_PATH> && SANDBOX_FEATURE=<feature-name> npx playwright test <feature-name>.spec.ts --headed
 ```
 
-Do NOT use `sandbox test` here — run `npx playwright test` directly to ensure `--headed` is passed correctly.
+Do NOT use `sandbox test` (without `--scaffold`) here — run `npx playwright test` directly to ensure `--headed` is passed correctly.
 
 The test will:
 1. Set the `X-Feature` cookie on `.<local_domain>`
-2. Navigate to the resolved base URL (printed by `setup_feature.py` as `base URL:`)
+2. Navigate to the resolved base URL (printed by `sandbox test --scaffold` as `base URL:`)
 3. Call `page.pause()` → Playwright Inspector opens, browser stays open
 
 The terminal will block until the developer closes the Inspector or presses Resume. This is expected.

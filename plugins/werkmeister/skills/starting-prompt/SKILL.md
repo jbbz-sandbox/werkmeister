@@ -12,10 +12,10 @@ Read the `starting_prompt` from the current sandbox workspace's `.werkmeister/wo
 ## Step 1 — Extract the starting prompt
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/starting-prompt/scripts/get_prompt.py"
+sandbox starting-prompt
 ```
 
-The script walks up from the current directory to find `.werkmeister/workspace.yml` and prints the `starting_prompt` value to stdout.
+It walks up from the current directory to find `.werkmeister/workspace.yml` and prints the `starting_prompt` value to stdout.
 
 Exit codes:
 

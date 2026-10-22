@@ -9,11 +9,9 @@
  * openssl or sudo.
  */
 
-import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEMO_SERVICES_REPO,
@@ -623,51 +621,6 @@ describe("syncPlaywright", () => {
   it("warns when npx is unavailable", () => {
     const steps = syncPlaywright(fakeRunner({}), false, neverRun);
     expect(steps[0]).toMatchObject({ ok: false, optional: true });
-  });
-
-  it("pins the same version as the feature-test skill, which ships separately", () => {
-    const script = fs.readFileSync(
-      path.resolve(
-        fileURLToPath(import.meta.url),
-        "../../../../../../plugins/werkmeister/skills/feature-test/scripts/setup_feature.py",
-      ),
-      "utf8",
-    );
-    expect(script).toContain(`PLAYWRIGHT_VERSION = "${PLAYWRIGHT_VERSION}"`);
-  });
-});
-
-describe("setup_feature.py resolve_workspace", () => {
-  it("resolves to the workspace, not the workspaces root, from a workspace root that is a git repo", () => {
-    // <home>/.sandbox/config.yaml sets paths.workspaces_root; <root>/ws has its own .git.
-    const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ws-home-")));
-    try {
-      const root = path.join(home, "features");
-      const ws = path.join(root, "ws");
-      fs.mkdirSync(path.join(ws, ".git"), { recursive: true });
-      fs.mkdirSync(path.join(home, ".sandbox"));
-      fs.writeFileSync(
-        path.join(home, ".sandbox", "config.yaml"),
-        `paths:\n  workspaces_root: ${root}\n`,
-      );
-      const scripts = path.resolve(
-        fileURLToPath(import.meta.url),
-        "../../../../../../plugins/werkmeister/skills/feature-test/scripts",
-      );
-      const r = spawnSync(
-        "python3",
-        ["-c", "import sys, setup_feature; print(setup_feature.resolve_workspace(None))"],
-        {
-          cwd: ws,
-          env: { ...process.env, HOME: home, PYTHONPATH: scripts, WORKSPACE: "" },
-          encoding: "utf8",
-        },
-      );
-      expect(r.stderr).toBe("");
-      expect(r.stdout.trim()).toBe(ws);
-    } finally {
-      fs.rmSync(home, { recursive: true, force: true });
-    }
   });
 });
 

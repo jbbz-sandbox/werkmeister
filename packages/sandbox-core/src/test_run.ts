@@ -14,17 +14,17 @@ import * as path from "node:path";
 
 import { candidateServiceNames, validationRows } from "./archetypes.js";
 import { loadArchetypes, loadReposConfig, loadServices } from "./config.js";
+import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
-import { ProcError, runAsync } from "./proc.js";
-import { info, passthrough, raw, warn } from "./reporter.js";
+import { ProcError, run, runAsync } from "./proc.js";
+import { info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
 
 /**
  * The Playwright release `sandbox setup` downloads Chromium for. Each release
  * expects one exact browser build, so a workspace on another version finds no
- * browser. Mirrored in the werkmeister plugin's feature-test setup_feature.py, which
- * ships separately and cannot import this; a parity test keeps them equal.
+ * browser.
  */
 export const PLAYWRIGHT_VERSION = "1.63.0";
 
@@ -220,4 +220,158 @@ export async function runFeatureTests({
     }
     throw e;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Scaffolding a suite (`sandbox test --scaffold`, the feature-test skill)
+// ---------------------------------------------------------------------------
+
+export interface FeatureIngress {
+  baseUrl: string;
+  /** Where the spec sets its X-Feature cookie: the host's parent domain. */
+  cookieDomain: string;
+}
+
+/**
+ * The ingress URL a scaffolded suite targets. Derived like the Caddyfile's
+ * hosts -- the first service with a `feature_router:` block -- so it follows
+ * whatever `sandbox setup` configured; an explicit *baseUrl* wins.
+ */
+export function featureIngress(baseUrl?: string | null): FeatureIngress {
+  if (!baseUrl) {
+    const host = Object.values(loadFeatureRouters()).find((r) => r.hostname)?.hostname;
+    if (!host) {
+      throw new SandboxError(
+        "No service declares a feature_router: block in services.yaml. Add one, or pass --base-url.",
+        "NO_FEATURE_ROUTER",
+      );
+    }
+    baseUrl = `https://${host}`;
+  }
+  const host = new URL(baseUrl).hostname;
+  return {
+    baseUrl: baseUrl.replace(/\/+$/, ""),
+    cookieDomain: `.${host.split(".").slice(1).join(".")}`,
+  };
+}
+
+const playwrightConfig = (
+  baseUrl: string,
+) => `import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: '.',
+  fullyParallel: false,
+  retries: 0,
+  reporter: 'line',
+  use: {
+    // Filled by \`sandbox test --scaffold\` from the configured feature ingress.
+    baseURL: '${baseUrl}',
+    ignoreHTTPSErrors: true,
+    extraHTTPHeaders: {
+      'X-Feature': process.env.SANDBOX_FEATURE || '',
+    },
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+});
+`;
+
+const featureSpec = (feature: string, { baseUrl, cookieDomain }: FeatureIngress) =>
+  `import { test, expect } from '@playwright/test';
+
+const FEATURE = process.env.SANDBOX_FEATURE!;
+
+// Filled by \`sandbox test --scaffold\` from the configured feature ingress.
+const BASE_URL = '${baseUrl}';
+
+test('feature: ${feature}', async ({ page, context }) => {
+  // Set the feature cookie so routing works at the browser level
+  await context.addCookies([{
+    name: 'X-Feature',
+    value: FEATURE,
+    domain: '${cookieDomain}',
+    path: '/',
+    maxAge: 2592000,
+  }]);
+
+  await page.goto('/');
+
+  // TODO: Add assertions specific to your feature
+  await expect(page).toHaveURL(\`\${BASE_URL}/\`);
+
+  // Pause here — Playwright Inspector opens so you can interact with the browser.
+  // Close the inspector or press Resume when done.
+  await page.pause();
+});
+`;
+
+/**
+ * Write `playwright.config.ts` and `<feature>.spec.ts` into *workspace*,
+ * skipping any that already exist. Returns the paths it created.
+ */
+export function scaffoldFeatureTests(
+  feature: string,
+  workspace: string,
+  ingress: FeatureIngress,
+): string[] {
+  // The name becomes a filename; a separator would write outside the workspace.
+  if (path.basename(feature) !== feature) {
+    throw new SandboxError(`Invalid feature name: ${feature}`, "BAD_FEATURE_NAME");
+  }
+  const files: [string, string][] = [
+    ["playwright.config.ts", playwrightConfig(ingress.baseUrl)],
+    [`${feature}.spec.ts`, featureSpec(feature, ingress)],
+  ];
+  const created: string[] = [];
+  for (const [name, text] of files) {
+    const dest = path.join(workspace, name);
+    if (fs.existsSync(dest)) continue;
+    fs.writeFileSync(dest, text);
+    created.push(dest);
+  }
+  return created;
+}
+
+/** Install the pinned `@playwright/test` if absent; never replace a project's own version. */
+export function ensurePlaywright(workspace: string): void {
+  const installed = installedPlaywrightVersion(workspace);
+  if (installed === PLAYWRIGHT_VERSION) {
+    info(`@playwright/test ${installed} present`);
+    return;
+  }
+  if (installed) {
+    warn(
+      `workspace pins @playwright/test ${installed}, but \`sandbox setup\` installs Chromium ` +
+        `for ${PLAYWRIGHT_VERSION} -- if launch fails, run: npx playwright@${installed} install chromium`,
+    );
+    return;
+  }
+  // Spec imports resolve from the workspace, so `npx` alone cannot supply the package.
+  const cmd = ["npm", "install", "--save-dev", `@playwright/test@${PLAYWRIGHT_VERSION}`];
+  // resolveWorkspace can land on the workspaces root (a workspace is itself a
+  // git repo); never drop a package.json + node_modules there.
+  if (!fs.existsSync(dotDir(workspace))) {
+    throw new SandboxError(
+      `${workspace} is not a sandbox workspace (no ${path.basename(dotDir(workspace))}/) -- ` +
+        `pass --workspace, or install manually there: ${cmd.join(" ")}`,
+      "NOT_A_WORKSPACE",
+    );
+  }
+  const live = passthrough();
+  let result: { status: number; stderr: string };
+  try {
+    result = run(cmd, { cwd: workspace, ...(live ? {} : { capture: true }) });
+  } catch (e) {
+    result = { status: 127, stderr: e instanceof Error ? e.message : String(e) };
+  }
+  if (result.status !== 0) {
+    if (!live && result.stderr) raw(result.stderr, "stderr");
+    throw new SandboxError(`\`${cmd.join(" ")}\` failed in ${workspace}`, "PLAYWRIGHT_INSTALL");
+  }
+  success(`installed @playwright/test ${PLAYWRIGHT_VERSION}`);
 }
