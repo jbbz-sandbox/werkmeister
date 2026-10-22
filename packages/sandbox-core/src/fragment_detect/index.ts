@@ -1,6 +1,6 @@
 /**
  * `sandbox detect`: generate a repo's `.sandbox/services.yaml` fragment.
- * See docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md.
+ * See docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc.
  */
 
 export * from "./allocate.js";
