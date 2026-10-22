@@ -125,6 +125,11 @@ export interface InitWorkspaceOptions {
   force?: boolean;
   /** The snapshot createWorkspace fetched; written to .sandbox/issue.md before the strategy runs. */
   issue?: IssueSnapshot;
+  /**
+   * False skips the image build. `--no-start` still creates the containers, and on a
+   * throwaway root they outlive it on the real daemon, holding a slot (SW-66).
+   */
+  build?: boolean;
 }
 
 /**
@@ -836,7 +841,7 @@ export async function initWorkspace(
       (meta["TEST_PATH"] ?? "").trim(),
       repos.map(([name]) => name),
     );
-    if (slot !== null) {
+    if (slot !== null && opts.build !== false) {
       // 9. Build images (without starting containers)
       info("Building Docker images (--no-start)...");
       // The build is chatty and slow, so a terminal caller watches it live via
