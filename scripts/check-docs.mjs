@@ -10,7 +10,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -148,13 +148,37 @@ function loadTools() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const docs = execFileSync("git", ["ls-files", "*.md"], { cwd: ROOT, encoding: "utf8" })
+  // Judged against tracked files, not the disk, so a build product present on
+  // this machine (the generated Caddyfile) can't pass here and fail in CI. A
+  // gitignored path is generated, so it can't be checked and is accepted.
+  const ignored = (p) => {
+    try {
+      execFileSync("git", ["check-ignore", "-q", "--no-index", p], { cwd: ROOT });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
     .split("\n")
-    .filter((f) => f && !SKIP.some((re) => re.test(f)));
+    .filter(Boolean);
+  const files = new Set(tracked);
+  const dirs = new Set(
+    tracked.flatMap((f) =>
+      f
+        .split("/")
+        .slice(0, -1)
+        .map((_, i, a) => a.slice(0, i + 1).join("/")),
+    ),
+  );
+  const docs = tracked.filter((f) => f.endsWith(".md") && !SKIP.some((re) => re.test(f)));
   const ctx = {
     cli: loadCli(),
     tools: loadTools(),
-    exists: (p) => existsSync(join(ROOT, p)),
+    exists: (p) => {
+      const rel = normalize(p).replace(/\/$/, "");
+      return files.has(rel) || dirs.has(rel) || ignored(rel);
+    },
     read: (p) => readFileSync(join(ROOT, p), "utf8"),
   };
   const problems = docs.flatMap((rel) => checkDoc(rel, readFileSync(join(ROOT, rel), "utf8"), ctx));

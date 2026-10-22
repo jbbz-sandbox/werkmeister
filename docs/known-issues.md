@@ -155,7 +155,7 @@ The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in t
 
 **Severity:** Critical (causes blank pages / empty responses)
 **Status:** Resolved — documented to prevent recurrence
-**Affects:** `~/.werkmeister/infra/proxy/Caddyfile` (formerly `apps/cli/infra/proxy/Caddyfile`), `apps/cli/infra/templates/Caddyfile.njk`, `packages/sandbox-core/src/generate.ts`
+**Affects:** `~/.werkmeister/infra/proxy/Caddyfile` (formerly `apps/cli/infra/proxy/Caddyfile`), `apps/cli/infra/templates/Caddyfile.njk`, `packages/sandbox-core/src/generate.ts` <!-- docs-check: ignore -->
 
 When the Caddyfile uses multiple `handle` blocks at the same nesting level for path-based routing, Caddy groups them into a **mutual-exclusion set**. Only the first matching `handle` block executes; the remaining blocks are silently dropped from the compiled config. This results in URLs returning HTTP 200 with `content-length: 0` (empty body) for any path whose route was dropped.
 
@@ -198,7 +198,7 @@ and `apps/cli/src/lib/__tests__/caddy_lint.test.ts` pins the bare-vs-scoped stru
 
 **Severity:** Moderate (causes stale configs)
 **Status:** Open — inherent to Docker Desktop
-**Affects:** `~/.werkmeister/infra/proxy/Caddyfile` (bind-mounted into `sandbox-caddy` container; was `apps/cli/infra/proxy/Caddyfile`)
+**Affects:** `~/.werkmeister/infra/proxy/Caddyfile` (bind-mounted into `sandbox-caddy` container; was `apps/cli/infra/proxy/Caddyfile`) <!-- docs-check: ignore -->
 
 Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediately after writes on the host. The generated `~/.werkmeister/infra/proxy/Caddyfile` file may show different sizes when compared between host and container, causing Caddy to use stale or truncated config.
 
@@ -314,8 +314,8 @@ and is what `infraRoot()` resolves from — so **whichever install ran `werkmeis
 wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
 serving `infra/` out of the other one.
 
-Generated state used to live *inside* that package tree: `apps/cli/infra/proxy/Caddyfile`
-and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under a
+Generated state used to live *inside* that package tree: `apps/cli/infra/proxy/Caddyfile` <!-- docs-check: ignore -->
+and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under a <!-- docs-check: ignore -->
 directory that ships in the published package, so reinstalling or upgrading
 `werkmeister` could discard or stale them. Resolved 2026-10-01: everything
 `werkmeister connect` generates now lives under `~/.werkmeister/infra/`
@@ -522,7 +522,7 @@ on a developer box running Caddy the old test passed either way, and the "no liv
 volume is proposed for removal" property asserted nothing at all on a machine with no
 features up. `machineConfigured()` in `fixtures.mjs` had no callers left and is gone.
 
-**Verified:** `md5` of `apps/cli/infra/proxy/Caddyfile` (now `~/.werkmeister/infra/proxy/Caddyfile`) is unchanged across a full
+**Verified:** `md5` of `apps/cli/infra/proxy/Caddyfile` (now `~/.werkmeister/infra/proxy/Caddyfile`) is unchanged across a full <!-- docs-check: ignore -->
 `packages/sandbox-core` run, and both files pass under an empty `HOME`.
 
 **A related trap, already fixed:** both files used to pin `process.env.SANDBOX_ROOT` to their
