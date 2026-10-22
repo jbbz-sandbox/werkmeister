@@ -62,7 +62,6 @@ Ranked by drift caught per effort, as proposed with the check above.
 
 Found while fixing the docs. Each one is either a code issue or needs a decision, so none of them is a doc edit:
 
-- **Autonomous rules only match the old launcher.** The rules in `hooks_gen.ts` are `Bash(sandbox …)` prefixes, so a `werkmeister …` call gets no automatic permission in autonomous mode. Its MCP deny list also still names `remove-workspace`, a tool that has been removed.
 - **`~/.sandbox` mounts.** This repo's `.sandbox/services.yaml` hardcodes `{{home}}/.sandbox` for mounts, locks and caches. On a machine that only has `~/.werkmeister`, Docker creates an empty `~/.sandbox` instead.
 - **About 96 `sandbox <cmd>` calls in the skills.** They work through the deprecated launcher, and the CLI's own help text mostly says `sandbox` too. Renaming them is one decision, not a doc fix.
 - **`docs/ponytail-debt.md` is behind.** It lists 26 markers; about 40 exist. Run `/ponytail-debt` to rebuild it.
