@@ -1,5 +1,12 @@
 # werkmeister-ui
 
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies [fecad45]
+  - werkmeister-core@0.28.1
+
 ## 0.4.5
 
 ### Patch Changes
