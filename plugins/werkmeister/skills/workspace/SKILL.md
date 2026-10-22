@@ -6,7 +6,7 @@ description: "Create a brand-new sandbox workspace (git worktrees on a <user>/<w
 # Sandbox Workspace
 
 **Every create goes through `createWorkspace`** (packages/sandbox-core/src/sandbox.ts) — the CLI,
-the browser form, both MCP servers and the /workspaces pane all call it. Never write
+the browser form, the MCP server and the /workspaces pane all call it. Never write
 workspace files by hand.
 
 With an `issue_id`, `createWorkspace` always:
@@ -29,14 +29,14 @@ runs `sandbox issue start` → In Review at `sandbox pr open` → Done at ship
 |---|---|
 | every input known (feature, issue, repos) | `sandbox workspace <feature> --issue-id <ref> --repos <r1,r2> [--services <a,b>] [--work-type <t>] [--context-strategy icm] [--autonomous] [--model <alias|id>]`. Pass `--task` only to override the issue title. Leave `--services` out unless the ticket names services to run (see **Services** below) |
 | the person should review the fields first | the /workspaces pane's Create tab, or the browser form (below) |
-| many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check. Before the first: the `sandbox` CLI runs `$SANDBOX_REPOS_ROOT/sandbox/apps/cli/dist`, so check that checkout is on an up-to-date `main` and rebuilt (`npm run build --workspace apps/cli`), or the batch comes out with stale defaults |
+| many issues at once | one `sandbox workspace` call per issue, **in sequence** (they share source repos), then run the batch check. Before the first: the `sandbox` CLI runs `$SANDBOX_REPOS_ROOT/sandbox/apps/cli/dist`, so check that checkout is on an up-to-date `main` and rebuilt (`pnpm run build` at its root), or the batch comes out with stale defaults |
 | many issues, run unattended | as above with `--autonomous` on each create, plus `--model sonnet` (or `haiku`) when the job is mechanical (lint passes, renames, timeout bumps). Then start one Claude Code session per workspace folder with the prompt `start the run`, **one at a time**: each new folder raises a trust prompt, and parallel starts collide. Start each session on the workspace's `model` when it has one (`list-workspaces` returns it) |
 
 **Services** (none by default): list only the services the ticket says to run locally, e.g. a web app it changes and someone will click through. Never list every service "so the gate has containers". `sandbox pr gate` starts one container for each touched repo that has none running, and stops it afterwards (SW-34). Each listed service is a container that `sandbox up` starts.
 
 **`autonomous`** (off by default; `--autonomous`, `SANDBOX_AUTONOMOUS=1`, `autonomous: true` in `workspace.yml`, or the form's checkbox): an icm workspace runs stage 01 → `sandbox pr open` with self-checks instead of human checks, and `.claude/settings.json` allows the git/sandbox/docker/gh/node/python3 calls a headless `claude-send "start the run"` needs. Set it only when the person asked for an unattended run — they then review only the PR. Off again: `autonomous: false`, then `sandbox init-workspace`.
 
-**`model`** (blank by default = Claude Code's default; `--model <alias|id>`, `SANDBOX_MODEL`, `model:` in `workspace.yml`, or the form's field): an alias (`opus`, `sonnet`, `haiku`) or a full `claude-…` id. Written to the workspace's `.claude/settings.json`, passed as `--model` by `claude-send` / `claude-resume`, and returned by `list-workspaces` / `workspace-status`. A `model` the person set in `settings.json` by hand is never overwritten. Clear it: delete `model:` from `workspace.yml`, then `sandbox init-workspace`.
+**`model`** (blank by default = Claude Code's default; `--model <alias|id>`, `SANDBOX_MODEL`, `model:` in `workspace.yml`, or the form's field): an alias (`opus`, `sonnet`, `haiku`) or a full `claude-…` id. Written to the workspace's `.claude/settings.json`, passed as `--model` by `claude-send` / `claude-resume`, and returned by `list-workspaces` / `status`. A `model` the person set in `settings.json` by hand is never overwritten. Clear it: delete `model:` from `workspace.yml`, then `sandbox init-workspace`.
 
 **`auto_stop`** (off by default; `--auto-stop`, `SANDBOX_AUTO_STOP=1`, `auto_stop: true` in `workspace.yml`, or the form's checkbox): writes a SessionEnd hook to the workspace's `.claude/settings.json` that runs `sandbox stop --if-idle`. When a session in the workspace ends (not `/clear` or `/resume`, not a headless `claude -p` turn) and no other Claude session is open there, the feature's containers stop; the slot and volumes stay, so `sandbox up` resumes fast. Shared infra is never stopped. Off again: `auto_stop: false`, then `sandbox init-workspace` (or `sandbox up`) removes the hook.
 
@@ -57,7 +57,7 @@ definitions (`_WIZARD_PROMPTS` in `packages/sandbox-core/src/workspace_prompts.t
 drive the terminal wizard. So every
 surface shows the same fields, labels, defaults, and validation — and the **same look**:
 every surface (browser form, dashboard tab, Desktop inline) renders the one shared form
-component (`apps/sandbox-dashboard/src/create-form.ts`).
+component (`packages/sandbox-ui/src/create-form.ts`).
 
 ## Which browser shows the form
 
@@ -125,9 +125,8 @@ Desktop.
 
 ### Prerequisites
 - The `sandbox` CLI on `PATH` (e.g. `~/.local/bin/sandbox`) and `node`.
-- The app built once: `npm --prefix apps/sandbox-dashboard run build` (produces `dist/form-cli.js`
-  for `--browser-form` and `dist/main.js` for `sandbox dashboard`). Running `sandbox dashboard` once also
-  builds it. Without the build, `--browser-form` errors with a clear message.
+- The app built once: `cd apps/sandbox-dashboard && pnpm run build` (produces `dist/form-cli.js`
+  for `--browser-form` and `dist/main.js` for `sandbox dashboard`). Without the build, `--browser-form` errors with a clear message.
   The form page (`dist/form.html`) is fully self-contained — no internet needed.
 
 ## Common pitfalls

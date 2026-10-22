@@ -10,7 +10,7 @@ Safely reload Caddy with validation and smoke tests.
 ## Step 0: Prefer `sandbox proxy-reload` (primary path)
 
 `sandbox proxy-reload` runs a CLI-native pipeline internally
-(`src/lib/caddy.ts::reloadCaddy`) that already does the
+(`sandbox-core/caddy.ts::reloadCaddy`) that already does the
 `docker cp` -> structural lint (advisory) -> `caddy adapt` (validates AND
 yields the compiled route count in one call) -> compare against a
 config-derived expected count -> `caddy reload` sequence, and it fails loudly
@@ -33,7 +33,7 @@ the manual steps below.
 Only use the manual procedure below (Steps 1-5) when `sandbox proxy-reload`
 itself is broken or unavailable -- e.g. a CLI bug, or you need to push and
 reload a hand-edited Caddyfile outside the generator. This manual path stays
-independent of the reload *pipeline* (`reload_caddy`), but the route counting
+independent of the reload *pipeline* (`reloadCaddy`), but the route counting
 in Step 2 reuses the CLI's pure counting function so both always agree on the
 number.
 
@@ -45,8 +45,8 @@ specifically so a manual reload never collides with a concurrently running
 `sandbox proxy-reload` (which owns `/tmp/Caddyfile`):
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.new
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.new 2>&1
 ```
@@ -76,7 +76,7 @@ with no importable `dist/lib/caddy.js`, so the walk is inlined here.
 (`grep -c 'reverse_proxy ' "$CADDYFILE"`). These two
 numbers count the same thing (distinct `reverse_proxy` destinations) and
 should match on a healthy config -- the same config-derived comparison
-`compute_expected_route_count()` performs in the CLI. There is no fixed
+`computeExpectedRouteCount()` performs in the CLI. There is no fixed
 threshold: a fresh generation of the current `~/.sandbox/infra/proxy/Caddyfile` compiles to
 7 routes, and that number changes whenever site blocks or `reverse_proxy`
 directives are added or removed. If the compiled count is **lower** than the
@@ -96,7 +96,7 @@ The ingress host is configured per machine — never hardcode it. Derive it from
 `ingress.local_domain` in `~/.sandbox/config.yaml` plus the routed service name:
 
 ```bash
-DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.sandbox/config.yaml | head -1)
+DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
 SERVICE=frontend   # the routed service under test; `sandbox services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
@@ -111,8 +111,8 @@ Smoke-test every hostname the reload affects, not just one — `sandbox services
 ## Step 5: Verify File Sync
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 HOST_SIZE=$(wc -c < "$CADDYFILE" | tr -d " ")  # macOS wc pads the count with spaces
 CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
 echo "Host: ${HOST_SIZE} bytes, Container bind-mount: ${CONTAINER_SIZE} bytes"

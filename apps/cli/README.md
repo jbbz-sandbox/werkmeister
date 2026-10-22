@@ -1,4 +1,4 @@
-# sandbox
+# werkmeister
 
 A multi-feature concurrent development orchestrator: run up to 12 isolated
 feature environments side by side, each with its own containers, ports, and
@@ -9,10 +9,11 @@ ingress hostnames.
 ```sh
 pnpm install
 pnpm run build
-./sandbox --help
+./werkmeister --help
 ```
 
-`./sandbox` resolves a node runtime (SANDBOX_NODE → PATH → newest nvm) and execs
+`./werkmeister` (alias `./w9r`; `./sandbox` is deprecated) resolves a node runtime
+(WERKMEISTER_NODE → SANDBOX_NODE → PATH → newest nvm) and execs
 `dist/main.js`. `sandbox hooks gate` bypasses the CLI import chain via
 `dist/lib/gate.js` for a fast PreToolUse cold start.
 
@@ -41,9 +42,8 @@ feature name (`infra` plus the workspaces under the workspaces root).
 - `src/main.ts` — commander program (subcommand registry + dispatch)
 - `src/commands/` — one module per subcommand (`run(args)` entrypoints)
 - `src/lib/` — shared logic
-- `infra/`, `docs/standards/`, `bin/` — runtime data the CLI consumes as-is
+- `infra/`, `bin/` — runtime data the CLI consumes as-is
 - `CONVENTIONS.md` — the code conventions used throughout
-- `docs/design.md` — scope and decisions
 
 ## Notes
 

@@ -45,5 +45,5 @@ is `docs/workspace-lifecycle.md` in the sandbox repo.
    sessions still open are listed for the person to `/exit`.
    `sandbox remove-workspace` is a deprecated alias; don't use it.
 
-MCP equivalents (workspaces server): `workspace-pr` (`gate|open|status`),
+MCP equivalents (werkmeister server): `workspace-pr` (`gate|open|status`),
 `close-out` (with `abandon` for the second outcome).

@@ -1,7 +1,7 @@
 # Code conventions — `src/`
 
 Conventions this CLI holds itself to. They exist because the runtime data in
-`infra/` and `docs/standards/` is consumed as-is and much of the output is
+`infra/` is consumed as-is and much of the output is
 contract-shaped: generated files, exit codes, and printed text are depended on
 by other tooling, so they are not free to drift.
 
@@ -13,9 +13,11 @@ by other tooling, so they are not free to drift.
 | `src/commands/<name>.ts` | one module per CLI command |
 | `src/lib/<name>.ts` | shared library modules |
 
-Runtime data dirs live alongside the source: `infra/`, `docs/standards/`, `bin/`.
-Path resolution: repo root = `SANDBOX_ROOT` env, else two levels up from
-`dist/lib/` (`src/lib/config.ts` owns `getSandboxRoot()` / `getInfraRoot()`).
+Runtime data dirs live alongside the source: `infra/`, `bin/`.
+Path resolution: package root = `WERKMEISTER_ROOT` / `SANDBOX_ROOT` env, else the first
+ancestor holding `apps/cli` (`sandboxRoot()` / `infraRoot()` in
+`packages/sandbox-core/src/config.ts`, re-exported by `src/lib/config.ts` as
+`getSandboxRoot()` / `getInfraRoot()`).
 
 ## Language
 
@@ -32,13 +34,13 @@ Path resolution: repo root = `SANDBOX_ROOT` env, else two levels up from
   verbatim with other consumers, so the environment options in `generate.ts`
   (autoescape, trim/lstrip) are load-bearing — see the notes there before
   touching them.
-- Subprocesses go through `src/lib/proc.ts` (spawnSync-based, synchronous):
+- Subprocesses go through `packages/sandbox-core/src/proc.ts` (spawnSync-based, synchronous):
   - `run(cmd: string[], opts)` → `{ status, stdout, stderr }`; `check: true` throws `ProcError`.
   - `capture(cmd)` → trimmed stdout, throws on failure.
   - Streaming/inherit-stdio cases: pass `stdio: "inherit"`.
   - `timeout` is in **seconds**, not milliseconds.
 - Filesystem work uses the sync `node:fs` API (`readFileSync` etc.) plus `node:path`.
-- ANSI colors come from `src/lib/colors.ts` — the single definition site.
+- ANSI colors come from `packages/sandbox-core/src/colors.ts` — the single definition site.
 - `console.error` for stderr, `console.log` for stdout.
 - `process.exit(n)` for exit codes. Thrown errors reach `main`, which prints
   `Error: <msg>` in red and exits 1; `SANDBOX_DEBUG` re-raises with a stack.
