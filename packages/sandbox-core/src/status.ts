@@ -32,7 +32,6 @@ import {
 import { getAllSlots, getPortRange, type SlotEntry, slotCount } from "./slots.js";
 import {
   _run,
-  connectedNamespace,
   type InterceptState,
   interceptBlocker,
   isRemoteService,
@@ -171,6 +170,8 @@ const STATUS_READ = (cmd: string[]) => _run(cmd, 15);
 /** What `sandbox status --intercepts --json` prints. */
 export interface InterceptsSnapshot {
   available: boolean;
+  /** Telepresence is on PATH, connected or not: a disconnected install can still intercept (SW-12). */
+  installed: boolean;
   connected_namespace: string | null;
   intercepts: InterceptRow[];
   /**
@@ -183,15 +184,14 @@ export interface InterceptsSnapshot {
 export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
   const state = listIntercepts(STATUS_READ);
   const registry = loadServices();
-  // Rows before the namespace probe: `--intercepts` has always shelled out in
-  // that order, and both are reads of the same live telepresence state.
   // No telepresence, nothing interceptable: rows would claim `interceptable: true` (SW-2).
-  const intercepts = state.available
+  const intercepts = state.installed
     ? buildInterceptRows(await getAllSlots(), registry, state)
     : [];
   return {
     available: state.available,
-    connected_namespace: state.available ? connectedNamespace(STATUS_READ) : null,
+    installed: state.installed,
+    connected_namespace: state.namespace,
     intercepts,
     remote_services: Object.keys(registry)
       .filter((name) => isRemoteService(registry[name]))

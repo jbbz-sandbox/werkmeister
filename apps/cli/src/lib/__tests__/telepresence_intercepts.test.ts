@@ -103,29 +103,41 @@ describe("interceptBlocker", () => {
 });
 
 describe("listIntercepts", () => {
+  // Status decides first: `list` only runs against a connected daemon (SW-12).
+  const CONNECTED = JSON.stringify({ daemon: { status: "Connected", namespace: "default" } });
+  const connected =
+    (list: [number, string]): Runner =>
+    (cmd) =>
+      cmd[1] === "status" ? [0, CONNECTED] : list;
+
   it("returns the parsed map from `telepresence list -i`", () => {
-    const runner: Runner = () => [0, ACTIVE];
-    expect(listIntercepts(runner).intercepts.get("frontend")).toBe("test-me");
+    expect(listIntercepts(connected([0, ACTIVE])).intercepts.get("frontend")).toBe("test-me");
   });
 
   it("reports available when the command succeeds", () => {
-    expect(listIntercepts(() => [0, "[]"]).available).toBe(true);
+    expect(listIntercepts(connected([0, "[]"])).available).toBe(true);
   });
 
   it("reports unavailable, not an error, when telepresence exits non-zero", () => {
-    const result = listIntercepts(() => [127, "telepresence: command not found"]);
+    const result = listIntercepts(connected([1, "boom"]));
     expect(result.available).toBe(false);
     expect(result.intercepts.size).toBe(0);
   });
 
+  it("reports not installed, not an error, when the binary is missing", () => {
+    const result = listIntercepts(() => [127, "telepresence: command not found"]);
+    expect([result.installed, result.available]).toEqual([false, false]);
+  });
+
   it("asks telepresence for intercepts only, as json", () => {
-    let seen: string[] = [];
+    const seen: string[][] = [];
     listIntercepts((cmd) => {
-      seen = cmd;
-      return [0, "[]"];
+      seen.push(cmd);
+      return cmd[1] === "status" ? [0, CONNECTED] : [0, "[]"];
     });
-    expect(seen).toContain("-i");
-    expect(seen).toContain("--format");
-    expect(seen).toContain("json");
+    const list = seen.find((cmd) => cmd[1] === "list") ?? [];
+    expect(list).toContain("-i");
+    expect(list).toContain("--format");
+    expect(list).toContain("json");
   });
 });

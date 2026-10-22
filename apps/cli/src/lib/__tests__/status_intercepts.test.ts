@@ -10,14 +10,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildInterceptRows, interceptsSnapshot } from "werkmeister-core/status";
 
 // The snapshot's only seams: the telepresence subprocess, the slot table, the registry.
-const h = vi.hoisted(() => ({ telepresence: true }));
+const h = vi.hoisted(() => ({
+  telepresence: "connected" as "absent" | "disconnected" | "connected",
+  calls: [] as string[],
+}));
 
 vi.mock("werkmeister-core/proc", async (importOriginal) => {
   const actual = await importOriginal<typeof import("werkmeister-core/proc")>();
   return {
     ...actual,
     run: (cmd: string[]) => {
-      if (!h.telepresence) throw new actual.ProcError("not found", cmd, -1, "", "", "ENOENT");
+      if (h.telepresence === "absent") {
+        throw new actual.ProcError("not found", cmd, -1, "", "", "ENOENT");
+      }
+      h.calls.push(cmd[1]);
+      if (h.telepresence === "disconnected") {
+        return {
+          status: 1,
+          stdout: '{"error":"root daemon: telepresence root daemon is not running"}',
+          stderr: "",
+        };
+      }
       if (cmd[1] === "list") {
         return {
           status: 0,
@@ -67,9 +80,16 @@ const SLOTS = {
   other: { slot: 2, services: ["frontend", "backend"] },
 };
 
-const none = { available: true, intercepts: new Map<string, string | null>() };
-const state = (pairs: [string, string | null][]) => ({
+const none = {
+  installed: true,
   available: true,
+  namespace: "default",
+  intercepts: new Map<string, string | null>(),
+};
+const state = (pairs: [string, string | null][]) => ({
+  installed: true,
+  available: true,
+  namespace: "default",
   intercepts: new Map(pairs),
 });
 
@@ -157,7 +177,9 @@ describe("buildInterceptRows", () => {
 
   it("still reports interceptability when telepresence is unavailable", () => {
     const rows = buildInterceptRows({ "test-me": SLOTS["test-me"] }, REGISTRY, {
+      installed: true,
       available: false,
+      namespace: null,
       intercepts: new Map(),
     });
     expect(rows[0].interceptable).toBe(true);
@@ -167,13 +189,15 @@ describe("buildInterceptRows", () => {
 
 describe("interceptsSnapshot contract (`sandbox status --intercepts --json`)", () => {
   beforeEach(() => {
-    h.telepresence = true;
+    h.telepresence = "connected";
+    h.calls = [];
   });
 
   it("returns {available, connected_namespace, intercepts[]} with the documented row fields", async () => {
     const snap = await interceptsSnapshot();
     expect(Object.keys(snap)).toEqual([
       "available",
+      "installed",
       "connected_namespace",
       "intercepts",
       "remote_services",
@@ -181,6 +205,7 @@ describe("interceptsSnapshot contract (`sandbox status --intercepts --json`)", (
     // legacy-worker has no k8s coordinates: never a cluster service (SW-21).
     expect(snap.remote_services).toEqual(["backend", "frontend"]);
     expect(snap.available).toBe(true);
+    expect(snap.installed).toBe(true);
     expect(snap.connected_namespace).toBe("default");
     for (const row of snap.intercepts) {
       expect(Object.keys(row)).toEqual([
@@ -197,13 +222,23 @@ describe("interceptsSnapshot contract (`sandbox status --intercepts --json`)", (
   });
 
   it("degrades to available: false with an empty list when telepresence is absent", async () => {
-    h.telepresence = false;
+    h.telepresence = "absent";
     await expect(interceptsSnapshot()).resolves.toEqual({
       available: false,
+      installed: false,
       connected_namespace: null,
       intercepts: [],
       // Still known without telepresence, so a pane can hide local-only rows (SW-21).
       remote_services: ["backend", "frontend"],
     });
+  });
+  it("keeps rows when installed but disconnected, and never runs `list` (SW-12)", async () => {
+    h.telepresence = "disconnected";
+    const snap = await interceptsSnapshot();
+    expect([snap.available, snap.installed, snap.connected_namespace]).toEqual([false, true, null]);
+    const frontend = snap.intercepts.find((r) => r.service === "frontend");
+    expect(frontend?.interceptable).toBe(true);
+    expect(snap.intercepts.every((r) => !r.intercepted)).toBe(true);
+    expect(h.calls).not.toContain("list");
   });
 });
