@@ -95,14 +95,19 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const total = Object.keys(health).length;
 
   console.log();
-  if (totalHealthy === total) {
+  if (!infraOk) {
+    // The health list only counts containers that exist, so a failed `up`
+    // could still read "All 1 services healthy" and exit 0.
+    console.log(
+      `  ${Colors.RED}${Colors.BOLD}Shared infrastructure did not start — see the error above.${Colors.RESET}`,
+    );
+    console.log(`  ${Colors.DIM}Check docker and your kubeconfig.${Colors.RESET}`);
+    process.exitCode = 1;
+  } else if (totalHealthy === total) {
     console.log(`  ${Colors.GREEN}${Colors.BOLD}All ${total} services healthy${Colors.RESET}`);
   } else {
     const down = total - totalHealthy;
     console.log(`  ${Colors.YELLOW}${totalHealthy}/${total} healthy, ${down} down${Colors.RESET}`);
-    if (!infraOk) {
-      console.log(`  ${Colors.DIM}Check docker and your kubeconfig.${Colors.RESET}`);
-    }
   }
 
   await checkTracker();
