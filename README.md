@@ -21,11 +21,13 @@ published package doesn't depend on the repo's package manager, so
 | Package | Path | What |
 | --- | --- | --- |
 | `werkmeister-core` | [packages/sandbox-core](packages/sandbox-core) | Shared library: config/registry resolution, workspace + issue-tracker helpers, typed wrappers over the CLI. |
+| `werkmeister-ui` | [packages/sandbox-ui](packages/sandbox-ui) | Shared UI modules and the workspace display model, used by the dashboard, the MCP server and the VS Code extension. |
 | `werkmeister-vscode` | [packages/vscode-plugin](packages/vscode-plugin) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
 
-`werkmeister-core` is the one shared dependency — the CLI, the dashboard and the VS
-Code extension all read the same machine config through it. Only the CLI
-publishes; everything else is private.
+`werkmeister-core` is the shared dependency every workspace builds on — the CLI,
+the dashboard and the VS Code extension all read the same machine config through
+it. `werkmeister-ui` is shared by the UI surfaces (dashboard, MCP server, VS Code
+extension). Only the CLI publishes; everything else is private.
 
 Every workspace here can also be run as a Werkmeister service of its own, so a feature
 workspace can develop Werkmeister inside Werkmeister — see "Self-hosting the Werkmeister repo"
@@ -109,8 +111,8 @@ that needs Xcode's tools.
 
 The package is a single esbuild bundle plus `infra/` — the templates, compose
 files, proxy UI and skills the CLI reads at runtime. `werkmeister-core` and the
-CLI's other libraries are bundled in, so the only dependency npm resolves is
-`dockerode`. `werkmeister setup` still seeds `~/.werkmeister` exactly as it does from a
+CLI's other libraries are bundled in, so the only dependencies npm resolves are
+`dockerode` and `@anthropic-ai/claude-agent-sdk`. `werkmeister setup` still seeds `~/.werkmeister` exactly as it does from a
 checkout, which is what makes the two installs interchangeable. The MCP server
 (`apps/mcp`, every tool) is bundled in too, as `dist/mcp.js`: `werkmeister mcp`,
 `werkmeister connect`'s MCP server on 3002 and the `werkmeister` plugin's MCP
@@ -134,8 +136,8 @@ pnpm changeset         # pick a bump, write a one-line description
 That writes `.changeset/<name>.md` — commit it with the PR. **Name
 `werkmeister`, even for work that lives in `werkmeister-core`:** the
 description lands in the changelog of whichever package the changeset names, and
-the CLI is the one anyone reads. `werkmeister-core` is `fixed` to the CLI, so its
-version follows either way.
+the CLI is the one anyone reads. `werkmeister-core` and `werkmeister-vscode` are
+`fixed` to the CLI, so their versions follow either way.
 
 On merge to `main`, the `release` job in `.github/workflows/ci.yml` opens (or
 updates) a **"chore: version packages"** PR carrying the version bumps and
@@ -143,7 +145,8 @@ updates) a **"chore: version packages"** PR carrying the version bumps and
 release. So a release is one reviewable merge, and `main` never publishes by
 accident.
 
-`release` runs only after the same push's `test` job passes (`needs: test`), so
+`release` runs only after the same push's `test` and `core-test` jobs pass
+(`needs: [test, core-test]`), so
 nothing publishes untested; npm will not accept a re-publish of a
 version. The job publishes through npm trusted publishing (OIDC): npmjs.com
 trusts `.github/workflows/ci.yml` in this repo, so no npm token is stored anywhere.
