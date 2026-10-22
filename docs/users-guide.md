@@ -1024,11 +1024,14 @@ the pieces that are not obvious from the demo services:
   `du -sh ~/.sandbox/cache/turbo` shows its size and deleting it is safe. Before this, turbo
   shared each worktree's cache with the main checkout, in `~/repos/sandbox/.turbo/cache`.
   Nothing writes there any more, so you can delete it by hand.
-- **One pnpm store for every workspace.** `sandbox-install` installs from
-  `~/.sandbox/cache/pnpm-store` (`npm_config_store_dir`), so each package version downloads
-  once per machine, not once per workspace. node_modules is a per-feature volume on another
-  filesystem, so pnpm copies files out of the store instead of hard-linking them. Deleting the
-  dir is safe; the next install refills it. `pnpm` itself is corepack's shim in the `tools`
+- **One pnpm store for every workspace.** `sandbox-install` installs from the shared
+  `sandbox-pnpm-store` volume at `/pnpm-store` (`npm_config_store_dir`), so each package
+  version downloads once per machine, not once per workspace. It's a named volume rather
+  than a host dir because reads over the VM's file share made a warm install about three
+  times slower. node_modules is a per-feature volume on another filesystem, so pnpm copies
+  files out of the store instead of hard-linking them. `docker volume rm sandbox-pnpm-store`
+  is safe while no workspace is up; the next install refills it, and the old
+  `~/.sandbox/cache/pnpm-store` dir can be deleted. `pnpm` itself is corepack's shim in the `tools`
   volume, with the pnpm build it fetches kept there too (`COREPACK_HOME`), so the four services
   can run `pnpm turbo …` without an install of their own.
 - **`werkmeister` inside the container is the worktree's own build.** `PATH` puts
@@ -1243,7 +1246,7 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
   - `extra_services` (map | null) — Sidecar containers (e.g., Redis instances)
   - `dockerfile` (string | null) — Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
   - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
-  - `extra_volumes` (list | null) — Additional volume mounts
+  - `extra_volumes` (list | null) — Additional volume mounts: a host path (`${REPO}/.git:/app/.git:ro`), a bare name for a per-feature named volume (`turbo-cache:/app/.turbo`, created as `<feature>-turbo-cache`), or `^name` for one volume every feature shares (`^sandbox-pnpm-store:/pnpm-store`). A shared volume is created on `sandbox up` and declared `external`, so no feature's `down --volumes`, close-out or `clean` removes it; drop it by hand with `docker volume rm <name>`
 
 - **`infrastructure`** — Infrastructure services (redis, postgres) with k8s forward ports
 - **`setup_services`** — Optional per-monorepo install/build steps that run before a repo's services start
