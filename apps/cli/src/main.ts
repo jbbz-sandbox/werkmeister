@@ -310,9 +310,35 @@ const SPECS: CommandSpec[] = [
       cmd
         .description("Run Playwright tests against a feature's stack")
         .argument("<feature>", "Feature name")
-        .argument("[extra...]", "Additional arguments to pass to Playwright");
+        .argument("[extra...]", "Additional arguments to pass to Playwright")
+        .option(
+          "--scaffold",
+          "Don't run: write playwright.config.ts + <feature>.spec.ts into the workspace " +
+            "(if missing) and install the pinned @playwright/test",
+        )
+        .option("-w, --workspace <path>", "--scaffold: workspace directory (default: from cwd)")
+        .option(
+          "--base-url <url>",
+          "--scaffold: ingress URL to target (default: the first feature_router service)",
+        );
     },
-    namespace: ([feature, extra]) => ({ feature, extra: extra ?? [] }),
+    namespace: ([feature, extra], o) => ({
+      feature,
+      extra: extra ?? [],
+      scaffold: o.scaffold ?? false,
+      workspace: o.workspace ?? null,
+      base_url: o.baseUrl ?? null,
+    }),
+  },
+  {
+    name: "starting-prompt",
+    load: () => import("./commands/starting_prompt.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Print the enclosing workspace's starting_prompt from workspace.yml")
+        .option("--start <dir>", "Directory to search up from (default: cwd)");
+    },
+    namespace: (_args, o) => ({ start: o.start ?? null }),
   },
   {
     name: "open",
