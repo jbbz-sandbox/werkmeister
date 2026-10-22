@@ -41,7 +41,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && vitest run -c bdd/vitest.config.ts",
-    "prepack": "cd ../../packages/vscode-plugin && npm run build && npm run package -- --out ../../apps/cli/dist/sandbox-workspaces.vsix"
+    "prepack": "cd ../../packages/vscode-plugin && pnpm run build && pnpm run package --out ../../apps/cli/dist/sandbox-workspaces.vsix"
   },
   "//prepack": "Ships the VS Code extension in the tarball for `sandbox setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build.",
   "//dependencies": "Everything else is bundled by esbuild.mjs — see its docstring. dockerode stays external because its ssh2 -> cpu-features requires must be allowed to fail into a pure-JS fallback, and ESM output turns an unresolved require into a shim that throws instead. The Agent SDK is external too, because it locates its bundled Claude Code binary by its own package path.",
@@ -54,11 +54,12 @@
     "@types/node": "^22.13.0",
     "commander": "^13.1.0",
     "esbuild": "^0.24.0",
+    "jsonc-parser": "^3.3.1",
     "quickpickle": "^1.11.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
-    "werkmeister-core": "^0.26.0",
+    "werkmeister-core": "workspace:*",
     "yaml": "^2.7.0"
   }
 }

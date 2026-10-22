@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
 import { allowed, check } from "./check-licenses.mjs";
 
@@ -14,25 +11,17 @@ test("allowed: OR needs one branch, AND needs every term", () => {
   assert.ok(!allowed("SEE LICENSE IN LICENSE.md"));
 });
 
-test("check: flags unknown licences, reads legacy `licenses`, skips reviewed packages", () => {
-  const root = mkdtempSync(join(tmpdir(), "licenses-"));
-  mkdirSync(join(root, "node_modules/old"), { recursive: true });
-  writeFileSync(
-    join(root, "node_modules/old/package.json"),
-    JSON.stringify({ licenses: [{ type: "MIT" }] }),
-  );
-  const packages = {
-    "": {},
-    "node_modules/ok": { version: "1.0.0", license: "ISC" },
-    "node_modules/old": { version: "1.0.0" },
-    "node_modules/gpl": { version: "2.0.0", license: "GPL-3.0-only" },
-    "node_modules/missing": { version: "3.0.0" },
-    "node_modules/@anthropic-ai/claude-agent-sdk-linux-x64": {
-      version: "1.0.0",
-      license: "SEE LICENSE IN LICENSE.md",
-    },
-    "node_modules/werkmeister": { link: true },
+test("check: flags unknown and missing licences, skips reviewed packages and their platform twins", () => {
+  const listing = {
+    ISC: [{ name: "ok", versions: ["1.0.0"] }],
+    "GPL-3.0-only": [{ name: "gpl", versions: ["2.0.0"] }],
+    Unknown: [
+      { name: "missing", versions: ["3.0.0", "3.1.0"] },
+      { name: "@anthropic-ai/claude-agent-sdk-linux-x64", versions: ["1.0.0"] },
+    ],
   };
-  writeFileSync(join(root, "package-lock.json"), JSON.stringify({ packages }));
-  assert.deepEqual(check(root), ["gpl@2.0.0: GPL-3.0-only", "missing@3.0.0: no licence field"]);
+  assert.deepEqual(check(listing), [
+    "gpl@2.0.0: GPL-3.0-only",
+    "missing@3.0.0, 3.1.0: no licence field",
+  ]);
 });

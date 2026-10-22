@@ -38,14 +38,14 @@ jobs:
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-node24-
       # SW-63: a new dependency under a licence outside the allowlist fails here.
-      - run: npm run licenses
+      - run: pnpm run licenses
       # Before turbo so a lint or format failure surfaces in seconds, not after the build.
-      - run: npx biome ci .
+      - run: pnpm exec biome ci .
       # One invocation so typecheck runs alongside build instead of before it.
       # werkmeister-core's tests run sharded in `core-test` below; its build
       # still runs here as every other package depends on it, and `tsc` there
       # type-checks the same files its `typecheck` would.
-      - run: npx turbo run typecheck build test --filter='!werkmeister-core'
+      - run: pnpm turbo run typecheck build test --filter='!werkmeister-core'
       # The extension host is an Electron app: it needs a display even headless,
       # and it downloads its own VS Code build on first run. With the build
       # cached for the version pinned in .vscode-test.mjs, vscode-test skips
@@ -54,10 +54,10 @@ jobs:
         with:
           path: packages/vscode-plugin/.vscode-test
           key: vscode-${{ runner.os }}-1.93.0-${{ hashFiles('packages/vscode-plugin/.vscode-test.mjs') }}
-      - run: xvfb-run -a npm run test:integration --workspace werkmeister-vscode
+      - run: xvfb-run -a pnpm --filter werkmeister-vscode run test:integration
       # `vsce package` fails on a README link it can't rewrite, and is the only
       # check on .vscodeignore — #38 broke packaging and nothing caught it.
-      - run: npm run package --workspace werkmeister-vscode
+      - run: pnpm --filter werkmeister-vscode run package
 
   # The core suite is ~100 files that each spawn a process, CPU-bound on a
   # 4-vCPU runner: 116s when it shared the runner with every other build. Two
@@ -79,7 +79,7 @@ jobs:
           path: .turbo/cache
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-node24-
-      - run: npx turbo run build --filter=werkmeister-core
+      - run: pnpm turbo run build --filter=werkmeister-core
       - run: node --test --test-shard=${{ matrix.shard }}/2 *.test.mjs
         working-directory: packages/sandbox-core
       # The smoke files are a few seconds in total; one shard takes them all.
@@ -124,7 +124,7 @@ jobs:
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
       - uses: ./.github/actions/install
-      # Restores what `test` just saved, so `npm run release`'s build replays
+      # Restores what `test` just saved, so `pnpm run release`'s build replays
       # from cache.
       - uses: actions/cache/restore@v4
         with:
@@ -135,13 +135,15 @@ jobs:
       # (i.e. that PR just merged): publishes and tags.
       - uses: changesets/action@v1
         with:
-          version: npm run changeset:version
-          publish: npm run release
+          version: pnpm run changeset:version
+          publish: pnpm run release
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
           # Opens/updates the version PR and creates the GitHub release.
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          # No npm token: `npm publish` (npm >= 11.5.1, bundled with Node 24)
-          # authenticates through the job's OIDC token, which npmjs.com accepts
-          # because this workflow is the package's trusted publisher.
+          # No npm token: changesets runs `pnpm publish`, which packs (rewriting
+          # `workspace:*`) and hands the tarball to the npm CLI. npm >= 11.5.1,
+          # bundled with Node 24, authenticates through the job's OIDC token,
+          # which npmjs.com accepts because this workflow is the package's
+          # trusted publisher.

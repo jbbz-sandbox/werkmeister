@@ -2,9 +2,10 @@
  * sandbox-install-startup.sh `install` mode (SW-33): skip npm ci while the
  * lockfile and Node major match the stamp in node_modules, and queue installs
  * host-wide through flock'd slot files. SW-35: builds run one at a time.
+ * SW-31: a pnpm lockfile installs with pnpm, from corepack's shim.
  *
- * Drives the real script: stub `npm` and `node` on PATH, and stub tool binaries
- * in SANDBOX_TOOLS_DIR so the download steps are skipped. Needs `flock` and
+ * Drives the real script: stub `npm`, `node` and `corepack` on PATH, and stub
+ * tool binaries (pnpm too) in SANDBOX_TOOLS_DIR so the download steps are skipped. Needs `flock` and
  * `sha256sum` (util-linux/coreutils), so it runs in the containers and on CI,
  * not on a macOS host.
  */
@@ -58,7 +59,7 @@ function run(app: string, extra: Record<string, string> = {}, args = ["install"]
   return spawnSync("sh", [SCRIPT, ...args], { cwd: app, env: env(extra), encoding: "utf8" });
 }
 
-/** npm calls logged since the last read, one `<args>` line each. */
+/** Calls logged since the last read: `<args>` for npm, `pnpm <args>` / `corepack <args>` for those. */
 function npmCalls(): string[] {
   const log = path.join(tmp, "npm.log");
   const lines = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
@@ -91,6 +92,13 @@ beforeEach(() => {
     ].join("\n"),
   );
   writeExec(path.join(tmp, "bin", "node"), 'echo "$NODE_V"');
+  // Stands in for `corepack enable --install-directory <dir> pnpm`: drops the shim in <dir>.
+  writeExec(
+    path.join(tmp, "bin", "corepack"),
+    ['echo "corepack $*" >> "$LOG"', `cp "${path.join(tmp, "pnpm-stub")}" "$3/pnpm"`].join("\n"),
+  );
+  writeExec(path.join(tmp, "pnpm-stub"), 'echo "pnpm $*" >> "$LOG"');
+  writeExec(path.join(tmp, "tools", "bin", "pnpm"), 'echo "pnpm $*" >> "$LOG"');
   for (const tool of ["bin/docker", "bin/kubectl", "docker/cli-plugins/docker-compose"]) {
     writeExec(path.join(tmp, "tools", tool), "exit 0");
   }
@@ -144,6 +152,28 @@ describe.skipIf(!hasFlock)("sandbox-install-startup.sh install", () => {
 
     expect(run(app).status).toBe(0);
     expect(npmCalls()).toEqual(["ci", "run build"]);
+  });
+
+  it("installs with pnpm when the app has a pnpm lockfile, with the same skip (SW-31)", () => {
+    const app = makeApp("app");
+    fs.rmSync(path.join(app, "package-lock.json"));
+    fs.writeFileSync(path.join(app, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    expect(run(app).status).toBe(0);
+    expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", "pnpm run build"]);
+
+    const second = run(app);
+    expect(second.stdout).toContain("skipping pnpm install");
+    expect(npmCalls()).toEqual(["pnpm run build"]);
+  });
+
+  it("adds corepack's pnpm shim to the tools volume once, in either mode", () => {
+    const app = makeApp("app");
+    const tools = path.join(tmp, "tools", "bin");
+    fs.rmSync(path.join(tools, "pnpm"));
+    expect(run(app, {}, []).status).toBe(0);
+    expect(npmCalls()).toEqual([`corepack enable --install-directory ${tools} pnpm`]);
+    expect(run(app, {}, []).status).toBe(0);
+    expect(npmCalls()).toEqual([]);
   });
 
   it("does not install without the `install` argument (the pre-SW-33 command)", () => {

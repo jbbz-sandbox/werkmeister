@@ -198,6 +198,11 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
   ])
     assert.ok(!AUTONOMOUS_RULES.includes(server), `no whole server: ${server}`);
   assert.ok(!AUTONOMOUS_RULES.some((r) => r.startsWith("Bash(npm install")), "no npm install");
+  // SW-31: the only pnpm install is the lockfile one; adding a dependency waits for a person.
+  assert.deepEqual(
+    AUTONOMOUS_RULES.filter((r) => /^Bash\(pnpm (install|i|add)\b/.test(r)),
+    ["Bash(pnpm install --frozen-lockfile:*)"],
+  );
   for (const r of [
     "Bash(sandbox proxy-reload:*)",
     "Bash(sandbox down:*)",
@@ -207,6 +212,9 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     "Bash(npm publish:*)",
     "Bash(npm link:*)",
     "Bash(npm install -g:*)",
+    "Bash(pnpm publish:*)",
+    "Bash(pnpm link:*)",
+    "Bash(pnpm add -g:*)",
     "mcp__plugin_sandbox-tools_sandbox-workspace__remove-workspace",
     "mcp__plugin_sandbox-tools_sandbox-workspace__kube-switch",
     "mcp__plugin_sandbox-tools_sandbox-workspace__up",

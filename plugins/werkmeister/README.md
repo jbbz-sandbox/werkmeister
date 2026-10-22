@@ -69,7 +69,7 @@ Plugins don't install in Desktop, so add the same server to
 
 ## Dependencies
 
-- **UI build (checkout only):** run `cd apps/sandbox-dashboard && npm run build` once — it
+- **UI build (checkout only):** run `cd apps/sandbox-dashboard && pnpm run build` once — it
   builds the `ui://` HTML, the browser form and the localhost dashboard that `werkmeister mcp`
   serves. Without it the server still runs; its App tools fall back to text.
 - The `w9r` CLI (package `werkmeister` 0.14 or later) must be on `PATH`, and Docker running.

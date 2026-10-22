@@ -62,7 +62,9 @@ const options = {
   outdir: "dist",
   // The Agent SDK runs a bundled Claude Code binary it locates relative to its
   // own package, so it stays an installed dependency rather than bundled code.
-  external: ["dockerode", "*.node", "@anthropic-ai/claude-agent-sdk"],
+  // chokidar is nunjucks' optional peer, required only for template watching,
+  // which we never use; pnpm's hidden hoist would otherwise let esbuild bundle one.
+  external: ["dockerode", "*.node", "@anthropic-ai/claude-agent-sdk", "chokidar"],
   // jsonc-parser's `main` is UMD, which loads its own files with a dynamic
   // require esbuild can't follow; its ESM build is plain imports.
   alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
