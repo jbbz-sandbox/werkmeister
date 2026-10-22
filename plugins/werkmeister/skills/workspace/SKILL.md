@@ -5,12 +5,14 @@ description: "Create a brand-new sandbox workspace (git worktrees on a <user>/<w
 
 # Sandbox Workspace
 
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+
 **Every create goes through `createWorkspace`** (packages/sandbox-core/src/sandbox.ts) — the CLI,
 the browser form, the MCP server and the /workspaces pane all call it. Never write
 workspace files by hand.
 
 With an `issue_id`, `createWorkspace` always:
-1. fetches the issue and stores it verbatim in `.sandbox/issue.md` — it **fails the create**
+1. fetches the issue and stores it verbatim in `.werkmeister/issue.md` — it **fails the create**
    if the issue can't be read (run `sandbox connect` to check tracker sign-in);
 2. fills `task` from the issue title when empty;
 3. has a model rewrite the issue into `description` / `starting_prompt` for whichever is

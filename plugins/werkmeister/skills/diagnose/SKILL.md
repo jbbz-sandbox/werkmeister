@@ -5,6 +5,8 @@ description: "Diagnose developer sandbox issues by running comprehensive health 
 
 # diagnose
 
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+
 Run the following diagnostic steps in order. Report findings as a structured summary with PASS/FAIL/WARN for each check.
 
 ## Step 1: Baseline Snapshot
@@ -34,15 +36,15 @@ ask the CLI for the feature's actual endpoints rather than assuming a range:
 sandbox services <feature>
 ```
 
-Then probe each reported port with its health path from `~/.sandbox/services.yaml`:
+Then probe each reported port with its health path from `~/.werkmeister/services.yaml`:
 
 ```bash
 curl -s -o /dev/null -w "<service> (<port>): HTTP %{http_code} | Size: %{size_download}\n" \
   "http://localhost:<port><health_path>" 2>&1
 ```
 
-Port ranges live in `~/.sandbox/ports.yaml` and service health paths in
-`~/.sandbox/services.yaml`; both are written by `sandbox setup` and differ per
+Port ranges live in `~/.werkmeister/ports.yaml` and service health paths in
+`~/.werkmeister/services.yaml`; both are written by `sandbox setup` and differ per
 machine.
 
 ## Step 3: Caddy Routing Verification
@@ -50,8 +52,8 @@ machine.
 Test known URLs through Caddy and compare with direct results:
 
 The ingress host is configured per machine — never hardcode it. It derives from
-`ingress.local_domain` in `~/.sandbox/config.yaml` joined to a service that
-declares a `feature_router:` block in `~/.sandbox/services.yaml`:
+`ingress.local_domain` in `~/.werkmeister/config.yaml` joined to a service that
+declares a `feature_router:` block in `~/.werkmeister/services.yaml`:
 
 ```bash
 DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
@@ -62,7 +64,7 @@ curl -sk -o /dev/null -w "homepage: HTTP %{http_code} | Size: %{size_download}\n
 ```
 
 Then probe the paths that actually matter for this service — the `test_path` in
-`.sandbox/workspace.yml`, plus whatever routes the feature touches:
+`.werkmeister/workspace.yml`, plus whatever routes the feature touches:
 
 ```bash
 for path in / "$(sed -n 's/^test_path:[[:space:]]*//p' .werkmeister/workspace.yml .sandbox/workspace.yml 2>/dev/null | head -1)"; do

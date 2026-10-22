@@ -5,13 +5,15 @@ description: "Trace a specific URL through the full sandbox routing chain to ide
 
 # routing-test
 
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+
 Trace a URL through the full routing chain. The user provides a URL (full or relative path). If no URL is provided, ask for one.
 
 ## Step 1: Determine Expected Service
 
 Routing is per-hostname, not per-path: Caddy terminates each service's public
 hostname directly. The service handling a URL is the one whose `feature_router:`
-block in `~/.sandbox/services.yaml` owns that hostname — so read the host from
+block in `~/.werkmeister/services.yaml` owns that hostname — so read the host from
 the URL and match it there. `sandbox services <feature>` lists the routed
 services for a running feature.
 
@@ -24,7 +26,7 @@ BASE=$((11100 + (SLOT - 1) * 100))   # slot 1 → 11100, slot 2 → 11200, …
 PORT=$((BASE + OFFSET))              # OFFSET = the service's `port_offset`
 ```
 
-`port_offset` per service lives in `~/.sandbox/services.yaml` (written by
+`port_offset` per service lives in `~/.werkmeister/services.yaml` (written by
 `sandbox setup`).
 
 ## Step 2: Test Direct to Expected Service
@@ -38,7 +40,7 @@ Report: HTTP status, content-type, content-length/transfer-encoding, any redirec
 ## Step 3: Test Through Caddy
 
 The ingress host is configured per machine — never hardcode it. Derive it from
-`ingress.local_domain` in `~/.sandbox/config.yaml` plus the routed service name
+`ingress.local_domain` in `~/.werkmeister/config.yaml` plus the routed service name
 (`sandbox services <feature>` lists them):
 
 ```bash
