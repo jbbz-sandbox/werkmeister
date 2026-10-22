@@ -186,7 +186,7 @@ function agentTime(ws: DisplayInput, now: Date): string {
 
 function containers(ws: DisplayInput): Text {
   const loops = ws.crashLoops ?? [];
-  if (loops.length === 1) return { text: `${loops[0].service} crash-looping`, tone: "err" };
+  if (loops.length === 1) return { text: `${loops[0]?.service} crash-looping`, tone: "err" };
   if (loops.length > 1) return { text: `${loops.length} crash-looping`, tone: "err" };
   const count = `${ws.running} of ${ws.total} up`;
   if (ws.state === "up") return { text: count, tone: "ok" };
@@ -222,7 +222,7 @@ export function hostLine(h: HostInput | null): Text {
   if (!h) return { text: "host load n/a", tone: "off" };
   return {
     text: `host load ${h.load.join(" · ")} / ${h.cores} cores · features ${h.featureCpuPercent}% CPU`,
-    tone: h.load[0] > h.cores ? "warn" : "ok",
+    tone: (h.load[0] ?? 0) > h.cores ? "warn" : "ok",
   };
 }
 

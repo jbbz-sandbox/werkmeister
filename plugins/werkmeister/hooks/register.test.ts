@@ -1385,7 +1385,7 @@ test("the Create tab draws the form from the schema: titles without wizard hints
   ])
     expect(await ui.find({ key })).toBeDefined();
   expect((await ui.find({ key: "f:starting_prompt" }))?.type).toBe("Client");
-  expect(await ui.find({ text: "Issue" })).toBeDefined();
+  expect(await ui.find({ text: "GitHub issue" })).toBeDefined();
   expect(await ui.find({ text: "Task title" })).toBeDefined();
   expect(await ui.find({ text: "Feature name *" })).toBeDefined();
   expect(await ui.find({ text: "Short title for the Current Task section." })).toBeDefined();
@@ -1867,7 +1867,7 @@ test("the lifecycle takes each PR's state from the PR poll, so it never contradi
             { state: "pr-open", prs: [API_OPEN, SANDBOX_OPEN] },
           ),
         ),
-      [`${WS}/workspace-prs`]: () => ok([PRS[0], { name: "abc", repos: PRS[0].repos }]),
+      [`${WS}/workspace-prs`]: () => ok([PRS[0], { name: "abc", repos: PRS[0]?.repos }]),
     }),
   );
   await openPane($);
@@ -2132,21 +2132,21 @@ test("interceptControl: one state per rule, and an unreadable owner is never you
     kind: "unavailable",
     text: "intercept state unavailable",
   });
-  expect(kind(row(), "ab", { ...SNAP, available: false }).text).toBe("intercepts unavailable");
-  expect(kind(undefined, "ab", SNAP).kind).toBe("blocked");
-  expect(kind(row({ intercepted: true, intercepted_by: "ab" }), "ab", SNAP).kind).toBe("active");
+  expect(kind(row(), "ab", { ...SNAP, available: false })?.text).toBe("intercepts unavailable");
+  expect(kind(undefined, "ab", SNAP)?.kind).toBe("blocked");
+  expect(kind(row({ intercepted: true, intercepted_by: "ab" }), "ab", SNAP)?.kind).toBe("active");
   expect(kind(row({ intercepted: true, intercepted_by: null }), "ab", SNAP)).toEqual({
     kind: "other",
     text: "⇄ intercepted (owner unknown)",
   });
-  expect(kind(row({ intercepted: true, intercepted_by: "other" }), "ab", SNAP).text).toBe(
+  expect(kind(row({ intercepted: true, intercepted_by: "other" }), "ab", SNAP)?.text).toBe(
     "⇄ intercepted by 'other'",
   );
-  expect(kind(row({ interceptable: false, blocker: "has no k8s_port." }), "ab", SNAP).text).toBe(
+  expect(kind(row({ interceptable: false, blocker: "has no k8s_port." }), "ab", SNAP)?.text).toBe(
     "not interceptable: has no k8s_port.",
   );
-  expect(kind(row(), "ab", SNAP).kind).toBe("off");
-  expect(kind(row({ intercepted: true, intercepted_by: null }), null, SNAP).kind).toBe("other");
+  expect(kind(row(), "ab", SNAP)?.kind).toBe("off");
+  expect(kind(row({ intercepted: true, intercepted_by: null }), null, SNAP)?.kind).toBe("other");
 });
 
 test("interceptControl: a local-only service gets no control, connected or not (SW-21)", () => {
