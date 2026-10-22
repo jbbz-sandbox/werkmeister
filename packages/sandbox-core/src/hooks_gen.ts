@@ -346,8 +346,9 @@ const pluginTool = (tool: string) => PLUGIN_MCP_PREFIXES.map((prefix) => `${pref
 // Every name the CLI answers to. A `Bash(…)` rule is a literal prefix, so a rule
 // for one name never matches a call through another: rules written only for
 // `sandbox` left `werkmeister …` and `w9r …` calls unapproved. `sandbox` is the
-// deprecated launcher; drop it here when SW-11 removes it.
-const CLI_NAMES = ["werkmeister", "w9r", "sandbox"];
+// deprecated launcher; drop it here when SW-11 removes it. It is listed first
+// because core_cli_spawns.test.ts reads an array ending in it as a CLI spawn.
+const CLI_NAMES = ["sandbox", "werkmeister", "w9r"];
 const cli = (rule: string) => CLI_NAMES.map((name) => `Bash(${name} ${rule})`);
 
 // `claude -p --permission-mode acceptEdits` (claude-send) refuses any Bash call
