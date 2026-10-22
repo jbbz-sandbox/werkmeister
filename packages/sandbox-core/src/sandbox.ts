@@ -942,6 +942,8 @@ export interface CreateOptions {
   issue?: IssueSnapshot;
   readStdinTask?: () => string;
   force?: boolean;
+  /** False skips init-workspace's image build, so no container is created (SW-66). */
+  build?: boolean;
 }
 
 const DISTILLED = ["feature", "task", "description", "starting_prompt", "services"] as const;
@@ -1053,6 +1055,7 @@ export async function createWorkspace(
       issue: issue ?? undefined,
       readStdinTask: opts.readStdinTask,
       force: opts.force,
+      build: opts.build,
     });
   };
 
