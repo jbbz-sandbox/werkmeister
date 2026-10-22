@@ -40,7 +40,7 @@ render, or a live editor.
    icon once merged). Hover a workspace: a Markdown card with Containers / PRs /
    Workflow / Agent rows, `⚙ Autonomous` on an autonomous run, the agent's
    question as a quote, and three links that work (primary action, `→ Switch
-   to`, `Open feature ↗`). Cross-check against `sandbox status` in a terminal —
+   to`, `Open feature ↗`). Cross-check against `werkmeister status` in a terminal —
    names, paths, and states should match.
    - Failure looks like: an empty tree with real workspaces running, or a tree
      showing dozens of raw repo checkouts instead of workspace names — see
@@ -94,8 +94,8 @@ render, or a live editor.
 8. **Open issue ↗.** Right-click a workspace with an issue ID → "Open
    issue ↗" opens the browser to that issue.
 
-9. **Open Workspace from the palette.** Command Palette → "Sandbox: Open
-   Workspace", with no tree node focused. It falls back to a QuickPick listing
+9. **Open Workspace from the palette.** Command Palette → "Sandbox: Open in
+   New Window", with no tree node focused. It falls back to a QuickPick listing
    all workspaces (name, issue ID, path).
 
 10. **Configure command — the filter only.** Palette → "Sandbox: Configure
@@ -124,15 +124,14 @@ render, or a live editor.
       swallowed. That was the pre-fix behaviour; it must not recur.
 
 15. **Logs — scope.** Right-click **Logs** on a workspace node → terminal
-    `sandbox logs <feature>` (tails everything). Right-click **Logs** on a
-    service node → `sandbox logs <feature> <service>`. Confirm real log lines
+    `logs <feature>` (tails everything). Right-click **Logs** on a
+    service node → `logs <service>`, that service only. Confirm real log lines
     stream.
 
 
-16. **New Workspace.** Click `+` in the view title. Enter an issue ID, or leave
-    it empty, and press Enter. A terminal at `~` runs `sandbox workspace`
-    (with `--issue-id <ref>` appended if you entered one). Press Escape on the
-    input box instead and confirm **nothing** launches.
+16. **New Workspace.** Click `+` in the view title. A terminal at the
+    workspaces root runs `sandbox workspace`, and the CLI's own wizard prompts
+    (issue ID included).
 
 17. **Open feature ↗.** Right-click a running workspace → **Open feature ↗**.
     Spawns `sandbox open` detached — the one command that doesn't use a
@@ -174,7 +173,7 @@ render, or a live editor.
 
 20. **Install into the real VS Code.**
     ```bash
-    cd packages/vscode-plugin && pnpm run package && code --install-extension werkmeister-vscode-0.1.0.vsix
+    cd packages/vscode-plugin && pnpm run build && pnpm run package --out werkmeister-vscode.vsix && code --install-extension werkmeister-vscode.vsix
     ```
     Deliberately not run during implementation — it modifies your live editor.
 
@@ -184,14 +183,14 @@ render, or a live editor.
     `SANDBOX_WORKSPACES_ROOT`). Open the Sandbox view with **no**
     `sandbox.root` / `sandbox.binPath` set.
 
-    Expected: the same workspaces `sandbox status` shows.
+    Expected: the same workspaces `werkmeister status` shows.
 
     Failure looks like either:
     - **Dozens of raw repo checkouts** instead of named workspaces —
       `resolveWorkspacesRoot`'s config-file tier regressed and it fell back to
       `~/workspace`, which is the *repos* root.
     - **The "Could not find the sandbox CLI" node** — werkmeister-core couldn't
-      resolve the binary from `~/.sandbox/config.yaml` with no env present.
+      resolve the binary from `~/.werkmeister/config.yaml` with no env present.
 
     Diagnose against werkmeister-core directly, bypassing the extension:
     ```bash

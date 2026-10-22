@@ -26,7 +26,7 @@ from `.sandbox/services.yaml`, and they run as root. The anchor gives them two s
    `~/.werkmeister` are mounted read-write at their host paths. Code in the container can:
    - rewrite `~/repos/sandbox/apps/cli/dist/main.js`, the host's own `werkmeister` build, which the
      host CLI and `apps/mcp` run;
-   - edit `~/.werkmeister/env.sh`, which `apps/cli/sandbox` sources on every host run;
+   - edit `~/.werkmeister/env.sh`, which `apps/cli/werkmeister` sources on every host run;
    - add a hook under any `~/repos/*/.git/hooks`, or to any workspace's `.claude/settings.json`
      under `~/features`, which host Claude sessions run.
 
@@ -89,7 +89,7 @@ the host's `apps/mcp` over HTTP, which needs no mount at all.
 The worktree is already on the host (`~/features/<ws>/<repo>`). What the host lacks is a
 `node_modules` for it: the container's tree lives in a docker volume, and the nested
 `node_modules` on the bind mount hold linux binaries (for example
-`apps/cli/node_modules/@esbuild/linux-x64`). A host `npm ci` would replace those and break the
+`apps/cli/node_modules/@esbuild/linux-x64`). A host `pnpm install` would replace those and break the
 container's watcher.
 
 The dependency tree can be borrowed instead of installed. A small host script builds a symlink
@@ -108,8 +108,8 @@ This was run against the live daemon (see Evidence):
   host state.
 
 **Ceiling:** third-party dependency versions come from the installed checkout. A PR that changes
-dependencies has to be dogfooded after `npm ci` in the main checkout. The script should say so
-when the worktree's and the installed checkout's `package-lock.json` differ.
+dependencies has to be dogfooded after `pnpm install` in the main checkout. The script should say so
+when the worktree's and the installed checkout's `pnpm-lock.yaml` differ.
 
 For the ICM pipeline this is the existing rule for every other repo: docker-dependent checks run
 in the exercise stage, on the host.

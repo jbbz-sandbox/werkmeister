@@ -10,7 +10,7 @@ By default, Docker containers without resource limits can consume unbounded CPU 
 - Unexpected OOM kills
 - Poor laptop battery life
 
-Werkmeister ships with pre-configured resource limits for all services (defined in `infra/config/services.yaml` and `infra/compose/shared-infra.yml`), but you can tune them based on your actual usage patterns.
+Werkmeister ships with pre-configured resource limits for all services (defined in each repo's `.sandbox/services.yaml`, merged into `~/.werkmeister/services.yaml`, and `infra/compose/shared-infra.yml`), but you can tune them based on your actual usage patterns.
 
 ## Quick Start
 
@@ -24,17 +24,17 @@ werkmeister stats --collect 15 --save
 # 3. Compare usage against configured limits
 werkmeister optimize
 
-# 4. Adjust limits in infra/config/services.yaml or infra/compose/shared-infra.yml
+# 4. Adjust limits in .sandbox/services.yaml or infra/compose/shared-infra.yml
 ```
 
 ## Where Resource Limits Are Configured
 
-### Feature Services (`infra/config/services.yaml`)
+### Feature Services (`.sandbox/services.yaml`)
 
-Each service in `infra/config/services.yaml` has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
+Each service in its repo's `.sandbox/services.yaml` (merged into `~/.werkmeister/services.yaml`, which `werkmeister optimize` reads) has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
 
 ```yaml
-# infra/config/services.yaml
+# .sandbox/services.yaml
 services:
   frontend:
     memory_limit: 2560M
@@ -119,7 +119,7 @@ werkmeister optimize
 
 This command:
 1. Takes a quick snapshot (or use `--collect N` for a longer collection period)
-2. Loads the configured limits from `infra/config/services.yaml`
+2. Loads the configured limits from `~/.werkmeister/services.yaml`
 3. Compares actual usage against configured limits
 4. Flags services that are near their limits (risk of OOM) or over-provisioned
 5. Generates data-driven limit recommendations based on `max_usage * 1.5`
@@ -143,7 +143,7 @@ Example output:
 
 ### For Feature Services
 
-Edit `infra/config/services.yaml` and update the `memory_limit` and `memory_reservation` fields:
+Edit `.sandbox/services.yaml` and update the `memory_limit` and `memory_reservation` fields:
 
 ```yaml
 services:
@@ -221,7 +221,7 @@ docker logs <container> 2>&1 | grep -i "memory\|heap\|oom"
 
 ## Reference: Current Default Limits
 
-From `infra/config/services.yaml` and `infra/compose/shared-infra.yml`:
+From `.sandbox/services.yaml` and `infra/compose/shared-infra.yml`:
 
 | Service | Memory Limit | Memory Reservation | Type |
 |---------|-------------|-------------------|------|
@@ -236,7 +236,7 @@ From `infra/config/services.yaml` and `infra/compose/shared-infra.yml`:
 ### "Cannot allocate memory" on container start
 
 Your total reservations exceed available Docker memory. Either:
-- Reduce reservations in `infra/config/services.yaml`
+- Reduce reservations in `.sandbox/services.yaml`
 - Increase Docker Desktop memory allocation (Settings > Resources)
 - Run fewer services with `werkmeister remove <feature> <service>`
 
@@ -247,7 +247,7 @@ Check logs for OOM kills:
 docker inspect <container> --format='{{.State.OOMKilled}}'
 ```
 
-If `true`, increase the `memory_limit` for that service in `infra/config/services.yaml`.
+If `true`, increase the `memory_limit` for that service in `.sandbox/services.yaml`.
 
 ### Build/compilation very slow
 
@@ -268,6 +268,6 @@ If CPU is consistently at the limit, increase it.
 
 1. **Monitor** with `werkmeister stats` during real development work
 2. **Analyze** with `werkmeister optimize` to compare usage vs limits
-3. **Adjust** limits in `infra/config/services.yaml` (features) or `infra/compose/shared-infra.yml` (infra)
+3. **Adjust** limits in `.sandbox/services.yaml` (features) or `infra/compose/shared-infra.yml` (infra)
 4. **Restart** affected containers with `werkmeister restart <feature>`
 5. **Iterate** as your development patterns change

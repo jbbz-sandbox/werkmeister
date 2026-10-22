@@ -1,4 +1,4 @@
-# Handoff: Stellwerk workspace card + tokens
+# Handoff: Werkmeister workspace card + tokens
 
 Target repo: `jbbz-sandbox/werkmeister` (branch `main`). Rules, vocabulary and decisions: [`docs/ui-spec.md`](../../ui-spec.md); where this README and the spec disagree, the spec wins.
 
@@ -7,10 +7,10 @@ This handoff covers a visual refresh of the workspace list across all four surfa
 
 ## About the design files
 The `design/` files are **HTML design references, not production code**. They load React, fonts and codicons from public CDNs so they open in a browser; production bundles must not. Rebuild them in the repo:
-- **Dashboard + MCP App:** as **React** components in `packages/sandbox-ui` (React is the UI library; see `docs/ui-spec.md` § Decisions). Until that package exists the card lives in `apps/sandbox-dashboard/src/workspace-ui.ts` (vanilla DOM via `el()` / `injectCss()`), which it replaces. React is bundled inline by `viteSingleFile`, so the Cowork artifact's CSP still holds; check it.
+- **Dashboard + MCP App:** as **React** components in `packages/sandbox-ui` (React is the UI library; see `docs/ui-spec.md` § Decisions). The card is `packages/sandbox-ui/src/workspace-card.tsx`; it replaced the vanilla-DOM `apps/sandbox-dashboard/src/workspace-ui.ts` (`el()` / `injectCss()`). React is bundled inline by `viteSingleFile`, so the Cowork artifact's CSP still holds; check it.
 - **VS Code:** `packages/vscode-plugin/src/build-tree.ts` is a pure `WsNode` builder; it reads the shared display model, not React.
 - **Pane:** `plugins/werkmeister/hooks/register.tsx` renders with Claude Code's own `Box`/`Text`/`Button`; it reads the shared display model, not React.
-- **Tokens:** `packages/sandbox-ui` (today `apps/sandbox-dashboard/src/theme.ts`, `THEME_CSS`).
+- **Tokens:** `packages/sandbox-ui` (`src/tokens.css`, imported by `src/theme.ts`).
 
 Open `design/*.dc.html` in a browser to see the designs. Sample data is in `design/data.js`.
 

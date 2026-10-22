@@ -5,6 +5,8 @@ description: "Diagnose developer sandbox issues by running comprehensive health 
 
 # diagnose
 
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+
 Run the following diagnostic steps in order. Report findings as a structured summary with PASS/FAIL/WARN for each check.
 
 ## Step 1: Baseline Snapshot
@@ -34,15 +36,15 @@ ask the CLI for the feature's actual endpoints rather than assuming a range:
 sandbox services <feature>
 ```
 
-Then probe each reported port with its health path from `~/.sandbox/services.yaml`:
+Then probe each reported port with its health path from `~/.werkmeister/services.yaml`:
 
 ```bash
 curl -s -o /dev/null -w "<service> (<port>): HTTP %{http_code} | Size: %{size_download}\n" \
   "http://localhost:<port><health_path>" 2>&1
 ```
 
-Port ranges live in `~/.sandbox/ports.yaml` and service health paths in
-`~/.sandbox/services.yaml`; both are written by `sandbox setup` and differ per
+Port ranges live in `~/.werkmeister/ports.yaml` and service health paths in
+`~/.werkmeister/services.yaml`; both are written by `sandbox setup` and differ per
 machine.
 
 ## Step 3: Caddy Routing Verification
@@ -50,11 +52,11 @@ machine.
 Test known URLs through Caddy and compare with direct results:
 
 The ingress host is configured per machine — never hardcode it. It derives from
-`ingress.local_domain` in `~/.sandbox/config.yaml` joined to a service that
-declares a `feature_router:` block in `~/.sandbox/services.yaml`:
+`ingress.local_domain` in `~/.werkmeister/config.yaml` joined to a service that
+declares a `feature_router:` block in `~/.werkmeister/services.yaml`:
 
 ```bash
-DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.sandbox/config.yaml | head -1)
+DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
 SERVICE=frontend   # the routed service under test; `sandbox services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
@@ -62,10 +64,10 @@ curl -sk -o /dev/null -w "homepage: HTTP %{http_code} | Size: %{size_download}\n
 ```
 
 Then probe the paths that actually matter for this service — the `test_path` in
-`.sandbox/workspace.yml`, plus whatever routes the feature touches:
+`.werkmeister/workspace.yml`, plus whatever routes the feature touches:
 
 ```bash
-for path in / "$(sed -n 's/^test_path:[[:space:]]*//p' .sandbox/workspace.yml)"; do
+for path in / "$(sed -n 's/^test_path:[[:space:]]*//p' .werkmeister/workspace.yml .sandbox/workspace.yml 2>/dev/null | head -1)"; do
   [ -n "$path" ] || continue
   curl -sk -o /dev/null -w "${path}: HTTP %{http_code} | Size: %{size_download}\n" "${BASE}${path}"
 done
@@ -76,8 +78,8 @@ done
 ## Step 4: Caddyfile Validation
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | \
   node --input-type=module -e "
@@ -131,8 +133,8 @@ not `localhost:4321`.
 ## Step 7: Docker Desktop File Sync
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 HOST_SIZE=$(wc -c < "$CADDYFILE" | tr -d " ")  # macOS wc pads the count with spaces
 CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
 if [ "$HOST_SIZE" = "$CONTAINER_SIZE" ]; then

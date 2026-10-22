@@ -5,13 +5,15 @@ description: "Trace a specific URL through the full sandbox routing chain to ide
 
 # routing-test
 
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+
 Trace a URL through the full routing chain. The user provides a URL (full or relative path). If no URL is provided, ask for one.
 
 ## Step 1: Determine Expected Service
 
 Routing is per-hostname, not per-path: Caddy terminates each service's public
 hostname directly. The service handling a URL is the one whose `feature_router:`
-block in `~/.sandbox/services.yaml` owns that hostname — so read the host from
+block in `~/.werkmeister/services.yaml` owns that hostname — so read the host from
 the URL and match it there. `sandbox services <feature>` lists the routed
 services for a running feature.
 
@@ -24,7 +26,7 @@ BASE=$((11100 + (SLOT - 1) * 100))   # slot 1 → 11100, slot 2 → 11200, …
 PORT=$((BASE + OFFSET))              # OFFSET = the service's `port_offset`
 ```
 
-`port_offset` per service lives in `~/.sandbox/services.yaml` (written by
+`port_offset` per service lives in `~/.werkmeister/services.yaml` (written by
 `sandbox setup`).
 
 ## Step 2: Test Direct to Expected Service
@@ -38,11 +40,11 @@ Report: HTTP status, content-type, content-length/transfer-encoding, any redirec
 ## Step 3: Test Through Caddy
 
 The ingress host is configured per machine — never hardcode it. Derive it from
-`ingress.local_domain` in `~/.sandbox/config.yaml` plus the routed service name
+`ingress.local_domain` in `~/.werkmeister/config.yaml` plus the routed service name
 (`sandbox services <feature>` lists them):
 
 ```bash
-DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.sandbox/config.yaml | head -1)
+DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
 BASE="https://${SERVICE}.${DOMAIN}"   # SERVICE = the routed service under test
 
 curl -sk -D - -o /tmp/sandbox-route-test-caddy "${BASE}{path}" 2>&1 | head -15
@@ -61,16 +63,16 @@ Check for discrepancies:
 ## Step 5: Verify Caddy Route Exists
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 grep -n "path.*{relevant_pattern}" "$CADDYFILE"
 ```
 
 Also check compiled config:
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | python3 -c "
 import json, sys

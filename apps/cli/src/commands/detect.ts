@@ -4,7 +4,7 @@
  * Generate <repo>/.sandbox/services.yaml from what the repo already says about
  * itself: package manifests, Dockerfiles, compose, Helm, k8s and kustomize.
  * Re-runs only add what is missing. Spec:
- * docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md.
+ * docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";

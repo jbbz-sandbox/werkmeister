@@ -1,19 +1,21 @@
 ---
 name: workspace-pr
-description: "Open, check or close out pull requests in a sandbox workspace. Use instead of /create-pr, finishing-a-development-branch or gh pr create whenever the cwd is inside a sandbox workspace (a folder with .sandbox/workspace.yml above it) — the user says 'create a PR', 'open a pull request', 'ship it', 'is it merged', 'is it released' or 'close out'."
+description: "Open, check or close out pull requests in a sandbox workspace. Use instead of /create-pr, finishing-a-development-branch or gh pr create whenever the cwd is inside a sandbox workspace (a folder with .werkmeister/workspace.yml, or .sandbox/workspace.yml on an older workspace, above it) — the user says 'create a PR', 'open a pull request', 'ship it', 'is it merged', 'is it released' or 'close out'."
 ---
 
 # workspace-pr — PRs from a sandbox workspace
 
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+
 Inside a workspace, a PR opens only through `sandbox pr open`. A PreToolUse hook
 blocks `gh pr create` and the GitHub MCP's `create_pull_request`, so generic PR
 skills fail here. The rules are in the workspace's `pr-rules.md`
-(`_shared/pr-rules.md` for ICM, `.sandbox/pr-rules.md` for JIT); the long form
+(`_shared/pr-rules.md` for ICM, `.werkmeister/pr-rules.md` for JIT); the long form
 is `docs/workspace-lifecycle.md` in the sandbox repo.
 
 1. **PR file per code repo touched.** ICM: the propose stage writes
    `stages/NN_propose/output/pr-<repo>.md`. JIT: `sb-pr` writes
-   `.sandbox/notes/pr-<repo>.md`. Never a PR for the workspace (record) branch.
+   `.werkmeister/notes/pr-<repo>.md`. Never a PR for the workspace (record) branch.
 2. **The person approves.** They set `status: approved` in each PR file. Never
    set it yourself.
 3. **`sandbox pr gate`** shows what still blocks: earlier stages, the acceptance
@@ -45,5 +47,5 @@ is `docs/workspace-lifecycle.md` in the sandbox repo.
    sessions still open are listed for the person to `/exit`.
    `sandbox remove-workspace` is a deprecated alias; don't use it.
 
-MCP equivalents (workspaces server): `workspace-pr` (`gate|open|status`),
+MCP equivalents (werkmeister server): `workspace-pr` (`gate|open|status`),
 `close-out` (with `abandon` for the second outcome).

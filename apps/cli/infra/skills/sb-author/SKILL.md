@@ -11,7 +11,7 @@ placeholder content and wire the structural links, then mark the source
 write the actual prose — that judgment call is this skill's job.
 
 1. **Find the placeholder** — the `graduated_to` path in the note's
-   frontmatter, or search `docs/standards/` for a
+   frontmatter, or search the standards tree (`overrides.standards_dir`) for a
    `<!-- TODO(graduate): fill from note NNN, see ... -->` marker.
 2. **Read the original decision note** (`.sandbox/notes/NNN-decision-*.md`,
    even though it's now `status: graduated` — it's still there as the

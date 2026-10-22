@@ -1,6 +1,6 @@
 # Third-party software and licences
 
-Every external library, program, container image and service Werkmeister depends on, with its licence. Werkmeister itself is Apache-2.0 ([LICENSE](../LICENSE), [NOTICE](../NOTICE)). Taken from the code at `werkmeister` 0.22.0 (SW-63). The npm part is enforced in CI by `npm run licenses` ([Checking npm licences](#checking-npm-licences)). The rest is checked by hand, so update this file whenever you add an image, a host command or an integration.
+Every external library, program, container image and service Werkmeister depends on, with its licence. Werkmeister itself is Apache-2.0 ([LICENSE](../LICENSE), [NOTICE](../NOTICE)). Taken from the code at `werkmeister` 0.22.0 (SW-63). The npm part is enforced in CI by `pnpm run licenses` ([Checking npm licences](#checking-npm-licences)). The rest is checked by hand, so update this file whenever you add an image, a host command or an integration.
 
 **Categories**
 
@@ -84,6 +84,7 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 | esbuild | ^0.24.0 → 0.24.2 | MIT | CLI and extension bundles |
 | vite, vite-plugin-singlefile | ^6.0.0 → 6.4.3, ^2.3.0 → 2.3.3 | MIT | MCP App / dashboard HTML |
 | vitest | ^3.0.0 → 3.2.7 | MIT | CLI tests |
+| quickpickle | ^1.11.2 → 1.11.2 | MIT | CLI Gherkin/BDD tests (`apps/cli/bdd`) |
 | typescript | ^5.7 / ^5.9.3 → 5.9.3 | Apache-2.0 | all workspaces |
 | tsx, concurrently, cross-env | → 4.23.1, 9.2.4, 10.1.0 | MIT | dev scripts |
 | @vscode/vsce | ^3.2.0 → 3.9.2 | MIT | `vsce package`. Pulls `@vscode/vsce-sign` (Microsoft licence terms) |
@@ -138,7 +139,7 @@ Found by grepping for the process helpers: `run([…])`, `runCapture`, `runCmd`,
 | code | optional | `machine_setup.ts` (`--install-extension`), `sandbox.ts` (open workspace) | Microsoft Software License (VS Code); MIT (Code - OSS) |
 | safaridriver | optional | `safari.ts` (`/usr/bin/safaridriver`) | Apple macOS component |
 | Chrome / Chromium / Brave / Edge | optional | `browser.ts` (`CHROME_BIN`, `overrides.browser_path`, `overrides.browser`) | proprietary (Chrome, Edge); BSD-3-Clause (Chromium); MPL-2.0 (Brave) |
-| werkmeister | — | spawned by the VS Code extension (`commands.ts`) and the plugin's `.mcp.json` | Apache-2.0 |
+| werkmeister | — | spawned by the VS Code extension (`commands.ts`, through the `sandbox` wrapper) and the plugin's `.mcp.json` | Apache-2.0 |
 
 ## Container images
 
@@ -166,16 +167,16 @@ Werkmeister runs without each of these. The person turns one on.
 | Jira (REST) | fast issue reads and updates, `issue create`, status moves | `jira.base_url`, `jira.email`, `jira.api_token` in `~/.werkmeister/config.yaml` (setup asks "Configure Jira credentials now?"). `overrides.issue_tracker` defaults to `jira` | setup reports "not configured". Reads fall back to `claude -p` over the Atlassian MCP. `issue create` fails with "no Jira REST credentials…" | Atlassian Cloud Terms of Service |
 | GitHub Issues | tracker with `owner/repo#n` refs | `overrides.issue_tracker: github`, `overrides.github_org`, plus an authenticated `gh` | "not signed in" → `gh auth login`; "can't read <repo>" → `gh auth refresh -s repo`. A failed view returns no issue | GitHub Terms of Service |
 | `gh` CLI | `pr open` / `status` / `watch` / `adopt`, PR review, default workspace repo | install and `gh auth login`. `SANDBOX_GH_BIN` overrides the binary | per-PR "gh pr view failed — …". `adopt` errors. Setup marks it optional | MIT (CLI); GitHub Terms of Service |
-| kubectl + a cluster (k8s-forwards) | cluster services forwarded onto the Docker network | `k8s_context` in `~/.werkmeister/services.local.yaml` (default `orbstack`), then `sandbox connect` | "Could not generate kubeconfig: …"; everything local still runs | Apache-2.0 (kubectl); the cluster's own terms |
-| Telepresence | `sandbox intercept` | setup step "Install/upgrade the OSS client via Homebrew" (`telepresenceio/telepresence/telepresence-oss`), then `bin/setup-telepresence-cluster.sh` once per cluster | setup ok "not installed (needed only for `sandbox intercept`)". Below `MIN_VERSION` 2.30.0, `intercept` refuses. `down` skips it | Apache-2.0 |
-| Claude Code plugin (`plugins/werkmeister`): skills, `werkmeister mcp` server, Workspaces pane mod | in-session tools, the Workspaces pane | `sandbox setup` installs it via `claude plugin`. The pane finds core through `WERKMEISTER_CORE_PATH` or `command -v werkmeister` | the CLI works alone. Without a UI build, App tools return text | Apache-2.0 (ours); Claude Code under Anthropic terms |
+| kubectl + a cluster (k8s-forwards) | cluster services forwarded onto the Docker network | `k8s_context` in `~/.werkmeister/services.local.yaml` (default `orbstack`), then `werkmeister connect` | "Could not generate kubeconfig: …"; everything local still runs | Apache-2.0 (kubectl); the cluster's own terms |
+| Telepresence | `werkmeister intercept` | setup step "Install/upgrade the OSS client via Homebrew" (`telepresenceio/telepresence/telepresence-oss`), then `bin/setup-telepresence-cluster.sh` once per cluster | setup ok "not installed (needed only for `sandbox intercept`)". Below `MIN_VERSION` 2.30.0, `intercept` refuses. `down` skips it | Apache-2.0 |
+| Claude Code plugin (`plugins/werkmeister`): skills, `werkmeister mcp` server, Workspaces pane mod | in-session tools, the Workspaces pane | `werkmeister setup` installs it via `claude plugin`. The pane finds core through `WERKMEISTER_CORE_PATH` or `command -v werkmeister` | the CLI works alone. Without a UI build, App tools return text | Apache-2.0 (ours); Claude Code under Anthropic terms |
 | Claude Desktop | MCP App UI in Desktop | manual `claude_desktop_config.json` entry (`plugins/werkmeister/README.md`) | hosts without App support get markdown | Anthropic Consumer / Commercial Terms |
 | Cowork artifact | live dashboard artifact | `install-workspace-dashboard` skill (needs a checkout + `pnpm run build:ui`) | falls back to the Desktop MCP App | Anthropic terms |
 | VS Code + extension | workspace and intercept tree view | setup prompt → `code --install-extension <bundled .vsix>` | "`code` not on PATH — skipped". A checkout bundles no .vsix | extension Apache-2.0; VS Code Microsoft Software License (Code - OSS MIT); `redhat.vscode-yaml` MIT for schema mapping |
 | `pr watch` scheduler | resumes sessions when a PR merges, ships or closes | `werkmeister pr watch --install` or the setup prompt. macOS: launchd `com.werkmeister.pr-watch`. Elsewhere: a crontab line every 600s | not installed is fine. "launchctl bootstrap failed" / "crontab not found" when installing | Apple macOS component; cron (system) |
 | Jaeger + Redis Insight | tracing UI and OTLP endpoints (16686/4317/4318); Redis UI (5540) | started with shared infra by `connect`. **No off switch today** (follow-up 4) | — (always on) | Apache-2.0; **SSPL-1.0** |
 | Playwright + Chromium | `werkmeister test` | a `playwright.config` in the workspace or repo. Setup installs Chromium for `playwright@1.63.0` via npx | `test` exits non-zero and lists each service's test command | Apache-2.0 (Playwright); BSD-3-Clause (Chromium) |
-| Browser for `sandbox open` | a feature-tagged browser window | `overrides.browser` (default chrome), `overrides.browser_path`, `CHROME_BIN`; Safari needs `safaridriver --enable` | "Browser not found at …"; Firefox is refused as not Chromium | see Host commands |
+| Browser for `werkmeister open` | a feature-tagged browser window | `overrides.browser` (default chrome), `overrides.browser_path`, `CHROME_BIN`; Safari needs `safaridriver --enable` | "Browser not found at …"; Firefox is refused as not Chromium | see Host commands |
 | Homebrew | Telepresence install | installed by the person | "Homebrew not found — …" | BSD-2-Clause |
 | Slack | dashboard "Request review" | `SANDBOX_REVIEW_SLACK_TOKEN`, `SANDBOX_REVIEW_SLACK_CHANNEL` | "Slack is not configured…" | Slack Terms of Service |
 | Context7 MCP | docs MCP server in generated workspaces | archetype `mcp_servers` (`CONTEXT7_API_KEY`) | not configured | MIT (`@upstash/context7-mcp`); Upstash terms for the API |

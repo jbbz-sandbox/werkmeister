@@ -62,8 +62,8 @@ done
 ## Step 4: Caddy Status
 
 ```bash
-CADDYFILE="${SANDBOX_CONFIG_FILE:+$(dirname "$SANDBOX_CONFIG_FILE")}"
-CADDYFILE="${CADDYFILE:-$HOME/.sandbox}/infra/proxy/Caddyfile"
+CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker exec sandbox-caddy caddy validate --config /etc/caddy/Caddyfile 2>&1
 HOST_SIZE=$(wc -c < "$CADDYFILE" 2>/dev/null | tr -d " ")
 # The path goes to wc inside the container: a `< /etc/caddy/Caddyfile` redirect would read the host's file.

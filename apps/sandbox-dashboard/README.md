@@ -36,7 +36,7 @@ sampling (no host implements it) — prompt refinement goes through the
 
 The tool table is in [`apps/mcp/README.md`](../mcp/README.md#tools).
 
-Issue reads and status lookups go through the issue tracker `sandbox setup`
+Issue reads and status lookups go through the issue tracker `werkmeister setup`
 configured (`issueTracker()` in `werkmeister-core/issue_tracker`); the dashboard never
 names a tracker, and the create form's "Fetch from …" button takes its label from
 the bundle (`ui:options.trackerLabel` on `issue_id`).
@@ -49,7 +49,7 @@ The CLI owns the inputs and the create logic:
   RJSF bundle (`{schema, uiSchema, formData, title}`) built from the same prompt
   definitions as the terminal wizard (`packages/sandbox-core/src/workspace_prompts.ts`,
   converted by `form_schema.ts`). Change a prompt there and every form tracks it.
-- **Creation** runs `sandbox workspace <feature> [--flag value …]`; form keys
+- **Creation** runs `werkmeister workspace <feature> [--flag value …]`; form keys
   map 1:1 onto CLI flags. The CLI validates, refuses existing branches, and
   rolls back partial worktrees.
 
@@ -58,12 +58,12 @@ The CLI owns the inputs and the create logic:
 | File | Role |
 |------|------|
 | `src/main.ts` | The localhost dashboard: `GET /` and `/api/*` on `PORT` (default 3001) |
-| `src/form-cli.ts` | `sandbox workspace --browser-form` — the no-MCP standalone form path |
+| `src/form-cli.ts` | `werkmeister workspace --browser-form` — the no-MCP standalone form path |
 | `src/lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
 | `src/lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `src/lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
 | `werkmeister-ui` (`packages/sandbox-ui`) | The shared UI modules (workspace list, create form, chat panel, theme, usage widget, markdown) and the display model |
-| `werkmeister-core` (`packages/`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
+| `werkmeister-core` (`packages/sandbox-core`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
 | other `src/*.ts` + `*.html` | The three vite inputs: `workspace-list.artifact`, `browser`, `form` |
 
 ## Build & test
