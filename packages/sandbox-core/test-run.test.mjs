@@ -8,10 +8,12 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import {
+  featureIngress,
   installedPlaywrightVersion,
   playwrightCwd,
   playwrightSearchDirs,
   runFeatureTests,
+  scaffoldFeatureTests,
 } from "./dist/test_run.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
@@ -96,4 +98,37 @@ test("finds @playwright/test hoisted to a parent node_modules", () => {
 
 test("reports no version when @playwright/test is not installed", () => {
   assert.equal(installedPlaywrightVersion(tmp()), null);
+});
+
+// The cookie domain must cover the host, or the browser never sends X-Feature.
+test("scaffolds a suite against the configured ingress, keeping existing files", async () => {
+  await withSandboxHome(
+    async () => {
+      const ingress = featureIngress();
+      assert.deepEqual(ingress, {
+        baseUrl: "https://web.local.test",
+        cookieDomain: ".local.test",
+      });
+      const ws = tmp();
+      fs.writeFileSync(path.join(ws, "playwright.config.ts"), "mine");
+      const created = scaffoldFeatureTests("feat-a", ws, ingress);
+      assert.deepEqual(created, [path.join(ws, "feat-a.spec.ts")]);
+      assert.equal(fs.readFileSync(path.join(ws, "playwright.config.ts"), "utf8"), "mine");
+      const spec = fs.readFileSync(created[0], "utf8");
+      assert.match(spec, /domain: '\.local\.test'/);
+      assert.match(spec, /const BASE_URL = 'https:\/\/web\.local\.test';/);
+      assert.throws(() => scaffoldFeatureTests("../x", ws, ingress), /Invalid feature name/);
+    },
+    {
+      config: "ingress:\n  local_domain: local.test\n",
+      services: "services:\n  web:\n    feature_router: {}\n",
+    },
+  );
+});
+
+test("an explicit base URL wins and loses its trailing slash", () => {
+  assert.deepEqual(featureIngress("https://app.example.dev/"), {
+    baseUrl: "https://app.example.dev",
+    cookieDomain: ".example.dev",
+  });
 });
