@@ -5,22 +5,24 @@ description: "Start a developer sandbox feature environment and open a headed br
 
 # Sandbox Feature Test
 
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+
 Spins up a named sandbox feature, scaffolds test files if needed, and opens a headed Playwright browser paused at the home page for interactive inspection.
 
 ## Prerequisites
 
-- `sandbox` CLI on PATH (its checkout is `paths.sandbox_root` in `~/.sandbox/config.yaml`)
+- `sandbox` CLI on PATH (its checkout is `paths.sandbox_root` in `~/.werkmeister/config.yaml`)
 - `npx` / Node.js available
 - `sandbox setup` run once on this machine — it downloads the Chromium build for the pinned Playwright (`setup_feature.py` installs the matching `@playwright/test` in the workspace)
 - Shared infra may or may not be running — this skill ensures it is
 
 ## Routing model (important)
 
-This skill is for front-door services (those with a `feature_router:`). A library, CLI or extension has no URL; follow the "How to validate" section of `.sandbox/sandbox-context.md` instead.
+This skill is for front-door services (those with a `feature_router:`). A library, CLI or extension has no URL; follow the "How to validate" section of `.werkmeister/sandbox-context.md` instead.
 
 The ingress host is configured per machine, not hardcoded here: it derives from
-`ingress.local_domain` in `~/.sandbox/config.yaml` joined to a service that
-declares a `feature_router:` block in `~/.sandbox/services.yaml`. `sandbox setup`
+`ingress.local_domain` in `~/.werkmeister/config.yaml` joined to a service that
+declares a `feature_router:` block in `~/.werkmeister/services.yaml`. `sandbox setup`
 owns those values, and `setup_feature.py` resolves them when it scaffolds the
 test files (override with `--base-url`).
 
@@ -37,7 +39,7 @@ Both are required: the header covers Playwright requests; the cookie covers brow
 If the user has not provided a feature name, ask for one. Feature names must:
 - Be lowercase, hyphen-separated (e.g., `add-solutions-panel`, `payment-refactor`)
 - Not already be allocated (collision = already running). Slot ownership lives in
-  the `com.sandbox.local.feature` docker label; `~/.sandbox/slots.json` is gone.
+  the `com.sandbox.local.feature` docker label; `~/.werkmeister/slots.json` is gone.
 
 ### Step 2 — Validate and scaffold
 

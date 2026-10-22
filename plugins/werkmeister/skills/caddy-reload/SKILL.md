@@ -1,9 +1,11 @@
 ---
 name: caddy-reload
-description: "Safely reload the Caddy proxy configuration with validation and smoke testing. Use after editing ~/.sandbox/infra/proxy/Caddyfile, after running `sandbox proxy-reload`, or when the Caddyfile on disk has been updated but Caddy is still serving old config. Validates config, counts compiled routes to detect silent drops, reloads, and smoke tests key URLs."
+description: "Safely reload the Caddy proxy configuration with validation and smoke testing. Use after editing ~/.werkmeister/infra/proxy/Caddyfile, after running `sandbox proxy-reload`, or when the Caddyfile on disk has been updated but Caddy is still serving old config. Validates config, counts compiled routes to detect silent drops, reloads, and smoke tests key URLs."
 ---
 
 # caddy-reload
+
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
 
 Safely reload Caddy with validation and smoke tests.
 
@@ -77,7 +79,7 @@ with no importable `dist/lib/caddy.js`, so the walk is inlined here.
 numbers count the same thing (distinct `reverse_proxy` destinations) and
 should match on a healthy config -- the same config-derived comparison
 `computeExpectedRouteCount()` performs in the CLI. There is no fixed
-threshold: a fresh generation of the current `~/.sandbox/infra/proxy/Caddyfile` compiles to
+threshold: a fresh generation of the current `~/.werkmeister/infra/proxy/Caddyfile` compiles to
 7 routes, and that number changes whenever site blocks or `reverse_proxy`
 directives are added or removed. If the compiled count is **lower** than the
 `reverse_proxy` occurrence count in the source file, routes were silently
@@ -93,7 +95,7 @@ docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile.new 2>&1
 ## Step 4: Smoke Test Routes
 
 The ingress host is configured per machine — never hardcode it. Derive it from
-`ingress.local_domain` in `~/.sandbox/config.yaml` plus the routed service name:
+`ingress.local_domain` in `~/.werkmeister/config.yaml` plus the routed service name:
 
 ```bash
 DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
