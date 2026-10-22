@@ -20,7 +20,7 @@ import { generateK8sForwards, overrideFilePath } from "./k8s_forwards.js";
 /** The Compose project name for shared infra (shared-infra.yml's `name:`). */
 export const INFRA_PROJECT = "sandbox-infra";
 
-export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv } {
+export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv; cwd: string } {
   const override = overrideFilePath();
   // A fresh machine's first `status`/`down` arrives before any `connect` has
   // generated the override, and `-f <missing>` is a hard error. Pure text
@@ -44,5 +44,9 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv } 
       INFRA_PROJECT,
     ],
     env: { ...process.env, SANDBOX_STATE_DIR: stateInfraRoot() },
+    // Compose v5 builds through `buildx bake`, which refuses a secret file
+    // outside the working directory unless granted `--allow=fs.read`. The
+    // shipped file's corp_ca secret is `${SANDBOX_STATE_DIR}/../corp-ca.crt`.
+    cwd: path.dirname(stateInfraRoot()),
   };
 }
