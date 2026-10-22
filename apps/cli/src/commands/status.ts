@@ -213,11 +213,18 @@ async function runInterceptsOnly(asJson: boolean): Promise<void> {
   }
 
   console.log(`\n${Colors.BOLD}=== Telepresence Intercepts ===${Colors.RESET}\n`);
-  if (!snapshot.available) {
+  if (!snapshot.installed) {
     console.log(
       `  ${Colors.DIM}telepresence unavailable — nothing can be intercepted.${Colors.RESET}`,
     );
     console.log();
+    return;
+  }
+  if (!snapshot.available) {
+    console.log(
+      `  ${Colors.DIM}telepresence not connected — \`sandbox intercept\` connects first.${Colors.RESET}\n`,
+    );
+    printInterceptRows(snapshot.intercepts);
     return;
   }
   console.log(

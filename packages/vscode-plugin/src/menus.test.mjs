@@ -62,6 +62,7 @@ function serviceContext(row) {
     ],
     {
       available: true,
+      installed: true,
       byFeature: new Map([["a", new Map([["frontend", row]])]]),
       remoteServices: new Set(["frontend"]),
     },
