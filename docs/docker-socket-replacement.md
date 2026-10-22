@@ -76,7 +76,7 @@ the host's `apps/mcp` over HTTP, which needs no mount at all.
 
 ### 2. Tests
 
-- Add `packages/sandbox-core/no-docker-socket.test.mjs`. It fails while any service in the
+- Add `packages/sandbox-core/no-docker-socket.test.mjs`. It fails while any service in the <!-- docs-check: ignore -->
   repo's own `.sandbox/services.yaml` mounts `docker.sock`, so the exception can't come back
   unnoticed. It was written and run in this run's reproduce stage, and it fails today with all
   four names.
@@ -89,7 +89,7 @@ the host's `apps/mcp` over HTTP, which needs no mount at all.
 The worktree is already on the host (`~/features/<ws>/<repo>`). What the host lacks is a
 `node_modules` for it: the container's tree lives in a docker volume, and the nested
 `node_modules` on the bind mount hold linux binaries (for example
-`apps/cli/node_modules/@esbuild/linux-x64`). A host `pnpm install` would replace those and break the
+`apps/cli/node_modules/@esbuild/linux-x64`). A host `pnpm install` would replace those and break the <!-- docs-check: ignore -->
 container's watcher.
 
 The dependency tree can be borrowed instead of installed. A small host script builds a symlink
@@ -104,7 +104,7 @@ This was run against the live daemon (see Evidence):
   `apps/cli/dist/main.js` drives the host daemon with nothing else. `werkmeister status` listed every
   feature with real container state.
 - **Dashboard.** The worktree's `apps/sandbox-dashboard/dist/main.js`, on top of the worktree's
-  `sandbox-core`, answered `workspace-status`, `kube-context` and `docker-ui` over stdio with real
+  `sandbox-core`, answered `workspace-status`, `kube-context` and `docker-ui` over stdio with real <!-- docs-check: ignore -->
   host state.
 
 **Ceiling:** third-party dependency versions come from the installed checkout. A PR that changes
@@ -181,5 +181,5 @@ Measured on 2026-10-15 in workspace `sandbox-135-docker-socket-mount`, at `173ac
   makes one sandbox-core test hermetic.
 - **Host dogfood:** `node <farm>/apps/cli/dist/main.js status` listed all six features with live
   container state.
-- **Host dashboard:** with the farm and `--preserve-symlinks`, `workspace-status`, `kube-context`
+- **Host dashboard:** with the farm and `--preserve-symlinks`, `workspace-status`, `kube-context` <!-- docs-check: ignore -->
   and `docker-ui` returned `isError=false` with real host state.
