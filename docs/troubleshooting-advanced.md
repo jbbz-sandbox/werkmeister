@@ -230,7 +230,7 @@ When everything is broken:
 
 ```bash
 # 1. Stop all feature services
-werkmeister down --all
+werkmeister down --all-features
 
 # 2. Restart shared infrastructure
 cd "$SANDBOX_ROOT"
@@ -252,7 +252,7 @@ werkmeister status
 
 ```bash
 # Stop everything
-werkmeister down --all --volumes
+werkmeister down --all-features --volumes
 docker compose -f infra/compose/shared-infra.yml down -v
 
 # Clean up

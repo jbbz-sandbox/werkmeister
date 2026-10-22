@@ -129,13 +129,13 @@ Defaults that don't depend on the current directory (`work_type`, `context_strat
 
 ## One MCP server
 
-`apps/mcp` (server `werkmeister`) is the only MCP server, and `plugins/werkmeister/.mcp.json` launches it. The dashboard's server (`workspaces`, `apps/sandbox-dashboard/src/server.ts`) is gone; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: SW-48.
+`apps/mcp` (server `werkmeister`) is the only MCP server, and `plugins/werkmeister/.mcp.json` launches it. The dashboard's server (`workspaces`, `apps/sandbox-dashboard/src/server.ts`) is gone; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: SW-48. <!-- docs-check: ignore -->
 
 | Merged tool | `workspaces` (dashboard) today | `werkmeister` (apps/mcp) today |
 |---|---|---|
 | `list-workspaces` (App UI) | `list-workspaces` | `list-workspaces` |
 | `create-workspace-form` (App UI) + `create-workspace` | `workspace`, `create-workspace` | `workspace` |
-| `status` | `workspace-status` | `status` |
+| `status` | `workspace-status` | `status` <!-- docs-check: ignore --> |
 | `up` · `stop` · `restart` · `down` | `workspace-action` | `up` · `stop` · `restart` · `down` |
 | `close-out` | `close-out` | `close-out` |
 | `connect` | `sandbox-connect` | `connect` |

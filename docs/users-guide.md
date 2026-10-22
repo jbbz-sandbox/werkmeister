@@ -40,7 +40,7 @@
    - [k8s Forward Ports](#k8s-forward-ports)
 9. [Configuration Files](#configuration-files)
    - [~/.werkmeister/services.yaml (generated)](#werkmeisterservicesyaml-generated)
-   - [infra/config/ports.yaml](#infraconfigportsyaml)
+   - [~/.werkmeister/ports.yaml](#werkmeisterportsyaml)
    - [k8s forward table (in services.yaml)](#k8s-forward-table-in-servicesyaml)
    - [Optional integrations](#optional-integrations)
 10. [Generated Files](#generated-files)
@@ -179,10 +179,9 @@ By default, Werkmeister looks for repos in `~/workspace/`. Override with `--work
 
 When you run `werkmeister up my-feature`, the CLI:
 1. Resolves the workspace directory (default: `~/workspace/`, or per the priority above)
-2. Finds repo directories that match entries in `infra/config/services.yaml`
-3. Runs `git diff main..HEAD --name-only` in each to find changed files
-4. Maps changed files to services using `infra/config/services.yaml`
-5. Starts only those services locally
+2. Reads the `SERVICES=` list from the workspace's `.env` (written by `init-workspace`)
+3. Looks each one up in `~/.werkmeister/services.yaml`
+4. Starts only those services locally
 
 ### Initializing a Workspace
 
@@ -564,7 +563,7 @@ werkmeister logs my-feature frontend
 
 ### Adding a service to a running feature
 
-There is no `werkmeister add` command, and `werkmeister up` takes no service list. To run a
+There is no `werkmeister add` command, and `werkmeister up` takes no service list. To run a <!-- docs-check: ignore -->
 service locally, add it to the `services` field in the workspace's
 `.werkmeister/workspace.yml`, rerun `werkmeister init-workspace` — this also adds the owning
 repo's worktree if it isn't present yet — then `werkmeister up`.
@@ -864,8 +863,8 @@ registry comes from the `demo-services` repo's own fragment:
 
 | Service | Repo | Path in Repo | Type | Internal Port | port_offset | Health Endpoint |
 |---|---|---|---|---|---|---|
-| backend | demo-services | `apps/backend` | api | 3000 | 0 | /health |
-| frontend | demo-services | `apps/frontend` | web | 3000 | 1 | / |
+| backend | demo-services | `apps/backend` | api | 3000 | 0 | /health <!-- docs-check: ignore --> |
+| frontend | demo-services | `apps/frontend` | web | 3000 | 1 | / <!-- docs-check: ignore --> |
 
 The columns above are the required keys. `werkmeister services` lists whatever is registered.
 
@@ -1009,7 +1008,7 @@ the pieces that are not obvious from the demo services:
   host bind-mount paths and the daemon is the host's, so the paths must be identical on both
   sides.
 - **`sandbox-install` reinstalls only when the lockfile changes.** It skips
-  `pnpm install --frozen-lockfile` (`npm ci` on a branch still on `package-lock.json`) while
+  `pnpm install --frozen-lockfile` (`npm ci` on a branch still on `package-lock.json`) while <!-- docs-check: ignore -->
   the lockfile and Node major version match the stamp in the node_modules volume. It also
   mounts `~/repos` with git's `safe.directory`, so turbo hashes inputs the same way the app
   containers do. Installs are queued host-wide through `~/.sandbox/locks`, at most
@@ -1227,7 +1226,7 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
 
 - **`services`** — Map of service name to service definition. Each service has:
   - `repo` (string) — Repository name (directory name in workspace)
-  - `path` (string) — Path within the repo (`.` for entire repo, `apps/frontend` for monorepo packages)
+  - `path` (string) — Path within the repo (`.` for entire repo, `apps/frontend` for monorepo packages) <!-- docs-check: ignore -->
   - `type` (string) — Service category: `web`, `api`, `graphql-subgraph` (also `graphql`, `subgraph`, `federation`), `graphql-gateway`
   - `internal_port` (int) — Port the service listens on inside its container
   - `port_offset` (int) — Offset within the feature slot range (0–19)
@@ -1252,7 +1251,7 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
 - **`setup_services`** — Optional per-monorepo install/build steps that run before a repo's services start
 - **`repos`** — Repo-to-service mapping with `path_mappings` for monorepos
 
-### infra/config/ports.yaml
+### ~/.werkmeister/ports.yaml
 
 Port allocation scheme:
 
@@ -1300,7 +1299,7 @@ the container's forward list is written to `k8s-port-forward/forwards` (mounted 
 `ports:`/`aliases:` are written to `compose/k8s-forwards.override.yml`, which every
 `docker compose` call the CLI makes passes as a second `-f`. The shipped
 `shared-infra.yml` is never modified.
-`apps/cli/src/lib/__tests__/k8s_forward_drift.test.ts` fails if the committed
+The "shipped shared-infra.yml" tests in `apps/cli/src/lib/__tests__/k8s_forwards.test.ts` fail if the committed
 `shared-infra.yml` drifts out of sync. To add or change a forward, edit only
 `services.yaml` and run `werkmeister connect`.
 
@@ -1701,7 +1700,7 @@ cd ~/workspace/PROJ-1234/werkmeister
 git diff main..HEAD --name-only
 
 # Verify repo name matches config
-grep -A 3 "repos:" infra/config/services.yaml
+grep -A 3 "repos:" ~/.werkmeister/services.yaml
 
 # Add the service manually: list it in `services` in .werkmeister/workspace.yml, then
 werkmeister init-workspace

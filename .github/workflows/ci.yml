@@ -46,6 +46,9 @@ jobs:
       # still runs here as every other package depends on it, and `tsc` there
       # type-checks the same files its `typecheck` would.
       - run: pnpm turbo run typecheck build test --filter='!werkmeister-core'
+      # After the build: commands and flags come from the built CLI's `__complete`.
+      # Its unit test runs with `licenses` above (scripts/*.test.mjs).
+      - run: pnpm run docs:check
       # The extension host is an Electron app: it needs a display even headless,
       # and it downloads its own VS Code build on first run. With the build
       # cached for the version pinned in .vscode-test.mjs, vscode-test skips
