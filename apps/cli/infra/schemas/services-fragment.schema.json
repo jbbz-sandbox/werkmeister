@@ -72,8 +72,8 @@
     },
     "volumes": {
       "type": "array",
-      "description": "Extra compose volume specs (`src:dst[:ro]`). Bare names are per-feature named volumes.",
-      "items": { "type": "string" }
+      "description": "Extra compose volume specs (`src:dst[:ro]`). Bare names are per-feature named volumes; `^name` is one volume every feature shares, never removed by a feature's teardown.",
+      "items": { "type": "string", "pattern": "^(?:[^^]|\\^[a-zA-Z0-9][a-zA-Z0-9_.-]*:)" }
     },
     "healthEndpoint": {
       "type": "string",

@@ -34,6 +34,7 @@ import {
   resolveWorkspace,
   type ServiceEntry,
   type ServicesConfig,
+  SHARED_VOLUME_MARKER,
   sandboxRoot,
   stateInfraRoot,
 } from "./config.js";
@@ -638,7 +639,7 @@ function renderFeatureCompose(
     name: string;
     networks: Record<string, unknown>;
     services: Record<string, unknown>;
-    volumes?: Record<string, { name: string }>;
+    volumes?: Record<string, { name: string; external?: boolean }>;
   } = {
     name: `sandbox-${feature}`,
     networks: {
@@ -655,7 +656,7 @@ function renderFeatureCompose(
   };
 
   // Collect named volumes that need per-feature isolation
-  const namedVolumes: Record<string, { name: string }> = {};
+  const namedVolumes: Record<string, { name: string; external?: boolean }> = {};
 
   const sortedServices = [...localServices].sort();
   for (let idx = 0; idx < sortedServices.length; idx++) {
@@ -746,6 +747,12 @@ function renderFeatureCompose(
         resolved = resolved.split("${REPO}").join(path.join(workspaceRoot, repo));
         resolved = resolved.split("${SANDBOX_ROOT}").join(sandboxRoot());
         volumes.push(resolved);
+      } else if (volName.startsWith(SHARED_VOLUME_MARKER)) {
+        // Shared by every feature — unprefixed and external, so this feature's
+        // `down --volumes` leaves it; ensureSharedVolumes() creates it before `up`
+        const shared = volName.slice(SHARED_VOLUME_MARKER.length);
+        volumes.push(`${shared}:${parts.slice(1).join(":")}`);
+        namedVolumes[shared] = { name: shared, external: true };
       } else {
         // Named volume — prefix with feature name
         const prefixed = `${feature}-${volName}`;

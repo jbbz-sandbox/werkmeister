@@ -639,18 +639,24 @@ export function getServiceNames(): string[] {
 }
 
 /**
- * Return the sorted set of named-volume base names the registry declares.
- *
- * Compose generation isolates these per feature by prefixing the feature
- * name (`<feature>-<base>`), so this is exactly the set of suffixes that
- * identify a per-feature sandbox volume. Mirrors the volume collection in
- * generateFeatureCompose() and docker-compose.feature.yml.njk: every
- * `node_modules_volume`, plus every `extra_volumes` entry whose left side is
- * a named volume rather than a host bind mount (a "/" marks a bind mount) —
- * across both `services:` and `setup_services:`.
+ * Marks an `extra_volumes` name as one volume shared by every feature
+ * (`^pnpm-store:/pnpm-store`): generation mounts it unprefixed and `external`,
+ * so no feature's `down --volumes` or `clean` removes it.
  */
-export function getVolumeBaseNames(): string[] {
+export const SHARED_VOLUME_MARKER = "^";
+
+/**
+ * Split the registry's named volumes into per-feature base names and shared names.
+ *
+ * Mirrors the volume collection in generateFeatureCompose() and
+ * docker-compose.feature.yml.njk: every `node_modules_volume`, plus every
+ * `extra_volumes` entry whose left side is a named volume rather than a host
+ * bind mount (a "/" marks a bind mount) — across both `services:` and
+ * `setup_services:`.
+ */
+function registryVolumeNames(): { bases: Set<string>; shared: Set<string> } {
   const bases = new Set<string>();
+  const shared = new Set<string>();
   const collect = (defs: Record<string, unknown>): void => {
     for (const def of Object.values(defs)) {
       if (!isDict(def)) {
@@ -669,7 +675,9 @@ export function getVolumeBaseNames(): string[] {
           continue;
         }
         const volName = spec.split(":")[0];
-        if (volName && !volName.includes("/")) {
+        if (volName.startsWith(SHARED_VOLUME_MARKER)) {
+          shared.add(volName.slice(SHARED_VOLUME_MARKER.length));
+        } else if (volName && !volName.includes("/")) {
           bases.add(volName);
         }
       }
@@ -677,7 +685,24 @@ export function getVolumeBaseNames(): string[] {
   };
   collect(loadServices());
   collect(loadSetupServices());
-  return [...bases].sort();
+  return { bases, shared };
+}
+
+/**
+ * Return the sorted set of named-volume base names the registry declares.
+ *
+ * Compose generation isolates these per feature by prefixing the feature
+ * name (`<feature>-<base>`), so this is exactly the set of suffixes that
+ * identify a per-feature sandbox volume. Shared (`^`) volumes are not among
+ * them: teardown must never treat one as a feature's.
+ */
+export function getVolumeBaseNames(): string[] {
+  return [...registryVolumeNames().bases].sort();
+}
+
+/** The volumes every feature shares (`^name` in `extra_volumes`), sorted. */
+export function getSharedVolumeNames(): string[] {
+  return [...registryVolumeNames().shared].sort();
 }
 
 // ---------------------------------------------------------------------------

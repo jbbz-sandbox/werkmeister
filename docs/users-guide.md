@@ -1237,7 +1237,7 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
   - `extra_services` (map | null) — Sidecar containers (e.g., Redis instances)
   - `dockerfile` (string | null) — Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
   - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
-  - `extra_volumes` (list | null) — Additional volume mounts
+  - `extra_volumes` (list | null) — Additional volume mounts: a host path (`${REPO}/.git:/app/.git:ro`), a bare name for a per-feature named volume (`turbo-cache:/app/.turbo`, created as `<feature>-turbo-cache`), or `^name` for one volume every feature shares (`^sandbox-pnpm-store:/pnpm-store`). A shared volume is created on `sandbox up` and declared `external`, so no feature's `down --volumes`, close-out or `clean` removes it; drop it by hand with `docker volume rm <name>`
 
 - **`infrastructure`** — Infrastructure services (redis, postgres) with k8s forward ports
 - **`setup_services`** — Optional per-monorepo install/build steps that run before a repo's services start
