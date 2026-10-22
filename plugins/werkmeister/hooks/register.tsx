@@ -36,9 +36,19 @@ try {
   const { op, ...args } = JSON.parse(s)
   let file = process.env.WERKMEISTER_CORE_PATH ?? process.env.SANDBOX_CORE_PATH
   if (!file) {
-    const bin = realpathSync(execFileSync('sh', ['-c', 'command -v werkmeister || command -v sandbox']).toString().trim())
-    const req = createRequire(dirname(bin) + '/x')
-    try { file = req.resolve('werkmeister-core') } catch { file = req.resolve('sandbox-core') }
+    const which = execFileSync('sh', ['-c', 'command -v werkmeister || command -v sandbox']).toString().trim()
+    const bin = realpathSync(which)
+    // npm's global bin is a symlink into the package. pnpm's (pnpm link --global) is a shell shim
+    // in PNPM_HOME, with the package under PNPM_HOME/global/<n>/node_modules.
+    const pnpmGlobal = join(dirname(which), 'global')
+    const dirs = [dirname(bin)]
+    try { for (const v of readdirSync(pnpmGlobal)) dirs.push(join(pnpmGlobal, v, 'node_modules', 'werkmeister')) } catch {}
+    for (const dir of dirs) {
+      for (const name of ['werkmeister-core', 'sandbox-core']) {
+        if (!file) try { file = createRequire(dir + '/x').resolve(name) } catch {}
+      }
+    }
+    if (!file) throw new Error('Cannot find werkmeister-core next to ' + which + '; set WERKMEISTER_CORE_PATH')
   }
   const core = await import(pathToFileURL(file).href)
   const yaml = createRequire(file)('yaml')
