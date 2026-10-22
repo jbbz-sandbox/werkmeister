@@ -11,7 +11,7 @@
 <main style="--sd-sans:'Barlow',-apple-system,system-ui,sans-serif;--sd-mono:'IBM Plex Mono',ui-monospace,monospace;--sd-bg:#f4f2ec;--sd-card:#fffdf8;--sd-hover:#efece4;--sd-ink:#1b1a17;--sd-muted:#5f5d56;--sd-faint:#716e67;--sd-line:#e2ded3;--sd-line-soft:#ece9e0;--sd-ctl:#d3cfc3;--sd-accent:#1f4e96;--sd-on-accent:#ffffff;--sd-info:#1f4e96;--sd-ok:#1b7340;--sd-ok-bg:#e6f4ea;--sd-ok-bd:#b5dcc1;--sd-warn:#8f5600;--sd-warn-bg:#fdf1dc;--sd-warn-bd:#ecc98a;--sd-warn-solid:#e9a23b;--sd-on-warn-solid:#241500;--sd-err:#b02a1f;--sd-err-bg:#fbe9e6;--sd-err-bd:#f0bdb5;--sd-off:#5f5d56;--sd-off-bg:#eeebe3;--sd-off-bd:#d9d5ca;--sd-pr:#6236b8;--sd-pr-bg:#f1ebfb;--sd-pr-bd:#d3c3f0;--sd-attn-bg:#fdf5e6;--sd-attn-bd:#e9a23b;width:2640px;box-sizing:border-box;padding:56px 64px 80px;font-family:'Barlow',system-ui,sans-serif;color:#1b1a17">
   <header style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:end;padding-bottom:20px;border-bottom:3px solid #1b1a17">
     <div style="font:700 96px/0.8 'Barlow Condensed',sans-serif;letter-spacing:-0.02em">08</div>
-    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Stellwerk · UI guide · Board 8 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Create form</h1></div>
+    <div><div style="font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5f5d56">Werkmeister · UI guide · Board 8 of 9</div><h1 style="margin:4px 0 0;font:600 40px/1.05 'Barlow',sans-serif">Create form</h1></div>
     <div style="font:400 15px/1.4 'Barlow',sans-serif;color:#5f5d56;max-width:600px;text-wrap:pretty">One form on every surface: the same fields, defaults, validation and words. Work type starts on <b>feature</b> and Workflow on <b>ICM</b>. Labels never carry terminal hints. <span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> Two-column pairs at full width, the services grid inside a tinted well, and a toggle for Autonomous.</div>
   </header>
 
@@ -51,13 +51,13 @@
       <div style="background:#1a1a19;border:1px solid #3a3a37;border-radius:12px;padding:12px 14px 16px;font:13px/1.5 -apple-system,system-ui,sans-serif;color:#e6e5e0;display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;gap:6px;align-items:center"><span style="padding:2px 9px;border-radius:6px;background:#2e2e2b">Workspaces</span><span style="padding:2px 9px;border-radius:6px;background:#f2f1ec;color:#1a1a19;font-weight:500">＋ Create</span><span style="padding:2px 6px">☐ Focused only</span></div>
         <div style="display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:start">
-          <b>Issue</b><div><div style="display:flex;gap:6px"><span style="flex:1;border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;color:#e6e5e0">jbbz-stellwerk/stellwerk#143</span><span style="padding:1px 9px;border-radius:6px;background:#2e2e2b;white-space:nowrap">⤓ Fill from issue</span></div><div style="color:#8a8984;font-size:12px">Fetched from your issue tracker; fills the empty fields below.</div></div>
+          <b>Issue</b><div><div style="display:flex;gap:6px"><span style="flex:1;border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;color:#e6e5e0">jbbz-sandbox/werkmeister#143</span><span style="padding:1px 9px;border-radius:6px;background:#2e2e2b;white-space:nowrap">⤓ Fill from issue</span></div><div style="color:#8a8984;font-size:12px">Fetched from your issue tracker; fills the empty fields below.</div></div>
           <b>Feature name *</b><div><span style="display:block;border:1px solid #ff7b72;border-radius:6px;padding:1px 8px">Wizard_Defaults</span><div style="color:#ff7b72;font-size:12px">▲ Use lowercase letters, numbers and single hyphens, e.g. mdx-blog</div></div>
           <b>Work type *</b><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;justify-self:start">feature ▾</span>
           <b>Workflow</b><div><span><span style="color:#7aa7f0">◉</span> ICM (staged)   <span style="color:#8a8984">○</span> JIT</span><div style="color:#8a8984;font-size:12px">ICM: numbered stages, each reviewed before the next.</div></div>
           <b>Autonomous run</b><div><span>☐ off</span><div style="color:#8a8984;font-size:12px">Runs from stage 01 to an open PR with no review gates. You review the PR.</div></div>
-          <b>Services to run locally</b><div style="display:grid;grid-template-columns:100px 1fr;gap:2px 8px;font-size:12px"><span style="color:#8a8984">demo-services</span><span>☐ backend ☐ clickhouse ☐ frontend ☐ mongo ☐ redpanda</span><span style="color:#8a8984">stellwerk</span><span><span style="color:#7aa7f0">☑</span> cli ☐ stellwerk-core <span style="color:#7aa7f0">☑</span> stellwerk-dashboard ☐ vscode-plugin</span><span style="color:#8a8984">wellness</span><span>☐ api ☐ mobile</span></div>
-          <b>Extra repos</b><div><span>☐ demo-services ☐ stellwerk ☐ wellness</span><div style="color:#8a8984;font-size:12px">Worktrees for repos with no local service.</div></div>
+          <b>Services to run locally</b><div style="display:grid;grid-template-columns:100px 1fr;gap:2px 8px;font-size:12px"><span style="color:#8a8984">demo-services</span><span>☐ backend ☐ clickhouse ☐ frontend ☐ mongo ☐ redpanda</span><span style="color:#8a8984">werkmeister</span><span><span style="color:#7aa7f0">☑</span> cli ☐ werkmeister-core <span style="color:#7aa7f0">☑</span> werkmeister-dashboard ☐ vscode-plugin</span><span style="color:#8a8984">wellness</span><span>☐ api ☐ mobile</span></div>
+          <b>Extra repos</b><div><span>☐ demo-services ☐ werkmeister ☐ wellness</span><div style="color:#8a8984;font-size:12px">Worktrees for repos with no local service.</div></div>
           <b>Labels</b><div><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;display:block">focus ✕</span><div style="color:#8a8984;font-size:12px">For filtering, e.g. focus</div></div>
           <b>Feature test path</b><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;color:#8a8984">/products/foo</span>
           <b>Task title</b><div><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;display:block">Restore wizard defaults in the create form</span><div style="color:#8a8984;font-size:12px">Defaults to the feature name in words.</div></div>
@@ -65,16 +65,16 @@
           <b>Starting prompt</b><div><span style="border:1px solid #4a4a46;border-radius:6px;padding:1px 8px;display:block;height:48px"></span><span style="display:inline-block;margin-top:6px;padding:1px 9px;border-radius:6px;background:#2e2e2b">✨ Refine with Claude</span></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;border-top:1px solid #3a3a37;padding-top:10px"><span style="color:#ff7b72;font-size:12px">1 field needs attention</span><span style="flex:1"></span><span style="padding:2px 10px;border-radius:6px;background:#2e2e2b;color:#7aa7f0;font-weight:700">＋ Create workspace</span></div>
-        <div style="border:1px solid #5cc177;border-radius:10px;padding:8px 12px"><span style="color:#5cc177;font-weight:700">✓ Workspace created</span> stellwerk-143-wizard-defaults · <span style="color:#7aa7f0">→ show card</span><div style="color:#8a8984;font-size:12px">The success line after submit. It replaces the form, and ＋ Create resets it.</div></div>
+        <div style="border:1px solid #5cc177;border-radius:10px;padding:8px 12px"><span style="color:#5cc177;font-weight:700">✓ Workspace created</span> werkmeister-143-wizard-defaults · <span style="color:#7aa7f0">→ show card</span><div style="color:#8a8984;font-size:12px">The success line after submit. It replaces the form, and ＋ Create resets it.</div></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px"><span style="font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#5f5d56">VS CODE · ＋ New workspace opens a terminal wizard · same questions, same order</span>
       <div style="background:#181818;border:1px solid #2b2b2b;border-radius:6px;overflow:hidden">
-        <div style="display:flex;gap:16px;padding:6px 14px;font:11px -apple-system,system-ui,sans-serif;color:#9d9d9d;border-bottom:1px solid #2b2b2b;letter-spacing:.04em"><span>PROBLEMS</span><span>OUTPUT</span><span style="color:#e7e7e7;border-bottom:1px solid #0078d4;padding-bottom:4px">TERMINAL</span><span style="flex:1"></span><span>stellwerk: new workspace</span></div>
-        <pre style="margin:0;padding:14px 16px;font:13px/1.65 'IBM Plex Mono',ui-monospace,monospace;color:#cccccc;white-space:pre-wrap"><span style="color:#9d9d9d">~/features $</span> stellwerk new
-<span style="color:#73c991">?</span> <b>Issue</b> <span style="color:#9d9d9d">(owner/repo#12)</span> › jbbz-stellwerk/stellwerk#143
+        <div style="display:flex;gap:16px;padding:6px 14px;font:11px -apple-system,system-ui,sans-serif;color:#9d9d9d;border-bottom:1px solid #2b2b2b;letter-spacing:.04em"><span>PROBLEMS</span><span>OUTPUT</span><span style="color:#e7e7e7;border-bottom:1px solid #0078d4;padding-bottom:4px">TERMINAL</span><span style="flex:1"></span><span>werkmeister: new workspace</span></div>
+        <pre style="margin:0;padding:14px 16px;font:13px/1.65 'IBM Plex Mono',ui-monospace,monospace;color:#cccccc;white-space:pre-wrap"><span style="color:#9d9d9d">~/features $</span> werkmeister new
+<span style="color:#73c991">?</span> <b>Issue</b> <span style="color:#9d9d9d">(owner/repo#12)</span> › jbbz-sandbox/werkmeister#143
   <span style="color:#9d9d9d">Fetched from your issue tracker; fills the empty fields below.</span>
-  <span style="color:#cca700">◌</span> ⤓ Fill from issue… fetching jbbz-stellwerk/stellwerk#143
+  <span style="color:#cca700">◌</span> ⤓ Fill from issue… fetching jbbz-sandbox/werkmeister#143
   <span style="color:#73c991">✓</span> Filled Feature name, Task title, Description
 <span style="color:#73c991">?</span> <b>Feature name</b> › Wizard_Defaults
   <span style="color:#f14c4c">▲ Use lowercase letters, numbers and single hyphens, e.g. mdx-blog</span>
@@ -85,7 +85,7 @@
 <span style="color:#73c991">?</span> <b>Autonomous run</b> › No
   <span style="color:#9d9d9d">Runs from stage 01 to an open PR with no review gates. You review the PR.</span>
 <span style="color:#73c991">?</span> <b>Services to run locally</b> <span style="color:#9d9d9d">(space to pick, enter to confirm)</span>
-  stellwerk  <span style="color:#4daafc">◉ cli</span>  ◯ stellwerk-core  <span style="color:#4daafc">◉ stellwerk-dashboard</span>  ◯ vscode-plugin
+  werkmeister  <span style="color:#4daafc">◉ cli</span>  ◯ werkmeister-core  <span style="color:#4daafc">◉ werkmeister-dashboard</span>  ◯ vscode-plugin
 <span style="color:#73c991">?</span> <b>Extra repos</b> › <span style="color:#9d9d9d">none</span>
 <span style="color:#73c991">?</span> <b>Labels</b> › focus
 <span style="color:#73c991">?</span> <b>Feature test path</b> › <span style="color:#9d9d9d">(/products/foo)</span>
@@ -94,9 +94,9 @@
 <span style="color:#73c991">?</span> <b>Starting prompt</b> <span style="color:#9d9d9d">(opens $EDITOR · r = ✨ Refine with Claude)</span> › <span style="color:#9d9d9d">skipped</span>
 <span style="color:#73c991">?</span> <b>＋ Create workspace?</b> › Yes
 <span style="color:#cca700">◌</span> Creating…
-<span style="color:#73c991">✓ Workspace created</span> stellwerk-143-wizard-defaults · revealed in the Stellwerk tree</pre>
+<span style="color:#73c991">✓ Workspace created</span> werkmeister-143-wizard-defaults · revealed in the Werkmeister tree</pre>
       </div>
-      <p style="margin:6px 0 0;font-size:13px;color:#5f5d56;max-width:760px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> The command name <code style="font:500 12px 'IBM Plex Mono',monospace">stellwerk new</code>, and showing the optional fields' placeholders in parentheses. Required prompts don't move on until the input is valid. The error repeats the browser's wording exactly.</p>
+      <p style="margin:6px 0 0;font-size:13px;color:#5f5d56;max-width:760px"><span style="font:500 11px 'IBM Plex Mono',monospace;color:#1f4e96;border:1px dashed #1f4e96;padding:0 5px;border-radius:3px">PROPOSAL</span> The command name <code style="font:500 12px 'IBM Plex Mono',monospace">werkmeister new</code>, and showing the optional fields' placeholders in parentheses. Required prompts don't move on until the input is valid. The error repeats the browser's wording exactly.</p>
     </div>
     <aside style="font-size:14px;line-height:1.5;max-width:520px;display:flex;flex-direction:column;gap:10px">
       <h3 style="margin:0;font:600 17px 'Barlow',sans-serif">Field order (all surfaces)</h3>

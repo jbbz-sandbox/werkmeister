@@ -8,7 +8,7 @@
 <body>
 <x-dc>
 <div style="box-sizing:border-box;width:100%;background:#1a1a19;border:1px solid #3a3a37;border-radius:12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5;color:#e6e5e0;padding:12px 14px 16px;text-align:left">
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:14px;color:#c8c7c1">Stellwerk workspaces</span><span style="flex:1"></span><span style="color:#9a9993">⤢</span><span style="color:#9a9993">✕</span></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:14px;color:#c8c7c1">Werkmeister workspaces</span><span style="flex:1"></span><span style="color:#9a9993">⤢</span><span style="color:#9a9993">✕</span></div>
   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">
     <span style="padding:2px 9px;border-radius:6px;background:{{ tabListBg }};color:{{ tabListFg }};font-weight:500">Workspaces<span onClick="{{ toggleNeeds }}" style="color:{{ needsTabFg }};font-weight:600;cursor:pointer;text-decoration:{{ needsUl }}">{{ needsTab }}</span></span>
     <span style="padding:2px 9px;border-radius:6px;background:{{ tabCreateBg }};color:{{ tabCreateFg }}">＋ Create</span>
@@ -62,7 +62,7 @@
         <sc-if value="{{ c.abandoning }}">
           <div style="margin-top:8px"><div style="color:#ff7b72;font-weight:700">✕ Abandon {{ c.name }}?</div><div style="color:#b5b4ae">Reason posted on the issue; workspace removed, branches kept.</div>
             <div style="margin-top:6px;color:#8a8984;font-size:12px">Reason (required)</div>
-            <div style="border:1px solid #ff7b72;border-radius:6px;padding:3px 8px;color:#e6e5e0">superseded by stellwerk#240<span style="color:#e6e5e0">▏</span></div>
+            <div style="border:1px solid #ff7b72;border-radius:6px;padding:3px 8px;color:#e6e5e0">superseded by werkmeister#240<span style="color:#e6e5e0">▏</span></div>
             <div style="display:flex;gap:6px;margin-top:6px"><span style="padding:2px 9px;border-radius:6px;background:#5a1f1a;color:#ffd7d3;font-weight:700">✕ Yes, abandon</span><span onClick="{{ c.cancel }}" style="padding:2px 9px;border-radius:6px;background:#2e2e2b;cursor:pointer">Cancel</span></div></div>
         </sc-if>
       </div>
