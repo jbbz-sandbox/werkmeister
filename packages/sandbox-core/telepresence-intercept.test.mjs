@@ -6,7 +6,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { SandboxError } from "./dist/errors.js";
-import { leaveIntercept, portOpen, startIntercept } from "./dist/telepresence.js";
+import {
+  dockerDaemonName,
+  leaveIntercept,
+  listIntercepts,
+  portOpen,
+  startIntercept,
+} from "./dist/telepresence.js";
 
 const base = { feature: "demo", localServices: ["backend"] };
 
@@ -59,4 +65,79 @@ test("leaveIntercept validates the service the same way", async () => {
 
 test("portOpen resolves false for a closed port rather than hanging", async () => {
   assert.equal(await portOpen(1, 200), false);
+});
+
+// SW-12: absent, disconnected and connected are three different answers.
+function fakeTelepresence(status, list = [0, "[]"]) {
+  const calls = [];
+  const runner = (cmd) => {
+    calls.push(cmd[1]);
+    return cmd[1] === "status" ? status : list;
+  };
+  return { runner, calls };
+}
+const CONNECTED = [0, JSON.stringify({ daemon: { status: "Connected", namespace: "default" } })];
+const ACTIVE = JSON.stringify([
+  { name: "frontend", intercept_info: [{ spec: { header_filters: { "x-feature": "ab" } } }] },
+]);
+
+test("listIntercepts: a missing binary is not installed, and list never runs", () => {
+  const t = fakeTelepresence([127, "telepresence: command not found"]);
+  const s = listIntercepts(t.runner);
+  assert.deepEqual(
+    [s.installed, s.available, s.namespace, s.intercepts.size],
+    [false, false, null, 0],
+  );
+  assert.deepEqual(t.calls, ["status"]);
+});
+
+test("listIntercepts: disconnected is installed but unavailable, and list never runs", () => {
+  const t = fakeTelepresence([
+    1,
+    '{"error":"root daemon: telepresence root daemon is not running"}',
+  ]);
+  const s = listIntercepts(t.runner);
+  assert.deepEqual(
+    [s.installed, s.available, s.namespace, s.intercepts.size],
+    [true, false, null, 0],
+  );
+  assert.deepEqual(t.calls, ["status"]);
+});
+
+test("listIntercepts: connected reads the namespace and the intercepts", () => {
+  const t = fakeTelepresence(CONNECTED, [0, ACTIVE]);
+  const s = listIntercepts(t.runner);
+  assert.deepEqual([s.installed, s.available, s.namespace], [true, true, "default"]);
+  assert.deepEqual([...s.intercepts], [["frontend", "ab"]]);
+  assert.deepEqual(t.calls, ["status", "list"]);
+});
+
+test("listIntercepts: connected but list failing stays installed, unavailable", () => {
+  const s = listIntercepts(fakeTelepresence(CONNECTED, [1, "boom"]).runner);
+  assert.deepEqual(
+    [s.installed, s.available, s.namespace, s.intercepts.size],
+    [true, false, "default", 0],
+  );
+});
+
+test("listIntercepts: with a host daemon beside the docker one, reads the connected one", () => {
+  const MULTI =
+    "multiple daemons are running, please select orbstack-default or orbstack-default-cn using the --use <match> flag";
+  const calls = [];
+  const runner = (cmd) => {
+    calls.push(cmd.slice(1).join(" "));
+    const use = cmd[cmd.indexOf("--use") + 1];
+    if (cmd[1] === "list") return [0, ACTIVE];
+    if (!cmd.includes("--use")) return [1, MULTI];
+    return use === "orbstack-default-cn"
+      ? CONNECTED
+      : [1, '{"error":"root daemon is not running"}'];
+  };
+  const s = listIntercepts(runner);
+  assert.deepEqual([s.installed, s.available, s.namespace], [true, true, "default"]);
+  assert.equal(calls.at(-1), "list -i --format json --use orbstack-default-cn");
+});
+
+test("dockerDaemonName is the container name connect --docker uses", () => {
+  assert.equal(dockerDaemonName("orbstack", "default"), "orbstack-default-cn");
 });

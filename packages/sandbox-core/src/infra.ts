@@ -35,11 +35,11 @@ import { error, info, success, warn } from "./reporter.js";
 import { restartAll, startAll, stopAll } from "./web_servers.js";
 
 function composeCmd(subcommand: string[]): boolean {
-  const { argv, env } = composeInvocation();
+  const { argv, env, cwd } = composeInvocation();
   const cmd = [...argv, ...subcommand];
   info(`Running: ${cmd.join(" ")}`);
   try {
-    const result = run(cmd, { capture: true, timeout: 120, env });
+    const result = run(cmd, { capture: true, timeout: 120, env, cwd });
     if (result.status !== 0) {
       error(`docker compose failed:\n${result.stderr.trim()}`);
       return false;
@@ -141,7 +141,7 @@ async function ensureProxyFiles(): Promise<void> {
  * k8s-forwards image, which routinely outlasts the cap.
  */
 async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
-  const { argv, env } = composeInvocation();
+  const { argv, env, cwd } = composeInvocation();
   const composeFile = argv[3];
 
   if (!fs.existsSync(composeFile)) {
@@ -151,7 +151,12 @@ async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
 
   info("Starting shared infrastructure (k8s-forwards, caddy, jaeger, redisinsight)...");
   try {
-    const result = await runAsync([...argv, "up", "-d", "--build"], { capture: true, signal, env });
+    const result = await runAsync([...argv, "up", "-d", "--build"], {
+      capture: true,
+      signal,
+      env,
+      cwd,
+    });
     if (result.status !== 0) {
       error(`docker compose failed:\n${result.stderr.trim()}`);
       return false;

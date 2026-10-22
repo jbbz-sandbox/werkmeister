@@ -83,8 +83,9 @@ try {
     'workspace-resources': () => core.getWorkspaceResources(),
     // The same snapshot \`sandbox status --intercepts --json\` prints: the CLI stays the one source of intercept state.
     intercepts: async () => (await sibling('status.js')).interceptsSnapshot(),
-    'intercept-start': async () => (await sibling('telepresence.js')).startIntercept(await interceptArgs()),
-    'intercept-leave': async () => ({ left: await (await sibling('telepresence.js')).leaveIntercept(await interceptArgs()) }),
+    // docker mode from the pane: it has no TTY for host mode's root-daemon sudo prompt (SW-12).
+    'intercept-start': async () => (await sibling('telepresence.js')).startIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }),
+    'intercept-leave': async () => ({ left: await (await sibling('telepresence.js')).leaveIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }) }),
     'workspace-prs': () => core.getWorkspacePRs(),
     connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
@@ -903,7 +904,9 @@ export function interceptControl(
   // A failed lookup can't tell remote from local, so it keeps "unavailable" on every row.
   if (snap === null) return { kind: "unavailable", text: "intercept state unavailable" };
   if (!snap.remote_services.includes(service)) return null;
-  if (!snap.available) return { kind: "unavailable", text: "intercepts unavailable" };
+  // Installed but disconnected falls through: Intercept connects first (SW-12).
+  if (!(snap.installed ?? snap.available))
+    return { kind: "unavailable", text: "intercepts unavailable" };
   if (!row) return { kind: "blocked", text: "not an interceptable service of this workspace" };
   if (row.intercepted) {
     // One intercept per deployment: an unreadable owner is never offered a Leave.
@@ -944,10 +947,10 @@ async function pressIntercept(
   await $.state.set(NOTE, `${service}: ${kind === "yes" ? "starting" : "leaving"} intercept…`);
   try {
     if (kind === "yes") {
-      await core($, "intercept-start", { name, feature, service }, 180000);
+      await core($, "intercept-start", { name, feature, service, dockerDaemon: true }, 180000);
       await $.state.set(NOTE, `${service}: intercepted (x-feature: ${feature})`);
     } else {
-      await core($, "intercept-leave", { name, feature, service }, 60000);
+      await core($, "intercept-leave", { name, feature, service, dockerDaemon: true }, 60000);
       await $.state.set(NOTE, `${service}: left intercept`);
     }
   } catch (err) {
@@ -1887,7 +1890,7 @@ export const register: Register = (on) => {
                 {c.kind === "off" && idle && asking && (
                   <Box gap={1}>
                     <Text color="warning">
-                      {`Intercept ${svc.name}? Installs a traffic-agent sidecar on ${row?.deployment ?? svc.name} in the shared dev cluster.`}
+                      {`Intercept ${svc.name}? Installs a traffic-agent sidecar on ${row?.deployment ?? svc.name} in the shared dev cluster.${snap?.available ? "" : " Connects telepresence (docker) first."}`}
                     </Text>
                     <Button
                       key={`intercept-yes:${r.name}/${svc.name}`}

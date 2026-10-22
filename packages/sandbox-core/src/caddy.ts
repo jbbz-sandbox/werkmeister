@@ -287,13 +287,13 @@ function _runCaddyCompose(
   args: string[],
   { capture = false }: { capture?: boolean } = {},
 ): boolean {
-  const { argv, env } = composeInvocation();
+  const { argv, env, cwd } = composeInvocation();
   const cmd = [...argv, ...args];
   info(`Running: ${cmd.join(" ")}`);
 
   let result;
   try {
-    result = run(cmd, { capture, timeout: 60, env });
+    result = run(cmd, { capture, timeout: 60, env, cwd });
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
       error("docker compose not found. Ensure Docker Desktop is installed.");
@@ -415,6 +415,49 @@ export async function stopCaddy(): Promise<boolean> {
     return false;
   }
   success("Caddy reverse proxy stopped");
+  return true;
+}
+
+const SHARED_NETWORK = "sandbox-shared";
+
+/**
+ * Create `sandbox-shared` when absent, labelled so the infra stack's compose
+ * adopts it. Every feature compose declares it external, and `up` no longer
+ * starts Caddy (which used to create it) for an unrouted workspace (SW-42).
+ */
+export function ensureSharedNetwork(): boolean {
+  try {
+    if (
+      run(["docker", "network", "inspect", SHARED_NETWORK], { capture: true, timeout: 30 })
+        .status === 0
+    ) {
+      return true;
+    }
+    const result = run(
+      [
+        "docker",
+        "network",
+        "create",
+        "--label",
+        `com.docker.compose.project=${INFRA_PROJECT}`,
+        "--label",
+        "com.docker.compose.network=shared-network",
+        SHARED_NETWORK,
+      ],
+      { capture: true, timeout: 30 },
+    );
+    if (result.status !== 0) {
+      error(`Could not create the ${SHARED_NETWORK} network: ${result.stderr.trim()}`);
+      return false;
+    }
+  } catch (e) {
+    if (e instanceof ProcError) {
+      error(`Could not create the ${SHARED_NETWORK} network: ${e.message}`);
+      return false;
+    }
+    throw e;
+  }
+  info(`Created the ${SHARED_NETWORK} network`);
   return true;
 }
 

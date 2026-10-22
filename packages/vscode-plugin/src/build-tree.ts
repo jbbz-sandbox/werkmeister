@@ -60,6 +60,8 @@ export interface InterceptRowLike {
 
 export interface InterceptsLike {
   available: boolean;
+  /** On PATH, connected or not: a disconnected install is still interceptable (SW-12). */
+  installed: boolean;
   byFeature: Map<string, Map<string, InterceptRowLike>>;
   remoteServices: ReadonlySet<string>;
 }
@@ -220,6 +222,7 @@ export function interceptView(
   feature: string | null,
   lookupFailed: boolean,
   remote: boolean,
+  connected = true,
 ): { contextValue: string; note: string; leave: boolean } | null {
   if (!remote) return null;
   if (!row) {
@@ -246,7 +249,11 @@ export function interceptView(
   if (!row.interceptable) {
     return { contextValue: "service", note: row.blocker ?? "not interceptable", leave: false };
   }
-  return { contextValue: "service:interceptable", note: "interceptable", leave: false };
+  return {
+    contextValue: "service:interceptable",
+    note: connected ? "interceptable" : "interceptable (telepresence not connected)",
+    leave: false,
+  };
 }
 
 function serviceNode(
@@ -261,8 +268,9 @@ function serviceNode(
   const view = interceptView(
     row,
     feature,
-    intercepts === null || !intercepts.available,
+    intercepts === null || !intercepts.installed,
     intercepts?.remoteServices.has(svc.name) ?? true,
+    intercepts?.available ?? true,
   );
   const suffix =
     view?.contextValue === "service:intercepted-mine"
