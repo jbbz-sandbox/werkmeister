@@ -2,21 +2,21 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build vscode-plugin",
+      "label": "build werkmeister-vscode",
       "type": "shell",
       "command": "pnpm --filter werkmeister-vscode run build"
     },
     {
       // F5's debugger attach can fail (ECONNREFUSED ::1), leaving the dev host
       // waiting forever on debugBrk. This opens one with no debugger to attach.
-      "label": "run vscode-plugin (no debugger)",
+      "label": "run werkmeister-vscode (no debugger)",
       "type": "shell",
-      "command": "code --new-window --extensionDevelopmentPath=\"${workspaceFolder}/packages/vscode-plugin\" \"${workspaceFolder}\"",
-      "dependsOn": "build vscode-plugin",
+      "command": "code --new-window --extensionDevelopmentPath=\"${workspaceFolder}/packages/werkmeister-vscode\" \"${workspaceFolder}\"",
+      "dependsOn": "build werkmeister-vscode",
       "problemMatcher": []
     },
     {
-      "label": "watch vscode-plugin",
+      "label": "watch werkmeister-vscode",
       "type": "shell",
       "command": "pnpm --filter werkmeister-vscode run watch",
       "isBackground": true,

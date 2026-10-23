@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmit": false,
+    "types": ["node"]
+  },
+  // A glob, not a list — same reasoning as packages/werkmeister-core/tsconfig.json.
+  "include": ["src/**/*.ts"]
+}

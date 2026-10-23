@@ -1,7 +1,7 @@
 /**
- * A copy of packages/sandbox-ui/src/display-model.ts (SW-49): the plugin loader refuses imports from outside
+ * A copy of packages/werkmeister-ui/src/display-model.ts (SW-49): the plugin loader refuses imports from outside
  * this folder. Everything from the `Tone` doc comment down is byte-identical to that file, and
- * packages/sandbox-ui/test/pane-copy.test.mjs fails when it drifts; change the original, then copy it here.
+ * packages/werkmeister-ui/test/pane-copy.test.mjs fails when it drifts; change the original, then copy it here.
  * The types above that line stand in for its `werkmeister-core` imports.
  */
 

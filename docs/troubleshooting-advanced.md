@@ -46,7 +46,7 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/sandbox-core/dist/caddy.js');
+const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
 const json = await new Response(process.stdin).text();
 console.log(countCompiledRoutes(JSON.parse(json)), 'compiled routes');
 "
@@ -156,7 +156,7 @@ docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
 ```bash
 docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>/dev/null | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/sandbox-core/dist/caddy.js');
+const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
 const total = countCompiledRoutes(JSON.parse(await new Response(process.stdin).text()));
 console.log('Total compiled routes:', total);
 if (total < 15) console.log('WARNING: Routes may have been silently dropped!');

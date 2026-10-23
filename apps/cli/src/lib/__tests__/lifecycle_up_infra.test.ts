@@ -15,9 +15,9 @@ import { withReporter } from "werkmeister-core/reporter";
 
 const registry: Record<string, Record<string, unknown>> = {
   cli: { type: "cli" },
-  "sandbox-core": { type: "library" },
-  "vscode-plugin": { type: "extension" },
-  "sandbox-dashboard": { type: "web", feature_router: { hostname: "dash.local.test" } },
+  "werkmeister-core": { type: "library" },
+  "werkmeister-vscode": { type: "extension" },
+  "werkmeister-dashboard": { type: "web", feature_router: { hostname: "dash.local.test" } },
   backend: { type: "api", k8s_deployment: "backend" },
 };
 const spawned: string[] = [];
@@ -106,7 +106,7 @@ afterEach(() => {
 describe("lifecycle.up starts shared infra only when needed", () => {
   it("a werkmeister-only workspace neither checks the forwards nor starts Caddy", async () => {
     const result = await withReporter(quiet, () =>
-      up("demo", workspace(["cli", "sandbox-core", "vscode-plugin"])),
+      up("demo", workspace(["cli", "werkmeister-core", "werkmeister-vscode"])),
     );
     expect(ensurePortForwardsHealthy).not.toHaveBeenCalled();
     expect(waitForForwards).not.toHaveBeenCalled();
@@ -123,7 +123,9 @@ describe("lifecycle.up starts shared infra only when needed", () => {
   });
 
   it("a routed workspace starts Caddy but leaves the forwards alone", async () => {
-    const result = await withReporter(quiet, () => up("demo", workspace(["sandbox-dashboard"])));
+    const result = await withReporter(quiet, () =>
+      up("demo", workspace(["werkmeister-dashboard"])),
+    );
     expect(ensurePortForwardsHealthy).not.toHaveBeenCalled();
     expect(startCaddy).toHaveBeenCalled();
     expect(result.caddy).toBe("started");
@@ -138,7 +140,7 @@ describe("lifecycle.up starts shared infra only when needed", () => {
   });
 
   it("never spawns anything that starts jaeger or redisinsight", async () => {
-    for (const services of [["cli"], ["sandbox-dashboard"], ["backend"]]) {
+    for (const services of [["cli"], ["werkmeister-dashboard"], ["backend"]]) {
       await withReporter(quiet, () => up("demo", workspace(services)));
     }
     expect(spawned.filter((cmd) => /jaeger|redisinsight/.test(cmd))).toEqual([]);

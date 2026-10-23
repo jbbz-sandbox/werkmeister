@@ -1442,7 +1442,7 @@ function formStubs(over: Partial<McpStub> = {}): McpStub {
       ok({ command: "sandbox workspace rate-limit", workspacePath: "/ws/api-7-rate-limit" }),
     [`${WS}/open-claude-link`]: (a) => ok({ url: a.url }),
     [`${WS}/refine-request`]: (args) => ok(`REFINE: ${String(args.text)}`),
-    // Stand-ins for sandbox-core's validateFormData and mergeFormData (form-validate.test.mjs tests the real ones).
+    // Stand-ins for werkmeister-core's validateFormData and mergeFormData (form-validate.test.mjs tests the real ones).
     [`${WS}/validate-form`]: (a) => ok(validateStub(a.formData as Record<string, unknown>)),
     [`${WS}/merge-form`]: (a) => {
       const out = { ...(a.current as Record<string, unknown>) };
@@ -2078,7 +2078,7 @@ test("close-out needs two presses, and a press on another row's button cancels i
   await ui.unmount();
 });
 
-test("Create checks the draft with sandbox-core's rules: no service or repo means no create", async ($, on) => {
+test("Create checks the draft with werkmeister-core's rules: no service or repo means no create", async ($, on) => {
   const repoRule =
     "Select at least one service (or add a repo below) — a workspace needs at least one repo.";
   const w = world(on, formStubs({ [`${WS}/validate-form`]: () => ok({ services: repoRule }) }));
@@ -2392,7 +2392,7 @@ test("Cancel drops a pending intercept without starting it", async ($, on) => {
   await ui.unmount();
 });
 
-test("the service reaches sandbox-core verbatim as a JSON field, never through a shell", async ($, on) => {
+test("the service reaches werkmeister-core verbatim as a JSON field, never through a shell", async ($, on) => {
   const w = world(on, ixStubs());
   await openPane($);
   const ui = await mountPane($);

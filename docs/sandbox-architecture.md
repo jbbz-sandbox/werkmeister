@@ -69,7 +69,7 @@ k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052
 - Copies an `X-Feature` cookie value into an `X-Feature` header on the upstream call, so the app can read the selected feature.
 - Proxies to `host.docker.internal:<port>` for a local feature container, or to `k8s-<service>:<forward_port>` for the k8s baseline.
 
-**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`werkmeister proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.werkmeister/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `packages/sandbox-core/src/feature_routing.ts`).
+**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`werkmeister proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.werkmeister/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `packages/werkmeister-core/src/feature_routing.ts`).
 
 ```
 # Example generated Caddyfile snippet

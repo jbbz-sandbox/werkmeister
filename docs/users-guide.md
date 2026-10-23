@@ -987,8 +987,8 @@ Setup services are automatically included in generated Docker Compose files when
 
 ### Self-hosting the Werkmeister repo
 
-The four workspaces of this repo (`apps/cli`, `apps/sandbox-dashboard`,
-`packages/sandbox-core`, `packages/vscode-plugin`) can be registered as services so a
+The four workspaces of this repo (`apps/cli`, `apps/werkmeister-dashboard`,
+`packages/werkmeister-core`, `packages/werkmeister-vscode`) can be registered as services so a
 feature workspace develops Werkmeister itself, each package in its own container. The
 registry shape is the one in [Services Reference](#services-reference);
 the pieces that are not obvious from the demo services:
@@ -1000,7 +1000,7 @@ the pieces that are not obvious from the demo services:
   fast; the gate `docker exec`s their tests. `werkmeister up --dev` (or
   `SANDBOX_DEV=1 docker compose up -d`) runs their `command:` watchers instead. The
   template still publishes a port, so a placeholder `internal_port` keeps their slot.
-- **Host access for `cli` and `sandbox-dashboard`.** Those two drive the host:
+- **Host access for `cli` and `werkmeister-dashboard`.** Those two drive the host:
   they get `/var/run/docker.sock` plus `~/.werkmeister`, `~/repos`, `~/features` and `~/.kube`
   bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
   kubectl binaries from the per-feature `tools` volume that
@@ -1041,22 +1041,22 @@ the pieces that are not obvious from the demo services:
   registry sets `HOST=0.0.0.0` because the container network is the isolation boundary and
   Docker's published port is the only way in.
 - **New hostnames need `/etc/hosts` entries.** The wildcard certificate already covers
-  `*.local.sandbox.com`, but `sandbox-dashboard.local.sandbox.com` only resolves after
+  `*.local.sandbox.com`, but `werkmeister-dashboard.local.sandbox.com` only resolves after
   `werkmeister setup` (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
   Caddy emits its site block only once a running feature declares the service.
 - **Inside the container, `werkmeister status` shows every k8s forward as dead** and `kubectl`
   cannot reach OrbStack's API server: both probe `127.0.0.1`, which is the container's own
   loopback. The forwards are fine; read their state from the host. `werkmeister up`, `down`,
   `status` (for features) and `workspace` all work from inside. This applies to a container
-  running the CLI *directly*. A container that calls the host MCP surface (`apps/mcp`)
+  running the CLI *directly*. A container that calls the host MCP surface (`apps/werkmeister-mcp`)
   instead is unaffected: `status` runs on the host, so the forward health it reports
   is the real one.
 - **Not covered:** the `gh` and `claude` binaries. Telepresence needs a daemon that owns the
   host's routing (or, with `--docker-daemon`, the Docker socket and a kubeconfig), so
   `werkmeister intercept` and `werkmeister connect` must run on the host — either from a host
-  terminal, or through the `intercept` and `connect` tools on `apps/mcp`,
+  terminal, or through the `intercept` and `connect` tools on `apps/werkmeister-mcp`,
   which run host-side with exactly the authority a host terminal has.
-- **A container can instead hold no daemon at all.** `apps/mcp` (port 3002, started by
+- **A container can instead hold no daemon at all.** `apps/werkmeister-mcp` (port 3002, started by
   `werkmeister connect`) exposes twenty Werkmeister verbs over authenticated HTTP, so a container
   needs only `~/repos`, `~/features` and `SANDBOX_MCP_TOKEN` — no docker socket, no docker
   CLI, no kubectl, no `werkmeister` binary. It is the only managed web server that binds
@@ -1064,7 +1064,7 @@ the pieces that are not obvious from the demo services:
   `HOST` before `werkmeister connect`, which would also expose the unauthenticated dashboard.
   Its `mcp_servers.werkmeister` registry entry is deliberately in no archetype — `.mcp.json` is
   shared with host sessions, where `host.docker.internal` does not resolve. See
-  `apps/mcp/README.md`.
+  `apps/werkmeister-mcp/README.md`.
 - **Wiring a service to drive Werkmeister that way** takes four edits to
   `~/.werkmeister/services.yaml`, and the granularity is the *service*, not the workspace —
   `services:` entries are machine-global, so a fresh workspace does not isolate a change.
@@ -1157,7 +1157,7 @@ the one shape that isolates you from the host's *containers* as well as its daem
 it is a second complete install: `~/.werkmeister`, certificates, `/etc/hosts` and all. To use
 the host's browser against it, point the host's `*.local.sandbox.com` entries at the VM's
 address instead of loopback, and copy the VM's CA into the browser's trust store. The
-apps/mcp server is irrelevant here — the CLI runs natively inside.
+apps/werkmeister-mcp server is irrelevant here — the CLI runs natively inside.
 
 Pick 1 when you want the agent off the host's Docker socket and nothing more. Pick 2
 when the runner is already part of your workflow. Pick 3 only when a wrong `werkmeister
@@ -1294,7 +1294,7 @@ A service whose forward/alias name differs from its service key can set
 `k8s_forward_name:` to override it.
 
 Both runtime consumers of this table are **generated** from `services.yaml` by
-`werkmeister connect` (`packages/sandbox-core/src/k8s_forwards.ts`) under `~/.werkmeister/infra/`:
+`werkmeister connect` (`packages/werkmeister-core/src/k8s_forwards.ts`) under `~/.werkmeister/infra/`:
 the container's forward list is written to `k8s-port-forward/forwards` (mounted at
 `/tmp/forwards`, read by `entrypoint.sh`), and the `k8s-forwards` service's
 `ports:`/`aliases:` are written to `compose/k8s-forwards.override.yml`, which every
@@ -1496,7 +1496,7 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 | `apps/cli/werkmeister` | Launcher: resolves a node runtime and execs `dist/main.js`. `apps/cli/sandbox` (symlinked at the repo root as `./sandbox`) is the deprecated alias |
 | `apps/cli/src/main.ts` | CLI dispatcher |
 | `apps/cli/src/commands/` | Command modules (up, down, status, etc.) |
-| `apps/cli/src/lib/` | CLI-only helpers (config, gate, PR guard, wizard); the shared engine (detect, slots, generate, docker, k8s, caddy) is in `packages/sandbox-core/src/` |
+| `apps/cli/src/lib/` | CLI-only helpers (config, gate, PR guard, wizard); the shared engine (detect, slots, generate, docker, k8s, caddy) is in `packages/werkmeister-core/src/` |
 | `~/.werkmeister/services.yaml` | Service registry (generated by `werkmeister registry sync`) |
 | `~/.werkmeister/ports.yaml` | Port allocation scheme |
 | `apps/cli/infra/compose/` | Shared-infra compose file, the k8s-port-forward image, redisinsight config, container scripts |

@@ -8,19 +8,19 @@ Origin: the ui-surfaces spike, tracked in Jira [SW-43](https://jory-group.atlass
 
 | Surface | Code | Renders with | Density |
 |---|---|---|---|
-| **Dashboard** | `apps/sandbox-dashboard` (browser page, `werkmeister dashboard`) | DOM | full |
+| **Dashboard** | `apps/werkmeister-dashboard` (browser page, `werkmeister dashboard`) | DOM | full |
 | **MCP App** | the same modules, served as `ui://` resources inside Claude Desktop | DOM, host theme | full (≤720px) |
 | **Pane** | `plugins/werkmeister/hooks/register.tsx` | Claude Code's `Box` / `Text` / `Button` | compact |
-| **VS Code** | `packages/vscode-plugin` | native TreeView: label, description, Markdown tooltip, codicons | compact |
+| **VS Code** | `packages/werkmeister-vscode` | native TreeView: label, description, Markdown tooltip, codicons | compact |
 
 ## Decisions
 
 | Decision | Date |
 |---|---|
 | **One spec, two densities.** Full and compact show the same fields, words and colour meanings; compact uses fewer pixels. | 2026-10-16 |
-| **Shared spec, not one shared component.** The pane and VS Code can't render DOM, so they share a non-DOM **display model** (workspace data → label, tone, glyph, primary action) in `packages/sandbox-ui`. The two DOM surfaces also share components. | 2026-10-16 |
-| **React is the UI library.** `packages/sandbox-ui` and the dashboard tabs are React; the vanilla-DOM helpers (`el()` / `injectCss()`) are gone (SW-57), and each component's stylesheet is a React-hoisted `<style>` (`Css`, `style.tsx`). React is bundled inline (`viteSingleFile`, no CDN), so the Cowork artifact's CSP holds. Moving VS Code to a webview is a separate, open decision. | 2026-10-17 |
-| **One MCP server**, `apps/mcp`, with one name per verb. No backward compatibility for tool names. | 2026-10-16 |
+| **Shared spec, not one shared component.** The pane and VS Code can't render DOM, so they share a non-DOM **display model** (workspace data → label, tone, glyph, primary action) in `packages/werkmeister-ui`. The two DOM surfaces also share components. | 2026-10-16 |
+| **React is the UI library.** `packages/werkmeister-ui` and the dashboard tabs are React; the vanilla-DOM helpers (`el()` / `injectCss()`) are gone (SW-57), and each component's stylesheet is a React-hoisted `<style>` (`Css`, `style.tsx`). React is bundled inline (`viteSingleFile`, no CDN), so the Cowork artifact's CSP holds. Moving VS Code to a webview is a separate, open decision. | 2026-10-17 |
+| **One MCP server**, `apps/werkmeister-mcp`, with one name per verb. No backward compatibility for tool names. | 2026-10-16 |
 | **Containers may call every MCP tool.** There is no host-only tier; the bearer token is the only gate. | 2026-10-16 |
 | **No Remove.** The only destructive verbs are Close out and Abandon…. `remove-workspace` is deprecated in favour of `close-out --abandon` (#160). | 2026-10-16 |
 
@@ -52,7 +52,7 @@ A person must tell, at a glance, for each workspace:
 
 ### Data
 
-Every row reads sandbox-core; no surface computes its own. The shapes and their edge cases are the TSDoc on `WorkspaceStatus` and `RepoPr` (`packages/sandbox-core/src/sandbox.ts`).
+Every row reads werkmeister-core; no surface computes its own. The shapes and their edge cases are the TSDoc on `WorkspaceStatus` and `RepoPr` (`packages/werkmeister-core/src/sandbox.ts`).
 
 | Row | Field |
 |---|---|
@@ -102,14 +102,14 @@ On the dashboard and MCP App, `↗ Continue in Desktop` opens the workspace fold
 
 Both confirm inline in the card footer, never in a modal (VS Code: a modal warning message is its only option).
 
-| Verb | Does (`closeOut`, `packages/sandbox-core/src/pr_lifecycle.ts`) | Confirm |
+| Verb | Does (`closeOut`, `packages/werkmeister-core/src/pr_lifecycle.ts`) | Confirm |
 |---|---|---|
 | `✓ Close out` | Every PR shipped, closed or abandoned: moves the issue to Done with a "Shipped" comment, writes `closeout.md`, removes the workspace, deletes the merged branches | one step: `✓ Yes, close out` |
 | `✕ Abandon…` | The work stops unsettled: posts "Abandoned: <reason>" on the issue and moves it to the abandoned status, pushes every branch and keeps them, removes the workspace | a required reason, then `✕ Yes, abandon` |
 
 ## The create form
 
-One form on every surface, built from `_WIZARD_PROMPTS` (`packages/sandbox-core/src/workspace_prompts.ts`): a GUI on the dashboard, MCP App and pane, the terminal wizard in VS Code. GUI labels carry no terminal hints ("blank to skip", "Enter for default").
+One form on every surface, built from `_WIZARD_PROMPTS` (`packages/werkmeister-core/src/workspace_prompts.ts`): a GUI on the dashboard, MCP App and pane, the terminal wizard in VS Code. GUI labels carry no terminal hints ("blank to skip", "Enter for default").
 
 | Field | GUI label | Widget | Required | Default |
 |---|---|---|---|---|
@@ -131,9 +131,9 @@ Defaults that don't depend on the current directory (`work_type`, `context_strat
 
 ## One MCP server
 
-`apps/mcp` (server `werkmeister`) is the only MCP server, and `plugins/werkmeister/.mcp.json` launches it. The dashboard's server (`workspaces`, `apps/sandbox-dashboard/src/server.ts`) is gone; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: SW-48. <!-- docs-check: ignore -->
+`apps/werkmeister-mcp` (server `werkmeister`) is the only MCP server, and `plugins/werkmeister/.mcp.json` launches it. The dashboard's server (`workspaces`, `apps/werkmeister-dashboard/src/server.ts`) is gone; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/werkmeister-mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: SW-48. <!-- docs-check: ignore -->
 
-| Merged tool | `workspaces` (dashboard) today | `werkmeister` (apps/mcp) today |
+| Merged tool | `workspaces` (dashboard) today | `werkmeister` (apps/werkmeister-mcp) today |
 |---|---|---|
 | `list-workspaces` (App UI) | `list-workspaces` | `list-workspaces` |
 | `create-workspace-form` (App UI) + `create-workspace` | `workspace`, `create-workspace` | `workspace` |

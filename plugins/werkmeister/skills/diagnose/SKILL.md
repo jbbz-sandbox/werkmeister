@@ -91,7 +91,7 @@ console.log('PASS: Caddyfile valid,', Object.values(servers).reduce((n,sv)=>n+wa
 ```
 
 This mirrors the CLI's canonical counter
-(`sandbox-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
+(`werkmeister-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
 leaf, across **all** compiled servers, same unit `sandbox proxy-reload`
 compares; the CLI ships as one bundle, so the walk is inlined here rather than
 imported). **Expected:** the printed count matches

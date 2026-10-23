@@ -28,6 +28,10 @@ export const RETIRED = [
   [/(?<!p)npm (run|ci|--prefix)\b/, "pnpm"],
   [/\bpackage-lock\.json\b/, "pnpm-lock.yaml"],
   [/stellwerk/i, "Werkmeister (Stellwerk was a dropped name)"],
+  [
+    /\b(?:apps\/(?:mcp|sandbox-dashboard)|packages\/(?:sandbox-core|sandbox-ui|vscode-plugin))(?![\w-])/,
+    "the `werkmeister-*` directory (SW-30)",
+  ],
 ];
 
 /** Point-in-time records: they are meant to name things as they were. */
@@ -135,7 +139,7 @@ function loadCli() {
 
 /** Tool names as the MCP server registers them, plus the plugin's own (`$.tool.register`). */
 function loadTools() {
-  const dir = join(ROOT, "apps/mcp/src");
+  const dir = join(ROOT, "apps/werkmeister-mcp/src");
   const tools = new Set();
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".ts")))
     for (const m of readFileSync(join(dir, f), "utf8").matchAll(
