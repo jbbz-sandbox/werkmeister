@@ -18,8 +18,8 @@
  * `npm i -g` install.
  *
  * `dockerode` and `@anthropic-ai/claude-agent-sdk` are the exceptions, left
- * external and declared as real dependencies (the SDK's reason is at `external`
- * below). For dockerode: 046 bundled it into the .vsix by externalising `*.node`, but that
+ * external and declared in package.json, the SDK as an optional dependency (its reason is
+ * at `external` below). For dockerode: 046 bundled it into the .vsix by externalising `*.node`, but that
  * bundle is CJS; this one is ESM, where esbuild rewrites an unresolved `require`
  * into a shim that throws rather than the guarded miss dockerode's ssh2 ->
  * cpu-features path relies on. Letting npm install it keeps the native

@@ -28,11 +28,31 @@ export function assistOptions(repoRoot: string): Options {
   };
 }
 
+/** SW-73: the SDK is an optional dependency, so its absence is an expected state, not a crash. */
+export class SdkMissingError extends Error {
+  constructor() {
+    super(
+      "`detect --assist` needs the Claude Agent SDK, which is not installed. " +
+        "Install it with: npm install -g @anthropic-ai/claude-agent-sdk",
+    );
+    this.name = "SdkMissingError";
+  }
+}
+
+/** Only "not installed" becomes the hint; any other load failure (a broken install) keeps its own message. */
+export function sdkLoadError(e: unknown): unknown {
+  return (e as { code?: string } | null)?.code === "ERR_MODULE_NOT_FOUND"
+    ? new SdkMissingError()
+    : e;
+}
+
 export const claudeResolver: Resolver = async (
   repoRoot: string,
   questions: Question[],
 ): Promise<Answer[]> => {
-  const { query } = await import("@anthropic-ai/claude-agent-sdk");
+  const { query } = await import("@anthropic-ai/claude-agent-sdk").catch((e) => {
+    throw sdkLoadError(e);
+  });
   for await (const message of query({
     prompt: assistPrompt(questions),
     options: assistOptions(repoRoot),
