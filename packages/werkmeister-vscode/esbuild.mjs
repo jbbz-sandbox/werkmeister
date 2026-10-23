@@ -47,7 +47,7 @@ const options = {
   plugins: [stubGrpc],
   format: "cjs",
   platform: "node",
-  target: "node20",
+  target: "node22",
   sourcemap: true,
   minify: false,
   define: { "import.meta.dirname": "__dirname", "import.meta.url": "__filename" },

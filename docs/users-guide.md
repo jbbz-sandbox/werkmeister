@@ -78,7 +78,7 @@ A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and rout
 
 | Requirement | Purpose | Installation |
 |---|---|---|
-| **Node.js 20+** | CLI runtime | `brew install node` (or nvm) |
+| **Node.js 22+** | CLI runtime | `brew install node` (or nvm) |
 | **Docker Desktop** | Container runtime | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) |
 | **Docker Compose v2** | Container orchestration | Included with Docker Desktop |
 | **kubectl** | Kubernetes CLI | `brew install kubectl` |

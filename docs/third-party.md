@@ -99,7 +99,7 @@ The code checks only Node (via `engines`; the wrapper fails with "could not loca
 
 | Software | Minimum | SPDX / terms | Used for |
 |---|---|---|---|
-| Node.js | `>=20` (`engines`). CI runs 24, the vscode image 22. Node 20 has been EOL since 2026-04 (follow-up 5) | MIT | runs `dist/main.js` |
+| Node.js | `>=22` (`engines`), the floor SW-77 settled: Node 20 has been EOL since 2026-04. The `node-floor` CI job tests on 22; everything else, including the release, runs 24 | MIT | runs `dist/main.js` |
 | pnpm | contributors and CI only, via corepack (`packageManager: pnpm@10.34.7`) | MIT | install, `pnpm run build`, `pnpm publish` |
 | npm | ships with Node (CI publish needs ≥11.5.1) | Artistic-2.0 | the upload `pnpm publish` hands it, npx bootstrap, users' `npm install -g` |
 | Docker Engine | not checked. Reached through dockerode on `DOCKER_HOST` or the context socket | Apache-2.0 (Moby). Docker Desktop is proprietary (Docker Subscription Service Agreement) | every container |
@@ -151,7 +151,7 @@ An image's licence covers its contents (base OS packages and the tool) and can d
 | `sandbox-k8s-forwards` (built `FROM alpine:3.21@sha256:48b0…`) | optional (k8s-forwards) | `infra/compose/k8s-port-forward/Dockerfile` | — (Werkmeister's entrypoint, Apache-2.0) | kubectl 1.31.5 Apache-2.0, bash 5.2.37 GPL-3.0-or-later, netcat-openbsd BSD-3-Clause, redis 7.2.11 BSD-3-Clause (`redis-cli`), postgresql17-client PostgreSQL, busybox GPL-2.0-only, musl MIT† |
 | `jaegertracing/all-in-one@sha256:ab6f…` (pinned from `latest`) | optional (observability, on by default) | `shared-infra.yml` | Apache-2.0 | Apache-2.0 Go binary; base layers not inspected |
 | `redis/redisinsight@sha256:aa21…` (pinned from `latest`) | optional (observability, on by default) | `shared-infra.yml` | **SSPL-1.0** (`/usr/src/app/redisinsight/LICENSE`†) | SSPL-1.0 app; base layers not inspected |
-| `node:20.16.0` (feature default) / your `image:` | required per feature | `infra/templates/docker-compose.feature.yml.njk` | MIT (Node.js) | Docker Official Image on Debian: mixed (GPL, LGPL, MIT, …) |
+| `node:22` (feature default) / your `image:` | required per feature | `infra/templates/docker-compose.feature.yml.njk` | MIT (Node.js) | Docker Official Image on Debian: mixed (GPL, LGPL, MIT, …) |
 | `node:22` + xvfb, xauth, GTK 3, NSS, … (SW-62) | dev-only | `packages/werkmeister-vscode/Dockerfile` | MIT (Node.js) | Debian packages: xvfb MIT/X11, GTK LGPL-2.1-or-later, NSS MPL-2.0, others mixed |
 | Static docker 27.5.1, compose v2.32.4, kubectl v1.31.4 (downloaded into a tools volume) | dev-only (the sandbox repo's own services) | `infra/compose/scripts/sandbox-install-startup.sh` | Apache-2.0 ×3 | — |
 | `alpine:3` (`detect` fallback guess) | — | `fragment_detect/precedence.ts` | — | Alpine: mixed |
@@ -216,4 +216,4 @@ At 0.22.0: build `apps/cli` (`npm run build`), run `npm pack --dry-run`, and com
 2. Ship LICENSE and third-party licence texts in the .vsix.
 3. Remove `infra/compose/scripts/otel-init.bundle.js`, or restore its source and licences.
 4. Make Redis Insight (SSPL-1.0), and perhaps Jaeger, opt-in in shared infra.
-5. Settle the Node floor: `engines` says `>=20` (EOL), the feature default image is `node:20.16.0`, and the ticket assumed 22.
+5. ~~Settle the Node floor: `engines` says `>=20` (EOL), the feature default image is `node:20.16.0`, and the ticket assumed 22.~~ Resolved by SW-77: the floor is 22 in `engines`, the feature default image, the esbuild targets and CI.
