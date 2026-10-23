@@ -10,7 +10,6 @@
       "!**/.turbo",
       "!**/.vscode-test",
       "!**/*.snapshot.json",
-      "!apps/cli/infra/compose/scripts/otel-init.bundle.js",
       "!apps/werkmeister-dashboard/workspace-list.artifact.html",
       // Design references exported from Claude Design; rebuilt in packages/werkmeister-ui, never imported
       "!docs/design"
