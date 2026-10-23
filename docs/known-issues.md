@@ -567,30 +567,17 @@ borrow the developer's registry.
 
 ## Build and Package Caches Are Wired One Tool at a Time
 
-**Severity:** Moderate (cost and complexity grow with every new toolchain)
-**Status:** Open: tracked here; design direction below
+**Severity:** Moderate (cost and complexity grew with every new toolchain)
+**Status:** Resolved (SW-69): caches are registry data
 **Affects:** the service registry (`.sandbox/services.yaml`, `~/.werkmeister/services.yaml`), compose generation, the `sandbox-install` setup service
 
-Every workspace container installs and builds its repo, so warm caches decide how fast `up`, the PR gate and a fresh workspace are. Today each cache is wired by hand, per tool, in the werkmeister repo's own registry:
+Each cache used to be wired by hand, per tool and per service: turbo as a host dir with `TURBO_CACHE_DIR` (SW-35), the pnpm store as `^sandbox-pnpm-store` with `npm_config_store_dir` (#351), and every other toolchain not shared at all. `ensureSharedVolumes()` created every `^` volume in the registry on any `up`, and nothing reported sizes or evicted the pnpm store.
 
-| Cache | How it is shared today | Where |
-|---|---|---|
-| turbo (monorepo task cache) | host dir `{{home}}/.sandbox/cache/turbo`, `TURBO_CACHE_DIR` + `TURBO_CACHE_MAX_AGE: 14d` (SW-35) | `services.yaml` env on each service and `sandbox-install` |
-| pnpm store | shared named volume `^sandbox-pnpm-store:/pnpm-store` (#351; was host dir `{{home}}/.sandbox/cache/pnpm-store`, SW-31), `npm_config_store_dir` | `services.yaml` `extra_volumes` (`*host_mounts`) and `sandbox-install` |
-| npm, yarn, bun, nx, and non-JS toolchains (cargo, Go modules, pip/uv, Maven/Gradle) | not shared: each workspace downloads and builds cold | none |
+**How it works now:**
+- **A cache is a `caches:` entry:** a container `path`, the `env` that points the tool at it, the `detect` files that mean a repo uses it, and a `max_age` or `prune` rule. `turbo` and `pnpm-store` are built in; a repo's fragment may add more, so a new tool is a registry entry, not code.
+- **Attachment:** a service gets every cache whose `detect` file is in its directory or a parent up to its repo root, plus its archetype's `caches`. Its own `caches:` list replaces both, and `[]` opts out. Its setup service gets the union, so the install fills the store the apps read.
+- **Storage:** a shared named volume (`sandbox-<key>` unless `volume:` names one). `host:` is the explicit opt-out.
+- **Per workspace:** `ensureSharedVolumes()` creates only the volumes the workspace's generated compose marks `external`.
+- **Visible and bounded:** `werkmeister status` lists each cache's size and age; `werkmeister cache prune [name]` applies `max_age` or `prune`, and `--reset` empties a cache.
 
-**What goes wrong as more repos and tools arrive:**
-- **No generic shape.** A cache is a volume line plus one or two tool-specific env vars, repeated on every service that needs it (`TURBO_CACHE_DIR`, `npm_config_store_dir`, `YARN_CACHE_FOLDER`, `NX_CACHE_DIRECTORY`, `CARGO_HOME`, `GOMODCACHE`, `PIP_CACHE_DIR`, …). A repo that switches tools, or a new repo on a different stack, means hand-editing the registry and knowing each tool's variable.
-- **Host dir vs volume is decided case by case.** Bind mounts over the VM file share are slow (a warm pnpm install took 15.5 s from a host dir against 5.6 s from a volume; see *Docker Desktop VirtioFS File Sync Lag*), but a host dir is easy to inspect and delete. turbo uses a host dir and pnpm a volume, with no rule saying which to use.
-- **Eviction is per tool, or missing.** turbo evicts by age. The pnpm store volume grows until someone runs `pnpm store prune` or `docker volume rm sandbox-pnpm-store`. Nothing reports cache sizes (status shows CPU and memory since SW-41, not disk).
-- **Concurrency is per tool.** Several workspaces install at once into one shared cache. pnpm and Yarn 2+ write atomically; Yarn 1 needs `--mutex`; others vary.
-- **`ensureSharedVolumes()` creates every `^` volume the registry declares** on any workspace's `up`, even one whose services don't mount it. That's harmless (an empty volume, created once), but it shows caches aren't modelled per workspace.
-
-**Design direction (generic enough for tools that don't exist yet):**
-1. **Declare caches as data on the archetype**, not per service. An archetype such as `node-pnpm-turbo` or `rust-cargo` lists its caches, each with a `name`, a container `path`, the `env` that points the tool at it, an optional `max_age` or prune command, and an optional install flag such as Yarn 1's `--mutex`. Services keep `archetype: <name>` and inherit them. A new tool means a new archetype entry, not new code.
-2. **Infer the archetype where possible:** from lockfiles (`pnpm-lock.yaml`, `yarn.lock` plus `.yarnrc.yml`, `bun.lockb`, `Cargo.lock`, `go.sum`, `uv.lock`) and monorepo config (`turbo.json`, `nx.json`). An explicit `archetype:` still wins.
-3. **One storage rule:** shared caches live in shared named volumes (`^name`) by default, for speed. A host dir is an explicit opt-out for caches you want to inspect from the host.
-4. **Create only what a workspace mounts:** `ensureSharedVolumes()` should read the generated compose's `external` volumes, not the whole registry.
-5. **Make caches visible and bounded:** `werkmeister status` lists each shared cache's size and age. One `werkmeister cache prune [name]` runs each archetype's prune or age rule, so eviction isn't left to the person. <!-- docs-check: ignore -->
-
-Until this lands, adding a cache means copying the pnpm pattern by hand: a `^volume:/path` line in `extra_volumes` and the tool's env var, on every service and setup service that installs.
+**Still not covered:** install flags such as Yarn 1's `--mutex`, and yarn or bun installs in `sandbox-install`, which runs pnpm or npm only. The built-in fallback compose (used only when the template is missing) still renders no service `environment:`, so a cache's env applies through the template only.

@@ -218,6 +218,28 @@ test("each collision names both owners", () => {
   );
 });
 
+test("caches: built-ins merged, a fragment may add one but not redefine one, the overlay may", () => {
+  const yarn = { path: "/yarn-cache", detect: ["yarn.lock"] };
+  const out = merge([frag("demo", { caches: { "yarn-cache": yarn } })]);
+  assert.deepEqual(Object.keys(out.caches).sort(), ["pnpm-store", "turbo", "yarn-cache"]);
+  assert.deepEqual(out.caches["yarn-cache"], yarn);
+  assert.throws(
+    () => merge([frag("demo", { caches: { turbo: { path: "/t" } } })]),
+    /caches\.turbo.*both werkmeister and demo/,
+  );
+  assert.throws(
+    () =>
+      merge([
+        frag("a", { caches: { c: { path: "/c" } } }),
+        frag("b", { caches: { c: { path: "/c" } } }),
+      ]),
+    /caches\.c.*both a and b/,
+  );
+  const local = merge([], { caches: { turbo: { max_age: "7d" } } });
+  assert.equal(local.caches.turbo.max_age, "7d");
+  assert.equal(local.caches.turbo.path, "/turbo-cache");
+});
+
 test("the local overlay wins and may add top-level keys", () => {
   const out = merge(
     [frag("demo", { services: { backend: { memory_limit: "256M", environment: { A: "1" } } } })],
@@ -246,6 +268,7 @@ test("renderRegistry emits the marker, sources and the fixed key order", () => {
   assert.ok(text.includes("# Machine overrides: /home/dev/.sandbox/services.local.yaml"));
   assert.deepEqual(Object.keys(parse(text)), [
     "archetypes",
+    "caches",
     "mcp_servers",
     "k8s_context",
     "services",

@@ -17,9 +17,12 @@ import nunjucks from "nunjucks";
 import * as YAML from "yaml";
 
 import { candidateServiceNames } from "./archetypes.js";
+import { applyCaches } from "./build_caches.js";
 import { buildSandboxContextMd } from "./claude_md.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
+  type ArchetypeRegistry,
+  type CacheRegistry,
   containerOf,
   DEFAULT_CPUS,
   DEFAULT_SETUP_CPUS,
@@ -27,6 +30,8 @@ import {
   forDotDir,
   IDLE_SERVICE_TYPES,
   infraRoot,
+  loadArchetypes,
+  loadCaches,
   loadPorts,
   loadReposConfig,
   loadServices,
@@ -111,6 +116,8 @@ export interface RegistryConfig {
   services?: ServicesConfig;
   ports?: Record<string, unknown>;
   setup_services?: ServicesConfig;
+  archetypes?: ArchetypeRegistry;
+  caches?: CacheRegistry;
 }
 
 /**
@@ -514,8 +521,15 @@ function renderFeatureCompose(
   workspaceOverride: string | null,
   source: string,
 ): [outPath: string, content: string, kind: string] {
-  const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
+  const [registryServices, portsConfig] = resolveServicesAndPorts(config);
   const [workspaceRoot, outPath] = resolveComposeOutPath(feature, workspaceOverride);
+  const [servicesConfig, cachedSetups] = applyCaches(
+    registryServices,
+    config && "setup_services" in config ? (config["setup_services"] ?? {}) : loadSetupServices(),
+    config && "archetypes" in config ? (config["archetypes"] ?? {}) : loadArchetypes(),
+    config && "caches" in config ? (config["caches"] ?? {}) : loadCaches(),
+    workspaceRoot,
+  );
   const devLinks = loadDevLinks(workspaceRoot);
   const header = composeHeader(feature, source);
 
@@ -580,9 +594,7 @@ function renderFeatureCompose(
       );
       svcObjects.push(svcObj);
     }
-    // Load setup service configs
-    let setupConfigs: ServicesConfig =
-      config && "setup_services" in config ? (config["setup_services"] ?? {}) : loadSetupServices();
+    let setupConfigs: ServicesConfig = cachedSetups;
     // Copy + annotate each setup config with its worktree gitdir (if the
     // repo checkout is a linked worktree) so the template can mount it.
     setupConfigs = Object.fromEntries(

@@ -848,7 +848,7 @@ export async function initWorkspace(
       // inherited stdio. An in-process one owns no TTY (its stdout may be an
       // MCP transport), so capture and replay through the reporter instead.
       const live = passthrough();
-      ensureSharedVolumes();
+      ensureSharedVolumes(path.join(workspaceRoot, COMPOSE_FILE));
       const result = procRun(workspaceComposeArgv(feature, ["up", "--build", "--no-start"]), {
         cwd: workspaceRoot,
         ...(live ? { stdio: "inherit" as const } : { capture: true }),

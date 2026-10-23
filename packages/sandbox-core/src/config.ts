@@ -457,6 +457,8 @@ export interface ServiceEntry {
   path?: string;
   type?: string;
   archetype?: string;
+  /** Keys in `caches:`; replaces the archetype's and the detected ones (build_caches.ts). */
+  caches?: string[];
   /** Legacy form of `archetype:` — see archetypes.ts. */
   standards?: string[];
   test?: string;
@@ -494,7 +496,24 @@ export interface Archetype {
   mcp_servers?: string[];
   test?: string;
   validate?: string;
+  caches?: string[];
   [key: string]: unknown;
+}
+
+/** One entry under services.yaml `caches:` (SW-69); resolved in build_caches.ts. */
+export interface CacheEntry {
+  path: string;
+  env?: Record<string, string>;
+  detect?: string[];
+  /** Default `sandbox-<key>`. */
+  volume?: string;
+  /** Bind this host dir instead of a shared volume. */
+  host?: string;
+  /** `<N>d` */
+  max_age?: string;
+  prune?: string;
+  /** Default node:22. */
+  image?: string;
 }
 
 /** One entry under services.yaml `repos:`. */
@@ -521,6 +540,7 @@ export interface PortsConfig {
   [key: string]: unknown;
 }
 export type ArchetypeRegistry = Record<string, Archetype>;
+export type CacheRegistry = Record<string, CacheEntry>;
 export type ReposConfig = Record<string, RepoEntry>;
 
 /** Read `~/.sandbox/services.yaml` (whole document). Required — throws when absent. */
@@ -633,6 +653,12 @@ export function loadMcpServers(): Record<string, Record<string, unknown>> {
   return (data["mcp_servers"] ?? {}) as Record<string, Record<string, unknown>>;
 }
 
+/** Load the `caches:` registry; empty for a registry that predates SW-69. */
+export function loadCaches(): CacheRegistry {
+  const data = servicesDoc({ required: false });
+  return (data["caches"] ?? {}) as CacheRegistry;
+}
+
 /** Return a sorted list of all known service names. */
 export function getServiceNames(): string[] {
   return Object.keys(loadServices()).sort();
@@ -646,7 +672,7 @@ export function getServiceNames(): string[] {
 export const SHARED_VOLUME_MARKER = "^";
 
 /**
- * Split the registry's named volumes into per-feature base names and shared names.
+ * The registry's per-feature named volumes; shared (`^`) ones are skipped.
  *
  * Mirrors the volume collection in generateFeatureCompose() and
  * docker-compose.feature.yml.njk: every `node_modules_volume`, plus every
@@ -654,9 +680,8 @@ export const SHARED_VOLUME_MARKER = "^";
  * bind mount (a "/" marks a bind mount) — across both `services:` and
  * `setup_services:`.
  */
-function registryVolumeNames(): { bases: Set<string>; shared: Set<string> } {
+function registryVolumeBases(): Set<string> {
   const bases = new Set<string>();
-  const shared = new Set<string>();
   const collect = (defs: Record<string, unknown>): void => {
     for (const def of Object.values(defs)) {
       if (!isDict(def)) {
@@ -675,9 +700,7 @@ function registryVolumeNames(): { bases: Set<string>; shared: Set<string> } {
           continue;
         }
         const volName = spec.split(":")[0];
-        if (volName.startsWith(SHARED_VOLUME_MARKER)) {
-          shared.add(volName.slice(SHARED_VOLUME_MARKER.length));
-        } else if (volName && !volName.includes("/")) {
+        if (volName && !volName.startsWith(SHARED_VOLUME_MARKER) && !volName.includes("/")) {
           bases.add(volName);
         }
       }
@@ -685,7 +708,7 @@ function registryVolumeNames(): { bases: Set<string>; shared: Set<string> } {
   };
   collect(loadServices());
   collect(loadSetupServices());
-  return { bases, shared };
+  return bases;
 }
 
 /**
@@ -697,12 +720,7 @@ function registryVolumeNames(): { bases: Set<string>; shared: Set<string> } {
  * them: teardown must never treat one as a feature's.
  */
 export function getVolumeBaseNames(): string[] {
-  return [...registryVolumeNames().bases].sort();
-}
-
-/** The volumes every feature shares (`^name` in `extra_volumes`), sorted. */
-export function getSharedVolumeNames(): string[] {
-  return [...registryVolumeNames().shared].sort();
+  return [...registryVolumeBases()].sort();
 }
 
 // ---------------------------------------------------------------------------

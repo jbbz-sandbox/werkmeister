@@ -20,6 +20,11 @@
       "description": "Cluster datastores port-forwarded into the docker world by the k8s-forwards container. Never run locally.",
       "additionalProperties": { "$ref": "#/definitions/infrastructure" }
     },
+    "caches": {
+      "type": "object",
+      "description": "Build and package caches shared by every feature (SW-69). A service gets a cache when its repo holds one of the cache's `detect` files, when its archetype lists it, or when its own `caches:` names it. Names must be unique across all repos and the built-ins (pnpm-store, turbo).",
+      "additionalProperties": { "$ref": "#/definitions/cache" }
+    },
     "repo": {
       "type": "object",
       "description": "Settings for this repo as a whole; merged into `repos.<repo>` of the generated registry. Read by `sandbox pr` and `sandbox close-out` (docs/workspace-lifecycle.md).",
@@ -95,6 +100,12 @@
         "archetype": {
           "type": "string",
           "description": "Key in the registry's `archetypes:` (defaults: node-web, node-service, node-tool, mcp-client). Selects standards and MCP servers."
+        },
+        "caches": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Keys in the registry's `caches:`. Replaces the archetype's and the detected caches; `[]` mounts none."
         },
         "standards": {
           "type": "array",
@@ -209,6 +220,53 @@
           "description": "Network alias for the tunnel when it differs from the service name."
         }
       },
+      "additionalProperties": false
+    },
+    "cache": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "Mount point inside the container."
+        },
+        "env": {
+          "$ref": "#/definitions/environment",
+          "description": "Points the tool at `path`. A service's own `environment:` wins on a clash."
+        },
+        "detect": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "File names (e.g. pnpm-lock.yaml); the cache attaches when one is in the service's directory or a parent up to its repo root."
+        },
+        "volume": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$",
+          "description": "Shared named volume. Default `sandbox-<key>`."
+        },
+        "host": {
+          "type": "string",
+          "description": "Opt-out of the volume: bind this host dir at `path` instead."
+        },
+        "max_age": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*d$",
+          "description": "`werkmeister cache prune` deletes entries older than this many days, e.g. 14d."
+        },
+        "prune": {
+          "type": "string",
+          "description": "Tool-aware prune command, run by `werkmeister cache prune` in a throwaway container with the cache mounted."
+        },
+        "image": {
+          "type": "string",
+          "description": "Image for that throwaway container. Default node:22."
+        }
+      },
+      "allOf": [
+        { "not": { "required": ["volume", "host"] } },
+        { "not": { "required": ["max_age", "prune"] } }
+      ],
       "additionalProperties": false
     },
     "setupService": {

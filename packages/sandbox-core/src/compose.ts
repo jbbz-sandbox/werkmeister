@@ -13,7 +13,7 @@ import { parse as parseYaml } from "yaml";
 
 import { Colors } from "./colors.js";
 import { COMPOSE_FILE, findWorkspaceCompose } from "./compose_file.js";
-import { getSharedVolumeNames, resolveWorkspace } from "./config.js";
+import { resolveWorkspace } from "./config.js";
 import { containerLogs, docker, type ProjectContainer, projectContainers } from "./docker.js";
 import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
@@ -239,7 +239,7 @@ function composeCommand(
     return null;
   }
   if (args.includes("up")) {
-    ensureSharedVolumes();
+    ensureSharedVolumes(composePath);
   }
   const cmd = workspaceComposeArgv(feature, args, composePath);
   info(`Running: ${cmd.join(" ")}`);
@@ -247,16 +247,23 @@ function composeCommand(
 }
 
 /**
- * Create every shared (`^name`) volume the registry declares.
+ * Create the shared (`^name`) volumes *composePath* mounts — only those, so a
+ * workspace that uses no cache never creates one (SW-69).
  *
  * Generated compose marks them `external` so no feature's `down --volumes`
  * removes them, and compose will not start a project whose external volume is
  * missing. `docker volume create` leaves an existing volume as it is. A failure
  * only warns: compose's own error about the missing volume follows.
  */
-export function ensureSharedVolumes(): void {
+export function ensureSharedVolumes(composePath: string): void {
   try {
-    for (const name of getSharedVolumeNames()) {
+    const doc = parseYaml(fs.readFileSync(composePath, "utf8")) as {
+      volumes?: Record<string, { name?: string; external?: boolean } | null>;
+    } | null;
+    const external = Object.entries(doc?.volumes ?? {})
+      .filter(([, v]) => v?.external === true)
+      .map(([key, v]) => v?.name ?? key);
+    for (const name of external) {
       const result = run(["docker", "volume", "create", name], { capture: true });
       if (result.status !== 0) {
         warn(`Could not create shared volume '${name}': ${result.stderr.trim()}`);

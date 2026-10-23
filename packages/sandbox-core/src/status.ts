@@ -11,6 +11,7 @@
  * type rather than two that can drift apart.
  */
 
+import { type CacheSnapshot, cacheSnapshots } from "./build_caches.js";
 import { type ContainerStatus, getContainerStatus, isOneShotService } from "./compose.js";
 import { INFRA_PROJECT } from "./compose_infra.js";
 import { loadServices } from "./config.js";
@@ -232,6 +233,8 @@ export interface StatusSnapshot {
   mcp_web_server: WebServerStatus;
   k8s_forwards: ForwardStatus[];
   features: FeatureSnapshot[];
+  /** SW-69: the registry's build and package caches. */
+  caches: CacheSnapshot[];
   summary: {
     total_features: number;
     available_slots: number;
@@ -262,6 +265,8 @@ export async function featureVitals(): Promise<FeatureVitals> {
 /** Everything `sandbox status` knows, in one machine-readable read. */
 export async function statusSnapshot(): Promise<StatusSnapshot> {
   const vitals = featureVitals();
+  // A missing or old registry must not cost the rest of status.
+  const caches = cacheSnapshots().catch(() => []);
   const infra = await getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = await getAllSlots();
@@ -302,6 +307,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
     mcp_web_server: mcp,
     k8s_forwards: k8s,
     features,
+    caches: await caches,
     summary: {
       total_features: features.length,
       available_slots: slotCount() - features.length,
