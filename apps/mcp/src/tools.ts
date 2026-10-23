@@ -13,7 +13,7 @@
 import * as path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { closeOut } from "werkmeister-core";
+import { closeOut, resumeAndNudge } from "werkmeister-core";
 
 import { launchFeatureWindow, readWorkspaceYaml } from "werkmeister-core/browser";
 import { composeLogs } from "werkmeister-core/compose";
@@ -36,6 +36,7 @@ import { graduateNote } from "werkmeister-core/graduate";
 import { connectK8s, up as infraUp } from "werkmeister-core/infra";
 import {
   down,
+  pause,
   readServicesFromWorkspace,
   reloadProxy,
   removeService,
@@ -184,6 +185,36 @@ function registerLifecycleTools(server: McpServer): void {
       adapt(async () => ({
         ...(await stop(resolveFeature(args.workspace, headersOf(extra)).feature)),
       })),
+  );
+
+  server.registerTool(
+    "pause",
+    {
+      title: "Pause a workspace",
+      description:
+        "Pause a workspace: freeze its containers and hold its Claude session until resume.",
+      inputSchema: { ...WORKSPACE_ARG },
+    },
+    async (args, extra): Promise<CallToolResult> =>
+      adapt(async () => ({
+        ...(await pause(resolveFeature(args.workspace, headersOf(extra)).feature)),
+      })),
+  );
+
+  server.registerTool(
+    "resume",
+    {
+      title: "Resume a paused workspace",
+      description:
+        "Resume a paused workspace: thaw exactly the containers paused, release its Claude " +
+        "session, and tell it to continue if Pause cut a turn.",
+      inputSchema: { ...WORKSPACE_ARG },
+    },
+    async (args, extra): Promise<CallToolResult> =>
+      adapt(async () => {
+        const ws = resolveFeature(args.workspace, headersOf(extra));
+        return { ...(await resumeAndNudge(ws.name, ws.dir, ws.feature)) };
+      }),
   );
 
   server.registerTool(

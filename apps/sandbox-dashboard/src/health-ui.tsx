@@ -15,7 +15,7 @@ interface InfraService {
 }
 interface FeatureStatus {
   name: string;
-  state: "up" | "partial" | "stopped" | "down" | "unknown";
+  state: "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
   running: number;
   total: number;
   slot: number | null;
@@ -118,7 +118,7 @@ const POLL_MS = 5000;
 // (failing healthcheck), amber = warming up, gray = stopped/off.
 const SVC_DOT = { healthy: "ok", running: "ok", starting: "warn", unhealthy: "bad", down: "" };
 // up=green (good), partial=amber (degraded), stopped/down/unknown=gray (off).
-const FEATURE_DOT = { up: "ok", partial: "warn", stopped: "", down: "", unknown: "" };
+const FEATURE_DOT = { up: "ok", partial: "warn", stopped: "", paused: "", down: "", unknown: "" };
 
 function ServiceRow({ s, nested }: { s: InfraService; nested: boolean }) {
   return (

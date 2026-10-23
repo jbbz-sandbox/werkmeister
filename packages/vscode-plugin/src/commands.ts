@@ -46,7 +46,7 @@ async function pickWorkspace(node?: WsNode): Promise<{ name: string; path: strin
 }
 
 /** Lifecycle actions that map 1:1 onto a `sandbox <action>` subcommand. */
-const LIFECYCLE = ["up", "stop", "restart", "down"] as const;
+const LIFECYCLE = ["up", "stop", "restart", "down", "pause", "resume"] as const;
 
 /** Lazily created so it doesn't clutter the Output dropdown until something fails. */
 let outputChannel: vscode.OutputChannel | undefined;

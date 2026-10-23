@@ -33,6 +33,8 @@ export interface DisplayInput {
   lastActivity: string | null;
   /** SW-41; optional so a core older than it still renders. */
   started?: { at: string; by: string } | null;
+  /** SW-70; optional so a core older than it still renders. */
+  paused?: { at: string; containers: string[] } | null;
   crashLoops?: { service: string; restarts: number; lastLog: string | null }[];
 }
 
@@ -116,7 +118,11 @@ export interface WorkspaceDisplay {
     compact: string;
     pips: ("done" | "current" | "next")[];
   };
-  primary: { action: "continue" | "close-out" | "up"; label: string; destructive: boolean };
+  primary: {
+    action: "continue" | "close-out" | "up" | "resume";
+    label: string;
+    destructive: boolean;
+  };
 }
 
 const AGENT: Record<
@@ -134,6 +140,15 @@ const AGENT: Record<
   done: { glyph: "✓", word: "Done", tone: "ok", dot: "ok", codicon: "pass" },
   idle: { glyph: "", word: "Idle", tone: "off", dot: "off", codicon: "circle-outline" },
 };
+
+/** Overrides every agent state while Pause holds the session: its last state is not news. */
+const PAUSED = {
+  glyph: "⏸",
+  word: "Paused",
+  tone: "off",
+  dot: "off",
+  codicon: "debug-pause",
+} as const;
 
 const SERVICE: Record<ServiceHealth, { glyph: string; tone: Tone; word: string; codicon: string }> =
   {
@@ -181,6 +196,7 @@ function containers(ws: DisplayInput): Text {
   if (ws.state === "up") return { text: count, tone: "ok" };
   if (ws.state === "partial") return { text: count, tone: "warn" };
   if (ws.state === "stopped") return { text: count, tone: "off" };
+  if (ws.state === "paused") return { text: "paused", tone: "off" };
   if (ws.state === "down") return { text: "down", tone: "off" };
   return { text: "Docker unreachable", tone: "off" };
 }
@@ -263,6 +279,7 @@ function primary(
   where: string,
 ): WorkspaceDisplay["primary"] {
   const cont = { action: "continue", label: `↗ Continue in ${where}`, destructive: false } as const;
+  if (ws.paused) return { action: "resume", label: "▶ Resume", destructive: false };
   if (ws.claude.agent === "needs-you") return cont;
   if (lifecycle === "shipped")
     return { action: "close-out", label: "✓ Close out", destructive: true };
@@ -274,14 +291,14 @@ function primary(
 export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): WorkspaceDisplay {
   const now = opts.now ?? new Date();
   const lifecycle = opts.lifecycle ?? null;
-  const a = AGENT[ws.claude.agent];
-  const needs = ws.claude.agent === "needs-you";
+  const a = ws.paused ? PAUSED : AGENT[ws.claude.agent];
+  const needs = !ws.paused && ws.claude.agent === "needs-you";
   const withPr = (opts.prs ?? []).filter((p): p is PrInput & { url: string } => p.url !== null);
   return {
     agent: {
       ...a,
       label: a.glyph ? `${a.glyph} ${a.word}` : a.word,
-      time: agentTime(ws, now),
+      time: ws.paused ? `paused ${ago(ws.paused.at, now)}` : agentTime(ws, now),
     },
     needs,
     question: needs ? ws.claude.question : null,

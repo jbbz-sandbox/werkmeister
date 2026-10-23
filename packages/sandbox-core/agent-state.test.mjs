@@ -2,6 +2,7 @@
 // state file Claude Code hooks write, else from the transcript tail.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -204,4 +205,70 @@ test("hooks: outside a workspace, or on junk input, nothing is written", () => {
   const dir = workspace("i-junk", null);
   assert.equal(record({ hook_event_name: "SubagentStop", cwd: dir }), null);
   assert.equal(readAgentState(dir), null);
+});
+
+// SW-70: while `paused.json` exists the same hook holds the session.
+const { pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import("./dist/agent_state.js");
+
+test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, the rest pass", () => {
+  const dir = workspace("j-gate", null);
+  for (const e of ["PreToolUse", "UserPromptSubmit", "Stop"])
+    assert.equal(pauseGate({ hook_event_name: e }, dir), null, `${e} with no marker`);
+  writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: true });
+  const pre = pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir);
+  assert.equal(pre.continue, false);
+  assert.equal(pre.stopReason, PAUSED_REASON);
+  assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
+  assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
+  for (const e of ["PostToolUse", "Notification", "Stop", "SessionEnd"])
+    assert.equal(pauseGate({ hook_event_name: e }, dir), null, e);
+});
+
+/** Run the hook entrypoint as Claude Code does: the event on stdin, the gate on stdout. */
+function hook(event) {
+  const entry = new URL("./dist/agent_state.js", import.meta.url).href;
+  const r = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", `import { main } from "${entry}"; main();`],
+    { input: JSON.stringify(event), encoding: "utf8" },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  return r.stdout.trim() ? JSON.parse(r.stdout) : null;
+}
+
+test("pause gate: the hook entry prints it from the code worktree and records nothing", () => {
+  const dir = workspace("k-main", null);
+  const cwd = path.join(dir, "sandbox", "apps");
+  fs.mkdirSync(cwd, { recursive: true });
+  const before = JSON.stringify({ state: "done", at: "2026-10-22T09:00:00.000Z" });
+  write(path.join(dir, ".werkmeister", "agent-state.json"), before);
+  writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
+  assert.equal(hook({ hook_event_name: "PreToolUse", tool_name: "Edit", cwd }).continue, false);
+  assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd }).decision, "block");
+  assert.equal(
+    fs.readFileSync(path.join(dir, ".werkmeister", "agent-state.json"), "utf8"),
+    before,
+    "a blocked call must not read as working",
+  );
+});
+
+test("pause gate: an unblocked prompt clears a stale resume nudge", () => {
+  const dir = workspace("l-nudge", null);
+  writeNudge(dir, "continue");
+  assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir }), null);
+  assert.equal(fs.existsSync(path.join(dir, ".werkmeister", "resume-nudge.json")), false);
+  assert.equal(readAgentState(dir).state, "working");
+});
+
+test("status: a paused workspace reports when, what Resume brings back, and a pending nudge", async () => {
+  const dir = workspace("m-status", null);
+  writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: ["m-api"], was_working: true });
+  writeNudge(dir, "continue");
+  const s = (await getWorkspaceStatuses()).statuses.find((w) => w.name === "m-status");
+  assert.deepEqual(s.paused, { at: "2026-10-22T10:00:00.000Z", containers: ["m-api"] });
+  assert.equal(s.resumeNudge, true);
+  // "unknown" when this machine has no reachable daemon: the record can't say more than docker.
+  assert.ok(["paused", "unknown"].includes(s.state), s.state);
+  const other = (await getWorkspaceStatuses()).statuses.find((w) => w.name === "j-gate");
+  assert.equal(other.resumeNudge, false);
 });
