@@ -61,7 +61,7 @@ Parse `WORKSPACE_PATH` from the output. All subsequent file operations and test 
 sandbox connect
 ```
 
-This is idempotent — safe to run even if infra is already up. It starts Caddy, Jaeger, RedisInsight, and the k8s port-forwards.
+This is idempotent — safe to run even if infra is already up. It starts Caddy and the k8s port-forwards, plus Jaeger and RedisInsight when `infra.profiles` in `~/.werkmeister/config.yaml` enables them.
 
 ### Step 4 — Start feature containers
 

@@ -129,8 +129,10 @@ Each feature slot (1–12) gets a port range. Deterministic, no collisions.
 
 | Service | Docker DNS | Port |
 |---------|-----------|------|
-| Jaeger (tracing UI) | `jaeger` | 16686 |
-| RedisInsight | `redisinsight` | 5540 |
+| Jaeger (tracing UI), opt-in | `jaeger` | 16686 |
+| RedisInsight, opt-in | `redisinsight` | 5540 |
+
+Jaeger and RedisInsight start only when `infra.profiles` in `~/.werkmeister/config.yaml` names them (see [third-party.md](third-party.md#optional-integrations)).
 
 Redis and Postgres themselves run in the k8s cluster and are reached through the
 forward table above, not as compose services. The containers listed here are defined
@@ -216,7 +218,7 @@ werkmeister remove <feature> <svc> # stop a local service, fall back to k8s
 werkmeister test <feature>       # run Playwright against this feature's stack
 
 # Infrastructure
-werkmeister up infra             # start shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy)
+werkmeister up infra             # start shared infrastructure (k8s-forwards, caddy; jaeger, redisinsight if enabled)
 werkmeister status --k8s         # check k8s-forwards container health
 werkmeister proxy-reload         # regenerate Caddyfile and reload Caddy
 ```
@@ -393,8 +395,8 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 │   ├── main.ts
 │   └── commands/                       # one module per command (up.ts, down.ts, ...)
 ├── apps/cli/infra/compose/             # Docker Compose files
-│   ├── shared-infra.yml                # Shared infrastructure (jaeger, redisinsight,
-│   │                                   #   k8s-forwards, caddy)
+│   ├── shared-infra.yml                # Shared infrastructure (k8s-forwards, caddy,
+│   │                                   #   opt-in jaeger, redisinsight)
 │   └── k8s-port-forward/               # Containerized k8s port-forwards
 │       ├── Dockerfile                  # Based on alpine (kubectl only)
 │       ├── entrypoint.sh              # Port-forward supervisor script

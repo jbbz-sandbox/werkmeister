@@ -1,8 +1,8 @@
 /**
  * sandbox connect
  *
- * Start all shared infrastructure: the k8s port-forwards (redis, postgres),
- * caddy, jaeger, and redisinsight.
+ * Start shared infrastructure: the k8s port-forwards (redis, postgres) and
+ * caddy, plus jaeger and redisinsight when `infra.profiles` turns them on.
  *
  * The work is `werkmeister-core/infra`; what is left here is the banners, the health
  * table and the developer-tools block. The three `tools.local.sandbox.com` URLs
@@ -114,12 +114,18 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log();
   console.log(`  ${Colors.BOLD}Developer tools:${Colors.RESET}`);
-  console.log(
-    `    ${Colors.CYAN}RedisInsight:${Colors.RESET}  https://tools.local.sandbox.com/redisinsight`,
-  );
-  console.log(
-    `    ${Colors.CYAN}Jaeger:${Colors.RESET}        https://tools.local.sandbox.com/jaeger`,
-  );
+  // Opt-in (SW-76): link only what came up, whether by config or COMPOSE_PROFILES.
+  const off: string[] = [];
+  if ("redisinsight" in health) {
+    console.log(
+      `    ${Colors.CYAN}RedisInsight:${Colors.RESET}  https://tools.local.sandbox.com/redisinsight`,
+    );
+  } else off.push("RedisInsight");
+  if ("jaeger" in health) {
+    console.log(
+      `    ${Colors.CYAN}Jaeger:${Colors.RESET}        https://tools.local.sandbox.com/jaeger`,
+    );
+  } else off.push("Jaeger");
   console.log(
     `    ${Colors.CYAN}GraphQL:${Colors.RESET}       https://tools.local.sandbox.com/graphql`,
   );
@@ -136,5 +142,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(
     `    ${Colors.CYAN}MCP server:${Colors.RESET}    ${mcp.url}mcp  (bearer token in ~/.sandbox/mcp-token)${mcpState}`,
   );
+  if (off.length) {
+    console.log(
+      `    ${Colors.DIM}${off.join(", ")}: off — add to infra.profiles in ~/.werkmeister/config.yaml${Colors.RESET}`,
+    );
+  }
   console.log();
 }
