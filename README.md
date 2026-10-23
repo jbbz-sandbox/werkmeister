@@ -112,7 +112,8 @@ that needs Xcode's tools.
 The package is a single esbuild bundle plus `infra/` — the templates, compose
 files, proxy UI and skills the CLI reads at runtime. `werkmeister-core` and the
 CLI's other libraries are bundled in, so the only dependencies npm resolves are
-`dockerode` and `@anthropic-ai/claude-agent-sdk`. `werkmeister setup` still seeds `~/.werkmeister` exactly as it does from a
+`dockerode` and, optionally, `@anthropic-ai/claude-agent-sdk` (only `detect --assist` uses it;
+without it the command prints how to install it). `werkmeister setup` still seeds `~/.werkmeister` exactly as it does from a
 checkout, which is what makes the two installs interchangeable. The MCP server
 (`apps/werkmeister-mcp`, every tool) is bundled in too, as `dist/mcp.js`: `werkmeister mcp`,
 `werkmeister connect`'s MCP server on 3002 and the `werkmeister` plugin's MCP
