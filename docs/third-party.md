@@ -72,7 +72,7 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 | … docker-modem 5.0.7 | | Apache-2.0 | dockerode transport |
 | … @grpc/grpc-js 1.14.5, protobufjs | | Apache-2.0, BSD-3-Clause | dockerode's BuildKit session |
 | … ssh2 1.17.0, cpu-features 0.0.10 (optional) | | MIT | dockerode's `ssh://` hosts |
-| @anthropic-ai/claude-agent-sdk | ^0.3.288 → 0.3.288 | none (Anthropic Commercial Terms) | `detect --assist` only, loaded lazily (`apps/cli/src/lib/assist_resolver.ts`). Pulls a ~240 MB `claude-agent-sdk-<platform>` binary package and peer `@anthropic-ai/sdk` (MIT). See [Terms that need attention](#terms-that-need-attention) |
+| @anthropic-ai/claude-agent-sdk | ^0.3.288 → 0.3.288 | none (Anthropic Commercial Terms) | `detect --assist` only, an `optionalDependency` loaded lazily (`apps/cli/src/lib/assist_resolver.ts`); `detect --assist` prints the install command when it is absent. Pulls a ~240 MB `claude-agent-sdk-<platform>` binary package and peer `@anthropic-ai/sdk` (MIT). See [Terms that need attention](#terms-that-need-attention) |
 
 ### Dev and build tooling
 
@@ -185,7 +185,7 @@ Werkmeister runs without each of these. The person turns one on.
 
 | Item | Finding | Recommendation |
 |---|---|---|
-| `@anthropic-ai/claude-agent-sdk` | Not an OSI licence: "SEE LICENSE IN README.md" → Anthropic Commercial Terms. The platform package says "© Anthropic PBC. All rights reserved". Werkmeister doesn't redistribute it: esbuild keeps it external, and the user's npm fetches it from the registry under Anthropic's terms | Never bundle it. Move it to `optionalDependencies` so every install isn't charged ~240 MB for a flag few people use, and have `detect --assist` say how to install it when it's absent (follow-up 1) |
+| `@anthropic-ai/claude-agent-sdk` | Not an OSI licence: "SEE LICENSE IN README.md" → Anthropic Commercial Terms. The platform package says "© Anthropic PBC. All rights reserved". Werkmeister doesn't redistribute it: esbuild keeps it external, and the user's npm fetches it from the registry under Anthropic's terms | Never bundle it. Done (SW-73): it is an `optionalDependency`, so an install can skip it (`--omit=optional`) or survive its failure, and `detect --assist` says how to install it when it's absent |
 | Redis Insight image | SSPL-1.0, not OSI. Pulled, not redistributed. SSPL's obligations bite when you offer the software as a service, which local use doesn't do. But it starts for everyone with no off switch | Make it opt-in, e.g. a compose profile (follow-up 4) |
 | `infra/compose/scripts/otel-init.bundle.js` | A 2.6 MB third-party bundle (OpenTelemetry JS and @grpc/grpc-js, Apache-2.0; protobufjs, BSD-3-Clause; yaml, ISC; …) published in the npm package. Its source (`apps/otel-init`) is gone and nothing references the file | Delete it, or restore its source and ship its licence texts (follow-up 3) <!-- docs-check: ignore --> |
 | The .vsix | redistributes Apache-2.0, BSD and MIT code with no licence texts (vsce: "LICENSE not found") | Ship LICENSE and generated third-party licences in the .vsix (follow-up 2) |
@@ -212,7 +212,7 @@ At 0.22.0: build `apps/cli` (`npm run build`), run `npm pack --dry-run`, and com
 
 ## Follow-ups
 
-1. Move `@anthropic-ai/claude-agent-sdk` to `optionalDependencies`, with a clear install hint from `detect --assist`.
+1. ~~Move `@anthropic-ai/claude-agent-sdk` to `optionalDependencies`, with a clear install hint from `detect --assist`.~~ Done in SW-73.
 2. Ship LICENSE and third-party licence texts in the .vsix.
 3. Remove `infra/compose/scripts/otel-init.bundle.js`, or restore its source and licences.
 4. Make Redis Insight (SSPL-1.0), and perhaps Jaeger, opt-in in shared infra.

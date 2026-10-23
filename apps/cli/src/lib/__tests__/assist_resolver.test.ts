@@ -1,7 +1,24 @@
 /** The Claude pass's SDK options: isolated from every on-disk setting, plugin and MCP server. Never calls the SDK. */
 import { describe, expect, it } from "vitest";
 
-import { assistOptions } from "../assist_resolver.js";
+import { assistOptions, SdkMissingError, sdkLoadError } from "../assist_resolver.js";
+
+const notInstalled = Object.assign(new Error("Cannot find package"), {
+  code: "ERR_MODULE_NOT_FOUND",
+});
+
+describe("sdkLoadError", () => {
+  it("turns a missing SDK into an SdkMissingError with the install command", () => {
+    const err = sdkLoadError(notInstalled);
+    expect(err).toBeInstanceOf(SdkMissingError);
+    expect((err as Error).message).toContain("npm install -g @anthropic-ai/claude-agent-sdk");
+  });
+
+  it("lets any other load failure through untouched", () => {
+    const broken = new Error("SyntaxError in sdk");
+    expect(sdkLoadError(broken)).toBe(broken);
+  });
+});
 
 describe("assistOptions", () => {
   const o = assistOptions("/repos/shop");
