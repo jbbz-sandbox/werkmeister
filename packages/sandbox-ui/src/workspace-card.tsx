@@ -22,6 +22,8 @@ export type CardAction =
   | "stop"
   | "restart"
   | "down"
+  | "pause"
+  | "resume"
   | "refresh-prs"
   | "open-feature"
   | "open-issue"
@@ -66,6 +68,7 @@ const UP: Btn = { label: "▶ Up", action: "up" };
 const STOP: Btn = { label: "■ Stop", action: "stop" };
 const RESTART: Btn = { label: "↻ Restart", action: "restart" };
 const DOWN: Btn = { label: "⏻ Down", action: "down" };
+const PAUSE: Btn = { label: "⏸ Pause", action: "pause" };
 const PANELS: Btn[] = [
   { label: "Chat", action: "chat" },
   { label: "Usage", action: "usage" },
@@ -85,15 +88,19 @@ export function barFor(
 ): { secondary: Btn[]; extra: Btn[] } {
   const primary = d.primary.action;
   const running = state === "up" || state === "partial";
+  // Paused: Resume is the primary; Stop and Down stay to hand the memory back too (SW-70).
   const secondary =
-    primary === "close-out"
-      ? [RESTART, DOWN]
-      : running
-        ? [STOP, RESTART]
-        : [...[UP, CONTINUE].filter((b) => b.action !== primary), NEW_SESSION];
+    primary === "resume"
+      ? [STOP, DOWN]
+      : primary === "close-out"
+        ? [RESTART, DOWN]
+        : running
+          ? [STOP, PAUSE]
+          : [...[UP, CONTINUE].filter((b) => b.action !== primary), NEW_SESSION];
   const shown = new Set<CardAction>([primary, ...secondary.map((b) => b.action)]);
-  const extra = [CONTINUE, CONTINUE_DESKTOP, DOWN, NEW_SESSION].filter(
-    (b) => !shown.has(b.action) && (b !== DOWN || running),
+  const whileRunning = new Set<Btn>([DOWN, RESTART, PAUSE]);
+  const extra = [CONTINUE, CONTINUE_DESKTOP, RESTART, PAUSE, DOWN, NEW_SESSION].filter(
+    (b) => !shown.has(b.action) && (!whileRunning.has(b) || running),
   );
   return { secondary, extra: [...extra, ...PANELS] };
 }
@@ -114,6 +121,8 @@ const TOOLS: Partial<Record<CardAction, { tool: string; verb: string }>> = {
   stop: { tool: "stop", verb: "Stopping" },
   restart: { tool: "restart", verb: "Restarting" },
   down: { tool: "down", verb: "Tearing down" },
+  pause: { tool: "pause", verb: "Pausing" },
+  resume: { tool: "resume", verb: "Resuming" },
   "open-feature": { tool: "open-feature", verb: "Opening" },
   "open-vscode": { tool: "open-workspace", verb: "Opening" },
   "close-out": { tool: "close-out", verb: "Closing out" },

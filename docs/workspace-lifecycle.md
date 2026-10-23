@@ -166,6 +166,7 @@ Before it reports, it ships merged PRs: for each kept workspace with a `merged` 
 | `workspaces[].lifecycle` | the workspace's [state](#states), read after that pass |
 | `workspaces[].prs[]` | one per PR file: `repo` (its worktree dir), `url`, `status`, `release` (the tag that shipped it, or null) |
 | `readyToClose` | lifecycle `shipped` or `abandoned` and no Claude turn working. Listed whether or not the transcript moved, and never also in `candidates`. A workspace the label filter dropped is not listed. |
+| `workspaces[].paused` | true while the workspace is [paused](#pause-and-resume). A paused workspace is never in `candidates` or `readyToClose`. |
 
 The skill asks the person before `werkmeister close-out` ([Close-out](#close-out)).
 
@@ -185,6 +186,24 @@ Every PR callback pass (the werkmeister mod's 10-minute timer and `werkmeister p
 A `docker exec` typed by hand in a terminal outside Claude is not seen.
 
 `auto_stop` (a SessionEnd hook, `werkmeister stop --if-idle`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
+
+## Pause and resume
+
+`⏸ Pause` on a card (or `werkmeister pause`, the `pause` MCP tool) takes a workspace's load off the host without losing its place (SW-70):
+
+- It writes `.werkmeister/paused.json`: when, the containers that were running, and whether the agent was mid-turn.
+- While that file exists, the agent-state hook ends the session's turn at its next tool call and blocks new prompts, from the person or from claude-send, PR callbacks and check-in. A tool call already running finishes first.
+- It then runs `docker pause` on each of those containers, `<feature>-sandbox-install` included. CPU is freed at once; memory is kept.
+
+`▶ Resume` (`werkmeister resume`, `resume`) unpauses exactly the recorded containers, starts any that were stopped meanwhile (■ Stop or the idle reaper), and deletes the record. When Pause cut a working turn it also tells the session `Workspace resumed by the person. Continue where you left off.`:
+
+| Session | How it continues |
+|---|---|
+| no live `claude` process (headless runs) | sent through claude-send |
+| a live Desktop session | the Workspaces pane sends it within one poll |
+| a live terminal or VS Code session | not sent; say "continue" there |
+
+`up` and `restart` refuse while a workspace is paused. `stop` keeps the pause. `down` ends it.
 
 ## Issue status
 

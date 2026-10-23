@@ -650,12 +650,12 @@ test("the bar is the primary plus two by state, and ⋯ the rest in ui-spec orde
       requestId: "workspaces",
     });
     expect((await ui.find({ key: "continue:ab" }))?.props.variant).toBe("primary");
-    for (const k of ["stop:ab", "restart:ab", "more:ab"])
+    for (const k of ["stop:ab", "pause:ab", "more:ab"])
       expect(await ui.find({ key: k })).toBeDefined();
     expect(await ui.find({ key: "down:ab" })).toBeUndefined();
     await ui.press({ key: "more:ab" });
     expect((await ui.find({ key: "menu:ab" }))?.text).toBe(
-      "⏻ Down＋ New session↻ Refresh PRsOpen issue ↗✓ Close out✕ Abandon…",
+      "↻ Restart⏻ Down＋ New session↻ Refresh PRsOpen issue ↗✓ Close out✕ Abandon…",
     );
     await ui.press({ key: "more:ab" });
     expect(await ui.find({ key: "menu:ab" })).toBeUndefined();
@@ -695,6 +695,8 @@ function sample(over: Partial<WorkspaceRow>): WorkspaceRow {
     project: "sandbox-s",
     started: null,
     crashLoops: [],
+    paused: null,
+    resumeNudge: false,
     session: null,
     ...over,
   };
@@ -760,8 +762,8 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     chip: "◌ Working",
     line: "containers 2 of 2 up · PRs stellwerk#231 Open · CI running · stage 4/5 implement",
     primary: "continue",
-    bar: ["stop", "restart"],
-    menu: ["down", "new", "prs", "issue", "abandon"],
+    bar: ["stop", "pause"],
+    menu: ["restart", "down", "new", "prs", "issue", "abandon"],
   });
   // 151: done, one service unhealthy, the PR released: Close out leads, Down replaces Stop.
   expect(
@@ -780,6 +782,23 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     line: "containers 1 of 2 up · PRs stellwerk#186 Merged · CI ✓ · Ready to close out",
     primary: "closeout",
     bar: ["restart", "down"],
+    menu: ["continue", "pause", "new", "beside", "pin", "prs", "issue", "abandon"],
+  });
+  // SW-70: paused overrides Needs you; Resume leads, Stop and Down beside it, nothing that would run them.
+  expect(
+    card(
+      sample({
+        state: "paused",
+        claude: { agent: "needs-you", at: null, question: "Q?" },
+        paused: { at: "2026-10-20T11:48:00Z", containers: ["s-api"] },
+        session: DESKTOP,
+      }),
+    ),
+  ).toEqual({
+    chip: "⏸ Paused",
+    line: "containers paused · PRs None yet",
+    primary: "resume",
+    bar: ["stop", "down"],
     menu: ["continue", "new", "beside", "pin", "prs", "issue", "abandon"],
   });
   // bwell: idle, no containers, no issue, JIT, an open PR failing CI: Up leads, Continue beside it.
@@ -832,6 +851,79 @@ test("a lifecycle press calls workspace-action and refreshes", async ($, on) => 
   expect(w.calls.filter((c) => c.key === `${WS}/list-workspaces`).length).toBe(before + 1);
   expect((await ui.find({ key: "note" }))?.text).toBe("sandbox stop");
   await ui.unmount();
+});
+
+test("Pause and Resume run workspace-action like the other lifecycle verbs (SW-70)", async ($, on) => {
+  const paused = {
+    ...STATUS,
+    statuses: STATUS.statuses.map((s) =>
+      s.name === "abc"
+        ? { ...s, state: "paused", paused: { at: "2026-10-20T11:00:00Z", containers: [] } }
+        : s,
+    ),
+  };
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/workspace-status`]: () => ok(paused),
+      [`${WS}/workspace-action`]: (a) =>
+        ok({ command: `sandbox ${a.action}`, output: "done", path: "/ws/ab" }),
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "resume:abc" }))?.props.variant).toBe("primary");
+  await tap(ui, "pause:ab");
+  await tap(ui, "resume:abc");
+  expect(w.calls.filter((c) => c.key === `${WS}/workspace-action`).map((c) => c.args)).toEqual([
+    { name: "ab", action: "pause" },
+    { name: "abc", action: "resume" },
+  ]);
+  await ui.unmount();
+});
+
+test("a pending Resume nudge is claimed and sent to the workspace's Desktop session, once", async ($, on) => {
+  const nudged = {
+    ...STATUS,
+    // ab has no Desktop session: its nudge waits for the session's own next prompt.
+    statuses: STATUS.statuses.map((s) => ({ ...s, resumeNudge: s.name !== "empty" })),
+  };
+  let pending = true;
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/workspace-status`]: () => ok(nudged),
+      [`${WS}/claim-resume-nudge`]: () => {
+        const message = pending
+          ? "Workspace resumed by the person. Continue where you left off."
+          : null;
+        pending = false;
+        return ok({ message });
+      },
+      "ccd_session_mgmt/get_session": () =>
+        ok(undefined, JSON.stringify({ sessionId: "local_me" })),
+      "ccd_session_mgmt/send_message": () =>
+        ok(undefined, "Message delivered. (delivery: delivered; message_id: m1)"),
+    }),
+  );
+  await openPane($);
+  await w.clock.advance(5000);
+  const claims = w.calls.filter((c) => c.key === `${WS}/claim-resume-nudge`);
+  expect(claims.every((c) => c.args.name === "abc")).toBe(true);
+  expect(
+    w.calls.filter((c) => c.key === "ccd_session_mgmt/send_message").map((c) => c.args),
+  ).toEqual([
+    {
+      session_id: "local_1",
+      message: "Workspace resumed by the person. Continue where you left off.",
+    },
+  ]);
 });
 
 test("press while busy is ignored", async ($, on) => {

@@ -78,7 +78,19 @@
         "command": "sandbox.stop",
         "title": "■ Stop",
         "category": "Sandbox",
+        "icon": "$(primitive-square)"
+      },
+      {
+        "command": "sandbox.pause",
+        "title": "⏸ Pause",
+        "category": "Sandbox",
         "icon": "$(debug-pause)"
+      },
+      {
+        "command": "sandbox.resume",
+        "title": "▶ Resume",
+        "category": "Sandbox",
+        "icon": "$(debug-continue)"
       },
       {
         "command": "sandbox.restart",
@@ -232,6 +244,16 @@
           "group": "inline@3"
         },
         {
+          "command": "sandbox.pause",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)(:|$)/",
+          "group": "inline@4"
+        },
+        {
+          "command": "sandbox.resume",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:paused(:|$)/",
+          "group": "inline@3"
+        },
+        {
           "command": "sandbox.toggleIntercept",
           "when": "view == sandboxWorkspaces && viewItem =~ /^service:(interceptable|intercepted-mine)$/",
           "group": "inline@1"
@@ -270,6 +292,16 @@
           "command": "sandbox.down",
           "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
           "group": "1_lifecycle@4"
+        },
+        {
+          "command": "sandbox.pause",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@5"
+        },
+        {
+          "command": "sandbox.resume",
+          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "group": "1_lifecycle@6"
         },
         {
           "command": "sandbox.newSession",

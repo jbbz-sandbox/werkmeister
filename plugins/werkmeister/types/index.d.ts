@@ -1,4 +1,4 @@
-export type WorkspaceState = "up" | "partial" | "stopped" | "down" | "unknown";
+export type WorkspaceState = "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
 
 export type WorkspaceRow = {
   name: string;
@@ -49,6 +49,10 @@ export type WorkspaceRow = {
   started: { at: string; by: "up" | "gate" | "restart" | "person" } | null;
   /** Containers restarting under their restart policy, with their last log line. */
   crashLoops: { service: string; restarts: number; lastLog: string | null }[];
+  /** Held by Pause (SW-70): when, and the containers Resume brings back; null when not paused. */
+  paused: { at: string; containers: string[] } | null;
+  /** Resume left a "continue" for this workspace's live session, for the pane to send. */
+  resumeNudge: boolean;
   /** The desktop-app session whose cwd lies in this workspace. */
   /** `beside`: this session started it, so the app will open it in split view next to this one. */
   /** `pinned`: the session is pinned in the app's sidebar. */
