@@ -11,7 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { composeInvocation } from "./dist/compose_infra.js";
+import { parse as parseYaml } from "yaml";
+
+import { composeInvocation, infraProfiles } from "./dist/compose_infra.js";
 import { infraRoot, stateInfraRoot } from "./dist/config.js";
 
 const VARS = [
@@ -97,4 +99,49 @@ test("leaves an existing override alone", async () => {
   await writeFile(override, "services: {}\n# sentinel\n");
   composeInvocation();
   assert.match(readFileSync(override, "utf8"), /sentinel/);
+});
+
+// SW-76: jaeger and redisinsight sit behind compose profiles that config.yaml's
+// `infra.profiles` turns on. The profiles follow `-p` so argv[3] stays the file.
+test("no infra.profiles adds no --profile", () => {
+  assert.ok(!composeInvocation().argv.includes("--profile"));
+});
+
+test("infra.profiles becomes one --profile per name, after -p", async () => {
+  await writeFile(process.env.SANDBOX_CONFIG_FILE, "infra:\n  profiles: [redisinsight, jaeger]\n");
+  const { argv } = composeInvocation();
+  assert.equal(argv[3], path.join(infraRoot(), "compose", "shared-infra.yml"));
+  assert.deepEqual(argv.slice(-6), [
+    "-p",
+    "sandbox-infra",
+    "--profile",
+    "redisinsight",
+    "--profile",
+    "jaeger",
+  ]);
+});
+
+test("a malformed infra.profiles reads as none", async () => {
+  for (const yaml of [
+    "infra:\n  profiles: redisinsight\n",
+    "infra:\n  profiles: {redisinsight: true}\n",
+    "infra: redisinsight\n",
+    "infra:\n",
+  ]) {
+    await writeFile(process.env.SANDBOX_CONFIG_FILE, yaml);
+    assert.deepEqual(infraProfiles(), [], yaml);
+  }
+  await writeFile(process.env.SANDBOX_CONFIG_FILE, 'infra:\n  profiles: [1, "", jaeger]\n');
+  assert.deepEqual(infraProfiles(), ["jaeger"]);
+});
+
+test("the shipped file puts only jaeger and redisinsight behind a profile, each its own", () => {
+  const file = path.join(infraRoot(), "compose", "shared-infra.yml");
+  const { services } = parseYaml(readFileSync(file, "utf8"));
+  const profiled = Object.fromEntries(
+    Object.entries(services)
+      .filter(([, def]) => def.profiles)
+      .map(([name, def]) => [name, def.profiles]),
+  );
+  assert.deepEqual(profiled, { jaeger: ["jaeger"], redisinsight: ["redisinsight"] });
 });

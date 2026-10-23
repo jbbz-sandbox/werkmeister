@@ -30,6 +30,7 @@ import {
   loadConfigFile,
   loadSandboxServiceConfigs,
 } from "../workspace_prompts.js";
+import { stageDecisions } from "./icm_decisions.js";
 import { type IcmVars, SELF_CHECK, type Stage, templateFor } from "./icm_templates.js";
 import { renderIssueRef } from "./issue_section.js";
 import type { ContextStrategy, InitContext } from "./types.js";
@@ -495,4 +496,5 @@ export const icm: ContextStrategy = {
   sessionContext: () => null,
   gate() {},
   ownedPaths: () => ["CLAUDE.md", "CONTEXT.md", "BRIEF.md", "_shared", "stages"],
+  decisions: stageDecisions,
 };

@@ -20,7 +20,7 @@ import { jit } from "./jit.js";
 import type { ContextStrategy, StrategyId } from "./types.js";
 import { STRATEGY_IDS } from "./types.js";
 
-export type { ContextStrategy, InitContext, StrategyId } from "./types.js";
+export type { ContextStrategy, DecisionSource, InitContext, StrategyId } from "./types.js";
 export { STRATEGY_IDS } from "./types.js";
 
 const REGISTRY: Record<StrategyId, ContextStrategy> = { jit, icm };

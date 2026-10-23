@@ -556,13 +556,17 @@ function registerAuthoringTools(server: McpServer): void {
       title: "Read or graduate a workspace's notes",
       description:
         "`context` renders the session-start standards + notes block. `list` returns the " +
-        "workspace's notes. `graduate` scaffolds a decision note into a standards domain — " +
+        "workspace's notes and its open `decisions` (icm reads them from stage outputs). " +
+        "`graduate` scaffolds one of those decisions into a standards domain — " +
         "domain and kind must be supplied, because the CLI's prompts are not available here.",
       inputSchema: {
         ...WORKSPACE_ARG,
         action: z.enum(["context", "list", "graduate"]),
         includeSuperseded: z.boolean().optional().describe("list: include superseded notes."),
-        notePath: z.string().optional().describe("graduate: absolute path of the decision note."),
+        notePath: z
+          .string()
+          .optional()
+          .describe("graduate: the decision's `path` as `list` returns it."),
         domain: z.string().optional().describe("graduate: standards domain to scaffold into."),
         kind: z
           .enum(["rule", "example", "anti-pattern"])
@@ -579,8 +583,12 @@ function registerAuthoringTools(server: McpServer): void {
             context: strategyFor(workspace).sessionContext(workspace, { source: "mcp" }) ?? "",
           };
         }
+        const { decisions } = strategyFor(workspace);
         if (args.action === "list") {
-          return { notes: listNotes(workspace, args.includeSuperseded ?? false) };
+          return {
+            notes: listNotes(workspace, args.includeSuperseded ?? false),
+            decisions: decisions.open(workspace),
+          };
         }
         if (!args.notePath || !args.domain || !args.kind) {
           throw new SandboxError(
@@ -589,7 +597,10 @@ function registerAuthoringTools(server: McpServer): void {
             "ARGS",
           );
         }
-        const note = parseNote(args.notePath);
+        // An icm decision's path is `<stage output>#<heading>`, not a file parseNote can read.
+        const note =
+          decisions.open(workspace).find((d) => d.path === args.notePath) ??
+          parseNote(args.notePath);
         if (note === null) {
           throw new SandboxError(`Not a readable note: ${args.notePath}`, "ARGS");
         }
@@ -598,6 +609,7 @@ function registerAuthoringTools(server: McpServer): void {
             domain: args.domain,
             kind: args.kind,
             slug: args.slug ?? null,
+            decisions,
           }),
         };
       }),
@@ -619,7 +631,8 @@ function registerHostTools(server: McpServer): void {
       title: "Start shared infrastructure",
       description:
         "Bring up the shared infra every feature depends on: generated proxy files, the " +
-        "corporate CA, the compose stack (caddy, k8s forwards, jaeger) and the host web " +
+        "corporate CA, the compose stack (caddy, k8s forwards, and jaeger / redisinsight " +
+        "when infra.profiles enables them) and the host web " +
         "servers. Host-wide, not scoped to your feature.",
       inputSchema: {
         k8sOnly: z

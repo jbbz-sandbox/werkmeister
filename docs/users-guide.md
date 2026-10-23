@@ -272,11 +272,20 @@ Each feature runs in an isolated environment:
 
 ### Step 1: Start Shared Infrastructure
 
-Start all shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy):
+Start shared infrastructure (k8s-forwards, caddy):
 
 ```bash
 werkmeister connect
 ```
+
+Jaeger and RedisInsight are opt-in. To start either or both with it, add their profiles to `~/.werkmeister/config.yaml` and run `werkmeister connect` again:
+
+```yaml
+infra:
+  profiles: [redisinsight, jaeger]
+```
+
+For a one-off, `COMPOSE_PROFILES=redisinsight werkmeister connect`. `werkmeister down infra` removes them either way.
 
 Verify k8s forwards are healthy:
 
@@ -1373,7 +1382,7 @@ Per-feature Docker Compose stack containing:
   - Memory limits from `services.yaml`
   - Health checks using `curl` to the service's health endpoint
   - `depends_on` the setup service (with `service_healthy` condition)
-- **Networks**: Feature containers join both the feature-specific network (`sandbox-<feature>`) and the `sandbox-shared` network, enabling communication with shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy)
+- **Networks**: Feature containers join both the feature-specific network (`sandbox-<feature>`) and the `sandbox-shared` network, enabling communication with shared infrastructure (k8s-forwards, caddy, and jaeger / redisinsight when enabled)
 
 ### .env
 
@@ -1502,7 +1511,7 @@ The container runs a single entrypoint script that starts all `kubectl port-forw
 | `apps/cli/infra/compose/` | Shared-infra compose file, the k8s-port-forward image, redisinsight config, container scripts |
 | `apps/cli/infra/compose/k8s-port-forward/` | Dockerfile and entrypoint for containerized k8s port-forwards |
 | `apps/cli/infra/templates/` | nunjucks templates for per-feature file generation |
-| `apps/cli/infra/compose/shared-infra.yml` | Shared infrastructure (k8s-forwards, jaeger, redisinsight, caddy) |
+| `apps/cli/infra/compose/shared-infra.yml` | Shared infrastructure (k8s-forwards, caddy; opt-in jaeger, redisinsight) |
 | `~/.werkmeister/infra/proxy/Caddyfile` | Generated Caddy config (never inside the package) |
 | `apps/cli/infra/proxy/ui/index.html` | Feature selector web UI |
 | `apps/cli/bin/` / `bin/` | Setup helper scripts (`generate-certs.sh`; `setup-telepresence-cluster.sh`) |

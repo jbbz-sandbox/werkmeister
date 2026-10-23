@@ -14,11 +14,23 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { infraRoot, stateInfraRoot } from "./config.js";
+import { infraRoot, loadConfig, stateInfraRoot } from "./config.js";
 import { generateK8sForwards, overrideFilePath } from "./k8s_forwards.js";
 
 /** The Compose project name for shared infra (shared-infra.yml's `name:`). */
 export const INFRA_PROJECT = "sandbox-infra";
+
+/**
+ * The optional services' profiles (jaeger, redisinsight) the person turned on
+ * with `infra.profiles` in config.yaml (SW-76). Anything but a list of names
+ * reads as none.
+ */
+export function infraProfiles(): string[] {
+  const infra = loadConfig().infra;
+  const profiles = (infra as { profiles?: unknown } | undefined)?.profiles;
+  if (!Array.isArray(profiles)) return [];
+  return profiles.filter((p): p is string => typeof p === "string" && p !== "");
+}
 
 export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv; cwd: string } {
   const override = overrideFilePath();
@@ -38,10 +50,12 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv; c
       override,
       // `-p`, not just the file's `name:`: a workspace container's `.env`
       // exports COMPOSE_PROJECT_NAME=sandbox-<feature>, which outranks `name:`
-      // and pointed every infra call at the workspace's project (#198). Last,
-      // because callers read the shipped file at argv[3].
+      // and pointed every infra call at the workspace's project (#198). It and
+      // the profiles go after the files, because callers read the shipped file
+      // at argv[3].
       "-p",
       INFRA_PROJECT,
+      ...infraProfiles().flatMap((p) => ["--profile", p]),
     ],
     env: { ...process.env, SANDBOX_STATE_DIR: stateInfraRoot() },
     // Compose v5 builds through `buildx bake`, which refuses a secret file

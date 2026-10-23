@@ -687,6 +687,19 @@ export async function openPrs(
     writePrFields(f, { status: "open", url, ...(await deps.session(ws)) });
     opened.push(path.relative(ws, f.path));
     lines.push(`${f.dir}: open ${url}`);
+    // Squash and rebase rewrite SHAs, so a blame-ignore entry added here would match nothing on base.
+    const ignored = await deps.run("git", [
+      "-C",
+      dir,
+      "diff",
+      `origin/${String(f.fm["base"] ?? "main")}...HEAD`,
+      "--",
+      ".git-blame-ignore-revs",
+    ]);
+    if (/^\+[0-9a-f]{7,40}\b/m.test(ignored.stdout))
+      lines.push(
+        "  warning: this branch adds a SHA to .git-blame-ignore-revs — merge with a merge commit, not squash or rebase, and say so at the top of the PR body",
+      );
     const ref = issueIdOf(loadConfigFile(ws, null));
     if (ref) {
       const moved = await moveIssue(deps.tracker, ref, "in_review", deps.statuses, {

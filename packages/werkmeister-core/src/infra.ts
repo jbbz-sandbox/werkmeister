@@ -23,7 +23,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { stopOrRestart } from "./compose.js";
-import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
+import { composeInvocation, INFRA_PROJECT, infraProfiles } from "./compose_infra.js";
 import { sandboxHome } from "./config.js";
 import { projectContainers } from "./docker.js";
 import { generateCaddyfile } from "./generate.js";
@@ -149,7 +149,8 @@ async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
     return false;
   }
 
-  info("Starting shared infrastructure (k8s-forwards, caddy, jaeger, redisinsight)...");
+  const services = ["k8s-forwards", "caddy", ...infraProfiles()].join(", ");
+  info(`Starting shared infrastructure (${services})...`);
   try {
     const result = await runAsync([...argv, "up", "-d", "--build"], {
       capture: true,
@@ -313,7 +314,9 @@ export async function connectK8s(): Promise<boolean> {
 /** Stop and remove shared infrastructure containers. */
 export async function down(volumes = false): Promise<void> {
   await stopAll();
-  const args = ["down"];
+  // `--profile *`: plain `down` skips an opted-in jaeger/redisinsight (as
+  // compose.ts's ALL_PROFILES does for workspaces).
+  const args = ["--profile", "*", "down"];
   if (volumes) {
     args.push("--volumes");
   }

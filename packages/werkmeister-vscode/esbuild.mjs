@@ -22,6 +22,7 @@
  *    fine, because the config.yaml tier added in Task 1 sits above it.
  */
 import * as esbuild from "esbuild";
+import { writeLicenses } from "../../scripts/write-licenses.mjs";
 
 const watch = process.argv.includes("--watch");
 
@@ -49,6 +50,7 @@ const options = {
   platform: "node",
   target: "node22",
   sourcemap: true,
+  metafile: true,
   minify: false,
   define: { "import.meta.dirname": "__dirname", "import.meta.url": "__filename" },
   logLevel: "info",
@@ -62,5 +64,9 @@ if (watch) {
   const ctx = await esbuild.context(options);
   await ctx.watch();
 } else {
-  await esbuild.build(options);
+  // The package root, not dist/: vsce only recognises LICENSE there (SW-74).
+  writeLicenses((await esbuild.build(options)).metafile, {
+    outDir: ".",
+    bundled: "dist/extension.cjs",
+  });
 }
