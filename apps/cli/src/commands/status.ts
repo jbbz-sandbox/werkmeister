@@ -4,6 +4,7 @@
  * Show shared infra, active features, and k8s port-forward health in one view.
  */
 
+import { type CacheSnapshot, cacheSnapshots } from "werkmeister-core/build_caches";
 import { getContainerStatus } from "werkmeister-core/compose";
 import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
 import type { HostSummary, ProjectHealth, Usage } from "werkmeister-core/resources";
@@ -25,6 +26,7 @@ import {
 import { listIntercepts } from "werkmeister-core/telepresence";
 import { type WebServerStatus, status as webStatus } from "werkmeister-core/web_servers";
 import { Colors, loadServices } from "../lib/config.js";
+import { fmtMem } from "./stats.js";
 
 function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): void {
   console.log(`  ${Colors.BOLD}Infrastructure${Colors.RESET}`);
@@ -85,6 +87,27 @@ function age(iso: string, now: number): string {
   if (s < 86400) return `${Math.floor(s / 3600)} h`;
   const d = Math.floor(s / 86400);
   return `${d} ${d === 1 ? "day" : "days"}`;
+}
+
+/** SW-69: one line per registry cache, `turbo  volume sandbox-turbo-cache  1.2 GiB  created 9 days ago`. */
+export function printCachesSection(rows: CacheSnapshot[], now = Date.now()): void {
+  if (!rows.length) return;
+  console.log(`${Colors.BOLD}Caches:${Colors.RESET}`);
+  const width = Math.max(...rows.map((r) => r.name.length));
+  const whereWidth = Math.max(...rows.map((r) => r.kind.length + r.source.length + 1));
+  for (const r of rows) {
+    const where = `${r.kind} ${r.source}`.padEnd(whereWidth);
+    const facts = !r.exists
+      ? `${Colors.DIM}not created${Colors.RESET}`
+      : [
+          r.size_bytes === null ? "size unknown" : fmtMem(r.size_bytes / 1048576),
+          r.created_at ? `created ${age(r.created_at, now)} ago` : null,
+        ]
+          .filter(Boolean)
+          .join("  ");
+    console.log(`  ${r.name.padEnd(width)}  ${where}  ${facts}`);
+  }
+  console.log();
 }
 
 /** `12.3% CPU · 410 MiB · started 2 h ago by up`; parts drop out when unknown. */
@@ -363,6 +386,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // Started first: the stats sweep takes about a second and overlaps the reads below.
   const vitals = featureVitals();
+  const caches = cacheSnapshots().catch(() => []);
   const infra = await getInfraStatus();
   const k8s = await getPerServiceStatus();
   const allSlots = await getAllSlots();
@@ -377,6 +401,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     buildInterceptRows(allSlots, loadServices(), listIntercepts()),
     await vitals,
   );
+  printCachesSection(await caches);
   const alive = printK8sSection(k8s);
 
   // Summary

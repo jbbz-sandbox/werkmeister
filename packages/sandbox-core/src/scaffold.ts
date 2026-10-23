@@ -176,6 +176,26 @@ export const REGISTRY_DEFAULTS: Record<string, any> = {
         "Walk the open items in MANUAL-CHECKLIST.md for anything visual.",
     },
   },
+  // SW-69: unlike archetypes, a fragment may add caches; it may not redefine these.
+  // Volumes, not host dirs: over the VM's file share a warm pnpm install took
+  // 15.5 s against 5.6 s from a volume (SW-31).
+  caches: {
+    // No prune rule: node_modules is a per-feature volume, so pnpm copies from
+    // the store and every store file has one link; `pnpm store prune` would empty it.
+    "pnpm-store": {
+      path: "/pnpm-store",
+      env: { npm_config_store_dir: "/pnpm-store" },
+      detect: ["pnpm-lock.yaml"],
+    },
+    // SW-35: without TURBO_CACHE_DIR a worktree's builds land in its main
+    // checkout's .turbo, unbounded; turbo itself evicts past the max age on each run.
+    turbo: {
+      path: "/turbo-cache",
+      env: { TURBO_CACHE_DIR: "/turbo-cache", TURBO_CACHE_MAX_AGE: "14d" },
+      detect: ["turbo.json"],
+      max_age: "14d",
+    },
+  },
   mcp_servers: {
     context7: {
       type: "stdio",

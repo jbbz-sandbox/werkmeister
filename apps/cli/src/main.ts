@@ -33,6 +33,7 @@
  *     sandbox code [feature]                   Open a workspace in VS Code
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
  *     sandbox registry [sync] [--check]        Regenerate ~/.sandbox/services.yaml from repo fragments
+ *     sandbox cache prune [name]               Prune build/package caches by their rule (--reset empties)
  *     sandbox dashboard                        Launch the workspace dashboard's MCP server (stdio)
  *     sandbox mcp                              Launch the headless remote MCP surface (stdio)
  *
@@ -848,6 +849,29 @@ const SPECS: CommandSpec[] = [
       workspaces_root: o.workspacesRoot ?? null,
       show: Boolean(o.show),
       check: Boolean(o.check),
+    }),
+  },
+  {
+    name: "cache",
+    load: () => import("./commands/cache.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Prune the shared build and package caches (`caches:` in the registry) by each one's age " +
+            "or prune rule",
+        )
+        .argument("<action>", "prune — the only action")
+        .argument("[name]", "One cache; every cache when omitted")
+        .option("--reset", "Empty the cache(s) instead of applying the rule.")
+        .option("--force", "Prune a cache even while a running container mounts it.")
+        .option("--dry-run", "Report what would be deleted; change nothing.");
+    },
+    namespace: ([action, name], o) => ({
+      action,
+      name: name ?? null,
+      reset: Boolean(o.reset),
+      force: Boolean(o.force),
+      dry_run: Boolean(o.dryRun),
     }),
   },
   {

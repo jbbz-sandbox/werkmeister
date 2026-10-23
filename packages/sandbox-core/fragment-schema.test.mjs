@@ -53,3 +53,42 @@ test("cpus: accepted on services, setup services and extra_services; zero and ju
   };
   assert.ok(validate(extra), JSON.stringify(validate.errors));
 });
+
+test("caches: a yarn and a cargo entry validate; malformed entries and service lists are rejected", () => {
+  const caches = {
+    "yarn-cache": {
+      path: "/yarn-cache",
+      env: { YARN_CACHE_FOLDER: "/yarn-cache" },
+      detect: ["yarn.lock"],
+      max_age: "30d",
+    },
+    cargo: {
+      path: "/cargo-home",
+      env: { CARGO_HOME: "/cargo-home" },
+      detect: ["Cargo.lock"],
+      prune: "cargo cache -a",
+      image: "rust:1",
+    },
+    turbo: { path: "/turbo", host: "{{home}}/.sandbox/cache/turbo" },
+  };
+  assert.ok(validate({ ...withoutRepo, caches }), JSON.stringify(validate.errors));
+  const [svc] = Object.keys(withoutRepo.services);
+  const withCaches = (list) => ({
+    ...withoutRepo,
+    services: { ...withoutRepo.services, [svc]: { ...withoutRepo.services[svc], caches: list } },
+  });
+  assert.ok(validate(withCaches(["yarn-cache"])), JSON.stringify(validate.errors));
+  assert.ok(validate(withCaches([])));
+  assert.equal(validate(withCaches("yarn-cache")), false);
+  for (const bad of [
+    { path: "rel/path" },
+    { env: {} },
+    { path: "/c", volume: "v", host: "/h" },
+    { path: "/c", max_age: "14d", prune: "x" },
+    { path: "/c", max_age: "2w" },
+    { path: "/c", volume: "^v" },
+    { path: "/c", colour: "red" },
+  ]) {
+    assert.equal(validate({ ...withoutRepo, caches: { c: bad } }), false, JSON.stringify(bad));
+  }
+});

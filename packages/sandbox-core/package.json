@@ -12,6 +12,7 @@
     "./agent_gen": "./dist/agent_gen.js",
     "./archetypes": "./dist/archetypes.js",
     "./browser": "./dist/browser.js",
+    "./build_caches": "./dist/build_caches.js",
     "./cache": "./dist/cache.js",
     "./caddy": "./dist/caddy.js",
     "./claude_md": "./dist/claude_md.js",

@@ -3,6 +3,7 @@
  * bound is turbo's own `TURBO_CACHE_MAX_AGE` eviction, so the eviction cases
  * drive the repo's real turbo binary against a throwaway monorepo and cache
  * dir: a turbo upgrade that stops evicting fails here, not on a full disk.
+ * SW-69: the cache is the built-in `turbo` entry, attached by turbo.json.
  */
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -10,43 +11,47 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { applyCaches } from "werkmeister-core/build_caches";
+import { REGISTRY_DEFAULTS } from "werkmeister-core/scaffold";
 import YAML from "yaml";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../../../../../..");
 const TURBO = path.join(REPO, "node_modules", ".bin", "turbo");
-const CACHE_DIR = "{{home}}/.sandbox/cache/turbo";
+const BUILT_IN = REGISTRY_DEFAULTS.caches.turbo;
+const MAX_AGE: string = BUILT_IN.env.TURBO_CACHE_MAX_AGE;
 
 // biome-ignore lint/suspicious/noExplicitAny: the registry is untyped YAML.
 const registry: any = YAML.parse(
   fs.readFileSync(path.join(REPO, ".sandbox", "services.yaml"), "utf8"),
 );
-const MAX_AGE: string = registry.setup_services["sandbox-install"].environment.TURBO_CACHE_MAX_AGE;
 
-describe("services.yaml turbo cache wiring", () => {
-  const appServices = Object.entries(registry.services).filter(
-    // biome-ignore lint/suspicious/noExplicitAny: see above.
-    ([, def]: [string, any]) => def.setup_service === "sandbox-install",
-  );
-
-  it("covers the install and every service it feeds", () => {
-    expect(appServices.map(([name]) => name).sort()).toEqual(
-      ["cli", "sandbox-core", "sandbox-dashboard", "vscode-plugin"].sort(),
-    );
+describe("the built-in turbo cache on this repo's services", () => {
+  it("points turbo at its own mount and prunes at turbo's own max age", () => {
+    expect(BUILT_IN.env.TURBO_CACHE_DIR).toBe(BUILT_IN.path);
+    expect(BUILT_IN.max_age).toBe(MAX_AGE);
+    expect(BUILT_IN.detect).toContain("turbo.json");
   });
 
-  it.each([
-    ["sandbox-install", registry.setup_services["sandbox-install"]],
-    ...appServices,
-    // biome-ignore lint/suspicious/noExplicitAny: see above.
-  ])("%s sets one explicit, bounded TURBO_CACHE_DIR and can reach it", (_name, def: any) => {
-    expect(def.environment.TURBO_CACHE_DIR).toBe(CACHE_DIR);
-    expect(def.environment.TURBO_CACHE_MAX_AGE).toBe(MAX_AGE);
-    // The host dir itself, or the ~/.sandbox it lives in, at the same path.
-    const mounts: string[] = def.extra_volumes;
-    expect(
-      mounts.includes(`${CACHE_DIR}:${CACHE_DIR}`) ||
-        mounts.includes("{{home}}/.sandbox:{{home}}/.sandbox"),
-    ).toBe(true);
+  it("reaches the install and every service it feeds through turbo.json alone", () => {
+    const repo = path.basename(REPO);
+    const withRepo = (defs: Record<string, object>) =>
+      Object.fromEntries(Object.entries(defs).map(([n, d]) => [n, { ...d, repo }]));
+    const [services, setups] = applyCaches(
+      withRepo(registry.services),
+      withRepo(registry.setup_services),
+      {},
+      REGISTRY_DEFAULTS.caches,
+      path.dirname(REPO),
+    );
+    const fed = Object.keys(services).filter(
+      (n) => services[n]?.setup_service === "sandbox-install",
+    );
+    expect(fed.sort()).toEqual(["cli", "sandbox-core", "sandbox-dashboard", "vscode-plugin"]);
+    for (const def of [setups["sandbox-install"], ...fed.map((n) => services[n])]) {
+      expect(def?.extra_volumes).toContain(`^sandbox-turbo:${BUILT_IN.path}`);
+      expect(def?.environment?.TURBO_CACHE_DIR).toBe(BUILT_IN.path);
+      expect(def?.environment?.TURBO_CACHE_MAX_AGE).toBe(MAX_AGE);
+    }
   });
 });
 

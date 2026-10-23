@@ -667,6 +667,44 @@ export async function listVolumeNames(): Promise<string[] | null> {
   }
 }
 
+export interface VolumeUsage {
+  size: number;
+  createdAt: string;
+}
+
+/** Size and creation time per volume, from one `docker system df`; null when unreachable. */
+export async function volumeUsage(): Promise<Map<string, VolumeUsage> | null> {
+  try {
+    const { Volumes } = (await docker().df()) as {
+      Volumes?: { Name: string; CreatedAt: string; UsageData?: { Size?: number } }[];
+    };
+    return new Map(
+      (Volumes ?? []).map((v) => [
+        v.Name,
+        { size: v.UsageData?.Size ?? -1, createdAt: v.CreatedAt },
+      ]),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Names of the running containers that mount the volume or host dir *source*;
+ * null when unreachable. Matched on each mount rather than the `volume` filter,
+ * which matches a bind by its destination, not its host dir.
+ */
+export async function runningContainersMounting(source: string): Promise<string[] | null> {
+  try {
+    const list = await docker().listContainers({ filters: { status: ["running"] } });
+    return list
+      .filter((c) => (c.Mounts ?? []).some((m) => m.Name === source || m.Source === source))
+      .map((c) => (c.Names[0] ?? c.Id).replace(/^\//, ""));
+  } catch {
+    return null;
+  }
+}
+
 /** Remove one volume. False when it is in use, already gone, or unreachable. */
 export async function removeVolume(name: string): Promise<boolean> {
   try {
