@@ -17,6 +17,7 @@ import { DOT_DIRS, dotDir, forDotDir, loadArchetypes } from "../config.js";
 import { type FeatureRouter, loadFeatureRouters } from "../feature_routing.js";
 import { main as gateMain, resetSessionState } from "../gate.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
+import { noteDecisions } from "../graduate.js";
 import { writeWorkspaceHooks, writeWorkspaceSettings } from "../hooks_gen.js";
 import { issueIdOfMeta } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
@@ -342,4 +343,5 @@ export const jit: ContextStrategy = {
       `${d}/.gate`,
     ]),
   ],
+  decisions: noteDecisions,
 };

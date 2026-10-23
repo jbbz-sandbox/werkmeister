@@ -97,7 +97,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.action === "start") {
     const workspace = findWorkspaceRoot(process.cwd());
     if (workspace === null)
-      fail("Not inside a sandbox workspace (no .sandbox/ directory found above CWD).");
+      fail("Not inside a werkmeister workspace — run this from a workspace folder or below.");
     const line = (await startIssue(workspace)) || "left as is (no in_progress status configured)";
     (line.includes("not moved") ? warn : success)(`Issue: ${line}`);
     return;
@@ -109,9 +109,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (!text) {
     const workspace = findWorkspaceRoot(process.cwd());
     if (workspace === null) {
-      fail(
-        "No issue given and not inside a sandbox workspace (no .sandbox/ directory found above CWD).",
-      );
+      fail("No issue given and not inside a werkmeister workspace.");
     }
     text = issueIdOf(loadConfigFile(workspace, null));
     if (!text)

@@ -21,9 +21,10 @@ import * as YAML from "yaml";
 import { dotDir } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { standardsDirPath } from "./global_config.js";
-import { listNotes, type Note } from "./notes.js";
+import { type Note, openDecisions } from "./notes.js";
 import { run } from "./proc.js";
 import { fnmatch, loadStandardsModules } from "./standards.js";
+import type { DecisionSource } from "./strategies/types.js";
 
 const _GIT_TIMEOUT = 5; // seconds; this can run from a SessionStart path
 
@@ -164,6 +165,15 @@ export function updateNoteStatus(
   fs.writeFileSync(notePath, `---\n${newFm}---${rest}`);
 }
 
+/** jit's decisions: `.werkmeister/notes/` decision notes, state in each note's frontmatter. */
+export const noteDecisions: DecisionSource = {
+  open: (workspaceRoot) => openDecisions(workspaceRoot),
+  mark: (_workspaceRoot, note, fields) => updateNoteStatus(note.path, fields),
+  cite: (workspaceRoot, note) =>
+    `note ${String(note.number).padStart(3, "0")}, see ` +
+    `${path.basename(dotDir(workspaceRoot))}/notes/${path.basename(note.path)}`,
+};
+
 /**
  * Close out `graduating` notes whose scaffold has actually landed.
  *
@@ -177,10 +187,14 @@ export function updateNoteStatus(
  * not a git checkout leaves every note `graduating`, which is the honest answer
  * — nothing can confirm the rule landed, so nothing claims it did.
  */
-export function reconcileGraduating(workspaceRoot: string, standardsDir?: string | null): Note[] {
-  const pending = listNotes(workspaceRoot).filter(
-    (n) => n.frontmatter["status"] === "graduating" && n.frontmatter["graduated_to"],
-  );
+export function reconcileGraduating(
+  workspaceRoot: string,
+  standardsDir?: string | null,
+  decisions: DecisionSource = noteDecisions,
+): Note[] {
+  const pending = decisions
+    .open(workspaceRoot)
+    .filter((n) => n.frontmatter["status"] === "graduating" && n.frontmatter["graduated_to"]);
   // The common case is no pending graduation; don't spawn git to learn that.
   if (!pending.length) {
     return [];
@@ -200,7 +214,7 @@ export function reconcileGraduating(workspaceRoot: string, standardsDir?: string
       tracked = false;
     }
     if (tracked) {
-      updateNoteStatus(note.path, { status: "graduated" });
+      decisions.mark(workspaceRoot, note, { status: "graduated" });
       closed.push(note);
     }
   }
@@ -212,6 +226,8 @@ export interface GraduateNoteOptions {
   kind: string;
   slug?: string | null;
   standardsDir?: string | null;
+  /** The workspace strategy's `decisions`; jit's notes when omitted. */
+  decisions?: DecisionSource;
 }
 
 /**
@@ -223,7 +239,13 @@ export interface GraduateNoteOptions {
 export function graduateNote(
   workspaceRoot: string,
   note: Record<string, any>,
-  { domain, kind, slug = null, standardsDir = null }: GraduateNoteOptions,
+  {
+    domain,
+    kind,
+    slug = null,
+    standardsDir = null,
+    decisions = noteDecisions,
+  }: GraduateNoteOptions,
 ): Record<string, any> {
   if (note["type"] !== "decision") {
     throw new GraduationError(`note ${path.basename(note["path"])} is not a decision note`);
@@ -257,8 +279,7 @@ export function graduateNote(
   let body = fs.readFileSync(standardPath, "utf8");
 
   const resolvedSlug = slug || note["slug"];
-  const noteRef = `${path.basename(dotDir(workspaceRoot))}/notes/${path.basename(note["path"])}`;
-  const marker = `<!-- TODO(graduate): fill from note ${String(note["number"]).padStart(3, "0")}, see ${noteRef} -->`;
+  const marker = `<!-- TODO(graduate): fill from ${decisions.cite(workspaceRoot, note as Note)} -->`;
 
   let scaffoldPath: string;
   if (kind === "rule") {
@@ -320,7 +341,7 @@ export function graduateNote(
   // `reconcileGraduating` closes it for real once the file is tracked; until
   // then the note keeps surfacing as an open decision, which is the point.
   const graduatedTo = path.relative(standardsDir, scaffoldPath);
-  updateNoteStatus(note["path"], { status: "graduating", graduated_to: graduatedTo });
+  decisions.mark(workspaceRoot, note as Note, { status: "graduating", graduated_to: graduatedTo });
 
   return {
     standard_path: standardPath,
