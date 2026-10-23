@@ -1,5 +1,12 @@
 # sandbox-mcp
 
+## 0.5.1
+
+### Patch Changes
+
+- werkmeister-core@0.31.0
+- werkmeister-ui@0.5.1
+
 ## 0.5.0
 
 ### Minor Changes
