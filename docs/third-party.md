@@ -6,7 +6,7 @@ Every external library, program, container image and service Werkmeister depends
 
 | Category | Meaning |
 |---|---|
-| bundled | inlined into a file Werkmeister publishes (`dist/*.js`, the .vsix, `infra/**`). Werkmeister redistributes it, so its licence terms apply to us |
+| bundled | inlined into a file Werkmeister publishes (`dist/*.js`, the .vsix). Werkmeister redistributes it, so its licence terms apply to us |
 | installed | a runtime dependency of the `werkmeister` npm package. The user's npm downloads it from the registry; Werkmeister doesn't redistribute it |
 | required | host software the person installs before Werkmeister works |
 | dev-only | needed to build, test or release from a checkout. Never shipped |
@@ -24,7 +24,7 @@ Versions: `range` is what package.json declares, `→ x.y.z` is what pnpm-lock.y
 | `dist/THIRD-PARTY-LICENSES.txt` | the name, version, licence and full licence text of each package inlined above. The build writes it from esbuild's metafile (packages that contribute bytes to an output) and fails if a bundled package has no licence file |
 | `dist/LICENSE`, `dist/NOTICE` | copies of the repo's files, written by the same build |
 | `dist/sandbox-workspaces.vsix` | the VS Code extension, built in `prepack` (see [vsix](#vs-code-extension-vsix)) |
-| `infra/**` | compose files, Dockerfiles, nunjucks templates, JSON schemas, skills and two scripts, one of which is the third-party `otel-init.bundle.js` ([Terms that need attention](#terms-that-need-attention)) |
+| `infra/**` | compose files, Dockerfiles, nunjucks templates, JSON schemas, skills and a script |
 | `bin/generate-certs.sh`, `werkmeister`, `w9r`, `sandbox`, `README.md`, `CONVENTIONS.md`, `package.json` | the wrappers and docs |
 
 The minified bundles also keep the `/*! … */` licence banners some packages carry, because SW-58 left `legalComments` at its `eof` default. Most packages (commander, yaml, zod…) carry no such banner, so `THIRD-PARTY-LICENSES.txt` is where their required notice actually ships.
@@ -187,7 +187,6 @@ Werkmeister runs without each of these. The person turns one on.
 |---|---|---|
 | `@anthropic-ai/claude-agent-sdk` | Not an OSI licence: "SEE LICENSE IN README.md" → Anthropic Commercial Terms. The platform package says "© Anthropic PBC. All rights reserved". Werkmeister doesn't redistribute it: esbuild keeps it external, and the user's npm fetches it from the registry under Anthropic's terms | Never bundle it. Done (SW-73): it is an `optionalDependency`, so an install can skip it (`--omit=optional`) or survive its failure, and `detect --assist` says how to install it when it's absent |
 | Redis Insight image | SSPL-1.0, not OSI. Pulled, not redistributed. SSPL's obligations bite when you offer the software as a service, which local use doesn't do. But it starts for everyone with no off switch | Make it opt-in, e.g. a compose profile (follow-up 4) |
-| `infra/compose/scripts/otel-init.bundle.js` | A 2.6 MB third-party bundle (OpenTelemetry JS and @grpc/grpc-js, Apache-2.0; protobufjs, BSD-3-Clause; yaml, ISC; …) published in the npm package. Its source (`apps/otel-init`) is gone and nothing references the file | Delete it, or restore its source and ship its licence texts (follow-up 3) <!-- docs-check: ignore --> |
 | `split-ca` in the .vsix | ISC by its `package.json`, but neither the npm package nor its repository carries a licence text, so the .vsix can only name it | It comes in through `docker-modem`. Ask upstream to add the text, or drop the dependency |
 | OrbStack, Docker Desktop, Claude Code, Claude Desktop, VS Code (Microsoft build), Chrome | proprietary host software the person installs under its own terms | Fine. Werkmeister neither bundles nor requires the proprietary editions: any Docker Engine works, and Code - OSS / Chromium work where the code allows a path |
 | `@vscode/vsce-sign` | Microsoft licence terms (use only with Visual Studio products). dev-only | Fine for packaging the extension. Listed in `REVIEWED` |
@@ -214,6 +213,6 @@ At 0.22.0: build `apps/cli` (`npm run build`), run `npm pack --dry-run`, and com
 
 1. ~~Move `@anthropic-ai/claude-agent-sdk` to `optionalDependencies`, with a clear install hint from `detect --assist`.~~ Done in SW-73.
 2. ~~Ship LICENSE and third-party licence texts in the .vsix.~~ Done (SW-74).
-3. Remove `infra/compose/scripts/otel-init.bundle.js`, or restore its source and licences.
+3. ~~Remove `infra/compose/scripts/otel-init.bundle.js`, or restore its source and licences.~~ Resolved (SW-75): nothing referenced the bundle, so it was deleted.
 4. Make Redis Insight (SSPL-1.0), and perhaps Jaeger, opt-in in shared infra.
 5. Settle the Node floor: `engines` says `>=20` (EOL), the feature default image is `node:20.16.0`, and the ticket assumed 22.
