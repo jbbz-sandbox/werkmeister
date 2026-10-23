@@ -27,7 +27,7 @@ function printDrift(entry: string): void {
 export async function run(args: Record<string, unknown>): Promise<void> {
   const workspace = findWorkspaceRoot(process.cwd());
   if (workspace === null) {
-    error("Not inside a sandbox workspace (no .sandbox/ directory found above CWD).");
+    error("Not inside a werkmeister workspace — run this from a workspace folder or below.");
     process.exit(1);
   }
   const strategy = strategyFor(workspace);

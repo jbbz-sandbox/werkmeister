@@ -62,7 +62,7 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 
 ### VS Code extension (.vsix)
 
-`packages/werkmeister-vscode/esbuild.mjs` inlines `werkmeister-core` and its dependencies into `extension.cjs` (CJS, not minified). The .vsix ships on its own and inside the npm package. Its bundled set, read from the sourcemap: dockerode 5.0.1, docker-modem 5.0.7, @balena/dockerignore 1.0.2, long 5.3.2 (Apache-2.0); protobufjs 7.6.5 and `@protobufjs/*`, bcrypt-pbkdf 1.0.2 (BSD-3-Clause); nunjucks (BSD-2-Clause); yaml, chownr, once, inherits, wrappy, split-ca (ISC); tweetnacl 0.14.5 (Unlicense); ssh2 1.17.0, cpu-features 0.0.10, jsonc-parser, tar-fs, tar-stream and the stream helpers (MIT). The .vsix currently ships no licence texts (follow-up 2).
+`packages/werkmeister-vscode/esbuild.mjs` inlines `werkmeister-core` and its dependencies into `extension.cjs` (CJS, not minified). The .vsix ships on its own and inside the npm package. Its bundled set, read from the sourcemap: dockerode 5.0.1, docker-modem 5.0.7, @balena/dockerignore 1.0.2, long 5.3.2 (Apache-2.0); protobufjs 7.6.5 and `@protobufjs/*`, bcrypt-pbkdf 1.0.2 (BSD-3-Clause); nunjucks (BSD-2-Clause); yaml, chownr, once, inherits, wrappy, split-ca (ISC); tweetnacl 0.14.5 (Unlicense); ssh2 1.17.0, cpu-features 0.0.10, jsonc-parser, tar-fs, tar-stream and the stream helpers (MIT). The build writes `LICENSE`, `NOTICE` and `THIRD-PARTY-LICENSES.txt` into the package root (`packages/werkmeister-vscode/`, gitignored), where vsce picks them up, using the same `scripts/write-licenses.mjs` as `apps/cli`. At 0.31.0 the file holds 47 packages, and vsce stores the root licence as `LICENSE.txt`. `split-ca` declares ISC but publishes no licence text, so its entry is a stub naming its source (`NO_LICENCE_FILE` in the script); any other bundled package without a licence file fails the build.
 
 ### Installed at runtime (`apps/cli` dependencies)
 
@@ -187,7 +187,7 @@ Werkmeister runs without each of these. The person turns one on.
 |---|---|---|
 | `@anthropic-ai/claude-agent-sdk` | Not an OSI licence: "SEE LICENSE IN README.md" → Anthropic Commercial Terms. The platform package says "© Anthropic PBC. All rights reserved". Werkmeister doesn't redistribute it: esbuild keeps it external, and the user's npm fetches it from the registry under Anthropic's terms | Never bundle it. Move it to `optionalDependencies` so every install isn't charged ~240 MB for a flag few people use, and have `detect --assist` say how to install it when it's absent (follow-up 1) |
 | Redis Insight image | SSPL-1.0, not OSI. Pulled, not redistributed. SSPL's obligations bite when you offer the software as a service, which local use doesn't do. But it starts for everyone with no off switch | Make it opt-in, e.g. a compose profile (follow-up 4) |
-| The .vsix | redistributes Apache-2.0, BSD and MIT code with no licence texts (vsce: "LICENSE not found") | Ship LICENSE and generated third-party licences in the .vsix (follow-up 2) |
+| `split-ca` in the .vsix | ISC by its `package.json`, but neither the npm package nor its repository carries a licence text, so the .vsix can only name it | It comes in through `docker-modem`. Ask upstream to add the text, or drop the dependency |
 | OrbStack, Docker Desktop, Claude Code, Claude Desktop, VS Code (Microsoft build), Chrome | proprietary host software the person installs under its own terms | Fine. Werkmeister neither bundles nor requires the proprietary editions: any Docker Engine works, and Code - OSS / Chromium work where the code allows a path |
 | `@vscode/vsce-sign` | Microsoft licence terms (use only with Visual Studio products). dev-only | Fine for packaging the extension. Listed in `REVIEWED` |
 | `@vscode/test-electron` | downloads Microsoft's VS Code build for tests | Fine for CI and local tests. Don't redistribute `.vscode-test/` |
@@ -212,7 +212,7 @@ At 0.22.0: build `apps/cli` (`npm run build`), run `npm pack --dry-run`, and com
 ## Follow-ups
 
 1. Move `@anthropic-ai/claude-agent-sdk` to `optionalDependencies`, with a clear install hint from `detect --assist`.
-2. Ship LICENSE and third-party licence texts in the .vsix.
+2. ~~Ship LICENSE and third-party licence texts in the .vsix.~~ Done (SW-74).
 3. ~~Remove `infra/compose/scripts/otel-init.bundle.js`, or restore its source and licences.~~ Resolved (SW-75): nothing referenced the bundle, so it was deleted.
 4. Make Redis Insight (SSPL-1.0), and perhaps Jaeger, opt-in in shared infra.
 5. Settle the Node floor: `engines` says `>=20` (EOL), the feature default image is `node:20.16.0`, and the ticket assumed 22.
