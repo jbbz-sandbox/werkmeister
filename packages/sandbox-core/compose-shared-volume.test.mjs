@@ -19,7 +19,7 @@ import { test } from "node:test";
 
 import YAML from "yaml";
 
-import { getSharedVolumeNames, getVolumeBaseNames } from "./dist/config.js";
+import { getVolumeBaseNames } from "./dist/config.js";
 import { generateFeatureCompose } from "./dist/generate.js";
 import { featureFromVolume, volumeBaseNames } from "./dist/lifecycle.js";
 import { withSandboxHome } from "./fixtures.mjs";
@@ -107,7 +107,6 @@ test("two features mount one external shared volume, each keeping its own per-fe
 test("a shared volume is never a per-feature base name, so clean never claims it", async () => {
   await withSandboxHome(
     async () => {
-      assert.deepEqual(getSharedVolumeNames(), ["sandbox-pnpm-store"]);
       assert.deepEqual(getVolumeBaseNames(), ["node-modules", "turbo-cache"]);
       assert.equal(featureFromVolume("sandbox-pnpm-store", volumeBaseNames()), null);
     },

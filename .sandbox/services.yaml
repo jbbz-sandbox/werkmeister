@@ -61,7 +61,6 @@ services:
       - "{{workspaces_root}}:{{workspaces_root}}"
       - "{{home}}/.kube:{{home}}/.kube:ro"
       - tools:/opt/sandbox-tools
-      - ^sandbox-pnpm-store:/pnpm-store
     environment: &host_env
       HOME: "{{home}}"
       PATH: /app/apps/cli:/opt/sandbox-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -69,20 +68,11 @@ services:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
-      # SW-35: one host-wide build cache (same value in sandbox-install below).
-      # Without it turbo shares a worktree's cache with the main checkout, so
-      # builds landed in ~/repos/sandbox/.turbo, unbounded. turbo evicts entries
-      # older than the max age itself, at the start of every `turbo run`.
-      TURBO_CACHE_DIR: "{{home}}/.sandbox/cache/turbo"
-      TURBO_CACHE_MAX_AGE: 14d
       # SW-31: pnpm is corepack's shim in the tools volume (sandbox-install puts
       # it there); the pnpm version it fetches lives there too, so it downloads
       # once per feature, without the prompt that would hang a container.
       COREPACK_HOME: /opt/sandbox-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
-      # The shared store (same value in sandbox-install below), so a `pnpm
-      # install` here matches the one node_modules was built with.
-      npm_config_store_dir: /pnpm-store
       # Read by sandbox-dashboard; harmless for the others.
       HOST: 0.0.0.0
 
@@ -164,16 +154,10 @@ setup_services:
   # so turbo hashes inputs the same way they do. ~/.sandbox/locks queues
   # installs host-wide, SANDBOX_INSTALL_SLOTS (default 2) at a time, and builds
   # one at a time.
-  # SW-35: the build cache is TURBO_CACHE_DIR, shared with the app containers,
-  # so a commit any workspace built restores in ~1 s instead of ~28 s. It is a
-  # host dir, not a named volume: the app containers already mount ~/.sandbox,
-  # the template prefixes every named volume per feature, and the dir can be
-  # inspected or deleted from the host.
-  # SW-31: the pnpm store is shared by every feature's install. It is a shared
-  # named volume (`^`), not a host dir: over the VM's file share a warm install
-  # took 15.5 s against 5.6 s from a volume. node_modules is a per-feature
-  # volume, so pnpm copies from the store rather than hard-linking; it still
-  # downloads each package once. Clear it with `docker volume rm sandbox-pnpm-store`.
+  # SW-69: the turbo cache and pnpm store are the built-in `turbo` and
+  # `pnpm-store` caches, attached here and to the four services by turbo.json and
+  # pnpm-lock.yaml. See them with `werkmeister status`; clear them with
+  # `werkmeister cache prune`.
   sandbox-install:
     image: node:22
     command: "sh /usr/local/bin/startup.sh install"
@@ -183,14 +167,9 @@ setup_services:
       - tools:/opt/sandbox-tools
       - "{{repos_root}}:{{repos_root}}"
       - "{{home}}/.sandbox/locks:/locks"
-      - "{{home}}/.sandbox/cache/turbo:{{home}}/.sandbox/cache/turbo"
-      - ^sandbox-pnpm-store:/pnpm-store
     environment:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
-      TURBO_CACHE_DIR: "{{home}}/.sandbox/cache/turbo"
-      TURBO_CACHE_MAX_AGE: 14d
       COREPACK_HOME: /opt/sandbox-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
-      npm_config_store_dir: /pnpm-store

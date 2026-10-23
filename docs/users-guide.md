@@ -1015,24 +1015,23 @@ the pieces that are not obvious from the demo services:
   `SANDBOX_INSTALL_SLOTS` (default 2) at a time, and builds run one at a time. To force a
   reinstall, run `werkmeister down -v`. After upgrading, run `werkmeister registry` so the new
   command reaches `~/.werkmeister/services.yaml`.
-- **One turbo cache for every container.** `sandbox-install` and the four services set
-  `TURBO_CACHE_DIR=~/.sandbox/cache/turbo`, so a commit any workspace has built restores in
-  about a second everywhere, including in the gate's `turbo run test`. Pass `--force` to
-  measure a cold run. `TURBO_CACHE_MAX_AGE=14d` bounds it: turbo deletes entries written more
-  than 14 days ago at the start of each run. It's a host dir, not a named volume, so
-  `du -sh ~/.sandbox/cache/turbo` shows its size and deleting it is safe. Before this, turbo
-  shared each worktree's cache with the main checkout, in `~/repos/sandbox/.turbo/cache`.
-  Nothing writes there any more, so you can delete it by hand.
-- **One pnpm store for every workspace.** `sandbox-install` installs from the shared
-  `sandbox-pnpm-store` volume at `/pnpm-store` (`npm_config_store_dir`), so each package
-  version downloads once per machine, not once per workspace. It's a named volume rather
-  than a host dir because reads over the VM's file share made a warm install about three
-  times slower. node_modules is a per-feature volume on another filesystem, so pnpm copies
-  files out of the store instead of hard-linking them. `docker volume rm sandbox-pnpm-store`
-  is safe while no workspace is up; the next install refills it, and the old
-  `~/.sandbox/cache/pnpm-store` dir can be deleted. `pnpm` itself is corepack's shim in the `tools`
-  volume, with the pnpm build it fetches kept there too (`COREPACK_HOME`), so the four services
-  can run `pnpm turbo …` without an install of their own.
+- **Shared build and package caches (SW-69).** The registry's built-in `turbo` and
+  `pnpm-store` caches attach to `sandbox-install` and the four services because the repo has
+  `turbo.json` and `pnpm-lock.yaml`. Each is a shared named volume (`sandbox-turbo` at
+  `/turbo-cache`, `sandbox-pnpm-store` at `/pnpm-store`), so a commit any workspace has built
+  restores in about a second everywhere, including in the gate's `turbo run test` (`--force`
+  measures a cold run), and each package version downloads once per machine. Volumes, not
+  host dirs: reads over the VM's file share made a warm install about three times slower.
+  node_modules is a per-feature volume on another filesystem, so pnpm copies files out of
+  the store rather than hard-linking them. `werkmeister status` shows each cache's size and
+  age. `werkmeister cache prune` deletes turbo entries older than 14 days (turbo also does
+  that itself at the start of each run); `werkmeister cache prune pnpm-store --reset` empties
+  the store, and the next install refills it. Add `--dry-run` to see what would go first.
+  The old `~/.sandbox/cache/turbo`, `~/.sandbox/cache/pnpm-store` and
+  `~/repos/sandbox/.turbo/cache` dirs are no longer written; delete them by hand. `pnpm`
+  itself is corepack's shim in the `tools` volume, with the pnpm build it fetches kept there
+  too (`COREPACK_HOME`), so the four services can run `pnpm turbo …` without an install of
+  their own.
 - **`werkmeister` inside the container is the worktree's own build.** `PATH` puts
   `/app/apps/cli` first. `sandbox_root` in `~/.werkmeister/config.yaml` still points at the main
   checkout, so templates and `infra/` come from there (see the known issue on machine-global
@@ -1246,9 +1245,11 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
   - `dockerfile` (string | null) — Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
   - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
   - `extra_volumes` (list | null) — Additional volume mounts: a host path (`${REPO}/.git:/app/.git:ro`), a bare name for a per-feature named volume (`turbo-cache:/app/.turbo`, created as `<feature>-turbo-cache`), or `^name` for one volume every feature shares (`^sandbox-pnpm-store:/pnpm-store`). A shared volume is created on `sandbox up` and declared `external`, so no feature's `down --volumes`, close-out or `clean` removes it; drop it by hand with `docker volume rm <name>`
+  - `caches` (list | null) — Keys in the registry's `caches:`. Unset, a service gets its archetype's `caches` plus every cache whose `detect` file is in its directory or a parent up to its repo root; a list replaces both, and `[]` opts out
 
 - **`infrastructure`** — Infrastructure services (redis, postgres) with k8s forward ports
 - **`setup_services`** — Optional per-monorepo install/build steps that run before a repo's services start
+- **`caches`** — Build and package caches shared by every workspace, keyed by name. Each has a container `path`, the `env` that points the tool at it, the `detect` files (e.g. `yarn.lock`) that attach it, and at most one of `max_age` (`<N>d`, used by `werkmeister cache prune`) or `prune` (a command run in a throwaway container, `image:` default `node:22`). It lives in the shared volume `sandbox-<key>` (or `volume:`), or in a host dir with `host:`. `turbo` and `pnpm-store` are built in; a repo's fragment may add caches but not redefine those. Example: `yarn-cache: {path: /yarn-cache, env: {YARN_CACHE_FOLDER: /yarn-cache}, detect: [yarn.lock], max_age: 30d}`
 - **`repos`** — Repo-to-service mapping with `path_mappings` for monorepos
 
 ### ~/.werkmeister/ports.yaml

@@ -235,7 +235,7 @@ async function renderCollection(
 }
 
 /** Format MiB as human-readable. */
-function fmtMem(mib: number): string {
+export function fmtMem(mib: number): string {
   if (mib >= 1024) return `${(mib / 1024).toFixed(1)} GiB`;
   if (mib >= 1) return `${mib.toFixed(0)} MiB`;
   return `${(mib * 1024).toFixed(0)} KiB`;
