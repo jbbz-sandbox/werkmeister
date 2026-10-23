@@ -12,7 +12,7 @@ const isDevelopment = process.env.NODE_ENV === "development";
 // modules into a single self-contained dist/<page>.html, served as a `ui://` resource.
 export default defineConfig({
   plugins: [viteSingleFile()],
-  // Two copies of React would break RJSF's element check; see apps/sandbox-dashboard/vite.config.ts.
+  // Two copies of React would break RJSF's element check; see apps/werkmeister-dashboard/vite.config.ts.
   resolve: { dedupe: ["react", "react-dom"] },
   build: {
     // Claude Desktop's modern Chromium webview is the only host.

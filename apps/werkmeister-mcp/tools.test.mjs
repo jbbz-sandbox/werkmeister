@@ -10,7 +10,7 @@ import { test } from "node:test";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { withSandboxHome } from "../../packages/sandbox-core/fixtures.mjs";
+import { withSandboxHome } from "../../packages/werkmeister-core/fixtures.mjs";
 
 // Never the real ~/.sandbox: core resolves its dot dir from HOME.
 process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-tools-home-"));

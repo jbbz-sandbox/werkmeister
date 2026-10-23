@@ -69,7 +69,7 @@ const RESOURCE_URI_LIST = "ui://workspace/mcp-list.html";
 const APP_ONLY = { ui: { visibility: ["app"] } };
 
 /** A file from an app's build, or null where there is none (a package install, an unbuilt checkout). */
-function appFile(app: "mcp" | "sandbox-dashboard", name: string): string | null {
+function appFile(app: "werkmeister-mcp" | "werkmeister-dashboard", name: string): string | null {
   try {
     // Relative to apps/cli, not this file: the CLI bundles this server into its own dist/.
     const file = path.join(sandboxRoot(), "..", app, "dist", name);
@@ -87,13 +87,16 @@ function appFile(app: "mcp" | "sandbox-dashboard", name: string): string | null 
  */
 function rendersUi(server: McpServer, html: string): boolean {
   const uiCap = getUiCapability(server.server.getClientCapabilities());
-  return Boolean(uiCap?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) && appFile("mcp", html) !== null;
+  return (
+    Boolean(uiCap?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) &&
+    appFile("werkmeister-mcp", html) !== null
+  );
 }
 
 function readAppHtml(name: string): string {
-  const file = appFile("mcp", name);
+  const file = appFile("werkmeister-mcp", name);
   if (file === null) {
-    throw new Error(`${name} is not built here — run \`pnpm run build\` in apps/mcp.`);
+    throw new Error(`${name} is not built here — run \`pnpm run build\` in apps/werkmeister-mcp.`);
   }
   return fs.readFileSync(file, "utf-8");
 }
@@ -265,7 +268,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           };
         }
 
-        const cli = appFile("sandbox-dashboard", "form-cli.js");
+        const cli = appFile("werkmeister-dashboard", "form-cli.js");
         if (cli === null) {
           return {
             isError: true,
@@ -273,7 +276,7 @@ export function registerWorkspaceTools(server: McpServer): void {
               {
                 type: "text",
                 text:
-                  "The browser form ships with a werkmeister checkout (apps/sandbox-dashboard), " +
+                  "The browser form ships with a werkmeister checkout (apps/werkmeister-dashboard), " +
                   "not this install. Call `create-workspace` with the fields as `formData`.",
               },
             ],

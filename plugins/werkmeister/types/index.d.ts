@@ -18,7 +18,7 @@ export type WorkspaceRow = {
   feature: string | null;
   /** The first ICM stage whose output/ is still empty; null when not an ICM workspace or every stage has output. */
   stage: { index: number; total: number; name: string } | null;
-  /** sandbox-core `lifecycleOf` — PR files only, no network; null when it could not be read. */
+  /** werkmeister-core `lifecycleOf` — PR files only, no network; null when it could not be read. */
   lifecycle: {
     state: "working" | "ready" | "pr-open" | "merged" | "shipped" | "closed-out" | "abandoned";
     prs: { dir: string; status: string; url: string | null }[];
@@ -65,7 +65,7 @@ export type WorkspaceRow = {
   } | null;
 };
 
-/** One repo worktree's PR for its branch (sandbox-core getWorkspacePRs, via `gh`); url null when it has none. */
+/** One repo worktree's PR for its branch (werkmeister-core getWorkspacePRs, via `gh`); url null when it has none. */
 export type RepoPr = {
   repo: string;
   url: string | null;
@@ -90,13 +90,13 @@ export type InfraStatus = {
   services: ServiceHealth[];
 };
 
-/** sandbox-core `getWorkspaceResources`: one stats sweep, CPU in % of one core. */
+/** werkmeister-core `getWorkspaceResources`: one stats sweep, CPU in % of one core. */
 export type WorkspaceResources = {
   projects: Record<string, { cpuPercent: number; memMib: number }>;
   host: { load: [number, number, number]; cores: number; featureCpuPercent: number };
 };
 
-/** One feature×service row of `sandbox status --intercepts --json` (sandbox-core `InterceptRow`). */
+/** One feature×service row of `sandbox status --intercepts --json` (werkmeister-core `InterceptRow`). */
 export type InterceptRow = {
   feature: string;
   service: string;
@@ -108,7 +108,7 @@ export type InterceptRow = {
   intercepted_by: string | null;
 };
 
-/** What `sandbox status --intercepts --json` prints (sandbox-core `InterceptsSnapshot`). */
+/** What `sandbox status --intercepts --json` prints (werkmeister-core `InterceptsSnapshot`). */
 export type InterceptsSnapshot = {
   available: boolean;
   /** On PATH, connected or not. Absent from a core older than SW-12: fall back to `available`. */

@@ -1,9 +1,9 @@
 /**
- * The bundled MCP server (`dist/mcp.js`, built from `../mcp/src/main.ts` by
+ * The bundled MCP server (`dist/mcp.js`, built from `../werkmeister-mcp/src/main.ts` by
  * esbuild.mjs) answers `initialize` over stdio.
  *
  * This is the one thing an `npm i -g` install relies on that no other test
- * covers: that apps/mcp and its deps (express, the MCP SDK, zod, werkmeister-core)
+ * covers: that apps/werkmeister-mcp and its deps (express, the MCP SDK, zod, werkmeister-core)
  * bundle into self-contained ESM and boot without the monorepo around them.
  * The `test` script builds first, so the bundle is always current here.
  */

@@ -25,7 +25,7 @@
  *     that is comes from `overrides.workspace_repo`, defaulting to the
  *     authenticated GitHub user's own `<user>/sandbox-workspace`;
  *   * the **Jira API token** in the `jira:` section of ~/.sandbox/config.yaml
- *     (OPTIONAL) — the sandbox-dashboard server's fast path for Jira reads;
+ *     (OPTIONAL) — the werkmeister-dashboard server's fast path for Jira reads;
  *     absent means it falls back to the claude CLI, so a missing/unfilled token
  *     is reported ok with guidance, and only a filled-but-rejected token fails
  *     the step;
@@ -1429,7 +1429,7 @@ export function syncPrWatchSchedule(
   ];
 }
 
-/** `<publisher>.<name>` from packages/vscode-plugin/package.json, as `code` lists it. */
+/** `<publisher>.<name>` from packages/werkmeister-vscode/package.json, as `code` lists it. */
 export const VSCODE_EXTENSION_ID = "jbbz.werkmeister-vscode";
 /** Where the CLI's `prepack` puts the packaged extension inside the tarball. */
 export const BUNDLED_VSIX_REL = path.join("dist", "sandbox-workspaces.vsix");
@@ -1491,7 +1491,7 @@ export function syncVscodeExtension(
       {
         label,
         ok: true,
-        detail: `${state.installed ?? "not installed"}; running from a checkout, which bundles no .vsix — build it from packages/vscode-plugin`,
+        detail: `${state.installed ?? "not installed"}; running from a checkout, which bundles no .vsix — build it from packages/werkmeister-vscode`,
       },
     ];
   }

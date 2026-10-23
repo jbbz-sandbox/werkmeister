@@ -15,14 +15,14 @@ published package doesn't depend on the repo's package manager, so
 | App | Path | What |
 | --- | --- | --- |
 | `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI. |
-| `werkmeister-mcp` | [apps/mcp](apps/mcp) | The one MCP server: every tool, over stdio and authenticated HTTP. Bundled into the CLI. |
-| `werkmeister-dashboard` | [apps/sandbox-dashboard](apps/sandbox-dashboard) | The localhost dashboard and the MCP App UI bundles for creating/managing Werkmeister workspaces. |
+| `werkmeister-mcp` | [apps/werkmeister-mcp](apps/werkmeister-mcp) | The one MCP server: every tool, over stdio and authenticated HTTP. Bundled into the CLI. |
+| `werkmeister-dashboard` | [apps/werkmeister-dashboard](apps/werkmeister-dashboard) | The localhost dashboard and the MCP App UI bundles for creating/managing Werkmeister workspaces. |
 
 | Package | Path | What |
 | --- | --- | --- |
-| `werkmeister-core` | [packages/sandbox-core](packages/sandbox-core) | Shared library: config/registry resolution, workspace + issue-tracker helpers, typed wrappers over the CLI. |
-| `werkmeister-ui` | [packages/sandbox-ui](packages/sandbox-ui) | Shared UI modules and the workspace display model, used by the dashboard, the MCP server and the VS Code extension. |
-| `werkmeister-vscode` | [packages/vscode-plugin](packages/vscode-plugin) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
+| `werkmeister-core` | [packages/werkmeister-core](packages/werkmeister-core) | Shared library: config/registry resolution, workspace + issue-tracker helpers, typed wrappers over the CLI. |
+| `werkmeister-ui` | [packages/werkmeister-ui](packages/werkmeister-ui) | Shared UI modules and the workspace display model, used by the dashboard, the MCP server and the VS Code extension. |
+| `werkmeister-vscode` | [packages/werkmeister-vscode](packages/werkmeister-vscode) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
 
 `werkmeister-core` is the shared dependency every workspace builds on — the CLI,
 the dashboard and the VS Code extension all read the same machine config through
@@ -63,7 +63,7 @@ A linked CLI doesn't offer to install the VS Code extension. Only the published
 package ships the `.vsix`, so build and install it yourself:
 
 ```bash
-cd packages/vscode-plugin
+cd packages/werkmeister-vscode
 pnpm run build && pnpm run package --out werkmeister-vscode.vsix
 code --install-extension werkmeister-vscode.vsix --force
 ```
@@ -114,10 +114,10 @@ files, proxy UI and skills the CLI reads at runtime. `werkmeister-core` and the
 CLI's other libraries are bundled in, so the only dependencies npm resolves are
 `dockerode` and `@anthropic-ai/claude-agent-sdk`. `werkmeister setup` still seeds `~/.werkmeister` exactly as it does from a
 checkout, which is what makes the two installs interchangeable. The MCP server
-(`apps/mcp`, every tool) is bundled in too, as `dist/mcp.js`: `werkmeister mcp`,
+(`apps/werkmeister-mcp`, every tool) is bundled in too, as `dist/mcp.js`: `werkmeister mcp`,
 `werkmeister connect`'s MCP server on 3002 and the `werkmeister` plugin's MCP
 entry all work from the package. What stays checkout-only is the workspaces
-dashboard (`apps/sandbox-dashboard`): the localhost browser page and the MCP App
+dashboard (`apps/werkmeister-dashboard`): the localhost browser page and the MCP App
 UI bundles, so on a package install the App tools answer in text.
 
 One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins

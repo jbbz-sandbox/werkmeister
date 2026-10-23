@@ -371,7 +371,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   } else if (ext.cli && !ext.bundled) {
     info(
       `Sandbox Workspaces extension: ${ext.installed ?? "not installed"}. A checkout bundles no .vsix, so ` +
-        "setup can't install it — build it from packages/vscode-plugin (see the README).",
+        "setup can't install it — build it from packages/werkmeister-vscode (see the README).",
     );
   }
 

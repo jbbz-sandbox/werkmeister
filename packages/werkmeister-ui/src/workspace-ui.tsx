@@ -1,9 +1,9 @@
 /**
  * Shared Sandbox Workspaces UI — the single source for all three surfaces:
  *
- *   • Browser dashboard     (apps/sandbox-dashboard/src/browser-main.ts → browser.html)
- *   • Cowork live artifact  (apps/sandbox-dashboard/src/artifact-main.ts → workspace-list.artifact.html)
- *   • MCP App inline view   (apps/mcp/ui/mcp-list.ts → mcp-list.html)
+ *   • Browser dashboard     (apps/werkmeister-dashboard/src/browser-main.ts → browser.html)
+ *   • Cowork live artifact  (apps/werkmeister-dashboard/src/artifact-main.ts → workspace-list.artifact.html)
+ *   • MCP App inline view   (apps/werkmeister-mcp/ui/mcp-list.ts → mcp-list.html)
  *
  * The UI is host-agnostic: every server call and external link goes through
  * the {@link HostBridge} the entrypoint supplies. It renders the top bar, the

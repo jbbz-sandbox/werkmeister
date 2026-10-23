@@ -1,6 +1,6 @@
 /**
  * The localhost workspaces dashboard: the browser page at `GET /` and the
- * `/api/*` bridge it calls. The MCP server is `apps/mcp` (`werkmeister mcp`);
+ * `/api/*` bridge it calls. The MCP server is `apps/werkmeister-mcp` (`werkmeister mcp`);
  * this app only renders.
  *
  *   node dist/main.js            # http://localhost:$PORT/ (default 3001)

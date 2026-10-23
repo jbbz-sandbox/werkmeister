@@ -24,7 +24,7 @@ render, or a live editor.
 
 ## Phase A — Extension Development Host (F5)
 
-1. **Launch the dev host.** Open `packages/vscode-plugin` in VS Code and press
+1. **Launch the dev host.** Open `packages/werkmeister-vscode` in VS Code and press
    **F5**. A second VS Code window ("Extension Development Host") opens.
 
 2. **Open the view.** Click the Sandbox icon in the activity bar to open the
@@ -173,7 +173,7 @@ render, or a live editor.
 
 20. **Install into the real VS Code.**
     ```bash
-    cd packages/vscode-plugin && pnpm run build && pnpm run package --out werkmeister-vscode.vsix && code --install-extension werkmeister-vscode.vsix
+    cd packages/werkmeister-vscode && pnpm run build && pnpm run package --out werkmeister-vscode.vsix && code --install-extension werkmeister-vscode.vsix
     ```
     Deliberately not run during implementation — it modifies your live editor.
 
@@ -195,7 +195,7 @@ render, or a live editor.
     Diagnose against werkmeister-core directly, bypassing the extension:
     ```bash
     env -u SANDBOX_WORKSPACES_ROOT -u SANDBOX_ROOT node -e '
-      const m = await import("/path/to/sandbox/packages/sandbox-core/dist/sandbox.js");
+      const m = await import("/path/to/sandbox/packages/werkmeister-core/dist/sandbox.js");
       console.log((await m.listWorkspaces()).root);
     ' --input-type=module
     ```

@@ -10,7 +10,12 @@ import { fileURLToPath } from "node:url";
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const grep = spawnSync(
   "grep",
-  ["-rn", "injectCss\\|function el(", "packages/sandbox-ui/src", "apps/sandbox-dashboard/src"],
+  [
+    "-rn",
+    "injectCss\\|function el(",
+    "packages/werkmeister-ui/src",
+    "apps/werkmeister-dashboard/src",
+  ],
   { cwd: repo, encoding: "utf8" },
 );
 assert.equal(grep.status, 1, `vanilla-DOM helpers found:\n${grep.stdout}${grep.stderr}`);

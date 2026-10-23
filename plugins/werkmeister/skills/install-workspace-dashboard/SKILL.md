@@ -5,7 +5,7 @@ description: Install the Sandbox Workspaces live dashboard as a Cowork artifact.
 
 # Install the Sandbox Workspaces dashboard artifact
 
-Installs `apps/sandbox-dashboard/dist/workspace-list.artifact.html` (from the
+Installs `apps/werkmeister-dashboard/dist/workspace-list.artifact.html` (from the
 sandbox repo) as a persistent Cowork live artifact: an expandable
 workspace list (container state, issue status, repos + PRs, lifecycle actions)
 with an embedded Claude Code chat panel per workspace that continues that
@@ -20,18 +20,18 @@ workspace's newest session.
 2. **Sandbox MCP server connected**: check that
    `mcp__plugin_werkmeister_werkmeister__list-workspaces` (or the equivalent under the
    user's server name) is available.
-3. **Built HTML exists**: `apps/sandbox-dashboard/dist/workspace-list.artifact.html`
+3. **Built HTML exists**: `apps/werkmeister-dashboard/dist/workspace-list.artifact.html`
    in the sandbox checkout. If missing, build it:
-   `cd apps/sandbox-dashboard && pnpm run build:ui` (needs `pnpm install` at the repo root
+   `cd apps/werkmeister-dashboard && pnpm run build:ui` (needs `pnpm install` at the repo root
    first). This needs the sandbox repo cloned: the dashboard app is not part of
    the `werkmeister` npm package, so a machine with only the
    package installed cannot use this skill.
 
 ## Install steps
 
-1. Read `apps/sandbox-dashboard/dist/workspace-list.artifact.html`. The MCP server
+1. Read `apps/werkmeister-dashboard/dist/workspace-list.artifact.html`. The MCP server
    name is baked in at build time from
-   `apps/sandbox-dashboard/src/artifact-meta.json` (default `werkmeister`),
+   `apps/werkmeister-dashboard/src/artifact-meta.json` (default `werkmeister`),
    and the bundled script derives its tool-name prefix from the file's own
    `cowork-artifact-meta` block at runtime. If the session's Sandbox tools are
    named differently than the meta block says, change `serverName` in
@@ -69,7 +69,7 @@ Tell the user:
   the copy in the connected folder so the open needs no re-copy.
 - The connected-folder copy is a snapshot. If the dashboard is rebuilt
   (`pnpm run build:ui`) or its server name changes, refresh the copy from
-  `apps/sandbox-dashboard/dist/workspace-list.artifact.html` so it stays in sync.
+  `apps/werkmeister-dashboard/dist/workspace-list.artifact.html` so it stays in sync.
 - Chat sends run headless `claude -p` turns in the workspace directory with
   `--permission-mode acceptEdits`; tool activity streams into the panel while
   a turn runs, and "Resume Claude ⌨" opens the real interactive session in
@@ -78,10 +78,10 @@ Tell the user:
 ## Updating the dashboard
 
 When the dashboard source changes — after a rebuild
-(`cd apps/sandbox-dashboard && pnpm run build:ui`) or a server-name change — both
+(`cd apps/werkmeister-dashboard && pnpm run build:ui`) or a server-name change — both
 copies must be refreshed, or the user will keep seeing the old UI:
 
-1. Read the rebuilt `apps/sandbox-dashboard/dist/workspace-list.artifact.html`
+1. Read the rebuilt `apps/werkmeister-dashboard/dist/workspace-list.artifact.html`
    (server-name changes go through `src/artifact-meta.json` + rebuild, never a
    hand-edit of the HTML).
 2. Write it to your scratch/outputs dir and call `mcp__cowork__update_artifact`

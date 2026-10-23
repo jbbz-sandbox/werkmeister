@@ -1,2 +1,4 @@
 # Biome first format + import-sort pass (#217): no behaviour change.
 49b8a10c44d554fe42e5bca798d6b563245c774c
+# SW-30 directory move to the package names (pure git mv).
+5a481a53ef13d190d74f77f7e7b02a6c890e90df

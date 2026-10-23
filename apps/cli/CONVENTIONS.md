@@ -16,7 +16,7 @@ by other tooling, so they are not free to drift.
 Runtime data dirs live alongside the source: `infra/`, `bin/`.
 Path resolution: package root = `WERKMEISTER_ROOT` / `SANDBOX_ROOT` env, else the first
 ancestor holding `apps/cli` (`sandboxRoot()` / `infraRoot()` in
-`packages/sandbox-core/src/config.ts`, re-exported by `src/lib/config.ts` as
+`packages/werkmeister-core/src/config.ts`, re-exported by `src/lib/config.ts` as
 `getSandboxRoot()` / `getInfraRoot()`).
 
 ## Language
@@ -34,13 +34,13 @@ ancestor holding `apps/cli` (`sandboxRoot()` / `infraRoot()` in
   verbatim with other consumers, so the environment options in `generate.ts`
   (autoescape, trim/lstrip) are load-bearing — see the notes there before
   touching them.
-- Subprocesses go through `packages/sandbox-core/src/proc.ts` (spawnSync-based, synchronous):
+- Subprocesses go through `packages/werkmeister-core/src/proc.ts` (spawnSync-based, synchronous):
   - `run(cmd: string[], opts)` → `{ status, stdout, stderr }`; `check: true` throws `ProcError`.
   - `capture(cmd)` → trimmed stdout, throws on failure.
   - Streaming/inherit-stdio cases: pass `stdio: "inherit"`.
   - `timeout` is in **seconds**, not milliseconds.
 - Filesystem work uses the sync `node:fs` API (`readFileSync` etc.) plus `node:path`.
-- ANSI colors come from `packages/sandbox-core/src/colors.ts` — the single definition site.
+- ANSI colors come from `packages/werkmeister-core/src/colors.ts` — the single definition site.
 - `console.error` for stderr, `console.log` for stdout.
 - `process.exit(n)` for exit codes. Thrown errors reach `main`, which prints
   `Error: <msg>` in red and exits 1; `SANDBOX_DEBUG` re-raises with a stack.

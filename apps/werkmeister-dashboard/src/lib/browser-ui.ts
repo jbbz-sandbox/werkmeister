@@ -7,7 +7,7 @@
  * UI (`dist/browser.html`) as an ordinary web page and proxies its tool calls
  * back into the real MCP tool handlers over an in-memory transport. No dispatch
  * table to keep in sync: the browser talks to the exact tools every other host
- * does, via a `Client` linked to apps/mcp's `createServer()`.
+ * does, via a `Client` linked to apps/werkmeister-mcp's `createServer()`.
  */
 
 import fs from "node:fs/promises";
@@ -64,7 +64,7 @@ export async function createBrowserUiRouter(): Promise<Router> {
       res
         .status(500)
         .type("text")
-        .send("Browser UI bundle missing — run `pnpm run build` in apps/sandbox-dashboard.");
+        .send("Browser UI bundle missing — run `pnpm run build` in apps/werkmeister-dashboard.");
     }
   });
 

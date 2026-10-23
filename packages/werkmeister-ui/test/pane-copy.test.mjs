@@ -16,6 +16,6 @@ test("plugins/werkmeister/hooks/display-model.ts is display-model.ts from the To
   assert.equal(
     body("../../../plugins/werkmeister/hooks/display-model.ts"),
     body("../src/display-model.ts"),
-    "the pane's copy drifted: copy packages/sandbox-ui/src/display-model.ts over it from the Tone comment down",
+    "the pane's copy drifted: copy packages/werkmeister-ui/src/display-model.ts over it from the Tone comment down",
   );
 });

@@ -23,13 +23,13 @@ if (!running.length) {
 }
 
 const body = "werkmeister-core smoke\n";
-const dir = await mkdtemp(path.join(tmpdir(), "sandbox-core-smoke-"));
+const dir = await mkdtemp(path.join(tmpdir(), "werkmeister-core-smoke-"));
 const host = path.join(dir, "payload.txt");
 await writeFile(host, body);
 
 // Not every running container is a usable target — a k8s pause container has no
 // /tmp to write into — so take the first that accepts the copy.
-const dest = "/tmp/sandbox-core-smoke.txt";
+const dest = "/tmp/werkmeister-core-smoke.txt";
 let container = null;
 for (const candidate of running) {
   try {
@@ -51,7 +51,7 @@ assert.equal(read.stdout, body, "the file did not round-trip through putArchive"
 
 // A failing command must surface its status rather than looking like success,
 // and its diagnostics must land on stderr — that is what the demux is for.
-const missing = await execCapture(container, ["cat", "/tmp/sandbox-core-smoke-absent"]);
+const missing = await execCapture(container, ["cat", "/tmp/werkmeister-core-smoke-absent"]);
 assert.notEqual(missing.exitCode, 0, "a missing file should not exit 0");
 assert.equal(missing.stdout, "", "nothing should reach stdout");
 assert.match(missing.stderr, /No such file|not found|cannot open/i);

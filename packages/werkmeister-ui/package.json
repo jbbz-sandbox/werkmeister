@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
-  "description": "The UI modules apps/sandbox-dashboard and apps/mcp share, and the non-DOM workspace display model every surface reads.",
+  "description": "The UI modules apps/werkmeister-dashboard and apps/werkmeister-mcp share, and the non-DOM workspace display model every surface reads.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

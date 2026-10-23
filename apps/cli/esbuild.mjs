@@ -12,7 +12,7 @@
  * budget — see gate.ts). Bundling would otherwise collapse them into one file
  * and hand the gate the whole CLI's import cost on every Edit/Write. `mcp`
  * execs `dist/mcp.js`: the headless MCP server lives in the sibling
- * `apps/mcp` workspace, which is private and not published, so it is bundled
+ * `apps/werkmeister-mcp` workspace, which is private and not published, so it is bundled
  * here from source — the same reason werkmeister-core is. Without it, `sandbox
  * mcp` and the `werkmeister` plugin's MCP entry have no target on an
  * `npm i -g` install.
@@ -57,7 +57,7 @@ const options = {
     { in: "src/lib/gate.ts", out: "lib/gate" },
     { in: "src/lib/pr_guard.ts", out: "lib/pr_guard" },
     { in: "src/lib/agent_state.ts", out: "lib/agent_state" },
-    { in: "../mcp/src/main.ts", out: "mcp" },
+    { in: "../werkmeister-mcp/src/main.ts", out: "mcp" },
   ],
   bundle: true,
   outdir: "dist",

@@ -20,7 +20,7 @@ Versions: `range` is what package.json declares, `→ x.y.z` is what pnpm-lock.y
 
 | Path | What it is |
 |---|---|
-| `dist/main.js`, `dist/lib/*.js`, `dist/mcp.js` | minified ESM bundles (esbuild, `apps/cli/esbuild.mjs`) of the CLI, the gate/hook entries and the MCP server. They inline `werkmeister-core`, `apps/mcp` and 115 npm packages |
+| `dist/main.js`, `dist/lib/*.js`, `dist/mcp.js` | minified ESM bundles (esbuild, `apps/cli/esbuild.mjs`) of the CLI, the gate/hook entries and the MCP server. They inline `werkmeister-core`, `apps/werkmeister-mcp` and 115 npm packages |
 | `dist/THIRD-PARTY-LICENSES.txt` | the name, version, licence and full licence text of each package inlined above. The build writes it from esbuild's metafile (packages that contribute bytes to an output) and fails if a bundled package has no licence file |
 | `dist/LICENSE`, `dist/NOTICE` | copies of the repo's files, written by the same build |
 | `dist/sandbox-workspaces.vsix` | the VS Code extension, built in `prepack` (see [vsix](#vs-code-extension-vsix)) |
@@ -39,36 +39,36 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 |---|---|---|---|
 | commander | ^13.1.0 → 13.1.0 | MIT | CLI argument parsing (`apps/cli`) |
 | @inquirer/prompts | ^8.5.2 → 8.5.2 | MIT | `setup` / interactive prompts (`apps/cli`) |
-| yaml | ^2.9.0 → 2.9.0 | ISC | config and workspace files (`sandbox-core`, `apps/cli`, dashboard) |
-| nunjucks | ^3.2.4 → 3.2.4 | BSD-2-Clause | compose / Caddyfile / env templates (`sandbox-core`) |
-| ajv | ^8.20.0 → 8.20.0 | MIT | services-fragment schema validation in `detect` (`sandbox-core/src/fragment_detect/validate.ts`) |
-| jsonc-parser | ^3.3.1 → 3.3.1 | MIT | comment-preserving edits to VS Code settings in `setup` (`sandbox-core/src/machine_setup.ts`) |
-| tar-fs | ^2.1.5 → 2.1.5 | MIT | tar streams for the Docker API (`sandbox-core/src/docker.ts`) |
-| @modelcontextprotocol/sdk | ^1.30.0 → 1.30.0 | MIT | MCP server (`apps/mcp`, bundled as `dist/mcp.js`) |
-| @modelcontextprotocol/ext-apps | ^1.7.0 → 1.7.4 | MIT | MCP App resources (`apps/mcp`) |
-| express | ^5.1.0 → 5.2.1 | MIT | MCP HTTP transport (`apps/mcp`) |
-| zod | ^4.4.3 → 4.4.3 | MIT | MCP tool schemas (`apps/mcp`) |
+| yaml | ^2.9.0 → 2.9.0 | ISC | config and workspace files (`werkmeister-core`, `apps/cli`, dashboard) |
+| nunjucks | ^3.2.4 → 3.2.4 | BSD-2-Clause | compose / Caddyfile / env templates (`werkmeister-core`) |
+| ajv | ^8.20.0 → 8.20.0 | MIT | services-fragment schema validation in `detect` (`werkmeister-core/src/fragment_detect/validate.ts`) |
+| jsonc-parser | ^3.3.1 → 3.3.1 | MIT | comment-preserving edits to VS Code settings in `setup` (`werkmeister-core/src/machine_setup.ts`) |
+| tar-fs | ^2.1.5 → 2.1.5 | MIT | tar streams for the Docker API (`werkmeister-core/src/docker.ts`) |
+| @modelcontextprotocol/sdk | ^1.30.0 → 1.30.0 | MIT | MCP server (`apps/werkmeister-mcp`, bundled as `dist/mcp.js`) |
+| @modelcontextprotocol/ext-apps | ^1.7.0 → 1.7.4 | MIT | MCP App resources (`apps/werkmeister-mcp`) |
+| express | ^5.1.0 → 5.2.1 | MIT | MCP HTTP transport (`apps/werkmeister-mcp`) |
+| zod | ^4.4.3 → 4.4.3 | MIT | MCP tool schemas (`apps/werkmeister-mcp`) |
 
 `dockerode` and its tree (`docker-modem`, `ssh2`, `cpu-features`, `@grpc/grpc-js`…) is **not** in the CLI bundle: it is an installed dependency (below).
 
-`react`, `react-dom`, `@rjsf/*` and `markdown-it` are **not** in the published package either. They build into `apps/mcp/dist/*.html` and the dashboard, which only exist in a checkout, and `readAppHtml` (`apps/mcp/src/workspace_tools.ts`) only finds them there. Their category is **bundled (checkout builds only)**:
+`react`, `react-dom`, `@rjsf/*` and `markdown-it` are **not** in the published package either. They build into `apps/werkmeister-mcp/dist/*.html` and the dashboard, which only exist in a checkout, and `readAppHtml` (`apps/werkmeister-mcp/src/workspace_tools.ts`) only finds them there. Their category is **bundled (checkout builds only)**:
 
 | Package | Version | SPDX | Where used |
 |---|---|---|---|
 | react, react-dom | ^19.2.8 → 19.2.8 | MIT | `werkmeister-ui` → MCP App HTML, dashboard |
 | @rjsf/core, @rjsf/utils, @rjsf/validator-ajv8 | ^5.24.0 → 5.24.13 | Apache-2.0 | config forms in `werkmeister-ui` |
 | markdown-it | ^14.3.0 → 14.3.2 | MIT | markdown rendering in `werkmeister-ui` |
-| yaml, express, zod, MCP SDK + ext-apps | as above | as above | `apps/sandbox-dashboard` server |
+| yaml, express, zod, MCP SDK + ext-apps | as above | as above | `apps/werkmeister-dashboard` server |
 
 ### VS Code extension (.vsix)
 
-`packages/vscode-plugin/esbuild.mjs` inlines `werkmeister-core` and its dependencies into `extension.cjs` (CJS, not minified). The .vsix ships on its own and inside the npm package. Its bundled set, read from the sourcemap: dockerode 5.0.1, docker-modem 5.0.7, @balena/dockerignore 1.0.2, long 5.3.2 (Apache-2.0); protobufjs 7.6.5 and `@protobufjs/*`, bcrypt-pbkdf 1.0.2 (BSD-3-Clause); nunjucks (BSD-2-Clause); yaml, chownr, once, inherits, wrappy, split-ca (ISC); tweetnacl 0.14.5 (Unlicense); ssh2 1.17.0, cpu-features 0.0.10, jsonc-parser, tar-fs, tar-stream and the stream helpers (MIT). The .vsix currently ships no licence texts (follow-up 2).
+`packages/werkmeister-vscode/esbuild.mjs` inlines `werkmeister-core` and its dependencies into `extension.cjs` (CJS, not minified). The .vsix ships on its own and inside the npm package. Its bundled set, read from the sourcemap: dockerode 5.0.1, docker-modem 5.0.7, @balena/dockerignore 1.0.2, long 5.3.2 (Apache-2.0); protobufjs 7.6.5 and `@protobufjs/*`, bcrypt-pbkdf 1.0.2 (BSD-3-Clause); nunjucks (BSD-2-Clause); yaml, chownr, once, inherits, wrappy, split-ca (ISC); tweetnacl 0.14.5 (Unlicense); ssh2 1.17.0, cpu-features 0.0.10, jsonc-parser, tar-fs, tar-stream and the stream helpers (MIT). The .vsix currently ships no licence texts (follow-up 2).
 
 ### Installed at runtime (`apps/cli` dependencies)
 
 | Package | Version | SPDX | Where used |
 |---|---|---|---|
-| dockerode | ^5.0.1 → 5.0.1 | Apache-2.0 | Docker Engine API: containers, compose reads/stop/logs (`sandbox-core`). Left external so npm resolves `ssh2`'s optional native `cpu-features` (`apps/cli/esbuild.mjs`) |
+| dockerode | ^5.0.1 → 5.0.1 | Apache-2.0 | Docker Engine API: containers, compose reads/stop/logs (`werkmeister-core`). Left external so npm resolves `ssh2`'s optional native `cpu-features` (`apps/cli/esbuild.mjs`) |
 | … docker-modem 5.0.7 | | Apache-2.0 | dockerode transport |
 | … @grpc/grpc-js 1.14.5, protobufjs | | Apache-2.0, BSD-3-Clause | dockerode's BuildKit session |
 | … ssh2 1.17.0, cpu-features 0.0.10 (optional) | | MIT | dockerode's `ssh://` hosts |
@@ -112,14 +112,14 @@ The code checks only Node (via `engines`; the wrapper fails with "could not loca
 
 ## Host commands
 
-Found by grepping for the process helpers: `run([…])`, `runCapture`, `runCmd`, `procRun` and `runner([…])` in `packages/sandbox-core/src`; `spawn` / `execFile*` in `apps/*`, `packages/vscode-plugin/src` and `plugins/werkmeister/hooks`; and the shell scripts under `apps/cli/bin`, `apps/cli/infra` and `bin/`. To refresh the list:
+Found by grepping for the process helpers: `run([…])`, `runCapture`, `runCmd`, `procRun` and `runner([…])` in `packages/werkmeister-core/src`; `spawn` / `execFile*` in `apps/*`, `packages/werkmeister-vscode/src` and `plugins/werkmeister/hooks`; and the shell scripts under `apps/cli/bin`, `apps/cli/infra` and `bin/`. To refresh the list:
 
     grep -rnoE '(run|runCapture|runCmd|procRun|runner|spawn|execFile|execFileSync)\(\s*\[?\s*"[a-z][a-z0-9_.-]*' apps packages plugins --include='*.ts' --include='*.tsx' --include='*.mjs' --exclude-dir=node_modules --exclude-dir=dist
 
 | Command | Category | Where (main call sites) | SPDX / terms |
 |---|---|---|---|
-| git | required | `sandbox-core/src/{worktrees,sandbox,pr_lifecycle,git_hooks,graduate,workspace_init,machine_setup}.ts`, `apps/cli/esbuild.mjs`, `build_freshness.ts` | GPL-2.0-only |
-| docker (`docker compose`) | required | `sandbox-core/src/{compose,compose_infra,lifecycle,pr_lifecycle,docker,caddy,infra}.ts` | Apache-2.0 |
+| git | required | `werkmeister-core/src/{worktrees,sandbox,pr_lifecycle,git_hooks,graduate,workspace_init,machine_setup}.ts`, `apps/cli/esbuild.mjs`, `build_freshness.ts` | GPL-2.0-only |
+| docker (`docker compose`) | required | `werkmeister-core/src/{compose,compose_infra,lifecycle,pr_lifecycle,docker,caddy,infra}.ts` | Apache-2.0 |
 | node, npm, npx | required | `web_servers.ts` (`node`; `pnpm run build` in a checkout), wrapper npx bootstrap, `test_run.ts` (`npx playwright`), `scaffold.ts` (`npx @upstash/context7-mcp` in generated MCP config) | MIT, Artistic-2.0 |
 | claude | required for setup | `claude_cli.ts`, `machine_setup.ts`, `sandbox.ts` (`CLAUDE_BIN` override) | proprietary (Anthropic) |
 | sh / bash | required | wrappers, `machine_setup.ts` (`bash generate-certs.sh`), `plugins/werkmeister/hooks/register.tsx` | GPL-3.0-or-later |
@@ -127,7 +127,7 @@ Found by grepping for the process helpers: `run([…])`, `runCapture`, `runCmd`,
 | sudo | feature | `generate-certs.sh` (trust cert, `/etc/hosts`); Telepresence | ISC |
 | security (macOS) | feature | `infra.ts` (corporate CA), `generate-certs.sh` (`add-trusted-cert`) | Apple macOS component |
 | osascript (macOS) | feature | `sandbox.ts` (resume Claude in Terminal) | Apple macOS component |
-| open / xdg-open | feature | `apps/mcp/src/workspace_tools.ts`, `apps/sandbox-dashboard/src/lib/localhost-form.ts`, `register.tsx` | Apple / xdg-utils (MIT) |
+| open / xdg-open | feature | `apps/werkmeister-mcp/src/workspace_tools.ts`, `apps/werkmeister-dashboard/src/lib/localhost-form.ts`, `register.tsx` | Apple / xdg-utils (MIT) |
 | lsof | feature, best effort | `web_servers.ts`, `pr_lifecycle.ts` | lsof licence (BSD-style) |
 | ps | feature | `pr_lifecycle.ts` (close-out lists `claude` sessions) | system |
 | kubectl | optional | `k8s.ts`, `sandbox.ts`, `fragment_detect/kustomize.ts`; also inside the k8s-forwards image | Apache-2.0 |
@@ -152,7 +152,7 @@ An image's licence covers its contents (base OS packages and the tool) and can d
 | `jaegertracing/all-in-one@sha256:ab6f…` (pinned from `latest`) | optional (observability, on by default) | `shared-infra.yml` | Apache-2.0 | Apache-2.0 Go binary; base layers not inspected |
 | `redis/redisinsight@sha256:aa21…` (pinned from `latest`) | optional (observability, on by default) | `shared-infra.yml` | **SSPL-1.0** (`/usr/src/app/redisinsight/LICENSE`†) | SSPL-1.0 app; base layers not inspected |
 | `node:20.16.0` (feature default) / your `image:` | required per feature | `infra/templates/docker-compose.feature.yml.njk` | MIT (Node.js) | Docker Official Image on Debian: mixed (GPL, LGPL, MIT, …) |
-| `node:22` + xvfb, xauth, GTK 3, NSS, … (SW-62) | dev-only | `packages/vscode-plugin/Dockerfile` | MIT (Node.js) | Debian packages: xvfb MIT/X11, GTK LGPL-2.1-or-later, NSS MPL-2.0, others mixed |
+| `node:22` + xvfb, xauth, GTK 3, NSS, … (SW-62) | dev-only | `packages/werkmeister-vscode/Dockerfile` | MIT (Node.js) | Debian packages: xvfb MIT/X11, GTK LGPL-2.1-or-later, NSS MPL-2.0, others mixed |
 | Static docker 27.5.1, compose v2.32.4, kubectl v1.31.4 (downloaded into a tools volume) | dev-only (the sandbox repo's own services) | `infra/compose/scripts/sandbox-install-startup.sh` | Apache-2.0 ×3 | — |
 | `alpine:3` (`detect` fallback guess) | — | `fragment_detect/precedence.ts` | — | Alpine: mixed |
 

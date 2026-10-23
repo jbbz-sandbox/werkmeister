@@ -4,7 +4,7 @@
  *
  * The Desktop flow renders the RJSF form inline via ext-apps. Hosts without the
  * `io.modelcontextprotocol/ui` capability can't do that — so for them
- * apps/mcp's `create-workspace-form` tool runs form-cli.js, which spins up a
+ * apps/werkmeister-mcp's `create-workspace-form` tool runs form-cli.js, which spins up a
  * tiny localhost HTTP server, serves the bundled create-form page
  * (`dist/form.html`, the same src/create-form.ts the browser dashboard's
  * "New workspace" tab renders — fully self-contained, no CDN),
@@ -134,7 +134,7 @@ export function promptViaLocalhostForm(
         res
           .status(500)
           .type("text")
-          .send("Form UI bundle missing — run `pnpm run build` in apps/sandbox-dashboard.");
+          .send("Form UI bundle missing — run `pnpm run build` in apps/werkmeister-dashboard.");
       }
     });
 

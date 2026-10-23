@@ -1,6 +1,6 @@
 /**
  * THE create-workspace form — the single implementation every surface renders:
- *   • the browser dashboard's "New workspace" tab (apps/sandbox-dashboard/src/browser-main.tsx),
+ *   • the browser dashboard's "New workspace" tab (apps/werkmeister-dashboard/src/browser-main.tsx),
  *   • the localhost fallback page (src/form-main.ts), and
  *   • the Desktop inline MCP App (src/mcp-app.ts).
  * All three differ only in the {@link HostBridge} they pass in; the form and

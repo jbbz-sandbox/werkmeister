@@ -14,6 +14,6 @@
     "noEmit": false,
     "types": ["node"]
   },
-  // A glob, not a list — same reasoning as packages/sandbox-core/tsconfig.json.
+  // A glob, not a list — same reasoning as packages/werkmeister-core/tsconfig.json.
   "include": ["src/**/*.ts"]
 }

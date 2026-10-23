@@ -9,9 +9,9 @@ import { needsCluster } from "./dist/config.js";
 
 const registry = {
   cli: { type: "cli" },
-  "sandbox-core": { type: "library" },
-  "vscode-plugin": { type: "extension" },
-  "sandbox-dashboard": { type: "web", feature_router: {} },
+  "werkmeister-core": { type: "library" },
+  "werkmeister-vscode": { type: "extension" },
+  "werkmeister-dashboard": { type: "web", feature_router: {} },
   backend: { type: "api", k8s_deployment: "backend" },
   worker: { type: "api", environment: { REDIS_URL: "redis://k8s-redis:9050" } },
   caller: { type: "api", environment: { API: "http://{backend}/graphql" } },
@@ -24,8 +24,8 @@ test("a workspace with no local services needs nothing", () => {
 });
 
 test("werkmeister-only and routed-only workspaces don't need the cluster", () => {
-  assert.equal(needsCluster(["cli", "sandbox-core", "vscode-plugin"], registry), false);
-  assert.equal(needsCluster(["sandbox-dashboard"], registry), false);
+  assert.equal(needsCluster(["cli", "werkmeister-core", "werkmeister-vscode"], registry), false);
+  assert.equal(needsCluster(["werkmeister-dashboard"], registry), false);
 });
 
 test("a cluster workload needs it", () => {

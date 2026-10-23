@@ -23,10 +23,10 @@ repo:
 services:
   # --- The sandbox repo's own workspaces (self-hosting) -----------------------
   # All five share one repo bind mount at /app and one per-feature node_modules
-  # volume; sandbox-install populates it and builds sandbox-core/dist first.
+  # volume; sandbox-install populates it and builds werkmeister-core/dist first.
   # 1G each: the pre-PR gate can run the dashboard's build in any of them, and
   # it runs out of heap at 512M.
-  # cli, sandbox-core and vscode-plugin (types cli/library/extension) idle under
+  # cli, werkmeister-core and werkmeister-vscode (types cli/library/extension) idle under
   # `sleep infinity` with no healthcheck; their `command:` watchers run only under
   # `sandbox up --dev`. The port is still published, so they keep their slot.
   # See docs/users-guide.md "Self-hosting the sandbox repo" in the sandbox repo.
@@ -42,7 +42,7 @@ services:
     path: apps/cli
     type: cli
     archetype: node-tool
-    # apps/mcp ships inside the CLI (dist/mcp.js), so its tests run here.
+    # apps/werkmeister-mcp ships inside the CLI (dist/mcp.js), so its tests run here.
     test: "pnpm turbo run test --filter=werkmeister --filter=werkmeister-mcp"
     validate: "Build, then run the built sandbox binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
     internal_port: 3998
@@ -73,11 +73,11 @@ services:
       # once per feature, without the prompt that would hang a container.
       COREPACK_HOME: /opt/sandbox-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
-      # Read by sandbox-dashboard; harmless for the others.
+      # Read by werkmeister-dashboard; harmless for the others.
       HOST: 0.0.0.0
 
-  sandbox-core:
-    path: packages/sandbox-core
+  werkmeister-core:
+    path: packages/werkmeister-core
     type: library
     archetype: node-tool
     test: "pnpm turbo run test --filter=werkmeister-core"
@@ -86,7 +86,7 @@ services:
     health_endpoint: /
     setup_service: sandbox-install
     image: node:22
-    command: "cd packages/sandbox-core && exec pnpm exec tsc --watch --preserveWatchOutput"
+    command: "cd packages/werkmeister-core && exec pnpm exec tsc --watch --preserveWatchOutput"
     memory_limit: 1G
     memory_reservation: 128M
     node_modules_volume: node-modules
@@ -99,8 +99,8 @@ services:
   # SANDBOX_MCP_TOKEN arrives via the feature .env (a missing one makes
   # `sandbox up` refuse the workspace). It has cli's host access too, so its
   # tests can use docker directly (#134).
-  vscode-plugin:
-    path: packages/vscode-plugin
+  werkmeister-vscode:
+    path: packages/werkmeister-vscode
     type: extension
     archetype: mcp-client
     test: "pnpm turbo run test --filter=werkmeister-vscode"
@@ -110,9 +110,9 @@ services:
     setup_service: sandbox-install
     # Dockerfile adds xvfb and Electron's libs; the stock image makes
     # test:integration exit 127 (SW-62). The tag is local, never pulled.
-    image: sandbox-vscode-plugin:local
+    image: werkmeister-vscode:local
     dockerfile: Dockerfile
-    command: "cd packages/vscode-plugin && exec pnpm run watch"
+    command: "cd packages/werkmeister-vscode && exec pnpm run watch"
     memory_limit: 1G
     memory_reservation: 128M
     node_modules_volume: node-modules
@@ -122,8 +122,8 @@ services:
 
   # Serves the workspace dashboard + MCP endpoint; its tools shell out to the
   # CLI, docker and kubectl, so it gets the same host access as `cli`.
-  sandbox-dashboard:
-    path: apps/sandbox-dashboard
+  werkmeister-dashboard:
+    path: apps/werkmeister-dashboard
     type: web
     archetype: node-web
     test: "pnpm turbo run test --filter=werkmeister-dashboard"
@@ -132,7 +132,7 @@ services:
     health_endpoint: /
     setup_service: sandbox-install
     image: node:22
-    command: "cd apps/sandbox-dashboard && exec pnpm run dev"
+    command: "cd apps/werkmeister-dashboard && exec pnpm run dev"
     memory_limit: 1G
     memory_reservation: 256M
     node_modules_volume: node-modules
@@ -144,7 +144,7 @@ services:
 setup_services:
   # The sandbox repo's install + build + tools download, all in startup.sh
   # (infra/compose/scripts/sandbox-install-startup.sh). The build runs so
-  # sandbox-core/dist exists before the four services start; the `tools` volume
+  # werkmeister-core/dist exists before the four services start; the `tools` volume
   # gets docker/compose/kubectl and the pnpm shim for the host-access services.
   # SW-31: `pnpm install --frozen-lockfile` (`npm ci` for a branch still on
   # package-lock.json) never rewrites the lockfile, so an up can't dirty the

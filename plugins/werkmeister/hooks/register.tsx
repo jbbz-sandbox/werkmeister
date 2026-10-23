@@ -17,7 +17,7 @@ import { displayModel, hostLine, type Tone, type WorkspaceDisplay } from "./disp
 export const PLUGIN = "werkmeister";
 export const PANE = "workspaces";
 
-// Workspace reads and actions run sandbox-core in a node child, the way the former /workspace-form mod did:
+// Workspace reads and actions run werkmeister-core in a node child, the way the former /workspace-form mod did:
 // the plugin's own MCP server is not answerable from a hook in the desktop host, a host process is.
 // stdin carries one JSON request { op, ...args }; stdout ends with one JSON line { ok, result | error }.
 // The core package is found from $WERKMEISTER_CORE_PATH or $SANDBOX_CORE_PATH, else from where the `werkmeister`
@@ -121,7 +121,7 @@ try {
     // The pane distils on the session's own model (fetchIssue) before Create and sends distill: false.
     'create-workspace': () => core.createWorkspace(args.formData, { open: false, distill: args.distill }),
     'refine-request': () => core.buildRefinePrompt(args.text, args.instruction, args.formData),
-    // The create form's rules live in sandbox-core, shared with the browser form.
+    // The create form's rules live in werkmeister-core, shared with the browser form.
     'validate-form': () => core.validateFormData(args.bundle, args.formData),
     'merge-form': () => core.mergeFormData(args.current, args.incoming),
   }
@@ -132,7 +132,7 @@ try {
 }
 `;
 
-/** One sandbox-core call in a node child; throws with the child's error text. */
+/** One werkmeister-core call in a node child; throws with the child's error text. */
 async function core<T>(
   $: EngineInterface,
   op: string,
@@ -153,10 +153,10 @@ async function core<T>(
     throw new Error(
       lines.find((l) => /Error\b/.test(l)) ||
         lines.pop() ||
-        `sandbox-core gave no result (exit ${r.exitCode})`,
+        `werkmeister-core gave no result (exit ${r.exitCode})`,
     );
   }
-  if (!o.ok || o.result === undefined) throw new Error(o.error ?? "sandbox-core failed");
+  if (!o.ok || o.result === undefined) throw new Error(o.error ?? "werkmeister-core failed");
   return o.result;
 }
 export const POLL_MS = 5000;
@@ -265,7 +265,7 @@ export function optionGroups(f: FormField): [string, string[]][] {
 const isEmpty = (v: Draft[string] | undefined) =>
   v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
 
-/** Why the draft can't be submitted, one line per field in form order; [] when it can. The rules are sandbox-core's validateFormData. */
+/** Why the draft can't be submitted, one line per field in form order; [] when it can. The rules are werkmeister-core's validateFormData. */
 async function formErrors(
   $: EngineInterface,
   bundle: FormBundle,
@@ -403,7 +403,7 @@ async function fetchIssue($: EngineInterface): Promise<void> {
   if (!ref) return;
   await $.state.set(FORM_BUSY, "fetch");
   try {
-    // The tracker lookup runs in sandbox-core; the distillation runs on this session's own client and login.
+    // The tracker lookup runs in werkmeister-core; the distillation runs on this session's own client and login.
     const req = await core<{ base: Record<string, unknown>; prompt: string | null }>(
       $,
       "issue-form-request",
@@ -448,7 +448,7 @@ async function fetchIssue($: EngineInterface): Promise<void> {
 export const REFINE_MODEL = "sonnet";
 
 /**
- * "Refine with Claude": rewrite the field with sandbox-core's refine prompt, the issue and the other fields as context.
+ * "Refine with Claude": rewrite the field with werkmeister-core's refine prompt, the issue and the other fields as context.
  * The completion runs on this session's own client and login, not a `claude -p` child with credentials of its own.
  */
 async function refineField($: EngineInterface, key: string, instruction: string): Promise<void> {
@@ -467,7 +467,7 @@ async function refineField($: EngineInterface, key: string, instruction: string)
       await $.state.set(NOTE, `Refine failed (${r.reason}); the field is unchanged.`);
       return;
     }
-    // Same extraction as sandbox-core's extractResult.
+    // Same extraction as werkmeister-core's extractResult.
     const refined = (r.text.match(/<result>\s*([\s\S]*?)\s*<\/result>/i)?.[1] ?? r.text).trim();
     if (!refined) {
       await $.state.set(NOTE, "Refine returned no text; the field is unchanged.");
@@ -689,7 +689,7 @@ const PAST_GH = new Set(["shipped", "abandoned"]);
 
 /**
  * The row with each PR file's status replaced by the PR poll's live state for its repo, and the lifecycle state
- * recomputed as sandbox-core's `lifecycleOf` does, so the meta line and buttons never contradict the card's
+ * recomputed as werkmeister-core's `lifecycleOf` does, so the meta line and buttons never contradict the card's
  * `⑂` PR line (SW-50). A repo the poll has no PR for, or no poll yet, keeps its file status.
  */
 export function withLivePrs(r: WorkspaceRow, live: RepoPr[]): WorkspaceRow {
@@ -1449,7 +1449,7 @@ async function openPane($: EngineInterface): Promise<void> {
 /** Sidebar group that desktop sessions started in a workspace are filed under, when the person has made it. */
 export const SESSION_GROUP = "Feature Workspaces";
 
-// sandbox-core's DOT_DIRS (SW-7), new name first; the hook cannot import sandbox-core.
+// werkmeister-core's DOT_DIRS (SW-7), new name first; the hook cannot import werkmeister-core.
 const DOT_DIRS = [".werkmeister", ".sandbox"];
 
 async function hasWorkspaceYml($: EngineInterface, dir: string): Promise<boolean> {

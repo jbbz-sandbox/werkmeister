@@ -45,7 +45,7 @@ const bridge: HostBridge = {
   },
 };
 
-// Match the other surfaces' page chrome (see apps/sandbox-dashboard/src/form-main.ts).
+// Match the other surfaces' page chrome (see apps/werkmeister-dashboard/src/form-main.ts).
 const BODY_GAP = 16;
 document.body.style.cssText = `margin:0;background:#f7f7f5;padding:${BODY_GAP}px`;
 const root = appRoot();

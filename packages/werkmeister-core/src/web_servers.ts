@@ -1,6 +1,6 @@
 /**
  * Lifecycle for the sandbox's host web servers — the workspaces dashboard /
- * MCP app (apps/sandbox-dashboard) and the remote MCP surface (apps/mcp).
+ * MCP app (apps/werkmeister-dashboard) and the remote MCP surface (apps/werkmeister-mcp).
  *
  * All run as plain host `node` processes — NOT containers — because their
  * tools drive host-local things (Docker, VS Code, Terminal, kubectl, the
@@ -53,7 +53,7 @@ export interface WebApp {
   /**
    * Extra environment variables for this app's process, merged over
    * `process.env` last (see `start()`). Per-app rather than inherited by
-   * every managed app: `apps/mcp` is the one server a container must reach
+   * every managed app: `apps/werkmeister-mcp` is the one server a container must reach
    * over the network, so it alone needs a wide (`0.0.0.0`) bind. DASHBOARD
    * is host-only and unauthenticated — binding it to every interface would
    * expose unauthenticated tools to the network, so it must not inherit this.
@@ -63,7 +63,7 @@ export interface WebApp {
 
 export const DASHBOARD: WebApp = {
   label: "Workspaces dashboard",
-  dir: "sandbox-dashboard",
+  dir: "werkmeister-dashboard",
   port: 3001,
   stem: "mcp-server",
   entry: "dist/main.js",
@@ -71,7 +71,7 @@ export const DASHBOARD: WebApp = {
 };
 
 /**
- * The remote MCP surface (`apps/mcp`) — the authenticated, headless sibling of
+ * The remote MCP surface (`apps/werkmeister-mcp`) — the authenticated, headless sibling of
  * DASHBOARD. Its stem is `sandbox-mcp` and not `mcp-server`, which DASHBOARD
  * already holds: a shared stem means a shared PID file and two apps reaping
  * each other. Port 3002 is free — dashboard 3001, feature slots
@@ -79,7 +79,7 @@ export const DASHBOARD: WebApp = {
  */
 export const MCP: WebApp = {
   label: "Sandbox MCP server",
-  dir: "mcp",
+  dir: "werkmeister-mcp",
   port: 3002,
   stem: "sandbox-mcp",
   entry: "dist/main.js",
@@ -88,7 +88,7 @@ export const MCP: WebApp = {
   // Must be reachable from a container with no Docker socket (that's the
   // whole point of this app), and a container's requests arrive over the
   // bridge network, not loopback — so this is the one managed app that
-  // needs a wide bind. On a 0.0.0.0 bind, apps/mcp/src/lib/token.ts's
+  // needs a wide bind. On a 0.0.0.0 bind, apps/werkmeister-mcp/src/lib/token.ts's
   // authorized() makes the bearer token mandatory (it only accepts a
   // missing header on loopback), so this does not open the surface up —
   // it just makes auth non-optional. DASHBOARD deliberately doesn't set
@@ -342,7 +342,7 @@ export async function start(
 ): Promise<boolean> {
   const [running, pid] = isRunning(app);
 
-  // Never bounce ourselves. `sandbox connect` is a tool on apps/mcp, and it
+  // Never bounce ourselves. `sandbox connect` is a tool on apps/werkmeister-mcp, and it
   // reaches infra.up() -> startAll(): a stale dist/ would otherwise make this
   // call SIGTERM the pid in the file, which is the process serving the request.
   if (running && pid === process.pid) {

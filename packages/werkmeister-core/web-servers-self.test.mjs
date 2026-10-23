@@ -24,7 +24,7 @@ test("MCP is one of the servers `sandbox connect` brings up, on its own stem", (
 });
 
 test("only MCP binds wide -- DASHBOARD stays loopback-only", () => {
-  // A container has no loopback route to the host, so apps/mcp must bind
+  // A container has no loopback route to the host, so apps/werkmeister-mcp must bind
   // 0.0.0.0. DASHBOARD is unauthenticated and must never inherit that env
   // var, or its tools become reachable from the network.
   assert.deepEqual(MCP.env, { HOST: "0.0.0.0" });

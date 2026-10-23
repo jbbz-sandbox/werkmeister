@@ -3,7 +3,7 @@
 The one werkmeister MCP server (SW-48): every tool, one name per verb, over
 stdio (`werkmeister mcp`) and authenticated HTTP on :3002. Host-side: it holds
 the Docker privilege so a container agent does not have to. The dashboard
-(`apps/sandbox-dashboard`) has no MCP server of its own; its browser page calls
+(`apps/werkmeister-dashboard`) has no MCP server of its own; its browser page calls
 this one's `createServer()` in process.
 
 ## Why it exists
@@ -15,7 +15,7 @@ removed — the verbs over HTTP instead of a socket.
 ## Running it
 
 `werkmeister connect` starts it, like the dashboard: it is a `WebApp`
-in `packages/sandbox-core/src/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID
+in `packages/werkmeister-core/src/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID
 and log under `~/.werkmeister`). A host-local MCP client gets it over stdio instead:
 
     werkmeister mcp                          # stdio -- no token, no port
@@ -99,7 +99,7 @@ A client that advertises the `io.modelcontextprotocol/ui` capability (Claude
 Desktop) renders them inline; any other client gets the browser form
 (`form-cli.js`) or a markdown table. The HTML is this app's vite build
 (`mcp-app.html`, `mcp-list.html` and `ui/`, from `werkmeister-ui`), read from
-`apps/mcp/dist`; the form is the dashboard's, from `apps/sandbox-dashboard/dist`.
+`apps/werkmeister-mcp/dist`; the form is the dashboard's, from `apps/werkmeister-dashboard/dist`.
 Both exist in a checkout only; a package install takes the text fallback.
 
 ## What is not here

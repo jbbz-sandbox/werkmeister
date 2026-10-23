@@ -17,7 +17,7 @@ covers what now catches them automatically and what is still open.
 | Relative Markdown links that don't resolve | the file system |
 | Repo paths in code spans (`apps/…`, `packages/…`, `plugins/…`, `docs/…`); `file.ts::symbol` also checks the symbol | the file system <!-- docs-check: ignore --> |
 | `werkmeister <command> --flag` at the start of a code span or shell line | the built CLI's `__complete` |
-| MCP tool names (`` `x` tool ``, `MCP tool `x``, `mcp__plugin_werkmeister_werkmeister__x`) | `registerTool` / `registerAppTool` in `apps/mcp/src`, plus the plugin's `*_TOOL` constants <!-- docs-check: ignore --> |
+| MCP tool names (`` `x` tool ``, `MCP tool `x``, `mcp__plugin_werkmeister_werkmeister__x`) | `registerTool` / `registerAppTool` in `apps/werkmeister-mcp/src`, plus the plugin's `*_TOOL` constants <!-- docs-check: ignore --> |
 
 It runs in CI after the build. Locally, run `pnpm run build` first.
 
@@ -39,7 +39,7 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 
 ## Writing docs that stay checkable
 
-- Cite a symbol, not a line: `` `packages/sandbox-core/src/caddy.ts::reloadCaddy` `` is checked, `caddy.ts:325` rots.
+- Cite a symbol, not a line: `` `packages/werkmeister-core/src/caddy.ts::reloadCaddy` `` is checked, `caddy.ts:325` rots.
 - Don't state counts or copy lists that live in code ("all 21 tools", the allow/deny lists). Link to the source, or generate the list (option 2 below).
 - Put commands in code spans, so the command check sees them.
 - When you rename a command, path, tool or config key, run `docs:check` before opening the PR.

@@ -4,7 +4,7 @@ A tree view over the developer-sandbox: every workspace under
 `paths.workspaces_root`, its container state, its Telepresence intercepts, and
 the `sandbox` CLI lifecycle — without leaving the editor.
 
-A consumer of `packages/sandbox-core`, alongside the `werkmeister-mcp`
+A consumer of `packages/werkmeister-core`, alongside the `werkmeister-mcp`
 server and the dashboard. Unlike the dashboard it imports werkmeister-core directly: the extension host
 is plain Node, so there is no HTTP or stdio hop.
 
@@ -46,7 +46,7 @@ pnpm run test:integration  # a real extension host (downloads a VS Code build on
 `src/menus.test.mjs` feeds real `buildTree` nodes into the real `when` clauses
 from `package.json`, which is the one place the two can drift apart silently.
 The integration suite covers what only a host can answer — command registration
-and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://github.com/jbbz-sandbox/werkmeister/blob/main/packages/vscode-plugin/MANUAL-CHECKLIST.md).
+and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://github.com/jbbz-sandbox/werkmeister/blob/main/packages/werkmeister-vscode/MANUAL-CHECKLIST.md).
 
 ## Install
 
