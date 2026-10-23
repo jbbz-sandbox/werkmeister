@@ -12,6 +12,8 @@
  *     sandbox down <feature|infra> [-v]        Stop and clean up a feature or infra
  *     sandbox restart <feature|infra>          Restart containers
  *     sandbox stop <feature|infra>             Stop containers (preserve slot/volumes)
+ *     sandbox pause [feature]                  Freeze containers and hold the Claude session
+ *     sandbox resume [feature]                 Thaw what pause froze; the session continues
  *     sandbox status [--k8s]                   Show all active features; --k8s for k8s detail only
  *     sandbox detect [repo] [--dry-run] [--yes] [--assist|--no-assist]  Generate a repo's .sandbox/services.yaml
  *     sandbox services <feature>               List service endpoints
@@ -190,6 +192,30 @@ const SPECS: CommandSpec[] = [
           "[feature]",
           "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.",
         );
+    },
+    namespace: ([feature]) => ({ feature: feature ?? null }),
+  },
+  {
+    name: "pause",
+    load: () => import("./commands/pause.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Freeze a workspace's running containers and hold its Claude session until resume",
+        )
+        .argument("[feature]", "Feature name. If omitted, read from FEATURE in a .env file.");
+    },
+    namespace: ([feature]) => ({ feature: feature ?? null }),
+  },
+  {
+    name: "resume",
+    load: () => import("./commands/resume.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Thaw exactly the containers pause froze, release the session, and tell it to continue",
+        )
+        .argument("[feature]", "Feature name. If omitted, read from FEATURE in a .env file.");
     },
     namespace: ([feature]) => ({ feature: feature ?? null }),
   },

@@ -34,6 +34,8 @@ const MERGED = [
   "stop",
   "restart",
   "down",
+  "pause",
+  "resume",
   "close-out",
   "connect",
   "open-feature",
@@ -90,7 +92,16 @@ test("the App tools point at the form and list resources, and both are listed", 
 
 test("workspace-scoped tools take one optional `workspace` argument", async () => {
   const { tools } = await (await connect()).listTools();
-  for (const n of ["up", "down", "open-feature", "close-out", "workspace-pr", "claude-send"]) {
+  for (const n of [
+    "up",
+    "down",
+    "pause",
+    "resume",
+    "open-feature",
+    "close-out",
+    "workspace-pr",
+    "claude-send",
+  ]) {
     const schema = tools.find((t) => t.name === n)?.inputSchema;
     assert.ok(schema?.properties?.workspace, `${n} has a workspace argument`);
     assert.ok(!schema?.properties?.feature && !schema?.properties?.name, `${n} has no second id`);

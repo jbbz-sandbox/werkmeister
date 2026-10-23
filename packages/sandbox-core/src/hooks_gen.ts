@@ -22,6 +22,8 @@
  *   `sandbox hooks agent-state` records working / needs-you / done in
  *   `.sandbox/agent-state.json` for the pane and dashboard (SW-46). Every
  *   strategy (`writeAgentStateHooks`); the event name arrives on stdin.
+ *   While `paused.json` exists the same hook blocks every tool call and prompt
+ *   (SW-70), so existing workspaces get the pause gate with no settings rewrite.
  *
  * - `permissions.allow`: the workspace's test commands and read-only git, for
  *   every strategy (`writeWorkspacePermissions`), so a headless session can run

@@ -125,3 +125,23 @@ describe("run", () => {
     expect(json.features[0]).toMatchObject({ cpu_percent: 3, mem_mib: 90, started_by: "gate" });
   });
 });
+
+describe("run, paused (SW-70)", () => {
+  it("reads a feature whose containers are all frozen as paused", async () => {
+    const { getContainerStatus } = await import("werkmeister-core/compose");
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      {
+        name: "a-api",
+        status: "paused",
+        health: "",
+        ports: "",
+        service: "api",
+        role: "",
+        exitCode: 0,
+      },
+    ]);
+    vi.mocked(featureVitals).mockResolvedValue({ health: new Map(), resources: null } as never);
+    await run({});
+    expect(out.join("\n")).toContain("paused (0/1)");
+  });
+});

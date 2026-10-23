@@ -40,10 +40,10 @@ A person must tell, at a glance, for each workspace:
 
 | Question | Row | Canonical text |
 |---|---|---|
-| Are the containers healthy? | **Containers** | `N of M up` or `down`, then one item per service: `● name` up · `○ name` down · `◐ name starting` · `▲ name unhealthy`. Docker unreachable: `Docker unreachable · retry` |
+| Are the containers healthy? | **Containers** | `N of M up`, `paused` or `down`, then one item per service: `● name` up · `○ name` down · `◐ name starting` · `▲ name unhealthy`. Docker unreachable: `Docker unreachable · retry` |
 | What PRs exist? | **PRs** | `repo#N` link, state badge, CI badge. `None yet`. Lookup failed: `PRs unavailable · retry` |
 | Where is the run? | **Workflow** | `Stage n of m · name` (ICM), `JIT · phase`, or the lifecycle step: `Ready to open PR` · `Awaiting release` · `Ready to close out` · `Closed out` · `Abandoned` |
-| What is the agent doing? | **Agent** + header chip | `◌ Working` · `● Needs you` · `✓ Done` · `Idle`, plus a time (`asked a question 12 min ago`). `⚙ Autonomous` (compact: `⚙ Auto`) when the run is autonomous |
+| What is the agent doing? | **Agent** + header chip | `◌ Working` · `● Needs you` · `✓ Done` · `Idle`, plus a time (`asked a question 12 min ago`). `⏸ Paused` (`paused 12 min ago`) replaces all four while the workspace is paused. `⚙ Autonomous` (compact: `⚙ Auto`) when the run is autonomous |
 
 - **Header:** name, agent chip, autonomous badge; then the work-type tag and the **task title from `workspace.yml`** (never the session title or a slice of the starting prompt); then the issue as `owner/repo#123`.
 - **Needs you** cards show the last question in the header, with the primary action.
@@ -69,6 +69,7 @@ Every row reads sandbox-core; no surface computes its own. The shapes and their 
 | CI | `CI ✓` · `CI running` · `CI ✗ N failing` | ok · warn · err |
 | Issue / PR link | `owner/repo#123`; a card may drop the owner for the default org (`werkmeister#231`) | info |
 | Containers summary | all up · some up · none up · unknown | ok · warn · off · off |
+| Paused | `⏸ Paused` (agent chip, replaces Needs you / Working / Done / Idle) | off |
 
 ## Actions
 
@@ -76,6 +77,7 @@ Every row reads sandbox-core; no surface computes its own. The shapes and their 
 |---|---|---|---|---|---|
 | Start containers | `▶ Up` | ✓ | ✓ | ✓ | ✓ |
 | Stop / restart / tear down | `■ Stop` · `↻ Restart` · `⏻ Down` | ✓ | ✓ | ✓ | ✓ |
+| Pause / resume | `⏸ Pause` · `▶ Resume` | ✓ | ✓ | ✓ | ✓ |
 | Continue a session | `↗ Continue in Terminal` · `↗ Continue in Desktop` | ✓ | ✓ | ✓ | Terminal |
 | New session | `＋ New session` | ✓ | ✓ | ✓ | ✓ |
 | Refresh PRs | `↻ Refresh PRs` | ✓ | ✓ | ✓ | ✓ |
@@ -94,7 +96,7 @@ Every row reads sandbox-core; no surface computes its own. The shapes and their 
 
 On the dashboard and MCP App, `↗ Continue in Desktop` opens the workspace folder in Desktop (`claude://code/new?folder=…`): a browser page or MCP iframe can't read the app's session list, so it can't link the previous Desktop session. `＋ New session` there opens a fresh `claude` in Terminal (`claude-resume` with `new: true`).
 
-**Primary action:** Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …`. The bar shows the primary plus two secondaries; everything else goes in `⋯`, in this order: Open beside · Pin · ↻ Refresh PRs · Open feature ↗ · Open issue ↗ · Logs · ✕ Abandon….
+**Primary action:** Paused → `▶ Resume` · Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …`. The bar shows the primary plus two secondaries: `■ Stop` · `⏸ Pause` while containers run (`↻ Restart` moves to `⋯`), `■ Stop` · `⏻ Down` while paused. Everything else goes in `⋯`, in this order: Open beside · Pin · ↻ Refresh PRs · Open feature ↗ · Open issue ↗ · Logs · ✕ Abandon….
 
 ### The two destructive verbs
 
@@ -136,7 +138,7 @@ Defaults that don't depend on the current directory (`work_type`, `context_strat
 | `list-workspaces` (App UI) | `list-workspaces` | `list-workspaces` |
 | `create-workspace-form` (App UI) + `create-workspace` | `workspace`, `create-workspace` | `workspace` |
 | `status` | `workspace-status` | `status` <!-- docs-check: ignore --> |
-| `up` · `stop` · `restart` · `down` | `workspace-action` | `up` · `stop` · `restart` · `down` |
+| `up` · `stop` · `restart` · `down` · `pause` · `resume` | `workspace-action` | `up` · `stop` · `restart` · `down` · `pause` · `resume` |
 | `close-out` | `close-out` | `close-out` |
 | `connect` | `sandbox-connect` | `connect` |
 | `open-feature` | `open-feature` | `open` |

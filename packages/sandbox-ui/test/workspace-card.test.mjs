@@ -154,8 +154,15 @@ test("barFor: primary + two secondaries, the rest in ⋯", () => {
   const d = (ws, lifecycle = null) => displayModel(status(ws), { lifecycle });
   const panels = ["Chat", "Usage", "Open in VS Code"];
   assert.deepEqual(labels(barFor(d({}), "up")), [
-    ["■ Stop", "↻ Restart"],
-    ["↗ Continue in Desktop", "⏻ Down", "＋ New session", ...panels],
+    ["■ Stop", "⏸ Pause"],
+    ["↗ Continue in Desktop", "↻ Restart", "⏻ Down", "＋ New session", ...panels],
+  ]);
+  // SW-70: Resume is the primary; Stop and Down hand the memory back too.
+  const paused = { state: "paused", paused: { at: "2026-10-22T10:00:00Z", containers: [] } };
+  assert.equal(d(paused).primary.label, "▶ Resume");
+  assert.deepEqual(labels(barFor(d(paused), "paused")), [
+    ["■ Stop", "⏻ Down"],
+    ["↗ Continue in Terminal", "↗ Continue in Desktop", "＋ New session", ...panels],
   ]);
   assert.deepEqual(labels(barFor(d({ state: "down" }), "down")), [
     ["↗ Continue in Terminal", "＋ New session"],
@@ -177,7 +184,7 @@ test("barFor: primary + two secondaries, the rest in ⋯", () => {
     labels(barFor(d({ claude: { agent: "done", at: null, question: null } }, "shipped"), "up")),
     [
       ["↻ Restart", "⏻ Down"],
-      ["↗ Continue in Terminal", "↗ Continue in Desktop", "＋ New session", ...panels],
+      ["↗ Continue in Terminal", "↗ Continue in Desktop", "⏸ Pause", "＋ New session", ...panels],
     ],
   );
 });
@@ -200,6 +207,12 @@ test("SW-54: New session opens a fresh Terminal session; Continue resumes", () =
   });
   assert.deepEqual(toolCall("continue", "ws").args, { workspace: "ws" });
   assert.equal(toolCall("up", "ws").tool, "up");
+  assert.deepEqual(toolCall("pause", "ws"), {
+    tool: "pause",
+    verb: "Pausing",
+    args: { workspace: "ws" },
+  });
+  assert.equal(toolCall("resume", "ws").tool, "resume");
   for (const linkOnly of ["continue-desktop", "open-issue", "chat"])
     assert.equal(toolCall(linkOnly, "ws"), null, linkOnly);
 });

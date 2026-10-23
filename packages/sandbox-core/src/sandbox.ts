@@ -15,14 +15,24 @@
  */
 import { execFile, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
-import { type AgentState, asksQuestion, questionOf, readAgentState } from "./agent_state.js";
+import {
+  type AgentState,
+  asksQuestion,
+  claimNudge,
+  nudgePath,
+  questionOf,
+  RESUME_NUDGE,
+  readAgentState,
+  readPaused,
+  writeNudge,
+} from "./agent_state.js";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
 import {
   askClaude,
@@ -73,7 +83,17 @@ export {
 import { launchFeatureWindow } from "./browser.js";
 import { featureUrl } from "./feature_routing.js";
 import { fetchIssueSnapshot, IssueFetchError, type IssueSnapshot } from "./issue_snapshot.js";
-import { down, reloadProxy, restart, stop, up } from "./lifecycle.js";
+import {
+  down,
+  liveSessions,
+  pause,
+  type ResumeResult,
+  reloadProxy,
+  restart,
+  resume,
+  stop,
+  up,
+} from "./lifecycle.js";
 import { listNotes } from "./notes.js";
 import {
   abandonWorkspace,
@@ -1171,8 +1191,11 @@ export interface WorkspaceStatus {
   name: string;
   /** Docker Compose project (`sandbox-<feature>`), or null if undeterminable. */
   project: string | null;
-  /** up = all running, partial = some, stopped = created but none running, down = no containers, unknown = docker unavailable. */
-  state: "up" | "partial" | "stopped" | "down" | "unknown";
+  /**
+   * up = all running, partial = some, stopped = created but none running, down = no containers,
+   * paused = held by Pause (its record exists; SW-70), unknown = docker unavailable.
+   */
+  state: "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
   running: number;
   total: number;
   /** Feature slot (from the `com.sandbox.local.slot` label), or null when no containers. */
@@ -1202,6 +1225,10 @@ export interface WorkspaceStatus {
   started: Started | null;
   /** Containers restarting under their restart policy; empty when docker is unreachable. */
   crashLoops: CrashLoop[];
+  /** When Pause ran and the containers Resume brings back; null when not paused. */
+  paused: { at: string; containers: string[] } | null;
+  /** Resume left a "continue" for a live session; the pane delivers it to Desktop. */
+  resumeNudge: boolean;
 }
 
 /** An ICM workspace's current stage: 1-based `index` of `total`, `name` without its `NN_` prefix. */
@@ -1449,8 +1476,12 @@ export async function getWorkspaceStatuses(): Promise<{
       }
       const { signal: claude, lastActivity } = await claudeSessionSignal(name, dir);
       const { model, autonomous, autoStop } = await readWorkspaceConfig(dir);
+      const rec = readPaused(dir);
+      const paused = rec ? { at: rec.at, containers: rec.containers } : null;
       // Docker-independent card fields, the same in both returns below.
       const card = {
+        paused,
+        resumeNudge: existsSync(nudgePath(dir)),
         claude,
         model,
         stage: await icmStage(dir),
@@ -1480,6 +1511,7 @@ export async function getWorkspaceStatuses(): Promise<{
       else if (counts.running === counts.total) state = "up";
       else if (counts.running > 0) state = "partial";
       else state = "stopped";
+      if (paused) state = "paused";
       const slot = counts?.slot ?? null;
       const ports = slot !== null ? slotPortLabel(slot, portsDoc) : null;
       const services = (counts?.services ?? []).map((s) => ({
@@ -1539,6 +1571,8 @@ export interface CheckInRow {
   changed: boolean;
   /** {@link lifecycleOf}'s state, read after the sweep ships merged PRs. */
   lifecycle: Lifecycle;
+  /** Held by Pause: never a candidate or ready to close, whatever its agent state (SW-70). */
+  paused: boolean;
   /** One per PR file; `repo` is its worktree dir, `release` the tag that shipped it. */
   prs: Array<{ repo: string; url: string | null; status: string; release: string | null }>;
 }
@@ -1623,6 +1657,7 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
         updatedAt,
         changed: sinceMs !== null && updatedAt !== null && Date.parse(updatedAt) > sinceMs,
         lifecycle: life.state,
+        paused: status?.paused != null,
         prs: life.prs.map((p) => ({
           repo: p.dir,
           url: p.url,
@@ -1638,7 +1673,9 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
   const readyToClose = rows
     .filter(
       (r) =>
-        (r.lifecycle === "shipped" || r.lifecycle === "abandoned") && r.claude.agent !== "working",
+        !r.paused &&
+        (r.lifecycle === "shipped" || r.lifecycle === "abandoned") &&
+        r.claude.agent !== "working",
     )
     .map((r) => r.name);
   return {
@@ -1649,6 +1686,7 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
     candidates: rows
       .filter(
         (r) =>
+          !r.paused &&
           r.claude.agent !== "working" &&
           !readyToClose.includes(r.name) &&
           (sinceMs === null
@@ -2568,12 +2606,50 @@ export async function getDockerUi(): Promise<{ provider: string; url: string | n
   return { provider: ctx || "docker", url: null };
 }
 
+/**
+ * Resume *feature* (workspace *name* at *ws*), then tell its session to continue
+ * when Pause cut a working turn (SW-70). With no live `claude` process the nudge
+ * goes headless; a live one would fork under a second `claude -p --resume`, so
+ * the nudge waits in a file the pane delivers to Desktop, and the session's next
+ * prompt clears it.
+ */
+export async function resumeAndNudge(
+  name: string,
+  ws: string,
+  feature: string,
+): Promise<ResumeResult & { nudge: "headless" | "pending" | "none" }> {
+  const result = await resume(feature);
+  if (!result.wasWorking) {
+    info("Session: it was not mid-turn, so nothing to continue");
+    return { ...result, nudge: "none" };
+  }
+  if (liveSessions(ws).length) {
+    writeNudge(ws, RESUME_NUDGE);
+    info(
+      'Session: a live session will get "continue" (Desktop via the pane; in a terminal, say it)',
+    );
+    return { ...result, nudge: "pending" };
+  }
+  try {
+    await sendToClaudeSession(name, RESUME_NUDGE);
+    info('Session: sent "continue" headless');
+  } catch (e) {
+    warn(`Session: could not send "continue": ${(e as Error).message}`);
+  }
+  return { ...result, nudge: "headless" };
+}
+
+/** The pending Resume nudge for workspace *name*, removed so only one caller sends it. */
+export async function claimResumeNudge(name: string): Promise<string | null> {
+  return claimNudge(await resolveWorkspaceDir(name));
+}
+
 /** The container-lifecycle verbs a workspace's stack supports. */
-export const WORKSPACE_ACTIONS = ["up", "stop", "restart", "down"] as const;
+export const WORKSPACE_ACTIONS = ["up", "stop", "restart", "down", "pause", "resume"] as const;
 export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
 
 /**
- * Run a lifecycle action (up/stop/restart/down) against a workspace.
+ * Run a lifecycle action (up/stop/restart/down/pause/resume) against a workspace.
  *
  * Calls `werkmeister-core/lifecycle` in-process — the payoff step 5 built the API
  * for (note 079) — rather than spawning the CLI. The transcript the CLI would
@@ -2630,6 +2706,12 @@ export async function runWorkspaceAction(
           break;
         case "restart":
           await restart(feature);
+          break;
+        case "pause":
+          await pause(feature);
+          break;
+        case "resume":
+          await resumeAndNudge(name, target, feature);
           break;
         case "down":
           await down(feature);

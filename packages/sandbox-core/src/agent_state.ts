@@ -149,6 +149,97 @@ export function nextState(input: Record<string, any>, current: AgentStateFile | 
   }
 }
 
+/** `<dot-dir>/paused.json` (SW-70). Its existence is the marker {@link pauseGate} checks. */
+export interface PausedFile {
+  at: string;
+  /** The containers that were running at pause time, in dependency order. */
+  containers: string[];
+  /** The agent was mid-turn, so Resume tells the session to continue. */
+  was_working: boolean;
+}
+
+export const PAUSED_REASON =
+  "Workspace paused by the person from its card. End your turn now; it continues when they press Resume.";
+export const RESUME_NUDGE = "Workspace resumed by the person. Continue where you left off.";
+
+export const pausedPath = (root: string) => path.join(dotDir(root), "paused.json");
+export const nudgePath = (root: string) => path.join(dotDir(root), "resume-nudge.json");
+
+// Rename so a reader (the status sweep, the hook) never sees half a file.
+function writeAtomic(file: string, body: unknown): void {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(body)}\n`);
+  fs.renameSync(tmp, file);
+}
+
+/** The pause record, or null when there is none or it doesn't parse. */
+export function readPaused(root: string): PausedFile | null {
+  try {
+    const o = JSON.parse(fs.readFileSync(pausedPath(root), "utf8"));
+    if (typeof o?.at !== "string" || !Array.isArray(o.containers)) return null;
+    return { at: o.at, containers: o.containers.map(String), was_working: o.was_working === true };
+  } catch {
+    return null;
+  }
+}
+
+export function writePaused(root: string, p: PausedFile): void {
+  writeAtomic(pausedPath(root), p);
+}
+
+export function clearPaused(root: string): void {
+  fs.rmSync(pausedPath(root), { force: true });
+}
+
+/** The pending "continue" for a live session, left by Resume for the pane to deliver. */
+export function readNudge(root: string): string | null {
+  try {
+    const o = JSON.parse(fs.readFileSync(nudgePath(root), "utf8"));
+    return typeof o?.message === "string" ? o.message : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeNudge(root: string, message: string, now = new Date()): void {
+  writeAtomic(nudgePath(root), { message, at: now.toISOString() });
+}
+
+/** Read and remove the pending nudge, so only one deliverer sends it. */
+export function claimNudge(root: string): string | null {
+  const message = readNudge(root);
+  fs.rmSync(nudgePath(root), { force: true });
+  return message;
+}
+
+/**
+ * The hook's stdout while the workspace is paused, or null. `continue: false` ends
+ * the turn with the transcript intact; the deny also holds where a host ignores it.
+ */
+export function pauseGate(input: Record<string, any>, root: string): object | null {
+  if (!fs.existsSync(pausedPath(root))) return null;
+  switch (input["hook_event_name"]) {
+    case "PreToolUse":
+      return {
+        continue: false,
+        stopReason: PAUSED_REASON,
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: PAUSED_REASON,
+        },
+      };
+    case "UserPromptSubmit":
+      // One guard for every sender: the person, claude-send, PR callbacks, check-in.
+      return {
+        decision: "block",
+        reason: "This workspace is paused. Press ▶ Resume on its card first.",
+      };
+    default:
+      return null;
+  }
+}
+
 /** Apply one hook event to the workspace holding its cwd. Returns the file written, or null. */
 export function record(input: Record<string, any>, now = new Date()): string | null {
   const root = findRecordRoot(String(input["cwd"] || process.cwd()));
@@ -167,19 +258,29 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   if (next.question) body.question = next.question;
   if (next.via) body.via = next.via;
   const file = stateFile(root);
-  // Rename so the status sweep never reads half a file.
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(body)}\n`);
-  fs.renameSync(tmp, file);
+  writeAtomic(file, body);
   return file;
 }
 
-/** Hook entrypoint: reads the event from stdin, prints nothing, always exits 0. */
+/**
+ * Hook entrypoint: reads the event from stdin and always exits 0. Prints only the
+ * pause gate; a blocked event records nothing, so it can't read as `working`.
+ */
 export function main(): void {
   try {
     const raw = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
     const parsed = raw.trim() ? JSON.parse(raw) : {};
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) record(parsed);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
+    const root = findRecordRoot(String(parsed["cwd"] || process.cwd()));
+    const gate = root ? pauseGate(parsed, root) : null;
+    if (gate) {
+      console.log(JSON.stringify(gate));
+      return;
+    }
+    // The session got a prompt, so a "continue" still waiting for it is stale.
+    if (root && parsed["hook_event_name"] === "UserPromptSubmit")
+      fs.rmSync(nudgePath(root), { force: true });
+    record(parsed);
   } catch {
     // a hook must never break the session
   }
