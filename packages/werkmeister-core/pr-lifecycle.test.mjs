@@ -582,6 +582,24 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
   }
 });
 
+test("openPrs: warns to use a merge commit when the branch adds a blame-ignore SHA", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([
+      DIFF_API,
+      [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }],
+      [/diff origin\/main\.\.\.HEAD -- \.git-blame-ignore-revs/, { stdout: "+c69bc70abc\n" }],
+    ]);
+    const r = await open(ws, d);
+    assert.ok(
+      r.lines.some((l) => /warning: .*merge commit/.test(l)),
+      r.lines.join("\n"),
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openPrs: nothing approved is refused and stops nothing (SW-39)", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
   try {
