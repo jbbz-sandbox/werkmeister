@@ -631,7 +631,8 @@ function registerHostTools(server: McpServer): void {
       title: "Start shared infrastructure",
       description:
         "Bring up the shared infra every feature depends on: generated proxy files, the " +
-        "corporate CA, the compose stack (caddy, k8s forwards, jaeger) and the host web " +
+        "corporate CA, the compose stack (caddy, k8s forwards, and jaeger / redisinsight " +
+        "when infra.profiles enables them) and the host web " +
         "servers. Host-wide, not scoped to your feature.",
       inputSchema: {
         k8sOnly: z

@@ -88,7 +88,10 @@ services:
         aliases:
           - k8s-forwards
 
+  # Optional (SW-76): starts only when `infra.profiles` in ~/.werkmeister/config.yaml
+  # (or COMPOSE_PROFILES) names its profile.
   jaeger:
+    profiles: [jaeger]
     image: jaegertracing/all-in-one@sha256:ab6f1a1f0fb49ea08bcd19f6b84f6081d0d44b364b6de148e1798eb5816bacac  # pinned from tag "latest" of jaegertracing/all-in-one
     container_name: sandbox-jaeger
     restart: unless-stopped
@@ -121,7 +124,9 @@ services:
         aliases:
           - jaeger
 
+  # Optional (SW-76), and SSPL-1.0, so never started for everyone: see docs/third-party.md.
   redisinsight:
+    profiles: [redisinsight]
     image: redis/redisinsight@sha256:aa21bbd198455b4ad964f76782db951155aa0d712321f599972d1525f031f0e6  # pinned from tag "latest" of redis/redisinsight
     container_name: redisinsight
     ports:
