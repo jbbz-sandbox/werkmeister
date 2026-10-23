@@ -99,7 +99,7 @@ function shows(command, contextValue) {
 }
 
 test("switch is offered on every workspace except the one this window is in", () => {
-  for (const state of ["up", "partial", "stopped", "down", "unknown"]) {
+  for (const state of ["up", "partial", "stopped", "paused", "down", "unknown"]) {
     assert.equal(shows("sandbox.switch", workspaceContext(state)), true, state);
     assert.equal(shows("sandbox.switch", workspaceContext(state, true)), false, `${state} current`);
   }
@@ -120,6 +120,32 @@ test("start shows only where there is something to start, current or not", () =>
       assert.equal(shows("sandbox.up", workspaceContext(state, isCurrent)), true, state);
     }
     assert.equal(shows("sandbox.up", workspaceContext("up", isCurrent)), false);
+    assert.equal(shows("sandbox.up", workspaceContext("paused", isCurrent)), false, "paused");
+  }
+});
+
+/** A paused workspace: its record is what sets the state, not a container tally (SW-70). */
+const pausedContext = (isCurrent) => {
+  const paused = { at: "2026-10-22T10:00:00Z", containers: [] };
+  const [node] = buildTree(
+    [ws("a")],
+    [st("a", { state: "paused", paused })],
+    null,
+    isCurrent ? ["/ws/a"] : [],
+  );
+  return node.contextValue;
+};
+
+test("pause shows where containers run, resume only where paused, current or not", () => {
+  for (const isCurrent of [false, true]) {
+    for (const state of ["up", "partial"]) {
+      assert.equal(shows("sandbox.pause", workspaceContext(state, isCurrent)), true, state);
+      assert.equal(shows("sandbox.resume", workspaceContext(state, isCurrent)), false, state);
+    }
+    for (const state of ["down", "stopped"])
+      assert.equal(shows("sandbox.pause", workspaceContext(state, isCurrent)), false, state);
+    assert.equal(shows("sandbox.resume", pausedContext(isCurrent)), true);
+    assert.equal(shows("sandbox.pause", pausedContext(isCurrent)), false);
   }
 });
 
@@ -203,7 +229,7 @@ test("continue, new session, PRs and both end verbs show on every workspace", ()
     "sandbox.closeOut",
     "sandbox.abandon",
   ]) {
-    for (const state of ["up", "partial", "stopped", "down", "unknown"]) {
+    for (const state of ["up", "partial", "stopped", "paused", "down", "unknown"]) {
       assert.equal(shows(command, workspaceContext(state)), true, `${command} ${state}`);
       assert.equal(shows(command, workspaceContext(state, true)), true, `${command} ${state}`);
     }

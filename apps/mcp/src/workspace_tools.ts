@@ -931,7 +931,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           z.object({
             name: z.string(),
             project: z.string().nullable(),
-            state: z.enum(["up", "partial", "stopped", "down", "unknown"]),
+            state: z.enum(["up", "partial", "stopped", "paused", "down", "unknown"]),
             running: z.number(),
             total: z.number(),
             slot: z.number().nullable(),
@@ -948,6 +948,8 @@ export function registerWorkspaceTools(server: McpServer): void {
               at: z.string().nullable(),
               question: z.string().nullable(),
             }),
+            paused: z.object({ at: z.string(), containers: z.array(z.string()) }).nullable(),
+            resumeNudge: z.boolean(),
           }),
         ),
         host: z.record(z.string(), z.unknown()).optional(),
@@ -964,7 +966,8 @@ export function registerWorkspaceTools(server: McpServer): void {
         const wsText = statuses
           .map((s) => {
             const counts = s.total ? ` (${s.running}/${s.total})` : "";
-            return `${s.name}: ${s.state}${counts}${claudeNote(s.claude)}`;
+            // A held session's last state (needs you, working) is not news while paused.
+            return `${s.name}: ${s.state}${counts}${s.paused ? "" : claudeNote(s.claude)}`;
           })
           .join("\n");
         const text = `infra: ${infra.state}${infra.total ? ` (${infra.running}/${infra.total})` : ""}\n${wsText || "No workspaces."}`;
@@ -988,7 +991,8 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "One sweep for the check-in skill: every workspace's labels, container and Claude " +
         "state, proposed stage gates, and whether its transcript changed since the last " +
-        "check-in, plus its `lifecycle` and `prs` (repo, url, status, `release`). First ships " +
+        "check-in, plus its `lifecycle`, `paused` and `prs` (repo, url, status, `release`). " +
+        "A paused workspace is never a candidate or ready to close. First ships " +
         "merged PRs a release tag now contains, as `pr status` does. Drops `skip` workspaces " +
         "(and non-`focus` ones when any carry `focus`), names the `candidates` that need a " +
         "courier and the `readyToClose` ones (shipped or abandoned, no Claude turn working). " +

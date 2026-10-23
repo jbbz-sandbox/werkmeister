@@ -120,6 +120,7 @@ export const TOOLTIP_COMMANDS = [
   "sandbox.continue",
   "sandbox.closeOut",
   "sandbox.up",
+  "sandbox.resume",
   "sandbox.switch",
   "sandbox.openFeature",
 ];
@@ -128,6 +129,7 @@ const PRIMARY_COMMAND: Record<WorkspaceDisplay["primary"]["action"], string> = {
   continue: "sandbox.continue",
   "close-out": "sandbox.closeOut",
   up: "sandbox.up",
+  resume: "sandbox.resume",
 };
 
 /**
@@ -140,6 +142,7 @@ export const LEGEND_NODE: WsNode = legendGroup([
   ["sync", "ok", "Working", "agent busy"],
   ["pass", "ok", "Done", "agent finished"],
   ["circle-outline", "off", "Idle", "no live turn, nothing asked"],
+  ["debug-pause", "off", "Paused", "session held, containers frozen · ▶ Resume"],
   ["warning", "err", "▲ unhealthy", "service · ● up · ○ down · ◐ starting"],
   ["git-merge", "pr", "Merged · Released", "PR state · Open is green"],
   ["gear", "off", "⚙ Auto", "autonomous run"],

@@ -27,7 +27,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
+import { clearPaused, nudgePath, readAgentState, readPaused, writePaused } from "./agent_state.js";
 import { ensureSharedNetwork, isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
 import {
@@ -40,12 +40,13 @@ import {
   composeUp,
   composeUpAsync,
   composeUpServiceAsync,
+  dependencyOrder,
   getContainerStatus,
   workspaceForFeature,
 } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import { getVolumeBaseNames, loadPorts, loadServices, needsCluster } from "./config.js";
-import { listVolumeNames, removeVolume } from "./docker.js";
+import { docker, listVolumeNames, projectContainers, removeVolume } from "./docker.js";
 import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
@@ -61,6 +62,7 @@ import {
 } from "./generate.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { reconcileGraduating } from "./graduate.js";
+import { writeAgentStateHooks } from "./hooks_gen.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { latestHandoff, type Note, openDecisions } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
@@ -119,6 +121,7 @@ export async function up(
   { signal }: { signal?: AbortSignal } = {},
 ): Promise<UpResult> {
   refuseInsideOwnContainer(feature, "up");
+  refusePaused(feature, workspace);
   migrateWorkspaceCompose(workspace);
   if (!fs.existsSync(path.join(workspace, COMPOSE_FILE))) {
     throw new SandboxError(
@@ -708,15 +711,16 @@ export async function stop(feature: string): Promise<StopResult> {
 /**
  * Restart *feature*'s containers in place.
  *
- * Throws `NOT_RUNNING` when the feature holds no slot, and
- * `COMPOSE_RESTART_FAILED` when a container fails to restart.
+ * Throws `NOT_RUNNING` when the feature holds no slot, `PAUSED` while it is
+ * paused, and `COMPOSE_RESTART_FAILED` when a container fails to restart.
  */
 export async function restart(feature: string): Promise<RestartResult> {
   refuseInsideOwnContainer(feature, "restart");
   const slot = await requireSlot(feature);
 
-  info(`Restarting containers for '${feature}' (slot ${slot})...`);
   const workspace = workspaceForFeature(feature);
+  refusePaused(feature, workspace);
+  info(`Restarting containers for '${feature}' (slot ${slot})...`);
   const restarted = workspace
     ? await withStartRecord(workspace, "restart", () => composeRestart(feature))
     : await composeRestart(feature);
@@ -728,6 +732,127 @@ export async function restart(feature: string): Promise<RestartResult> {
   }
 
   return { feature, slot };
+}
+
+/** Containers running while the session is held would undo the pause: Resume is the way back. */
+function refusePaused(feature: string, workspace: string | null): void {
+  if (workspace && readPaused(workspace)) {
+    throw new SandboxError(`'${feature}' is paused; Resume it first`, "PAUSED");
+  }
+}
+
+function workspaceOrThrow(feature: string): string {
+  const workspace = workspaceForFeature(feature);
+  if (!workspace) {
+    throw new SandboxError(`No workspace folder for '${feature}'`, "NO_WORKSPACE");
+  }
+  return workspace;
+}
+
+const statusOf = (e: unknown) => (e as { statusCode?: number }).statusCode;
+const daemonMessage = (e: unknown) =>
+  (e as { json?: { message?: string } }).json?.message ?? (e as Error).message;
+
+export interface PauseResult {
+  feature: string;
+  slot: number;
+  containers: string[];
+}
+
+/**
+ * Freeze *feature*'s running containers and hold its Claude session (SW-70).
+ *
+ * The record is written before the first freeze, so the hook gate holds the
+ * session before it can see a frozen container and try to fix it. A partial
+ * failure keeps the record, so Resume undoes what did freeze.
+ *
+ * Throws `NOT_RUNNING`, `NO_WORKSPACE`, `ALREADY_PAUSED` or `COMPOSE_PAUSE_FAILED`.
+ */
+export async function pause(feature: string): Promise<PauseResult> {
+  refuseInsideOwnContainer(feature, "pause");
+  const slot = await requireSlot(feature);
+  const workspace = workspaceOrThrow(feature);
+  if (readPaused(workspace)) {
+    throw new SandboxError(`'${feature}' is already paused`, "ALREADY_PAUSED");
+  }
+  const live = await projectContainers(`sandbox-${feature}`, undefined, { all: false });
+  if (live === null)
+    throw new SandboxError("docker not found / not running", "COMPOSE_PAUSE_FAILED");
+  const containers = dependencyOrder(live.filter((c) => c.state === "running")).map((c) => c.name);
+
+  // A workspace from before SW-46 has no agent-state hook, and so no gate.
+  writeAgentStateHooks(workspace);
+  writePaused(workspace, {
+    at: new Date().toISOString(),
+    containers,
+    was_working: readAgentState(workspace)?.state === "working",
+  });
+
+  info(`Pausing ${containers.length} container(s) for '${feature}' (slot ${slot})...`);
+  const failed: string[] = [];
+  for (const name of [...containers].reverse()) {
+    try {
+      await docker().getContainer(name).pause();
+    } catch (e) {
+      // 409: already paused, which is the goal.
+      if (statusOf(e) !== 409) failed.push(`${name}: ${daemonMessage(e)}`);
+    }
+  }
+  if (failed.length) {
+    throw new SandboxError(`docker pause failed: ${failed.join("; ")}`, "COMPOSE_PAUSE_FAILED");
+  }
+  success(`Paused '${feature}': its Claude session is held until Resume`);
+  return { feature, slot, containers };
+}
+
+export interface ResumeResult {
+  feature: string;
+  workspace: string;
+  containers: { name: string; did: "unpaused" | "started" | "missing" }[];
+  wasWorking: boolean;
+}
+
+/**
+ * Bring back exactly the containers Pause froze, then release the session. One
+ * stopped meanwhile (■ Stop, the idle reaper) is started; telling the session to
+ * continue is the caller's job (`resumeAndNudge` in sandbox.ts).
+ *
+ * Throws `NO_WORKSPACE`, `NOT_PAUSED` or `COMPOSE_RESUME_FAILED`.
+ */
+export async function resume(feature: string): Promise<ResumeResult> {
+  refuseInsideOwnContainer(feature, "resume");
+  const workspace = workspaceOrThrow(feature);
+  const rec = readPaused(workspace);
+  if (!rec) throw new SandboxError(`'${feature}' is not paused`, "NOT_PAUSED");
+
+  info(`Resuming ${rec.containers.length} container(s) for '${feature}'...`);
+  const containers: ResumeResult["containers"] = [];
+  for (const name of rec.containers) {
+    const c = docker().getContainer(name);
+    try {
+      const { State } = await c.inspect();
+      if (State.Paused) {
+        await c.unpause();
+        containers.push({ name, did: "unpaused" });
+      } else if (!State.Running) {
+        await c.start();
+        containers.push({ name, did: "started" });
+      }
+    } catch (e) {
+      if (statusOf(e) !== 404) {
+        throw new SandboxError(
+          `docker resume ${name} failed: ${daemonMessage(e)}`,
+          "COMPOSE_RESUME_FAILED",
+        );
+      }
+      warn(`${name} is gone; nothing to resume`);
+      containers.push({ name, did: "missing" });
+    }
+  }
+  // Last, so the session never wakes into a frozen container.
+  clearPaused(workspace);
+  success(`Resumed '${feature}'`);
+  return { feature, workspace, containers, wasWorking: rec.was_working };
 }
 
 /** A feature that has been torn down, and the slot it gave back. */
@@ -769,6 +894,8 @@ export async function down(
     warn(`Could not clean up k8s intercepts: ${exc instanceof Error ? exc.message : String(exc)}`);
   }
 
+  // Before the teardown: workspaceForFeature reads the containers' labels first.
+  const workspace = workspaceForFeature(feature);
   const slot = await getSlot(feature);
   if (slot === null) {
     warn(`Feature '${feature}' does not have an allocated slot`);
@@ -787,6 +914,11 @@ export async function down(
 
   info("Releasing feature slot...");
   releaseSlot(feature);
+  // Tearing down ends a pause: there is nothing left to resume.
+  if (workspace) {
+    clearPaused(workspace);
+    fs.rmSync(nudgePath(workspace), { force: true });
+  }
 
   return { feature, slot };
 }

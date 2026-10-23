@@ -173,6 +173,23 @@ test("primary action", () => {
   assert.equal(model().primary.label, "↗ Continue in Terminal");
 });
 
+test("SW-70: paused overrides the agent state, reads paused, and offers Resume", () => {
+  const d = model({
+    state: "paused",
+    paused: { at: minsAgo(12), containers: ["a-api"] },
+    claude: { agent: "needs-you", at: minsAgo(30), question: "Which fix?" },
+  });
+  assert.equal(d.agent.label, "⏸ Paused");
+  assert.equal(d.agent.tone, "off");
+  assert.equal(d.agent.time, "paused 12 min ago");
+  assert.equal(d.needs, false);
+  assert.equal(d.question, null);
+  assert.deepEqual(d.containers, { text: "paused", tone: "off" });
+  assert.deepEqual(d.primary, { action: "resume", label: "▶ Resume", destructive: false });
+  // A core older than SW-70 sends no `paused`: nothing changes.
+  assert.equal(model({ paused: undefined }).agent.label, "Idle");
+});
+
 test("ago", () => {
   assert.equal(ago(null, NOW), "");
   assert.equal(ago(new Date(NOW.getTime() - 40_000).toISOString(), NOW), "40 s ago");

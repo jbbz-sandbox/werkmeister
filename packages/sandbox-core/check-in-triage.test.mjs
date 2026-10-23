@@ -101,3 +101,25 @@ test("the mark's sub-millisecond mtime rounds instead of truncating", async () =
   const r = await checkInTriage();
   assert.equal(r.since, new Date(1_700_000_000_889).toISOString());
 });
+
+test("a paused workspace is never a candidate or ready to close, whatever it last said (SW-70)", async () => {
+  // `focus`: the test above left one, so the sweep keeps focus workspaces only.
+  workspace("f-paused", { labels: ["focus"], gate: "proposed" });
+  workspace("g-live", { labels: ["focus"], gate: "proposed" });
+  const dot = path.join(root, "f-paused", ".sandbox");
+  fs.writeFileSync(
+    path.join(dot, "agent-state.json"),
+    JSON.stringify({ state: "needs-you", at: new Date().toISOString(), question: "Which fix?" }),
+  );
+  fs.writeFileSync(
+    path.join(dot, "paused.json"),
+    JSON.stringify({ at: new Date().toISOString(), containers: [], was_working: false }),
+  );
+  const r = await checkInTriage();
+  const row = (n) => r.workspaces.find((w) => w.name === n);
+  assert.equal(row("f-paused").paused, true);
+  assert.equal(row("g-live").paused, false);
+  assert.ok(!r.candidates.includes("f-paused"));
+  assert.ok(r.candidates.includes("g-live"));
+  assert.ok(!r.readyToClose.includes("f-paused"));
+});

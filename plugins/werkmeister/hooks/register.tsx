@@ -90,6 +90,7 @@ try {
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
     'workspace-status': () => core.getWorkspaceStatuses(),
+    'claim-resume-nudge': async () => ({ message: await core.claimResumeNudge(args.name) }),
     'workspace-resources': () => core.getWorkspaceResources(),
     // The same snapshot \`sandbox status --intercepts --json\` prints: the CLI stays the one source of intercept state.
     intercepts: async () => (await sibling('status.js')).interceptsSnapshot(),
@@ -582,6 +583,8 @@ type StatusResult = {
     project?: string | null;
     started?: WorkspaceRow["started"];
     crashLoops?: WorkspaceRow["crashLoops"];
+    paused?: WorkspaceRow["paused"];
+    resumeNudge?: boolean;
   }[];
 };
 type SessionInfo = {
@@ -669,6 +672,8 @@ export function buildRows(
       project: s?.project ?? null,
       started: s?.started ?? null,
       crashLoops: s?.crashLoops ?? [],
+      paused: s?.paused ?? null,
+      resumeNudge: s?.resumeNudge ?? false,
       session: sessionFor(w.path, allPaths, sessions),
     };
   });
@@ -858,6 +863,38 @@ async function connect($: EngineInterface): Promise<void> {
   await tick($);
 }
 
+/**
+ * Sends Resume's "continue" (SW-70) to each workspace's Desktop session: only the pane can name it. The claim
+ * removes the file first, so a failure is logged, not retried; a row with no Desktop session leaves it be.
+ */
+async function deliverNudges($: EngineInterface, rows: WorkspaceRow[]): Promise<void> {
+  const due = rows.filter((r) => r.resumeNudge && r.session);
+  if (!due.length) return;
+  const self = payload<{ sessionId: string }>(
+    await $.mcp.call("ccd_session_mgmt", "get_session", { session_id: "self" }),
+  ).sessionId;
+  for (const r of due) {
+    try {
+      const { message } = await core<{ message: string | null }>($, "claim-resume-nudge", {
+        name: r.name,
+      });
+      if (!message || !r.session) continue;
+      // send_message refuses the calling session, so a nudge for this one is its own prompt.
+      if (r.session.id === self) await $.prompt.submit({ text: message });
+      else {
+        const sent = await $.mcp.call("ccd_session_mgmt", "send_message", {
+          session_id: r.session.id,
+          message,
+        });
+        const text = sent.content.map((c) => c.text ?? "").join(" ");
+        if (sent.isError || !/delivery: (delivered|queued)/.test(text)) throw new Error(text);
+      }
+    } catch (e) {
+      $.ui.log(`Resume "continue" not delivered to ${r.name}: ${(e as Error).message}`);
+    }
+  }
+}
+
 let ticking = false;
 /** Refreshes rows once. A tick that starts while one runs is skipped. */
 async function tick($: EngineInterface): Promise<void> {
@@ -877,7 +914,9 @@ async function tick($: EngineInterface): Promise<void> {
     } catch {
       sessions = [];
     }
-    await $.state.set(ROWS, buildRows(list, status, sessions));
+    const rows = buildRows(list, status, sessions);
+    await $.state.set(ROWS, rows);
+    await deliverNudges($, rows);
     await $.state.set(INFRA, status.infra ?? null);
     await $.state.set(INTERCEPTS, await intercepts);
     await $.state.set(ERROR, "");
@@ -976,6 +1015,8 @@ export type Action =
   | "stop"
   | "restart"
   | "down"
+  | "pause"
+  | "resume"
   | "new"
   | "continue"
   | "beside"
@@ -984,14 +1025,16 @@ export type Action =
   | "closeout"
   | "abandon"
   | "cancel";
-type Lifecycle = "up" | "stop" | "restart" | "down";
-const LIFECYCLE = new Set<Action>(["up", "stop", "restart", "down"]);
+type Lifecycle = "up" | "stop" | "restart" | "down" | "pause" | "resume";
+const LIFECYCLE = new Set<Action>(["up", "stop", "restart", "down", "pause", "resume"]);
 
 const LABEL: Record<Exclude<Action, "continue" | "pin">, string> = {
   up: "▶ Up",
   stop: "■ Stop",
   restart: "↻ Restart",
   down: "⏻ Down",
+  pause: "⏸ Pause",
+  resume: "▶ Resume",
   new: "＋ New session",
   beside: "⇆ Open beside",
   prs: "↻ Refresh PRs",
@@ -1004,28 +1047,38 @@ const LABEL: Record<Exclude<Action, "continue" | "pin">, string> = {
 export type CardActions = { primary: Action; bar: Action[]; menu: (Action | "issue")[] };
 
 /** The ⋯ menu's leftover lifecycle and session buttons, in this order (06 Actions). */
-const EXTRAS: Action[] = ["continue", "stop", "restart", "down", "new"];
+const EXTRAS: Action[] = ["continue", "stop", "pause", "restart", "down", "new"];
 
 /**
  * ui-spec § Actions: the display model's primary, two secondaries, and everything else in ⋯ in the spec's order.
- * The secondaries follow the containers (06 Actions): Up and New while nothing runs, else Stop and Restart, with
- * Down in Stop's place once the work shipped; when the primary is one of them, Continue takes its slot.
+ * The secondaries follow the containers (06 Actions): Up and New while nothing runs, Stop and Down while paused,
+ * else Stop and Pause, with Restart and Down once the work shipped; when the primary is one of them, Continue
+ * takes its slot.
  */
 export function actionsFor(r: WorkspaceRow, d: WorkspaceDisplay, canType: boolean): CardActions {
   const session = hasSession(r);
+  const paused = r.paused != null;
   const off = r.state === "down" || r.state === "stopped";
   const shipped = r.lifecycle?.state === "shipped";
   const want: Action = d.primary.action === "close-out" ? "closeout" : d.primary.action;
   // Continue with no session would resume nothing: New session takes its place.
   const primary: Action = want === "continue" && !session ? "new" : want;
-  const pair: Action[] = off ? ["up", "new"] : shipped ? ["restart", "down"] : ["stop", "restart"];
+  const pair: Action[] = paused
+    ? ["stop", "down"]
+    : off
+      ? ["up", "new"]
+      : shipped
+        ? ["restart", "down"]
+        : ["stop", "pause"];
   const bar = pair.flatMap((a): Action[] => (a !== primary ? [a] : session ? ["continue"] : []));
   const allowed = (a: Action) =>
     a === "continue"
       ? session
-      : off
-        ? a === "new" || (a === "down" && r.state === "stopped")
-        : !(shipped && a === "stop");
+      : paused
+        ? a === "new" || a === "stop" || a === "down"
+        : off
+          ? a === "new" || (a === "down" && r.state === "stopped")
+          : !(shipped && a === "stop");
   return {
     primary,
     bar,

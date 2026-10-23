@@ -11,7 +11,10 @@ import { withReporter } from "werkmeister-core/reporter";
 
 import { makeRecorder } from "../../commands/__tests__/helpers/recorder.js";
 
-vi.mock("werkmeister-core/compose", () => ({ composeDownAsync: vi.fn() }));
+vi.mock("werkmeister-core/compose", () => ({
+  composeDownAsync: vi.fn(),
+  workspaceForFeature: vi.fn(() => null),
+}));
 vi.mock("werkmeister-core/slots", () => ({ getSlot: async () => 3, releaseSlot: vi.fn() }));
 vi.mock("werkmeister-core/telepresence", () => ({
   leaveFeatureIntercepts: vi.fn(() => []),

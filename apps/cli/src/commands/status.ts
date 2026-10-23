@@ -70,6 +70,9 @@ async function featureStatus(featureName: string): Promise<string> {
   }
   const running = containers.filter((c) => c.status === "running").length;
   const totalC = containers.length;
+  if (running === 0 && containers.some((c) => c.status === "paused")) {
+    return `${Colors.CYAN}paused (0/${totalC})${Colors.RESET}`;
+  }
   if (running === totalC) {
     return `${Colors.GREEN}up (${running}/${totalC})${Colors.RESET}`;
   }
