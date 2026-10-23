@@ -11,8 +11,8 @@
       "!**/.vscode-test",
       "!**/*.snapshot.json",
       "!apps/cli/infra/compose/scripts/otel-init.bundle.js",
-      "!apps/sandbox-dashboard/workspace-list.artifact.html",
-      // Design references exported from Claude Design; rebuilt in packages/sandbox-ui, never imported
+      "!apps/werkmeister-dashboard/workspace-list.artifact.html",
+      // Design references exported from Claude Design; rebuilt in packages/werkmeister-ui, never imported
       "!docs/design"
     ]
   },

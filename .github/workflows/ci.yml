@@ -55,8 +55,8 @@ jobs:
       # update.code.visualstudio.com entirely (#151).
       - uses: actions/cache@v4
         with:
-          path: packages/vscode-plugin/.vscode-test
-          key: vscode-${{ runner.os }}-1.93.0-${{ hashFiles('packages/vscode-plugin/.vscode-test.mjs') }}
+          path: packages/werkmeister-vscode/.vscode-test
+          key: vscode-${{ runner.os }}-1.93.0-${{ hashFiles('packages/werkmeister-vscode/.vscode-test.mjs') }}
       - run: xvfb-run -a pnpm --filter werkmeister-vscode run test:integration
       # `vsce package` fails on a README link it can't rewrite, and is the only
       # check on .vscodeignore — #38 broke packaging and nothing caught it.
@@ -84,11 +84,11 @@ jobs:
           restore-keys: turbo-${{ runner.os }}-node24-
       - run: pnpm turbo run build --filter=werkmeister-core
       - run: node --test --test-shard=${{ matrix.shard }}/2 *.test.mjs
-        working-directory: packages/sandbox-core
+        working-directory: packages/werkmeister-core
       # The smoke files are a few seconds in total; one shard takes them all.
       - if: matrix.shard == 2
         run: for f in *.smoke.mjs; do node "$f" || exit 1; done
-        working-directory: packages/sandbox-core
+        working-directory: packages/werkmeister-core
 
   # Gated on the test jobs rather than repeating their checks: a publish cannot
   # be taken back, and this used to be a separate workflow that raced CI on

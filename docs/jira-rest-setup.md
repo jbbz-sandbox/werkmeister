@@ -1,6 +1,6 @@
 # Jira REST setup (API token)
 
-Setup log for direct Jira REST access from `apps/sandbox-dashboard` — replaces the
+Setup log for direct Jira REST access from `apps/werkmeister-dashboard` — replaces the
 `claude -p` → Atlassian-MCP round-trips for data-only Jira reads (status pills,
 issue cards, refine briefings). Written as a log so it can become an onboarding
 doc/script; steps marked **[manual]** cannot be scripted, everything else can.
@@ -54,7 +54,7 @@ First performed: 2026-07-11. Verified working same day.
 
 ## How it's consumed
 
-`packages/sandbox-core/src/jira-rest.ts` reads `JIRA_BASE_URL` / `JIRA_EMAIL` /
+`packages/werkmeister-core/src/jira-rest.ts` reads `JIRA_BASE_URL` / `JIRA_EMAIL` /
 `JIRA_API_TOKEN` from the process env first, then from the `jira:` section of
 `~/.werkmeister/config.yaml`.
 When credentials are absent or a call fails, every caller degrades to the

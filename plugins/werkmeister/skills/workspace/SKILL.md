@@ -7,7 +7,7 @@ description: "Create a brand-new sandbox workspace (git worktrees on a <user>/<w
 
 > Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
 
-**Every create goes through `createWorkspace`** (packages/sandbox-core/src/sandbox.ts) — the CLI,
+**Every create goes through `createWorkspace`** (packages/werkmeister-core/src/sandbox.ts) — the CLI,
 the browser form, the MCP server and the /workspaces pane all call it. Never write
 workspace files by hand.
 
@@ -55,11 +55,11 @@ The workspace is git worktrees (one per repo, derived from the selected **servic
 (writes `CLAUDE.md`, `.env`, `compose.yml`, …).
 
 There is **no hand-maintained schema** — fields are built from the same prompt
-definitions (`_WIZARD_PROMPTS` in `packages/sandbox-core/src/workspace_prompts.ts`) that
+definitions (`_WIZARD_PROMPTS` in `packages/werkmeister-core/src/workspace_prompts.ts`) that
 drive the terminal wizard. So every
 surface shows the same fields, labels, defaults, and validation — and the **same look**:
 every surface (browser form, dashboard tab, Desktop inline) renders the one shared form
-component (`packages/sandbox-ui/src/create-form.ts`).
+component (`packages/werkmeister-ui/src/create-form.ts`).
 
 ## Which browser shows the form
 
@@ -127,7 +127,7 @@ Desktop.
 
 ### Prerequisites
 - The `sandbox` CLI on `PATH` (e.g. `~/.local/bin/sandbox`) and `node`.
-- The app built once: `cd apps/sandbox-dashboard && pnpm run build` (produces `dist/form-cli.js`
+- The app built once: `cd apps/werkmeister-dashboard && pnpm run build` (produces `dist/form-cli.js`
   for `--browser-form` and `dist/main.js` for `sandbox dashboard`). Without the build, `--browser-form` errors with a clear message.
   The form page (`dist/form.html`) is fully self-contained — no internet needed.
 

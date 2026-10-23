@@ -81,7 +81,7 @@ fi
 # server `connect` starts on 3001).
 #
 # Only apps/cli is published to npm (see its package.json `files`), so on a
-# global install these siblings are absent. apps/mcp is bundled into this
+# global install these siblings are absent. apps/werkmeister-mcp is bundled into this
 # package as dist/mcp.js (esbuild.mjs), so `mcp` always has a target. The
 # dashboard is checkout-only.
 case "${1:-}" in
@@ -96,7 +96,7 @@ case "${1:-}" in
         exec "$node_bin" "$app_entry" --stdio "$@"
         ;;
     dashboard)
-        app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/sandbox-dashboard/dist/main.js"
+        app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/werkmeister-dashboard/dist/main.js"
         if [ ! -f "$app_entry" ]; then
             echo "Error: the workspaces dashboard ships with a werkmeister checkout only -- missing $app_entry." >&2
             exit 1

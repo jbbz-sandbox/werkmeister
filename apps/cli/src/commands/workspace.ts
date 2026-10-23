@@ -194,11 +194,17 @@ export function browserFormCommand(
 }
 
 function runBrowserForm(args: Record<string, unknown>): void {
-  const cliJs = path.join(getMonorepoRoot(), "apps", "sandbox-dashboard", "dist", "form-cli.js");
+  const cliJs = path.join(
+    getMonorepoRoot(),
+    "apps",
+    "werkmeister-dashboard",
+    "dist",
+    "form-cli.js",
+  );
   if (!(fs.existsSync(cliJs) && fs.statSync(cliJs).isFile())) {
     error(
       `Browser form not built: ${cliJs} is missing. ` +
-        "Run `npm --prefix apps/sandbox-dashboard run build` (or `sandbox dashboard` once) first.",
+        "Run `npm --prefix apps/werkmeister-dashboard run build` (or `sandbox dashboard` once) first.",
     );
     process.exit(1);
   }

@@ -12,7 +12,7 @@ Safely reload Caddy with validation and smoke tests.
 ## Step 0: Prefer `sandbox proxy-reload` (primary path)
 
 `sandbox proxy-reload` runs a CLI-native pipeline internally
-(`sandbox-core/caddy.ts::reloadCaddy`) that already does the
+(`werkmeister-core/caddy.ts::reloadCaddy`) that already does the
 `docker cp` -> structural lint (advisory) -> `caddy adapt` (validates AND
 yields the compiled route count in one call) -> compare against a
 config-derived expected count -> `caddy reload` sequence, and it fails loudly
@@ -68,7 +68,7 @@ console.log('Compiled routes:', Object.values(servers).reduce((n,sv)=>n+walk(sv.
 ```
 
 This mirrors the CLI's canonical counter
-(`sandbox-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
+(`werkmeister-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
 leaf, across **all** compiled servers, not just `srv0`), so the manual path
 and `sandbox proxy-reload` agree on the number. The CLI ships as one bundle
 with no importable `dist/lib/caddy.js`, so the walk is inlined here.

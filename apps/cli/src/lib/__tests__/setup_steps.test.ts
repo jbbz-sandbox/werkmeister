@@ -703,7 +703,7 @@ describe("syncVscodeExtension", () => {
   it("ships the extension at the CLI's version — setup compares the two", () => {
     const read = (p: string) =>
       JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "../../../../..", p), "utf8"));
-    expect(read("packages/vscode-plugin/package.json").version).toBe(
+    expect(read("packages/werkmeister-vscode/package.json").version).toBe(
       read("apps/cli/package.json").version,
     );
   });

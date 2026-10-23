@@ -51,8 +51,8 @@ feature name (`infra` plus the workspaces under the workspaces root).
   nunjucks with a small compat layer (`{% do %}`, dict truthiness,
   `map(attribute=…)`) so they stay shared verbatim with other consumers
 - `sandbox mcp` runs the one MCP server over stdio. Its source is
-  `apps/mcp`, bundled into `dist/mcp.js` by `esbuild.mjs` so it ships in the npm
+  `apps/werkmeister-mcp`, bundled into `dist/mcp.js` by `esbuild.mjs` so it ships in the npm
   package. `sandbox dashboard` runs the localhost workspaces dashboard from
-  `apps/sandbox-dashboard`, which is checkout-only
+  `apps/werkmeister-dashboard`, which is checkout-only
 - interactive prompts and process-spawn edges are async (`run()` is
   `async` throughout); core logic stays synchronous

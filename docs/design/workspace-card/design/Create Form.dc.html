@@ -124,7 +124,7 @@ class Component extends DCLogic {
     const err = st === 'error';
     const loading = st === 'filling';
     const picked = filled ? ['cli', 'werkmeister-dashboard'] : [];
-    const G = [['demo-services', ['backend', 'clickhouse', 'frontend', 'mongo', 'redpanda']], ['werkmeister', ['cli', 'werkmeister-core', 'werkmeister-dashboard', 'vscode-plugin']], ['wellness', ['api', 'mobile']]];
+    const G = [['demo-services', ['backend', 'clickhouse', 'frontend', 'mongo', 'redpanda']], ['werkmeister', ['cli', 'werkmeister-core', 'werkmeister-dashboard', 'werkmeister-vscode']], ['wellness', ['api', 'mobile']]];
     return {
       success: st === 'success', form: st !== 'success', browser: !narrow,
       successNote: narrow ? 'Opens in this chat as a card.' : 'Opening in VS Code…',
