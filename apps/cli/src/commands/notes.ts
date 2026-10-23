@@ -27,7 +27,7 @@ import {
   KINDS,
   matchDomainsForRefs,
 } from "werkmeister-core/graduate";
-import { type Note, openDecisions } from "werkmeister-core/notes";
+import type { Note } from "werkmeister-core/notes";
 import { loadStandardsModules } from "werkmeister-core/standards";
 import { strategyFor } from "werkmeister-core/strategies";
 import { error, info, success } from "../lib/config.js";
@@ -114,19 +114,24 @@ export async function graduateOne(
   const modules = loadStandardsModules();
   const resolvedDomain = await resolveDomain(note, modules, domain);
   const resolvedKind = await resolveKind(kind);
-  return graduateNote(workspace, note, { domain: resolvedDomain, kind: resolvedKind, slug });
+  return graduateNote(workspace, note, {
+    domain: resolvedDomain,
+    kind: resolvedKind,
+    slug,
+    decisions: strategyFor(workspace).decisions,
+  });
 }
 
 async function runGraduate(args: Record<string, unknown>): Promise<void> {
   const workspace = findWorkspaceRoot(process.cwd());
   if (workspace === null) {
-    error("Not inside a sandbox workspace (no .sandbox/ directory found above CWD).");
+    error("Not inside a werkmeister workspace — run this from a workspace folder or below.");
     process.exit(1);
   }
 
-  const decisions = openDecisions(workspace);
+  const decisions = strategyFor(workspace).decisions.open(workspace);
   if (!decisions.length) {
-    info("No open decision notes to graduate.");
+    info("No open decisions to graduate.");
     return;
   }
 

@@ -64,7 +64,7 @@ import { load as loadGlobalConfig } from "./global_config.js";
 import { reconcileGraduating } from "./graduate.js";
 import { writeAgentStateHooks } from "./hooks_gen.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
-import { latestHandoff, type Note, openDecisions } from "./notes.js";
+import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
@@ -1397,11 +1397,12 @@ export async function teardownNotes(feature: string): Promise<TeardownNotes> {
   if (workspace === null) {
     return { workspace: null, handoff: null, decisions: [], graduated: [] };
   }
-  const graduated = reconcileGraduating(workspace);
+  const { decisions } = strategyFor(workspace);
+  const graduated = reconcileGraduating(workspace, null, decisions);
   return {
     workspace,
     handoff: latestHandoff(workspace),
-    decisions: openDecisions(workspace),
+    decisions: decisions.open(workspace),
     graduated,
   };
 }
