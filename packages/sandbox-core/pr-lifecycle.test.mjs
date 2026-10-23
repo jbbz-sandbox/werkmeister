@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { dotDir } from "./dist/config.js";
 import { resolveIssueStatuses } from "./dist/issue_status.js";
@@ -1189,10 +1190,15 @@ async function withClaudeHome(sessions, fn) {
   fs.writeFileSync(bin, `#!/bin/sh\n{ pwd -P; echo "$@"; } >> "${log}"\n`, { mode: 0o755 });
   process.env.HOME = home;
   process.env.CLAUDE_BIN = bin;
+  const read = () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : []);
   try {
-    return await fn(() =>
-      fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [],
-    );
+    // `claude` is spawned detached and may outlive deliverHeadless's 2.5 s grace: under the full
+    // suite macOS's first-exec check on a fresh stub took up to 10 s (SW-67). Wait for `min` lines.
+    return await fn(async (min = 0) => {
+      for (const end = Date.now() + 30_000; read().length < min && Date.now() < end; )
+        await sleep(50);
+      return read();
+    });
   } finally {
     for (const [k, v] of Object.entries(prev))
       if (v === undefined) delete process.env[k];
@@ -1394,20 +1400,19 @@ test("deliverHeadless: a session started in a code worktree is resumed from ther
         });
 
         await deliverHeadless(cb("s-sub", sub));
-        assert.deepEqual(calls().slice(-2), resumed(sub, "s-sub"));
+        assert.deepEqual((await calls(2)).slice(-2), resumed(sub, "s-sub"));
 
         // Recorded before SW-16: no start folder, found by its id alone.
         await deliverHeadless(cb("s-sub"));
-        assert.deepEqual(calls().slice(-2), resumed(sub, "s-sub"));
+        assert.deepEqual((await calls(4)).slice(-2), resumed(sub, "s-sub"));
 
         await deliverHeadless(cb("s-root", ws));
-        assert.deepEqual(calls().slice(-2), resumed(ws, "s-root"));
+        assert.deepEqual((await calls(6)).slice(-2), resumed(ws, "s-root"));
 
         // Never another session: not the root's newest, not a wrong recorded folder.
-        const n = calls().length;
         await assert.rejects(deliverHeadless(cb("s-gone")), /session s-gone is gone/);
         await assert.rejects(deliverHeadless(cb("s-sub", ws)), /session s-sub is gone/);
-        assert.equal(calls().length, n);
+        assert.equal((await calls()).length, 6);
       }),
     );
   } finally {
