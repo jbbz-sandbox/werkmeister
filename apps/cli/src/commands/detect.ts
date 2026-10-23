@@ -27,7 +27,7 @@ import {
 import type { Runner } from "werkmeister-core/machine_setup";
 import { RegistryError } from "werkmeister-core/registry_sync";
 
-import { claudeResolver } from "../lib/assist_resolver.js";
+import { claudeResolver, SdkMissingError } from "../lib/assist_resolver.js";
 import { Colors, info, success, warn } from "../lib/config.js";
 import { confirm } from "../lib/wizard.js";
 
@@ -156,7 +156,9 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
         for (const r of result.rejected) warn(`Ignored Claude's answer for ${r.item}: ${r.reason}`);
       } catch (e) {
         warn(
-          `Claude pass failed (${e instanceof Error ? e.message : String(e)}) — keeping the deterministic guesses.`,
+          e instanceof SdkMissingError
+            ? `${e.message}\n  Keeping the deterministic guesses.`
+            : `Claude pass failed (${e instanceof Error ? e.message : String(e)}) — keeping the deterministic guesses.`,
         );
       }
     }

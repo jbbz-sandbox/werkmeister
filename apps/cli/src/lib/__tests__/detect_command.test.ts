@@ -9,7 +9,9 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Answer, Resolver } from "werkmeister-core/fragment_detect";
 import type { Runner } from "werkmeister-core/machine_setup";
+import { type LogEvent, withReporter } from "werkmeister-core/reporter";
 import { type DetectDeps, runDetect } from "../../commands/detect.js";
+import { SdkMissingError } from "../assist_resolver.js";
 
 const noTools: Runner = (cmd) =>
   cmd[0] === "git" ? [128, "fatal: not a git repository"] : [127, `${cmd[0]}: command not found`];
@@ -123,6 +125,25 @@ describe("sandbox detect", () => {
     expect(await runDetect(args({ yes: true, assist: true }), deps(reposRoot, { resolver }))).toBe(
       0,
     );
+    expect(fs.readFileSync(path.join(root, ".sandbox/services.yaml"), "utf8")).toContain(
+      "# guessed:",
+    );
+  });
+
+  it("a missing SDK prints its install hint, keeps the guesses and exits 0", async () => {
+    const { root, reposRoot } = repo(GO_APP);
+    const resolver: Resolver = async () => {
+      throw new SdkMissingError();
+    };
+    const events: LogEvent[] = [];
+    const reporter = { emit: (e: LogEvent) => void events.push(e), passthrough: false };
+    const code = await withReporter(reporter, () =>
+      runDetect(args({ yes: true, assist: true }), deps(reposRoot, { resolver })),
+    );
+    expect(code).toBe(0);
+    const warned = events.flatMap((e) => (e.level === "warn" ? [e.msg] : [])).join("\n");
+    expect(warned).toContain("npm install -g @anthropic-ai/claude-agent-sdk");
+    expect(warned).not.toContain("Claude pass failed");
     expect(fs.readFileSync(path.join(root, ".sandbox/services.yaml"), "utf8")).toContain(
       "# guessed:",
     );
