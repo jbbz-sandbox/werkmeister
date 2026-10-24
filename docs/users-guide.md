@@ -45,7 +45,7 @@
    - [Optional integrations](#optional-integrations)
 10. [Generated Files](#generated-files)
 11. [Caddy Proxy & Feature Selector UI](#caddy-proxy--feature-selector-ui)
-12. [k8s Port-Forward Scripts](#k8s-port-forward-scripts)
+12. [k8s Port-Forwards (Containerized)](#k8s-port-forwards-containerized)
 13. [Environment Variables](#environment-variables)
 14. [File Paths Reference](#file-paths-reference)
 15. [Workflows](#workflows)
