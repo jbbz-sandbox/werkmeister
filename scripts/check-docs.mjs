@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * Fail when a doc names something the code no longer has: a retired term, a
- * repo path that doesn't exist, a `werkmeister` command or flag the CLI doesn't
- * define, or an MCP tool the server doesn't register. See docs/docs-sync.md.
+ * repo path that doesn't exist, a `werkmeister` (or `sandbox`) command or flag
+ * the CLI doesn't define, an MCP tool the server doesn't register, a bare
+ * `<placeholder>` GitHub would drop, or a `#anchor` no heading defines. See
+ * docs/docs-sync.md.
  *
  * Commands and flags come from the built CLI's own `__complete`, so run after
  * `pnpm run build`. A line containing `docs-check: ignore` is skipped, for the
@@ -99,24 +101,111 @@ export function checkDoc(rel, text, { cli, tools, exists, read }) {
       if (!exists(p)) report(line, `missing path ${p}`);
       else if (symbol && !read(p).includes(symbol)) report(line, `${p} has no ${symbol}`);
     }
-    // ponytail: only flags straight after the command word are checked, so a
-    // subcommand's flags (`pr watch --install`) pass unseen. Walk subcommands
-    // if those start drifting.
-    // A command starts the span or a shell statement; elsewhere it's prose ("werkmeister never…").
-    for (const m of code.matchAll(
-      /(?:^|[;&|(]\s*|^\s*\$\s+)(?:werkmeister|w9r) ([a-z][\w-]*)((?: --[a-z][\w-]*(?:=\S+)?)*)/g,
-    )) {
-      const flags = cli.commands.get(m[1]);
-      if (!flags) {
-        report(line, `unknown command \`werkmeister ${m[1]}\``);
-        continue;
-      }
-      for (const f of m[2].matchAll(/--[a-z][\w-]*/g))
-        if (!flags.has(f[0]) && f[0] !== "--help")
-          report(line, `unknown flag \`werkmeister ${m[1]} ${f[0]}\``);
+    checkCommands(line, code, cli, report);
+  }
+  checkPlaceholders(text, report);
+  checkAnchors(rel, text, read, exists, report);
+  return problems;
+}
+
+/**
+ * `werkmeister`, `w9r` or `sandbox` (the deprecated launcher runs the same CLI)
+ * where a command starts the span or a shell statement, elsewhere it's prose
+ * ("werkmeister never…"). Every `--flag` up to the statement's end or a bare
+ * `--` is checked against the command's own set: `pr watch` and `cache prune`
+ * are `<action>` positionals, so their flags hang on `pr` and `cache`.
+ */
+export function checkCommands(line, code, cli, report) {
+  for (const m of code.matchAll(
+    /(?:^|[;&|(]\s*|^\s*\$\s+)(werkmeister|w9r|sandbox) ([a-z][\w-]*)([^;&|()]*)/g,
+  )) {
+    const flags = cli.commands.get(m[2]);
+    if (!flags) {
+      report(line, `unknown command \`${m[1]} ${m[2]}\``);
+      continue;
+    }
+    const args = m[3].replace(/"[^"]*"|'[^']*'/g, "").split(/\s+/);
+    const end = args.indexOf("--");
+    for (const arg of end < 0 ? args : args.slice(0, end)) {
+      const flag = arg.match(/^--[a-z][\w-]*/)?.[0];
+      if (flag && !flags.has(flag) && flag !== "--help")
+        report(line, `unknown flag \`${m[1]} ${m[2]} ${flag}\``);
     }
   }
-  return problems;
+}
+
+/** Lines with fenced blocks blanked, so index + 1 stays the line number. */
+function unfenced(text) {
+  let fenced = false;
+  return text.split("\n").map((line) => {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    else if (!fenced) return line;
+    return "";
+  });
+}
+
+/** The elements GitHub keeps; any other `<tag …>` it strips without a trace. */
+const HTML_TAGS = new Set(
+  "a abbr b bdo blockquote br caption cite code dd del details dfn div dl dt em figcaption figure h1 h2 h3 h4 h5 h6 hr i img ins kbd li mark ol p picture pre q rp rt ruby s samp small source span strike strong sub summary sup table tbody td tfoot th thead time tr tt u ul var video wbr".split(
+    " ",
+  ),
+);
+
+/** A `<placeholder>` outside code: GitHub reads it as an unknown HTML tag and drops it. */
+export function checkPlaceholders(text, report) {
+  const blank = (m) => m.replace(/[^\n]/g, "");
+  const prose = unfenced(text)
+    .join("\n")
+    .replace(/^---\n[\s\S]*?\n---\n/, blank)
+    // A code span may wrap a line, but never crosses a blank one.
+    .replace(/<!--[\s\S]*?-->|(`+)(?:(?!\n\s*\n)[\s\S])*?\1/g, blank);
+  prose.split("\n").forEach((l, i) => {
+    for (const m of l.matchAll(/(?<!\\)<([a-z][a-z0-9-]*)(?:\s[^<>]*)?\/?>/gi))
+      if (!HTML_TAGS.has(m[1].toLowerCase()))
+        report(i + 1, `bare placeholder \`${m[0]}\` (GitHub drops it); put it in a code span`);
+  });
+}
+
+/** GitHub's heading id: link text kept, punctuation dropped, lowercased, spaces to hyphens. */
+export function slug(heading) {
+  return heading
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}_ -]/gu, "")
+    .replace(/ /g, "-");
+}
+
+/** Every `#id` a doc defines: heading slugs (GitHub suffixes repeats -1, -2, …) and `<a id|name>`. */
+export function anchors(text) {
+  const ids = new Set();
+  const seen = new Map();
+  for (const line of unfenced(text)) {
+    const h = line.match(/^#{1,6}\s+(.*?)(?:\s+#+)?\s*$/);
+    if (h) {
+      const s = slug(h[1]);
+      const n = seen.get(s) ?? 0;
+      seen.set(s, n + 1);
+      ids.add(n ? `${s}-${n}` : s);
+    }
+    for (const m of line.matchAll(/<a\s[^>]*\b(?:id|name)="([^"]+)"/g)) ids.add(m[1]);
+  }
+  return ids;
+}
+
+/** `#x` and `other.md#x` links against that doc's anchors. `#L9` names a line, not a heading. */
+export function checkAnchors(rel, text, read, exists, report) {
+  const own = anchors(text);
+  unfenced(text).forEach((l, i) => {
+    for (const m of l.matchAll(/\]\(([^)\s#]*)#([^)\s]+)\)/g)) {
+      const [, target, frag] = m;
+      if ((target && !target.endsWith(".md")) || /^L\d+(-L\d+)?$/.test(frag)) continue;
+      const path = join(dirname(rel), target);
+      if (target && !exists(path)) continue;
+      if (!(target ? anchors(read(path)) : own).has(frag))
+        report(i + 1, `broken anchor \`${target}#${frag}\``);
+    }
+  });
 }
 
 /** The built CLI's commands and their long flags, asked through `__complete`. */

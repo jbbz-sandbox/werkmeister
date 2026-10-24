@@ -16,7 +16,9 @@ covers what now catches them automatically and what is still open.
 | Retired names and paths (`k8s-connect`, `infra/config/`, `npm run`, Stellwerk, …) | the `RETIRED` list in the script <!-- docs-check: ignore --> |
 | Relative Markdown links that don't resolve | the file system |
 | Repo paths in code spans (`apps/…`, `packages/…`, `plugins/…`, `docs/…`); `file.ts::symbol` also checks the symbol | the file system <!-- docs-check: ignore --> |
-| `werkmeister <command> --flag` at the start of a code span or shell line | the built CLI's `__complete` |
+| `werkmeister`, `w9r` or `sandbox <command>` at the start of a code span or shell line, and every `--flag` after it up to a bare `--` | the built CLI's `__complete` |
+| Bare `<placeholder>`s outside code, which GitHub drops silently | `HTML_TAGS` in the script (the elements GitHub keeps) |
+| `#anchor` links, in the same doc or another `.md` | that doc's headings, as GitHub slugs them |
 | MCP tool names (`` `x` tool ``, `MCP tool `x``, `mcp__plugin_werkmeister_werkmeister__x`) | `registerTool` / `registerAppTool` in `apps/werkmeister-mcp/src`, plus the plugin's `*_TOOL` constants <!-- docs-check: ignore --> |
 
 It runs in CI after the build. Locally, run `pnpm run build` first.
@@ -31,8 +33,9 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 
 **What it does not catch:**
 
-- A subcommand's flags (`pr watch --install`). Only flags straight after the command word are checked.
-- Commands run through the deprecated `sandbox` launcher.
+- Short flags (`-s backend`).
+- Whether a flag fits the action it follows: flags hang on the command, so `pr open --install` passes.
+- Anchors into files other than Markdown (`tree.ts#L98`).
 - Prose claims ("only one dependency", "all 19 tools").
 - Line numbers (`gate.ts:290`).
 - Anything about other repos (`demo-services`).
@@ -40,7 +43,7 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 ## Writing docs that stay checkable
 
 - Cite a symbol, not a line: `` `packages/werkmeister-core/src/caddy.ts::reloadCaddy` `` is checked, `caddy.ts:325` rots.
-- Don't state counts or copy lists that live in code ("all 21 tools", the allow/deny lists). Link to the source, or generate the list (option 2 below).
+- Don't state counts or copy lists that live in code ("all 21 tools", the allow/deny lists). Link to the source, or generate the list (option 1 below).
 - Put commands in code spans, so the command check sees them.
 - When you rename a command, path, tool or config key, run `docs:check` before opening the PR.
 
@@ -56,7 +59,6 @@ Ranked by drift caught per effort, as proposed with the check above.
    - the changesets `fixed` group and the release `needs:` in the README
 2. **TSDoc `{@link}` in code comments, checked by TypeDoc.** Code comments that name another symbol or file drift too (the esbuild header, comments linking to deleted specs). Write them as `{@link reloadCaddy}` and run TypeDoc over `werkmeister-core` in CI with `--emit none` and `invalidLink` validation as errors. Skip publishing an API site: `werkmeister-core` is private, so a site would have almost no readers.
 3. **Run the skills' shell snippets.** The plugin skills' bash blocks are instructions Claude executes, and a wrong path there fails at runtime. Extracting and smoke-running them (e.g. in `apps/cli/bdd`) costs more than the checks above. Revisit if skills keep breaking after `docs:check`.
-4. **Subcommand flags.** Walk commander's subcommands (or extend `__complete`) so `pr watch --install` is checked too.
 
 ## Open follow-ups from the 2026-10-22 sweep
 

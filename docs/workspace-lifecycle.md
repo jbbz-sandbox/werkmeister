@@ -144,9 +144,9 @@ A pass runs `werkmeister pr status` for each workspace with a callback and tells
 
 | Status | Message |
 |---|---|
-| merged | PR <url> merged. Run `werkmeister pr status`, then follow the workspace router. |
-| shipped | PR <url> shipped in <tag>. Ask the person whether to run `werkmeister close-out`. |
-| closed | PR <url> was closed. Report it to the person. |
+| merged | PR `<url>` merged. Run `werkmeister pr status`, then follow the workspace router. |
+| shipped | PR `<url>` shipped in `<tag>`. Ask the person whether to run `werkmeister close-out`. |
+| closed | PR `<url>` was closed. Report it to the person. |
 
 `notified` is written before the message goes out, so a failed delivery is logged and not repeated. Once the PR is shipped, closed or abandoned the callback fields are removed. A pass never merges and never closes out.
 
