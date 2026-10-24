@@ -1126,7 +1126,7 @@ const reconcileRoot = () => path.join(dotDir(os.homedir()), "reconcile");
 /** A chat-session key that names a PR-reconcile dir instead of a workspace. */
 const RECONCILE_PREFIX = "reconcile:";
 
-/** Map a reconcile key (`reconcile:<slug>`) to its dir under {@link reconcileRoot}. */
+/** Map a reconcile key (`reconcile:<slug>`) to its dir under `reconcileRoot`. */
 function reconcileDirForKey(name: string): string {
   const slug = name.slice(RECONCILE_PREFIX.length);
   if (!slug || slug.includes("/") || slug.includes("\\") || slug.includes("..")) {
@@ -1384,7 +1384,7 @@ function serviceHealthState(s: { state: string; health: string }): ServiceHealth
 
 /**
  * Pure tally of container records by Compose project, excluding completed one-shot setup
- * containers. Split out from {@link dockerComposeProjects} so it's unit-testable without
+ * containers. Split out from `dockerComposeProjects` so it's unit-testable without
  * touching the daemon.
  */
 export function tallyComposeContainers(rows: ProjectContainer[]): Map<string, ComposeProjectTally> {
@@ -3682,7 +3682,7 @@ const RECONCILE_PROMPT =
  * spawn via `-p --append-system-prompt-file`, so the session's first turn needs
  * no tools and runs unattended — which is why the window can open in the
  * background (never steals focus) and be watched entirely from the dashboard's
- * chat panel. The session lives in its own dir under {@link reconcileRoot}
+ * chat panel. The session lives in its own dir under `reconcileRoot`
  * (`<repo>-<number>`), giving it an isolated Claude project dir the tailer keys
  * on cleanly. See the launch call for why it is headless + tool-restricted and
  * deliberately NOT `--bare`.
