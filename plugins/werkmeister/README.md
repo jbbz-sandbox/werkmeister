@@ -167,10 +167,10 @@ about it.
 /plugin marketplace remove sandbox
 ```
 
-**Checkout installs** that set `CLAUDE_CODE_PLUGIN_DIRS` to `.../plugins/sandbox-tools` keep
-working for one release: that path is now a link to `plugins/werkmeister` and loads the plugin
-under its new name. Point it at `.../plugins/werkmeister`, and rename the `sandbox` entry in
-`extraKnownMarketplaces` to `werkmeister` (or delete it), before the link is removed.
+**Checkout installs** that set `CLAUDE_CODE_PLUGIN_DIRS` to `.../plugins/sandbox-tools` stop
+loading the plugin: the plugins/sandbox-tools link was removed (SW-23). Point it at
+`.../plugins/werkmeister`, and rename the `sandbox` entry in `extraKnownMarketplaces` to
+`werkmeister` (or delete it).
 
 **Also update by hand:**
 - Claude Desktop: in `claude_desktop_config.json`, rename the `sandbox-workspace` server to

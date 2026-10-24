@@ -18,10 +18,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ArchetypeRegistry } from "./config.js";
 
-// Named so the CLI-argv guard in core_cli_spawns.test.ts (a quoted "sandbox" closing a bracket)
-// does not read this MCP-server key as a CLI spawn.
-const LEGACY_SERVER = "sandbox";
-
 /** Union the present archetypes' `mcp_servers:` names, sorted. */
 export function resolveWorkspaceMcpServers(
   presentArchetypes: Record<string, string[]>,
@@ -146,11 +142,6 @@ export function writeWorkspaceMcp(
       delete servers[name];
     }
   }
-  // The headless server was registered as `sandbox` before SW-9. It is no longer in the
-  // registry, so the loop above would keep it as user-added; drop it when it is ours (only
-  // our projection carries X-Sandbox-Feature). Remove one release after the rename.
-  const legacy = servers[LEGACY_SERVER] as { headers?: Record<string, string> } | undefined;
-  if (legacy?.headers?.["X-Sandbox-Feature"] !== undefined) delete servers[LEGACY_SERVER];
   Object.assign(servers, wanted);
 
   fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + "\n");

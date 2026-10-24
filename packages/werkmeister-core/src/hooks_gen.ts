@@ -335,14 +335,7 @@ export const READ_ONLY_GIT_RULES = [
   "Bash(git ls-files:*)",
 ];
 
-// The plugin's server is `werkmeister` (SW-48). It was `sandbox-tools` with server `sandbox-workspace` (SW-9). A machine that has not
-// run `w9r setup` yet still exposes the old names, so both stay allowed; the old one can go once
-// that release is out of support. Dropping it also prunes it from existing workspaces (see
-// `permissionsRecord`).
-const PLUGIN_MCP_PREFIXES = [
-  "mcp__plugin_werkmeister_werkmeister__",
-  "mcp__plugin_sandbox-tools_sandbox-workspace__",
-];
+const PLUGIN_MCP_PREFIXES = ["mcp__plugin_werkmeister_werkmeister__"];
 const pluginTool = (tool: string) => PLUGIN_MCP_PREFIXES.map((prefix) => `${prefix}${tool}`);
 
 // Every name the CLI answers to. A `Bash(…)` rule is a literal prefix, so a rule
