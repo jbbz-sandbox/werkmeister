@@ -392,7 +392,7 @@ export interface InterceptState {
  * turns into rc 127 at effectively zero cost. Status runs before `list` because
  * `list` on a disconnected daemon implicitly connects — a daemon launch on every
  * status poll (SW-12). Upstream documents `user_daemon` as the host-mode status
- * key, which {@link parseConnectedNamespace} reads.
+ * key, which `parseConnectedNamespace` reads.
  */
 export function listIntercepts(runner: Runner = _run): InterceptState {
   const [rc, out] = runner(STATUS_ARGS);

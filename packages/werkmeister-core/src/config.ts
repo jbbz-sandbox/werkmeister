@@ -142,7 +142,7 @@ export function modelPricingYamlPath(): string {
  * The directory holding per-feature workspaces: `paths.workspaces_root` →
  * `$SANDBOX_WORKSPACES_ROOT` → `~/workspace`.
  *
- * Same YAML-over-env precedence as {@link registryPath}, and here the YAML is
+ * Same YAML-over-env precedence as `registryPath`, and here the YAML is
  * load-bearing rather than merely fresher: a GUI-launched process (the VS Code
  * extension host, Claude Desktop) never sourced env.sh at all, so the export it
  * would otherwise depend on does not exist.
@@ -731,7 +731,7 @@ export function getVolumeBaseNames(): string[] {
  * The CLI package directory (`<checkout>/apps/cli`) — the root of everything
  * that ships as CODE: `infra/`, `dist/`, the `sandbox` wrapper.
  *
- * Resolution mirrors `resolveSandboxBin` in sandbox.ts because it answers the
+ * Resolution mirrors {@link sandbox.resolveSandboxBin} because it answers the
  * same question: `SANDBOX_ROOT` first (the wrapper re-derives and exports it from
  * the *running* checkout, so it is authoritative and beats a nearer one on
  * disk), then a walk up from this module looking for the checkout that owns
