@@ -153,8 +153,7 @@ services:
     validate: "Open the page and the sidebar entry for the doc you changed; `pnpm --filter docs-site build` fails on a dead link."
     internal_port: 5173
     port_offset: 6
-    # The site's base path (the github.io project URL); / only redirects here.
-    health_endpoint: /werkmeister/
+    health_endpoint: /
     setup_service: sandbox-install
     image: node:22
     command: "cd apps/docs-site && exec pnpm exec vitepress dev . --host 0.0.0.0 --port 5173"
@@ -174,7 +173,7 @@ services:
       # Vite refuses unknown Host headers; this lets Caddy's hostname through.
       # Match it to local_domain in config.yaml.
       DOCS_ALLOWED_HOSTS: .local.sandbox.com
-    # docs-site.local.sandbox.com/werkmeister/
+    # docs-site.local.sandbox.com/
     feature_router: {}
 
 setup_services:
