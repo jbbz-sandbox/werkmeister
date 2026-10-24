@@ -10,7 +10,7 @@ published package doesn't depend on the repo's package manager, so
 `npx werkmeister setup` and `npm install -g werkmeister` work as they always have
 (see "Install the CLI without a clone").
 
-Docs: <https://jbbz-sandbox.github.io/werkmeister/>
+Docs: <https://werkmeister.io/>
 
 ## Workspaces
 
