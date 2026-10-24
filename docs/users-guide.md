@@ -1342,7 +1342,9 @@ werkmeister issue create --project <KEY> --type bug|feature|task --title <text> 
 ```
 
 `create` needs the Jira REST token and maps `bug`/`feature`/`task` to Bug/Story/Task; a project
-without that type gets a Task labelled with it. GitHub issues are filed with `gh issue create`.
+without that type gets a Task labelled with it. Write the body and `--comment` in Markdown: headings,
+lists, bold, code spans, fenced blocks and links are converted to Jira wiki markup on the way in.
+GitHub issues are filed with `gh issue create`.
 
 `ref` is optional inside a workspace — it defaults to the workspace's `issue_id`. On GitHub,
 `--status closed` or `done` closes the issue, `open` reopens it, and any other status is added

@@ -152,6 +152,52 @@ async function updateViaMcp(key: string, update: IssueUpdate): Promise<void> {
     throw new Error(str(parsed?.error) ?? `Could not update ${key} through the Atlassian MCP`);
 }
 
+/** Wiki markup's specials, escaped inside `{{monospace}}` so `<!--`, `--flag` and `{@link}` stay literal. */
+const monoEscape = (code: string) => `{{${code.replace(/([-{}!*_+^~[\]|#])/g, "\\$1")}}}`;
+
+/**
+ * Markdown (what agents write, and the issues guide's body templates) as Jira
+ * wiki markup, which REST v2 stores verbatim: there `## Ask` is a nested
+ * numbered list and `**x**` is not bold. Covers headings, lists, bold, code
+ * spans, fenced blocks and links.
+ */
+// ponytail: line-based, no nesting beyond list indent or tables; prose outside
+// code is passed through, so a stray `{x}` or `[x]` can still read as a macro or link.
+export function markdownToWiki(md: string): string {
+  let fence: string | null = null;
+  return md
+    .split("\n")
+    .map((line) => {
+      // No language: Jira warns on names it lacks (`sh`, `text`).
+      const f = /^\s*(```|~~~)\s*[\w-]*\s*$/.exec(line);
+      if (f && (!fence || f[1] === fence)) {
+        fence = fence ? null : f[1];
+        return "{code}";
+      }
+      if (fence) return line;
+      const inline = (s: string) =>
+        s
+          .split(/(`[^`]+`)/)
+          .map((p) =>
+            p.startsWith("`") && p.length > 1
+              ? monoEscape(p.slice(1, -1))
+              : p
+                  .replace(/\*\*(.+?)\*\*/g, "*$1*")
+                  .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "[$1|$2]"),
+          )
+          .join("");
+      const h = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (h) return `h${h[1].length}. ${inline(h[2])}`;
+      const li = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(line);
+      if (li) {
+        const depth = Math.floor(li[1].replace(/\t/g, "  ").length / 2) + 1;
+        return `${(/\d/.test(li[2]) ? "#" : "*").repeat(depth)} ${inline(li[3])}`;
+      }
+      return inline(line);
+    })
+    .join("\n");
+}
+
 /** Sandbox-tool issues go to GitHub unless `overrides.sandbox_issues_project` names a Jira project; issues_report.ts names it too. */
 const SANDBOX_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
@@ -208,7 +254,7 @@ export const jira: IssueTrackerStrategy = {
       issueType: ISSUE_TYPES[type],
       fallbackLabel: type,
       summary: title,
-      description: body,
+      description: markdownToWiki(body),
     });
     if (!created)
       throw new Error(
@@ -219,7 +265,9 @@ export const jira: IssueTrackerStrategy = {
   },
 
   async updateIssue(ref, update) {
-    if ((await updateIssueRest(ref, update)) === null) await updateViaMcp(ref, update);
+    // The MCP path takes Markdown as-is; only REST v2 needs wiki markup.
+    const rest = update.comment ? { ...update, comment: markdownToWiki(update.comment) } : update;
+    if ((await updateIssueRest(ref, rest)) === null) await updateViaMcp(ref, update);
   },
 
   async checkAuth() {
