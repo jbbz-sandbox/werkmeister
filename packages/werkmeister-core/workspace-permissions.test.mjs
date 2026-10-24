@@ -194,11 +194,10 @@ test("autonomousRules: the feature's own sandbox and docker targets, exact where
 test("autonomous rules reach nothing shared: no blanket command or server, deny covers the shared acts", () => {
   const blanket = /^Bash\((sandbox|werkmeister|w9r|docker|npm|gh|claude|claude plugin):\*\)$/;
   assert.ok(!AUTONOMOUS_RULES.some((r) => blanket.test(r)), "no blanket rule");
-  for (const server of [
-    "mcp__plugin_werkmeister_werkmeister",
-    "mcp__plugin_sandbox-tools_sandbox-workspace",
-  ])
-    assert.ok(!AUTONOMOUS_RULES.includes(server), `no whole server: ${server}`);
+  assert.ok(
+    !AUTONOMOUS_RULES.includes("mcp__plugin_werkmeister_werkmeister"),
+    "no whole server",
+  );
   assert.ok(!AUTONOMOUS_RULES.some((r) => r.startsWith("Bash(npm install")), "no npm install");
   // SW-31: the only pnpm install is the lockfile one; adding a dependency waits for a person.
   assert.deepEqual(
@@ -219,8 +218,6 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     "Bash(pnpm publish:*)",
     "Bash(pnpm link:*)",
     "Bash(pnpm add -g:*)",
-    "mcp__plugin_sandbox-tools_sandbox-workspace__kube-switch",
-    "mcp__plugin_sandbox-tools_sandbox-workspace__up",
     "mcp__plugin_werkmeister_werkmeister__kube-switch",
     "mcp__plugin_werkmeister_werkmeister__up",
     "mcp__plugin_werkmeister_werkmeister__down",
@@ -229,6 +226,8 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     assert.ok(AUTONOMOUS_DENY.includes(r), r);
   const allowed = new Set(autonomousRules("feat", ["api"]));
   assert.ok(!AUTONOMOUS_DENY.some((r) => allowed.has(r)), "no rule both allowed and denied");
+  // SW-23: the pre-SW-9 plugin prefix is no longer generated.
+  assert.ok(![...AUTONOMOUS_DENY, ...allowed].some((r) => r.includes("sandbox-tools")));
 });
 
 // A `Bash(…)` rule is a literal prefix: one written only for `sandbox` never
@@ -282,7 +281,7 @@ test("a refresh replaces the old broad autonomous rules recorded earlier", async
     "Bash(docker:*)",
     "Bash(npm:*)",
     "Bash(gh:*)",
-    "mcp__plugin_sandbox-tools_sandbox-workspace",
+    "mcp__plugin_werkmeister_werkmeister",
   ];
   const root = workspace({ permissions: { allow: ["mine", ...old] } });
   fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
