@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { needsCluster } from "./dist/config.js";
+import { clusterNeeded } from "./dist/k8s.js";
 
 const registry = {
   cli: { type: "cli" },
@@ -53,4 +54,37 @@ test("a ${VAR} shell reference is not a service ref", () => {
 
 test("a service missing from the registry needs nothing", () => {
   assert.equal(needsCluster(["ghost"], registry), false);
+});
+
+// `sandbox status` and the pane show a stopped forwarder as a fault only when a
+// running feature's local services need it.
+const ctr = (feature, service, state = "running") => ({
+  service,
+  state,
+  labels: feature ? { "com.sandbox.local.feature": feature } : {},
+});
+
+test("a stopped forwarder is not needed by werkmeister-only features", () => {
+  assert.equal(clusterNeeded([], registry), false);
+  assert.equal(clusterNeeded([ctr("a", "cli"), ctr("a", "sandbox-core")], registry), false);
+});
+
+test("a running feature with a cluster-backed service needs it", () => {
+  assert.equal(clusterNeeded([ctr("a", "cli"), ctr("b", "backend")], registry), true);
+});
+
+test("a stopped feature, or a non-sandbox container, doesn't", () => {
+  assert.equal(clusterNeeded([ctr("b", "backend", "exited")], registry), false);
+  assert.equal(clusterNeeded([ctr(null, "backend")], registry), false);
+});
+
+test("a feature's stopped containers still count as local", () => {
+  // caller -> {backend}: local when backend is a container of the same feature, even stopped.
+  const local = { ...registry, backend: {} };
+  assert.equal(clusterNeeded([ctr("a", "caller"), ctr("a", "backend", "exited")], local), false);
+  assert.equal(clusterNeeded([ctr("a", "caller")], local), true);
+});
+
+test("an unreachable docker counts as needed", () => {
+  assert.equal(clusterNeeded(null, registry), true);
 });
