@@ -332,8 +332,10 @@ export async function startService(
     composeUpServiceAsync(feature, service, composePath),
   );
   if (!started) {
+    // A timed-out or cancelled up leaves the container Created, never started (SW-86).
+    const state = (await getContainerStatus(feature)).find((c) => c.service === service)?.status;
     throw new SandboxError(
-      `Failed to start ${service} — see the compose output above`,
+      `Failed to start ${service}${state ? ` (left ${state})` : ""} — see the compose output above`,
       "COMPOSE_UP_FAILED",
     );
   }
