@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.35.1
+
+### Patch Changes
+
+- ca7d771: SW-81: a hidden `werkmeister __reference` prints the commands and options as JSON. `pnpm run docs:gen` builds the users-guide command list from it, and `docs:check` reads it for the flag check.
+- 77f45bf: The public docs now build as a VitePress site (`apps/docs-site`) from the docs where they live, and deploy to GitHub Pages at https://jbbz-sandbox.github.io/werkmeister/ when a release publishes (SW-80). A broken doc link fails the site build. The README links to the site, explains `demo-services`, and `docs/jira-rest-setup.md` reads as a how-to.
+
 ## 0.35.0
 
 ## 0.34.0
