@@ -19,6 +19,7 @@ import {
   claimCallbacks,
   closeOut,
   deliverHeadless,
+  gatePrs,
   lifecycleOf,
   mapTouched,
   openPrs,
@@ -152,12 +153,16 @@ test("PR file: title and body split, writePrFields keeps the body", () => {
   }
 });
 
-test("prFileDir: propose, legacy ship, JIT notes, spike has none", () => {
+test("prFileDir: propose, legacy ship, JIT notes, spike's last stage (SW-83)", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-dir-"));
   try {
     assert.equal(prFileDir(ws), path.join(dotDir(ws), "notes"));
-    fs.mkdirSync(path.join(ws, "stages", "01_questions"), { recursive: true });
-    assert.equal(prFileDir(ws), null);
+    fs.mkdirSync(path.join(ws, "stages"));
+    fs.writeFileSync(path.join(ws, "stages", ".DS_Store"), "");
+    assert.equal(prFileDir(ws), null, "no stage dir yet");
+    fs.mkdirSync(path.join(ws, "stages", "01_questions"));
+    fs.mkdirSync(path.join(ws, "stages", "02_findings"));
+    assert.equal(prFileDir(ws), path.join(ws, "stages", "02_findings", "output"));
     fs.mkdirSync(path.join(ws, "stages", "04_ship"));
     assert.equal(prFileDir(ws), path.join(ws, "stages", "04_ship", "output"));
     fs.mkdirSync(path.join(ws, "stages", "04_propose"));
@@ -1224,6 +1229,166 @@ async function withClaudeHome(sessions, fn) {
     clean(home);
   }
 }
+
+// ---- spikes (SW-83): PR files in the last stage's output -----------------------
+
+/** A temp spike workspace: 01_questions (done), 02_findings holding the PR files. */
+function spikeWorkspace({ files = {} } = {}) {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-spike-"));
+  const out = (d) => path.join(ws, "stages", d, "output");
+  for (const d of ["01_questions", "02_findings"]) fs.mkdirSync(out(d), { recursive: true });
+  fs.writeFileSync(path.join(out("01_questions"), "questions.md"), "status: decided\n");
+  fs.writeFileSync(path.join(out("02_findings"), "findings.md"), "x");
+  for (const [dir, text] of Object.entries(files))
+    fs.writeFileSync(path.join(out("02_findings"), `pr-${dir}.md`), text);
+  fs.mkdirSync(dotDir(ws), { recursive: true });
+  fs.writeFileSync(
+    path.join(dotDir(ws), "workspace.yml"),
+    "feature: feat\nservices: api,lib\nissue_id: o/app#7\nwork_type: spike\n",
+  );
+  fs.writeFileSync(path.join(ws, ".env"), "FEATURE=feat\nSANDBOX_SLOT=1\n");
+  return ws;
+}
+
+const DIFF_DOCS = [/diff --name-only/, { stdout: "docs/research/x.md\n" }];
+const SKIP_EXERCISE = "skip_exercise: a doc, nothing to run\n";
+
+test("spike: a doc PR file in 02_findings passes the gate with skip_exercise and opens", async () => {
+  const ws = spikeWorkspace({ files: { app: prFile({ extra: SKIP_EXERCISE }) } });
+  try {
+    assert.equal(readPrFiles(ws)[0].path, path.join(ws, "stages/02_findings/output/pr-app.md"));
+    assert.equal(lifecycleOf(ws).state, "ready");
+    const g = await gate(ws, deps([DIFF_DOCS]));
+    assert.deepEqual(failed(g), []);
+    assert.equal(
+      g.checks.find((c) => c.name === "exercise").detail,
+      "skipped: a doc, nothing to run",
+    );
+    assert.equal(
+      g.checks.find((c) => c.name === "stages").detail,
+      "every earlier stage has output",
+    );
+
+    let recorded = null;
+    const d = deps(
+      [DIFF_DOCS, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]],
+      {
+        commitRecord: async (_ws, _msg, paths) => {
+          recorded = paths;
+          return { ok: true, message: "record pushed" };
+        },
+      },
+    );
+    const r = await open(ws, d);
+    assert.ok(r.ok, r.lines.join("\n"));
+    assert.equal(readPrFiles(ws)[0].fm.url, "https://github.com/o/app/pull/9");
+    assert.deepEqual(recorded, ["stages/02_findings/output/pr-app.md"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: skip_exercise needs a non-empty reason", async () => {
+  const blank = icmWorkspace({
+    exercise: null,
+    files: { app: prFile({ extra: 'skip_exercise: " "\n' }) },
+  });
+  try {
+    const g = await gate(blank, deps([DIFF_API]));
+    assert.deepEqual(
+      g.checks.find((c) => c.name === "exercise"),
+      {
+        name: "exercise",
+        ok: false,
+        detail: "no exercise.md — record the exercise checks first",
+      },
+    );
+  } finally {
+    clean(blank);
+  }
+});
+
+test("spike with no PR file: gate and open say which file to write and where the format is", async () => {
+  const ws = spikeWorkspace();
+  try {
+    const where = path.join(ws, "stages", "02_findings", "output");
+    const msg = (rules) =>
+      `No matching PR file in ${where}. Write pr-<repo>.md there (format: ${rules}) and have the person set status: approved.`;
+    await assert.rejects(
+      withSandboxHome(() => gatePrs(ws, undefined, deps([]))),
+      {
+        message: msg("docs/workspace-lifecycle.md in the sandbox repo"),
+      },
+    );
+    fs.mkdirSync(path.join(ws, "_shared"));
+    fs.writeFileSync(path.join(ws, "_shared", "pr-rules.md"), "x");
+    await assert.rejects(open(ws, deps([])), { message: msg("_shared/pr-rules.md") });
+  } finally {
+    clean(ws);
+  }
+});
+
+test("spike: adoptPr writes its PR file into 02_findings", async () => {
+  const ws = spikeWorkspace();
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  try {
+    await adoptPr(ws, { noPr: "landed by hand in #12" }, deps([]));
+    const [f] = readPrFiles(ws);
+    assert.equal(f.path, path.join(ws, "stages/02_findings/output/pr-app.md"));
+    assert.equal(f.fm.status, "closed");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("spike close-out: with a PR file it waits for ship then takes the PR path; without one it closes as before", async () => {
+  const open_ = spikeWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
+  try {
+    const err = await inWorkspacesRoot(open_, (name) =>
+      closeOut(name, {}, deps([])).then(
+        () => null,
+        (e) => e,
+      ),
+    );
+    assert.match(
+      String(err),
+      /is pr-open \(app: open\)/,
+      "no spike shortcut once a PR file exists",
+    );
+  } finally {
+    clean(open_);
+  }
+
+  const shipped = spikeWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: https://x/pr/9\nmerge_sha: abc\n" }) },
+  });
+  try {
+    let issue = null;
+    const d = deps([[/ls-remote/, { code: 2 }]], {
+      tracker: {
+        fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+        updateIssue: async (ref, u) => (issue = [ref, u.status]),
+      },
+    });
+    await inWorkspacesRoot(shipped, (name) => closeOut(name, {}, d));
+    assert.deepEqual(issue, ["o/app#7", "closed"]);
+    assert.match(
+      fs.readFileSync(path.join(shipped, "closeout.md"), "utf8"),
+      /\| o\/app \| https:\/\/x\/pr\/9 \| shipped \| abc \|/,
+    );
+    assert.ok(d.calls.includes("git -C /src/app branch -D me/ws"), "merged branch deleted");
+  } finally {
+    clean(shipped);
+  }
+
+  const bare = spikeWorkspace();
+  try {
+    await inWorkspacesRoot(bare, (name) => closeOut(name, {}, deps([])));
+    assert.ok(fs.existsSync(path.join(bare, "closeout.md")));
+  } finally {
+    clean(bare);
+  }
+});
 
 test("callbackFields: both ids from the env, no host id outside the desktop app", () =>
   withClaudeHome({}, async () => {

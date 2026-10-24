@@ -79,6 +79,11 @@ function proposeDir(stages: Stage[]): string | null {
   return i < 0 ? null : stageDirs(stages)[i];
 }
 
+/** The stage dir whose output holds PR files: propose, else the last stage (spike, SW-83). */
+function prDir(stages: Stage[]): string {
+  return proposeDir(stages) ?? stageDirs(stages)[stages.length - 1];
+}
+
 /**
  * How to reload each service. Container names follow docker-compose.feature.yml.njk
  * (<feature>-<service>); idle types run no watcher, so a restart rebuilds nothing (SW-32).
@@ -262,11 +267,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
       (s, i) =>
         `| ${i === 0 ? "starting the run" : (s.enter ?? `\`${dirs[i - 1]}\` output ${v.autonomous ? "self-checked" : "approved"}`)} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
     ),
-    ...(proposeDir(stages)
-      ? [
-          "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `sandbox pr open`, then Auto-fix on (rule 5) | PR URL is in the PR file and Auto-fix is on |",
-        ]
-      : []),
+    "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `sandbox pr open`, then Auto-fix on (rule 5) | PR URL is in the PR file and Auto-fix is on |",
     "| a PR merged or released, or asked to close out | `sandbox pr status`, then ask the person before `sandbox close-out` | closed out after the person says yes |",
     "| asked for status | `ls stages/*/output/` | report which stages hold artifacts |",
     "| containers / ports / routing broken | `.sandbox/sandbox-context.md` | — |",
@@ -367,9 +368,7 @@ function render(ctx: InitContext): Record<string, string> {
     "_shared/standards.md": renderStandards(r),
     "_shared/issues-report.md": buildIssuesReportMd(ctx.workspaceName, issueIdOfMeta(ctx.meta)),
   };
-  const propose = proposeDir(stages);
-  if (propose)
-    files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${propose}/output/`, base.autonomous);
+  files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${prDir(stages)}/output/`, base.autonomous);
   stages.forEach((stage, i) => {
     files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(
       dirs[i],
