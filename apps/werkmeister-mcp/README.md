@@ -79,16 +79,62 @@ server. Until that is widened, use:
 
 ## Tools
 
-| Group | Tools |
-|-------|-------|
-| Create | `create-workspace-form` (App UI: inline form, or the browser form; `issue` pre-fills), `create-workspace` (`formData` + `open`), `init-workspace`; UI-only: `workspace-form-schema`, `issue-form-data`, `refine-prompt` |
-| List and lifecycle | `list-workspaces` (App UI), `status` (`detail` adds the host snapshot), `up`, `stop`, `restart`, `down`, `close-out`, `services`, `logs`, `test`, `remove-service`, `proxy-reload` |
-| Open | `open-workspace` (VS Code), `open-feature` (tagged browser), `open-workspaces-ui` (the localhost dashboard) |
-| Pull requests | `workspace-pr` (gate / open / status), `workspace-prs`, `open-prs`, `pr-approve`, `ask-pr-review`, `pr-reconcile` |
-| Issues | `issue`; UI-only: `issue-statuses` |
-| Context layer | `skills`, `hooks`, `notes`, `standards`, `detect` |
-| Infra | `connect`, `intercept`, `docker-ui`, `k8s-forwards-status`, `kube-context`, `kube-switch`, `check-in`, `workspace-usage` |
-| Claude sessions | `claude-transcript`, `claude-send`, `claude-resume`; UI-only: `claude-turn-status` |
+<!-- generated:mcp-tools -->
+
+48 tools (6 UI-only).
+
+| Tool | What it does |
+| --- | --- |
+| `up` | Bring a feature up |
+| `down` | Tear a feature down |
+| `stop` | Stop a feature's containers |
+| `pause` | Pause a workspace |
+| `resume` | Resume a paused workspace |
+| `restart` | Restart a feature's containers |
+| `detect` | Generate a repo's service-registry fragment |
+| `services` | Where a feature's services answer |
+| `logs` | Read a feature's container logs |
+| `remove-service` | Drop a service from a feature |
+| `test` | Run a feature's Playwright suite |
+| `proxy-reload` | Regenerate and reload the reverse proxy |
+| `close-out` | End a workspace |
+| `init-workspace` | Reconcile a workspace |
+| `skills` | Check or sync a workspace's context layer |
+| `standards` | Validate the standards tree |
+| `hooks` | Refresh a workspace's context layer |
+| `notes` | Read or graduate a workspace's notes |
+| `connect` | Start shared infrastructure |
+| `open-feature` | Open a feature-tagged browser window |
+| `intercept` | Start or leave a k8s traffic intercept (UI-only) |
+| `create-workspace-form` | New Sandbox Workspace |
+| `create-workspace` | Create Workspace |
+| `workspace-form-schema` | Workspace Form Schema (UI-only) |
+| `issue-form-data` | Issue → Form Fields (UI-only) |
+| `refine-prompt` | Refine Prompt (UI-only) |
+| `list-workspaces` | List Sandbox Workspaces |
+| `open-workspaces-ui` | Open Workspaces Dashboard in Browser |
+| `open-workspace` | Open Workspace in VS Code |
+| `workspace-prs` | Workspace Pull Requests |
+| `issue-statuses` | Issue Statuses (UI-only) |
+| `open-prs` | Open Pull Requests |
+| `pr-approve` | Approve Pull Request |
+| `ask-pr-review` | Ask for PR Review |
+| `issue` | Issue Card |
+| `pr-reconcile` | Reconcile PR with Issue |
+| `workspace-pr` | Workspace PR: gate, open, status |
+| `status` | Sandbox status |
+| `check-in` | Check-in Triage |
+| `workspace-usage` | Workspace Token Usage |
+| `docker-ui` | Docker Container UI |
+| `k8s-forwards-status` | k8s Forwards Health |
+| `kube-context` | Current Kube Context |
+| `kube-switch` | Switch Kube Context |
+| `claude-transcript` | Claude Code Session Transcript |
+| `claude-send` | Send to Claude Code Session |
+| `claude-turn-status` | Claude Turn Status (UI-only) |
+| `claude-resume` | Resume Claude Session in Terminal |
+
+<!-- /generated -->
 
 UI-only tools carry `_meta.ui.visibility: ["app"]`: the MCP App calls them, the
 model does not see them.

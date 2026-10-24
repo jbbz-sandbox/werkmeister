@@ -12,17 +12,21 @@ published package doesn't depend on the repo's package manager, so
 
 ## Workspaces
 
+<!-- generated:workspaces -->
+
 | App | Path | What |
 | --- | --- | --- |
-| `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI. |
-| `werkmeister-mcp` | [apps/werkmeister-mcp](apps/werkmeister-mcp) | The one MCP server: every tool, over stdio and authenticated HTTP. Bundled into the CLI. |
-| `werkmeister-dashboard` | [apps/werkmeister-dashboard](apps/werkmeister-dashboard) | The localhost dashboard and the MCP App UI bundles for creating/managing Werkmeister workspaces. |
+| `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI tool |
+| `werkmeister-dashboard` | [apps/werkmeister-dashboard](apps/werkmeister-dashboard) | The localhost workspaces dashboard and the --browser-form page. |
+| `werkmeister-mcp` | [apps/werkmeister-mcp](apps/werkmeister-mcp) | The werkmeister MCP server: every tool, over stdio and authenticated HTTP, including the MCP App UI tools and the App pages they serve. Bundled into the CLI. |
 
 | Package | Path | What |
 | --- | --- | --- |
-| `werkmeister-core` | [packages/werkmeister-core](packages/werkmeister-core) | Shared library: config/registry resolution, workspace + issue-tracker helpers, typed wrappers over the CLI. |
-| `werkmeister-ui` | [packages/werkmeister-ui](packages/werkmeister-ui) | Shared UI modules and the workspace display model, used by the dashboard, the MCP server and the VS Code extension. |
-| `werkmeister-vscode` | [packages/werkmeister-vscode](packages/werkmeister-vscode) | VS Code tree view over workspaces, container state and Telepresence intercepts. |
+| `werkmeister-core` | [packages/werkmeister-core](packages/werkmeister-core) | Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and issue-tracker helpers. Consumed by the CLI, werkmeister-dashboard, and the VS Code extension. |
+| `werkmeister-ui` | [packages/werkmeister-ui](packages/werkmeister-ui) | The UI modules apps/werkmeister-dashboard and apps/werkmeister-mcp share, and the non-DOM workspace display model every surface reads. |
+| `werkmeister-vscode` | [packages/werkmeister-vscode](packages/werkmeister-vscode) | Manage developer-sandbox feature workspaces — container state, Telepresence intercepts, and the sandbox CLI lifecycle — from a VS Code tree view. |
+
+<!-- /generated -->
 
 `werkmeister-core` is the shared dependency every workspace builds on — the CLI,
 the dashboard and the VS Code extension all read the same machine config through

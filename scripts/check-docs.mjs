@@ -3,17 +3,18 @@
  * Fail when a doc names something the code no longer has: a retired term, a
  * repo path that doesn't exist, a `werkmeister` (or `sandbox`) command or flag
  * the CLI doesn't define, an MCP tool the server doesn't register, a bare
- * `<placeholder>` GitHub would drop, or a `#anchor` no heading defines. See
- * docs/docs-sync.md.
+ * `<placeholder>` GitHub would drop, a `#anchor` no heading defines, or a
+ * generated region that `docs:gen` would rewrite. See docs/docs-sync.md.
  *
- * Commands and flags come from the built CLI's own `__complete`, so run after
+ * Commands and flags come from the built CLI's own `__reference`, so run after
  * `pnpm run build`. A line containing `docs-check: ignore` is skipped, for the
  * mentions that are meant to name the old thing (migration notes, history).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cliReference, fill, loadRegions, mcpSource, mcpTools, REGION } from "./gen-docs.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -68,17 +69,26 @@ export function codeSpans(text) {
 
 /**
  * Every problem in one doc. `cli` is { commands: Map<name, Set<flag>> }, `tools`
- * a Set of MCP tool names, `exists`/`read` take repo-relative paths.
+ * a Set of MCP tool names, `regions` docs:gen's Markdown by region name,
+ * `exists`/`read` take repo-relative paths.
  */
-export function checkDoc(rel, text, { cli, tools, exists, read }) {
+export function checkDoc(rel, text, { cli, tools, regions, exists, read }) {
   const problems = [];
   const lines = text.split("\n");
   const ignored = (n) => lines[n - 1].includes("docs-check: ignore");
   const report = (line, msg) => ignored(line) || problems.push(`${rel}:${line}: ${msg}`);
+  // A retired name in a generated region is the source's own (a deny rule, help naming what
+  // a command replaced); checkGenerated already holds the region to that source.
+  const generated = new Set();
+  for (const m of text.matchAll(REGION)) {
+    const first = text.slice(0, m.index).split("\n").length;
+    for (let n = first; n < first + m[0].split("\n").length; n++) generated.add(n);
+  }
 
   lines.forEach((l, i) => {
     for (const [re, use] of RETIRED)
-      if (re.test(l)) report(i + 1, `retired \`${l.match(re)[0]}\` — use ${use}`);
+      if (re.test(l) && !generated.has(i + 1))
+        report(i + 1, `retired \`${l.match(re)[0]}\` — use ${use}`);
     for (const m of l.matchAll(/\]\(([^)\s]+)\)/g)) {
       const target = m[1].split("#")[0];
       if (!target || /^[a-z]+:/i.test(target)) continue;
@@ -105,7 +115,21 @@ export function checkDoc(rel, text, { cli, tools, exists, read }) {
   }
   checkPlaceholders(text, report);
   checkAnchors(rel, text, read, exists, report);
+  checkGenerated(text, regions, report);
   return problems;
+}
+
+/** A region whose body isn't what docs:gen writes: hand-edited, or its source moved on. */
+export function checkGenerated(text, regions, report) {
+  if (!text.includes("<!-- generated:")) return;
+  const { problems } = fill(text, regions);
+  for (const p of problems) report(p.line, p.msg);
+  for (const m of text.matchAll(REGION))
+    if (m[1] in regions && fill(m[0], regions).text !== m[0])
+      report(
+        text.slice(0, m.index).split("\n").length,
+        `generated region \`${m[1]}\` is out of date — run \`pnpm run docs:gen\``,
+      );
 }
 
 /**
@@ -208,33 +232,18 @@ export function checkAnchors(rel, text, read, exists, report) {
   });
 }
 
-/** The built CLI's commands and their long flags, asked through `__complete`. */
+/** The built CLI's commands and their long flags, hidden ones included. */
 function loadCli() {
-  const main = join(ROOT, "apps/cli/dist/main.js");
-  if (!existsSync(main))
-    throw new Error("apps/cli/dist/main.js is missing — run `pnpm run build` first");
-  const complete = (line) =>
-    execFileSync(process.execPath, [main, "__complete"], {
-      env: { ...process.env, COMP_LINE: line, COMP_POINT: String(line.length) },
-      encoding: "utf8",
-    })
-      .split("\n")
-      .filter(Boolean);
-  const commands = new Map();
-  for (const name of complete("werkmeister "))
-    commands.set(name, new Set(complete(`werkmeister ${name} --`)));
-  return { commands };
+  return {
+    commands: new Map(
+      cliReference().map((c) => [c.name, new Set(c.options.flatMap((o) => o.long ?? []))]),
+    ),
+  };
 }
 
 /** Tool names as the MCP server registers them, plus the plugin's own (`$.tool.register`). */
 function loadTools() {
-  const dir = join(ROOT, "apps/werkmeister-mcp/src");
-  const tools = new Set();
-  for (const f of readdirSync(dir).filter((f) => f.endsWith(".ts")))
-    for (const m of readFileSync(join(dir, f), "utf8").matchAll(
-      /register(?:App)?Tool\(\s*(?:server,\s*)?"([^"]+)"/g,
-    ))
-      tools.add(m[1]);
+  const tools = new Set(mcpTools(mcpSource()).map((t) => t.name));
   const plugin = readFileSync(join(ROOT, "plugins/werkmeister/hooks/register.tsx"), "utf8");
   for (const m of plugin.matchAll(/const \w+_TOOL = "([^"]+)"/g)) tools.add(m[1]);
   return tools;
@@ -268,6 +277,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const ctx = {
     cli: loadCli(),
     tools: loadTools(),
+    regions: await loadRegions(),
     exists: (p) => {
       const rel = normalize(p).replace(/\/$/, "");
       return files.has(rel) || dirs.has(rel) || ignored(rel);
