@@ -3,6 +3,7 @@
  * lockfile and Node major match the stamp in node_modules, and queue installs
  * host-wide through flock'd slot files. SW-35: builds run one at a time.
  * SW-31: a pnpm lockfile installs with pnpm, from corepack's shim.
+ * SW-85: the stamp has a second copy in the worktree, and both must match.
  *
  * Drives the real script: stub `npm`, `node` and `corepack` on PATH, and stub
  * tool binaries (pnpm too) in SANDBOX_TOOLS_DIR so the download steps are skipped. Needs `flock` and
@@ -150,6 +151,33 @@ describe.skipIf(!hasFlock)("sandbox-install-startup.sh install", () => {
     expect(fs.existsSync(stamp(app))).toBe(false);
     expect(npmCalls()).toEqual(["ci"]);
 
+    expect(run(app).status).toBe(0);
+    expect(npmCalls()).toEqual(["ci", "run build"]);
+  });
+
+  it("reinstalls when the worktree is re-created on a kept node_modules volume (SW-85)", () => {
+    const app = makeApp("app");
+    run(app);
+    npmCalls();
+    // app/node_modules stands in for the volume: it survives, the worktree around it is new.
+    for (const f of fs.readdirSync(app)) {
+      if (f !== "node_modules") fs.rmSync(path.join(app, f), { recursive: true });
+    }
+    fs.writeFileSync(path.join(app, "package-lock.json"), '{"lockfileVersion":3}\n');
+    expect(run(app).status).toBe(0);
+    expect(npmCalls()).toEqual(["ci", "run build"]);
+
+    // ...and only once: the next up of the same worktree skips again.
+    run(app);
+    expect(npmCalls()).toEqual(["run build"]);
+  });
+
+  it("reinstalls when the volume is dropped and the worktree kept (`down -v`)", () => {
+    const app = makeApp("app");
+    run(app);
+    npmCalls();
+    fs.rmSync(path.join(app, "node_modules"), { recursive: true });
+    fs.mkdirSync(path.join(app, "node_modules"));
     expect(run(app).status).toBe(0);
     expect(npmCalls()).toEqual(["ci", "run build"]);
   });

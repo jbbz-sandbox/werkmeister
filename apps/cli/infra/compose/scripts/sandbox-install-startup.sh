@@ -52,6 +52,9 @@ take_install_slot() {
 # stamp is removed before and written only after a successful install, so a
 # failed one retries next up. The build always runs: turbo restores it from the
 # shared TURBO_CACHE_DIR, and dist/ may be stale after a pull.
+# SW-85: each package's own node_modules is in the worktree, not the volume, so
+# a second stamp in the worktree (.turbo/ is git-ignored on every branch) must
+# match too: a worktree re-created on a kept volume has none, and reinstalls.
 if [ "${1:-}" = install ]; then
   mkdir -p "$LOCKS"
   if [ -f pnpm-lock.yaml ]; then
@@ -63,13 +66,16 @@ if [ "${1:-}" = install ]; then
   fi
   stamp=node_modules/.sandbox-install-hash
   want="$(cat package-lock.json pnpm-lock.yaml 2>/dev/null | sha256sum | cut -d' ' -f1) $(node -v | cut -d. -f1)"
-  if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
+  wstamp=.turbo/.sandbox-install-hash
+  if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && [ "$(cat "$wstamp" 2>/dev/null)" = "$want" ]; then
     echo "sandbox-install: lockfile and Node major unchanged, skipping $install"
   else
     take_install_slot
-    rm -f "$stamp"
+    rm -f "$stamp" "$wstamp"
     $install
+    mkdir -p .turbo
     echo "$want" >"$stamp"
+    echo "$want" >"$wstamp"
     exec 9>&-
   fi
   # SW-35: one build at a time host-wide. turbo names its temp cache files by
