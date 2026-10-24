@@ -13,6 +13,7 @@
     "changeset:version": "changeset version && pnpm install --lockfile-only",
     "release": "pnpm run build && changeset publish",
     "licenses": "node --test 'scripts/*.test.mjs' && node scripts/check-licenses.mjs",
+    "docs:gen": "node scripts/gen-docs.mjs",
     "docs:check": "node scripts/check-docs.mjs",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."

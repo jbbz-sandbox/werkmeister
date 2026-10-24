@@ -11,6 +11,7 @@ const ctx = {
     ]),
   },
   tools: new Set(["status"]),
+  regions: { x: "a" },
   exists: (p) => ["docs/real.md", "apps/cli/src/main.ts"].includes(p),
   read: (p) => (p === "docs/real.md" ? "## A" : "export function main() {}"),
 };
@@ -83,4 +84,22 @@ test("checks #anchors against GitHub heading slugs", () => {
   assert.equal(slug("k8s Port-Forwards (Containerized)"), "k8s-port-forwards-containerized");
   assert.equal(slug("Features & Workspaces"), "features--workspaces");
   assert.equal(slug("`werkmeister connect --k8s`"), "werkmeister-connect---k8s");
+});
+
+test("fails a generated region that docs:gen would rewrite", () => {
+  const fresh = "<!-- generated:x -->\n\na\n\n<!-- /generated -->";
+  assert.deepEqual(check(`# T\n${fresh}`), []);
+  assert.match(
+    check(fresh.replace("\na\n", "\nb\n"))[0],
+    /x\.md:1: generated region `x` is out of date/,
+  );
+  assert.match(
+    check("<!-- generated:y -->\n<!-- /generated -->")[0],
+    /unknown generated region `y`/,
+  );
+  // Stale, but not retired: a generated line restates its source.
+  assert.equal(
+    check("<!-- generated:x -->\n\nnpm run k8s-connect\n\n<!-- /generated -->").length,
+    1,
+  );
 });
