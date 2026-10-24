@@ -189,8 +189,13 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/install
       - run: pnpm turbo run build --filter=docs-site
+      # Named per attempt: a re-run uploads again into the same run, and deploy-pages
+      # refuses a run holding two artifacts of the name it looks for.
       - uses: actions/upload-pages-artifact@v5
         with:
           path: apps/docs-site/dist
+          name: github-pages-${{ github.run_attempt }}
       - id: deploy
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
