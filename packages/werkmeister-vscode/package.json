@@ -2,7 +2,7 @@
   "name": "werkmeister-vscode",
   "displayName": "Sandbox Workspaces",
   "description": "Manage developer-sandbox feature workspaces — container state, Telepresence intercepts, and the sandbox CLI lifecycle — from a VS Code tree view.",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "license": "Apache-2.0",
   "publisher": "JBBZ",
   "private": true,
