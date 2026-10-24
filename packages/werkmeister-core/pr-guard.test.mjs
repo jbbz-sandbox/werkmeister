@@ -7,7 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { decide, findRecordRoot } from "./dist/pr_guard.js";
+import { decide, findRecordRoot, opensPr } from "./dist/pr_guard.js";
 
 function workspace() {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-guard-"));
@@ -60,6 +60,51 @@ test("denies the GitHub MCP create_pull_request", () => {
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });
   }
+});
+
+test("a spike's deny names its last stage's output (SW-83)", () => {
+  const ws = workspace();
+  try {
+    fs.rmSync(path.join(ws, "stages", "04_propose"), { recursive: true });
+    fs.mkdirSync(path.join(ws, "stages", "01_questions"));
+    fs.mkdirSync(path.join(ws, "stages", "02_findings"));
+    assert.match(decide(bash(ws, "gh pr create")) ?? "", /`stages\/02_findings\/output\/`/);
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("opensPr: a real invocation at a statement start (SW-83)", () => {
+  for (const cmd of [
+    "gh pr create",
+    'cd app && gh pr create --title "x" --body y',
+    "GH_TOKEN=x gh pr create --fill",
+    "env GH_TOKEN=x gh pr create",
+    "(cd app; gh pr create)",
+    "url=$(gh pr create --fill)",
+    "git push || gh pr create",
+    "  gh  pr  create",
+    "if true; then gh pr create; fi",
+    "cat <<'EOF' > notes.md\ngh pr create\nEOF\ngh pr create --fill",
+    "cat <<EOF\nEOF\ngh pr create",
+    "cat <<<x; gh pr create",
+  ])
+    assert.equal(opensPr(cmd), true, cmd);
+});
+
+test("opensPr: the phrase in quotes, a heredoc body or a pattern is not a call (SW-83)", () => {
+  for (const cmd of [
+    'gh issue create --title t --body "the guard blocks gh pr create in quotes"',
+    "gh issue create --body 'run gh pr create; it fails'",
+    "gh issue create --body-file - <<'EOF'\nThe PR guard matched:\ngh pr create\nEOF",
+    "cat <<-EOF > x.md\n\tgh pr create\n\tEOF",
+    'grep -rn "gh pr create" src',
+    "echo 'gh pr create' | wc -c",
+    'echo "a \\" gh pr create"',
+    "gh pr view 9 && gh pr list",
+    "sandbox pr open",
+  ])
+    assert.equal(opensPr(cmd), false, cmd);
 });
 
 test("allows other commands, and everything outside a workspace", () => {

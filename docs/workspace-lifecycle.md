@@ -53,7 +53,7 @@ Each workspace gets these as `_shared/pr-rules.md` (ICM) or `.werkmeister/pr-rul
 
 One per code repo touched, named `pr-<repo>.md`, where `<repo>` is the code worktree's directory name.
 
-- ICM: `stages/NN_propose/output/`. Workspaces generated before the rename use `NN_ship/`.
+- ICM: `stages/NN_propose/output/`. Workspaces generated before the rename use `NN_ship/`. A template with neither (spike) uses its last stage's `output/` ([Spikes](#spikes)).
 - JIT: `.werkmeister/notes/`. Not a note: notes are named `NNN-*`.
 
 ```markdown
@@ -68,6 +68,7 @@ release:                       # the release tag that shipped it, written by wer
 reason:                        # required for closed / abandoned
 skip_tests: {}                 # <service>: <reason> — for a service with no test command or no running container
 skip_release:                  # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag
+skip_exercise:                 # <reason> — skips the gate's exercise check, e.g. a doc deliverable with nothing to run
 session:                       # the Claude Code session that ran werkmeister pr open (PR callbacks, below)
 host_session:                  # its desktop app id (local_…), only when opened from the desktop app
 notified:                      # the last status that session was told
@@ -84,11 +85,11 @@ The first `#` heading is the PR title and the rest is the body. The person sets 
 
 | Check | Passes when |
 |---|---|
-| stages | ICM: every stage before propose has output. JIT: no open decision notes. |
+| stages | ICM: every stage before the one holding PR files has output. JIT: no open decision notes. |
 | acceptance | the PR body has a `PASS` table cell and no `FAIL` cell |
 | clean | `git status --porcelain` in the code worktree is empty |
 | test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, or in any running container of its repo, because they all mount the worktree at `/app` with its `node_modules`. When the repo has none running, the gate starts one (`docker compose up -d --wait <svc>`, preferring a cli/library/extension service, which only sleeps) and stops it when the gate ends, pass or fail. A service with no command, or one whose container could not be started, fails unless `skip_tests` names it with a reason. |
-| exercise | `exercise.md` (ICM: any stage output; JIT: `.werkmeister/notes/`) has a `PASS` cell and no `FAIL` |
+| exercise | `exercise.md` (ICM: any stage output; JIT: `.werkmeister/notes/`) has a `PASS` cell and no `FAIL`, unless `skip_exercise` gives a reason |
 | baseline `<svc>` | for a touched local `api`/`web` service: its own container is running and its `health_endpoint` answers below 400 |
 | release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `werkmeister pr status` still waits for the release tag. |
 | approved | `status: approved` |
@@ -250,6 +251,7 @@ A key left out takes its default (table above). The flat keys `issue_progress_st
 Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `werkmeister hooks pr-guard`, with matcher `Bash|mcp__.*create_pull_request`. It is installed by `werkmeister up` / `init-workspace` for both strategies.
 
 - Inside a workspace (any folder under one holding `.werkmeister/workspace.yml`), it denies `gh pr create` in Bash and the GitHub MCP's `create_pull_request`. The deny message points to `werkmeister pr open`.
+- It matches a real invocation: `gh pr create` at the start of a statement (after `;`, `&&`, `|`, `(`, `$(`, a newline, env assignments or `env`/`command`/`exec`). The phrase inside quotes, a heredoc body or a grep pattern is allowed, so a `gh issue create` whose body quotes it goes through. A call hidden in a `bash -c "…"` or `eval` string isn't inspected either; the guard steers skills, it isn't a security boundary.
 - This is what stops `/create-pr`, `superpowers:finishing-a-development-branch` or a raw `gh` call from opening a PR on the wrong repo or skipping the gate.
 - `werkmeister pr open` runs `gh` itself, not through the Bash tool, so the guard never sees it.
 - The `werkmeister:workspace-pr` skill and the `sb-pr` skill steer toward the right path before the guard has to fire.
@@ -284,4 +286,7 @@ The workspace's Claude sessions are cleaned up as part of close-out:
 
 ## Spikes
 
-A spike has no propose stage and no PR files. When `findings.md` is recorded where it is needed (the next workspace's brief, or the issue), `werkmeister close-out` removes the workspace.
+A spike (`01_questions`, `02_findings`) has no propose stage. Its PR files, when it has any, live in its last stage's output: `stages/02_findings/output/pr-<repo>.md`, and its `_shared/pr-rules.md` says so.
+
+- **No repo deliverable.** No PR file. When `findings.md` is recorded where it is needed (the next workspace's brief, or the issue), `werkmeister close-out` removes the workspace.
+- **A repo deliverable** (e.g. a write-up in `docs/research/` "opened as a PR"). The findings stage commits it on the code worktree's branch and writes `pr-<repo>.md` at `status: draft`, with an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise. The person sets `status: approved`, `werkmeister pr open` runs the gate and opens it, and close-out follows the normal PR path: it waits for the PR to ship. `werkmeister pr adopt` writes the file there too.

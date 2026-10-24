@@ -30,19 +30,50 @@ export function findRecordRoot(start: string): string | null {
   }
 }
 
+// Mirrors pr_lifecycle.ts's prFileDir, which this fast path can't import.
 function prFileDirName(root: string): string {
   try {
-    const names = fs.readdirSync(path.join(root, "stages")).sort();
+    const names = fs
+      .readdirSync(path.join(root, "stages"))
+      .filter((n) => /^\d+_/.test(n))
+      .sort();
     const dir =
-      names.find((n) => /^\d+_propose$/.test(n)) ?? names.find((n) => /^\d+_ship$/.test(n));
-    return dir ? `stages/${dir}/output/` : "the propose stage's output/";
+      names.find((n) => /^\d+_propose$/.test(n)) ??
+      names.find((n) => /^\d+_ship$/.test(n)) ??
+      names.at(-1);
+    return dir ? `stages/${dir}/output/` : "the last stage's output/";
   } catch {
     return `${path.basename(dotDir(root))}/notes/`;
   }
 }
 
-const GH_PR_CREATE = /\bgh\s+pr\s+create\b/;
+// `<<<` is a here-string, not a heredoc. The body runs to a line holding only the word.
+const HEREDOC =
+  /(?<!<)<<(?!<)-?\s*(['"]?)(\w+)\1([^\n]*)(?:\n(?:[\s\S]*?\n)?\t*\2(?=\n|$)|[\s\S]*$)/g;
+const QUOTED = /'[^']*(?:'|$)|"(?:[^"\\]|\\[\s\S])*(?:"|$)/g;
+// The command word at a statement start, after any env assignments or prefix words.
+const GH_PR_CREATE =
+  /(?:^|[;&|({\n`])\s*(?:(?:\w+=\S*|command|exec|env|then|do|else)\s+)*gh\s+pr\s+create\b/;
 const MCP_CREATE_PR = /create_pull_request$/;
+
+/**
+ * Whether *command* runs `gh pr create`, not merely mentions it in a quoted
+ * string, heredoc body or grep pattern (SW-83).
+ * ponytail: `bash -c "..."` and `eval "..."` are quoted, so they pass; parse
+ * those strings too if the guard ever has to be a boundary rather than a steer.
+ */
+export function opensPr(command: string): boolean {
+  return GH_PR_CREATE.test(command.replace(HEREDOC, "$3").replace(QUOTED, "_"));
+}
+
+/** The workspace's PR rules page, relative to *root*; the docs when it predates one. */
+export function prRulesPath(root: string): string {
+  return (
+    ["_shared/pr-rules.md", ...DOT_DIRS.map((d) => `${d}/pr-rules.md`)].find((p) =>
+      fs.existsSync(path.join(root, p)),
+    ) ?? "docs/workspace-lifecycle.md in the sandbox repo"
+  );
+}
 
 /** The deny reason for this PreToolUse input, or null to allow. */
 export function decide(input: Record<string, any>): string | null {
@@ -50,13 +81,8 @@ export function decide(input: Record<string, any>): string | null {
   if (!root) return null;
   const tool = String(input["tool_name"] || "");
   const command = String(input["tool_input"]?.["command"] || "");
-  const opensPr = (tool === "Bash" && GH_PR_CREATE.test(command)) || MCP_CREATE_PR.test(tool);
-  if (!opensPr) return null;
-  // A workspace generated before the rules file existed has neither path; point at the docs then.
-  const rules =
-    ["_shared/pr-rules.md", ...DOT_DIRS.map((d) => `${d}/pr-rules.md`)].find((p) =>
-      fs.existsSync(path.join(root, p)),
-    ) ?? "docs/workspace-lifecycle.md in the sandbox repo";
+  if (!((tool === "Bash" && opensPr(command)) || MCP_CREATE_PR.test(tool))) return null;
+  const rules = prRulesPath(root);
   return (
     `Inside sandbox workspace \`${path.basename(root)}\`, PRs open only through \`sandbox pr open\`: ` +
     "it runs the pre-PR gate and records the URL. Write the PR file in " +

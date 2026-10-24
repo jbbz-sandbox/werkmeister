@@ -39,6 +39,7 @@ import {
   stopIdle,
 } from "./lifecycle.js";
 import { openDecisions } from "./notes.js";
+import { prRulesPath } from "./pr_guard.js";
 import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
 import {
   commitAndPush,
@@ -200,17 +201,24 @@ function touchExecMarker(ws: string): void {
 
 /**
  * Where PR files live: the propose stage's output (ICM), else `.sandbox/notes`
- * (JIT). `_ship` is the stage name before decision 11; null for a staged
- * workspace with neither (spike).
+ * (JIT). `_ship` is the stage name before decision 11. A template with neither
+ * (spike) keeps them in its last stage's output (SW-83); null only when
+ * `stages/` holds no stage.
  */
 export function prFileDir(ws: string): string | null {
   let names: string[];
   try {
-    names = fs.readdirSync(path.join(ws, "stages")).sort();
+    names = fs
+      .readdirSync(path.join(ws, "stages"))
+      .filter((n) => /^\d+_/.test(n))
+      .sort();
   } catch {
     return path.join(dotDir(ws), "notes");
   }
-  const dir = names.find((n) => /^\d+_propose$/.test(n)) ?? names.find((n) => /^\d+_ship$/.test(n));
+  const dir =
+    names.find((n) => /^\d+_propose$/.test(n)) ??
+    names.find((n) => /^\d+_ship$/.test(n)) ??
+    names.at(-1);
   return dir ? path.join(ws, "stages", dir, "output") : null;
 }
 
@@ -524,15 +532,19 @@ async function gateChecks(
     );
   }
 
-  const evidence = exerciseFile(ws);
-  const evidenceProblem = evidence ? passTable(fs.readFileSync(evidence, "utf8")) : "is missing";
-  add(
-    "exercise",
-    evidenceProblem === null,
-    evidence
-      ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
-      : "no exercise.md — record the exercise checks first",
-  );
+  const skipExercise = reason(file.fm["skip_exercise"]);
+  if (skipExercise) add("exercise", true, `skipped: ${skipExercise}`);
+  else {
+    const evidence = exerciseFile(ws);
+    const evidenceProblem = evidence ? passTable(fs.readFileSync(evidence, "utf8")) : "is missing";
+    add(
+      "exercise",
+      evidenceProblem === null,
+      evidence
+        ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
+        : "no exercise.md — record the exercise checks first",
+    );
+  }
   const slot = Number(readEnv(ws, "SANDBOX_SLOT"));
   // Only a served endpoint has a baseline; the test check already proved a container ran the rest.
   const isServed = (s: string) => ["api", "web"].includes(services[s]?.["type"] ?? "");
@@ -600,11 +612,12 @@ function selectFiles(ws: string, only: string | undefined, keep: (f: PrFile) => 
   const all = readPrFiles(ws);
   const files = only ? all.filter((f) => f.dir === only) : all.filter(keep);
   if (!files.length) {
-    const where = prFileDir(ws) ?? "this workspace (no propose stage)";
+    const where = prFileDir(ws) ?? "this workspace (no stage holds PR files)";
+    const format = `format: ${prRulesPath(ws)}`;
     throw new WorkspaceError(
       only
-        ? `No PR file pr-${only}.md in ${where}.`
-        : `No matching PR file in ${where}. See pr-rules.md.`,
+        ? `No PR file pr-${only}.md in ${where} (${format}).`
+        : `No matching PR file in ${where}. Write pr-<repo>.md there (${format}) and have the person set status: approved.`,
     );
   }
   return files;
@@ -1085,7 +1098,7 @@ export async function adoptPr(
   deps: Deps = defaultDeps(),
 ): Promise<{ ok: boolean; lines: string[] }> {
   const dir = prFileDir(ws);
-  if (!dir) throw new WorkspaceError("This workspace has no propose stage to hold a PR file.");
+  if (!dir) throw new WorkspaceError("This workspace has no stage to hold a PR file.");
   let repo = opts.repo;
   if (!repo) {
     const wts = await listRepoWorktrees(ws);

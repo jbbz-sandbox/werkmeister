@@ -375,16 +375,21 @@ const spike: Stage[] = [
         `Working (this run): \`${v.at("questions")}/output/questions.md\` — must read \`status: decided\``,
         `Working (this run): whatever each question's method names, in ${v.repos}`,
         "Reference (every run): `../../.sandbox/sandbox-context.md` — ports, containers",
+        "Reference (when the brief asks for a repo deliverable): `../../_shared/pr-rules.md` — the PR file format and the gate",
       ],
       doNotLoad: "`_shared/standards.md` (prototype code is throwaway), `.sandbox/*.yml`.",
       process: [
         "Answer each question by its method. Prototype code lives in `output/` or on a scratch branch, never on the workspace branch.",
         "Write `output/findings.md`: per question, the answer, the evidence (commands and output), and confidence.",
         "End `findings.md` with a recommendation: the next work item and its work type.",
+        "If the brief asks for a deliverable in a code repo (e.g. a doc opened as a PR): commit it on that worktree's branch, and write `output/pr-<repo>.md` in the format of `_shared/pr-rules.md` at `status: draft`, with an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise.",
       ],
-      outputs: ["`output/findings.md`"],
+      outputs: [
+        "`output/findings.md`",
+        "`output/pr-<repo>.md` per repo — only when the brief asks for a repo deliverable",
+      ],
       humanCheck:
-        "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here. When the recommendation is recorded where it is needed, `sandbox close-out`.",
+        "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here. If there is a `pr-*.md`, set `status: approved`; `sandbox pr open` runs the gate and opens it, and close-out waits for it to ship. Otherwise, when the recommendation is recorded where it is needed, `sandbox close-out`.",
     }),
   },
 ];
