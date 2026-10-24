@@ -1,5 +1,9 @@
 name: Install
-description: pnpm, Node 24 and node_modules, restored from cache when the lockfile is unchanged.
+description: pnpm, Node and node_modules, restored from cache when the lockfile is unchanged.
+inputs:
+  node-version:
+    description: Node major to install. 24 for everything but the node-floor job.
+    default: "24"
 runs:
   using: composite
   steps:
@@ -8,7 +12,7 @@ runs:
     - uses: pnpm/action-setup@v6
     - uses: actions/setup-node@v7
       with:
-        node-version: 24
+        node-version: ${{ inputs.node-version }}
         cache: pnpm
     # node_modules itself, not just the pnpm store: a hit skips the install
     # entirely. The lockfile changes on every version PR, so those runs still
@@ -20,7 +24,7 @@ runs:
           node_modules
           apps/*/node_modules
           packages/*/node_modules
-        key: node-modules-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}
+        key: node-modules-${{ runner.os }}-node${{ inputs.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}
     - if: steps.node-modules.outputs.cache-hit != 'true'
       run: pnpm install --frozen-lockfile
       shell: bash

@@ -90,11 +90,26 @@ jobs:
         run: for f in *.smoke.mjs; do node "$f" || exit 1; done
         working-directory: packages/werkmeister-core
 
+  # SW-77: engines promises Node >=22, so the suites the gate names run on 22
+  # itself. Everything else stays on 24, whose bundled npm the release needs.
+  node-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure a git identity for the smoke tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@users.noreply.github.com"
+      - uses: ./.github/actions/install
+        with:
+          node-version: 22
+      - run: pnpm turbo run test --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core
+
   # Gated on the test jobs rather than repeating their checks: a publish cannot
   # be taken back, and this used to be a separate workflow that raced CI on
   # every push.
   release:
-    needs: [test, core-test]
+    needs: [test, core-test, node-floor]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # npm refuses a re-publish of a version, so two overlapping runs
     # would not race harmlessly — the loser fails.
