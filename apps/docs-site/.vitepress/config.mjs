@@ -57,7 +57,12 @@ export default defineConfig({
   // The github.io project URL; "/" once werkmeister.io (SW-4) is the Pages custom domain.
   base: "/werkmeister/",
   cleanUrls: true,
-  vite: { resolve: { alias: [{ find: /^vue(?=$|\/)/, replacement: VUE }] } },
+  vite: {
+    resolve: { alias: [{ find: /^vue(?=$|\/)/, replacement: VUE }] },
+    // Extra dev-server hosts, comma-separated: the workspace service sets it for
+    // its Caddy hostname. Unset keeps Vite's localhost-only default.
+    server: { allowedHosts: process.env.DOCS_ALLOWED_HOSTS?.split(",") },
+  },
   markdown: {
     config: (md) =>
       repoLinks(md, {

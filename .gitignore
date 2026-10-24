@@ -2,7 +2,8 @@ node_modules/
 dist/
 .next/
 .turbo/
-.vitepress/cache/
+**/.vitepress/cache/
+*.timestamp-*.mjs
 *.log
 .DS_Store
 
