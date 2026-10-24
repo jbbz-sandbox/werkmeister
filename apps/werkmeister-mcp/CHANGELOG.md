@@ -1,5 +1,16 @@
 # sandbox-mcp
 
+## 0.6.0
+
+### Minor Changes
+
+- 002e175: Graduation works in icm workspaces (SW-72). Each context strategy now supplies its own decisions. In icm they are the `status: decided` sections of `stages/*/output/*.md`, one per heading, with id `stages/<stage>/output/<file>.md#<heading-slug>`. `werkmeister notes graduate`, the `werkmeister down` offer and the MCP `notes` `graduate` action scaffold them through the same `graduateNote` path jit uses. Their `graduating → graduated` state is kept in `.werkmeister/graduations.yml`, so the stage outputs are never rewritten. MCP `notes` `list` also returns the open `decisions`. jit is unchanged. The not-in-workspace error no longer names the old `.sandbox/` directory.
+
+### Patch Changes
+
+- werkmeister-core@0.32.0
+- werkmeister-ui@0.5.2
+
 ## 0.5.1
 
 ### Patch Changes

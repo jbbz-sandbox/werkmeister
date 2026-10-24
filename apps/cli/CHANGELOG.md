@@ -1,5 +1,25 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.32.0
+
+### Minor Changes
+
+- 002e175: Graduation works in icm workspaces (SW-72). Each context strategy now supplies its own decisions. In icm they are the `status: decided` sections of `stages/*/output/*.md`, one per heading, with id `stages/<stage>/output/<file>.md#<heading-slug>`. `werkmeister notes graduate`, the `werkmeister down` offer and the MCP `notes` `graduate` action scaffold them through the same `graduateNote` path jit uses. Their `graduating → graduated` state is kept in `.werkmeister/graduations.yml`, so the stage outputs are never rewritten. MCP `notes` `list` also returns the open `decisions`. jit is unchanged. The not-in-workspace error no longer names the old `.sandbox/` directory.
+- 22541a5: Redis Insight and Jaeger no longer start with shared infra (SW-76). Redis Insight is SSPL-1.0, so it shouldn't start for everyone, and nothing in Werkmeister sends traces to Jaeger. To turn either or both back on, add their profiles to `~/.werkmeister/config.yaml` and run `werkmeister connect`:
+
+  ```yaml
+  infra:
+    profiles: [redisinsight, jaeger]
+  ```
+
+  `COMPOSE_PROFILES=redisinsight werkmeister connect` works for a one-off. Containers already running from an earlier release stay up until `werkmeister down infra`, which now removes the opt-in ones too.
+
+### Patch Changes
+
+- 4b2d289: Stop shipping `infra/compose/scripts/otel-init.bundle.js`, a 2.6 MB third-party bundle with no source or licence texts that nothing referenced.
+- d83f887: PR rules: squash is the default merge; a PR whose commit SHAs must survive (e.g. a `.git-blame-ignore-revs` entry) asks for a merge commit at the top of its body. `pr open` warns when the branch adds a blame-ignore SHA.
+- 3b36893: SW-73: `@anthropic-ai/claude-agent-sdk` is now an optional dependency. `detect --assist` prints the install command when it is missing instead of a module-resolution error.
+
 ## 0.31.0
 
 ### Minor Changes
