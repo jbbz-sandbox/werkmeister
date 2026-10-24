@@ -74,6 +74,20 @@ test("runAsync rejects with ETIMEDOUT, distinct from an abort", async () => {
   assert.equal(err.code, "ETIMEDOUT");
 });
 
+test("runAsync rejects with ETIMEDOUT when the child traps the kill and exits on its own", async () => {
+  // docker compose catches the timeout's SIGTERM, cancels, and exits 130 with no
+  // signal (SW-86): a timeout all the same, not a compose failure.
+  const err = await runAsync(
+    ["node", "-e", "process.on('SIGTERM', () => process.exit(130)); setTimeout(() => {}, 60000)"],
+    { capture: true, timeout: 1 },
+  ).then(
+    (r) => r,
+    (e) => e,
+  );
+  assert.ok(err instanceof ProcError, `expected ProcError, got ${JSON.stringify(err)}`);
+  assert.equal(err.code, "ETIMEDOUT");
+});
+
 test("an aborted child is actually dead, not just abandoned", async () => {
   // The pid travels through a file, not through stdout: runAsync only surfaces
   // stdout once the child is gone, so reading it back would race the abort --

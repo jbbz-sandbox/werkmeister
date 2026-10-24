@@ -153,6 +153,11 @@ export function workspaceComposeArgv(
   ];
 }
 
+const COMPOSE_TIMEOUT_S = 300;
+// A cold `up` holds the whole setup install and build (queued behind the
+// host-wide install slots and turbo-build lock) before it starts a service (SW-86).
+const COMPOSE_UP_TIMEOUT_S = 20 * 60;
+
 /**
  * Run `docker compose -f <file> <args>`.
  *
@@ -182,9 +187,9 @@ function runCompose(
       run(cmd, { stdio: "inherit" });
       return null;
     }
-    return reportComposeOutcome(run(cmd, { capture, timeout: 300 }), capture);
+    return reportComposeOutcome(run(cmd, { capture, timeout: COMPOSE_TIMEOUT_S }), capture);
   } catch (err) {
-    return reportComposeFailure(err);
+    return reportComposeFailure(err, COMPOSE_TIMEOUT_S);
   }
 }
 
@@ -203,7 +208,13 @@ async function runComposeAsync(
     capture = false,
     composePath = null,
     signal,
-  }: { capture?: boolean; composePath?: string | null; signal?: AbortSignal } = {},
+    timeout = COMPOSE_TIMEOUT_S,
+  }: {
+    capture?: boolean;
+    composePath?: string | null;
+    signal?: AbortSignal;
+    timeout?: number;
+  } = {},
 ): Promise<RunResult | null> {
   const cmd = composeCommand(feature, args, composePath);
   if (cmd === null) {
@@ -211,9 +222,9 @@ async function runComposeAsync(
   }
 
   try {
-    return reportComposeOutcome(await runAsync(cmd, { capture, timeout: 300, signal }), capture);
+    return reportComposeOutcome(await runAsync(cmd, { capture, timeout, signal }), capture);
   } catch (err) {
-    return reportComposeFailure(err);
+    return reportComposeFailure(err, timeout);
   }
 }
 
@@ -306,7 +317,7 @@ function reportComposeOutcome(result: RunResult, capture: boolean): RunResult | 
  * `e.stdout`/`e.stderr` are empty when nothing was captured (ENOENT, or a
  * stream-mode caller with inherited stdio), so this is a no-op there.
  */
-function reportComposeFailure(err: unknown): null {
+function reportComposeFailure(err: unknown, timeout: number): null {
   if (err instanceof ProcError) {
     if (err.stdout) raw(err.stdout);
     if (err.stderr) raw(err.stderr, "stderr");
@@ -320,7 +331,7 @@ function reportComposeFailure(err: unknown): null {
     return null;
   }
   if (err instanceof ProcError && err.code === "ETIMEDOUT") {
-    error("docker compose timed out after 5 minutes");
+    error(`docker compose timed out after ${timeout / 60} minutes`);
     return null;
   }
   throw err;
@@ -392,6 +403,7 @@ export async function composeUpAsync(feature: string, signal?: AbortSignal): Pro
   const result = await runComposeAsync(feature, ["up", "-d", "--build", "--remove-orphans"], {
     capture: true,
     signal,
+    timeout: COMPOSE_UP_TIMEOUT_S,
   });
   if (result && result.status === 0) {
     success(`Containers for '${feature}' are up`);
@@ -415,6 +427,7 @@ export async function composeUpServiceAsync(
   const result = await runComposeAsync(feature, ["up", "-d", "--wait", service], {
     capture: true,
     composePath,
+    timeout: COMPOSE_UP_TIMEOUT_S,
   });
   return result !== null && result.status === 0;
 }
