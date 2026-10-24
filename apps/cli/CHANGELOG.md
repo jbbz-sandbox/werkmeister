@@ -1,5 +1,7 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.35.0
+
 ## 0.34.0
 
 ### Minor Changes
