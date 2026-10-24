@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.35.2
+
+### Patch Changes
+
+- 31c8c3d: Re-running the `docs-deploy` CI job no longer fails with "Multiple artifacts named "github-pages"": each attempt uploads the site under its own artifact name (SW-80).
+
 ## 0.35.1
 
 ### Patch Changes
