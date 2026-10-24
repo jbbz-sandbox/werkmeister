@@ -459,6 +459,56 @@ test("gate: starts and stops nothing when the repo's containers already run (SW-
   }
 });
 
+test("gate starts a service compose.yml defines when the branch registry renamed it (SW-87)", async () => {
+  // The branch renames lib → lib-renamed; compose.yml is rendered from the machine
+  // registry, which still says lib.
+  const branch = {
+    services: {
+      api: REGISTRY.services.api,
+      "lib-renamed": { type: "library", test: "npm test -w lib" },
+    },
+    repos: {
+      app: {
+        ...REGISTRY.repos.app,
+        services: ["api", "lib-renamed"],
+        path_mappings: { "apps/api": "api", "packages/lib": "lib-renamed" },
+      },
+    },
+  };
+  const ws = icmWorkspace();
+  try {
+    const d = noServices(ws, [[/diff --name-only/, { stdout: "packages/lib/y.ts\n" }]]);
+    d.branchRegistry = () => branch;
+    d.startService = async (_ws, feature, service) => {
+      if (!REGISTRY.repos.app.services.includes(service))
+        throw new Error(`no such service: ${service}`);
+      d.started.push(`${feature}-${service}`);
+    };
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.deepEqual(d.started, ["feat-lib"]);
+    assert.ok(d.calls.includes("docker exec feat-lib sh -c npm test -w lib"), d.calls.join("\n"));
+    assert.match(
+      g.checks.find((c) => c.name === "registry").detail,
+      /names lib-renamed as lib .*werkmeister registry/,
+    );
+    assert.ok(d.calls.includes("docker exec feat-lib sh -c npx changeset status"));
+
+    // A container already running under the compose id serves the branch id.
+    const running = deps([], { branchRegistry: () => branch });
+    const r = stubRun([
+      [/^docker ps/, { stdout: "feat-lib\n" }],
+      [/diff --name-only/, { stdout: "packages/lib/y.ts\n" }],
+    ]);
+    Object.assign(running, { run: r.run, calls: r.calls });
+    assert.deepEqual(failed(await gate(ws, running)), []);
+    assert.deepEqual(running.started, []);
+    assert.ok(running.calls.includes("docker exec feat-lib sh -c npm test -w lib"));
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: baseline checks only touched local api/web services (SW-34)", async () => {
   const ws = icmWorkspace();
   const diffLib = [/diff --name-only/, { stdout: "packages/lib/y.ts\n" }];

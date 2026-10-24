@@ -454,11 +454,15 @@ async function gateChecks(
       .map((s) => s.trim())
       .filter(Boolean),
   );
+  // compose.yml is rendered from the machine registry, which can still carry ids the
+  // branch has renamed (SW-87); containers and on-demand starts use its ids.
+  const machineRepo = deps.repos[file.dir] ?? {};
+  const rendered = (machineRepo["services"] ?? []) as string[];
   const containerFor = (svc: string): string | null => {
     const own = containerOf(feature, svc);
     if (running.has(own)) return own;
     // Every container of a repo mounts the same worktree at /app with its node_modules.
-    const sibling = ((repo["services"] ?? []) as string[])
+    const sibling = [...((repo["services"] ?? []) as string[]), ...rendered]
       .map((s) => containerOf(feature, s))
       .find((c) => running.has(c));
     return sibling ?? null;
@@ -479,14 +483,33 @@ async function gateChecks(
     releaseRuns ||
     touched.some((s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes));
   if (needsContainer && !repoServices.some(containerFor)) {
+    // A branch id maps to the compose id that owns the same path.
+    const toRendered = (s: string): string | undefined => {
+      if (rendered.includes(s)) return s;
+      const at = Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>).find(
+        ([, name]) => name === s,
+      )?.[0];
+      return at === undefined
+        ? undefined
+        : ((machineRepo["path_mappings"] ?? {}) as Record<string, string>)[at];
+    };
+    const renamed = touched.filter((s) => toRendered(s) && toRendered(s) !== s);
+    if (renamed.length)
+      add(
+        "registry",
+        true,
+        `compose.yml still names ${renamed.map((s) => `${s} as ${toRendered(s)}`).join(", ")} — ` +
+          "resync the machine registry with `werkmeister registry`",
+      );
+    const candidates = [
+      ...touched.map(toRendered).filter((s): s is string => Boolean(s)),
+      ...rendered,
+    ];
     // Any one container serves the whole repo (containerFor's sibling fallback); an
     // idle one only sleeps, where a web service would start its dev server.
     const pick =
-      [...touched, ...repoServices].find((s) =>
-        IDLE_SERVICE_TYPES.includes(services[s]?.["type"] ?? ""),
-      ) ??
-      touched[0] ??
-      repoServices[0];
+      candidates.find((s) => IDLE_SERVICE_TYPES.includes(deps.services[s]?.["type"] ?? "")) ??
+      candidates[0];
     if (pick) {
       touchExecMarker(ws);
       try {
