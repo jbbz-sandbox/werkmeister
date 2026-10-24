@@ -30,8 +30,6 @@ test("the plugin's MCP server is the one the code and the permission rules name"
   assert.deepEqual(servers, ["werkmeister"]);
 });
 
-test("the old plugin path is a link to the new one, for CLAUDE_CODE_PLUGIN_DIRS installs", () => {
-  const old = path.join(REPO, "plugins/sandbox-tools");
-  assert.equal(fs.readlinkSync(old), "werkmeister");
-  assert.equal(readJson("plugins/sandbox-tools/.claude-plugin/plugin.json").name, "werkmeister");
+test("the old plugin path is gone (the SW-9 link was removed by SW-23)", () => {
+  assert.equal(fs.existsSync(path.join(REPO, "plugins/sandbox-tools")), false);
 });
