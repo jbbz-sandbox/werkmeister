@@ -168,7 +168,7 @@ about it.
 ```
 
 **Checkout installs** that set `CLAUDE_CODE_PLUGIN_DIRS` to `.../plugins/sandbox-tools` stop
-loading the plugin: the `plugins/sandbox-tools` link was removed (SW-23). Point it at
+loading the plugin: the plugins/sandbox-tools link was removed (SW-23). Point it at
 `.../plugins/werkmeister`, and rename the `sandbox` entry in `extraKnownMarketplaces` to
 `werkmeister` (or delete it).
 
