@@ -10,6 +10,8 @@ published package doesn't depend on the repo's package manager, so
 `npx werkmeister setup` and `npm install -g werkmeister` work as they always have
 (see "Install the CLI without a clone").
 
+Docs: <https://jbbz-sandbox.github.io/werkmeister/>
+
 ## Workspaces
 
 <!-- generated:workspaces -->
@@ -17,6 +19,7 @@ published package doesn't depend on the repo's package manager, so
 | App | Path | What |
 | --- | --- | --- |
 | `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI tool |
+| `docs-site` | [apps/docs-site](apps/docs-site) | The public docs site: VitePress over the repo's docs, in place. |
 | `werkmeister-dashboard` | [apps/werkmeister-dashboard](apps/werkmeister-dashboard) | The localhost workspaces dashboard and the --browser-form page. |
 | `werkmeister-mcp` | [apps/werkmeister-mcp](apps/werkmeister-mcp) | The werkmeister MCP server: every tool, over stdio and authenticated HTTP, including the MCP App UI tools and the App pages they serve. Bundled into the CLI. |
 
@@ -256,7 +259,11 @@ The CLI launcher lives at [apps/cli/werkmeister](apps/cli/werkmeister). The old 
 ## Local Kubernetes bootstrap
 
 The local cluster is set up from the **demo-services** repo, checked out
-alongside this one under `paths.repos_root`:
+alongside this one under `paths.repos_root`. demo-services is the example app we
+develop and test Werkmeister against: a backend and a frontend, with postgres and
+redis as shared cluster infra. It isn't public, so to try Werkmeister, point it at
+your own repos; wherever the docs name `demo-services`, read it as an example of
+that shape.
 
 ```bash
 cd ../demo-services

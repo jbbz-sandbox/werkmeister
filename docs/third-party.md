@@ -84,6 +84,7 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 | esbuild | ^0.24.0 → 0.24.2 | MIT | CLI and extension bundles |
 | vite, vite-plugin-singlefile | ^6.0.0 → 6.4.3, ^2.3.0 → 2.3.3 | MIT | MCP App / dashboard HTML |
 | vitest | ^3.0.0 → 3.2.7 | MIT | CLI tests |
+| vitepress | ~1.6.4 → 1.6.4 | MIT | the public docs site (`apps/docs-site`) |
 | quickpickle | ^1.11.2 → 1.11.2 | MIT | CLI Gherkin/BDD tests (`apps/cli/bdd`) |
 | typescript | ^5.7 / ^5.9.3 → 5.9.3 | Apache-2.0 | all workspaces |
 | tsx, concurrently, cross-env | → 4.23.1, 9.2.4, 10.1.0 | MIT | dev scripts |
@@ -91,7 +92,7 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 | @vscode/test-electron, @vscode/test-cli | ^3.1.0 → 3.1.0, ^0.0.15 | MIT | extension integration tests. They download Microsoft's VS Code build (Microsoft Software License) into `.vscode-test/` |
 | @types/* | | MIT | type definitions |
 
-Transitive dev-only licences outside the usual set: Artistic-2.0 (vsce's `istextorbinary` family), WTFPL (`@azu/style-format`), CC-BY-3.0 (`spdx-exceptions`, a data file), Python-2.0 (`argparse`), BlueOak-1.0.0, 0BSD, CC0-1.0, Unlicense. `jszip` is `MIT OR GPL-3.0-or-later` and is taken as MIT.
+Transitive dev-only licences outside the usual set: Artistic-2.0 (vsce's `istextorbinary` family), WTFPL (`@azu/style-format`), CC-BY-3.0 (`spdx-exceptions`, a data file), BSD-3-Clause reported as `BSD` (`speakingurl`, under vitepress: its legacy `licenses` array), Python-2.0 (`argparse`), BlueOak-1.0.0, 0BSD, CC0-1.0, Unlicense. `jszip` is `MIT OR GPL-3.0-or-later` and is taken as MIT.
 
 ## Required host software
 

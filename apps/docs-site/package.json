@@ -1,0 +1,17 @@
+{
+  "name": "docs-site",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "description": "The public docs site: VitePress over the repo's docs, in place.",
+  "scripts": {
+    "build": "vitepress build .",
+    "dev": "vitepress dev .",
+    "preview": "vitepress preview .",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "vitepress": "~1.6.4"
+  }
+}

@@ -36,6 +36,8 @@ export const REVIEWED = {
   "@azu/style-format": "WTFPL; dev-only, under @vscode/vsce",
   "spdx-exceptions": "CC-BY-3.0 data file; dev-only, under @changesets/cli",
   spawndamnit: "MIT text behind `SEE LICENSE IN LICENSE`; dev-only, under @changesets/cli",
+  speakingurl:
+    "BSD-3-Clause text and `license`; a legacy `licenses` array says `BSD`; dev-only, under vitepress",
 };
 
 /** True when an SPDX expression is satisfied by the allowlist: any `OR` branch, every `AND` term. */
