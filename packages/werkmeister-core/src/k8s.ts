@@ -14,12 +14,13 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { Colors } from "./colors.js";
 import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
-import { stateInfraRoot } from "./config.js";
-import { containerRunning, projectContainers } from "./docker.js";
+import { loadServices, needsCluster, type ServicesConfig, stateInfraRoot } from "./config.js";
+import { containerRunning, type ProjectContainer, projectContainers } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { type ForwardSpec, forwardSpecs } from "./k8s_forwards.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
+import { LABEL_FEATURE } from "./slots.js";
 
 // The forward table is NOT duplicated here: `forwardSpecs()` derives it from
 // ~/.sandbox/services.yaml — the same call that generates the entrypoint's
@@ -37,6 +38,44 @@ export async function checkPortForwardHealth(): Promise<Record<string, boolean>>
       (c) => c.health === "healthy" || (c.state === "running" && !c.health),
     ),
   };
+}
+
+/**
+ * Whether a running feature has a local service that needs the k8s-forwards
+ * container (SW-42). `sandbox up` starts the forwarder only then, so a stopped
+ * one is otherwise the normal state, not a fault. A feature's local services
+ * are all its containers, running or not; it counts once any of them runs.
+ * `null` containers (docker unreachable) count as needed, so an outage still warns.
+ */
+export function clusterNeeded(
+  containers: ProjectContainer[] | null,
+  services: ServicesConfig,
+): boolean {
+  if (!containers) return true;
+  const features = new Map<string, { local: string[]; running: boolean }>();
+  for (const c of containers) {
+    const feature = c.labels[LABEL_FEATURE];
+    if (!feature) continue;
+    const f = features.get(feature) ?? { local: [], running: false };
+    f.local.push(c.service);
+    f.running ||= c.state === "running";
+    features.set(feature, f);
+  }
+  return [...features.values()].some((f) => f.running && needsCluster(f.local, services));
+}
+
+/**
+ * {@link clusterNeeded} against the registry, listing containers unless given
+ * them. An unreadable registry counts as needed.
+ */
+export async function forwarderNeeded(containers?: ProjectContainer[] | null): Promise<boolean> {
+  let services: ServicesConfig;
+  try {
+    services = loadServices();
+  } catch {
+    return true;
+  }
+  return clusterNeeded(containers === undefined ? await projectContainers() : containers, services);
 }
 
 /**
@@ -370,7 +409,8 @@ export interface ForwardStatus {
  * TCP-bound but not serving traffic.
  *
  * Returns a list of dicts with keys: name, listen_port, remote_port, health_path, status.
- * status is one of: "alive", "dead", "container_down".
+ * status is one of: "alive", "dead", "container_down", or "stopped" — the
+ * container is down and no running feature needs it ({@link forwarderNeeded}).
  */
 export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
   const forwardsUp = await containerRunning("sandbox-k8s-forwards");
@@ -383,6 +423,7 @@ export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
     return [];
   }
 
+  const down = forwardsUp ? null : (await forwarderNeeded()) ? "container_down" : "stopped";
   const results: ForwardStatus[] = [];
   for (const spec of specs) {
     results.push({
@@ -390,7 +431,7 @@ export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
       listen_port: spec.listen,
       remote_port: spec.remote,
       health_path: spec.health,
-      status: forwardsUp ? await classifyForward(spec.listen, spec.health) : "container_down",
+      status: down ?? (await classifyForward(spec.listen, spec.health)),
     });
   }
   return results;

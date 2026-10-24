@@ -161,7 +161,7 @@ const CSS = `
 
 /** Infra / k8s summary → the dot scale: all up ok · some warn · none err · unknown off. */
 function countTone(up: number, total: number, state?: string): Tone {
-  if (state === "unknown" || !total) return "off";
+  if (state === "unknown" || state === "stopped" || !total) return "off";
   if (up === total) return "ok";
   return up === 0 ? "err" : "warn";
 }
@@ -202,6 +202,10 @@ function TopBar({
     setK8s(null);
     try {
       const d = await bridge.callTool("k8s-forwards-status", {});
+      if (d.stopped) {
+        setK8s({ state: "stopped", title: "Stopped — not needed by any running workspace" });
+        return;
+      }
       const bad = (d.forwards ?? []).filter((f: { healthy: boolean }) => !f.healthy);
       setK8s({
         healthy: d.healthy,

@@ -287,12 +287,25 @@ function printInterceptRows(rows: InterceptRow[]): void {
   console.log();
 }
 
+/** The forwarder is down and no running feature needs it (SW-42): neutral, not a fault. */
+function forwarderStopped(services: ForwardStatus[]): boolean {
+  return services[0]?.status === "stopped";
+}
+
+const STOPPED_TEXT = "stopped — not needed by any running workspace";
+
 /** Print per-service k8s port-forward health. Returns count of alive forwards. */
 function printK8sSection(services: ForwardStatus[]): number {
   console.log(`  ${Colors.BOLD}k8s Port-Forwards${Colors.RESET}`);
 
   if (!services.length) {
     console.log(`  ${Colors.DIM}not running  (start with: sandbox connect)${Colors.RESET}`);
+    console.log();
+    return 0;
+  }
+
+  if (forwarderStopped(services)) {
+    console.log(`  ${Colors.DIM}container sandbox-k8s-forwards ${STOPPED_TEXT}${Colors.RESET}`);
     console.log();
     return 0;
   }
@@ -356,6 +369,7 @@ function runK8sOnly(k8s: ForwardStatus[], asJson: boolean): void {
 
   console.log(`\n${Colors.BOLD}=== k8s Port-Forward Status ===${Colors.RESET}\n`);
   const alive = printK8sSection(k8s);
+  if (forwarderStopped(k8s)) return;
   const total = k8s.length;
   if (total) {
     console.log(`  ${alive}/${total} services alive`);
@@ -411,8 +425,11 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const totalFeatures = Object.keys(allSlots).length;
   const available = slotCount() - totalFeatures;
   const k8sTotal = k8s.length;
+  const stopped = forwarderStopped(k8s);
   let k8sColor: string;
-  if (alive === k8sTotal) {
+  if (stopped) {
+    k8sColor = Colors.DIM;
+  } else if (alive === k8sTotal) {
     k8sColor = Colors.GREEN;
   } else if (alive > 0) {
     k8sColor = Colors.YELLOW;
@@ -421,11 +438,11 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
   console.log(
     `  ${Colors.CYAN}${totalFeatures} active feature(s), ${available} slot(s) available${Colors.RESET}` +
-      `  |  k8s: ${k8sColor}${alive}/${k8sTotal} alive${Colors.RESET}`,
+      `  |  k8s: ${k8sColor}${stopped ? "stopped" : `${alive}/${k8sTotal} alive`}${Colors.RESET}`,
   );
   console.log();
 
-  if (alive < k8sTotal) {
+  if (!stopped && alive < k8sTotal) {
     console.log(
       `  ${Colors.YELLOW}To restart dead forwards: ` +
         `docker restart sandbox-k8s-forwards${Colors.RESET}`,

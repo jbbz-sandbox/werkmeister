@@ -46,6 +46,7 @@ interface K8sForwardsResult {
   forwards: K8sForward[];
   healthy: number;
   total: number;
+  stopped?: boolean;
 }
 interface KubeContextResult {
   context: string | null;
@@ -344,7 +345,13 @@ export function HealthTab({ bridge, active }: { bridge: HostBridge; active: bool
       <div className="sec-h">k8s Forwards</div>
       <div>
         {k8s &&
-          (k8s.forwards.length ? (
+          (k8s.stopped ? (
+            <div className="row">
+              <span className="dot" />
+              <span className="name">k8s-forwards</span>
+              <span className="detail">stopped — not needed by any running workspace</span>
+            </div>
+          ) : k8s.forwards.length ? (
             k8s.forwards.map((f) => (
               <div className="row" key={f.name}>
                 <span className={`dot ${f.healthy ? "ok" : "bad"}`} />
