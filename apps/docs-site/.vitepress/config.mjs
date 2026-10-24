@@ -54,8 +54,7 @@ export default defineConfig({
   ),
   rewrites: { "apps/docs-site/index.md": "index.md" },
   outDir: "dist",
-  // The github.io project URL; "/" once werkmeister.io (SW-4) is the Pages custom domain.
-  base: "/werkmeister/",
+  base: "/",
   cleanUrls: true,
   vite: {
     resolve: { alias: [{ find: /^vue(?=$|\/)/, replacement: VUE }] },
