@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.35.3
+
+### Patch Changes
+
+- 0bff492: The docs site is served at https://werkmeister.io instead of https://jbbz-sandbox.github.io/werkmeister/ (SW-88).
+
 ## 0.35.2
 
 ### Patch Changes
