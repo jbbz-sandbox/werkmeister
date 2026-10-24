@@ -48,7 +48,7 @@ const options = {
   plugins: [stubGrpc],
   format: "cjs",
   platform: "node",
-  target: "node20",
+  target: "node22",
   sourcemap: true,
   metafile: true,
   minify: false,

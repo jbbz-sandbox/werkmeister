@@ -73,7 +73,7 @@ services:
 {# sharp picks @img/sharp-linux-x64 vs -linuxmusl-x64 at install time, and a     #}
 {# glibc-built tree will not load under an alpine app image.                     #}
   {{ setup_name }}:
-    image: {{ setup.image | default('node:20.16.0') }}
+    image: {{ setup.image | default('node:22') }}
     container_name: {{ container_of(feature_name, setup_name) }}
 {# SW-34: an install only on-demand services need stays out of a plain `up`. #}
 {% if setup_name not in setup_services_local %}
@@ -141,7 +141,7 @@ services:
 {# docker-execs the test), so these idle unless `sandbox up --dev`.             #}
 {% set idle = svc.type in idle_types %}
   {{ svc.name }}:
-    image: {{ svc.image | default('node:20.16.0') }}
+    image: {{ svc.image | default('node:22') }}
 {# SW-62: a service that needs system packages builds its own image from a Dockerfile #}
 {# in its dir (tagged `image`), instead of installing them by hand in the container.  #}
 {% if svc.dockerfile %}

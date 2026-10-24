@@ -151,6 +151,19 @@ describe("generateFeatureCompose", () => {
   });
 });
 
+// SW-77: the Node floor is 22, so an app service with no `image:` gets node:22.
+it("gives an app service with no image the default node image", () => {
+  home.write(
+    "services.yaml",
+    fixtureServicesYaml().replace(
+      '    image: node:22-alpine\n    command: "cd apps/backend',
+      '    command: "cd apps/backend',
+    ),
+  );
+  const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+  expect(content).toContain("image: node:22\n");
+});
+
 // ---- setup services --------------------------------------------------------
 // `setup_services` was fully plumbed but never exercised: no entry has ever
 // been non-empty, so the template's raw dereferences went unnoticed.
@@ -176,16 +189,16 @@ describe("setup services", () => {
     const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
     // A setup container installs deps the app container then loads, so the two
     // must agree on platform+libc — sharp resolves @img/sharp-linux-x64 vs
-    // -linuxmusl-x64 at install time. The image was hardcoded to node:20.16.0
-    // (glibc) while the demo apps run node:22-alpine (musl).
+    // -linuxmusl-x64 at install time. The image was hardcoded to a glibc
+    // node (20.16.0) while the demo apps run node:22-alpine (musl).
     expect(content).toContain("image: node:22-alpine");
     expect(content).not.toContain("node:20.16.0");
   });
 
-  it("falls back to the previous hardcoded image when none is set", () => {
+  it("falls back to the default image when none is set", () => {
     withSetupService(`    repo: demo-services\n    command: "npm install"\n`);
     const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
-    expect(content).toContain("image: node:20.16.0");
+    expect(content).toContain("image: node:22\n");
   });
 
   it("fills the fields the template dereferences unguarded", () => {

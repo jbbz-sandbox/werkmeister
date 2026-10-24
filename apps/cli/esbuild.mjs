@@ -70,7 +70,7 @@ const options = {
   alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
   format: "esm",
   platform: "node",
-  target: "node20",
+  target: "node22",
   define: { __SANDBOX_BUILD__: JSON.stringify(buildStamp) },
   sourcemap: true,
   metafile: true,
