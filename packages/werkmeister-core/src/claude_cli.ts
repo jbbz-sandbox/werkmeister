@@ -29,7 +29,7 @@ export async function isExecutable(p: string): Promise<boolean> {
  * (and `docker`, `git`, `gh` downstream of it), which the stripped PATH a
  * GUI-launched process inherits often can't — prepend the usual tool dirs.
  *
- * Exported for the same reason as {@link resolveSandboxBin}: callers that spawn
+ * Exported for the same reason as {@link sandbox.resolveSandboxBin}: callers that spawn
  * the CLI themselves need this env, not a hand-rolled approximation of it.
  */
 export function childEnv(): NodeJS.ProcessEnv {

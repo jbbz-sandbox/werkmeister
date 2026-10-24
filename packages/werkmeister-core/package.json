@@ -71,6 +71,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "docs:links": "typedoc",
     "test": "node --test *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
@@ -86,6 +87,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/nunjucks": "^3.2.6",
+    "typedoc": "0.28.20",
     "typescript": "^5.9.3"
   }
 }

@@ -41,6 +41,8 @@ jobs:
       - run: pnpm run licenses
       # Before turbo so a lint or format failure surfaces in seconds, not after the build.
       - run: pnpm exec biome ci .
+      # SW-82: a broken `{@link}` in core's comments fails here; it needs no build.
+      - run: pnpm --filter werkmeister-core run docs:links
       # One invocation so typecheck runs alongside build instead of before it.
       # werkmeister-core's tests run sharded in `core-test` below; its build
       # still runs here as every other package depends on it, and `tsc` there
