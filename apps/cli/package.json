@@ -1,6 +1,6 @@
 {
   "name": "werkmeister",
-  "version": "0.35.0",
+  "version": "0.35.1",
   "license": "Apache-2.0",
   "description": "Multi-feature concurrent development orchestrator CLI tool",
   "type": "module",
