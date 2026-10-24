@@ -194,10 +194,7 @@ test("autonomousRules: the feature's own sandbox and docker targets, exact where
 test("autonomous rules reach nothing shared: no blanket command or server, deny covers the shared acts", () => {
   const blanket = /^Bash\((sandbox|werkmeister|w9r|docker|npm|gh|claude|claude plugin):\*\)$/;
   assert.ok(!AUTONOMOUS_RULES.some((r) => blanket.test(r)), "no blanket rule");
-  assert.ok(
-    !AUTONOMOUS_RULES.includes("mcp__plugin_werkmeister_werkmeister"),
-    "no whole server",
-  );
+  assert.ok(!AUTONOMOUS_RULES.includes("mcp__plugin_werkmeister_werkmeister"), "no whole server");
   assert.ok(!AUTONOMOUS_RULES.some((r) => r.startsWith("Bash(npm install")), "no npm install");
   // SW-31: the only pnpm install is the lockfile one; adding a dependency waits for a person.
   assert.deepEqual(
