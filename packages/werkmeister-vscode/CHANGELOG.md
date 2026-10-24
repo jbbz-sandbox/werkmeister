@@ -1,5 +1,13 @@
 # vscode-plugin
 
+## 0.32.0
+
+### Patch Changes
+
+- 6b92949: Ship `LICENSE`, `NOTICE` and `THIRD-PARTY-LICENSES.txt` (the licence text of every package inlined into `extension.cjs`) in the .vsix, so vsce no longer warns "LICENSE not found" (SW-74). The extension build now shares `scripts/write-licenses.mjs` with `apps/cli`.
+  - werkmeister-core@0.32.0
+  - werkmeister-ui@0.5.2
+
 ## 0.31.0
 
 ### Patch Changes
