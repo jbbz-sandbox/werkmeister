@@ -138,10 +138,11 @@ export interface AsyncRunOptions extends RunOptions {
  * anything that can run for more than a moment -- compose, playwright,
  * telepresence -- so a caller that is not a dying CLI process can still stop it.
  *
- * An abort and a timeout both kill the child with a signal and leave a null
- * exit status, so the two are told apart by asking the AbortSignal rather than
- * by which event arrives first: Node emits "error" for an abort and only
- * "close" for a timeout, but nothing orders them against each other.
+ * An abort and a timeout both kill the child, and a child that traps the
+ * signal picks its own exit status, so the two are told apart by asking the
+ * AbortSignal rather than by the exit or by which event arrives first: Node
+ * emits "error" for an abort and only "close" for a timeout, but nothing orders
+ * them against each other.
  */
 export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<RunResult> {
   return new Promise((resolve, reject) => {
@@ -193,14 +194,15 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
       fail(`Command failed to start: ${cmd.join(" ")} (${e.message})`, -1, code);
     });
 
-    child.on("close", (status, signal) => {
+    child.on("close", (status) => {
       if (aborted()) {
         fail(`Command aborted: ${cmd.join(" ")}`, -1, "ABORT_ERR");
         return;
       }
-      // Killed by a signal with no exit status, and not by us: the only other
-      // thing that kills this child is the timeout we passed to spawn.
-      if (status === null && signal !== null && opts.timeout !== undefined) {
+      // Not aborted, so a kill can only be the timeout we passed to spawn. Asked of
+      // the child, not its exit shape: docker compose traps the SIGTERM and exits
+      // 130 with no signal (SW-86).
+      if (child.killed && opts.timeout !== undefined) {
         fail(`Command timed out after ${opts.timeout}s: ${cmd.join(" ")}`, -1, "ETIMEDOUT");
         return;
       }
