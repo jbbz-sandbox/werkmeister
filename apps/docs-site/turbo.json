@@ -1,0 +1,18 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // The site builds docs outside this package, so they belong in its cache key.
+      // ponytail: a rewritten link's target (apps/cli/…) isn't an input, so its appearing or
+      // vanishing replays a stale build; docs:check checks those paths on every run anyway.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/README.md",
+        "$TURBO_ROOT$/docs/*.md",
+        "$TURBO_ROOT$/plugins/werkmeister/README.md"
+      ],
+      "outputs": ["dist/**"]
+    }
+  }
+}
