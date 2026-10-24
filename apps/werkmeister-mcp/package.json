@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
-  "description": "The werkmeister MCP server: every tool, over stdio and authenticated HTTP, including the MCP App UI tools and the App pages they serve.",
+  "description": "The werkmeister MCP server: every tool, over stdio and authenticated HTTP, including the MCP App UI tools and the App pages they serve. Bundled into the CLI.",
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "scripts": {

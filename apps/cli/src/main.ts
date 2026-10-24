@@ -1180,6 +1180,25 @@ export async function main(): Promise<void> {
     return completeLine(program);
   }
 
+  // SW-81: commander's model as JSON, for docs:gen's CLI reference and docs:check's flag list.
+  if (process.argv[2] === "__reference") {
+    const reference = program.commands.map((c) => ({
+      name: c.name(),
+      usage: c.usage().replace(/^\[options\] ?/, ""),
+      description: c.description(),
+      // commander 13 has no public getter for `.hidden`.
+      hidden: Boolean((c as unknown as { _hidden?: boolean })._hidden),
+      options: c.options.map((o) => ({
+        flags: o.flags,
+        long: o.long,
+        description: o.description,
+        hidden: o.hidden,
+      })),
+    }));
+    console.log(JSON.stringify(reference));
+    return;
+  }
+
   // Not for `hooks`: they run on every tool call, and git would be a spawn each.
   // Not for `stop --if-idle` either: it runs inside SessionEnd's exit budget.
   if (process.argv[2] !== "hooks" && !process.argv.includes("--if-idle")) {

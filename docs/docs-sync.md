@@ -20,6 +20,7 @@ covers what now catches them automatically and what is still open.
 | Bare `<placeholder>`s outside code, which GitHub drops silently | `HTML_TAGS` in the script (the elements GitHub keeps) |
 | `#anchor` links, in the same doc or another `.md` | that doc's headings, as GitHub slugs them |
 | MCP tool names (`` `x` tool ``, `MCP tool `x``, `mcp__plugin_werkmeister_werkmeister__x`) | `registerTool` / `registerAppTool` in `apps/werkmeister-mcp/src`, plus the plugin's `*_TOOL` constants <!-- docs-check: ignore --> |
+| Generated regions that `docs:gen` would rewrite (hand-edited, or the source moved on), unknown region names, unclosed markers | `scripts/gen-docs.mjs` |
 
 It runs in CI after the build. Locally, run `pnpm run build` first.
 
@@ -28,6 +29,7 @@ It runs in CI after the build. Locally, run `pnpm run build` first.
 - **The doc is stale:** fix the doc.
 - **The line is meant to name the old thing** (a resolved known issue, a migration note, history): add `<!-- docs-check: ignore -->` to that line. In a table row, put it inside the last cell.
 - **You just retired a name:** add it to `RETIRED` with what replaces it, so the next mention fails CI instead of waiting for a sweep.
+- **A generated region is out of date:** run `pnpm run docs:gen` and commit the result. To change its wording, change the source it names below.
 
 Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-management and SCAMPER research docs are skipped as point-in-time records.
 
@@ -40,10 +42,23 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 - Line numbers (`gate.ts:290`).
 - Anything about other repos (`demo-services`).
 
+## Generated regions: `pnpm run docs:gen`
+
+[`scripts/gen-docs.mjs`](../scripts/gen-docs.mjs) (SW-81) rewrites every region marked `<!-- generated:<name> -->` … `<!-- /generated -->` in the tracked Markdown from its source, as plain Markdown. Like `docs:check`, it reads the built core and CLI, so run `pnpm run build` first. A retired name inside a region is the source's own and isn't flagged; every other check still applies.
+
+| Region | Where | Source |
+| --- | --- | --- |
+| `autonomous-allow`, `autonomous-deny` | `docs/context-strategies.md` | `packages/werkmeister-core/src/hooks_gen.ts::autonomousRules`, `AUTONOMOUS_DENY` |
+| `mcp-tools` | `apps/werkmeister-mcp/README.md` | each `registerTool` / `registerAppTool` call's name and `title` in `apps/werkmeister-mcp/src` |
+| `cli-reference` | `docs/users-guide.md` | commander's commands, arguments and options, through the CLI's hidden `__reference` mode |
+| `workspaces` | `README.md` | each `apps/*` and `packages/*` `package.json`'s `name` and `description` |
+
+A new region is a key in `loadRegions()` plus its markers in a doc.
+
 ## Writing docs that stay checkable
 
 - Cite a symbol, not a line: `` `packages/werkmeister-core/src/caddy.ts::reloadCaddy` `` is checked, `caddy.ts:325` rots.
-- Don't state counts or copy lists that live in code ("all 21 tools", the allow/deny lists). Link to the source, or generate the list (option 1 below).
+- Don't state counts or copy lists that live in code ("all 21 tools", the allow/deny lists). Link to the source, or generate the list (a region above).
 - Put commands in code spans, so the command check sees them.
 - When you rename a command, path, tool or config key, run `docs:check` before opening the PR.
 
@@ -51,12 +66,7 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 
 Ranked by drift caught per effort, as proposed with the check above.
 
-1. **Generated sections.** Mark a region `<!-- generated:<name> -->` … `<!-- /generated -->`. A `docs:gen` script rewrites it from source, and `docs:check` fails if the output would change (the same check-in-and-verify pattern as `licenses`). Candidates, most drift-prone first:
-   - the autonomous allow/deny lists in `docs/context-strategies.md` (from `hooks_gen.ts`)
-   - the MCP tool list and count (from the registrations)
-   - the CLI command reference in `docs/users-guide.md` (from commander's command and option descriptions)
-   - the README workspaces table (from each `package.json`)
-   - the changesets `fixed` group and the release `needs:` in the README
+1. **More generated regions.** Implemented for four regions (SW-81, above). Still a candidate: the changesets `fixed` group and the release `needs:` in the README.
 2. **TSDoc `{@link}` in code comments, checked by TypeDoc.** Code comments that name another symbol or file drift too (the esbuild header, comments linking to deleted specs). Write them as `{@link reloadCaddy}` and run TypeDoc over `werkmeister-core` in CI with `--emit none` and `invalidLink` validation as errors. Skip publishing an API site: `werkmeister-core` is private, so a site would have almost no readers. Implemented (SW-82) as `pnpm --filter werkmeister-core run docs:links` (config in `packages/werkmeister-core/typedoc.json`), run by the CI `test` job; `notExported` is off, and a link to a symbol in another module needs the module name, as in `{@link sandbox.resolveSandboxBin}`.
 3. **Run the skills' shell snippets.** The plugin skills' bash blocks are instructions Claude executes, and a wrong path there fails at runtime. Extracting and smoke-running them (e.g. in `apps/cli/bdd`) costs more than the checks above. Revisit if skills keep breaking after `docs:check`.
 
