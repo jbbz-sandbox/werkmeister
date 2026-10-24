@@ -121,6 +121,8 @@ jobs:
       pull-requests: write   # open and update the "version packages" PR
       id-token: write        # npm trusted publishing: OIDC instead of a stored token
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
     steps:
       # A push made with GITHUB_TOKEN gets its CI held for approval, so the
       # version PR could merge before `test` ran on it. A GitHub App token's
@@ -153,7 +155,8 @@ jobs:
           restore-keys: turbo-${{ runner.os }}-node24-
       # With changesets pending: opens/updates the version PR. With none pending
       # (i.e. that PR just merged): publishes and tags.
-      - uses: changesets/action@v1
+      - id: changesets
+        uses: changesets/action@v1
         with:
           version: pnpm run changeset:version
           publish: pnpm run release
@@ -167,3 +170,27 @@ jobs:
           # bundled with Node 24, authenticates through the job's OIDC token,
           # which npmjs.com accepts because this workflow is the package's
           # trusted publisher.
+
+  # SW-80: the docs site tracks the latest published release. Its own job, so npm
+  # publishing stays off the github-pages environment (its branch rules, and the
+  # environment claim it would add to the npm OIDC token).
+  docs-deploy:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    concurrency: pages
+    permissions:
+      pages: write      # deploy-pages
+      id-token: write   # deploy-pages proves the run with an OIDC token
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/install
+      - run: pnpm turbo run build --filter=docs-site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/docs-site/dist
+      - id: deploy
+        uses: actions/deploy-pages@v5

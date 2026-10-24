@@ -1014,7 +1014,8 @@ The registry is `~/.werkmeister/services.yaml`, and it is **generated**: `werkme
 (or `werkmeister registry sync`) merges every `<repo>/.sandbox/services.yaml` found
 under `paths.repos_root`, then applies `~/.werkmeister/services.local.yaml` on top.
 Edit a repo's fragment or the local file, never the generated one. The demo
-registry comes from the `demo-services` repo's own fragment:
+registry comes from the `demo-services` repo's own fragment (our private example app;
+see [Local Kubernetes bootstrap](../README.md#local-kubernetes-bootstrap)):
 
 | Service | Repo | Path in Repo | Type | Internal Port | port_offset | Health Endpoint |
 |---|---|---|---|---|---|---|

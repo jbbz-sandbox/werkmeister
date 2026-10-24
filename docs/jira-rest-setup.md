@@ -1,13 +1,10 @@
 # Jira REST setup (API token)
 
-Setup log for direct Jira REST access from `apps/werkmeister-dashboard` — replaces the
-`claude -p` → Atlassian-MCP round-trips for data-only Jira reads (status pills,
-issue cards, refine briefings). Written as a log so it can become an onboarding
-doc/script; steps marked **[manual]** cannot be scripted, everything else can.
+An optional Jira API token lets Werkmeister read Jira over REST directly (status
+pills, issue cards and briefings in `apps/werkmeister-dashboard`) instead of a
+`claude -p` round-trip through the Atlassian MCP.
 
-First performed: 2026-07-11. Verified working same day.
-
-> **Automated:** `werkmeister setup` asks "Configure Jira credentials now?" and
+> **Mostly automated:** `werkmeister setup` asks "Configure Jira credentials now?" and
 > writes them to the `jira:` section of `~/.werkmeister/config.yaml`;
 > `werkmeister connect` live-verifies them against `/rest/api/3/myself`.
 > Only step 1 below (creating the token) remains manual. The step is
