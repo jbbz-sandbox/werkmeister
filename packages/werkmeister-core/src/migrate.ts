@@ -137,7 +137,7 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
           ok: false,
           detail:
             `still running: ${blocking.map((c) => c.name).join(", ")} — stop them ` +
-            "(`werkmeister stop <feature>`, `werkmeister infra down`) and re-run; nothing was changed",
+            "(`werkmeister stop <feature>`, `werkmeister down infra`) and re-run; nothing was changed",
         },
       ];
     }
@@ -255,7 +255,7 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
       label: "shared infra",
       ok: true,
       detail:
-        "its files moved as they are (no host paths in them); the next `werkmeister infra up` mounts them from the new home",
+        "its files moved as they are (no host paths in them); the next `werkmeister connect` mounts them from the new home",
     });
   }
   return steps;
