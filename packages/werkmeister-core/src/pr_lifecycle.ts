@@ -1321,7 +1321,35 @@ export async function closeOut(
       `Abandon needs a reason: sandbox close-out ${name} --abandon "<reason>"`,
     );
   }
-  const ws = await resolveWorkspaceDir(name);
+  const ws = await resolveWorkspaceDir(name).catch((e: Error) => {
+    // A finished close-out removed the folder, so a rerun lands here (SW-90).
+    throw /^No such workspace/.test(e.message)
+      ? new WorkspaceError(`${e.message} — already closed out, or never created.`)
+      : e;
+  });
+  // Fail fast rather than wait: the pane, MCP server and VS Code call this in long-lived processes,
+  // and the run holding the lock reports the outcome itself.
+  const lock = path.join(sandboxHome(), `close-out-${path.basename(ws)}.lock`);
+  fs.mkdirSync(path.dirname(lock), { recursive: true });
+  if (!takeLock(lock)) {
+    throw new WorkspaceError(
+      `close-out of '${name}' is already running; that run reports the result. If none is, delete ${lock}.`,
+    );
+  }
+  try {
+    return await closeOutLocked(name, ws, why, deps);
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
+}
+
+async function closeOutLocked(
+  name: string,
+  ws: string,
+  why: string | undefined,
+  deps: Deps,
+): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
+  const command = `sandbox close-out ${name}${why ? " --abandon" : ""}`;
   const cfg = loadConfigFile(ws, null);
   if (why) abandonWorkspace(ws, why);
   const life = lifecycleOf(ws);
@@ -1376,10 +1404,17 @@ export async function closeOut(
   }
 
   const files = readPrFiles(ws);
-  fs.writeFileSync(
-    path.join(ws, "closeout.md"),
-    renderCloseout(files, issueLine, why ? `Abandoned: ${why}` : undefined),
-  );
+  try {
+    fs.writeFileSync(
+      path.join(ws, "closeout.md"),
+      renderCloseout(files, issueLine, why ? `Abandoned: ${why}` : undefined),
+    );
+  } catch (e) {
+    // Removed while the issue moved, by something outside this lock (`sandbox remove`, rm).
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT" || fs.existsSync(ws)) throw e;
+    lines.push(`'${name}' is already closed out or removed: ${ws} is gone.`);
+    return { command, output: lines.join("\n"), path: ws, terminals: [] };
+  }
   const branches: Array<{ src: string; branch: string }> = [];
   // An adopted PR's branch was never this workspace's to delete; an abandoned workspace keeps them all.
   for (const f of abandoned
@@ -1420,6 +1455,5 @@ export async function closeOut(
     }
   }
   lines.push(...terminals);
-  const command = `sandbox close-out ${name}${why ? " --abandon" : ""}`;
   return { command, output: lines.filter(Boolean).join("\n"), path: ws, terminals };
 }

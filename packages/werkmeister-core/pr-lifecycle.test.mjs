@@ -1083,6 +1083,65 @@ test("closeOut: a tracker refusal is a warning, close-out still records and remo
   }
 });
 
+test("closeOut: an overlapping run says close-out is already running, and a later one already closed out", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: https://x/pr/9\nmerge_sha: abc\n" }) },
+  });
+  try {
+    let removes = 0;
+    let entered;
+    let release;
+    const inRemove = new Promise((r) => (entered = r));
+    const held = new Promise((r) => (release = r));
+    const d = deps([[/ls-remote/, { code: 2 }]], {
+      remove: async () => {
+        if (removes++ === 0) {
+          entered();
+          await held;
+          fs.rmSync(ws, { recursive: true, force: true });
+        }
+        return { output: "removed" };
+      },
+    });
+    await inWorkspacesRoot(ws, async (name) => {
+      const first = closeOut(name, {}, d);
+      await inRemove;
+      await assert.rejects(closeOut(name, {}, d), /close-out of '.+' is already running/);
+      release();
+      await first;
+      await assert.rejects(closeOut(name, {}, d), /already closed out/);
+    });
+    assert.equal(removes, 1);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut: the folder gone by the closeout.md write reports already closed out, not ENOENT", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: https://x/pr/9\nmerge_sha: abc\n" }) },
+  });
+  try {
+    let removed = false;
+    const d = deps([[/ls-remote/, { code: 2 }]], {
+      tracker: {
+        fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+        // Another remover finishes while the issue moves, just before the write.
+        updateIssue: async () => fs.rmSync(ws, { recursive: true, force: true }),
+      },
+      remove: async () => {
+        removed = true;
+        return { output: "removed" };
+      },
+    });
+    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
+    assert.match(r.output, /already closed out/);
+    assert.ok(!removed);
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openTerminalSessions: TTY claude processes whose cwd is in the workspace", async () => {
   const ps =
     "  11 ttys001  /usr/local/bin/claude\n  12 ??       claude\n  13 ttys002  claude\n  14 ttys003  zsh\n  15 ttys004  claude\n";

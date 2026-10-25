@@ -23,6 +23,14 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
   const abandon = (args.abandon as string | null | undefined) ?? null;
 
+  // Agents run this from a tool with no terminal: refuse rather than read an empty stdin (SW-90).
+  // stderr, unlike `error`, so a caller that keeps only stderr still sees why.
+  if (!args.yes && !process.stdin.isTTY) {
+    console.error(
+      `${Colors.RED}close-out needs --yes when not run from a terminal -- nothing changed.${Colors.RESET}`,
+    );
+    process.exit(1);
+  }
   console.log(`\n${Colors.BOLD}=== sandbox close-out: ${name} ===${Colors.RESET}\n`);
   if (!args.yes) {
     console.log(
