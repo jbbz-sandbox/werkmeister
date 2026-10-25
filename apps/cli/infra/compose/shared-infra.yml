@@ -41,7 +41,7 @@ services:
         - linux/amd64
       # See Dockerfile: corp-ca.crt is appended to alpine's trust store so
       # `apk add` validates through a corporate TLS proxy (Netskope/Zscaler).
-      # `sandbox connect` writes ~/.sandbox/corp-ca.crt if it can find a
+      # `sandbox connect` writes ~/.werkmeister/corp-ca.crt if it can find a
       # proxy root in the System keychain; otherwise the file is empty and
       # the build path is a no-op.
       secrets:
@@ -50,7 +50,7 @@ services:
     container_name: sandbox-k8s-forwards
     restart: unless-stopped
     # Published ports and network aliases come from the generated override
-    # (~/.sandbox/infra/compose/k8s-forwards.override.yml); see k8s_forwards.ts.
+    # (~/.werkmeister/infra/compose/k8s-forwards.override.yml); see k8s_forwards.ts.
     volumes:
       - ${HOME}/.kube:/root/.kube:ro
       - ${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro
@@ -167,8 +167,8 @@ services:
       - ../proxy/ui:/sandbox/proxy/ui:ro
       # Generated beside the Caddyfile; a file bind over the shipped ui dir.
       - ${SANDBOX_STATE_DIR}/proxy/features.json:/sandbox/proxy/ui/features.json:ro
-      # Cert location comes from `ingress.certs_dir` in ~/.sandbox/config.yaml,
-      # exported as SANDBOX_CERTS_DIR by ~/.sandbox/env.sh. The default keeps
+      # Cert location comes from `ingress.certs_dir` in ~/.werkmeister/config.yaml,
+      # exported as SANDBOX_CERTS_DIR by ~/.werkmeister/env.sh. The default keeps
       # this working for a shell that hasn't sourced env.sh.
       - ${SANDBOX_CERTS_DIR:-${HOME}/.docker/certs}:/etc/caddy/certs:ro
       - sandbox-caddy-data:/data

@@ -1,12 +1,12 @@
 # Sandbox service-registry fragment for this repo.
 #
 # `sandbox registry sync` (run by `sandbox setup`) merges every
-# <repo>/.sandbox/services.yaml under paths.repos_root into
-# ~/.sandbox/services.yaml. Only `services:`, `setup_services:`,
+# <repo>/.werkmeister/services.yaml under paths.repos_root into
+# ~/.werkmeister/services.yaml. Only `services:`, `setup_services:`,
 # `infrastructure:` and `repo:` (this repo's own settings, merged into
 # `repos.<dir>`) may appear here; the repo key is the checkout's directory name
-# and the rest of `repos:` is derived. {{home}}, {{repos_root}} and {{workspaces_root}}
-# expand from the developer's config.yaml at merge time. `x-` keys hold YAML
+# and the rest of `repos:` is derived. {{home}}, {{repos_root}}, {{workspaces_root}}
+# and {{werkmeister_home}} (the tool's home folder) expand at merge time. `x-` keys hold YAML
 # anchors and are dropped from the output.
 
 # Ship detection for `sandbox pr status` and the pre-PR gate's release check
@@ -30,7 +30,7 @@ services:
   # `sleep infinity` with no healthcheck; their `command:` watchers run only under
   # `sandbox up --dev`. The port is still published, so they keep their slot.
   # See docs/users-guide.md "Self-hosting the sandbox repo" in the sandbox repo.
-  # Fully functional CLI: the host's docker socket plus ~/.sandbox, ~/repos,
+  # Fully functional CLI: the host's docker socket plus ~/.werkmeister, ~/repos,
   # ~/features and ~/.kube mounted at their host paths, because the compose
   # files it generates carry host bind-mount paths and the daemon is the
   # host's. HOME matches so `~` expands the same way; PATH puts the worktree's
@@ -56,7 +56,7 @@ services:
     node_modules_volume: node-modules
     extra_volumes: &host_mounts
       - /var/run/docker.sock:/var/run/docker.sock
-      - "{{home}}/.sandbox:{{home}}/.sandbox"
+      - "{{werkmeister_home}}:{{werkmeister_home}}"
       - "{{repos_root}}:{{repos_root}}"
       - "{{workspaces_root}}:{{workspaces_root}}"
       - "{{home}}/.kube:{{home}}/.kube:ro"
@@ -186,7 +186,7 @@ setup_services:
   # worktree (#148).
   # SW-33: the install is skipped while the lockfile and Node major are unchanged.
   # ~/repos and safe.directory give git the same access as the app containers,
-  # so turbo hashes inputs the same way they do. ~/.sandbox/locks queues
+  # so turbo hashes inputs the same way they do. ~/.werkmeister/locks queues
   # installs host-wide, SANDBOX_INSTALL_SLOTS (default 2) at a time, and builds
   # one at a time.
   # SW-69: the turbo cache and pnpm store are the built-in `turbo` and
@@ -201,7 +201,7 @@ setup_services:
     extra_volumes:
       - tools:/opt/sandbox-tools
       - "{{repos_root}}:{{repos_root}}"
-      - "{{home}}/.sandbox/locks:/locks"
+      - "{{werkmeister_home}}/locks:/locks"
     environment:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory

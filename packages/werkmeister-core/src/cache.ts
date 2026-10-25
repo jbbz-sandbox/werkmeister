@@ -1,6 +1,6 @@
 /**
  * Persistent, cross-process TTL cache for the issue-tracker lookups
- * (status pills + form briefing). One JSON file at ~/.sandbox/issue-cache.json
+ * (status pills + form briefing). One JSON file at ~/.werkmeister/issue-cache.json
  * holds namespaced `{ v, at }` entries, shared by the long-lived MCP server and
  * the short-lived browser-form CLI. Reads load the file on demand; writes
  * re-read-merge-and-atomically-rename so concurrent writers don't clobber each

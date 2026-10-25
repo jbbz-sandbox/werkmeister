@@ -8,8 +8,8 @@ import { SandboxTreeProvider } from "./tree.js";
  * The WERKMEISTER_* values this process inherited, captured before any setting is
  * applied. Settings write the new names because they win over SANDBOX_* (SW-7);
  * an inherited SANDBOX_* is never touched, so it stays the fallback. Clearing a setting must restore these, not delete them: the
- * documented tier order is setting > env > ~/.sandbox/config.yaml, and a
- * shell-launched VS Code legitimately carries env from ~/.sandbox/env.sh.
+ * documented tier order is setting > env > ~/.werkmeister/config.yaml, and a
+ * shell-launched VS Code legitimately carries env from ~/.werkmeister/env.sh.
  */
 const INHERITED_ENV = {
   WERKMEISTER_BIN: process.env.WERKMEISTER_BIN,
@@ -19,7 +19,7 @@ const INHERITED_ENV = {
 /**
  * Copy the extension's settings into process.env before any werkmeister-core call.
  *
- * Tier order is: VS Code setting > SANDBOX_* env > ~/.sandbox/config.yaml. A
+ * Tier order is: VS Code setting > SANDBOX_* env > ~/.werkmeister/config.yaml. A
  * GUI-launched VS Code inherits no SANDBOX_* vars (~/.zshenv is never
  * sourced), so these settings are the escape hatch for a non-standard layout.
  * But a shell-launched `code .` DOES inherit them, and clearing the setting

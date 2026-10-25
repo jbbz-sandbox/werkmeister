@@ -616,12 +616,12 @@ ${
   hasUrl
     ? `### Feature missing from \`/__werkmeister\` selector
 
-The dropdown is populated from \`~/.sandbox/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
+The dropdown is populated from \`~/.werkmeister/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
 
 Diagnose — compare what's labeled vs. what the UI shows:
 \`\`\`bash
 docker ps -a --filter label=com.sandbox.local.feature   --format '{{ .Label "com.sandbox.local.feature" }}' | sort -u
-jq '[.[].name]' "$HOME/.sandbox/infra/proxy/features.json"
+jq '[.[].name]' "$HOME/.werkmeister/infra/proxy/features.json"
 \`\`\`
 
 Resync:
@@ -651,7 +651,7 @@ docker compose logs -f    # watch startup if something crashes
 
   return `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
-  Source:    ~/.sandbox/services.yaml + ports.yaml
+  Source:    ~/.werkmeister/services.yaml + ports.yaml
              + .sandbox/workspace.yml (feature, services, slot)
   Generator: packages/werkmeister-core/src/claude_md.ts :: buildSandboxContextMd
   Regen:     sandbox init-workspace  (or \`sandbox up\` after slot changes)

@@ -186,7 +186,7 @@ async function isFile(p: string): Promise<boolean> {
  * checkout root that owns the CLI package → the `~/.local/bin/sandbox` symlink.
  *
  * SANDBOX_ROOT is the machine-global pointer at the *running* checkout: `sandbox
- * config` generates it into `~/.sandbox/env.sh`, which `~/.zshenv` and the
+ * config` generates it into `~/.werkmeister/env.sh`, which `~/.zshenv` and the
  * wrapper both source. It ranks above the walk-up and the symlink because those
  * two resolve to whichever checkout happens to be nearest or globally linked,
  * which is the wrong one as soon as you work out of a feature worktree.
@@ -316,7 +316,7 @@ async function buildRefineContext(formData?: Record<string, unknown>): Promise<s
   const registry = await readServicesRegistry();
   if (registry) {
     blocks.push(
-      "The sandbox service registry (~/.sandbox/services.yaml). Use it to " +
+      "The sandbox service registry (~/.werkmeister/services.yaml). Use it to " +
         "understand which services exist and how they relate, so any service the rewrite " +
         "references matches a real one:\n" +
         "```yaml\n" +
@@ -490,7 +490,7 @@ export function parseServiceNames(yaml: string): string[] {
  * or the lookup failed). The workspaces pane runs `prompt` on its session's own
  * model and hands the answer to {@link applyIssueFormAnswer}.
  *
- * When the service registry (`~/.sandbox/services.yaml`) is reachable it's
+ * When the service registry (`~/.werkmeister/services.yaml`) is reachable it's
  * embedded as background context, so the model can map the issue onto the
  * sandbox's actual services and suggest which `services` to spin up.
  */
@@ -582,7 +582,7 @@ function buildIssueExtractPrompt(
 ): string {
   const backgroundContext = registry
     ? "Background context — the sandbox service registry " +
-      "(~/.sandbox/services.yaml). Use it to understand which services exist and to " +
+      "(~/.werkmeister/services.yaml). Use it to understand which services exist and to " +
       "pick the ones this issue most likely touches:\n" +
       "```yaml\n" +
       registry +
@@ -623,7 +623,7 @@ const STATUS_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Current status per issue ref, from the configured tracker. Per-ref persistent
- * cache (5-min TTL): fresh/stale refs are served from ~/.sandbox/issue-cache.json
+ * cache (5-min TTL): fresh/stale refs are served from ~/.werkmeister/issue-cache.json
  * (stale ones background-revalidated), only genuine misses hit the tracker.
  * `refresh` forces every ref to re-fetch. Best-effort: refs the tracker can't
  * return are omitted (and not cached, so they retry next call).
@@ -3206,14 +3206,14 @@ export function rateFor(prices: Record<string, ModelRate>, model: string): Model
   return base !== model ? prices[base] : undefined;
 }
 
-// Fallback used when ~/.sandbox/model-pricing.yaml is missing/unparseable.
+// Fallback used when ~/.werkmeister/model-pricing.yaml is missing/unparseable.
 const DEFAULT_PRICES: Record<string, ModelRate> = {
   "claude-opus-4-8": { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 },
   "claude-sonnet-5": { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3 },
   "claude-haiku-4-5": { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 },
 };
 
-/** Locate `~/.sandbox/model-pricing.yaml`, mirroring resolveServicesYaml. */
+/** Locate `~/.werkmeister/model-pricing.yaml`, mirroring resolveServicesYaml. */
 async function resolveModelPricingYaml(): Promise<string | null> {
   return existing(modelPricingYamlPath());
 }
@@ -3561,7 +3561,7 @@ export async function sendToClaudeSession(
 // (see infra/compose/shared-infra.yml), so health is checked directly, by the
 // probe its health_endpoint names: HTTP GET on a path, a protocol exchange for
 // `redis`/`postgres`, or a bare TCP connect when it names nothing. Definitions
-// come from ~/.sandbox/services.yaml (each service's k8s_forward_port +
+// come from ~/.werkmeister/services.yaml (each service's k8s_forward_port +
 // health_endpoint; the single source of truth for the forward table). The
 // container's own probe.sh reads the same field and must agree with this.
 // ---------------------------------------------------------------------------
@@ -3588,7 +3588,7 @@ export async function getK8sForwardsHealth(): Promise<{
   const file = await resolveServicesYaml();
   if (!file) {
     throw new WorkspaceError(
-      "Could not locate the service registry (~/.sandbox/services.yaml) — run `sandbox setup`.",
+      "Could not locate the service registry (~/.werkmeister/services.yaml) — run `sandbox setup`.",
     );
   }
   const doc = (parseYaml(await fs.readFile(file, "utf-8")) ?? {}) as Record<string, any>;

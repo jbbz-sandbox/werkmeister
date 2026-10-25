@@ -10,7 +10,7 @@ import {
   listWorkspaces,
   resolveSandboxBin,
 } from "werkmeister-core";
-import { getReposRoot, workspacesRoot } from "werkmeister-core/config";
+import { DOT_DIRS, getReposRoot, workspacesRoot } from "werkmeister-core/config";
 import type { WsNode } from "./build-tree.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
@@ -116,7 +116,7 @@ async function pickRepo(): Promise<string | null> {
   const choice = await vscode.window.showQuickPick(
     names.map((n) => ({
       label: n,
-      description: fs.existsSync(join(root, n, ".sandbox", "services.yaml"))
+      description: DOT_DIRS.some((d) => fs.existsSync(join(root, n, d, "services.yaml")))
         ? "has services.yaml"
         : "",
       path: join(root, n),

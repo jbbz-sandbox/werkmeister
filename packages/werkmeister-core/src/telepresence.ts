@@ -55,9 +55,7 @@ function which(cmd: string): string | null {
     try {
       fs.accessSync(candidate, fs.constants.X_OK);
       if (fs.statSync(candidate).isFile()) return candidate;
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   return null;
 }
@@ -282,7 +280,7 @@ export function buildListInterceptsArgs(): string[] {
  */
 export function interceptBlocker(svcDef: unknown): string | null {
   if (typeof svcDef !== "object" || svcDef === null || Array.isArray(svcDef)) {
-    return "is not defined in ~/.sandbox/services.yaml.";
+    return "is not defined in ~/.werkmeister/services.yaml.";
   }
   const svc = svcDef as Record<string, unknown>;
   const missing = missingClusterKeys(svc);

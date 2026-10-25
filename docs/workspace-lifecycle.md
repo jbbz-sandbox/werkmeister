@@ -100,7 +100,7 @@ The test commands also appear in `.werkmeister/sandbox-context.md` under "Test c
 
 ## Ship detection (registry `repo:`)
 
-A repo's registry fragment (`<repo>/.sandbox/services.yaml`) says when its merges count as shipped:
+A repo's registry fragment (`<repo>/.werkmeister/services.yaml`) says when its merges count as shipped:
 
 ```yaml
 repo:

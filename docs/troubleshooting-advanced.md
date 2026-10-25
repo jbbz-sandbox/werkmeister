@@ -83,7 +83,7 @@ docker logs {container_name} --tail 100 2>&1
 |-------|-------|-----|
 | `ECONNREFUSED` to database | postgres forward not ready | `docker restart sandbox-k8s-forwards` or check k8s forwards |
 | `yarn: command not found` | Bad Docker image or missing node_modules volume | `werkmeister down --volumes && werkmeister up` |
-| OOM Killed | Container exceeded memory limit | Increase `memory_limit` in the repo's `.sandbox/services.yaml` |
+| OOM Killed | Container exceeded memory limit | Increase `memory_limit` in the repo's `.werkmeister/services.yaml` |
 | Port already in use | Another process using the port | `lsof -i :{port}` to find the conflict |
 | `ENOSPC` | Docker disk full | `docker system prune -a` |
 

@@ -22,7 +22,7 @@ const MAX_AGE: string = BUILT_IN.env.TURBO_CACHE_MAX_AGE;
 
 // biome-ignore lint/suspicious/noExplicitAny: the registry is untyped YAML.
 const registry: any = YAML.parse(
-  fs.readFileSync(path.join(REPO, ".sandbox", "services.yaml"), "utf8"),
+  fs.readFileSync(path.join(REPO, ".werkmeister", "services.yaml"), "utf8"),
 );
 
 describe("the built-in turbo cache on this repo's services", () => {

@@ -74,19 +74,19 @@ describe("sandbox detect", () => {
   it("--dry-run reports and writes nothing", async () => {
     const { root, reposRoot } = repo(NODE_APP);
     expect(await runDetect(args({ dryRun: true }), deps(reposRoot))).toBe(0);
-    expect(fs.existsSync(path.join(root, ".sandbox/services.yaml"))).toBe(false);
+    expect(fs.existsSync(path.join(root, ".werkmeister/services.yaml"))).toBe(false);
   });
 
   it("without a TTY and without --yes it writes nothing", async () => {
     const { root, reposRoot } = repo(NODE_APP);
     expect(await runDetect(args(), deps(reposRoot))).toBe(0);
-    expect(fs.existsSync(path.join(root, ".sandbox/services.yaml"))).toBe(false);
+    expect(fs.existsSync(path.join(root, ".werkmeister/services.yaml"))).toBe(false);
   });
 
   it("--yes writes a runnable fragment, and a second run is a no-op", async () => {
     const { root, reposRoot } = repo(NODE_APP);
     expect(await runDetect(args({ yes: true }), deps(reposRoot))).toBe(0);
-    const file = path.join(root, ".sandbox/services.yaml");
+    const file = path.join(root, ".werkmeister/services.yaml");
     const first = fs.readFileSync(file, "utf8");
     expect(first).toContain("internal_port: 8080");
     expect(first).toContain("command: exec npm run dev");
@@ -112,7 +112,7 @@ describe("sandbox detect", () => {
       0,
     );
     expect(resolver).toHaveBeenCalledOnce();
-    expect(fs.readFileSync(path.join(root, ".sandbox/services.yaml"), "utf8")).toContain(
+    expect(fs.readFileSync(path.join(root, ".werkmeister/services.yaml"), "utf8")).toContain(
       "command: cd services/api && exec go run . # inferred by Claude: README dev section",
     );
   });
@@ -125,7 +125,7 @@ describe("sandbox detect", () => {
     expect(await runDetect(args({ yes: true, assist: true }), deps(reposRoot, { resolver }))).toBe(
       0,
     );
-    expect(fs.readFileSync(path.join(root, ".sandbox/services.yaml"), "utf8")).toContain(
+    expect(fs.readFileSync(path.join(root, ".werkmeister/services.yaml"), "utf8")).toContain(
       "# guessed:",
     );
   });
@@ -144,7 +144,7 @@ describe("sandbox detect", () => {
     const warned = events.flatMap((e) => (e.level === "warn" ? [e.msg] : [])).join("\n");
     expect(warned).toContain("npm install -g @anthropic-ai/claude-agent-sdk");
     expect(warned).not.toContain("Claude pass failed");
-    expect(fs.readFileSync(path.join(root, ".sandbox/services.yaml"), "utf8")).toContain(
+    expect(fs.readFileSync(path.join(root, ".werkmeister/services.yaml"), "utf8")).toContain(
       "# guessed:",
     );
   });
@@ -170,6 +170,6 @@ describe("sandbox detect", () => {
   it("a repo with nothing to detect exits 1 and writes nothing", async () => {
     const { root, reposRoot } = repo({ "README.md": "hi" });
     expect(await runDetect(args({ yes: true }), deps(reposRoot))).toBe(1);
-    expect(fs.existsSync(path.join(root, ".sandbox"))).toBe(false);
+    expect(fs.existsSync(path.join(root, ".werkmeister"))).toBe(false);
   });
 });

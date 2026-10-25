@@ -1,6 +1,6 @@
 /**
  * The issue-tracker registry: which tracker this machine files work and bugs
- * against — `overrides.issue_tracker` in ~/.sandbox/config.yaml, set by
+ * against — `overrides.issue_tracker` in ~/.werkmeister/config.yaml, set by
  * `sandbox setup` — and the one door every issue read and write goes through.
  * Callers ask `issueTracker()` and never name a tracker.
  *

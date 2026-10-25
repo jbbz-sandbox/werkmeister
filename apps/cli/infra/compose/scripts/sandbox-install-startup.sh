@@ -7,7 +7,7 @@
 # re-up of the same feature costs nothing.
 #
 # `install` is an argument, not the default, because this file comes from the
-# main checkout while the command comes from ~/.sandbox/services.yaml: until
+# main checkout while the command comes from ~/.werkmeister/services.yaml: until
 # `werkmeister registry` resyncs, the old `npm ci && npm run build && sh
 # startup.sh` still calls this with no argument and must not install twice.
 #
@@ -27,7 +27,7 @@ if [ ! -x "$TOOLS/bin/pnpm" ]; then
 fi
 
 # Hold one of SANDBOX_INSTALL_SLOTS host-wide lock files (the bind-mounted
-# ~/.sandbox/locks) so workspaces starting together don't all install at once.
+# ~/.werkmeister/locks) so workspaces starting together don't all install at once.
 # The slot is held on fd 9 until the install finishes.
 take_install_slot() {
   slots=${SANDBOX_INSTALL_SLOTS:-2}

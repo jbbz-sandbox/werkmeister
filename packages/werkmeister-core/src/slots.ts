@@ -14,11 +14,11 @@
  * ownership. `allocateSlot` scans live container labels to find a free
  * slot; the next `docker compose up` stamps the slot label onto the new
  * containers, making that allocation authoritative. There is no separate
- * registry file -- `~/.sandbox/slots.json` was removed in the labels
+ * registry file -- `~/.werkmeister/slots.json` was removed in the labels
  * refactor.
  *
  * Allocation is protected by an advisory file lock at
- * `~/.sandbox/locks/allocate.lock` so concurrent `sandbox up` runs
+ * `~/.werkmeister/locks/allocate.lock` so concurrent `sandbox up` runs
  * cannot race onto the same slot between the scan and the
  * `docker compose up` that stamps the label.
  */
@@ -412,7 +412,7 @@ export async function featureServices(feature: string): Promise<FeatureServices>
 // ---------------------------------------------------------------------------
 
 /**
- * Remove `~/.sandbox/slots.json` if present.
+ * Remove `~/.werkmeister/slots.json` if present.
  *
  * Idempotent: second invocation is a no-op because the file is gone.
  * Any features in slots.json that have no labeled containers are logged
@@ -439,12 +439,13 @@ export async function migrateSlotsJson(): Promise<void> {
   );
   if (orphans.length > 0) {
     warn(
-      `~/.sandbox/slots.json had features with no labeled containers: ` + `${orphans.join(", ")}`,
+      `~/.werkmeister/slots.json had features with no labeled containers: ` +
+        `${orphans.join(", ")}`,
     );
     warn("These are now forgotten — restart them with 'sandbox up' to re-register.");
   }
 
-  info("Migrating: removing legacy ~/.sandbox/slots.json (labels are now authoritative)");
+  info("Migrating: removing legacy ~/.werkmeister/slots.json (labels are now authoritative)");
   try {
     fs.unlinkSync(legacy);
   } catch (exc) {

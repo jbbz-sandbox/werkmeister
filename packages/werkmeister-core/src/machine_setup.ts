@@ -4,8 +4,8 @@
  * The prerequisites of the sandbox system live outside this repo and outside
  * any workspace, on the developer's machine:
  *
- *   * the **registry configs** in `~/.sandbox` — services.yaml GENERATED from
- *     every `<repo>/.sandbox/services.yaml` under repos_root (registry_sync.ts),
+ *   * the **registry configs** in `~/.werkmeister` — services.yaml GENERATED from
+ *     every `<repo>/.werkmeister/services.yaml` under repos_root (registry_sync.ts),
  *     and ports.yaml, model-pricing.yaml, services.local.yaml, secrets.env
  *     seeded from lib/scaffold once and never overwritten;
  *   * the **ingress certificate** covering every hostname the registry routes,
@@ -24,7 +24,7 @@
  *     (plain-directory fallback with a warning when it is missing). Which repo
  *     that is comes from `overrides.workspace_repo`, defaulting to the
  *     authenticated GitHub user's own `<user>/sandbox-workspace`;
- *   * the **Jira API token** in the `jira:` section of ~/.sandbox/config.yaml
+ *   * the **Jira API token** in the `jira:` section of ~/.werkmeister/config.yaml
  *     (OPTIONAL) — the werkmeister-dashboard server's fast path for Jira reads;
  *     absent means it falls back to the claude CLI, so a missing/unfilled token
  *     is reported ok with guidance, and only a filled-but-rejected token fails
@@ -651,7 +651,7 @@ export function syncPathDirs(
   return steps;
 }
 
-// --- Registry configs (~/.sandbox/{services,ports,model-pricing}.yaml) ------
+// --- Registry configs (~/.werkmeister/{services,ports,model-pricing}.yaml) ------
 
 /** Where the registry files used to live, relative to the repo root. */
 export const LEGACY_CONFIG_DIR = path.join("infra", "config");
@@ -669,7 +669,7 @@ export interface RegistryOptions {
  * generated from repo fragments by syncRegistry, after the clone steps.
  *
  * Three outcomes per file, all idempotent:
- *   * present  — already in ~/.sandbox, left untouched (hand edits are safe);
+ *   * present  — already in ~/.werkmeister, left untouched (hand edits are safe);
  *   * migrated — found under the checkout's legacy `infra/config/`, COPIED up
  *     (copied, not moved: an old checkout may still be on a branch that needs
  *     the file, and a copy is the reversible choice);
@@ -870,7 +870,7 @@ export function syncIngressCerts(
   return [{ label, ok: true, detail }];
 }
 
-// --- Jira API token (optional fast path; `jira:` in ~/.sandbox/config.yaml) --
+// --- Jira API token (optional fast path; `jira:` in ~/.werkmeister/config.yaml) --
 
 export const JIRA_TOKEN_URL = "https://id.atlassian.com/manage-profile/security/api-tokens";
 
@@ -970,10 +970,10 @@ export async function syncJiraToken(
   ];
 }
 
-/** Schema file in `<cli>/infra/schemas/` → the glob it validates. */
-const EDITOR_SCHEMAS: Record<string, string> = {
-  "services-fragment.schema.json": "**/.sandbox/services.yaml",
-  "workspace.schema.json": "**/.sandbox/workspace.yml",
+/** Schema file in `<cli>/infra/schemas/` → the globs it validates, new dot-dir name first. */
+const EDITOR_SCHEMAS: Record<string, string[]> = {
+  "services-fragment.schema.json": ["**/.werkmeister/services.yaml", "**/.sandbox/services.yaml"],
+  "workspace.schema.json": ["**/.werkmeister/workspace.yml", "**/.sandbox/workspace.yml"],
 };
 
 /** VS Code's user settings.json (stable channel only). */
@@ -988,8 +988,8 @@ export interface EditorSchemaState {
   present: boolean;
   /** Unparsable settings.json; its parse error. */
   error?: string;
-  /** `yaml.schemas` keys to set (schema path → glob) and to drop (stale paths). */
-  set: Record<string, string>;
+  /** `yaml.schemas` keys to set (schema path → globs) and to drop (stale paths). */
+  set: Record<string, string[]>;
   drop: string[];
   /** Raw settings text the edits apply to. */
   text: string;
@@ -1017,12 +1017,12 @@ export function editorSchemaState(
     return state;
   }
   const mapped: Record<string, unknown> = data?.["yaml.schemas"] ?? {};
-  const covers = (v: unknown, glob: string) => v === glob || (Array.isArray(v) && v.includes(glob));
-  for (const [file, glob] of Object.entries(EDITOR_SCHEMAS)) {
+  const listed = (v: unknown, glob: string) => v === glob || (Array.isArray(v) && v.includes(glob));
+  for (const [file, globs] of Object.entries(EDITOR_SCHEMAS)) {
     const want = path.join(schemasDir, file);
-    if (!covers(mapped[want], glob)) state.set[want] = glob;
+    if (!globs.every((g) => listed(mapped[want], g))) state.set[want] = globs;
     for (const [key, v] of Object.entries(mapped)) {
-      if (key !== want && covers(v, glob)) state.drop.push(key);
+      if (key !== want && globs.some((g) => listed(v, g))) state.drop.push(key);
     }
   }
   return state;
@@ -1072,8 +1072,8 @@ export function syncEditorSchemas(
   const fmt = { formattingOptions: { insertSpaces: true, tabSize: 4 } };
   for (const key of state.drop)
     text = applyEdits(text, modify(text, ["yaml.schemas", key], undefined, fmt));
-  for (const [key, glob] of Object.entries(state.set)) {
-    text = applyEdits(text, modify(text, ["yaml.schemas", key], glob, fmt));
+  for (const [key, globs] of Object.entries(state.set)) {
+    text = applyEdits(text, modify(text, ["yaml.schemas", key], globs, fmt));
   }
   fs.writeFileSync(settingsPath, text);
   return [{ label, ok: true, optional: true, detail: `mapped in ${settingsPath}` }];
@@ -1172,7 +1172,7 @@ export function syncClaudeStandardsDir(
       "additionalDirectories"
     ],
   );
-  // ponytail: add-only — a grant left by an old standards_dir stays; record the granted path under ~/.sandbox if stale grants ever matter.
+  // ponytail: add-only — a grant left by an old standards_dir stays; record the granted path under ~/.werkmeister if stale grants ever matter.
   const edits = hasList
     ? modify(state.text, ["permissions", "additionalDirectories", -1], dir, {
         ...fmt,

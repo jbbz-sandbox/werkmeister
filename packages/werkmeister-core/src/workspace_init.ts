@@ -225,7 +225,7 @@ const _WORKSPACE_CONFIG_HEADER =
   "#          Optional `standards_override: {add: [...], remove: [...]}` tunes\n" +
   "#          the CLAUDE.md Standards routing block (docs/jit-context-system.md).\n" +
   "#          To register a brand-new service, edit\n" +
-  "#          ~/.sandbox/services.yaml instead.\n" +
+  "#          ~/.werkmeister/services.yaml instead.\n" +
   "# Format:  YAML — line comments (`#`) are supported. The loader also\n" +
   "#          accepts legacy JSONC and JSON for back-compat.\n";
 
@@ -467,7 +467,7 @@ export function findWorkspaceRoot(): string {
   throw new WorkspaceRootError(
     `${Colors.RED}[err]  Not inside a sandbox workspace (checked: ` +
       `${rootsDisplay}) and no parent \`.git\` directory found.\n` +
-      "       The workspaces root comes from ~/.sandbox/config.yaml — run " +
+      "       The workspaces root comes from ~/.werkmeister/config.yaml — run " +
       "`sandbox config` to set it (or `sandbox config --check` to verify). " +
       `See docs/known-issues.md for details.${Colors.RESET}`,
   );

@@ -236,7 +236,7 @@ function registerLifecycleTools(server: McpServer): void {
       title: "Generate a repo's service-registry fragment",
       description:
         "Scan a repo (package manifests, Dockerfiles, compose, Helm, k8s, kustomize) and propose its " +
-        ".sandbox/services.yaml. Returns the report, the proposed YAML and the questions the scan could " +
+        ".werkmeister/services.yaml. Returns the report, the proposed YAML and the questions the scan could " +
         "not settle. Writes only with write: true. Answer questions by passing `answers` " +
         "({ item: <question id>, value, reason, files_read }); answers can only fill those questions.",
       inputSchema: {

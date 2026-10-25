@@ -93,7 +93,12 @@ test("a new fragment: header, every section, guessed comments, the env rewrite",
 test("re-running after writing changes nothing", () => {
   const root = fixture(DEMO, "demo-services");
   const first = renderFragment(planFragment(root, opts(root)));
-  mkdirSync(path.join(root, ".sandbox"), { recursive: true });
+  assert.equal(
+    first.path,
+    path.join(root, ".werkmeister", "services.yaml"),
+    "a new fragment uses the new name",
+  );
+  mkdirSync(path.dirname(first.path), { recursive: true });
   writeFileSync(first.path, first.yaml);
   const second = renderFragment(planFragment(root, opts(root)));
   assert.equal(second.changed, false);
@@ -131,6 +136,11 @@ test("gap-filling keeps anchors, flow sequences, comments and hand values byte f
   const root = fixture({ ...DEMO, ".sandbox/services.yaml": existing }, "demo-services");
   const plan = planFragment(root, opts(root));
   const r = renderFragment(plan);
+  assert.equal(
+    r.path,
+    path.join(root, ".sandbox", "services.yaml"),
+    "a legacy fragment is updated in place",
+  );
   assertKeptAllBytes(existing, r.yaml);
   const doc = parse(r.yaml);
   assert.equal(doc.services.backend.port_offset, 7);

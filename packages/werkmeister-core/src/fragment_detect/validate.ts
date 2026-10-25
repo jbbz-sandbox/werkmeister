@@ -6,7 +6,7 @@ import * as path from "node:path";
 import AjvModule from "ajv";
 import { parse as parseYaml } from "yaml";
 
-import { sandboxRoot } from "../config.js";
+import { sandboxHome, sandboxRoot } from "../config.js";
 import { discoverFragments, mergeRegistry, RegistryError } from "../registry_sync.js";
 import type { Plan } from "./plan.js";
 import type { Rendered } from "./render.js";
@@ -44,7 +44,12 @@ export function validateFragment(
     mergeRegistry([...others, { repo: plan.repo, path: plan.fragmentPath, doc }], {
       defaults: {},
       local: {},
-      paths: { home: os.homedir(), repos_root: reposRoot, workspaces_root: reposRoot },
+      paths: {
+        home: os.homedir(),
+        repos_root: reposRoot,
+        workspaces_root: reposRoot,
+        werkmeister_home: sandboxHome(),
+      },
     });
   } catch (e) {
     if (!(e instanceof RegistryError)) throw e;

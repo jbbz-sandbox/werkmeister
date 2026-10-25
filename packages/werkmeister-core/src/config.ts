@@ -62,7 +62,7 @@ export function configPath(): string {
   return override ? expandUser(override) : path.join(dotDir(os.homedir()), "config.yaml");
 }
 
-/** The `~/.sandbox` directory, derived from {@link configPath} so both relocate together. */
+/** The `~/.werkmeister` directory, derived from {@link configPath} so both relocate together. */
 export function sandboxHome(): string {
   return path.dirname(configPath());
 }
@@ -72,7 +72,7 @@ function isDict(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * `~/.sandbox/config.yaml`. Only the sections the code reads are typed; like
+ * `~/.werkmeister/config.yaml`. Only the sections the code reads are typed; like
  * {@link ServiceEntry}, this is a claim about the YAML, not a check.
  */
 export interface GlobalConfig {
@@ -99,7 +99,7 @@ export function loadConfig(): GlobalConfig {
 
 /**
  * Resolve one registry file: `overrides.<overrideKey>` → `$*_<envName>` →
- * `~/.sandbox/<basename>`.
+ * `~/.werkmeister/<basename>`.
  *
  * The YAML override wins over the env var because env.sh is *generated from*
  * the YAML — when the two disagree, the export is the stale one. The env var
@@ -118,7 +118,7 @@ function registryPath(overrideKey: string, envName: string, basename: string): s
   return path.join(sandboxHome(), basename);
 }
 
-/** Path to the service registry (`overrides.services_yaml` → `$SANDBOX_SERVICES_YAML` → ~/.sandbox/services.yaml). */
+/** Path to the service registry (`overrides.services_yaml` → `$SANDBOX_SERVICES_YAML` → ~/.werkmeister/services.yaml). */
 export function servicesYamlPath(): string {
   return registryPath("services_yaml", "SERVICES_YAML", "services.yaml");
 }
@@ -128,12 +128,12 @@ export function servicesLocalYamlPath(): string {
   return path.join(path.dirname(servicesYamlPath()), "services.local.yaml");
 }
 
-/** Path to the port allocation map (`overrides.ports_yaml` → `$SANDBOX_PORTS_YAML` → ~/.sandbox/ports.yaml). */
+/** Path to the port allocation map (`overrides.ports_yaml` → `$SANDBOX_PORTS_YAML` → ~/.werkmeister/ports.yaml). */
 export function portsYamlPath(): string {
   return registryPath("ports_yaml", "PORTS_YAML", "ports.yaml");
 }
 
-/** Path to the model pricing table (`overrides.model_pricing_yaml` → `$SANDBOX_MODEL_PRICING_YAML` → ~/.sandbox/model-pricing.yaml). */
+/** Path to the model pricing table (`overrides.model_pricing_yaml` → `$SANDBOX_MODEL_PRICING_YAML` → ~/.werkmeister/model-pricing.yaml). */
 export function modelPricingYamlPath(): string {
   return registryPath("model_pricing_yaml", "MODEL_PRICING_YAML", "model-pricing.yaml");
 }
@@ -250,7 +250,7 @@ function asDict(value: unknown): Record<string, string> {
  * Directory holding the canonical source-repo checkouts (and the
  * hand-authored top-level CLAUDE.md context file).
  *
- * Reads `paths.repos_root` from the global config (`~/.sandbox/config.yaml`
+ * Reads `paths.repos_root` from the global config (`~/.werkmeister/config.yaml`
  * — the single source of truth), falling back to `~/workspace`. The
  * `SANDBOX_REPOS_ROOT` env var is a derived export for external processes and
  * is not read at runtime.
@@ -317,7 +317,7 @@ export function detectWorkspaceFromCwd(): string | null {
  * Resolution order:
  *
  * 1. `--workspace` flag (explicit path)
- * 2. `paths.workspaces_root` from the global config (`~/.sandbox/config.yaml`)
+ * 2. `paths.workspaces_root` from the global config (`~/.werkmeister/config.yaml`)
  * 3. Auto-detect from cwd (traverse up to nearest `.git`, return parent)
  * 4. Fallback: `~/workspace`
  */
@@ -379,7 +379,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
     if (required) {
       const msg =
         `Required config file not found: ${filePath}\n` +
-        "Run `sandbox setup` to seed the machine-global config in ~/.sandbox.";
+        "Run `sandbox setup` to seed the machine-global config in ~/.werkmeister.";
       error(msg);
       throw new Error(msg);
     }
@@ -391,7 +391,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
     if (required) {
       const msg =
         `Required config file is empty or invalid: ${filePath}\n` +
-        "Run `sandbox setup` to seed the machine-global config in ~/.sandbox.";
+        "Run `sandbox setup` to seed the machine-global config in ~/.werkmeister.";
       error(msg);
       throw new Error(msg);
     }
@@ -543,13 +543,13 @@ export type ArchetypeRegistry = Record<string, Archetype>;
 export type CacheRegistry = Record<string, CacheEntry>;
 export type ReposConfig = Record<string, RepoEntry>;
 
-/** Read `~/.sandbox/services.yaml` (whole document). Required — throws when absent. */
+/** Read `~/.werkmeister/services.yaml` (whole document). Required — throws when absent. */
 function servicesDoc({ required = true } = {}): Record<string, unknown> {
   return loadYaml(servicesYamlPath(), { required });
 }
 
 /**
- * Load the service registry from ~/.sandbox/services.yaml.
+ * Load the service registry from ~/.werkmeister/services.yaml.
  *
  * services.yaml is a REQUIRED config: a missing or empty file throws
  * instead of silently proceeding with `{}` (DEBT-01 D-02/D-04) — a missing
@@ -606,7 +606,7 @@ export function loadInfrastructure(): ServicesConfig {
 }
 
 /**
- * Load port allocation config from ~/.sandbox/ports.yaml.
+ * Load port allocation config from ~/.werkmeister/ports.yaml.
  *
  * ports.yaml is a REQUIRED config: a missing or empty file throws instead
  * of silently proceeding with `{}` (DEBT-01 D-02/D-04) — slot allocation
@@ -617,7 +617,7 @@ export function loadPorts(): PortsConfig {
 }
 
 /**
- * Load the repo→services mapping from ~/.sandbox/services.yaml.
+ * Load the repo→services mapping from ~/.werkmeister/services.yaml.
  *
  * Returns the `repos:` section, which maps each repo name to its list of
  * services and optional path_mappings.  Returns an empty dict if unavailable.
@@ -761,7 +761,7 @@ export function sandboxRoot(): string {
 /**
  * The `infra/` dir holding compose files, templates, the proxy UI, schemas and
  * skills. All versioned code — the machine-specific registry files live in
- * `~/.sandbox` instead, reached via {@link servicesYamlPath} and friends, and
+ * `~/.werkmeister` instead, reached via {@link servicesYamlPath} and friends, and
  * everything the CLI *generates* for the shared infra lives under
  * {@link stateInfraRoot}. Nothing writes here at runtime.
  */
@@ -770,12 +770,12 @@ export function infraRoot(): string {
 }
 
 /**
- * `~/.sandbox/infra`: the generated runtime files for the shared infra — the
+ * `~/.werkmeister/infra`: the generated runtime files for the shared infra — the
  * Caddyfile, features.json, the pinned kubeconfig, the forwards table and the
  * k8s-forwards compose override. Read-only sibling: {@link infraRoot}.
  *
  * Derived from {@link sandboxHome} so `SANDBOX_CONFIG_FILE` relocates it with
- * the rest of `~/.sandbox`. Always absolute: Compose resolves a relative
+ * the rest of `~/.werkmeister`. Always absolute: Compose resolves a relative
  * `${SANDBOX_STATE_DIR}` against the compose file's directory, which is the
  * package — exactly where these files must not go.
  */

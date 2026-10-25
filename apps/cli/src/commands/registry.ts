@@ -1,8 +1,8 @@
 /**
  * sandbox registry [sync] [--check]
  *
- * Regenerate ~/.sandbox/services.yaml from every <repo>/.sandbox/services.yaml
- * under paths.repos_root, merged under ~/.sandbox/services.local.yaml. The
+ * Regenerate ~/.werkmeister/services.yaml from every <repo>/.werkmeister/services.yaml
+ * under paths.repos_root, merged under ~/.werkmeister/services.local.yaml. The
  * same step `sandbox setup` runs, on its own: for the moment you clone a new
  * repo and want it registered without a full setup pass.
  *

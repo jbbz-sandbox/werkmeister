@@ -26,7 +26,7 @@ description: "Begin the test phase in a sandbox workspace. Use when running or w
   section of the same file.
 - **Fallback** (a workspace generated before tester agents existed, or a service with
   no tester): run the tests inline under the same rules — the test command is the
-  service's `test:` in `~/.sandbox/services.yaml` (or its archetype's) or the repo's
+  service's `test:` in `~/.werkmeister/services.yaml` (or its archetype's) or the repo's
   `package.json`; edit only
   test files; never "fix" application source in this phase.
 - **Record the exercise evidence** the PR gate reads: write `.sandbox/notes/exercise.md`

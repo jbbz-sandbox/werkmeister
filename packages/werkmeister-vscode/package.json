@@ -369,12 +369,12 @@
         "sandbox.binPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Absolute path to the `sandbox` wrapper script. Overrides everything, including `#sandbox.root#`. Leave empty to resolve from the environment or `~/.sandbox/config.yaml`."
+          "markdownDescription": "Absolute path to the `sandbox` wrapper script. Overrides everything, including `#sandbox.root#`. Leave empty to resolve from the environment or `~/.werkmeister/config.yaml`."
         },
         "sandbox.root": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Absolute path to the developer-sandbox checkout directory that contains the `sandbox` wrapper. Leave empty to resolve from the environment or `~/.sandbox/config.yaml`."
+          "markdownDescription": "Absolute path to the developer-sandbox checkout directory that contains the `sandbox` wrapper. Leave empty to resolve from the environment or `~/.werkmeister/config.yaml`."
         }
       }
     }
