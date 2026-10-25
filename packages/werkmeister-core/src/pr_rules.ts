@@ -71,6 +71,6 @@ Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out
 | \`sandbox pr adopt <pr-number\\|url> [repo]\` | the fix landed outside this workspace: write the PR file from that PR, then record its status |
 | \`sandbox pr adopt --no-pr "<reason>" [repo]\` | the fix is already on base with no PR: write a \`closed\` PR file with the reason |
 | \`sandbox close-out\` | after ship: move the issue to done if shipping didn't, write \`closeout.md\`, remove the workspace, delete merged branches |
-| \`sandbox close-out --abandon "<reason>"\` | give up: record the reason, comment it on the issue, push and keep every branch, remove the workspace |
+| \`sandbox close-out --abandon "<reason>"\` | give up: record the reason, comment it on the issue, push and keep every branch with commits of its own, remove the workspace |
 `;
 }
