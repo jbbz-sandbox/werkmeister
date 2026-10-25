@@ -90,20 +90,20 @@ test("applyCaches: volume and host mounts, service env wins, setup gets the unio
   const before = structuredClone([services, setups]);
   const [svc, set] = applyCaches(services, setups, {}, CACHES, path.join(tmp, "ws"));
 
-  assert.deepEqual(svc.a.extra_volumes, ["/var/cache/h:/h", "^sandbox-turbo:/turbo-cache"]);
+  assert.deepEqual(svc.a.extra_volumes, ["/var/cache/h:/h", "^werkmeister-turbo:/turbo-cache"]);
   assert.equal(
     svc.a.environment.TURBO_CACHE_DIR,
     "/mine",
     "the service's own env beats the cache's",
   );
-  assert.deepEqual(svc.b.extra_volumes, ["^sandbox-pnpm-store:/pnpm-store"]);
+  assert.deepEqual(svc.b.extra_volumes, ["^werkmeister-pnpm-store:/pnpm-store"]);
   assert.equal(svc.b.environment.npm_config_store_dir, "/pnpm-store");
   assert.equal(svc.c, services.c, "no caches: entry passes through");
   assert.deepEqual(set.inst.extra_volumes, [
     "tools:/t",
     "/var/cache/h:/h",
-    "^sandbox-pnpm-store:/pnpm-store",
-    "^sandbox-turbo:/turbo-cache",
+    "^werkmeister-pnpm-store:/pnpm-store",
+    "^werkmeister-turbo:/turbo-cache",
   ]);
   assert.equal(set.other, setups.other);
   assert.deepEqual([services, setups], before);
@@ -162,15 +162,15 @@ test("a new tool is a registry entry: yarn and cargo caches reach the compose wi
   await withSandboxHome(
     async () => {
       const doc = renderCompose("alpha", ws);
-      assert.deepEqual(doc.volumes["sandbox-yarn-cache"], {
-        name: "sandbox-yarn-cache",
+      assert.deepEqual(doc.volumes["werkmeister-yarn-cache"], {
+        name: "werkmeister-yarn-cache",
         external: true,
       });
       assert.deepEqual(doc.volumes["cargo-home"], { name: "cargo-home", external: true });
-      assert.equal(doc.volumes["sandbox-unused"], undefined, "an undetected cache is not declared");
+      assert.equal(doc.volumes["werkmeister-unused"], undefined, "an undetected cache is not declared");
       for (const svc of ["backend", "demo-install"]) {
         const s = doc.services[svc];
-        assert.ok(s.volumes.includes("sandbox-yarn-cache:/yarn-cache"), svc);
+        assert.ok(s.volumes.includes("werkmeister-yarn-cache:/yarn-cache"), svc);
         assert.ok(s.volumes.includes("cargo-home:/cargo-home"), svc);
         assert.equal(envOf(s).YARN_CACHE_FOLDER, "/yarn-cache", svc);
         assert.equal(envOf(s).CARGO_HOME, "/cargo-home", svc);
@@ -186,15 +186,15 @@ test("the built-in pnpm-store and turbo caches attach by lockfile alone", async 
   await withSandboxHome(
     async () => {
       const doc = renderCompose("alpha", ws);
-      assert.deepEqual(doc.volumes["sandbox-pnpm-store"], {
-        name: "sandbox-pnpm-store",
+      assert.deepEqual(doc.volumes["werkmeister-pnpm-store"], {
+        name: "werkmeister-pnpm-store",
         external: true,
       });
-      assert.deepEqual(doc.volumes["sandbox-turbo"], { name: "sandbox-turbo", external: true });
+      assert.deepEqual(doc.volumes["werkmeister-turbo"], { name: "werkmeister-turbo", external: true });
       for (const svc of ["backend", "demo-install"]) {
         const s = doc.services[svc];
-        assert.ok(s.volumes.includes("sandbox-pnpm-store:/pnpm-store"), svc);
-        assert.ok(s.volumes.includes("sandbox-turbo:/turbo-cache"), svc);
+        assert.ok(s.volumes.includes("werkmeister-pnpm-store:/pnpm-store"), svc);
+        assert.ok(s.volumes.includes("werkmeister-turbo:/turbo-cache"), svc);
         assert.equal(envOf(s).npm_config_store_dir, "/pnpm-store", svc);
         assert.equal(envOf(s).TURBO_CACHE_DIR, "/turbo-cache", svc);
       }
@@ -209,30 +209,43 @@ test("cacheSnapshots: volume rows from docker df, a missing volume, a host dir s
   dirWith("hostcache/sub");
   fs.writeFileSync(path.join(hostDir, "sub", "b"), "678");
   const caches = { a: { path: "/a" }, b: { path: "/b" }, h: { path: "/h", host: hostDir } };
-  const usage = new Map([["sandbox-a", { size: 2048, createdAt: "2026-10-01T00:00:00Z" }]]);
+  const usage = new Map([
+    ["werkmeister-a", { size: 2048, createdAt: "2026-10-01T00:00:00Z" }],
+    // SW-93: the pre-rename default, left over on a machine that had it.
+    ["sandbox-a", { size: 4096, createdAt: "2026-09-01T00:00:00Z" }],
+  ]);
   const rows = await cacheSnapshots(caches, usage);
   assert.deepEqual(rows[0], {
     name: "a",
     kind: "volume",
-    source: "sandbox-a",
+    source: "werkmeister-a",
     exists: true,
     size_bytes: 2048,
     created_at: "2026-10-01T00:00:00Z",
   });
   assert.deepEqual(rows[1], {
+    name: "a",
+    kind: "volume",
+    source: "sandbox-a",
+    exists: true,
+    size_bytes: 4096,
+    created_at: "2026-09-01T00:00:00Z",
+  });
+  assert.deepEqual(rows[2], {
     name: "b",
     kind: "volume",
-    source: "sandbox-b",
+    source: "werkmeister-b",
     exists: false,
     size_bytes: null,
     created_at: null,
   });
-  assert.equal(rows[2].kind, "host");
-  assert.equal(rows[2].size_bytes, 8);
+  assert.equal(rows[3].kind, "host");
+  assert.equal(rows[3].size_bytes, 8);
+  assert.equal(rows.length, 4);
 });
 
 /** pruneCaches with every Docker read faked; `ran` collects each `docker run` argv. */
-function fakeDeps(caches, { exists = true, busy = [], stdout = "" } = {}) {
+function fakeDeps(caches, { exists = true, busy = [], stdout = "", leftover = [] } = {}) {
   const ran = [];
   return {
     ran,
@@ -241,14 +254,19 @@ function fakeDeps(caches, { exists = true, busy = [], stdout = "" } = {}) {
       snapshots: async (c) =>
         Object.keys(c)
           .sort()
-          .map((name) => ({
-            name,
-            kind: c[name].host ? "host" : "volume",
-            source: c[name].host ?? `sandbox-${name}`,
-            exists,
-            size_bytes: 1000,
-            created_at: null,
-          })),
+          .flatMap((name) =>
+            [
+              c[name].host ?? `werkmeister-${name}`,
+              ...(leftover.includes(name) ? [`sandbox-${name}`] : []),
+            ].map((source) => ({
+              name,
+              kind: c[name].host ? "host" : "volume",
+              source,
+              exists,
+              size_bytes: 1000,
+              created_at: null,
+            })),
+          ),
       busy: async () => busy,
       run: (argv) => {
         ran.push(argv);
@@ -286,7 +304,7 @@ test("pruneCaches: max_age by -mmin, prune with the cache env, no rule skipped",
     "run",
     "--rm",
     "-v",
-    "sandbox-cargo:/cargo",
+    "werkmeister-cargo:/cargo",
     "-e",
     "CARGO_HOME=/cargo",
     "rust:1",
@@ -299,12 +317,28 @@ test("pruneCaches: max_age by -mmin, prune with the cache env, no rule skipped",
     "run",
     "--rm",
     "-v",
-    "sandbox-turbo:/turbo-cache",
+    "werkmeister-turbo:/turbo-cache",
     "node:22",
   ]);
   assert.equal(
     ran[1].at(-1),
     "find '/turbo-cache' -mindepth 1 -type f -mmin +20160 -delete && find '/turbo-cache' -mindepth 1 -type d -empty -delete",
+  );
+});
+
+test("pruneCaches: a leftover sandbox-<key> volume (SW-93) is pruned too, under its own name", async () => {
+  const { ran, deps } = fakeDeps(RULES, { leftover: ["turbo"] });
+  const results = await pruneCaches({ name: "turbo" }, deps);
+  assert.deepEqual(
+    results.map((r) => [r.name, r.action, r.ok]),
+    [
+      ["turbo", "max_age", true],
+      ["turbo (sandbox-turbo)", "max_age", true],
+    ],
+  );
+  assert.deepEqual(
+    ran.map((argv) => argv[4]),
+    ["werkmeister-turbo:/turbo-cache", "sandbox-turbo:/turbo-cache"],
   );
 });
 

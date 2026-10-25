@@ -142,6 +142,28 @@ test("stopIdle: a failed stop is reported and not ok; no containers and no docke
   });
 });
 
+test("stopIdle: finds containers under either label set (SW-93), inspecting each once", async () => {
+  const calls = [];
+  const run = (cmd) => {
+    calls.push(cmd);
+    if (cmd[1] === "ps") {
+      const stdout = {
+        "label=com.werkmeister.feature": "new\nboth",
+        "label=com.sandbox.local.feature": "old\nboth",
+      }[cmd[4]];
+      return { status: 0, stdout, stderr: "" };
+    }
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  await stopIdle(30, { now: NOW, run, sessionsDir: sessionsDir([]), stop: async () => {} });
+  const inspect = calls.find((c) => c[1] === "inspect");
+  assert.deepEqual(inspect.slice(4), ["new", "both", "old"]);
+  assert.match(
+    inspect[3],
+    /or \(index \.Config\.Labels "com\.werkmeister\.feature"\) \(index \.Config\.Labels "com\.sandbox\.local\.feature"\)/,
+  );
+});
+
 test("idleStopMinutes: 30 by default, overrides.idle_stop_minutes when a whole number ≥ 0", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "idle-config-"));
   const prev = process.env.SANDBOX_CONFIG_FILE;

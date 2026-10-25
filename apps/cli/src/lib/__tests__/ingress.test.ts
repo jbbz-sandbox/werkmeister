@@ -9,6 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cookieDomain } from "werkmeister-core/browser";
 import { featureUrl, ingressHostnames, loadFeatureRouters } from "werkmeister-core/feature_routing";
 import { INGRESS_DEFAULTS, loadIngress } from "werkmeister-core/global_config";
 import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
@@ -30,6 +31,20 @@ afterEach(() => {
 describe("loadIngress", () => {
   it("falls back to the built-in domains when no config exists", () => {
     expect(loadIngress()).toEqual(INGRESS_DEFAULTS);
+    // SW-93: off sandbox.com, which belongs to someone else.
+    expect(INGRESS_DEFAULTS.local_domain).toBe("local.werkmeister.io");
+    expect(INGRESS_DEFAULTS.remote_domain).toBe("remote.werkmeister.io");
+  });
+
+  it("keeps a machine's configured domains: the new defaults never move one", () => {
+    home.writeConfig({
+      version: 1,
+      ingress: { local_domain: "local.sandbox.com", remote_domain: "remote.sandbox.com" },
+    });
+    expect(loadIngress()).toMatchObject({
+      local_domain: "local.sandbox.com",
+      remote_domain: "remote.sandbox.com",
+    });
   });
 
   it("fills in only the keys the config omits", () => {
@@ -43,6 +58,14 @@ describe("loadIngress", () => {
     home.writeConfig({ version: 1, ingress: { certs_dir: "~/certs" } });
     expect(loadIngress().certs_dir).not.toContain("~");
     expect(loadIngress().certs_dir.endsWith("/certs")).toBe(true);
+  });
+});
+
+describe("cookieDomain", () => {
+  it("covers every host under the configured local domain, defaulting with it", () => {
+    expect(cookieDomain()).toBe(".local.werkmeister.io");
+    home.writeConfig(CUSTOM_DOMAINS);
+    expect(cookieDomain()).toBe(".local.example.test");
   });
 });
 

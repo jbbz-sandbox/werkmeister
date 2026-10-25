@@ -21,7 +21,7 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import {
   badgeScript,
-  COOKIE_DOMAIN,
+  cookieDomain,
   type FeatureWindow,
   featureColor,
   findFreePort,
@@ -160,7 +160,7 @@ export async function launchSafariWindow(
 
     raw("\n");
     info(`Feature : ${feature}`);
-    info(`Cookie  : X-Feature=${feature}  (domain ${COOKIE_DOMAIN})`);
+    info(`Cookie  : X-Feature=${feature}  (domain ${cookieDomain()})`);
     info(`Badge   : ${color}`);
     info(`URL     : ${url}`);
     info("Profile : Safari's normal profile (safaridriver has no throwaway-profile option)");
@@ -178,7 +178,7 @@ export async function launchSafariWindow(
       cookie: {
         name: "X-Feature",
         value: feature,
-        domain: COOKIE_DOMAIN.replace(/^\./, ""),
+        domain: cookieDomain().replace(/^\./, ""),
         path: "/",
         secure: true,
         sameSite: "Lax",

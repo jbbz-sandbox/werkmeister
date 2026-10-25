@@ -39,7 +39,7 @@ Both are required: the header covers Playwright requests; the cookie covers brow
 If the user has not provided a feature name, ask for one. Feature names must:
 - Be lowercase, hyphen-separated (e.g., `add-solutions-panel`, `payment-refactor`)
 - Not already be allocated (collision = already running). Slot ownership lives in
-  the `com.sandbox.local.feature` docker label; `~/.werkmeister/slots.json` is gone.
+  the `com.werkmeister.feature` docker label; `~/.werkmeister/slots.json` is gone.
 
 ### Step 2 — Validate and scaffold
 

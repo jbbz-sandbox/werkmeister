@@ -19,6 +19,7 @@ import * as YAML from "yaml";
 import { candidateServiceNames } from "./archetypes.js";
 import { applyCaches } from "./build_caches.js";
 import { buildSandboxContextMd } from "./claude_md.js";
+import { projectName } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
   type ArchetypeRegistry,
@@ -645,7 +646,7 @@ function renderFeatureCompose(
 
   // ---- Programmatic generation -----------------------------------------
   getPortRange(slot);
-  const networkName = `sandbox-${feature}`;
+  const networkName = projectName(feature);
 
   const compose: {
     name: string;
@@ -653,7 +654,7 @@ function renderFeatureCompose(
     services: Record<string, unknown>;
     volumes?: Record<string, { name: string; external?: boolean }>;
   } = {
-    name: `sandbox-${feature}`,
+    name: projectName(feature),
     networks: {
       [`feature-${feature}`]: {
         name: networkName,
@@ -661,7 +662,7 @@ function renderFeatureCompose(
       },
       "shared-network": {
         external: true,
-        name: "sandbox-shared",
+        name: "werkmeister-shared",
       },
     },
     services: {},
@@ -722,10 +723,10 @@ function renderFeatureCompose(
       },
       container_name: containerOf(feature, svcName),
       labels: {
-        "com.sandbox.local.feature": feature,
-        "com.sandbox.local.slot": String(slot),
-        "com.sandbox.local.service": svcName,
-        "com.sandbox.local.role": "app",
+        "com.werkmeister.feature": feature,
+        "com.werkmeister.slot": String(slot),
+        "com.werkmeister.service": svcName,
+        "com.werkmeister.role": "app",
       },
       ports: [`${hostPort}:${internalPort}`],
       environment,
@@ -1054,7 +1055,7 @@ export function generateFeatureEnv(
     "",
     `SANDBOX_FEATURE=${feature}`,
     `SANDBOX_SLOT=${slot}`,
-    `COMPOSE_PROJECT_NAME=sandbox-${feature}`,
+    `COMPOSE_PROJECT_NAME=${projectName(feature)}`,
     "",
     "# Service URLs",
   ];

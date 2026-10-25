@@ -131,14 +131,14 @@ test("healthOf: earliest running start and its reason, crash loops per service",
 });
 
 test("usageByProject / hostSummary: one sweep summed per project; infra is not a feature", () => {
-  const s = (project, feature, cpuPercent, memMib) => ({
+  const s = (project, feature, cpuPercent, memMib, prefix = "com.sandbox.local") => ({
     name: `${project}-x`,
     cpuPercent,
     memMib,
     memLimitMib: 0,
     labels: {
       "com.docker.compose.project": project,
-      ...(feature ? { "com.sandbox.local.feature": feature } : {}),
+      ...(feature ? { [`${prefix}.feature`]: feature } : {}),
     },
   });
   const stats = [
@@ -146,16 +146,18 @@ test("usageByProject / hostSummary: one sweep summed per project; infra is not a
     s("sandbox-a", "a", 0.02, 300.3),
     s("sandbox-infra", "infra", 50, 64),
     s("other", null, 7, 1),
+    s("werkmeister-b", "b", 1, 10, "com.werkmeister"),
   ];
   assert.deepEqual(usageByProject(stats), {
     "sandbox-a": { cpuPercent: 12.4, memMib: 401 },
     "sandbox-infra": { cpuPercent: 50, memMib: 64 },
     other: { cpuPercent: 7, memMib: 1 },
+    "werkmeister-b": { cpuPercent: 1, memMib: 10 },
   });
   assert.deepEqual(hostSummary(stats, [3.21, 2.86, 2.04], 10), {
     load: [3.2, 2.9, 2],
     cores: 10,
-    featureCpuPercent: 12.4,
+    featureCpuPercent: 13.4,
   });
 });
 

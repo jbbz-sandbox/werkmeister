@@ -35,7 +35,7 @@ function result(over: Partial<UpResult> = {}): UpResult {
     slot: 3,
     portRange: [3300, 3399],
     localServices: ["api", "web"],
-    urls: ["https://web.local.sandbox.com"],
+    urls: ["https://web.local.werkmeister.io"],
     servicePorts: [
       { service: "api", port: 3301 },
       { service: "web", port: 3300 },
@@ -71,7 +71,7 @@ describe("sandbox up", () => {
     // Colour codes sit between the bullet and the name, so match from the name.
     expect(out).toContain("api -> localhost:3301");
     expect(out).toContain("web -> localhost:3300");
-    expect(out).toContain("https://web.local.sandbox.com");
+    expect(out).toContain("https://web.local.werkmeister.io");
     expect(out).toContain("3 (ports 3300-3399)");
   });
 

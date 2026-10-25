@@ -23,6 +23,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import type { RepoEntry, ServiceEntry } from "./config.js";
 import { getReposRoot, servicesLocalYamlPath, servicesYamlPath, workspacesRoot } from "./config.js";
+import { loadIngress } from "./global_config.js";
 import type { Step } from "./machine_setup.js";
 import { REGISTRY_DEFAULTS, renderServicesLocalYaml, seedFile } from "./scaffold.js";
 
@@ -77,6 +78,8 @@ export interface PlaceholderPaths {
   home: string;
   repos_root: string;
   workspaces_root: string;
+  /** The machine's ingress domain, so a fragment needn't hard-code one (SW-93). */
+  local_domain: string;
 }
 
 function isDict(value: unknown): value is YamlMap {
@@ -108,9 +111,9 @@ function readFragment(repo: string, file: string): Fragment {
   return { repo, path: file, doc: isDict(doc) ? doc : {} };
 }
 
-const PLACEHOLDER = /\{\{\s*(home|repos_root|workspaces_root)\s*\}\}/g;
+const PLACEHOLDER = /\{\{\s*(home|repos_root|workspaces_root|local_domain)\s*\}\}/g;
 
-/** Expand `{{home}}`, `{{repos_root}}`, `{{workspaces_root}}` in every string, at any depth. */
+/** Expand `{{home}}`, `{{repos_root}}`, `{{workspaces_root}}`, `{{local_domain}}` in every string, at any depth. */
 export function expandPlaceholders<T>(value: T, paths: PlaceholderPaths): T {
   if (typeof value === "string") {
     return value.replace(PLACEHOLDER, (_m, key: keyof PlaceholderPaths) => paths[key]) as T;
@@ -317,7 +320,12 @@ export interface SyncRegistryOptions {
 }
 
 function placeholderPaths(): PlaceholderPaths {
-  return { home: os.homedir(), repos_root: getReposRoot(), workspaces_root: workspacesRoot() };
+  return {
+    home: os.homedir(),
+    repos_root: getReposRoot(),
+    workspaces_root: workspacesRoot(),
+    local_domain: loadIngress().local_domain,
+  };
 }
 
 function readLocalOverlay(localPath: string): YamlMap {

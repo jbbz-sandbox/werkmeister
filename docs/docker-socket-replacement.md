@@ -57,7 +57,7 @@ the agent session already runs, using the worktree's own build.
 
 Each of the four services keeps only what the compose generator gives every worktree service:
 `/app` (the worktree), the `node_modules` volume, and the worktree's `.git/worktrees/<name>`
-(read-only). The `tools` volume and the tools download in `sandbox-install-startup.sh` go too.
+(read-only). The `tools` volume and the tools download in `werkmeister-install-startup.sh` go too.
 
 ```yaml
   cli:

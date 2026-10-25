@@ -12,7 +12,7 @@ const SERVICES = {
   worker: { repo: "demo", archetype: "node-web" },
 };
 const ARCHETYPES = { "node-web": { standards: ["ui"], test: "npm test" } };
-const ROUTERS = { frontend: { hostname: "frontend.local.sandbox.com" } };
+const ROUTERS = { frontend: { hostname: "frontend.local.werkmeister.io" } };
 
 test("a routed service gets a smoke url, an unrouted one does not", () => {
   const [spec] = buildTesterSpecs(
@@ -24,7 +24,7 @@ test("a routed service gets a smoke url, an unrouted one does not", () => {
     "/",
   );
   const byName = Object.fromEntries(spec.services.map((s) => [s.name, s]));
-  assert.equal(byName.frontend.url, "https://frontend.local.sandbox.com/");
+  assert.equal(byName.frontend.url, "https://frontend.local.werkmeister.io/");
   assert.equal(byName.worker.url, null);
   assert.equal(spec.feature, "test");
 });
@@ -43,7 +43,7 @@ test("the tester body carries the guarded curl and no CLAUDE.md pointer", () => 
   assert.match(body, /docker ps --format '\{\{\.Names\}\}' \| grep -x test-frontend/);
   assert.match(
     body,
-    /curl -sk -b "X-Feature=test" -o \/dev\/null -w "HTTP %\{http_code\}\\n" "https:\/\/frontend\.local\.sandbox\.com\/"/,
+    /curl -sk -b "X-Feature=test" -o \/dev\/null -w "HTTP %\{http_code\}\\n" "https:\/\/frontend\.local\.werkmeister\.io\/"/,
   );
   assert.doesNotMatch(body, /read CLAUDE\.md first/);
   assert.match(body, /run from `demo\/`: `npm test`/, "the unit-test lines are unchanged");

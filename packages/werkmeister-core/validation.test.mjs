@@ -119,10 +119,10 @@ test("a URL-addressed candidate brings back health checks and routing, scoped to
       ]);
       assert.match(out, /\| `web` \| demo \| `apps\/web` \| `npm test` \| run the tests \|/);
       assert.match(out, /## Quick Health Checks/);
-      assert.match(out, /web\.local\.sandbox\.com/);
+      assert.match(out, /web\.local\.werkmeister\.io/);
       assert.doesNotMatch(
         out,
-        /elsewhere\.local\.sandbox\.com\/"/,
+        /elsewhere\.local\.werkmeister\.io\/"/,
         "health checks skip hosts outside the candidates",
       );
       assert.match(out, /## Proxy Routing/);

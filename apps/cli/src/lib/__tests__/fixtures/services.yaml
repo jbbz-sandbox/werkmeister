@@ -113,13 +113,13 @@ services:
     feature_router:
       # Local docker feature: Caddy terminates this host and reverse-proxies to
       # the running frontend container via its published host port.
-      hostname: frontend.local.sandbox.com
+      hostname: frontend.local.werkmeister.io
       # Remote K8s deployment: the docker Caddy terminates this host too (it
       # resolves to 127.0.0.1 like the local one) and reverse-proxies to the
       # cluster deployment through the k8s-forwards tunnel — NOT cluster DNS,
       # which Caddy cannot resolve from the docker shared network. Static —
       # always routed, independent of sandbox slots/features.
-      remote_hostname: frontend.remote.sandbox.com
+      remote_hostname: frontend.remote.werkmeister.io
       remote_upstream: k8s-frontend:9053
     # frontend fetches http://backend/ server-side; the feature network
     # aliases each service to its name, so this dependency also guarantees

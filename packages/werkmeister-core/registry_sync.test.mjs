@@ -35,6 +35,7 @@ const PATHS = {
   home: "/home/dev",
   repos_root: "/home/dev/repos",
   workspaces_root: "/home/dev/features",
+  local_domain: "local.example.test",
 };
 
 let root;
@@ -93,12 +94,13 @@ test("discoverFragments names the file on a YAML syntax error", () => {
   );
 });
 
-test("expandPlaceholders touches only the three names, at any depth", () => {
+test("expandPlaceholders touches only the four names, at any depth", () => {
   const out = expandPlaceholders(
     {
       a: "{{home}}/.sandbox",
       b: ["{{repos_root}}:{{repos_root}}"],
       c: { d: "{{ workspaces_root }}" },
+      hosts: ".{{local_domain}}",
       keep: "${SANDBOX_MCP_TOKEN} {{other}} {service}",
       n: 3,
     },
@@ -108,6 +110,7 @@ test("expandPlaceholders touches only the three names, at any depth", () => {
     a: "/home/dev/.sandbox",
     b: ["/home/dev/repos:/home/dev/repos"],
     c: { d: "/home/dev/features" },
+    hosts: ".local.example.test",
     keep: "${SANDBOX_MCP_TOKEN} {{other}} {service}",
     n: 3,
   });

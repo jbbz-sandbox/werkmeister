@@ -418,10 +418,10 @@ export async function stopCaddy(): Promise<boolean> {
   return true;
 }
 
-const SHARED_NETWORK = "sandbox-shared";
+const SHARED_NETWORK = "werkmeister-shared";
 
 /**
- * Create `sandbox-shared` when absent, labelled so the infra stack's compose
+ * Create `werkmeister-shared` when absent, labelled so the infra stack's compose
  * adopts it. Every feature compose declares it external, and `up` no longer
  * starts Caddy (which used to create it) for an unrouted workspace (SW-42).
  */
@@ -441,7 +441,7 @@ export function ensureSharedNetwork(): boolean {
         "--label",
         `com.docker.compose.project=${INFRA_PROJECT}`,
         "--label",
-        "com.docker.compose.network=shared-network",
+        `com.docker.compose.network=${SHARED_NETWORK}`,
         SHARED_NETWORK,
       ],
       { capture: true, timeout: 30 },

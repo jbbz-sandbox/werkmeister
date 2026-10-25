@@ -19,6 +19,17 @@ interface LinkGroup {
   links: SandboxLink[];
 }
 
+// Through Caddy the dashboard is werkmeister-dashboard.<local_domain>, which tells us
+// this machine's domain (it may still be local.sandbox.com, SW-93). Served on
+// localhost it can't know, so it assumes the defaults.
+const DASHBOARD_HOST = "werkmeister-dashboard.";
+const LOCAL_DOMAIN = location.hostname.startsWith(DASHBOARD_HOST)
+  ? location.hostname.slice(DASHBOARD_HOST.length)
+  : "local.werkmeister.io";
+const REMOTE_DOMAIN = LOCAL_DOMAIN.startsWith("local.")
+  ? `remote.${LOCAL_DOMAIN.slice("local.".length)}`
+  : "remote.werkmeister.io";
+
 // Hardcoded for this sandbox. `/__sandbox` is served by Caddy on every host
 // router; admin ports come from infra/compose/shared-infra.yml. Add rows here as
 // more feature hostnames or infra tools come online.
@@ -30,13 +41,13 @@ const GROUPS: LinkGroup[] = [
       {
         label: "frontend · local",
         desc: "Routes to the local Docker feature container",
-        url: "https://frontend.local.sandbox.com/__sandbox",
+        url: `https://frontend.${LOCAL_DOMAIN}/__sandbox`,
         kind: "local",
       },
       {
         label: "frontend · remote",
         desc: "Routes to the in-cluster deployment",
-        url: "https://frontend.remote.sandbox.com/__sandbox",
+        url: `https://frontend.${REMOTE_DOMAIN}/__sandbox`,
         kind: "remote",
       },
     ],

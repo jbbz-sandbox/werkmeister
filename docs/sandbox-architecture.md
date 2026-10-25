@@ -48,7 +48,7 @@ cluster — see [docs/topology.md](topology.md). This section is the request pat
      │   .internal)│                    │   container)│
      └─────────────┘                    └─────────────┘
 
-All services communicate via Docker DNS on the sandbox-shared network.
+All services communicate via Docker DNS on the werkmeister-shared network.
 Local feature containers are reached from Caddy via host.docker.internal:<port>.
 k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052).
 ```
@@ -73,7 +73,7 @@ k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052
 
 ```
 # Example generated Caddyfile snippet
-frontend.remote.sandbox.com {
+frontend.remote.werkmeister.io {
     tls internal
 
     # Feature selector UI
@@ -236,7 +236,7 @@ When `werkmeister up <feature>` runs, it dynamically generates the workspace's `
 networks:
   feature-payment-refactor:
     name: sandbox-payment-refactor
-  sandbox-shared:
+  werkmeister-shared:
     external: true
 
 services:
@@ -257,7 +257,7 @@ services:
       feature-payment-refactor:
         aliases:
           - frontend
-      sandbox-shared:
+      werkmeister-shared:
         aliases:
           - frontend
 
@@ -278,17 +278,17 @@ services:
       feature-payment-refactor:
         aliases:
           - backend
-      sandbox-shared:
+      werkmeister-shared:
         aliases:
           - backend
 ```
 
 **Key design choices**:
-- Docker DNS aliases on the `sandbox-shared` network to reach all services -- no `host.docker.internal` anywhere.
+- Docker DNS aliases on the `werkmeister-shared` network to reach all services -- no `host.docker.internal` anywhere.
 - Local services (same feature): referenced by Docker DNS name (e.g., `http://backend:3000`). The env-var name is the service name upper-cased with `-` → `_`, plus `_URL`.
 - k8s baseline services: reached via the `k8s-forwards` container (e.g., `http://k8s-forwards:9052`).
 - Shared infrastructure: Redis at `redis://k8s-redis:9050`, Postgres at `postgresql://k8s-postgres:9051/dev`.
-- Feature containers join both the per-feature network (isolation) and the `sandbox-shared` network (access to shared infra and k8s forwards).
+- Feature containers join both the per-feature network (isolation) and the `werkmeister-shared` network (access to shared infra and k8s forwards).
 - Volume mounts for hot-reload of source code from the worktree.
 - Environment variables are generated per-service, mixing local and k8s endpoints using Docker DNS names.
 
@@ -298,7 +298,7 @@ Applies only when the registry has a service with a GraphQL type (`graphql-subgr
 
 The gateway needs to know where each subgraph lives. Since subgraph locations vary per feature (some local, some k8s), the config must be per-feature.
 
-**Approach**: Generate a `supergraph-config.yaml` per feature and mount it into the gateway container (or the k8s gateway if the gateway itself isn't running locally). All URLs use Docker DNS names on the `sandbox-shared` network.
+**Approach**: Generate a `supergraph-config.yaml` per feature and mount it into the gateway container (or the k8s gateway if the gateway itself isn't running locally). All URLs use Docker DNS names on the `werkmeister-shared` network.
 
 ```yaml
 # Auto-generated: supergraph-config.payment-refactor.yaml
@@ -330,7 +330,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 - Mounts `~/.kube` (read-only) and the generated kubeconfig for `kubectl` authentication.
 
 **Networking**:
-- Connected to the `sandbox-shared` Docker network.
+- Connected to the `werkmeister-shared` Docker network.
 - Registers DNS aliases for each forwarded service (e.g., `k8s-backend`, `k8s-frontend`, `k8s-redis`, `k8s-postgres`).
 - The primary alias `k8s-forwards` is the canonical name used by other containers.
 - Each forward listens on `0.0.0.0:<listen_port>` so it is reachable from any container on the shared network.
@@ -357,7 +357,7 @@ Each feature can run its full Playwright test suite against its own isolated sta
 // playwright.config.ts — generated or parameterized per feature
 export default defineConfig({
   use: {
-    baseURL: 'https://frontend.local.sandbox.com',
+    baseURL: 'https://frontend.local.werkmeister.io',
     extraHTTPHeaders: {
       'X-Feature': process.env.SANDBOX_FEATURE || 'default',
     },
@@ -449,7 +449,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 2. ALLOCATE
    ├── Find next available feature slot (e.g., slot 3)
    ├── Assign port range 11300–11319
-   └── Slot is recorded as a container label (com.sandbox.local.slot) on compose up
+   └── Slot is recorded as a container label (com.werkmeister.slot) on compose up
 
 3. GENERATE
    ├── Render docker-compose from template with:
@@ -473,7 +473,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 
 7. REPORT
    └── Print feature URL, service endpoints, and status
-       "✓ payment-refactor ready at https://frontend.local.sandbox.com (cookie: X-Feature=payment-refactor)"
+       "✓ payment-refactor ready at https://frontend.local.werkmeister.io (cookie: X-Feature=payment-refactor)"
        "  Local:  frontend (:11300), backend (:11301)"
        "  k8s:    api (:9004), redis (:9050), ..."
 ```
