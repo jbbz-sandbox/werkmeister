@@ -35,8 +35,9 @@ import { info, warn } from "./config.js";
 export type { PromptSpec };
 
 /** Ctrl-C / Ctrl-D: exit 130, never proceed to write partial state. */
-function abort(): never {
+function abort(reason?: string): never {
   console.log();
+  if (reason) warn(reason);
   process.exit(130);
 }
 
@@ -59,13 +60,16 @@ async function readLine(label: string, defaultValue: string): Promise<string> {
   try {
     return await new Promise<string>((resolve, reject) => {
       rl.on("SIGINT", () => reject(new Error("interrupted"))); // Ctrl-C
-      rl.on("close", () => reject(new Error("eof"))); // Ctrl-D
+      rl.on("close", () => reject(new Error("eof"))); // Ctrl-D, or an empty/exhausted pipe
       rl.question(`  ${label}${shown}: `).then(resolve, reject);
     });
-  } catch {
-    // Both rejections above are the user leaving; readline has no other failure
-    // mode here worth distinguishing.
-    abort();
+  } catch (e) {
+    // Without this, an agent's empty stdin ended at the prompt with a bare blank line (SW-90).
+    abort(
+      (e as Error).message === "eof"
+        ? "No answer: stdin is not a terminal and had no input left -- nothing changed."
+        : undefined,
+    );
   } finally {
     rl.close();
   }
