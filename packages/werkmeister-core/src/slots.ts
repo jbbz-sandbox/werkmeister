@@ -9,7 +9,7 @@
  *     ...
  *     slot 12 -> ports 12200-12219
  *
- * Docker container labels (the `com.sandbox.local.*` family stamped
+ * Docker container labels (the `com.werkmeister.*` family stamped
  * by `generateFeatureCompose`) are the single source of truth for slot
  * ownership. `allocateSlot` scans live container labels to find a free
  * slot; the next `docker compose up` stamps the slot label onto the new
@@ -33,10 +33,16 @@ import { SandboxError } from "./errors.js";
 import { sandboxLock } from "./locks.js";
 import { error, info, success, warn } from "./reporter.js";
 
-export const LABEL_PREFIX = "com.sandbox.local";
+export const LABEL_PREFIX = "com.werkmeister";
 export const LABEL_FEATURE = `${LABEL_PREFIX}.feature`;
-export const LABEL_SLOT = `${LABEL_PREFIX}.slot`;
-export const LABEL_SERVICE = `${LABEL_PREFIX}.service`;
+/** Stamped before SW-93; containers keep them until their next `up`. SW-11 drops the reads. */
+export const LEGACY_LABEL_PREFIX = "com.sandbox.local";
+export const LEGACY_LABEL_FEATURE = `${LEGACY_LABEL_PREFIX}.feature`;
+
+/** *key* (`feature`, `slot`, `service`, `role`) from either label set; "" when unlabelled. */
+export function labelOf(labels: Record<string, string> | undefined, key: string): string {
+  return labels?.[`${LABEL_PREFIX}.${key}`] ?? labels?.[`${LEGACY_LABEL_PREFIX}.${key}`] ?? "";
+}
 
 export interface SlotEntry {
   slot: number;
@@ -76,15 +82,23 @@ interface LabelRow {
 async function queryLabeledContainers(): Promise<LabelRow[] | null> {
   let containers;
   try {
-    containers = await docker().listContainers({
-      all: true,
-      filters: { label: [LABEL_FEATURE] },
-      // The shelled path had `timeout: 10`, and a daemon that accepts the
-      // connection but never replies is a failure mode this repo has already
-      // been bitten by (docs/known-issues.md, the dead k8s forward). Aborting
-      // surfaces it as "unreachable" instead of hanging the CLI forever.
-      abortSignal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
-    });
+    // One query per label set: the daemon ANDs repeated label filters.
+    const sets = await Promise.all(
+      [LABEL_FEATURE, LEGACY_LABEL_FEATURE].map((label) =>
+        docker().listContainers({
+          all: true,
+          filters: { label: [label] },
+          // The shelled path had `timeout: 10`, and a daemon that accepts the
+          // connection but never replies is a failure mode this repo has already
+          // been bitten by (docs/known-issues.md, the dead k8s forward). Aborting
+          // surfaces it as "unreachable" instead of hanging the CLI forever.
+          abortSignal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
+        }),
+      ),
+    );
+    // A container carrying both sets answers both queries.
+    const seen = new Set<string>();
+    containers = sets.flat().filter((c) => !seen.has(c.Names[0]) && seen.add(c.Names[0]));
   } catch {
     return null; // unreachable daemon, or one that stopped answering
   }
@@ -92,9 +106,9 @@ async function queryLabeledContainers(): Promise<LabelRow[] | null> {
     // dockerode reports every alias the container answers to, each with the
     // API's leading slash. `docker ps` printed the first one, unslashed.
     name: (c.Names[0] ?? "").replace(/^\//, ""),
-    feature: c.Labels[LABEL_FEATURE] ?? "",
-    slot: c.Labels[LABEL_SLOT] ?? "",
-    service: c.Labels[LABEL_SERVICE] ?? "",
+    feature: labelOf(c.Labels, "feature"),
+    slot: labelOf(c.Labels, "slot"),
+    service: labelOf(c.Labels, "service"),
   }));
 }
 

@@ -39,7 +39,9 @@ vi.mock("werkmeister-core/docker", async (importOriginal) => {
         // dockerode rejects when it cannot reach the daemon; slots.ts turns
         // that into the `null` that means "occupancy unknown".
         if (h.containers === null) throw new Error("connect ENOENT /var/run/docker.sock");
-        return h.containers;
+        // Honour the label filter as the daemon does, so a query for one label set can't see the other.
+        const [label] = (opts?.filters as { label?: string[] } | undefined)?.label ?? [];
+        return label ? h.containers.filter((c) => label in c.Labels) : h.containers;
       },
     }),
   };
@@ -74,7 +76,10 @@ import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /** {"feat-a": [3, ["frontend"]]} → the `listContainers` rows the daemon returns. */
-function fakeContainers(entries: Record<string, [number, string[]]>): ContainerRow[] {
+function fakeContainers(
+  entries: Record<string, [number, string[]]>,
+  prefix = "com.werkmeister",
+): ContainerRow[] {
   const rows: ContainerRow[] = [];
   for (const [feature, [slot, services]] of Object.entries(entries)) {
     for (const service of services) {
@@ -82,9 +87,9 @@ function fakeContainers(entries: Record<string, [number, string[]]>): ContainerR
         // The API always slash-prefixes names; slots.ts strips it back off.
         Names: [`/${feature}-${service}`],
         Labels: {
-          "com.sandbox.local.feature": feature,
-          "com.sandbox.local.slot": String(slot),
-          "com.sandbox.local.service": service,
+          [`${prefix}.feature`]: feature,
+          [`${prefix}.slot`]: String(slot),
+          [`${prefix}.service`]: service,
         },
       });
     }
@@ -160,6 +165,27 @@ describe("allocateSlot", () => {
   });
 });
 
+// SW-93: a workspace brought up before the label rename stays visible until its next `up`.
+describe("containers labelled before SW-93 (com.sandbox.local.*)", () => {
+  it("are found, and hold their slot against a new allocation", async () => {
+    h.containers = fakeContainers({ "feat-old": [1, ["frontend"]] }, "com.sandbox.local");
+    expect(await getSlot("feat-old")).toBe(1);
+    expect(await allocateSlot("feat-new", null, 1)).toBe(2);
+  });
+
+  it("share the slot space with new ones: no slot is handed out twice", async () => {
+    h.containers = [
+      ...fakeContainers({ "feat-old": [1, ["frontend"]] }, "com.sandbox.local"),
+      ...fakeContainers({ "feat-new": [2, ["frontend"]] }),
+    ];
+    expect(await getAllSlots()).toEqual({
+      "feat-old": { slot: 1, services: ["frontend"] },
+      "feat-new": { slot: 2, services: ["frontend"] },
+    });
+    expect(await allocateSlot("feat-next")).toBe(3);
+  });
+});
+
 describe("releaseSlot", () => {
   it("is a no-op and never touches docker", () => {
     // No container fixture: release must not query Docker at all.
@@ -196,7 +222,7 @@ describe("port math and slot lookups", () => {
     // `all` matters: a stopped container still owns its slot label, and
     // dropping it would hand a live feature's slot to the next allocation.
     expect(h.lastListOpts?.all).toBe(true);
-    expect(h.lastListOpts?.filters).toEqual({ label: ["com.sandbox.local.feature"] });
+    expect(h.lastListOpts?.filters).toEqual({ label: ["com.sandbox.local.feature"] }); // the second of the two label-set queries
     // A daemon that accepts and never replies must not hang the CLI — the
     // shelled path carried `timeout: 10` and this has to keep it.
     expect(h.lastListOpts?.abortSignal).toBeInstanceOf(AbortSignal);
@@ -205,7 +231,7 @@ describe("port math and slot lookups", () => {
   it("strips the API's leading slash from container names", async () => {
     // The unparseable-slot warning prints the name; a stray `/` would leak.
     h.containers = fakeContainers({ feat: [1, ["frontend"]] });
-    h.containers[0].Labels["com.sandbox.local.slot"] = "not-a-number";
+    h.containers[0].Labels["com.werkmeister.slot"] = "not-a-number";
     const messages: string[] = [];
     const recorder: Reporter = {
       emit: (e) => {

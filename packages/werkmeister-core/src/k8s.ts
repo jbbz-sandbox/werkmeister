@@ -20,7 +20,7 @@ import { SandboxError } from "./errors.js";
 import { type ForwardSpec, forwardSpecs } from "./k8s_forwards.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
-import { LABEL_FEATURE } from "./slots.js";
+import { labelOf } from "./slots.js";
 
 // The forward table is NOT duplicated here: `forwardSpecs()` derives it from
 // ~/.werkmeister/services.yaml — the same call that generates the entrypoint's
@@ -54,7 +54,7 @@ export function clusterNeeded(
   if (!containers) return true;
   const features = new Map<string, { local: string[]; running: boolean }>();
   for (const c of containers) {
-    const feature = c.labels[LABEL_FEATURE];
+    const feature = labelOf(c.labels, "feature");
     if (!feature) continue;
     const f = features.get(feature) ?? { local: [], running: false };
     f.local.push(c.service);

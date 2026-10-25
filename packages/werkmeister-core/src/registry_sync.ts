@@ -30,6 +30,7 @@ import {
   servicesYamlPath,
   workspacesRoot,
 } from "./config.js";
+import { loadIngress } from "./global_config.js";
 import type { Step } from "./machine_setup.js";
 import { REGISTRY_DEFAULTS, renderServicesLocalYaml, seedFile } from "./scaffold.js";
 
@@ -95,6 +96,8 @@ export interface PlaceholderPaths {
   workspaces_root: string;
   /** The tool's home folder: `~/.werkmeister`, or `~/.sandbox` until `werkmeister migrate` (SW-92). */
   werkmeister_home: string;
+  /** The machine's ingress domain, so a fragment needn't hard-code one (SW-93). */
+  local_domain: string;
 }
 
 function isDict(value: unknown): value is YamlMap {
@@ -126,7 +129,8 @@ function readFragment(repo: string, file: string): Fragment {
   return { repo, path: file, doc: isDict(doc) ? doc : {} };
 }
 
-const PLACEHOLDER = /\{\{\s*(home|repos_root|workspaces_root|werkmeister_home)\s*\}\}/g;
+const PLACEHOLDER =
+  /\{\{\s*(home|repos_root|workspaces_root|werkmeister_home|local_domain)\s*\}\}/g;
 
 /** Expand every {@link PlaceholderPaths} key written as `{{key}}` in every string, at any depth. */
 export function expandPlaceholders<T>(value: T, paths: PlaceholderPaths): T {
@@ -340,6 +344,7 @@ function placeholderPaths(): PlaceholderPaths {
     repos_root: getReposRoot(),
     workspaces_root: workspacesRoot(),
     werkmeister_home: sandboxHome(),
+    local_domain: loadIngress().local_domain,
   };
 }
 

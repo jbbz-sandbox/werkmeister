@@ -505,7 +505,7 @@ export interface CacheEntry {
   path: string;
   env?: Record<string, string>;
   detect?: string[];
-  /** Default `sandbox-<key>`. */
+  /** Default `werkmeister-<key>`. */
   volume?: string;
   /** Bind this host dir instead of a shared volume. */
   host?: string;

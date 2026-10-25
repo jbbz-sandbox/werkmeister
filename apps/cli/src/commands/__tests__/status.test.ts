@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("werkmeister-core/compose", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/compose")>()),
+  // A workspace up'd before SW-93, still under its sandbox- project.
+  liveProject: vi.fn(async (feature: string) => `sandbox-${feature}`),
   getContainerStatus: vi.fn(async () => [
     {
       name: "a-api",

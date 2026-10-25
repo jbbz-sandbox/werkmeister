@@ -27,10 +27,15 @@ export interface CacheSource {
   name: string;
 }
 
-/** Volume or host dir a cache lives in: `host` wins, else `volume`, else `sandbox-<key>`. */
+/** Volume or host dir a cache lives in: `host` wins, else `volume`, else `werkmeister-<key>`. */
 export function cacheSource(key: string, cache: CacheEntry): CacheSource {
   if (cache.host) return { kind: "host", name: cache.host };
-  return { kind: "volume", name: cache.volume ?? `sandbox-${key}` };
+  return { kind: "volume", name: cache.volume ?? `werkmeister-${key}` };
+}
+
+/** The default volume before SW-93, left behind on machines that had it; SW-11 drops it. */
+function legacyCacheVolume(key: string, cache: CacheEntry): string | null {
+  return cache.host || cache.volume ? null : `sandbox-${key}`;
 }
 
 /** True when one of *files* is in *from* or a parent of it, up to and including *root*. */
@@ -145,7 +150,11 @@ function dirSize(dir: string): number {
   return total;
 }
 
-/** One row per registry cache: where it lives, whether it exists yet, its size and creation time. */
+/**
+ * One row per registry cache: where it lives, whether it exists yet, its size and
+ * creation time. A leftover pre-SW-93 `sandbox-<key>` volume gets a second row, so
+ * `status` shows it and `cache prune` reaches it.
+ */
 export async function cacheSnapshots(
   caches: CacheRegistry = loadCaches(),
   usage: Map<string, VolumeUsage> | null | undefined = undefined,
@@ -153,29 +162,43 @@ export async function cacheSnapshots(
   usage ??= await volumeUsage();
   return Object.keys(caches)
     .sort()
-    .map((name) => {
-      const src = cacheSource(name, caches[name] as CacheEntry);
-      if (src.kind === "host") {
-        const st = fs.statSync(src.name, { throwIfNoEntry: false });
-        return {
-          name,
-          kind: src.kind,
-          source: src.name,
-          exists: Boolean(st),
-          size_bytes: st ? dirSize(src.name) : null,
-          created_at: st ? st.birthtime.toISOString() : null,
-        };
-      }
-      const u = usage?.get(src.name);
-      return {
-        name,
-        kind: src.kind,
-        source: src.name,
-        exists: Boolean(u),
-        size_bytes: u && u.size >= 0 ? u.size : null,
-        created_at: u?.createdAt ?? null,
-      };
+    .flatMap((name) => {
+      const cache = caches[name] as CacheEntry;
+      const legacy = legacyCacheVolume(name, cache);
+      const leftover = legacy ? usage?.get(legacy) : undefined;
+      const src = cacheSource(name, cache);
+      const row = snapshotOf(name, src, usage);
+      return leftover && legacy
+        ? [row, snapshotOf(name, { kind: "volume", name: legacy }, usage)]
+        : [row];
     });
+}
+
+function snapshotOf(
+  name: string,
+  src: CacheSource,
+  usage: Map<string, VolumeUsage> | null | undefined,
+): CacheSnapshot {
+  if (src.kind === "host") {
+    const st = fs.statSync(src.name, { throwIfNoEntry: false });
+    return {
+      name,
+      kind: src.kind,
+      source: src.name,
+      exists: Boolean(st),
+      size_bytes: st ? dirSize(src.name) : null,
+      created_at: st ? st.birthtime.toISOString() : null,
+    };
+  }
+  const u = usage?.get(src.name);
+  return {
+    name,
+    kind: src.kind,
+    source: src.name,
+    exists: Boolean(u),
+    size_bytes: u && u.size >= 0 ? u.size : null,
+    created_at: u?.createdAt ?? null,
+  };
 }
 
 export interface PruneResult {
@@ -230,8 +253,11 @@ export async function pruneCaches(
   const results: PruneResult[] = [];
   for (const row of rows) {
     const cache = caches[row.name] as CacheEntry;
+    // The leftover pre-SW-93 volume's row says which volume it is.
+    const name =
+      row.source === cacheSource(row.name, cache).name ? row.name : `${row.name} (${row.source})`;
     const skip = (detail: string, ok = true) =>
-      results.push({ name: row.name, action: "skipped", detail, ok });
+      results.push({ name, action: "skipped", detail, ok });
     if (!row.exists) {
       // `docker run -v` would create the volume we are only meant to clean.
       skip("not created");
@@ -281,7 +307,7 @@ export async function pruneCaches(
     if (opts.dryRun && action !== "max_age") {
       const size = row.size_bytes === null ? "unknown size" : `${row.size_bytes} bytes`;
       const detail = action === "reset" ? `would empty ${size}` : `would run: ${cmd}`;
-      results.push({ name: row.name, action, detail: detail + inUse, ok: true });
+      results.push({ name, action, detail: detail + inUse, ok: true });
       continue;
     }
     const argv = ["docker", "run", "--rm", "-v", `${row.source}:${cache.path}`, ...env];
@@ -294,7 +320,7 @@ export async function pruneCaches(
         : opts.dryRun
           ? `would delete ${out} file(s) older than ${cache.max_age}${inUse}`
           : out || "done";
-    results.push({ name: row.name, action, detail, ok: res.status === 0 });
+    results.push({ name, action, detail, ok: res.status === 0 });
   }
   return results;
 }

@@ -10,7 +10,7 @@
  *      saved cookies/history) plus a remote debugging port. The throwaway
  *      profile is what makes CDP reliable -- a normal already-running Chrome
  *      ignores the debug port.
- *   2. Sets the routing cookie `X-Feature=<feature>` on `.local.sandbox.com`.
+ *   2. Sets the routing cookie `X-Feature=<feature>` on `.<local_domain>`.
  *   3. Injects a script into EVERY document (`Page.addScriptToEvaluateOnNewDocument`)
  *      that (a) prefixes the tab/window title with `[feature]` and (b) paints a
  *      fixed, feature-colored badge in the corner -- so the window is identifiable
@@ -36,7 +36,10 @@ import type { PromptSpec } from "./global_config.js";
 import * as gc from "./global_config.js";
 import { error, info, raw } from "./reporter.js";
 
-export const COOKIE_DOMAIN = ".local.sandbox.com";
+/** The X-Feature cookie's domain: every routed host under the configured local domain. */
+export function cookieDomain(): string {
+  return `.${gc.loadIngress().local_domain.replace(/^\.+/, "")}`;
+}
 
 // --------------------------------------------------------------------------
 // Browser choice
@@ -495,7 +498,7 @@ class FeatureSession {
         {
           name: "X-Feature",
           value: this.feature,
-          domain: COOKIE_DOMAIN,
+          domain: cookieDomain(),
           path: "/",
           secure: true,
           sameSite: "Lax",
@@ -737,7 +740,7 @@ async function launchChromiumWindow(
 
   raw("\n");
   info(`Feature : ${feature}`);
-  info(`Cookie  : X-Feature=${feature}  (domain ${COOKIE_DOMAIN})`);
+  info(`Cookie  : X-Feature=${feature}  (domain ${cookieDomain()})`);
   info(`Badge   : ${color}`);
   info(`URL     : ${url}`);
   info(`Profile : ${profile}  (throwaway)`);

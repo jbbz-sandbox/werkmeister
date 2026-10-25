@@ -94,15 +94,15 @@ export interface WsNode {
 /**
  * Feature name from a Compose project name. `getWorkspaceStatuses` sets
  * `project` from the workspace's `COMPOSE_PROJECT_NAME`, which `init-workspace`
- * always writes as `sandbox-<feature>` (and falls back to that same form), so
- * stripping the prefix is the reliable inverse.
+ * always writes as `werkmeister-<feature>` (`sandbox-<feature>` before SW-93,
+ * read until SW-11), so stripping the prefix is the reliable inverse.
  *
  * ponytail: prefix strip rather than re-reading .sandbox/workspace.yml per
  * workspace. If a hand-edited .env ever breaks the convention, read the yml.
  */
 export function featureOf(project: string | null): string | null {
-  if (!project?.startsWith("sandbox-")) return null;
-  return project.slice("sandbox-".length) || null;
+  const prefix = ["werkmeister-", "sandbox-"].find((p) => project?.startsWith(p));
+  return (prefix && project?.slice(prefix.length)) || null;
 }
 
 /** Board 09 §E. `needs` is a solid chip elsewhere; a tree icon can only be yellow. */

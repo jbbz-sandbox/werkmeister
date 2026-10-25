@@ -12,8 +12,15 @@
 name: sandbox-infra
 
 networks:
+  # SW-93: features join werkmeister-shared; ones brought up before the rename stay
+  # on sandbox-shared until their next `up`, so every service below joins both
+  # under the same aliases. sandbox-shared keeps its original key because compose
+  # refuses a network whose label names a different one. SW-11 drops it.
   shared-network:
     name: sandbox-shared
+    driver: bridge
+  werkmeister-shared:
+    name: werkmeister-shared
     driver: bridge
 
 services:
@@ -84,9 +91,10 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      shared-network:
+      shared-network: &k8s-forwards-net
         aliases:
           - k8s-forwards
+      werkmeister-shared: *k8s-forwards-net
 
   # Optional (SW-76): starts only when `infra.profiles` in ~/.werkmeister/config.yaml
   # (or COMPOSE_PROFILES) names its profile.
@@ -120,9 +128,10 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      shared-network:
+      shared-network: &jaeger-net
         aliases:
           - jaeger
+      werkmeister-shared: *jaeger-net
 
   # Optional (SW-76), and SSPL-1.0, so never started for everyone: see docs/third-party.md.
   redisinsight:
@@ -151,9 +160,10 @@ services:
           cpus: "0.1"
           memory: 128M
     networks:
-      shared-network:
+      shared-network: &redisinsight-net
         aliases:
           - redisinsight
+      werkmeister-shared: *redisinsight-net
 
   caddy:
     image: caddy:2-alpine
@@ -190,9 +200,10 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      shared-network:
+      shared-network: &caddy-net
         aliases:
           - caddy
+      werkmeister-shared: *caddy-net
 
 volumes:
   sandbox-caddy-data:

@@ -343,8 +343,10 @@ export interface IngressSettings {
 }
 
 export const INGRESS_DEFAULTS: IngressSettings = {
-  local_domain: "local.sandbox.com",
-  remote_domain: "remote.sandbox.com",
+  // SW-93: sandbox.com belongs to someone else. A machine whose config.yaml sets
+  // these (every `setup` run writes them) keeps its domains.
+  local_domain: "local.werkmeister.io",
+  remote_domain: "remote.werkmeister.io",
   certs_dir: path.join(os.homedir(), ".docker", "certs"),
 };
 

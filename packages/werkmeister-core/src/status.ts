@@ -12,7 +12,12 @@
  */
 
 import { type CacheSnapshot, cacheSnapshots } from "./build_caches.js";
-import { type ContainerStatus, getContainerStatus, isOneShotService } from "./compose.js";
+import {
+  type ContainerStatus,
+  getContainerStatus,
+  isOneShotService,
+  liveProject,
+} from "./compose.js";
 import { INFRA_PROJECT } from "./compose_infra.js";
 import { loadServices } from "./config.js";
 import { projectContainers } from "./docker.js";
@@ -281,7 +286,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
   const features: FeatureSnapshot[] = [];
   for (const [featureName, featureInfo] of sortedSlots(allSlots)) {
     const containers = tallied(await getContainerStatus(featureName));
-    const project = `sandbox-${featureName}`;
+    const project = await liveProject(featureName);
     const usage = resources?.projects[project];
     const h = health.get(project);
     features.push({

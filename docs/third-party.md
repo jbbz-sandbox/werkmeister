@@ -154,7 +154,7 @@ An image's licence covers its contents (base OS packages and the tool) and can d
 | `redis/redisinsight@sha256:aa21…` (pinned from `latest`) | optional (observability, off by default) | `shared-infra.yml` | **SSPL-1.0** (`/usr/src/app/redisinsight/LICENSE`†) | SSPL-1.0 app; base layers not inspected |
 | `node:22` (feature default) / your `image:` | required per feature | `infra/templates/docker-compose.feature.yml.njk` | MIT (Node.js) | Docker Official Image on Debian: mixed (GPL, LGPL, MIT, …) |
 | `node:22` + xvfb, xauth, GTK 3, NSS, … (SW-62) | dev-only | `packages/werkmeister-vscode/Dockerfile` | MIT (Node.js) | Debian packages: xvfb MIT/X11, GTK LGPL-2.1-or-later, NSS MPL-2.0, others mixed |
-| Static docker 27.5.1, compose v2.32.4, kubectl v1.31.4 (downloaded into a tools volume) | dev-only (the sandbox repo's own services) | `infra/compose/scripts/sandbox-install-startup.sh` | Apache-2.0 ×3 | — |
+| Static docker 27.5.1, compose v2.32.4, kubectl v1.31.4 (downloaded into a tools volume) | dev-only (the sandbox repo's own services) | `infra/compose/scripts/werkmeister-install-startup.sh` | Apache-2.0 ×3 | — |
 | `alpine:3` (`detect` fallback guess) | — | `fragment_detect/precedence.ts` | — | Alpine: mixed |
 
 Werkmeister pulls or builds these on the person's machine and doesn't redistribute them.

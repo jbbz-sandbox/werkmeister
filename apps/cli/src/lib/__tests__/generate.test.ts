@@ -227,6 +227,21 @@ describe("setup services", () => {
     expect(withScript).toContain("demo-install-startup.sh:/usr/local/bin/startup.sh");
   });
 
+  it("still finds a startup script for a fragment naming the setup sandbox-install (SW-93)", () => {
+    home.write(
+      "services.yaml",
+      fixtureServicesYaml()
+        .replace("    setup_service: null\n", "    setup_service: sandbox-install\n")
+        .replace(
+          "setup_services: {}",
+          `setup_services:\n  sandbox-install:\n${MINIMAL_SETUP}    startup_script: true\n`,
+        ),
+    );
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain("/werkmeister-install-startup.sh:/usr/local/bin/startup.sh");
+    expect(content).not.toContain("sandbox-install-startup.sh");
+  });
+
   it("blocks the app service until the setup container exits", () => {
     withSetupService(MINIMAL_SETUP);
     const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
@@ -239,13 +254,23 @@ describe("setup services", () => {
     // a fully healthy feature as `partial` — the app services carry role=app.
     withSetupService(MINIMAL_SETUP);
     const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
-    expect(content).toContain('com.sandbox.local.service: "demo-install"');
+    expect(content).toContain('com.werkmeister.service: "demo-install"');
     expect(content).toMatch(
-      /com\.sandbox\.local\.service: "demo-install"\n\s*com\.sandbox\.local\.role: "setup"/,
+      /com\.werkmeister\.service: "demo-install"\n\s*com\.werkmeister\.role: "setup"/,
     );
     // A `{# #}` comment inside the labels block renders as an indented blank
     // line; trim it, or every generated compose carries trailing whitespace.
     expect(content).not.toMatch(/^[ \t]+$/m);
+  });
+
+  it("stamps only the com.werkmeister labels and werkmeister- names (SW-93)", () => {
+    withSetupService(MINIMAL_SETUP);
+    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
+    expect(content).toContain('com.werkmeister.feature: "f"');
+    expect(content).not.toContain("com.sandbox.local");
+    expect(content).toMatch(/^name: werkmeister-f$/m);
+    expect(content).toMatch(/^ {4}name: werkmeister-f$/m);
+    expect(content).toMatch(/shared-network:\n\s+external: true\n\s+name: werkmeister-shared\n/);
   });
 
   it("shares one node_modules volume across the setup container and every app", () => {
@@ -320,6 +345,7 @@ describe("generateFeatureEnv", () => {
     expect(content).toContain("SANDBOX_FEATURE=myfeat");
     expect(content).toContain("SANDBOX_SLOT=1");
     expect(content).toContain("http://backend:3000");
+    expect(content).toContain("COMPOSE_PROJECT_NAME=werkmeister-myfeat");
   });
 
   it("preserves workspace metadata across regeneration", () => {

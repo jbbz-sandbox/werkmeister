@@ -11,15 +11,15 @@
  * `~/.werkmeister/config.yaml` rather than being restated per service:
  *
  *   ingress:                        # ~/.werkmeister/config.yaml
- *     local_domain: local.sandbox.com
- *     remote_domain: remote.sandbox.com
+ *     local_domain: local.werkmeister.io
+ *     remote_domain: remote.werkmeister.io
  *
  *   frontend:                     # ~/.werkmeister/services.yaml
  *     feature_router:
  *       remote_upstream: k8s-frontend:9053
  *
- * yields `frontend.local.sandbox.com` (local docker feature) and
- * `frontend.remote.sandbox.com` (the cluster deployment). A service that
+ * yields `frontend.local.werkmeister.io` (local docker feature) and
+ * `frontend.remote.werkmeister.io` (the cluster deployment). A service that
  * needs a non-conforming host pins it explicitly with `hostname:` /
  * `remote_hostname:`, which always wins over the derived value.
  *
@@ -112,7 +112,7 @@ export function ingressHostnames(
 
 /**
  * Absolute URL for a path on the feature ingress, e.g. `/orders` →
- * `https://frontend.local.sandbox.com/orders`. Null when nothing is routed.
+ * `https://frontend.local.werkmeister.io/orders`. Null when nothing is routed.
  *
  * Shared by `sandbox open` and the MCP server's open-feature tool so the two
  * land on the same page: the routed host set is per-machine (ingress config +

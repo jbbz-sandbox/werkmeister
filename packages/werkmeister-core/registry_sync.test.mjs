@@ -36,6 +36,7 @@ const PATHS = {
   repos_root: "/home/dev/repos",
   workspaces_root: "/home/dev/features",
   werkmeister_home: "/home/dev/.werkmeister",
+  local_domain: "local.example.test",
 };
 
 let root;
@@ -110,13 +111,14 @@ test("discoverFragments names the file on a YAML syntax error", () => {
   );
 });
 
-test("expandPlaceholders touches only the four names, at any depth", () => {
+test("expandPlaceholders touches only the five names, at any depth", () => {
   const out = expandPlaceholders(
     {
       a: "{{home}}/.sandbox",
       w: "{{werkmeister_home}}/locks:/locks",
       b: ["{{repos_root}}:{{repos_root}}"],
       c: { d: "{{ workspaces_root }}" },
+      hosts: ".{{local_domain}}",
       keep: "${SANDBOX_MCP_TOKEN} {{other}} {service}",
       n: 3,
     },
@@ -127,6 +129,7 @@ test("expandPlaceholders touches only the four names, at any depth", () => {
     w: "/home/dev/.werkmeister/locks:/locks",
     b: ["/home/dev/repos:/home/dev/repos"],
     c: { d: "/home/dev/features" },
+    hosts: ".local.example.test",
     keep: "${SANDBOX_MCP_TOKEN} {{other}} {service}",
     n: 3,
   });

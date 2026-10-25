@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/jbbz-sandbox/werkmeister/main/apps/cli/infra/schemas/services-fragment.schema.json",
   "title": "Sandbox service-registry fragment (<repo>/.werkmeister/services.yaml, legacy <repo>/.sandbox/services.yaml)",
-  "description": "A repo's slice of the service registry. `sandbox registry sync` (run by `sandbox setup`) merges every fragment under paths.repos_root into ~/.werkmeister/services.yaml. `{{home}}`, `{{repos_root}}`, `{{workspaces_root}}` and `{{werkmeister_home}}` expand in any string at merge time. Mirrors the checks in packages/werkmeister-core/src/registry_sync.ts.",
+  "description": "A repo's slice of the service registry. `sandbox registry sync` (run by `sandbox setup`) merges every fragment under paths.repos_root into ~/.werkmeister/services.yaml. `{{home}}`, `{{repos_root}}`, `{{workspaces_root}}`, `{{werkmeister_home}}` and `{{local_domain}}` expand in any string at merge time. Mirrors the checks in packages/werkmeister-core/src/registry_sync.ts.",
   "type": "object",
   "properties": {
     "services": {
@@ -243,7 +243,7 @@
         "volume": {
           "type": "string",
           "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$",
-          "description": "Shared named volume. Default `sandbox-<key>`."
+          "description": "Shared named volume. Default `werkmeister-<key>`."
         },
         "host": {
           "type": "string",

@@ -30,7 +30,7 @@ This is the most common infrastructure issue.
 ```bash
 # Test through Caddy
 curl -sk -o /dev/null -w "Caddy: HTTP %{http_code} | Size: %{size_download}\n" \
-  "https://frontend.local.sandbox.com/your/path"
+  "https://frontend.local.werkmeister.io/your/path"
 
 # Test direct to expected service (check CLAUDE.md routing table for correct port)
 curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
@@ -190,7 +190,7 @@ docker network ls --filter name=sandbox
 
 # Check which containers are on each network
 docker network inspect sandbox-infra_default --format '{{range .Containers}}{{.Name}} {{end}}'
-docker network inspect sandbox-shared --format '{{range .Containers}}{{.Name}} {{end}}'
+docker network inspect werkmeister-shared --format '{{range .Containers}}{{.Name}} {{end}}'
 ```
 
 ### DNS Resolution Inside Containers
@@ -270,9 +270,9 @@ routing source of truth is the `feature_router:` blocks in `~/.werkmeister/servi
 
 ```
 # frontend (web)
-https://frontend.local.sandbox.com/
-https://frontend.local.sandbox.com/__werkmeister
+https://frontend.local.werkmeister.io/
+https://frontend.local.werkmeister.io/__werkmeister
 
 # backend (api)
-https://backend.local.sandbox.com/health
+https://backend.local.werkmeister.io/health
 ```

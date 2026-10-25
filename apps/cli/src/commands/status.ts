@@ -5,7 +5,7 @@
  */
 
 import { type CacheSnapshot, cacheSnapshots } from "werkmeister-core/build_caches";
-import { getContainerStatus } from "werkmeister-core/compose";
+import { getContainerStatus, liveProject } from "werkmeister-core/compose";
 import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
 import type { HostSummary, ProjectHealth, Usage } from "werkmeister-core/resources";
 import { getAllSlots, type SlotEntry, slotCount } from "werkmeister-core/slots";
@@ -92,7 +92,7 @@ function age(iso: string, now: number): string {
   return `${d} ${d === 1 ? "day" : "days"}`;
 }
 
-/** SW-69: one line per registry cache, `turbo  volume sandbox-turbo-cache  1.2 GiB  created 9 days ago`. */
+/** SW-69: one line per registry cache, `turbo  volume werkmeister-turbo  1.2 GiB  created 9 days ago`. */
 export function printCachesSection(rows: CacheSnapshot[], now = Date.now()): void {
   if (!rows.length) return;
   console.log(`${Colors.BOLD}Caches:${Colors.RESET}`);
@@ -196,7 +196,7 @@ async function printFeaturesSection(
       svcStr = svcStr.slice(0, 30) + "...";
     }
 
-    const project = `sandbox-${featureName}`;
+    const project = await liveProject(featureName);
     const health = vitals.health.get(project);
     const extra = vitalsText(vitals.resources?.projects[project], health?.started);
     console.log(

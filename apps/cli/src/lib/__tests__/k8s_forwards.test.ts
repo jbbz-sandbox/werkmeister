@@ -9,6 +9,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildForwardRows, renderK8sForwardsOverride } from "werkmeister-core/k8s_forwards";
+import { parse as parseYaml } from "yaml";
 
 describe("buildForwardRows — infrastructure forwards", () => {
   it("emits a pipe-delimited row per infra entry that declares k8s_forward_port", () => {
@@ -109,6 +110,10 @@ describe("renderK8sForwardsOverride", () => {
         "        aliases:",
         "          - k8s-backend",
         "          - k8s-redis",
+        "      werkmeister-shared:",
+        "        aliases:",
+        "          - k8s-backend",
+        "          - k8s-redis",
         "",
       ].join("\n"),
     );
@@ -149,5 +154,20 @@ describe("shipped shared-infra.yml", () => {
     );
     expect(text).not.toContain("./k8s-port-forward/tmp/");
     expect(text).not.toContain("../proxy/Caddyfile");
+  });
+
+  // SW-93: features up'd before the rename are still on sandbox-shared.
+  it("joins every service to both shared networks under the same aliases", () => {
+    const doc = parseYaml(text) as {
+      networks: Record<string, { name: string }>;
+      services: Record<string, { networks?: Record<string, unknown> }>;
+    };
+    expect(doc.networks["shared-network"].name).toBe("sandbox-shared");
+    expect(doc.networks["werkmeister-shared"].name).toBe("werkmeister-shared");
+    const networked = Object.values(doc.services).filter((svc) => svc.networks);
+    expect(networked.length).toBeGreaterThan(0);
+    for (const svc of networked) {
+      expect(svc.networks?.["werkmeister-shared"]).toEqual(svc.networks?.["shared-network"]);
+    }
   });
 });
