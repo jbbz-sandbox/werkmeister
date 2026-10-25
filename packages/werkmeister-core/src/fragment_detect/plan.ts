@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import type { Runner } from "../machine_setup.js";
+import { fragmentPath as existingFragment, FRAGMENT_REL } from "../registry_sync.js";
 import { allocateForwards, allocateOffsets, rewriteEnv, takenPorts } from "./allocate.js";
 import { detectCompose } from "./compose.js";
 import { correlate } from "./correlate.js";
@@ -88,7 +89,8 @@ function envExampleKeys(ctx: DetectContext, dir: string): string[] {
 export function planFragment(root: string, opts: PlanOptions): Plan {
   const abs = path.resolve(root);
   const repo = path.basename(abs);
-  const fragmentPath = path.join(abs, ".sandbox", "services.yaml");
+  // A legacy `.sandbox/` fragment is updated where it is; a new one goes under `.werkmeister/`.
+  const fragmentPath = existingFragment(abs) ?? path.join(abs, FRAGMENT_REL);
   const existing = fs.existsSync(fragmentPath) ? fs.readFileSync(fragmentPath, "utf8") : null;
   // An existing fragment that doesn't parse can't be gap-filled: let the YAML error propagate.
   const existingDoc: Record<string, any> | null = existing ? (parseYaml(existing) ?? null) : null;

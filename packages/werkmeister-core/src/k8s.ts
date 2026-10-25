@@ -23,7 +23,7 @@ import { error, info, success, warn } from "./reporter.js";
 import { labelOf } from "./slots.js";
 
 // The forward table is NOT duplicated here: `forwardSpecs()` derives it from
-// ~/.sandbox/services.yaml — the same call that generates the entrypoint's
+// ~/.werkmeister/services.yaml — the same call that generates the entrypoint's
 // data file and shared-infra.yml's ports/aliases, so health checks can never
 // probe a service the container isn't actually forwarding.
 

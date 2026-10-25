@@ -59,7 +59,7 @@ function composeCmd(subcommand: string[]): boolean {
 }
 
 /**
- * Ensure `~/.sandbox/corp-ca.crt` is populated with the corporate TLS-proxy
+ * Ensure `~/.werkmeister/corp-ca.crt` is populated with the corporate TLS-proxy
  * root(s) from the macOS System keychain, if any. Docker build mounts this as
  * a BuildKit secret so `apk`/`curl` inside images validate through Netskope/
  * Zscaler-style intercept. Empty file (no proxy roots found, or non-mac) is a
@@ -67,7 +67,7 @@ function composeCmd(subcommand: string[]): boolean {
  * missing `secrets.file` even if no build stage consumes it.
  *
  * ponytail: mac-only extraction via `security`. Linux/WSL devs behind the same
- * proxy can drop their CA at ~/.sandbox/corp-ca.crt manually; this function
+ * proxy can drop their CA at ~/.werkmeister/corp-ca.crt manually; this function
  * won't overwrite a pre-populated file (only touches empty/missing).
  */
 function ensureCorpCa(): void {
@@ -117,7 +117,7 @@ function ensureCorpCa(): void {
   }
 }
 
-/** Generate proxy/Caddyfile and refresh the k8s kubeconfig, under ~/.sandbox/infra. */
+/** Generate proxy/Caddyfile and refresh the k8s kubeconfig, under ~/.werkmeister/infra. */
 async function ensureProxyFiles(): Promise<void> {
   // Always regenerate: the Caddyfile must carry the host routers (and any
   // active feature's routes) before Caddy loads it. generateCaddyfile() also
@@ -253,7 +253,7 @@ export async function up({ signal }: { signal?: AbortSignal } = {}): Promise<boo
 
   // Extract corporate TLS-proxy root(s) so the k8s-forwards image build can
   // validate outbound HTTPS. Must run before `docker compose up` — the
-  // compose file declares `secrets.corp_ca.file: ~/.sandbox/corp-ca.crt` and
+  // compose file declares `secrets.corp_ca.file: ~/.werkmeister/corp-ca.crt` and
   // will hard-fail if the path doesn't exist.
   ensureCorpCa();
 

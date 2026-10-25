@@ -32,7 +32,7 @@ describe("repo layout", () => {
 
   it("names each service in this repo's registry fragment after its directory", () => {
     const { services } = YAML.parse(
-      fs.readFileSync(path.join(REPO, ".sandbox", "services.yaml"), "utf8"),
+      fs.readFileSync(path.join(REPO, ".werkmeister", "services.yaml"), "utf8"),
     );
     for (const [id, def] of Object.entries<{ path: string }>(services)) {
       expect(fs.existsSync(path.join(REPO, def.path)), def.path).toBe(true);

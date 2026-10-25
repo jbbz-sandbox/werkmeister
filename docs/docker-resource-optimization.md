@@ -24,17 +24,17 @@ werkmeister stats --collect 15 --save
 # 3. Compare usage against configured limits
 werkmeister optimize
 
-# 4. Adjust limits in .sandbox/services.yaml or infra/compose/shared-infra.yml
+# 4. Adjust limits in .werkmeister/services.yaml or infra/compose/shared-infra.yml
 ```
 
 ## Where Resource Limits Are Configured
 
-### Feature Services (`.sandbox/services.yaml`)
+### Feature Services (`.werkmeister/services.yaml`)
 
 Each service in its repo's `.sandbox/services.yaml` (merged into `~/.werkmeister/services.yaml`, which `werkmeister optimize` reads) has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
 
 ```yaml
-# .sandbox/services.yaml
+# .werkmeister/services.yaml
 services:
   frontend:
     memory_limit: 2560M
@@ -143,7 +143,7 @@ Example output:
 
 ### For Feature Services
 
-Edit `.sandbox/services.yaml` and update the `memory_limit` and `memory_reservation` fields:
+Edit `.werkmeister/services.yaml` and update the `memory_limit` and `memory_reservation` fields:
 
 ```yaml
 services:
@@ -221,7 +221,7 @@ docker logs <container> 2>&1 | grep -i "memory\|heap\|oom"
 
 ## Reference: Current Default Limits
 
-From `.sandbox/services.yaml` and `infra/compose/shared-infra.yml`:
+From `.werkmeister/services.yaml` and `infra/compose/shared-infra.yml`:
 
 | Service | Memory Limit | Memory Reservation | Type |
 |---------|-------------|-------------------|------|
@@ -236,7 +236,7 @@ From `.sandbox/services.yaml` and `infra/compose/shared-infra.yml`:
 ### "Cannot allocate memory" on container start
 
 Your total reservations exceed available Docker memory. Either:
-- Reduce reservations in `.sandbox/services.yaml`
+- Reduce reservations in `.werkmeister/services.yaml`
 - Increase Docker Desktop memory allocation (Settings > Resources)
 - Run fewer services with `werkmeister remove <feature> <service>`
 
@@ -247,7 +247,7 @@ Check logs for OOM kills:
 docker inspect <container> --format='{{.State.OOMKilled}}'
 ```
 
-If `true`, increase the `memory_limit` for that service in `.sandbox/services.yaml`.
+If `true`, increase the `memory_limit` for that service in `.werkmeister/services.yaml`.
 
 ### Build/compilation very slow
 
@@ -268,6 +268,6 @@ If CPU is consistently at the limit, increase it.
 
 1. **Monitor** with `werkmeister stats` during real development work
 2. **Analyze** with `werkmeister optimize` to compare usage vs limits
-3. **Adjust** limits in `.sandbox/services.yaml` (features) or `infra/compose/shared-infra.yml` (infra)
+3. **Adjust** limits in `.werkmeister/services.yaml` (features) or `infra/compose/shared-infra.yml` (infra)
 4. **Restart** affected containers with `werkmeister restart <feature>`
 5. **Iterate** as your development patterns change

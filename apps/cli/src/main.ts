@@ -15,7 +15,7 @@
  *     sandbox pause [feature]                  Freeze containers and hold the Claude session
  *     sandbox resume [feature]                 Thaw what pause froze; the session continues
  *     sandbox status [--k8s]                   Show all active features; --k8s for k8s detail only
- *     sandbox detect [repo] [--dry-run] [--yes] [--assist|--no-assist]  Generate a repo's .sandbox/services.yaml
+ *     sandbox detect [repo] [--dry-run] [--yes] [--assist|--no-assist]  Generate a repo's .werkmeister/services.yaml
  *     sandbox services <feature>               List service endpoints
  *     sandbox logs <feature> [service]         Tail container logs
  *     sandbox remove <feature> <service>       Stop a local service (fall back to k8s)
@@ -34,7 +34,8 @@
  *     sandbox close-out [name]                 End a workspace: after release, or with --abandon <reason>
  *     sandbox code [feature]                   Open a workspace in VS Code
  *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
- *     sandbox registry [sync] [--check]        Regenerate ~/.sandbox/services.yaml from repo fragments
+ *     sandbox registry [sync] [--check]        Regenerate ~/.werkmeister/services.yaml from repo fragments
+ *     sandbox migrate [--workspaces] [--check] Move ~/.sandbox to ~/.werkmeister and repoint what names it
  *     sandbox cache prune [name]               Prune build/package caches by their rule (--reset empties)
  *     sandbox dashboard                        Launch the workspace dashboard's MCP server (stdio)
  *     sandbox mcp                              Launch the headless remote MCP surface (stdio)
@@ -279,7 +280,7 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Generate <repo>/.sandbox/services.yaml from the repo's package manifests, " +
+          "Generate <repo>/.werkmeister/services.yaml from the repo's package manifests, " +
             "Dockerfiles, compose, Helm and k8s files (re-runs only add what is missing)",
         )
         .argument(
@@ -837,7 +838,7 @@ const SPECS: CommandSpec[] = [
       cmd
         .description(
           "Guided machine setup: walks through paths, ingress domains and the " +
-            "~/.sandbox service registry, then converges the plugins, the " +
+            "~/.werkmeister service registry, then converges the plugins, the " +
             "sandbox-workspace checkout, the TLS certificate and the optional " +
             "issue tracker, Telepresence and VS Code YAML-schema prerequisites",
         )
@@ -856,7 +857,7 @@ const SPECS: CommandSpec[] = [
       cmd
         .description(
           "Set up and maintain the machine-global sandbox config " +
-            "(~/.sandbox/config.yaml — the single source of truth); regenerates " +
+            "(~/.werkmeister/config.yaml — the single source of truth); regenerates " +
             "env.sh and wires up ~/.zshenv and the Desktop MCP config",
         )
         .option(
@@ -906,13 +907,29 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Regenerate ~/.sandbox/services.yaml from every <repo>/.sandbox/services.yaml " +
-            "under paths.repos_root (merged under ~/.sandbox/services.local.yaml)",
+          "Regenerate ~/.werkmeister/services.yaml from every <repo>/.werkmeister/services.yaml " +
+            "(or legacy .sandbox/services.yaml) under paths.repos_root (merged under " +
+            "~/.werkmeister/services.local.yaml)",
         )
         .argument("[action]", "sync — the default and only action")
         .option("--check", "Report drift without writing; nonzero exit when stale.");
     },
     namespace: ([action], o) => ({ action: action ?? "sync", check: Boolean(o.check) }),
+  },
+  {
+    name: "migrate",
+    load: () => import("./commands/migrate.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, " +
+            "env.sh, the ~/.zshenv block, services.yaml, the pr-watch schedule and workspace " +
+            "compose files. Safe to re-run; refuses while affected containers are running.",
+        )
+        .option("--workspaces", "Also rename each workspace's .sandbox/ to .werkmeister/.")
+        .option("--check", "Report what would change without writing.");
+    },
+    namespace: (_args, o) => ({ check: Boolean(o.check), workspaces: Boolean(o.workspaces) }),
   },
   {
     name: "init-workspace",
@@ -1037,7 +1054,7 @@ const SPECS: CommandSpec[] = [
 ];
 
 async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
-  // One-shot migration: remove legacy ~/.sandbox/slots.json on first run
+  // One-shot migration: remove legacy ~/.werkmeister/slots.json on first run
   // after the labels refactor. Idempotent; no-op once the file is gone.
   try {
     const { migrateSlotsJson } = await import("werkmeister-core/slots");

@@ -3,7 +3,7 @@
  * data-only Jira reads (status pills, issue cards, refine briefings), replacing
  * multi-second `claude -p` → Atlassian-MCP round-trips with ~200ms HTTP calls.
  *
- * Credentials come from the `jira:` section of ~/.sandbox/config.yaml (the
+ * Credentials come from the `jira:` section of ~/.werkmeister/config.yaml (the
  * machine-global single source of truth), overridable per-process via
  * JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN. Every export is best-effort and
  * returns null when credentials are absent or a call fails, so callers degrade
@@ -47,7 +47,7 @@ function normalizeCreds(baseUrl: string, email: string, token: string): JiraCred
 
 /**
  * Resolve Jira credentials: process env first (per-process override), then the
- * `jira:` section of ~/.sandbox/config.yaml. Re-read per call (one small file
+ * `jira:` section of ~/.werkmeister/config.yaml. Re-read per call (one small file
  * read, dwarfed by the network call) so a token paste/renewal takes effect
  * without a server restart.
  */

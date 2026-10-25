@@ -67,7 +67,7 @@ export function resolveSecrets(
   return { byService, missing: [...missing].sort() };
 }
 
-/** Return the path to the real secrets file (`~/.sandbox/secrets.env`). */
+/** Return the path to the real secrets file (`~/.werkmeister/secrets.env`). */
 export function getSecretsPath(): string {
   return secretsPath();
 }

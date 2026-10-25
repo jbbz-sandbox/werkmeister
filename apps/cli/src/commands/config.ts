@@ -2,8 +2,8 @@
  * sandbox config [--repos-root PATH] [--workspaces-root PATH] [--show] [--check]
  *
  * Set up and maintain the machine-global sandbox configuration
- * (``~/.sandbox/config.yaml`` — the single source of truth). On write it also
- * regenerates ``~/.sandbox/env.sh``, installs a managed source-block in
+ * (``~/.werkmeister/config.yaml`` — the single source of truth). On write it also
+ * regenerates ``~/.werkmeister/env.sh``, installs a managed source-block in
  * ``~/.zshenv``, and strips the now-redundant ``env`` block from the sandbox MCP
  * server in ``claude_desktop_config.json`` (the ``sandbox`` wrapper self-loads
  * env.sh).

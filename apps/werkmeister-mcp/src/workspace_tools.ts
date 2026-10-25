@@ -1022,7 +1022,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       title: "Workspace Token Usage",
       description:
         "Sum a workspace's Claude Code token usage by model and session, with a " +
-        "rough USD estimate (rates from ~/.sandbox/model-pricing.yaml). On-demand.",
+        "rough USD estimate (rates from ~/.werkmeister/model-pricing.yaml). On-demand.",
       inputSchema: { ...WORKSPACE_ARG },
       outputSchema: {
         name: z.string(),
@@ -1120,7 +1120,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     {
       title: "k8s Forwards Health",
       description:
-        "Check every default k8s port-forward (from ~/.sandbox/services.yaml): HTTP GET " +
+        "Check every default k8s port-forward (from ~/.werkmeister/services.yaml): HTTP GET " +
         "on each forward's health endpoint (2xx/3xx = healthy), or a TCP connect when it has " +
         "none. Returns per-forward health plus healthy/total counts; `stopped` when the " +
         "forwarder is down and no running workspace needs the cluster (normal, not a fault).",

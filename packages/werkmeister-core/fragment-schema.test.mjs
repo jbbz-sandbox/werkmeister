@@ -16,7 +16,7 @@ const schema = JSON.parse(
 );
 const validate = new Ajv({ allErrors: true, strict: false }).compile(schema);
 const fragment = parse(
-  fs.readFileSync(new URL("../../.sandbox/services.yaml", import.meta.url), "utf8"),
+  fs.readFileSync(new URL("../../.werkmeister/services.yaml", import.meta.url), "utf8"),
 );
 const { repo: _, ...withoutRepo } = fragment;
 

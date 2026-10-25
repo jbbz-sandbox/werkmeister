@@ -23,7 +23,7 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
   } else {
     error(
       "Failed to update proxy -- see route-count/adapt errors above " +
-        "and inspect ~/.sandbox/infra/proxy/Caddyfile.",
+        "and inspect ~/.werkmeister/infra/proxy/Caddyfile.",
     );
   }
 

@@ -1,16 +1,16 @@
 /**
- * Seed content for the machine-global config files in `~/.sandbox`.
+ * Seed content for the machine-global config files in `~/.werkmeister`.
  *
  * These files used to be committed under `<repo>/infra/config/`. They describe
  * the developer's machine — which services exist, which ports they get, what
- * models cost — not the checkout, so they now live in `~/.sandbox` and this
+ * models cost — not the checkout, so they now live in `~/.werkmeister` and this
  * module is the only place their initial content is defined. `sandbox setup`
  * writes each one exactly once: seeding NEVER overwrites an existing file, so
  * a re-run can't clobber hand edits.
  *
  * The seeded files are literal YAML text because their comments ARE the
  * documentation. services.yaml is the exception: it is GENERATED from each
- * repo's .sandbox/services.yaml fragment by registry_sync.ts, and only its
+ * repo's .werkmeister/services.yaml fragment by registry_sync.ts, and only its
  * defaults (REGISTRY_DEFAULTS, below) live here, as data.
  */
 
@@ -95,14 +95,14 @@ export function renderSecretsEnv(): string {
 
 /**
  * The per-machine registry overlay. `sandbox registry sync` merges it LAST over
- * the generated ~/.sandbox/services.yaml, so this is where hand edits live now;
+ * the generated ~/.werkmeister/services.yaml, so this is where hand edits live now;
  * the generated file itself is never edited.
  */
 export function renderServicesLocalYaml(k8sContext: string): string {
   return `# Machine-local registry overrides — hand-edit freely.
 #
-# \`sandbox registry sync\` (and \`sandbox setup\`) regenerate ~/.sandbox/services.yaml
-# from every <repo>/.sandbox/services.yaml under paths.repos_root, then merge
+# \`sandbox registry sync\` (and \`sandbox setup\`) regenerate ~/.werkmeister/services.yaml
+# from every <repo>/.werkmeister/services.yaml under paths.repos_root, then merge
 # this file over the result: maps merge, scalars and lists replace. A key here
 # beats every fragment, e.g.
 #

@@ -1,14 +1,14 @@
 /**
- * Test helper: a throwaway `~/.sandbox` seeded from the checked-in fixtures.
+ * Test helper: a throwaway `~/.werkmeister` seeded from the checked-in fixtures.
  *
  * The registry files (services.yaml, ports.yaml) used to be committed under
  * `<repo>/infra/config/`, so tests could just point SANDBOX_ROOT at the repo
- * and read the real ones. They now live in the developer's `~/.sandbox`, which
+ * and read the real ones. They now live in the developer's `~/.werkmeister`, which
  * tests must never touch — so the demo registry moved to `__tests__/fixtures/`
  * and this helper stages it in a temp dir instead.
  *
  * `SANDBOX_CONFIG_FILE` is the seam: `global_config` derives the whole
- * `~/.sandbox` directory from it, so setting it relocates config.yaml,
+ * `~/.werkmeister` directory from it, so setting it relocates config.yaml,
  * services.yaml, ports.yaml, model-pricing.yaml and secrets.env together.
  */
 
@@ -32,7 +32,7 @@ export function fixtureServicesYaml(): string {
 }
 
 export interface SandboxHome {
-  /** The temp directory standing in for `~/.sandbox`. */
+  /** The temp directory standing in for `~/.werkmeister`. */
   dir: string;
   /** Write (or overwrite) a file inside it; returns the full path. */
   write(name: string, content: string): string;
@@ -50,7 +50,7 @@ export interface SandboxHomeOptions {
 }
 
 /**
- * Stage a temp `~/.sandbox` and point `SANDBOX_CONFIG_FILE` at it.
+ * Stage a temp `~/.werkmeister` and point `SANDBOX_CONFIG_FILE` at it.
  *
  * Call `cleanup()` in `afterEach`. Note that config.yaml is optional: with no
  * file present the loaders fall through to the defaults, which is exactly the

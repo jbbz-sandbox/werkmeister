@@ -9,7 +9,7 @@
  * down/stop/restart infra` tears them down or bounces them; `sandbox status`
  * reports the dashboard.
  *
- * Each is tracked by a PID file under `~/.sandbox/` (same state dir as the slot
+ * Each is tracked by a PID file under `~/.werkmeister/` (same state dir as the slot
  * locks), keyed by {@link WebApp.stem}.
  *
  * Ports are fixed per app — NOT configurable. A floating port (read from the
@@ -38,7 +38,7 @@ export interface WebApp {
   dir: string;
   /** Fixed listen port (see the module docstring for why it isn't configurable). */
   port: number;
-  /** PID/log file stem under `~/.sandbox`. */
+  /** PID/log file stem under `~/.werkmeister`. */
   stem: string;
   /** Entry script, relative to the app dir. */
   entry: string;
@@ -129,9 +129,7 @@ async function freePort(port: number): Promise<void> {
   for (const pid of pids) {
     try {
       process.kill(pid, "SIGTERM");
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   if (pids.length === 0) {
     return;
@@ -146,9 +144,7 @@ async function freePort(port: number): Promise<void> {
     // still bound → force it
     try {
       process.kill(pid, "SIGKILL");
-    } catch {
-      continue;
-    }
+    } catch {}
   }
 }
 
@@ -228,9 +224,7 @@ function distStale(app: WebApp): boolean {
         if (fs.statSync(f).mtimeMs > refMtime) {
           return true;
         }
-      } catch {
-        continue;
-      }
+      } catch {}
     }
   }
   return false;

@@ -6,7 +6,7 @@ import * as path from "node:path";
 import AjvModule from "ajv";
 import { parse as parseYaml } from "yaml";
 
-import { sandboxRoot } from "../config.js";
+import { sandboxHome, sandboxRoot } from "../config.js";
 import { loadIngress } from "../global_config.js";
 import { discoverFragments, mergeRegistry, RegistryError } from "../registry_sync.js";
 import type { Plan } from "./plan.js";
@@ -49,6 +49,7 @@ export function validateFragment(
         home: os.homedir(),
         repos_root: reposRoot,
         workspaces_root: reposRoot,
+        werkmeister_home: sandboxHome(),
         local_domain: loadIngress().local_domain,
       },
     });

@@ -1,5 +1,5 @@
 // The merge is what makes `sandbox setup` repeatable: every repo's
-// .sandbox/services.yaml fragment lands in one generated registry, with the
+// .werkmeister/services.yaml (or legacy .sandbox/services.yaml) fragment lands in one generated registry, with the
 // collisions that would silently break port allocation or detection failing
 // loud instead. These tests pin the merge rules; the filesystem step
 // (syncRegistry) is pinned in the second half of this file.
@@ -35,6 +35,7 @@ const PATHS = {
   home: "/home/dev",
   repos_root: "/home/dev/repos",
   workspaces_root: "/home/dev/features",
+  werkmeister_home: "/home/dev/.werkmeister",
   local_domain: "local.example.test",
 };
 
@@ -47,8 +48,8 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function writeFragment(repo, text) {
-  const dir = path.join(repos, repo, ".sandbox");
+function writeFragment(repo, text, dotDir = ".sandbox") {
+  const dir = path.join(repos, repo, dotDir);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "services.yaml"), text);
 }
@@ -68,6 +69,22 @@ test("discoverFragments finds only <dir>/.sandbox/services.yaml, sorted by repo"
     ["a-repo", "b-repo"],
   );
   assert.equal(found[0].path, path.join(repos, "a-repo", ".sandbox", "services.yaml"));
+});
+
+test("discoverFragments reads .werkmeister/ first, falling back to .sandbox/ per repo (SW-92)", () => {
+  writeFragment("legacy", "services:\n  old: {}\n");
+  writeFragment("renamed", "services:\n  new: {}\n", ".werkmeister");
+  writeFragment("both", "services:\n  stale: {}\n");
+  writeFragment("both", "services:\n  current: {}\n", ".werkmeister");
+  mkdirSync(path.join(repos, "empty-new", ".werkmeister"), { recursive: true });
+  writeFragment("empty-new", "services:\n  kept: {}\n");
+  const found = Object.fromEntries(discoverFragments(repos).map((f) => [f.repo, f]));
+  assert.deepEqual(Object.keys(found), ["both", "empty-new", "legacy", "renamed"]);
+  assert.equal(found.both.path, path.join(repos, "both", ".werkmeister", "services.yaml"));
+  assert.deepEqual(Object.keys(found.both.doc.services), ["current"]);
+  assert.equal(found["empty-new"].path, path.join(repos, "empty-new", ".sandbox", "services.yaml"));
+  assert.equal(found.legacy.path, path.join(repos, "legacy", ".sandbox", "services.yaml"));
+  assert.equal(found.renamed.path, path.join(repos, "renamed", ".werkmeister", "services.yaml"));
 });
 
 test("discoverFragments skips a linked git worktree of a repo it already scans", () => {
@@ -94,10 +111,11 @@ test("discoverFragments names the file on a YAML syntax error", () => {
   );
 });
 
-test("expandPlaceholders touches only the four names, at any depth", () => {
+test("expandPlaceholders touches only the five names, at any depth", () => {
   const out = expandPlaceholders(
     {
       a: "{{home}}/.sandbox",
+      w: "{{werkmeister_home}}/locks:/locks",
       b: ["{{repos_root}}:{{repos_root}}"],
       c: { d: "{{ workspaces_root }}" },
       hosts: ".{{local_domain}}",
@@ -108,6 +126,7 @@ test("expandPlaceholders touches only the four names, at any depth", () => {
   );
   assert.deepEqual(out, {
     a: "/home/dev/.sandbox",
+    w: "/home/dev/.werkmeister/locks:/locks",
     b: ["/home/dev/repos:/home/dev/repos"],
     c: { d: "/home/dev/features" },
     hosts: ".local.example.test",
@@ -312,7 +331,7 @@ test("syncRegistry fails loud with nothing written when no fragment exists", () 
   const [step] = syncRegistry({ reposRoot: repos });
   assert.equal(step.label, "config services.yaml");
   assert.equal(step.ok, false);
-  assert.match(step.detail, /no .sandbox\/services\.yaml found under/);
+  assert.match(step.detail, /no .werkmeister\/services\.yaml found under/);
   assert.match(step.detail, /sandbox setup/);
   assert.equal(existsSync(registryPath()), false);
 });
@@ -320,13 +339,15 @@ test("syncRegistry fails loud with nothing written when no fragment exists", () 
 test("syncRegistry reports 'no fragments' rather than throwing for a missing repos_root", () => {
   const [step] = syncRegistry({ reposRoot: path.join(root, "absent") });
   assert.equal(step.ok, false);
-  assert.match(step.detail, /no .sandbox\/services\.yaml found/);
+  assert.match(step.detail, /no .werkmeister\/services\.yaml found/);
 });
 
 test("syncRegistry writes the merged registry with expanded placeholders", () => {
   writeFragment(
     "demo",
-    "services:\n  backend:\n    path: apps/backend\n    extra_volumes:\n      - '{{home}}/.sandbox:{{home}}/.sandbox'\n",
+    "services:\n  backend:\n    path: apps/backend\n    extra_volumes:\n      - '{{home}}/.sandbox:{{home}}/.sandbox'\n" +
+      "      - '{{werkmeister_home}}/locks:/locks'\n",
+    ".werkmeister",
   );
   writeFileSync(path.join(home, "services.local.yaml"), "k8s_context: kind-dev\n");
   const [step] = syncRegistry({ reposRoot: repos });
@@ -337,6 +358,11 @@ test("syncRegistry writes the merged registry with expanded placeholders", () =>
   assert.equal(
     doc.services.backend.extra_volumes[0],
     `${os.homedir()}/.sandbox:${os.homedir()}/.sandbox`,
+  );
+  assert.equal(
+    doc.services.backend.extra_volumes[1],
+    `${home}/locks:/locks`,
+    "the tool home, wherever it is",
   );
   assert.deepEqual(doc.repos.demo.path_mappings, { "apps/backend": "backend" });
 });
@@ -472,6 +498,17 @@ test("branchRegistry takes the gated repo's fragment from its worktree, the rest
   assert.deepEqual(reg.repos.app.path_mappings, { "apps/api": "api", "apps/worker": "worker" });
   assert.equal(reg.services.web.test, "local", "the machine overlay still wins");
   assert.equal(existsSync(registryPath()), false, "the shared registry is not written");
+});
+
+test("branchRegistry reads a worktree's .werkmeister/ fragment (SW-92)", () => {
+  writeFragment("app", "services:\n  api:\n    test: old\n");
+  const worktree = path.join(root, "features", "ws", "app");
+  mkdirSync(path.join(worktree, ".werkmeister"), { recursive: true });
+  writeFileSync(
+    path.join(worktree, ".werkmeister", "services.yaml"),
+    "services:\n  api:\n    test: new\n",
+  );
+  assert.equal(branchRegistry("app", worktree, repos).services.api.test, "new");
 });
 
 test("branchRegistry is null for a worktree without a fragment", () => {
