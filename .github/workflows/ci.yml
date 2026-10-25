@@ -123,6 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       published: ${{ steps.changesets.outputs.published }}
+      # 'true' while main holds changes no release has shipped yet.
+      pending: ${{ steps.changesets.outputs.hasChangesets }}
     steps:
       # A push made with GITHUB_TOKEN gets its CI held for approval, so the
       # version PR could merge before `test` ran on it. A GitHub App token's
@@ -193,12 +195,15 @@ jobs:
           fi
 
   # SW-80: the docs site tracks the latest published release, plus docs-only
-  # merges (SW-96). Its own job, so npm publishing stays off the github-pages
-  # environment (its branch rules, and the environment claim it would add to the
-  # npm OIDC token).
+  # merges (SW-96) while no changeset is pending: the build is all of main, so
+  # with one pending it would publish docs for code no release has shipped. Its
+  # own job, so npm publishing stays off the github-pages environment (its
+  # branch rules, and the environment claim it would add to the npm OIDC token).
   docs-deploy:
     needs: [release, docs-only]
-    if: needs.release.outputs.published == 'true' || needs.docs-only.outputs.changed == 'true'
+    if: >-
+      needs.release.outputs.published == 'true' ||
+      (needs.docs-only.outputs.changed == 'true' && needs.release.outputs.pending == 'false')
     concurrency: pages
     permissions:
       pages: write      # deploy-pages
