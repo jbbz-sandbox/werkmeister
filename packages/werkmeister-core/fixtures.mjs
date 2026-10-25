@@ -1,7 +1,7 @@
 /**
- * A temp `~/.sandbox` for tests that reach the machine-global config.
+ * A temp `~/.werkmeister` for tests that reach the machine-global config.
  *
- * CI runs on a clean machine: no `~/.sandbox/{config,services,ports}.yaml`, and
+ * CI runs on a clean machine: no `~/.werkmeister/{config,services,ports}.yaml`, and
  * `loadServices`/`loadPorts` throw "Required config file not found" rather than
  * returning empty. A test that borrows the developer's real registry passes
  * locally and fails there — which is exactly how nine of these got merged.

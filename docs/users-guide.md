@@ -393,7 +393,7 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `--k8s`: Show k8s port-forward health only (replaces standalone k8s-status command)
   - `--intercepts`: Show Telepresence intercept state only (per feature service; cheap — skips docker and k8s probes).
   - `--json`: Output structured JSON (useful for agent-driven diagnosis)
-- `werkmeister detect [repo]`: Generate \<repo>/.sandbox/services.yaml from the repo's package manifests, Dockerfiles, compose, Helm and k8s files (re-runs only add what is missing)
+- `werkmeister detect [repo]`: Generate \<repo>/.werkmeister/services.yaml from the repo's package manifests, Dockerfiles, compose, Helm and k8s files (re-runs only add what is missing)
   - `--dry-run`: Show the report and the proposed YAML; write nothing
   - `-y, --yes`: Write without asking
   - `--assist`: Ask Claude to resolve the fields the scan had to guess
@@ -471,10 +471,10 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `-y, --yes`: Skip the confirmation prompt
   - `--abandon <reason>`: Close out without shipping; the reason goes in closeout.md and the PR files
 - `werkmeister code [feature]`: Open a workspace in VS Code
-- `werkmeister setup`: Guided machine setup: walks through paths, ingress domains and the ~/.sandbox service registry, then converges the plugins, the sandbox-workspace checkout, the TLS certificate and the optional issue tracker, Telepresence and VS Code YAML-schema prerequisites
+- `werkmeister setup`: Guided machine setup: walks through paths, ingress domains and the ~/.werkmeister service registry, then converges the plugins, the sandbox-workspace checkout, the TLS certificate and the optional issue tracker, Telepresence and VS Code YAML-schema prerequisites
   - `--check`: Report prerequisite state without prompting or running any install/update commands
   - `--yes`: Non-interactive: accept every default and skip optional installs
-- `werkmeister config`: Set up and maintain the machine-global sandbox config (~/.sandbox/config.yaml — the single source of truth); regenerates env.sh and wires up ~/.zshenv and the Desktop MCP config
+- `werkmeister config`: Set up and maintain the machine-global sandbox config (~/.werkmeister/config.yaml — the single source of truth); regenerates env.sh and wires up ~/.zshenv and the Desktop MCP config
   - `--repos-root <path>`: Absolute path to the canonical source-repo clones (non-interactive set).
   - `--workspaces-root <path>`: Absolute path to the per-feature worktree workspaces (non-interactive set).
   - `--show`: Print the resolved config and each value's origin, without writing.
@@ -483,8 +483,11 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `--reset`: Empty the cache(s) instead of applying the rule.
   - `--force`: Prune a cache even while a running container mounts it.
   - `--dry-run`: Report what would be deleted; change nothing.
-- `werkmeister registry [action]`: Regenerate ~/.sandbox/services.yaml from every \<repo>/.sandbox/services.yaml under paths.repos_root (merged under ~/.sandbox/services.local.yaml)
+- `werkmeister registry [action]`: Regenerate ~/.werkmeister/services.yaml from every \<repo>/.werkmeister/services.yaml (or legacy .sandbox/services.yaml) under paths.repos_root (merged under ~/.werkmeister/services.local.yaml)
   - `--check`: Report drift without writing; nonzero exit when stale.
+- `werkmeister migrate`: Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, env.sh, the ~/.zshenv block, services.yaml, the pr-watch schedule and workspace compose files. Safe to re-run; refuses while affected containers are running.
+  - `--workspaces`: Also rename each workspace's .sandbox/ to .werkmeister/.
+  - `--check`: Report what would change without writing.
 - `werkmeister init-workspace`: Reconcile a sandbox workspace from .sandbox/workspace.yml: create/remove repo worktrees to match the `repos`/`services` fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (SANDBOX_*) > workspace.yml.
   - `-t, --task <title>`: Task description / title (env: SANDBOX_TASK; config: task).
   - `--feature <name>`: Feature name for sandbox slot routing (config: feature).
@@ -646,7 +649,7 @@ werkmeister status [-v]
 
 ### werkmeister detect
 
-**Generate a repo's `.sandbox/services.yaml` from what the repo already contains.**
+**Generate a repo's `.werkmeister/services.yaml` from what the repo already contains.**
 
 ```
 werkmeister detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
@@ -1013,7 +1016,7 @@ Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g.
 ### Application Services
 
 The registry is `~/.werkmeister/services.yaml`, and it is **generated**: `werkmeister setup`
-(or `werkmeister registry sync`) merges every `<repo>/.sandbox/services.yaml` found
+(or `werkmeister registry sync`) merges every `<repo>/.werkmeister/services.yaml` found
 under `paths.repos_root`, then applies `~/.werkmeister/services.local.yaml` on top.
 Edit a repo's fragment or the local file, never the generated one. The demo
 registry comes from the `demo-services` repo's own fragment (our private example app;
@@ -1028,7 +1031,7 @@ The columns above are the required keys. `werkmeister services` lists whatever i
 
 ### Writing a fragment
 
-A fragment is a slice of the registry committed at `<repo>/.sandbox/services.yaml`. `werkmeister detect` writes a first draft of this file for you; see [werkmeister detect](#werkmeister-detect).
+A fragment is a slice of the registry committed at `<repo>/.werkmeister/services.yaml`. `werkmeister detect` writes a first draft of this file for you; see [werkmeister detect](#werkmeister-detect).
 Its JSON Schema is `apps/cli/infra/schemas/services-fragment.schema.json`. `werkmeister setup`
 offers to map it (and `workspace.schema.json`) in VS Code's user `yaml.schemas` by local
 path, which turns on validation through the redhat.vscode-yaml extension. Don't add a
@@ -1067,7 +1070,10 @@ Rules:
 - Only `services:`, `setup_services:` and `infrastructure:` may appear. `repo:` is the
   checkout's directory name and `repos:` is derived from each service's `path`.
 - `{{home}}`, `{{repos_root}}` and `{{workspaces_root}}` expand from the developer's
-  `config.yaml`; use them instead of absolute paths in `extra_volumes:` and `environment:`.
+  `config.yaml`, `{{werkmeister_home}}` to the tool's home folder (`~/.werkmeister`, or
+  `~/.sandbox` until `werkmeister migrate`), and `{{local_domain}}` to `ingress.local_domain`;
+  use them instead of absolute paths and hard-coded domains in
+  `extra_volumes:` and `environment:`.
 - A `secrets:` key resolves from the workspace's `.werkmeister/workspace.yml` `env_vars:` first,
   then `~/.werkmeister/secrets.env` as `<SERVICE>__KEY` (service name uppercased, `-` → `_`,
   e.g. `MY_API__MY_API_KEY`), then plain `KEY`. A value from `secrets.env` reaches only
@@ -1169,7 +1175,7 @@ the pieces that are not obvious from the demo services:
   `pnpm install --frozen-lockfile` (`npm ci` on a branch still on `package-lock.json`) while <!-- docs-check: ignore -->
   the lockfile and Node major version match the stamp in the node_modules volume. It also
   mounts `~/repos` with git's `safe.directory`, so turbo hashes inputs the same way the app
-  containers do. Installs are queued host-wide through `~/.sandbox/locks`, at most
+  containers do. Installs are queued host-wide through `~/.werkmeister/locks`, at most
   `SANDBOX_INSTALL_SLOTS` (default 2) at a time, and builds run one at a time. To force a
   reinstall, run `werkmeister down -v`. After upgrading, run `werkmeister registry` so the new
   command reaches `~/.werkmeister/services.yaml`.
@@ -1369,13 +1375,15 @@ Fixed ports shared by all features:
 
 ## Configuration Files
 
-Machine config lives in `~/.werkmeister`, and each workspace's generated state in `<workspace>/.werkmeister/`. A machine or workspace that still has `~/.sandbox` or `.sandbox/` keeps working: the old directory is read in place when the new one is missing, and nothing is moved. A repo's registry fragment is the exception: it is still `<repo>/.sandbox/services.yaml`.
+Machine config lives in `~/.werkmeister`, each workspace's generated state in `<workspace>/.werkmeister/`, and a repo's registry fragment in `<repo>/.werkmeister/services.yaml`. `~/.sandbox` and `.sandbox/` are the legacy names. A machine, workspace or repo that still uses them keeps working: the old directory is read in place when the new one is missing.
+
+To move a machine off `~/.sandbox`, stop its workspaces and the shared infra, then run `werkmeister migrate` once. It moves `~/.sandbox` to `~/.werkmeister` and repoints every file that carries the old path: `config.yaml`, `env.sh`, the `~/.zshenv` block, `services.yaml`, the pr-watch schedule and each workspace's compose file. It refuses while a container the move would break is running, and a second run changes nothing. `--workspaces` also renames each workspace's `.sandbox/` to `.werkmeister/`; run `werkmeister init-workspace` in each one afterwards so its generated text follows. `--check` reports what would change without writing. Pull and rebuild the CLI before you migrate: a CLI built before the move skips `.werkmeister/` fragments.
 
 ### ~/.werkmeister/services.yaml (generated)
 
 The central service registry. Defines all services, their repos, paths, ports, k8s details, and dependencies.
 
-Generated by `werkmeister registry sync` from every `<repo>/.sandbox/services.yaml`
+Generated by `werkmeister registry sync` from every `<repo>/.werkmeister/services.yaml`
 (see "Writing a fragment"); `archetypes:` and `mcp_servers:` come from Werkmeister's
 own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is merged last.
 

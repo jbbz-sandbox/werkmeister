@@ -184,7 +184,7 @@ apps/cli/werkmeister setup            # guided wizard
 ```
 
 The wizard walks through your repo/workspace paths, the ingress base domains,
-and the service registry (generated from each repo's `.sandbox/services.yaml`),
+and the service registry (generated from each repo's `.werkmeister/services.yaml`),
 then converges the rest: the `werkmeister` and
 `ponytail` plugins (an old `sandbox-tools` install is swapped out; see
 [Migrating from `sandbox-tools`](plugins/werkmeister/README.md#migrating-from-sandbox-tools)), the companion `sandbox-workspace` checkout, a TLS

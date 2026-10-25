@@ -8,13 +8,13 @@
  *
  * A service opts into routing by declaring a `feature_router:` block in
  * services.yaml. Hostnames DERIVE from the base domains in
- * `~/.sandbox/config.yaml` rather than being restated per service:
+ * `~/.werkmeister/config.yaml` rather than being restated per service:
  *
- *   ingress:                        # ~/.sandbox/config.yaml
+ *   ingress:                        # ~/.werkmeister/config.yaml
  *     local_domain: local.werkmeister.io
  *     remote_domain: remote.werkmeister.io
  *
- *   frontend:                     # ~/.sandbox/services.yaml
+ *   frontend:                     # ~/.werkmeister/services.yaml
  *     feature_router:
  *       remote_upstream: k8s-frontend:9053
  *

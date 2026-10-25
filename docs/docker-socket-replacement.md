@@ -7,7 +7,7 @@ registry change ships in a separate PR afterwards.
 ## Problem
 
 `cli`, `werkmeister-core`, `werkmeister-vscode` and `werkmeister-dashboard` all take `extra_volumes: *host_mounts`
-from `.sandbox/services.yaml`, and they run as root. The anchor gives them two separate ways out:
+from `.werkmeister/services.yaml`, and they run as root. The anchor gives them two separate ways out:
 
 1. **The docker socket.** From inside `cli`, one command gives a privileged sibling container with
    the Mac's `/` and the user's `~/.ssh` mounted:
@@ -77,7 +77,7 @@ the host's `apps/werkmeister-mcp` over HTTP, which needs no mount at all.
 ### 2. Tests
 
 - Add `packages/werkmeister-core/no-docker-socket.test.mjs`. It fails while any service in the <!-- docs-check: ignore -->
-  repo's own `.sandbox/services.yaml` mounts `docker.sock`, so the exception can't come back
+  repo's own `.werkmeister/services.yaml` mounts `docker.sock`, so the exception can't come back
   unnoticed. It was written and run in this run's reproduce stage, and it fails today with all
   four names.
 - `workspace_init.test.mjs` "a non-interactive create with no strategy writes context_strategy:

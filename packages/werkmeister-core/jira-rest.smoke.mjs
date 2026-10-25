@@ -1,6 +1,6 @@
 // Smoke test for jira-rest: creds resolution (config YAML + env override) and
 // briefing formatting; plus a LIVE section (issue fetch + batch status) that runs
-// only when real credentials are configured in ~/.sandbox/config.yaml.
+// only when real credentials are configured in ~/.werkmeister/config.yaml.
 //   npm run build && node jira-rest.smoke.mjs [LIVE-KEY]
 import assert from "node:assert";
 import fs from "node:fs";
@@ -51,7 +51,7 @@ fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("jira-rest pure-function smoke: PASS");
 
-// 6. LIVE (needs real creds in ~/.sandbox/config.yaml and a real issue key in argv —
+// 6. LIVE (needs real creds in ~/.werkmeister/config.yaml and a real issue key in argv —
 // no default key, since a hardcoded one only exists on one Jira site)
 const creds = await jiraCreds();
 if (!creds || !process.argv[2]) {

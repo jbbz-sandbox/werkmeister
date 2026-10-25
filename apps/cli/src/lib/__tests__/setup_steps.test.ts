@@ -869,7 +869,7 @@ describe("demo-services clone gating and registry ordering", () => {
     expect(registryAt).toBeGreaterThan(labels.indexOf(`repo ${DEMO_SERVICES_REPO}`));
     expect(registryAt).toBeGreaterThan(labels.indexOf(`repo ${WORKSPACE_ROOT_REPO}`));
     expect(steps[registryAt].ok).toBe(false);
-    expect(steps[registryAt].detail).toContain("no .sandbox/services.yaml found");
+    expect(steps[registryAt].detail).toContain("no .werkmeister/services.yaml found");
   });
 
   it("generates the registry from a fragment it finds under repos_root", async () => {
@@ -1031,10 +1031,17 @@ describe("syncEditorSchemas", () => {
     expect(text).toContain("// mine");
     expect(text).toContain('"/k8s.json": "*.k8s.yaml"');
     expect(text).not.toContain("/old/");
-    expect(text).toContain(
-      `"${schemas}/services-fragment.schema.json": "**/.sandbox/services.yaml"`,
-    );
-    expect(text).toContain(`"${schemas}/workspace.schema.json": "**/.sandbox/workspace.yml"`);
+    const mapped = JSON.parse(text.replace(/\/\/.*$/gm, "").replace(/,(\s*[}\]])/g, "$1"))[
+      "yaml.schemas"
+    ];
+    expect(mapped[`${schemas}/services-fragment.schema.json`]).toEqual([
+      "**/.werkmeister/services.yaml",
+      "**/.sandbox/services.yaml",
+    ]);
+    expect(mapped[`${schemas}/workspace.schema.json`]).toEqual([
+      "**/.werkmeister/workspace.yml",
+      "**/.sandbox/workspace.yml",
+    ]);
 
     syncEditorSchemas(false, true, settings, schemas);
     expect(fs.readFileSync(settings, "utf8")).toBe(text);

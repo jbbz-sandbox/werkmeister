@@ -207,7 +207,7 @@ werkmeister restart <feature>     # restart feature's containers
 werkmeister status               # show all features, their services, resource usage
 
 # Inspection
-werkmeister detect [repo]        # generate the repo's .sandbox/services.yaml (--dry-run to preview)
+werkmeister detect [repo]        # generate the repo's .werkmeister/services.yaml (--dry-run to preview)
 werkmeister services <feature>   # list services and their endpoints for this feature
 werkmeister logs <feature> [svc] # tail logs for a feature's service
 

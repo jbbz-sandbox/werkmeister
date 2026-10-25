@@ -3,7 +3,7 @@
  *
  * Provides a simple advisory lock to prevent race conditions when multiple
  * `sandbox up` / `sandbox down` commands run concurrently.  All lock files
- * live under `~/.sandbox/locks/`.
+ * live under `~/.werkmeister/locks/`.
  *
  * Usage:
  *
@@ -92,7 +92,7 @@ function tryAcquire(lockPath: string): boolean {
  * ----------
  * name
  *     Logical lock name (e.g. `"slots"`, `"caddyfile"`).  Maps to
- *     `~/.sandbox/locks/<name>.lock`.
+ *     `~/.werkmeister/locks/<name>.lock`.
  * fn
  *     The critical section. Its return value is passed through. If it
  *     returns a promise, the lock is held until the promise settles.

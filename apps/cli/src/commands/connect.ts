@@ -136,7 +136,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const mcp = await webStatus(MCP);
   const mcpState = mcp.running ? "" : `  ${Colors.DIM}(not running)${Colors.RESET}`;
   console.log(
-    `    ${Colors.CYAN}MCP server:${Colors.RESET}    ${mcp.url}mcp  (bearer token in ~/.sandbox/mcp-token)${mcpState}`,
+    `    ${Colors.CYAN}MCP server:${Colors.RESET}    ${mcp.url}mcp  (bearer token in ~/.werkmeister/mcp-token)${mcpState}`,
   );
   if (off.length) {
     console.log(

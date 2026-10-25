@@ -1,7 +1,7 @@
 /**
  * sandbox detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
  *
- * Generate <repo>/.sandbox/services.yaml from what the repo already says about
+ * Generate <repo>/.werkmeister/services.yaml from what the repo already says about
  * itself: package manifests, Dockerfiles, compose, Helm, k8s and kustomize.
  * Re-runs only add what is missing. Spec:
  * docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc.

@@ -3,8 +3,8 @@
 #
 # The hostnames are NOT hardcoded here. They come from the sandbox ingress
 # config (`ingress.local_domain` / `ingress.remote_domain` in
-# ~/.sandbox/config.yaml, crossed with the routed services in
-# ~/.sandbox/services.yaml) and are passed in by `sandbox setup` via --domain.
+# ~/.werkmeister/config.yaml, crossed with the routed services in
+# ~/.werkmeister/services.yaml) and are passed in by `sandbox setup` via --domain.
 # That way the certificate SANs, the /etc/hosts entries and the Caddy site
 # blocks all derive from one list instead of three hand-synced copies.
 #

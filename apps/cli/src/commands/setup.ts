@@ -3,7 +3,7 @@
  *
  * The guided first-run (and re-run) of a sandbox machine. Walks through every
  * prerequisite that lives outside the checkout, writing the machine-global
- * config in `~/.sandbox` and converging the rest:
+ * config in `~/.werkmeister` and converging the rest:
  *
  * The wizard asks everything up front, in ten sections:
  *
@@ -26,7 +26,7 @@
  *
  * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
  * converges the machine (werkmeister-core/machine_setup):
- * seeding the `~/.sandbox` registry files (or migrating them up from a legacy
+ * seeding the `~/.werkmeister` registry files (or migrating them up from a legacy
  * `infra/config/` checkout), the werkmeister and ponytail plugins, the
  * companion sandbox-workspace checkout, the TLS certificate covering every
  * routed hostname, and the four optional prerequisites above.
@@ -92,7 +92,7 @@ interface Answers {
 }
 
 /**
- * Collect config answers and persist `~/.sandbox/config.yaml` + its projections.
+ * Collect config answers and persist `~/.werkmeister/config.yaml` + its projections.
  *
  * Returns the setup-step answers that are NOT stored in the YAML (one-shot
  * choices like "seed the demo registry" or "install telepresence").
@@ -346,7 +346,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     info("Already mapped.");
   } else {
     info(
-      "Validates <repo>/.sandbox/services.yaml and .sandbox/workspace.yml against the " +
+      "Validates <repo>/.werkmeister/services.yaml and .sandbox/workspace.yml against the " +
         "sandbox's JSON Schemas (needs the redhat.vscode-yaml extension). Adds " +
         `\`yaml.schemas\` entries to ${vscodeSettingsPath()}; comments and other settings are kept.`,
     );
