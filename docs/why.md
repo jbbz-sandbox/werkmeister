@@ -24,6 +24,8 @@ person can decide.
 
 > I believe the most valuable thing a developer brings is judgment. I built
 > Werkmeister so that judgment is the only thing you have to bring.
+>
+> More time to do the things that humans are good at.
 
 ## The story
 
@@ -102,7 +104,6 @@ out whether this is useful to anyone but me. If it is, the "we" starts there.
 
 For the hero, a tagline, or a README first line:
 
-- More time to do the things that humans are good at.
 - Judgment is the only part of software that can't be automated. Werkmeister is built around it.
 - Confidence shouldn't be the thing you trade for speed.
 - Autonomous where it can be. Human where it must be.
