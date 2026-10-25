@@ -53,5 +53,8 @@ test("only the external volumes are created, by their name", () => {
     name: werkmeister-turbo
     external: true
 `);
-  assert.deepEqual(created, ["volume create werkmeister-pnpm-store", "volume create werkmeister-turbo"]);
+  assert.deepEqual(created, [
+    "volume create werkmeister-pnpm-store",
+    "volume create werkmeister-turbo",
+  ]);
 });
