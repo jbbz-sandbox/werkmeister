@@ -447,7 +447,7 @@ function registerAuthoringTools(server: McpServer): void {
         "The one way to end a workspace. After every PR shipped: close the issue, write closeout.md, " +
         "commit and push every branch, tear the feature down, delete the workspace directory and the " +
         "merged code branches. With `abandon` (a reason) when work is unshipped: record the reason, leave " +
-        "the issue, push and keep every branch, then remove. Without `abandon` it refuses while a PR is " +
+        "the issue, push and keep every branch with commits of its own, then remove. Without `abandon` it refuses while a PR is " +
         "unshipped. Destructive — confirm with the person first. Nothing is deleted if any branch " +
         "cannot be pushed.",
       inputSchema: {

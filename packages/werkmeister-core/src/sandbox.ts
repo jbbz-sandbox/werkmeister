@@ -56,6 +56,7 @@ import {
   forwardSpecs,
   modelPricingYamlPath,
   portsYamlPath,
+  sandboxHome,
   servicesYamlPath,
   slotPortRange,
   workspacesRoot,
@@ -97,6 +98,7 @@ import {
 import { listNotes } from "./notes.js";
 import {
   abandonWorkspace,
+  commitsAhead,
   type Deps,
   type Lifecycle,
   lifecycleOf,
@@ -2268,12 +2270,6 @@ export async function worktreeSources(worktrees: string[]): Promise<string[]> {
 }
 
 /**
- * Hand a worktree's branch off to the remote: stage + commit any changes, then
- * push the branch (set upstream). This is the "handoff" — after a successful
- * push nothing is lost when the local workspace is deleted. Returns whether the
- * branch is safely on the remote plus a one-line status.
- */
-/**
  * The line of git output that names the problem. `git push` prints the remote
  * URL first, and the `! [rejected] ... (non-fast-forward)` line after it, so
  * the first line alone is useless. Prefer a `!`, `error:` or `fatal:` line.
@@ -2285,11 +2281,21 @@ function gitErrorLine(text: string): string {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * Hand a worktree's branch off to the remote: commit tracked changes, then push
+ * the branch (set upstream). This is the "handoff" — after it nothing is lost
+ * when the local workspace is deleted. Untracked files never go on the branch
+ * (SW-91: a container's build cache got committed as work); they are tarred to
+ * *keepDir* instead, and so is the handoff commit as a patch when *push* is off.
+ * Returns whether the work is safe plus a status line, the commit's `--stat`
+ * and where anything was kept.
+ */
 export async function commitAndPush(
   dir: string,
   message = `chore: handoff ${path.basename(dir)} before workspace teardown`,
-  // Only these paths (relative to *dir*), e.g. the PR files a record commit is about; default: everything.
+  // Only these paths (relative to *dir*), e.g. the PR files a record commit is about; default: every tracked change.
   paths: string[] = [],
+  opts: { keepDir?: string; push?: boolean } = {},
 ): Promise<{ ok: boolean; message: string }> {
   const label = path.basename(dir);
   const br = await runCapture("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"]).catch(
@@ -2299,14 +2305,18 @@ export async function commitAndPush(
   if (!branch || branch === "HEAD")
     return { ok: false, message: `${label}: no branch to push (detached HEAD)` };
 
-  // Stage everything, then commit only if there's something staged
-  // (`diff --cached --quiet` exits 1 when there are staged changes).
+  // Named paths may be new files (an adopted PR file), so `-A` them; otherwise tracked changes only.
+  // Commit only if something is staged (`diff --cached --quiet` exits 1 when there is).
   const only = paths.length ? ["--", ...paths] : [];
-  await runCapture("git", ["-C", dir, "add", "-A", ...only]).catch(() => {});
+  await runCapture("git", ["-C", dir, "add", ...(paths.length ? ["-A", ...only] : ["-u"])]).catch(
+    () => {},
+  );
   const staged = await runCapture("git", ["-C", dir, "diff", "--cached", "--quiet", ...only]).catch(
     () => null,
   );
-  if (staged && staged.code === 1) {
+  const lines: string[] = [];
+  const committed = staged?.code === 1;
+  if (committed) {
     const c = await runCapture("git", ["-C", dir, "commit", "-m", message, ...only]).catch(
       () => null,
     );
@@ -2316,6 +2326,47 @@ export async function commitAndPush(
         message: `${label}: commit failed — ${c ? gitErrorLine(c.stderr || c.stdout) : "spawn error"}`,
       };
     }
+    if (!paths.length) {
+      const stat = await runCapture("git", ["-C", dir, "show", "--stat", "--format=", "HEAD"]);
+      lines.push(
+        `  committed ${message}:`,
+        ...stripAnsi(stat.stdout)
+          .trimEnd()
+          .split("\n")
+          .map((l) => `   ${l}`),
+      );
+    }
+  }
+  const keepDir = opts.keepDir ?? path.join(sandboxHome(), "handoff");
+  if (!paths.length) {
+    const kept = await keepUntracked(dir, path.join(keepDir, `${label}.tgz`));
+    if (typeof kept === "string") return { ok: false, message: `${label}: ${kept}` };
+    if (kept.length)
+      lines.push(
+        `  ${kept.length} untracked file(s) left off the branch, kept in ${path.join(keepDir, `${label}.tgz`)}:`,
+        ...kept.map((f) => `    ${f}`),
+      );
+  }
+  const status = (head: string) => ({
+    ok: true,
+    message: [`${label}: ${head}`, ...lines].join("\n"),
+  });
+
+  if (opts.push === false) {
+    if (!committed) return status("nothing to hand off (not pushed)");
+    const patch = path.join(keepDir, `${label}.patch`);
+    const fp = await runCapture("git", ["-C", dir, "format-patch", "-1", "--binary", "--stdout"]);
+    try {
+      if (fp.code !== 0) throw new Error(gitErrorLine(fp.stderr));
+      await fs.mkdir(keepDir, { recursive: true });
+      await fs.writeFile(patch, fp.stdout);
+    } catch (e) {
+      return {
+        ok: false,
+        message: `${label}: could not save the handoff patch — ${(e as Error).message}`,
+      };
+    }
+    return status(`not pushed (abandoned, no commits of its own); handoff commit kept in ${patch}`);
   }
 
   // Nothing to hand off if HEAD already lives on the remote branch — a clean
@@ -2339,7 +2390,7 @@ export async function commitAndPush(
       `${remoteRef}..HEAD`,
     ]).catch(() => null);
     if (ahead && ahead.code === 0 && stripAnsi(ahead.stdout).trim() === "0") {
-      return { ok: true, message: `${label}: nothing to hand off (${branch} already on origin)` };
+      return status(`nothing to hand off (${branch} already on origin)`);
     }
   }
 
@@ -2350,7 +2401,37 @@ export async function commitAndPush(
       message: `${label}: push failed — ${p ? gitErrorLine(p.stderr || p.stdout) : "spawn error"}`,
     };
   }
-  return { ok: true, message: `${label}: pushed ${branch}` };
+  return status(`pushed ${branch}`);
+}
+
+/**
+ * Tar *dir*'s untracked, non-ignored files to *tarball* so the teardown that
+ * follows can't lose them. Returns the files kept, or why it failed.
+ */
+async function keepUntracked(dir: string, tarball: string): Promise<string[] | string> {
+  const ls = await runCapture("git", [
+    "-C",
+    dir,
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "-z",
+  ]);
+  if (ls.code !== 0) return `could not list untracked files — ${gitErrorLine(ls.stderr)}`;
+  const files = ls.stdout.split("\0").filter(Boolean);
+  if (!files.length) return [];
+  const list = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "handoff-")), "files");
+  try {
+    await fs.writeFile(list, files.join("\0"));
+    await fs.mkdir(path.dirname(tarball), { recursive: true });
+    // `--null` before `-T`: bsdtar reads the list mode from flags already seen.
+    const t = await runCapture("tar", ["-czf", tarball, "-C", dir, "--null", "-T", list]);
+    if (t.code !== 0)
+      return `could not keep untracked files in ${tarball} — ${stripAnsi(t.stderr).trim()}`;
+  } finally {
+    await fs.rm(path.dirname(list), { recursive: true, force: true });
+  }
+  return files;
 }
 
 /**
@@ -2390,8 +2471,19 @@ export async function removeWorkspace(
 
   // 1. Handoff — commit + push every branch. Abort the whole teardown if any
   //    branch can't be pushed, so a delete never loses un-pushed work.
+  //    An abandoned code branch with no commits of its own isn't pushed: it would hold only
+  //    the handoff commit, and that becomes a junk PR (SW-91). The record branch always goes.
+  const abandoned = !!opts.abandon?.trim();
+  const keepDir = path.join(sandboxHome(), "handoff", name);
+  // close-out writes closeout.md just before this and it belongs on the record branch, but the
+  // handoff only commits tracked changes, so stage it by name (docs/workspace-lifecycle.md).
+  if (existsSync(path.join(target, "closeout.md")))
+    await runCapture("git", ["-C", target, "add", "--", "closeout.md"]).catch(() => {});
   const pushes = [];
-  for (const wt of worktrees) pushes.push(await commitAndPush(wt));
+  for (const wt of worktrees) {
+    const push = !(abandoned && wt !== target && (await commitsAhead(wt)) === 0);
+    pushes.push(await commitAndPush(wt, undefined, [], { keepDir, push }));
+  }
   parts.push(...pushes.map((p) => p.message));
   if (pushes.some((p) => !p.ok)) {
     throw new WorkspaceError(

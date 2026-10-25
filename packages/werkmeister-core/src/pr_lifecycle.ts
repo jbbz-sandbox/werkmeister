@@ -108,7 +108,8 @@ export interface Deps {
     message: string,
     paths: string[],
   ) => Promise<{ ok: boolean; message: string }>;
-  remove: (name: string) => Promise<{ output: string }>;
+  /** *abandoned*: don't push a code branch that would hold only the handoff commit (SW-91). */
+  remove: (name: string, abandoned: boolean) => Promise<{ output: string }>;
   /** Terminal sessions still open in the workspace, one line each. */
   terminals: (ws: string) => Promise<string[]>;
   sourceOf: (dir: string) => Promise<string | null>;
@@ -161,7 +162,11 @@ export function defaultDeps(): Deps {
     tracker: issueTracker(),
     statuses: resolveIssueStatuses(overrides, loadIssueTracker()),
     commitRecord: commitAndPush,
-    remove: (name) => removeWorkspace(name, { closedOut: true }),
+    remove: (name, abandoned) =>
+      removeWorkspace(name, {
+        closedOut: true,
+        abandon: abandoned ? "close-out --abandon" : undefined,
+      }),
     terminals: (ws) => openTerminalSessions(ws),
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
     session: (ws) => callbackFields(ws, process.env),
@@ -1234,16 +1239,32 @@ export async function removalBlockers(
       continue;
     }
     if (PAST_MERGE.has(status)) continue;
-    let base = f?.fm["base"] ? `origin/${f.fm["base"]}` : "";
-    if (!base) {
-      const head = await run("git", ["-C", dir, "rev-parse", "--abbrev-ref", "origin/HEAD"]);
-      base = head.code === 0 && head.stdout.trim() ? head.stdout.trim() : "origin/main";
-    }
-    const ahead = await run("git", ["-C", dir, "rev-list", "--count", `${base}..HEAD`]);
-    const n = ahead.code === 0 ? Number(ahead.stdout.trim()) : 0;
+    const base = f?.fm["base"] ? `origin/${f.fm["base"]}` : await originBase(dir, run);
+    const n = (await commitsAhead(dir, base, run)) ?? 0;
     if (n > 0) out.push(`${repo}: ${n} commit(s) not on ${base} and no merged PR`);
   }
   return out;
+}
+
+async function originBase(dir: string, run: Run): Promise<string> {
+  const head = await run("git", ["-C", dir, "rev-parse", "--abbrev-ref", "origin/HEAD"]);
+  return head.code === 0 && head.stdout.trim() ? head.stdout.trim() : "origin/main";
+}
+
+/** Commits on *dir*'s HEAD that *base* (default: origin's default branch) lacks; null when git can't tell. */
+export async function commitsAhead(
+  dir: string,
+  base?: string,
+  run: Run = execRun,
+): Promise<number | null> {
+  const ahead = await run("git", [
+    "-C",
+    dir,
+    "rev-list",
+    "--count",
+    `${base ?? (await originBase(dir, run))}..HEAD`,
+  ]);
+  return ahead.code === 0 ? Number(ahead.stdout.trim()) : null;
 }
 
 export function renderCloseout(prs: PrFile[], issue: string, note?: string): string {
@@ -1428,7 +1449,7 @@ async function closeOutLocked(
 
   // Before removal: the cwd of a session in a deleted folder no longer matches it.
   const terminals = await deps.terminals(ws);
-  lines.push((await deps.remove(name)).output);
+  lines.push((await deps.remove(name, abandoned)).output);
 
   // After removal: a branch checked out in a worktree can't be deleted.
   for (const { src, branch } of branches) {

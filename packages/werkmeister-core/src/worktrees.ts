@@ -35,7 +35,7 @@ const _GITIGNORE_GENERATED = ["/.env", _SECRET_ENVS_RULE] as const;
 /**
  * Add the `/.env.*` rule to a workspace .gitignore written before it existed.
  * `sandbox up` writes per-service secret files without rerunning
- * init-workspace, and close-out (removeWorkspace) runs `git add -A`, commits and pushes.
+ * init-workspace, and close-out (removeWorkspace) commits tracked changes and pushes.
  */
 export function ensureSecretEnvsIgnored(workspaceDir: string): void {
   const gitignorePath = path.join(workspaceDir, ".gitignore");

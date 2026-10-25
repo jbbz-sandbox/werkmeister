@@ -320,7 +320,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         `Abandon workspace '${ws.name}'?`,
         {
           modal: true,
-          detail: `Records the reason, pushes every branch and keeps them, tears down containers and deletes ${ws.path}. The delete is aborted if any push fails.`,
+          detail: `Records the reason, pushes and keeps every branch with commits of its own, tears down containers and deletes ${ws.path}. Untracked files and a branch with nothing of its own are saved under the werkmeister home instead. The delete is aborted if any push fails.`,
         },
         "Abandon",
       );
