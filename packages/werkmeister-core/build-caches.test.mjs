@@ -167,7 +167,11 @@ test("a new tool is a registry entry: yarn and cargo caches reach the compose wi
         external: true,
       });
       assert.deepEqual(doc.volumes["cargo-home"], { name: "cargo-home", external: true });
-      assert.equal(doc.volumes["werkmeister-unused"], undefined, "an undetected cache is not declared");
+      assert.equal(
+        doc.volumes["werkmeister-unused"],
+        undefined,
+        "an undetected cache is not declared",
+      );
       for (const svc of ["backend", "demo-install"]) {
         const s = doc.services[svc];
         assert.ok(s.volumes.includes("werkmeister-yarn-cache:/yarn-cache"), svc);
@@ -190,7 +194,10 @@ test("the built-in pnpm-store and turbo caches attach by lockfile alone", async 
         name: "werkmeister-pnpm-store",
         external: true,
       });
-      assert.deepEqual(doc.volumes["werkmeister-turbo"], { name: "werkmeister-turbo", external: true });
+      assert.deepEqual(doc.volumes["werkmeister-turbo"], {
+        name: "werkmeister-turbo",
+        external: true,
+      });
       for (const svc of ["backend", "demo-install"]) {
         const s = doc.services[svc];
         assert.ok(s.volumes.includes("werkmeister-pnpm-store:/pnpm-store"), svc);
