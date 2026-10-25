@@ -37,7 +37,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       `  ${Colors.DIM}${
         abandon === null
           ? "Closes the issue, writes closeout.md, removes the workspace, and deletes merged code branches."
-          : "Records the reason in closeout.md, pushes every branch and keeps them, then removes the workspace."
+          : "Records the reason in closeout.md, pushes and keeps every branch with commits of its own, then removes the workspace."
       }${Colors.RESET}`,
     );
     if (

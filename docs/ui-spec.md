@@ -105,7 +105,7 @@ Both confirm inline in the card footer, never in a modal (VS Code: a modal warni
 | Verb | Does (`closeOut`, `packages/werkmeister-core/src/pr_lifecycle.ts`) | Confirm |
 |---|---|---|
 | `✓ Close out` | Every PR shipped, closed or abandoned: moves the issue to Done with a "Shipped" comment, writes `closeout.md`, removes the workspace, deletes the merged branches | one step: `✓ Yes, close out` |
-| `✕ Abandon…` | The work stops unsettled: posts "Abandoned: `<reason>`" on the issue and moves it to the abandoned status, pushes every branch and keeps them, removes the workspace | a required reason, then `✕ Yes, abandon` |
+| `✕ Abandon…` | The work stops unsettled: posts "Abandoned: `<reason>`" on the issue and moves it to the abandoned status, pushes and keeps every branch with commits of its own, removes the workspace | a required reason, then `✕ Yes, abandon` |
 
 ## The create form
 

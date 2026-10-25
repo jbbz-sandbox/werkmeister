@@ -264,7 +264,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 
 1. **Issue.** The safety net: if the workspace has one and it isn't already done (shipping normally moved it), move it to `done` ([Issue status](#issue-status)). The comment names the release and PR. A tracker refusal is a warning in the output and in `closeout.md`; close-out goes on.
 2. **Record.** Write `closeout.md`: one row per PR (repo, URL, status, merge SHA, release, reason) plus the issue line.
-3. **Remove.** `removeWorkspace`, the internal step: commit and push every branch (the record branch now carries `closeout.md`), `werkmeister down`, reload the proxy, delete the directory, prune the worktrees. If any push fails, nothing is deleted.
+3. **Remove.** `removeWorkspace`, the internal step: commit tracked changes and push every branch (the record branch now carries `closeout.md`), `werkmeister down`, reload the proxy, delete the directory, prune the worktrees. If any push fails, nothing is deleted. Untracked files never go on a branch: they are saved to `handoff/<workspace>/<repo>.tgz` in the werkmeister home, and the output lists them with each handoff commit's `--stat`.
 4. **Branches.** Delete each merged code branch locally, and on origin if it is still there (GitHub's "delete branch on merge" may have done it already). An `adopted` PR's branch was never the workspace's, so it is kept. The record branch is kept.
 
 **Abandoned.** `werkmeister close-out <name> --abandon "<reason>"` ends a workspace whose work won't ship. The reason is required.
@@ -272,7 +272,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 1. Every unsettled PR file becomes `abandoned` with the reason.
 2. The issue gets a comment with the reason and moves to `abandoned` when one is configured (GitHub: closed as not planned). A refusal is a warning.
 3. `closeout.md` records the reason.
-4. Remove, as above: every branch is pushed, so no work is lost.
+4. Remove, as above, except that a code branch with no commits of its own is not pushed (it would hold only the handoff commit). Its handoff commit is saved as `handoff/<workspace>/<repo>.patch` instead, so no work is lost.
 5. Every branch is kept.
 
 The `abandoned` PR status is the record of this, not a second way in. A workspace whose PR files are already all `abandoned` closes out the same way without the flag.
