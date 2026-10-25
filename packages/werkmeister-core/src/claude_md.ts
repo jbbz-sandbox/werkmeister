@@ -616,11 +616,11 @@ ${
   hasUrl
     ? `### Feature missing from \`/__werkmeister\` selector
 
-The dropdown is populated from \`~/.sandbox/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.sandbox.local.feature\` — the source of truth) if a slot is allocated without a proxy regen.
+The dropdown is populated from \`~/.sandbox/infra/proxy/features.json\` (a static file served by Caddy), which is regenerated alongside the Caddyfile. It can drift from the live container labels (\`com.werkmeister.feature\` — the source of truth) if a slot is allocated without a proxy regen.
 
 Diagnose — compare what's labeled vs. what the UI shows:
 \`\`\`bash
-docker ps -a --filter label=com.sandbox.local.feature   --format '{{ .Label "com.sandbox.local.feature" }}' | sort -u
+docker ps -a --filter label=com.werkmeister.feature   --format '{{ .Label "com.werkmeister.feature" }}' | sort -u
 jq '[.[].name]' "$HOME/.sandbox/infra/proxy/features.json"
 \`\`\`
 

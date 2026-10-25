@@ -42,6 +42,7 @@ import {
   composeUpServiceAsync,
   dependencyOrder,
   getContainerStatus,
+  liveProject,
   workspaceForFeature,
 } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
@@ -75,6 +76,8 @@ import {
   getPortRange,
   getServicePort,
   getSlot,
+  LABEL_FEATURE,
+  LEGACY_LABEL_FEATURE,
   releaseSlot,
 } from "./slots.js";
 import { strategyFor } from "./strategies/index.js";
@@ -344,7 +347,7 @@ export async function startService(
 /** Throws `COMPOSE_UP_FAILED` when the external network every feature compose joins can't be made. */
 function requireSharedNetwork(): void {
   if (!ensureSharedNetwork()) {
-    throw new SandboxError("Could not create the sandbox-shared network", "COMPOSE_UP_FAILED");
+    throw new SandboxError("Could not create the werkmeister-shared network", "COMPOSE_UP_FAILED");
   }
 }
 
@@ -589,17 +592,21 @@ function mtimeMs(p: string): number | null {
   }
 }
 
-const LABEL_FEATURE = "com.sandbox.local.feature";
 const LABEL_WORKDIR = "com.docker.compose.project.working_dir";
 
 /** Running feature containers grouped by feature; null when docker cannot be read. */
 function runningFeatures(runCmd: (cmd: string[]) => RunResult): RunningFeature[] | null {
   try {
-    const ids = runCmd(["docker", "ps", "-q", "--filter", `label=${LABEL_FEATURE}`]);
-    if (ids.status !== 0) return null;
-    const list = ids.stdout.split("\n").filter(Boolean);
-    if (!list.length) return [];
-    const fmt = `{{index .Config.Labels "${LABEL_FEATURE}"}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}`;
+    // One `ps` per label set: docker ANDs repeated label filters.
+    const list = new Set<string>();
+    for (const label of [LABEL_FEATURE, LEGACY_LABEL_FEATURE]) {
+      const ids = runCmd(["docker", "ps", "-q", "--filter", `label=${label}`]);
+      if (ids.status !== 0) return null;
+      for (const id of ids.stdout.split("\n").filter(Boolean)) list.add(id);
+    }
+    if (!list.size) return [];
+    const feature = `or (index .Config.Labels "${LABEL_FEATURE}") (index .Config.Labels "${LEGACY_LABEL_FEATURE}")`;
+    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}`;
     const inspect = runCmd(["docker", "inspect", "--format", fmt, ...list]);
     if (inspect.status !== 0) return null;
     const byFeature = new Map<string, RunningFeature>();
@@ -777,7 +784,7 @@ export async function pause(feature: string): Promise<PauseResult> {
   if (readPaused(workspace)) {
     throw new SandboxError(`'${feature}' is already paused`, "ALREADY_PAUSED");
   }
-  const live = await projectContainers(`sandbox-${feature}`, undefined, { all: false });
+  const live = await projectContainers(await liveProject(feature), undefined, { all: false });
   if (live === null)
     throw new SandboxError("docker not found / not running", "COMPOSE_PAUSE_FAILED");
   const containers = dependencyOrder(live.filter((c) => c.state === "running")).map((c) => c.name);

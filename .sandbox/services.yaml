@@ -23,7 +23,7 @@ repo:
 services:
   # --- The sandbox repo's own workspaces (self-hosting) -----------------------
   # All five share one repo bind mount at /app and one per-feature node_modules
-  # volume; sandbox-install populates it and builds werkmeister-core/dist first.
+  # volume; werkmeister-install populates it and builds werkmeister-core/dist first.
   # 1G each: the pre-PR gate can run the dashboard's build in any of them, and
   # it runs out of heap at 512M.
   # cli, werkmeister-core and werkmeister-vscode (types cli/library/extension) idle under
@@ -48,7 +48,7 @@ services:
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
-    setup_service: sandbox-install
+    setup_service: werkmeister-install
     image: node:22
     command: "cd apps/cli && exec pnpm run watch"
     memory_limit: 1G
@@ -68,7 +68,7 @@ services:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
-      # SW-31: pnpm is corepack's shim in the tools volume (sandbox-install puts
+      # SW-31: pnpm is corepack's shim in the tools volume (werkmeister-install puts
       # it there); the pnpm version it fetches lives there too, so it downloads
       # once per feature, without the prompt that would hang a container.
       COREPACK_HOME: /opt/sandbox-tools/corepack
@@ -84,7 +84,7 @@ services:
     internal_port: 3999
     port_offset: 2
     health_endpoint: /
-    setup_service: sandbox-install
+    setup_service: werkmeister-install
     image: node:22
     command: "cd packages/werkmeister-core && exec pnpm exec tsc --watch --preserveWatchOutput"
     memory_limit: 1G
@@ -107,7 +107,7 @@ services:
     internal_port: 3997
     port_offset: 4
     health_endpoint: /
-    setup_service: sandbox-install
+    setup_service: werkmeister-install
     # Dockerfile adds xvfb and Electron's libs; the stock image makes
     # test:integration exit 127 (SW-62). The tag is local, never pulled.
     image: werkmeister-vscode:local
@@ -130,7 +130,7 @@ services:
     internal_port: 3001
     port_offset: 5
     health_endpoint: /
-    setup_service: sandbox-install
+    setup_service: werkmeister-install
     image: node:22
     command: "cd apps/werkmeister-dashboard && exec pnpm run dev"
     memory_limit: 1G
@@ -138,7 +138,7 @@ services:
     node_modules_volume: node-modules
     extra_volumes: *host_mounts
     environment: *host_env
-    # dashboard.local.sandbox.com — local only; nothing runs in the cluster.
+    # werkmeister-dashboard.<local_domain> — local only; nothing runs in the cluster.
     feature_router: {}
 
   # The public docs site (SW-80): VitePress dev server over the repo's docs, in
@@ -154,7 +154,7 @@ services:
     internal_port: 5173
     port_offset: 6
     health_endpoint: /
-    setup_service: sandbox-install
+    setup_service: werkmeister-install
     image: node:22
     command: "cd apps/docs-site && exec pnpm exec vitepress dev . --host 0.0.0.0 --port 5173"
     memory_limit: 512M
@@ -171,14 +171,14 @@ services:
       COREPACK_HOME: /opt/sandbox-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       # Vite refuses unknown Host headers; this lets Caddy's hostname through.
-      # Match it to local_domain in config.yaml.
-      DOCS_ALLOWED_HOSTS: .local.sandbox.com
-    # docs-site.local.sandbox.com/
+      # Registry sync fills in this machine's local_domain from config.yaml.
+      DOCS_ALLOWED_HOSTS: ".{{local_domain}}"
+    # docs-site.<local_domain>/
     feature_router: {}
 
 setup_services:
   # The sandbox repo's install + build + tools download, all in startup.sh
-  # (infra/compose/scripts/sandbox-install-startup.sh). The build runs so
+  # (infra/compose/scripts/werkmeister-install-startup.sh). The build runs so
   # werkmeister-core/dist exists before the app services start; the `tools` volume
   # gets docker/compose/kubectl and the pnpm shim for the host-access services.
   # SW-31: `pnpm install --frozen-lockfile` (`npm ci` for a branch still on
@@ -193,7 +193,7 @@ setup_services:
   # `pnpm-store` caches, attached here and to the app services by turbo.json and
   # pnpm-lock.yaml. See them with `werkmeister status`; clear them with
   # `werkmeister cache prune`.
-  sandbox-install:
+  werkmeister-install:
     image: node:22
     command: "sh /usr/local/bin/startup.sh install"
     node_modules_volume: node-modules

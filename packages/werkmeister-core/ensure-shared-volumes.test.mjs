@@ -46,12 +46,12 @@ test("only the external volumes are created, by their name", () => {
   const created = ensure(`volumes:
   alpha-node-modules:
     name: alpha-node-modules
-  sandbox-pnpm-store:
-    name: sandbox-pnpm-store
+  werkmeister-pnpm-store:
+    name: werkmeister-pnpm-store
     external: true
   turbo:
-    name: sandbox-turbo
+    name: werkmeister-turbo
     external: true
 `);
-  assert.deepEqual(created, ["volume create sandbox-pnpm-store", "volume create sandbox-turbo"]);
+  assert.deepEqual(created, ["volume create werkmeister-pnpm-store", "volume create werkmeister-turbo"]);
 });

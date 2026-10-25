@@ -1,5 +1,5 @@
 /**
- * sandbox-install-startup.sh `install` mode (SW-33): skip npm ci while the
+ * werkmeister-install-startup.sh `install` mode (SW-33): skip npm ci while the
  * lockfile and Node major match the stamp in node_modules, and queue installs
  * host-wide through flock'd slot files. SW-35: builds run one at a time.
  * SW-31: a pnpm lockfile installs with pnpm, from corepack's shim.
@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 const SCRIPT = path.resolve(
   fileURLToPath(import.meta.url),
   "../../../..",
-  "infra/compose/scripts/sandbox-install-startup.sh",
+  "infra/compose/scripts/werkmeister-install-startup.sh",
 );
 const hasFlock = spawnSync("sh", ["-c", "command -v flock && command -v sha256sum"]).status === 0;
 
@@ -71,7 +71,7 @@ function npmCalls(): string[] {
 const stamp = (app: string) => path.join(app, "node_modules", ".sandbox-install-hash");
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-install-"));
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-install-"));
   // `ci` counts itself in INFLIGHT while it "installs", so the queue case can see overlap.
   writeExec(
     path.join(tmp, "bin", "npm"),
@@ -109,7 +109,7 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-describe.skipIf(!hasFlock)("sandbox-install-startup.sh install", () => {
+describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
   it("installs once, then skips npm ci while nothing changed", () => {
     const app = makeApp("app");
     expect(run(app).status).toBe(0);

@@ -5,12 +5,13 @@
  * caddy, plus jaeger and redisinsight when `infra.profiles` turns them on.
  *
  * The work is `werkmeister-core/infra`; what is left here is the banners, the health
- * table and the developer-tools block. The three `tools.local.sandbox.com` URLs
+ * table and the developer-tools block. The three `tools.<local_domain>` URLs
  * stay renderer-side deliberately — moving them opens where tool URLs are
  * configured, which is not this migration's question (note 070).
  */
 
 import * as readline from "node:readline/promises";
+import { loadIngress } from "werkmeister-core/global_config";
 import { connectK8s, infraHealth, up as infraUp } from "werkmeister-core/infra";
 import { ghBin, issueTracker, type TrackerAuth } from "werkmeister-core/issue_tracker";
 import { run as procRun } from "werkmeister-core/proc";
@@ -116,19 +117,14 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`  ${Colors.BOLD}Developer tools:${Colors.RESET}`);
   // Opt-in (SW-76): link only what came up, whether by config or COMPOSE_PROFILES.
   const off: string[] = [];
+  const tools = `https://tools.${loadIngress().local_domain}`;
   if ("redisinsight" in health) {
-    console.log(
-      `    ${Colors.CYAN}RedisInsight:${Colors.RESET}  https://tools.local.sandbox.com/redisinsight`,
-    );
+    console.log(`    ${Colors.CYAN}RedisInsight:${Colors.RESET}  ${tools}/redisinsight`);
   } else off.push("RedisInsight");
   if ("jaeger" in health) {
-    console.log(
-      `    ${Colors.CYAN}Jaeger:${Colors.RESET}        https://tools.local.sandbox.com/jaeger`,
-    );
+    console.log(`    ${Colors.CYAN}Jaeger:${Colors.RESET}        ${tools}/jaeger`);
   } else off.push("Jaeger");
-  console.log(
-    `    ${Colors.CYAN}GraphQL:${Colors.RESET}       https://tools.local.sandbox.com/graphql`,
-  );
+  console.log(`    ${Colors.CYAN}GraphQL:${Colors.RESET}       ${tools}/graphql`);
   // The dashboard is checkout-only (web_servers.start skips it on a package
   // install), so only advertise a URL that is actually being served.
   const dashboard = await webStatus(DASHBOARD);
