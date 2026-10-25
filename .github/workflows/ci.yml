@@ -171,12 +171,34 @@ jobs:
           # which npmjs.com accepts because this workflow is the package's
           # trusted publisher.
 
-  # SW-80: the docs site tracks the latest published release. Its own job, so npm
-  # publishing stays off the github-pages environment (its branch rules, and the
-  # environment claim it would add to the npm OIDC token).
+  # SW-96: a docs-only merge publishes nothing, so on its own the site would wait
+  # for the next release to show it. "Only docs" means every changed file is a
+  # .md file or lives under apps/docs-site/; a merge that also touches code keeps
+  # waiting for its release, so the site never describes an unpublished CLI.
+  docs-only:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.only_docs }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" --paginate --jq '.files[].filename')
+          if [ -n "$files" ] && ! grep -qvE '(\.md$|^apps/docs-site/)' <<<"$files"; then
+            echo "only_docs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "only_docs=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # SW-80: the docs site tracks the latest published release, plus docs-only
+  # merges (SW-96). Its own job, so npm publishing stays off the github-pages
+  # environment (its branch rules, and the environment claim it would add to the
+  # npm OIDC token).
   docs-deploy:
-    needs: release
-    if: needs.release.outputs.published == 'true'
+    needs: [release, docs-only]
+    if: needs.release.outputs.published == 'true' || needs.docs-only.outputs.changed == 'true'
     concurrency: pages
     permissions:
       pages: write      # deploy-pages
