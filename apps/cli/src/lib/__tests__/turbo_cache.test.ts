@@ -44,7 +44,7 @@ describe("the built-in turbo cache on this repo's services", () => {
       path.dirname(REPO),
     );
     const fed = Object.keys(services).filter(
-      (n) => services[n]?.setup_service === "sandbox-install",
+      (n) => services[n]?.setup_service === "werkmeister-install",
     );
     expect(fed.sort()).toEqual([
       "cli",
@@ -53,8 +53,8 @@ describe("the built-in turbo cache on this repo's services", () => {
       "werkmeister-dashboard",
       "werkmeister-vscode",
     ]);
-    for (const def of [setups["sandbox-install"], ...fed.map((n) => services[n])]) {
-      expect(def?.extra_volumes).toContain(`^sandbox-turbo:${BUILT_IN.path}`);
+    for (const def of [setups["werkmeister-install"], ...fed.map((n) => services[n])]) {
+      expect(def?.extra_volumes).toContain(`^werkmeister-turbo:${BUILT_IN.path}`);
       expect(def?.environment?.TURBO_CACHE_DIR).toBe(BUILT_IN.path);
       expect(def?.environment?.TURBO_CACHE_MAX_AGE).toBe(MAX_AGE);
     }

@@ -5,14 +5,14 @@
 # On-demand services (the PR gate starts these): {{ local_services | selectattr('on_demand') | map(attribute='name') | join(', ') }}
 {% endif %}
 
-name: sandbox-{{ feature_name }}
+name: werkmeister-{{ feature_name }}
 
 networks:
   feature-{{ feature_name }}:
-    name: sandbox-{{ feature_name }}
+    name: werkmeister-{{ feature_name }}
   shared-network:
     external: true
-    name: sandbox-shared
+    name: werkmeister-shared
 
 {% set setup_services_needed = [] %}
 {% set setup_services_local = [] %}
@@ -80,12 +80,12 @@ services:
     profiles: ["on-demand"]
 {% endif %}
     labels:
-      com.sandbox.local.feature: "{{ feature_name }}"
-      com.sandbox.local.slot: "{{ slot }}"
-      com.sandbox.local.service: "{{ setup_name }}"
+      com.werkmeister.feature: "{{ feature_name }}"
+      com.werkmeister.slot: "{{ slot }}"
+      com.werkmeister.service: "{{ setup_name }}"
       {#- One-shot: `sandbox status` and the VS Code tree read this to keep a
           finished setup container out of the running/total tally. #}
-      com.sandbox.local.role: "setup"
+      com.werkmeister.role: "setup"
     working_dir: /app
     volumes:
       - {{ workspace_path }}/{{ setup.repo }}:/app
@@ -108,8 +108,9 @@ services:
 {# Opt-in: no `*-startup.sh` ships in infra/compose/scripts/, and bind-mounting #}
 {# a host path that does not exist makes Docker silently create an empty        #}
 {# directory at /usr/local/bin/startup.sh.                                      #}
+{# SW-93: a fragment still naming the setup `sandbox-install` gets the renamed script; SW-11 drops this. #}
 {% if setup.startup_script %}
-      - {{ sandbox_root }}/infra/compose/scripts/{{ setup_name }}-startup.sh:/usr/local/bin/startup.sh
+      - {{ sandbox_root }}/infra/compose/scripts/{{ 'werkmeister-install' if setup_name == 'sandbox-install' else setup_name }}-startup.sh:/usr/local/bin/startup.sh
 {% endif %}
     command: ["/bin/sh", "-c", "{{ setup.command }}"]
     deploy:
@@ -156,10 +157,10 @@ services:
     profiles: ["on-demand"]
 {% endif %}
     labels:
-      com.sandbox.local.feature: "{{ feature_name }}"
-      com.sandbox.local.slot: "{{ slot }}"
-      com.sandbox.local.service: "{{ svc.name }}"
-      com.sandbox.local.role: "app"
+      com.werkmeister.feature: "{{ feature_name }}"
+      com.werkmeister.slot: "{{ slot }}"
+      com.werkmeister.service: "{{ svc.name }}"
+      com.werkmeister.role: "app"
     working_dir: /app
 {% if idle %}
     restart: on-failure:3
@@ -281,10 +282,10 @@ services:
     image: {{ extra.image }}
     container_name: {{ container_of(feature_name, extra_name) }}
     labels:
-      com.sandbox.local.feature: "{{ feature_name }}"
-      com.sandbox.local.slot: "{{ slot }}"
-      com.sandbox.local.service: "{{ extra_name }}"
-      com.sandbox.local.role: "app"
+      com.werkmeister.feature: "{{ feature_name }}"
+      com.werkmeister.slot: "{{ slot }}"
+      com.werkmeister.service: "{{ extra_name }}"
+      com.werkmeister.role: "app"
     ports:
       - "{{ base_port + svc.port_offset + 100 }}:{{ extra.get('internal_port', 6379) }}"
     command: {{ extra.command }}

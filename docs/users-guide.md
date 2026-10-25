@@ -229,7 +229,7 @@ Slot assignments are persisted in `~/.werkmeister/slots.json` and survive termin
 
 All services are available from k8s on a fixed port range (9000–9099), shared across all features. These are the "baseline" — when a feature doesn't run a service locally, requests are routed to the k8s forward.
 
-k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of shared infrastructure (`infra/compose/shared-infra.yml`). They are accessible via the Docker DNS name `k8s-forwards` on the `sandbox-shared` network.
+k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of shared infrastructure (`infra/compose/shared-infra.yml`). They are accessible via the Docker DNS name `k8s-forwards` on the `werkmeister-shared` network.
 
 | Port | Service | k8s Namespace |
 |---|---|---|
@@ -245,9 +245,11 @@ These ports are internal to the Docker network — other containers reach them v
 Caddy runs as a Docker container (ports 80 and 443) and provides:
 
 1. **HTTPS termination** — Caddy terminates HTTPS on port 443 using locally-trusted certificates
-2. **Feature selector UI** — a web page at `https://frontend.local.sandbox.com/__werkmeister` for setting the active feature in your browser
+2. **Feature selector UI** — a web page at `https://frontend.local.werkmeister.io/__werkmeister` for setting the active feature in your browser
 3. **Feature resolution** — Caddy matches the `X-Feature` cookie and reverse-proxies to that feature's local container, falling back to the k8s baseline when the service isn't running locally
-4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `frontend.local.sandbox.com`)
+4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `frontend.local.werkmeister.io`)
+
+The base domains default to `local.werkmeister.io` and `remote.werkmeister.io`. `werkmeister setup` writes them into `~/.sandbox/config.yaml`, so a machine set up before the defaults moved off `local.sandbox.com` keeps its domains, certificate and `/etc/hosts` entries. To move one, change the domains in the `werkmeister setup` wizard; it regenerates the certificate and hosts entries for them.
 
 The Caddyfile is regenerated automatically whenever you run `werkmeister up`, `werkmeister down`, `werkmeister remove`, or `werkmeister proxy-reload`.
 
@@ -299,7 +301,7 @@ werkmeister status --k8s
 Add to `/etc/hosts`:
 
 ```
-127.0.0.1 frontend.local.sandbox.com
+127.0.0.1 frontend.local.werkmeister.io
 ```
 
 ### Step 3: Start a Feature
@@ -321,12 +323,12 @@ A workspace with no services still comes up; all its traffic goes to k8s.
 ### Step 5: Access Your Feature
 
 **Option A: Browser cookie**
-Visit `https://frontend.local.sandbox.com/__werkmeister`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
+Visit `https://frontend.local.werkmeister.io/__werkmeister`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
 
 **Option B: HTTP header**
 Use a browser extension or curl:
 ```bash
-curl -H "X-Feature: my-feature" https://frontend.local.sandbox.com/
+curl -H "X-Feature: my-feature" https://frontend.local.werkmeister.io/
 ```
 
 ### Step 6: View Status
@@ -555,7 +557,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 [info] Starting containers...
 [ok]   Feature 'my-feature' is up!
 
-  URL:       https://frontend.local.sandbox.com
+  URL:       https://frontend.local.werkmeister.io
   Header:    X-Feature: my-feature
   Slot:      1
   Ports:     11100-11119
@@ -869,7 +871,7 @@ werkmeister connect --k8s
 
 No arguments. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`) which runs all 12 `kubectl port-forward` processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
 
-The container runs on the `sandbox-shared` Docker network and is accessible to other containers via the DNS name `k8s-forwards`. Port-forward processes inside the container auto-restart if they disconnect, managed by the container's entrypoint script.
+The container runs on the `werkmeister-shared` Docker network and is accessible to other containers via the DNS name `k8s-forwards`. Port-forward processes inside the container auto-restart if they disconnect, managed by the container's entrypoint script.
 
 After starting, it runs a health check and reports the status.
 
@@ -1160,10 +1162,10 @@ the pieces that are not obvious from the demo services:
   they get `/var/run/docker.sock` plus `~/.werkmeister`, `~/repos`, `~/features` and `~/.kube`
   bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
   kubectl binaries from the per-feature `tools` volume that
-  `infra/compose/scripts/sandbox-install-startup.sh` fills. The generated compose files carry
+  `infra/compose/scripts/werkmeister-install-startup.sh` fills. The generated compose files carry
   host bind-mount paths and the daemon is the host's, so the paths must be identical on both
   sides.
-- **`sandbox-install` reinstalls only when the lockfile changes.** It skips
+- **`werkmeister-install` reinstalls only when the lockfile changes.** It skips
   `pnpm install --frozen-lockfile` (`npm ci` on a branch still on `package-lock.json`) while <!-- docs-check: ignore -->
   the lockfile and Node major version match the stamp in the node_modules volume. It also
   mounts `~/repos` with git's `safe.directory`, so turbo hashes inputs the same way the app
@@ -1172,9 +1174,9 @@ the pieces that are not obvious from the demo services:
   reinstall, run `werkmeister down -v`. After upgrading, run `werkmeister registry` so the new
   command reaches `~/.werkmeister/services.yaml`.
 - **Shared build and package caches (SW-69).** The registry's built-in `turbo` and
-  `pnpm-store` caches attach to `sandbox-install` and the four services because the repo has
-  `turbo.json` and `pnpm-lock.yaml`. Each is a shared named volume (`sandbox-turbo` at
-  `/turbo-cache`, `sandbox-pnpm-store` at `/pnpm-store`), so a commit any workspace has built
+  `pnpm-store` caches attach to `werkmeister-install` and the four services because the repo has
+  `turbo.json` and `pnpm-lock.yaml`. Each is a shared named volume (`werkmeister-turbo` at
+  `/turbo-cache`, `werkmeister-pnpm-store` at `/pnpm-store`), so a commit any workspace has built
   restores in about a second everywhere, including in the gate's `turbo run test` (`--force`
   measures a cold run), and each package version downloads once per machine. Volumes, not
   host dirs: reads over the VM's file share made a warm install about three times slower.
@@ -1197,7 +1199,7 @@ the pieces that are not obvious from the demo services:
   registry sets `HOST=0.0.0.0` because the container network is the isolation boundary and
   Docker's published port is the only way in.
 - **New hostnames need `/etc/hosts` entries.** The wildcard certificate already covers
-  `*.local.sandbox.com`, but `werkmeister-dashboard.local.sandbox.com` only resolves after
+  `*.local.werkmeister.io`, but `werkmeister-dashboard.local.werkmeister.io` only resolves after
   `werkmeister setup` (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
   Caddy emits its site block only once a running feature declares the service.
 - **Inside the container, `werkmeister status` shows every k8s forward as dead** and `kubectl`
@@ -1311,7 +1313,7 @@ telepresence, with the only shared thing a kubeconfig. The compose files already
 `host.docker.internal:host-gateway`, so plain Linux `dockerd` works unchanged. This is
 the one shape that isolates you from the host's *containers* as well as its daemon, and
 it is a second complete install: `~/.werkmeister`, certificates, `/etc/hosts` and all. To use
-the host's browser against it, point the host's `*.local.sandbox.com` entries at the VM's
+the host's browser against it, point the host's `*.local.werkmeister.io` entries at the VM's
 address instead of loopback, and copy the VM's CA into the browser's trust store. The
 apps/werkmeister-mcp server is irrelevant here — the CLI runs natively inside.
 
@@ -1400,12 +1402,12 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
   - `extra_services` (map | null) — Sidecar containers (e.g., Redis instances)
   - `dockerfile` (string | null) — Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
   - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
-  - `extra_volumes` (list | null) — Additional volume mounts: a host path (`${REPO}/.git:/app/.git:ro`), a bare name for a per-feature named volume (`turbo-cache:/app/.turbo`, created as `<feature>-turbo-cache`), or `^name` for one volume every feature shares (`^sandbox-pnpm-store:/pnpm-store`). A shared volume is created on `sandbox up` and declared `external`, so no feature's `down --volumes`, close-out or `clean` removes it; drop it by hand with `docker volume rm <name>`
+  - `extra_volumes` (list | null) — Additional volume mounts: a host path (`${REPO}/.git:/app/.git:ro`), a bare name for a per-feature named volume (`turbo-cache:/app/.turbo`, created as `<feature>-turbo-cache`), or `^name` for one volume every feature shares (`^werkmeister-pnpm-store:/pnpm-store`). A shared volume is created on `sandbox up` and declared `external`, so no feature's `down --volumes`, close-out or `clean` removes it; drop it by hand with `docker volume rm <name>`
   - `caches` (list | null) — Keys in the registry's `caches:`. Unset, a service gets its archetype's `caches` plus every cache whose `detect` file is in its directory or a parent up to its repo root; a list replaces both, and `[]` opts out
 
 - **`infrastructure`** — Infrastructure services (redis, postgres) with k8s forward ports
 - **`setup_services`** — Optional per-monorepo install/build steps that run before a repo's services start
-- **`caches`** — Build and package caches shared by every workspace, keyed by name. Each has a container `path`, the `env` that points the tool at it, the `detect` files (e.g. `yarn.lock`) that attach it, and at most one of `max_age` (`<N>d`, used by `werkmeister cache prune`) or `prune` (a command run in a throwaway container, `image:` default `node:22`). It lives in the shared volume `sandbox-<key>` (or `volume:`), or in a host dir with `host:`. `turbo` and `pnpm-store` are built in; a repo's fragment may add caches but not redefine those. Example: `yarn-cache: {path: /yarn-cache, env: {YARN_CACHE_FOLDER: /yarn-cache}, detect: [yarn.lock], max_age: 30d}`
+- **`caches`** — Build and package caches shared by every workspace, keyed by name. Each has a container `path`, the `env` that points the tool at it, the `detect` files (e.g. `yarn.lock`) that attach it, and at most one of `max_age` (`<N>d`, used by `werkmeister cache prune`) or `prune` (a command run in a throwaway container, `image:` default `node:22`). It lives in the shared volume `werkmeister-<key>` (or `volume:`), or in a host dir with `host:`. `turbo` and `pnpm-store` are built in; a repo's fragment may add caches but not redefine those. Example: `yarn-cache: {path: /yarn-cache, env: {YARN_CACHE_FOLDER: /yarn-cache}, detect: [yarn.lock], max_age: 30d}`
 - **`repos`** — Repo-to-service mapping with `path_mappings` for monorepos
 
 ### ~/.werkmeister/ports.yaml
@@ -1531,7 +1533,7 @@ Per-feature Docker Compose stack containing:
   - Memory limits from `services.yaml`
   - Health checks using `curl` to the service's health endpoint
   - `depends_on` the setup service (with `service_healthy` condition)
-- **Networks**: Feature containers join both the feature-specific network (`sandbox-<feature>`) and the `sandbox-shared` network, enabling communication with shared infrastructure (k8s-forwards, caddy, and jaeger / redisinsight when enabled)
+- **Networks**: Feature containers join both the feature-specific network (`werkmeister-<feature>`) and the `werkmeister-shared` network, enabling communication with shared infrastructure (k8s-forwards, caddy, and jaeger / redisinsight when enabled)
 
 ### .env
 
@@ -1573,7 +1575,7 @@ docker compose -f infra/compose/shared-infra.yml logs -f caddy
 
 ### Feature Selector UI
 
-Visit **`https://frontend.local.sandbox.com/__werkmeister`** in your browser to:
+Visit **`https://frontend.local.werkmeister.io/__werkmeister`** in your browser to:
 - See the currently active feature (from the `X-Feature` cookie)
 - Switch to a different feature by typing the name and clicking "Set Feature"
 - Clear the feature cookie to return to the k8s baseline
@@ -1591,7 +1593,7 @@ document.cookie = "X-Feature=my-feature; path=/; max-age=2592000";
 
 **Header (curl/API tools):**
 ```bash
-curl -H "X-Feature: my-feature" https://frontend.local.sandbox.com/
+curl -H "X-Feature: my-feature" https://frontend.local.werkmeister.io/
 ```
 
 **Browser extension:** Use a header-injection extension like ModHeader to add `X-Feature: my-feature` to all requests.
@@ -1606,7 +1608,7 @@ k8s port-forwards run inside a Docker container rather than as host-side shell s
 
 - **Container name**: `sandbox-k8s-forwards`
 - **Built from**: `infra/compose/k8s-port-forward/Dockerfile`
-- **Network**: `sandbox-shared` (accessible to all feature containers via DNS name `k8s-forwards`)
+- **Network**: `werkmeister-shared` (accessible to all feature containers via DNS name `k8s-forwards`)
 - **Health checks**: Managed by Docker health checks defined in the compose file
 
 ### Common Operations
@@ -1702,7 +1704,7 @@ cd ~/workspace/werkmeister
 werkmeister up PROJ-1234
 
 # 6. Set the feature in your browser
-# Visit https://frontend.local.sandbox.com/__werkmeister and enter "PROJ-1234"
+# Visit https://frontend.local.werkmeister.io/__werkmeister and enter "PROJ-1234"
 
 # 7. Develop and iterate
 werkmeister logs PROJ-1234
@@ -1780,7 +1782,7 @@ werkmeister services PROJ-1234
 curl http://localhost:11101/  # frontend at slot 1, offset 1
 
 # Access via Caddy with feature header
-curl -H "X-Feature: PROJ-1234" https://frontend.local.sandbox.com/
+curl -H "X-Feature: PROJ-1234" https://frontend.local.werkmeister.io/
 
 # Check container status
 werkmeister status -v
@@ -1845,7 +1847,7 @@ cat ~/.werkmeister/infra/proxy/Caddyfile | grep -A 5 "PROJ-1234"
 werkmeister proxy-reload
 
 # Test with explicit header
-curl -v -H "X-Feature: PROJ-1234" https://frontend.local.sandbox.com/
+curl -v -H "X-Feature: PROJ-1234" https://frontend.local.werkmeister.io/
 
 # Check Caddy is running
 docker compose -f infra/compose/shared-infra.yml ps caddy
@@ -1912,7 +1914,7 @@ werkmeister down stale-feature
 ## Architecture Diagram
 
 ```
-                    Docker network: sandbox-shared
+                    Docker network: werkmeister-shared
 ┌──────────────────────────────────────────────────────────────────────┐
 │                                                                      │
 │  ┌────────────────────────────────────────────────────────────────┐  │
@@ -1923,7 +1925,7 @@ werkmeister down stale-feature
 │                          ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │  Caddy (HTTPS :443)                                          │    │
-│  │  frontend.local.sandbox.com                              │    │
+│  │  frontend.local.werkmeister.io                              │    │
 │  │                                                               │    │
 │  │  1. Terminate HTTPS                                           │    │
 │  │  2. Serve feature selector UI (/__werkmeister)                     │    │

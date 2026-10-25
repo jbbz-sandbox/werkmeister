@@ -4,6 +4,9 @@
 // (#225, same leak as #198 for infra). Every workspace compose argv must carry `-p`.
 
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { test } from "node:test";
 
 import { workspaceComposeArgv } from "./dist/compose.js";
@@ -17,7 +20,7 @@ test("names the workspace project even when the caller's env sets COMPOSE_PROJEC
       "-f",
       "/w/compose.yml",
       "-p",
-      "sandbox-demo",
+      "werkmeister-demo",
       "ps",
     ]);
   } finally {
@@ -30,9 +33,20 @@ test("without a compose path it relies on cwd, still pinning the project", () =>
     "docker",
     "compose",
     "-p",
-    "sandbox-demo",
+    "werkmeister-demo",
     "up",
     "--build",
     "--no-start",
   ]);
+});
+
+// SW-93: a workspace generated before the rename keeps its project until its next `up`
+// regenerates the file; a `-p` that disagreed would start a second copy beside it.
+test("pins the project the compose file names, so an old workspace keeps its sandbox- project", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "compose-project-"));
+  const file = path.join(dir, "compose.yml");
+  fs.writeFileSync(file, "# header\nname: sandbox-demo\n\nservices: {}\n");
+  assert.equal(workspaceComposeArgv("demo", ["ps"], file)[5], "sandbox-demo");
+  fs.writeFileSync(file, "name: werkmeister-demo\nservices: {}\n");
+  assert.equal(workspaceComposeArgv("demo", ["ps"], file)[5], "werkmeister-demo");
 });

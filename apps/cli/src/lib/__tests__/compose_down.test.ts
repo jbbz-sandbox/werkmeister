@@ -25,8 +25,11 @@ vi.mock("werkmeister-core/proc", async (importOriginal) => {
     ...actual,
     run: (cmd: string[]) => {
       h.calls.push(cmd);
-      if (cmd[1] === "ps") {
+      if (cmd[1] === "ps" && cmd.includes("--format")) {
         return { status: 0, stdout: h.workspace + "\n", stderr: "" };
+      }
+      if (cmd[1] === "ps" || cmd[1] === "volume") {
+        return { status: 0, stdout: "", stderr: "" }; // no pre-SW-93 project left over
       }
       return { status: h.composeStatus, stdout: "", stderr: "boom" };
     },
@@ -74,7 +77,7 @@ describe("composeDown", () => {
     ).toBe(true);
     expect(h.calls.at(-1)).toContain("--volumes");
     // One workspace lookup, not one per layer.
-    expect(h.calls.filter((c) => c[1] === "ps")).toHaveLength(1);
+    expect(h.calls.filter((c) => c[1] === "ps" && c.includes("--format"))).toHaveLength(1);
   });
 
   // A workspace generated before #224 keeps its docker-compose.yml until re-inited.

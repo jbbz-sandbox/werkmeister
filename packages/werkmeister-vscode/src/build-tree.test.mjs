@@ -67,8 +67,10 @@ const intercepts = (spec, remote = Object.values(spec).flatMap(Object.keys)) => 
   ),
 });
 
-test("featureOf strips the sandbox- compose prefix", () => {
+test("featureOf strips the werkmeister- compose prefix, and the pre-SW-93 sandbox- one", () => {
+  assert.equal(featureOf("werkmeister-tre-1125"), "tre-1125");
   assert.equal(featureOf("sandbox-tre-1125"), "tre-1125");
+  assert.equal(featureOf("werkmeister-"), null);
   assert.equal(featureOf("something-else"), null);
   assert.equal(featureOf(null), null);
 });

@@ -32,7 +32,7 @@ import * as YAML from "yaml";
 
 import { presentArchetypes } from "./archetypes.js";
 import { Colors } from "./colors.js";
-import { ensureSharedVolumes, workspaceComposeArgv } from "./compose.js";
+import { ensureSharedVolumes, retireLegacyProject, workspaceComposeArgv } from "./compose.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
   dotDir,
@@ -848,11 +848,16 @@ export async function initWorkspace(
       // inherited stdio. An in-process one owns no TTY (its stdout may be an
       // MCP transport), so capture and replay through the reporter instead.
       const live = passthrough();
-      ensureSharedVolumes(path.join(workspaceRoot, COMPOSE_FILE));
-      const result = procRun(workspaceComposeArgv(feature, ["up", "--build", "--no-start"]), {
-        cwd: workspaceRoot,
-        ...(live ? { stdio: "inherit" as const } : { capture: true }),
-      });
+      const composePath = path.join(workspaceRoot, COMPOSE_FILE);
+      ensureSharedVolumes(composePath);
+      retireLegacyProject(feature, composePath);
+      const result = procRun(
+        workspaceComposeArgv(feature, ["up", "--build", "--no-start"], composePath),
+        {
+          cwd: workspaceRoot,
+          ...(live ? { stdio: "inherit" as const } : { capture: true }),
+        },
+      );
       if (!live) {
         if (result.stdout) raw(result.stdout);
         if (result.stderr) raw(result.stderr, "stderr");

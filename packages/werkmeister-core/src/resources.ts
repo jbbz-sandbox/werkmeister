@@ -22,6 +22,7 @@ import {
   type ProjectContainer,
 } from "./docker.js";
 import { dotDir } from "./dot_dir.js";
+import { labelOf } from "./slots.js";
 
 export type StartedBy = "up" | "gate" | "restart" | "person";
 
@@ -243,7 +244,7 @@ export function hostSummary(
   cores: number = os.availableParallelism(),
 ): HostSummary {
   const feature = stats.filter((s) => {
-    const f = s.labels["com.sandbox.local.feature"];
+    const f = labelOf(s.labels, "feature");
     return f && f !== "infra";
   });
   return {

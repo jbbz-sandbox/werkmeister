@@ -1,5 +1,5 @@
 #!/bin/sh
-# The sandbox repo's sandbox-install setup container (services.yaml
+# The sandbox repo's werkmeister-install setup container (services.yaml
 # `startup_script: true`). With `install`, it installs and builds the repo
 # first; then it installs the host-facing CLIs the sandbox repo's own services
 # need into the per-feature `tools` volume mounted at /opt/sandbox-tools.
@@ -40,7 +40,7 @@ take_install_slot() {
       i=$((i + 1))
     done
     if [ -z "$waiting" ]; then
-      echo "sandbox-install: $slots installs already running on this host, waiting"
+      echo "werkmeister-install: $slots installs already running on this host, waiting"
       waiting=1
     fi
     sleep 1
@@ -64,11 +64,12 @@ if [ "${1:-}" = install ]; then
     pm=npm
     install="npm ci"
   fi
+  # Stamp names predate SW-93; renaming them would force one full reinstall per workspace.
   stamp=node_modules/.sandbox-install-hash
   want="$(cat package-lock.json pnpm-lock.yaml 2>/dev/null | sha256sum | cut -d' ' -f1) $(node -v | cut -d. -f1)"
   wstamp=.turbo/.sandbox-install-hash
   if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && [ "$(cat "$wstamp" 2>/dev/null)" = "$want" ]; then
-    echo "sandbox-install: lockfile and Node major unchanged, skipping $install"
+    echo "werkmeister-install: lockfile and Node major unchanged, skipping $install"
   else
     take_install_slot
     rm -f "$stamp" "$wstamp"
@@ -93,7 +94,7 @@ ARCH="$(uname -m)" # x86_64 | aarch64 — docker/compose name assets this way
 case "$ARCH" in
   x86_64) KARCH=amd64 ;;
   aarch64) KARCH=arm64 ;;
-  *) echo "sandbox-install: unsupported arch $ARCH" >&2; exit 1 ;;
+  *) echo "werkmeister-install: unsupported arch $ARCH" >&2; exit 1 ;;
 esac
 
 mkdir -p "$TOOLS/bin" "$TOOLS/docker/cli-plugins"

@@ -569,7 +569,7 @@ borrow the developer's registry.
 
 **Severity:** Moderate (cost and complexity grew with every new toolchain)
 **Status:** Resolved (SW-69): caches are registry data
-**Affects:** the service registry (`.sandbox/services.yaml`, `~/.werkmeister/services.yaml`), compose generation, the `sandbox-install` setup service
+**Affects:** the service registry (`.sandbox/services.yaml`, `~/.werkmeister/services.yaml`), compose generation, the `werkmeister-install` setup service (`sandbox-install` before SW-93)
 
 Each cache used to be wired by hand, per tool and per service: turbo as a host dir with `TURBO_CACHE_DIR` (SW-35), the pnpm store as `^sandbox-pnpm-store` with `npm_config_store_dir` (#351), and every other toolchain not shared at all. `ensureSharedVolumes()` created every `^` volume in the registry on any `up`, and nothing reported sizes or evicted the pnpm store.
 
@@ -580,4 +580,4 @@ Each cache used to be wired by hand, per tool and per service: turbo as a host d
 - **Per workspace:** `ensureSharedVolumes()` creates only the volumes the workspace's generated compose marks `external`.
 - **Visible and bounded:** `werkmeister status` lists each cache's size and age; `werkmeister cache prune [name]` applies `max_age` or `prune`, and `--reset` empties a cache.
 
-**Still not covered:** install flags such as Yarn 1's `--mutex`, and yarn or bun installs in `sandbox-install`, which runs pnpm or npm only. The built-in fallback compose (used only when the template is missing) still renders no service `environment:`, so a cache's env applies through the template only.
+**Still not covered:** install flags such as Yarn 1's `--mutex`, and yarn or bun installs in `werkmeister-install`, which runs pnpm or npm only. The built-in fallback compose (used only when the template is missing) still renders no service `environment:`, so a cache's env applies through the template only.

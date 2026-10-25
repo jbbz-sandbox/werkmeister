@@ -48,7 +48,7 @@ import {
 export { childEnv } from "./claude_cli.js";
 
 // Type-only: erased at build, so this adds nothing to the bundle.
-import { isOneShotService } from "./compose.js";
+import { isOneShotService, projectName } from "./compose.js";
 import { INFRA_PROJECT } from "./compose_infra.js";
 import {
   dotDir,
@@ -68,6 +68,7 @@ import { infraHealth, up as infraUp } from "./infra.js";
 import { type Issue, issueBriefing, issueIdOf, issueTracker } from "./issue_tracker.js";
 import { checkForwardHealth, forwarderNeeded } from "./k8s.js";
 import { type CrashLoop, type ProjectHealth, projectHealth, type Started } from "./resources.js";
+import { labelOf } from "./slots.js";
 import { type InterceptRow, interceptsSnapshot } from "./status.js";
 
 export { mergeFormData, repoSelectionError, validateFormData } from "./form_schema.js";
@@ -1200,7 +1201,7 @@ export interface WorkspaceStatus {
   state: "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
   running: number;
   total: number;
-  /** Feature slot (from the `com.sandbox.local.slot` label), or null when no containers. */
+  /** Feature slot (from the `com.werkmeister.slot` label), or null when no containers. */
   slot: number | null;
   /** Port range for the slot, e.g. "11200-11219", or null when no slot. */
   ports: string | null;
@@ -1365,7 +1366,7 @@ export interface ComposeProjectTally {
    * when the container declares no healthcheck).
    */
   services: { name: string; state: string; health: string }[];
-  /** Slot from the `com.sandbox.local.slot` label (features only; null for infra). */
+  /** Slot from the `com.werkmeister.slot` label (features only; null for infra). */
   slot: number | null;
 }
 
@@ -1397,12 +1398,12 @@ export function tallyComposeContainers(rows: ProjectContainer[]): Map<string, Co
     // A setup job that finished is not a missing service. One that failed or has
     // not finished yet is, and stays in the tally so the workspace reads degraded.
     const finished = state === "exited" && exitCode === 0;
-    if (isOneShotService(service, labels["com.sandbox.local.role"]) && finished) continue;
+    if (isOneShotService(service, labelOf(labels, "role")) && finished) continue;
     const e = out.get(project) ?? { running: 0, total: 0, services: [], slot: null };
     e.total++;
     if (state === "running") e.running++;
     e.services.push({ name: service, state, health });
-    const slot = labels["com.sandbox.local.slot"];
+    const slot = labelOf(labels, "slot");
     if (e.slot === null && slot) {
       const n = Number.parseInt(slot, 10);
       if (Number.isInteger(n)) e.slot = n;
@@ -1479,7 +1480,7 @@ export async function getWorkspaceStatuses(): Promise<{
       let project = await readEnvValue(dir, "COMPOSE_PROJECT_NAME");
       if (!project) {
         const feature = await readWorkspaceFeature(dir);
-        project = feature ? `sandbox-${feature}` : null;
+        project = feature ? projectName(feature) : null;
       }
       const { signal: claude, lastActivity } = await claudeSessionSignal(name, dir);
       const { model, autonomous, autoStop } = await readWorkspaceConfig(dir);
@@ -2658,7 +2659,7 @@ export async function openFeatureBrowser(name: string): Promise<{ path: string }
  * split exists — and the summary below is this function's own rendering, since
  * the library emits progress but never lays out a command's output (note 070 §3).
  *
- * **The three `tools.local.sandbox.com` links are absent, deliberately.** They are
+ * **The three `tools.<local_domain>` links are absent, deliberately.** They are
  * hardcoded in the CLI's renderer and note 070 §2 accepted that an in-process
  * caller cannot reach them; moving them is a "where do tool URLs live" question,
  * not this one. The dashboard URL *is* included — it comes from `web_servers`

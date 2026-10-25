@@ -98,9 +98,12 @@ export function renderK8sForwardsOverride(specs: ForwardSpec[]): string {
     "    ports:",
     ...specs.map((s) => `      - "${s.listen}:${s.listen}"   # ${s.name}`),
     "    networks:",
-    "      shared-network:",
-    "        aliases:",
-    ...specs.map((s) => `          - k8s-${s.name}`),
+    // Both shared networks, as shared-infra.yml joins them (SW-93).
+    ...["shared-network", "werkmeister-shared"].flatMap((net) => [
+      `      ${net}:`,
+      "        aliases:",
+      ...specs.map((s) => `          - k8s-${s.name}`),
+    ]),
     "",
   ].join("\n");
 }

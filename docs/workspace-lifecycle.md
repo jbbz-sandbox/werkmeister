@@ -194,7 +194,7 @@ A `docker exec` typed by hand in a terminal outside Claude is not seen.
 
 - It writes `.werkmeister/paused.json`: when, the containers that were running, and whether the agent was mid-turn.
 - While that file exists, the agent-state hook ends the session's turn at its next tool call and blocks new prompts, from the person or from claude-send, PR callbacks and check-in. A tool call already running finishes first.
-- It then runs `docker pause` on each of those containers, `<feature>-sandbox-install` included. CPU is freed at once; memory is kept.
+- It then runs `docker pause` on each of those containers, `<feature>-werkmeister-install` included. CPU is freed at once; memory is kept.
 
 `▶ Resume` (`werkmeister resume`, `resume`) unpauses exactly the recorded containers, starts any that were stopped meanwhile (■ Stop or the idle reaper), and deletes the record. When Pause cut a working turn it also tells the session `Workspace resumed by the person. Continue where you left off.`:
 

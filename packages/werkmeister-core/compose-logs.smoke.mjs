@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { composeLogsStream } from "./dist/compose.js";
 import { projectContainers } from "./dist/docker.js";
 
-const all = await projectContainers();
+// Running only: a created-but-never-started stack has no logs to tail.
+const all = await projectContainers(undefined, undefined, { all: false });
 if (all === null) {
   console.log("compose-logs.smoke SKIPPED (no reachable daemon)");
   process.exit(0);
@@ -19,10 +20,18 @@ const feature =
   process.env.SANDBOX_FEATURE ||
   all
     .map((c) => c.labels["com.docker.compose.project"] ?? "")
-    .filter((n) => n.startsWith("sandbox-") && n !== "sandbox-infra")
-    .map((n) => n.slice("sandbox-".length))[0];
+    // `sandbox-` until a workspace's first `up` after SW-93; SW-11 drops it.
+    .map((n) => /^(?:werkmeister|sandbox)-(.+)$/.exec(n)?.[1])
+    .filter((f) => f && f !== "infra")[0];
 
-if (!feature || !all.some((c) => c.labels["com.docker.compose.project"] === `sandbox-${feature}`)) {
+if (
+  !feature ||
+  !all.some((c) =>
+    [`werkmeister-${feature}`, `sandbox-${feature}`].includes(
+      c.labels["com.docker.compose.project"],
+    ),
+  )
+) {
   console.log("compose-logs.smoke SKIPPED (no feature stack running)");
   process.exit(0);
 }

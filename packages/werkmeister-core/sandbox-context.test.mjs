@@ -38,13 +38,13 @@ test("health checks and the feature URL are scoped to the local services", async
       const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices(), "/");
       const curls = out.match(/curl -sk -b "X-Feature=test"[^\n]*/g) ?? [];
       assert.equal(curls.length, 1, curls.join("\n"));
-      assert.match(curls[0], /frontend\.local\.sandbox\.com/);
-      assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.sandbox\.com\//);
+      assert.match(curls[0], /frontend\.local\.werkmeister\.io/);
+      assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.werkmeister\.io\//);
       assert.match(
         out,
-        /document\.cookie = "X-Feature=test; domain=\.local\.sandbox\.com; path=\/; SameSite=Lax"/,
+        /document\.cookie = "X-Feature=test; domain=\.local\.werkmeister\.io; path=\/; SameSite=Lax"/,
       );
-      assert.match(out, /frontend\.local\.sandbox\.com\/__werkmeister/);
+      assert.match(out, /frontend\.local\.werkmeister\.io\/__werkmeister/);
       assert.match(
         out,
         /\| `frontend` \| local \| `apps\/frontend` \| `test-frontend` \| 11101 \|/,
@@ -54,7 +54,7 @@ test("health checks and the feature URL are scoped to the local services", async
       assert.doesNotMatch(out, /## Infrastructure/);
       assert.match(
         out,
-        /- `https:\/\/dashboard\.local\.sandbox\.com`/,
+        /- `https:\/\/dashboard\.local\.werkmeister\.io`/,
         "the routed-host list stays machine-wide",
       );
     },
@@ -66,7 +66,7 @@ test("no test path means the feature URL is the host root", async () => {
   await withSandboxHome(
     async () => {
       const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices());
-      assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.sandbox\.com\/\n/);
+      assert.match(out, /\*\*Feature URL:\*\* https:\/\/frontend\.local\.werkmeister\.io\/\n/);
     },
     { services: SERVICES },
   );

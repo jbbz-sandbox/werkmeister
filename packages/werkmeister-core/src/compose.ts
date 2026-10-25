@@ -7,6 +7,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import { parse as parseYaml } from "yaml";
@@ -17,7 +18,7 @@ import { resolveWorkspace } from "./config.js";
 import { containerLogs, docker, type ProjectContainer, projectContainers } from "./docker.js";
 import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
-import { getSlot } from "./slots.js";
+import { getSlot, LABEL_FEATURE, LEGACY_LABEL_FEATURE, labelOf } from "./slots.js";
 
 export interface ContainerStatus {
   name: string;
@@ -25,7 +26,7 @@ export interface ContainerStatus {
   health: string;
   ports: string;
   service: string;
-  /** `com.sandbox.local.role` — `"setup"` marks a one-shot container. Empty when unlabelled. */
+  /** `com.werkmeister.role` — `"setup"` marks a one-shot container. Empty when unlabelled. */
   role: string;
   /** Meaningful only once `status` is `exited`; compose reports 0 for live containers too. */
   exitCode: number;
@@ -98,33 +99,36 @@ function isFile(p: string): boolean {
  * from. That directory is the feature's workspace.
  */
 function workspaceFromContainerLabel(feature: string): string | null {
-  let result;
-  try {
-    result = run(
-      [
-        "docker",
-        "ps",
-        "-a",
-        "--filter",
-        `label=com.sandbox.local.feature=${feature}`,
-        "--format",
-        '{{.Label "com.docker.compose.project.working_dir"}}',
-      ],
-      { capture: true, timeout: 10 },
-    );
-  } catch (err) {
-    if (err instanceof ProcError) {
-      return null; // missing docker binary, OS error, or timeout
+  for (const label of [LABEL_FEATURE, LEGACY_LABEL_FEATURE]) {
+    let result;
+    try {
+      result = run(
+        [
+          "docker",
+          "ps",
+          "-a",
+          "--filter",
+          `label=${label}=${feature}`,
+          "--format",
+          '{{.Label "com.docker.compose.project.working_dir"}}',
+        ],
+        { capture: true, timeout: 10 },
+      );
+    } catch (err) {
+      if (err instanceof ProcError) {
+        return null; // missing docker binary, OS error, or timeout
+      }
+      throw err;
     }
-    throw err;
-  }
-  if (result.status !== 0) {
-    return null;
-  }
-  for (const line of result.stdout.split("\n")) {
-    const p = line.trim();
-    if (p) {
-      return p;
+    if (result.status !== 0) {
+      return null;
+    }
+    const found = result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean);
+    if (found) {
+      return found;
     }
   }
   return null;
@@ -148,9 +152,73 @@ export function workspaceComposeArgv(
     "compose",
     ...(composePath ? ["-f", composePath] : []),
     "-p",
-    `sandbox-${feature}`,
+    fileProject(feature, composePath),
     ...args,
   ];
+}
+
+/** The compose project a feature gets from its next `up` on. */
+export function projectName(feature: string): string {
+  return `werkmeister-${feature}`;
+}
+
+/** Pre-SW-93 project: a workspace stays under it until its next `up`. SW-11 drops it. */
+export function legacyProjectName(feature: string): string {
+  return `sandbox-${feature}`;
+}
+
+/** The project *feature*'s containers are under now: the legacy one while it holds any. */
+export async function liveProject(feature: string): Promise<string> {
+  const legacy = legacyProjectName(feature);
+  return (await projectContainers(legacy))?.length ? legacy : projectName(feature);
+}
+
+/**
+ * The project the compose file names. A file generated before SW-93 still says
+ * `sandbox-<feature>`, and `-p` must agree with it or compose would start a second
+ * copy of the workspace beside the running one.
+ */
+function fileProject(feature: string, composePath?: string): string {
+  try {
+    const doc =
+      composePath && (parseYaml(fs.readFileSync(composePath, "utf8")) as { name?: string });
+    if (doc && typeof doc.name === "string") return doc.name;
+  } catch {
+    // no file yet: the new name
+  }
+  return projectName(feature);
+}
+
+/**
+ * Take down a pre-SW-93 `sandbox-<feature>` project once the compose file names
+ * another: its containers hold the container names the new project needs, and a
+ * `down --volumes` of the new project skips volumes the old one created. SW-11 drops this.
+ */
+export function retireLegacyProject(
+  feature: string,
+  composePath: string,
+  { removeVolumes = false }: { removeVolumes?: boolean } = {},
+): void {
+  const legacy = legacyProjectName(feature);
+  if (fileProject(feature, composePath) === legacy) return;
+  const label = `label=com.docker.compose.project=${legacy}`;
+  try {
+    const held = [["docker", "ps", "-aq", "--filter", label]];
+    if (removeVolumes) held.push(["docker", "volume", "ls", "-q", "--filter", label]);
+    if (!held.some((cmd) => run(cmd, { capture: true, timeout: 10 }).stdout.trim())) return;
+    info(`Taking down '${feature}''s pre-rename project ${legacy}`);
+    const args = ["down", "--remove-orphans", ...(removeVolumes ? ["--volumes"] : [])];
+    // From an empty dir: compose finds the project by label, and must not load the
+    // workspace's new compose file under the old name.
+    const result = run(["docker", "compose", "-p", legacy, ...args], {
+      capture: true,
+      cwd: os.tmpdir(),
+      timeout: COMPOSE_TIMEOUT_S,
+    });
+    if (result.status !== 0) warn(`Could not take down ${legacy}: ${result.stderr.trim()}`);
+  } catch (e) {
+    warn(`Could not take down ${legacy}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 const COMPOSE_TIMEOUT_S = 300;
@@ -251,6 +319,9 @@ function composeCommand(
   }
   if (args.includes("up")) {
     ensureSharedVolumes(composePath);
+  }
+  if (args.includes("up") || args.includes("down")) {
+    retireLegacyProject(feature, composePath, { removeVolumes: args.includes("--volumes") });
   }
   const cmd = workspaceComposeArgv(feature, args, composePath);
   info(`Running: ${cmd.join(" ")}`);
@@ -469,7 +540,7 @@ export async function composeDownAsync(
  * Returns true on success.
  */
 export async function composeStop(feature: string): Promise<boolean> {
-  const err = await stopOrRestart("stop", `sandbox-${feature}`);
+  const err = await stopOrRestart("stop", await liveProject(feature));
   if (err) {
     error(err);
     return false;
@@ -484,7 +555,7 @@ export async function composeStop(feature: string): Promise<boolean> {
  * Returns true on success.
  */
 export async function composeRestart(feature: string): Promise<boolean> {
-  const err = await stopOrRestart("restart", `sandbox-${feature}`);
+  const err = await stopOrRestart("restart", await liveProject(feature));
   if (err) {
     error(err);
     return false;
@@ -513,7 +584,7 @@ export async function stopOrRestart(
   const profiled = action === "restart" ? profiledServices(containers) : new Set<string>();
   for (const c of ordered) {
     const finishedSetup =
-      c.state === "exited" && isOneShotService(c.service, c.labels["com.sandbox.local.role"]);
+      c.state === "exited" && isOneShotService(c.service, labelOf(c.labels, "role"));
     // `compose restart` loads the default profiles only, so it never started
     // an on-demand container the PR gate had stopped (SW-34).
     const offProfile = c.state !== "running" && profiled.has(c.service);
@@ -610,7 +681,7 @@ export async function composeLogs(
   // in-process caller's reporter (the MCP tool's) owns no TTY.
   const color = passthrough() && process.stdout.isTTY === true;
   await containerLogs(
-    `sandbox-${feature}`,
+    await liveProject(feature),
     service ?? null,
     { follow, tail, signal, color },
     (line, stream) => raw(`${line}\n`, stream),
@@ -637,11 +708,13 @@ export function composeLogsStream(
   onData: (chunk: string) => void,
 ): LogTail {
   const controller = new AbortController();
-  const done = containerLogs(
-    `sandbox-${feature}`,
-    service,
-    { follow: true, tail: 100, signal: controller.signal, color: true },
-    (line) => onData(`${line}\n`),
+  const done = liveProject(feature).then((project) =>
+    containerLogs(
+      project,
+      service,
+      { follow: true, tail: 100, signal: controller.signal, color: true },
+      (line) => onData(`${line}\n`),
+    ),
   );
   return { stop: () => controller.abort(), done };
 }
@@ -654,14 +727,14 @@ export function composeLogsStream(
  * as "nothing to report" rather than as an error.
  */
 export async function getContainerStatus(feature: string): Promise<ContainerStatus[]> {
-  const containers = (await projectContainers(`sandbox-${feature}`)) ?? [];
+  const containers = (await projectContainers(await liveProject(feature))) ?? [];
   return containers.map((c) => ({
     name: c.name,
     status: c.state,
     health: c.health,
     ports: c.ports,
     service: c.service,
-    role: c.labels["com.sandbox.local.role"] ?? "",
+    role: labelOf(c.labels, "role"),
     exitCode: c.exitCode,
   }));
 }
@@ -671,7 +744,7 @@ export async function getContainerStatus(feature: string): Promise<ContainerStat
  * `restart` policy, unlike real services. Counting a finished one would make a
  * healthy feature read as "partial".
  *
- * Identified by the `com.sandbox.local.role=setup` label the compose template
+ * Identified by the `com.werkmeister.role=setup` label the compose template
  * stamps on every `setup_services` entry; the `-setup` suffix is the pre-label
  * fallback, since the label only lands on containers created after it was added
  * and workspaces that are already up must keep reading correctly until their
