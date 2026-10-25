@@ -86,7 +86,7 @@ fi
 # dashboard is checkout-only.
 case "${1:-}" in
     mcp)
-        app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/mcp/dist/main.js"
+        app_entry="$(cd "$SANDBOX_ROOT/.." && pwd)/werkmeister-mcp/dist/main.js"
         [ -f "$app_entry" ] || app_entry="$SANDBOX_ROOT/dist/mcp.js"
         if [ ! -f "$app_entry" ]; then
             echo "Error: 'mcp' is not available -- missing $app_entry (run 'pnpm run build')." >&2
