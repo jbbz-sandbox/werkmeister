@@ -35,7 +35,13 @@ const GROUPS = [
       ["Jira REST setup", "docs/jira-rest-setup.md"],
     ],
   ],
-  ["Project", [["Third-party software", "docs/third-party.md"]]],
+  [
+    "Project",
+    [
+      ["Why Werkmeister", "docs/why.md"],
+      ["Third-party software", "docs/third-party.md"],
+    ],
+  ],
 ];
 const PAGES = [
   "apps/docs-site/index.md",
