@@ -911,6 +911,7 @@ test("closeOut --abandon: records why, comments it and closes the issue as not p
         updateIssue: async (ref, u) => (updated = [ref, u]),
       },
       terminals: async (dir) => [`terminal session: pid 9 on ttys001 in ${dir} — /exit it`],
+      remove: async (_name, abandoned) => ({ output: `removed abandoned=${abandoned}` }),
     });
     const r = await inWorkspacesRoot(ws, (name) =>
       closeOut(name, { abandon: "superseded by #170" }, d),
@@ -926,7 +927,7 @@ test("closeOut --abandon: records why, comments it and closes the issue as not p
       !d.calls.some((c) => c.includes("branch -D") || c.includes("--delete")),
       "abandon keeps every branch",
     );
-    assert.match(r.output, /removed/);
+    assert.match(r.output, /removed abandoned=true/, "remove skips pushing handoff-only branches");
     assert.deepEqual(r.terminals, [`terminal session: pid 9 on ttys001 in ${ws} — /exit it`]);
     assert.equal(r.path, ws);
     assert.match(r.command, /--abandon$/);
@@ -947,9 +948,11 @@ test("closeOut retry after an abandon that failed to remove: still abandoned", a
         fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
         updateIssue: async () => (updated = true),
       },
+      remove: async (_name, abandoned) => ({ output: `removed abandoned=${abandoned}` }),
     });
-    await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
+    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.equal(updated, false);
+    assert.match(r.output, /removed abandoned=true/);
   } finally {
     clean(ws);
   }
