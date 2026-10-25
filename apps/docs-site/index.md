@@ -27,6 +27,8 @@ features:
 
 > I believe the most valuable thing a developer brings is judgment. I built
 > Werkmeister so that judgment is the only thing you have to bring.
+>
+> More time to do the things that humans are good at.
 
 I used to skip the tests. Not proudly, but when the feature was done and the day
 was gone, they were the first thing to fall off the end. Now they get written,
