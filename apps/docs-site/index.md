@@ -1,9 +1,16 @@
 ---
 layout: home
 hero:
-  name: Werkmeister
+  name: Werk|meis|ter
+  ipa: "[ˈvɛʁkˌmaɪ̯stɐ]"
+  said: VAIRK-my-ster
+  grammar: "<i>m</i> -s, -"
+  senses:
+    - works foreman; the one who runs the building of the thing, not the one who builds it.
+    - "<i>(Comput)</i> <code>w9r</code>: runs many pieces of work at once, each in its own workspace, and stops only where a person has to decide."
+  etymology: "<i>German</i>, from <b>Werk</b> work (<i>Old High German</i> werc, akin to English <i>work</i>) + <b>Meister</b> master (<i>Old High German</i> meistar, from <i>Latin</i> magister)"
   text: Autonomous where it can be. Human where it must be.
-  tagline: Orchestrate autonomous development that stops exactly where human judgment is required.
+  tagline: Make the agent do the work and the person do the deciding.
   actions:
     - theme: brand
       text: Get started
@@ -30,15 +37,8 @@ features:
 >
 > More time to do the things that humans are good at.
 
-I used to skip the tests. Not proudly, but when the feature was done and the day
-was gone, they were the first thing to fall off the end. Now they get written,
-all three kinds, because the writing is no longer on me. The work that used to
-compete with my judgment runs beside it.
+It started with a time difference. Our company opened an office in Pune, India,
+and we were hiring to fill it. Lots of new developers, every one of them needing
+a working environment before they could write a line of code.
 
-Development is no longer the bottleneck. I am. That turns out to be exactly where
-I want to be.
-
-[Read the whole story →](/docs/why) <!-- docs-check: ignore (a site route: this page is served at /, not apps/docs-site/) -->
-
-<small>**Werkmeister** is German for a works foreman, said roughly VAIRK-my-ster: the
-person who runs the building of the thing. The short command is `w9r`.</small>
+[Read how it started →](/docs/why#how-it-started) <!-- docs-check: ignore (a site route: this page is served at /, not apps/docs-site/) -->

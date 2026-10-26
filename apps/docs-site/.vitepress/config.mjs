@@ -15,6 +15,7 @@ const GROUPS = [
     [
       ["Overview", "README.md"],
       ["Users guide", "docs/users-guide.md"],
+      ["The UIs", "docs/uis.md"],
       ["Workspace lifecycle", "docs/workspace-lifecycle.md"],
     ],
   ],

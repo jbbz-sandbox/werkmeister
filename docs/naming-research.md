@@ -26,7 +26,7 @@ Taken from [sandbox-architecture.md](sandbox-architecture.md) and
 1. **Only changed services run locally.** Each feature runs on the laptop only the
    services whose code it changed. Everything else is reached through port-forwards to the
    shared Kubernetes cluster (the "baseline").
-2. **Many features run at once.** Up to 12 features (and so up to 12 Claude Code agents)
+2. **Many features run at once.** Many features (12 slots by default, and so as many Claude Code agents)
    run side by side on one machine, each with its own Docker network and port range.
 3. **A per-request choice.** Caddy, the proxy, reads the `X-Feature` cookie on each
    request and sends it to that feature's local copy of a service, or to the baseline

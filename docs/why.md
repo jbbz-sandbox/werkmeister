@@ -5,7 +5,7 @@
 
 ## Vision
 
-**A world where a developer's day is spent on judgment, not toil.**
+**A world where a developer's day is spent on judgment and craft, not toil.**
 
 Software is written, tested, wired up, deployed and verified by agents that never
 skip a step. People are where the decisions are: what to build, whether it is
@@ -13,8 +13,7 @@ right, and when it ships.
 
 ## Mission
 
-**Orchestrate autonomous development that stops exactly where human judgment is
-required.**
+**Make the agent do the work and the person do the deciding.**
 
 Werkmeister runs many pieces of work at once, each in its own isolated workspace
 with its own workflow for its kind of work, and gates the places where only a
@@ -26,6 +25,42 @@ person can decide.
 > Werkmeister so that judgment is the only thing you have to bring.
 >
 > More time to do the things that humans are good at.
+
+## How it started
+
+It started with a time difference.
+
+Our company opened an office in Pune, India, and we were hiring to fill it. Lots
+of new developers, every one of them needing a working environment before they
+could write a line of code.
+
+Getting one took days. A new engineer spent two or three of them wiring up about
+ten local containers, and no two environments came out the same. Their morning
+was my evening, and their evening was my early morning, so every snag landed in
+one or the other. I was walking people through setup one at a time and burning
+the candle at both ends.
+
+I didn't want a better onboarding doc. I wanted one command that brought
+everything up, so nobody needed me awake for it.
+
+The hard part was what *not* to run. Nobody needs the whole platform on their
+laptop. You need the services you're about to change, and everything else should
+come from the shared environment that's already running. So that became the
+rule: run locally only what you change, and defer the rest to remote.
+
+Setup went from days to about thirty minutes, and from ten containers to one to
+three. Everyone started from the same baseline, and the drift stopped.
+
+The team called the tool the developer sandbox. It ran one environment at a
+time, for the feature you were working on right then. Switching to a bug fix
+meant tearing that down, bringing up another, and finding your place again when
+you came back. Context switching was hard because the tool made you pay for
+every switch.
+
+So it grew: from one environment for the feature in progress to many features at
+once, each with an agent doing the work. That's Werkmeister.
+
+Also on my blog: [How Werkmeister started](https://jaysonboyer.github.io/blog/werkmeister-origin/).
 
 ## The story
 
@@ -113,13 +148,14 @@ For the hero, a tagline, or a README first line:
 
 Vision:
 
+- A world where a developer's day is spent on judgment, not toil.
 - Every developer's day spent on the decisions only a human can make.
 - Software that builds itself, with people at the gates.
 
 Mission:
 
+- Orchestrate autonomous development that stops exactly where human judgment is required.
 - Give each kind of work its own autonomous workflow, run them in isolation side by side, and put a human gate exactly where one belongs.
-- Make the agent do the work and the person do the deciding.
 
 ## The name
 
@@ -152,3 +188,5 @@ candidate and why it lost, is in [naming-research.md](naming-research.md).
   shortest section.
 - The opener is a confession. Read it once as a stranger before it goes under
   your name on the site.
+- The origin and the confession are two stories. The origin says why the tool
+  exists; the confession says what it changed. Keep them in that order.

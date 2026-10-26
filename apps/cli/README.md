@@ -1,8 +1,8 @@
 # werkmeister
 
-A multi-feature concurrent development orchestrator: run up to 12 isolated
-feature environments side by side, each with its own containers, ports, and
-ingress hostnames.
+A multi-feature concurrent development orchestrator: run many isolated
+feature environments side by side (12 slots by default, and you can raise it),
+each with its own containers, ports, and ingress hostnames.
 
 ## Quick start
 

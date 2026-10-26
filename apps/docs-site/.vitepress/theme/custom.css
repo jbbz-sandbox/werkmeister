@@ -1,0 +1,4 @@
+/* The topology SVGs are mermaid's light theme; invert them under the dark theme. */
+.dark .vp-doc img[src*="/images/topology/"] {
+  filter: invert(0.88) hue-rotate(180deg);
+}

@@ -7,8 +7,8 @@
 
 ## 1. What the tool actually is
 
-Stated purpose: a multi-feature concurrent development orchestrator — up to 12 Claude
-Code agents developing across ~15 services on one 32GB Mac, each running only the
+Stated purpose: a multi-feature concurrent development orchestrator — many Claude
+Code agents (12 slots by default) developing across ~15 services on one Mac, each running only the
 services it changed.
 
 That is the *application*. The reusable machinery underneath is broader, and the
@@ -185,7 +185,7 @@ read as a security claim.
   live cluster, a corporate CA, `/etc/hosts` entries, a setup wizard) is a wall that every
   use in §5 hits before it reaches value. This is the single largest market unlock in the
   document and it is subtraction, not construction.
-- **Magnify — a slot pool that is not one laptop.** 12 slots on an M2 becomes 200 on a
+- **Magnify — a slot pool that is not one laptop.** 12 default slots on an M2 becomes 200 on a
   shared host or a cloud pool. This is the SaaS shape of §5.1 and §5.2.
 - **Modify the unit of ephemerality.** Workspace-per-feature → per-PR, per-incident,
   per-prospect, per-customer-bug. The lifecycle does not care what the unit means.
