@@ -23,6 +23,7 @@ import { projectName } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
   type ArchetypeRegistry,
+  baselineUpstream,
   type CacheRegistry,
   containerOf,
   DEFAULT_CPUS,
@@ -408,11 +409,53 @@ function quoted(value: string): string {
 }
 
 /**
+ * `<SVC>_URL` / `_HOST` / `_PORT` for every service a feature can reach: a
+ * local sibling by its Docker DNS alias, else its `baseline_upstream`, else its
+ * k8s forward. A service with none of the three gets no vars.
+ */
+function serviceUrlVars(
+  localServices: string[],
+  servicesConfig: ServicesConfig,
+  portsConfig: Record<string, unknown>,
+): Record<string, string> {
+  const urls: Record<string, string> = {};
+  for (const svcName of Object.keys(servicesConfig).sort()) {
+    const svcDef = servicesConfig[svcName] ?? {};
+    if (!isDict(svcDef)) {
+      continue;
+    }
+    const envPrefix = svcName.toUpperCase().replace(/-/g, "_");
+    if (localServices.includes(svcName)) {
+      const internalPort = svcDef["internal_port"] ?? 3000;
+      urls[`${envPrefix}_URL`] = `http://${svcName}:${internalPort}`;
+      urls[`${envPrefix}_HOST`] = svcName;
+      urls[`${envPrefix}_PORT`] = String(internalPort);
+      continue;
+    }
+    const baseline = baselineUpstream(svcName, svcDef);
+    if (baseline) {
+      urls[`${envPrefix}_URL`] = `http://${baseline.host}:${baseline.port}`;
+      urls[`${envPrefix}_HOST`] = baseline.host;
+      urls[`${envPrefix}_PORT`] = String(baseline.port);
+      continue;
+    }
+    const k8sPort = k8sPortForService(svcName, servicesConfig, portsConfig);
+    if (k8sPort) {
+      urls[`${envPrefix}_URL`] = `http://k8s-forwards:${k8sPort}`;
+      urls[`${envPrefix}_HOST`] = "k8s-forwards";
+      urls[`${envPrefix}_PORT`] = String(k8sPort);
+    }
+  }
+
+  return avoidComposeEnvShadowing(urls, localServices, servicesConfig);
+}
+
+/**
  * Replace `{service-name}` placeholders in environment values.
  *
  * If the referenced service is running locally, use its Docker network alias
- * and internal port.  Otherwise use the `k8s-forwards` container with the
- * appropriate port.
+ * and internal port.  Otherwise use its `baseline_upstream` when set, else the
+ * `k8s-forwards` container with the appropriate port.
  *
  * Note: this pattern is distinct from the `${ENV_VAR}` shell-interpolation
  * syntax also used in services.yaml (e.g. `"${GITHUB_AUTH_TOKEN}"`) -- the
@@ -439,6 +482,10 @@ function resolveServiceRefs(
       const internalPort = svcDef["internal_port"] ?? 3000;
       return `${svcName}:${internalPort}`;
     }
+    const baseline = baselineUpstream(svcName, svcDef);
+    if (baseline) {
+      return `${baseline.host}:${baseline.port}`;
+    }
     // Use k8s-forwards container on the shared Docker network
     const k8sPort = k8sPortForService(svcName, servicesConfig, portsConfig);
     if (k8sPort) {
@@ -446,7 +493,7 @@ function resolveServiceRefs(
     }
     throw new Error(
       `Cannot resolve {${svcName}} in ${quoted(value)}: ` +
-        `${quoted(svcName)} is not local and has no k8s_forward_port in services.yaml`,
+        `${quoted(svcName)} is not local and has neither baseline_upstream nor k8s_forward_port in services.yaml`,
     );
   });
 }
@@ -1006,33 +1053,10 @@ export function generateFeatureEnv(
   if (template) {
     const [portStart] = getPortRange(slot);
     // Build service_urls and env_vars for the template
-    let serviceUrls: Record<string, string> = {};
     // Rendered last so a workspace can override a generated service URL; secrets
     // get the same override in writeServiceSecretEnvs.
     const envVars = loadWorkspaceEnvVars(workspaceRoot);
-    for (const svcName of Object.keys(servicesConfig).sort()) {
-      const svcDef = servicesConfig[svcName] ?? {};
-      if (!isDict(svcDef)) {
-        continue;
-      }
-      const envPrefix = svcName.toUpperCase().replace(/-/g, "_");
-      const internalPort = svcDef["internal_port"] ?? 3000;
-      if (localServices.includes(svcName)) {
-        // Local services: use Docker DNS alias on shared network
-        serviceUrls[`${envPrefix}_URL`] = `http://${svcName}:${internalPort}`;
-        serviceUrls[`${envPrefix}_HOST`] = svcName;
-        serviceUrls[`${envPrefix}_PORT`] = String(internalPort);
-      } else {
-        // Remote services: use k8s-forwards container
-        const k8sPort = k8sPortForService(svcName, servicesConfig, portsConfig);
-        if (k8sPort) {
-          serviceUrls[`${envPrefix}_URL`] = `http://k8s-forwards:${k8sPort}`;
-          serviceUrls[`${envPrefix}_HOST`] = "k8s-forwards";
-          serviceUrls[`${envPrefix}_PORT`] = String(k8sPort);
-        }
-      }
-    }
-    serviceUrls = avoidComposeEnvShadowing(serviceUrls, localServices, servicesConfig);
+    const serviceUrls = serviceUrlVars(localServices, servicesConfig, portsConfig);
     const rendered = template.render(
       jinjaContext({
         feature_name: feature,
@@ -1060,30 +1084,7 @@ export function generateFeatureEnv(
     "# Service URLs",
   ];
 
-  let fallbackUrls: Record<string, string> = {};
-  for (const svcName of Object.keys(servicesConfig).sort()) {
-    const svcDef = servicesConfig[svcName] ?? {};
-    if (!isDict(svcDef)) {
-      continue;
-    }
-    const envPrefix = svcName.toUpperCase().replace(/-/g, "_");
-
-    if (localServices.includes(svcName)) {
-      const internalPort = svcDef["internal_port"] ?? 3000;
-      fallbackUrls[`${envPrefix}_URL`] = `http://${svcName}:${internalPort}`;
-      fallbackUrls[`${envPrefix}_HOST`] = svcName;
-      fallbackUrls[`${envPrefix}_PORT`] = String(internalPort);
-    } else {
-      const k8sPort = k8sPortForService(svcName, servicesConfig, portsConfig);
-      if (k8sPort) {
-        fallbackUrls[`${envPrefix}_URL`] = `http://k8s-forwards:${k8sPort}`;
-        fallbackUrls[`${envPrefix}_HOST`] = "k8s-forwards";
-        fallbackUrls[`${envPrefix}_PORT`] = String(k8sPort);
-      }
-    }
-  }
-
-  fallbackUrls = avoidComposeEnvShadowing(fallbackUrls, localServices, servicesConfig);
+  const fallbackUrls = serviceUrlVars(localServices, servicesConfig, portsConfig);
   for (const [key, value] of Object.entries(fallbackUrls)) {
     lines.push(`${key}=${value}`);
   }

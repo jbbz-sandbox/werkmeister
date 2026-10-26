@@ -109,3 +109,21 @@ test("Container Lifecycle mentions auto-stop only when it is on (#231)", async (
     { services: SERVICES },
   );
 });
+
+test("a baseline service's row shows its upstream URL (SW-102)", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices());
+      assert.match(
+        out,
+        /\| `backend` \| baseline \| `apps\/backend` \| — \| — \| `BACKEND_URL=http:\/\/baseline-backend:3000` \|/,
+      );
+    },
+    {
+      services: SERVICES.replace(
+        "    k8s_forward_port: 9052\n",
+        '    k8s_forward_port: 9052\n    baseline_upstream: "baseline-backend:3000"\n',
+      ),
+    },
+  );
+});

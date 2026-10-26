@@ -335,6 +335,73 @@ describe("cpu limits", () => {
   });
 });
 
+// ---- baseline_upstream (SW-102) ------------------------------------------
+
+/** Fixture registry with frontend local and referencing {backend}; *edit* reshapes backend. */
+function withBackendRef(edit: (backend: any) => void): void {
+  const doc = YAML.parse(fixtureServicesYaml());
+  doc.services.frontend.environment = {
+    ...(doc.services.frontend.environment ?? {}),
+    BASELINE_PROBE: "http://{backend}/health",
+  };
+  edit(doc.services.backend);
+  home.write("services.yaml", YAML.stringify(doc));
+}
+
+const frontendCompose = (local = ["frontend"]): string =>
+  fs.readFileSync(generateFeatureCompose("f", 1, local, null, tmp), "utf8");
+
+describe("baseline_upstream (SW-102)", () => {
+  it("resolves a {service} ref with no k8s_forward_port to the upstream", () => {
+    withBackendRef((b) => {
+      delete b.k8s_forward_port;
+      b.baseline_upstream = "baseline-backend:3000";
+    });
+    expect(frontendCompose()).toContain("http://baseline-backend:3000/health");
+  });
+
+  it("wins over k8s_forward_port, which then gets no forward", () => {
+    withBackendRef((b) => {
+      b.baseline_upstream = "10.0.0.5:8080";
+    });
+    const content = frontendCompose();
+    expect(content).toContain("http://10.0.0.5:8080/health");
+    expect(content).not.toContain("k8s-forwards:9052");
+  });
+
+  it("loses to the service running locally", () => {
+    withBackendRef((b) => {
+      b.baseline_upstream = "baseline-backend:3000";
+    });
+    expect(frontendCompose(["frontend", "backend"])).not.toContain("baseline-backend");
+  });
+
+  it("throws naming both keys when a non-local ref has neither", () => {
+    withBackendRef((b) => {
+      delete b.k8s_forward_port;
+    });
+    expect(() => frontendCompose()).toThrow(/neither baseline_upstream nor k8s_forward_port/);
+  });
+
+  it("throws on an upstream that is not host:port", () => {
+    withBackendRef((b) => {
+      b.baseline_upstream = "baseline-backend";
+    });
+    expect(() => frontendCompose()).toThrow(/'backend'.baseline_upstream must be host:port/);
+  });
+
+  it("writes the service's URL, HOST and PORT vars into .env from the upstream", () => {
+    withBackendRef((b) => {
+      delete b.k8s_forward_port;
+      b.baseline_upstream = "baseline-backend:3000";
+    });
+    const content = fs.readFileSync(generateFeatureEnv("f", 1, ["frontend"], null, tmp), "utf8");
+    expect(content).toContain("BACKEND_URL=http://baseline-backend:3000\n");
+    expect(content).toContain("BACKEND_HOST=baseline-backend\n");
+    expect(content).toContain("BACKEND_PORT=3000\n");
+  });
+});
+
 describe("generateFeatureEnv", () => {
   it("writes feature, slot, and a local service DNS URL", () => {
     // Demo services have no k8s forward, so a local service is reached over the

@@ -218,6 +218,11 @@
         "k8s_forward_name": {
           "type": "string",
           "description": "Network alias for the tunnel when it differs from the service name."
+        },
+        "baseline_upstream": {
+          "type": "string",
+          "pattern": "^\\S+:[0-9]{1,5}$",
+          "description": "host:port a {service} reference resolves to when the service is not local, instead of k8s-forwards. Wins over k8s_forward_port, which then gets no forward (SW-102)."
         }
       },
       "additionalProperties": false

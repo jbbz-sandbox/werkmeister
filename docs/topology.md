@@ -6,8 +6,8 @@ crosses the boundary between your laptop and the cluster.
 The short version: **containers are local, Kubernetes is remote, and telepresence
 is the only piece that can sit on either side.** That last choice is
 `werkmeister intercept --docker-daemon`, and it is the only decision in this document.
-Without a cluster, the same shape holds with a manual tunnel standing in for
-`k8s-forwards`; see *Without Kubernetes*.
+Without a cluster, the same shape holds with a baseline container in `w9r-infra`
+or a manual tunnel standing in for `k8s-forwards`; see *Without Kubernetes*.
 
 ---
 
@@ -213,19 +213,43 @@ the intercepts have no stand-in. What holds today, checked against the code:
    | Cloud Run | `gcloud run services proxy <svc> --port <port>` |
    | A remote Docker host | `ssh -L`, or `DOCKER_HOST=ssh://…` and publish the port |
 
-3. **Container-to-service references don't follow.** A `{service}` reference in
-   a container's environment resolves only to `k8s-forwards:<k8s_forward_port>`
-   and throws without one (`resolveServiceRefs`, `packages/werkmeister-core/src/generate.ts`).
-   So your local containers can't reach a non-Kubernetes base service through
-   the generated env vars yet.
+3. **Container-to-service references follow `baseline_upstream`.** A `{service}`
+   reference in a container's environment, and its generated `<SVC>_URL` /
+   `_HOST` / `_PORT`, resolve to the service's `baseline_upstream: host:port` in
+   `services.yaml` when it is set, ahead of `k8s_forward_port`; a service with
+   the key gets no forward (`resolveServiceRefs`, `packages/werkmeister-core/src/generate.ts`).
+   Point it at a baseline container (item 5) or any Docker DNS name or remote
+   address the containers can reach; not `host.docker.internal`, which only
+   Caddy and `k8s-forwards` map.
 4. **No intercepts.** Telepresence is Kubernetes-only: `werkmeister intercept`
    needs the traffic-manager and a traffic-agent sidecar, and refuses a service
    without `k8s_deployment`, `k8s_namespace` and `k8s_port`. Remote → laptop by
    header has no equivalent off-cluster. `ssh -R` from the host is the nearest
    stand-in, and it takes the whole port, not one header's worth of requests.
-5. **Planned.** `w9r-infra` hosting the base services you're not changing, as
-   containers from the latest deployed images, plus an upstream key for item 3.
-   Not built; tracked as [SW-102](https://jory-group.atlassian.net/browse/SW-102).
+5. **Baseline containers.** `w9r-infra` can run a base service you're not
+   changing from its deployed image. Pin the image by digest in
+   `~/.werkmeister/config.yaml` and point the service's `baseline_upstream` at
+   the container's `baseline-<service>` alias:
+
+   ```yaml
+   # ~/.werkmeister/config.yaml
+   infra:
+     baseline:
+       backend:
+         image: ghcr.io/acme/backend@sha256:<digest>   # docker inspect --format='{{index .RepoDigests 0}}' <image>:<tag>
+         environment: { DATABASE_URL: "postgres://…" } # optional
+
+   # ~/.werkmeister/services.yaml
+   services:
+     backend:
+       baseline_upstream: "baseline-backend:3000"      # the service's internal_port
+   ```
+
+   `werkmeister connect` writes them into a generated `baseline.override.yml`
+   and starts `w9r-baseline-<service>` on the shared network; a tag-only image
+   is refused. No host port is published: set `feature_router.remote_upstream`
+   to the same alias to make it the browser's no-cookie default too. Removing
+   an entry leaves its container running until `werkmeister down infra`.
 
 ### The local-cluster variant
 

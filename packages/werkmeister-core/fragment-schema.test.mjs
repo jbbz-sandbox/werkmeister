@@ -92,3 +92,24 @@ test("caches: a yarn and a cargo entry validate; malformed entries and service l
     assert.equal(validate({ ...withoutRepo, caches: { c: bad } }), false, JSON.stringify(bad));
   }
 });
+
+test("baseline_upstream must be host:port (SW-102)", () => {
+  const frag = (u) => ({
+    services: {
+      demo: {
+        path: ".",
+        type: "api",
+        internal_port: 80,
+        port_offset: 0,
+        health_endpoint: "/",
+        baseline_upstream: u,
+      },
+    },
+  });
+  for (const ok of ["baseline-demo:80", "10.0.0.5:8080", "host.docker.internal:3000"]) {
+    assert.ok(validate(frag(ok)), `${ok}: ${JSON.stringify(validate.errors)}`);
+  }
+  for (const bad of ["baseline-demo", "demo:", ":80", "demo:abc", 80]) {
+    assert.equal(validate(frag(bad)), false, String(bad));
+  }
+});

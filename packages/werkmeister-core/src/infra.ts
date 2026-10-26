@@ -22,6 +22,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { baselineSpecs, generateBaselineOverride } from "./baseline.js";
 import { stopOrRestart, takeDownProject } from "./compose.js";
 import {
   composeInvocation,
@@ -134,6 +135,8 @@ async function ensureProxyFiles(): Promise<void> {
   // k8s-forwards container reads (k8s-port-forward/forwards) and the compose
   // override — must happen before `docker compose up`.
   generateK8sForwards();
+  // Throws on a bad infra.baseline entry, before compose ever sees it.
+  generateBaselineOverride();
 
   refreshKubeconfig();
 }
@@ -155,7 +158,12 @@ export async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
   }
 
   takeDownProject(LEGACY_INFRA_PROJECT, "the pre-rename shared infra");
-  const services = ["k8s-forwards", "caddy", ...infraProfiles()].join(", ");
+  const services = [
+    "k8s-forwards",
+    "caddy",
+    ...infraProfiles(),
+    ...baselineSpecs().map((s) => `baseline-${s.service}`),
+  ].join(", ");
   info(`Starting shared infrastructure (${services})...`);
   try {
     const result = await runAsync([...argv, "up", "-d", "--build"], {

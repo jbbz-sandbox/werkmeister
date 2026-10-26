@@ -290,6 +290,8 @@ infra:
 
 For a one-off, `COMPOSE_PROFILES=redisinsight werkmeister connect`. `werkmeister down infra` removes them either way.
 
+No cluster? `infra.baseline` runs the base services you aren't changing from digest-pinned images, and each service's `baseline_upstream` in `services.yaml` points `{service}` references at them. See [Without Kubernetes](topology.md#without-kubernetes).
+
 Verify k8s forwards are healthy:
 
 ```bash

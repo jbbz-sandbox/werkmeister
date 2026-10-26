@@ -27,7 +27,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { dotDir, loadPorts, loadServices, slotPortRange } from "./config.js";
+import { baselineUpstream, dotDir, loadPorts, loadServices, slotPortRange } from "./config.js";
 import { docker } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { sandboxLock } from "./locks.js";
@@ -343,7 +343,7 @@ export function getServicePort(slot: number, portOffset: number): number {
 
 export interface ServiceEndpoint {
   service: string;
-  source: "local" | "k8s" | "none";
+  source: "local" | "baseline" | "k8s" | "none";
   /** `null` when *source* is `"none"` — the CLI renders that as "(not configured)". */
   endpoint: string | null;
   type: string;
@@ -359,8 +359,9 @@ export interface FeatureServices {
  * Decide where *service* answers for a feature holding *slot*.
  *
  * A container running locally wins: its host port is the slot's base plus the
- * service's `port_offset`. Otherwise a `k8s_forward_port` means the k8s-forwards
- * container tunnels it to the host. Neither means the registry says nothing
+ * service's `port_offset`. Otherwise a `baseline_upstream` names a Docker-network
+ * address (not a host one), else a `k8s_forward_port` means the k8s-forwards
+ * container tunnels it to the host. None means the registry says nothing
  * about how to reach it.
  */
 export function classifyEndpoint(
@@ -379,6 +380,11 @@ export function classifyEndpoint(
       endpoint: `localhost:${getServicePort(slot, portOffset)}`,
       type,
     };
+  }
+
+  const baseline = baselineUpstream(service, svcDef);
+  if (baseline) {
+    return { service, source: "baseline", endpoint: `${baseline.host}:${baseline.port}`, type };
   }
 
   const k8sPort = svcDef["k8s_forward_port"];
