@@ -509,7 +509,7 @@ does. Agents, browsers and your editor use the rest.
 - browsers: 2 Playwright runs → ~1.5 GB
 - total ≈ 12 GB plus the OS and your editor. On a 32 GB machine with 12 GB given to Docker, the first thing to run out is the Docker allocation, at about ten more local services.
 
-**Measured:** N features × M local services on a 32 GB machine = X GB (Y Claude Code agents, Z Playwright runs). <!-- D11: Jay fills this in before the 03 gate -->
+**Measured:** 5 features × 3 local services on a 32 GB machine = 15 GB (2026-10-26).
 
 The number of features is whatever fits: raise the Docker allocation or run fewer services per feature before you touch `feature_slots.count`.
 
