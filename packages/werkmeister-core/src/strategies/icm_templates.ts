@@ -72,7 +72,7 @@ const EXERCISE_FORMAT =
 const propose: Stage = {
   name: "propose",
   job: "acceptance walk and PR files",
-  writes: "one commit per code repo touched, `output/pr-<repo>.md` per repo",
+  writes: "one commit per code repo touched, `output/pr-<worktree>.md` per repo",
   check: "approve each PR file; `sandbox pr open` opens it",
   standards: "none",
   contract: (v) => ({
@@ -89,15 +89,15 @@ const propose: Stage = {
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write PASS or FAIL with the file and line in a prior `output/` that proves it. A FAIL routes back to the owning stage — do not fix it here.",
       "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit.",
-      "Write `output/pr-<repo>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`. Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs, the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
+      "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`. Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs, the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
       "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],
     outputs: [
       "One commit per code repo touched, on that worktree's branch",
-      "`output/pr-<repo>.md` per repo",
+      "`output/pr-<worktree>.md` per repo",
     ],
     humanCheck:
-      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then ask the person before `sandbox close-out`.",
+      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `sandbox pr open` runs the gate and opens it. Merging is yours. After the release, `sandbox pr status`, then ask the person before `sandbox close-out`. Code written after a PR merged (e.g. found at release) is a follow-up: `sandbox pr new <worktree> --slug <slug>`.",
     selfCheck:
       "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `sandbox pr open`. Stop at the PR URL. Merging is the person's.",
   }),
@@ -382,11 +382,11 @@ const spike: Stage[] = [
         "Answer each question by its method. Prototype code lives in `output/` or on a scratch branch, never on the workspace branch.",
         "Write `output/findings.md`: per question, the answer, the evidence (commands and output), and confidence.",
         "End `findings.md` with a recommendation: the next work item and its work type.",
-        "If the brief asks for a deliverable in a code repo (e.g. a doc opened as a PR): commit it on that worktree's branch, and write `output/pr-<repo>.md` in the format of `_shared/pr-rules.md` at `status: draft`, with an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise.",
+        "If the brief asks for a deliverable in a code repo (e.g. a doc opened as a PR): commit it on that worktree's branch, and write `output/pr-<worktree>.md` in the format of `_shared/pr-rules.md` at `status: draft`, with an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise.",
       ],
       outputs: [
         "`output/findings.md`",
-        "`output/pr-<repo>.md` per repo — only when the brief asks for a repo deliverable",
+        "`output/pr-<worktree>.md` per repo — only when the brief asks for a repo deliverable",
       ],
       humanCheck:
         "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here. If there is a `pr-*.md`, set `status: approved`; `sandbox pr open` runs the gate and opens it, and close-out waits for it to ship. Otherwise, when the recommendation is recorded where it is needed, `sandbox close-out`.",

@@ -147,7 +147,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.match(
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
-      /`stages\/04_propose\/output\/pr-<repo>\.md`/,
+      /`stages\/04_propose\/output\/pr-<worktree>\[-<slug>\]\.md`/,
     );
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
@@ -258,13 +258,16 @@ test("spike: pr-rules and the PR route point at 02_findings; findings may write 
     async (root, ctx) => {
       icm.init(ctx);
       const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
-      assert.match(read("_shared/pr-rules.md"), /`stages\/02_findings\/output\/pr-<repo>\.md`/);
+      assert.match(
+        read("_shared/pr-rules.md"),
+        /`stages\/02_findings\/output\/pr-<worktree>\[-<slug>\]\.md`/,
+      );
       assert.match(read("_shared/pr-rules.md"), /skip_exercise:/);
       assert.match(read("CLAUDE.md"), /^\| asked to open or create a PR /m);
       const findings = read("stages/02_findings/CONTEXT.md");
       assert.match(
         findings,
-        /write `output\/pr-<repo>\.md` in the format of `_shared\/pr-rules\.md`/,
+        /write `output\/pr-<worktree>\.md` in the format of `_shared\/pr-rules\.md`/,
       );
       assert.match(findings, /If there is a `pr-\*\.md`, set `status: approved`/);
       assert.deepEqual(icm.check(root), []);

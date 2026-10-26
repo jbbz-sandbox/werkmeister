@@ -16,6 +16,9 @@ is `docs/workspace-lifecycle.md` in the sandbox repo.
 1. **PR file per code repo touched.** ICM: the propose stage writes
    `stages/NN_propose/output/pr-<repo>.md`. JIT: `sb-pr` writes
    `.werkmeister/notes/pr-<repo>.md`. Never a PR for the workspace (record) branch.
+   Code written after a repo's PR merged (e.g. found at release) is a follow-up:
+   `sandbox pr new <worktree> --slug <slug>` cuts a fresh branch from base and
+   writes a draft `pr-<worktree>-<slug>.md`; it then goes through the same steps.
 2. **The person approves.** They set `status: approved` in each PR file. Never
    set it yourself.
 3. **`sandbox pr gate`** shows what still blocks: earlier stages, the acceptance
