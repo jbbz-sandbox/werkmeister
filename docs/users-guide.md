@@ -463,6 +463,7 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `-y, --yes`: Skip the confirmation prompt
   - `--abandon <reason>`: Remove despite unshipped work; records the reason in closeout.md and the PR files
 - `werkmeister pr <action> [args...]`: Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)
+  - `--slug <slug>`: new: the follow-up's name, in its PR file and branch
   - `--no-pr <reason>`: adopt: no PR — the fix is already on base
   - `--install`: watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes
   - `--uninstall`: watch: remove that schedule
