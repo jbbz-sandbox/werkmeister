@@ -25,33 +25,27 @@ A system that lets many Claude Code agents develop features at once across a mul
 For which *machine* each of these runs on — laptop, container runtime, or a cloud
 cluster — see [docs/topology.md](topology.md). This section is the request path.
 
+![The request path: the browser sends the X-Feature cookie to Caddy, which routes to a local feature container when the cookie matches one and to the k8s baseline otherwise](images/sandbox-architecture/request-path.svg)
+
+<details>
+<summary>Diagram source</summary>
+
+```mermaid
+flowchart TB
+  browser["Browser / Playwright<br/>cookie: X-Feature=my-feature"]
+  caddy["Caddy — one site block per service hostname, :443<br/>TLS termination (local certs)<br/>feature selector UI at /__werkmeister<br/>copies the X-Feature cookie onto the upstream as a header"]
+  local["Local containers<br/>host.docker.internal:&lt;port&gt;"]
+  k8s["k8s baseline<br/>k8s-forwards container, e.g. k8s-forwards:9052"]
+  browser -->|"HTTPS :443"| caddy
+  caddy -->|"X-Feature cookie matches a local container"| local
+  caddy -->|"otherwise"| k8s
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Browser / Playwright                                               │
-│  Cookie: X-Feature=my-feature                                       │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │ HTTPS (:443)
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Caddy  (one site block per service hostname, :443)                 │
-│                                                                     │
-│  • TLS termination (local certs)                                    │
-│  • Serves feature selector UI at /__werkmeister                     │
-│  • Copies the X-Feature cookie onto the upstream as a header        │
-│  • Match X-Feature cookie → local container, else k8s baseline      │
-└──────────┬──────────────────────────────────┬───────────────────────┘
-           │                                  │
-     ┌─────▼──────┐                    ┌──────▼──────┐
-     │  Local      │                    │  k8s        │
-     │  Containers │                    │  Baseline   │
-     │  (host.docker│                   │  (k8s-fwds  │
-     │   .internal)│                    │   container)│
-     └─────────────┘                    └─────────────┘
+
+</details>
 
 All services communicate via Docker DNS on the werkmeister-shared network.
-Local feature containers are reached from Caddy via host.docker.internal:<port>.
-k8s services are reached via the k8s-forwards container (e.g., k8s-forwards:9052).
-```
+Local feature containers are reached from Caddy via `host.docker.internal:<port>`.
+k8s services are reached via the k8s-forwards container (e.g., `k8s-forwards:9052`).
 
 ---
 
