@@ -1,26 +1,5 @@
 # Why Werkmeister
 
-> The origin story, vision and mission, in the voice of its one contributor.
-> Source for the landing page's "why" section and anything that introduces the project.
-
-## Vision
-
-**A world where a developer's day is spent on judgment and craft, not toil.**
-
-Software is written, tested, wired up, deployed and verified by agents that never
-skip a step. People are where the decisions are: what to build, whether it is
-right, and when it ships.
-
-## Mission
-
-**Make the agent do the work and the person do the deciding.**
-
-Werkmeister runs many pieces of work at once, each in its own isolated workspace
-with its own workflow for its kind of work, and gates the places where only a
-person can decide.
-
-## Why statement
-
 > I believe the most valuable thing a developer brings is judgment. I built
 > Werkmeister so that judgment is the only thing you have to bring.
 >
@@ -100,7 +79,14 @@ nowhere. Somewhere specific.
 I believe the answer is a gate. A place where the work stops and waits for a
 human, and only a human.
 
+The world I want is one where a developer's day is spent on judgment and craft,
+not toil. Software is written, tested, wired up, deployed and verified by agents
+that never skip a step. People are where the decisions are: what to build,
+whether it is right, and when it ships.
+
 ## How it works
+
+Make the agent do the work and the person do the deciding.
 
 Not all work is the same work. A bug has a shape: reproduce it, propose a fix,
 implement, deploy, verify. A spike has a different shape. A feature, a refactor,
@@ -156,15 +142,3 @@ well-known package. The tool was called `sandbox` for its first year. That word
 can't be searched for, and a competitor uses it for their own unit of work, so it
 had to go before the project went open source. The full search, with every
 candidate and why it lost, is in [naming-research.md](naming-research.md).
-
-## Notes on voice
-
-- First person throughout. There is one contributor, and a belief owned by a
-  named person is more credible than one claimed by an invisible team. When a
-  second contributor lands, "Where it stands" is the only section to rewrite.
-- Why first, how second, what last. The product description is deliberately the
-  shortest section.
-- The opener is a confession. Read it once as a stranger before it goes under
-  your name on the site.
-- The origin and the confession are two stories. The origin says why the tool
-  exists; the confession says what it changed. Keep them in that order.
