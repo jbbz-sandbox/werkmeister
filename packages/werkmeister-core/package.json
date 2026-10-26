@@ -74,7 +74,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "docs:links": "typedoc",
-    "test": "node --test *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
+    "test": "node --test --test-concurrency=2 *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@types/dockerode": "^4.0.1",
