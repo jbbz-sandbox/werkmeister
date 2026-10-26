@@ -1,7 +1,7 @@
 # Werkmeister — User's Guide
 
 > Multi-feature concurrent development environment (formerly `sandbox`; the CLI is `werkmeister`, or `w9r` for short; the old `sandbox` command is deprecated).
-> Enables up to 12 features to be developed simultaneously, each running only the services that have code changes locally while everything else is served from k8s.
+> Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it.
 
 ---
 
@@ -68,10 +68,10 @@ A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and rout
 
 **Key benefits:**
 
-- **Low memory footprint** — a typical feature uses 512MB–1GB (3 local services) instead of 12GB+ for the full stack
+- **Low memory footprint** — a local service costs about half a gigabyte, so a feature running two or three of them is a fraction of the full stack
 - **Feature isolation** — each feature gets its own Docker network, port range, and compose stack; no cross-contamination
 - **Auto-detection** — `werkmeister up` analyzes your git changes to determine which services to run
-- **Up to 12 concurrent features** — enough for a full team of Claude Code agents
+- **Many features at once** — Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it.
 
 ---
 
@@ -569,7 +569,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.werkmeister/workspace.yml`, rerun `werkmeister init-workspace`, then `werkmeister up`.
 
-**If all 12 slots are occupied**, the command exits with an error. Free a slot by running `werkmeister down` on another feature.
+**If every slot is taken** (12 by default, `feature_slots.count`), the command exits with an error. Free a slot by running `werkmeister down` on another feature.
 
 ---
 
@@ -1424,7 +1424,7 @@ Port allocation scheme:
 
 ```yaml
 feature_slots:
-  count: 12          # Maximum concurrent features
+  count: 12          # Feature slots (default 12; raise it)
   base_port: 11100   # Starting port for slot 1
   ports_per_slot: 20  # Ports available per slot
 ```
@@ -1805,7 +1805,7 @@ werkmeister restart PROJ-1234
 
 ### "No available slots" Error
 
-All 12 slots are occupied. Free one by stopping a feature:
+Every slot is taken (12 by default). Free one by stopping a feature:
 
 ```bash
 werkmeister status          # See which features are active

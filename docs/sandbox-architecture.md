@@ -6,7 +6,7 @@
 
 ## Overview
 
-A system that enables up to 12 Claude Code agents to concurrently develop features across a multi-service application on a 32GB M2 Mac. Each feature runs only the services it modifies locally, with everything else port-forwarded from k8s. A reverse proxy routes traffic per-feature using HTTP headers/cookies.
+A system that lets many Claude Code agents develop features at once across a multi-service application on one machine. Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it. A reverse proxy routes traffic per-feature using HTTP headers/cookies.
 
 ---
 
@@ -482,25 +482,36 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 
 ## Resource Estimation
 
-**Per feature (3 local services, typical)**:
-- ~512MB–1GB RAM (Node.js services with hot-reload)
-- Minimal CPU when idle
+Two budgets, not one. Containers share the memory you gave Docker (OrbStack or
+Docker Desktop → Resources), and that allocation fills long before the machine
+does. Agents, browsers and your editor use the rest.
 
-**Shared overhead**:
-- Caddy proxy: ~20MB
-- k8s port-forwards container: ~64–256MB
-- Redis: ~32–64MB
-- Cloud SQL Proxy: ~32–64MB
-- Docker daemon overhead: ~500MB
+**Inside the Docker allocation**
 
-**Worst case (12 features × 3 services each = 36 containers)**:
-- ~12–15GB RAM for containers
-- ~1GB shared overhead
-- Total: ~13–16GB — fits within 32GB with room for Claude Code agents and OS
+| What | Each | Note |
+|---|---|---|
+| A local service | ~0.5 GB | a Node service with hot reload; a JVM or a database is more |
+| Caddy | ~20 MB | measured |
+| `k8s-forwards` | ~65–250 MB | measured idle; grows with forwards |
+| Docker daemon | ~0.5 GB | |
 
-**Typical case (8 features × 3 services, 2 features × 5 services)**:
-- ~10–12GB RAM
-- Comfortable headroom
+**Outside it**
+
+| What | Each | Note |
+|---|---|---|
+| A Claude Code agent | ~0.25 GB per process, 2–3 processes per session | 245 MB per process measured 2026-10-25 |
+| A Playwright run | ~0.5–1 GB | one Chromium |
+
+**Worked example: 6 features, 2 local services each**
+
+- containers: 12 × 0.5 GB = 6 GB, + ~0.6 GB shared → ~7 GB of the Docker allocation
+- agents: 6 × ~0.6 GB → ~3.6 GB
+- browsers: 2 Playwright runs → ~1.5 GB
+- total ≈ 12 GB plus the OS and your editor. On a 32 GB machine with 12 GB given to Docker, the first thing to run out is the Docker allocation, at about ten more local services.
+
+**Measured:** 5 features × 3 local services on a 32 GB machine = 15 GB (2026-10-26).
+
+The number of features is whatever fits: raise the Docker allocation or run fewer services per feature before you touch `feature_slots.count`.
 
 ---
 
@@ -564,4 +575,4 @@ werkmeister status
 
 4. **Proxy header propagation**: Should web apps explicitly forward `X-Feature`, or should Caddy inject it on all proxied traffic? Caddy injection is simpler but the header wouldn't survive if a service makes an outbound call that doesn't go through the proxy.
 
-5. **Playwright parallelism**: Can all 12 features run Playwright tests simultaneously, or is that too resource-heavy? May need a queue.
+5. **Playwright parallelism**: Can every running feature run Playwright tests simultaneously, or is that too resource-heavy? May need a queue.

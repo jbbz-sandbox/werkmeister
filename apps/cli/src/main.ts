@@ -2,8 +2,8 @@
 /**
  * Developer Sandbox CLI
  *
- * A multi-feature concurrent development orchestrator that lets up to 12
- * Claude Code agents develop features simultaneously. Each feature runs
+ * A multi-feature concurrent development orchestrator that lets many
+ * Claude Code agents develop features at once (12 slots by default). Each feature runs
  * only the services it modifies locally, with everything else
  * port-forwarded from k8s.
  *
