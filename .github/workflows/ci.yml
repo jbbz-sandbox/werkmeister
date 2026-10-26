@@ -175,8 +175,11 @@ jobs:
 
   # SW-96: a docs-only merge publishes nothing, so on its own the site would wait
   # for the next release to show it. "Only docs" means every changed file is a
-  # .md file or lives under apps/docs-site/; a merge that also touches code keeps
-  # waiting for its release, so the site never describes an unpublished CLI.
+  # .md file or lives under docs/ or apps/docs-site/ (so a diagram added next to
+  # its page counts); a merge that also touches code keeps waiting for its
+  # release, so the site never describes an unpublished CLI. A force-push leaves
+  # `before` with no common ancestor, so the compare fails: treat that as not
+  # docs-only rather than failing the run.
   docs-only:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -187,8 +190,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          files=$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" --paginate --jq '.files[].filename')
-          if [ -n "$files" ] && ! grep -qvE '(\.md$|^apps/docs-site/)' <<<"$files"; then
+          files=$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" --paginate --jq '.files[].filename') || files=
+          if [ -n "$files" ] && ! grep -qvE '(\.md$|^docs/|^apps/docs-site/)' <<<"$files"; then
             echo "only_docs=true" >> "$GITHUB_OUTPUT"
           else
             echo "only_docs=false" >> "$GITHUB_OUTPUT"
