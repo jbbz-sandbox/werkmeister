@@ -24,6 +24,10 @@ networks:
     driver: bridge
 
 services:
+  # Baseline services (SW-102) are not listed here: their images are chosen per
+  # machine in config.yaml `infra.baseline`, so they come from the generated
+  # baseline.override.yml (packages/werkmeister-core/src/baseline.ts).
+
   # redis and postgres are NOT docker services here — they run in the OrbStack
   # k8s cluster (demo-services: charts/redis.yaml, charts/postgres.yaml) and are surfaced to the
   # docker world by the k8s-forwards container below (host 9050 / 9051). This

@@ -26,6 +26,19 @@ test("a service not running locally falls back to its k8s forward port", () => {
   );
 });
 
+test("a baseline_upstream wins over the forward and reports the Docker-network address (SW-102)", () => {
+  const e = classifyEndpoint(
+    "backend",
+    { k8s_forward_port: 9052, baseline_upstream: "baseline-backend:3000", type: "api" },
+    [],
+    3,
+  );
+  assert.deepEqual(
+    { source: e.source, endpoint: e.endpoint },
+    { source: "baseline", endpoint: "baseline-backend:3000" },
+  );
+});
+
 test("a service with neither a local container nor a forward is unconfigured", () => {
   const e = classifyEndpoint("ghost", { type: "api" }, [], 3);
   assert.equal(e.source, "none");

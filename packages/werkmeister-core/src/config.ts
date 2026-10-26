@@ -165,6 +165,28 @@ export function workspacesRoot(): string {
 // caller's job precisely because the two callers disagree about what an
 // unreadable registry means.
 
+/**
+ * A service's `baseline_upstream` split into host and port, or null when it has
+ * none. Split on the last `:` so a bracketed IPv6 host survives (SW-102).
+ */
+export function baselineUpstream(
+  name: string,
+  def: unknown,
+): { host: string; port: number } | null {
+  if (!isDict(def) || def["baseline_upstream"] === undefined || def["baseline_upstream"] === null) {
+    return null;
+  }
+  const value = def["baseline_upstream"];
+  const match = typeof value === "string" ? /^(\S+):([0-9]{1,5})$/.exec(value) : null;
+  const port = match ? Number(match[2]) : 0;
+  if (!match || port < 1 || port > 65535) {
+    throw new Error(
+      `services.yaml: '${name}'.baseline_upstream must be host:port, got ${JSON.stringify(value)}`,
+    );
+  }
+  return { host: match[1], port };
+}
+
 export interface ForwardSpec {
   name: string;
   listen: number;
@@ -178,7 +200,8 @@ export interface ForwardSpec {
  * The k8s port-forward table: one entry per forwarded service in services.yaml
  * order, then every `infrastructure:` entry declaring `k8s_forward_port`.
  *
- * A service is forwarded iff it declares `k8s_forward_port`. The forward *name*
+ * A service is forwarded iff it declares `k8s_forward_port` and no
+ * `baseline_upstream` (which wins, so its refs never point at a forward). The forward *name*
  * is `k8s_forward_name` when set (an alias differing from the key), else the
  * key. `remote` is the in-pod container port (`internal_port`) for both kinds —
  * `kubectl port-forward deployment/x` binds a pod port, not the cluster-facing
@@ -195,7 +218,8 @@ export function forwardSpecs(
       if (
         !isDict(def) ||
         def["k8s_forward_port"] === null ||
-        def["k8s_forward_port"] === undefined
+        def["k8s_forward_port"] === undefined ||
+        baselineUpstream(key, def)
       ) {
         continue;
       }
@@ -466,6 +490,8 @@ export interface ServiceEntry {
   internal_port?: number;
   port_offset?: number;
   k8s_forward_port?: number;
+  /** `host:port` a `{service}` ref resolves to instead of k8s-forwards (SW-102). */
+  baseline_upstream?: string;
   k8s_forward_name?: string;
   k8s_namespace?: string;
   k8s_pod_prefix?: string;

@@ -13,6 +13,7 @@ import { afterEach, beforeEach, test } from "node:test";
 
 import { parse as parseYaml } from "yaml";
 
+import { baselineOverridePath } from "./dist/baseline.js";
 import { composeInvocation, infraProfiles } from "./dist/compose_infra.js";
 import { infraRoot, stateInfraRoot } from "./dist/config.js";
 
@@ -99,6 +100,17 @@ test("leaves an existing override alone", async () => {
   await writeFile(override, "services: {}\n# sentinel\n");
   composeInvocation();
   assert.match(readFileSync(override, "utf8"), /sentinel/);
+});
+
+// SW-102: only `connect` writes the baseline override, so status/down before
+// one (or with a broken infra.baseline) never see it.
+test("adds the baseline override as a third -f only once it exists", async () => {
+  assert.equal(composeInvocation().argv.filter((a) => a === "-f").length, 2);
+  const baseline = baselineOverridePath();
+  await writeFile(baseline, "services: {}\n");
+  const { argv } = composeInvocation();
+  assert.equal(argv[3], path.join(infraRoot(), "compose", "shared-infra.yml"));
+  assert.deepEqual(argv.slice(6, 10), ["-f", baseline, "-p", "w9r-infra"]);
 });
 
 // SW-76: jaeger and redisinsight sit behind compose profiles that config.yaml's

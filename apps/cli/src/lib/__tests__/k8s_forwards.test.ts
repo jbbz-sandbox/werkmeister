@@ -52,6 +52,21 @@ describe("buildForwardRows — infrastructure forwards", () => {
     expect(rows).toEqual(["redis|9050|6379|default|redis|"]);
   });
 
+  it("skips a service or infra entry that declares baseline_upstream, even with k8s_forward_port (SW-102)", () => {
+    const services = {
+      backend: {
+        k8s_forward_port: 9052,
+        internal_port: 3000,
+        baseline_upstream: "baseline-backend:3000",
+      },
+      frontend: { k8s_forward_port: 9053, internal_port: 3000 },
+    };
+    const infra = {
+      redis: { k8s_forward_port: 9050, internal_port: 6379, baseline_upstream: "10.0.0.5:6379" },
+    };
+    expect(buildForwardRows(services, infra)).toEqual(["frontend|9053|3000|||"]);
+  });
+
   it("returns no rows when there is no forwarded infrastructure", () => {
     expect(buildForwardRows({}, {})).toEqual([]);
   });

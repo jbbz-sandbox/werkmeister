@@ -3,7 +3,8 @@
  *
  * Two files: the shipped `infra/compose/shared-infra.yml` (read-only, part of
  * the npm package) and the generated `k8s-forwards.override.yml` under
- * `stateInfraRoot()`. The shipped file interpolates `${SANDBOX_STATE_DIR}` for
+ * `stateInfraRoot()`, plus `baseline.override.yml` once `connect` has written
+ * it (baseline.ts). The shipped file interpolates `${SANDBOX_STATE_DIR}` for
  * every generated mount, so the env this returns must reach the spawn.
  *
  * A leaf module on purpose: `infra.ts`, `caddy.ts`, `k8s.ts` and `status.ts`
@@ -14,6 +15,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { baselineOverridePath } from "./baseline.js";
 import { infraRoot, loadConfig, stateInfraRoot } from "./config.js";
 import { generateK8sForwards, overrideFilePath } from "./k8s_forwards.js";
 
@@ -49,6 +51,9 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv; c
   if (!fs.existsSync(override)) {
     generateK8sForwards(true);
   }
+  // Only `connect` writes this one: generating it here would let a bad
+  // infra.baseline entry break `status` and `down` too (SW-102).
+  const baseline = baselineOverridePath();
   return {
     argv: [
       "docker",
@@ -57,6 +62,7 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv; c
       path.join(infraRoot(), "compose", "shared-infra.yml"),
       "-f",
       override,
+      ...(fs.existsSync(baseline) ? ["-f", baseline] : []),
       // `-p`, not just the file's `name:`: a workspace container's `.env`
       // exports COMPOSE_PROJECT_NAME=sandbox-<feature>, which outranks `name:`
       // and pointed every infra call at the workspace's project (#198). It and

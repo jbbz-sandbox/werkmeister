@@ -13,7 +13,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { containerTestCommand, serviceTestCommand, validationRows } from "./archetypes.js";
-import { type ArchetypeRegistry, loadArchetypes, type ServicesConfig } from "./config.js";
+import {
+  type ArchetypeRegistry,
+  baselineUpstream,
+  loadArchetypes,
+  type ServicesConfig,
+} from "./config.js";
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
 import { loadIngress } from "./global_config.js";
 import { issueLink } from "./issue_tracker.js";
@@ -431,11 +436,18 @@ export function buildSandboxContextMd(
     if (!isDict(svcDef)) {
       continue;
     }
+    const envVar = `${svc.toUpperCase().replace(/-/g, "_")}_URL`;
+    const baseline = baselineUpstream(svc, svcDef);
+    if (baseline) {
+      serviceRows.push(
+        `| \`${svc}\` | baseline | \`${svcDef["path"] ?? "."}\` | — | — | \`${envVar}=http://${baseline.host}:${baseline.port}\` |`,
+      );
+      continue;
+    }
     const port = k8sPort(svc);
     if (!port) {
       continue;
     }
-    const envVar = `${svc.toUpperCase().replace(/-/g, "_")}_URL`;
     serviceRows.push(
       `| \`${svc}\` | k8s | \`${svcDef["path"] ?? "."}\` | — | — | \`${envVar}=http://k8s-forwards:${port}\` |`,
     );
@@ -583,7 +595,7 @@ ${
     hasLocal || serviceRows.length > 0
       ? `## Services
 
-Every container gets each service's URL injected as an env var (the last column). Local services resolve to the Docker DNS alias on the per-feature network; k8s-forwarded services resolve via the shared \`k8s-forwards\` container.
+Every container gets each service's URL injected as an env var (the last column). Local services resolve to the Docker DNS alias on the per-feature network; baseline services resolve to their \`baseline_upstream\`; k8s-forwarded services resolve via the shared \`k8s-forwards\` container.
 
 ${servicesTable}
 
