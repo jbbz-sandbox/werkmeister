@@ -19,7 +19,7 @@ import { main as gateMain, resetSessionState } from "../gate.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { noteDecisions } from "../graduate.js";
 import { writeWorkspaceHooks, writeWorkspaceSettings } from "../hooks_gen.js";
-import { issueIdOfMeta } from "../issue_tracker.js";
+import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import {
   buildContext,
@@ -256,7 +256,14 @@ function init(ctx: InitContext): void {
   fs.mkdirSync(path.dirname(issuesReportPath), { recursive: true });
   fs.writeFileSync(
     issuesReportPath,
-    forDotDir(buildIssuesReportMd(workspaceName, issueIdOfMeta(meta)), workspaceRoot),
+    forDotDir(
+      buildIssuesReportMd(
+        workspaceName,
+        issueIdOfMeta(meta),
+        issueTracker({ project: inputs["project"], text: issueIdOfMeta(meta) }),
+      ),
+      workspaceRoot,
+    ),
   );
   success(`Wrote ${issuesReportPath}`);
   const prRulesPath = path.join(dotDir(workspaceRoot), "pr-rules.md");

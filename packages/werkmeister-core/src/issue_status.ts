@@ -9,7 +9,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { load } from "./global_config.js";
-import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
+import {
+  issueIdOf,
+  issueTracker,
+  loadIssueTracker,
+  projectFor,
+  projectOf,
+  type TrackerAt,
+} from "./issue_tracker.js";
 import type { Issue, IssueTrackerStrategy, TrackerId } from "./issue_trackers/types.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
@@ -66,6 +73,14 @@ export function resolveIssueStatuses(
     else if (alias && overrides[alias] !== undefined) out[point] = blankToNull(overrides[alias]);
   }
   return out;
+}
+
+/** The statuses for `at`: its project's map over its tracker's defaults, else today's overrides. */
+export function issueStatuses(at?: TrackerAt): IssueStatuses {
+  const project = at ? projectFor(at) : null;
+  return project
+    ? resolveIssueStatuses({ issue_statuses: project.issueStatuses }, project.tracker)
+    : resolveIssueStatuses(load()["overrides"] ?? {}, loadIssueTracker());
 }
 
 /** 0 new, 1 in progress, 2 in review, 3 merged, 4 done: from the category, then the names. */
@@ -146,11 +161,15 @@ function currentStage(ws: string): string {
 /** `sandbox issue start`: the first stage or phase began, so the issue moves to in_progress. */
 export async function startIssue(
   ws: string,
-  tracker: IssueTrackerStrategy = issueTracker(),
-  statuses: IssueStatuses = resolveIssueStatuses(load()["overrides"] ?? {}, loadIssueTracker()),
+  tracker?: IssueTrackerStrategy,
+  statuses?: IssueStatuses,
 ): Promise<string> {
-  const ref = issueIdOf(loadConfigFile(ws, null));
+  const cfg = loadConfigFile(ws, null);
+  const ref = issueIdOf(cfg);
   if (!ref) return "no issue";
+  const at = { project: projectOf(cfg), text: ref };
+  tracker ??= issueTracker(at);
+  statuses ??= issueStatuses(at);
   return moveIssue(tracker, ref, "in_progress", statuses, {
     comment: `Work started: ${currentStage(ws)} in workspace ${path.basename(ws)}.`,
   });

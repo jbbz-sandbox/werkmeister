@@ -128,6 +128,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     // config or a live token.
     ...(cfg.ingress ? { ingress: cfg.ingress } : {}),
     ...(cfg.jira ? { jira: cfg.jira } : {}),
+    ...(cfg.projects ? { projects: cfg.projects } : {}),
   };
 
   const saved = gc.save(newCfg);

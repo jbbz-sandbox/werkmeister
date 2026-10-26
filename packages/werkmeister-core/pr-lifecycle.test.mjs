@@ -34,7 +34,7 @@ import {
   writePrFields,
 } from "./dist/pr_lifecycle.js";
 import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
 const PASS_BODY = "## Acceptance\n| criterion | result |\n|---|---|\n| works | PASS |\n";
 
@@ -635,6 +635,73 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.deepEqual(d.stopped, [], "a failed gate keeps the containers for the fix");
   } finally {
     clean(bad);
+  }
+});
+
+test("openPrs: with no tracker injected, each workspace's project gets the in_review move (SW-104)", async () => {
+  for (const k of ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"]) delete process.env[k];
+  const config = `jira: { base_url: https://x.atlassian.net, email: a@b.c, api_token: tok }
+projects:
+  acme: { tracker: { id: github, org: acme }, issue_statuses: { in_review: "status: review" } }
+  werkmeister: { tracker: { id: jira, project: SW } }
+`;
+  const ghIssue = { title: "T", state: "OPEN", labels: [], assignees: [], comments: [] };
+  const jiraCalls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    jiraCalls.push(`${init.method ?? "GET"} ${String(url).replace("https://x.atlassian.net", "")}`);
+    if (init.method === "POST") return new Response(null, { status: 204 });
+    if (String(url).includes("/transitions"))
+      return Response.json({ transitions: [{ id: "31", to: { name: "In Review" } }] });
+    return Response.json({
+      key: "SW-9",
+      fields: { status: { name: "In Progress", statusCategory: { key: "indeterminate" } } },
+    });
+  };
+  const yml = (issue, project) =>
+    `feature: feat\nservices: api,lib\nissue_id: ${issue}\nproject: ${project}\nwork_type: feature\n`;
+  const ghWs = icmWorkspace();
+  const jiraWs = icmWorkspace();
+  fs.writeFileSync(path.join(dotDir(ghWs), "workspace.yml"), yml("acme/app#7", "acme"));
+  fs.writeFileSync(path.join(dotDir(jiraWs), "workspace.yml"), yml("SW-9", "werkmeister"));
+  const created = [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }];
+  try {
+    await withSandboxHome(
+      () =>
+        withFakeGh({ issue: ghIssue }, async (bin) => {
+          const ghCalls = () =>
+            fs
+              .readFileSync(path.join(path.dirname(bin), "calls"), "utf8")
+              .trim()
+              .split("\n");
+          const ghR = await openPrs(
+            ghWs,
+            undefined,
+            deps([DIFF_API, created], { tracker: undefined, statuses: undefined }),
+          );
+          assert.ok(ghR.ok, ghR.lines.join("\n"));
+          assert.ok(ghCalls().includes("issue edit 7 -R acme/app --add-label status: review"));
+          assert.deepEqual(jiraCalls, [], "the GitHub workspace never calls Jira");
+
+          const before = ghCalls().length;
+          const jiraR = await openPrs(
+            jiraWs,
+            undefined,
+            deps([DIFF_API, created], { tracker: undefined, statuses: undefined }),
+          );
+          assert.ok(jiraR.ok, jiraR.lines.join("\n"));
+          assert.ok(
+            jiraCalls.includes("POST /rest/api/2/issue/SW-9/transitions"),
+            jiraCalls.join("\n"),
+          );
+          assert.equal(ghCalls().length, before, "the Jira workspace never calls gh");
+        }),
+      { config },
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+    clean(ghWs);
+    clean(jiraWs);
   }
 });
 

@@ -15,7 +15,14 @@ import {
   jiraMyself,
   updateIssueRest,
 } from "../jira-rest.js";
-import type { Issue, IssueComment, IssueKind, IssueTrackerStrategy, IssueUpdate } from "./types.js";
+import type {
+  Issue,
+  IssueComment,
+  IssueKind,
+  IssueTrackerStrategy,
+  IssueUpdate,
+  TrackerScope,
+} from "./types.js";
 
 const KEY_RE = /[A-Za-z][A-Za-z0-9]+-\d+/;
 
@@ -203,93 +210,103 @@ const SANDBOX_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
 const ISSUE_TYPES: Record<IssueKind, string> = { bug: "Bug", feature: "Story", task: "Task" };
 
-export const jira: IssueTrackerStrategy = {
-  id: "jira",
-  label: "Jira",
-  refExample: "PROJ-123",
-  refPattern: null,
-  issueTypes: ISSUE_TYPES,
-  // The first LETTERS-DIGITS token wins: the key in every Jira URL shape, and in a branch name.
-  parseRef: (text) => KEY_RE.exec(text ?? "")?.[0].toUpperCase() ?? null,
-  slug: (ref) => ref.trim().toLowerCase(),
-  url: jiraBrowseUrl,
+/** Jira, narrowed to `scope.project`'s keys when set (SW-104). The site stays the machine's `jira:` block. */
+export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
+  const key = scope.project?.toUpperCase();
+  return {
+    id: "jira",
+    label: "Jira",
+    refExample: "PROJ-123",
+    refPattern: null,
+    issueTypes: ISSUE_TYPES,
+    // The first LETTERS-DIGITS token wins: the key in every Jira URL shape, and in a branch name.
+    parseRef: (text) => KEY_RE.exec(text ?? "")?.[0].toUpperCase() ?? null,
+    slug: (ref) => ref.trim().toLowerCase(),
+    holds: (ref) => !key || ref.toUpperCase().startsWith(`${key}-`),
+    url: jiraBrowseUrl,
 
-  async fetchIssue(ref) {
-    const rest = await fetchIssueRest(ref);
-    return rest ? fromRest(rest) : fetchViaMcp(ref);
-  },
+    async fetchIssue(ref) {
+      const rest = await fetchIssueRest(ref);
+      return rest ? fromRest(rest) : fetchViaMcp(ref);
+    },
 
-  async fetchIssues(refs) {
-    if (!refs.length) return {};
-    const statuses = (await fetchStatusesRest(refs)) ?? (await statusesViaMcp(refs));
-    const out: Record<string, Issue> = {};
-    for (const [ref, status] of Object.entries(statuses))
-      out[ref] = { ref, status, url: jiraBrowseUrl(ref) ?? undefined };
-    return out;
-  },
+    async fetchIssues(refs) {
+      if (!refs.length) return {};
+      const statuses = (await fetchStatusesRest(refs)) ?? (await statusesViaMcp(refs));
+      const out: Record<string, Issue> = {};
+      for (const [ref, status] of Object.entries(statuses))
+        out[ref] = { ref, status, url: jiraBrowseUrl(ref) ?? undefined };
+      return out;
+    },
 
-  filingGuide(issueId) {
-    const project = /^([A-Z][A-Z0-9]+)-\d+$/.exec(issueId)?.[1];
-    const sandboxProject = loadSandboxIssuesProject();
-    const rawBase = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
-    const site = isJiraPlaceholder(rawBase) || !rawBase ? "" : ` (${rawBase})`;
-    const command = (key?: string) =>
-      `\`sandbox issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file>\`; ` +
-      "if it fails for want of a Jira API token, the Atlassian MCP tools if connected, otherwise hand the person the title, type and body to file";
-    const jql = (key?: string) =>
-      `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "<keywords>"\``;
-    const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${site}`;
-    return {
-      row: `| app code in a worktree | ${where} | ${command(project)} |`,
-      sandbox: sandboxProject
-        ? { where: `Jira, project \`${sandboxProject}\`${site}`, command: command(sandboxProject) }
-        : undefined,
-      search: `Search first: ${jql(project)}. If it exists, comment on it instead. (Sandbox-tool issues: ${sandboxProject ? jql(sandboxProject) : `\`gh issue list -R ${SANDBOX_ISSUES_REPO} --search "<keywords>" --state all\``}.)`,
-    };
-  },
+    filingGuide(issueId) {
+      const project = /^([A-Z][A-Z0-9]+)-\d+$/.exec(issueId)?.[1] ?? key;
+      const sandboxProject = loadSandboxIssuesProject();
+      const rawBase = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
+      const site = isJiraPlaceholder(rawBase) || !rawBase ? "" : ` (${rawBase})`;
+      const command = (key?: string) =>
+        `\`sandbox issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file>\`; ` +
+        "if it fails for want of a Jira API token, the Atlassian MCP tools if connected, otherwise hand the person the title, type and body to file";
+      const jql = (key?: string) =>
+        `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "<keywords>"\``;
+      const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${site}`;
+      return {
+        row: `| app code in a worktree | ${where} | ${command(project)} |`,
+        sandbox: sandboxProject
+          ? {
+              where: `Jira, project \`${sandboxProject}\`${site}`,
+              command: command(sandboxProject),
+            }
+          : undefined,
+        search: `Search first: ${jql(project)}. If it exists, comment on it instead. (Sandbox-tool issues: ${sandboxProject ? jql(sandboxProject) : `\`gh issue list -R ${SANDBOX_ISSUES_REPO} --search "<keywords>" --state all\``}.)`,
+      };
+    },
 
-  async createIssue({ project, type, title, body }) {
-    const created = await createIssueRest({
-      project,
-      issueType: ISSUE_TYPES[type],
-      fallbackLabel: type,
-      summary: title,
-      description: markdownToWiki(body),
-    });
-    if (!created)
-      throw new Error(
-        "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md), " +
-          "or file it with the Atlassian MCP tools",
-      );
-    return { ref: created.key, title, type: created.issueType, url: created.url };
-  },
+    async createIssue({ project, type, title, body }) {
+      const created = await createIssueRest({
+        project,
+        issueType: ISSUE_TYPES[type],
+        fallbackLabel: type,
+        summary: title,
+        description: markdownToWiki(body),
+      });
+      if (!created)
+        throw new Error(
+          "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md), " +
+            "or file it with the Atlassian MCP tools",
+        );
+      return { ref: created.key, title, type: created.issueType, url: created.url };
+    },
 
-  async updateIssue(ref, update) {
-    // The MCP path takes Markdown as-is; only REST v2 needs wiki markup.
-    const rest = update.comment ? { ...update, comment: markdownToWiki(update.comment) } : update;
-    if ((await updateIssueRest(ref, rest)) === null) await updateViaMcp(ref, update);
-  },
+    async updateIssue(ref, update) {
+      // The MCP path takes Markdown as-is; only REST v2 needs wiki markup.
+      const rest = update.comment ? { ...update, comment: markdownToWiki(update.comment) } : update;
+      if ((await updateIssueRest(ref, rest)) === null) await updateViaMcp(ref, update);
+    },
 
-  async checkAuth() {
-    const fix = "set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md)";
-    try {
-      const me = await jiraMyself();
-      if (me) return { ok: true, who: me.who, fix: "" };
-      // No REST creds: fetchIssue still works through the Atlassian MCP, so only placeholder values are a fault.
-      const j = loadJira();
-      const values = [
-        process.env.JIRA_BASE_URL,
-        process.env.JIRA_EMAIL,
-        process.env.JIRA_API_TOKEN,
-        j.base_url,
-        j.email,
-        j.api_token,
-      ];
-      return values.some((v) => v && isJiraPlaceholder(String(v)))
-        ? { ok: false, reason: "Jira settings still hold the placeholder values", fix }
-        : { ok: true, who: "via Atlassian MCP (not checked)", fix: "" };
-    } catch (e) {
-      return { ok: false, reason: (e as Error).message, fix };
-    }
-  },
-};
+    async checkAuth() {
+      const fix = "set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md)";
+      try {
+        const me = await jiraMyself();
+        if (me) return { ok: true, who: me.who, fix: "" };
+        // No REST creds: fetchIssue still works through the Atlassian MCP, so only placeholder values are a fault.
+        const j = loadJira();
+        const values = [
+          process.env.JIRA_BASE_URL,
+          process.env.JIRA_EMAIL,
+          process.env.JIRA_API_TOKEN,
+          j.base_url,
+          j.email,
+          j.api_token,
+        ];
+        return values.some((v) => v && isJiraPlaceholder(String(v)))
+          ? { ok: false, reason: "Jira settings still hold the placeholder values", fix }
+          : { ok: true, who: "via Atlassian MCP (not checked)", fix: "" };
+      } catch (e) {
+        return { ok: false, reason: (e as Error).message, fix };
+      }
+    },
+  };
+}
+
+export const jira = jiraTracker();

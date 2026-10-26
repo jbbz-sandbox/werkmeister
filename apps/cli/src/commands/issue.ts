@@ -30,7 +30,10 @@ import {
   issueIdOf,
   issueTracker,
   type NewIssue,
+  projectOf,
+  trackerById,
 } from "werkmeister-core/issue_tracker";
+import { loadProjects } from "werkmeister-core/projects";
 import { loadConfigFile } from "werkmeister-core/workspace_prompts";
 
 import { error, success, warn } from "../lib/config.js";
@@ -77,8 +80,12 @@ function fail(msg: string): never {
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
-  const tracker = issueTracker();
   if (args.action === "create") {
+    // A Jira project's key files through Jira even when the machine's tracker is GitHub (SW-104).
+    const key = String(args.project ?? "").toUpperCase();
+    const tracker = loadProjects().some((p) => p.tracker === "jira" && p.scope.project === key)
+      ? trackerById("jira")
+      : issueTracker();
     if (!tracker.createIssue)
       fail(
         `${tracker.label} issues are filed with its own CLI: gh issue create -R <owner>/<repo>.`,
@@ -106,15 +113,19 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (typeof update === "string") fail(update);
 
   let text = (args.ref as string | null) ?? "";
+  let project = "";
   if (!text) {
     const workspace = findWorkspaceRoot(process.cwd());
     if (workspace === null) {
       fail("No issue given and not inside a werkmeister workspace.");
     }
-    text = issueIdOf(loadConfigFile(workspace, null));
+    const cfg = loadConfigFile(workspace, null);
+    text = issueIdOf(cfg);
+    project = projectOf(cfg);
     if (!text)
       fail("No issue given and this workspace has no issue (issue_id in .sandbox/workspace.yml).");
   }
+  const tracker = issueTracker({ project, text });
   const ref = tracker.parseRef(text);
   if (!ref) fail(`'${text}' is not a ${tracker.label} issue ID (e.g. ${tracker.refExample}).`);
 

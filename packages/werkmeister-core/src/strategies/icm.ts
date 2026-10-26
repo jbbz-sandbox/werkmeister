@@ -14,7 +14,7 @@ import { COMPOSE_FILE } from "../compose_file.js";
 import { dotDir, forDotDir, IDLE_SERVICE_TYPES } from "../config.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { removeWorkspaceHooks, writePrGuardHook, writeWorkspaceSettings } from "../hooks_gen.js";
-import { issueIdOfMeta } from "../issue_tracker.js";
+import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd } from "../pr_rules.js";
 import { info, success, warn } from "../reporter.js";
@@ -366,7 +366,11 @@ function render(ctx: InitContext): Record<string, string> {
   const base = vars(ctx, stages);
   const files: Record<string, string> = {
     "_shared/standards.md": renderStandards(r),
-    "_shared/issues-report.md": buildIssuesReportMd(ctx.workspaceName, issueIdOfMeta(ctx.meta)),
+    "_shared/issues-report.md": buildIssuesReportMd(
+      ctx.workspaceName,
+      issueIdOfMeta(ctx.meta),
+      issueTracker({ project: ctx.inputs["project"], text: issueIdOfMeta(ctx.meta) }),
+    ),
   };
   files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${prDir(stages)}/output/`, base.autonomous);
   stages.forEach((stage, i) => {

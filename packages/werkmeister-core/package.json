@@ -40,6 +40,7 @@
     "./issue_snapshot": "./dist/issue_snapshot.js",
     "./issue_status": "./dist/issue_status.js",
     "./issue_tracker": "./dist/issue_tracker.js",
+    "./projects": "./dist/projects.js",
     "./k8s": "./dist/k8s.js",
     "./k8s_forwards": "./dist/k8s_forwards.js",
     "./lifecycle": "./dist/lifecycle.js",

@@ -53,7 +53,7 @@ import {
   readIssueRef,
   writeIssueCopy,
 } from "./issue_snapshot.js";
-import { issueTracker } from "./issue_tracker.js";
+import { issueTracker, projectForIssue } from "./issue_tracker.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
@@ -140,14 +140,15 @@ export interface InitWorkspaceOptions {
 export async function resolveIssueCopy(
   root: string,
   issueId: string,
-  opts: { issue?: IssueSnapshot; refresh?: boolean },
+  opts: { issue?: IssueSnapshot; refresh?: boolean; project?: string },
 ): Promise<IssueRef | null> {
   if (opts.issue) {
     writeIssueCopy(root, opts.issue);
   } else if (opts.refresh) {
     if (!issueId) throw new WorkspaceInitError("--refresh-issue: this workspace has no issue_id.");
     try {
-      writeIssueCopy(root, await fetchIssueSnapshot(issueId));
+      const tracker = issueTracker({ project: opts.project, text: issueId });
+      writeIssueCopy(root, await fetchIssueSnapshot(issueId, undefined, tracker));
     } catch (e) {
       if (e instanceof IssueFetchError)
         throw new WorkspaceInitError(
@@ -156,7 +157,7 @@ export async function resolveIssueCopy(
       throw e;
     }
   }
-  return readIssueRef(root, issueId);
+  return readIssueRef(root, issueId, opts.project);
 }
 /** Thrown by {@link findWorkspaceRoot}; the CLI's print paths and
  *  `init-workspace` adapter catch it and print the (pre-rendered) message. */
@@ -708,14 +709,17 @@ export async function initWorkspace(
   writeWorkspaceConfig(workspaceRoot, inputs);
 
   // 2b. The issue copy (.sandbox/issue.md): handed over at creation, refreshed on request, else read back.
+  const project = inputs["project"] ?? "";
   const issueId = inputs["issue_id"]
-    ? (issueTracker().parseRef(inputs["issue_id"]) ?? inputs["issue_id"])
+    ? (issueTracker({ project, text: inputs["issue_id"] }).parseRef(inputs["issue_id"]) ??
+      inputs["issue_id"])
     : "";
   let issue: IssueRef | null;
   try {
     issue = await resolveIssueCopy(workspaceRoot, issueId, {
       issue: opts.issue,
       refresh: Boolean(args["refresh_issue"]),
+      project,
     });
   } catch (e) {
     if (e instanceof WorkspaceInitError) fail(e.message);
@@ -942,8 +946,14 @@ export async function provisionWorkspace(
   parseStrategyId(resolved.context_strategy);
 
   const featureSlug = feature.toLowerCase();
+  try {
+    const project = projectForIssue(resolved.issue_id ?? "", resolved.project);
+    if (project) resolved.project = project.name;
+  } catch (e) {
+    fail((e as Error).message);
+  }
   // The wizard ran after resolveInputs, so normalize its answer here too.
-  const tracker = issueTracker();
+  const tracker = issueTracker({ project: resolved.project, text: resolved.issue_id });
   if (resolved.issue_id) {
     resolved.issue_id = tracker.parseRef(resolved.issue_id) ?? resolved.issue_id;
   }

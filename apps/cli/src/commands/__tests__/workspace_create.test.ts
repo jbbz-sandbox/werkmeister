@@ -13,6 +13,7 @@ let presetInputs: Record<string, string> = {};
 let wizardServices = "api";
 let reasked: string[] = [];
 let specOpts: unknown = null;
+let refProject: string | null = null;
 const fetched: string[] = [];
 
 class FakeWorkspaceError extends Error {}
@@ -51,6 +52,7 @@ vi.mock("werkmeister-core/issue_tracker", () => ({
     refExample: "o/r#1",
     parseRef: (r: string) => (/^o\/r#\d+$/.test(r) ? r : /^\d+$/.test(r) ? `o/r#${r}` : null),
   }),
+  projectFor: () => (refProject ? { name: refProject } : null),
 }));
 vi.mock("werkmeister-core/form_schema", async () => ({
   buildFormSchema: () => ({}),
@@ -96,6 +98,7 @@ describe("sandbox workspace", () => {
   beforeEach(() => {
     calls.length = errors.length = warns.length = fetched.length = 0;
     createError = fetchError = null;
+    refProject = null;
     wizardKeys = [];
     wizardResolved = {};
     afterFieldResults = [];
@@ -204,6 +207,13 @@ describe("sandbox workspace", () => {
       const [formData, opts] = calls[0] as [Record<string, string>, Record<string, unknown>];
       expect(formData.issue_id).toBe("o/r#5");
       expect(opts).toMatchObject({ issue: { title: "t" }, distill: false });
+    });
+
+    it("defaults the next prompt, project, to the project whose scope holds the ref (SW-104)", async () => {
+      wizardResolved = { issue_id: "5" };
+      refProject = "acme";
+      await run({ feature: "f" });
+      expect(afterFieldResults[0]).toEqual({ task: "t", description: "d", project: "acme" });
     });
 
     it("skips an issue_id that came from flag/env/config", async () => {

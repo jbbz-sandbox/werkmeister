@@ -7,7 +7,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { dotDir } from "./config.js";
-import { type IssueComment, issueTracker, type TrackerId } from "./issue_tracker.js";
+import {
+  type IssueComment,
+  type IssueTrackerStrategy,
+  issueTracker,
+  type TrackerId,
+} from "./issue_tracker.js";
 import type { IssueRef } from "./strategies/types.js";
 
 export const issueCopyPath = (root: string) => path.join(dotDir(root), "issue.md");
@@ -29,8 +34,8 @@ export class IssueFetchError extends Error {}
 export async function fetchIssueSnapshot(
   ref: string,
   now: () => Date = () => new Date(),
+  tracker: IssueTrackerStrategy = issueTracker({ text: ref }),
 ): Promise<IssueSnapshot> {
-  const tracker = issueTracker();
   const issue = await tracker.fetchIssue(ref);
   if (!issue) throw new IssueFetchError(`couldn't read ${ref} from ${tracker.label}`);
   return {
@@ -104,7 +109,7 @@ export function writeIssueCopy(root: string, s: IssueSnapshot): void {
 }
 
 /** What the strategies render: the stored copy (when it is `issueId`'s), else a no-copy ref built from `issueId`, else null. */
-export function readIssueRef(root: string, issueId: string): IssueRef | null {
+export function readIssueRef(root: string, issueId: string, project = ""): IssueRef | null {
   let s: IssueSnapshot | null = null;
   try {
     s = parseIssueCopy(fs.readFileSync(issueCopyPath(root), "utf8"));
@@ -114,5 +119,10 @@ export function readIssueRef(root: string, issueId: string): IssueRef | null {
   if (s && s.ref === issueId)
     return { ref: s.ref, url: s.url, title: s.title, fetchedAt: s.fetchedAt };
   if (!issueId) return null;
-  return { ref: issueId, url: issueTracker().url(issueId), title: "", fetchedAt: null };
+  return {
+    ref: issueId,
+    url: issueTracker({ project, text: issueId }).url(issueId),
+    title: "",
+    fetchedAt: null,
+  };
 }

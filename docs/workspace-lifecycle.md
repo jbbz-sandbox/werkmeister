@@ -253,6 +253,8 @@ overrides:
     abandoned: Won't Do
 ```
 
+A workspace in a project (`project:` in its `workspace.yml`, see the users guide § Projects) uses that project's `issue_statuses` instead, with the same keys; a key it leaves out takes its tracker's default, not this map's.
+
 A key left out takes its default (table above). The flat keys `issue_progress_status`, `issue_review_status` and `issue_done_status` set `in_progress`, `in_review` and `done` when the map doesn't name them. On GitHub, `closed` / `done` / `completed` closes the issue as completed, `not planned` closes it as not planned, and anything else is a label.
 
 **Rules.**

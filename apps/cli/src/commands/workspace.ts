@@ -45,7 +45,7 @@ import { createWorkspace, distillIssue, WorkspaceError } from "werkmeister-core"
 import { workspacesRoot } from "werkmeister-core/config";
 import { buildFormSchema, repoSelectionError } from "werkmeister-core/form_schema";
 import { fetchIssueSnapshot, type IssueSnapshot } from "werkmeister-core/issue_snapshot";
-import { issueTracker } from "werkmeister-core/issue_tracker";
+import { issueTracker, projectFor } from "werkmeister-core/issue_tracker";
 import { run as procRun } from "werkmeister-core/proc";
 import { WorkspaceInitError } from "werkmeister-core/workspace_init";
 import { resolveInputs, workspacePromptSpec } from "werkmeister-core/workspace_prompts";
@@ -97,7 +97,7 @@ export async function resolveWorkspaceInputs(
       afterField: async (key, r): Promise<Record<string, string>> => {
         // An issue from flag/env/config is createWorkspace's to read.
         if (key !== "issue_id" || !r.issue_id || preset.has("issue_id")) return {};
-        const tracker = issueTracker();
+        const tracker = issueTracker({ text: r.issue_id });
         const ref = tracker.parseRef(r.issue_id);
         // A bad ref or a failed read stops the wizard: run prints it once and exits 1.
         if (!ref)
@@ -106,16 +106,19 @@ export async function resolveWorkspaceInputs(
           );
         r.issue_id = ref;
         try {
-          issue = await fetchIssueSnapshot(ref);
+          issue = await fetchIssueSnapshot(ref, undefined, tracker);
         } catch {
           throw new WorkspaceError(
             `couldn't read ${ref} from ${tracker.label}; run \`sandbox connect\` to check the issue tracker.`,
           );
         }
-        if (args.no_distill) return { task: issue.title };
+        // The project prompt comes next: default it to the project whose scope holds the ref.
+        const project = projectFor({ text: ref })?.name;
+        const picked: Record<string, string> = project ? { project } : {};
+        if (args.no_distill) return { task: issue.title, ...picked };
         const { fields, warning } = await distillIssue(issue);
         if (warning) info(`Issue read; fields not pre-filled: ${warning}`);
-        return { task: issue.title, ...fields };
+        return { task: issue.title, ...fields, ...picked };
       },
     });
     // The GUIs' rule: at least one service or repo. Re-ask just those two fields.

@@ -67,6 +67,18 @@ describe("sandbox config rewrite", () => {
 
     expect(YAML.parse(fs.readFileSync(cfgFile, "utf8")).jira).toEqual(FILLED);
   });
+
+  it("preserves a hand-written projects section (SW-104)", async () => {
+    const repos = path.join(tmp, "repos");
+    fs.mkdirSync(repos);
+    const projects = { acme: { tracker: { id: "github", org: "acme" }, default: true } };
+    gc.save({ version: 1, paths: { repos_root: repos }, projects });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await runConfig({ repos_root: repos, workspaces_root: repos, show: false, check: false });
+
+    expect(YAML.parse(fs.readFileSync(cfgFile, "utf8")).projects).toEqual(projects);
+  });
 });
 
 describe("syncJiraToken", () => {

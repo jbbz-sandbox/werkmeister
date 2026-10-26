@@ -50,6 +50,11 @@
       "type": "string",
       "description": "Issue ID in this machine's issue tracker (overrides.issue_tracker, set by `sandbox setup`)."
     },
+    "project": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "The project (a key of `projects:` in ~/.werkmeister/config.yaml) whose tracker holds issue_id. Absent: the machine's tracker (overrides.issue_tracker)."
+    },
     "jira_id": {
       "type": "string",
       "deprecated": true,

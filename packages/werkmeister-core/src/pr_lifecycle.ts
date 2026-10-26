@@ -26,10 +26,9 @@ import {
   type ServicesConfig,
   sandboxHome,
 } from "./config.js";
-import { load as loadGlobalConfig } from "./global_config.js";
 import { updateNoteStatus } from "./graduate.js";
-import { type IssueStatuses, moveIssue, resolveIssueStatuses } from "./issue_status.js";
-import { issueIdOf, issueTracker, loadIssueTracker } from "./issue_tracker.js";
+import { type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
+import { issueIdOf, issueTracker, projectOf } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import {
   idleStopMinutes,
@@ -101,9 +100,10 @@ export interface Deps {
   services: ServicesConfig;
   archetypes: ArchetypeRegistry;
   repos: ReposConfig;
-  tracker: IssueTrackerStrategy;
+  /** Fixed tracker and statuses (tests); absent: the workspace's own, through its project (SW-104). */
+  tracker?: IssueTrackerStrategy;
   /** Where each lifecycle point moves the issue (issue_status.ts). */
-  statuses: IssueStatuses;
+  statuses?: IssueStatuses;
   /** Commit and push *paths* (relative to the workspace) on the record branch — nothing else that is dirty. */
   commitRecord: (
     ws: string,
@@ -154,15 +154,12 @@ async function httpStatus(url: string): Promise<number> {
 }
 
 export function defaultDeps(): Deps {
-  const overrides = loadGlobalConfig()["overrides"] ?? {};
   return {
     run: execRun,
     httpStatus,
     services: loadServices(),
     archetypes: loadArchetypes(),
     repos: loadReposConfig(),
-    tracker: issueTracker(),
-    statuses: resolveIssueStatuses(overrides, loadIssueTracker()),
     commitRecord: commitAndPush,
     remove: (name, abandoned) =>
       removeWorkspace(name, {
@@ -179,6 +176,19 @@ export function defaultDeps(): Deps {
       return minutes ? stopIdle(minutes) : { lines: [] };
     },
     startService: (ws, feature, service) => startService(feature, ws, service),
+  };
+}
+
+/** The tracker and statuses that move *ref*, the issue of the workspace whose config is *cfg*. */
+function trackingOf(
+  cfg: Record<string, unknown> | null,
+  ref: string,
+  deps: Deps,
+): { tracker: IssueTrackerStrategy; statuses: IssueStatuses } {
+  const at = { project: projectOf(cfg), text: ref };
+  return {
+    tracker: deps.tracker ?? issueTracker(at),
+    statuses: deps.statuses ?? issueStatuses(at),
   };
 }
 
@@ -781,11 +791,13 @@ export async function openPrs(
       lines.push(
         "  warning: this branch adds a SHA to .git-blame-ignore-revs — merge with a merge commit, not squash or rebase, and say so at the top of the PR body",
       );
-    const ref = issueIdOf(loadConfigFile(ws, null));
+    const wsCfg = loadConfigFile(ws, null);
+    const ref = issueIdOf(wsCfg);
     if (ref) {
       // A follow-up can open after the issue is Done; Done stays, the comment links the fix.
       const followUp = all.some((g) => g !== f && g.dir === f.dir);
-      const moved = await moveIssue(deps.tracker, ref, "in_review", deps.statuses, {
+      const { tracker, statuses } = trackingOf(wsCfg, ref, deps);
+      const moved = await moveIssue(tracker, ref, "in_review", statuses, {
         comment: `${followUp ? "Follow-up PR" : "PR"} opened: ${url}`,
         ...(followUp ? { alwaysComment: true } : {}),
       });
@@ -921,12 +933,14 @@ async function moveIssueForPrs(
   deps: Deps,
 ): Promise<string> {
   const anything = Object.values(seen).some((v) => v.length);
-  const ref = anything ? issueIdOf(loadConfigFile(ws, null)) : "";
+  const wsCfg = anything ? loadConfigFile(ws, null) : null;
+  const ref = issueIdOf(wsCfg);
   if (!ref) return "";
   const files = readPrFiles(ws);
   const state = lifecycleOf(ws).state;
+  const { tracker, statuses } = trackingOf(wsCfg, ref, deps);
   const move = (point: Parameters<typeof moveIssue>[2], comment: string, back = false) =>
-    moveIssue(deps.tracker, ref, point, deps.statuses, { comment, back });
+    moveIssue(tracker, ref, point, statuses, { comment, back });
   // A multi-repo workspace is done only when every PR has settled.
   if (seen.shipped.length && state === "shipped")
     return move("done", shippedComment(files.filter((f) => statusOf(f) === "shipped")));
@@ -1525,19 +1539,20 @@ async function closeOutLocked(
   const ref = issueIdOf(cfg);
   let issueLine = "none";
   if (ref) {
+    const { tracker, statuses } = trackingOf(cfg, ref, deps);
     // moveIssue never throws: a tracker refusal is a warning here, not a stopped close-out.
     if (why) {
-      issueLine = await moveIssue(deps.tracker, ref, "abandoned", deps.statuses, {
+      issueLine = await moveIssue(tracker, ref, "abandoned", statuses, {
         comment: `Abandoned: ${why}`,
         alwaysComment: true,
       });
     } else if (abandoned) {
       // A retry: the first run already commented.
-      const current = (await deps.tracker.fetchIssue(ref))?.status ?? "";
+      const current = (await tracker.fetchIssue(ref))?.status ?? "";
       issueLine = `${ref} left ${current || "as is"} (abandoned)`;
     } else {
       issueLine =
-        (await moveIssue(deps.tracker, ref, "done", deps.statuses, {
+        (await moveIssue(tracker, ref, "done", statuses, {
           comment: shippedComment(readPrFiles(ws).filter((f) => statusOf(f) === "shipped")),
         })) || `${ref} left as is (no done status configured)`;
     }
