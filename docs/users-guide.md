@@ -893,10 +893,10 @@ After starting, it runs a health check and reports the status.
 werkmeister status --k8s
 ```
 
-No arguments. Checks the Docker container health of `sandbox-k8s-forwards` and reports the status of each forwarded port:
+No arguments. Checks the Docker container health of `w9r-k8s-forwards` and reports the status of each forwarded port:
 
 ```
-  Container: sandbox-k8s-forwards    Status: healthy
+  Container: w9r-k8s-forwards    Status: healthy
 
   Service                Port   k8s Target                            Status
   ─────────────────────────────────────────────────────────────────────────────────
@@ -1576,7 +1576,7 @@ docker compose -f infra/compose/shared-infra.yml logs -f caddy
 
 **Container details:**
 - Image: `caddy:2-alpine`
-- Name: `sandbox-caddy`
+- Name: `w9r-caddy`
 - Ports: 80 (HTTP), 443 (HTTPS)
 - Volumes: Caddyfile (read-only), UI files, Caddy data/config
 - Health check: `caddy validate --config /etc/caddy/Caddyfile`
@@ -1614,7 +1614,7 @@ k8s port-forwards run inside a Docker container rather than as host-side shell s
 
 ### Container Details
 
-- **Container name**: `sandbox-k8s-forwards`
+- **Container name**: `w9r-k8s-forwards`
 - **Built from**: `infra/compose/k8s-port-forward/Dockerfile`
 - **Network**: `werkmeister-shared` (accessible to all feature containers via DNS name `k8s-forwards`)
 - **Health checks**: Managed by Docker health checks defined in the compose file
@@ -1623,16 +1623,16 @@ k8s port-forwards run inside a Docker container rather than as host-side shell s
 
 ```bash
 # View port-forward logs
-docker logs sandbox-k8s-forwards
+docker logs w9r-k8s-forwards
 
 # Follow logs in real-time
-docker logs -f sandbox-k8s-forwards
+docker logs -f w9r-k8s-forwards
 
 # Restart the container (re-establishes all port-forwards)
 docker compose -f infra/compose/shared-infra.yml restart k8s-forwards
 
 # Check container health
-docker inspect --format='{{.State.Health.Status}}' sandbox-k8s-forwards
+docker inspect --format='{{.State.Health.Status}}' w9r-k8s-forwards
 ```
 
 ### How It Works
@@ -1819,7 +1819,7 @@ werkmeister down old-feature  # Free up a slot
 werkmeister status --k8s
 
 # View port-forward logs
-docker logs sandbox-k8s-forwards
+docker logs w9r-k8s-forwards
 
 # Restart the k8s-forwards container
 docker compose -f infra/compose/shared-infra.yml restart k8s-forwards

@@ -349,7 +349,7 @@ export function parseConfigMem(memStr: string): number {
  * Container names may be prefixed with feature/project names, e.g.:
  * - 'sandbox-redis' → 'redis'
  * - 'feat-myfeature-frontend-1' → 'frontend'
- * - 'sandbox-k8s-forwards' → 'k8s-forwards'
+ * - 'w9r-k8s-forwards' → 'k8s-forwards'
  */
 export function matchService(
   containerName: string,
@@ -362,7 +362,7 @@ export function matchService(
 
   // Strip common prefixes
   let stripped = containerName;
-  for (const prefix of ["sandbox-", "feat-"]) {
+  for (const prefix of ["w9r-", "sandbox-", "feat-"]) {
     if (stripped.startsWith(prefix)) {
       stripped = stripped.slice(prefix.length);
     }

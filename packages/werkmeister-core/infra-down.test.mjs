@@ -39,6 +39,9 @@ afterEach(() => {
 
 test("down removes every profile's containers, not just the default set", async () => {
   await withReporter(collectingReporter(), () => down());
-  const [call] = readFileSync(log, "utf8").trim().split("\n");
-  assert.match(call, /-p sandbox-infra --profile \* down$/);
+  const call = readFileSync(log, "utf8")
+    .trim()
+    .split("\n")
+    .find((l) => l.includes(" down"));
+  assert.match(call, /-p w9r-infra --profile \* down$/);
 });

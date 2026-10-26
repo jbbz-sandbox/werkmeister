@@ -13,7 +13,7 @@ import * as path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { Colors } from "./colors.js";
-import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
+import { composeInvocation, INFRA_PROJECT, K8S_FORWARDS_CONTAINER } from "./compose_infra.js";
 import { loadServices, needsCluster, type ServicesConfig, stateInfraRoot } from "./config.js";
 import { containerRunning, type ProjectContainer, projectContainers } from "./docker.js";
 import { SandboxError } from "./errors.js";
@@ -261,7 +261,7 @@ export async function waitForForwards(timeoutMs = 30_000, pollMs = 500): Promise
       throw new SandboxError(
         `k8s port-forwards did not come back within ${Math.round(timeoutMs / 1000)}s: ` +
           `${pending.map((s) => `${s.name}:${s.listen}`).join(", ")}\n` +
-          "       Check `docker logs sandbox-k8s-forwards` and your kubeconfig.",
+          `       Check \`docker logs ${K8S_FORWARDS_CONTAINER}\` and your kubeconfig.`,
         "FORWARDS_NEVER_READY",
       );
     }
@@ -413,7 +413,7 @@ export interface ForwardStatus {
  * container is down and no running feature needs it ({@link forwarderNeeded}).
  */
 export async function getPerServiceStatus(): Promise<ForwardStatus[]> {
-  const forwardsUp = await containerRunning("sandbox-k8s-forwards");
+  const forwardsUp = await containerRunning(K8S_FORWARDS_CONTAINER);
 
   let specs: ForwardSpec[];
   try {

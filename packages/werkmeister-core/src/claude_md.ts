@@ -631,7 +631,7 @@ sandbox proxy-reload      # regenerates Caddyfile + features.json, reloads Caddy
 
 ### Caddy returns \`content-length: 0\` but direct service hit works
 
-Caddy routing issue, not an app issue. Try \`sandbox proxy-reload\` first; if Caddy is still misrouting, check \`docker logs sandbox-caddy --tail 50\`.
+Caddy routing issue, not an app issue. Try \`sandbox proxy-reload\` first; if Caddy is still misrouting, check \`docker logs w9r-caddy --tail 50\`.
 
 `
     : ""

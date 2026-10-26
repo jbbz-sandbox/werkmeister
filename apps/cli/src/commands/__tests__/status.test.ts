@@ -168,27 +168,27 @@ describe("a stopped k8s-forwards container", () => {
     await run({});
     const text = out.join("\n");
     expect(text).toContain(
-      "container sandbox-k8s-forwards stopped — not needed by any running workspace",
+      "container w9r-k8s-forwards stopped — not needed by any running workspace",
     );
     expect(text).toContain("k8s: \x1b[2mstopped");
     expect(text).not.toContain("is down");
-    expect(text).not.toContain("docker restart sandbox-k8s-forwards");
+    expect(text).not.toContain("docker restart w9r-k8s-forwards");
 
     out = [];
     await run({ k8s: true });
-    expect(out.join("\n")).not.toContain("docker restart sandbox-k8s-forwards");
+    expect(out.join("\n")).not.toContain("docker restart w9r-k8s-forwards");
   });
 
   it("stays a red warning with the restart hint when a running workspace needs it", async () => {
     vi.mocked(getPerServiceStatus).mockResolvedValue([forward("container_down")]);
     await run({});
     const text = out.join("\n");
-    expect(text).toContain("\x1b[31mcontainer sandbox-k8s-forwards is down");
+    expect(text).toContain("\x1b[31mcontainer w9r-k8s-forwards is down");
     expect(text).toContain("0/1 alive");
-    expect(text).toContain("docker restart sandbox-k8s-forwards");
+    expect(text).toContain("docker restart w9r-k8s-forwards");
 
     out = [];
     await run({ k8s: true });
-    expect(out.join("\n")).toContain("docker restart sandbox-k8s-forwards");
+    expect(out.join("\n")).toContain("docker restart w9r-k8s-forwards");
   });
 });

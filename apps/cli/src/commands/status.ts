@@ -6,6 +6,7 @@
 
 import { type CacheSnapshot, cacheSnapshots } from "werkmeister-core/build_caches";
 import { getContainerStatus, liveProject } from "werkmeister-core/compose";
+import { K8S_FORWARDS_CONTAINER } from "werkmeister-core/compose_infra";
 import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
 import type { HostSummary, ProjectHealth, Usage } from "werkmeister-core/resources";
 import { getAllSlots, type SlotEntry, slotCount } from "werkmeister-core/slots";
@@ -305,13 +306,15 @@ function printK8sSection(services: ForwardStatus[]): number {
   }
 
   if (forwarderStopped(services)) {
-    console.log(`  ${Colors.DIM}container sandbox-k8s-forwards ${STOPPED_TEXT}${Colors.RESET}`);
+    console.log(
+      `  ${Colors.DIM}container ${K8S_FORWARDS_CONTAINER} ${STOPPED_TEXT}${Colors.RESET}`,
+    );
     console.log();
     return 0;
   }
 
   if (services[0].status === "container_down") {
-    console.log(`  ${Colors.RED}container sandbox-k8s-forwards is down${Colors.RESET}`);
+    console.log(`  ${Colors.RED}container ${K8S_FORWARDS_CONTAINER} is down${Colors.RESET}`);
     console.log(`  ${Colors.DIM}Run 'sandbox connect' to start all infrastructure.${Colors.RESET}`);
     console.log();
     return 0;
@@ -377,7 +380,7 @@ function runK8sOnly(k8s: ForwardStatus[], asJson: boolean): void {
   }
   if (alive < total) {
     console.log(
-      `  ${Colors.YELLOW}To restart dead forwards: docker restart sandbox-k8s-forwards${Colors.RESET}`,
+      `  ${Colors.YELLOW}To restart dead forwards: docker restart ${K8S_FORWARDS_CONTAINER}${Colors.RESET}`,
     );
     console.log();
   }
@@ -445,7 +448,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (!stopped && alive < k8sTotal) {
     console.log(
       `  ${Colors.YELLOW}To restart dead forwards: ` +
-        `docker restart sandbox-k8s-forwards${Colors.RESET}`,
+        `docker restart ${K8S_FORWARDS_CONTAINER}${Colors.RESET}`,
     );
     console.log();
   }

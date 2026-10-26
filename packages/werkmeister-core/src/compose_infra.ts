@@ -18,7 +18,16 @@ import { infraRoot, loadConfig, stateInfraRoot } from "./config.js";
 import { generateK8sForwards, overrideFilePath } from "./k8s_forwards.js";
 
 /** The Compose project name for shared infra (shared-infra.yml's `name:`). */
-export const INFRA_PROJECT = "sandbox-infra";
+export const INFRA_PROJECT = "w9r-infra";
+
+/**
+ * The project before SW-95. Its containers hold the container names and ports
+ * 80/443 the renamed stack needs, so infra start and `down` take it down first.
+ */
+export const LEGACY_INFRA_PROJECT = "sandbox-infra";
+
+/** The k8s-forwards service's `container_name:` in shared-infra.yml. */
+export const K8S_FORWARDS_CONTAINER = "w9r-k8s-forwards";
 
 /**
  * The optional services' profiles (jaeger, redisinsight) the person turned on

@@ -60,7 +60,7 @@ test("argv names the shipped file then the override, env carries SANDBOX_STATE_D
     "-f",
     path.join(stateInfraRoot(), "compose", "k8s-forwards.override.yml"),
     "-p",
-    "sandbox-infra",
+    "w9r-infra",
   ]);
   assert.equal(env.SANDBOX_STATE_DIR, path.join(home, "infra"));
   assert.equal(env.PATH, process.env.PATH, "inherits the process env");
@@ -82,7 +82,7 @@ test("cwd is the directory holding corp-ca.crt, so bake can read the secret", ()
 test("names the infra project even when the caller's env sets COMPOSE_PROJECT_NAME", () => {
   process.env.COMPOSE_PROJECT_NAME = "sandbox-demo";
   const { argv } = composeInvocation();
-  assert.deepEqual(argv.slice(-2), ["-p", "sandbox-infra"]);
+  assert.deepEqual(argv.slice(-2), ["-p", "w9r-infra"]);
 });
 
 test("creates the override from the registry when it is missing", () => {
@@ -113,7 +113,7 @@ test("infra.profiles becomes one --profile per name, after -p", async () => {
   assert.equal(argv[3], path.join(infraRoot(), "compose", "shared-infra.yml"));
   assert.deepEqual(argv.slice(-6), [
     "-p",
-    "sandbox-infra",
+    "w9r-infra",
     "--profile",
     "redisinsight",
     "--profile",

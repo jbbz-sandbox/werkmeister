@@ -33,6 +33,7 @@ test("matchService finds the configured service inside a compose container name"
   assert.equal(matchService("sandbox-redis", configured), "redis");
   assert.equal(matchService("feat-myfeature-frontend-1", configured), "frontend");
   assert.equal(matchService("sandbox-k8s-forwards", configured), "k8s-forwards");
+  assert.equal(matchService("w9r-k8s-forwards", configured), "k8s-forwards", "SW-95 infra name");
   assert.equal(matchService("sandbox-demo-backend-1", configured), "backend");
 });
 
