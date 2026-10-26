@@ -7,7 +7,7 @@
  * then embedded and watched inline via the shared chat panel (werkmeister-ui/chat-panel).
  *
  * Browser surface only (needs the same-origin Express server for its reconcile +
- * live session-stream routes); not mounted by mcp-list.ts or artifact-main.ts.
+ * live session-stream routes); not mounted by mcp-list.ts.
  */
 
 import { useCallback, useEffect, useState } from "react";

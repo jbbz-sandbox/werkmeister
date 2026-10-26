@@ -21,7 +21,6 @@ sandbox environment.
 | `workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`werkmeister` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
 | `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. |
-| `install-workspace-dashboard` | Install the Sandbox Workspaces live dashboard as a **Cowork artifact** (`apps/werkmeister-dashboard/dist/workspace-list.artifact.html`). |
 
 ### Mods
 
@@ -53,7 +52,6 @@ Claude session bridge — with **one form definition and graceful UI degradation
 | Surface | How it connects | UI |
 |---------|-----------------|----|
 | **Claude Desktop** | `claude_desktop_config.json` (Desktop doesn't install plugins) | Inline MCP App (`ui://`): create form + workspace dashboard |
-| **Cowork** | `install-workspace-dashboard` skill | Live artifact dashboard |
 | **Claude Code CLI / VS Code** | this plugin's `.mcp.json` | Localhost browser: dashboard (`open-workspaces-ui`) + blocking create form |
 
 The server detects whether the client renders MCP App UI (`io.modelcontextprotocol/ui`
