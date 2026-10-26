@@ -1558,6 +1558,16 @@ projects. The ref is then checked with that project's tracker.
 `werkmeister config --check` names each invalid project; an invalid project is skipped with a
 warning. `werkmeister connect` checks sign-in for each project's tracker.
 
+**Adding a second tracker.** `werkmeister setup` and `werkmeister config` never ask about
+projects; when they rewrite `config.yaml` they keep the `projects:` section you wrote. So:
+
+1. Run `werkmeister setup` as usual. The tracker it asks for stays the one every workspace
+   without a project uses.
+2. Add the `projects:` block to `~/.werkmeister/config.yaml` by hand (example above). For a Jira
+   project, the `jira:` credentials from setup are the ones it uses.
+3. `werkmeister config --check` to validate it.
+4. `werkmeister connect` to check sign-in for each project's tracker.
+
 #### Slack review requests
 
 The dashboard's "Request review" button posts to Slack. Set both
