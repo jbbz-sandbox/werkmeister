@@ -149,11 +149,35 @@ describe("shipped shared-infra.yml", () => {
     expect(text).toContain("${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro");
     expect(text).toContain("${SANDBOX_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro");
     expect(text).toContain("${SANDBOX_STATE_DIR}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro");
-    expect(text).toContain(
-      "${SANDBOX_STATE_DIR}/proxy/features.json:/sandbox/proxy/ui/features.json:ro",
-    );
+    expect(text).toContain("${SANDBOX_STATE_DIR}/proxy/features.json:/srv/features.json:ro");
     expect(text).not.toContain("./k8s-port-forward/tmp/");
     expect(text).not.toContain("../proxy/Caddyfile");
+  });
+
+  // SW-100: docker must create a nested bind's mountpoint inside the outer bind's
+  // host dir, which fails on a :ro mount and litters the checkout otherwise.
+  it("nests no bind under another bind's target", () => {
+    const doc = parseYaml(text) as {
+      services: Record<string, { volumes?: (string | { type?: string; target?: string })[] }>;
+    };
+    const nested: string[] = [];
+    for (const [name, svc] of Object.entries(doc.services)) {
+      const targets = (svc.volumes ?? []).flatMap((v) => {
+        if (typeof v !== "string") return v.type === "bind" && v.target ? [v.target] : [];
+        // The target is the first absolute part: a ${VAR:-default} source has its own colon.
+        const [source = "", ...rest] = v.split(":");
+        const target = rest.find((part) => part.startsWith("/"));
+        // Named volumes have a bare-name source; binds start with ., / , ~ or ${.
+        return /^[./~$]/.test(source) && target ? [target] : [];
+      });
+      for (const inner of targets) {
+        for (const outer of targets) {
+          if (inner.startsWith(outer.replace(/\/*$/, "/")))
+            nested.push(`${name}: ${inner} under ${outer}`);
+        }
+      }
+    }
+    expect(nested).toEqual([]);
   });
 
   // SW-93: features up'd before the rename are still on sandbox-shared.

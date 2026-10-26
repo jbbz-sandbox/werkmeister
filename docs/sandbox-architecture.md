@@ -79,7 +79,7 @@ frontend.remote.werkmeister.io {
     # Feature selector UI
     @selector_features path /__werkmeister/features.json /__sandbox/features.json
     handle @selector_features {
-        root * /sandbox/proxy/ui
+        root * /srv
         rewrite * /features.json
         file_server
     }
