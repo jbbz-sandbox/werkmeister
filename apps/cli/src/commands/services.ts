@@ -21,6 +21,7 @@ import { Colors, info, warn } from "../lib/config.js";
  */
 const SOURCE_CELL: Record<ServiceEndpoint["source"], string> = {
   local: `${Colors.GREEN}local${Colors.RESET}  `,
+  baseline: `${Colors.MAGENTA}baseline${Colors.RESET}`,
   k8s: `${Colors.CYAN}k8s${Colors.RESET}    `,
   none: `${Colors.DIM}N/A${Colors.RESET}    `,
 };
@@ -66,6 +67,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log();
   console.log(
     `  ${Colors.GREEN}local${Colors.RESET} = running in Docker on this machine  ` +
+      `|  ${Colors.MAGENTA}baseline${Colors.RESET} = services.yaml baseline_upstream  ` +
       `|  ${Colors.CYAN}k8s${Colors.RESET} = port-forwarded from k8s cluster`,
   );
   console.log();
