@@ -765,13 +765,14 @@ const SPECS: CommandSpec[] = [
         .addArgument(
           new Argument(
             "<action>",
-            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace; watch: resume each opening session once its PR merges, ships or closes (any workspace; `--install` schedules it)",
-          ).choices(["gate", "open", "status", "adopt", "watch"]),
+            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace; watch: resume each opening session once its PR merges, ships or closes (any workspace; `--install` schedules it); new: start a follow-up PR file and branch for a worktree whose PRs have merged",
+          ).choices(["gate", "open", "status", "adopt", "watch", "new"]),
         )
         .argument(
           "[args...]",
-          "[repo] — only this code worktree's PR file; adopt: <pr-number|url> [repo]",
+          "[repo] — only this code worktree's PR files, or one PR file by its name (`sandbox-why-page`); adopt: <pr-number|url> [repo]; new: <worktree>",
         )
+        .option("--slug <slug>", "new: the follow-up's name, in its PR file and branch")
         .option("--no-pr <reason>", "adopt: no PR — the fix is already on base")
         .option(
           "--install",
@@ -790,6 +791,7 @@ const SPECS: CommandSpec[] = [
         pr,
         noPr,
         repo: args[pr ? 1 : 0] ?? null,
+        slug: o.slug ?? null,
         json: Boolean(o.json),
         install: Boolean(o.install),
         uninstall: Boolean(o.uninstall),

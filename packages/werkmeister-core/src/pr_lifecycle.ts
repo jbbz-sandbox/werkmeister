@@ -80,6 +80,8 @@ export interface PrFile {
   path: string;
   /** The code worktree's directory name — also its key in the registry `repos:`. */
   dir: string;
+  /** The file's own name: `sandbox` for `pr-sandbox.md`, `sandbox-why-page` for a follow-up (SW-103). */
+  stem: string;
   fm: Record<string, unknown>;
   title: string;
   body: string;
@@ -242,9 +244,13 @@ function parsePrFile(p: string): PrFile {
     );
   }
   const heading = /^#\s+(.+)$/m.exec(m[2]);
+  const stem = path.basename(p).replace(/^pr-/, "").replace(/\.md$/, "");
+  const worktree = (fm as Record<string, unknown>)["worktree"];
   return {
     path: p,
-    dir: path.basename(p).replace(/^pr-/, "").replace(/\.md$/, ""),
+    // A follow-up's name carries a slug, so its worktree comes from frontmatter (SW-103).
+    dir: typeof worktree === "string" && worktree.trim() ? worktree.trim() : stem,
+    stem,
     fm: fm as Record<string, unknown>,
     title: heading ? heading[1].trim() : "",
     body: heading ? m[2].slice(heading.index + heading[0].length).replace(/^\s*\n/, "") : m[2],
@@ -625,27 +631,45 @@ export async function gatePrs(
   only?: string,
   deps: Deps = defaultDeps(),
 ): Promise<{ ok: boolean; lines: string[] }> {
-  const files = selectFiles(ws, only, () => true);
+  const all = readPrFiles(ws);
+  const files = selectFiles(ws, all, only, (f) => !superseded(f, all));
   const lines: string[] = [];
   let ok = true;
   for (const f of files) {
     const g = await runGate(ws, f, deps);
     ok &&= g.ok;
-    lines.push(...formatGate(f.dir, g));
+    lines.push(...formatGate(f.stem, g));
   }
   return { ok, lines };
 }
 
-function selectFiles(ws: string, only: string | undefined, keep: (f: PrFile) => boolean): PrFile[] {
-  const all = readPrFiles(ws);
-  const files = only ? all.filter((f) => f.dir === only) : all.filter(keep);
+/** A merged PR whose worktree has since moved on to a follow-up PR file. */
+function superseded(f: PrFile, all: PrFile[]): boolean {
+  return (
+    PAST_MERGE.has(statusOf(f)) &&
+    all.some((g) => g !== f && g.dir === f.dir && !PAST_MERGE.has(statusOf(g)))
+  );
+}
+
+/** *only* names a file stem or a worktree; a worktree with several files narrows them by *keep*. */
+function selectFiles(
+  ws: string,
+  all: PrFile[],
+  only: string | undefined,
+  keep: (f: PrFile) => boolean,
+): PrFile[] {
+  let files = all.filter(keep);
+  if (only) {
+    files = all.filter((f) => f.stem === only || f.dir === only);
+    if (files.length > 1) files = files.filter(keep);
+  }
   if (!files.length) {
     const where = prFileDir(ws) ?? "this workspace (no stage holds PR files)";
     const format = `format: ${prRulesPath(ws)}`;
     throw new WorkspaceError(
       only
-        ? `No PR file pr-${only}.md in ${where} (${format}).`
-        : `No matching PR file in ${where}. Write pr-<repo>.md there (${format}) and have the person set status: approved.`,
+        ? `No PR file for ${only} in ${where} (${format}).`
+        : `No matching PR file in ${where}. Write pr-<worktree>[-<slug>].md there (${format}) and have the person set status: approved.`,
     );
   }
   return files;
@@ -656,23 +680,39 @@ export async function openPrs(
   only?: string,
   deps: Deps = defaultDeps(),
 ): Promise<{ ok: boolean; lines: string[] }> {
-  const files = selectFiles(ws, only, (f) => statusOf(f) === "approved");
+  const all = readPrFiles(ws);
+  const files = selectFiles(ws, all, only, (f) => statusOf(f) === "approved");
   const lines: string[] = [];
   let ok = true;
   const opened: string[] = [];
   for (const f of files) {
+    const branch = String(f.fm["branch"] ?? "");
+    // GitHub deletes a merged PR's branch; pushing the same name again recreates it (SW-98).
+    const used = all.find(
+      (g) =>
+        g !== f &&
+        g.dir === f.dir &&
+        String(g.fm["branch"] ?? "") === branch &&
+        ["merged", "shipped", "closed"].includes(statusOf(g)),
+    );
+    if (used) {
+      ok = false;
+      lines.push(
+        `${f.stem}: branch ${branch} was already used by ${used.stem} (${statusOf(used)}) — cut a new one with \`werkmeister pr new ${f.dir} --slug <slug>\``,
+      );
+      continue;
+    }
     const g = await runGate(ws, f, deps);
     if (!g.ok) {
       ok = false;
-      lines.push(...formatGate(f.dir, g));
+      lines.push(...formatGate(f.stem, g));
       continue;
     }
     const dir = path.join(ws, f.dir);
-    const branch = String(f.fm["branch"] ?? "");
     const push = await deps.run("git", ["-C", dir, "push", "-u", "origin", branch]);
     if (push.code !== 0) {
       ok = false;
-      lines.push(`${f.dir}: push failed — ${push.stderr.trim()}`);
+      lines.push(`${f.stem}: push failed — ${push.stderr.trim()}`);
       continue;
     }
     const existing = await deps.run(
@@ -720,14 +760,14 @@ export async function openPrs(
       if (created.code !== 0 || !url.startsWith("http")) {
         ok = false;
         lines.push(
-          `${f.dir}: gh pr create failed — ${created.stderr.trim() || created.stdout.trim()}`,
+          `${f.stem}: gh pr create failed — ${created.stderr.trim() || created.stdout.trim()}`,
         );
         continue;
       }
     }
     writePrFields(f, { status: "open", url, ...(await deps.session(ws)) });
     opened.push(path.relative(ws, f.path));
-    lines.push(`${f.dir}: open ${url}`);
+    lines.push(`${f.stem}: open ${url}`);
     // Squash and rebase rewrite SHAs, so a blame-ignore entry added here would match nothing on base.
     const ignored = await deps.run("git", [
       "-C",
@@ -743,8 +783,11 @@ export async function openPrs(
       );
     const ref = issueIdOf(loadConfigFile(ws, null));
     if (ref) {
+      // A follow-up can open after the issue is Done; Done stays, the comment links the fix.
+      const followUp = all.some((g) => g !== f && g.dir === f.dir);
       const moved = await moveIssue(deps.tracker, ref, "in_review", deps.statuses, {
-        comment: `PR opened: ${url}`,
+        comment: `${followUp ? "Follow-up PR" : "PR"} opened: ${url}`,
+        ...(followUp ? { alwaysComment: true } : {}),
       });
       if (moved) lines.push(`  issue ${moved}`);
     }
@@ -784,7 +827,7 @@ export async function refreshPrStatus(
         "state,mergeCommit,reviewDecision,latestReviews",
       ]);
       if (v.code !== 0) {
-        lines.push(`${f.dir}: gh pr view failed — ${v.stderr.trim()}`);
+        lines.push(`${f.stem}: gh pr view failed — ${v.stderr.trim()}`);
         continue;
       }
       const view = JSON.parse(v.stdout) as {
@@ -851,7 +894,7 @@ export async function refreshPrStatus(
     if (after !== before || f.fm["review"] !== reviewBefore)
       changed.push(path.relative(ws, f.path));
     lines.push(
-      `${f.dir}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`,
+      `${f.stem}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`,
     );
   }
   const moved = await moveIssueForPrs(ws, seen, deps);
@@ -1136,14 +1179,17 @@ export async function adoptPr(
       );
     repo = wts[0].repo;
   }
-  const file = path.join(dir, `pr-${repo}.md`);
-  if (fs.existsSync(file))
-    throw new WorkspaceError(`${file} already exists — remove it first to adopt.`);
+  let file = path.join(dir, `pr-${repo}.md`);
+  const taken = () => {
+    if (fs.existsSync(file))
+      throw new WorkspaceError(`${file} already exists — remove it first to adopt.`);
+  };
 
   let fm: Record<string, unknown>;
   let title: string;
   if (opts.noPr !== undefined) {
     if (!opts.noPr.trim()) throw new WorkspaceError("--no-pr needs a reason.");
+    taken();
     fm = { status: "closed", reason: opts.noPr.trim(), adopted: true };
     title = "No PR: the fix is already on base";
   } else {
@@ -1166,8 +1212,16 @@ export async function adoptPr(
       throw new WorkspaceError(
         `${pr.url} is ${pr.state}, not merged — use --no-pr <reason> if the fix landed another way.`,
       );
+    const tracked = readPrFiles(ws).find((f) => f.fm["url"] === pr.url);
+    if (tracked)
+      throw new WorkspaceError(`${pr.url} is already tracked in ${path.basename(tracked.path)}.`);
+    // The worktree's first PR file is taken: adopt as a follow-up named by PR number (SW-103).
+    const followUp = fs.existsSync(file);
+    if (followUp) file = path.join(dir, `pr-${repo}-${/\/pull\/(\d+)/.exec(pr.url)?.[1]}.md`);
+    taken();
     const merged = pr.state === "MERGED";
     fm = {
+      ...(followUp ? { worktree: repo } : {}),
       repo: /github\.com\/([^/]+\/[^/]+)\/pull\//.exec(pr.url)?.[1] ?? "",
       branch: pr.headRefName,
       base: pr.baseRefName,
@@ -1183,17 +1237,81 @@ export async function adoptPr(
     file,
     `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`sandbox pr adopt\`: the work landed outside this workspace.\n`,
   );
-  const lines = [`${repo}: adopted as ${fm["status"]}`];
+  const lines = [`${path.basename(file, ".md").replace(/^pr-/, "")}: adopted as ${fm["status"]}`];
   if (fm["status"] !== "closed") lines.push(...(await refreshPrStatus(ws, deps)).lines);
   // No-op when refreshPrStatus already committed it.
   lines.push((await deps.commitRecord(ws, "chore: adopt PR", [path.relative(ws, file)])).message);
   return { ok: true, lines };
 }
 
+/**
+ * `sandbox pr new <worktree> --slug <slug>`: a follow-up PR for code written after *worktree*'s
+ * PR merged (SW-103). Cuts `<branch>-<slug>` from base, since a squash-merged branch's commits
+ * are not on base, and writes `pr-<worktree>-<slug>.md` at `status: draft`.
+ */
+export async function newPr(
+  ws: string,
+  worktree: string,
+  slug: string,
+  deps: Deps = defaultDeps(),
+): Promise<{ ok: boolean; lines: string[] }> {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug))
+    throw new WorkspaceError("--slug: lowercase letters, digits and dashes.");
+  const dir = prFileDir(ws);
+  if (!dir) throw new WorkspaceError("This workspace has no stage to hold a PR file.");
+  const mine = readPrFiles(ws).filter((f) => f.dir === worktree);
+  if (!mine.length)
+    throw new WorkspaceError(
+      `No PR file for ${worktree} yet — the first PR is pr-${worktree}.md (format: ${prRulesPath(ws)}).`,
+    );
+  const live = mine.filter((f) => !PAST_MERGE.has(statusOf(f)));
+  if (live.length)
+    throw new WorkspaceError(
+      `${worktree} still has ${live.map((f) => `${f.stem} (${statusOf(f)})`).join(", ")} — the worktree holds one branch at a time; finish or close that PR first.`,
+    );
+  const file = path.join(dir, `pr-${worktree}-${slug}.md`);
+  if (fs.existsSync(file)) throw new WorkspaceError(`${file} already exists.`);
+  const wt = path.join(ws, worktree);
+  const dirty = await deps.run("git", ["-C", wt, "status", "--porcelain"]);
+  if (dirty.code !== 0 || dirty.stdout.trim())
+    throw new WorkspaceError(
+      `${worktree} has uncommitted changes — commit or stash them first.${dirty.stderr.trim() ? ` ${dirty.stderr.trim()}` : ""}`,
+    );
+  const prev = mine.find((f) => f.stem === worktree) ?? mine[0];
+  const branch = `${String(prev.fm["branch"] ?? "")}-${slug}`;
+  const base = String(prev.fm["base"] ?? "main");
+  for (const args of [
+    ["fetch", "-q", "origin", base],
+    ["switch", "--no-track", "-c", branch, `origin/${base}`],
+  ]) {
+    const r = await deps.run("git", ["-C", wt, ...args]);
+    if (r.code !== 0) throw new WorkspaceError(`git ${args[0]} failed — ${r.stderr.trim()}`);
+  }
+  const fm = { worktree, repo: prev.fm["repo"], branch, base, status: "draft" };
+  fs.writeFileSync(
+    file,
+    `---\n${YAML.stringify(fm)}---\n# <PR title>\n\n<body: summary, test and exercise results, acceptance table (PASS/FAIL) — see ${path.basename(prRulesPath(ws))}>\n`,
+  );
+  const rel = path.relative(ws, file);
+  return {
+    ok: true,
+    lines: [
+      `${worktree}-${slug}: draft ${rel} on ${branch} (from origin/${base})`,
+      (await deps.commitRecord(ws, "chore: start follow-up PR", [rel])).message,
+    ],
+  };
+}
+
 /** The workspace's place in the lifecycle, from files only — cheap enough for the pane's poll. */
 export function lifecycleOf(ws: string): {
   state: Lifecycle;
-  prs: Array<{ dir: string; status: string; url: string | null; release: string | null }>;
+  prs: Array<{
+    dir: string;
+    stem: string;
+    status: string;
+    url: string | null;
+    release: string | null;
+  }>;
 } {
   let files: PrFile[] = [];
   try {
@@ -1203,6 +1321,7 @@ export function lifecycleOf(ws: string): {
   }
   const prs = files.map((f) => ({
     dir: f.dir,
+    stem: f.stem,
     status: statusOf(f),
     url: f.fm["url"] ? String(f.fm["url"]) : null,
     release: f.fm["release"] ? String(f.fm["release"]) : null,
@@ -1232,13 +1351,14 @@ export async function removalBlockers(
   const files = readPrFiles(ws);
   const out: string[] = [];
   for (const { repo, dir } of worktrees) {
-    const f = files.find((x) => x.dir === repo);
-    const status = f ? statusOf(f) : "none";
-    if (f && status === "open") {
-      out.push(`${repo}: PR is open (${f.fm["url"]})`);
+    const mine = files.filter((x) => x.dir === repo);
+    const open = mine.find((x) => statusOf(x) === "open");
+    if (open) {
+      out.push(`${repo}: PR is open (${open.fm["url"]})`);
       continue;
     }
-    if (PAST_MERGE.has(status)) continue;
+    if (mine.length && mine.every((x) => PAST_MERGE.has(statusOf(x)))) continue;
+    const f = mine.find((x) => !PAST_MERGE.has(statusOf(x)));
     const base = f?.fm["base"] ? `origin/${f.fm["base"]}` : await originBase(dir, run);
     const n = (await commitsAhead(dir, base, run)) ?? 0;
     if (n > 0) out.push(`${repo}: ${n} commit(s) not on ${base} and no merged PR`);
@@ -1388,7 +1508,7 @@ async function closeOutLocked(
       spikeDone
     )
   ) {
-    const detail = life.prs.map((p) => `${p.dir}: ${p.status}`).join(", ") || "no PR files";
+    const detail = life.prs.map((p) => `${p.stem}: ${p.status}`).join(", ") || "no PR files";
     throw new WorkspaceError(
       `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`sandbox pr status\` after the release, ` +
         `or give up with \`sandbox close-out ${name} --abandon "<reason>"\`.`,

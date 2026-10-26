@@ -696,7 +696,10 @@ export function withLivePrs(r: WorkspaceRow, live: RepoPr[]): WorkspaceRow {
   const l = r.lifecycle;
   if (!l || l.state === "closed-out") return r;
   const prs = l.prs.map((p) => {
-    const state = live.find((x) => x.repo === p.dir)?.state?.toLowerCase();
+    // The poll follows the worktree's current branch; an earlier PR file keeps its own status (SW-103).
+    const state = live
+      .find((x) => x.repo === p.dir && (!p.url || x.url === p.url))
+      ?.state?.toLowerCase();
     return state && state !== p.status && !PAST_GH.has(p.status) ? { ...p, status: state } : p;
   });
   if (prs.every((p, i) => p === l.prs[i])) return r;

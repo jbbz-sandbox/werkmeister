@@ -12,7 +12,9 @@ workspace — don't reach for them.
 1. **Self-review.** Invoke `sb-review` on the branch diff (vs the base branch)
    and address its findings before continuing.
 2. **Write one PR file per repo touched:** `.sandbox/notes/pr-<repo>.md`, in the
-   format of `.sandbox/pr-rules.md`, at `status: draft`.
+   format of `.sandbox/pr-rules.md`, at `status: draft`. Code written after a
+   repo's PR merged is a follow-up: `sandbox pr new <worktree> --slug <slug>`
+   cuts a fresh branch from base and writes a draft `pr-<worktree>-<slug>.md`.
    - **Title** (the first `#` heading): `<type>(<optional scope>): <ISSUE-ID> <short description>` —
      conventional-commit types (`feat`, `fix`, `refactor`, `chore`, `docs`,
      `test`, `ci`, `perf`); scope optional, use it when targeting a specific

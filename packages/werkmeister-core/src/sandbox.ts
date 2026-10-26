@@ -118,6 +118,7 @@ export {
   gatePrs,
   type Lifecycle,
   lifecycleOf,
+  newPr,
   openPrs,
   type PrStatus,
   readPrFiles,

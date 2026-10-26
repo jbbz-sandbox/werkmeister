@@ -2023,6 +2023,27 @@ test("withLivePrs: shipped and abandoned outrank gh, a closed PR settles, an unp
   expect(withLivePrs(none, [])).toBe(none);
 });
 
+test("withLivePrs: a follow-up's live PR leaves the worktree's earlier PR file alone (SW-103)", () => {
+  const followUp = { dir: "api", status: "approved", url: null };
+  const merged = { ...API_OPEN, status: "merged" };
+  const live = [
+    {
+      repo: "api",
+      branch: "b-fix",
+      url: "https://github.com/o/api/pull/8",
+      state: "OPEN" as const,
+      title: "t",
+      labels: [],
+    },
+  ];
+  const r = withLivePrs(
+    { lifecycle: { state: "working", prs: [followUp, merged] } } as unknown as WorkspaceRow,
+    live,
+  );
+  expect(r.lifecycle?.prs.map((p) => p.status)).toEqual(["open", "merged"]);
+  expect(r.lifecycle?.state).toBe("pr-open");
+});
+
 test("↻ PRs runs pr-status for that workspace path", async ($, on) => {
   const w = world(
     on,

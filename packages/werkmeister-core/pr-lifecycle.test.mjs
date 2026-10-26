@@ -22,6 +22,7 @@ import {
   gatePrs,
   lifecycleOf,
   mapTouched,
+  newPr,
   openPrs,
   openTerminalSessions,
   prFileDir,
@@ -1228,7 +1229,7 @@ test("adoptPr: a merged PR from outside is written, shipped by its release tag, 
       },
     );
     assert.ok(committed.includes("stages/03_propose/output/pr-app.md"));
-    await assert.rejects(adoptPr(ws, { pr: "140" }, d), /already exists/);
+    await assert.rejects(adoptPr(ws, { pr: "140" }, d), /already tracked in pr-app.md/);
 
     const out = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.match(
@@ -1425,7 +1426,7 @@ test("spike with no PR file: gate and open say which file to write and where the
   try {
     const where = path.join(ws, "stages", "02_findings", "output");
     const msg = (rules) =>
-      `No matching PR file in ${where}. Write pr-<repo>.md there (format: ${rules}) and have the person set status: approved.`;
+      `No matching PR file in ${where}. Write pr-<worktree>[-<slug>].md there (format: ${rules}) and have the person set status: approved.`;
     await assert.rejects(
       withSandboxHome(() => gatePrs(ws, undefined, deps([]))),
       {
@@ -1746,4 +1747,280 @@ test("watchPrs: one idle-reaper pass under its own lock; a held lock skips it (S
     else process.env.SANDBOX_WORKSPACES_ROOT = prev;
     clean(root);
   }
+});
+
+// ---- SW-103: more than one PR file per worktree --------------------------------
+
+/** A follow-up PR file for worktree `app`, named `pr-app-<slug>.md`. */
+const followUp = (status, extra = "") =>
+  prFile({ status, extra: `worktree: app\n${extra}` }).replace(
+    "branch: me/ws\n",
+    "branch: me/ws-fix\n",
+  );
+
+test("PR file identity: worktree from frontmatter, the file name as fallback (SW-103)", () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped" }), "app-fix": followUp("draft") },
+  });
+  try {
+    const got = readPrFiles(ws).map((f) => [f.stem, f.dir]);
+    assert.deepEqual(got, [
+      ["app-fix", "app"],
+      ["app", "app"],
+    ]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("lifecycleOf: two PR files for one worktree in each state (SW-103)", () => {
+  const cases = [
+    ["shipped", "draft", "working"],
+    ["shipped", "approved", "working"],
+    ["shipped", "open", "pr-open"],
+    ["shipped", "merged", "merged"],
+    ["shipped", "shipped", "shipped"],
+    ["merged", "open", "pr-open"],
+    ["shipped", "closed", "shipped"],
+    ["shipped", "abandoned", "shipped"],
+  ];
+  for (const [first, second, want] of cases) {
+    const ws = icmWorkspace({
+      files: { app: prFile({ status: first }), "app-fix": followUp(second) },
+    });
+    try {
+      assert.equal(lifecycleOf(ws).state, want, `${first} + ${second}`);
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
+test("newPr: cuts <branch>-<slug> from base and writes a draft follow-up (SW-103)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped" }) } });
+  try {
+    let recorded = null;
+    const d = deps([], {
+      commitRecord: async (_ws, _m, paths) => {
+        recorded = paths;
+        return { ok: true, message: "record pushed" };
+      },
+    });
+    const r = await newPr(ws, "app", "fix", d);
+    assert.ok(r.ok);
+    const wt = path.join(ws, "app");
+    assert.ok(d.calls.includes(`git -C ${wt} fetch -q origin main`));
+    assert.ok(d.calls.includes(`git -C ${wt} switch --no-track -c me/ws-fix origin/main`));
+    const f = readPrFiles(ws).find((x) => x.stem === "app-fix");
+    assert.equal(f.dir, "app");
+    assert.deepEqual(
+      [f.fm.worktree, f.fm.repo, f.fm.branch, f.fm.base, f.fm.status],
+      ["app", "o/app", "me/ws-fix", "main", "draft"],
+    );
+    assert.deepEqual(recorded, ["stages/03_propose/output/pr-app-fix.md"]);
+    assert.match(
+      r.lines[0],
+      /^app-fix: draft .*pr-app-fix\.md on me\/ws-fix \(from origin\/main\)$/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("newPr: refuses while the worktree's branch is in use, and on bad input (SW-103)", async () => {
+  const refused = async (files, args, re, table = []) => {
+    const ws = icmWorkspace({ files });
+    try {
+      const d = deps(table);
+      await assert.rejects(newPr(ws, ...args, d), re);
+      assert.ok(!d.calls.some((c) => c.includes(" switch ")), "no branch is cut");
+    } finally {
+      clean(ws);
+    }
+  };
+  const shipped = { app: prFile({ status: "shipped" }) };
+  for (const status of ["open", "approved", "draft"])
+    await refused(
+      { ...shipped, "app-one": followUp(status) },
+      ["app", "two"],
+      new RegExp(`app still has app-one \\(${status}\\)`),
+    );
+  await refused({ lib: prFile({ status: "shipped" }) }, ["app", "fix"], /No PR file for app yet/);
+  await refused({ ...shipped, "app-fix": followUp("shipped") }, ["app", "fix"], /already exists/);
+  await refused(shipped, ["app", "Fix_1"], /--slug/);
+  await refused(shipped, ["app", "fix"], /app has uncommitted changes/, [
+    [/status --porcelain/, { stdout: " M x.ts\n" }],
+  ]);
+});
+
+test("gatePrs: a superseded PR file is skipped; a worktree or a file name selects (SW-103)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped" }), "app-fix": followUp("approved") },
+  });
+  try {
+    for (const only of [undefined, "app", "app-fix"]) {
+      const r = await withSandboxHome(() => gatePrs(ws, only, deps([DIFF_API])));
+      assert.ok(r.ok, `${only}: ${r.lines.join("\n")}`);
+      assert.equal(r.lines[0], "app-fix: gate passed");
+    }
+    await assert.rejects(
+      withSandboxHome(() => gatePrs(ws, "app-nope", deps([]))),
+      /No PR file for app-nope in/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: opens the follow-up only; a Done issue gets a comment, not a move (SW-103)", async () => {
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "shipped", extra: "url: https://github.com/o/app/pull/8\n" }),
+      "app-fix": followUp("approved"),
+    },
+  });
+  try {
+    const tracker = issueAt("Closed");
+    const d = deps([DIFF_API, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]], {
+      tracker,
+    });
+    const r = await open(ws, d);
+    assert.ok(r.ok, r.lines.join("\n"));
+    assert.ok(
+      r.lines.includes("app-fix: open https://github.com/o/app/pull/9"),
+      r.lines.join("\n"),
+    );
+    const pushes = d.calls.filter((c) => / push -u origin /.test(c));
+    assert.deepEqual(
+      pushes.map((c) => c.split(" ").at(-1)),
+      ["me/ws-fix"],
+    );
+    const byStem = Object.fromEntries(readPrFiles(ws).map((f) => [f.stem, f.fm]));
+    assert.equal(byStem["app-fix"].status, "open");
+    assert.equal(byStem.app.status, "shipped");
+    assert.deepEqual(tracker.updates, [
+      ["o/app#7", undefined, "Follow-up PR opened: https://github.com/o/app/pull/9"],
+    ]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: refuses a branch an earlier PR of the worktree already used (SW-103)", async () => {
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "merged" }),
+      "app-fix": prFile({ status: "approved", extra: "worktree: app\n" }),
+    },
+  });
+  try {
+    const d = deps([DIFF_API]);
+    const r = await open(ws, d);
+    assert.equal(r.ok, false);
+    assert.match(
+      r.lines[0],
+      /^app-fix: branch me\/ws was already used by app \(merged\) — .*pr new app/,
+    );
+    assert.ok(!d.calls.some((c) => / push /.test(c)));
+  } finally {
+    clean(ws);
+  }
+  // Two repos of one workspace share a branch name; that is not reuse.
+  const multi = icmWorkspace({
+    files: { lib: prFile({ status: "shipped" }), app: prFile({ status: "approved" }) },
+  });
+  try {
+    const d = deps([DIFF_API, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]]);
+    const r = await open(multi, d);
+    assert.ok(r.ok, r.lines.join("\n"));
+  } finally {
+    clean(multi);
+  }
+});
+
+test("refreshPrStatus: each PR file of a worktree ships on its own; done once both settle (SW-103)", async () => {
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "merged", extra: "url: https://x/pr/8\nmerge_sha: aaa\n" }),
+      "app-fix": followUp("open", "url: https://x/pr/9\n"),
+    },
+  });
+  try {
+    const tracker = issueAt("Open", ["Peer Review"]);
+    await refreshPrStatus(
+      ws,
+      deps([[/^gh pr view https:\/\/x\/pr\/9 /, { stdout: JSON.stringify({ state: "OPEN" }) }]], {
+        tracker,
+      }),
+    );
+    let byStem = Object.fromEntries(readPrFiles(ws).map((f) => [f.stem, f.fm.status]));
+    assert.deepEqual(byStem, { "app-fix": "open", app: "merged" });
+    await refreshPrStatus(
+      ws,
+      deps(
+        [
+          [
+            /^gh pr view https:\/\/x\/pr\/9 /,
+            { stdout: JSON.stringify({ state: "MERGED", mergeCommit: { oid: "bbb" } }) },
+          ],
+          [/tag --contains (aaa|bbb)/, { stdout: "v1.3.0\n" }],
+        ],
+        { tracker },
+      ),
+    );
+    byStem = Object.fromEntries(readPrFiles(ws).map((f) => [f.stem, f.fm.status]));
+    assert.deepEqual(byStem, { "app-fix": "shipped", app: "shipped" });
+    assert.equal(lifecycleOf(ws).state, "shipped");
+    assert.equal(tracker.updates.filter((u) => u[1] === "closed").length, 1);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("adoptPr: a second PR for a worktree is written as pr-<repo>-<number>.md (SW-103)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: https://github.com/o/app/pull/8\n" }) },
+  });
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  try {
+    const view = {
+      url: "https://github.com/o/app/pull/141",
+      headRefName: "other/fix",
+      baseRefName: "main",
+      title: "fix: after release",
+      state: "OPEN",
+    };
+    const d = deps([
+      [/^gh pr view 141 /, { stdout: JSON.stringify(view) }],
+      [/^gh pr view https/, { stdout: JSON.stringify({ state: "OPEN" }) }],
+    ]);
+    const r = await adoptPr(ws, { pr: "141" }, d);
+    assert.equal(r.lines[0], "app-141: adopted as open");
+    const f = readPrFiles(ws).find((x) => x.stem === "app-141");
+    assert.equal(f.dir, "app");
+    assert.equal(f.fm.url, view.url);
+    await assert.rejects(adoptPr(ws, { pr: "141" }, d), /already tracked in pr-app-141\.md/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("removalBlockers: every PR file of a worktree counts (SW-103)", async () => {
+  const trees = [{ repo: "app", dir: "/w/app" }];
+  const { run } = stubRun([[/rev-list --count origin\/main\.\.HEAD/, { stdout: "1\n" }]]);
+  const blockers = async (second) => {
+    const ws = icmWorkspace({
+      files: { app: prFile({ status: "shipped" }), "app-fix": followUp(second, "url: u\n") },
+    });
+    try {
+      return await removalBlockers(ws, trees, run);
+    } finally {
+      clean(ws);
+    }
+  };
+  assert.deepEqual(await blockers("open"), ["app: PR is open (u)"]);
+  assert.deepEqual(await blockers("shipped"), []);
+  assert.deepEqual(await blockers("draft"), [
+    "app: 1 commit(s) not on origin/main and no merged PR",
+  ]);
 });

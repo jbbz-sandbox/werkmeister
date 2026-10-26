@@ -1,20 +1,22 @@
 /**
  * sandbox pr <gate|open|status> [repo] [--json]
  * sandbox pr adopt <pr-number|url> [repo] | adopt --no-pr "<reason>" [repo]
+ * sandbox pr new <worktree> --slug <slug>
  *
  * The workspace's only way to open a PR (docs/workspace-lifecycle.md). Run
  * from anywhere inside a workspace; `repo` is a code worktree's directory name
- * and limits the action to that repo's PR file.
+ * and limits the action to that repo's PR files; a PR file's name (`sandbox-why-page`) limits it to that file.
  *   gate    run the pre-PR gate, change nothing
  *   open    gate each `approved` PR file, push, open the PR, record its URL
  *   status  record merged / shipped / closed from GitHub and release tags
  *   adopt   write the PR file for a fix that landed outside the workspace
+ *   new     after a worktree's PR merged: cut a fresh branch from base and write a draft follow-up PR file
  *   watch   from anywhere: resume each terminal session whose PR merged, shipped or closed
  *           (desktop sessions are the werkmeister mod's)
  *   watch --install | --uninstall   add / remove the 10-minute schedule (launchd on macOS, else crontab)
  */
 
-import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
+import { adoptPr, gatePrs, newPr, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
 import { installPrWatchSchedule, uninstallPrWatchSchedule } from "werkmeister-core/machine_setup";
 import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { error } from "../lib/config.js";
@@ -40,6 +42,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     process.exit(1);
   }
   const repo = (args.repo as string | null) ?? undefined;
+  if (args.action === "new" && !(repo && args.slug)) {
+    error("Usage: sandbox pr new <worktree> --slug <slug>");
+    process.exit(1);
+  }
   const result =
     args.action === "adopt"
       ? await adoptPr(ws, {
@@ -47,11 +53,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
           noPr: (args.noPr as string | null) ?? undefined,
           repo,
         })
-      : args.action === "gate"
-        ? await gatePrs(ws, repo)
-        : args.action === "open"
-          ? await openPrs(ws, repo)
-          : { ok: true, ...(await refreshPrStatus(ws)) };
+      : args.action === "new"
+        ? await newPr(ws, repo as string, args.slug as string)
+        : args.action === "gate"
+          ? await gatePrs(ws, repo)
+          : args.action === "open"
+            ? await openPrs(ws, repo)
+            : { ok: true, ...(await refreshPrStatus(ws)) };
   print(result, args);
 }
 

@@ -51,13 +51,14 @@ Each workspace gets these as `_shared/pr-rules.md` (ICM) or `.werkmeister/pr-rul
 
 ## PR files
 
-One per code repo touched, named `pr-<repo>.md`, where `<repo>` is the code worktree's directory name.
+One per code repo touched at a time, named `pr-<worktree>[-<slug>].md`, where `<worktree>` is the code worktree's directory name. The first PR for a worktree is `pr-<worktree>.md`; a follow-up adds a slug ([Follow-up PR](#follow-up-pr)).
 
 - ICM: `stages/NN_propose/output/`. Workspaces generated before the rename use `NN_ship/`. A template with neither (spike) uses its last stage's `output/` ([Spikes](#spikes)).
 - JIT: `.werkmeister/notes/`. Not a note: notes are named `NNN-*`.
 
 ```markdown
 ---
+worktree: sandbox              # the code worktree; optional for pr-<worktree>.md, written by werkmeister pr new
 repo: jbbz-sandbox/werkmeister     # the code repo on GitHub; never the workspace repo
 branch: jayboyer/sandbox-133-workspace-pr-lifecycle
 base: main
@@ -78,6 +79,18 @@ notified:                      # the last status that session was told
 ```
 
 The first `#` heading is the PR title and the rest is the body. The person sets `draft → approved`; tooling writes every other status and never infers `approved`. In an `autonomous` icm workspace the agent sets it after its self-check and lists its decisions under `## Recommendations for reviewer` in the body, so the person's review happens on the PR itself ([context-strategies.md](context-strategies.md#autonomous-175)).
+
+### Follow-up PR
+
+Code written after a worktree's PR merged, e.g. a problem found while cutting or deploying the release, or review feedback that lands after merge, goes in a follow-up PR from the same workspace (SW-103).
+
+- `werkmeister pr new <worktree> --slug <slug>` fetches the base and cuts `<branch>-<slug>` from `origin/<base>`. It cuts from base, not from the merged branch, because a squash merge leaves that branch's commits off base. It then writes `pr-<worktree>-<slug>.md` at `status: draft`, with `worktree`, `repo`, `branch` and `base` taken from the worktree's first PR file, and commits it on the record branch.
+- It refuses while any other PR file for that worktree is not yet `merged`, `shipped`, `closed` or `abandoned`, since the worktree holds one branch at a time. It also refuses on uncommitted changes.
+- From there the follow-up is an ordinary PR file: fill the title, body and acceptance table, the person approves it, `pr gate` / `pr open` / `pr status` handle it. A merged first PR stops being gated once the follow-up exists. `pr open` refuses a branch an earlier PR of the same worktree already used, since GitHub deleted it on merge and pushing it again recreates it.
+- The gate's exercise check reads the run's `exercise.md`, so put the follow-up's own test and exercise results in its PR body, or set `skip_exercise` with the reason.
+- The lifecycle composes over every file: the workspace reads `working` while the follow-up is a draft, `pr-open` while it is open, and `shipped` once every file is settled. Close-out waits for all of them.
+- If the issue is already Done, `pr open` comments `Follow-up PR opened: <url>` and leaves it Done ([Issue status](#issue-status)).
+- After close-out the workspace is gone; a later fix needs a new workspace.
 
 ## The gate
 
@@ -120,11 +133,12 @@ repo:
 
 | Command | Does |
 |---|---|
-| `werkmeister pr gate [repo]` | run the gate, change nothing |
+| `werkmeister pr gate [repo]` | run the gate, change nothing. Skips a merged PR file whose worktree has a follow-up in progress. `repo` is a worktree (its PR files) or one PR file's name (`sandbox-why-page`), for every `pr` action |
 | `werkmeister pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to `in_review` ([Issue status](#issue-status)), commit and push the PR file on the record branch |
 | `werkmeister pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
+| `werkmeister pr new <worktree> --slug <slug>` | after that worktree's PRs merged: cut `<branch>-<slug>` from `origin/<base>` and write a draft `pr-<worktree>-<slug>.md` ([Follow-up PR](#follow-up-pr)) |
 | `werkmeister issue start` | the first stage or phase began: move the workspace's issue to `in_progress` ([Issue status](#issue-status)) |
-| `werkmeister pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. Refuses if the PR file exists or the PR closed unmerged. |
+| `werkmeister pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. When `pr-<repo>.md` is taken, writes `pr-<repo>-<number>.md` with `worktree: <repo>`. Refuses if a PR file already has that PR's URL, or the PR closed unmerged. |
 | `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). `werkmeister setup` offers to run it every 10 minutes (launchd on macOS, a crontab line elsewhere). `werkmeister pr watch --install` / `--uninstall` add or remove that schedule directly. Logs: `~/.werkmeister/pr-watch.log` |
 | `werkmeister pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
 | `werkmeister close-out [name] [--abandon "<reason>"]` | end the workspace (below). The one end-of-workspace verb |
@@ -220,6 +234,7 @@ The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the wor
 | PR closed without merging, and no other PR open | `in_progress` (back) | `In Progress` | label `status: in progress` | `PR closed without merging: <url>` |
 | Every PR merged | `merged` | no change | no change | `Merged: <url>` |
 | Shipped: every PR settled, one shipped (release tag contains the merge, or merged where `ship: merge`) | `done` | `Done` | close as completed | `Shipped: <release> — <url>` |
+| `werkmeister pr open` for a follow-up after the issue is Done | — | no change | no change | `Follow-up PR opened: <url>` |
 | `werkmeister close-out` | `done` if not already | `Done` | close if still open | `Shipped: …` |
 | `werkmeister close-out --abandon "<reason>"` | `abandoned` | no status, comment only | close as not planned | `Abandoned: <reason>` |
 | Spike | `done` at close-out | `Done` | closed | `Shipped: no PRs` |
