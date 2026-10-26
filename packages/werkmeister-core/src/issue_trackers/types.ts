@@ -12,6 +12,16 @@
 export const TRACKER_IDS = ["jira", "github"] as const;
 export type TrackerId = (typeof TRACKER_IDS)[number];
 
+/**
+ * A project's slice of its tracker (SW-104): a Jira project key, or a GitHub
+ * owner and optionally its repos. `{}` is the machine's whole tracker, as before projects.
+ */
+export interface TrackerScope {
+  project?: string;
+  org?: string;
+  repos?: string[];
+}
+
 export interface IssueComment {
   author: string;
   /** ISO date, when the tracker gives one. */
@@ -76,6 +86,8 @@ export interface IssueTrackerStrategy {
   parseRef(text: string): string | null;
   /** The ref as a workspace-name prefix: `PROJ-12` → `proj-12`. */
   slug(ref: string): string;
+  /** Whether a canonical ref is in this tracker's scope; always true when unscoped. */
+  holds(ref: string): boolean;
   /** The issue's web page, or null when it cannot be built from config. */
   url(ref: string): string | null;
   /** One issue with its description and comments. Null when it cannot be read; never throws. */

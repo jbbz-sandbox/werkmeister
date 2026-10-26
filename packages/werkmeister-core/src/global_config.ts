@@ -41,6 +41,7 @@ import {
   servicesLocalYamlPath,
   servicesYamlPath,
 } from "./config.js";
+import { projectProblems } from "./projects.js";
 import { warn } from "./reporter.js";
 
 /**
@@ -720,6 +721,7 @@ export function check(cfg: GlobalConfig): string[] {
   if (standardsProblem) {
     problems.push(standardsProblem);
   }
+  problems.push(...projectProblems(cfg));
 
   const envPath = envShPath();
   if (!fs.existsSync(envPath)) {

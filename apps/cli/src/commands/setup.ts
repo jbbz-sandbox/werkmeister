@@ -450,6 +450,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       ...(resolvedGh.github_org ? { github_org: resolvedGh.github_org } : {}),
     },
     ...(jira.base_url || jira.email || jira.api_token ? { jira } : {}),
+    // Hand-written like `jira:`; setup never asks about projects (SW-104).
+    ...(cfg.projects ? { projects: cfg.projects } : {}),
   };
 
   const saved = gc.save(newCfg);

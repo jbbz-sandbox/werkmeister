@@ -13,8 +13,15 @@
 import * as readline from "node:readline/promises";
 import { loadIngress } from "werkmeister-core/global_config";
 import { connectK8s, infraHealth, up as infraUp } from "werkmeister-core/infra";
-import { ghBin, issueTracker, type TrackerAuth } from "werkmeister-core/issue_tracker";
+import {
+  ghBin,
+  type IssueTrackerStrategy,
+  issueTracker,
+  projectTracker,
+  type TrackerAuth,
+} from "werkmeister-core/issue_tracker";
 import { run as procRun } from "werkmeister-core/proc";
+import { loadProjects } from "werkmeister-core/projects";
 import { DASHBOARD, MCP, status as webStatus } from "werkmeister-core/web_servers";
 import { Colors } from "../lib/config.js";
 import { interruptSignal } from "../lib/interrupt.js";
@@ -25,12 +32,26 @@ export function trackerLine(label: string, auth: TrackerAuth): string {
     : `  ${Colors.YELLOW}issue tracker · ${label} · ${auth.reason} — run: ${auth.fix}${Colors.RESET}`;
 }
 
-/** Report tracker sign-in; on a TTY, offer GitHub's own login. Never fails connect. */
+/** Report sign-in for the machine's tracker and each project's (SW-104); on a TTY, offer GitHub's own login. Never fails connect. */
 export async function checkTracker(): Promise<void> {
-  let label = "";
+  let checks: [IssueTrackerStrategy, string][] = [];
   try {
-    const tracker = issueTracker();
-    label = tracker.label;
+    checks = [
+      [issueTracker(), ""],
+      ...loadProjects().map((p): [IssueTrackerStrategy, string] => [projectTracker(p), p.name]),
+    ];
+  } catch (e) {
+    console.log(
+      `  ${Colors.YELLOW}issue tracker · check failed: ${(e as Error).message}${Colors.RESET}`,
+    );
+    return;
+  }
+  for (const [tracker, project] of checks) await checkOne(tracker, project);
+}
+
+async function checkOne(tracker: IssueTrackerStrategy, project: string): Promise<void> {
+  const label = project ? `${tracker.label} (${project})` : tracker.label;
+  try {
     let auth = await tracker.checkAuth();
     if (!auth.ok && tracker.id === "github" && process.stdin.isTTY) {
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -44,10 +65,10 @@ export async function checkTracker(): Promise<void> {
         auth = await tracker.checkAuth();
       }
     }
-    console.log(trackerLine(tracker.label, auth));
+    console.log(trackerLine(label, auth));
   } catch (e) {
     console.log(
-      `  ${Colors.YELLOW}issue tracker · ${label ? `${label} · ` : ""}check failed: ${(e as Error).message}${Colors.RESET}`,
+      `  ${Colors.YELLOW}issue tracker · ${label} · check failed: ${(e as Error).message}${Colors.RESET}`,
     );
   }
 }

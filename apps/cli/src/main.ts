@@ -588,6 +588,11 @@ const SPECS: CommandSpec[] = [
             "prefixed to the workspace dir name; passed through to init-workspace.",
         )
         .option(
+          "--project <name>",
+          "The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue. " +
+            "Default: the one whose scope holds --issue-id, else the default project.",
+        )
+        .option(
           "-s, --services <list>",
           "Comma-separated services to run locally. Their owning repos are " +
             "added as worktrees, and the list is passed through to init-workspace.",
@@ -670,6 +675,7 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature], o) => ({
       feature: feature ?? null,
       issue_id: o.issueId ?? null,
+      project: o.project ?? null,
       services: o.services ?? null,
       repos: o.repos ?? null,
       labels: o.labels ?? null,
@@ -969,6 +975,11 @@ const SPECS: CommandSpec[] = [
             "(env: SANDBOX_ISSUE_ID; config: issue_id).",
         )
         .option(
+          "--project <name>",
+          "The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue " +
+            "(env: SANDBOX_PROJECT; config: project).",
+        )
+        .option(
           "--labels <list>",
           "Comma-separated free-form tags for filtering workspaces in the " +
             "dashboard search (env: SANDBOX_LABELS; config: labels).",
@@ -1039,6 +1050,7 @@ const SPECS: CommandSpec[] = [
       repos: o.repos ?? null,
       force: Boolean(o.force),
       issue_id: o.issueId ?? null,
+      project: o.project ?? null,
       labels: o.labels ?? null,
       test_path: o.testPath ?? null,
       description: o.description ?? null,

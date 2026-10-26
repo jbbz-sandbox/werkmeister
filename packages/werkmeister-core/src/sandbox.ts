@@ -65,8 +65,18 @@ import { containerRunning, type ProjectContainer, projectContainers } from "./do
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { buildFormSchema } from "./form_schema.js";
 import { infraHealth, up as infraUp } from "./infra.js";
-import { type Issue, issueBriefing, issueIdOf, issueTracker } from "./issue_tracker.js";
+import {
+  type Issue,
+  issueBriefing,
+  issueIdOf,
+  issueTracker,
+  projectFor,
+  projectForIssue,
+  projectOf,
+  trackerById,
+} from "./issue_tracker.js";
 import { checkForwardHealth, forwarderNeeded } from "./k8s.js";
+import { loadProjects } from "./projects.js";
 import { type CrashLoop, type ProjectHealth, projectHealth, type Started } from "./resources.js";
 import { labelOf } from "./slots.js";
 import { type InterceptRow, interceptsSnapshot } from "./status.js";
@@ -293,8 +303,12 @@ async function buildRefineContext(formData?: Record<string, unknown>): Promise<s
   // the form was opened with --issue); only fetch here when it's absent (e.g. the
   // user typed the issue_id into the form by hand). Best-effort: a failed/empty
   // fetch just leaves the bare issue_id in the form block above.
-  const tracker = issueTracker();
-  const ref = tracker.parseRef(typeof formData?.issue_id === "string" ? formData.issue_id : "");
+  const formIssue = typeof formData?.issue_id === "string" ? formData.issue_id : "";
+  const tracker = issueTracker({
+    project: typeof formData?.project === "string" ? formData.project : "",
+    text: formIssue,
+  });
+  const ref = tracker.parseRef(formIssue);
   if (ref) {
     // stale-while-revalidate: reuse the cached briefing (incl. a cached `null`
     // "fetched-but-empty"); only fetch on a cold miss. Persisted across
@@ -499,7 +513,7 @@ export function parseServiceNames(yaml: string): string[] {
 export async function buildIssueFormRequest(
   text: string,
 ): Promise<{ base: Record<string, unknown>; prompt: string | null }> {
-  const tracker = issueTracker();
+  const tracker = issueTracker({ text });
   const ref = tracker.parseRef(text);
   if (!ref) return { base: {}, prompt: null };
   const base: Record<string, unknown> = { issue_id: ref };
@@ -512,14 +526,14 @@ export async function buildIssueFormRequest(
   await cacheSet(`briefing:${ref}`, briefing);
   if (issue.title) base.task = issue.title;
 
-  return { base, prompt: await issueExtractPrompt(ref, briefing) };
+  return { base, prompt: await issueExtractPrompt(tracker.label, ref, briefing) };
 }
 
 /** The distillation prompt for one fetched issue's briefing. */
-async function issueExtractPrompt(ref: string, briefing: string): Promise<string> {
+async function issueExtractPrompt(label: string, ref: string, briefing: string): Promise<string> {
   const registry = await readServicesRegistry();
   const serviceNames = registry ? parseServiceNames(registry) : [];
-  return buildIssueExtractPrompt(issueTracker().label, ref, registry, serviceNames, briefing);
+  return buildIssueExtractPrompt(label, ref, registry, serviceNames, briefing);
 }
 
 /**
@@ -634,15 +648,25 @@ export async function getIssueStatuses(
   refs: string[],
   opts?: { refresh?: boolean },
 ): Promise<Record<string, string>> {
-  const tracker = issueTracker();
   const valid = [
-    ...new Set(refs.map((r) => tracker.parseRef(r)).filter((r): r is string => !!r)),
+    ...new Set(
+      refs.map((r) => issueTracker({ text: r }).parseRef(r)).filter((r): r is string => !!r),
+    ),
   ].sort((a, b) => a.localeCompare(b));
   if (!valid.length) return {};
   const fetchStatuses = async (batch: string[]): Promise<Record<string, string>> => {
+    // Each project's refs go to its own tracker in one batch (SW-104); "" is the machine's.
+    const groups = new Map<string, string[]>();
+    for (const r of batch) {
+      const name = projectFor({ text: r })?.name ?? "";
+      groups.set(name, [...(groups.get(name) ?? []), r]);
+    }
     const out: Record<string, string> = {};
-    for (const [r, issue] of Object.entries(await tracker.fetchIssues(batch)))
-      if (issue.status) out[r] = issue.status;
+    for (const [name, group] of groups) {
+      const tracker = issueTracker(name ? { project: name } : undefined);
+      for (const [r, issue] of Object.entries(await tracker.fetchIssues(group)))
+        if (issue.status) out[r] = issue.status;
+    }
     return out;
   };
 
@@ -747,6 +771,7 @@ export interface WorkspaceEntry {
 
 interface WorkspaceConfigFields {
   issueId: string | null;
+  project: string;
   labels: string[];
   model: string | null;
   autonomous: boolean;
@@ -780,6 +805,7 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
         : isTrue(rawAutoStop);
     return {
       issueId,
+      project: projectOf(data),
       labels,
       model,
       autonomous,
@@ -790,6 +816,7 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
   } catch {
     return {
       issueId: null,
+      project: "",
       labels: [],
       model: null,
       autonomous: false,
@@ -821,14 +848,14 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
   const workspaces = await Promise.all(
     names.map(async (name): Promise<WorkspaceEntry> => {
       const p = path.join(root, name);
-      const { issueId, labels, model, task, workType } = await readWorkspaceConfig(p);
+      const { issueId, project, labels, model, task, workType } = await readWorkspaceConfig(p);
       return {
         name,
         path: p,
         // vscode://file + an absolute path (already leading-slash) → single slash.
         vscodeUri: `vscode://file${p.split(path.sep).map(encodeURIComponent).join("/")}`,
         issueId,
-        issueUrl: issueId ? issueTracker().url(issueId) : null,
+        issueUrl: issueId ? issueTracker({ project, text: issueId }).url(issueId) : null,
         labels,
         model,
         task,
@@ -838,6 +865,13 @@ export async function listWorkspaces(): Promise<{ root: string; workspaces: Work
     }),
   );
   return { root, workspaces };
+}
+
+/** The form's "Fetch from <tracker>" label: the one tracker the projects (or the machine) use, else a generic word. */
+function formTrackerLabel(): string {
+  const ids = [...new Set(loadProjects().map((p) => p.tracker))];
+  if (!ids.length) return issueTracker().label;
+  return ids.length === 1 ? trackerById(ids[0]).label : "tracker";
 }
 
 /** Build the RJSF form bundle from core's own prompt definitions. */
@@ -859,7 +893,7 @@ export async function getFormSchema(): Promise<FormSchemaBundle> {
     ...issueUi,
     "ui:options": {
       ...((issueUi["ui:options"] ?? {}) as Record<string, unknown>),
-      trackerLabel: issueTracker().label,
+      trackerLabel: formTrackerLabel(),
     },
   };
   return {
@@ -987,7 +1021,9 @@ export async function distillIssue(
   });
   let answer: string | null = null;
   try {
-    answer = await distill(await issueExtractPrompt(issue.ref, briefing));
+    answer = await distill(
+      await issueExtractPrompt(trackerById(issue.tracker).label, issue.ref, briefing),
+    );
   } catch (e) {
     return { fields: {}, warning: (e as Error).message };
   }
@@ -1010,9 +1046,15 @@ export async function prepareCreate(
   opts: CreateOptions = {},
 ): Promise<{ resolved: Record<string, string>; issue: IssueSnapshot | null }> {
   const resolved = resolveInputs(formData, opts.cwd ?? os.homedir());
+  try {
+    const project = projectForIssue(resolved.issue_id ?? "", resolved.project);
+    if (project) resolved.project = project.name;
+  } catch (e) {
+    throw new WorkspaceError((e as Error).message);
+  }
   if (!resolved.issue_id) return { resolved, issue: null };
 
-  const tracker = issueTracker();
+  const tracker = issueTracker({ project: resolved.project, text: resolved.issue_id });
   const ref = tracker.parseRef(resolved.issue_id);
   if (!ref)
     throw new WorkspaceError(
@@ -1023,7 +1065,7 @@ export async function prepareCreate(
   let issue = opts.issue ?? null;
   if (!issue) {
     try {
-      issue = await fetchIssueSnapshot(ref);
+      issue = await fetchIssueSnapshot(ref, undefined, tracker);
     } catch (e) {
       if (e instanceof IssueFetchError) {
         const auth = await tracker.checkAuth();
@@ -2089,8 +2131,9 @@ export function prFromView(v: ViewResult, _meLogin: string): OpenPr {
   const labels = (v.labels ?? []).map((l) => l.name ?? "").filter(Boolean);
   const title = v.title ?? "";
   const body = v.body ?? "";
-  const tracker = issueTracker();
-  const issueId = tracker.parseRef(`${title} ${body} ${v.headRefName ?? ""}`);
+  const prText = `${title} ${body} ${v.headRefName ?? ""}`;
+  const tracker = issueTracker({ text: prText });
+  const issueId = tracker.parseRef(prText);
   return {
     url: v.url,
     repo,
@@ -2229,7 +2272,7 @@ const CARD_TTL_MS = 5 * 60 * 1000;
  * (`ref` "" when `text` holds none) so the triage launch is never blocked.
  */
 export async function fetchIssueCard(text: string): Promise<Issue> {
-  const tracker = issueTracker();
+  const tracker = issueTracker({ text });
   const ref = tracker.parseRef(text);
   if (!ref) return { ref: "" };
   const card = await withCache<Issue>(

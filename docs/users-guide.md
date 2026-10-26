@@ -436,6 +436,7 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `--slug <slug>`: graduate: override the derived reference-file slug
 - `werkmeister workspace [feature]`: Create a new workspace under $SANDBOX_WORKSPACES_ROOT (git worktrees on a \<user>/\<workspace> branch) and run init-workspace inside it.
   - `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `sandbox setup`). Its slug is prefixed to the workspace dir name; passed through to init-workspace.
+  - `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue. Default: the one whose scope holds --issue-id, else the default project.
   - `-s, --services <list>`: Comma-separated services to run locally. Their owning repos are added as worktrees, and the list is passed through to init-workspace.
   - `-r, --repos <list>`: Comma-separated repos to create worktrees for (union with the repos derived from --services). Interactive multi-select if neither --repos nor --services is given.
   - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search; passed through to init-workspace.
@@ -498,6 +499,7 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `-r, --repos <list>`: Comma-separated repos to keep as git worktrees (union with the repos owning --services). Persisted to workspace.yml; the worktree set is reconciled to match on every run (env: SANDBOX_REPOS; config: repos).
   - `--force`: When reconciling, delete repo worktrees dropped from workspace.yml even if they have uncommitted changes, and delete a \<user>/\<workspace> branch an earlier workspace left on origin instead of aborting (default: abort without changes).
   - `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `sandbox setup`) (env: SANDBOX_ISSUE_ID; config: issue_id).
+  - `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue (env: SANDBOX_PROJECT; config: project).
   - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search (env: SANDBOX_LABELS; config: labels).
   - `--test-path <path>`: URL path for feature testing (env: SANDBOX_TEST_PATH; config: test_path).
   - `--description <text>`: Free-form description for the CLAUDE.md header (env: SANDBOX_DESCRIPTION; config: description).
@@ -1509,6 +1511,52 @@ GitHub issues are filed with `gh issue create`.
 `ref` is optional inside a workspace — it defaults to the workspace's `issue_id`. On GitHub,
 `--status closed` or `done` closes the issue, `open` reopens it, and any other status is added
 as a label.
+
+#### Projects
+
+A machine with one tracker needs nothing below. When you work on products that track their
+work in different places — one in Jira, one in GitHub issues — give each a project in
+`~/.werkmeister/config.yaml`. A project is a tracking strategy: a tracker with its scope, and
+optionally a board and its own status names. It holds no repos or services.
+
+```yaml
+projects:
+  werkmeister:
+    tracker: { id: jira, project: SW }               # tracking software: Jira, project key SW
+    board: { id: 42, ready: Selected for Development }   # optional: a board in that tracker
+    issue_statuses: { in_review: In Review }         # optional: replaces overrides.issue_statuses
+    default: true                                    # optional: at most one project
+  acme:
+    tracker: { id: github, org: acme, repos: [acme/web, acme/api] }   # repos optional
+    board: { id: 3, ready: Ready }                   # a GitHub Projects number owned by org
+```
+
+Names are lowercase letters, digits and single hyphens.
+
+**The two tracking strategies.**
+
+- **Tracking software** is the `tracker`. Jira needs `project` (the key); the site and token stay
+  the one `jira:` block above, shared by every Jira project. GitHub needs `org`; `repos` narrows
+  the scope to those repos, else it is every registry repo under `org`.
+- **A board** inside that tracker decides what is ready and in what order: `ready` names the column
+  whose items are ready to start, and the board's own rank orders them. There is no default
+  column. The board only reads order: status moves still use `issue_statuses`.
+
+**Which tracker a workspace uses.** A workspace records its project as `project:` in
+`workspace.yml`, and its issue link, status moves and `pr open` / ship updates go to that
+project's tracker with that project's status names. A project's `issue_statuses` start from its
+tracker's defaults, not from `overrides.issue_statuses`. An issue ref with no workspace (a PR
+body, the dashboard's issue column) goes to the project whose scope holds it. A workspace with no
+`project:`, and every workspace on a machine with no `projects:`, uses `overrides.issue_tracker`
+exactly as above.
+
+**Creating a workspace.** `werkmeister workspace --issue-id <ref> [--project <name>]`; the create
+form and the wizard ask for the project after the issue. Left blank, it is the project whose
+scope holds the ref, else the `default: true` one; a ref that fits none fails and lists the
+projects. The ref is then checked with that project's tracker.
+
+`werkmeister config --check` names each invalid project; an invalid project is skipped with a
+warning. `werkmeister connect` checks sign-in for each project's tracker.
 
 #### Slack review requests
 

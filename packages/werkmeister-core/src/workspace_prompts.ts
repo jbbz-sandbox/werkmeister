@@ -30,8 +30,9 @@ import {
 } from "./config.js";
 import type { PromptEntry, PromptSpecJson } from "./form_schema.js";
 import type { PromptSpec } from "./global_config.js";
-import { issueIdOf, issueTracker } from "./issue_tracker.js";
+import { defaultProject, issueIdOf, issueTracker, trackerById } from "./issue_tracker.js";
 import { ProcError, run as procRun } from "./proc.js";
+import { loadProjects } from "./projects.js";
 import { info, warn } from "./reporter.js";
 import { STRATEGY_IDS } from "./strategies/types.js";
 
@@ -125,6 +126,7 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
   ["repos", "REPOS", "repos"],
   ["services", "SERVICES", "services"],
   ["issue_id", "ISSUE_ID", "issue_id"],
+  ["project", "PROJECT", "project"],
   ["test_path", "TEST_PATH", "test_path"],
   ["description", "DESCRIPTION", "description"],
   ["task", "TASK", "task"],
@@ -317,7 +319,10 @@ export function resolveInputs(
     }
   }
   if (resolved.issue_id)
-    resolved.issue_id = issueTracker().parseRef(resolved.issue_id) ?? resolved.issue_id;
+    resolved.issue_id =
+      issueTracker({ project: resolved.project, text: resolved.issue_id }).parseRef(
+        resolved.issue_id,
+      ) ?? resolved.issue_id;
   if (resolved.autonomous) resolved.autonomous = String(isTrue(resolved.autonomous));
   if (resolved.auto_stop) resolved.auto_stop = String(isTrue(resolved.auto_stop));
 
@@ -359,7 +364,8 @@ function scrapeIssueId(workspaceRoot: string): string {
     if (result.status !== 0) {
       continue;
     }
-    const ref = issueTracker().parseRef(result.stdout.trim());
+    const branch = result.stdout.trim();
+    const ref = issueTracker({ text: branch }).parseRef(branch);
     if (ref) {
       return ref;
     }
@@ -441,6 +447,16 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
       "Issue ID in this machine's issue tracker. The issue is fetched and stored in " +
       "the workspace; empty fields are filled from it.",
     defaultFn: (ws) => scrapeIssueId(ws),
+  },
+  {
+    // After issue_id: the wizard defaults it from the ref's project; shown only with projects (wizardPrompts()).
+    key: "project",
+    label: "Project",
+    help:
+      "The project whose tracker holds the issue (projects: in ~/.werkmeister/config.yaml). " +
+      "Blank picks the one whose scope holds the issue, else the default project.",
+    choicesFn: () => loadProjects().map((p) => p.name),
+    defaultFn: () => defaultProject()?.name ?? "",
   },
   {
     key: "feature",
@@ -631,17 +647,32 @@ export function promptEntry(
   return entry;
 }
 
-/** `_WIZARD_PROMPTS` with the issue prompt's example and validation for the configured tracker. */
+/**
+ * `_WIZARD_PROMPTS` with the issue prompt's example and validation for the configured tracker.
+ * With projects, the project prompt joins and the issue prompt takes any text: which
+ * tracker validates it isn't known until the project is (SW-104).
+ */
 export function wizardPrompts(): PromptSpec[] {
+  const projects = loadProjects();
+  if (projects.length) {
+    const examples = [...new Set(projects.map((p) => trackerById(p.tracker).refExample))];
+    return _WIZARD_PROMPTS.map((spec) =>
+      spec.key === "issue_id" ? { ...spec, placeholder: examples.join(" or ") } : spec,
+    );
+  }
   const tracker = issueTracker();
-  return _WIZARD_PROMPTS.map((spec) =>
-    spec.key === "issue_id"
-      ? {
-          ...spec,
-          placeholder: tracker.refExample,
-          ...(tracker.refPattern ? { pattern: tracker.refPattern } : {}),
-        }
-      : spec,
+  return _WIZARD_PROMPTS.flatMap((spec) =>
+    spec.key === "project"
+      ? []
+      : spec.key === "issue_id"
+        ? [
+            {
+              ...spec,
+              placeholder: tracker.refExample,
+              ...(tracker.refPattern ? { pattern: tracker.refPattern } : {}),
+            },
+          ]
+        : [spec],
   );
 }
 

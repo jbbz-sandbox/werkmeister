@@ -16,17 +16,23 @@
  *
  * Lives in `overrides:` so `sandbox config`, which rebuilds the YAML and keeps
  * overrides verbatim, cannot drop it.
+ *
+ * Projects (SW-104, projects.ts) narrow this per workspace: a workspace's
+ * `project:` picks its tracker and scope, and text with no project is matched
+ * to the project whose scope holds its ref. Without either, the machine's tracker.
  */
 
 import { load } from "./global_config.js";
-import { github } from "./issue_trackers/github.js";
-import { jira } from "./issue_trackers/jira.js";
+import { github, githubTracker } from "./issue_trackers/github.js";
+import { jira, jiraTracker } from "./issue_trackers/jira.js";
 import {
   type Issue,
   type IssueTrackerStrategy,
   TRACKER_IDS,
   type TrackerId,
 } from "./issue_trackers/types.js";
+import { loadProjects, type Project } from "./projects.js";
+import { warn } from "./reporter.js";
 
 export {
   GITHUB_ISSUE_PATTERN,
@@ -46,6 +52,7 @@ export type {
   TrackerId,
 } from "./issue_trackers/types.js";
 export { TRACKER_IDS } from "./issue_trackers/types.js";
+export type { Board, Project } from "./projects.js";
 
 const REGISTRY: Record<TrackerId, IssueTrackerStrategy> = { jira, github };
 
@@ -59,12 +66,93 @@ export function loadIssueTracker(cfg?: Record<string, any>): TrackerId {
   return (TRACKER_IDS as readonly string[]).includes(id) ? (id as TrackerId) : "jira";
 }
 
-/** The configured tracker. */
-export function issueTracker(cfg?: Record<string, any>): IssueTrackerStrategy {
-  return REGISTRY[loadIssueTracker(cfg)];
+const FACTORIES = { jira: jiraTracker, github: githubTracker } as const;
+
+/** A project's tracker, bound to its scope. */
+export function projectTracker(project: Project): IssueTrackerStrategy {
+  return FACTORIES[project.tracker](project.scope);
+}
+
+/** Where a lookup happens: a workspace's `project:` and/or text holding an issue ref. */
+export interface TrackerAt {
+  project?: string;
+  text?: string;
+}
+
+const missingWarned = new Set<string>();
+
+/**
+ * The project a lookup lands in: `project` by name; else the first project (by
+ * name) whose tracker finds a ref in `text` that its scope holds; else null.
+ */
+export function projectFor(at: TrackerAt = {}): Project | null {
+  const projects = loadProjects();
+  if (!projects.length) return null;
+  const name = at.project?.trim();
+  if (name) {
+    const named = projects.find((p) => p.name === name);
+    if (named) return named;
+    if (!missingWarned.has(name)) {
+      missingWarned.add(name);
+      warn(`project "${name}" is not in projects: of the config — using the machine's tracker`);
+    }
+    return null;
+  }
+  if (!at.text) return null;
+  for (const p of projects) {
+    const tracker = projectTracker(p);
+    const ref = tracker.parseRef(at.text);
+    if (ref && tracker.holds(ref)) return p;
+  }
+  return null;
+}
+
+/** The one project marked `default: true`; null when none, or more than one. */
+export function defaultProject(): Project | null {
+  const marked = loadProjects().filter((p) => p.default);
+  return marked.length === 1 ? marked[0] : null;
+}
+
+/** The tracker for `at` (see projectFor), else the machine's (`overrides.issue_tracker`). */
+export function issueTracker(at?: TrackerAt): IssueTrackerStrategy {
+  const project = at ? projectFor(at) : null;
+  return project ? projectTracker(project) : REGISTRY[loadIssueTracker()];
+}
+
+/**
+ * A new workspace's project (SW-104): `named`, else the one whose scope holds
+ * `issueId`, else the `default: true` one. Null on a machine with no projects,
+ * or with no issue and no name. Throws when none fits, or when the project's
+ * tracker can't read the ref. Scope only picks the project: a named or default
+ * one may hold refs outside it.
+ */
+export function projectForIssue(issueId: string, named = ""): Project | null {
+  const projects = loadProjects();
+  if (!projects.length) {
+    if (named) throw new Error(`--project ${named}: this machine has no projects: in its config`);
+    return null;
+  }
+  const names = projects.map((p) => p.name).join(", ");
+  const chosen = named ? projects.find((p) => p.name === named) : undefined;
+  if (named && !chosen) throw new Error(`no project "${named}" (projects: ${names})`);
+  if (!issueId) return chosen ?? null;
+  const project = chosen ?? projectFor({ text: issueId }) ?? defaultProject();
+  if (!project)
+    throw new Error(`${issueId} isn't in any project's scope; pass --project (one of: ${names})`);
+  const tracker = projectTracker(project);
+  if (!tracker.parseRef(issueId))
+    throw new Error(
+      `${issueId} isn't a ${tracker.label} issue in project ${project.name} (e.g. ${tracker.refExample})`,
+    );
+  return project;
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/** A workspace.yml's project; "" when none. */
+export function projectOf(data: Record<string, unknown> | null | undefined): string {
+  return str(data?.project);
+}
 
 /** A workspace.yml's issue ref: `issue_id`, else the pre-rename `jira_id` / `github_issue`; "" when none. */
 export function issueIdOf(data: Record<string, unknown> | null | undefined): string {

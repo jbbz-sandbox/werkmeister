@@ -10,6 +10,8 @@ vi.mock("werkmeister-core/issue_tracker", () => ({
     },
   }),
 }));
+// No projects: the machine's tracker alone, and the real ~/.werkmeister stays unread.
+vi.mock("werkmeister-core/projects", () => ({ loadProjects: () => [] }));
 const { checkTracker } = await import("../connect.js");
 
 it("a throwing tracker check prints one line and never fails connect", async () => {
