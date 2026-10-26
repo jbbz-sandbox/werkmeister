@@ -18,7 +18,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [3c9e892]
+- Updated dependencies [5b37069]
   - werkmeister-core@0.37.1
   - werkmeister-ui@0.5.17
 
@@ -26,7 +26,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [59ae387]
+- Updated dependencies [fa98c10]
   - werkmeister-core@0.37.0
   - werkmeister-ui@0.5.16
 
@@ -41,7 +41,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [b5bec68]
+- Updated dependencies [67637e6]
   - werkmeister-core@0.36.1
   - werkmeister-ui@0.5.14
 
@@ -49,9 +49,9 @@
 
 ### Patch Changes
 
-- 746524a: SW-92: `werkmeister migrate` moves `~/.sandbox` to `~/.werkmeister` and repoints every file that carries the old path: `config.yaml` values, `env.sh`, the `~/.zshenv` block, `services.yaml`, the pr-watch launchd agent (or crontab line) and each workspace's compose file. It refuses while a container that mounts the old home, or any workspace container, is running. A second run changes nothing. `--workspaces` also renames each workspace's `.sandbox/` to `.werkmeister/`, and `--check` reports without writing. Registry sync, `detect` and the pre-PR gate now read `<repo>/.werkmeister/services.yaml` first and fall back to `<repo>/.sandbox/services.yaml`. `detect` writes new fragments under `.werkmeister/`. Fragments can use `{{werkmeister_home}}` for the tool's home folder. This repo's fragment moved to `.werkmeister/services.yaml` and uses it, so **pull and rebuild the CLI before the next `registry sync`**: an older build skips the moved fragment. Docs, help text and generated text now say `~/.werkmeister`, with `~/.sandbox` named only as the legacy name.
-- Updated dependencies [eabd324]
-- Updated dependencies [746524a]
+- 9dfc1cc: SW-92: `werkmeister migrate` moves `~/.sandbox` to `~/.werkmeister` and repoints every file that carries the old path: `config.yaml` values, `env.sh`, the `~/.zshenv` block, `services.yaml`, the pr-watch launchd agent (or crontab line) and each workspace's compose file. It refuses while a container that mounts the old home, or any workspace container, is running. A second run changes nothing. `--workspaces` also renames each workspace's `.sandbox/` to `.werkmeister/`, and `--check` reports without writing. Registry sync, `detect` and the pre-PR gate now read `<repo>/.werkmeister/services.yaml` first and fall back to `<repo>/.sandbox/services.yaml`. `detect` writes new fragments under `.werkmeister/`. Fragments can use `{{werkmeister_home}}` for the tool's home folder. This repo's fragment moved to `.werkmeister/services.yaml` and uses it, so **pull and rebuild the CLI before the next `registry sync`**: an older build skips the moved fragment. Docs, help text and generated text now say `~/.werkmeister`, with `~/.sandbox` named only as the legacy name.
+- Updated dependencies [7fa838e]
+- Updated dependencies [9dfc1cc]
   - werkmeister-core@0.36.0
   - werkmeister-ui@0.5.13
 
@@ -66,7 +66,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [ce9e540]
+- Updated dependencies [8dd972e]
   - werkmeister-core@0.35.4
   - werkmeister-ui@0.5.11
 
@@ -74,7 +74,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [14aa6e8]
+- Updated dependencies [e3c5ec9]
   - werkmeister-core@0.35.3
   - werkmeister-ui@0.5.10
 
@@ -89,7 +89,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [5ba440a]
+- Updated dependencies [6d24ff6]
   - werkmeister-core@0.35.1
   - werkmeister-ui@0.5.8
 
@@ -97,7 +97,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [5bc1a35]
+- Updated dependencies [8666887]
   - werkmeister-core@0.35.0
   - werkmeister-ui@0.5.7
 
@@ -105,8 +105,8 @@
 
 ### Patch Changes
 
-- Updated dependencies [2f92c5f]
-- Updated dependencies [d26e6ae]
+- Updated dependencies [8c99ce9]
+- Updated dependencies [157e9e8]
   - werkmeister-core@0.34.0
   - werkmeister-ui@0.5.6
 
@@ -114,7 +114,7 @@
 
 ### Patch Changes
 
-- c12dd11: `werkmeister status`, the Workspaces pane and the dashboard show a stopped k8s-forwards container as neutral ("stopped — not needed by any running workspace") when no running workspace has a cluster-backed local service. Since SW-42 `up` starts the forwarder only for such workspaces, so on a werkmeister-only machine it is stopped by design. While a running workspace needs it, a stopped forwarder still shows red with the `docker restart sandbox-k8s-forwards` hint. `k8s-forwards-status` gains a `stopped` flag, and the infra tally leaves out a forwarder nothing needs, so infra no longer reads partial.
+- 2922867: `werkmeister status`, the Workspaces pane and the dashboard show a stopped k8s-forwards container as neutral ("stopped — not needed by any running workspace") when no running workspace has a cluster-backed local service. Since SW-42 `up` starts the forwarder only for such workspaces, so on a werkmeister-only machine it is stopped by design. While a running workspace needs it, a stopped forwarder still shows red with the `docker restart sandbox-k8s-forwards` hint. `k8s-forwards-status` gains a `stopped` flag, and the infra tally leaves out a forwarder nothing needs, so infra no longer reads partial.
   - werkmeister-core@0.33.2
   - werkmeister-ui@0.5.5
 
@@ -136,7 +136,7 @@
 
 ### Minor Changes
 
-- 002e175: Graduation works in icm workspaces (SW-72). Each context strategy now supplies its own decisions. In icm they are the `status: decided` sections of `stages/*/output/*.md`, one per heading, with id `stages/<stage>/output/<file>.md#<heading-slug>`. `werkmeister notes graduate`, the `werkmeister down` offer and the MCP `notes` `graduate` action scaffold them through the same `graduateNote` path jit uses. Their `graduating → graduated` state is kept in `.werkmeister/graduations.yml`, so the stage outputs are never rewritten. MCP `notes` `list` also returns the open `decisions`. jit is unchanged. The not-in-workspace error no longer names the old `.sandbox/` directory.
+- d2c85d1: Graduation works in icm workspaces (SW-72). Each context strategy now supplies its own decisions. In icm they are the `status: decided` sections of `stages/*/output/*.md`, one per heading, with id `stages/<stage>/output/<file>.md#<heading-slug>`. `werkmeister notes graduate`, the `werkmeister down` offer and the MCP `notes` `graduate` action scaffold them through the same `graduateNote` path jit uses. Their `graduating → graduated` state is kept in `.werkmeister/graduations.yml`, so the stage outputs are never rewritten. MCP `notes` `list` also returns the open `decisions`. jit is unchanged. The not-in-workspace error no longer names the old `.sandbox/` directory.
 
 ### Patch Changes
 
@@ -154,11 +154,11 @@
 
 ### Minor Changes
 
-- 0c00bdd: Pause and Resume a workspace (SW-70). `werkmeister pause` and the `pause` MCP tool freeze the workspace's running containers (`docker pause`, `-sandbox-install` included) and hold its Claude session: while `.werkmeister/paused.json` exists, the agent-state hook ends the turn at the next tool call and blocks new prompts. `werkmeister resume` and `resume` thaw exactly those containers, starting any stopped meanwhile, release the session and, when Pause cut a working turn, tell it to continue: headless through claude-send, a Desktop session through the Workspaces pane. Every card, `status` and `check-in` show `paused`, and a paused workspace is never a check-in candidate. `up` and `restart` refuse while paused; `down` ends the pause. The card bar on a running workspace is now `■ Stop · ⏸ Pause` with `↻ Restart` in ⋯; VS Code's Stop icon is now a square.
+- 62e969a: Pause and Resume a workspace (SW-70). `werkmeister pause` and the `pause` MCP tool freeze the workspace's running containers (`docker pause`, `-sandbox-install` included) and hold its Claude session: while `.werkmeister/paused.json` exists, the agent-state hook ends the turn at the next tool call and blocks new prompts. `werkmeister resume` and `resume` thaw exactly those containers, starting any stopped meanwhile, release the session and, when Pause cut a working turn, tell it to continue: headless through claude-send, a Desktop session through the Workspaces pane. Every card, `status` and `check-in` show `paused`, and a paused workspace is never a check-in candidate. `up` and `restart` refuse while paused; `down` ends the pause. The card bar on a running workspace is now `■ Stop · ⏸ Pause` with `↻ Restart` in ⋯; VS Code's Stop icon is now a square.
 
 ### Patch Changes
 
-- Updated dependencies [0c00bdd]
+- Updated dependencies [62e969a]
   - werkmeister-core@0.30.0
   - werkmeister-ui@0.5.0
 
@@ -173,7 +173,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [fecad45]
+- Updated dependencies [cd828e1]
   - werkmeister-core@0.28.1
   - werkmeister-ui@0.4.6
 
@@ -202,7 +202,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [0735db5]
+- Updated dependencies [443da5d]
   - werkmeister-core@0.26.0
   - werkmeister-ui@0.4.2
 
@@ -210,7 +210,7 @@
 
 ### Patch Changes
 
-- Updated dependencies [92f3b4a]
+- Updated dependencies [d4d5e01]
   - werkmeister-core@0.25.0
   - werkmeister-ui@0.4.1
 
@@ -218,8 +218,8 @@
 
 ### Patch Changes
 
-- 6c99717: SW-57: the rest of the UI is React. The chat panel, the options input, the usage breakdown, the create form's card and the dashboard's tab shell, Open Pull Requests, Health and Links tabs no longer use the vanilla-DOM `el()` / `injectCss()` helpers, which are gone. Each component renders its own stylesheet with `Css` (a React-hoisted `<style>`, one per component); the tokens stay CSS custom properties in `tokens.css`. `werkmeister-ui` now exports `ChatPanel`, `OptionsInput`, `Usage`, `CreateForm` and `WorkspaceList` in place of `initChatPanel`, `createOptionsInput` and `renderUsage`; `initWorkspaceUI` and `initCreateForm` keep their signatures. The workspace card takes `renderPanel(kind)` instead of `mountPanel(kind, host)`. On the Desktop-inline and Cowork surfaces an open chat now syncs the transcript every 3 s while a turn runs, as its polling was meant to, instead of only when the turn ends.
-- Updated dependencies [6c99717]
+- f510b53: SW-57: the rest of the UI is React. The chat panel, the options input, the usage breakdown, the create form's card and the dashboard's tab shell, Open Pull Requests, Health and Links tabs no longer use the vanilla-DOM `el()` / `injectCss()` helpers, which are gone. Each component renders its own stylesheet with `Css` (a React-hoisted `<style>`, one per component); the tokens stay CSS custom properties in `tokens.css`. `werkmeister-ui` now exports `ChatPanel`, `OptionsInput`, `Usage`, `CreateForm` and `WorkspaceList` in place of `initChatPanel`, `createOptionsInput` and `renderUsage`; `initWorkspaceUI` and `initCreateForm` keep their signatures. The workspace card takes `renderPanel(kind)` instead of `mountPanel(kind, host)`. On the Desktop-inline and Cowork surfaces an open chat now syncs the transcript every 3 s while a turn runs, as its polling was meant to, instead of only when the turn ends.
+- Updated dependencies [f510b53]
   - werkmeister-ui@0.4.0
   - werkmeister-core@0.24.1
 
@@ -227,14 +227,14 @@
 
 ### Minor Changes
 
-- 5886cc5: SW-54: the dashboard and MCP App workspace card gains `↗ Continue in Desktop` and `＋ New session`, the top bar gains `＋ New workspace` (the MCP App list opens the create form in place), and the list gains a `☐ Focused only` filter. `claude-resume` takes `new: true` to open a fresh Terminal session.
+- 1ed01fe: SW-54: the dashboard and MCP App workspace card gains `↗ Continue in Desktop` and `＋ New session`, the top bar gains `＋ New workspace` (the MCP App list opens the create form in place), and the list gains a `☐ Focused only` filter. `claude-resume` takes `new: true` to open a fresh Terminal session.
 
 ### Patch Changes
 
-- Updated dependencies [3fc5287]
-- Updated dependencies [3c1a49a]
-- Updated dependencies [5886cc5]
-- Updated dependencies [20f67e7]
+- Updated dependencies [61780d5]
+- Updated dependencies [138b15e]
+- Updated dependencies [1ed01fe]
+- Updated dependencies [e132f03]
   - werkmeister-core@0.24.0
   - werkmeister-ui@0.3.0
 
@@ -242,11 +242,11 @@
 
 ### Patch Changes
 
-- 050e037: The dashboard, the Cowork artifact and the MCP App show the handoff workspace card, rebuilt in React in `werkmeister-ui` (SW-53). Each workspace is one always-expanded card: the agent chip (solid amber only for `● Needs you`, with the last question), the work type and task title, the issue, then Containers, PRs (state badge, dashed for Draft, and CI), Workflow (stage pips or the lifecycle step) and Agent rows. The action bar shows the primary action and two secondaries; the rest are in `⋯`, which also opens Chat, Usage and Logs. Close out and `✕ Abandon…` confirm inline in the footer, and Abandon needs a reason; "Click again to confirm" is gone. The page gains a loading skeleton, a restyled top bar, a Needs-you filter and a legend. The new tokens (`tokens.css`, light and dark) replace the old palette, with Barlow and IBM Plex Mono inlined as woff2, so no font is fetched.
+- f9017c7: The dashboard, the Cowork artifact and the MCP App show the handoff workspace card, rebuilt in React in `werkmeister-ui` (SW-53). Each workspace is one always-expanded card: the agent chip (solid amber only for `● Needs you`, with the last question), the work type and task title, the issue, then Containers, PRs (state badge, dashed for Draft, and CI), Workflow (stage pips or the lifecycle step) and Agent rows. The action bar shows the primary action and two secondaries; the rest are in `⋯`, which also opens Chat, Usage and Logs. Close out and `✕ Abandon…` confirm inline in the footer, and Abandon needs a reason; "Click again to confirm" is gone. The page gains a loading skeleton, a restyled top bar, a Needs-you filter and a legend. The new tokens (`tokens.css`, light and dark) replace the old palette, with Barlow and IBM Plex Mono inlined as woff2, so no font is fetched.
 
   `listWorkspaces()` (and the `list-workspaces` tool) adds `task`, `workType` and `lifecycle` to each workspace. `RepoPr` adds `draft`, and `workspace-prs` now declares `ci`, `failingChecks` and `draft`. The `logs` tool returns its lines as `output` in its structured content too.
 
-- Updated dependencies [050e037]
+- Updated dependencies [f9017c7]
   - werkmeister-core@0.23.0
   - werkmeister-ui@0.2.0
 
@@ -254,9 +254,9 @@
 
 ### Patch Changes
 
-- e5a3eb9: apps/mcp now builds the MCP App pages (`mcp-app.html`, `mcp-list.html`) itself, from the new `werkmeister-ui` package (`packages/sandbox-ui`), and serves them from its own `dist/`. The dashboard and apps/mcp share one copy of the UI modules, and `werkmeister-ui` adds the non-DOM display model the card, pane and VS Code will read.
-- Updated dependencies [58a61bd]
-- Updated dependencies [3fdbf6d]
+- 412e6c0: apps/mcp now builds the MCP App pages (`mcp-app.html`, `mcp-list.html`) itself, from the new `werkmeister-ui` package (`packages/sandbox-ui`), and serves them from its own `dist/`. The dashboard and apps/mcp share one copy of the UI modules, and `werkmeister-ui` adds the non-DOM display model the card, pane and VS Code will read.
+- Updated dependencies [3f0542a]
+- Updated dependencies [95598c3]
   - werkmeister-core@0.22.0
   - werkmeister-ui@0.1.1
 
@@ -264,141 +264,141 @@
 
 ### Patch Changes
 
-- Updated dependencies [084b453]
-- Updated dependencies [e4adda8]
+- Updated dependencies [eb040c0]
+- Updated dependencies [5f85354]
   - werkmeister-core@0.21.0
 
 ## 0.3.6
 
 ### Patch Changes
 
-- Updated dependencies [afc375a]
+- Updated dependencies [002e00f]
   - werkmeister-core@0.20.0
 
 ## 0.3.5
 
 ### Patch Changes
 
-- Updated dependencies [0ec96f9]
+- Updated dependencies [1e7d8a7]
   - werkmeister-core@0.19.0
 
 ## 0.3.4
 
 ### Patch Changes
 
-- Updated dependencies [963da69]
-- Updated dependencies [28e39b6]
-- Updated dependencies [cfea47d]
-- Updated dependencies [8a0c8b4]
+- Updated dependencies [bd22bce]
+- Updated dependencies [3936ebd]
+- Updated dependencies [9420fd0]
+- Updated dependencies [6f712a9]
   - werkmeister-core@0.18.0
 
 ## 0.3.3
 
 ### Patch Changes
 
-- Updated dependencies [8c2a1eb]
+- Updated dependencies [5ba6593]
   - werkmeister-core@0.17.0
 
 ## 0.3.2
 
 ### Patch Changes
 
-- Updated dependencies [7035cff]
-- Updated dependencies [183a2e9]
-- Updated dependencies [7d121e8]
-- Updated dependencies [4e08dd6]
-- Updated dependencies [fe14381]
-- Updated dependencies [88fb0e3]
-- Updated dependencies [4240fba]
+- Updated dependencies [fef4b99]
+- Updated dependencies [07e7d18]
+- Updated dependencies [8b4a73d]
+- Updated dependencies [844ccbf]
+- Updated dependencies [70125e3]
+- Updated dependencies [39eb67a]
+- Updated dependencies [65ff7f9]
   - werkmeister-core@0.16.0
 
 ## 0.3.1
 
 ### Patch Changes
 
-- Updated dependencies [dba74e3]
+- Updated dependencies [f85e6af]
   - werkmeister-core@0.15.0
 
 ## 0.3.0
 
 ### Minor Changes
 
-- 5e11f2a: Werkmeister rename, config side (SW-7): the tool now reads `~/.werkmeister` and each workspace's `.werkmeister/` first, falling back to `~/.sandbox` and `.sandbox/` when the new directory is missing. Nothing is moved, so existing installs and workspaces keep working unchanged. A fresh machine gets `~/.werkmeister`, and a new workspace gets `.werkmeister/`, along with generated docs that name it. Every `SANDBOX_*` variable the tool reads now also accepts a `WERKMEISTER_*` name, which wins when both are set. The names the tool exports (env.sh, compose and container env, `.env`, the generated MCP config) stay `SANDBOX_*` for now. The VS Code extension's `sandbox.root`/`sandbox.binPath` settings are now applied as `WERKMEISTER_ROOT`/`WERKMEISTER_BIN`, so they still beat an inherited env var.
+- 7e0a144: Werkmeister rename, config side (SW-7): the tool now reads `~/.werkmeister` and each workspace's `.werkmeister/` first, falling back to `~/.sandbox` and `.sandbox/` when the new directory is missing. Nothing is moved, so existing installs and workspaces keep working unchanged. A fresh machine gets `~/.werkmeister`, and a new workspace gets `.werkmeister/`, along with generated docs that name it. Every `SANDBOX_*` variable the tool reads now also accepts a `WERKMEISTER_*` name, which wins when both are set. The names the tool exports (env.sh, compose and container env, `.env`, the generated MCP config) stay `SANDBOX_*` for now. The VS Code extension's `sandbox.root`/`sandbox.binPath` settings are now applied as `WERKMEISTER_ROOT`/`WERKMEISTER_BIN`, so they still beat an inherited env var.
 
 ### Patch Changes
 
-- Updated dependencies [ccdb6a0]
-- Updated dependencies [192c2f2]
-- Updated dependencies [cc2806e]
-- Updated dependencies [5e11f2a]
+- Updated dependencies [6ff0f46]
+- Updated dependencies [99a2303]
+- Updated dependencies [acf3e20]
+- Updated dependencies [7e0a144]
   - sandbox-core@0.14.0
 
 ## 0.2.3
 
 ### Patch Changes
 
-- Updated dependencies [d5b1a9a]
+- Updated dependencies [0853f96]
   - sandbox-core@0.13.0
 
 ## 0.2.2
 
 ### Patch Changes
 
-- Updated dependencies [aba829c]
+- Updated dependencies [e12539a]
   - sandbox-core@0.12.0
 
 ## 0.2.1
 
 ### Patch Changes
 
-- 2f106fc: Workspaces now get `compose.yml`, the Compose v2 preferred name, instead of `docker-compose.yml` (#224). An existing workspace's file is renamed on the next `sandbox init-workspace` or `sandbox up`; until then `down`, `logs` and `close-out` still read `docker-compose.yml`, so a running stack is never orphaned (Compose keys it by project `name:`, which is unchanged).
-- Updated dependencies [2f106fc]
+- 0f2892d: Workspaces now get `compose.yml`, the Compose v2 preferred name, instead of `docker-compose.yml` (#224). An existing workspace's file is renamed on the next `sandbox init-workspace` or `sandbox up`; until then `down`, `logs` and `close-out` still read `docker-compose.yml`, so a running stack is never orphaned (Compose keys it by project `name:`, which is unchanged).
+- Updated dependencies [0f2892d]
   - sandbox-core@0.11.0
 
 ## 0.2.0
 
 ### Minor Changes
 
-- afd99d4: Close-out is the one end-of-workspace verb (#160). `sandbox close-out <ws> --abandon "<reason>"` ends a workspace whose work won't ship: it records the reason, leaves the issue, pushes every branch and keeps them, then removes the workspace. Both outcomes list terminal Claude sessions still open in the workspace. The pane shows one end button per card: ✓ Close out once shipped, otherwise ✕ Abandon… with a reason field. After a close-out, the pane and the `close-out` MCP tool archive the workspace's desktop sessions. The `remove-workspace` MCP tool, the pane's ✕ Remove and VS Code's Remove Workspace are gone; VS Code has Close Out Workspace. `sandbox remove-workspace` still works for one release but prints a deprecation notice.
+- 93adb9a: Close-out is the one end-of-workspace verb (#160). `sandbox close-out <ws> --abandon "<reason>"` ends a workspace whose work won't ship: it records the reason, leaves the issue, pushes every branch and keeps them, then removes the workspace. Both outcomes list terminal Claude sessions still open in the workspace. The pane shows one end button per card: ✓ Close out once shipped, otherwise ✕ Abandon… with a reason field. After a close-out, the pane and the `close-out` MCP tool archive the workspace's desktop sessions. The `remove-workspace` MCP tool, the pane's ✕ Remove and VS Code's Remove Workspace are gone; VS Code has Close Out Workspace. `sandbox remove-workspace` still works for one release but prints a deprecation notice.
 
   `closeOut(name, opts, deps)` now takes `{ abandon }` as its second argument, and `deps` moves to the third.
 
 ### Patch Changes
 
-- Updated dependencies [afd99d4]
-- Updated dependencies [63fdd7b]
-- Updated dependencies [a671c9f]
+- Updated dependencies [93adb9a]
+- Updated dependencies [ca13ea7]
+- Updated dependencies [5247bbc]
   - sandbox-core@0.10.0
 
 ## 0.1.8
 
 ### Patch Changes
 
-- Updated dependencies [09c0746]
-- Updated dependencies [5d20904]
-- Updated dependencies [69a386d]
+- Updated dependencies [5d23026]
+- Updated dependencies [bc09b75]
+- Updated dependencies [100e350]
   - sandbox-core@0.9.0
 
 ## 0.1.7
 
 ### Patch Changes
 
-- Updated dependencies [594efe1]
-- Updated dependencies [542eecf]
+- Updated dependencies [88430c7]
+- Updated dependencies [e40578c]
   - sandbox-core@0.8.0
 
 ## 0.1.6
 
 ### Patch Changes
 
-- Updated dependencies [1f9039f]
+- Updated dependencies [5f1c77f]
   - sandbox-core@0.7.0
 
 ## 0.1.5
 
 ### Patch Changes
 
-- Updated dependencies [2d701e4]
+- Updated dependencies [4485440]
   - sandbox-core@0.6.0
 
 ## 0.1.4
@@ -411,10 +411,10 @@
 
 ### Patch Changes
 
-- Updated dependencies [6f38fc7]
-- Updated dependencies [6d2333e]
-- Updated dependencies [4ff0cc7]
-- Updated dependencies [9a89e99]
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
   - sandbox-core@0.4.0
 
 ## 0.1.2
