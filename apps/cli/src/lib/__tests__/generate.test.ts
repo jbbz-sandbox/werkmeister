@@ -611,6 +611,8 @@ describe("generateCaddyfile", () => {
       const content = fs.readFileSync(await generateCaddyfile(features), "utf8");
       expect(content).toContain("path /__werkmeister/features.json /__sandbox/features.json");
       expect(content).toContain("path /__werkmeister* /__sandbox*");
+      // SW-100: shared-infra.yml mounts features.json at /srv, outside the :ro ui dir.
+      expect(content).toMatch(/handle @selector_features \{\s+root \* \/srv\n/);
       // Selector handles must precede the feature/default handles that would shadow them.
       expect(content.indexOf("/__werkmeister*")).toBeLessThan(content.indexOf("handle /* {"));
     },

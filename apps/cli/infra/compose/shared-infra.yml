@@ -175,8 +175,9 @@ services:
     volumes:
       - ${SANDBOX_STATE_DIR}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../proxy/ui:/sandbox/proxy/ui:ro
-      # Generated beside the Caddyfile; a file bind over the shipped ui dir.
-      - ${SANDBOX_STATE_DIR}/proxy/features.json:/sandbox/proxy/ui/features.json:ro
+      # Outside the :ro ui bind (SW-100): nesting it there needs a mountpoint file
+      # in the shipped ui dir, which fresh clones and npm installs don't have.
+      - ${SANDBOX_STATE_DIR}/proxy/features.json:/srv/features.json:ro
       # Cert location comes from `ingress.certs_dir` in ~/.werkmeister/config.yaml,
       # exported as SANDBOX_CERTS_DIR by ~/.werkmeister/env.sh. The default keeps
       # this working for a shell that hasn't sourced env.sh.

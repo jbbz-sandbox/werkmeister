@@ -1335,9 +1335,8 @@ export async function generateCaddyfile(
       allFeatures = await getAllSlots();
     }
 
-    // Write features.json for the feature selector UI. Caddy serves it from
-    // the shipped ui dir via a file bind-mount (shared-infra.yml), so it
-    // lives beside the Caddyfile, not in a ui/ subdir.
+    // Write features.json for the feature selector UI. shared-infra.yml
+    // file-binds it to /srv/features.json, outside the shipped :ro ui dir.
     const featuresJson = Object.entries(allFeatures)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .filter(([, featInfo]) => isDict(featInfo))
@@ -1478,7 +1477,7 @@ function hostRouterLines(routers: HostRouter[]): string[] {
     lines.push("    # /__sandbox is a deprecated alias (SW-8; SW-11 removes it).");
     lines.push("    @selector_features path /__werkmeister/features.json /__sandbox/features.json");
     lines.push("    handle @selector_features {");
-    lines.push("        root * /sandbox/proxy/ui");
+    lines.push("        root * /srv");
     lines.push("        rewrite * /features.json");
     lines.push("        file_server");
     lines.push("    }");
