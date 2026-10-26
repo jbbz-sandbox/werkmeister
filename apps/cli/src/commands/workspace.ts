@@ -114,7 +114,7 @@ export async function resolveWorkspaceInputs(
         }
         // The project prompt comes next: default it to the project whose scope holds the ref.
         const project = projectFor({ text: ref })?.name;
-        const picked = project ? { project } : {};
+        const picked: Record<string, string> = project ? { project } : {};
         if (args.no_distill) return { task: issue.title, ...picked };
         const { fields, warning } = await distillIssue(issue);
         if (warning) info(`Issue read; fields not pre-filled: ${warning}`);
