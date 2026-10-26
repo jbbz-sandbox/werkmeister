@@ -1,8 +1,7 @@
 /**
  * Browser-accessible fallback for the inline "Sandbox Workspaces" MCP App UI.
  *
- * The dashboard (`src/workspace-ui.ts`) renders inline in Claude Desktop and as
- * a Cowork artifact. Hosts that don't render `ui://` resources (Claude Code
+ * The dashboard (`src/workspace-ui.ts`) renders inline in Claude Desktop. Hosts that don't render `ui://` resources (Claude Code
  * CLI, the VS Code extension) can't show it — so this serves the SAME bundled
  * UI (`dist/browser.html`) as an ordinary web page and proxies its tool calls
  * back into the real MCP tool handlers over an in-memory transport. No dispatch
@@ -72,8 +71,8 @@ export async function createBrowserUiRouter(): Promise<Router> {
   // claude-transcript polling. Server→client only; sends still go through
   // POST /api/tool (claude-send). No new dependency; EventSource gives
   // auto-reconnect + Last-Event-ID for free. Only this same-origin Express
-  // surface can hold the socket — the Desktop-inline and Cowork-artifact
-  // surfaces keep polling (they leave HostBridge.streamSession undefined).
+  // surface can hold the socket — the Desktop-inline
+  // surface keeps polling (they leave HostBridge.streamSession undefined).
   router.get("/api/session/stream", localOnly, (req, res) => {
     const name = typeof req.query.name === "string" ? req.query.name : "";
     if (!name) {

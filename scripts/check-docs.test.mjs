@@ -46,7 +46,7 @@ test("checks commands and flags only where a command starts", () => {
 test("checks MCP tool names", () => {
   assert.deepEqual(check("the `status` tool"), []);
   assert.equal(check("the `workspace-action` MCP tool").length, 1);
-  assert.deepEqual(check("`mcp__cowork__create_artifact` tool"), []);
+  assert.deepEqual(check("`mcp__werkmeister__status` tool"), []);
 });
 
 test("checks flags anywhere in a command, up to a bare --", () => {

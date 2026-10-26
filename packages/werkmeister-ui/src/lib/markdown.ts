@@ -7,7 +7,7 @@
  *
  * Lives in lib/ (not inline in prs-ui.ts) so the compiled dist/lib/markdown.js is
  * importable by lib/open-prs.smoke.mjs, which locks in this config. Only prs-ui.ts
- * (browser bundle) imports it at runtime — the strict-CSP Cowork artifact does not.
+ * (browser bundle) imports it at runtime — the strict-CSP MCP App (mcp-list.html) does not.
  */
 import MarkdownIt from "markdown-it";
 

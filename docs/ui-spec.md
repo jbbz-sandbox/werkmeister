@@ -19,7 +19,7 @@ Origin: the ui-surfaces spike, tracked in Jira [SW-43](https://jory-group.atlass
 |---|---|
 | **One spec, two densities.** Full and compact show the same fields, words and colour meanings; compact uses fewer pixels. | 2026-10-16 |
 | **Shared spec, not one shared component.** The pane and VS Code can't render DOM, so they share a non-DOM **display model** (workspace data → label, tone, glyph, primary action) in `packages/werkmeister-ui`. The two DOM surfaces also share components. | 2026-10-16 |
-| **React is the UI library.** `packages/werkmeister-ui` and the dashboard tabs are React; the vanilla-DOM helpers (`el()` / `injectCss()`) are gone (SW-57), and each component's stylesheet is a React-hoisted `<style>` (`Css`, `style.tsx`). React is bundled inline (`viteSingleFile`, no CDN), so the Cowork artifact's CSP holds. Moving VS Code to a webview is a separate, open decision. | 2026-10-17 |
+| **React is the UI library.** `packages/werkmeister-ui` and the dashboard tabs are React; the vanilla-DOM helpers (`el()` / `injectCss()`) are gone (SW-57), and each component's stylesheet is a React-hoisted `<style>` (`Css`, `style.tsx`). React is bundled inline (`viteSingleFile`, no CDN), so the strict CSP holds. Moving VS Code to a webview is a separate, open decision. | 2026-10-17 |
 | **One MCP server**, `apps/werkmeister-mcp`, with one name per verb. No backward compatibility for tool names. | 2026-10-16 |
 | **Containers may call every MCP tool.** There is no host-only tier; the bearer token is the only gate. | 2026-10-16 |
 | **No Remove.** The only destructive verbs are Close out and Abandon…. `remove-workspace` is deprecated in favour of `close-out --abandon` (#160). | 2026-10-16 |

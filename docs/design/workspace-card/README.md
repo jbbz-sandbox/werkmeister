@@ -7,7 +7,7 @@ This handoff covers a visual refresh of the workspace list across all four surfa
 
 ## About the design files
 The `design/` files are **HTML design references, not production code**. They load React, fonts and codicons from public CDNs so they open in a browser; production bundles must not. Rebuild them in the repo:
-- **Dashboard + MCP App:** as **React** components in `packages/werkmeister-ui` (React is the UI library; see `docs/ui-spec.md` § Decisions). The card is `packages/werkmeister-ui/src/workspace-card.tsx`; it replaced the vanilla-DOM `apps/werkmeister-dashboard/src/workspace-ui.ts` (`el()` / `injectCss()`). React is bundled inline by `viteSingleFile`, so the Cowork artifact's CSP still holds; check it. <!-- docs-check: ignore -->
+- **Dashboard + MCP App:** as **React** components in `packages/werkmeister-ui` (React is the UI library; see `docs/ui-spec.md` § Decisions). The card is `packages/werkmeister-ui/src/workspace-card.tsx`; it replaced the vanilla-DOM `apps/werkmeister-dashboard/src/workspace-ui.ts` (`el()` / `injectCss()`). React is bundled inline by `viteSingleFile`, so the strict CSP still holds; check it. <!-- docs-check: ignore -->
 - **VS Code:** `packages/werkmeister-vscode/src/build-tree.ts` is a pure `WsNode` builder; it reads the shared display model, not React.
 - **Pane:** `plugins/werkmeister/hooks/register.tsx` renders with Claude Code's own `Box`/`Text`/`Button`; it reads the shared display model, not React.
 - **Tokens:** `packages/werkmeister-ui` (`src/tokens.css`, imported by `src/theme.ts`).
@@ -178,7 +178,7 @@ Full matrix: `design/06 Actions.dc.html`.
 - [ ] Long names wrap and never push the chips off the card. Seven or more services wrap.
 - [ ] Draft PRs have a dashed badge. "PRs unavailable" and "Docker unreachable" each offer a retry.
 - [ ] Abandon can't be submitted with an empty reason.
-- [ ] Bundles make no network font requests, and the Cowork artifact is still under the CSP.
+- [ ] Bundles make no network font requests, and the MCP App is still under the CSP.
 - [ ] The existing `test/*.smoke.mjs` and `build-tree` tests pass, with tests updated for the new descriptions.
 
 ## Files

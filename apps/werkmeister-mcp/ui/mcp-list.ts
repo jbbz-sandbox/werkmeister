@@ -1,10 +1,10 @@
 /**
  * MCP App (inline `ui://`) entrypoint for the shared workspace UI
- * (werkmeister-ui/workspace-ui) — the fallback surface when Cowork live artifacts
- * aren't available. Rendered inline by hosts that support MCP App UI (Claude
- * Desktop) when the `list-workspaces` tool is called.
+ * (werkmeister-ui/workspace-ui) — the main Claude Desktop surface. Rendered
+ * inline by hosts that support MCP App UI when the `list-workspaces` tool is
+ * called.
  *
- * Same UI as the dashboard's Cowork artifact (workspace-list.artifact.html); only
+ * Same UI as the dashboard's browser build (browser.html); only
  * the transport differs: server tools go through `app.callServerTool` with
  * bare tool names, and external links through `app.openLink` (the webview
  * blocks bare anchors).

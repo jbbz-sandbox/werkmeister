@@ -2,8 +2,8 @@
  * Pure, dependency-free filter for the workspace list's search box. Lives in
  * `lib/` (not `src/`) so it compiles to plain Node-importable JS via
  * `tsc -p tsconfig.server.json` and is unit-testable without a DOM —
- * `src/workspace-ui.ts` (the shared UI for the browser dashboard, Cowork
- * artifact, and MCP inline view, including its strict-CSP bundle) imports
+ * `src/workspace-ui.ts` (the shared UI for the browser dashboard
+ * and MCP inline view, including its strict-CSP bundle) imports
  * this same source file directly.
  */
 
