@@ -122,7 +122,7 @@ const mineView = {
 const otherFresh = {
   ...view,
   url: "https://github.com/sandbox/sandbox/pull/2",
-  author: { login: "coworker" },
+  author: { login: "colleague" },
 };
 const otherIsMe = {
   ...view,
@@ -132,7 +132,7 @@ const otherIsMe = {
 const otherStale = {
   ...view,
   url: "https://github.com/sandbox/sandbox/pull/4",
-  author: { login: "coworker" },
+  author: { login: "colleague" },
   updatedAt: "2026-01-01T00:00:00Z",
 };
 const res = assembleOpenPrs([mineView], [otherFresh, otherIsMe, otherStale], "jaysonboyer", now);

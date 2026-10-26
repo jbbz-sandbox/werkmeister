@@ -6,7 +6,7 @@
  * Keyed by an opaque `name` (a workspace name OR a `reconcile:` session key);
  * the server resolves it to a directory (werkmeister-core `resolveSessionDir`).
  * The browser surface live-streams over SSE (`bridge.streamSession`); hosts
- * that leave it undefined (Desktop-inline, Cowork artifact) fall back to
+ * that leave it undefined (Desktop-inline) fall back to
  * `claude-transcript` / `claude-turn-status` polling.
  *
  * It styles itself (`.claude-chat` scope, full button styles) so it renders the
@@ -298,7 +298,7 @@ function StreamedChat(p: ChatPanelProps) {
   );
 }
 
-/** Desktop-inline and Cowork artifact: poll `claude-transcript` / `claude-turn-status`. */
+/** Desktop-inline: poll `claude-transcript` / `claude-turn-status`. */
 function PolledChat(p: ChatPanelProps) {
   const { name, bridge } = p;
   const pageVisible = usePageVisible();

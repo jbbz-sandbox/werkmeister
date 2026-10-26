@@ -7,7 +7,7 @@
   "description": "The localhost workspaces dashboard and the --browser-form page.",
   "main": "dist/main.js",
   "scripts": {
-    "build:ui": "cross-env INPUT=workspace-list.artifact.html vite build && cross-env INPUT=browser.html vite build && cross-env INPUT=form.html vite build",
+    "build:ui": "cross-env INPUT=browser.html vite build && cross-env INPUT=form.html vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "build": "tsc --noEmit -p tsconfig.json && pnpm run build:ui && pnpm run build:server",
     "watch:ui": "cross-env NODE_ENV=development INPUT=mcp-app.html vite build --watch",

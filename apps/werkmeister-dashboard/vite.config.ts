@@ -1,25 +1,5 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
-import artifactMeta from "./src/artifact-meta.json";
-
-// Expands src/artifact-meta.json (server name written ONCE) into the
-// cowork-artifact-meta block that Cowork reads to grant MCP tool access.
-// src/artifact-main.ts derives its tool-name prefix from the same block at
-// runtime, so the server name has a single source of truth.
-function coworkArtifactMeta(): Plugin {
-  const { serverName, tools, ...rest } = artifactMeta;
-  const meta = {
-    ...rest,
-    mcpTools: tools.map((t) => `mcp__${serverName}__${t}`),
-    mcpServerNames: tools.map(() => serverName),
-  };
-  return {
-    name: "cowork-artifact-meta",
-    transformIndexHtml(html) {
-      return html.replace("__COWORK_ARTIFACT_META__", JSON.stringify(meta, null, 2));
-    },
-  };
-}
 
 const INPUT = process.env.INPUT;
 if (!INPUT) {
@@ -31,7 +11,7 @@ const isDevelopment = process.env.NODE_ENV === "development";
 // Bundles the UI (HTML + TS + CSS) into a single self-contained dist/mcp-app.html
 // that the MCP server serves as a `ui://` resource.
 export default defineConfig({
-  plugins: [coworkArtifactMeta(), viteSingleFile()],
+  plugins: [viteSingleFile()],
   // Guard, not a fix for a live problem: npm workspaces hoist @rjsf/* to the
   // repo root, so whenever the root ends up with a different `react` than this
   // app's, RJSF resolves to that one and we ship two Reacts. RJSF's elements

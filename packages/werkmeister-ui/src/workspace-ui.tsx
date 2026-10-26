@@ -1,15 +1,14 @@
 /**
- * Shared Sandbox Workspaces UI — the single source for all three surfaces:
+ * Shared Sandbox Workspaces UI — the single source for both surfaces:
  *
  *   • Browser dashboard     (apps/werkmeister-dashboard/src/browser-main.ts → browser.html)
- *   • Cowork live artifact  (apps/werkmeister-dashboard/src/artifact-main.ts → workspace-list.artifact.html)
  *   • MCP App inline view   (apps/werkmeister-mcp/ui/mcp-list.ts → mcp-list.html)
  *
  * The UI is host-agnostic: every server call and external link goes through
  * the {@link HostBridge} the entrypoint supplies. It renders the top bar, the
  * filter (text + Needs you) and one always-expanded {@link WorkspaceCard} per
  * workspace (SW-53). React is bundled inline by each surface's viteSingleFile
- * build, so the Cowork artifact's strict CSP still holds. Cards open the chat
+ * build, so the strict CSP still holds. Cards open the chat
  * panel, usage and logs on demand.
  */
 
@@ -43,8 +42,8 @@ export interface HostBridge {
    * Optional live session stream. Present ONLY on the browser surface (a
    * same-origin Express server that can hold an SSE socket); when absent,
    * the chat panel falls back to claude-transcript/claude-turn-status polling. This
-   * optional method IS the fallback switch — the Desktop-inline and Cowork
-   * artifact surfaces leave it undefined and keep polling.
+   * optional method IS the fallback switch — the Desktop-inline
+   * surface leaves it undefined and keeps polling.
    *
    * Delivers backfill (`onEntry` per index, then `onReady`) followed by live
    * `onEntry`/`onTurn` deltas. Entries are index-addressed upserts. Returns an

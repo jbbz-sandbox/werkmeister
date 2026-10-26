@@ -10,7 +10,6 @@
       "!**/.turbo",
       "!**/.vscode-test",
       "!**/*.snapshot.json",
-      "!apps/werkmeister-dashboard/workspace-list.artifact.html",
       // Design references exported from Claude Design; rebuilt in packages/werkmeister-ui, never imported
       "!docs/design"
     ]
