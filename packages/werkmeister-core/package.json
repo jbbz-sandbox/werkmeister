@@ -19,6 +19,7 @@
     "./colors": "./dist/colors.js",
     "./compose": "./dist/compose.js",
     "./compose_file": "./dist/compose_file.js",
+    "./compose_infra": "./dist/compose_infra.js",
     "./config": "./dist/config.js",
     "./docker": "./dist/docker.js",
     "./dot_dir": "./dist/dot_dir.js",

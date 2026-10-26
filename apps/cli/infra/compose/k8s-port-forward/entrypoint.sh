@@ -55,7 +55,7 @@ MONGO_USER="${MONGO_USER:-sb-dev-rw-group}"
 
 # log NAME MESSAGE
 # Writes a timestamped, service-prefixed line to container stdout
-# (visible in 'docker logs sandbox-k8s-forwards').
+# (visible in 'docker logs w9r-k8s-forwards').
 log() {
     local name="$1"
     local msg="$2"

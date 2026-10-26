@@ -80,8 +80,8 @@ done
 ```bash
 CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
-docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
-docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | \
+docker cp "$CADDYFILE" w9r-caddy:/tmp/Caddyfile.check
+docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | \
   node --input-type=module -e "
 let s=''; for await (const c of process.stdin) s+=c;
 const walk=(rs=[])=>rs.reduce((n,r)=>n+(r.handle??[]).reduce((m,h)=>m+(h.handler==='subroute'?walk(h.routes):h.handler==='reverse_proxy'?1:0),0),0);
@@ -103,8 +103,8 @@ fixed threshold; the number changes with the config. If the compiled count is
 ## Step 5: Network Connectivity from Caddy
 
 ```bash
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/health 2>&1 && echo "PASS: Caddy -> backend" || echo "FAIL: Caddy -> backend"
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/ 2>&1 && echo "PASS: Caddy -> frontend" || echo "FAIL: Caddy -> frontend"
+docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/health 2>&1 && echo "PASS: Caddy -> backend" || echo "FAIL: Caddy -> backend"
+docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/ 2>&1 && echo "PASS: Caddy -> frontend" || echo "FAIL: Caddy -> frontend"
 ```
 
 ## Step 6: k8s Port-Forward Detail
@@ -118,12 +118,12 @@ sandbox status --k8s
 This performs real HTTP health checks (not just TCP) against each forward's health endpoint.
 Dead entries indicate the forward is TCP-bound but the k8s service isn't responding at the
 application layer. The entrypoint's self-healing monitor will restart those forwards within
-~45s — check `docker logs sandbox-k8s-forwards` to confirm restart activity.
+~45s — check `docker logs w9r-k8s-forwards` to confirm restart activity.
 
 To check logs for a specific failing service (e.g. frontend on port 9053):
 
 ```bash
-docker logs sandbox-k8s-forwards 2>&1 | grep "\[frontend\]" | tail -20
+docker logs w9r-k8s-forwards 2>&1 | grep "\[frontend\]" | tail -20
 ```
 
 Note: the correct host port for k8s-forwarded services is the `listen_port` from `sandbox status --k8s`
@@ -136,7 +136,7 @@ not `localhost:4321`.
 CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 HOST_SIZE=$(wc -c < "$CADDYFILE" | tr -d " ")  # macOS wc pads the count with spaces
-CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
+CONTAINER_SIZE=$(docker exec w9r-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
 if [ "$HOST_SIZE" = "$CONTAINER_SIZE" ]; then
     echo "PASS: Caddyfile synced ($HOST_SIZE bytes)"
 else

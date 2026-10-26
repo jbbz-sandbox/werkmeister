@@ -201,23 +201,32 @@ export function retireLegacyProject(
 ): void {
   const legacy = legacyProjectName(feature);
   if (fileProject(feature, composePath) === legacy) return;
-  const label = `label=com.docker.compose.project=${legacy}`;
+  takeDownProject(legacy, `'${feature}''s pre-rename project`, { removeVolumes });
+}
+
+/** `docker compose down` a pre-rename *project* by its label, when it still holds anything. */
+export function takeDownProject(
+  project: string,
+  what: string,
+  { removeVolumes = false }: { removeVolumes?: boolean } = {},
+): void {
+  const label = `label=com.docker.compose.project=${project}`;
   try {
     const held = [["docker", "ps", "-aq", "--filter", label]];
     if (removeVolumes) held.push(["docker", "volume", "ls", "-q", "--filter", label]);
     if (!held.some((cmd) => run(cmd, { capture: true, timeout: 10 }).stdout.trim())) return;
-    info(`Taking down '${feature}''s pre-rename project ${legacy}`);
+    info(`Taking down ${what} ${project}`);
     const args = ["down", "--remove-orphans", ...(removeVolumes ? ["--volumes"] : [])];
     // From an empty dir: compose finds the project by label, and must not load the
-    // workspace's new compose file under the old name.
-    const result = run(["docker", "compose", "-p", legacy, ...args], {
+    // new compose file under the old name.
+    const result = run(["docker", "compose", "-p", project, ...args], {
       capture: true,
       cwd: os.tmpdir(),
       timeout: COMPOSE_TIMEOUT_S,
     });
-    if (result.status !== 0) warn(`Could not take down ${legacy}: ${result.stderr.trim()}`);
+    if (result.status !== 0) warn(`Could not take down ${project}: ${result.stderr.trim()}`);
   } catch (e) {
-    warn(`Could not take down ${legacy}: ${e instanceof Error ? e.message : String(e)}`);
+    warn(`Could not take down ${project}: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

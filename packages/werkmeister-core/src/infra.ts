@@ -22,8 +22,13 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { stopOrRestart } from "./compose.js";
-import { composeInvocation, INFRA_PROJECT, infraProfiles } from "./compose_infra.js";
+import { stopOrRestart, takeDownProject } from "./compose.js";
+import {
+  composeInvocation,
+  INFRA_PROJECT,
+  infraProfiles,
+  LEGACY_INFRA_PROJECT,
+} from "./compose_infra.js";
 import { sandboxHome } from "./config.js";
 import { projectContainers } from "./docker.js";
 import { generateCaddyfile } from "./generate.js";
@@ -140,7 +145,7 @@ async function ensureProxyFiles(): Promise<void> {
  * runs and caps it at 120s, and this path both stays quiet and rebuilds the
  * k8s-forwards image, which routinely outlasts the cap.
  */
-async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
+export async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
   const { argv, env, cwd } = composeInvocation();
   const composeFile = argv[3];
 
@@ -149,6 +154,7 @@ async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
     return false;
   }
 
+  takeDownProject(LEGACY_INFRA_PROJECT, "the pre-rename shared infra");
   const services = ["k8s-forwards", "caddy", ...infraProfiles()].join(", ");
   info(`Starting shared infrastructure (${services})...`);
   try {
@@ -314,6 +320,7 @@ export async function connectK8s(): Promise<boolean> {
 /** Stop and remove shared infrastructure containers. */
 export async function down(volumes = false): Promise<void> {
   await stopAll();
+  takeDownProject(LEGACY_INFRA_PROJECT, "the pre-rename shared infra", { removeVolumes: volumes });
   // `--profile *`: plain `down` skips an opted-in jaeger/redisinsight (as
   // compose.ts's ALL_PROFILES does for workspaces).
   const args = ["--profile", "*", "down"];

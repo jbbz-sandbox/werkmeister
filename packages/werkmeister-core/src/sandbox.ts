@@ -49,7 +49,7 @@ export { childEnv } from "./claude_cli.js";
 
 // Type-only: erased at build, so this adds nothing to the bundle.
 import { isOneShotService, projectName } from "./compose.js";
-import { INFRA_PROJECT } from "./compose_infra.js";
+import { INFRA_PROJECT, K8S_FORWARDS_CONTAINER } from "./compose_infra.js";
 import {
   dotDir,
   envVar,
@@ -1344,7 +1344,7 @@ async function claudeSessionSignal(
   return signal(Date.now() - Date.parse(lastActivity) < LIVE_TURN_MS ? "working" : "idle");
 }
 
-/** Shared-infrastructure (`sandbox connect`) container state — the `sandbox-infra` Compose project. */
+/** Shared-infrastructure (`sandbox connect`) container state — the `w9r-infra` Compose project. */
 export interface InfraStatus {
   state: "up" | "partial" | "down" | "unknown";
   running: number;
@@ -3599,7 +3599,7 @@ export async function getK8sForwardsHealth(): Promise<{
       return { name: d.name, port: d.listen, healthy: r.ok, detail: r.detail };
     }),
   );
-  const stopped = !(await containerRunning("sandbox-k8s-forwards")) && !(await forwarderNeeded());
+  const stopped = !(await containerRunning(K8S_FORWARDS_CONTAINER)) && !(await forwarderNeeded());
   return {
     forwards,
     healthy: forwards.filter((f) => f.healthy).length,

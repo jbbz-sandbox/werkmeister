@@ -49,8 +49,8 @@ specifically so a manual reload never collides with a concurrently running
 ```bash
 CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
-docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.new
-docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.new 2>&1
+docker cp "$CADDYFILE" w9r-caddy:/tmp/Caddyfile.new
+docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile.new 2>&1
 ```
 
 If output contains `Error:`, STOP and report. Do not reload an invalid config.
@@ -58,7 +58,7 @@ If output contains `Error:`, STOP and report. Do not reload an invalid config.
 ## Step 2: Count Compiled Routes
 
 ```bash
-docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.new 2>/dev/null | \
+docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile.new 2>/dev/null | \
   node --input-type=module -e "
 let s=''; for await (const c of process.stdin) s+=c;
 const walk=(rs=[])=>rs.reduce((n,r)=>n+(r.handle??[]).reduce((m,h)=>m+(h.handler==='subroute'?walk(h.routes):h.handler==='reverse_proxy'?1:0),0),0);
@@ -89,7 +89,7 @@ dropped (the historic handle-vs-route bug, or a duplicate/overlapping
 ## Step 3: Reload Caddy
 
 ```bash
-docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile.new 2>&1
+docker exec w9r-caddy caddy reload --config /tmp/Caddyfile.new 2>&1
 ```
 
 ## Step 4: Smoke Test Routes
@@ -116,7 +116,7 @@ Smoke-test every hostname the reload affects, not just one — `sandbox services
 CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 HOST_SIZE=$(wc -c < "$CADDYFILE" | tr -d " ")  # macOS wc pads the count with spaces
-CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
+CONTAINER_SIZE=$(docker exec w9r-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
 echo "Host: ${HOST_SIZE} bytes, Container bind-mount: ${CONTAINER_SIZE} bytes"
 if [ "$HOST_SIZE" != "$CONTAINER_SIZE" ]; then
     echo "NOTE: Bind-mount not synced yet. This is normal with Docker Desktop."
