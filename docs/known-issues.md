@@ -88,7 +88,7 @@ This resolves *PID tracking*, not *liveness* — the container's healthcheck can
 
 **Severity:** Moderate (cost more than one debugging session)
 **Status:** Fixed — the probes speak the protocol
-**Affects:** `sandbox-k8s-forwards`; anything reaching Redis/Postgres through it, host tests included
+**Affects:** `w9r-k8s-forwards`; anything reaching Redis/Postgres through it, host tests included
 
 A stale `kubectl port-forward` accepts the TCP connection and then never replies, so anything
 that stops at "connected" reports a dead datastore as healthy. Both checks used to stop
@@ -111,8 +111,8 @@ reads unhealthy until it is. `werkmeister status` and the dashboard use the matc
 no probe):
 
 ```bash
-docker exec sandbox-k8s-forwards /usr/local/bin/probe.sh   # per-forward verdicts
-docker restart sandbox-k8s-forwards                        # healthy again in ~12s
+docker exec w9r-k8s-forwards /usr/local/bin/probe.sh   # per-forward verdicts
+docker restart w9r-k8s-forwards                        # healthy again in ~12s
 ```
 
 ---
@@ -198,7 +198,7 @@ and `apps/cli/src/lib/__tests__/caddy_lint.test.ts` pins the bare-vs-scoped stru
 
 **Severity:** Moderate (causes stale configs)
 **Status:** Open — inherent to Docker Desktop
-**Affects:** `~/.werkmeister/infra/proxy/Caddyfile` (bind-mounted into `sandbox-caddy` container; was `apps/cli/infra/proxy/Caddyfile`) <!-- docs-check: ignore -->
+**Affects:** `~/.werkmeister/infra/proxy/Caddyfile` (bind-mounted into `w9r-caddy` container; was `apps/cli/infra/proxy/Caddyfile`) <!-- docs-check: ignore -->
 
 Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediately after writes on the host. The generated `~/.werkmeister/infra/proxy/Caddyfile` file may show different sizes when compared between host and container, causing Caddy to use stale or truncated config.
 
@@ -210,8 +210,8 @@ Docker Desktop's VirtioFS file sharing may not sync bind-mounted files immediate
 **Workaround:** Always use `docker cp` to push the file, then reload from the copied path:
 
 ```bash
-docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
-docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
+docker cp ~/.werkmeister/infra/proxy/Caddyfile w9r-caddy:/tmp/Caddyfile
+docker exec w9r-caddy caddy reload --config /tmp/Caddyfile
 ```
 
 Do not rely on the bind mount at `/etc/caddy/Caddyfile` syncing in real-time for reloads.

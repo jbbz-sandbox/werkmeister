@@ -43,8 +43,8 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 
 **Verify:**
 ```bash
-docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
-docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
+docker cp ~/.werkmeister/infra/proxy/Caddyfile w9r-caddy:/tmp/Caddyfile
+docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
   node --input-type=module -e "
 const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
 const json = await new Response(process.stdin).text();
@@ -81,7 +81,7 @@ docker logs {container_name} --tail 100 2>&1
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `ECONNREFUSED` to database | postgres forward not ready | `docker restart sandbox-k8s-forwards` or check k8s forwards |
+| `ECONNREFUSED` to database | postgres forward not ready | `docker restart w9r-k8s-forwards` or check k8s forwards |
 | `yarn: command not found` | Bad Docker image or missing node_modules volume | `werkmeister down --volumes && werkmeister up` |
 | OOM Killed | Container exceeded memory limit | Increase `memory_limit` in the repo's `.werkmeister/services.yaml` |
 | Port already in use | Another process using the port | `lsof -i :{port}` to find the conflict |
@@ -98,13 +98,13 @@ docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}"
 
 ### Check Overall Health
 ```bash
-docker inspect sandbox-k8s-forwards --format '{{.State.Health.Status}}'
-docker logs sandbox-k8s-forwards --tail 30 2>&1
+docker inspect w9r-k8s-forwards --format '{{.State.Health.Status}}'
+docker logs w9r-k8s-forwards --tail 30 2>&1
 ```
 
 ### Test Individual Forwards
 ```bash
-docker exec sandbox-k8s-forwards sh -c '
+docker exec w9r-k8s-forwards sh -c '
 for p in 9000 9001 9002 9003 9004 9005 9006 9007 9008 9052; do
     if nc -z localhost $p 2>/dev/null; then echo "UP:   port $p"
     else echo "DOWN: port $p"; fi
@@ -113,10 +113,10 @@ done'
 
 ### Restart Forwards
 ```bash
-docker restart sandbox-k8s-forwards
+docker restart w9r-k8s-forwards
 # Wait for health check (start_period is 60s)
 sleep 65
-docker inspect sandbox-k8s-forwards --format '{{.State.Health.Status}}'
+docker inspect w9r-k8s-forwards --format '{{.State.Health.Status}}'
 ```
 
 ### k8s Auth Issues
@@ -132,7 +132,7 @@ kubectl get nodes >/dev/null 2>&1 && echo "Cluster OK" || echo "Cluster unreacha
 werkmeister connect
 
 # Restart forwards afterwards
-docker restart sandbox-k8s-forwards
+docker restart w9r-k8s-forwards
 ```
 
 ---
@@ -141,20 +141,20 @@ docker restart sandbox-k8s-forwards
 
 ### Validate Config
 ```bash
-docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
-docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>&1
+docker cp ~/.werkmeister/infra/proxy/Caddyfile w9r-caddy:/tmp/Caddyfile
+docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile 2>&1
 ```
 
 ### Reload After Changes
 ```bash
 # ALWAYS use docker cp — do NOT rely on bind mount sync
-docker cp ~/.werkmeister/infra/proxy/Caddyfile sandbox-caddy:/tmp/Caddyfile
-docker exec sandbox-caddy caddy reload --config /tmp/Caddyfile
+docker cp ~/.werkmeister/infra/proxy/Caddyfile w9r-caddy:/tmp/Caddyfile
+docker exec w9r-caddy caddy reload --config /tmp/Caddyfile
 ```
 
 ### Count Compiled Routes
 ```bash
-docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile 2>/dev/null | \
+docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile 2>/dev/null | \
   node --input-type=module -e "
 const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
 const total = countCompiledRoutes(JSON.parse(await new Response(process.stdin).text()));
@@ -178,9 +178,9 @@ openssl x509 -in ~/.docker/certs/localhost.crt -noout -dates 2>/dev/null
 ### Caddy to Backend Services
 ```bash
 # Test from inside Caddy container
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/ 2>&1
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/ 2>&1
-docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11102/api/healthcheck 2>&1
+docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11100/ 2>&1
+docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11101/ 2>&1
+docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.internal:11102/api/healthcheck 2>&1
 ```
 
 ### Docker Network Inspection
@@ -189,13 +189,13 @@ docker exec sandbox-caddy wget -q -O /dev/null --timeout=3 http://host.docker.in
 docker network ls --filter name=sandbox
 
 # Check which containers are on each network
-docker network inspect sandbox-infra_default --format '{{range .Containers}}{{.Name}} {{end}}'
+docker network inspect w9r-infra_default --format '{{range .Containers}}{{.Name}} {{end}}'
 docker network inspect werkmeister-shared --format '{{range .Containers}}{{.Name}} {{end}}'
 ```
 
 ### DNS Resolution Inside Containers
 ```bash
-docker exec sandbox-caddy nslookup host.docker.internal
+docker exec w9r-caddy nslookup host.docker.internal
 docker exec {feature}-frontend nslookup k8s-forwards
 ```
 

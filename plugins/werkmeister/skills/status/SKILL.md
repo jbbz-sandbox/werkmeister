@@ -64,10 +64,10 @@ done
 ```bash
 CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
-docker exec sandbox-caddy caddy validate --config /etc/caddy/Caddyfile 2>&1
+docker exec w9r-caddy caddy validate --config /etc/caddy/Caddyfile 2>&1
 HOST_SIZE=$(wc -c < "$CADDYFILE" 2>/dev/null | tr -d " ")
 # The path goes to wc inside the container: a `< /etc/caddy/Caddyfile` redirect would read the host's file.
-CONTAINER_SIZE=$(docker exec sandbox-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')
+CONTAINER_SIZE=$(docker exec w9r-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')
 echo "Caddyfile: host=${HOST_SIZE}B container=${CONTAINER_SIZE}B"
 ```
 

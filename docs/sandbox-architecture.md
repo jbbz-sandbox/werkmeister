@@ -346,7 +346,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 
 **Health checks**: Docker Compose healthcheck runs `/usr/local/bin/probe.sh` (`infra/compose/k8s-port-forward/probe.sh`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
-**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs sandbox-k8s-forwards`. The `werkmeister status --k8s` command checks the container's health status.
+**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs w9r-k8s-forwards`. The `werkmeister status --k8s` command checks the container's health status.
 
 ### 8. Playwright Integration
 

@@ -73,8 +73,8 @@ Also check compiled config:
 ```bash
 CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
-docker cp "$CADDYFILE" sandbox-caddy:/tmp/Caddyfile.check
-docker exec sandbox-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | python3 -c "
+docker cp "$CADDYFILE" w9r-caddy:/tmp/Caddyfile.check
+docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | python3 -c "
 import json, sys
 config = json.load(sys.stdin)
 print(json.dumps(config, indent=2))

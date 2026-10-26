@@ -149,7 +149,7 @@ An image's licence covers its contents (base OS packages and the tool) and can d
 | Image | Category | Where | Tool licence | Image contents licence |
 |---|---|---|---|---|
 | `caddy:2-alpine` (2.11.4 at time of writing) | required (shared infra) | `apps/cli/infra/compose/shared-infra.yml` | Apache-2.0 | label `Apache-2.0`†; Alpine base: musl MIT, busybox GPL-2.0-only, others mixed |
-| `sandbox-k8s-forwards` (built `FROM alpine:3.21@sha256:48b0…`) | optional (k8s-forwards) | `infra/compose/k8s-port-forward/Dockerfile` | — (Werkmeister's entrypoint, Apache-2.0) | kubectl 1.31.5 Apache-2.0, bash 5.2.37 GPL-3.0-or-later, netcat-openbsd BSD-3-Clause, redis 7.2.11 BSD-3-Clause (`redis-cli`), postgresql17-client PostgreSQL, busybox GPL-2.0-only, musl MIT† |
+| `w9r-k8s-forwards` (built `FROM alpine:3.21@sha256:48b0…`) | optional (k8s-forwards) | `infra/compose/k8s-port-forward/Dockerfile` | — (Werkmeister's entrypoint, Apache-2.0) | kubectl 1.31.5 Apache-2.0, bash 5.2.37 GPL-3.0-or-later, netcat-openbsd BSD-3-Clause, redis 7.2.11 BSD-3-Clause (`redis-cli`), postgresql17-client PostgreSQL, busybox GPL-2.0-only, musl MIT† |
 | `jaegertracing/all-in-one@sha256:ab6f…` (pinned from `latest`) | optional (observability, off by default) | `shared-infra.yml` | Apache-2.0 | Apache-2.0 Go binary; base layers not inspected |
 | `redis/redisinsight@sha256:aa21…` (pinned from `latest`) | optional (observability, off by default) | `shared-infra.yml` | **SSPL-1.0** (`/usr/src/app/redisinsight/LICENSE`†) | SSPL-1.0 app; base layers not inspected |
 | `node:22` (feature default) / your `image:` | required per feature | `infra/templates/docker-compose.feature.yml.njk` | MIT (Node.js) | Docker Official Image on Debian: mixed (GPL, LGPL, MIT, …) |

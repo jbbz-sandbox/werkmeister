@@ -9,7 +9,7 @@
 #   docker pull <image>:<tag> && docker inspect --format='{{index .RepoDigests 0}}' <image>:<tag>
 # Then update the `@sha256:` value and the adjacent tag comment together.
 
-name: sandbox-infra
+name: w9r-infra
 
 networks:
   # SW-93: features join werkmeister-shared; ones brought up before the rename stay
@@ -54,7 +54,7 @@ services:
       secrets:
         - corp_ca
     platform: linux/amd64
-    container_name: sandbox-k8s-forwards
+    container_name: w9r-k8s-forwards
     restart: unless-stopped
     # Published ports and network aliases come from the generated override
     # (~/.werkmeister/infra/compose/k8s-forwards.override.yml); see k8s_forwards.ts.
@@ -167,7 +167,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: sandbox-caddy
+    container_name: w9r-caddy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -181,8 +181,8 @@ services:
       # exported as SANDBOX_CERTS_DIR by ~/.werkmeister/env.sh. The default keeps
       # this working for a shell that hasn't sourced env.sh.
       - ${SANDBOX_CERTS_DIR:-${HOME}/.docker/certs}:/etc/caddy/certs:ro
-      - sandbox-caddy-data:/data
-      - sandbox-caddy-config:/config
+      - caddy-data:/data
+      - caddy-config:/config
     # Caddy terminates each service's hostname directly and dials the feature
     # container via the host's published port, so it needs host.docker.internal
     # (host-gateway on Linux; Docker Desktop provides it automatically, but
@@ -206,8 +206,8 @@ services:
       werkmeister-shared: *caddy-net
 
 volumes:
-  sandbox-caddy-data:
-  sandbox-caddy-config:
+  caddy-data:
+  caddy-config:
   redisinsight-data:
 
 secrets:

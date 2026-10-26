@@ -15,7 +15,7 @@ import { copyFileToContainer, execCapture, projectContainers } from "./docker.js
 import { ProcError, run } from "./proc.js";
 import { error, info, raw, success, warn } from "./reporter.js";
 
-export const CADDY_CONTAINER = "sandbox-caddy";
+export const CADDY_CONTAINER = "w9r-caddy";
 export const CADDY_CONTAINER_PATH = "/tmp/Caddyfile";
 
 // Matches a `reverse_proxy` directive start, bare or block-form.

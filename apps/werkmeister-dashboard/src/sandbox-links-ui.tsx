@@ -59,13 +59,13 @@ const GROUPS: LinkGroup[] = [
       {
         label: "Jaeger",
         desc: "Distributed tracing UI",
-        url: "https://jaeger.sandbox-infra.orb.local/jaeger/",
+        url: "https://jaeger.w9r-infra.orb.local/jaeger/",
         kind: "admin",
       },
       {
         label: "RedisInsight",
         desc: "Redis GUI / key browser",
-        url: "https://redisinsight.sandbox-infra.orb.local/redisinsight/",
+        url: "https://redisinsight.w9r-infra.orb.local/redisinsight/",
         kind: "admin",
       },
       {
