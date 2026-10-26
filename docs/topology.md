@@ -6,40 +6,46 @@ crosses the boundary between your laptop and the cluster.
 The short version: **containers are local, Kubernetes is remote, and telepresence
 is the only piece that can sit on either side.** That last choice is
 `werkmeister intercept --docker-daemon`, and it is the only decision in this document.
-
-The same two diagrams, rendered in colour and easier to read at a glance:
-<https://claude.ai/code/artifact/c4e95b16-b1ef-437c-880c-8ab2867030c4>
-(access is granted per person — ask the repo owner if it 404s for you). The ASCII
-below is the copy of record and stays correct on its own.
+Without a cluster, the same shape holds with a manual tunnel standing in for
+`k8s-forwards`; see *Without Kubernetes*.
 
 ---
 
 ## The intended shape
 
+![The intended shape: the laptop's binaries and containers on the left, the shared Kubernetes cluster on the right, and the three things that cross between them](images/topology/intended-shape.svg)
+
+<details>
+<summary>Diagram source</summary>
+
+```mermaid
+flowchart LR
+  subgraph laptop["DEVELOPER LAPTOP"]
+    direction TB
+    cli["werkmeister · telepresence · kubectl<br/>plain binaries — mac / Linux / WSL"]
+    subgraph runtime["CONTAINER RUNTIME — any Docker-API engine"]
+      direction TB
+      caddy["caddy<br/>ingress per feature"]
+      fwd["k8s-forwards<br/>one port-forward per service"]
+      feat["your feature: backend, …<br/>slot 3 → published :11300"]
+      tpd["telepresence daemon container<br/>--docker-daemon only"]
+    end
+  end
+  subgraph cluster["KUBERNETES — shared, cloud"]
+    direction TB
+    api["API server<br/>a real hostname"]
+    tm["traffic-manager<br/>install once per cluster"]
+    backend["backend pod<br/>app + traffic-agent sidecar"]
+    base["frontend · postgres · redis<br/>the shared dev baseline"]
+  end
+  cli -- "1 · kubeconfig" --> api
+  base -- "2 · port-forwards" --> fwd
+  backend -- "3 · intercepted traffic" --> feat
+  caddy -.-> feat
+  caddy -.-> fwd
 ```
-DEVELOPER LAPTOP                                 KUBERNETES (shared, cloud)
-                                           internet/VPN
-┌────────────────────────────────────┐      ┊    ┌────────────────────────────────┐
-│ werkmeister, telepresence, kubectl  │ ──(1)────►│ API server                     │
-│ plain binaries — mac/Linux/WSL     │      ┊    │   a real hostname              │
-└────────────────────────────────────┘      ┊    ├────────────────────────────────┤
-┌────────────────────────────────────┐      ┊    │ traffic-manager                │
-│ CONTAINER RUNTIME — DOCKER/OCI     │      ┊    │   install once per cluster     │
-│ any Docker-API engine: Docker      │      ┊    ├────────────────────────────────┤
-│ Desktop, OrbStack, Colima, …       │   ┌──┊────│ backend pod                    │
-├────────────────────────────────────┤   │  ┊    │   app + traffic-agent sidecar  │
-│ caddy — ingress per feature        │   │  ┊    ├────────────────────────────────┤
-├────────────────────────────────────┤   │(3)    │ frontend · postgres · redis    │
-│ k8s-forwards                       │ ◄─┼──┊────│   the shared dev baseline      │
-│   a port-forward per service       │   │(2)┊   └────────────────────────────────┘
-├────────────────────────────────────┤   │  ┊
-│ your feature: backend, …           │ ◄─┘  ┊
-│   slot 3 → published :11300        │      ┊
-├────────────────────────────────────┤      ┊
-│ telepresence daemon container      │      ┊
-│   --docker-daemon only             │      ┊
-└────────────────────────────────────┘      ┊
-```
+
+</details>
 
 Only three things cross the boundary:
 
@@ -98,31 +104,34 @@ the routing table. It comes **once per root-daemon lifetime** — until
 telepresence creates. Nothing telepresence-related runs on the host, so nothing
 asks for a password.
 
+![Where telepresence runs: host mode's two daemons on your machine, and --docker-daemon's single container with the address fork the CLI fixes](images/topology/telepresence-modes.svg)
+
+<details>
+<summary>Diagram source</summary>
+
+```mermaid
+flowchart TB
+  subgraph host["HOST MODE (default)"]
+    direction TB
+    h1["cluster pod — traffic-agent"]
+    h2["userd + rootd<br/>processes on your machine<br/>[sudo: telepresence network daemon]"]
+    h3["your container, published on :11300"]
+    h1 -- "encrypted tunnel" --> h2
+    h2 -- "--address 127.0.0.1 — already your laptop" --> h3
+  end
+  subgraph dd["--DOCKER-DAEMON"]
+    direction TB
+    d1["cluster pod — traffic-agent"]
+    d2["daemon container<br/>no sudo, the runtime owns the routing"]
+    d3["the container ITSELF → {&quot;error&quot;:&quot;EOF&quot;}"]
+    d4["your container :11300"]
+    d1 -- "encrypted tunnel" --> d2
+    d2 -- "default --address 127.0.0.1" --> d3
+    d2 -- "--address host.docker.internal<br/>what the CLI passes for you" --> d4
+  end
 ```
-HOST MODE (default)
 
-  cluster pod — traffic-agent
-        │  encrypted tunnel
-        ▼
-  userd + rootd, processes on your machine
-  [sudo: telepresence network daemon]
-        │  --address 127.0.0.1  — already your laptop
-        ▼
-  your container, published on :11300
-
-
---DOCKER-DAEMON
-
-  cluster pod — traffic-agent
-        │  encrypted tunnel
-        ▼
-  daemon container — no sudo, the runtime owns the routing
-        │
-        ├─ default --address 127.0.0.1 ──► the container ITSELF → {"error":"EOF"}
-        │
-        └─ --address host.docker.internal ──► your container :11300
-                                              ▲ what the CLI passes for you
-```
+</details>
 
 The right-hand fork is the one thing docker mode gets wrong on its own, so the
 CLI passes `--address host.docker.internal` whenever `--docker-daemon` is set
@@ -181,6 +190,42 @@ Also worth knowing, none of it blocking:
   `--docker-daemon` in a real deployment: the daemon container egresses through
   the host, so the VPN still carries it, but the host's own routing table is
   left alone.
+
+## Without Kubernetes
+
+Nothing above needs a cluster except the forwards and the intercepts, and only
+the intercepts have no stand-in. What holds today, checked against the code:
+
+1. **The forward table is empty.** A service with no `k8s_forward_port` gets no
+   forward (`forwardSpecs`, `packages/werkmeister-core/src/config.ts`), so
+   `k8s-forwards` has nothing to do and the shape collapses to Caddy plus your
+   containers.
+2. **Browser traffic still has a baseline.** Caddy's no-cookie default for a
+   hostname is the service's `feature_router.remote_upstream`, any `host:port`
+   (`defaultUpstream` in `packages/werkmeister-core/src/generate.ts`). Set it to
+   `host.docker.internal:<port>` and a tunnel held open on the host is the
+   baseline. One line each:
+
+   | Where the base service runs | The tunnel |
+   |---|---|
+   | EC2 | `ssh -L <port>:localhost:<port> ec2-user@<host>`, or `aws ssm start-session --document-name AWS-StartPortForwardingSession` |
+   | ECS / Fargate | SSM `AWS-StartPortForwardingSessionToRemoteHost` through a bastion or an ECS Exec task |
+   | Cloud Run | `gcloud run services proxy <svc> --port <port>` |
+   | A remote Docker host | `ssh -L`, or `DOCKER_HOST=ssh://…` and publish the port |
+
+3. **Container-to-service references don't follow.** A `{service}` reference in
+   a container's environment resolves only to `k8s-forwards:<k8s_forward_port>`
+   and throws without one (`resolveServiceRefs`, `packages/werkmeister-core/src/generate.ts`).
+   So your local containers can't reach a non-Kubernetes base service through
+   the generated env vars yet.
+4. **No intercepts.** Telepresence is Kubernetes-only: `werkmeister intercept`
+   needs the traffic-manager and a traffic-agent sidecar, and refuses a service
+   without `k8s_deployment`, `k8s_namespace` and `k8s_port`. Remote → laptop by
+   header has no equivalent off-cluster. `ssh -R` from the host is the nearest
+   stand-in, and it takes the whole port, not one header's worth of requests.
+5. **Planned.** `w9r-infra` hosting the base services you're not changing, as
+   containers from the latest deployed images, plus an upstream key for item 3.
+   Not built; tracked as [SW-102](https://jory-group.atlassian.net/browse/SW-102).
 
 ### The local-cluster variant
 
