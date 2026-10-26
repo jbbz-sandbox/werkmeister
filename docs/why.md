@@ -135,28 +135,6 @@ what's intuitive and what's friction.
 If that's you, let's pair up. Not because I need users. Because I want to find
 out whether this is useful to anyone but me. If it is, the "we" starts there.
 
-## Alternate why lines
-
-For the hero, a tagline, or a README first line:
-
-- Judgment is the only part of software that can't be automated. Werkmeister is built around it.
-- Confidence shouldn't be the thing you trade for speed.
-- Autonomous where it can be. Human where it must be.
-- Development is no longer the bottleneck. You are. That's how it should be.
-
-## Alternate vision and mission lines
-
-Vision:
-
-- A world where a developer's day is spent on judgment, not toil.
-- Every developer's day spent on the decisions only a human can make.
-- Software that builds itself, with people at the gates.
-
-Mission:
-
-- Orchestrate autonomous development that stops exactly where human judgment is required.
-- Give each kind of work its own autonomous workflow, run them in isolation side by side, and put a human gate exactly where one belongs.
-
 ## The name
 
 Not part of the story. For an "About" or FAQ block, or a footnote on the landing page.
