@@ -47,6 +47,8 @@ same form as the dashboard.
 
 ![The Claude Code workspaces pane: compact cards for three demo workspaces](images/uis/claude-code-pane.png)
 
+*Screenshot pending: the image above is a placeholder.*
+
 ## VS Code extension
 
 **What it is.** A tree view in the activity bar: every workspace, then its
