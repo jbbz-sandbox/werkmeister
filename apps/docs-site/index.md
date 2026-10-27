@@ -16,9 +16,6 @@ hero:
       text: Get started
       link: /docs/users-guide
     - theme: alt
-      text: Why Werkmeister
-      link: /docs/why
-    - theme: alt
       text: GitHub
       link: https://github.com/jbbz-sandbox/werkmeister
 features:
