@@ -12,13 +12,6 @@
 name: w9r-infra
 
 networks:
-  # SW-93: features join werkmeister-shared; ones brought up before the rename stay
-  # on sandbox-shared until their next `up`, so every service below joins both
-  # under the same aliases. sandbox-shared keeps its original key because compose
-  # refuses a network whose label names a different one. SW-11 drops it.
-  shared-network:
-    name: sandbox-shared
-    driver: bridge
   werkmeister-shared:
     name: werkmeister-shared
     driver: bridge
@@ -37,7 +30,7 @@ services:
   # credentials via the two bind mounts below, equivalent to the host user's own
   # `kubectl` access to the cluster:
   #   - ${HOME}/.kube:/root/.kube:ro                          (read-only)
-  #   - ${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro  (read-only, generated)
+  #   - ${WERKMEISTER_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro  (read-only, generated)
   # A container escape, or a compromised/tampered image running at the pinned
   # digest below, would have that same k8s access. The digest pin on the
   # `alpine` base image (see k8s-port-forward/Dockerfile) is the primary
@@ -52,7 +45,7 @@ services:
         - linux/amd64
       # See Dockerfile: corp-ca.crt is appended to alpine's trust store so
       # `apk add` validates through a corporate TLS proxy (Netskope/Zscaler).
-      # `sandbox connect` writes ~/.werkmeister/corp-ca.crt if it can find a
+      # `werkmeister connect` writes ~/.werkmeister/corp-ca.crt if it can find a
       # proxy root in the System keychain; otherwise the file is empty and
       # the build path is a no-op.
       secrets:
@@ -64,11 +57,11 @@ services:
     # (~/.werkmeister/infra/compose/k8s-forwards.override.yml); see k8s_forwards.ts.
     volumes:
       - ${HOME}/.kube:/root/.kube:ro
-      - ${SANDBOX_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro
-      # Forward table generated from services.yaml by `sandbox connect`.
-      - ${SANDBOX_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro
+      - ${WERKMEISTER_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro
+      # Forward table generated from services.yaml by `werkmeister connect`.
+      - ${WERKMEISTER_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro
     env_file:
-      - ${SANDBOX_STATE_DIR}/../secrets.env
+      - ${WERKMEISTER_STATE_DIR}/../secrets.env
     # OrbStack's API server is https://127.0.0.1:26443 on the host; from inside
     # this container 127.0.0.1 is the container itself. connect.ts rewrites the
     # pinned kubeconfig's server to host.docker.internal, which this mapping
@@ -95,17 +88,16 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      shared-network: &k8s-forwards-net
+      werkmeister-shared:
         aliases:
           - k8s-forwards
-      werkmeister-shared: *k8s-forwards-net
 
   # Optional (SW-76): starts only when `infra.profiles` in ~/.werkmeister/config.yaml
   # (or COMPOSE_PROFILES) names its profile.
   jaeger:
     profiles: [jaeger]
     image: jaegertracing/all-in-one@sha256:ab6f1a1f0fb49ea08bcd19f6b84f6081d0d44b364b6de148e1798eb5816bacac  # pinned from tag "latest" of jaegertracing/all-in-one
-    container_name: sandbox-jaeger
+    container_name: w9r-jaeger
     restart: unless-stopped
     ports:
       - "16686:16686"  # Jaeger UI
@@ -132,10 +124,9 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      shared-network: &jaeger-net
+      werkmeister-shared:
         aliases:
           - jaeger
-      werkmeister-shared: *jaeger-net
 
   # Optional (SW-76), and SSPL-1.0, so never started for everyone: see docs/third-party.md.
   redisinsight:
@@ -164,10 +155,9 @@ services:
           cpus: "0.1"
           memory: 128M
     networks:
-      shared-network: &redisinsight-net
+      werkmeister-shared:
         aliases:
           - redisinsight
-      werkmeister-shared: *redisinsight-net
 
   caddy:
     image: caddy:2-alpine
@@ -177,15 +167,15 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ${SANDBOX_STATE_DIR}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../proxy/ui:/sandbox/proxy/ui:ro
+      - ${WERKMEISTER_STATE_DIR}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../proxy/ui:/werkmeister/proxy/ui:ro
       # Outside the :ro ui bind (SW-100): nesting it there needs a mountpoint file
       # in the shipped ui dir, which fresh clones and npm installs don't have.
-      - ${SANDBOX_STATE_DIR}/proxy/features.json:/srv/features.json:ro
+      - ${WERKMEISTER_STATE_DIR}/proxy/features.json:/srv/features.json:ro
       # Cert location comes from `ingress.certs_dir` in ~/.werkmeister/config.yaml,
-      # exported as SANDBOX_CERTS_DIR by ~/.werkmeister/env.sh. The default keeps
+      # exported as WERKMEISTER_CERTS_DIR by ~/.werkmeister/env.sh. The default keeps
       # this working for a shell that hasn't sourced env.sh.
-      - ${SANDBOX_CERTS_DIR:-${HOME}/.docker/certs}:/etc/caddy/certs:ro
+      - ${WERKMEISTER_CERTS_DIR:-${HOME}/.docker/certs}:/etc/caddy/certs:ro
       - caddy-data:/data
       - caddy-config:/config
     # Caddy terminates each service's hostname directly and dials the feature
@@ -205,10 +195,9 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      shared-network: &caddy-net
+      werkmeister-shared:
         aliases:
           - caddy
-      werkmeister-shared: *caddy-net
 
 volumes:
   caddy-data:
@@ -217,4 +206,4 @@ volumes:
 
 secrets:
   corp_ca:
-    file: ${SANDBOX_STATE_DIR}/../corp-ca.crt
+    file: ${WERKMEISTER_STATE_DIR}/../corp-ca.crt

@@ -18,9 +18,9 @@ import { composeInvocation, infraProfiles } from "./dist/compose_infra.js";
 import { infraRoot, stateInfraRoot } from "./dist/config.js";
 
 const VARS = [
-  "SANDBOX_CONFIG_FILE",
-  "SANDBOX_SERVICES_YAML",
-  "SANDBOX_ROOT",
+  "WERKMEISTER_CONFIG_FILE",
+  "WERKMEISTER_SERVICES_YAML",
+  "WERKMEISTER_ROOT",
   "COMPOSE_PROJECT_NAME",
 ];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
@@ -40,10 +40,10 @@ let home;
 beforeEach(async () => {
   for (const v of VARS) delete process.env[v];
   home = await mkdtemp(path.join(tmpdir(), "sandbox-compose-"));
-  process.env.SANDBOX_CONFIG_FILE = path.join(home, "config.yaml");
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "config.yaml");
   await writeFile(path.join(home, "services.yaml"), REGISTRY);
-  process.env.SANDBOX_SERVICES_YAML = path.join(home, "services.yaml");
-  process.env.SANDBOX_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+  process.env.WERKMEISTER_SERVICES_YAML = path.join(home, "services.yaml");
+  process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
 });
 afterEach(() => {
   for (const v of VARS) {
@@ -52,7 +52,7 @@ afterEach(() => {
   }
 });
 
-test("argv names the shipped file then the override, env carries SANDBOX_STATE_DIR", () => {
+test("argv names the shipped file then the override, env carries WERKMEISTER_STATE_DIR", () => {
   const { argv, env } = composeInvocation();
   assert.deepEqual(argv.slice(0, 2), ["docker", "compose"]);
   assert.deepEqual(argv.slice(2), [
@@ -63,16 +63,16 @@ test("argv names the shipped file then the override, env carries SANDBOX_STATE_D
     "-p",
     "w9r-infra",
   ]);
-  assert.equal(env.SANDBOX_STATE_DIR, path.join(home, "infra"));
+  assert.equal(env.WERKMEISTER_STATE_DIR, path.join(home, "infra"));
   assert.equal(env.PATH, process.env.PATH, "inherits the process env");
 });
 
 // Compose v5 builds through `buildx bake`, which refuses a secret file outside
 // the working directory without `--allow=fs.read=…`. shared-infra.yml's corp_ca
-// secret is `${SANDBOX_STATE_DIR}/../corp-ca.crt`, so compose runs from there.
+// secret is `${WERKMEISTER_STATE_DIR}/../corp-ca.crt`, so compose runs from there.
 test("cwd is the directory holding corp-ca.crt, so bake can read the secret", () => {
   const { cwd, env } = composeInvocation();
-  assert.equal(cwd, path.dirname(env.SANDBOX_STATE_DIR));
+  assert.equal(cwd, path.dirname(env.WERKMEISTER_STATE_DIR));
   assert.equal(cwd, home);
 });
 
@@ -120,7 +120,10 @@ test("no infra.profiles adds no --profile", () => {
 });
 
 test("infra.profiles becomes one --profile per name, after -p", async () => {
-  await writeFile(process.env.SANDBOX_CONFIG_FILE, "infra:\n  profiles: [redisinsight, jaeger]\n");
+  await writeFile(
+    process.env.WERKMEISTER_CONFIG_FILE,
+    "infra:\n  profiles: [redisinsight, jaeger]\n",
+  );
   const { argv } = composeInvocation();
   assert.equal(argv[3], path.join(infraRoot(), "compose", "shared-infra.yml"));
   assert.deepEqual(argv.slice(-6), [
@@ -140,10 +143,10 @@ test("a malformed infra.profiles reads as none", async () => {
     "infra: redisinsight\n",
     "infra:\n",
   ]) {
-    await writeFile(process.env.SANDBOX_CONFIG_FILE, yaml);
+    await writeFile(process.env.WERKMEISTER_CONFIG_FILE, yaml);
     assert.deepEqual(infraProfiles(), [], yaml);
   }
-  await writeFile(process.env.SANDBOX_CONFIG_FILE, 'infra:\n  profiles: [1, "", jaeger]\n');
+  await writeFile(process.env.WERKMEISTER_CONFIG_FILE, 'infra:\n  profiles: [1, "", jaeger]\n');
   assert.deepEqual(infraProfiles(), ["jaeger"]);
 });
 

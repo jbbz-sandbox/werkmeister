@@ -1,6 +1,6 @@
 /**
- * The workspace's own copy of its issue (`.sandbox/issue.md`): fetched once at
- * creation, refreshed only by `sandbox init-workspace --refresh-issue`. The
+ * The workspace's own copy of its issue (`.werkmeister/issue.md`): fetched once at
+ * creation, refreshed only by `werkmeister init-workspace --refresh-issue`. The
  * source of record the brief and CLAUDE.md point at (docs/context-strategies.md).
  */
 import * as fs from "node:fs";

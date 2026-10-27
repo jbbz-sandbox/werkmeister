@@ -5,7 +5,7 @@
 // containers nothing could find.
 //
 // Renders the same feature through both paths. The template path uses the real
-// apps/cli checkout; the fallback path points SANDBOX_ROOT at an empty dir so
+// apps/cli checkout; the fallback path points WERKMEISTER_ROOT at an empty dir so
 // the template lookup misses.
 
 import assert from "node:assert/strict";
@@ -24,8 +24,8 @@ const SERVICES = ["backend", "frontend"];
 
 function containerNames(sandboxRoot) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-cn-ws-"));
-  const prev = process.env.SANDBOX_ROOT;
-  if (sandboxRoot) process.env.SANDBOX_ROOT = sandboxRoot;
+  const prev = process.env.WERKMEISTER_ROOT;
+  if (sandboxRoot) process.env.WERKMEISTER_ROOT = sandboxRoot;
   try {
     return withSandboxHome(async () => {
       const out = generateFeatureCompose(FEATURE, 1, SERVICES, null, ws);
@@ -35,8 +35,8 @@ function containerNames(sandboxRoot) {
       );
     });
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_ROOT;
-    else process.env.SANDBOX_ROOT = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_ROOT;
+    else process.env.WERKMEISTER_ROOT = prev;
     fs.rmSync(ws, { recursive: true, force: true });
   }
 }

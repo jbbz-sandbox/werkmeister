@@ -6,7 +6,7 @@
  * SW-85: the stamp has a second copy in the worktree, and both must match.
  *
  * Drives the real script: stub `npm`, `node` and `corepack` on PATH, and stub
- * tool binaries (pnpm too) in SANDBOX_TOOLS_DIR so the download steps are skipped. Needs `flock` and
+ * tool binaries (pnpm too) in WERKMEISTER_TOOLS_DIR so the download steps are skipped. Needs `flock` and
  * `sha256sum` (util-linux/coreutils), so it runs in the containers and on CI,
  * not on a macOS host.
  */
@@ -44,8 +44,8 @@ function env(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   return {
     ...process.env,
     PATH: `${path.join(tmp, "bin")}:${process.env.PATH}`,
-    SANDBOX_TOOLS_DIR: path.join(tmp, "tools"),
-    SANDBOX_INSTALL_LOCKS: path.join(tmp, "locks"),
+    WERKMEISTER_TOOLS_DIR: path.join(tmp, "tools"),
+    WERKMEISTER_INSTALL_LOCKS: path.join(tmp, "locks"),
     LOG: path.join(tmp, "npm.log"),
     INFLIGHT: path.join(tmp, "inflight"),
     PEAKS: path.join(tmp, "peaks"),
@@ -68,7 +68,7 @@ function npmCalls(): string[] {
   return lines.filter(Boolean);
 }
 
-const stamp = (app: string) => path.join(app, "node_modules", ".sandbox-install-hash");
+const stamp = (app: string) => path.join(app, "node_modules", ".werkmeister-install-hash");
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-install-"));
@@ -210,13 +210,13 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     expect(npmCalls()).toEqual([]);
   });
 
-  it("runs at most SANDBOX_INSTALL_SLOTS installs at once across workspaces", async () => {
+  it("runs at most WERKMEISTER_INSTALL_SLOTS installs at once across workspaces", async () => {
     const runs = [1, 2, 3, 4, 5].map(
       (n) =>
         new Promise<number | null>((resolve) => {
           const child = spawn("sh", [SCRIPT, "install"], {
             cwd: makeApp(`ws${n}`),
-            env: env({ CI_SECONDS: "2", SANDBOX_INSTALL_SLOTS: "2" }),
+            env: env({ CI_SECONDS: "2", WERKMEISTER_INSTALL_SLOTS: "2" }),
             stdio: "ignore",
           });
           child.on("close", resolve);
@@ -237,7 +237,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
         new Promise<number | null>((resolve) => {
           const child = spawn("sh", [SCRIPT, "install"], {
             cwd: makeApp(`ws${n}`),
-            env: env({ BUILD_SECONDS: "1", SANDBOX_INSTALL_SLOTS: "5" }),
+            env: env({ BUILD_SECONDS: "1", WERKMEISTER_INSTALL_SLOTS: "5" }),
             stdio: "ignore",
           });
           child.on("close", resolve);

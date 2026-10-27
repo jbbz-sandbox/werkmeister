@@ -16,7 +16,7 @@ const wsPath = path.join(wsRoot, "demo");
 fs.mkdirSync(wsPath, { recursive: true });
 
 process.env.HOME = home;
-process.env.SANDBOX_WORKSPACES_ROOT = wsRoot;
+process.env.WERKMEISTER_WORKSPACES_ROOT = wsRoot;
 
 // Claude encodes the project dir as workspacePath with every non-alphanumeric → "-".
 const encoded = wsPath.replace(/[^a-zA-Z0-9]/g, "-");

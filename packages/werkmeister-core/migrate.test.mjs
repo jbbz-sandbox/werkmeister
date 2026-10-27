@@ -66,8 +66,8 @@ beforeEach(() => {
   write(
     path.join(legacy, "config.yaml"),
     "# mine, kept\n" +
-      `paths:\n  repos_root: ${home}/repos\n  workspaces_root: ${features}\n` +
-      "overrides:\n  model_pricing_yaml: ~/.sandbox/model-pricing.yaml\n" +
+      `paths:\n  repos_root: ${home}/repos\n  workspaces_root: ${features}\n  sandbox_root: /opt/w9r\n` +
+      "overrides:\n  model_pricing_yaml: ~/.sandbox/model-pricing.yaml\n  sandbox_issues_project: SW\n" +
       `ingress:\n  certs_dir: ${home}/.sandbox/certs\n`,
   );
   write(path.join(legacy, "env.sh"), "# old\n");
@@ -83,7 +83,6 @@ beforeEach(() => {
     "services:\n  cli:\n    path: apps/cli\n    extra_volumes:\n" +
       "      - '{{werkmeister_home}}:{{werkmeister_home}}'\n      - '{{werkmeister_home}}/locks:/locks'\n",
   );
-  write(path.join(home, "repos", "demo", ".sandbox", "services.yaml"), "services:\n  web: {}\n");
   write(path.join(features, "ws1", ".sandbox", "workspace.yml"), "feature: ws1\n");
   write(
     path.join(features, "ws1", "compose.yml"),
@@ -92,7 +91,10 @@ beforeEach(() => {
   write(path.join(features, "ws2", ".werkmeister", "workspace.yml"), "feature: ws2\n");
   write(path.join(features, "ws2", "compose.yml"), "services: {}\n");
 
+  // Installed by a pre-move CLI, so its log path is still the old home.
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(legacy, "config.yaml");
   assert.equal(installPrWatchSchedule(prWatch()).ok, true);
+  delete process.env.WERKMEISTER_CONFIG_FILE;
   calls = [];
 });
 
@@ -122,21 +124,24 @@ test("migrate moves the home and repoints every file that carried the old path",
   assert.match(config, /^# mine, kept$/m);
   assert.match(config, /model_pricing_yaml: ~\/\.werkmeister\/model-pricing\.yaml/);
   assert.ok(config.includes(`certs_dir: ${target}/certs`));
+  assert.match(config, /^  werkmeister_root: \/opt\/w9r$/m);
+  assert.match(config, /^  werkmeister_issues_project: SW$/m);
+  assert.doesNotMatch(config, /sandbox_(root|issues_project):/);
 
   const envSh = fs.readFileSync(path.join(target, "env.sh"), "utf8");
   assert.ok(!envSh.includes(".sandbox"), envSh);
-  assert.ok(envSh.includes(`SANDBOX_CERTS_DIR=${target}/certs`), envSh);
+  assert.ok(envSh.includes(`WERKMEISTER_CERTS_DIR=${target}/certs`), envSh);
 
   const zshenv = fs.readFileSync(path.join(home, ".zshenv"), "utf8");
   assert.ok(zshenv.startsWith("export EDITOR=vim\n"));
   assert.ok(zshenv.includes('. "$HOME/.werkmeister/env.sh"'));
   assert.ok(!zshenv.includes(".sandbox/"));
-  assert.equal(zshenv.split(">>> sandbox config >>>").length, 2, "one block");
+  assert.ok(!zshenv.includes(">>> sandbox config >>>"), "the old block is retired");
+  assert.equal(zshenv.split(">>> werkmeister config >>>").length, 2, "one block");
 
   const registry = fs.readFileSync(path.join(target, "services.yaml"), "utf8");
   assert.ok(registry.includes(`${target}:${target}`));
   assert.ok(registry.includes(`${target}/locks:/locks`));
-  assert.ok(registry.includes("web:"), "the legacy .sandbox/ fragment is still merged");
 
   const plistText = fs.readFileSync(plist(), "utf8");
   assert.ok(plistText.includes(`${target}/pr-watch.log`));
@@ -233,4 +238,28 @@ test("refuses when both homes exist, or when *_CONFIG_FILE points elsewhere", as
   assert.equal(steps[0].ok, false);
   assert.match(steps[0].detail, /CONFIG_FILE/);
   assert.deepEqual(snapshot(home), before);
+});
+
+test("the pre-rename ~/.zshrc completion block and ${SANDBOX_ROOT} volume specs are replaced", async () => {
+  write(
+    path.join(home, ".zshrc"),
+    "alias ll='ls -l'\n# >>> sandbox completion >>>\ncomplete -C 'sandbox __complete' sandbox\n# <<< sandbox completion <<<\n",
+  );
+  write(
+    path.join(legacy, "services.local.yaml"),
+    "services:\n  cli:\n    extra_volumes: ['${SANDBOX_ROOT}:/src']\n",
+  );
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  const zshrc = fs.readFileSync(path.join(home, ".zshrc"), "utf8");
+  assert.ok(zshrc.startsWith("alias ll='ls -l'\n"));
+  assert.ok(!zshrc.includes("sandbox"), zshrc);
+  assert.match(zshrc, /complete -C 'werkmeister __complete' werkmeister w9r/);
+  assert.match(
+    fs.readFileSync(path.join(target, "services.local.yaml"), "utf8"),
+    /'\$\{WERKMEISTER_ROOT\}:\/src'/,
+  );
 });

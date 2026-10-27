@@ -10,15 +10,18 @@ import { test } from "node:test";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "check-in-home-"));
 const root = path.join(home, "features");
 process.env.HOME = home;
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
-process.env.SANDBOX_WORKSPACES_ROOT = root;
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_WORKSPACES_ROOT = root;
 
 const { checkInTriage } = await import("./dist/sandbox.js");
 
 function workspace(name, { labels = [], gate, lastRole } = {}) {
   const dir = path.join(root, name);
-  fs.mkdirSync(path.join(dir, ".sandbox"), { recursive: true });
-  fs.writeFileSync(path.join(dir, ".sandbox", "workspace.yml"), `labels: [${labels.join(", ")}]\n`);
+  fs.mkdirSync(path.join(dir, ".werkmeister"), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, ".werkmeister", "workspace.yml"),
+    `labels: [${labels.join(", ")}]\n`,
+  );
   const out = path.join(dir, "stages", "02_plan", "output");
   fs.mkdirSync(out, { recursive: true });
   // Quoting the phrase in prose is not a gate; only a line starting with it is.
@@ -106,7 +109,7 @@ test("a paused workspace is never a candidate or ready to close, whatever it las
   // `focus`: the test above left one, so the sweep keeps focus workspaces only.
   workspace("f-paused", { labels: ["focus"], gate: "proposed" });
   workspace("g-live", { labels: ["focus"], gate: "proposed" });
-  const dot = path.join(root, "f-paused", ".sandbox");
+  const dot = path.join(root, "f-paused", ".werkmeister");
   fs.writeFileSync(
     path.join(dot, "agent-state.json"),
     JSON.stringify({ state: "needs-you", at: new Date().toISOString(), question: "Which fix?" }),

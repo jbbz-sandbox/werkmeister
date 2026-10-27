@@ -27,10 +27,10 @@ function args(overrides: Record<string, unknown> = {}): Record<string, unknown> 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-"));
   cfgFile = path.join(tmp, "config.yaml");
-  process.env.SANDBOX_CONFIG_FILE = cfgFile;
+  process.env.WERKMEISTER_CONFIG_FILE = cfgFile;
 });
 afterEach(() => {
-  delete process.env.SANDBOX_CONFIG_FILE;
+  delete process.env.WERKMEISTER_CONFIG_FILE;
   fs.rmSync(tmp, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -48,13 +48,13 @@ describe("config command", () => {
     const saved = YAML.parse(fs.readFileSync(cfgFile, "utf8"));
     expect(saved.paths.repos_root).toBe(repos);
     expect(saved.paths.workspaces_root).toBe(ws);
-    // sandbox_root is self-derived, not taken from a flag.
-    expect(saved.paths.sandbox_root).toBe(String(getSandboxRoot()));
+    // werkmeister_root is self-derived, not taken from a flag.
+    expect(saved.paths.werkmeister_root).toBe(String(getSandboxRoot()));
 
     const envSh = gc.envShPath();
     expect(fs.existsSync(envSh)).toBe(true);
     // tmp paths only contain shlex-safe chars, so they render unquoted.
-    expect(fs.readFileSync(envSh, "utf8")).toContain(`export SANDBOX_REPOS_ROOT=${repos}`);
+    expect(fs.readFileSync(envSh, "utf8")).toContain(`export WERKMEISTER_REPOS_ROOT=${repos}`);
   });
 
   it("check exit codes: no config → drift → exit(1)", async () => {

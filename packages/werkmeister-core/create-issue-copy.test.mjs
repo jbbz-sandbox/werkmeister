@@ -1,4 +1,4 @@
-// A create (initWorkspace handed the fetched snapshot) writes .sandbox/issue.md
+// A create (initWorkspace handed the fetched snapshot) writes .werkmeister/issue.md
 // and the issue section, per strategy; a later re-init never seeds a JIT handoff
 // from the issue alone (spec §6).
 
@@ -13,7 +13,7 @@ import { initWorkspace } from "./dist/workspace_init.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
 const REPO = path.resolve(import.meta.dirname, "..", "..");
-process.env.SANDBOX_ROOT = path.join(REPO, "apps", "cli");
+process.env.WERKMEISTER_ROOT = path.join(REPO, "apps", "cli");
 
 const SNAP = {
   ref: "o/r#5",
@@ -40,8 +40,8 @@ function walk(root, rel = "") {
 async function withWorkspace(yml, fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "create-copy-ws-"));
   try {
-    fs.mkdirSync(path.join(root, ".sandbox"));
-    fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), yml);
+    fs.mkdirSync(path.join(root, ".werkmeister"));
+    fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), yml);
     return await withSandboxHome(() => withReporter(collectingReporter(), () => fn(root)), {
       config: "overrides:\n  issue_tracker: github\n",
     });
@@ -51,7 +51,7 @@ async function withWorkspace(yml, fn) {
 }
 
 const notes = (root) => {
-  const dir = path.join(root, ".sandbox", "notes");
+  const dir = path.join(root, ".werkmeister", "notes");
   return fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".md")) : [];
 };
 
@@ -72,7 +72,7 @@ test("jit: a create with an issue and no prompt seeds a handoff without 'task be
   await withWorkspace("task: Fix it\nwork_type: bugfix\nissue_id: o/r#5\n", async (root) => {
     await initWorkspace({}, root, { issue: SNAP });
     const [note] = notes(root);
-    const body = fs.readFileSync(path.join(root, ".sandbox", "notes", note), "utf8");
+    const body = fs.readFileSync(path.join(root, ".werkmeister", "notes", note), "utf8");
     assert.match(body, /^## Issue$/m);
     assert.doesNotMatch(body, /task below|Seeded from `starting_prompt`/);
   });

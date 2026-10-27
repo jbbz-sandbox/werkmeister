@@ -21,6 +21,10 @@ test("the header supplies the workspace when no argument does", () => {
   assert.equal(workspaceId(undefined, { [FEATURE_HEADER]: "frontend" }), "frontend");
 });
 
+test("a .mcp.json from before SW-106 still names the workspace", () => {
+  assert.equal(workspaceId(undefined, { "x-sandbox-feature": "frontend" }), "frontend");
+});
+
 test("an explicit argument overrides the header", () => {
   assert.equal(workspaceId("backend", { [FEATURE_HEADER]: "frontend" }), "backend");
 });
@@ -32,7 +36,7 @@ test("neither is a coded error naming both ways to supply it", () => {
       assert.ok(e instanceof SandboxError);
       assert.equal(e.code, "NO_WORKSPACE");
       assert.match(e.message, /`workspace`/);
-      assert.match(e.message, /X-Sandbox-Feature/);
+      assert.match(e.message, /X-Werkmeister-Feature/);
       return true;
     },
   );

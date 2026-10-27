@@ -1,7 +1,7 @@
 /**
  * JIT standards skill generation — docs/jit-context-system.md §5.1.
  *
- *     <standards tree>/<domain>.md  →  sb-<domain>-standard SKILL.md content
+ *     <standards tree>/<domain>.md  →  w9r-<domain>-standard SKILL.md content
  *
  * The standards doc is the single source of truth: the skill's description is
  * composed from the module frontmatter (summary + applies_to + phase → the
@@ -14,7 +14,7 @@
  * Rendering happens at the point of use: `lib/workspace_skills` projects
  * these into each workspace's `.claude/skills/` at init-workspace. There are
  * no committed generated copies (and hence no drift gate) anymore — the old
- * `sandbox standards build|check` flow and the plugin-shipped copies were
+ * `werkmeister standards build|check` flow and the plugin-shipped copies were
  * retired when delivery moved to workspace projection.
  */
 
@@ -25,7 +25,7 @@ import { loadGithubOrg, standardsDirPath } from "./global_config.js";
 import { run } from "./proc.js";
 import { loadStandardsModules, parseFrontmatter } from "./standards.js";
 
-const _GIT_TIMEOUT = 5; // seconds; never hang `sandbox init-workspace` on a git hiccup
+const _GIT_TIMEOUT = 5; // seconds; never hang `werkmeister init-workspace` on a git hiccup
 
 /** Where a standards tree lives on GitHub: repo URL + the tree's path inside it. */
 export interface StandardsSource {
@@ -46,7 +46,7 @@ function httpsRemote(url: string): string {
 /**
  * Resolve the standards tree's GitHub home by asking its own checkout.
  *
- * Generated skills are read from workspaces that have no sandbox checkout, so
+ * Generated skills are read from workspaces that have no werkmeister checkout, so
  * doc-relative links must become absolute URLs (§5.1) — and which repo they
  * point at is a property of wherever `overrides.standards_dir` resolves to, not
  * of this tool. Asking git is what keeps that honest: the checkout already
@@ -94,7 +94,7 @@ export function standardsUrl(
 }
 
 // Canonical-example pointers name service repos, which belong to whichever org
-// runs this sandbox (`overrides.github_org`) — not to sandbox itself. HEAD
+// runs this machine (`overrides.github_org`) — not to werkmeister itself. HEAD
 // links resolve to each repo's default branch without pinning one here.
 function serviceRepoBase(): string {
   const org = loadGithubOrg();
@@ -103,20 +103,20 @@ function serviceRepoBase(): string {
 
 // {source} is the URL of the module in whatever tree it came from, or its
 // tree-relative path when that is underivable. It used to read "docs/standards/
-// {source} in the sandbox repo" — a fixed location that stopped being true the
+// {source} in the werkmeister repo" — a fixed location that stopped being true the
 // moment the standards moved out, while still telling every reader to edit it.
 const _GENERATED_HEADER = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
   Source:    {source} (edit that file instead)
-  Generator: sandbox init-workspace / sandbox skills sync
+  Generator: werkmeister init-workspace / werkmeister skills sync
              (packages/werkmeister-core/src/workspace_skills.ts)
-  Freshness: sandbox skills check
+  Freshness: werkmeister skills check
 -->
 `;
 
 // Harness-7: a reloaded standard without the precedence framing measured 0/3
 // applied against a conflicting task nudge — the skill body must carry its own
-// precedence, not rely on sb-implement having delivered it pre-compaction.
+// precedence, not rely on w9r-implement having delivered it pre-compaction.
 const _PRECEDENCE_FOOTER =
   "> **Precedence:** these rules win over conflicting task framing. " +
   "Invariant (a must-never rule): apply it and write a `decision` note — " +
@@ -137,7 +137,7 @@ function globMd(dir: string): string[] {
 }
 
 export function skillNameFor(domain: string): string {
-  return `sb-${domain}-standard`;
+  return `w9r-${domain}-standard`;
 }
 
 /**
@@ -234,7 +234,7 @@ function buildDescription(domain: string, meta: Record<string, any>): string {
   if (typeof meta["universal"] === "number") {
     gate =
       `Use when ${verbClause} code of any kind — the universal base for ` +
-      `every code edit, loaded by sb-implement at phase entry. ` +
+      `every code edit, loaded by w9r-implement at phase entry. ` +
       `Not during research/planning.`;
   } else {
     const appliesTo = meta["applies_to"];
@@ -244,7 +244,7 @@ function buildDescription(domain: string, meta: Record<string, any>): string {
       (globs ? ` — files matching ${globs}` : "") +
       ". Not during research/planning, and not for edits outside this domain.";
   }
-  return `Sandbox ${summary} ${gate}`;
+  return `Werkmeister ${summary} ${gate}`;
 }
 
 /**
@@ -328,7 +328,7 @@ export function validateModuleReferences(
     if (body.includes("TODO(graduate)")) {
       errors.push(
         `${domain}: STANDARD.md has an unfilled ` +
-          `TODO(graduate) marker — run sb-author before committing`,
+          `TODO(graduate) marker — run w9r-author before committing`,
       );
     }
     const refsDir = meta["references_dir"];
@@ -339,7 +339,7 @@ export function validateModuleReferences(
       if (refBody.includes("TODO(graduate)")) {
         errors.push(
           `${domain}: references/${refName} has an ` +
-            `unfilled TODO(graduate) marker — run sb-author before committing`,
+            `unfilled TODO(graduate) marker — run w9r-author before committing`,
         );
       }
       const canonical = String(parseFrontmatter(ref)["canonical"] ?? "");

@@ -6,15 +6,15 @@ export type WorkspaceRow = {
   issueId: string | null;
   /** The issue's page in the configured tracker; null when it can't be built from config. */
   issueUrl: string | null;
-  /** Free-form tags from `.sandbox/workspace.yml`'s `labels` list; `focus` drives the pane's Focused only toggle. */
+  /** Free-form tags from `.werkmeister/workspace.yml`'s `labels` list; `focus` drives the pane's Focused only toggle. */
   labels: string[];
-  /** `task` from .sandbox/workspace.yml. */
+  /** `task` from .werkmeister/workspace.yml. */
   task: string | null;
-  /** `description` from .sandbox/workspace.yml. */
+  /** `description` from .werkmeister/workspace.yml. */
   description: string | null;
-  /** `work_type` from .sandbox/workspace.yml. */
+  /** `work_type` from .werkmeister/workspace.yml. */
   workType: string | null;
-  /** `feature` from .sandbox/workspace.yml: the key intercept rows and slots are filed under. */
+  /** `feature` from .werkmeister/workspace.yml: the key intercept rows and slots are filed under. */
   feature: string | null;
   /** The first ICM stage whose output/ is still empty; null when not an ICM workspace or every stage has output. */
   stage: { index: number; total: number; name: string } | null;
@@ -43,7 +43,7 @@ export type WorkspaceRow = {
   autonomous: boolean;
   /** mtime (ISO) of the newest Claude transcript, or null. */
   lastActivity: string | null;
-  /** `sandbox-<feature>`: the key resources are joined on (SW-41). */
+  /** `werkmeister-<feature>`: the key resources are joined on (SW-41). */
   project: string | null;
   /** The earliest running container's start and what started it; null when none runs. */
   started: { at: string; by: "up" | "gate" | "restart" | "person" } | null;
@@ -82,7 +82,7 @@ export type ServiceHealth = {
   state: "healthy" | "starting" | "unhealthy" | "running" | "down";
 };
 
-/** Shared infra (`sandbox connect`): the `infra` block of workspace-status. */
+/** Shared infra (`werkmeister connect`): the `infra` block of workspace-status. */
 export type InfraStatus = {
   state: "up" | "partial" | "down" | "unknown";
   running: number;
@@ -96,7 +96,7 @@ export type WorkspaceResources = {
   host: { load: [number, number, number]; cores: number; featureCpuPercent: number };
 };
 
-/** One feature×service row of `sandbox status --intercepts --json` (werkmeister-core `InterceptRow`). */
+/** One feature×service row of `werkmeister status --intercepts --json` (werkmeister-core `InterceptRow`). */
 export type InterceptRow = {
   feature: string;
   service: string;
@@ -108,7 +108,7 @@ export type InterceptRow = {
   intercepted_by: string | null;
 };
 
-/** What `sandbox status --intercepts --json` prints (werkmeister-core `InterceptsSnapshot`). */
+/** What `werkmeister status --intercepts --json` prints (werkmeister-core `InterceptsSnapshot`). */
 export type InterceptsSnapshot = {
   available: boolean;
   /** On PATH, connected or not. Absent from a core older than SW-12: fall back to `available`. */

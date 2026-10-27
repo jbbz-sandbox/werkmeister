@@ -21,7 +21,7 @@ const ws = (name, over = {}) => ({
 
 const st = (name, over = {}) => ({
   name,
-  project: `sandbox-${name}`,
+  project: `werkmeister-${name}`,
   state: "down",
   running: 0,
   total: 0,
@@ -67,9 +67,8 @@ const intercepts = (spec, remote = Object.values(spec).flatMap(Object.keys)) => 
   ),
 });
 
-test("featureOf strips the werkmeister- compose prefix, and the pre-SW-93 sandbox- one", () => {
+test("featureOf strips the werkmeister- compose prefix", () => {
   assert.equal(featureOf("werkmeister-tre-1125"), "tre-1125");
-  assert.equal(featureOf("sandbox-tre-1125"), "tre-1125");
   assert.equal(featureOf("werkmeister-"), null);
   assert.equal(featureOf("something-else"), null);
   assert.equal(featureOf(null), null);
@@ -598,7 +597,7 @@ test("SW-41: CPU and memory join the row by compose project; the start reason is
     ],
     null,
     [],
-    { now, usage: { "sandbox-a": { cpuPercent: 12.3, memMib: 410 } } },
+    { now, usage: { "werkmeister-a": { cpuPercent: 12.3, memMib: 410 } } },
   );
   assert.match(node.description, /1 of 1 up · 12\.3% CPU · 410 MiB/);
   assert.match(node.tooltip, /\*\*Resources\*\* 12\\\.3% CPU · 410 MiB · started 2 h ago by gate/);

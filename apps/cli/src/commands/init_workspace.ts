@@ -1,9 +1,9 @@
 /**
- * sandbox init-workspace [options]
+ * werkmeister init-workspace [options]
  *
- * Reconcile a sandbox workspace from its `.sandbox/workspace.yml` and
+ * Reconcile a workspace from its `.werkmeister/workspace.yml` and
  * (re)generate its context files. This is the config-driven half of workspace
- * management: `sandbox workspace` creates the workspace ROOT and writes
+ * management: `werkmeister workspace` creates the workspace ROOT and writes
  * workspace.yml; `init-workspace` (run there, by `workspace` or directly)
  * does the rest and is idempotent — edit workspace.yml and rerun to apply changes.
  *
@@ -14,14 +14,14 @@
  *    Missing repos are added as worktrees; repos dropped from the config have
  *    their worktrees removed (a dirty worktree aborts the run unless `--force`).
  * 2. Generate/overwrite CLAUDE.md, .env, compose.yml, the projected
- *    .claude/ skills+agents, .mcp.json, and .sandbox/* from that config.
+ *    .claude/ skills+agents, .mcp.json, and .werkmeister/* from that config.
  *
  * It refuses to run against a bare directory (no workspace.yml and no --feature),
- * pointing the user at `sandbox workspace` — it never prompts (the interactive
- * wizard lives in `sandbox workspace`).
+ * pointing the user at `werkmeister workspace` — it never prompts (the interactive
+ * wizard lives in `werkmeister workspace`).
  *
  * The workspace root is inferred from CWD: the script honours
- * SANDBOX_WORKSPACES_ROOT (then SANDBOX_WORKSPACE_ROOT and WORKSPACE for
+ * WERKMEISTER_WORKSPACES_ROOT (then WERKMEISTER_WORKSPACE_ROOT and WORKSPACE for
  * back-compat, then ~/workspace) and walks up to the first direct child of the
  * configured root, falling back to a parent-of-.git auto-detect when CWD is
  * not under a configured root.
@@ -41,7 +41,7 @@ import {
 } from "werkmeister-core/workspace_init";
 
 /**
- * Read a task title piped on stdin (`echo "…" | sandbox init-workspace`).
+ * Read a task title piped on stdin (`echo "…" | werkmeister init-workspace`).
  *
  * This is the CLI's affordance, not the library's: only a process that owns fd
  * 0 may consume it, which is why `initWorkspace` takes this as a callback and
@@ -62,7 +62,7 @@ export function readStdinTask(): string {
 // Entry point
 // ---------------------------------------------------------------------------
 
-/** Execute `sandbox init-workspace`. */
+/** Execute `werkmeister init-workspace`. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   try {
     await initWorkspace(args, undefined, { readStdinTask });

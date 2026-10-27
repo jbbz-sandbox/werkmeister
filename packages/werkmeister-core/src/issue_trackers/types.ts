@@ -1,5 +1,5 @@
 /**
- * The issue-tracker interface. `sandbox setup` picks one tracker per machine
+ * The issue-tracker interface. `werkmeister setup` picks one tracker per machine
  * (`overrides.issue_tracker`); every read and write of an issue goes through
  * `issueTracker()` in ../issue_tracker.ts and never names a tracker.
  *
@@ -96,13 +96,13 @@ export interface IssueTrackerStrategy {
   fetchIssues(refs: string[]): Promise<Record<string, Issue>>;
   /**
    * The issues guide's routing: the "Where" table's app-code row, the
-   * search-first step, and where and how to file sandbox-tool issues when this
+   * search-first step, and where and how to file werkmeister issues when this
    * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none.
    */
   filingGuide(issueId: string): {
     row: string;
     search: string;
-    sandbox?: { where: string; command: string };
+    werkmeister?: { where: string; command: string };
   };
   /**
    * File a new issue; it comes back with its ref and url. Absent when agents

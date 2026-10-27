@@ -88,7 +88,7 @@ export function serviceTestCommand(
 
 /**
  * How the agent runs *cmd* from the host: in the service's container, where the
- * worktree's `node_modules` live. sandbox-context.md and the workspace's
+ * worktree's `node_modules` live. werkmeister-context.md and the workspace's
  * `permissions.allow` rule both use it, so the rule matches what the agent runs.
  */
 export function containerTestCommand(feature: string, svc: string, cmd: string): string {

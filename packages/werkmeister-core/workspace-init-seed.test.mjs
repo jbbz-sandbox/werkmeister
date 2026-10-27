@@ -22,7 +22,7 @@ status: open
 
 # Handoff: workspace creation
 
-This workspace is a feature — invoke \`sb-research\` first to explore and spec the work.
+This workspace is a feature — invoke \`w9r-research\` first to explore and spec the work.
 
 Seeded at workspace creation (no starting prompt was provided).
 `;
@@ -51,7 +51,7 @@ test("a prompt seeds one handoff carrying it", () => {
     assert.equal(notes[0].type, "handoff");
     assert.match(notes[0].body, /Seeded from `starting_prompt`/);
     assert.match(notes[0].body, /Ship it/);
-    assert.match(notes[0].body, /invoke `sb-research` first/);
+    assert.match(notes[0].body, /invoke `w9r-research` first/);
   });
 });
 
@@ -84,7 +84,7 @@ test("the seeded handoff starts at the work type's first phase", () => {
     seedStartingHandoff(ws, "Tidy the module", "refactor");
     const [note] = listNotes(ws, true);
     assert.equal(note.frontmatter.phase, "implement");
-    assert.match(note.body, /invoke `sb-implement` first/);
+    assert.match(note.body, /invoke `w9r-implement` first/);
   });
   withWorkspace((ws) => {
     seedStartingHandoff(ws, "Ship it", "feature");

@@ -1,10 +1,10 @@
 /**
- * Shared git-worktree helpers for sandbox workspaces.
+ * Shared git-worktree helpers for workspaces.
  *
- * `sandbox workspace` creates the workspace ROOT (a worktree of the
- * sandbox-workspace repo); `sandbox init-workspace` reconciles the nested
+ * `werkmeister workspace` creates the workspace ROOT (a worktree of the
+ * sandbox-workspace repo); `werkmeister init-workspace` reconciles the nested
  * per-repo worktrees against the desired set declared in
- * `.sandbox/workspace.yml`. Both commands share the primitives here so
+ * `.werkmeister/workspace.yml`. Both commands share the primitives here so
  * worktree creation/removal behaves identically wherever it runs — and so the
  * two command modules don't import each other (avoids a circular import).
  */
@@ -18,23 +18,23 @@ import { info } from "./reporter.js";
 // Workspace .gitignore (managed section)
 // ---------------------------------------------------------------------------
 
-const _GITIGNORE_MARKER = "# --- sandbox workspace (managed section)";
+const _GITIGNORE_MARKER = "# --- sandbox workspace (managed section)"; // name-check: ignore
 
 const _GITIGNORE_HEADER =
   `${_GITIGNORE_MARKER} -----------------------------------\n` +
   "# Repo worktrees nested in this workspace, ignored by name. Rewritten by\n" +
-  "# `sandbox init-workspace` on each run; rules above come from the repo's main.\n";
+  "# `werkmeister init-workspace` on each run; rules above come from the repo's main.\n";
 
 // Ignored besides the repo worktree dirs: only secrets (.env.<svc> holds each
 // service's resolved secrets). The generated projections (.claude/, CLAUDE.md,
-// .mcp.json, .sandbox/*) are deliberately TRACKED — versioned workspace state
+// .mcp.json, .werkmeister/*) are deliberately TRACKED — versioned workspace state
 // is the point of the dedicated root repo.
 const _SECRET_ENVS_RULE = "/.env.*";
 const _GITIGNORE_GENERATED = ["/.env", _SECRET_ENVS_RULE] as const;
 
 /**
  * Add the `/.env.*` rule to a workspace .gitignore written before it existed.
- * `sandbox up` writes per-service secret files without rerunning
+ * `werkmeister up` writes per-service secret files without rerunning
  * init-workspace, and close-out (removeWorkspace) commits tracked changes and pushes.
  */
 export function ensureSecretEnvsIgnored(workspaceDir: string): void {

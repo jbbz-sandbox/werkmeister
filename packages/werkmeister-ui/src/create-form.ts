@@ -553,7 +553,7 @@ export function CreateForm({ bridge, onCreated, onCancel }: CreateFormProps) {
       e(
         "p",
         { className: "subtitle" },
-        "Create a sandbox workspace — git worktrees on a ",
+        "Create a workspace — git worktrees on a ",
         e("code", null, "<user>/<workspace>"),
         " branch, then init.",
       ),

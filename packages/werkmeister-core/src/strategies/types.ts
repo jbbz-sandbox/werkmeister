@@ -2,7 +2,7 @@
  * The context-strategy interface (docs/context-strategies.md, option B).
  *
  * A strategy owns every write to a workspace's context layer: CLAUDE.md and
- * whatever the agent reads besides it. `initWorkspace`, `up`, `sandbox
+ * whatever the agent reads besides it. `initWorkspace`, `up`, `werkmeister
  * skills|notes context|hooks gate` and the MCP skills/hooks tools each make one
  * call through `strategyFor` and never name a strategy.
  *
@@ -27,9 +27,9 @@ export interface InitContext {
   meta: Record<string, string>;
   /** Resolved workspace.yml inputs: starting_prompt, work_type, ... */
   inputs: Record<string, string>;
-  /** `args["config"]` — a workspace config path overriding .sandbox/workspace.yml. */
+  /** `args["config"]` — a workspace config path overriding .werkmeister/workspace.yml. */
   configOverride: string | null;
-  /** The workspace's issue (`.sandbox/issue.md`, else just `issue_id`); null/absent when it has none. */
+  /** The workspace's issue (`.werkmeister/issue.md`, else just `issue_id`); null/absent when it has none. */
   issue?: IssueRef | null;
   /** True only on the creation run (initWorkspace was handed the fetched snapshot). */
   isCreate?: boolean;
@@ -41,13 +41,13 @@ export interface ContextStrategy {
   init(ctx: InitContext): void;
   /** Called by `up` after secrets are validated and before the slot is allocated. */
   refresh(workspaceRoot: string): void;
-  /** Backs `sandbox skills check` and MCP `skills` tool. Empty array = fresh. */
+  /** Backs `werkmeister skills check` and MCP `skills` tool. Empty array = fresh. */
   check(workspaceRoot: string): string[];
-  /** Backs `sandbox skills sync` and MCP `skills` tool. */
+  /** Backs `werkmeister skills sync` and MCP `skills` tool. */
   sync(workspaceRoot: string): { wrote: string[] };
-  /** SessionStart re-injection text, or null. Backs `sandbox notes context`. */
+  /** SessionStart re-injection text, or null. Backs `werkmeister notes context`. */
   sessionContext(workspaceRoot: string, hookPayload: Record<string, unknown>): string | null;
-  /** PreToolUse gate. Backs `sandbox hooks gate`; must fail open. */
+  /** PreToolUse gate. Backs `werkmeister hooks gate`; must fail open. */
   gate(): void;
   /** Workspace-relative paths this strategy owns. A trailing `*` in the last segment is a prefix glob. */
   ownedPaths(): string[];

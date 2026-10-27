@@ -1,6 +1,6 @@
 /**
- * Workspace creation and reconciliation — the work behind `sandbox workspace`
- * and `sandbox init-workspace`.
+ * Workspace creation and reconciliation — the work behind `werkmeister workspace`
+ * and `werkmeister init-workspace`.
  *
  * Moved here from `apps/cli/src/commands/workspace.ts` and
  * `.../init_workspace.ts` (note 086 row 5) so `createWorkspace` can call it
@@ -12,11 +12,11 @@
  *
  *   {@link provisionWorkspace} — create the workspace ROOT (a worktree of the
  *   `sandbox-workspace` repo on `<user>/<workspace>`), write
- *   `.sandbox/workspace.yml`, hand off to `initWorkspace`, and commit.
+ *   `.werkmeister/workspace.yml`, hand off to `initWorkspace`, and commit.
  *
  *   {@link initWorkspace} — reconcile the nested per-repo worktrees against
  *   that config and (re)generate CLAUDE.md, .env, compose.yml, the
- *   projected .claude/ skills+agents, .mcp.json and .sandbox/*. Idempotent.
+ *   projected .claude/ skills+agents, .mcp.json and .werkmeister/*. Idempotent.
  *
  * Nothing here prints or exits: every message goes through the ambient reporter
  * and every fatal path throws {@link WorkspaceInitError} *after* its `[err]`
@@ -123,7 +123,7 @@ export interface InitWorkspaceOptions {
    * deleted instead of blocking creation.
    */
   force?: boolean;
-  /** The snapshot createWorkspace fetched; written to .sandbox/issue.md before the strategy runs. */
+  /** The snapshot createWorkspace fetched; written to .werkmeister/issue.md before the strategy runs. */
   issue?: IssueSnapshot;
   /**
    * False skips the image build. `--no-start` still creates the containers, and on a
@@ -152,7 +152,7 @@ export async function resolveIssueCopy(
     } catch (e) {
       if (e instanceof IssueFetchError)
         throw new WorkspaceInitError(
-          `${e.message}; run \`sandbox connect\` to check the issue tracker.`,
+          `${e.message}; run \`werkmeister connect\` to check the issue tracker.`,
         );
       throw e;
     }
@@ -196,7 +196,7 @@ function splitMultiValue(value: string): string[] {
 
 /**
  * True if a workspace config file exists (any search-order name, or an explicit
- * --config / SANDBOX_WORKSPACE_CONFIG override that resolves).
+ * --config / WERKMEISTER_WORKSPACE_CONFIG override that resolves).
  */
 function hasWorkspaceConfig(workspaceRoot: string, override: string | null): boolean {
   if (override && fs.existsSync(expandUserPath(override))) {
@@ -206,21 +206,21 @@ function hasWorkspaceConfig(workspaceRoot: string, override: string | null): boo
   if (envOverride && fs.existsSync(expandUserPath(envOverride))) {
     return true;
   }
-  const sandbox = dotDir(workspaceRoot);
-  return _WORKSPACE_CONFIG_NAMES.some((name) => fs.existsSync(path.join(sandbox, name)));
+  const dir = dotDir(workspaceRoot);
+  return _WORKSPACE_CONFIG_NAMES.some((name) => fs.existsSync(path.join(dir, name)));
 }
 
 // No schema modeline or `$schema` key: the repo is private, so a GitHub URL
 // 404s in the editor, and either one outranks the local `yaml.schemas`
-// mapping `sandbox setup` writes (machine_setup.ts :: syncEditorSchemas).
+// mapping `werkmeister setup` writes (machine_setup.ts :: syncEditorSchemas).
 const _WORKSPACE_CONFIG_HEADER =
   "# AUTO-GENERATED — durable source of truth for workspace inputs.\n" +
-  "# Tool:    sandbox init-workspace\n" +
+  "# Tool:    werkmeister init-workspace\n" +
   "# Source:  src/commands/init_workspace.ts :: _write_workspace_config\n" +
   "# Edit:    Hand-edit `feature`, `repos`, `services`, `issue_id`, `task`,\n" +
   "#          `test_path`, `description`, `labels`, or `starting_prompt` below; rerun\n" +
-  "#          `sandbox init-workspace` to propagate changes into\n" +
-  `#          CLAUDE.md / .env / ${COMPOSE_FILE} / .sandbox/*.\n` +
+  "#          `werkmeister init-workspace` to propagate changes into\n" +
+  `#          CLAUDE.md / .env / ${COMPOSE_FILE} / .werkmeister/*.\n` +
   "#          Adding/removing a repo here reconciles git worktrees on rerun;\n" +
   "#          removing a repo with uncommitted edits needs `--force`.\n" +
   "#          Optional `standards_override: {add: [...], remove: [...]}` tunes\n" +
@@ -231,7 +231,7 @@ const _WORKSPACE_CONFIG_HEADER =
   "#          accepts legacy JSONC and JSON for back-compat.\n";
 
 /**
- * Persist resolved inputs to `<workspace>/.sandbox/workspace.yml`. Preserves
+ * Persist resolved inputs to `<workspace>/.werkmeister/workspace.yml`. Preserves
  * unmanaged keys, skips a no-op write, and migrates legacy workspace.yaml /
  * .jsonc / .json to workspace.yml.
  *
@@ -404,7 +404,7 @@ async function selectRepos(
   if (unknown.length) {
     fail(
       `Unknown service(s): ${unknown.join(", ")}. ` +
-        "See `sandbox services` / config/services.yaml.",
+        "See `werkmeister services` / config/services.yaml.",
     );
   }
 
@@ -423,7 +423,7 @@ async function selectRepos(
 // Workspace detection
 // ---------------------------------------------------------------------------
 
-/** Build the search order for the sandbox workspaces-container directory. */
+/** Build the search order for the workspaces-container directory. */
 function candidateWorkspaceRoots(): string[] {
   const roots: string[] = [];
   const configured = loadPaths()["workspaces_root"];
@@ -466,10 +466,10 @@ export function findWorkspaceRoot(): string {
 
   const rootsDisplay = candidateWorkspaceRoots().join(", ");
   throw new WorkspaceRootError(
-    `${Colors.RED}[err]  Not inside a sandbox workspace (checked: ` +
+    `${Colors.RED}[err]  Not inside a workspace (checked: ` +
       `${rootsDisplay}) and no parent \`.git\` directory found.\n` +
       "       The workspaces root comes from ~/.werkmeister/config.yaml — run " +
-      "`sandbox config` to set it (or `sandbox config --check` to verify). " +
+      "`werkmeister config` to set it (or `werkmeister config --check` to verify). " +
       `See docs/known-issues.md for details.${Colors.RESET}`,
   );
 }
@@ -538,7 +538,7 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
   if (missingSrc.length) {
     fail(
       `Source repo(s) not found under ${reposRoot}: ${missingSrc.join(", ")}. ` +
-        "Clone them there (or fix `repos` in .sandbox/workspace.yml) and rerun.",
+        "Clone them there (or fix `repos` in .werkmeister/workspace.yml) and rerun.",
     );
   }
 
@@ -608,9 +608,9 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
  * Resolve the task title: `--task` > the caller's stdin reader > a hint derived
  * from the workspace slug.
  *
- * Reading fd 0 is the CLI's affordance (`echo "…" | sandbox init-workspace`),
+ * Reading fd 0 is the CLI's affordance (`echo "…" | werkmeister init-workspace`),
  * so only the CLI supplies a reader. In-process fd 0 belongs to the host — for
- * `sandbox dashboard` it is the JSON-RPC channel — and must not be read.
+ * `werkmeister dashboard` it is the JSON-RPC channel — and must not be read.
  */
 function resolveTask(
   argsTask: string | null | undefined,
@@ -630,7 +630,7 @@ function resolveTask(
 }
 
 // ---------------------------------------------------------------------------
-// Sandbox config loading
+// Werkmeister config loading
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -667,9 +667,9 @@ function logMeta(task: string, meta: Record<string, string>): void {
 }
 
 /**
- * Execute `sandbox init-workspace`.
+ * Execute `werkmeister init-workspace`.
  *
- * `workspaceRootOverride` is how `sandbox workspace` hands over the directory it
+ * `workspaceRootOverride` is how `werkmeister workspace` hands over the directory it
  * just created: everything below resolves paths from the root rather than the
  * cwd, so with it supplied this runs in-process instead of `workspace` having to
  * re-exec the CLI in the new directory just to move `findWorkspaceRoot`'s
@@ -687,8 +687,8 @@ export async function initWorkspace(
   const workspaceName = path.basename(workspaceRoot);
   info(`Workspace root: ${workspaceRoot}`);
 
-  // 2. Resolve generic inputs from the config file (CLI flag > SANDBOX_* env >
-  //    .sandbox/workspace.yml > existing .env).
+  // 2. Resolve generic inputs from the config file (CLI flag > WERKMEISTER_* env >
+  //    .werkmeister/workspace.yml > existing .env).
   const inputs = resolveInputs(args, workspaceRoot);
   // The layer this run writes, validated before 2a persists it.
   const strategy = strategyById(parseStrategyId(inputs["context_strategy"]));
@@ -698,17 +698,17 @@ export async function initWorkspace(
   );
   if (!hasConfig && !inputs["feature"]) {
     fail(
-      "No .sandbox/workspace.yml found and no --feature given. " +
-        "Run `sandbox workspace <name>` to create and initialise a workspace, " +
-        "then rerun `sandbox init-workspace` from inside it to reconcile changes.",
+      "No .werkmeister/workspace.yml found and no --feature given. " +
+        "Run `werkmeister workspace <name>` to create and initialise a workspace, " +
+        "then rerun `werkmeister init-workspace` from inside it to reconcile changes.",
     );
   }
 
-  // 2a. Persist resolved inputs to .sandbox/workspace.yml BEFORE writing any
+  // 2a. Persist resolved inputs to .werkmeister/workspace.yml BEFORE writing any
   // other file — the durable source of truth. A no-op when unchanged.
   writeWorkspaceConfig(workspaceRoot, inputs);
 
-  // 2b. The issue copy (.sandbox/issue.md): handed over at creation, refreshed on request, else read back.
+  // 2b. The issue copy (.werkmeister/issue.md): handed over at creation, refreshed on request, else read back.
   const project = inputs["project"] ?? "";
   const issueId = inputs["issue_id"]
     ? (issueTracker({ project, text: inputs["issue_id"] }).parseRef(inputs["issue_id"]) ??
@@ -811,7 +811,7 @@ export async function initWorkspace(
   for (const err of validateArchetypeMcpServers(archetypes, mcpDefinitions)) {
     warn(err);
   }
-  // Only when non-empty: substituting "" would write an X-Sandbox-Feature header
+  // Only when non-empty: substituting "" would write an X-Werkmeister-Feature header
   // that silently resolves to no feature, where a literal `${FEATURE}` left in
   // the file makes the misconfiguration visible.
   const mcpFeature = (meta["FEATURE"] ?? "").trim();
@@ -835,7 +835,7 @@ export async function initWorkspace(
   seedWorkspaceMetadataEnv(envPath, meta);
   success(`Wrote ${envPath}`);
 
-  // 8. Generate compose.yml, allocate slot, write .sandbox/sandbox-context.md
+  // 8. Generate compose.yml, allocate slot, write .werkmeister/werkmeister-context.md
   const feature = (meta["FEATURE"] ?? "").trim();
   if (feature) {
     const slot = await generateWorkspaceCompose(
@@ -897,7 +897,7 @@ async function runInitWorkspace(
   resolved: Record<string, string>,
   opts: InitWorkspaceOptions,
 ): Promise<number> {
-  info(`Running: sandbox init-workspace (feature: ${featureSlug})`);
+  info(`Running: werkmeister init-workspace (feature: ${featureSlug})`);
   try {
     await initWorkspace(
       { ...resolved, feature: featureSlug, force: opts.force },
@@ -937,7 +937,7 @@ export async function provisionWorkspace(
   if (!feature) {
     fail(
       "A feature name is required (pass it as an argument, set it in " +
-        "./.sandbox/workspace.yml, or run interactively).",
+        "./.werkmeister/workspace.yml, or run interactively).",
     );
   }
 
@@ -972,7 +972,7 @@ export async function provisionWorkspace(
   const workspaceDir = path.join(resolveWorkspacesRoot(), workspaceName);
 
   // 2. Create the workspace ROOT (a sandbox-workspace worktree) and record the
-  //    resolved inputs — including the repo set — in .sandbox/workspace.yml.
+  //    resolved inputs — including the repo set — in .werkmeister/workspace.yml.
   if (fs.existsSync(workspaceDir)) {
     info(`Workspace already exists: ${workspaceDir} — re-running init-workspace.`);
   } else {
@@ -988,9 +988,9 @@ export async function provisionWorkspace(
   const rc = await runInitWorkspace(workspaceDir, featureSlug, resolved, opts);
   if (rc !== 0) {
     const message =
-      `sandbox init-workspace exited with status ${rc}. ` +
+      `werkmeister init-workspace exited with status ${rc}. ` +
       `The workspace root exists at ${workspaceDir}; ` +
-      "re-run `sandbox init-workspace` from there once resolved.";
+      "re-run `werkmeister init-workspace` from there once resolved.";
     warn(message);
     throw new WorkspaceInitError(message);
   }

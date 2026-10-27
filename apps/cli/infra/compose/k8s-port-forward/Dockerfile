@@ -17,7 +17,7 @@ FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d650
 #
 # corp_ca secret: on machines behind a TLS-intercepting proxy (Netskope/Zscaler),
 # outbound HTTPS from the build hits a cert the host trusts but alpine's shipped
-# root store doesn't. `sandbox connect` extracts the proxy root into
+# root store doesn't. `werkmeister connect` extracts the proxy root into
 # ~/.werkmeister/corp-ca.crt and mounts it as a BuildKit secret. Missing/empty file
 # is a no-op — off-proxy builds work unchanged. The CA is appended to alpine's
 # combined bundle before apk runs, so the fetch validates cleanly.

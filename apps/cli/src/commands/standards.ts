@@ -1,10 +1,10 @@
 /**
- * sandbox standards check — structural regression gate over the configured
+ * werkmeister standards check — structural regression gate over the configured
  * standards tree (docs/jit-context-system.md §7).
  *
  * Renders `checkStandards()` and maps any error to exit 1, so a malformed
  * standards edit fails loudly instead of silently dropping out of
- * loadStandardsModules. Separate from `sandbox skills check`, which is
+ * loadStandardsModules. Separate from `werkmeister skills check`, which is
  * workspace-scoped (projection staleness).
  */
 

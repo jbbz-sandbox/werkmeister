@@ -3,7 +3,7 @@ import * as path from "node:path";
 
 import type { Finding, Skipped } from "./types.js";
 
-/** Known datastore images → the wire probe `sandbox` can run (`""` = TCP only) and their default port. */
+/** Known datastore images → the wire probe `werkmeister` can run (`""` = TCP only) and their default port. */
 export const DATASTORES: Record<string, { health: string; port: number }> = {
   redis: { health: "redis", port: 6379 },
   postgres: { health: "postgres", port: 5432 },

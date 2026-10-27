@@ -8,8 +8,8 @@ import { pathDefault } from "werkmeister-core/global_config";
 const saved = { ...process.env };
 
 beforeEach(() => {
-  delete process.env.SANDBOX_REPOS_ROOT;
-  delete process.env.SANDBOX_WORKSPACES_ROOT;
+  delete process.env.WERKMEISTER_REPOS_ROOT;
+  delete process.env.WERKMEISTER_WORKSPACES_ROOT;
 });
 afterEach(() => {
   process.env = { ...saved };
@@ -23,7 +23,7 @@ describe("pathDefault", () => {
   });
 
   it("falls back to the exported env when nothing is stored", () => {
-    process.env.SANDBOX_REPOS_ROOT = "/env/repos";
+    process.env.WERKMEISTER_REPOS_ROOT = "/env/repos";
     expect(pathDefault("repos_root", {})).toBe("/env/repos");
   });
 

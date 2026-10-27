@@ -8,7 +8,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 const cfg = path.join(mkdtempSync(path.join(tmpdir(), "jira-site-")), "config.yaml");
-process.env.SANDBOX_CONFIG_FILE = cfg;
+process.env.WERKMEISTER_CONFIG_FILE = cfg;
 const { jiraSiteRef, jiraSitePhrase } = await import("./dist/issue_tracker.js");
 const { jiraBrowseUrl } = await import("./dist/issue_trackers/jira.js");
 

@@ -77,8 +77,8 @@ test("a non-interactive create with no strategy writes context_strategy: icm (#1
     "init",
   ]);
   execFileSync("git", ["clone", "-q", seed, path.join(repos, "demo-repo")]);
-  const prevRoot = process.env.SANDBOX_ROOT;
-  process.env.SANDBOX_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+  const prevRoot = process.env.WERKMEISTER_ROOT;
+  process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
   try {
     await withSandboxHome(
       async () => {
@@ -104,8 +104,8 @@ test("a non-interactive create with no strategy writes context_strategy: icm (#1
       { config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(tmp, "ws")}\n` },
     );
   } finally {
-    if (prevRoot === undefined) delete process.env.SANDBOX_ROOT;
-    else process.env.SANDBOX_ROOT = prevRoot;
+    if (prevRoot === undefined) delete process.env.WERKMEISTER_ROOT;
+    else process.env.WERKMEISTER_ROOT = prevRoot;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

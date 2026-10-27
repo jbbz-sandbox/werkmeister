@@ -14,7 +14,7 @@ import { afterEach, beforeEach, test } from "node:test";
 
 import { waitForForwards } from "./dist/k8s.js";
 
-const VARS = ["SANDBOX_SERVICES_YAML", "SANDBOX_CONFIG_FILE", "SANDBOX_ROOT"];
+const VARS = ["WERKMEISTER_SERVICES_YAML", "WERKMEISTER_CONFIG_FILE", "WERKMEISTER_ROOT"];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 let open = [];
 
@@ -50,7 +50,7 @@ async function registry(ports) {
     )
     .join("");
   await writeFile(file, `services: {}\ninfrastructure:\n${body}`);
-  process.env.SANDBOX_SERVICES_YAML = file;
+  process.env.WERKMEISTER_SERVICES_YAML = file;
 }
 
 beforeEach(() => {

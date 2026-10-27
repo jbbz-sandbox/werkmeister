@@ -12,19 +12,19 @@ const home = fs.mkdtempSync(path.join(os.tmpdir(), "check-in-release-"));
 const root = path.join(home, "features");
 process.env.HOME = home;
 // The callback lock lives next to the config file.
-process.env.SANDBOX_CONFIG_FILE = path.join(home, ".sandbox", "config.yaml");
-process.env.SANDBOX_WORKSPACES_ROOT = root;
+process.env.WERKMEISTER_CONFIG_FILE = path.join(home, ".werkmeister", "config.yaml");
+process.env.WERKMEISTER_WORKSPACES_ROOT = root;
 
 const { checkInTriage } = await import("./dist/sandbox.js");
 const { resolveIssueStatuses } = await import("./dist/issue_status.js");
-const lockFile = path.join(home, ".sandbox", "pr-callbacks.lock");
+const lockFile = path.join(home, ".werkmeister", "pr-callbacks.lock");
 
 /** A workspace with one PR file (`fm` frontmatter lines), or none when `fm` is null. */
 function workspace(name, fm, { labels = [], closedOut = false, agent, lastRole } = {}) {
   const dir = path.join(root, name);
-  fs.mkdirSync(path.join(dir, ".sandbox"), { recursive: true });
+  fs.mkdirSync(path.join(dir, ".werkmeister"), { recursive: true });
   fs.writeFileSync(
-    path.join(dir, ".sandbox", "workspace.yml"),
+    path.join(dir, ".werkmeister", "workspace.yml"),
     `labels: [${labels.join(", ")}]\nissue_id: o/app#${name.length}\n`,
   );
   const out = path.join(dir, "stages", "04_propose", "output");
@@ -33,7 +33,7 @@ function workspace(name, fm, { labels = [], closedOut = false, agent, lastRole }
   if (closedOut) fs.writeFileSync(path.join(dir, "closeout.md"), "closed\n");
   if (agent)
     fs.writeFileSync(
-      path.join(dir, ".sandbox", "agent-state.json"),
+      path.join(dir, ".werkmeister", "agent-state.json"),
       JSON.stringify({ state: agent, at: new Date().toISOString() }),
     );
   if (lastRole) {

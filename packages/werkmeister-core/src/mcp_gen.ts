@@ -66,7 +66,7 @@ export function validateArchetypeMcpServers(
  * A dumb recursive string substitution over the definition body rather than a
  * field the registry schema knows about: the registry stays free-form JSON, and
  * any future server that wants the feature gets it the same way. An unmatched
- * `${...}` — `${SANDBOX_MCP_TOKEN}`, expanded by the MCP client from the
+ * `${...}` — `${WERKMEISTER_MCP_TOKEN}`, expanded by the MCP client from the
  * container's environment — is written through untouched, which is what keeps
  * the token out of a file that lives inside a git worktree.
  *

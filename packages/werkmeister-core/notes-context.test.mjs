@@ -18,7 +18,7 @@ import {
 } from "./dist/notes.js";
 
 const fakeNote = (n, body = "x".repeat(2000)) => ({
-  path: `/ws/.sandbox/notes/${String(n).padStart(3, "0")}-decision-x.md`,
+  path: `/ws/.werkmeister/notes/${String(n).padStart(3, "0")}-decision-x.md`,
   number: n,
   type: "decision",
   slug: "x",
@@ -46,7 +46,7 @@ test("renderDecisions keeps the newest and names what it elided", () => {
 test("renderNote truncates a body over the per-note cap", () => {
   const out = renderNote("Open decision", fakeNote(7, "y".repeat(9000)), "/ws");
   assert.ok(
-    out.startsWith("── Open decision: .sandbox/notes/007-decision-x.md ──\ny"),
+    out.startsWith("── Open decision: .werkmeister/notes/007-decision-x.md ──\ny"),
     out.slice(0, 80),
   );
   assert.match(out, /\n…\(truncated — read the full note\)\n$/);
@@ -70,7 +70,7 @@ test("renderActiveStandards renders both situations verbatim", () => {
       "the full rules. Re-invoke each skill to reload them before editing " +
       "matching files again." +
       precedence +
-      "\n- `sb-python-standard` — no bare except\n",
+      "\n- `w9r-python-standard` — no bare except\n",
   );
   assert.equal(
     renderActiveStandards([["python", ""]], "startup"),
@@ -78,16 +78,16 @@ test("renderActiveStandards renders both situations verbatim", () => {
       "Files changed on this branch match these standards. Invoke each " +
       "skill before editing matching files." +
       precedence +
-      "\n- `sb-python-standard`\n",
+      "\n- `w9r-python-standard`\n",
   );
 });
 
-// JIT keeps PR files and exercise evidence in .sandbox/notes/ (docs/workspace-lifecycle.md);
+// JIT keeps PR files and exercise evidence in .werkmeister/notes/ (docs/workspace-lifecycle.md);
 // they are not notes, so they never reach the SessionStart payload or the numbering.
 test("pr-*.md and exercise.md in the notes dir are not notes", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "notes-pr-"));
   try {
-    const dir = path.join(ws, ".sandbox", "notes");
+    const dir = path.join(ws, ".werkmeister", "notes");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, "001-decision-x.md"),

@@ -1,5 +1,5 @@
 /**
- * Caddy reverse proxy management for the developer sandbox.
+ * Caddy reverse proxy management for werkmeister.
  *
  * Caddy runs as a Docker container (part of shared-infra) and routes traffic
  * to the correct feature's containers based on the X-Feature header/cookie.

@@ -52,7 +52,7 @@ function split(ref: string): [string, string] {
   return [m[1], m[2]];
 }
 
-/** `gh`, or $SANDBOX_GH_BIN (tests point it at a fake). */
+/** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake). */
 export const ghBin = () => envVar("GH_BIN") || "gh";
 
 /** `gh` with its stdout; throws with gh's own message on a non-zero exit. */

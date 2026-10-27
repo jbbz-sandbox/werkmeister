@@ -26,7 +26,7 @@ import {
 
 // The machine's config.yaml would leak in: `overrides.issue_tracker: github`
 // rewords and re-validates the `issue_id` prompt.
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
 // An empty dir: no workspace.yml to pre-resolve fields, no repos to scrape.
 const root = await mkdtemp(path.join(tmpdir(), "prompt-spec-"));
@@ -110,8 +110,8 @@ test("autonomous is an optional checkbox, off by default", () => {
 /** A workspace root whose workspace.yml holds *yml*. */
 function wsWith(yml) {
   const ws = mkdtempSync(path.join(tmpdir(), "autonomous-"));
-  mkdirSync(path.join(ws, ".sandbox"));
-  writeFileSync(path.join(ws, ".sandbox", "workspace.yml"), yml);
+  mkdirSync(path.join(ws, ".werkmeister"));
+  writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), yml);
   return ws;
 }
 
@@ -120,11 +120,11 @@ test("autonomous resolves from the flag, the env var and workspace.yml, as true/
   assert.equal(resolveInputs({}, wsWith("autonomous: true\n")).autonomous, "true");
   assert.equal(resolveInputs({}, wsWith("autonomous: false\n")).autonomous, "false");
   assert.ok(!("autonomous" in resolveInputs({}, root)));
-  process.env.SANDBOX_AUTONOMOUS = "1";
+  process.env.WERKMEISTER_AUTONOMOUS = "1";
   try {
     assert.equal(resolveInputs({}, wsWith("autonomous: false\n")).autonomous, "true");
   } finally {
-    delete process.env.SANDBOX_AUTONOMOUS;
+    delete process.env.WERKMEISTER_AUTONOMOUS;
   }
 });
 
@@ -138,7 +138,7 @@ test("workspace.yml stores autonomous as a YAML boolean", () => {
   const ws = wsWith("feature: x\n");
   writeWorkspaceConfig(ws, { autonomous: "true" });
   assert.match(
-    readFileSync(path.join(ws, ".sandbox", "workspace.yml"), "utf8"),
+    readFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "utf8"),
     /^autonomous: true$/m,
   );
 });

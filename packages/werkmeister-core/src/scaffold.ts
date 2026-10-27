@@ -4,7 +4,7 @@
  * These files used to be committed under `<repo>/infra/config/`. They describe
  * the developer's machine — which services exist, which ports they get, what
  * models cost — not the checkout, so they now live in `~/.werkmeister` and this
- * module is the only place their initial content is defined. `sandbox setup`
+ * module is the only place their initial content is defined. `werkmeister setup`
  * writes each one exactly once: seeding NEVER overwrites an existing file, so
  * a re-run can't clobber hand edits.
  *
@@ -67,7 +67,7 @@ models:
  * Render the starter secrets.env template.
  *
  * Empty by default: a service opts into a required secret by listing it in
- * its own `secrets:` entry in services.yaml, and `sandbox up` only fails fast
+ * its own `secrets:` entry in services.yaml, and `werkmeister up` only fails fast
  * on the keys the feature's own services declare (secrets.ts
  * `resolveSecrets`). Add real values here as your services need them.
  */
@@ -77,7 +77,7 @@ export function renderSecretsEnv(): string {
       "# Machine-global secrets — real values, never committed.",
       "#",
       "# A service declares the keys it needs via `secrets:` in its services.yaml",
-      "# entry; `sandbox up` writes them, as plain KEY, into that service's own",
+      "# entry; `werkmeister up` writes them, as plain KEY, into that service's own",
       "# <workspace>/.env.<service>, and fails fast when one is missing or empty.",
       "#",
       "# Namespace a key by service as <SERVICE>__KEY (service name uppercased,",
@@ -94,14 +94,14 @@ export function renderSecretsEnv(): string {
 // ---------------------------------------------------------------------------
 
 /**
- * The per-machine registry overlay. `sandbox registry sync` merges it LAST over
+ * The per-machine registry overlay. `werkmeister registry sync` merges it LAST over
  * the generated ~/.werkmeister/services.yaml, so this is where hand edits live now;
  * the generated file itself is never edited.
  */
 export function renderServicesLocalYaml(k8sContext: string): string {
   return `# Machine-local registry overrides — hand-edit freely.
 #
-# \`sandbox registry sync\` (and \`sandbox setup\`) regenerate ~/.werkmeister/services.yaml
+# \`werkmeister registry sync\` (and \`werkmeister setup\`) regenerate ~/.werkmeister/services.yaml
 # from every <repo>/.werkmeister/services.yaml under paths.repos_root, then merge
 # this file over the result: maps merge, scalars and lists replace. A key here
 # beats every fragment, e.g.
@@ -110,7 +110,7 @@ export function renderServicesLocalYaml(k8sContext: string): string {
 #     frontend:
 #       memory_limit: 2G
 #
-# Kube context for a dev cluster — consumed by \`sandbox intercept\`.
+# Kube context for a dev cluster — consumed by \`werkmeister intercept\`.
 k8s_context: ${k8sContext.trim() || "orbstack"}
 `;
 }
@@ -122,7 +122,7 @@ k8s_context: ${k8sContext.trim() || "orbstack"}
 /**
  * Write *content* to *target* only when it does not already exist.
  *
- * The never-overwrite rule is what makes `sandbox setup` safe to re-run: the
+ * The never-overwrite rule is what makes `werkmeister setup` safe to re-run: the
  * registry files accumulate hand edits, and a setup pass must converge the
  * machine without touching them.
  */
@@ -139,11 +139,11 @@ export function seedFile(target: string, content: string, mode = 0o644): SeedRes
 }
 
 // ---------------------------------------------------------------------------
-// Registry defaults (sandbox-owned; merged under every repo's fragment)
+// Registry defaults (werkmeister-owned; merged under every repo's fragment)
 // ---------------------------------------------------------------------------
 
 /**
- * The `archetypes:` and `mcp_servers:` registries. Owned by the sandbox, not
+ * The `archetypes:` and `mcp_servers:` registries. Owned by werkmeister, not
  * by any app repo: `standards:` keys must match a docs/standards/<key>.md
  * module and the MCP bodies are projected verbatim into .mcp.json, so a
  * fragment references these by name and never redefines them.
@@ -152,9 +152,9 @@ export function seedFile(target: string, content: string, mode = 0o644): SeedRes
  * the registry merge — they are deliberately plain strings here.
  */
 // Named so the CLI-argv guard in core_cli_spawns.test.ts (which greps core for
-// a quoted sandbox name closing an array) does not read this MCP-server
+// a quoted werkmeister name closing an array) does not read this MCP-server
 // reference as a CLI spawn.
-const SANDBOX_MCP_SERVER = "werkmeister";
+const WERKMEISTER_MCP_SERVER = "werkmeister";
 
 export const REGISTRY_DEFAULTS: Record<string, any> = {
   archetypes: {
@@ -170,7 +170,7 @@ export const REGISTRY_DEFAULTS: Record<string, any> = {
     },
     "mcp-client": {
       standards: ["engineering", "testing"],
-      mcp_servers: [SANDBOX_MCP_SERVER],
+      mcp_servers: [WERKMEISTER_MCP_SERVER],
       validate:
         "Build, then npm run test:integration (Extension Development Host via @vscode/test-cli). " +
         "Walk the open items in MANUAL-CHECKLIST.md for anything visual.",
@@ -203,10 +203,13 @@ export const REGISTRY_DEFAULTS: Record<string, any> = {
       args: ["-y", "@upstash/context7-mcp"],
       env: { CONTEXT7_API_KEY: "${CONTEXT7_API_KEY:-}" },
     },
-    [SANDBOX_MCP_SERVER]: {
+    [WERKMEISTER_MCP_SERVER]: {
       type: "http",
       url: "http://host.docker.internal:3002/mcp",
-      headers: { Authorization: "Bearer ${SANDBOX_MCP_TOKEN}", "X-Sandbox-Feature": "${FEATURE}" },
+      headers: {
+        Authorization: "Bearer ${WERKMEISTER_MCP_TOKEN}",
+        "X-Werkmeister-Feature": "${FEATURE}",
+      },
     },
   },
 };

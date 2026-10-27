@@ -1,22 +1,40 @@
 /**
  * `werkmeister migrate`: move `~/.sandbox` to `~/.werkmeister` (SW-92).
  *
- * Readers already follow the move through `dotDir()`; what breaks is every file
- * that was written with the old absolute path in it. Each step below repairs one
- * of those, detects before it writes, and is a no-op once done, so a second run
+ * Readers only know `~/.werkmeister` and the post-SW-106 names, so every file
+ * written under the old home or with an old name needs repair. Each step below
+ * repairs one of those, detects before it writes, and is a no-op once done, so a second run
  * (or a run on a machine that was never on `~/.sandbox`) changes nothing and a
  * run that failed half-way can simply be repeated. Reports through Step objects
- * like machine_setup. Goes away with the fallbacks in SW-11.
+ * like machine_setup. The one place the CLI still reads the pre-rename names.
  */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
+import { parse as parseYaml } from "yaml";
 import { COMPOSE_FILE, LEGACY_COMPOSE_FILE } from "./compose_file.js";
-import { configPath, envVar, workspacesRoot } from "./config.js";
+import {
+  configPath,
+  envVar,
+  expandUser,
+  servicesLocalYamlPath,
+  servicesYamlPath,
+  workspacesRoot,
+} from "./config.js";
 import { docker } from "./docker.js";
-import { ensureZshenvSources, envShPath, load, renderEnvSh, writeEnvSh } from "./global_config.js";
+import { DOT_DIR } from "./dot_dir.js";
+import {
+  ensureZshenvSources,
+  ensureZshrcCompletion,
+  envShPath,
+  load,
+  renderEnvSh,
+  stripBlock,
+  writeEnvSh,
+  zshenvPath,
+  zshrcPath,
+} from "./global_config.js";
 import {
   installPrWatchSchedule,
   type PrWatchScheduleOptions,
@@ -26,7 +44,6 @@ import {
 import { syncRegistry } from "./registry_sync.js";
 
 export const LEGACY_DOT_DIR = ".sandbox";
-export const DOT_DIR = ".werkmeister";
 
 /** A running container, as far as the refusal needs to know. */
 export interface RunningContainer {
@@ -71,6 +88,13 @@ function repointed(text: string, from: string, to: string): string {
   return text.replace(new RegExp(`${escapeRe(from)}(?![\\w.-])`, "g"), to);
 }
 
+/** Drop the pre-SW-106 `# >>> <name> >>>` block from *file*; true when there was one. */
+function retireBlock(file: string, name: string): boolean {
+  if (!fs.existsSync(file)) return false;
+  const text = fs.readFileSync(file, "utf8");
+  return writeIfChanged(file, stripBlock(text, `# >>> ${name} >>>`, `# <<< ${name} <<<`), false);
+}
+
 /** Write *next* unless it equals what is there; true when it differs. */
 function writeIfChanged(file: string, next: string, checkOnly: boolean): boolean {
   if (fs.readFileSync(file, "utf8") === next) return false;
@@ -88,6 +112,15 @@ function workspaceDirs(root: string): string[] {
     .filter((dir) =>
       [DOT_DIR, LEGACY_DOT_DIR].some((d) => fs.existsSync(path.join(dir, d, "workspace.yml"))),
     );
+}
+
+/** {@link workspacesRoot} as the pre-rename home's config.yaml sets it: nothing reads that home but migrate. */
+function workspacesRootBeforeMove(legacy: string): string {
+  const file = path.join(legacy, "config.yaml");
+  const configured = fs.existsSync(file)
+    ? parseYaml(fs.readFileSync(file, "utf8"))?.paths?.workspaces_root
+    : undefined;
+  return configured ? path.resolve(expandUser(String(configured))) : workspacesRoot();
 }
 
 export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
@@ -116,7 +149,7 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
     ];
   }
 
-  const wsRoot = workspacesRoot();
+  const wsRoot = fs.existsSync(legacy) ? workspacesRootBeforeMove(legacy) : workspacesRoot();
   const legacyWorkspaces = opts.workspaces
     ? workspaceDirs(wsRoot).filter(
         (dir) =>
@@ -168,15 +201,17 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
   let configChanged = false;
   if (fs.existsSync(config)) {
     const text = fs.readFileSync(config, "utf8");
-    const next = repointed(repointed(text, legacy, target), `~/${LEGACY_DOT_DIR}`, `~/${DOT_DIR}`);
+    const next = repointed(repointed(text, legacy, target), `~/${LEGACY_DOT_DIR}`, `~/${DOT_DIR}`)
+      .replace(/^(\s*)sandbox_root:/m, "$1werkmeister_root:")
+      .replace(/^(\s*)sandbox_issues_project:/m, "$1werkmeister_issues_project:");
     configChanged = writeIfChanged(config, next, checkOnly);
   }
   steps.push({
     label: "config.yaml",
     ok: true,
     detail: configChanged
-      ? would("repointed paths at the new home", "would repoint paths at the new home")
-      : "no paths under the old home",
+      ? would("repointed paths and renamed keys", "would repoint paths and rename keys")
+      : "no paths under the old home, no pre-rename keys",
   });
 
   if (checkOnly) {
@@ -192,11 +227,37 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
       ok: true,
       detail: envChanged ? `regenerated ${envSh}` : "up to date",
     });
+    const oldEnvBlock = retireBlock(zshenvPath(), "sandbox config");
     steps.push({
       label: "~/.zshenv",
       ok: true,
-      detail: ensureZshenvSources() ? `source block now reads ${target}/env.sh` : "up to date",
+      detail:
+        ensureZshenvSources() || oldEnvBlock
+          ? `source block now reads ${target}/env.sh`
+          : "up to date",
     });
+    if (retireBlock(zshrcPath(), "sandbox completion")) {
+      ensureZshrcCompletion();
+      steps.push({ label: "~/.zshrc", ok: true, detail: "completion now for werkmeister and w9r" });
+    }
+    // Volume specs name the CLI checkout as ${SANDBOX_ROOT} until SW-106; services.yaml is
+    // regenerated from fragments right after, services.local.yaml is the person's own.
+    const rooted = [servicesYamlPath(), servicesLocalYamlPath()].filter(
+      (file) =>
+        fs.existsSync(file) &&
+        writeIfChanged(
+          file,
+          fs.readFileSync(file, "utf8").replaceAll("${SANDBOX_ROOT}", "${WERKMEISTER_ROOT}"),
+          false,
+        ),
+    );
+    if (rooted.length) {
+      steps.push({
+        label: "volume specs",
+        ok: true,
+        detail: `\${SANDBOX_ROOT} → \${WERKMEISTER_ROOT} in ${rooted.join(", ")}`,
+      });
+    }
     steps.push(...syncRegistry());
   }
 

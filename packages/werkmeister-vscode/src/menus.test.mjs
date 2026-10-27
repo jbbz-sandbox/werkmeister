@@ -27,7 +27,7 @@ const ws = (name, over = {}) => ({
 
 const st = (name, over = {}) => ({
   name,
-  project: `sandbox-${name}`,
+  project: `werkmeister-${name}`,
   state: "down",
   running: 0,
   total: 0,

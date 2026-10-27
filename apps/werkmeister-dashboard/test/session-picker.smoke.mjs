@@ -16,7 +16,7 @@ const wsRoot = path.join(tmp, "workspaces");
 const wsPath = path.join(wsRoot, "demo");
 fs.mkdirSync(wsPath, { recursive: true });
 process.env.HOME = home;
-process.env.SANDBOX_WORKSPACES_ROOT = wsRoot;
+process.env.WERKMEISTER_WORKSPACES_ROOT = wsRoot;
 
 const encoded = wsPath.replace(/[^a-zA-Z0-9]/g, "-");
 const projDir = path.join(home, ".claude", "projects", encoded);

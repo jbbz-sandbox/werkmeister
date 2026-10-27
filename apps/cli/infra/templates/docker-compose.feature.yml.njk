@@ -83,7 +83,7 @@ services:
       com.werkmeister.feature: "{{ feature_name }}"
       com.werkmeister.slot: "{{ slot }}"
       com.werkmeister.service: "{{ setup_name }}"
-      {#- One-shot: `sandbox status` and the VS Code tree read this to keep a
+      {#- One-shot: `werkmeister status` and the VS Code tree read this to keep a
           finished setup container out of the running/total tally. #}
       com.werkmeister.role: "setup"
     working_dir: /app
@@ -98,7 +98,7 @@ services:
 {% for vol in setup.extra_volumes %}
 {% set vol_parts = vol.split(':') %}
 {% if '/' in vol_parts[0] %}
-      - {{ vol | replace('${REPO}', workspace_path + '/' + setup.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+      - {{ vol | replace('${REPO}', workspace_path + '/' + setup.repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
 {% elif vol[0] == '^' %}
       - {{ vol | replace('^', '') }}
 {% else %}
@@ -108,9 +108,8 @@ services:
 {# Opt-in: no `*-startup.sh` ships in infra/compose/scripts/, and bind-mounting #}
 {# a host path that does not exist makes Docker silently create an empty        #}
 {# directory at /usr/local/bin/startup.sh.                                      #}
-{# SW-93: a fragment still naming the setup `sandbox-install` gets the renamed script; SW-11 drops this. #}
 {% if setup.startup_script %}
-      - {{ sandbox_root }}/infra/compose/scripts/{{ 'werkmeister-install' if setup_name == 'sandbox-install' else setup_name }}-startup.sh:/usr/local/bin/startup.sh
+      - {{ werkmeister_root }}/infra/compose/scripts/{{ setup_name }}-startup.sh:/usr/local/bin/startup.sh
 {% endif %}
     command: ["/bin/sh", "-c", "{{ setup.command }}"]
     deploy:
@@ -139,7 +138,7 @@ services:
 {% endfor %}
 {% for svc in local_services %}
 {# SW-32: nothing reads a cli/library/extension watcher's output (the gate only #}
-{# docker-execs the test), so these idle unless `sandbox up --dev`.             #}
+{# docker-execs the test), so these idle unless `werkmeister up --dev`.             #}
 {% set idle = svc.type in idle_types %}
   {{ svc.name }}:
     image: {{ svc.image | default('node:22') }}
@@ -180,7 +179,7 @@ services:
 {% for vol in svc.get('extra_volumes', []) %}
 {% set vol_parts = vol.split(':') %}
 {% if '/' in vol_parts[0] %}
-      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
 {% elif vol[0] == '^' %}
       - {{ vol | replace('^', '') }}
 {% else %}
@@ -189,7 +188,7 @@ services:
 {% endfor %}
 {# Per-workspace dev-links (note 008): always host bind mounts, so no named-volume branch #}
 {% for vol in svc.get('dev_links', []) %}
-      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${SANDBOX_ROOT}', sandbox_root) }}
+      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
 {% endfor %}
     ports:
       - "{{ base_port + svc.port_offset }}:{{ svc.internal_port }}"
@@ -223,8 +222,8 @@ services:
           git config --global --add url."https://$${GITHUB_AUTH_TOKEN}@github.com/".insteadOf "git+ssh://git@github.com/"
         fi
 {%- if idle %}
-        # SANDBOX_DEV is interpolated by compose from the env of `sandbox up --dev`.
-        [ "${SANDBOX_DEV:-}" = 1 ] || exec sleep infinity
+        # WERKMEISTER_DEV is interpolated by compose from the env of `werkmeister up --dev`.
+        [ "${WERKMEISTER_DEV:-}" = 1 ] || exec sleep infinity
 {%- endif %}
         {{ svc.command or "exec sleep infinity" }}
 {% endif %}

@@ -3,7 +3,7 @@
  *
  * npx resolves the CLI inside ~/.npm/_npx/<hash>/, a cache npm re-hashes on
  * every version change and garbage-collects. `setup`/`config` persist
- * SANDBOX_ROOT into ~/.sandbox, and the compose generator bakes it into each
+ * WERKMEISTER_ROOT into ~/.sandbox, and the compose generator bakes it into each
  * workspace's compose.yml as a bind mount — so running from there pins
  * permanent state to a directory that will vanish. The wrapper installs
  * globally and hands off instead.
@@ -61,7 +61,7 @@ function run(wrapper: string, args: string[], pathPrefix: string): string {
     encoding: "utf8",
     env: {
       ...process.env,
-      SANDBOX_ROOT: "",
+      WERKMEISTER_ROOT: "",
       HOME: tmp, // no ~/.sandbox/env.sh to source
       PATH: `${pathPrefix}:${process.env.PATH}`,
     },

@@ -1,5 +1,5 @@
 /**
- * sandbox clean [--all] [--dry-run]
+ * werkmeister clean [--all] [--dry-run]
  *
  * Remove orphaned Docker volumes and stale slot entries from stopped
  * features. With --all, also tears down active features first.
@@ -12,12 +12,12 @@
 import { planClean, runClean } from "werkmeister-core/lifecycle";
 import { Colors } from "../lib/config.js";
 
-/** Execute the ``sandbox clean`` command. */
+/** Execute the ``werkmeister clean`` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const all = Boolean(args.all);
   const dryRun = Boolean(args.dry_run);
 
-  console.log(`\n${Colors.BOLD}=== sandbox clean ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister clean ===${Colors.RESET}\n`);
 
   // planClean is runClean's dry run, named so the non-destructive call is the
   // obvious one to reach for rather than a boolean nobody reads twice.

@@ -19,7 +19,7 @@ pills, issue cards and briefings in `apps/werkmeister-dashboard`) instead of a
      your Jira site, e.g. your-org.atlassian.net).
    - Click **Create API token** (the plain one, *not* "with scopes" — the
      unscoped token works with all REST endpoints we use).
-   - Name: `sandbox-jira` (anything memorable). Expiry: max is 1 year — note
+   - Name: `werkmeister-jira` (anything memorable). Expiry: max is 1 year — note
      the date; you'll repeat this step then.
    - Copy the token immediately (it is shown once).
 

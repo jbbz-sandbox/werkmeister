@@ -1,8 +1,8 @@
 /**
  * Shared infrastructure management (compose/shared-infra.yml).
  *
- * All four verbs of the `infra` target live here: `up` is what `sandbox connect`
- * and `sandbox up infra` both run, and `down`/`stop`/`restart` are what the
+ * All four verbs of the `infra` target live here: `up` is what `werkmeister connect`
+ * and `werkmeister up infra` both run, and `down`/`stop`/`restart` are what the
  * matching commands route to when their target is "infra".
  *
  * Per §4, nothing here decides layout: progress goes through the reporter, and
@@ -216,7 +216,7 @@ function checkPort(host: string, port: number, timeoutSec: number): Promise<bool
  * Distinct from `status.ts`'s `getInfraStatus`, which reads the same containers
  * but reports a four-way display string and has no fallback. This one is a
  * healthy/not-healthy verdict that must still answer when the daemon cannot, so
- * `sandbox connect` can say what converged.
+ * `werkmeister connect` can say what converged.
  */
 async function checkInfraHealth(): Promise<Record<string, boolean>> {
   const services: Record<string, boolean> = {};
@@ -259,7 +259,7 @@ export async function up({ signal }: { signal?: AbortSignal } = {}): Promise<boo
 
   // Auto-configure the secret-commit guard hook (idempotent, never clobbers
   // a pre-existing custom core.hooksPath). Informational only — a
-  // hooksPath conflict should warn, not block `sandbox connect`.
+  // hooksPath conflict should warn, not block `werkmeister connect`.
   configureGitHooksPath();
 
   // Ensure proxy files exist before docker compose tries to read them
@@ -307,7 +307,7 @@ export async function infraHealth(timeoutSec: number): Promise<Record<string, bo
 }
 
 /**
- * Start or restart the k8s port-forwards container only (`sandbox connect --k8s`).
+ * Start or restart the k8s port-forwards container only (`werkmeister connect --k8s`).
  *
  * Returns whether the forwards are up; the caller turns a false into the
  * recovery hint, which is a next-step and so stays CLI-side.
@@ -353,7 +353,7 @@ export async function stop(): Promise<void> {
     return;
   }
   success(
-    "Shared infrastructure stopped (containers preserved, resumable with 'sandbox up infra')",
+    "Shared infrastructure stopped (containers preserved, resumable with 'werkmeister up infra')",
   );
 }
 

@@ -62,7 +62,7 @@ The CLI owns the inputs and the create logic:
 | `src/lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `src/lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
 | `werkmeister-ui` (`packages/werkmeister-ui`) | The shared UI modules (workspace list, create form, chat panel, theme, usage widget, markdown) and the display model |
-| `werkmeister-core` (`packages/werkmeister-core`) | Bridge to `sandbox` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
+| `werkmeister-core` (`packages/werkmeister-core`) | Bridge to `werkmeister` / `gh` / `kubectl` / `claude` CLIs, the issue-tracker strategies, and the `./cache` subpath — imported as a workspace dependency, not a local `lib/` file |
 | other `src/*.ts` + `*.html` | The two vite inputs: `browser`, `form` |
 
 ## Build & test

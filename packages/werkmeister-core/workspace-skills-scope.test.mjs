@@ -25,16 +25,16 @@ function withTree(fn) {
 test("no active list projects every standard", () => {
   withTree((dir) => {
     const names = Object.keys(renderWorkspaceSkills(dir, null, null));
-    assert.ok(names.includes("sb-alpha-standard"));
-    assert.ok(names.includes("sb-beta-standard"));
+    assert.ok(names.includes("w9r-alpha-standard"));
+    assert.ok(names.includes("w9r-beta-standard"));
   });
 });
 
 test("an active list keeps only those standards and every entry skill", () => {
   withTree((dir) => {
     const names = Object.keys(renderWorkspaceSkills(dir, null, ["alpha"]));
-    assert.ok(names.includes("sb-alpha-standard"));
-    assert.ok(!names.includes("sb-beta-standard"));
-    assert.ok(names.includes("sb-implement"), "entry skills are never filtered");
+    assert.ok(names.includes("w9r-alpha-standard"));
+    assert.ok(!names.includes("w9r-beta-standard"));
+    assert.ok(names.includes("w9r-implement"), "entry skills are never filtered");
   });
 });

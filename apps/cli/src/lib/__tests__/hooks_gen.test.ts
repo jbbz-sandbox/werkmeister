@@ -86,10 +86,10 @@ describe("writeWorkspaceHooks", () => {
   });
 
   it("repairs stale skill projections without writing to the context window", () => {
-    expect(SESSION_START_COMMAND).toContain("sandbox skills check");
-    expect(SESSION_START_COMMAND).toContain("sandbox skills sync");
+    expect(SESSION_START_COMMAND).toContain("werkmeister skills check");
+    expect(SESSION_START_COMMAND).toContain("werkmeister skills sync");
     // Only `notes context` may reach stdout — see the comment on _SKILLS_SELF_HEAL.
-    expect(SESSION_START_COMMAND).not.toMatch(/sandbox skills (check|sync)(?! >\/dev\/null)/);
+    expect(SESSION_START_COMMAND).not.toMatch(/werkmeister skills (check|sync)(?! >\/dev\/null)/);
   });
 });
 

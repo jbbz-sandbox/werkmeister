@@ -35,7 +35,7 @@ export function createServer(): McpServer {
 async function startStdio(): Promise<void> {
   await createServer().connect(new StdioServerTransport());
   // stdout is the JSON-RPC channel on stdio — diagnostics must go to stderr.
-  console.error("[sandbox-mcp] MCP server running on stdio");
+  console.error("[werkmeister-mcp] MCP server running on stdio");
 }
 
 async function startHttp(): Promise<void> {
@@ -99,7 +99,7 @@ async function startHttp(): Promise<void> {
   // that's where the failure has to be handled. stdout is the JSON-RPC
   // transport on --stdio, so diagnostics still go to stderr here too.
   const httpServer = app.listen(port, host, () => {
-    console.error(`[sandbox-mcp] listening on http://${host}:${port}/mcp`);
+    console.error(`[werkmeister-mcp] listening on http://${host}:${port}/mcp`);
   });
   httpServer.on("error", (err: Error) => {
     console.error("Failed to start server:", err);

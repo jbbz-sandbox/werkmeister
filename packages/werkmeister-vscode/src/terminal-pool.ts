@@ -1,5 +1,5 @@
 /**
- * Which terminal a `sandbox` command runs in.
+ * Which terminal a `werkmeister` command runs in.
  *
  * Free of any `vscode` import so it runs under `node --test`, the same split
  * build-tree.ts uses to keep the decisions testable without an extension host.

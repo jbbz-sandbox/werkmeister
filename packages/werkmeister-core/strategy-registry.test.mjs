@@ -12,8 +12,8 @@ import { readContextStrategy, STRATEGY_IDS, strategyFor } from "./dist/strategie
 
 function ws(yml) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-reg-"));
-  fs.mkdirSync(path.join(root, ".sandbox"));
-  if (yml !== null) fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), yml);
+  fs.mkdirSync(path.join(root, ".werkmeister"));
+  if (yml !== null) fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), yml);
   return root;
 }
 

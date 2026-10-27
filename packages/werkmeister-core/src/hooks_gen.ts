@@ -4,23 +4,23 @@
  * Emits two managed hooks into each workspace's `.claude/settings.json`:
  *
  * - SessionStart: every new context window (startup / resume / clear /
- *   post-compaction) runs `sandbox notes context`, which injects the latest
+ *   post-compaction) runs `werkmeister notes context`, which injects the latest
  *   handoff + open decision notes as session context. One matcher-less hook
  *   covers both involuntary boundaries — fresh sessions AND the window rebirth
  *   after compaction (SessionStart's `compact` source).
- * - PreToolUse (matcher `Edit|Write`): every governed edit runs `sandbox
+ * - PreToolUse (matcher `Edit|Write`): every governed edit runs `werkmeister
  *   hooks gate`, which denies the first Edit/Write per session x domain once,
  *   carrying the loading instructions in the deny reason.
- * - PreToolUse (matcher `Bash|mcp__.*create_pull_request`): `sandbox hooks
- *   pr-guard` denies opening a PR any way but `sandbox pr open`
+ * - PreToolUse (matcher `Bash|mcp__.*create_pull_request`): `werkmeister hooks
+ *   pr-guard` denies opening a PR any way but `werkmeister pr open`
  *   (docs/workspace-lifecycle.md). Unlike the two above it is installed for
  *   every strategy (`writePrGuardHook`), and `removeWorkspaceHooks` keeps it.
- * - SessionEnd: `sandbox stop --if-idle` stops the workspace's feature when the
+ * - SessionEnd: `werkmeister stop --if-idle` stops the workspace's feature when the
  *   session ends and no other is open there (#231). Only while `auto_stop` is
  *   on (`writeAutoStopHook`, every strategy); turning it off removes the entry.
  * - UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop, SessionEnd:
- *   `sandbox hooks agent-state` records working / needs-you / done in
- *   `.sandbox/agent-state.json` for the pane and dashboard (SW-46). Every
+ *   `werkmeister hooks agent-state` records working / needs-you / done in
+ *   `.werkmeister/agent-state.json` for the pane and dashboard (SW-46). Every
  *   strategy (`writeAgentStateHooks`); the event name arrives on stdin.
  *   While `paused.json` exists the same hook blocks every tool call and prompt
  *   (SW-70), so existing workspaces get the pause gate with no settings rewrite.
@@ -28,7 +28,7 @@
  * - `permissions.allow`: the workspace's test commands and read-only git, for
  *   every strategy (`writeWorkspacePermissions`), so a headless session can run
  *   the stage's test step without an approval prompt. An `autonomous` workspace
- *   also gets `autonomousRules` — what a run needs to reach `sandbox pr open`,
+ *   also gets `autonomousRules` — what a run needs to reach `werkmeister pr open`,
  *   scoped to its own feature — and `AUTONOMOUS_DENY` in `permissions.deny`.
  * - `model`: the workspace's `model` input (`writeWorkspaceModel`), so a session
  *   opened in the folder starts on it.
@@ -36,7 +36,7 @@
  * Unlike the other projections, settings.json may legitimately hold user
  * entries (JSON carries no do-not-hand-edit comment), so this generator merges:
  * it owns exactly the hook entries whose command contains each marker below,
- * and the allow/deny rules and model recorded in `.sandbox/claude-permissions.json`,
+ * and the allow/deny rules and model recorded in `.werkmeister/claude-permissions.json`,
  * replacing stale versions and preserving everything else.
  */
 
@@ -53,12 +53,12 @@ import {
 } from "./config.js";
 import { readAutonomous, readAutoStop, readModel } from "./workspace_prompts.js";
 
-// Markers doubling as the payload: entries containing them are sandbox-managed.
-const _HOOK_MARKER = "sandbox notes context";
-const _GATE_MARKER = "sandbox hooks gate";
-const _PR_GUARD_MARKER = "sandbox hooks pr-guard";
-const _AUTO_STOP_MARKER = "sandbox stop --if-idle";
-const _AGENT_STATE_MARKER = "sandbox hooks agent-state";
+// Markers doubling as the payload: entries containing them are werkmeister-managed.
+const _HOOK_MARKER = "werkmeister notes context";
+const _GATE_MARKER = "werkmeister hooks gate";
+const _PR_GUARD_MARKER = "werkmeister hooks pr-guard";
+const _AUTO_STOP_MARKER = "werkmeister stop --if-idle";
+const _AGENT_STATE_MARKER = "werkmeister hooks agent-state";
 
 // Projections lag whenever the standards tree moves on after a workspace was
 // inited, and nothing else re-runs the writer — so the session that would read a
@@ -67,19 +67,19 @@ const _AGENT_STATE_MARKER = "sandbox hooks agent-state";
 // takes the `sync` branch. Both are silenced — SessionStart stdout is injected
 // into the context window, and only `notes context` has earned that space.
 const _SKILLS_SELF_HEAL =
-  "sandbox skills check >/dev/null 2>&1 || sandbox skills sync >/dev/null 2>&1";
+  "werkmeister skills check >/dev/null 2>&1 || werkmeister skills sync >/dev/null 2>&1";
 
-// `sandbox` resolves via PATH; if this machine doesn't expose it (or the
+// `werkmeister` resolves via PATH; if this machine doesn't expose it (or the
 // workspace is driven by a harness with a stripped env), the hook must no-op
 // silently rather than surface a warning on every session start / edit.
 // `_HOOK_MARKER` must survive any rewording of SessionStart's command: it is how
 // `_isManaged` recognises the entry to replace, so losing it leaves every
 // existing workspace with two SessionStart hooks instead of one updated one.
-export const SESSION_START_COMMAND = `command -v sandbox >/dev/null 2>&1 && { ${_SKILLS_SELF_HEAL}; ${_HOOK_MARKER}; } || true`;
-export const PRE_TOOL_USE_GATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_GATE_MARKER} || true`;
-export const PR_GUARD_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_PR_GUARD_MARKER} || true`;
-export const SESSION_END_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_AUTO_STOP_MARKER} >/dev/null 2>&1 || true`;
-export const AGENT_STATE_COMMAND = `command -v sandbox >/dev/null 2>&1 && ${_AGENT_STATE_MARKER} || true`;
+export const SESSION_START_COMMAND = `command -v werkmeister >/dev/null 2>&1 && { ${_SKILLS_SELF_HEAL}; ${_HOOK_MARKER}; } || true`;
+export const PRE_TOOL_USE_GATE_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_GATE_MARKER} || true`;
+export const PR_GUARD_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_PR_GUARD_MARKER} || true`;
+export const SESSION_END_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_AUTO_STOP_MARKER} >/dev/null 2>&1 || true`;
+export const AGENT_STATE_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_AGENT_STATE_MARKER} || true`;
 
 /** The events whose hooks tell working, needs-you and done apart (agent_state.ts `nextState`). */
 export const AGENT_STATE_EVENTS = [
@@ -135,6 +135,10 @@ export function buildAgentStateEntry(): HookEntry {
   return { hooks: [{ type: "command", command: AGENT_STATE_COMMAND }] };
 }
 
+// A pre-SW-106 entry ran `sandbox …`: recognising it lets the next write replace it, not add a twin. // name-check: ignore
+const isManagedCommand = (command: string, marker: string) =>
+  command.includes(marker) || command.includes(marker.replace(/^werkmeister /, "sandbox ")); // name-check: ignore
+
 function _isManaged(entry: unknown, marker: string = _HOOK_MARKER): boolean {
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
     return false;
@@ -148,7 +152,7 @@ function _isManaged(entry: unknown, marker: string = _HOOK_MARKER): boolean {
       typeof hook === "object" &&
       hook !== null &&
       !Array.isArray(hook) &&
-      String((hook as Record<string, unknown>)["command"] ?? "").includes(marker),
+      isManagedCommand(String((hook as Record<string, unknown>)["command"] ?? ""), marker),
   );
 }
 
@@ -213,7 +217,7 @@ function _saveSettings(settingsPath: string, settings: Record<string, unknown>):
  * Merge *managed* entries into `.claude/settings.json`.
  *
  * Preserves user-added settings keys, other hook events, and non-managed
- * entries within each managed event; replaces any stale sandbox-managed entry.
+ * entries within each managed event; replaces any stale werkmeister-managed entry.
  * Unparseable existing JSON, structurally-unexpected `hooks` or per-event
  * shapes, and non-dict entries within an event are left untouched (returning
  * the path) rather than clobbered — a human put something there.
@@ -340,21 +344,19 @@ const pluginTool = (tool: string) => PLUGIN_MCP_PREFIXES.map((prefix) => `${pref
 
 // Every name the CLI answers to. A `Bash(…)` rule is a literal prefix, so a rule
 // for one name never matches a call through another: rules written only for
-// `sandbox` left `werkmeister …` and `w9r …` calls unapproved. `sandbox` is the
-// deprecated launcher; drop it here when SW-11 removes it. It is listed first
-// because core_cli_spawns.test.ts reads an array ending in it as a CLI spawn.
-const CLI_NAMES = ["sandbox", "werkmeister", "w9r"];
+// `werkmeister` left `w9r …` calls unapproved.
+const CLI_NAMES = ["werkmeister", "w9r"];
 const cli = (rule: string) => CLI_NAMES.map((name) => `Bash(${name} ${rule})`);
 
 // `claude -p --permission-mode acceptEdits` (claude-send) refuses any Bash call
 // without a rule and nobody is there to approve it (#175). These cover the run
-// from stage 01 to `sandbox pr open` and stop at its own workspace: no
-// `sandbox:*`, `docker:*`, `npm:*`, `gh:*` or whole MCP server, which reached
+// from stage 01 to `werkmeister pr open` and stop at its own workspace: no
+// `werkmeister:*`, `docker:*`, `npm:*`, `gh:*` or whole MCP server, which reached
 // the shared proxy, other features and the linked CLI. The PR guard is a
 // PreToolUse deny, so `gh pr create` stays blocked.
 export const AUTONOMOUS_RULES = [
   "Bash(git:*)",
-  // `sandbox pr open` does the push and the PR; gh is read-only here.
+  // `werkmeister pr open` does the push and the PR; gh is read-only here.
   ...["pr view", "pr checks", "pr diff", "pr list", "issue view", "run view", "run list"].map(
     (cmd) => `Bash(gh ${cmd}:*)`,
   ),
@@ -394,12 +396,12 @@ export const AUTONOMOUS_RULES = [
   ].flatMap(pluginTool),
 ];
 
-/** AUTONOMOUS_RULES plus the `sandbox` and `docker` commands that name this feature or its containers. */
+/** AUTONOMOUS_RULES plus the `werkmeister` and `docker` commands that name this feature or its containers. */
 export function autonomousRules(feature: string, services: string[]): string[] {
   if (!feature) return AUTONOMOUS_RULES;
   return [
     ...AUTONOMOUS_RULES,
-    // Exact: `sandbox restart <f> infra` and `docker restart <f>-a <other>` stay out.
+    // Exact: `werkmeister restart <f> infra` and `docker restart <f>-a <other>` stay out.
     ...cli(`up ${feature}`),
     ...cli(`restart ${feature}`),
     ...["logs", "test", "services"].flatMap((cmd) => cli(`${cmd} ${feature}:*`)),
@@ -472,7 +474,7 @@ export const AUTONOMOUS_DENY = [
 ];
 
 // Permission strings can't carry a marker the way hook commands do, so the rules
-// sandbox inserted are listed here; anything else in `allow`/`deny` is the person's.
+// werkmeister inserted are listed here; anything else in `allow`/`deny` is the person's.
 const permissionsRecord = (workspaceRoot: string) =>
   path.join(dotDir(workspaceRoot), "claude-permissions.json");
 
@@ -580,7 +582,7 @@ function _writeRecord(recordPath: string, record: PermissionsRecord): void {
 /**
  * Merge *allow* and *deny* into `.claude/settings.json` `permissions`.
  *
- * Adds what is missing, drops rules sandbox added earlier that are no longer
+ * Adds what is missing, drops rules werkmeister added earlier that are no longer
  * wanted, and never touches a rule it didn't add — one the person already had
  * is not recorded, so it survives removal. Unparseable JSON or an unexpected
  * `permissions` / `allow` / `deny` shape is left untouched, record included.
@@ -628,7 +630,7 @@ export function writeWorkspacePermissions(
   return settingsPath;
 }
 
-/** Remove every allow and deny rule sandbox added, keeping the person's. */
+/** Remove every allow and deny rule werkmeister added, keeping the person's. */
 export function removeWorkspacePermissions(workspaceRoot: string): string {
   return writeWorkspacePermissions(workspaceRoot, [], []);
 }
@@ -636,7 +638,7 @@ export function removeWorkspacePermissions(workspaceRoot: string): string {
 /**
  * Set `.claude/settings.json` `model` to *model*, or remove it when null.
  *
- * Only a model sandbox recorded writing is replaced or removed: one the person
+ * Only a model werkmeister recorded writing is replaced or removed: one the person
  * set (any value that differs from the record) is left as is and not recorded.
  * Unparseable JSON is left untouched, record included.
  */

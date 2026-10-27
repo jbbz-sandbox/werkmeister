@@ -72,7 +72,7 @@ describe("sandbox stop", () => {
 
     await expect(go(() => runStop({ feature: "demo" }))).rejects.toThrow(Exited);
     expect(lines).toContain("[error] Feature 'demo' is not running (no slot allocated)");
-    expect(lines.indexOf("[info] Start it with: sandbox up demo")).toBe(
+    expect(lines.indexOf("[info] Start it with: werkmeister up demo")).toBe(
       lines.indexOf("[error] Feature 'demo' is not running (no slot allocated)") + 1,
     );
   });
@@ -180,7 +180,7 @@ describe("sandbox restart", () => {
     );
 
     await expect(go(() => runRestart({ feature: "demo" }))).rejects.toThrow(Exited);
-    expect(lines.indexOf("[info] Check with: sandbox logs demo")).toBe(
+    expect(lines.indexOf("[info] Check with: werkmeister logs demo")).toBe(
       lines.indexOf("[error] Failed to restart containers for 'demo'") + 1,
     );
   });

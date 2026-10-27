@@ -1,7 +1,7 @@
 /**
- * sandbox list-workspaces
+ * werkmeister list-workspaces
  *
- * The workspaces under $SANDBOX_WORKSPACES_ROOT with their issue and
+ * The workspaces under $WERKMEISTER_WORKSPACES_ROOT with their issue and
  * labels. The scan is `werkmeister-core`'s `listWorkspaces` -- the same call the
  * dashboard and the MCP surface make; what is left here is the table.
  */
@@ -16,7 +16,7 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
 
   if (!workspaces.length) {
     console.log(
-      `  ${Colors.DIM}No workspaces. Create one with: sandbox workspace <feature>${Colors.RESET}\n`,
+      `  ${Colors.DIM}No workspaces. Create one with: werkmeister workspace <feature>${Colors.RESET}\n`,
     );
     return;
   }
@@ -38,6 +38,6 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
   }
 
   console.log();
-  console.log(`  ${Colors.DIM}End one with: sandbox close-out <name>${Colors.RESET}`);
+  console.log(`  ${Colors.DIM}End one with: werkmeister close-out <name>${Colors.RESET}`);
   console.log();
 }

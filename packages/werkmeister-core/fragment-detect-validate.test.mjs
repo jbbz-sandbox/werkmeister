@@ -32,7 +32,7 @@ test("a generated fragment is valid", () => {
 
 test("a service name another repo already has fails the trial merge", () => {
   const root = fixture(SHOP, "shop");
-  const other = path.join(path.dirname(root), "legacy", ".sandbox");
+  const other = path.join(path.dirname(root), "legacy", ".werkmeister");
   mkdirSync(other, { recursive: true });
   writeFileSync(
     path.join(other, "services.yaml"),
@@ -56,7 +56,7 @@ test("a schema violation is reported with its path", () => {
   );
 });
 
-test("writeFragment creates .sandbox/ and writes the text", () => {
+test("writeFragment creates .werkmeister/ and writes the text", () => {
   const root = fixture(SHOP, "shop");
   const rendered = renderFragment(planFragment(root, opts(root)));
   assert.ok(!existsSync(rendered.path));

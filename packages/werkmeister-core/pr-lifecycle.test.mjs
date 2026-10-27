@@ -132,7 +132,7 @@ function deps(table, over = {}) {
 }
 
 const clean = (ws) => fs.rmSync(ws, { recursive: true, force: true });
-// The baseline check reads ports.yaml for host ports; CI has no ~/.sandbox.
+// The baseline check reads ports.yaml for host ports; CI has no ~/.werkmeister.
 const gate = (ws, d) => withSandboxHome(() => runGate(ws, readPrFiles(ws)[0], d));
 const open = (ws, d) => withSandboxHome(() => openPrs(ws, undefined, d));
 const failed = (g) => g.checks.filter((c) => !c.ok).map((c) => c.name);
@@ -556,7 +556,7 @@ test("gate: a broken branch fragment fails the gate with its error, not a crash"
       ws,
       deps([DIFF_API], {
         branchRegistry: () => {
-          throw new Error("app/.sandbox/services.yaml: services.api must be a map");
+          throw new Error("app/.werkmeister/services.yaml: services.api must be a map");
         },
       }),
     );
@@ -1497,7 +1497,7 @@ test("spike with no PR file: gate and open say which file to write and where the
     await assert.rejects(
       withSandboxHome(() => gatePrs(ws, undefined, deps([]))),
       {
-        message: msg("docs/workspace-lifecycle.md in the sandbox repo"),
+        message: msg("docs/workspace-lifecycle.md in the werkmeister repo"),
       },
     );
     fs.mkdirSync(path.join(ws, "_shared"));
@@ -1587,11 +1587,11 @@ test("callbackFields: both ids from the env, no host id outside the desktop app"
 test("callbackMessage: the issue's texts", () => {
   assert.equal(
     callbackMessage("merged", URL9),
-    `PR ${URL9} merged. Run \`sandbox pr status\`, then follow the workspace router.`,
+    `PR ${URL9} merged. Run \`werkmeister pr status\`, then follow the workspace router.`,
   );
   assert.equal(
     callbackMessage("shipped", URL9, "v1.2.0"),
-    `PR ${URL9} shipped in v1.2.0. Ask the person whether to run \`sandbox close-out\`.`,
+    `PR ${URL9} shipped in v1.2.0. Ask the person whether to run \`werkmeister close-out\`.`,
   );
   assert.equal(callbackMessage("closed", URL9), `PR ${URL9} was closed. Report it to the person.`);
   assert.equal(callbackMessage("open", URL9), null);
@@ -1698,8 +1698,8 @@ test("claimCallbacks: a held lock claims nothing; a stale one is taken over", as
 
 test("watchPrs: headless claims are sent, desktop ones returned, a failed send is reported", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-watch-"));
-  const prev = process.env.SANDBOX_WORKSPACES_ROOT;
-  process.env.SANDBOX_WORKSPACES_ROOT = root;
+  const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
+  process.env.WERKMEISTER_WORKSPACES_ROOT = root;
   fs.renameSync(icmWorkspace({ files: { app: callbackFile() } }), path.join(root, "a-ws"));
   fs.renameSync(
     icmWorkspace({ files: { app: callbackFile("host_session: local_h1\n") } }),
@@ -1730,16 +1730,16 @@ test("watchPrs: headless claims are sent, desktop ones returned, a failed send i
       );
     });
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
-    else process.env.SANDBOX_WORKSPACES_ROOT = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+    else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
     clean(root);
   }
 });
 
 test("deliverHeadless: a session started in a code worktree is resumed from there (SW-16)", async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pr-deliver-")));
-  const prev = process.env.SANDBOX_WORKSPACES_ROOT;
-  process.env.SANDBOX_WORKSPACES_ROOT = root;
+  const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
+  process.env.WERKMEISTER_WORKSPACES_ROOT = root;
   const ws = path.join(root, "a-ws");
   fs.renameSync(icmWorkspace(), ws);
   const sub = path.join(ws, "sandbox");
@@ -1779,16 +1779,16 @@ test("deliverHeadless: a session started in a code worktree is resumed from ther
       }),
     );
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
-    else process.env.SANDBOX_WORKSPACES_ROOT = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+    else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
     clean(root);
   }
 });
 
 test("watchPrs: one idle-reaper pass under its own lock; a held lock skips it (SW-39)", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-watch-idle-"));
-  const prev = process.env.SANDBOX_WORKSPACES_ROOT;
-  process.env.SANDBOX_WORKSPACES_ROOT = root;
+  const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
+  process.env.WERKMEISTER_WORKSPACES_ROOT = root;
   const lock = path.join(root, "idle-stop.lock");
   try {
     await withSandboxHome(async () => {
@@ -1810,8 +1810,8 @@ test("watchPrs: one idle-reaper pass under its own lock; a held lock skips it (S
       assert.ok(held.lines.includes("another idle-stop pass is running"));
     });
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
-    else process.env.SANDBOX_WORKSPACES_ROOT = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+    else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
     clean(root);
   }
 });

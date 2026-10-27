@@ -1,6 +1,6 @@
 /**
  * `up` called `generateSupergraphConfig` only when the slot changed, so a
- * stale `.sandbox/supergraph-config.yml` from before federation went opt-in
+ * stale `.werkmeister/supergraph-config.yml` from before federation went opt-in
  * survived a plain `up` (#120). Every collaborator of `up` is mocked except
  * `generateSupergraphConfig`, which runs for real against the mocked registry.
  */
@@ -57,10 +57,10 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-supergraph-"));
   fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
   // Slot 3 matches allocateSlot, so `up` takes the unchanged-slot path.
-  fs.writeFileSync(path.join(root, ".env"), "SANDBOX_SLOT=3\nSERVICES=\n");
-  fs.mkdirSync(path.join(root, ".sandbox"));
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), "context_strategy: icm\n");
-  supergraph = path.join(root, ".sandbox", "supergraph-config.yml");
+  fs.writeFileSync(path.join(root, ".env"), "WERKMEISTER_SLOT=3\nSERVICES=\n");
+  fs.mkdirSync(path.join(root, ".werkmeister"));
+  fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), "context_strategy: icm\n");
+  supergraph = path.join(root, ".werkmeister", "supergraph-config.yml");
   fs.writeFileSync(supergraph, "# stale\n");
 });
 afterEach(() => {

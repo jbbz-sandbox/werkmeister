@@ -87,15 +87,15 @@ const quiet: Reporter = { passthrough: false, emit: () => {} };
 let root: string;
 
 function workspace(services: string[]): string {
-  fs.writeFileSync(path.join(root, ".env"), `SANDBOX_SLOT=3\nSERVICES=${services.join(",")}\n`);
+  fs.writeFileSync(path.join(root, ".env"), `WERKMEISTER_SLOT=3\nSERVICES=${services.join(",")}\n`);
   return root;
 }
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-infra-"));
   fs.writeFileSync(path.join(root, "compose.yml"), "services: {}\n");
-  fs.mkdirSync(path.join(root, ".sandbox"));
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), "context_strategy: icm\n");
+  fs.mkdirSync(path.join(root, ".werkmeister"));
+  fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), "context_strategy: icm\n");
   spawned.length = 0;
   vi.clearAllMocks();
 });

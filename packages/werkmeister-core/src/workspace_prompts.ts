@@ -6,7 +6,7 @@
  * these prompts in a terminal wizard (`runWizard` — rendering stays CLI-side)
  * and the dashboard/extension turn the same spec into an RJSF form via
  * {@link buildFormSchema}. Core used to reach the second path by spawning
- * `sandbox workspace --print-form-schema`, which made core depend on the CLI
+ * `werkmeister workspace --print-form-schema`, which made core depend on the CLI
  * that depends on core — see note 087, `core never drives the CLI`.
  *
  * Moved verbatim from `apps/cli/src/commands/init_workspace.ts` and
@@ -116,7 +116,7 @@ export function loadWorkspaceConfig(p: string): unknown {
 }
 
 // Keys are [cliAttr, envName, configField], consulted in order CLI > env > config.
-// envName is read as WERKMEISTER_<envName>, then SANDBOX_<envName> (envVar).
+// envName is read as WERKMEISTER_<envName> (envVar).
 // `feature` has no env source: every workspace container exports SANDBOX_FEATURE
 // as its own identity, which would prefill any workspace created from inside one (#148).
 export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
@@ -208,9 +208,9 @@ export function loadConfigFile(
   if (envOverride) {
     candidates.push(expandUserPath(envOverride));
   }
-  const sandbox = dotDir(workspaceRoot);
+  const dir = dotDir(workspaceRoot);
   for (const name of _WORKSPACE_CONFIG_NAMES) {
-    candidates.push(path.join(sandbox, name));
+    candidates.push(path.join(dir, name));
   }
 
   for (const p of candidates) {
@@ -276,7 +276,7 @@ function loadExistingEnvMetadata(workspaceRoot: string): Record<string, string> 
 
 /**
  * Resolve every input field per the documented precedence
- * (CLI flag > SANDBOX_* env var > config file > existing .env > unset).
+ * (CLI flag > WERKMEISTER_* env var > config file > existing .env > unset).
  */
 export function resolveInputs(
   args: Record<string, unknown>,
@@ -376,7 +376,7 @@ function scrapeIssueId(workspaceRoot: string): string {
 export type Phase = "research" | "implement" | "test" | "review" | "pr";
 export type PhasePath = "spike" | "bounded" | "architectural";
 
-/** What must exist in .sandbox/notes/ before the first source edit. */
+/** What must exist in .werkmeister/notes/ before the first source edit. */
 export interface PhaseGate {
   note: "decision" | "finding";
   status?: "decided"; // absent = any non-superseded note of that type
@@ -396,31 +396,31 @@ export const WORK_TYPE_PHASES: Record<string, WorkTypePlan> = {
     path: "architectural",
     phases: ["research", "implement", "test", "review", "pr"],
     gate: { note: "decision", status: "decided" },
-    hint: "invoke `sb-research` first — it ends in a `decision` note the user approves before any code",
+    hint: "invoke `w9r-research` first — it ends in a `decision` note the user approves before any code",
   },
   bugfix: {
     path: "bounded",
     phases: ["research", "implement", "test", "pr"],
     gate: { note: "finding" },
-    hint: "invoke `sb-research` first to reproduce and write the root cause to a `finding` note before changing code",
+    hint: "invoke `w9r-research` first to reproduce and write the root cause to a `finding` note before changing code",
   },
   incident: {
     path: "bounded",
     phases: ["research", "implement", "test", "pr"],
     gate: { note: "finding" },
-    hint: "invoke `sb-research` first to diagnose; the `finding` note is the incident record",
+    hint: "invoke `w9r-research` first to diagnose; the `finding` note is the incident record",
   },
   refactor: {
     path: "bounded",
     phases: ["implement", "test", "review", "pr"],
     gate: null,
-    hint: "invoke `sb-implement` first — the scope is known and standards matter most",
+    hint: "invoke `w9r-implement` first — the scope is known and standards matter most",
   },
   spike: {
     path: "spike",
     phases: ["research"],
     gate: null,
-    hint: "invoke `sb-research` first to frame the questions; anything built is throwaway and there is no PR",
+    hint: "invoke `w9r-research` first to frame the questions; anything built is throwaway and there is no PR",
   },
 };
 
@@ -428,7 +428,7 @@ export const DEFAULT_PLAN: WorkTypePlan = {
   path: "architectural",
   phases: ["research", "implement", "test", "review", "pr"],
   gate: null,
-  hint: "invoke `sb-research` first",
+  hint: "invoke `w9r-research` first",
 };
 
 /** The plan for a free-text work type; unknown (or "Other") → {@link DEFAULT_PLAN}. */
@@ -462,8 +462,8 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "feature",
     label: "Feature name",
     help:
-      "Lowercase, hyphen-separated. Drives sandbox slot routing via the X-Feature cookie. " +
-      `No feature = no ${COMPOSE_FILE} / sandbox-context.md.`,
+      "Lowercase, hyphen-separated. Drives workspace slot routing via the X-Feature cookie. " +
+      `No feature = no ${COMPOSE_FILE} / werkmeister-context.md.`,
     acceptEmpty: false,
     recommended: true,
     pattern: "^[a-z0-9]+(-[a-z0-9]+)*$",
@@ -485,7 +485,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "context_strategy",
     label: "Workflow",
     help:
-      "Which context layer init-workspace generates: jit (sb-* skills, hooks, notes) " +
+      "Which context layer init-workspace generates: jit (w9r-* skills, hooks, notes) " +
       "or icm (staged folders the agent walks by itself).",
     pattern: "^(" + STRATEGY_IDS.join("|") + ")$",
     default: STRATEGY_IDS[0],
@@ -495,10 +495,10 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "autonomous",
     label: "Autonomous run",
     help:
-      "Off by default. On: an icm run goes from stage 01 to `sandbox pr open` with no human check " +
+      "Off by default. On: an icm run goes from stage 01 to `werkmeister pr open` with no human check " +
       "(each stage self-checks and the agent approves its own PR file), and .claude/settings.json " +
-      "allows the git, sandbox, docker, gh, node and python3 calls a headless session needs. " +
-      "The person reviews the PR; `sandbox pr gate` still applies.",
+      "allows the git, werkmeister, docker, gh, node and python3 calls a headless session needs. " +
+      "The person reviews the PR; `werkmeister pr gate` still applies.",
     boolean: true,
   },
   {
@@ -517,8 +517,8 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Auto-stop on session end",
     help:
       "On by default for autonomous workspaces, off otherwise. On: when a Claude session in the workspace ends and no other one is open " +
-      "there, a SessionEnd hook runs `sandbox stop --if-idle`, which stops this feature's " +
-      "containers (slot and volumes kept; `sandbox up` resumes). Shared infra is never stopped.",
+      "there, a SessionEnd hook runs `werkmeister stop --if-idle`, which stops this feature's " +
+      "containers (slot and volumes kept; `werkmeister up` resumes). Shared infra is never stopped.",
     boolean: true,
   },
   {
@@ -567,7 +567,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Starting prompt",
     help:
       "The first instruction to hand the agent in this workspace; " +
-      "persisted to .sandbox/workspace.yml.",
+      "persisted to .werkmeister/workspace.yml.",
     multiline: true,
     refinable: true,
     refineInstruction:
@@ -732,7 +732,7 @@ export const REPOS_PROMPT: PromptSpec = {
 };
 
 /**
- * Resolve inputs and build the prompt spec `sandbox workspace` presents:
+ * Resolve inputs and build the prompt spec `werkmeister workspace` presents:
  * `_WIZARD_PROMPTS` with {@link REPOS_PROMPT} spliced in after `services`.
  *
  * Callers that print the result as JSON on stdout must silence stdout

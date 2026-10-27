@@ -29,13 +29,13 @@ beforeEach(() => {
     `version: 1\noverrides:\n  standards_dir: ${path.join(home, "none")}\n`,
   );
   fs.writeFileSync(path.join(home, "services.yaml"), "services: {}\n");
-  prevCfg = process.env.SANDBOX_CONFIG_FILE;
-  process.env.SANDBOX_CONFIG_FILE = path.join(home, "config.yaml");
+  prevCfg = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "config.yaml");
 
   root = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-cmd-ws-"));
-  fs.mkdirSync(path.join(root, ".sandbox"));
+  fs.mkdirSync(path.join(root, ".werkmeister"));
   fs.writeFileSync(
-    path.join(root, ".sandbox", "workspace.yml"),
+    path.join(root, ".werkmeister", "workspace.yml"),
     "context_strategy: icm\nwork_type: feature\n",
   );
   const strategy = strategyFor(root);
@@ -57,8 +57,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  if (prevCfg === undefined) delete process.env.SANDBOX_CONFIG_FILE;
-  else process.env.SANDBOX_CONFIG_FILE = prevCfg;
+  if (prevCfg === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+  else process.env.WERKMEISTER_CONFIG_FILE = prevCfg;
   fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(home, { recursive: true, force: true });
 });
@@ -85,11 +85,11 @@ describe("JIT commands in an icm workspace", () => {
   });
 
   it("notes context prints nothing", async () => {
-    // Seed a handoff note under .sandbox/notes/ so the jit path WOULD print —
+    // Seed a handoff note under .werkmeister/notes/ so the jit path WOULD print —
     // this distinguishes "icm has nothing to say" from "icm was never asked".
-    fs.mkdirSync(path.join(root, ".sandbox", "notes"), { recursive: true });
+    fs.mkdirSync(path.join(root, ".werkmeister", "notes"), { recursive: true });
     fs.writeFileSync(
-      path.join(root, ".sandbox", "notes", "001-handoff-start.md"),
+      path.join(root, ".werkmeister", "notes", "001-handoff-start.md"),
       "---\ntype: handoff\nstatus: open\n---\n# Handoff\nstart here\n",
     );
     const write = vi.spyOn(process.stdout, "write");

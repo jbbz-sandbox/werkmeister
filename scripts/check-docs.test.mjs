@@ -58,11 +58,11 @@ test("checks flags anywhere in a command, up to a bare --", () => {
   assert.equal(check("`werkmeister pr watch --all`").length, 1);
 });
 
-test("checks sandbox <cmd> lines like werkmeister ones", () => {
-  assert.deepEqual(check("`sandbox status --k8s`"), []);
+test("checks w9r <cmd> lines like werkmeister ones", () => {
+  assert.deepEqual(check("`w9r status --k8s`"), []);
   assert.deepEqual(check("`cd sandbox && werkmeister status`"), []);
-  assert.equal(check("`sandbox status --all`").length, 1);
-  assert.equal(check("`sandbox k9s`").length, 1);
+  assert.equal(check("`w9r status --all`").length, 1);
+  assert.equal(check("`w9r k9s`").length, 1);
 });
 
 test("flags bare placeholders outside code", () => {

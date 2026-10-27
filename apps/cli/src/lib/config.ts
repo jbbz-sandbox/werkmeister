@@ -25,12 +25,12 @@ export { error, info, success, warn };
 // ---------------------------------------------------------------------------
 
 /**
- * Return the root of the sandbox CLI package.
+ * Return the root of the werkmeister CLI package.
  *
  * Kept as a named export because 15 modules call it; the derivation itself
  * lives in `werkmeister-core/config` now, so the library modules that moved there
  * resolve `infra/` the same way the CLI does. It throws rather than guessing
- * when neither `SANDBOX_ROOT` nor a walk-up finds the checkout — reading the
+ * when neither `WERKMEISTER_ROOT` nor a walk-up finds the checkout — reading the
  * wrong `infra/` is worse than failing.
  */
 export const getSandboxRoot = sandboxRoot;

@@ -1,7 +1,7 @@
 /**
- * Shared shapes for `sandbox detect`. Detectors emit Findings, correlation
+ * Shared shapes for `werkmeister detect`. Detectors emit Findings, correlation
  * groups them into services, and precedence turns each group into fields.
- * See docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc.
+ * See docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc. // name-check: ignore
  */
 import type { Runner } from "../machine_setup.js";
 

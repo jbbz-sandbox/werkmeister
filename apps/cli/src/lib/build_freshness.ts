@@ -7,7 +7,7 @@
  * because dist predated the merged #145 fix. esbuild.mjs stamps the source SHA
  * into the bundle; this compares it with the checkout's HEAD.
  *
- * Only a monorepo checkout is checked (`<SANDBOX_ROOT>/../../.git`): a published
+ * Only a monorepo checkout is checked (`<WERKMEISTER_ROOT>/../../.git`): a published
  * install has no .git, and the existsSync keeps it from spawning git at all.
  */
 import { execFileSync } from "node:child_process";
@@ -43,7 +43,7 @@ export function staleBuildWarning(build: BuildStamp | undefined, repoRoot: strin
   if (head === build.sha) return null;
   const built = build.sha.slice(0, 7) + (build.dirty ? " (+uncommitted changes)" : "");
   return (
-    `warning: this sandbox CLI was built from ${built}, but ${repoRoot} is at ${head.slice(0, 7)}.\n` +
+    `warning: this werkmeister CLI was built from ${built}, but ${repoRoot} is at ${head.slice(0, 7)}.\n` +
     `  Rebuild it from ${repoRoot}: ${REBUILD_COMMAND}`
   );
 }

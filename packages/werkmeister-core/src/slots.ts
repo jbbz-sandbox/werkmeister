@@ -1,5 +1,5 @@
 /**
- * Feature slot management for the developer sandbox.
+ * Feature slot management for werkmeister.
  *
  * Each concurrently-running feature is assigned a *slot* (1-12). The slot
  * determines the port range that feature's containers listen on:
@@ -18,7 +18,7 @@
  * refactor.
  *
  * Allocation is protected by an advisory file lock at
- * `~/.werkmeister/locks/allocate.lock` so concurrent `sandbox up` runs
+ * `~/.werkmeister/locks/allocate.lock` so concurrent `werkmeister up` runs
  * cannot race onto the same slot between the scan and the
  * `docker compose up` that stamps the label.
  */
@@ -36,7 +36,7 @@ import { error, info, success, warn } from "./reporter.js";
 export const LABEL_PREFIX = "com.werkmeister";
 export const LABEL_FEATURE = `${LABEL_PREFIX}.feature`;
 /** Stamped before SW-93; containers keep them until their next `up`. SW-11 drops the reads. */
-export const LEGACY_LABEL_PREFIX = "com.sandbox.local";
+export const LEGACY_LABEL_PREFIX = "com.sandbox.local"; // name-check: ignore
 export const LEGACY_LABEL_FEATURE = `${LEGACY_LABEL_PREFIX}.feature`;
 
 /** *key* (`feature`, `slot`, `service`, `role`) from either label set; "" when unlabelled. */
@@ -68,11 +68,11 @@ interface LabelRow {
 }
 
 /**
- * Per-container label rows for every sandbox feature container.
+ * Per-container label rows for every workspace feature container.
  *
  * The daemon already holds these as fields; `docker ps --format` only
  * flattened them to tabs for us to split back apart, and charged ~45ms of CLI
- * startup to do it (66ms shelled vs 21ms here, warmed). `sandbox status`,
+ * startup to do it (66ms shelled vs 21ms here, warmed). `werkmeister status`,
  * `down` and `clean` each query twice, so each pays that twice.
  *
  * Returns `null` if the daemon is unreachable; `[]` if reachable but no
@@ -229,7 +229,7 @@ function takenSlots(dockerSlots: Record<string, SlotEntry> | null): Set<number> 
  * Nothing is persisted. The next `docker compose up` stamps the slot
  * label onto the new containers, which becomes the authoritative record.
  * An advisory file lock serializes concurrent allocations so two
- * parallel `sandbox up` invocations cannot pick the same slot between
+ * parallel `werkmeister up` invocations cannot pick the same slot between
  * the scan and container creation.
  *
  * *services* is accepted for back-compat with the slots.json era and
@@ -277,7 +277,7 @@ export async function allocateSlot(
 
       error(`All ${count} feature slots are occupied!`);
       throw new Error(
-        "No available slots. Stop an existing feature with 'sandbox down <feature>' first.",
+        "No available slots. Stop an existing feature with 'werkmeister down <feature>' first.",
       );
     },
     { timeout: _ALLOCATE_LOCK_TIMEOUT },
@@ -288,7 +288,7 @@ export async function allocateSlot(
  * No-op kept for call-site symmetry.
  *
  * Slot ownership lives on container labels. `docker compose down`
- * (called by `sandbox down`) removes the containers, which is what
+ * (called by `werkmeister down`) removes the containers, which is what
  * actually frees the slot. Callers in `down.ts` and `clean.ts`
  * still invoke this for readability; there is no cache to invalidate.
  */
@@ -462,7 +462,7 @@ export async function migrateSlotsJson(): Promise<void> {
       `~/.werkmeister/slots.json had features with no labeled containers: ` +
         `${orphans.join(", ")}`,
     );
-    warn("These are now forgotten — restart them with 'sandbox up' to re-register.");
+    warn("These are now forgotten — restart them with 'werkmeister up' to re-register.");
   }
 
   info("Migrating: removing legacy ~/.werkmeister/slots.json (labels are now authoritative)");

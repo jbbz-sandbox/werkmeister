@@ -1,6 +1,6 @@
 # Using the JIT context system — operating practices
 
-> **Not normative.** The binding rules live in the `sb-*` phase skills
+> **Not normative.** The binding rules live in the `w9r-*` phase skills
 > (`apps/cli/infra/skills/`), which are what an agent actually loads; this file is
 > the *why* behind them, for whoever maintains those skills. Where the two
 > disagree, the skill wins and this file is stale.
@@ -20,19 +20,19 @@ Prevention rules only work if they are in context **before** the first token of
 generated code. Loading a standard after code exists is too late — the model is
 then reviewing rather than being steered, which is a weaker mechanism.
 
-This is why `sb-implement` must run before the first `Edit`/`Write` of a session,
+This is why `w9r-implement` must run before the first `Edit`/`Write` of a session,
 not after a draft exists.
 
 ## 2. Load only what the phase needs
 
-`sb-research` explicitly forbids loading `sb-*-standard` skills and `ponytail`:
+`w9r-research` explicitly forbids loading `w9r-*-standard` skills and `ponytail`:
 they govern *writing* code, the phase is read-only, and loading them there both
-wastes budget and weakens the phase gate. Symmetrically, `sb-implement` loads the
+wastes budget and weakens the phase gate. Symmetrically, `w9r-implement` loads the
 universal base plus **only** the domain standards whose "Loads on" patterns match
 the files about to be edited.
 
 Re-check on each new file type. Starting on `.ts` service code and later touching
-a `.tsx` means loading `sb-ui-standard` **at that point** — not retroactively.
+a `.tsx` means loading `w9r-ui-standard` **at that point** — not retroactively.
 
 ## 3. Re-anchor at the edit site (the lost-in-middle problem)
 
@@ -64,7 +64,7 @@ noise: it reports a clean run on a suite that failed.
 
 ## 5. Delegate fan-out; read what you reason against
 
-> Normative home: `sb-research`, "Read what you reason against".
+> Normative home: `w9r-research`, "Read what you reason against".
 > This was the one practice here that no skill encoded; it does now.
 
 Subagents keep exploration bulk out of the parent window and return a conclusion
@@ -96,7 +96,7 @@ Before investigating, grep the ledger for the question.
 ## 7. Respect `status:` in note frontmatter
 
 `status: superseded` means **do not read the body** — it names its replacement.
-Both `sb-implement` step 3 and `sb-research` step 0 say so. Reading a superseded
+Both `w9r-implement` step 3 and `w9r-research` step 0 say so. Reading a superseded
 8KB handoff for content already restated in its successor is pure waste.
 
 ## 8. Bound the investigation

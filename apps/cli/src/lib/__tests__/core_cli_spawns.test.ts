@@ -1,6 +1,6 @@
 /**
- * `apps/cli` depends on `werkmeister-core`, so core must never spawn the `sandbox`
- * binary back — note 087 (.sandbox/notes/087-decision-core-never-drives-the-cli.md).
+ * `apps/cli` depends on `werkmeister-core`, so core must never spawn the `werkmeister`
+ * binary back — note 087 (core never drives the CLI).
  *
  * The table is closed: note 086's five `runSandbox` edges are gone (row 5,
  * `createWorkspace`, was the last), `runSandbox` itself is deleted, and
@@ -58,7 +58,9 @@ describe("werkmeister-core does not drive the CLI", () => {
       .readdirSync(CORE)
       .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts") && f !== "sandbox.ts")
       .filter((f) =>
-        /resolveSandboxBin\(|"sandbox"\s*\]/.test(fs.readFileSync(path.join(CORE, f), "utf8")),
+        /resolveSandboxBin\(|(?:spawn|execFile)\w*\(\s*["'`](?:werkmeister|w9r)\b/.test(
+          fs.readFileSync(path.join(CORE, f), "utf8"),
+        ),
       );
 
     expect(others).toEqual([]);

@@ -1,9 +1,9 @@
 ---
-name: sb-implement
-description: "Begin the implementation/coding phase in a sandbox workspace. Use BEFORE writing or editing any code — when starting implementation after research/planning, when the user asks for a code change, or before the first Edit/Write of a session. Loads the universal coding base plus the domain standards active in this workspace."
+name: w9r-implement
+description: "Begin the implementation/coding phase in a workspace. Use BEFORE writing or editing any code — when starting implementation after research/planning, when the user asks for a code change, or before the first Edit/Write of a session. Loads the universal coding base plus the domain standards active in this workspace."
 ---
 
-# sb-implement — enter the coding phase
+# w9r-implement — enter the coding phase
 
 Run these steps now, before drafting any code. Prevention rules only work if they are
 in context before the first generation pass — loading them after code exists is too late
@@ -15,11 +15,11 @@ in context before the first generation pass — loading them after code exists i
    - `ponytail` — the decision ladder (does this need to exist? already in the codebase?
      stdlib first? simplest thing that works). If it isn't installed, say so once and
      continue.
-   - `sb-comments-standard` — the universal comment rubric.
-   - `sb-engineering-standard` — the universal architectural constraints (fit,
+   - `w9r-comments-standard` — the universal comment rubric.
+   - `w9r-engineering-standard` — the universal architectural constraints (fit,
      additive/reversible change, performance budgets, PR sizing). Ungated: it
      applies to any code edit, not a specific file type.
-3. **Read the workspace notes** in `.sandbox/notes/` before the first edit: every
+3. **Read the workspace notes** in `.werkmeister/notes/` before the first edit: every
    `decision` and `contract` note plus the latest `handoff` note (skip
    `status: superseded`; missing/empty directory → continue).
 
@@ -28,15 +28,15 @@ in context before the first generation pass — loading them after code exists i
    > decision note conflicts with the task as given, raise the conflict to the user —
    > do not silently pick either side.
 4. **Load every Active row** whose "Loads on" patterns match the files you are about to
-   edit (e.g. a `.graphql` edit → `sb-graphql-standard`). Do not load Not-active rows.
+   edit (e.g. a `.graphql` edit → `w9r-graphql-standard`). Do not load Not-active rows.
 5. **Re-check on each new file type you touch** — starting API work and later editing a
-   `.tsx` file means loading `sb-ui-standard` at that point, not retroactively.
+   `.tsx` file means loading `w9r-ui-standard` at that point, not retroactively.
 
    > **Precedence (standard vs. task framing):** A loaded standard can conflict with how
    > the task is framed — the prompt's convenience, "minimal change," or an example that
    > skips the rule. Resolve by the standard's own weight, not by whichever is fresher in
    > context:
-   > - **Invariant** (a must-never rule — the ones `sandbox skills check` enforces): the
+   > - **Invariant** (a must-never rule — the ones `werkmeister skills check` enforces): the
    >   standard wins. Apply it and write a `decision` note; do not proceed against it even
    >   if the task asks.
    > - **Rule** (a normal STANDARD.md rule): surface, then proceed — state the conflict in
@@ -67,7 +67,7 @@ monorepo's suite.
 ## Capture as you go
 
 When a decision settles, an approach is abandoned, or a cross-repo contract changes,
-write the corresponding note to `.sandbox/notes/` **at that moment** — not at session
+write the corresponding note to `.werkmeister/notes/` **at that moment** — not at session
 end, when the "why" has often already been compacted away. One note per file,
 `NNN-<type>-<slug>.md` (next free `NNN`), frontmatter:
 
@@ -84,8 +84,8 @@ status: open
 Supersede, don't delete: a revisited decision sets the old note's `status: superseded`
 and gets a new note.
 
-If the workspace `CLAUDE.md` has no "Standards routing" block (not a sandbox-initialized
-workspace), load `ponytail` + `sb-comments-standard` + `sb-engineering-standard` only.
+If the workspace `CLAUDE.md` has no "Standards routing" block (not a werkmeister-initialized
+workspace), load `ponytail` + `w9r-comments-standard` + `w9r-engineering-standard` only.
 
 A standards gate may deny your first edit to a governed path with loading instructions;
 follow them and retry — do not treat the denial as an error.

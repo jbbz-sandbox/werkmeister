@@ -1,8 +1,8 @@
 /**
- * sandbox up <feature>
+ * werkmeister up <feature>
  *
  * Starts containers for a feature workspace. Expects a compose.yml to
- * have been generated in the workspace root by 'sandbox init-workspace'. If the
+ * have been generated in the workspace root by 'werkmeister init-workspace'. If the
  * slot assigned at init time was released and is now taken by another feature,
  * the compose file is regenerated with a new slot before starting.
  *
@@ -44,14 +44,14 @@ function printSummary(result: UpResult): void {
   console.log(`  ${Colors.DIM}k8s services: (everything not listed above)${Colors.RESET}`);
   console.log();
   console.log(`  ${Colors.DIM}Useful commands:${Colors.RESET}`);
-  console.log("    sandbox status            # view all features");
-  console.log(`    sandbox logs ${feature}    # tail logs`);
-  console.log(`    sandbox test ${feature}    # run Playwright tests`);
-  console.log(`    sandbox down ${feature}    # tear down`);
+  console.log("    werkmeister status            # view all features");
+  console.log(`    werkmeister logs ${feature}    # tail logs`);
+  console.log(`    werkmeister test ${feature}    # run Playwright tests`);
+  console.log(`    werkmeister down ${feature}    # tear down`);
   console.log();
 }
 
-/** Execute the `sandbox up <feature>` command. */
+/** Execute the `werkmeister up <feature>` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());
 
@@ -62,7 +62,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
-    // `sandbox up infra` is `sandbox connect` — the command, not
+    // `werkmeister up infra` is `werkmeister connect` — the command, not
     // `werkmeister-core/infra`'s `up()`, because this path prints connect's whole
     // rendering (banner, health table, tools block) and `up()` returns before
     // any of it. Imported as a literal so tsc resolves it: this call lived in
@@ -76,9 +76,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   const workspace = resolveWorkspace(feature, (args.workspace as string | null) ?? null);
 
-  console.log(`\n${Colors.BOLD}=== sandbox up: ${feature} ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister up: ${feature} ===${Colors.RESET}\n`);
   // The compose child inherits it; the template's idle gate reads it (SW-32).
-  if (args.dev) process.env.SANDBOX_DEV = "1";
+  if (args.dev) process.env.WERKMEISTER_DEV = "1";
 
   // Every failure propagates: none of up's four codes carries a hint that has
   // to print between the error line and the exit, so main.ts's handler renders

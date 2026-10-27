@@ -10,17 +10,17 @@ import { test } from "node:test";
 
 import { decide, findWorkspaceRoot } from "./dist/gate.js";
 
-test("findWorkspaceRoot walks up to the nearest .sandbox directory", () => {
+test("findWorkspaceRoot walks up to the nearest .werkmeister directory", () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ws-")));
   const nested = path.join(root, "repo", "src");
   fs.mkdirSync(nested, { recursive: true });
-  fs.mkdirSync(path.join(root, ".sandbox"));
+  fs.mkdirSync(path.join(root, ".werkmeister"));
 
   assert.equal(findWorkspaceRoot(nested), root);
   assert.equal(findWorkspaceRoot(root), root);
 });
 
-test("findWorkspaceRoot returns null when no .sandbox exists above start", () => {
+test("findWorkspaceRoot returns null when no .werkmeister exists above start", () => {
   const bare = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bare-")));
   assert.equal(findWorkspaceRoot(bare), null);
 });
@@ -30,11 +30,11 @@ const DECIDED = { note: "decision", status: "decided" };
 function withGatedWorkspace(phaseGate, fn, { notesDir = true } = {}) {
   const ws = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "phase-gate-")));
   try {
-    fs.mkdirSync(path.join(ws, ".sandbox"), { recursive: true });
-    if (notesDir) fs.mkdirSync(path.join(ws, ".sandbox", "notes"));
+    fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+    if (notesDir) fs.mkdirSync(path.join(ws, ".werkmeister", "notes"));
     const manifest = { generated_by: "test", universal: [], domains: {} };
     if (phaseGate !== undefined) manifest.phase_gate = phaseGate;
-    fs.writeFileSync(path.join(ws, ".sandbox", "standards.json"), JSON.stringify(manifest));
+    fs.writeFileSync(path.join(ws, ".werkmeister", "standards.json"), JSON.stringify(manifest));
     return fn(ws);
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });
@@ -44,7 +44,7 @@ function withGatedWorkspace(phaseGate, fn, { notesDir = true } = {}) {
 function note(ws, name, status, eol = "\n") {
   const type = name.split("-")[1];
   const text = ["---", `type: ${type}`, `status: ${status}`, "---", "", "body", ""].join(eol);
-  fs.writeFileSync(path.join(ws, ".sandbox", "notes", name), text);
+  fs.writeFileSync(path.join(ws, ".werkmeister", "notes", name), text);
 }
 
 const src = (ws) => path.join(ws, "repo", "src", "a.ts");
@@ -56,7 +56,7 @@ test("phase gate: no decision note denies, repeatedly, and writes no state", () 
       assert.match(reason, /^Phase gate:/);
       assert.match(reason, /`decision`/);
     }
-    assert.ok(!fs.existsSync(path.join(ws, ".sandbox", ".gate")));
+    assert.ok(!fs.existsSync(path.join(ws, ".werkmeister", ".gate")));
   });
 });
 
@@ -70,7 +70,7 @@ test("phase gate: an open decision note still denies", () => {
 test("phase gate: a decided note falls through to the standards gate", () => {
   withGatedWorkspace(DECIDED, (ws) => {
     note(ws, "001-decision-x.md", "decided");
-    assert.match(decide(ws, "s1", src(ws)), /^Standards gate: invoke `sb-implement`/);
+    assert.match(decide(ws, "s1", src(ws)), /^Standards gate: invoke `w9r-implement`/);
     assert.equal(decide(ws, "s1", src(ws)), null);
   });
 });
@@ -84,9 +84,9 @@ test("phase gate: a superseded note is skipped, not counted", () => {
   });
 });
 
-test("phase gate: edits under .sandbox/ are never gated", () => {
+test("phase gate: edits under .werkmeister/ are never gated", () => {
   withGatedWorkspace(DECIDED, (ws) => {
-    const target = path.join(ws, ".sandbox", "notes", "002-decision-y.md");
+    const target = path.join(ws, ".werkmeister", "notes", "002-decision-y.md");
     assert.doesNotMatch(decide(ws, "s1", target) ?? "", /Phase gate/);
   });
 });
@@ -94,7 +94,7 @@ test("phase gate: edits under .sandbox/ are never gated", () => {
 test("phase gate: no phase_gate key, or null, behaves as today", () => {
   for (const gate of [undefined, null]) {
     withGatedWorkspace(gate, (ws) => {
-      assert.match(decide(ws, "s1", src(ws)), /^Standards gate: invoke `sb-implement`/);
+      assert.match(decide(ws, "s1", src(ws)), /^Standards gate: invoke `w9r-implement`/);
     });
   }
 });
@@ -142,7 +142,10 @@ test("phase gate: a dot-dot-prefixed name inside the workspace is gated", () => 
 
 test("phase gate: a note with no frontmatter fails open", () => {
   withGatedWorkspace(DECIDED, (ws) => {
-    fs.writeFileSync(path.join(ws, ".sandbox", "notes", "001-decision-x.md"), "no frontmatter\n");
+    fs.writeFileSync(
+      path.join(ws, ".werkmeister", "notes", "001-decision-x.md"),
+      "no frontmatter\n",
+    );
     assert.doesNotMatch(decide(ws, "s1", src(ws)) ?? "", /Phase gate/);
   });
 });

@@ -20,7 +20,7 @@ fs.writeFileSync(
   cfgFile,
   "paths: {}\njira:\n  base_url: https://y.atlassian.net/\n  email: c@d.e\n  api_token: yaml-tok\n",
 );
-process.env.SANDBOX_CONFIG_FILE = cfgFile;
+process.env.WERKMEISTER_CONFIG_FILE = cfgFile;
 assert.deepEqual(await jiraCreds(), {
   baseUrl: "https://y.atlassian.net",
   email: "c@d.e",
@@ -44,9 +44,9 @@ delete process.env.JIRA_EMAIL;
 delete process.env.JIRA_API_TOKEN;
 
 // 5. no readable config → no creds (callers degrade to the claude CLI path)
-process.env.SANDBOX_CONFIG_FILE = path.join(tmp, "absent.yaml");
+process.env.WERKMEISTER_CONFIG_FILE = path.join(tmp, "absent.yaml");
 assert.equal(await jiraCreds(), null);
-delete process.env.SANDBOX_CONFIG_FILE;
+delete process.env.WERKMEISTER_CONFIG_FILE;
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log("jira-rest pure-function smoke: PASS");

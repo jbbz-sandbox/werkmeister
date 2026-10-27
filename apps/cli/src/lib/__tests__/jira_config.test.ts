@@ -33,10 +33,10 @@ let cfgFile: string;
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "jira-cfg-"));
   cfgFile = path.join(tmp, "config.yaml");
-  process.env.SANDBOX_CONFIG_FILE = cfgFile;
+  process.env.WERKMEISTER_CONFIG_FILE = cfgFile;
 });
 afterEach(() => {
-  delete process.env.SANDBOX_CONFIG_FILE;
+  delete process.env.WERKMEISTER_CONFIG_FILE;
   fs.rmSync(tmp, { recursive: true, force: true });
   vi.restoreAllMocks();
 });

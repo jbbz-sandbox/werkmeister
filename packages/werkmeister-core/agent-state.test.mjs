@@ -11,8 +11,8 @@ import { test } from "node:test";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "agent-state-home-"));
 const root = path.join(home, "features");
 process.env.HOME = home;
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
-process.env.SANDBOX_WORKSPACES_ROOT = root;
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_WORKSPACES_ROOT = root;
 
 const { getWorkspaceStatuses } = await import("./dist/sandbox.js");
 

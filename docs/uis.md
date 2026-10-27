@@ -55,7 +55,7 @@ same form as the dashboard.
 services with container state and Telepresence intercepts. Source:
 `packages/werkmeister-vscode`.
 
-**Where you open it.** The Sandbox Workspaces view in VS Code's activity bar.
+**Where you open it.** The Werkmeister Workspaces view in VS Code's activity bar.
 It polls every five seconds while visible.
 
 **What you can do.** Up, Stop, Restart, Down, Pause and Resume on a workspace,
