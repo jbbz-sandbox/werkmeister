@@ -1,6 +1,6 @@
-# Sandbox service-registry fragment for this repo.
+# Werkmeister service-registry fragment for this repo.
 #
-# `sandbox registry sync` (run by `sandbox setup`) merges every
+# `werkmeister registry sync` (run by `werkmeister setup`) merges every
 # <repo>/.werkmeister/services.yaml under paths.repos_root into
 # ~/.werkmeister/services.yaml. Only `services:`, `setup_services:`,
 # `infrastructure:` and `repo:` (this repo's own settings, merged into
@@ -9,9 +9,9 @@
 # {{werkmeister_home}} (the tool's home folder) and {{local_domain}} expand at merge time. `x-` keys hold YAML
 # anchors and are dropped from the output.
 
-# Ship detection for `sandbox pr status` and the pre-PR gate's release check
+# Ship detection for `werkmeister pr status` and the pre-PR gate's release check
 # (docs/workspace-lifecycle.md): changesets publishes and tags each release, so
-# a merge has shipped once a sandbox-cli release tag contains it.
+# a merge has shipped once a werkmeister release tag contains it.
 repo:
   ship: tag
   release_tag: "werkmeister@*"
@@ -21,20 +21,20 @@ repo:
   no_service_paths: [docs, .changeset, .gitignore, README.md]
 
 services:
-  # --- The sandbox repo's own workspaces (self-hosting) -----------------------
+  # --- The werkmeister repo's own workspaces (self-hosting) -----------------------
   # All five share one repo bind mount at /app and one per-feature node_modules
   # volume; werkmeister-install populates it and builds werkmeister-core/dist first.
   # 1G each: the pre-PR gate can run the dashboard's build in any of them, and
   # it runs out of heap at 512M.
   # cli, werkmeister-core and werkmeister-vscode (types cli/library/extension) idle under
   # `sleep infinity` with no healthcheck; their `command:` watchers run only under
-  # `sandbox up --dev`. The port is still published, so they keep their slot.
-  # See docs/users-guide.md "Self-hosting the sandbox repo" in the sandbox repo.
+  # `werkmeister up --dev`. The port is still published, so they keep their slot.
+  # See docs/users-guide.md "Self-hosting the Werkmeister repo" in the werkmeister repo.
   # Fully functional CLI: the host's docker socket plus ~/.werkmeister, ~/repos,
   # ~/features and ~/.kube mounted at their host paths, because the compose
   # files it generates carry host bind-mount paths and the daemon is the
   # host's. HOME matches so `~` expands the same way; PATH puts the worktree's
-  # own `sandbox` wrapper first (the dogfood point) and the tools volume next.
+  # own `werkmeister` wrapper first (the dogfood point) and the tools volume next.
   # GIT_CONFIG_* marks every directory safe: the worktrees belong to the host
   # uid, and git refuses "dubious ownership" otherwise. The anchors below are
   # reused by every other service here, so this entry must stay above them.
@@ -44,7 +44,7 @@ services:
     archetype: node-tool
     # apps/werkmeister-mcp ships inside the CLI (dist/mcp.js), so its tests run here.
     test: "pnpm turbo run typecheck test --filter=werkmeister --filter=werkmeister-mcp"
-    validate: "Build, then run the built sandbox binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
+    validate: "Build, then run the built werkmeister binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
@@ -60,18 +60,18 @@ services:
       - "{{repos_root}}:{{repos_root}}"
       - "{{workspaces_root}}:{{workspaces_root}}"
       - "{{home}}/.kube:{{home}}/.kube:ro"
-      - tools:/opt/sandbox-tools
+      - tools:/opt/werkmeister-tools
     environment: &host_env
       HOME: "{{home}}"
-      PATH: /app/apps/cli:/opt/sandbox-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      DOCKER_CONFIG: /opt/sandbox-tools/docker
+      PATH: /app/apps/cli:/opt/werkmeister-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      DOCKER_CONFIG: /opt/werkmeister-tools/docker
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
       # SW-31: pnpm is corepack's shim in the tools volume (werkmeister-install puts
       # it there); the pnpm version it fetches lives there too, so it downloads
       # once per feature, without the prompt that would hang a container.
-      COREPACK_HOME: /opt/sandbox-tools/corepack
+      COREPACK_HOME: /opt/werkmeister-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       # Read by werkmeister-dashboard; harmless for the others.
       HOST: 0.0.0.0
@@ -95,9 +95,9 @@ services:
     extra_volumes: *host_mounts
     environment: *host_env
 
-  # Also the MCP client bed: its archetype wires the sandbox server, and
-  # SANDBOX_MCP_TOKEN arrives via the feature .env (a missing one makes
-  # `sandbox up` refuse the workspace). It has cli's host access too, so its
+  # Also the MCP client bed: its archetype wires the werkmeister server, and
+  # WERKMEISTER_MCP_TOKEN arrives via the feature .env (a missing one makes
+  # `werkmeister up` refuse the workspace). It has cli's host access too, so its
   # tests can use docker directly (#134).
   werkmeister-vscode:
     path: packages/werkmeister-vscode
@@ -118,7 +118,7 @@ services:
     node_modules_volume: node-modules
     extra_volumes: *host_mounts
     environment: *host_env
-    secrets: [SANDBOX_MCP_TOKEN]
+    secrets: [WERKMEISTER_MCP_TOKEN]
 
   # Serves the workspace dashboard + MCP endpoint; its tools shell out to the
   # CLI, docker and kubectl, so it gets the same host access as `cli`.
@@ -161,14 +161,14 @@ services:
     memory_reservation: 128M
     node_modules_volume: node-modules
     extra_volumes:
-      - tools:/opt/sandbox-tools
+      - tools:/opt/werkmeister-tools
       - "{{repos_root}}:{{repos_root}}"
     environment:
-      PATH: /opt/sandbox-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      PATH: /opt/werkmeister-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
-      COREPACK_HOME: /opt/sandbox-tools/corepack
+      COREPACK_HOME: /opt/werkmeister-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       # Vite refuses unknown Host headers; this lets Caddy's hostname through.
       # Registry sync fills in this machine's local_domain from config.yaml.
@@ -177,7 +177,7 @@ services:
     feature_router: {}
 
 setup_services:
-  # The sandbox repo's install + build + tools download, all in startup.sh
+  # The werkmeister repo's install + build + tools download, all in startup.sh
   # (infra/compose/scripts/werkmeister-install-startup.sh). The build runs so
   # werkmeister-core/dist exists before the app services start; the `tools` volume
   # gets docker/compose/kubectl and the pnpm shim for the host-access services.
@@ -187,7 +187,7 @@ setup_services:
   # SW-33: the install is skipped while the lockfile and Node major are unchanged.
   # ~/repos and safe.directory give git the same access as the app containers,
   # so turbo hashes inputs the same way they do. ~/.werkmeister/locks queues
-  # installs host-wide, SANDBOX_INSTALL_SLOTS (default 2) at a time, and builds
+  # installs host-wide, WERKMEISTER_INSTALL_SLOTS (default 2) at a time, and builds
   # one at a time.
   # SW-69: the turbo cache and pnpm store are the built-in `turbo` and
   # `pnpm-store` caches, attached here and to the app services by turbo.json and
@@ -199,12 +199,12 @@ setup_services:
     node_modules_volume: node-modules
     startup_script: true
     extra_volumes:
-      - tools:/opt/sandbox-tools
+      - tools:/opt/werkmeister-tools
       - "{{repos_root}}:{{repos_root}}"
       - "{{werkmeister_home}}/locks:/locks"
     environment:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"
-      COREPACK_HOME: /opt/sandbox-tools/corepack
+      COREPACK_HOME: /opt/werkmeister-tools/corepack
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"

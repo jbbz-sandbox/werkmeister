@@ -25,7 +25,7 @@ function git(...args: string[]): void {
 }
 
 function seedNote(): Record<string, unknown> {
-  const notePath = path.join(workspace, ".sandbox", "notes", "003-decision-widget-sizing.md");
+  const notePath = path.join(workspace, ".werkmeister", "notes", "003-decision-widget-sizing.md");
   fs.writeFileSync(
     notePath,
     "---\ntype: decision\nphase: implement\nauthor: main\nstatus: open\n---\n\n# Widget sizing\n",
@@ -36,7 +36,7 @@ function seedNote(): Record<string, unknown> {
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "grad-2repo-"));
   workspace = path.join(tmp, "workspace");
-  fs.mkdirSync(path.join(workspace, ".sandbox", "notes"), { recursive: true });
+  fs.mkdirSync(path.join(workspace, ".werkmeister", "notes"), { recursive: true });
 
   standardsDir = path.join(tmp, "standards");
   fs.mkdirSync(path.join(standardsDir, "widgets"), { recursive: true });
@@ -57,7 +57,7 @@ describe("a graduation that has not been committed", () => {
   it("leaves the note open, because nothing confirms the rule landed", () => {
     graduateNote(workspace, seedNote(), { domain: "widgets", kind: "example", standardsDir });
 
-    const notePath = path.join(workspace, ".sandbox", "notes", "003-decision-widget-sizing.md");
+    const notePath = path.join(workspace, ".werkmeister", "notes", "003-decision-widget-sizing.md");
     expect(parseNote(notePath)?.frontmatter["status"]).toBe("graduating");
     // The visible consequence: it keeps being offered as an open decision.
     expect(openDecisions(workspace).map((n) => n.slug)).toContain("widget-sizing");
@@ -76,7 +76,7 @@ describe("once the scaffold is tracked in the standards tree", () => {
     git("add", "-A");
 
     expect(reconcileGraduating(workspace, standardsDir).length).toBe(1);
-    const notePath = path.join(workspace, ".sandbox", "notes", "003-decision-widget-sizing.md");
+    const notePath = path.join(workspace, ".werkmeister", "notes", "003-decision-widget-sizing.md");
     expect(parseNote(notePath)?.frontmatter["status"]).toBe("graduated");
     expect(openDecisions(workspace)).toEqual([]);
   });
@@ -86,7 +86,7 @@ describe("once the scaffold is tracked in the standards tree", () => {
     git("add", "-A");
     reconcileGraduating(workspace, standardsDir);
 
-    const notePath = path.join(workspace, ".sandbox", "notes", "003-decision-widget-sizing.md");
+    const notePath = path.join(workspace, ".werkmeister", "notes", "003-decision-widget-sizing.md");
     expect(parseNote(notePath)?.frontmatter["graduated_to"]).toBe(
       path.join("widgets", "references", "widget-sizing.md"),
     );

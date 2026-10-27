@@ -25,14 +25,14 @@ let root: string;
 
 function note(name: string, type: string, body: string): void {
   fs.writeFileSync(
-    path.join(root, ".sandbox", "notes", name),
+    path.join(root, ".werkmeister", "notes", name),
     `---\ntype: ${type}\nstatus: open\n---\n${body}\n`,
   );
 }
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "notes-ctx-"));
-  fs.mkdirSync(path.join(root, ".sandbox", "notes"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".werkmeister", "notes"), { recursive: true });
   note("001-handoff-start.md", "handoff", "# Handoff\nstart here");
 });
 afterEach(() => {
@@ -48,10 +48,10 @@ describe("buildContext", () => {
     const out = buildContext(root);
 
     expect(out.length).toBeLessThan(10000);
-    expect(out).toContain("Latest handoff: .sandbox/notes/001-handoff-start.md");
-    expect(out).toContain("Open decision: .sandbox/notes/007-decision-d7.md");
-    expect(out).toContain("Open decision: .sandbox/notes/006-decision-d6.md");
-    expect(out).not.toContain("Open decision: .sandbox/notes/002-decision-d2.md");
+    expect(out).toContain("Latest handoff: .werkmeister/notes/001-handoff-start.md");
+    expect(out).toContain("Open decision: .werkmeister/notes/007-decision-d7.md");
+    expect(out).toContain("Open decision: .werkmeister/notes/006-decision-d6.md");
+    expect(out).not.toContain("Open decision: .werkmeister/notes/002-decision-d2.md");
     // The elided ones still reach the session by path.
     expect(out).toMatch(/4 older open decision note\(s\) not shown/);
     expect(out).toContain("002-decision-d2.md");
@@ -73,7 +73,7 @@ describe("buildContext", () => {
     const out = buildContext(root);
 
     expect(out.length).toBeLessThan(10000);
-    expect(out).toContain(`Open decision: .sandbox/notes/121-decision-${slug(121)}.md`);
+    expect(out).toContain(`Open decision: .werkmeister/notes/121-decision-${slug(121)}.md`);
     expect(out).toMatch(
       /not shown \(context budget\)[^\n]*-decision-d\d+-a+\.md \(and \d+ older\) ──\n$/,
     );

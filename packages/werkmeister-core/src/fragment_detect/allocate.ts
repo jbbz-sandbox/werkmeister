@@ -99,7 +99,7 @@ export function allocateForwards(
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * `postgres:5432` (in-cluster) → `k8s-postgres:<forward>` (the sandbox
+ * `postgres:5432` (in-cluster) → `k8s-postgres:<forward>` (the werkmeister
  * tunnel), in the *keys* that came from k8s only.
  */
 export function rewriteEnv(

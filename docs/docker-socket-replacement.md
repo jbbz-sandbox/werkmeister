@@ -24,7 +24,7 @@ from `.werkmeister/services.yaml`, and they run as root. The anchor gives them t
 
 2. **Read-write host paths that the host later executes.** `~/repos`, `~/features` and
    `~/.werkmeister` are mounted read-write at their host paths. Code in the container can:
-   - rewrite `~/repos/sandbox/apps/cli/dist/main.js`, the host's own `werkmeister` build, which the
+   - rewrite `~/repos/werkmeister/apps/cli/dist/main.js`, the host's own `werkmeister` build, which the
      host CLI and `apps/werkmeister-mcp` run;
    - edit `~/.werkmeister/env.sh`, which `apps/cli/werkmeister` sources on every host run;
    - add a hook under any `~/repos/*/.git/hooks`, or to any workspace's `.claude/settings.json`
@@ -71,7 +71,7 @@ Each of the four services keeps only what the compose generator gives every work
       HOST: 0.0.0.0        # the one &host_env key still needed, and only here
 ```
 
-`werkmeister-vscode` keeps `secrets: [SANDBOX_MCP_TOKEN]` and its `mcp-client` archetype. It talks to
+`werkmeister-vscode` keeps `secrets: [WERKMEISTER_MCP_TOKEN]` and its `mcp-client` archetype. It talks to
 the host's `apps/werkmeister-mcp` over HTTP, which needs no mount at all.
 
 ### 2. Tests
@@ -94,7 +94,7 @@ container's watcher.
 
 The dependency tree can be borrowed instead of installed. A small host script builds a symlink
 farm outside the worktree:
-- every entry points into the installed checkout's `node_modules` (`~/repos/sandbox`, darwin
+- every entry points into the installed checkout's `node_modules` (`~/repos/werkmeister`, darwin
   binaries);
 - the workspace packages (`werkmeister-core`, …) point at the worktree's own `packages/`;
 - the script runs the worktree's entry point with `--preserve-symlinks`.
@@ -160,14 +160,14 @@ script.
 
 ## Evidence
 
-Measured on 2026-10-15 in workspace `sandbox-135-docker-socket-mount`, at `173ac96`.
+Measured on 2026-10-15 in workspace `sandbox-135-docker-socket-mount`, at `173ac96`. <!-- name-check: ignore -->
 
 - **Four test suites without host access.** A throwaway `node:22` container with only the
   generator's mounts: no socket, no `docker` CLI, no `~/.werkmeister`, `~/.kube`, `~/repos` or
   `~/features`, running as root. Command:
   `npx turbo run test --force --continue --filter=werkmeister --filter=werkmeister-core --filter=werkmeister-vscode --filter=sandbox-workspace-mcp-app`.
   The first run, with all four suites at once, timed out across the CLI suite under machine load.
-  So `sandbox-cli` and `werkmeister-core` were rerun alone. The baseline column is one run of all four
+  So `werkmeister` and `werkmeister-core` were rerun alone. The baseline column is one run of all four
   suites at once, in today's `cli` container:
 
   | Suite | Without host access | Today's `cli` container (socket + host mounts) |
@@ -175,7 +175,7 @@ Measured on 2026-10-15 in workspace `sandbox-135-docker-socket-mount`, at `173ac
   | `werkmeister-vscode` | 40 pass, 0 fail | 40 pass, 0 fail |
   | `sandbox-workspace-mcp-app` | pass | pass |
   | `werkmeister-core` | 456 pass, 2 fail: the new guard test (expected), and #190, which needs a `docker` CLI (§ Tests) | 457 pass, 2 fail: the new guard test, and `claude-md.test.mjs` "the active table is identical across work types", which reads the host's standards tree through the `~/.werkmeister` mount |
-  | `sandbox-cli` | 421 pass, 2 fail: `generate_certs.test.ts` 5 s timeouts, the subject of #178 | 419 pass, 4 fail: 5 s and 30 s timeouts under load |
+  | `werkmeister` | 421 pass, 2 fail: `generate_certs.test.ts` 5 s timeouts, the subject of #178 | 419 pass, 4 fail: 5 s and 30 s timeouts under load |
 
   Nothing in the CLI, plugin or dashboard suites needs the socket. Removing the host mounts also
   makes one werkmeister-core test hermetic.

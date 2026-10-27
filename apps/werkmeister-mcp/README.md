@@ -8,14 +8,14 @@ this one's `createServer()` in process.
 
 ## Why it exists
 
-Self-hosting the sandbox gave a container the host's Docker socket, and the
+Self-hosting werkmeister gave a container the host's Docker socket, and the
 daemon is root on the host. This server is the same capability with that mount
 removed — the verbs over HTTP instead of a socket.
 
 ## Running it
 
 `werkmeister connect` starts it, like the dashboard: it is a `WebApp`
-in `packages/werkmeister-core/src/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID
+in `packages/werkmeister-core/src/web_servers.ts` (stem `sandbox-mcp`, port 3002, PID <!-- name-check: ignore -->
 and log under `~/.werkmeister`). A host-local MCP client gets it over stdio instead:
 
     werkmeister mcp                          # stdio -- no token, no port
@@ -48,14 +48,14 @@ was not meant for it.
 `werkmeister init-workspace` projects the workspace's `.mcp.json` from the
 `mcp_servers:` registry in `~/.werkmeister/services.yaml`. The `werkmeister` entry there
 points at `http://host.docker.internal:3002/mcp`, carries the workspace's own
-feature in `X-Sandbox-Feature`, and leaves `${SANDBOX_MCP_TOKEN}` for the MCP
+feature in `X-Werkmeister-Feature`, and leaves `${WERKMEISTER_MCP_TOKEN}` for the MCP
 client to expand from the container's environment. The token is never written
 into that file — it lives inside a git worktree.
 
 **The `werkmeister` entry is deliberately not listed in any archetype's
 `mcp_servers:`,** so it is projected into no workspace by default. `.mcp.json`
 is shared by host sessions and container sessions, and on the host
-`host.docker.internal` does not resolve and `SANDBOX_MCP_TOKEN` is unset — so
+`host.docker.internal` does not resolve and `WERKMEISTER_MCP_TOKEN` is unset — so
 wiring it everywhere would put a permanently failing server into every
 workspace. Add `werkmeister` to the archetype or entry of a workspace that is
 actually driven from a container.
@@ -63,8 +63,8 @@ actually driven from a container.
 Workspace-scoped tools take one optional `workspace` argument — the workspace
 directory name or its feature name — that overrides the header.
 
-That covers a container the sandbox itself runs. For putting the *agent* in a
-container, a Docker Sandbox microVM, or a full VM — what each needs mounted and
+That covers a container werkmeister itself runs. For putting the *agent* in a
+container, a Docker Sandbox microVM, or a full VM — what each needs mounted and <!-- name-check: ignore -->
 set, and which pieces stop working there — see "Running the agent itself in
 isolation" in `docs/users-guide.md`.
 
@@ -74,8 +74,8 @@ isolation" in `docs/users-guide.md`.
 server. Until that is widened, use:
 
     lsof -nP -iTCP:3002 -sTCP:LISTEN
-    cat ~/.werkmeister/sandbox-mcp.pid
-    tail ~/.werkmeister/sandbox-mcp.log
+    cat ~/.werkmeister/sandbox-mcp.pid # name-check: ignore
+    tail ~/.werkmeister/sandbox-mcp.log # name-check: ignore
 
 ## Tools
 
@@ -106,12 +106,12 @@ server. Until that is widened, use:
 | `connect` | Start shared infrastructure |
 | `open-feature` | Open a feature-tagged browser window |
 | `intercept` | Start or leave a k8s traffic intercept (UI-only) |
-| `create-workspace-form` | New Sandbox Workspace |
+| `create-workspace-form` | New Werkmeister Workspace |
 | `create-workspace` | Create Workspace |
 | `workspace-form-schema` | Workspace Form Schema (UI-only) |
 | `issue-form-data` | Issue → Form Fields (UI-only) |
 | `refine-prompt` | Refine Prompt (UI-only) |
-| `list-workspaces` | List Sandbox Workspaces |
+| `list-workspaces` | List Werkmeister Workspaces |
 | `open-workspaces-ui` | Open Workspaces Dashboard in Browser |
 | `open-workspace` | Open Workspace in VS Code |
 | `workspace-prs` | Workspace Pull Requests |
@@ -122,7 +122,7 @@ server. Until that is widened, use:
 | `issue` | Issue Card |
 | `pr-reconcile` | Reconcile PR with Issue |
 | `workspace-pr` | Workspace PR: gate, open, status |
-| `status` | Sandbox status |
+| `status` | Werkmeister status |
 | `check-in` | Check-in Triage |
 | `workspace-usage` | Workspace Token Usage |
 | `docker-ui` | Docker Container UI |

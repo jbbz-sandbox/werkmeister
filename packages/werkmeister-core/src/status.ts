@@ -1,12 +1,12 @@
 /**
- * The computing half of `sandbox status`: the collectors and the machine-readable
+ * The computing half of `werkmeister status`: the collectors and the machine-readable
  * snapshot, with no rendering.
  *
  * The boundary is §4's: what derives state lives here, what formats it stays in
  * the CLI command. Every `print*` function and the argv branching are still
  * there, and nothing in this module writes to stdout.
  *
- * `StatusSnapshot` is snake_case on purpose. It *is* `sandbox status --json`'s
+ * `StatusSnapshot` is snake_case on purpose. It *is* `werkmeister status --json`'s
  * shape, key for key, so the renderer is a bare `JSON.stringify` and there is one
  * type rather than two that can drift apart.
  */
@@ -165,7 +165,7 @@ export function buildInterceptRows(
  * dashboard server — has its whole event loop blocked for however long a wedged
  * daemon takes to answer, not just the one request waiting on it. 120s of that
  * is a hung app; 15s is a slow refresh. The cap lives here rather than at the
- * call sites because every reader of a *status view* wants it, `sandbox status`
+ * call sites because every reader of a *status view* wants it, `werkmeister status`
  * included — and because an in-process caller no longer gets it for free from
  * the 15s timeout on a CLI child.
  *
@@ -173,7 +173,7 @@ export function buildInterceptRows(
  */
 const STATUS_READ = (cmd: string[]) => _run(cmd, 15);
 
-/** What `sandbox status --intercepts --json` prints. */
+/** What `werkmeister status --intercepts --json` prints. */
 export interface InterceptsSnapshot {
   available: boolean;
   /** Telepresence is on PATH, connected or not: a disconnected install can still intercept (SW-12). */
@@ -251,7 +251,7 @@ export interface StatusSnapshot {
   };
 }
 
-/** Feature vitals keyed by compose project; `projects` keys are `sandbox-<feature>`. */
+/** Feature vitals keyed by compose project; `projects` keys are `werkmeister-<feature>`. */
 export interface FeatureVitals {
   health: Map<string, ProjectHealth>;
   /** Null when the sweep failed. */
@@ -267,7 +267,7 @@ export async function featureVitals(): Promise<FeatureVitals> {
   return { health, resources };
 }
 
-/** Everything `sandbox status` knows, in one machine-readable read. */
+/** Everything `werkmeister status` knows, in one machine-readable read. */
 export async function statusSnapshot(): Promise<StatusSnapshot> {
   const vitals = featureVitals();
   // A missing or old registry must not cost the rest of status.

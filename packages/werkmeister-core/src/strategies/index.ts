@@ -125,7 +125,7 @@ export function reportLeftovers(
   if (!prune) {
     warn(
       `${from.id} layer still present: ${left.join(", ")}; remove by hand or run ` +
-        "`sandbox init-workspace --prune-context`",
+        "`werkmeister init-workspace --prune-context`",
     );
     return;
   }

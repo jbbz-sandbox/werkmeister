@@ -1,5 +1,5 @@
 /**
- * sandbox down <feature>
+ * werkmeister down <feature>
  *
  * Stop containers, release the feature's slot, update the reverse proxy
  * configuration, and clean up generated files.
@@ -66,7 +66,7 @@ async function printNotes(feature: string): Promise<void> {
       console.log(
         `${Colors.BOLD}Open decision notes${Colors.RESET} — graduate what ` +
           "should outlive the feature (PR body, the issue, docs/standards); " +
-          "run `sandbox notes graduate` to do it:\n",
+          "run `werkmeister notes graduate` to do it:\n",
       );
       for (const note of decisions) {
         printNote(note, workspace);
@@ -89,8 +89,8 @@ async function printNotes(feature: string): Promise<void> {
           slug: null,
         });
         info(
-          `Scaffolded ${result["scaffold_path"]} — run sb-author to fill it ` +
-            "in, then `sandbox skills check`. Commit it in the standards repo; " +
+          `Scaffolded ${result["scaffold_path"]} — run w9r-author to fill it ` +
+            "in, then `werkmeister skills check`. Commit it in the standards repo; " +
             "the note stays open until that file is tracked.",
         );
       } catch (exc) {
@@ -115,12 +115,12 @@ async function printNotes(feature: string): Promise<void> {
  * still-running containers, so they must precede the teardown.
  */
 async function teardown(feature: string, removeVolumes: boolean): Promise<DownResult> {
-  console.log(`\n${Colors.BOLD}=== sandbox down: ${feature} ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister down: ${feature} ===${Colors.RESET}\n`);
   await printNotes(feature);
   return downFeature(feature, { removeVolumes, signal: interruptSignal() });
 }
 
-/** Execute the `sandbox down` command. */
+/** Execute the `werkmeister down` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());
   const removeVolumes = Boolean(args.volumes);
@@ -133,7 +133,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       info("No active features to stop.");
       return;
     }
-    console.log(`\n${Colors.BOLD}=== sandbox down --all-features ===${Colors.RESET}\n`);
+    console.log(`\n${Colors.BOLD}=== werkmeister down --all-features ===${Colors.RESET}\n`);
     info(`Stopping ${names.length} feature(s): ${names.join(", ")}`);
     for (const feature of names) {
       await teardown(feature, removeVolumes);
@@ -150,7 +150,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
-    console.log(`\n${Colors.BOLD}=== sandbox down: ${feature} ===${Colors.RESET}\n`);
+    console.log(`\n${Colors.BOLD}=== werkmeister down: ${feature} ===${Colors.RESET}\n`);
     const infra = await import("werkmeister-core/infra");
     await infra.down(removeVolumes);
     console.log();

@@ -1,20 +1,20 @@
 ---
 name: diagnose
-description: "Diagnose developer sandbox issues by running comprehensive health checks across all layers: containers, networking, Caddy routing, and service connectivity. Use when a sandbox URL isn't working, returns empty responses, shows wrong content, or any sandbox infrastructure issue is suspected. Also use proactively after `sandbox up` or `sandbox proxy-reload` to verify everything is healthy."
+description: "Diagnose werkmeister issues by running comprehensive health checks across all layers: containers, networking, Caddy routing, and service connectivity. Use when a workspace URL isn't working, returns empty responses, shows wrong content, or any werkmeister infrastructure issue is suspected. Also use proactively after `werkmeister up` or `werkmeister proxy-reload` to verify everything is healthy."
 ---
 
 # diagnose
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
 
 Run the following diagnostic steps in order. Report findings as a structured summary with PASS/FAIL/WARN for each check.
 
 ## Step 1: Baseline Snapshot
 
-Get a structured baseline of all sandbox state in one call:
+Get a structured baseline of all werkmeister state in one call:
 
 ```bash
-sandbox status --json
+werkmeister status --json
 ```
 
 Parse the JSON to identify:
@@ -33,7 +33,7 @@ Host ports are slot-allocated per feature, so they are never fixed constants —
 ask the CLI for the feature's actual endpoints rather than assuming a range:
 
 ```bash
-sandbox services <feature>
+werkmeister services <feature>
 ```
 
 Then probe each reported port with its health path from `~/.werkmeister/services.yaml`:
@@ -44,7 +44,7 @@ curl -s -o /dev/null -w "<service> (<port>): HTTP %{http_code} | Size: %{size_do
 ```
 
 Port ranges live in `~/.werkmeister/ports.yaml` and service health paths in
-`~/.werkmeister/services.yaml`; both are written by `sandbox setup` and differ per
+`~/.werkmeister/services.yaml`; both are written by `werkmeister setup` and differ per
 machine.
 
 ## Step 3: Caddy Routing Verification
@@ -56,8 +56,8 @@ The ingress host is configured per machine — never hardcode it. It derives fro
 declares a `feature_router:` block in `~/.werkmeister/services.yaml`:
 
 ```bash
-DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
-SERVICE=frontend   # the routed service under test; `sandbox services <feature>` lists them
+DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.werkmeister/config.yaml 2>/dev/null | head -1)
+SERVICE=frontend   # the routed service under test; `werkmeister services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
 curl -sk -o /dev/null -w "homepage: HTTP %{http_code} | Size: %{size_download}\n" "$BASE/"
@@ -67,7 +67,7 @@ Then probe the paths that actually matter for this service — the `test_path` i
 `.werkmeister/workspace.yml`, plus whatever routes the feature touches:
 
 ```bash
-for path in / "$(sed -n 's/^test_path:[[:space:]]*//p' .werkmeister/workspace.yml .sandbox/workspace.yml 2>/dev/null | head -1)"; do
+for path in / "$(sed -n 's/^test_path:[[:space:]]*//p' .werkmeister/workspace.yml .werkmeister/workspace.yml 2>/dev/null | head -1)"; do
   [ -n "$path" ] || continue
   curl -sk -o /dev/null -w "${path}: HTTP %{http_code} | Size: %{size_download}\n" "${BASE}${path}"
 done
@@ -78,7 +78,7 @@ done
 ## Step 4: Caddyfile Validation
 
 ```bash
-CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CFG="${WERKMEISTER_CONFIG_FILE:-$HOME/.werkmeister/config.yaml}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker cp "$CADDYFILE" w9r-caddy:/tmp/Caddyfile.check
 docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | \
@@ -92,7 +92,7 @@ console.log('PASS: Caddyfile valid,', Object.values(servers).reduce((n,sv)=>n+wa
 
 This mirrors the CLI's canonical counter
 (`werkmeister-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
-leaf, across **all** compiled servers, same unit `sandbox proxy-reload`
+leaf, across **all** compiled servers, same unit `werkmeister proxy-reload`
 compares; the CLI ships as one bundle, so the walk is inlined here rather than
 imported). **Expected:** the printed count matches
 `grep -c 'reverse_proxy ' "$CADDYFILE"` — there is no
@@ -112,7 +112,7 @@ docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.intern
 If Step 1 flagged any dead k8s forwards, get the full per-service table with HTTP health status:
 
 ```bash
-sandbox status --k8s
+werkmeister status --k8s
 ```
 
 This performs real HTTP health checks (not just TCP) against each forward's health endpoint.
@@ -126,14 +126,14 @@ To check logs for a specific failing service (e.g. frontend on port 9053):
 docker logs w9r-k8s-forwards 2>&1 | grep "\[frontend\]" | tail -20
 ```
 
-Note: the correct host port for k8s-forwarded services is the `listen_port` from `sandbox status --k8s`
+Note: the correct host port for k8s-forwarded services is the `listen_port` from `werkmeister status --k8s`
 output, **not** the remote k8s pod port. For example, frontend is at `localhost:9053`,
 not `localhost:4321`.
 
 ## Step 7: Docker Desktop File Sync
 
 ```bash
-CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CFG="${WERKMEISTER_CONFIG_FILE:-$HOME/.werkmeister/config.yaml}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 HOST_SIZE=$(wc -c < "$CADDYFILE" | tr -d " ")  # macOS wc pads the count with spaces
 CONTAINER_SIZE=$(docker exec w9r-caddy wc -c /etc/caddy/Caddyfile 2>/dev/null | awk '{print $1}')  # path given to wc in the container; a < redirect reads the host file
@@ -149,7 +149,7 @@ fi
 Present results as:
 
 ```
-## Sandbox Diagnostic Report
+## Werkmeister Diagnostic Report
 
 | Check | Status | Details |
 |-------|--------|---------|

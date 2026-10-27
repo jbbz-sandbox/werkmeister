@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/jbbz-sandbox/werkmeister/main/apps/cli/infra/schemas/workspace.schema.json",
-  "title": "Sandbox workspace config (.sandbox/workspace.yml)",
-  "description": "Durable source of truth for a sandbox workspace's inputs. Generated and re-read by `sandbox init-workspace`. Unmanaged keys are preserved across writes, so additional properties are allowed.",
+  "title": "Werkmeister workspace config (.werkmeister/workspace.yml)",
+  "description": "Durable source of truth for a workspace's inputs. Generated and re-read by `werkmeister init-workspace`. Unmanaged keys are preserved across writes, so additional properties are allowed.",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -26,21 +26,21 @@
     "autonomous": {
       "type": "boolean",
       "default": false,
-      "description": "icm: run stage 01 to `sandbox pr open` with self-checks instead of human checks. Every strategy: add the Bash and werkmeister workspaces MCP allow rules a headless session needs to .claude/settings.json (recorded in .sandbox/claude-permissions.json, removed when this turns off)."
+      "description": "icm: run stage 01 to `werkmeister pr open` with self-checks instead of human checks. Every strategy: add the Bash and werkmeister workspaces MCP allow rules a headless session needs to .claude/settings.json (recorded in .werkmeister/claude-permissions.json, removed when this turns off)."
     },
     "model": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\[\\]-]*$",
-      "description": "Claude model for the workspace's sessions: an alias (opus, sonnet, haiku) or a full claude-… id. Written to .claude/settings.json (recorded in .sandbox/claude-permissions.json, so removing it here removes only that value, never a model set by hand) and passed as --model to claude-send / claude-resume. Absent = Claude Code's default."
+      "description": "Claude model for the workspace's sessions: an alias (opus, sonnet, haiku) or a full claude-… id. Written to .claude/settings.json (recorded in .werkmeister/claude-permissions.json, so removing it here removes only that value, never a model set by hand) and passed as --model to claude-send / claude-resume. Absent = Claude Code's default."
     },
     "auto_stop": {
       "type": "boolean",
       "default": false,
-      "description": "Write a SessionEnd hook to .claude/settings.json that runs `sandbox stop --if-idle` (#231): when a session in the workspace ends and no other Claude session is open there, this feature's containers stop (slot and volumes kept; `sandbox up` resumes). Never stops shared infra. Turning it off removes the hook on the next init-workspace / up."
+      "description": "Write a SessionEnd hook to .claude/settings.json that runs `werkmeister stop --if-idle` (#231): when a session in the workspace ends and no other Claude session is open there, this feature's containers stop (slot and volumes kept; `werkmeister up` resumes). Never stops shared infra. Turning it off removes the hook on the next init-workspace / up."
     },
     "repos": {
       "type": "string",
-      "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `sandbox init-workspace` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."
+      "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `werkmeister init-workspace` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."
     },
     "services": {
       "type": "string",
@@ -48,7 +48,7 @@
     },
     "issue_id": {
       "type": "string",
-      "description": "Issue ID in this machine's issue tracker (overrides.issue_tracker, set by `sandbox setup`)."
+      "description": "Issue ID in this machine's issue tracker (overrides.issue_tracker, set by `werkmeister setup`)."
     },
     "project": {
       "type": "string",
@@ -97,12 +97,12 @@
     },
     "dev_links": {
       "type": "object",
-      "description": "Per-workspace dev-link bind mounts. Maps a service name to a list of \"host:container[:ro]\" specs merged into that service's compose volumes — mount a locally built package over its node_modules copy without editing the global services.yaml. Vars: ${WORKSPACE} (workspace root), ${REPO} (the service's repo dir), ${SANDBOX_ROOT}.",
+      "description": "Per-workspace dev-link bind mounts. Maps a service name to a list of \"host:container[:ro]\" specs merged into that service's compose volumes — mount a locally built package over its node_modules copy without editing the global services.yaml. Vars: ${WORKSPACE} (workspace root), ${REPO} (the service's repo dir), ${WERKMEISTER_ROOT}.",
       "additionalProperties": {
         "type": "array",
         "items": {
           "type": "string",
-          "description": "A bind mount, e.g. \"${WORKSPACE}/shared/packages/core:/app/node_modules/@sandbox/core\"."
+          "description": "A bind mount, e.g. \"${WORKSPACE}/shared/packages/core:/app/node_modules/@werkmeister/core\"."
         }
       }
     },

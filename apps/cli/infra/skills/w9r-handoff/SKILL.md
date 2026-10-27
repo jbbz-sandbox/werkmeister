@@ -1,16 +1,16 @@
 ---
-name: sb-handoff
-description: "Write a handoff note capturing session/phase state in a sandbox workspace. Use when pausing or ending a session, when the user says 'hand off', 'wrap up', 'pause here', or between phases (research done → implementation next) — any moment the current window's state must survive into a later session or agent."
+name: w9r-handoff
+description: "Write a handoff note capturing session/phase state in a workspace. Use when pausing or ending a session, when the user says 'hand off', 'wrap up', 'pause here', or between phases (research done → implementation next) — any moment the current window's state must survive into a later session or agent."
 ---
 
-# sb-handoff — checkpoint the session into a handoff note
+# w9r-handoff — checkpoint the session into a handoff note
 
-Write one `handoff` note to `.sandbox/notes/` so a fresh session can resume without
-re-deriving state. Conventions: docs/notes-conventions.md in the sandbox repo.
+Write one `handoff` note to `.werkmeister/notes/` so a fresh session can resume without
+re-deriving state. Conventions: docs/notes-conventions.md in the werkmeister repo.
 
 1. **Supersede the previous handoff.** If a non-superseded `handoff` note exists in
-   `.sandbox/notes/`, edit its frontmatter to `status: superseded`. Do not delete it.
-2. **Write the new note** as `.sandbox/notes/NNN-handoff-<slug>.md` — next free `NNN`,
+   `.werkmeister/notes/`, edit its frontmatter to `status: superseded`. Do not delete it.
+2. **Write the new note** as `.werkmeister/notes/NNN-handoff-<slug>.md` — next free `NNN`,
    slug like `2026-07-04-session-end` or `research-to-implement`:
 
    ```yaml
@@ -36,5 +36,5 @@ re-deriving state. Conventions: docs/notes-conventions.md in the sandbox repo.
 4. **Confirm to the user**: the note path and a one-line summary of what a fresh
    session will pick up.
 
-If `.sandbox/notes/` does not exist (not a sandbox-initialized workspace), create the
+If `.werkmeister/notes/` does not exist (not a werkmeister-initialized workspace), create the
 directory first.

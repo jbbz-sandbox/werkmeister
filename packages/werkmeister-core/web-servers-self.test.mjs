@@ -35,7 +35,7 @@ test("start() leaves a server alone when the PID file is this very process", asy
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "web-servers-self-"));
   const prev = process.env.HOME;
   process.env.HOME = home;
-  const pidFile = path.join(home, ".sandbox", `${MCP.stem}.pid`);
+  const pidFile = path.join(home, ".werkmeister", `${MCP.stem}.pid`);
   fs.mkdirSync(path.dirname(pidFile), { recursive: true });
   fs.writeFileSync(pidFile, String(process.pid));
   try {

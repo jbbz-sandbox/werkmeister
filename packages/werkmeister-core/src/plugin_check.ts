@@ -7,7 +7,7 @@
  * *snapshot*: freshly generated skills in this repo reach no session until the
  * plugin is refreshed, and nothing detects the drift. This module compares the
  * installed plugin against the repo's `plugins/werkmeister/` at
- * `sandbox init-workspace` and returns loud warnings when the install lags.
+ * `werkmeister init-workspace` and returns loud warnings when the install lags.
  *
  * Warn-only by design: a stale (or absent) plugin degrades context quality but
  * must never block workspace initialisation, and any failure reading Claude's
@@ -23,7 +23,7 @@ import { sandboxRoot } from "./config.js";
 export const PLUGIN_NAME = "werkmeister";
 
 /** The plugin's name before SW-9; `w9r setup` migrates an install of it. */
-export const LEGACY_PLUGIN_NAME = "sandbox-tools";
+export const LEGACY_PLUGIN_NAME = "sandbox-tools"; // name-check: ignore
 
 export const REFRESH_HINT =
   "run `w9r setup` to refresh it so sessions pick up the current " + "werkmeister ops skills";
@@ -210,7 +210,7 @@ export function pluginDriftWarnings(
       `${PLUGIN_NAME} plugin is not installed — the ops skills ` +
         `(${PLUGIN_NAME}:diagnose, ${PLUGIN_NAME}:status, ${PLUGIN_NAME}:workspace, …) will not ` +
         `surface in Claude Code sessions. Run \`w9r setup\` to install ` +
-        `it (or use /plugin in Claude Code). The sb-* skills are ` +
+        `it (or use /plugin in Claude Code). The w9r-* skills are ` +
         `unaffected — they are projected into each workspace by ` +
         `init-workspace.`,
     ];

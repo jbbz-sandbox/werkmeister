@@ -1,5 +1,5 @@
 /**
- * `sandbox hooks agent-state` — what a workspace's Claude session is doing (SW-46),
+ * `werkmeister hooks agent-state` — what a workspace's Claude session is doing (SW-46),
  * written by the Claude Code hooks hooks_gen.ts installs and read by
  * `getWorkspaceStatuses()`. The transcript can't carry it: "Claude spoke last"
  * is both a finished run and a question, and a permission prompt writes nothing.

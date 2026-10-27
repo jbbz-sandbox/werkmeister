@@ -59,9 +59,9 @@ let root: string;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-strategy-"));
   fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
-  fs.writeFileSync(path.join(root, ".env"), "SANDBOX_SLOT=3\nSERVICES=\n");
-  fs.mkdirSync(path.join(root, ".sandbox"));
-  fs.writeFileSync(path.join(root, ".sandbox", "workspace.yml"), "context_strategy: icm\n");
+  fs.writeFileSync(path.join(root, ".env"), "WERKMEISTER_SLOT=3\nSERVICES=\n");
+  fs.mkdirSync(path.join(root, ".werkmeister"));
+  fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), "context_strategy: icm\n");
 });
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });

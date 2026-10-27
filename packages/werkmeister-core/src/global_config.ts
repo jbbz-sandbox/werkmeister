@@ -1,21 +1,21 @@
 /**
- * Machine-global sandbox configuration.
+ * Machine-global werkmeister configuration.
  *
  * `~/.werkmeister/config.yaml` is the single source of truth for machine-global
  * settings (repo/workspace roots, optional overrides, and the optional Jira REST
  * credentials). This module owns reading and writing it, and projecting it onto
  * the backward-compat surfaces:
  *
- * - `~/.werkmeister/env.sh`  — `export SANDBOX_*=…` lines, sourced by the shell and
- *   by the `sandbox` wrapper so external processes and the node MCP app still see
+ * - `~/.werkmeister/env.sh`  — `export WERKMEISTER_*=…` lines, sourced by the shell and
+ *   by the `werkmeister` wrapper so external processes and the node MCP app still see
  *   the vars.
  * - `~/.zshenv`          — one managed block that sources env.sh (replacing the
  *   old hardcoded exports).
- * - `claude_desktop_config.json` — the sandbox MCP server's redundant `env`
+ * - `claude_desktop_config.json` — the werkmeister MCP server's redundant `env`
  *   block is removed (the wrapper self-loads env.sh).
  *
- * The CLI reads *values* only from the YAML (never from `SANDBOX_*` env at
- * runtime). The one env var honoured here is `SANDBOX_CONFIG_FILE` — it names
+ * The CLI reads *values* only from the YAML (never from `WERKMEISTER_*` env at
+ * runtime). The one env var honoured here is `WERKMEISTER_CONFIG_FILE` — it names
  * *which* YAML to read (default `~/.werkmeister/config.yaml`), a location, not a
  * value, so "single source = the YAML" stays literally true and the loader is
  * testable against a temp file.
@@ -99,18 +99,18 @@ export function envShPath(): string {
 // ---------------------------------------------------------------------------
 // The service registry, port map and pricing table describe THIS MACHINE's
 // services, not the checkout, so they live beside config.yaml in ~/.werkmeister and
-// are seeded by `sandbox setup`. Resolution moved to `werkmeister-core/config`
+// are seeded by `werkmeister setup`. Resolution moved to `werkmeister-core/config`
 // (re-exported above) — out-of-process consumers now read the same YAML this
-// does, instead of relying on the SANDBOX_*_YAML exports having been sourced.
+// does, instead of relying on the WERKMEISTER_*_YAML exports having been sourced.
 // Those exports (see _ENV_MAP) remain as the fallback for a shell.
 
 /**
  * Root of the code-standards source tree (`overrides.standards_dir` →
- * `<sandbox root>/docs/standards`).
+ * `<werkmeister root>/docs/standards`).
  *
  * The standards are one organization's *content*; the CLI is a reusable tool.
  * This is the seam between them — point it at any directory laid out the way
- * `loadStandardsModules` expects and `sandbox standards check` gates it there
+ * `loadStandardsModules` expects and `werkmeister standards check` gates it there
  * too. Unlike the registry files above it has no `~/.werkmeister` default: the
  * bundled tree ships with the checkout, so an unconfigured install keeps
  * working.
@@ -188,30 +188,30 @@ export function desktopConfigPath(): string {
 // (yaml section, key, env var). Emitted to env.sh only when the value is set.
 // Consumed by shells and by compose; `werkmeister-core/config` reads the YAML.
 const _ENV_MAP: readonly [string, string, string][] = [
-  ["paths", "sandbox_root", "SANDBOX_ROOT"],
-  ["paths", "repos_root", "SANDBOX_REPOS_ROOT"],
-  ["paths", "workspaces_root", "SANDBOX_WORKSPACES_ROOT"],
-  ["overrides", "mcp_port", "SANDBOX_MCP_PORT"],
-  ["overrides", "node", "SANDBOX_NODE"],
-  ["overrides", "services_yaml", "SANDBOX_SERVICES_YAML"],
-  ["overrides", "ports_yaml", "SANDBOX_PORTS_YAML"],
-  ["overrides", "model_pricing_yaml", "SANDBOX_MODEL_PRICING_YAML"],
-  ["overrides", "cache_file", "SANDBOX_CACHE_FILE"],
+  ["paths", "werkmeister_root", "WERKMEISTER_ROOT"],
+  ["paths", "repos_root", "WERKMEISTER_REPOS_ROOT"],
+  ["paths", "workspaces_root", "WERKMEISTER_WORKSPACES_ROOT"],
+  ["overrides", "mcp_port", "WERKMEISTER_MCP_PORT"],
+  ["overrides", "node", "WERKMEISTER_NODE"],
+  ["overrides", "services_yaml", "WERKMEISTER_SERVICES_YAML"],
+  ["overrides", "ports_yaml", "WERKMEISTER_PORTS_YAML"],
+  ["overrides", "model_pricing_yaml", "WERKMEISTER_MODEL_PRICING_YAML"],
+  ["overrides", "cache_file", "WERKMEISTER_CACHE_FILE"],
   // Consumed by infra/compose/shared-infra.yml, which bind-mounts the cert dir
   // into the Caddy container. Exported so `docker compose` sees it.
-  ["ingress", "certs_dir", "SANDBOX_CERTS_DIR"],
+  ["ingress", "certs_dir", "WERKMEISTER_CERTS_DIR"],
 ];
 
 // Managed-block markers for ~/.zshenv (idempotent replace).
-const _ZSH_BEGIN = "# >>> sandbox config >>>";
-const _ZSH_END = "# <<< sandbox config <<<";
+const _ZSH_BEGIN = "# >>> werkmeister config >>>";
+const _ZSH_END = "# <<< werkmeister config <<<";
 
 // Managed-block markers for ~/.zshrc (tab completion; idempotent replace).
-const _COMPLETION_BEGIN = "# >>> sandbox completion >>>";
-const _COMPLETION_END = "# <<< sandbox completion <<<";
+const _COMPLETION_BEGIN = "# >>> werkmeister completion >>>";
+const _COMPLETION_END = "# <<< werkmeister completion <<<";
 
 // Old hardcoded exports we migrate away from (stripped from ~/.zshenv on write).
-const _LEGACY_EXPORT_VARS = ["SANDBOX_ROOT", "SANDBOX_REPOS_ROOT", "SANDBOX_WORKSPACES_ROOT"];
+const _LEGACY_EXPORT_VARS = ["SANDBOX_ROOT", "SANDBOX_REPOS_ROOT", "SANDBOX_WORKSPACES_ROOT"]; // name-check: ignore
 
 // ---------------------------------------------------------------------------
 // Prompts (repos_root, workspaces_root) — reused by the config command wizard
@@ -221,7 +221,8 @@ export const _CONFIG_PROMPTS: readonly PromptSpec[] = [
     key: "repos_root",
     label: "Repos root (absolute path)",
     help:
-      "Directory holding the canonical source-repo clones " + "(exported as SANDBOX_REPOS_ROOT).",
+      "Directory holding the canonical source-repo clones " +
+      "(exported as WERKMEISTER_REPOS_ROOT).",
     acceptEmpty: false,
     pattern: _ABS_PATH,
     placeholder: "/Users/you/workspace",
@@ -231,7 +232,7 @@ export const _CONFIG_PROMPTS: readonly PromptSpec[] = [
     label: "Workspaces root (absolute path)",
     help:
       "Directory holding per-feature worktree workspaces " +
-      "(exported as SANDBOX_WORKSPACES_ROOT).",
+      "(exported as WERKMEISTER_WORKSPACES_ROOT).",
     acceptEmpty: false,
     pattern: _ABS_PATH,
     placeholder: "/Users/you/workspace/features",
@@ -344,7 +345,7 @@ export interface IngressSettings {
 }
 
 export const INGRESS_DEFAULTS: IngressSettings = {
-  // SW-93: sandbox.com belongs to someone else. A machine whose config.yaml sets
+  // SW-93: sandbox.com belongs to someone else. A machine whose config.yaml sets // name-check: ignore
   // these (every `setup` run writes them) keeps its domains.
   local_domain: "local.werkmeister.io",
   remote_domain: "remote.werkmeister.io",
@@ -381,9 +382,9 @@ export function loadIngress(cfg?: GlobalConfig): IngressSettings {
 /**
  * The `owner/repo` whose worktrees become each feature-workspace root.
  *
- * Lives in `overrides:` rather than in a section of its own so `sandbox config`
+ * Lives in `overrides:` rather than in a section of its own so `werkmeister config`
  * — which rebuilds the YAML and preserves overrides verbatim — cannot drop it.
- * Empty means unconfigured: `sandbox setup` derives the default from the
+ * Empty means unconfigured: `werkmeister setup` derives the default from the
  * authenticated GitHub user, and warns when it can't.
  */
 export function loadWorkspaceRepo(cfg?: GlobalConfig): string {
@@ -394,13 +395,13 @@ export function loadWorkspaceRepo(cfg?: GlobalConfig): string {
 /** `owner/repo` — GitHub's own slug shape, no scheme and no `.git` suffix. */
 const _REPO_SLUG = "[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$";
 
-/** Workspace-repo prompt — driven by `sandbox setup`. */
+/** Workspace-repo prompt — driven by `werkmeister setup`. */
 export const _WORKSPACE_REPO_PROMPT: PromptSpec = {
   key: "workspace_repo",
   label: "Workspace config repo (owner/repo)",
   help:
     "GitHub repo cloned under the repos root and worktree'd as the root of " +
-    "every feature workspace, so .sandbox/ configs and notes get history. " +
+    "every feature workspace, so .werkmeister/ configs and notes get history. " +
     "Defaults to your own; point it at a shared <org>/sandbox-workspace to " +
     "share workspace configs with your team.",
   acceptEmpty: false,
@@ -409,7 +410,7 @@ export const _WORKSPACE_REPO_PROMPT: PromptSpec = {
 };
 
 /**
- * The GitHub owner the service repos live under — nothing here is Sandbox's own.
+ * The GitHub owner the service repos live under — nothing here is Werkmeister's own.
  *
  * Standards docs name their canonical examples as `<repo>:<path>`; this is what
  * turns those into links. Defaults to whoever owns the workspace repo, which is
@@ -426,18 +427,18 @@ export function loadGithubOrg(cfg?: GlobalConfig): string {
 }
 
 /**
- * The Jira project key the sandbox tool's own issues go to
- * (`overrides.sandbox_issues_project`, e.g. `SW`), upper-cased; "" when unset
+ * The Jira project key werkmeister's own issues go to
+ * (`overrides.werkmeister_issues_project`, e.g. `SW`), upper-cased; "" when unset
  * or not a key. Only read under `issue_tracker: jira`; unset keeps them on
- * GitHub (issues_report.ts's SANDBOX_ISSUES_REPO).
+ * GitHub (issues_report.ts's WERKMEISTER_ISSUES_REPO).
  */
 export function loadSandboxIssuesProject(cfg?: GlobalConfig): string {
-  const value = (cfg ?? load())["overrides"]?.["sandbox_issues_project"];
+  const value = (cfg ?? load())["overrides"]?.["werkmeister_issues_project"];
   const key = typeof value === "string" ? value.trim().toUpperCase() : "";
   return /^[A-Z][A-Z0-9]+$/.test(key) ? key : "";
 }
 
-/** GitHub org/user prompt — driven by `sandbox setup`. */
+/** GitHub org/user prompt — driven by `werkmeister setup`. */
 export const _GITHUB_ORG_PROMPT: PromptSpec = {
   key: "github_org",
   label: "GitHub org for service repos",
@@ -453,7 +454,7 @@ export const _GITHUB_ORG_PROMPT: PromptSpec = {
 const _DOMAIN =
   "[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$";
 
-/** Ingress prompts — driven by `sandbox setup`, alongside `_CONFIG_PROMPTS`. */
+/** Ingress prompts — driven by `werkmeister setup`, alongside `_CONFIG_PROMPTS`. */
 export const _INGRESS_PROMPTS: readonly PromptSpec[] = [
   {
     key: "local_domain",
@@ -480,7 +481,7 @@ export const _INGRESS_PROMPTS: readonly PromptSpec[] = [
     label: "Certificate directory (absolute path)",
     help:
       "Where bin/generate-certs.sh writes localhost.crt/.key; bind-mounted " +
-      "into the Caddy container (exported as SANDBOX_CERTS_DIR).",
+      "into the Caddy container (exported as WERKMEISTER_CERTS_DIR).",
     acceptEmpty: false,
     pattern: _ABS_PATH,
     placeholder: INGRESS_DEFAULTS.certs_dir,
@@ -488,9 +489,9 @@ export const _INGRESS_PROMPTS: readonly PromptSpec[] = [
 ];
 
 const _HEADER =
-  "# Global sandbox configuration — single source of truth.\n" +
-  "# Managed by `sandbox config`; safe to hand-edit, then run " +
-  "`sandbox config --check`.\n";
+  "# Global werkmeister configuration — single source of truth.\n" +
+  "# Managed by `werkmeister config`; safe to hand-edit, then run " +
+  "`werkmeister config --check`.\n";
 
 /** Write the config YAML (creating ~/.werkmeister/ as needed). */
 export function save(cfg: GlobalConfig): string {
@@ -515,11 +516,11 @@ function shQuote(s: string): string {
   return "'" + s.replace(/'/g, "'\"'\"'") + "'";
 }
 
-/** Render the `export SANDBOX_*=…` shell text from the config. */
+/** Render the `export WERKMEISTER_*=…` shell text from the config. */
 export function renderEnvSh(cfg: GlobalConfig): string {
   const lines = [
-    `# Generated by \`sandbox config\` from ${configPath()} — DO NOT EDIT.`,
-    "# Sourced by ~/.zshenv and the `sandbox` wrapper for backward compatibility.",
+    `# Generated by \`werkmeister config\` from ${configPath()} — DO NOT EDIT.`,
+    "# Sourced by ~/.zshenv and the `werkmeister` wrapper for backward compatibility.",
   ];
   for (const [section, key, envVar] of _ENV_MAP) {
     const value = (cfg[section] as Record<string, unknown> | undefined)?.[key];
@@ -528,7 +529,7 @@ export function renderEnvSh(cfg: GlobalConfig): string {
     }
     // Every mapped value is a path or a scalar; expand a leading `~` here so
     // consumers that don't do shell tilde expansion (docker compose reading
-    // SANDBOX_CERTS_DIR, node reading SANDBOX_SERVICES_YAML) get a real path.
+    // WERKMEISTER_CERTS_DIR, node reading WERKMEISTER_SERVICES_YAML) get a real path.
     const text = String(value);
     lines.push(`export ${envVar}=${shQuote(text.startsWith("~") ? expandUser(text) : text)}`);
   }
@@ -550,14 +551,14 @@ function managedBlock(): string {
   const home = path.basename(dotDir(os.homedir()));
   return (
     `${_ZSH_BEGIN}\n` +
-    "# Managed by `sandbox config` — do not edit; regenerated on `sandbox config`.\n" +
+    "# Managed by `werkmeister config` — do not edit; regenerated on `werkmeister config`.\n" +
     `[ -f "$HOME/${home}/env.sh" ] && . "$HOME/${home}/env.sh"\n` +
     `${_ZSH_END}\n`
   );
 }
 
 /** Remove the block delimited by *begin* and *end*, plus any line matching *drop*. */
-function stripBlock(
+export function stripBlock(
   text: string,
   begin: string,
   end: string,
@@ -582,7 +583,7 @@ function stripBlock(
   return out.join("\n");
 }
 
-/** A legacy hardcoded SANDBOX_* export, which env.sh now owns. */
+/** A legacy hardcoded SANDBOX_* export, which env.sh now owns. */ // name-check: ignore
 function isLegacyExport(line: string): boolean {
   const stripped = line.trim();
   return (
@@ -616,10 +617,10 @@ export function ensureZshenvSources(p?: string): boolean {
 }
 
 /**
- * Idempotently install `sandbox` tab completion in ~/.zshrc.
+ * Idempotently install `werkmeister` and `w9r` tab completion in ~/.zshrc.
  *
  * `complete -C` is bash's protocol, reached in zsh through bashcompinit — one
- * `sandbox __complete` callback then serves both shells, with no generated
+ * `werkmeister __complete` callback then serves both shells, with no generated
  * completion script to go stale. Appended last so an rc that runs `compinit`
  * itself (oh-my-zsh and friends) has already done so. The guards cover the rc
  * that never does — bashcompinit would fail with "compdef: not found" — and the
@@ -635,12 +636,12 @@ export function ensureZshrcCompletion(p?: string): boolean {
   const body = stripBlock(original, _COMPLETION_BEGIN, _COMPLETION_END);
   const block =
     `${_COMPLETION_BEGIN}\n` +
-    "# Managed by `sandbox setup` — do not edit; regenerated on `sandbox setup`.\n" +
-    "if (( $+commands[sandbox] )); then\n" +
+    "# Managed by `werkmeister setup` — do not edit; regenerated on `werkmeister setup`.\n" +
+    "if (( $+commands[werkmeister] )); then\n" +
     "  (( $+functions[compdef] )) || { autoload -Uz compinit && compinit }\n" +
     "  if (( $+functions[compdef] )); then\n" +
     "    autoload -Uz +X bashcompinit && bashcompinit\n" +
-    "    complete -C 'sandbox __complete' sandbox\n" +
+    "    complete -C 'werkmeister __complete' werkmeister w9r\n" +
     "  fi\n" +
     "fi\n" +
     `${_COMPLETION_END}\n`;
@@ -651,15 +652,15 @@ export function ensureZshrcCompletion(p?: string): boolean {
 // claude_desktop_config.json
 // ---------------------------------------------------------------------------
 
-/** A sandbox MCP server: command basename `sandbox` invoked with `mcp`. */
+/** The tool's MCP server entry: command basename `werkmeister` invoked with `mcp`. */
 function isSandboxServer(body: Record<string, unknown>): boolean {
   const command = String(body["command"] ?? "");
   const args = (body["args"] as unknown[] | undefined) ?? [];
-  return path.basename(command) === "sandbox" && args[0] === "mcp";
+  return path.basename(command) === "werkmeister" && args[0] === "mcp";
 }
 
 /**
- * Drop the redundant `env` block from the sandbox MCP server entry.
+ * Drop the redundant `env` block from the werkmeister MCP server entry.
  *
  * Idempotent; no-op when the file, the server, or the block is absent. Returns
  * true if a change was written.
@@ -700,7 +701,7 @@ export function check(cfg: GlobalConfig): string[] {
   const problems: string[] = [];
 
   if (!fs.existsSync(configPath())) {
-    problems.push(`config file missing: ${configPath()} — run \`sandbox config\``);
+    problems.push(`config file missing: ${configPath()} — run \`werkmeister config\``);
     return problems;
   }
 
@@ -725,14 +726,14 @@ export function check(cfg: GlobalConfig): string[] {
 
   const envPath = envShPath();
   if (!fs.existsSync(envPath)) {
-    problems.push(`${envPath} missing — run \`sandbox config\``);
+    problems.push(`${envPath} missing — run \`werkmeister config\``);
   } else if (fs.readFileSync(envPath, "utf8") !== renderEnvSh(cfg)) {
-    problems.push(`${envPath} is stale — run \`sandbox config\` to regenerate`);
+    problems.push(`${envPath} is stale — run \`werkmeister config\` to regenerate`);
   }
 
   const zpath = zshenvPath();
   if (!fs.existsSync(zpath) || !fs.readFileSync(zpath, "utf8").includes(_ZSH_BEGIN)) {
-    problems.push(`${zpath} does not source env.sh — run \`sandbox config\``);
+    problems.push(`${zpath} does not source env.sh — run \`werkmeister config\``);
   }
 
   const dpath = desktopConfigPath();
@@ -742,7 +743,8 @@ export function check(cfg: GlobalConfig): string[] {
       for (const body of Object.values(data["mcpServers"] ?? {})) {
         if (isDict(body) && isSandboxServer(body) && "env" in body) {
           problems.push(
-            `${dpath}: sandbox server still has a stale \`env\` block — ` + "run `sandbox config`",
+            `${dpath}: werkmeister server still has a stale \`env\` block — ` +
+              "run `werkmeister config`",
           );
         }
       }

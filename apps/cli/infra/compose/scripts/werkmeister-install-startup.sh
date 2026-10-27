@@ -1,8 +1,8 @@
 #!/bin/sh
-# The sandbox repo's werkmeister-install setup container (services.yaml
+# The werkmeister repo's werkmeister-install setup container (services.yaml
 # `startup_script: true`). With `install`, it installs and builds the repo
-# first; then it installs the host-facing CLIs the sandbox repo's own services
-# need into the per-feature `tools` volume mounted at /opt/sandbox-tools.
+# first; then it installs the host-facing CLIs the werkmeister repo's own services
+# need into the per-feature `tools` volume mounted at /opt/werkmeister-tools.
 # Idempotent: each download is skipped when its binary already exists, so a
 # re-up of the same feature costs nothing.
 #
@@ -15,8 +15,8 @@
 # switch, so the lockfile in /app picks the package manager.
 set -eu
 
-TOOLS=${SANDBOX_TOOLS_DIR:-/opt/sandbox-tools}
-LOCKS=${SANDBOX_INSTALL_LOCKS:-/locks}
+TOOLS=${WERKMEISTER_TOOLS_DIR:-/opt/werkmeister-tools}
+LOCKS=${WERKMEISTER_INSTALL_LOCKS:-/locks}
 PATH="$TOOLS/bin:$PATH"
 
 # corepack's pnpm shim, in the tools volume so the app containers (which have it
@@ -26,11 +26,11 @@ if [ ! -x "$TOOLS/bin/pnpm" ]; then
   corepack enable --install-directory "$TOOLS/bin" pnpm
 fi
 
-# Hold one of SANDBOX_INSTALL_SLOTS host-wide lock files (the bind-mounted
+# Hold one of WERKMEISTER_INSTALL_SLOTS host-wide lock files (the bind-mounted
 # ~/.werkmeister/locks) so workspaces starting together don't all install at once.
 # The slot is held on fd 9 until the install finishes.
 take_install_slot() {
-  slots=${SANDBOX_INSTALL_SLOTS:-2}
+  slots=${WERKMEISTER_INSTALL_SLOTS:-2}
   waiting=""
   while :; do
     i=1
@@ -65,9 +65,9 @@ if [ "${1:-}" = install ]; then
     install="npm ci"
   fi
   # Stamp names predate SW-93; renaming them would force one full reinstall per workspace.
-  stamp=node_modules/.sandbox-install-hash
+  stamp=node_modules/.werkmeister-install-hash
   want="$(cat package-lock.json pnpm-lock.yaml 2>/dev/null | sha256sum | cut -d' ' -f1) $(node -v | cut -d. -f1)"
-  wstamp=.turbo/.sandbox-install-hash
+  wstamp=.turbo/.werkmeister-install-hash
   if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && [ "$(cat "$wstamp" 2>/dev/null)" = "$want" ]; then
     echo "werkmeister-install: lockfile and Node major unchanged, skipping $install"
   else

@@ -13,9 +13,9 @@ import { withSandboxHome } from "./fixtures.mjs";
 
 const SNAPSHOT = path.join(import.meta.dirname, "strategy-jit.snapshot.json");
 const REPO = path.resolve(import.meta.dirname, "..", "..");
-// Skill templates come from $SANDBOX_ROOT/infra/skills; a developer's shell
+// Skill templates come from $WERKMEISTER_ROOT/infra/skills; a developer's shell
 // often points it at another checkout. Pin it to this one.
-process.env.SANDBOX_ROOT = path.join(REPO, "apps", "cli");
+process.env.WERKMEISTER_ROOT = path.join(REPO, "apps", "cli");
 
 function walk(root, rel = "") {
   const out = [];
@@ -45,9 +45,9 @@ test("jit init writes the same files, byte for byte", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "jit-snap-ws-"));
   try {
     seedStandards(std);
-    fs.mkdirSync(path.join(root, ".sandbox"));
+    fs.mkdirSync(path.join(root, ".werkmeister"));
     fs.writeFileSync(
-      path.join(root, ".sandbox", "workspace.yml"),
+      path.join(root, ".werkmeister", "workspace.yml"),
       "task: Snapshot run\nwork_type: feature\nstarting_prompt: Add a health check.\n",
     );
     const files = await withSandboxHome(

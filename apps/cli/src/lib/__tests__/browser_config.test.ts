@@ -11,11 +11,11 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "browser-cfg-"));
-  process.env.SANDBOX_CONFIG_FILE = path.join(tmp, "config.yaml");
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(tmp, "config.yaml");
   delete process.env.CHROME_BIN;
 });
 afterEach(() => {
-  delete process.env.SANDBOX_CONFIG_FILE;
+  delete process.env.WERKMEISTER_CONFIG_FILE;
   delete process.env.CHROME_BIN;
   fs.rmSync(tmp, { recursive: true, force: true });
   vi.restoreAllMocks();

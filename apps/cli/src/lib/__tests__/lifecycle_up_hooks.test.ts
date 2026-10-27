@@ -57,7 +57,7 @@ let root: string;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-hooks-"));
   fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
-  fs.writeFileSync(path.join(root, ".env"), "SANDBOX_SLOT=3\nSERVICES=\n");
+  fs.writeFileSync(path.join(root, ".env"), "WERKMEISTER_SLOT=3\nSERVICES=\n");
   fs.mkdirSync(path.join(root, ".claude"));
   fs.writeFileSync(
     path.join(root, ".claude", "settings.json"),

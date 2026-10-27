@@ -3,7 +3,7 @@
  * (docs/jit-context-system.md §3.2).
  *
  * Pure mechanics: scaffold placeholder content and wire the structural links a
- * domain's STANDARD.md needs. No prose judgment (that's `sb-author`, a skill)
+ * domain's STANDARD.md needs. No prose judgment (that's `w9r-author`, a skill)
  * and no interactive prompting (that's the CLI layer in `commands/notes`).
  *
  * Graduation straddles two repos — the scaffold lands in the standards tree,
@@ -45,7 +45,7 @@ export class GraduationError extends SandboxError {
  *
  * `overrides.standards_dir` can point at a shared clone, a packaged tree, or
  * someone else's repo, and graduation writes *into* it. Checked as a
- * precondition rather than left to the write itself: `sandbox down` reports a
+ * precondition rather than left to the write itself: `werkmeister down` reports a
  * GraduationError but swallows anything else so teardown is never blocked, so
  * an EACCES escaping from writeFileSync would present as a graduation that
  * quietly did nothing.
@@ -120,7 +120,7 @@ export function eligibleDomains(modules: Record<string, Record<string, any>>): s
 
 /**
  * Match a decision note's `refs` (file paths or free-text domain mentions —
- * sb-review's capture template doesn't guarantee domain keys) against each
+ * w9r-review's capture template doesn't guarantee domain keys) against each
  * candidate domain's `applies_to` glob list, or the domain key itself.
  */
 export function matchDomainsForRefs(

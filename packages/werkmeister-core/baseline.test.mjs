@@ -72,7 +72,7 @@ test("renderBaselineOverride: none is an empty services map", () => {
   assert.deepEqual(parseYaml(renderBaselineOverride([])), { services: {} });
 });
 
-test("renderBaselineOverride: one container per spec, aliased baseline-<svc> on both networks", () => {
+test("renderBaselineOverride: one container per spec, aliased baseline-<svc> on the shared network", () => {
   const image = `traefik/whoami@${DIGEST}`;
   const out = renderBaselineOverride([
     { service: "demo", image, port: 80, environment: {} },
@@ -85,12 +85,11 @@ test("renderBaselineOverride: one container per spec, aliased baseline-<svc> on 
   ]);
   assert.match(out, /^# AUTO-GENERATED/);
   const { services } = parseYaml(out);
-  const net = { aliases: ["baseline-demo"] };
   assert.deepEqual(services["baseline-demo"], {
     image,
     container_name: "w9r-baseline-demo",
     restart: "unless-stopped",
-    networks: { "shared-network": net, "werkmeister-shared": net },
+    networks: { "werkmeister-shared": { aliases: ["baseline-demo"] } },
   });
   assert.equal(services["baseline-api"].environment.DATABASE_URL, "postgres://u:p@db:5432/x");
   assert.equal(services["baseline-api"].ports, undefined, "reached over the shared network only");
@@ -135,7 +134,7 @@ test("docker compose accepts the shipped file merged with both overrides", {
       "--format",
       "json",
     ],
-    { cwd: state, env: { ...process.env, SANDBOX_STATE_DIR: infra }, encoding: "utf8" },
+    { cwd: state, env: { ...process.env, WERKMEISTER_STATE_DIR: infra }, encoding: "utf8" },
   );
   fs.rmSync(state, { recursive: true, force: true });
   assert.equal(r.status, 0, r.stderr);

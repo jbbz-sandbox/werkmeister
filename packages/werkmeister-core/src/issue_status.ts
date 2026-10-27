@@ -158,7 +158,7 @@ function currentStage(ws: string): string {
   return `stage ${empty ?? dirs[0] ?? "01"}`;
 }
 
-/** `sandbox issue start`: the first stage or phase began, so the issue moves to in_progress. */
+/** `werkmeister issue start`: the first stage or phase began, so the issue moves to in_progress. */
 export async function startIssue(
   ws: string,
   tracker?: IssueTrackerStrategy,

@@ -1,5 +1,5 @@
 /**
- * sandbox remove <feature> <service>
+ * werkmeister remove <feature> <service>
  *
  * Remove a local service from a feature, falling back to k8s for that
  * service. Re-generates compose and proxy configuration.
@@ -50,7 +50,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const service = args.service as string;
 
   console.log(
-    `\n${Colors.BOLD}=== sandbox remove: ${service} from ${feature} ===${Colors.RESET}\n`,
+    `\n${Colors.BOLD}=== werkmeister remove: ${service} from ${feature} ===${Colors.RESET}\n`,
   );
 
   let result: RemoveResult;

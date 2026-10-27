@@ -1,7 +1,7 @@
 # Keeping docs in sync with the code
 
 Docs here drift in a few predictable ways: a command or MCP tool is renamed, a
-file moves, an old name lingers (`~/.sandbox`, `npm run`, Stellwerk), or a doc <!-- docs-check: ignore -->
+file moves, an old name lingers (`~/.sandbox`, `npm run`, Stellwerk), or a doc <!-- docs-check: ignore --> <!-- name-check: ignore -->
 restates a fact that lives in code or config and then goes stale. The
 2026-10-22 sweep (PR #354) fixed about a hundred of these by hand. This page
 covers what now catches them automatically and what is still open.
@@ -16,7 +16,7 @@ covers what now catches them automatically and what is still open.
 | Retired names and paths (`k8s-connect`, `infra/config/`, `npm run`, Stellwerk, …) | the `RETIRED` list in the script <!-- docs-check: ignore --> |
 | Relative Markdown links that don't resolve | the file system |
 | Repo paths in code spans (`apps/…`, `packages/…`, `plugins/…`, `docs/…`); `file.ts::symbol` also checks the symbol | the file system <!-- docs-check: ignore --> |
-| `werkmeister`, `w9r` or `sandbox <command>` at the start of a code span or shell line, and every `--flag` after it up to a bare `--` | the built CLI's `__complete` |
+| `werkmeister <command>` or `w9r <command>` at the start of a code span or shell line, and every `--flag` after it up to a bare `--` | the built CLI's `__complete` |
 | Bare `<placeholder>`s outside code, which GitHub drops silently | `HTML_TAGS` in the script (the elements GitHub keeps) |
 | `#anchor` links, in the same doc or another `.md` | that doc's headings, as GitHub slugs them |
 | MCP tool names (`` `x` tool ``, `MCP tool `x``, `mcp__plugin_werkmeister_werkmeister__x`) | `registerTool` / `registerAppTool` in `apps/werkmeister-mcp/src`, plus the plugin's `*_TOOL` constants <!-- docs-check: ignore --> |
@@ -67,14 +67,13 @@ A new region is a key in `loadRegions()` plus its markers in a doc.
 Ranked by drift caught per effort, as proposed with the check above.
 
 1. **More generated regions.** Implemented for four regions (SW-81, above). Still a candidate: the changesets `fixed` group and the release `needs:` in the README.
-2. **TSDoc `{@link}` in code comments, checked by TypeDoc.** Code comments that name another symbol or file drift too (the esbuild header, comments linking to deleted specs). Write them as `{@link reloadCaddy}` and run TypeDoc over `werkmeister-core` in CI with `--emit none` and `invalidLink` validation as errors. Skip publishing an API site: `werkmeister-core` is private, so a site would have almost no readers. Implemented (SW-82) as `pnpm --filter werkmeister-core run docs:links` (config in `packages/werkmeister-core/typedoc.json`), run by the CI `test` job; `notExported` is off, and a link to a symbol in another module needs the module name, as in `{@link sandbox.resolveSandboxBin}`.
+2. **TSDoc `{@link}` in code comments, checked by TypeDoc.** Code comments that name another symbol or file drift too (the esbuild header, comments linking to deleted specs). Write them as `{@link reloadCaddy}` and run TypeDoc over `werkmeister-core` in CI with `--emit none` and `invalidLink` validation as errors. Skip publishing an API site: `werkmeister-core` is private, so a site would have almost no readers. Implemented (SW-82) as `pnpm --filter werkmeister-core run docs:links` (config in `packages/werkmeister-core/typedoc.json`), run by the CI `test` job; `notExported` is off, and a link to a symbol in another module needs the module name, as in `{@link sandbox.resolveSandboxBin}`. <!-- name-check: ignore -->
 3. **Run the skills' shell snippets.** The plugin skills' bash blocks are instructions Claude executes, and a wrong path there fails at runtime. Extracting and smoke-running them (e.g. in `apps/cli/bdd`) costs more than the checks above. Revisit if skills keep breaking after `docs:check`.
 
 ## Open follow-ups from the 2026-10-22 sweep
 
 Found while fixing the docs. Each one is either a code issue or needs a decision, so none of them is a doc edit:
 
-- **About 96 `sandbox <cmd>` calls in the skills.** They work through the deprecated launcher, and the CLI's own help text mostly says `sandbox` too. Renaming them is one decision, not a doc fix.
 - **`docs/ponytail-debt.md` is behind.** It lists 26 markers; about 40 exist. Run `/ponytail-debt` to rebuild it.
 - **`apps/cli/CONVENTIONS.md` dependency policy** ("no new npm dependencies beyond commander, nunjucks, yaml") no longer matches the code. Either update the policy or decide it still stands.
 - **Full system recovery** in `docs/troubleshooting-advanced.md` runs `docker compose -f shared-infra.yml` bare, which skips the generated override and environment that `composeInvocation()` adds. It probably needs a CLI command instead.

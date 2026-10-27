@@ -100,7 +100,7 @@ function fakeContainers(
 let home: SandboxHome;
 
 beforeEach(() => {
-  process.env.SANDBOX_ROOT = repoRoot;
+  process.env.WERKMEISTER_ROOT = repoRoot;
   home = useSandboxHome();
   h.containers = [];
   h.portsOverride = null;

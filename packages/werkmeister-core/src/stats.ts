@@ -347,7 +347,7 @@ export function parseConfigMem(memStr: string): number {
  * Try to match a Docker container name to a service in config.
  *
  * Container names may be prefixed with feature/project names, e.g.:
- * - 'sandbox-redis' → 'redis'
+ * - 'sandbox-redis' → 'redis' // name-check: ignore
  * - 'feat-myfeature-frontend-1' → 'frontend'
  * - 'w9r-k8s-forwards' → 'k8s-forwards'
  */
@@ -362,7 +362,8 @@ export function matchService(
 
   // Strip common prefixes
   let stripped = containerName;
-  for (const prefix of ["w9r-", "sandbox-", "feat-"]) {
+  const prefixes = ["w9r-", "sandbox-", "feat-"]; // name-check: ignore
+  for (const prefix of prefixes) {
     if (stripped.startsWith(prefix)) {
       stripped = stripped.slice(prefix.length);
     }
@@ -452,7 +453,7 @@ function classifyUsage(limitMib: number, usagePct: number): UsageStatus {
  * memory limit.
  *
  * *collectMinutes* of 0 takes a quick 15-second snapshot instead, which is what
- * `sandbox optimize` does with no `--collect`.
+ * `werkmeister optimize` does with no `--collect`.
  *
  * Only `memory_limit` is read from services.yaml: `memory_reservation` sits
  * beside it in the config but no comparison here uses it.
@@ -479,7 +480,7 @@ export async function optimizeReport(
   }
 
   if (!Object.keys(stats).length) {
-    warn("No running containers found. Start your sandbox first.");
+    warn("No running containers found. Start your workspace first.");
     return { usage: [], recommendations: [] };
   }
 

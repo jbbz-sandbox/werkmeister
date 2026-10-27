@@ -1,6 +1,6 @@
 // The opt-in `auto_stop` (#231): workspace.yml → the managed SessionEnd hook in
-// settings.json, the idle check behind `sandbox stop --if-idle` and the create
-// form. sandbox-context.md's line is in sandbox-context.test.mjs.
+// settings.json, the idle check behind `werkmeister stop --if-idle` and the create
+// form. werkmeister-context.md's line is in werkmeister-context.test.mjs.
 
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -20,7 +20,7 @@ import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { writeWorkspaceConfig } from "./dist/workspace_init.js";
 import { computePromptSpec, readAutoStop } from "./dist/workspace_prompts.js";
 
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
 function workspace(yml, settings) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ws-auto-stop-"));
@@ -54,7 +54,7 @@ test("auto_stop on: one managed SessionEnd entry, user entries kept, no duplicat
   const hooks = readHooks(root);
   assert.deepEqual(hooks.SessionEnd, [USER_END, buildSessionEndEntry(), AGENT]);
   assert.deepEqual(hooks.PreToolUse, [USER_PRE, AGENT]);
-  assert.match(hooks.SessionEnd[1].hooks[0].command, /sandbox stop --if-idle/);
+  assert.match(hooks.SessionEnd[1].hooks[0].command, /werkmeister stop --if-idle/);
   assert.equal(hooks.SessionEnd[1].hooks[0].timeout, 10);
 });
 

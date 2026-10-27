@@ -28,7 +28,7 @@ test("a workspace with no projected skills is all drift, and reports authoring s
     const result = checkSkills(ws);
     assert.deepEqual(result.authoring, []);
     assert.ok(result.drift.length > 0);
-    assert.ok(result.drift.every((e) => e.startsWith("missing: sb-")));
+    assert.ok(result.drift.every((e) => e.startsWith("missing: w9r-")));
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });
   }
@@ -39,9 +39,9 @@ test("a workspace with no projected skills is all drift, and reports authoring s
 test("the re-resolved manifest carries the work type's phase gate", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "skills-manifest-"));
   try {
-    fs.mkdirSync(path.join(ws, ".sandbox"));
+    fs.mkdirSync(path.join(ws, ".werkmeister"));
     fs.writeFileSync(
-      path.join(ws, ".sandbox", "standards.json"),
+      path.join(ws, ".werkmeister", "standards.json"),
       JSON.stringify({ phase_gate: { note: "decision", status: "decided" } }),
     );
     const resolved = { active: [], modules: {}, workType: " Feature " };
@@ -61,10 +61,13 @@ test("a workspace whose manifest has no phase gate never gains one on re-resolve
   try {
     const resolved = { active: [], modules: {}, workType: " Feature " };
     assert.ok(!("phase_gate" in resolveWorkspaceManifest(ws, resolved)), "no manifest on disk");
-    fs.mkdirSync(path.join(ws, ".sandbox"));
-    fs.writeFileSync(path.join(ws, ".sandbox", "standards.json"), JSON.stringify({ domains: {} }));
+    fs.mkdirSync(path.join(ws, ".werkmeister"));
+    fs.writeFileSync(
+      path.join(ws, ".werkmeister", "standards.json"),
+      JSON.stringify({ domains: {} }),
+    );
     assert.ok(!("phase_gate" in resolveWorkspaceManifest(ws, resolved)), "manifest without gate");
-    fs.writeFileSync(path.join(ws, ".sandbox", "standards.json"), "{not json");
+    fs.writeFileSync(path.join(ws, ".werkmeister", "standards.json"), "{not json");
     assert.ok(!("phase_gate" in resolveWorkspaceManifest(ws, resolved)), "corrupt manifest");
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });

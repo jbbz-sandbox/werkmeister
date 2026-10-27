@@ -335,7 +335,7 @@ function PolledChat(p: ChatPanelProps) {
         if (g === gen.current)
           set({
             loaded: true,
-            error: "Couldn’t load the session — is the Sandbox server up to date?",
+            error: "Couldn’t load the session — is the Werkmeister server up to date?",
           });
       },
     );

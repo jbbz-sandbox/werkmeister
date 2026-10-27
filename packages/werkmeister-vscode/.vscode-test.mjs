@@ -25,7 +25,7 @@ export default defineConfig({
   // cleared setting must restore, and WERKMEISTER_BIN is the one with nothing to
   // restore — `undefined` unsets it, since spawn drops undefined env values.
   env: {
-    WERKMEISTER_ROOT: "/tmp/sandbox-inherited-root",
+    WERKMEISTER_ROOT: "/tmp/werkmeister-inherited-root",
     WERKMEISTER_BIN: undefined,
   },
   mocha: {

@@ -3,30 +3,30 @@
  * type an issue is (bug | feature | task), where it goes — a bug is fixed here
  * if this workspace's changes caused it, otherwise it is filed in the machine's
  * issue tracker (`overrides.issue_tracker`; each tracker's strategy supplies
- * its own routing rows) or, for the sandbox tool itself, on the sandbox repo
- * unless the tracker takes those too (`overrides.sandbox_issues_project`) — and the
+ * its own routing rows) or, for werkmeister itself, on the werkmeister repo
+ * unless the tracker takes those too (`overrides.werkmeister_issues_project`) — and the
  * body per type. icm writes it to `_shared/issues-report.md`, jit to
- * `.sandbox/issues-report.md`; each strategy's CLAUDE.md points at its copy.
+ * `.werkmeister/issues-report.md`; each strategy's CLAUDE.md points at its copy.
  */
 
 import { COMPOSE_FILE } from "./compose_file.js";
 import { type IssueTrackerStrategy, issueTracker } from "./issue_tracker.js";
 import type { IssueKind } from "./issue_trackers/types.js";
 
-export const SANDBOX_ISSUES_REPO = "jbbz-sandbox/werkmeister";
+export const WERKMEISTER_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
 export function buildIssuesReportMd(
   workspaceName: string,
   issueId = "",
   tracker: IssueTrackerStrategy = issueTracker(),
 ): string {
-  const { row: appRow, search: searchStep, sandbox } = tracker.filingGuide(issueId.trim());
-  const sandboxWhere = sandbox ?? {
-    where: `https://github.com/${SANDBOX_ISSUES_REPO}/issues`,
-    command: `\`gh issue create -R ${SANDBOX_ISSUES_REPO} --label <label>\``,
+  const { row: appRow, search: searchStep, werkmeister } = tracker.filingGuide(issueId.trim());
+  const sandboxWhere = werkmeister ?? {
+    where: `https://github.com/${WERKMEISTER_ISSUES_REPO}/issues`,
+    command: `\`gh issue create -R ${WERKMEISTER_ISSUES_REPO} --label <label>\``,
   };
-  // GitHub labels apply unless the tracker takes sandbox-tool issues too; a tracker with its own types adds a column.
-  const labels = !sandbox;
+  // GitHub labels apply unless the tracker takes werkmeister issues too; a tracker with its own types adds a column.
+  const labels = !werkmeister;
   const types = tracker.issueTypes;
   const col = (k: IssueKind) => (types ? ` ${types[k]} |` : "");
   const label = (text: string) => (labels ? ` ${text} |` : "");
@@ -49,7 +49,7 @@ Every issue has one type. It sets the ${[labels && "label (GitHub)", types && `i
 Decide this first.
 
 - **New — this workspace's changes caused it** (the bug is in code changed on this branch, committed or not, and does not happen on the base branch): fix it here, in the current stage or phase. Do **not** file an issue.
-- **Existing — it was already there** (it happens on the base branch, or it is in code this workspace has not touched, including the \`sandbox\` tool itself): file it as an issue where it belongs (table below), then carry on. Fix it here only if the current task depends on it, and say so in the issue.
+- **Existing — it was already there** (it happens on the base branch, or it is in code this workspace has not touched, including the \`werkmeister\` tool itself): file it as an issue where it belongs (table below), then carry on. Fix it here only if the current task depends on it, and say so in the issue.
 
 Not sure? Check whether it happens on the base branch. If you still can't tell, ask the person — don't guess.
 
@@ -61,7 +61,7 @@ File one when the person asks for it, or when you find work outside this workspa
 
 | Issue is about | File at | Command |
 |---|---|---|
-| the \`sandbox\` tool: CLI, MCP tools, plugin skills, generated files (\`.sandbox/\`, \`${COMPOSE_FILE}\`, \`.env\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | ${sandboxWhere.where} | ${sandboxWhere.command} |
+| the \`werkmeister\` tool: CLI, MCP tools, plugin skills, generated files (\`.werkmeister/\`, \`${COMPOSE_FILE}\`, \`.env\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | ${sandboxWhere.where} | ${sandboxWhere.command} |
 ${appRow}
 
 ## How

@@ -63,9 +63,9 @@ Given(
     world.env = { ...process.env };
     for (const k of [
       "WERKMEISTER_ROOT",
-      "SANDBOX_ROOT",
+      "WERKMEISTER_ROOT",
       "WERKMEISTER_CONFIG_FILE",
-      "SANDBOX_CONFIG_FILE",
+      "WERKMEISTER_CONFIG_FILE",
     ])
       delete world.env[k];
     Object.assign(world.env, {

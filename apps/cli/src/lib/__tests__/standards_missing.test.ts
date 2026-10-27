@@ -20,10 +20,10 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "std-missing-"));
-  process.env.SANDBOX_CONFIG_FILE = path.join(tmp, "config.yaml");
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(tmp, "config.yaml");
 });
 afterEach(() => {
-  delete process.env.SANDBOX_CONFIG_FILE;
+  delete process.env.WERKMEISTER_CONFIG_FILE;
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 

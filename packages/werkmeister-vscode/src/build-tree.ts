@@ -1,6 +1,6 @@
 /**
  * Pure tree construction — every join, ownership, icon, and description decision
- * for the Sandbox Workspaces view.
+ * for the Werkmeister Workspaces view.
  *
  * Deliberately free of any `vscode` import so it runs under `node --test`
  * without an extension harness; `tree.ts` does nothing but map a WsNode onto a
@@ -94,15 +94,13 @@ export interface WsNode {
 /**
  * Feature name from a Compose project name. `getWorkspaceStatuses` sets
  * `project` from the workspace's `COMPOSE_PROJECT_NAME`, which `init-workspace`
- * always writes as `werkmeister-<feature>` (`sandbox-<feature>` before SW-93,
- * read until SW-11), so stripping the prefix is the reliable inverse.
+ * always writes as `werkmeister-<feature>`, so stripping the prefix is the reliable inverse.
  *
- * ponytail: prefix strip rather than re-reading .sandbox/workspace.yml per
+ * ponytail: prefix strip rather than re-reading .werkmeister/workspace.yml per
  * workspace. If a hand-edited .env ever breaks the convention, read the yml.
  */
 export function featureOf(project: string | null): string | null {
-  const prefix = ["werkmeister-", "sandbox-"].find((p) => project?.startsWith(p));
-  return (prefix && project?.slice(prefix.length)) || null;
+  return (project?.startsWith("werkmeister-") && project.slice("werkmeister-".length)) || null;
 }
 
 /** Board 09 §E. `needs` is a solid chip elsewhere; a tree icon can only be yellow. */
@@ -481,9 +479,9 @@ export function cliNotFoundNode(message: string): WsNode {
   return {
     kind: "error",
     id: "error:cli-not-found",
-    label: "Could not find the sandbox CLI",
+    label: "Could not find the werkmeister CLI",
     description: "click to configure",
-    tooltip: `${message}\n\nSet sandbox.binPath or sandbox.root, or run \`sandbox config\`.`,
+    tooltip: `${message}\n\nSet sandbox.binPath or sandbox.root, or run \`werkmeister config\`.`,
     icon: { id: "error", color: TONE_COLORS.err },
     contextValue: "error",
     expanded: false,

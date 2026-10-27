@@ -1,5 +1,5 @@
-// The merge is what makes `sandbox setup` repeatable: every repo's
-// .werkmeister/services.yaml (or legacy .sandbox/services.yaml) fragment lands in one generated registry, with the
+// The merge is what makes `werkmeister setup` repeatable: every repo's
+// .werkmeister/services.yaml fragment lands in one generated registry, with the
 // collisions that would silently break port allocation or detection failing
 // loud instead. These tests pin the merge rules; the filesystem step
 // (syncRegistry) is pinned in the second half of this file.
@@ -48,17 +48,17 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function writeFragment(repo, text, dotDir = ".sandbox") {
+function writeFragment(repo, text, dotDir = ".werkmeister") {
   const dir = path.join(repos, repo, dotDir);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "services.yaml"), text);
 }
 
-const frag = (repo, doc) => ({ repo, path: `/x/${repo}/.sandbox/services.yaml`, doc });
+const frag = (repo, doc) => ({ repo, path: `/x/${repo}/.werkmeister/services.yaml`, doc });
 const merge = (fragments, local = {}) =>
   mergeRegistry(fragments, { defaults: REGISTRY_DEFAULTS, local, paths: PATHS });
 
-test("discoverFragments finds only <dir>/.sandbox/services.yaml, sorted by repo", () => {
+test("discoverFragments finds only <dir>/.werkmeister/services.yaml, sorted by repo", () => {
   writeFragment("b-repo", "services: {}\n");
   writeFragment("a-repo", "services: {}\n");
   mkdirSync(path.join(repos, "no-fragment"));
@@ -68,23 +68,7 @@ test("discoverFragments finds only <dir>/.sandbox/services.yaml, sorted by repo"
     found.map((f) => f.repo),
     ["a-repo", "b-repo"],
   );
-  assert.equal(found[0].path, path.join(repos, "a-repo", ".sandbox", "services.yaml"));
-});
-
-test("discoverFragments reads .werkmeister/ first, falling back to .sandbox/ per repo (SW-92)", () => {
-  writeFragment("legacy", "services:\n  old: {}\n");
-  writeFragment("renamed", "services:\n  new: {}\n", ".werkmeister");
-  writeFragment("both", "services:\n  stale: {}\n");
-  writeFragment("both", "services:\n  current: {}\n", ".werkmeister");
-  mkdirSync(path.join(repos, "empty-new", ".werkmeister"), { recursive: true });
-  writeFragment("empty-new", "services:\n  kept: {}\n");
-  const found = Object.fromEntries(discoverFragments(repos).map((f) => [f.repo, f]));
-  assert.deepEqual(Object.keys(found), ["both", "empty-new", "legacy", "renamed"]);
-  assert.equal(found.both.path, path.join(repos, "both", ".werkmeister", "services.yaml"));
-  assert.deepEqual(Object.keys(found.both.doc.services), ["current"]);
-  assert.equal(found["empty-new"].path, path.join(repos, "empty-new", ".sandbox", "services.yaml"));
-  assert.equal(found.legacy.path, path.join(repos, "legacy", ".sandbox", "services.yaml"));
-  assert.equal(found.renamed.path, path.join(repos, "renamed", ".werkmeister", "services.yaml"));
+  assert.equal(found[0].path, path.join(repos, "a-repo", ".werkmeister", "services.yaml"));
 });
 
 test("discoverFragments skips a linked git worktree of a repo it already scans", () => {
@@ -107,30 +91,30 @@ test("discoverFragments names the file on a YAML syntax error", () => {
     () => discoverFragments(repos),
     (e) =>
       e instanceof RegistryError &&
-      e.message.includes(path.join("bad", ".sandbox", "services.yaml")),
+      e.message.includes(path.join("bad", ".werkmeister", "services.yaml")),
   );
 });
 
 test("expandPlaceholders touches only the five names, at any depth", () => {
   const out = expandPlaceholders(
     {
-      a: "{{home}}/.sandbox",
+      a: "{{home}}/.cache",
       w: "{{werkmeister_home}}/locks:/locks",
       b: ["{{repos_root}}:{{repos_root}}"],
       c: { d: "{{ workspaces_root }}" },
       hosts: ".{{local_domain}}",
-      keep: "${SANDBOX_MCP_TOKEN} {{other}} {service}",
+      keep: "${WERKMEISTER_MCP_TOKEN} {{other}} {service}",
       n: 3,
     },
     PATHS,
   );
   assert.deepEqual(out, {
-    a: "/home/dev/.sandbox",
+    a: "/home/dev/.cache",
     w: "/home/dev/.werkmeister/locks:/locks",
     b: ["/home/dev/repos:/home/dev/repos"],
     c: { d: "/home/dev/features" },
     hosts: ".local.example.test",
-    keep: "${SANDBOX_MCP_TOKEN} {{other}} {service}",
+    keep: "${WERKMEISTER_MCP_TOKEN} {{other}} {service}",
     n: 3,
   });
 });
@@ -282,12 +266,12 @@ test("renderRegistry emits the marker, sources and the fixed key order", () => {
   });
   const text = renderRegistry(
     merged,
-    ["/x/demo/.sandbox/services.yaml"],
-    "/home/dev/.sandbox/services.local.yaml",
+    ["/x/demo/.werkmeister/services.yaml"],
+    "/home/dev/.werkmeister/services.local.yaml",
   );
   assert.ok(text.startsWith(GENERATED_MARKER + "\n"));
-  assert.ok(text.includes("# Source: /x/demo/.sandbox/services.yaml"));
-  assert.ok(text.includes("# Machine overrides: /home/dev/.sandbox/services.local.yaml"));
+  assert.ok(text.includes("# Source: /x/demo/.werkmeister/services.yaml"));
+  assert.ok(text.includes("# Machine overrides: /home/dev/.werkmeister/services.local.yaml"));
   assert.deepEqual(Object.keys(parse(text)), [
     "archetypes",
     "caches",
@@ -301,20 +285,20 @@ test("renderRegistry emits the marker, sources and the fixed key order", () => {
   assert.equal(parse(text).mcp_servers.context7.env.CONTEXT7_API_KEY, "${CONTEXT7_API_KEY:-}");
 });
 
-// --- syncRegistry: the step `sandbox setup` and `sandbox registry` run -------
-// Config lives in a temp ~/.sandbox via SANDBOX_CONFIG_FILE, the same seam the
+// --- syncRegistry: the step `werkmeister setup` and `werkmeister registry` run -------
+// Config lives in a temp ~/.werkmeister via WERKMEISTER_CONFIG_FILE, the same seam the
 // CLI's tests use, so servicesYamlPath() lands in the temp dir.
-const ENV = ["SANDBOX_CONFIG_FILE", "SANDBOX_SERVICES_YAML", "SANDBOX_WORKSPACES_ROOT"];
+const ENV = ["WERKMEISTER_CONFIG_FILE", "WERKMEISTER_SERVICES_YAML", "WERKMEISTER_WORKSPACES_ROOT"];
 let savedEnv;
 let home;
 beforeEach(() => {
   savedEnv = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
   for (const k of ENV) delete process.env[k];
-  home = path.join(root, "sandbox-home");
+  home = path.join(root, "w9r-home");
   mkdirSync(home);
-  process.env.SANDBOX_CONFIG_FILE = path.join(home, "config.yaml");
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "config.yaml");
   writeFileSync(
-    process.env.SANDBOX_CONFIG_FILE,
+    process.env.WERKMEISTER_CONFIG_FILE,
     `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(root, "features")}\n`,
   );
 });
@@ -332,7 +316,7 @@ test("syncRegistry fails loud with nothing written when no fragment exists", () 
   assert.equal(step.label, "config services.yaml");
   assert.equal(step.ok, false);
   assert.match(step.detail, /no .werkmeister\/services\.yaml found under/);
-  assert.match(step.detail, /sandbox setup/);
+  assert.match(step.detail, /werkmeister setup/);
   assert.equal(existsSync(registryPath()), false);
 });
 
@@ -345,7 +329,7 @@ test("syncRegistry reports 'no fragments' rather than throwing for a missing rep
 test("syncRegistry writes the merged registry with expanded placeholders", () => {
   writeFragment(
     "demo",
-    "services:\n  backend:\n    path: apps/backend\n    extra_volumes:\n      - '{{home}}/.sandbox:{{home}}/.sandbox'\n" +
+    "services:\n  backend:\n    path: apps/backend\n    extra_volumes:\n      - '{{home}}/.cache:{{home}}/.cache'\n" +
       "      - '{{werkmeister_home}}/locks:/locks'\n",
     ".werkmeister",
   );
@@ -357,7 +341,7 @@ test("syncRegistry writes the merged registry with expanded placeholders", () =>
   assert.equal(doc.services.backend.repo, "demo");
   assert.equal(
     doc.services.backend.extra_volumes[0],
-    `${os.homedir()}/.sandbox:${os.homedir()}/.sandbox`,
+    `${os.homedir()}/.cache:${os.homedir()}/.cache`,
   );
   assert.equal(
     doc.services.backend.extra_volumes[1],
@@ -485,9 +469,9 @@ test("branchRegistry takes the gated repo's fragment from its worktree, the rest
   );
   writeFragment("other", "services:\n  web:\n    path: apps/web\n    test: npm test\n");
   const worktree = path.join(root, "features", "ws", "app");
-  mkdirSync(path.join(worktree, ".sandbox"), { recursive: true });
+  mkdirSync(path.join(worktree, ".werkmeister"), { recursive: true });
   writeFileSync(
-    path.join(worktree, ".sandbox", "services.yaml"),
+    path.join(worktree, ".werkmeister", "services.yaml"),
     "services:\n  api:\n    path: apps/api\n    test: npx turbo run test --filter=new-api\n" +
       "  worker:\n    path: apps/worker\n",
   );

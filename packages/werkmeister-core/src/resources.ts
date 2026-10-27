@@ -63,7 +63,7 @@ export interface WorkspaceResources {
   host: HostSummary;
 }
 
-/** One sandbox command's compose start, `from`/`to` ISO. */
+/** One werkmeister command's compose start, `from`/`to` ISO. */
 export interface StartRecord {
   by: Exclude<StartedBy, "person">;
   from: string;
@@ -76,7 +76,7 @@ const CLOCK_SLACK_MS = 2000;
 /** A restart longer ago than this, on a container still running, is history rather than a loop. */
 export const CRASH_WINDOW_MS = 5 * 60_000;
 
-/** No compose label records who started a container (labels are fixed at create), so sandbox keeps its own log. */
+/** No compose label records who started a container (labels are fixed at create), so werkmeister keeps its own log. */
 export function startsFile(workspace: string): string {
   return path.join(dotDir(workspace), "starts.json");
 }

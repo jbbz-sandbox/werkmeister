@@ -1,10 +1,9 @@
 /**
- * The three bin scripts declared in package.json: `werkmeister`, `w9r` and the
- * deprecated `sandbox` alias (SW-5; removal is SW-11).
+ * The bin scripts declared in package.json: `werkmeister` and `w9r`.
  *
  * Drives the real scripts, so it needs dist/main.js — `npm test` builds first.
  * HOME points at an empty dir so the wrapper never sources the developer's
- * ~/.sandbox/env.sh.
+ * ~/.werkmeister/env.sh.
  */
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -35,15 +34,19 @@ describe("bin scripts", () => {
       expect(r.stderr).toBe("");
     });
   }
+});
 
-  // stderr, so `sandbox <cmd> --json` and piped stdout stay parseable.
-  it("sandbox --help prints one deprecation line on stderr, then runs as normal", () => {
-    const r = help("sandbox");
-    expect(r.status).toBe(0);
-    expect(r.stdout).toContain("Usage: werkmeister");
-    expect(r.stdout).not.toContain("sandbox is deprecated");
-    const lines = r.stderr.trim().split("\n");
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/deprecated.*werkmeister.*w9r/i);
+// SW-106: the old name is gone from the package and from what users see.
+describe("no sandbox name", () => {
+  it("package.json declares only the werkmeister and w9r bins", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(CLI_DIR, "package.json"), "utf8"));
+    expect(Object.keys(pkg.bin).sort()).toEqual(["w9r", "werkmeister"]);
+    expect(pkg.files).not.toContain("sandbox");
+  });
+
+  it("werkmeister --help never says sandbox", () => {
+    // Kept on purpose: the sandbox-workspace record repo, and `migrate` naming what it moves.
+    const kept = /sandbox-workspace|Move ~\/\.sandbox to/g;
+    expect(help("werkmeister").stdout.replace(kept, "")).not.toMatch(/sandbox/i);
   });
 });

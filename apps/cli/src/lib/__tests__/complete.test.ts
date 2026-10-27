@@ -34,10 +34,10 @@ function complete(line: string): string[] {
       ...process.env,
       COMP_LINE: line,
       COMP_POINT: String(line.length),
-      // Point at a config.yaml that does not exist, so SANDBOX_WORKSPACES_ROOT
+      // Point at a config.yaml that does not exist, so WERKMEISTER_WORKSPACES_ROOT
       // is what workspacesRoot() resolves — the real config outranks the env var.
-      SANDBOX_CONFIG_FILE: path.join(wsRoot, "no-such-config.yaml"),
-      SANDBOX_WORKSPACES_ROOT: wsRoot,
+      WERKMEISTER_CONFIG_FILE: path.join(wsRoot, "no-such-config.yaml"),
+      WERKMEISTER_WORKSPACES_ROOT: wsRoot,
     },
   });
   expect(res.status).toBe(0);

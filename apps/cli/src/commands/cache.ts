@@ -1,5 +1,5 @@
 /**
- * sandbox cache prune [name] [--reset] [--force] [--dry-run]
+ * werkmeister cache prune [name] [--reset] [--force] [--dry-run]
  *
  * Apply each shared cache's rule from the registry's `caches:` (SW-69):
  * `max_age` deletes older entries, `prune` runs the tool's own command, and

@@ -20,7 +20,7 @@ it("dist/mcp.js answers initialize over stdio", async () => {
 
   const child = spawn(process.execPath, [entry, "--stdio"], {
     stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env, SANDBOX_ROOT: CLI_ROOT },
+    env: { ...process.env, WERKMEISTER_ROOT: CLI_ROOT },
   });
   onTestFinished(() => void child.kill());
   let stderr = "";

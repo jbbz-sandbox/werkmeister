@@ -1,13 +1,13 @@
 /**
- * sandbox stats
+ * werkmeister stats
  *
- * Collect and display Docker container resource usage for all sandbox containers.
+ * Collect and display Docker container resource usage for all werkmeister containers.
  * Supports a one-shot snapshot or continuous collection over a time period.
  *
  * Examples:
- *     sandbox stats                     # Snapshot of current usage
- *     sandbox stats --collect 5         # Collect for 5 minutes
- *     sandbox stats --collect 30 -i 5   # 30 minutes, 5-second intervals
+ *     werkmeister stats                     # Snapshot of current usage
+ *     werkmeister stats --collect 5         # Collect for 5 minutes
+ *     werkmeister stats --collect 30 -i 5   # 30 minutes, 5-second intervals
  */
 
 import { containerStats } from "werkmeister-core/docker";
@@ -103,7 +103,7 @@ function formatRecommendations(recommendations: Recommendation[]): string {
   return lines.join("\n");
 }
 
-/** Execute the ``sandbox stats`` command. */
+/** Execute the ``werkmeister stats`` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const duration = (args.collect as number) ?? 0;
   const interval = (args.interval as number) ?? 10;
@@ -124,16 +124,16 @@ async function runSnapshot(_save: boolean): Promise<void> {
   const cpus = configuredCpus();
 
   if (!snapshot.length) {
-    warn("No running containers found. Start your sandbox first.");
+    warn("No running containers found. Start a workspace first.");
     return;
   }
 
-  // Filter to sandbox containers
+  // Filter to werkmeister containers
   let sandboxEntries = snapshot.filter(
-    (e) => e.name.startsWith("sandbox-") || e.name.startsWith("feat-"),
+    (e) => e.name.startsWith("w9r-") || e.name.startsWith("feat-"),
   );
   if (!sandboxEntries.length) {
-    // Show all if no sandbox prefix match
+    // Show all if no werkmeister prefix match
     sandboxEntries = snapshot;
   }
 

@@ -1,5 +1,5 @@
 /**
- * Browser-accessible fallback for the inline "Sandbox Workspaces" MCP App UI.
+ * Browser-accessible fallback for the inline "Werkmeister Workspaces" MCP App UI.
  *
  * The dashboard (`src/workspace-ui.ts`) renders inline in Claude Desktop. Hosts that don't render `ui://` resources (Claude Code
  * CLI, the VS Code extension) can't show it — so this serves the SAME bundled

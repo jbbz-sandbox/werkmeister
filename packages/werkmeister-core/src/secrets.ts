@@ -1,9 +1,9 @@
 /**
- * Required-secret validation for the developer sandbox.
+ * Required-secret validation for werkmeister.
  *
  * A service in services.yaml declares the secret keys it needs via an
  * optional `secrets: [KEY, ...]` list, satisfied in secrets.env by
- * `<SERVICE>__KEY` or plain `KEY` (see `resolveSecrets`). `sandbox up`
+ * `<SERVICE>__KEY` or plain `KEY` (see `resolveSecrets`). `werkmeister up`
  * requires only the keys declared by the services actually in the feature's
  * own workspace (its local `SERVICES=` list) -- a feature that uses no such
  * services needs no secrets.env entries at all. This replaces a fixed global key list, which
@@ -17,7 +17,7 @@ import * as fs from "node:fs";
 import type { ServicesConfig } from "./config.js";
 import { secretsPath } from "./global_config.js";
 
-/** Same rule as the generated `<PREFIX>_URL` keys: `werkmeister-core` → `SANDBOX_CORE`. */
+/** Same rule as the generated `<PREFIX>_URL` keys: `werkmeister-core` → `WERKMEISTER_CORE`. */
 export function secretPrefix(svcName: string): string {
   return svcName.toUpperCase().replace(/-/g, "_");
 }

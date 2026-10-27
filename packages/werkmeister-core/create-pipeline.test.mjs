@@ -63,12 +63,12 @@ test("an unattended create takes only description and starting_prompt from the m
 });
 
 test("a workspace container's own env does not leak into an unattended create (#148)", async () => {
-  const keys = ["FEATURE", "SANDBOX_FEATURE", "SANDBOX_SLOT"];
+  const keys = ["FEATURE", "SANDBOX_FEATURE", "WERKMEISTER_SLOT"];
   const prev = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
   Object.assign(process.env, {
     FEATURE: "repo-dir-drift",
     SANDBOX_FEATURE: "repo-dir-drift",
-    SANDBOX_SLOT: "3",
+    WERKMEISTER_SLOT: "3",
   });
   try {
     await withSandboxHome(
@@ -145,8 +145,8 @@ test("a fetch failure creates nothing", async () => {
   await withSandboxHome(
     async () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), "wsroot-"));
-      const prev = process.env.SANDBOX_WORKSPACES_ROOT;
-      process.env.SANDBOX_WORKSPACES_ROOT = root;
+      const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
+      process.env.WERKMEISTER_WORKSPACES_ROOT = root;
       try {
         await withFakeGh({ issue: null }, async () => {
           await assert.rejects(
@@ -159,8 +159,8 @@ test("a fetch failure creates nothing", async () => {
         });
         assert.deepEqual(fs.readdirSync(root), []);
       } finally {
-        if (prev === undefined) delete process.env.SANDBOX_WORKSPACES_ROOT;
-        else process.env.SANDBOX_WORKSPACES_ROOT = prev;
+        if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+        else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
       }
     },
     { config: GH },
@@ -184,6 +184,6 @@ test("an unparseable ref fails with the tracker's example", async () => {
 test("a missing feature tells the CLI user how to give one", () => {
   assert.throws(
     () => buildWorkspaceArgs({}),
-    /^WorkspaceError: A feature name is required \(pass it as an argument, set it in \.\/\.sandbox\/workspace\.yml, or run interactively\)\.$/,
+    /^WorkspaceError: A feature name is required \(pass it as an argument, set it in \.\/\.werkmeister\/workspace\.yml, or run interactively\)\.$/,
   );
 });

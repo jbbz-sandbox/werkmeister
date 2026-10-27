@@ -1,10 +1,10 @@
 /**
- * sandbox workspace <feature> [options]
+ * werkmeister workspace <feature> [options]
  *
- * Create a brand-new sandbox workspace under ``$SANDBOX_WORKSPACES_ROOT`` and
+ * Create a brand-new workspace under ``$WERKMEISTER_WORKSPACES_ROOT`` and
  * initialise it.
  *
- * This command owns workspace *creation*; ``sandbox init-workspace`` owns
+ * This command owns workspace *creation*; ``werkmeister init-workspace`` owns
  * everything derived from the config. Concretely, ``workspace``:
  *
  *   1. resolves inputs (CLI switches / an existing workspace.yml / the interactive
@@ -14,15 +14,15 @@
  *      ``<user>/<workspace>`` branch — the container the nested repo worktrees
  *      live in. Without a local ``sandbox-workspace`` checkout the root falls
  *      back to a plain directory (no history);
- *   3. writes ``.sandbox/workspace.yml`` (the durable source of truth, including
+ *   3. writes ``.werkmeister/workspace.yml`` (the durable source of truth, including
  *      the resolved ``repos`` set); and
- *   4. runs ``sandbox init-workspace`` inside it, which creates the nested repo
+ *   4. runs ``werkmeister init-workspace`` inside it, which creates the nested repo
  *      worktrees from that config and writes CLAUDE.md / .env /
- *      compose.yml / .claude/ / .sandbox/*. The initial state is then
+ *      compose.yml / .claude/ / .werkmeister/*. The initial state is then
  *      committed (not pushed).
  *
  * The workspace directory name is derived from the optional issue ID and
- * the feature name. Workspace state (.sandbox/workspace.yml, .sandbox/notes/, the
+ * the feature name. Workspace state (.werkmeister/workspace.yml, .werkmeister/notes/, the
  * projected .claude/ and generated context files) is tracked on the branch; the
  * nested repo worktrees and .env are gitignored.
  *
@@ -109,7 +109,7 @@ export async function resolveWorkspaceInputs(
           issue = await fetchIssueSnapshot(ref, undefined, tracker);
         } catch {
           throw new WorkspaceError(
-            `couldn't read ${ref} from ${tracker.label}; run \`sandbox connect\` to check the issue tracker.`,
+            `couldn't read ${ref} from ${tracker.label}; run \`werkmeister connect\` to check the issue tracker.`,
           );
         }
         // The project prompt comes next: default it to the project whose scope holds the ref.
@@ -207,7 +207,7 @@ function runBrowserForm(args: Record<string, unknown>): void {
   if (!(fs.existsSync(cliJs) && fs.statSync(cliJs).isFile())) {
     error(
       `Browser form not built: ${cliJs} is missing. ` +
-        "Run `npm --prefix apps/werkmeister-dashboard run build` (or `sandbox dashboard` once) first.",
+        "Run `npm --prefix apps/werkmeister-dashboard run build` (or `werkmeister dashboard` once) first.",
     );
     process.exit(1);
   }
@@ -232,7 +232,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  // 1. Resolve inputs (CLI > ./.sandbox/workspace.yml > interactive), then hand
+  // 1. Resolve inputs (CLI > ./.werkmeister/workspace.yml > interactive), then hand
   //    the whole creation to core.
   try {
     const { resolved, issue } = await resolveWorkspaceInputs(args);

@@ -1,9 +1,9 @@
 /**
- * sandbox skills <check|sync>
+ * werkmeister skills <check|sync>
  *
  * Freshness control for the workspace's context layer: `check` and `sync` are
  * the workspace strategy's (`werkmeister-core/strategies`). For jit that is the
- * sb-* skills projected into `.claude/skills/` plus the gate manifest; for
+ * w9r-* skills projected into `.claude/skills/` plus the gate manifest; for
  * icm, `_shared/standards.md` and the stage contracts.
  *
  * check: run the workspace strategy's check — a fresh rendering diffed against
@@ -12,7 +12,7 @@
  *       as drifted.
  *
  * Run from anywhere inside a workspace — the workspace root is resolved by
- * walking up to the nearest `.sandbox/` directory.
+ * walking up to the nearest `.werkmeister/` directory.
  */
 
 import { findWorkspaceRoot } from "werkmeister-core/gate";
@@ -27,7 +27,7 @@ function printDrift(entry: string): void {
 export async function run(args: Record<string, unknown>): Promise<void> {
   const workspace = findWorkspaceRoot(process.cwd());
   if (workspace === null) {
-    error("Not inside a werkmeister workspace — run this from a workspace folder or below.");
+    error("Not inside a workspace — run this from a workspace folder or below.");
     process.exit(1);
   }
   const strategy = strategyFor(workspace);
@@ -43,8 +43,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
   if (drift.length) {
     console.log(
-      `${Colors.YELLOW}Context layer lags the sandbox repo — run ` +
-        "`sandbox skills sync` (or `sandbox init-workspace`) to refresh." +
+      `${Colors.YELLOW}Context layer lags the werkmeister repo — run ` +
+        "`werkmeister skills sync` (or `werkmeister init-workspace`) to refresh." +
         `${Colors.RESET}`,
     );
     process.exit(1);

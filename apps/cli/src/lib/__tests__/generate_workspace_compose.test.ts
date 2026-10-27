@@ -26,8 +26,8 @@ let tmp: string;
 let home: SandboxHome;
 
 beforeEach(() => {
-  // SANDBOX_ROOT for the templates; a temp ~/.sandbox for the registry.
-  process.env.SANDBOX_ROOT = repoRoot;
+  // WERKMEISTER_ROOT for the templates; a temp ~/.sandbox for the registry.
+  process.env.WERKMEISTER_ROOT = repoRoot;
   home = useSandboxHome();
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wscompose-"));
   vi.spyOn(console, "log").mockImplementation(() => {});
@@ -46,6 +46,6 @@ describe("generateWorkspaceCompose", () => {
     expect(fs.statSync(path.join(tmp, ".env")).isFile()).toBe(true);
     // The fixture registry has no GraphQL subgraph, so no supergraph config.
     expect(fs.existsSync(path.join(dotDir(tmp), "supergraph-config.yml"))).toBe(false);
-    expect(fs.statSync(path.join(dotDir(tmp), "sandbox-context.md")).isFile()).toBe(true);
+    expect(fs.statSync(path.join(dotDir(tmp), "werkmeister-context.md")).isFile()).toBe(true);
   });
 });

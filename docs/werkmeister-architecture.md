@@ -25,7 +25,7 @@ A system that lets many Claude Code agents develop features at once across a mul
 For which *machine* each of these runs on — laptop, container runtime, or a cloud
 cluster — see [docs/topology.md](topology.md). This section is the request path.
 
-![The request path: the browser sends the X-Feature cookie to Caddy, which routes to a local feature container when the cookie matches one and to the k8s baseline otherwise](images/sandbox-architecture/request-path.svg)
+![The request path: the browser sends the X-Feature cookie to Caddy, which routes to a local feature container when the cookie matches one and to the k8s baseline otherwise](images/werkmeister-architecture/request-path.svg)
 
 <details>
 <summary>Diagram source</summary>
@@ -59,7 +59,7 @@ k8s services are reached via the k8s-forwards container (e.g., `k8s-forwards:905
 
 **What Caddy does**:
 - Terminates HTTPS/TLS using local certificates (mounted from the directory named by `ingress.certs_dir` in `~/.werkmeister/config.yaml`).
-- Serves the feature selector UI at `/__werkmeister` on every host (`/__sandbox` is a deprecated alias) — a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__werkmeister/features.json` is matched first (a real file); any other `/__werkmeister` path returns the picker.
+- Serves the feature selector UI at `/__werkmeister` on every host — a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__werkmeister/features.json` is matched first (a real file); any other `/__werkmeister` path returns the picker.
 - Copies an `X-Feature` cookie value into an `X-Feature` header on the upstream call, so the app can read the selected feature.
 - Proxies to `host.docker.internal:<port>` for a local feature container, or to `k8s-<service>:<forward_port>` for the k8s baseline.
 
@@ -71,15 +71,15 @@ frontend.remote.werkmeister.io {
     tls internal
 
     # Feature selector UI
-    @selector_features path /__werkmeister/features.json /__sandbox/features.json
+    @selector_features path /__werkmeister/features.json
     handle @selector_features {
         root * /srv
         rewrite * /features.json
         file_server
     }
-    @selector path /__werkmeister* /__sandbox*
+    @selector path /__werkmeister*
     handle @selector {
-        root * /sandbox/proxy/ui
+        root * /werkmeister/proxy/ui
         rewrite * /index.html
         file_server
     }
@@ -229,7 +229,7 @@ When `werkmeister up <feature>` runs, it dynamically generates the workspace's `
 
 networks:
   feature-payment-refactor:
-    name: sandbox-payment-refactor
+    name: werkmeister-payment-refactor
   werkmeister-shared:
     external: true
 
@@ -378,7 +378,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 
 ## Routing applies only to front-door services
 
-Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.werkmeister/sandbox-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `werkmeister test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
+Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.werkmeister/werkmeister-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `werkmeister test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
 
 ## Directory Structure
 

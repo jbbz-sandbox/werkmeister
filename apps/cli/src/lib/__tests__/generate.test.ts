@@ -1,7 +1,7 @@
 /**
  * the four HIGH-priority generators.
  *
- * SANDBOX_ROOT points at this repo so infraRoot finds the real templates,
+ * WERKMEISTER_ROOT points at this repo so infraRoot finds the real templates,
  * while a throwaway ~/.sandbox (seeded from __tests__/fixtures) backs
  * loadServices/loadPorts — the registry moved out of the checkout, so the
  * developer's own must never be read here. compose/env/supergraph tests pass
@@ -48,7 +48,7 @@ let tmp: string;
 let home: SandboxHome;
 
 beforeEach(() => {
-  process.env.SANDBOX_ROOT = repoRoot;
+  process.env.WERKMEISTER_ROOT = repoRoot;
   home = useSandboxHome();
   h.stateInfraRoot = null;
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gen-"));
@@ -131,7 +131,7 @@ describe("generateFeatureCompose", () => {
     const outPath = generateFeatureCompose("myfeat", 1, ["frontend"], null, tmp);
     expect(outPath).toBe(path.join(tmp, COMPOSE_FILE));
     const content = fs.readFileSync(outPath, "utf8");
-    expect(content).toContain("# Sandbox docker-compose for feature: myfeat");
+    expect(content).toContain("# Werkmeister docker-compose for feature: myfeat");
     expect(content).toContain("frontend:");
   });
 
@@ -145,7 +145,7 @@ describe("generateFeatureCompose", () => {
 
   it("empty local services still writes a valid file", () => {
     const content = fs.readFileSync(generateFeatureCompose("myfeat", 1, [], null, tmp), "utf8");
-    expect(content.startsWith("# Sandbox docker-compose for feature: myfeat")).toBe(true);
+    expect(content.startsWith("# Werkmeister docker-compose for feature: myfeat")).toBe(true);
     expect(content).not.toContain("backend:");
     expect(content).not.toContain("frontend:");
   });
@@ -225,21 +225,6 @@ describe("setup services", () => {
       "utf8",
     );
     expect(withScript).toContain("demo-install-startup.sh:/usr/local/bin/startup.sh");
-  });
-
-  it("still finds a startup script for a fragment naming the setup sandbox-install (SW-93)", () => {
-    home.write(
-      "services.yaml",
-      fixtureServicesYaml()
-        .replace("    setup_service: null\n", "    setup_service: sandbox-install\n")
-        .replace(
-          "setup_services: {}",
-          `setup_services:\n  sandbox-install:\n${MINIMAL_SETUP}    startup_script: true\n`,
-        ),
-    );
-    const content = fs.readFileSync(generateFeatureCompose("f", 1, ["backend"], null, tmp), "utf8");
-    expect(content).toContain("/werkmeister-install-startup.sh:/usr/local/bin/startup.sh");
-    expect(content).not.toContain("sandbox-install-startup.sh");
   });
 
   it("blocks the app service until the setup container exits", () => {
@@ -410,7 +395,7 @@ describe("generateFeatureEnv", () => {
     expect(outPath).toBe(path.join(tmp, ".env"));
     const content = fs.readFileSync(outPath, "utf8");
     expect(content).toContain("SANDBOX_FEATURE=myfeat");
-    expect(content).toContain("SANDBOX_SLOT=1");
+    expect(content).toContain("WERKMEISTER_SLOT=1");
     expect(content).toContain("http://backend:3000");
     expect(content).toContain("COMPOSE_PROJECT_NAME=werkmeister-myfeat");
   });
@@ -672,18 +657,15 @@ describe("generateCaddyfile", () => {
   it.each([
     ["no running feature", {}],
     ["a running feature", { myfeat: { slot: 1, services: ["frontend"] } }],
-  ])(
-    "serves the selector at /__werkmeister and the /__sandbox alias with %s",
-    async (_, features) => {
-      const content = fs.readFileSync(await generateCaddyfile(features), "utf8");
-      expect(content).toContain("path /__werkmeister/features.json /__sandbox/features.json");
-      expect(content).toContain("path /__werkmeister* /__sandbox*");
-      // SW-100: shared-infra.yml mounts features.json at /srv, outside the :ro ui dir.
-      expect(content).toMatch(/handle @selector_features \{\s+root \* \/srv\n/);
-      // Selector handles must precede the feature/default handles that would shadow them.
-      expect(content.indexOf("/__werkmeister*")).toBeLessThan(content.indexOf("handle /* {"));
-    },
-  );
+  ])("serves the selector at /__werkmeister with %s", async (_, features) => {
+    const content = fs.readFileSync(await generateCaddyfile(features), "utf8");
+    expect(content).toContain("path /__werkmeister/features.json\n");
+    expect(content).toContain("path /__werkmeister*\n");
+    // SW-100: shared-infra.yml mounts features.json at /srv, outside the :ro ui dir.
+    expect(content).toMatch(/handle @selector_features \{\s+root \* \/srv\n/);
+    // Selector handles must precede the feature/default handles that would shadow them.
+    expect(content.indexOf("/__werkmeister*")).toBeLessThan(content.indexOf("handle /* {"));
+  });
 
   it("emits one site block per routed service that has a running feature", async () => {
     const svcCfg = loadServices();
@@ -794,7 +776,7 @@ describe("compose staleness", () => {
 
 // ---- idle service containers (SW-32) --------------------------------------
 // Nothing reads a cli/library/extension watcher's output, so those containers
-// idle unless `sandbox up --dev` sets SANDBOX_DEV.
+// idle unless `sandbox up --dev` sets WERKMEISTER_DEV.
 
 describe("idle service containers", () => {
   const config = {
@@ -810,14 +792,14 @@ describe("idle service containers", () => {
     return YAML.parse(fs.readFileSync(outPath, "utf8")).services;
   }
 
-  it("idles a cli service under init, gating its watcher on SANDBOX_DEV", () => {
+  it("idles a cli service under init, gating its watcher on WERKMEISTER_DEV", () => {
     const tool = render().tool;
     expect(tool.init).toBe(true);
     expect(tool.restart).toBe("on-failure:3");
     expect(tool.healthcheck).toBeUndefined();
     const script: string = tool.command[2];
     expect(script).toContain(
-      '[ "${SANDBOX_DEV:-}" = 1 ] || exec sleep infinity\nexec npm run watch',
+      '[ "${WERKMEISTER_DEV:-}" = 1 ] || exec sleep infinity\nexec npm run watch',
     );
   });
 
@@ -832,7 +814,7 @@ describe("idle service containers", () => {
     expect(web.init).toBeUndefined();
     expect(web.restart).toBe("unless-stopped");
     expect(web.healthcheck.test[1]).toContain("curl -sf");
-    expect(web.command[2]).not.toContain("SANDBOX_DEV");
+    expect(web.command[2]).not.toContain("WERKMEISTER_DEV");
     expect(web.depends_on.tool.condition).toBe("service_started");
   });
 });

@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Sandbox Workspaces Extension",
+      "name": "Run Werkmeister Workspaces Extension",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/werkmeister-vscode"],
@@ -10,7 +10,7 @@
       "preLaunchTask": "build werkmeister-vscode"
     },
     {
-      "name": "Run Sandbox Workspaces Extension (watch)",
+      "name": "Run Werkmeister Workspaces Extension (watch)",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/werkmeister-vscode"],

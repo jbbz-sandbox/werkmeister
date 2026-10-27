@@ -1,5 +1,5 @@
 /**
- * sandbox close-out [name] [--yes] [--abandon <reason>]
+ * werkmeister close-out [name] [--yes] [--abandon <reason>]
  *
  * The one end-of-workspace verb (docs/workspace-lifecycle.md). Shipped: close
  * the issue, write closeout.md, remove the workspace, delete the merged code
@@ -31,7 +31,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     );
     process.exit(1);
   }
-  console.log(`\n${Colors.BOLD}=== sandbox close-out: ${name} ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister close-out: ${name} ===${Colors.RESET}\n`);
   if (!args.yes) {
     console.log(
       `  ${Colors.DIM}${

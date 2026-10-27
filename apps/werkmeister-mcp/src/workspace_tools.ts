@@ -116,7 +116,7 @@ const SESSION_ARG = {
     .optional()
     .describe(
       "Workspace directory name or feature name, or a `reconcile:<repo>-<number>` key from " +
-        "pr-reconcile. Defaults to the X-Sandbox-Feature header on the connection.",
+        "pr-reconcile. Defaults to the X-Werkmeister-Feature header on the connection.",
     ),
 };
 
@@ -215,11 +215,11 @@ export function registerWorkspaceTools(server: McpServer): void {
     server,
     "create-workspace-form",
     {
-      title: "New Sandbox Workspace",
+      title: "New Werkmeister Workspace",
       description:
-        "Open the New Sandbox Workspace form and create the workspace from it (git worktrees on a " +
-        "<user>/<workspace> branch under $SANDBOX_WORKSPACES_ROOT, then init-workspace). With an " +
-        "`issue_id` the issue is fetched and stored in `.sandbox/issue.md` (the create fails if it " +
+        "Open the New Werkmeister Workspace form and create the workspace from it (git worktrees on a " +
+        "<user>/<workspace> branch under $WERKMEISTER_WORKSPACES_ROOT, then init-workspace). With an " +
+        "`issue_id` the issue is fetched and stored in `.werkmeister/issue.md` (the create fails if it " +
         "can't be read). The form renders inline where the client supports MCP App UI (Claude " +
         "Desktop), otherwise in the user's browser. Fields come from the same prompt definitions " +
         "as the terminal wizard. Pass an issue ID or URL as `issue` to pre-fill. To create without " +
@@ -229,7 +229,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .string()
           .optional()
           .describe(
-            "Issue ID or URL in this machine's issue tracker (see `sandbox setup`). When set, " +
+            "Issue ID or URL in this machine's issue tracker (see `werkmeister setup`). When set, " +
               "the issue is fetched and used to pre-fill the form (feature, issue_id, task, " +
               "description, starting_prompt).",
           ),
@@ -259,7 +259,7 @@ export function registerWorkspaceTools(server: McpServer): void {
               {
                 type: "text",
                 text:
-                  "Opening the workspace form. Fill it in to create a new sandbox " +
+                  "Opening the workspace form. Fill it in to create a new " +
                   "workspace (worktrees + branch + init-workspace)." +
                   note,
               },
@@ -325,7 +325,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "Create the workspace through `createWorkspace` in this process " +
         "(worktrees + branch + init-workspace); with an `issue_id` the issue is fetched and " +
-        "stored in `.sandbox/issue.md` (the create fails if it can't be read). Called by the New Sandbox " +
+        "stored in `.werkmeister/issue.md` (the create fails if it can't be read). Called by the New Werkmeister " +
         "Workspace form; can also be invoked directly.",
       inputSchema: {
         formData: z
@@ -372,7 +372,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     {
       title: "Workspace Form Schema",
       description:
-        "Return the New Sandbox Workspace form definition (RJSF schema/uiSchema/formData/title), " +
+        "Return the New Werkmeister Workspace form definition (RJSF schema/uiSchema/formData/title), " +
         "built from the terminal wizard's prompt definitions. Data-only; used by the browser dashboard's " +
         "create-workspace tab.",
       inputSchema: {},
@@ -408,7 +408,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     {
       title: "Issue → Form Fields",
       description:
-        "Distil an issue from this machine's issue tracker into New Sandbox Workspace form fields " +
+        "Distil an issue from this machine's issue tracker into New Werkmeister Workspace form fields " +
         "(issue_id, feature, task, description, starting_prompt, suggested services) from an issue " +
         "ID or URL. Best-effort; returns just { issue_id } if the lookup fails. Called by the " +
         "form's “Fetch from <tracker>” button.",
@@ -440,7 +440,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       title: "Refine Prompt",
       description:
         "Rewrite a starting-prompt draft via the local `claude` CLI. Called by the " +
-        "New Sandbox Workspace form's “Refine this prompt” button; returns the rewrite.",
+        "New Werkmeister Workspace form's “Refine this prompt” button; returns the rewrite.",
       inputSchema: {
         text: z.string().describe("The current prompt text to refine."),
         instruction: z
@@ -482,9 +482,9 @@ export function registerWorkspaceTools(server: McpServer): void {
     server,
     "list-workspaces",
     {
-      title: "List Sandbox Workspaces",
+      title: "List Werkmeister Workspaces",
       description:
-        "List the workspaces under $SANDBOX_WORKSPACES_ROOT (workspace name + issue). " +
+        "List the workspaces under $WERKMEISTER_WORKSPACES_ROOT (workspace name + issue). " +
         "Renders an interactive table inline where the client supports MCP App UI (Claude " +
         "Desktop), otherwise a markdown table. To open one in VS Code, call `open-workspace` " +
         "with the name.",
@@ -534,7 +534,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     {
       title: "Open Workspaces Dashboard in Browser",
       description:
-        "Open the interactive Sandbox Workspaces dashboard in the user's default browser — the " +
+        "Open the interactive Werkmeister Workspaces dashboard in the user's default browser — the " +
         "same UI Claude Desktop renders inline, as a fallback for hosts that don't render MCP App " +
         "UI. Starts the localhost dashboard on port 3001 if it isn't running, and returns its URL.",
       inputSchema: {},
@@ -563,7 +563,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     "open-workspace",
     {
       title: "Open Workspace in VS Code",
-      description: "Launch VS Code on a workspace directory under $SANDBOX_WORKSPACES_ROOT. ",
+      description: "Launch VS Code on a workspace directory under $WERKMEISTER_WORKSPACES_ROOT. ",
       inputSchema: {
         ...WORKSPACE_ARG,
       },
@@ -712,7 +712,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     {
       title: "Open Pull Requests",
       description:
-        "List open PRs across the sandbox org (younger than 30 days): my own PRs and other " +
+        "List open PRs across the GitHub org (younger than 30 days): my own PRs and other " +
         "members' ready-for-human-approval PRs, each with review/check/label state and its issue " +
         "ID. Best-effort — a PR whose details can't be read degrades to a stub card.",
       inputSchema: {},
@@ -866,7 +866,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     {
       title: "Workspace PR: gate, open, status",
       description:
-        "The only way to open a PR from a sandbox workspace — use it instead of `gh pr create`, " +
+        "The only way to open a PR from a workspace — use it instead of `gh pr create`, " +
         "`/create-pr` or `finishing-a-development-branch`. `gate` runs the pre-PR gate; `open` gates " +
         "each PR file at `status: approved`, pushes, opens the PR and records its URL; `status` records " +
         "merged / shipped / closed from GitHub and release tags.",
@@ -903,11 +903,11 @@ export function registerWorkspaceTools(server: McpServer): void {
   server.registerTool(
     "status",
     {
-      title: "Sandbox status",
+      title: "Werkmeister status",
       description:
         "Report live container status for every workspace (up / partial / stopped / down) and the " +
         "shared infra, from a single `docker ps` sweep matched to each workspace's Compose project, " +
-        "with each workspace's agent state. With `detail: true`, also everything `sandbox status` " +
+        "with each workspace's agent state. With `detail: true`, also everything `werkmeister status` " +
         "knows (as `host`): infrastructure containers, the host web servers, k8s forward health, " +
         "every feature's slot and containers, and telepresence intercepts.",
       inputSchema: {
@@ -915,7 +915,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .boolean()
           .optional()
           .describe(
-            "Add the host-wide `sandbox status` snapshot. Slower: it probes every k8s forward.",
+            "Add the host-wide `werkmeister status` snapshot. Slower: it probes every k8s forward.",
           ),
       },
       outputSchema: z.object({

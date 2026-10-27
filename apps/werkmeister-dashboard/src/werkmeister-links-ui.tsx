@@ -1,6 +1,6 @@
 /**
  * "Links" dashboard tab. A short static, grouped list of useful local URLs:
- * the sandbox feature-selector pages (`/__sandbox`, which set the X-Feature
+ * the werkmeister feature-selector pages (`/__werkmeister`, which set the X-Feature
  * cookie) and the local admin UIs served by the shared infra.
  */
 
@@ -20,7 +20,7 @@ interface LinkGroup {
 }
 
 // Through Caddy the dashboard is werkmeister-dashboard.<local_domain>, which tells us
-// this machine's domain (it may still be local.sandbox.com, SW-93). Served on
+// this machine's domain (a machine set up before SW-93 may keep its old one). Served on
 // localhost it can't know, so it assumes the defaults.
 const DASHBOARD_HOST = "werkmeister-dashboard.";
 const LOCAL_DOMAIN = location.hostname.startsWith(DASHBOARD_HOST)
@@ -30,7 +30,7 @@ const REMOTE_DOMAIN = LOCAL_DOMAIN.startsWith("local.")
   ? `remote.${LOCAL_DOMAIN.slice("local.".length)}`
   : "remote.werkmeister.io";
 
-// Hardcoded for this sandbox. `/__sandbox` is served by Caddy on every host
+// Hardcoded for this werkmeister. `/__werkmeister` is served by Caddy on every host
 // router; admin ports come from infra/compose/shared-infra.yml. Add rows here as
 // more feature hostnames or infra tools come online.
 const GROUPS: LinkGroup[] = [
@@ -41,13 +41,13 @@ const GROUPS: LinkGroup[] = [
       {
         label: "frontend · local",
         desc: "Routes to the local Docker feature container",
-        url: `https://frontend.${LOCAL_DOMAIN}/__sandbox`,
+        url: `https://frontend.${LOCAL_DOMAIN}/__werkmeister`,
         kind: "local",
       },
       {
         label: "frontend · remote",
         desc: "Routes to the in-cluster deployment",
-        url: `https://frontend.${REMOTE_DOMAIN}/__sandbox`,
+        url: `https://frontend.${REMOTE_DOMAIN}/__werkmeister`,
         kind: "remote",
       },
     ],
@@ -69,7 +69,7 @@ const GROUPS: LinkGroup[] = [
         kind: "admin",
       },
       {
-        label: "Sandbox dashboard",
+        label: "Werkmeister dashboard",
         desc: "Workspaces dashboard",
         url: "http://localhost:3001/",
         kind: "admin",

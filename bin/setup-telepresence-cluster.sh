@@ -2,12 +2,12 @@
 # One-time cluster bootstrap: install telepresence's traffic-manager into the
 # OrbStack k8s cluster.
 #
-# This is NOT part of `sandbox setup` on purpose: `sandbox setup` provisions
+# This is NOT part of `werkmeister setup` on purpose: `werkmeister setup` provisions
 # per-developer machine state (CLI binaries, certs, /etc/hosts). This installs
 # a workload into the shared cluster itself, so it only needs to run once per
 # cluster, not once per developer machine.
 #
-# Symptom this fixes: `sandbox intercept <feature> -s <service>` failing with
+# Symptom this fixes: `werkmeister intercept <feature> -s <service>` failing with
 #   telepresence connect: error: traffic manager not found, if it is not
 #   installed, please run 'telepresence helm install'.
 #
@@ -25,7 +25,7 @@ if [ "$CTX" != "orbstack" ]; then
 fi
 
 if ! command -v telepresence >/dev/null 2>&1; then
-  echo "telepresence CLI not found on PATH. Run 'sandbox setup' first." >&2
+  echo "telepresence CLI not found on PATH. Run 'werkmeister setup' first." >&2
   exit 1
 fi
 
@@ -41,4 +41,4 @@ echo "Waiting for traffic-manager to become ready..."
 kubectl -n "$NAMESPACE" rollout status deployment/traffic-manager --timeout=60s
 
 echo ""
-echo "Done. You can now run: sandbox intercept <feature> -s <service>"
+echo "Done. You can now run: werkmeister intercept <feature> -s <service>"

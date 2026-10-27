@@ -1,5 +1,5 @@
 /**
- * sandbox connect
+ * werkmeister connect
  *
  * Start shared infrastructure: the k8s port-forwards (redis, postgres) and
  * caddy, plus jaeger and redisinsight when `infra.profiles` turns them on.
@@ -73,7 +73,7 @@ async function checkOne(tracker: IssueTrackerStrategy, project: string): Promise
   }
 }
 
-/** Handle `sandbox connect --k8s`: start/restart the k8s port-forwards container only. */
+/** Handle `werkmeister connect --k8s`: start/restart the k8s port-forwards container only. */
 async function runK8sOnly(): Promise<void> {
   console.log(`\n${Colors.BOLD}=== k8s Connect ===${Colors.RESET}\n`);
 
@@ -82,20 +82,22 @@ async function runK8sOnly(): Promise<void> {
     console.log(
       `  ${Colors.DIM}Ensure Docker is running and your kubeconfig is valid.${Colors.RESET}`,
     );
-    console.log(`  ${Colors.DIM}Run 'sandbox connect' to start all infrastructure.${Colors.RESET}`);
+    console.log(
+      `  ${Colors.DIM}Run 'werkmeister connect' to start all infrastructure.${Colors.RESET}`,
+    );
   }
 
   console.log();
 }
 
-/** Execute the `sandbox connect` command. */
+/** Execute the `werkmeister connect` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.k8s) {
     await runK8sOnly();
     return;
   }
 
-  console.log(`\n${Colors.BOLD}=== Sandbox Connect ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== Werkmeister Connect ===${Colors.RESET}\n`);
 
   const infraOk = await infraUp({ signal: interruptSignal() });
 

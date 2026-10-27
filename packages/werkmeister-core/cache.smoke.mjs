@@ -8,9 +8,9 @@ import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cache-"));
 const cacheFile = path.join(tmp, "jira-cache.json");
-process.env.SANDBOX_CACHE_FILE = cacheFile;
+process.env.WERKMEISTER_CACHE_FILE = cacheFile;
 
-// SANDBOX_CACHE_FILE must be set before the module loads — hence the dynamic import.
+// WERKMEISTER_CACHE_FILE must be set before the module loads — hence the dynamic import.
 const { cacheGet, cacheSet, withCache, runBatchOnce } = await import("werkmeister-core/cache");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
