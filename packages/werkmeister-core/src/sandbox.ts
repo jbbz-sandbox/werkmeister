@@ -3732,6 +3732,20 @@ export async function resumeClaudeInTerminal(
   return { path: target, sessionId: resumeId };
 }
 
+/** Opens a Terminal window following the workspace's container logs, for the pane's Logs (SW-105). */
+export async function followLogsInTerminal(name: string): Promise<{ feature: string }> {
+  const target = await resolveWorkspaceDir(name);
+  const feature = await readEnvValue(target, "FEATURE");
+  if (!feature) {
+    throw new WorkspaceError(
+      `Workspace '${name}' has no FEATURE in its .env — run \`werkmeister init-workspace\` there first.`,
+    );
+  }
+  // ponytail: `werkmeister` must be on the Terminal's PATH, as `claude` already is for Continue in Terminal.
+  await openTerminalRunning(`werkmeister logs ${shellQuote(feature)}`);
+  return { feature };
+}
+
 /** The shell command that reopens a workspace session in a terminal. */
 export function claudeResumeCommand(sessionId: string | null, model: string | null): string {
   return [

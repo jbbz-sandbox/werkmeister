@@ -54,13 +54,11 @@ export type WorkspaceRow = {
   /** Resume left a "continue" for this workspace's live session, for the pane to send. */
   resumeNudge: boolean;
   /** The desktop-app session whose cwd lies in this workspace. */
-  /** `beside`: this session started it, so the app will open it in split view next to this one. */
   /** `pinned`: the session is pinned in the app's sidebar. */
   session: {
     id: string;
     title: string;
     link: string | null;
-    beside: boolean;
     pinned: boolean;
   } | null;
 };
@@ -181,8 +179,6 @@ declare module "claude-code" {
       prs: Record<string, RepoPr[]>;
       /** How the last PR poll ended; `failed` reads `PRs unavailable · retry` on the cards. */
       prsPoll: "ok" | "failed";
-      /** The card whose ⋯ menu is open, by workspace name; '' when none. */
-      menu: string;
       /** The ? legend is shown. */
       legend: boolean;
       /** The pane's open tab. */

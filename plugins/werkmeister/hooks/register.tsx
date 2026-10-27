@@ -100,6 +100,8 @@ try {
     'pr-watch': () => core.watchPrs({ desktop: true }),
     'close-out': () => core.closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {}),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
+    'follow-logs': () => core.followLogsInTerminal(args.name),
+    'open-feature': () => core.openFeatureBrowser(args.name),
     'open-vscode': () => { execFileSync('open', ['-a', 'Visual Studio Code', args.path]); return { path: args.path } },
     // Only claude:// links: a new Desktop session in a folder, or a session's own link.
     'open-claude-link': () => {
@@ -180,7 +182,6 @@ const INTERCEPTS = { plugin: "werkmeister", key: "intercepts" } as const;
 const INTERCEPT = "intercept:";
 const PRS = { plugin: "werkmeister", key: "prs" } as const;
 const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
-const MENU = { plugin: "werkmeister", key: "menu" } as const;
 const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
 /** BUSY while `werkmeister connect` runs; no workspace name has parentheses. */
 const CONNECTING = "(connect)";
@@ -621,9 +622,6 @@ export function sessionFor(
   allPaths: string[],
   sessions: SessionInfo[],
 ): WorkspaceRow["session"] {
-  // list_sessions leaves out the calling session, so a startedBy naming no listed session is this one.
-  // ponytail: a starter archived or past the list limit reads as this session too; the split then refuses and says so.
-  const listed = new Set(sessions.map((s) => s.sessionId));
   for (const s of sessions) {
     if (!contains(path, s.cwd)) continue;
     const deeper = allPaths.some(
@@ -634,7 +632,6 @@ export function sessionFor(
       id: s.sessionId,
       title: s.title,
       link: s.link ?? null,
-      beside: !!s.startedBy && !listed.has(s.startedBy),
       pinned: s.pinned === true,
     };
   }
@@ -1017,9 +1014,10 @@ export type Action =
   | "resume"
   | "new"
   | "continue"
-  | "beside"
   | "pin"
   | "prs"
+  | "logs"
+  | "feature"
   | "closeout"
   | "abandon"
   | "cancel";
@@ -1034,59 +1032,58 @@ const LABEL: Record<Exclude<Action, "continue" | "pin">, string> = {
   pause: "⏸ Pause",
   resume: "▶ Resume",
   new: "＋ New session",
-  beside: "⇆ Open beside",
   prs: "↻ Refresh PRs",
+  logs: "Logs",
+  feature: "Open feature ↗",
   closeout: "✓ Close out",
   abandon: "✕ Abandon…",
   cancel: "Cancel",
 };
 
-/** What a card offers, in the order the bar and the ⋯ menu draw it; `issue` is the Open issue link. */
-export type CardActions = { primary: Action; bar: Action[]; menu: (Action | "issue")[] };
-
-/** The ⋯ menu's leftover lifecycle and session buttons, in this order (06 Actions). */
-const EXTRAS: Action[] = ["continue", "stop", "pause", "restart", "down", "new"];
+/** What a card offers, one list per group in draw order; `issue` is the Open issue link (ui-spec § Actions). */
+export type CardActions = {
+  primary: Action;
+  session: Action[];
+  containers: Action[];
+  work: (Action | "issue")[];
+};
 
 /**
- * ui-spec § Actions: the display model's primary, two secondaries, and everything else in ⋯ in the spec's order.
- * The secondaries follow the containers (06 Actions): Up and New while nothing runs, Stop and Down while paused,
- * else Stop and Pause, with Restart and Down once the work shipped; when the primary is one of them, Continue
- * takes its slot.
+ * ui-spec § Actions, Pane: the display model's primary, highlighted where it sits, and the buttons grouped by
+ * what they act on. Buttons that don't apply are left out. Stop stays hidden once the work shipped (06 Actions).
  */
 export function actionsFor(r: WorkspaceRow, d: WorkspaceDisplay, canType: boolean): CardActions {
   const session = hasSession(r);
-  const paused = r.paused != null;
   const off = r.state === "down" || r.state === "stopped";
+  const live = r.state === "up" || r.state === "partial";
   const shipped = r.lifecycle?.state === "shipped";
   const want: Action = d.primary.action === "close-out" ? "closeout" : d.primary.action;
   // Continue with no session would resume nothing: New session takes its place.
   const primary: Action = want === "continue" && !session ? "new" : want;
-  const pair: Action[] = paused
-    ? ["stop", "down"]
-    : off
-      ? ["up", "new"]
-      : shipped
-        ? ["restart", "down"]
-        : ["stop", "pause"];
-  const bar = pair.flatMap((a): Action[] => (a !== primary ? [a] : session ? ["continue"] : []));
-  const allowed = (a: Action) =>
-    a === "continue"
-      ? session
-      : paused
-        ? a === "new" || a === "stop" || a === "down"
-        : off
-          ? a === "new" || (a === "down" && r.state === "stopped")
-          : !(shipped && a === "stop");
+  const containers: Action[] =
+    r.paused != null
+      ? ["resume", "stop", "down"]
+      : off
+        ? ["up", ...(r.state === "stopped" ? (["down"] as const) : [])]
+        : [
+            ...(shipped ? [] : (["stop"] as const)),
+            "pause",
+            "restart",
+            "down",
+            ...(live ? (["logs", "feature"] as const) : []),
+          ];
   return {
     primary,
-    bar,
-    menu: [
-      ...EXTRAS.filter((a) => allowed(a) && a !== primary && !bar.includes(a)),
-      ...(r.session?.beside ? (["beside"] as const) : []),
+    session: [
+      ...(session ? (["continue"] as const) : []),
+      "new",
       ...(r.session ? (["pin"] as const) : []),
+    ],
+    containers,
+    work: [
       "prs",
       ...(r.issueUrl ? (["issue"] as const) : []),
-      ...(canCloseOut(r) && primary !== "closeout" ? (["closeout"] as const) : []),
+      ...(canCloseOut(r) ? (["closeout"] as const) : []),
       // Abandon needs a typed reason, so none where no Input draws.
       ...(canType ? (["abandon"] as const) : []),
     ],
@@ -1196,7 +1193,6 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
   const { value: busy = "" } = await $.state.get(BUSY);
   if (busy !== "") return;
 
-  await $.state.set(MENU, "");
   const { value: pending = "" } = await $.state.get(CONFIRM);
   if (
     action === "cancel" ||
@@ -1222,26 +1218,18 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     return;
   }
 
-  // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09), so the button focuses the session,
-  // else opens its link through the node child.
-  // Beside: the session in split view next to this one, so the pane stays in sight. The button shows only
-  // for sessions this one started, the only ones the app will split.
-  if (action === "beside") {
-    const { value: rows = [] } = await $.state.get(ROWS);
-    const row = rows.find((r) => r.name === name);
-    if (!row?.session?.beside) return;
-    const r = await $.mcp.call("ccd_window", "open_session_in", {
-      session_id: row.session.id,
-      target: "split",
-    });
-    if (r.isError)
-      await $.state.set(
-        NOTE,
-        r.content
-          .map((c) => c.text ?? "")
-          .join(" ")
-          .trim(),
-      );
+  if (action === "logs" || action === "feature") {
+    try {
+      if (action === "logs") {
+        await core($, "follow-logs", { name });
+        $.ui.toast(`Following ${name}'s logs in a Terminal window`);
+      } else {
+        await core($, "open-feature", { name });
+        $.ui.toast(`Opening ${name}'s feature in the browser`);
+      }
+    } catch (err) {
+      await $.state.set(NOTE, (err as Error).message);
+    }
     return;
   }
 
@@ -1276,7 +1264,8 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     if (!row) return;
     try {
       if (row.session) {
-        // Split, not focus: the session opens beside this chat, which stays in place with the pane.
+        // A claude:// Link draws nothing on the desktop pane (probe, 2026-10-09). Split, not focus: the session
+        // opens beside this chat, which stays in place with the pane.
         const r = await $.mcp.call("ccd_window", "open_session_in", {
           session_id: row.session.id,
           target: "split",
@@ -1600,7 +1589,6 @@ export const register: Register = (on) => {
     const prs = polled ?? {};
     const { value: tab = "list" } = await $.state.get(TAB);
     const { value: focus = false } = await $.state.get(FOCUS);
-    const { value: menu = "" } = await $.state.get(MENU);
     const { value: legend = false } = await $.state.get(LEGEND);
     const { value: prsPoll } = await $.state.get(PRS_POLL);
     const now = new Date(await $.clock.now());
@@ -1841,25 +1829,42 @@ export const register: Register = (on) => {
       const acts = actionsFor(r, d, canType);
       const label = (a: Action) =>
         a === "continue"
-          ? `↗ Continue in ${continueTarget(r)}`
+          ? continueTarget(r) === "Desktop"
+            ? "⇆ Open beside"
+            : `↗ Continue in ${continueTarget(r)}`
           : a === "pin"
             ? r.session?.pinned
               ? "📌 Unpin"
               : "📌 Pin"
             : LABEL[a];
-      const button = (a: Action, variant: "primary" | "secondary", plain?: true) => (
-        <Button
-          key={`${a}:${r.name}`}
-          label={label(a)}
-          variant={variant}
-          plain={plain}
-          // Buttons take no colour; Abandon's label turns red under the pointer.
-          {...(a === "abandon"
-            ? { dimColor: true, hover: { color: "error", dimColor: false } }
-            : {})}
-          onPress={() => void press($, a, r.name)}
-        />
-      );
+      const button = (a: Action | "issue", variant?: "primary" | "secondary") =>
+        a === "issue" ? (
+          <Box key={`issue:${r.name}`}>
+            <Link href={r.issueUrl ?? ""} label="Open issue ↗" />
+          </Box>
+        ) : (
+          <Button
+            key={`${a}:${r.name}`}
+            label={label(a)}
+            variant={variant ?? (a === acts.primary ? "primary" : "secondary")}
+            // Buttons take no colour; Abandon's label turns red under the pointer.
+            {...(a === "abandon"
+              ? { dimColor: true, hover: { color: "error", dimColor: false } }
+              : {})}
+            onPress={() => void press($, a, r.name)}
+          />
+        );
+      // Containers draw their reads (Logs, Open feature) on a line under the lifecycle buttons.
+      const reads = (a: Action | "issue") => a === "logs" || a === "feature";
+      const groups = (
+        [
+          ["session", [acts.session]],
+          ["containers", [acts.containers.filter((a) => !reads(a)), acts.containers.filter(reads)]],
+          ["work", [acts.work]],
+        ] as const
+      )
+        .map(([g, lines]) => [g, lines.filter((l) => l.length > 0)] as const)
+        .filter(([, lines]) => lines.length > 0);
       const sub = subtitle(r);
       const confirming =
         confirm === CLOSE_OUT + r.name
@@ -2022,35 +2027,20 @@ export const register: Register = (on) => {
             </Box>
           ) : (
             <Box key={`actions:${r.name}`} flexDirection="column" marginTop={1}>
-              <Box key={`bar:${r.name}`} gap={1}>
-                {button(acts.primary, "primary")}
-                {acts.bar.map((a) => button(a, "secondary"))}
-                <Button
-                  key={`more:${r.name}`}
-                  label="⋯"
-                  variant="secondary"
-                  onPress={() => void $.state.set(MENU, menu === r.name ? "" : r.name)}
-                />
-              </Box>
-              {menu === r.name && (
-                <Box
-                  key={`menu:${r.name}`}
-                  flexDirection="column"
-                  borderStyle="round"
-                  borderColor="inactive"
-                  paddingX={1}
-                >
-                  {acts.menu.map((a) =>
-                    a === "issue" ? (
-                      <Box key={`issue:${r.name}`}>
-                        <Link href={r.issueUrl ?? ""} label="Open issue ↗" />
+              {groups.map(([g, lines]) => (
+                <Box key={`${g}-row:${r.name}`}>
+                  <Box key={`${g}-label:${r.name}`} minWidth={11}>
+                    <Text dimColor>{g}</Text>
+                  </Box>
+                  <Box key={`${g}-lines:${r.name}`} flexDirection="column">
+                    {lines.map((line, i) => (
+                      <Box key={`${g}-${i}:${r.name}`} flexWrap="wrap" gap={1}>
+                        {line.map((a) => button(a))}
                       </Box>
-                    ) : (
-                      button(a, "secondary", true)
-                    ),
-                  )}
+                    ))}
+                  </Box>
                 </Box>
-              )}
+              ))}
             </Box>
           )}
         </Box>
