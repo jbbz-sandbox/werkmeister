@@ -1035,6 +1035,24 @@ see [Local Kubernetes bootstrap](../README.md#local-kubernetes-bootstrap)):
 
 The columns above are the required keys. `werkmeister services` lists whatever is registered.
 
+### Leaving a repo out on this machine
+
+To keep a cloned repo's services out of the registry without deleting its fragment, list
+the repo's directory name under `disabled_fragments` in `~/.werkmeister/services.local.yaml`,
+then run `werkmeister registry sync`:
+
+```yaml
+disabled_fragments: [demo-services, wellness]
+```
+
+Sync leaves out that repo's `services`, `setup_services` and `infrastructure`, along with any
+entry in `services.local.yaml` that belongs to it (its `repo:` names it, or it patches one of
+its services). It prints a `fragment <repo>` line for each repo it skips, and the generated
+file's header lists the skipped fragments as `# Disabled:`. `werkmeister registry sync --check`
+counts a disabled repo as expected, not as drift. Port allocation still counts a disabled
+repo's ports, so turning it back on never collides. To re-enable a repo, delete its name from
+the list and sync again.
+
 ### Writing a fragment
 
 A fragment is a slice of the registry committed at `<repo>/.werkmeister/services.yaml`. `werkmeister detect` writes a first draft of this file for you; see [werkmeister detect](#werkmeister-detect).
