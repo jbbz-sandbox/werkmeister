@@ -1,5 +1,14 @@
 # vscode-plugin
 
+## 0.43.0
+
+### Patch Changes
+
+- Updated dependencies [3bd6bf5]
+- Updated dependencies [75bdd3d]
+  - werkmeister-core@0.43.0
+  - werkmeister-ui@0.5.24
+
 ## 0.42.0
 
 ### Patch Changes
