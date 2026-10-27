@@ -24,10 +24,19 @@ export const BUILD_STAMP: BuildStamp | undefined =
 
 export const REBUILD_COMMAND = "pnpm turbo run build --filter=werkmeister";
 
+/** esbuild.mjs's entry points, the workspace package they import, and the lockfile pinning the rest. */
+const BUNDLE_SOURCES = [
+  "apps/cli",
+  "apps/werkmeister-mcp",
+  "packages/werkmeister-core",
+  "pnpm-lock.yaml",
+];
+
 /**
  * The warning text when *build* came from a commit other than *repoRoot*'s
- * HEAD, else null. A dirty build at the same SHA is not flagged: there is no
- * telling whether its uncommitted changes are the ones still on disk.
+ * HEAD and a bundled source changed between the two, else null. A dirty build
+ * at the same SHA is not flagged: there is no telling whether its uncommitted
+ * changes are the ones still on disk.
  */
 export function staleBuildWarning(build: BuildStamp | undefined, repoRoot: string): string | null {
   if (!build?.sha || !fs.existsSync(path.join(repoRoot, ".git"))) return null;
@@ -41,6 +50,20 @@ export function staleBuildWarning(build: BuildStamp | undefined, repoRoot: strin
     return null;
   }
   if (head === build.sha) return null;
+  // turbo keys the build cache on these sources, not HEAD, so a docs-only commit
+  // replays a dist still stamped with the older SHA (SW-128).
+  try {
+    execFileSync(
+      "git",
+      ["-C", repoRoot, "diff", "--quiet", build.sha, head, "--", ...BUNDLE_SOURCES],
+      {
+        stdio: "ignore",
+      },
+    );
+    return null;
+  } catch {
+    // Changed sources (exit 1) or a SHA this clone lacks: the bundle may be stale.
+  }
   const built = build.sha.slice(0, 7) + (build.dirty ? " (+uncommitted changes)" : "");
   return (
     `warning: this werkmeister CLI was built from ${built}, but ${repoRoot} is at ${head.slice(0, 7)}.\n` +

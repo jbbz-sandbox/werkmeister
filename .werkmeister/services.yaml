@@ -157,7 +157,9 @@ services:
     setup_service: werkmeister-install
     image: node:22
     command: "cd apps/docs-site && exec pnpm exec vitepress dev . --host 0.0.0.0 --port 5173"
-    memory_limit: 512M
+    # 2G, above the others' 1G: the gate can run cli's cold typecheck + test here
+    # (~900M) beside the dev server (~220M); 512M and 1G OOM-killed it (SW-128).
+    memory_limit: 2G
     memory_reservation: 128M
     node_modules_volume: node-modules
     extra_volumes:
