@@ -64,6 +64,7 @@ import {
 import { containerRunning, type ProjectContainer, projectContainers } from "./docker.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 import { buildFormSchema } from "./form_schema.js";
+import { loadGithubOrg } from "./global_config.js";
 import { infraHealth, up as infraUp } from "./infra.js";
 import {
   type Issue,
@@ -2183,10 +2184,17 @@ async function resolveGithubLogin(): Promise<string> {
 
 /** Open-PR URLs from one `gh search prs` query (org + open-state are always applied). */
 async function ghSearchPrUrls(filters: string[]): Promise<string[]> {
+  const owner = loadGithubOrg();
+  // Without --owner, gh searches all of GitHub, so an unknown org must fail rather than guess (SW-120).
+  if (!owner) {
+    throw new WorkspaceError(
+      "Could not tell which GitHub org to search. Set `overrides.github_org` in the werkmeister config.",
+    );
+  }
   const res = await runCapture("gh", [
     "search",
     "prs",
-    "--owner=sandbox", // name-check: ignore
+    `--owner=${owner}`,
     "--state=open",
     ...filters,
     "--json",
