@@ -110,6 +110,11 @@ export function renderServicesLocalYaml(k8sContext: string): string {
 #     frontend:
 #       memory_limit: 2G
 #
+# Leave a repo's fragment out of the registry on this machine (its services,
+# setup_services and infrastructure); delete the name to re-enable:
+#
+#   disabled_fragments: [demo-services]
+#
 # Kube context for a dev cluster — consumed by \`werkmeister intercept\`.
 k8s_context: ${k8sContext.trim() || "orbstack"}
 `;

@@ -499,3 +499,109 @@ test("branchRegistry is null for a worktree without a fragment", () => {
   writeFragment("app", "services:\n  api: {}\n");
   assert.equal(branchRegistry("app", path.join(root, "nowhere"), repos), null);
 });
+
+// --- SW-129: disabled_fragments in services.local.yaml ----------------------
+// Fixture: `app` (web) stays on; `demo` (api, redis, demo-install) is the one switched off.
+const localYaml = () => path.join(home, "services.local.yaml");
+function writeAppAndDemo() {
+  writeFragment("app", "services:\n  web:\n    path: apps/web\n");
+  writeFragment(
+    "demo",
+    "services:\n  api:\n    path: apps/api\ninfrastructure:\n  redis:\n    image: redis\n" +
+      "setup_services:\n  demo-install:\n    command: npm i\n",
+  );
+}
+
+test("syncRegistry leaves a disabled fragment out, reports it, and keeps the key out of the registry (SW-129)", () => {
+  writeAppAndDemo();
+  writeFileSync(localYaml(), "k8s_context: kind-dev\ndisabled_fragments: [demo]\n");
+  const steps = syncRegistry({ reposRoot: repos });
+  assert.equal(steps[0].ok, true, steps[0].detail);
+  assert.match(steps[0].detail, /from 1 fragment$/);
+  const skip = steps.find((s) => s.label === "fragment demo");
+  assert.equal(skip?.ok, true);
+  assert.match(skip.detail, /disabled in .*services\.local\.yaml — skipped/);
+  const text = readFileSync(registryPath(), "utf8");
+  assert.match(text, /^# Disabled: .*\/demo\/\.werkmeister\/services\.yaml$/m);
+  const doc = parse(text);
+  assert.deepEqual(Object.keys(doc.services), ["web"]);
+  assert.deepEqual(doc.infrastructure, {});
+  assert.deepEqual(doc.setup_services, {});
+  assert.deepEqual(Object.keys(doc.repos), ["app"]);
+  assert.equal(doc.disabled_fragments, undefined);
+  assert.equal(doc.k8s_context, "kind-dev");
+});
+
+test("syncRegistry --check treats a disabled fragment as expected, and re-enabling brings it back (SW-129)", () => {
+  writeAppAndDemo();
+  writeFileSync(localYaml(), "disabled_fragments: [demo]\n");
+  syncRegistry({ reposRoot: repos });
+  const check = syncRegistry({ reposRoot: repos, checkOnly: true });
+  assert.equal(check[0].ok, true, check[0].detail);
+  assert.match(check[0].detail, /up to date/);
+
+  writeFileSync(localYaml(), "disabled_fragments: []\n");
+  const drift = syncRegistry({ reposRoot: repos, checkOnly: true });
+  assert.match(drift[0].detail, /drift/);
+  assert.equal(drift.length, 1, "nothing skipped once re-enabled");
+  syncRegistry({ reposRoot: repos });
+  const text = readFileSync(registryPath(), "utf8");
+  assert.doesNotMatch(text, /# Disabled:/);
+  const doc = parse(text);
+  assert.deepEqual(Object.keys(doc.services).sort(), ["api", "web"]);
+  assert.deepEqual(Object.keys(doc.infrastructure), ["redis"]);
+  assert.deepEqual(Object.keys(doc.setup_services), ["demo-install"]);
+});
+
+test("syncRegistry drops overlay entries that belong to a disabled repo and keeps the rest (SW-129)", () => {
+  writeAppAndDemo();
+  writeFileSync(
+    localYaml(),
+    "disabled_fragments: [demo]\nservices:\n  mq:\n    repo: demo\n    image: mq\n" +
+      "  api:\n    memory_limit: 2G\n  web:\n    memory_limit: 1G\n" +
+      "infrastructure:\n  redis:\n    memory_limit: 1G\nrepos:\n  demo:\n    ship: merge\n",
+  );
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, true, step.detail);
+  const doc = parse(readFileSync(registryPath(), "utf8"));
+  assert.deepEqual(Object.keys(doc.services), ["web"]);
+  assert.equal(doc.services.web.memory_limit, "1G");
+  assert.deepEqual(doc.infrastructure, {});
+  assert.deepEqual(Object.keys(doc.repos), ["app"]);
+});
+
+test("syncRegistry notes a disabled name with no fragment and changes nothing else (SW-129)", () => {
+  writeAppAndDemo();
+  writeFileSync(localYaml(), "k8s_context: x\n");
+  syncRegistry({ reposRoot: repos });
+  const before = readFileSync(registryPath(), "utf8");
+  writeFileSync(localYaml(), "k8s_context: x\ndisabled_fragments: [nope]\n");
+  const steps = syncRegistry({ reposRoot: repos });
+  assert.match(steps[0].detail, /up to date/);
+  const note = steps.find((s) => s.label === "fragment nope");
+  assert.equal(note?.ok, true);
+  assert.match(note.detail, /no fragment under/);
+  assert.equal(readFileSync(registryPath(), "utf8"), before);
+});
+
+test("syncRegistry fails on a disabled_fragments that is not a list of names (SW-129)", () => {
+  writeAppAndDemo();
+  writeFileSync(localYaml(), "disabled_fragments: demo\n");
+  const [step] = syncRegistry({ reposRoot: repos });
+  assert.equal(step.ok, false);
+  assert.match(step.detail, /disabled_fragments must be a list of repo names/);
+});
+
+test("branchRegistry honours disabled_fragments but never drops the gated repo (SW-129)", () => {
+  writeAppAndDemo();
+  writeFileSync(localYaml(), "disabled_fragments: [demo, app]\n");
+  const worktree = path.join(root, "features", "ws", "demo");
+  mkdirSync(path.join(worktree, ".werkmeister"), { recursive: true });
+  writeFileSync(
+    path.join(worktree, ".werkmeister", "services.yaml"),
+    "services:\n  api:\n    path: apps/api\n",
+  );
+  const reg = branchRegistry("demo", worktree, repos);
+  assert.deepEqual(Object.keys(reg.services), ["api"]);
+  assert.equal(reg.disabled_fragments, undefined);
+});

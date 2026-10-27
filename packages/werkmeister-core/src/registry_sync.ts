@@ -269,11 +269,57 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Merged
   return deepMerge(merged, opts.local) as MergedRegistry;
 }
 
+/** The overlay key listing repos whose fragments this machine leaves out (SW-129). */
+const DISABLED_KEY = "disabled_fragments";
+
+export interface DisabledSplit {
+  fragments: Fragment[];
+  skipped: Fragment[];
+  /** Listed names with no fragment under repos_root. */
+  unknown: string[];
+  /** *local* without DISABLED_KEY or the entries that belong to a skipped repo. */
+  local: YamlMap;
+}
+
+/** Split off the fragments *local*'s `disabled_fragments` names, and prune the overlay to match. */
+export function applyDisabled(
+  fragments: Fragment[],
+  local: YamlMap,
+  localPath: string,
+): DisabledSplit {
+  const { [DISABLED_KEY]: raw, ...rest } = local;
+  const names = raw ?? [];
+  if (!Array.isArray(names) || !names.every((n) => typeof n === "string")) {
+    throw new RegistryError(`${localPath}: ${DISABLED_KEY} must be a list of repo names`);
+  }
+  const disabled = new Set(names);
+  const skipped = fragments.filter((f) => disabled.has(f.repo));
+  const pruned = structuredClone(rest);
+  // An overlay entry for a disabled repo would otherwise land as a stub (a patch
+  // with no image) or keep a service the fragment no longer brings in.
+  for (const section of ["services", "setup_services", "infrastructure"]) {
+    const entries = pruned[section];
+    if (!isDict(entries)) continue;
+    for (const [name, entry] of Object.entries(entries)) {
+      const owned = skipped.some((f) => isDict(f.doc[section]) && name in f.doc[section]);
+      if (owned || (isDict(entry) && disabled.has(entry["repo"] as string))) delete entries[name];
+    }
+  }
+  if (isDict(pruned["repos"])) for (const name of disabled) delete pruned["repos"][name];
+  return {
+    fragments: fragments.filter((f) => !disabled.has(f.repo)),
+    skipped,
+    unknown: names.filter((n) => !fragments.some((f) => f.repo === n)),
+    local: pruned,
+  };
+}
+
 /** The generated file: marker header, then the document in OUTPUT_ORDER. */
 export function renderRegistry(
   merged: MergedRegistry,
   sources: string[],
   localPath: string,
+  disabled: string[] = [],
 ): string {
   const ordered: YamlMap = {};
   for (const key of OUTPUT_ORDER) if (key in merged) ordered[key] = merged[key];
@@ -283,6 +329,7 @@ export function renderRegistry(
     "# Edit a repo's .werkmeister/services.yaml fragment, or the machine overrides file, then",
     "# run `werkmeister registry sync` (or `werkmeister setup`). Regenerated from:",
     ...sources.map((s) => `# Source: ${s}`),
+    ...disabled.map((s) => `# Disabled: ${s}`),
     `# Machine overrides: ${localPath}`,
     "",
   ].join("\n");
@@ -377,9 +424,15 @@ export function branchRegistry(
   if (!file) return null;
   const fragments = discoverFragments(reposRoot).filter((f) => f.repo !== repo);
   fragments.push(readFragment(repo, file));
-  return mergeRegistry(fragments, {
+  const localPath = servicesLocalYamlPath();
+  const local = readLocalOverlay(localPath);
+  // The gate tests this repo's branch, so its own services stay in even when it is disabled here.
+  const listed = local[DISABLED_KEY];
+  if (Array.isArray(listed)) local[DISABLED_KEY] = listed.filter((n) => n !== repo);
+  const split = applyDisabled(fragments, local, localPath);
+  return mergeRegistry(split.fragments, {
     defaults: REGISTRY_DEFAULTS,
-    local: readLocalOverlay(servicesLocalYamlPath()),
+    local: split.local,
     paths: placeholderPaths(),
   });
 }
@@ -397,7 +450,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const target = servicesYamlPath();
   const localPath = servicesLocalYamlPath();
 
-  let fragments: Fragment[];
+  let split: DisabledSplit;
   let merged: MergedRegistry;
   let text: string;
   // A standalone `werkmeister registry sync` on a machine that never ran the new
@@ -411,7 +464,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
       seedFile(localPath, renderServicesLocalYaml(context));
       seededLocal = `; seeded ${localPath} (k8s_context: ${context} — edit there)`;
     }
-    fragments = discoverFragments(reposRoot);
+    const fragments = discoverFragments(reposRoot);
     if (fragments.length === 0) {
       return [
         {
@@ -423,36 +476,55 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
         },
       ];
     }
-    merged = mergeRegistry(fragments, {
+    split = applyDisabled(fragments, readLocalOverlay(localPath), localPath);
+    merged = mergeRegistry(split.fragments, {
       defaults: REGISTRY_DEFAULTS,
-      local: readLocalOverlay(localPath),
+      local: split.local,
       paths: placeholderPaths(),
     });
     text = renderRegistry(
       merged,
-      fragments.map((f) => f.path),
+      split.fragments.map((f) => f.path),
       localPath,
+      split.skipped.map((f) => f.path),
     );
   } catch (e) {
     return [{ label, ok: false, detail: e instanceof Error ? e.message : String(e) }];
   }
 
-  const sources = `${fragments.length} fragment${fragments.length === 1 ? "" : "s"}`;
+  const skips: Step[] = [
+    ...split.skipped.map((f) => ({
+      label: `fragment ${f.repo}`,
+      ok: true,
+      detail: `disabled in ${localPath} — skipped`,
+    })),
+    ...split.unknown.map((name) => ({
+      label: `fragment ${name}`,
+      ok: true,
+      detail: `listed in ${DISABLED_KEY} in ${localPath}, but no fragment under ${reposRoot}`,
+    })),
+  ];
+  const report = (step: Step): Step[] => [step, ...skips];
+
+  const count = split.fragments.length;
+  const sources = `${count} fragment${count === 1 ? "" : "s"}`;
   const existing = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
   if (existing === text) {
-    return [{ label, ok: true, detail: `up to date (${sources}) at ${target}${seededLocal}` }];
+    return report({
+      label,
+      ok: true,
+      detail: `up to date (${sources}) at ${target}${seededLocal}`,
+    });
   }
   if (opts.checkOnly) {
-    return [
-      {
-        label,
-        ok: false,
-        detail:
-          existing === null
-            ? `missing — would generate ${target} from ${sources}`
-            : `drift — would regenerate ${target} from ${sources}`,
-      },
-    ];
+    return report({
+      label,
+      ok: false,
+      detail:
+        existing === null
+          ? `missing — would generate ${target} from ${sources}`
+          : `drift — would regenerate ${target} from ${sources}`,
+    });
   }
 
   let note = "";
@@ -470,7 +542,11 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, text);
   } catch (e) {
-    return [{ label, ok: false, detail: `could not write ${target}: ${e}` }];
+    return report({ label, ok: false, detail: `could not write ${target}: ${e}` });
   }
-  return [{ label, ok: true, detail: `generated ${target} from ${sources}${note}${seededLocal}` }];
+  return report({
+    label,
+    ok: true,
+    detail: `generated ${target} from ${sources}${note}${seededLocal}`,
+  });
 }
