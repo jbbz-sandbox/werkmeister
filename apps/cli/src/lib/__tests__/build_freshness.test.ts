@@ -15,14 +15,26 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+function git(repo: string, ...args: string[]): string {
+  return execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+    encoding: "utf8",
+  }).trim();
+}
+
 function commit(repo: string): string {
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", ...args], {
-      encoding: "utf8",
-    }).trim();
-  git("init", "-q");
-  git("commit", "-q", "--allow-empty", "-m", "x");
-  return git("rev-parse", "HEAD");
+  git(repo, "init", "-q");
+  git(repo, "commit", "-q", "--allow-empty", "-m", "x");
+  return git(repo, "rev-parse", "HEAD");
+}
+
+/** Commit *rel* (relative to *repo*) and return the new HEAD. */
+function commitFile(repo: string, rel: string): string {
+  git(repo, "init", "-q");
+  fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true });
+  fs.writeFileSync(path.join(repo, rel), rel);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-q", "-m", rel);
+  return git(repo, "rev-parse", "HEAD");
 }
 
 describe("staleBuildWarning", () => {
@@ -38,6 +50,21 @@ describe("staleBuildWarning", () => {
     expect(warning).toContain("built from 0123456 (+uncommitted changes)");
     expect(warning).toContain(`is at ${head.slice(0, 7)}`);
     expect(warning).toContain(REBUILD_COMMAND);
+  });
+
+  // SW-128: turbo keys the build cache on the bundle's inputs, not HEAD, so a
+  // docs-only commit replays a dist stamped with the older SHA.
+  it("is silent when HEAD moved only outside the bundle's sources", () => {
+    const built = commitFile(tmp, "apps/cli/src/main.ts");
+    commitFile(tmp, "docs/guide.md");
+    commitFile(tmp, "plugins/werkmeister/skills/x/SKILL.md");
+    expect(staleBuildWarning({ sha: built, dirty: false }, tmp)).toBeNull();
+  });
+
+  it("warns when a bundled source changed since the build", () => {
+    const built = commitFile(tmp, "apps/cli/src/main.ts");
+    commitFile(tmp, "packages/werkmeister-core/src/lifecycle.ts");
+    expect(staleBuildWarning({ sha: built, dirty: false }, tmp)).toContain("built from");
   });
 
   it("is silent outside a git checkout (a published install)", () => {

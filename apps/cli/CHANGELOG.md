@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.44.0
+
+### Minor Changes
+
+- fd482b8: `werkmeister registry sync` skips repos listed in `disabled_fragments` in `~/.werkmeister/services.local.yaml`, leaving their services, setup_services and infrastructure out of the registry, and reports each skip. (SW-129)
+
+### Patch Changes
+
+- a57e706: SW-128: the stale-build warning no longer fires when HEAD moved only outside the CLI bundle's sources (`apps/cli`, `apps/werkmeister-mcp`, `packages/werkmeister-core`, `pnpm-lock.yaml`). turbo replays a cached `dist` for such a commit, still stamped with the older SHA, so the warning appeared after every docs-only pull and the rebuild it named could not clear it. The PR gate's cli tests now pass in the docs-site container: `bins.test.ts` no longer sees that warning, `lifecycle_own_container.test.ts` sets `WERKMEISTER_FEATURE`, and the docs-site container gets 2G (512M and 1G OOM-killed a cold cli typecheck and test run there).
+
 ## 0.43.0
 
 ### Minor Changes
