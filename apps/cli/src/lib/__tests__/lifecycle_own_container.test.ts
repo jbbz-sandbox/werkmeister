@@ -30,7 +30,12 @@ import { insideOwnContainer, up } from "werkmeister-core/lifecycle";
 
 const quiet: Reporter = { passthrough: false, emit: () => {} };
 let root: string;
-const saved = process.env.SANDBOX_FEATURE;
+// A workspace container exports WERKMEISTER_FEATURE, which wins over
+// SANDBOX_FEATURE, so both are saved and set (SW-128).
+const saved = {
+  WERKMEISTER_FEATURE: process.env.WERKMEISTER_FEATURE,
+  SANDBOX_FEATURE: process.env.SANDBOX_FEATURE,
+};
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-own-container-"));
@@ -38,8 +43,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
-  if (saved === undefined) delete process.env.SANDBOX_FEATURE;
-  else process.env.SANDBOX_FEATURE = saved;
+  for (const [k, v] of Object.entries(saved)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
 });
 
 describe("insideOwnContainer", () => {
@@ -59,7 +66,7 @@ describe("insideOwnContainer", () => {
 
 describe("lifecycle.up inside the feature's own container", () => {
   it("refuses before checking forwards or running compose", async () => {
-    process.env.SANDBOX_FEATURE = "demo";
+    process.env.WERKMEISTER_FEATURE = "demo";
     await expect(withReporter(quiet, () => up("demo", root))).rejects.toMatchObject({
       code: "INSIDE_OWN_CONTAINER",
     });
