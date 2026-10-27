@@ -1284,7 +1284,11 @@ export async function newPr(
   const live = mine.filter((f) => !PAST_MERGE.has(statusOf(f)));
   if (live.length)
     throw new WorkspaceError(
-      `${worktree} still has ${live.map((f) => `${f.stem} (${statusOf(f)})`).join(", ")} — the worktree holds one branch at a time; finish or close that PR first.`,
+      `${worktree} still has ${live.map((f) => `${f.stem} (${statusOf(f)})`).join(", ")} — the worktree holds one branch at a time; finish or close that PR first.${
+        live.some((f) => statusOf(f) !== "draft")
+          ? " If it has merged, run werkmeister pr status first to record it."
+          : ""
+      }`,
     );
   const file = path.join(dir, `pr-${worktree}-${slug}.md`);
   if (fs.existsSync(file)) throw new WorkspaceError(`${file} already exists.`);
