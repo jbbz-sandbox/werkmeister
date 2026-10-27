@@ -20,7 +20,7 @@ These hold for every PR this workspace produces, whatever skill or command was a
 4. **Only \`werkmeister pr open\` opens PRs.** \`gh pr create\`, \`/create-pr\` and \`finishing-a-development-branch\` are blocked inside a workspace.
 5. **Auto-fix is always on.** Right after \`werkmeister pr open\`, in the Claude desktop app: bind the PR to this session (\`ccd_pr\` \`get_status\`; \`bind_pr\` with the PR's URL if it isn't bound), then turn on Auto-fix with \`ccd_pr\` \`set_monitor\` (\`auto_fix: true\`, \`address_comments: true\`, the PR's \`url\`). Don't ask first. Never turn on auto-merge.
 6. **Merge is the person's act.** Tooling never merges. Squash is the default. A PR whose commit SHAs must survive (e.g. a commit listed in \`.git-blame-ignore-revs\`) says "Merge with a merge commit" at the top of its body, and the person merges it that way; squash and rebase both rewrite SHAs.
-7. **Close out only when every PR file is \`shipped\`, \`closed\` or \`abandoned\`.**
+7. **Close out only when every PR file is \`shipped\`, \`closed\` or \`abandoned\`, and after the post-mortem:** the werkmeister \`postmortem\` skill writes \`postmortem.md\` at the workspace root. \`werkmeister close-out\` refuses without it unless \`--skip-postmortem "<reason>"\`.
 
 ## PR file — \`${prFileDir}pr-<worktree>[-<slug>].md\`
 
@@ -58,7 +58,7 @@ ${approver} Tooling writes every other status.
 | Open | \`werkmeister pr open\` creates the PR |
 | Merge | the person merges it |
 | Ship | the merge is part of a release — the work is done |
-| Close out | \`werkmeister close-out\`: record, close the issue, remove the workspace, delete merged branches |
+| Close out | post-mortem (\`postmortem.md\`), then \`werkmeister close-out\`: record, close the issue, remove the workspace, delete merged branches |
 
 Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out\` (or \`abandoned\`).
 
@@ -74,5 +74,6 @@ Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out
 | \`werkmeister pr adopt --no-pr "<reason>" [repo]\` | the fix is already on base with no PR: write a \`closed\` PR file with the reason |
 | \`werkmeister close-out\` | after ship: move the issue to done if shipping didn't, write \`closeout.md\`, remove the workspace, delete merged branches |
 | \`werkmeister close-out --abandon "<reason>"\` | give up: record the reason, comment it on the issue, push and keep every branch with commits of its own, remove the workspace |
+| \`werkmeister close-out --skip-postmortem "<reason>"\` | close out without a post-mortem, only when the person says to; the reason goes in \`closeout.md\` |
 `;
 }

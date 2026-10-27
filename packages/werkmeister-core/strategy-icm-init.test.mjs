@@ -379,14 +379,19 @@ test("an idle-type service is reloaded by docker exec, not restart (SW-32)", asy
   );
 });
 
-test("the merged-or-released router row asks the person before close-out (SW-13)", async () => {
+test("the merged-or-released router row runs the post-mortem, then asks the person before close-out (SW-13, SW-108)", async () => {
   await withIcmWorkspace(async (root, ctx) => {
     icm.init(ctx);
-    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+    const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
     assert.match(
-      claude,
-      /^\| a PR merged or released, or asked to close out \| `werkmeister pr status`, then ask the person before `werkmeister close-out` \| .* \|$/m,
+      read("CLAUDE.md"),
+      /^\| a PR merged or released, or asked to close out \| `werkmeister pr status`, then the werkmeister `postmortem` skill \(writes `postmortem\.md`\), then ask the person before `werkmeister close-out` \| .* \|$/m,
     );
+    assert.match(
+      read("stages/04_propose/CONTEXT.md"),
+      /then the post-mortem \(`postmortem` skill\), then ask the person before `werkmeister close-out`/,
+    );
+    assert.match(read("_shared/pr-rules.md"), /^7\. .*`postmortem\.md`.*--skip-postmortem/m);
   });
 });
 

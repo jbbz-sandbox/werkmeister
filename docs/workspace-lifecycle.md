@@ -275,12 +275,24 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 
 ## Close-out
 
-`werkmeister close-out` is the only way to end a workspace. It has two outcomes.
+`werkmeister close-out` is the only way to end a workspace. A post-mortem comes first; then it has two outcomes.
+
+### Post-mortem
+
+Lessons found mid-run (SW-104's CI failure on a typecheck the listed test commands never ran, SW-107) are lost with the workspace unless someone asks for them on purpose. So every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it, and every route to close-out points there first (the ICM `CLAUDE.md` row and propose/spike checks, `pr-rules.md` rule 7 for ICM and JIT, `w9r-pr`, `workspace-pr`).
+
+1. **Gather** the run's problems: failed checks, Auto-fix commits and change-requesting reviews on each PR file's `url`; issues filed from the workspace (their bodies name it); deviations and FAIL rows in stage outputs or JIT notes; gate failures and the person's corrections in the session transcripts.
+2. **Agree** a change per problem: the agent proposes what could have been done differently, and the person accepts, edits or rejects it.
+3. **Record** one row per problem: problem, source, cause, agreed change, action. A run with no problems records `Problems: none` and asks nothing.
+4. **Act** on each accepted change, and name it in the row: an SW issue, an edit in the standards tree, or a memory entry in the project memory every workspace shares. A change to `_shared/` or another generated file is an SW issue, since the workspace's copy is removed.
+5. **Commit and push** `postmortem.md` on the record branch. The handoff also stages it by name, as it does `closeout.md`.
+
+Without `postmortem.md`, close-out refuses before it changes anything: an unshipped workspace hears the ship refusal first, and with `--abandon` the PR files stay as they were. `--skip-postmortem "<reason>"` (MCP `skip_postmortem`) closes out without one, only when the person says to, and the reason goes in `closeout.md`. A retry of a `closed-out` workspace isn't checked again. The pane's and VS Code's buttons have no skip: they show the refusal, which says to ask Claude to close out.
 
 **Shipped.** Without `--abandon`, it refuses unless the workspace is `shipped` or `abandoned`. A `spike` with no PR files is also allowed, and so is `closed-out` (a `closeout.md` exists but the removal failed), which retries. Then, in order:
 
 1. **Issue.** The safety net: if the workspace has one and it isn't already done (shipping normally moved it), move it to `done` ([Issue status](#issue-status)). The comment names the release and PR. A tracker refusal is a warning in the output and in `closeout.md`; close-out goes on.
-2. **Record.** Write `closeout.md`: one row per PR (repo, URL, status, merge SHA, release, reason) plus the issue line.
+2. **Record.** Write `closeout.md`: one row per PR (repo, URL, status, merge SHA, release, reason), the issue line, and `Post-mortem: postmortem.md` (or `Post-mortem skipped: <reason>`).
 3. **Remove.** `removeWorkspace`, the internal step: commit tracked changes and push every branch (the record branch now carries `closeout.md`), `werkmeister down`, reload the proxy, delete the directory, prune the worktrees. If any push fails, nothing is deleted. Untracked files never go on a branch: they are saved to `handoff/<workspace>/<repo>.tgz` in the werkmeister home, and the output lists them with each handoff commit's `--stat`.
 4. **Branches.** Delete each merged code branch locally, and on origin if it is still there (GitHub's "delete branch on merge" may have done it already). An `adopted` PR's branch was never the workspace's, so it is kept. The record branch is kept.
 
@@ -288,7 +300,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 
 1. Every unsettled PR file becomes `abandoned` with the reason.
 2. The issue gets a comment with the reason and moves to `abandoned` when one is configured (GitHub: closed as not planned). A refusal is a warning.
-3. `closeout.md` records the reason.
+3. `closeout.md` records the reason and the post-mortem line.
 4. Remove, as above, except that a code branch with no commits of its own is not pushed (it would hold only the handoff commit). Its handoff commit is saved as `handoff/<workspace>/<repo>.patch` instead, so no work is lost.
 5. Every branch is kept.
 

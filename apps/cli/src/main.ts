@@ -813,19 +813,25 @@ const SPECS: CommandSpec[] = [
       cmd
         .description(
           "End a workspace. After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. " +
-            "With --abandon: record the reason, push every branch and keep them, remove the workspace",
+            "With --abandon: record the reason, push every branch and keep them, remove the workspace. " +
+            "Refuses without postmortem.md (run the post-mortem first) unless --skip-postmortem gives a reason",
         )
         .argument("[name]", "Workspace directory name; defaults to the workspace you are in")
         .option("-y, --yes", "Skip the confirmation prompt")
         .option(
           "--abandon <reason>",
           "Close out without shipping; the reason goes in closeout.md and the PR files",
+        )
+        .option(
+          "--skip-postmortem <reason>",
+          "Close out without a post-mortem; the reason goes in closeout.md",
         );
     },
     namespace: ([name], o) => ({
       name: name ?? null,
       yes: Boolean(o.yes),
       abandon: o.abandon ?? null,
+      skipPostmortem: o.skipPostmortem ?? null,
     }),
   },
   {

@@ -21,6 +21,7 @@ werkmeister environment.
 | `workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`werkmeister` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
 | `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. |
+| `postmortem` | Before close-out: gather every problem in the run, agree with the person what changes so it doesn't recur, write `postmortem.md` and act on each change (docs/workspace-lifecycle.md § Post-mortem). |
 
 ### Mods
 

@@ -1470,13 +1470,19 @@ export async function openTerminalSessions(ws: string, run: Run = execRun): Prom
  */
 export async function closeOut(
   name: string,
-  opts: { abandon?: string } = {},
+  opts: { abandon?: string; skipPostmortem?: string } = {},
   deps: Deps = defaultDeps(),
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
   const why = opts.abandon?.trim();
   if (opts.abandon !== undefined && !why) {
     throw new WorkspaceError(
       `Abandon needs a reason: werkmeister close-out ${name} --abandon "<reason>"`,
+    );
+  }
+  const skip = opts.skipPostmortem?.trim();
+  if (opts.skipPostmortem !== undefined && !skip) {
+    throw new WorkspaceError(
+      `Skipping the post-mortem needs a reason: werkmeister close-out ${name} --skip-postmortem "<reason>"`,
     );
   }
   const ws = await resolveWorkspaceDir(name).catch((e: Error) => {
@@ -1495,7 +1501,7 @@ export async function closeOut(
     );
   }
   try {
-    return await closeOutLocked(name, ws, why, deps);
+    return await closeOutLocked(name, ws, why, skip, deps);
   } finally {
     fs.rmSync(lock, { force: true });
   }
@@ -1505,10 +1511,21 @@ async function closeOutLocked(
   name: string,
   ws: string,
   why: string | undefined,
+  skip: string | undefined,
   deps: Deps,
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
   const command = `werkmeister close-out ${name}${why ? " --abandon" : ""}`;
   const cfg = loadConfigFile(ws, null);
+  // SW-108: a run's lessons go with the workspace unless someone asks for them on purpose.
+  // A retry (closeout.md written, removal failed) already passed this.
+  const postmortem = path.join(ws, "postmortem.md");
+  const postmortemRefusal =
+    !skip && !fs.existsSync(path.join(ws, "closeout.md")) && !fs.existsSync(postmortem)
+      ? `'${name}' has no postmortem.md. Run the post-mortem first: ask Claude to close out (the werkmeister \`postmortem\` skill), ` +
+        `or skip it with \`werkmeister close-out ${name}${why ? ' --abandon "<reason>"' : ""} --skip-postmortem "<reason>"\`.`
+      : null;
+  // Before abandonWorkspace, which rewrites the PR files: a refusal changes nothing.
+  if (why && postmortemRefusal) throw new WorkspaceError(postmortemRefusal);
   if (why) abandonWorkspace(ws, why);
   const life = lifecycleOf(ws);
   const spikeDone =
@@ -1531,6 +1548,8 @@ async function closeOutLocked(
         `or give up with \`werkmeister close-out ${name} --abandon "<reason>"\`.`,
     );
   }
+  // After the ship check, so an unshipped workspace hears that first.
+  if (postmortemRefusal) throw new WorkspaceError(postmortemRefusal);
   // Not from the state alone: shipped + newly abandoned PR files read `shipped`, and a retry reads
   // `closed-out`; neither may post "Shipped:" or delete branches.
   const abandoned =
@@ -1566,7 +1585,18 @@ async function closeOutLocked(
   try {
     fs.writeFileSync(
       path.join(ws, "closeout.md"),
-      renderCloseout(files, issueLine, why ? `Abandoned: ${why}` : undefined),
+      renderCloseout(
+        files,
+        issueLine,
+        [
+          why && `Abandoned: ${why}`,
+          skip
+            ? `Post-mortem skipped: ${skip}`
+            : fs.existsSync(postmortem) && "Post-mortem: postmortem.md",
+        ]
+          .filter(Boolean)
+          .join("\n") || undefined,
+      ),
     );
   } catch (e) {
     // Removed while the issue moved, by something outside this lock (`werkmeister remove`, rm).

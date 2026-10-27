@@ -449,7 +449,8 @@ function registerAuthoringTools(server: McpServer): void {
         "merged code branches. With `abandon` (a reason) when work is unshipped: record the reason, leave " +
         "the issue, push and keep every branch with commits of its own, then remove. Without `abandon` it refuses while a PR is " +
         "unshipped. Destructive — confirm with the person first. Nothing is deleted if any branch " +
-        "cannot be pushed.",
+        "cannot be pushed. Refuses without postmortem.md in the workspace: run the werkmeister " +
+        "`postmortem` skill first.",
       inputSchema: {
         ...WORKSPACE_ARG,
         abandon: z
@@ -458,14 +459,20 @@ function registerAuthoringTools(server: McpServer): void {
           .describe(
             "Close out without shipping: why the work is abandoned. Recorded in closeout.md and the PR files.",
           ),
+        skip_postmortem: z
+          .string()
+          .optional()
+          .describe(
+            "Close out without a post-mortem: why. Recorded in closeout.md. Only when the person says to skip it.",
+          ),
       },
     },
     async (args, extra): Promise<CallToolResult> =>
       adapt(async () => {
-        const result = await closeOut(
-          resolveWorkspace(args.workspace, headersOf(extra)).name,
-          args.abandon !== undefined ? { abandon: args.abandon } : {},
-        );
+        const result = await closeOut(resolveWorkspace(args.workspace, headersOf(extra)).name, {
+          ...(args.abandon !== undefined ? { abandon: args.abandon } : {}),
+          ...(args.skip_postmortem !== undefined ? { skipPostmortem: args.skip_postmortem } : {}),
+        });
         // closeOut installs its own collecting reporter for the teardown, and
         // that AsyncLocalStorage scope shadows adapt()'s — re-emit what it
         // captured or the transcript loses the push and down output.
