@@ -156,11 +156,6 @@ export function seedFile(target: string, content: string, mode = 0o644): SeedRes
  * `${VAR:-}` strings are expanded by the MCP client at session start, not by
  * the registry merge — they are deliberately plain strings here.
  */
-// Named so the CLI-argv guard in core_cli_spawns.test.ts (which greps core for
-// a quoted werkmeister name closing an array) does not read this MCP-server
-// reference as a CLI spawn.
-const WERKMEISTER_MCP_SERVER = "werkmeister";
-
 export const REGISTRY_DEFAULTS: Record<string, any> = {
   archetypes: {
     "node-web": {
@@ -173,9 +168,11 @@ export const REGISTRY_DEFAULTS: Record<string, any> = {
       standards: ["engineering", "testing"],
       validate: "Library: run the unit/smoke tests. No URL, cookie, or Caddy step applies.",
     },
+    // No mcp_servers (SW-115): .mcp.json is shared with host sessions, where the
+    // werkmeister entry's host.docker.internal never resolves. A container opts in
+    // with an archetype of its own (docs/users-guide.md, edit 3).
     "mcp-client": {
       standards: ["engineering", "testing"],
-      mcp_servers: [WERKMEISTER_MCP_SERVER],
       validate:
         "Build, then npm run test:integration (Extension Development Host via @vscode/test-cli). " +
         "Walk the open items in MANUAL-CHECKLIST.md for anything visual.",
@@ -208,7 +205,7 @@ export const REGISTRY_DEFAULTS: Record<string, any> = {
       args: ["-y", "@upstash/context7-mcp"],
       env: { CONTEXT7_API_KEY: "${CONTEXT7_API_KEY:-}" },
     },
-    [WERKMEISTER_MCP_SERVER]: {
+    werkmeister: {
       type: "http",
       url: "http://host.docker.internal:3002/mcp",
       headers: {

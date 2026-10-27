@@ -95,10 +95,10 @@ services:
     extra_volumes: *host_mounts
     environment: *host_env
 
-  # Also the MCP client bed: its archetype wires the werkmeister server, and
-  # WERKMEISTER_MCP_TOKEN arrives via the feature .env (a missing one makes
-  # `werkmeister up` refuse the workspace). It has cli's host access too, so its
-  # tests can use docker directly (#134).
+  # Also the MCP client bed: WERKMEISTER_MCP_TOKEN arrives via the feature .env
+  # (a missing one makes `werkmeister up` refuse the workspace). Its archetype
+  # no longer wires the werkmeister server into the shared .mcp.json (SW-115).
+  # It has cli's host access too, so its tests can use docker directly (#134).
   werkmeister-vscode:
     path: packages/werkmeister-vscode
     type: extension
