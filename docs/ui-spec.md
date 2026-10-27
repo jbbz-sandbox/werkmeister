@@ -23,6 +23,7 @@ Origin: the ui-surfaces spike, tracked in Jira [SW-43](https://jory-group.atlass
 | **One MCP server**, `apps/werkmeister-mcp`, with one name per verb. No backward compatibility for tool names. | 2026-10-16 |
 | **Containers may call every MCP tool.** There is no host-only tier; the bearer token is the only gate. | 2026-10-16 |
 | **No Remove.** The only destructive verbs are Close out and Abandon…. `remove-workspace` is deprecated in favour of `close-out --abandon` (#160). | 2026-10-16 |
+| **Pane buttons grouped by what they act on** (session · containers · work); `⇆ Open beside` replaces `↗ Continue in Desktop` on the pane (SW-105). | 2026-10-26 |
 
 ## Rules
 
@@ -78,7 +79,7 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 | Start containers | `▶ Up` | ✓ | ✓ | ✓ | ✓ |
 | Stop / restart / tear down | `■ Stop` · `↻ Restart` · `⏻ Down` | ✓ | ✓ | ✓ | ✓ |
 | Pause / resume | `⏸ Pause` · `▶ Resume` | ✓ | ✓ | ✓ | ✓ |
-| Continue a session | `↗ Continue in Terminal` · `↗ Continue in Desktop` | ✓ | ✓ | ✓ | Terminal |
+| Continue a session | `↗ Continue in Terminal` · `↗ Continue in Desktop`; Pane: `⇆ Open beside` for a Desktop session, `↗ Continue in Terminal` · `↗ Continue in VS Code` otherwise | ✓ | ✓ | ✓ | Terminal |
 | New session | `＋ New session` | ✓ | ✓ | ✓ | ✓ |
 | Refresh PRs | `↻ Refresh PRs` | ✓ | ✓ | ✓ | ✓ |
 | Open the feature | `Open feature ↗` | ✓ | ✓ | ✓ | ✓ |
@@ -86,7 +87,7 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 | Logs | `Logs` | ✓ | ✓ | ✓ | ✓ |
 | Connect infra | `⚡ Connect infra` (top bar) | ✓ | ✓ | ✓ | ✓ |
 | Create | `＋ New workspace` | ✓ | ✓ | ✓ | ✓ (terminal wizard) |
-| Open beside · Pin | `⇆ Open beside` · `📌 Pin` | ✗ | ✗ | ✓ | ✗ |
+| Pin | `📌 Pin` | ✗ | ✗ | ✓ | ✗ |
 | Bring into view | `→ Switch to` | ✗ | ✗ | ✓ | ✓ |
 | Filter to `focus`-labelled | `☐ Focused only` | ✓ | ✓ | ✓ | ✗ |
 | Finish settled work | `✓ Close out` | ✓ | ✓ | ✓ | ✓ |
@@ -96,7 +97,17 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 
 On the dashboard and MCP App, `↗ Continue in Desktop` opens the workspace folder in Desktop (`claude://code/new?folder=…`): a browser page or MCP iframe can't read the app's session list, so it can't link the previous Desktop session. `＋ New session` there opens a fresh `claude` in Terminal (`claude-resume` with `new: true`).
 
-**Primary action:** Paused → `▶ Resume` · Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …`. The bar shows the primary plus two secondaries: `■ Stop` · `⏸ Pause` while containers run (`↻ Restart` moves to `⋯`), `■ Stop` · `⏻ Down` while paused. Everything else goes in `⋯`, in this order: Open beside · Pin · ↻ Refresh PRs · Open feature ↗ · Open issue ↗ · Logs · ✕ Abandon….
+**Primary action:** Paused → `▶ Resume` · Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …` (`＋ New session` when there is no session).
+
+**Dashboard, MCP App, VS Code:** the bar shows the primary plus two secondaries: `■ Stop` · `⏸ Pause` while containers run (`↻ Restart` moves to `⋯`), `■ Stop` · `⏻ Down` while paused. Everything else goes in `⋯`, in this order: Pin · ↻ Refresh PRs · Open feature ↗ · Open issue ↗ · Logs · ✕ Abandon….
+
+**Pane:** no `⋯`. One labelled row per group, each wrapping within itself on a narrow card; buttons that don't apply are hidden, and the primary is highlighted where it sits.
+
+| Group | Buttons, in order |
+|---|---|
+| `session` | `⇆ Open beside` (Desktop; tries the split, else opens the session in this chat's place and toasts how to split it) or `↗ Continue in Terminal` / `VS Code` · `＋ New session` · `📌 Pin` |
+| `containers` | `▶ Resume` or `▶ Up` · `■ Stop` · `⏸ Pause` · `↻ Restart` · `⏻ Down`, then on a second line, while containers run, `Logs` (a Terminal window following them) · `Open feature ↗` |
+| `work` | `↻ Refresh PRs` · `Open issue ↗` · `✓ Close out` · `✕ Abandon…` |
 
 ### The two destructive verbs
 

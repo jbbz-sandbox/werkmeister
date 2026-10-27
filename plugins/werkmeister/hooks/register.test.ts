@@ -100,17 +100,13 @@ function ok(structuredContent: unknown, text = "ok"): McpAnswer {
 
 type Mounted = Pick<Awaited<ReturnType<Engine["ui"]["mount"]>>, "find" | "press">;
 
-/** A card button, opening the card's ⋯ menu first when it isn't in the bar. */
+/** A card button, in whichever group row it draws. */
 async function seek(ui: Mounted, key: string) {
-  const shown = await ui.find({ key });
-  if (shown) return shown;
-  await ui.press({ key: `more:${key.slice(key.indexOf(":") + 1)}` });
   return ui.find({ key });
 }
 
-/** Presses a card button wherever it draws: the bar, the confirm, or the ⋯ menu. */
+/** Presses a card button: a group row's or the confirm's. */
 async function tap(ui: Mounted, key: string) {
-  await seek(ui, key);
   await ui.press({ key });
 }
 
@@ -384,7 +380,7 @@ test("a card is name and agent chip, work type · task, then the labelled compac
   }
 });
 
-test("cards link each PR and, from ⋯, the issue", async ($, on) => {
+test("cards link each PR and, in the work row, the issue", async ($, on) => {
   const w = world(on, stubs());
   await openPane($);
   await w.clock.settle();
@@ -488,7 +484,7 @@ test("sessions from text block with no structuredContent still join", async ($, 
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await seek(ui, "continue:abc"))?.text).toBe("↗ Continue in Desktop");
+  expect((await seek(ui, "continue:abc"))?.text).toBe("⇆ Open beside");
   await ui.unmount();
 });
 
@@ -638,7 +634,7 @@ test("a failed list keeps the last rows and shows the error", async ($, on) => {
   await ui.unmount();
 });
 
-test("the bar is the primary plus two by state, and ⋯ the rest in ui-spec order", async ($, on) => {
+test("the card draws session, containers and work rows, the primary highlighted, no ⋯", async ($, on) => {
   world(on, stubs());
   await openPane($);
   for (const surface of SURFACES) {
@@ -650,15 +646,11 @@ test("the bar is the primary plus two by state, and ⋯ the rest in ui-spec orde
       requestId: "workspaces",
     });
     expect((await ui.find({ key: "continue:ab" }))?.props.variant).toBe("primary");
-    for (const k of ["stop:ab", "pause:ab", "more:ab"])
-      expect(await ui.find({ key: k })).toBeDefined();
-    expect(await ui.find({ key: "down:ab" })).toBeUndefined();
-    await ui.press({ key: "more:ab" });
-    expect((await ui.find({ key: "menu:ab" }))?.text).toBe(
-      "↻ Restart⏻ Down＋ New session↻ Refresh PRsOpen issue ↗✓ Close out✕ Abandon…",
-    );
-    await ui.press({ key: "more:ab" });
-    expect(await ui.find({ key: "menu:ab" })).toBeUndefined();
+    expect((await ui.find({ key: "stop:ab" }))?.props.variant).toBe("secondary");
+    expect((await ui.find({ key: "session-row:ab" }))?.text).toBe("session↗ Continue in Terminal＋ New session");
+    expect((await ui.find({ key: "containers-row:ab" }))?.text).toBe("containers■ Stop⏸ Pause↻ Restart⏻ DownLogsOpen feature ↗");
+    expect((await ui.find({ key: "work-row:ab" }))?.text).toBe("work↻ Refresh PRsOpen issue ↗✓ Close out✕ Abandon…");
+    expect(await ui.find({ key: "more:ab" })).toBeUndefined();
     // Nothing up and nothing to continue: Up leads, New session beside it.
     expect((await ui.find({ key: "up:empty" }))?.props.variant).toBe("primary");
     expect(await ui.find({ key: "new:empty" })).toBeDefined();
@@ -701,7 +693,7 @@ function sample(over: Partial<WorkspaceRow>): WorkspaceRow {
     ...over,
   };
 }
-const DESKTOP = { id: "local_9", title: "t", link: null, beside: true, pinned: false };
+const DESKTOP = { id: "local_9", title: "t", link: null, pinned: false };
 
 test("actionsFor and metaParts give the five Pane View samples their design buttons and line", () => {
   const NOW = new Date("2026-10-20T12:00:00Z");
@@ -714,8 +706,9 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
         .map((p) => p.text)
         .join(""),
       primary: a.primary,
-      bar: a.bar,
-      menu: a.menu,
+      session: a.session,
+      containers: a.containers,
+      work: a.work,
     };
   };
   const PR = (
@@ -750,8 +743,9 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     chip: "● Needs you",
     line: "containers down · PRs None yet · stage 2/4 findings",
     primary: "continue",
-    bar: ["up", "new"],
-    menu: ["beside", "pin", "prs", "issue", "abandon"],
+    session: ["continue", "new", "pin"],
+    containers: ["up"],
+    work: ["prs", "issue", "abandon"],
   });
   // 206: working, autonomous, both up, a draft-or-open PR with CI running, a Terminal session.
   expect(
@@ -762,8 +756,9 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     chip: "◌ Working",
     line: "containers 2 of 2 up · PRs stellwerk#231 Open · CI running · stage 4/5 implement",
     primary: "continue",
-    bar: ["stop", "pause"],
-    menu: ["restart", "down", "new", "prs", "issue", "abandon"],
+    session: ["continue", "new"],
+    containers: ["stop", "pause", "restart", "down", "logs", "feature"],
+    work: ["prs", "issue", "abandon"],
   });
   // 151: done, one service unhealthy, the PR released: Close out leads, Down replaces Stop.
   expect(
@@ -781,8 +776,9 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     chip: "✓ Done",
     line: "containers 1 of 2 up · PRs stellwerk#186 Merged · CI ✓ · Ready to close out",
     primary: "closeout",
-    bar: ["restart", "down"],
-    menu: ["continue", "pause", "new", "beside", "pin", "prs", "issue", "abandon"],
+    session: ["continue", "new", "pin"],
+    containers: ["pause", "restart", "down", "logs", "feature"],
+    work: ["prs", "issue", "closeout", "abandon"],
   });
   // SW-70: paused overrides Needs you; Resume leads, Stop and Down beside it, nothing that would run them.
   expect(
@@ -798,8 +794,9 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     chip: "⏸ Paused",
     line: "containers paused · PRs None yet",
     primary: "resume",
-    bar: ["stop", "down"],
-    menu: ["continue", "new", "beside", "pin", "prs", "issue", "abandon"],
+    session: ["continue", "new", "pin"],
+    containers: ["resume", "stop", "down"],
+    work: ["prs", "issue", "abandon"],
   });
   // bwell: idle, no containers, no issue, JIT, an open PR failing CI: Up leads, Continue beside it.
   expect(
@@ -820,9 +817,98 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     chip: "Idle",
     line: "containers down · PRs stellwerk#12 Open · CI ✗ 2 failing · JIT · implement",
     primary: "up",
-    bar: ["continue", "new"],
-    menu: ["beside", "pin", "prs", "abandon"],
+    session: ["continue", "new", "pin"],
+    containers: ["up"],
+    work: ["prs", "abandon"],
   });
+});
+
+test("actionsFor groups each container state's buttons, with and without a session (SW-105)", () => {
+  const NOW = new Date("2026-10-20T12:00:00Z");
+  const SHIPPED = { state: "shipped" as const, prs: [{ dir: "s", status: "shipped" as const, url: null }] };
+  const states: Record<string, Partial<WorkspaceRow>> = {
+    running: { state: "up" },
+    paused: { state: "paused", paused: { at: "2026-10-20T11:00:00Z", containers: [] } },
+    stopped: { state: "stopped", running: 0 },
+    down: { state: "down", running: 0 },
+    shipped: { state: "up", lifecycle: SHIPPED },
+  };
+  const sessions: Record<string, Partial<WorkspaceRow>> = {
+    desktop: { session: DESKTOP },
+    terminal: {},
+    none: { sessionTitle: null, sessionOrigin: null },
+  };
+  const got: Record<string, unknown> = {};
+  for (const [st, over] of Object.entries(states))
+    for (const [se, sOver] of Object.entries(sessions)) {
+      const r = sample({ ...over, ...sOver });
+      const a = actionsFor(r, display(r, [], NOW), true);
+      expect([...a.session, ...a.containers, ...a.work]).toContain(a.primary);
+      got[`${st}/${se}`] = [a.primary, a.session, a.containers, a.work];
+    }
+  const LIVE = ["stop", "pause", "restart", "down", "logs", "feature"];
+  const WORK = ["prs", "issue", "abandon"];
+  expect(got).toEqual({
+    "running/desktop": ["continue", ["continue", "new", "pin"], LIVE, WORK],
+    "running/terminal": ["continue", ["continue", "new"], LIVE, WORK],
+    "running/none": ["new", ["new"], LIVE, WORK],
+    "paused/desktop": ["resume", ["continue", "new", "pin"], ["resume", "stop", "down"], WORK],
+    "paused/terminal": ["resume", ["continue", "new"], ["resume", "stop", "down"], WORK],
+    "paused/none": ["resume", ["new"], ["resume", "stop", "down"], WORK],
+    "stopped/desktop": ["up", ["continue", "new", "pin"], ["up", "down"], WORK],
+    "stopped/terminal": ["up", ["continue", "new"], ["up", "down"], WORK],
+    "stopped/none": ["up", ["new"], ["up", "down"], WORK],
+    "down/desktop": ["up", ["continue", "new", "pin"], ["up"], WORK],
+    "down/terminal": ["up", ["continue", "new"], ["up"], WORK],
+    "down/none": ["up", ["new"], ["up"], WORK],
+    "shipped/desktop": [
+      "closeout",
+      ["continue", "new", "pin"],
+      LIVE.slice(1),
+      ["prs", "issue", "closeout", "abandon"],
+    ],
+    "shipped/terminal": [
+      "closeout",
+      ["continue", "new"],
+      LIVE.slice(1),
+      ["prs", "issue", "closeout", "abandon"],
+    ],
+    "shipped/none": ["closeout", ["new"], LIVE.slice(1), ["prs", "issue", "closeout", "abandon"]],
+  });
+  // No Input to type a reason in: no Abandon.
+  const r = sample({});
+  expect(actionsFor(r, display(r, [], NOW), false).work).toEqual(["prs", "issue"]);
+});
+
+test("Logs and Open feature run their core op for the card's workspace (SW-105)", async ($, on) => {
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/follow-logs`]: () => ok({ feature: "ab" }),
+      [`${WS}/open-feature`]: () => ok({ path: "/" }),
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  await tap(ui, "logs:ab");
+  await tap(ui, "feature:ab");
+  expect(
+    w.calls.filter((c) => c.key === `${WS}/follow-logs` || c.key === `${WS}/open-feature`),
+  ).toEqual([
+    { key: `${WS}/follow-logs`, args: { name: "ab" }, via: "process" },
+    { key: `${WS}/open-feature`, args: { name: "ab" }, via: "process" },
+  ]);
+  expect(w.toasts).toEqual([
+    "Following ab's logs in a Terminal window",
+    "Opening ab's feature in the browser",
+  ]);
+  await ui.unmount();
 });
 
 test("a lifecycle press calls workspace-action and refreshes", async ($, on) => {
@@ -1144,7 +1230,7 @@ test("New session opens the app's new-session link for the workspace folder", as
   await ui.unmount();
 });
 
-test("Continue in Desktop splits a session this one started beside this chat", async ($, on) => {
+test("Open beside splits a session this one started beside this chat", async ($, on) => {
   const sessions = [{ ...SESSIONS[0], startedBy: "local_self" }, ...SESSIONS.slice(1)];
   const w = world(
     on,
@@ -1171,7 +1257,7 @@ test("Continue in Desktop splits a session this one started beside this chat", a
   await ui.unmount();
 });
 
-test("Continue in Desktop opens the session's own link when the app won't split it", async ($, on) => {
+test("Open beside opens the session's own link when the app won't split it", async ($, on) => {
   const w = world(
     on,
     stubs({
@@ -1190,7 +1276,7 @@ test("Continue in Desktop opens the session's own link when the app won't split 
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await seek(ui, "continue:abc"))?.text).toBe("↗ Continue in Desktop");
+  expect((await seek(ui, "continue:abc"))?.text).toBe("⇆ Open beside");
   await tap(ui, "continue:abc");
   expect(w.calls.find((c) => c.key === "ccd_window/open_session_in")?.args).toEqual({
     session_id: "local_1",
@@ -1200,63 +1286,6 @@ test("Continue in Desktop opens the session's own link when the app won't split 
     url: "claude://x/local_1",
   });
   expect(w.toasts.join(" ")).toContain("Open in → Split view");
-  await ui.unmount();
-});
-
-test("Open beside shows only for a session this one started, and splits it", async ($, on) => {
-  // local_1 was started by this session (its starter is not listed); local_9 by a listed session.
-  const sessions = [
-    { ...SESSIONS[0], startedBy: "local_self" },
-    {
-      sessionId: "local_9",
-      title: "Side of local_3",
-      cwd: "/ws/empty",
-      link: "claude://x/local_9",
-      startedBy: "local_3",
-    },
-    SESSIONS[2],
-  ];
-  const w = world(
-    on,
-    stubs({
-      "ccd_session_mgmt/list_sessions": () => ok(undefined, JSON.stringify(sessions)),
-      "ccd_window/open_session_in": () => ok({}),
-    }),
-  );
-  await openPane($);
-  const ui = await $.ui.mount({
-    plugin: "werkmeister",
-    surface: "desktop",
-    component: "Pane",
-    props: PANE_PROPS,
-    requestId: "workspaces",
-  });
-  expect((await seek(ui, "beside:abc"))?.text).toBe("⇆ Open beside");
-  expect(await seek(ui, "beside:empty")).toBeFalsy();
-  await tap(ui, "beside:abc");
-  expect(w.calls.find((c) => c.key === "ccd_window/open_session_in")?.args).toEqual({
-    session_id: "local_1",
-    target: "split",
-  });
-  expect(w.toasts).toEqual([]);
-  await ui.unmount();
-});
-
-test("without a session this one started, there is no Open beside", async ($, on) => {
-  world(
-    on,
-    stubs({ "ccd_session_mgmt/list_sessions": () => ok(undefined, JSON.stringify(SESSIONS)) }),
-  );
-  await openPane($);
-  const ui = await $.ui.mount({
-    plugin: "werkmeister",
-    surface: "desktop",
-    component: "Pane",
-    props: PANE_PROPS,
-    requestId: "workspaces",
-  });
-  expect(await seek(ui, "continue:abc")).toBeTruthy();
-  expect(await seek(ui, "beside:abc")).toBeFalsy();
   await ui.unmount();
 });
 
