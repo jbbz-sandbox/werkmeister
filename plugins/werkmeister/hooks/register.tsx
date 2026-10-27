@@ -1852,17 +1852,17 @@ export const register: Register = (on) => {
             <Link href={r.issueUrl ?? ""} label="Open issue ↗" />
           </Box>
         ) : (
-        <Button
-          key={`${a}:${r.name}`}
-          label={label(a)}
-          variant={variant ?? (a === acts.primary ? "primary" : "secondary")}
-          // Buttons take no colour; Abandon's label turns red under the pointer.
-          {...(a === "abandon"
-            ? { dimColor: true, hover: { color: "error", dimColor: false } }
-            : {})}
-          onPress={() => void press($, a, r.name)}
-        />
-      );
+          <Button
+            key={`${a}:${r.name}`}
+            label={label(a)}
+            variant={variant ?? (a === acts.primary ? "primary" : "secondary")}
+            // Buttons take no colour; Abandon's label turns red under the pointer.
+            {...(a === "abandon"
+              ? { dimColor: true, hover: { color: "error", dimColor: false } }
+              : {})}
+            onPress={() => void press($, a, r.name)}
+          />
+        );
       // Containers draw their reads (Logs, Open feature) on a line under the lifecycle buttons.
       const reads = (a: Action | "issue") => a === "logs" || a === "feature";
       const groups = (

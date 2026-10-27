@@ -647,9 +647,15 @@ test("the card draws session, containers and work rows, the primary highlighted,
     });
     expect((await ui.find({ key: "continue:ab" }))?.props.variant).toBe("primary");
     expect((await ui.find({ key: "stop:ab" }))?.props.variant).toBe("secondary");
-    expect((await ui.find({ key: "session-row:ab" }))?.text).toBe("session↗ Continue in Terminal＋ New session");
-    expect((await ui.find({ key: "containers-row:ab" }))?.text).toBe("containers■ Stop⏸ Pause↻ Restart⏻ DownLogsOpen feature ↗");
-    expect((await ui.find({ key: "work-row:ab" }))?.text).toBe("work↻ Refresh PRsOpen issue ↗✓ Close out✕ Abandon…");
+    expect((await ui.find({ key: "session-row:ab" }))?.text).toBe(
+      "session↗ Continue in Terminal＋ New session",
+    );
+    expect((await ui.find({ key: "containers-row:ab" }))?.text).toBe(
+      "containers■ Stop⏸ Pause↻ Restart⏻ DownLogsOpen feature ↗",
+    );
+    expect((await ui.find({ key: "work-row:ab" }))?.text).toBe(
+      "work↻ Refresh PRsOpen issue ↗✓ Close out✕ Abandon…",
+    );
     expect(await ui.find({ key: "more:ab" })).toBeUndefined();
     // Nothing up and nothing to continue: Up leads, New session beside it.
     expect((await ui.find({ key: "up:empty" }))?.props.variant).toBe("primary");
@@ -825,7 +831,10 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
 
 test("actionsFor groups each container state's buttons, with and without a session (SW-105)", () => {
   const NOW = new Date("2026-10-20T12:00:00Z");
-  const SHIPPED = { state: "shipped" as const, prs: [{ dir: "s", status: "shipped" as const, url: null }] };
+  const SHIPPED = {
+    state: "shipped" as const,
+    prs: [{ dir: "s", status: "shipped" as const, url: null }],
+  };
   const states: Record<string, Partial<WorkspaceRow>> = {
     running: { state: "up" },
     paused: { state: "paused", paused: { at: "2026-10-20T11:00:00Z", containers: [] } },
