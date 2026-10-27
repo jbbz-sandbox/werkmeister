@@ -383,11 +383,11 @@ test("the merged-or-released router row runs the post-mortem, then asks the pers
     const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
     assert.match(
       read("CLAUDE.md"),
-      /^\| a PR merged or released, or asked to close out \| `sandbox pr status`, then the werkmeister `postmortem` skill \(writes `postmortem\.md`\), then ask the person before `sandbox close-out` \| .* \|$/m,
+      /^\| a PR merged or released, or asked to close out \| `werkmeister pr status`, then the werkmeister `postmortem` skill \(writes `postmortem\.md`\), then ask the person before `werkmeister close-out` \| .* \|$/m,
     );
     assert.match(
       read("stages/04_propose/CONTEXT.md"),
-      /then the post-mortem \(`postmortem` skill\), then ask the person before `sandbox close-out`/,
+      /then the post-mortem \(`postmortem` skill\), then ask the person before `werkmeister close-out`/,
     );
     assert.match(read("_shared/pr-rules.md"), /^7\. .*`postmortem\.md`.*--skip-postmortem/m);
   });

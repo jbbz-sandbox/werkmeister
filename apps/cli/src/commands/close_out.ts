@@ -1,5 +1,5 @@
 /**
- * sandbox close-out [name] [--yes] [--abandon <reason>] [--skip-postmortem <reason>]
+ * werkmeister close-out [name] [--yes] [--abandon <reason>] [--skip-postmortem <reason>]
  *
  * The one end-of-workspace verb (docs/workspace-lifecycle.md). Shipped: close
  * the issue, write closeout.md, remove the workspace, delete the merged code

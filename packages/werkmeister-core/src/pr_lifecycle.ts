@@ -1479,7 +1479,7 @@ export async function closeOut(
   const skip = opts.skipPostmortem?.trim();
   if (opts.skipPostmortem !== undefined && !skip) {
     throw new WorkspaceError(
-      `Skipping the post-mortem needs a reason: sandbox close-out ${name} --skip-postmortem "<reason>"`,
+      `Skipping the post-mortem needs a reason: werkmeister close-out ${name} --skip-postmortem "<reason>"`,
     );
   }
   const ws = await resolveWorkspaceDir(name).catch((e: Error) => {
@@ -1519,7 +1519,7 @@ async function closeOutLocked(
   const postmortemRefusal =
     !skip && !fs.existsSync(path.join(ws, "closeout.md")) && !fs.existsSync(postmortem)
       ? `'${name}' has no postmortem.md. Run the post-mortem first: ask Claude to close out (the werkmeister \`postmortem\` skill), ` +
-        `or skip it with \`sandbox close-out ${name}${why ? ' --abandon "<reason>"' : ""} --skip-postmortem "<reason>"\`.`
+        `or skip it with \`werkmeister close-out ${name}${why ? ' --abandon "<reason>"' : ""} --skip-postmortem "<reason>"\`.`
       : null;
   // Before abandonWorkspace, which rewrites the PR files: a refusal changes nothing.
   if (why && postmortemRefusal) throw new WorkspaceError(postmortemRefusal);
