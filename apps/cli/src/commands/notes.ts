@@ -19,7 +19,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import { findWorkspaceRoot } from "werkmeister-core/gate";
-import { standardsDirPath } from "werkmeister-core/global_config";
+import { candidateWorkspaceRoots, standardsDirPath } from "werkmeister-core/global_config";
 import {
   eligibleDomains,
   GraduationError,
@@ -123,7 +123,7 @@ export async function graduateOne(
 }
 
 async function runGraduate(args: Record<string, unknown>): Promise<void> {
-  const workspace = findWorkspaceRoot(process.cwd());
+  const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
   if (workspace === null) {
     error("Not inside a workspace — run this from a workspace folder or below.");
     process.exit(1);
@@ -218,7 +218,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // context: hook-safe, must never raise or break a session launch
   try {
-    const workspace = findWorkspaceRoot(process.cwd());
+    const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
     if (workspace === null) {
       return;
     }

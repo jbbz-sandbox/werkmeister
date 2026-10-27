@@ -89,8 +89,31 @@ function fnmatch(name: string, pat: string): boolean {
 // Gate proper
 // ---------------------------------------------------------------------------
 
-/** Walk up from *start* to the nearest directory containing `.werkmeister/`. */
-export function findWorkspaceRoot(start: string): string | null {
+/** The folder directly under one of *roots* that holds *start*, or null: what counts as a workspace. */
+export function workspaceUnder(start: string, roots: readonly string[]): string | null {
+  const directory = path.resolve(start);
+  for (const root of roots) {
+    const rel = path.relative(root, directory);
+    if (rel === "" || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
+      continue;
+    }
+    return path.join(root, rel.split(path.sep)[0]);
+  }
+  return null;
+}
+
+/**
+ * The workspace holding *start*. CLI callers pass the configured *roots*
+ * (workspace_init's `candidateWorkspaceRoots`), so a temp config never resolves a
+ * real workspace (SW-113) and a code worktree's own `.werkmeister/` is stepped over.
+ * Without roots — {@link decide}'s hook path, which can't afford the config load —
+ * walk up to the nearest directory containing `.werkmeister/`.
+ */
+export function findWorkspaceRoot(start: string, roots?: readonly string[]): string | null {
+  if (roots) {
+    const workspace = workspaceUnder(start, roots);
+    return workspace !== null && _isDir(dotDir(workspace)) ? workspace : null;
+  }
   let directory = path.resolve(start);
   while (true) {
     if (_isDir(dotDir(directory))) {

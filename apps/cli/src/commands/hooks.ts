@@ -11,6 +11,7 @@
 
 import { main as agentState } from "werkmeister-core/agent_state";
 import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { candidateWorkspaceRoots } from "werkmeister-core/global_config";
 import { main as prGuard } from "werkmeister-core/pr_guard";
 import { strategyFor } from "werkmeister-core/strategies";
 
@@ -28,7 +29,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
   let strategy;
   try {
-    strategy = strategyFor(findWorkspaceRoot(process.cwd()) ?? process.cwd());
+    strategy = strategyFor(
+      findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots()) ?? process.cwd(),
+    );
   } catch {
     return; // a hook must never block the tool call
   }

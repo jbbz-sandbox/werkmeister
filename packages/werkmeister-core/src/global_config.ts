@@ -305,6 +305,13 @@ export function loadPaths(): Record<string, string> {
   return isDict(paths) ? paths : {};
 }
 
+/** The folders a workspace may live directly under: `paths.workspaces_root`, then `~/workspace`. */
+export function candidateWorkspaceRoots(): string[] {
+  const configured = loadPaths()["workspaces_root"];
+  const roots = configured ? [path.resolve(expandUser(configured))] : [];
+  return [...new Set([...roots, path.join(os.homedir(), "workspace")])];
+}
+
 /** Jira REST credentials as stored in the YAML (`base_url`, `email`, `api_token`). */
 export interface JiraSettings {
   base_url?: string;

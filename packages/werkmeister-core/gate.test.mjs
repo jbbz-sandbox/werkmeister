@@ -25,6 +25,32 @@ test("findWorkspaceRoot returns null when no .werkmeister exists above start", (
   assert.equal(findWorkspaceRoot(bare), null);
 });
 
+// SW-113: a temp config's workspace root must hide a real workspace the CLI starts inside.
+test("findWorkspaceRoot with roots ignores a workspace outside them", () => {
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roots-")));
+  const real = path.join(tmp, "features", "real-ws");
+  fs.mkdirSync(path.join(real, ".werkmeister"), { recursive: true });
+  fs.mkdirSync(path.join(real, "sandbox", "src"), { recursive: true });
+  fs.mkdirSync(path.join(tmp, "ws"));
+
+  assert.equal(findWorkspaceRoot(path.join(real, "sandbox", "src"), [path.join(tmp, "ws")]), null);
+  assert.equal(findWorkspaceRoot(real, [path.join(tmp, "ws")]), null);
+});
+
+test("findWorkspaceRoot with roots returns the folder under the root, past a worktree's .werkmeister", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roots-")));
+  const ws = path.join(root, "ws-1");
+  fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+  fs.mkdirSync(path.join(ws, "sandbox", ".werkmeister"), { recursive: true });
+  fs.mkdirSync(path.join(ws, "sandbox", "src"));
+  fs.mkdirSync(path.join(root, "not-a-ws"));
+
+  assert.equal(findWorkspaceRoot(path.join(ws, "sandbox", "src"), [root]), ws);
+  assert.equal(findWorkspaceRoot(ws, ["/elsewhere", root]), ws);
+  assert.equal(findWorkspaceRoot(root, [root]), null);
+  assert.equal(findWorkspaceRoot(path.join(root, "not-a-ws"), [root]), null);
+});
+
 const DECIDED = { note: "decision", status: "decided" };
 
 function withGatedWorkspace(phaseGate, fn, { notesDir = true } = {}) {
