@@ -1,5 +1,5 @@
 /**
- * Docker Compose helpers for the developer sandbox.
+ * Docker Compose helpers for werkmeister.
  *
  * Wraps `docker compose` commands to manage per-feature container stacks.
  * Each feature's compose file lives at the workspace root under `COMPOSE_FILE`
@@ -69,7 +69,7 @@ export function workspaceForFeature(feature: string): string | null {
   return labelWorkspace;
 }
 
-/** True when *workspace*'s generated `.env` declares `FEATURE=` or `SANDBOX_FEATURE=` *feature*. */
+/** True when *workspace*'s generated `.env` declares `FEATURE=` or `WERKMEISTER_FEATURE=` *feature*. */
 function envNamesFeature(workspace: string, feature: string): boolean {
   let text: string;
   try {
@@ -78,7 +78,7 @@ function envNamesFeature(workspace: string, feature: string): boolean {
     return false;
   }
   return text.split("\n").some((line) => {
-    const m = /^\s*(?:SANDBOX_)?FEATURE=(.*)$/.exec(line);
+    const m = /^\s*(?:WERKMEISTER_)?FEATURE=(.*)$/.exec(line);
     return m !== null && m[1].trim() === feature;
   });
 }
@@ -138,7 +138,7 @@ function workspaceFromContainerLabel(feature: string): string | null {
  * The one way to spell `docker compose` for a workspace's stack.
  *
  * `-p`, not just the file's `name:`: a workspace container's `.env` exports
- * COMPOSE_PROJECT_NAME=sandbox-<caller>, which outranks `name:` and pointed
+ * COMPOSE_PROJECT_NAME=sandbox-<caller>, which outranks `name:` and pointed // name-check: ignore
  * every compose call at the caller's project (#225, the same leak #198 closed
  * for infra). Without *composePath* compose reads the file from cwd.
  */
@@ -164,7 +164,7 @@ export function projectName(feature: string): string {
 
 /** Pre-SW-93 project: a workspace stays under it until its next `up`. SW-11 drops it. */
 export function legacyProjectName(feature: string): string {
-  return `sandbox-${feature}`;
+  return `sandbox-${feature}`; // name-check: ignore
 }
 
 /** The project *feature*'s containers are under now: the legacy one while it holds any. */
@@ -175,7 +175,7 @@ export async function liveProject(feature: string): Promise<string> {
 
 /**
  * The project the compose file names. A file generated before SW-93 still says
- * `sandbox-<feature>`, and `-p` must agree with it or compose would start a second
+ * `sandbox-<feature>`, and `-p` must agree with it or compose would start a second // name-check: ignore
  * copy of the workspace beside the running one.
  */
 function fileProject(feature: string, composePath?: string): string {
@@ -190,7 +190,7 @@ function fileProject(feature: string, composePath?: string): string {
 }
 
 /**
- * Take down a pre-SW-93 `sandbox-<feature>` project once the compose file names
+ * Take down a pre-SW-93 `sandbox-<feature>` project once the compose file names // name-check: ignore
  * another: its containers hold the container names the new project needs, and a
  * `down --volumes` of the new project skips volumes the old one created. SW-11 drops this.
  */
@@ -321,7 +321,7 @@ function composeCommand(
   if (composePath === null || !isFile(composePath)) {
     error(
       `No ${COMPOSE_FILE} found for feature '${feature}'.\n` +
-        `       Run 'sandbox init-workspace' (and 'sandbox up') from the ` +
+        `       Run 'werkmeister init-workspace' (and 'werkmeister up') from the ` +
         `feature's workspace first.`,
     );
     return null;
@@ -544,7 +544,7 @@ export async function composeDownAsync(
  * Stop (but do not remove) containers for *feature*.
  *
  * The slot and generated files are preserved so the feature can be
- * resumed with `sandbox restart <feature>` or `sandbox up <feature>`.
+ * resumed with `werkmeister restart <feature>` or `werkmeister up <feature>`.
  *
  * Returns true on success.
  */
@@ -677,7 +677,7 @@ export async function composeLogs(
 ): Promise<void> {
   if ((await getSlot(feature)) === null) {
     warn(`Feature '${feature}' is not running (no slot allocated)`);
-    warn(`Start it with: sandbox up ${feature}`);
+    warn(`Start it with: werkmeister up ${feature}`);
     return;
   }
 

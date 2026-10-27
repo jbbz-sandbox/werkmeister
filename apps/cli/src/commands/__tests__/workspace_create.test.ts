@@ -237,7 +237,7 @@ describe("sandbox workspace", () => {
       fetchError = new Error("401");
       await expect(run({ feature: "f" })).rejects.toThrow("exit:1");
       expect(errors).toEqual([
-        "couldn't read o/r#5 from GitHub; run `sandbox connect` to check the issue tracker.",
+        "couldn't read o/r#5 from GitHub; run `werkmeister connect` to check the issue tracker.",
       ]);
       expect(calls).toEqual([]);
     });

@@ -19,7 +19,7 @@ import { edit } from "./textarea";
 const SURFACES = ["terminal", "desktop"] as const;
 const WS = "plugin:werkmeister:workspaces";
 const PANE_PROPS = {
-  title: "Sandbox workspaces",
+  title: "Werkmeister workspaces",
   isFocused: false,
   bodyColumns: 100,
   placement: "dock" as const,
@@ -1306,7 +1306,7 @@ test("a session starting in a folder of workspaces opens the pane; elsewhere it 
         ? [{ name: "ab", kind: "dir" as const, size: 0, mtimeMs: 0, isLink: false }]
         : [],
   }));
-  on("fs.exists", (_$, e) => ({ value: e.path === "/features/ab/.sandbox/workspace.yml" }));
+  on("fs.exists", (_$, e) => ({ value: e.path === "/features/ab/.werkmeister/workspace.yml" }));
   await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
   expect(opened()).toBe(0);
   await $.session.start({ cwd: "/features", surface: null, isInteractive: false });
@@ -1339,7 +1339,7 @@ test("a desktop session starting inside a workspace is filed under the Feature W
   const moves = () => w.calls.filter((c) => c.key === "ccd_sidebar/move_sessions");
   on("session.start", (_$, e) => ({ cwd: e.cwd }));
   on("fs.list", () => ({ value: [] }));
-  on("fs.exists", (_$, e) => ({ value: e.path === "/features/ab/.sandbox/workspace.yml" }));
+  on("fs.exists", (_$, e) => ({ value: e.path === "/features/ab/.werkmeister/workspace.yml" }));
   await $.session.start({ cwd: "/features", surface: "desktop", isInteractive: true });
   await $.session.start({ cwd: "/features/ab/sandbox", surface: "terminal", isInteractive: true });
   expect(moves()).toHaveLength(0);
@@ -1853,7 +1853,7 @@ test("a failed Refine completion leaves the field and says why", async ($, on) =
   await ui.unmount();
 });
 
-test("Connect runs sandbox connect, refreshes, and the infra line shows status", async ($, on) => {
+test("Connect runs werkmeister connect, refreshes, and the infra line shows status", async ($, on) => {
   const infra = {
     state: "partial",
     running: 2,
@@ -1886,7 +1886,7 @@ test("Connect runs sandbox connect, refreshes, and the infra line shows status",
   await ui.press({ key: "connect" });
   expect(w.calls.filter((c) => c.key === `${WS}/connect`)).toHaveLength(1);
   expect(w.calls.filter((c) => c.key === `${WS}/workspace-status`).length).toBe(before + 1);
-  expect((await ui.find({ key: "note" }))?.text).toBe("sandbox connect: done");
+  expect((await ui.find({ key: "note" }))?.text).toBe("werkmeister connect: done");
   await ui.unmount();
 });
 
@@ -1942,7 +1942,7 @@ test("the lifecycle replaces the stage on the card and picks the lifecycle butto
 
 // SW-50: a PR file still says `open` after the PR merged; the card's lifecycle follows the PR poll, not the file.
 const API_OPEN = { dir: "api", status: "open", url: "https://github.com/o/api/pull/7" };
-const SANDBOX_OPEN = {
+const WERKMEISTER_OPEN = {
   dir: "sandbox",
   status: "open",
   url: "https://github.com/o/sandbox/pull/12",
@@ -1956,7 +1956,7 @@ test("the lifecycle takes each PR's state from the PR poll, so it never contradi
         ok(
           lifecycleList(
             { state: "pr-open", prs: [API_OPEN] },
-            { state: "pr-open", prs: [API_OPEN, SANDBOX_OPEN] },
+            { state: "pr-open", prs: [API_OPEN, WERKMEISTER_OPEN] },
           ),
         ),
       [`${WS}/workspace-prs`]: () => ok([PRS[0], { name: "abc", repos: PRS[0]?.repos }]),
@@ -2016,7 +2016,7 @@ test("withLivePrs: shipped and abandoned outrank gh, a closed PR settles, an unp
   const r = row([{ ...API_OPEN, status: "shipped" }]);
   expect(withLivePrs(r, live("MERGED"))).toBe(r);
   expect(withLivePrs(row([API_OPEN]), live("CLOSED")).lifecycle?.state).toBe("shipped");
-  expect(withLivePrs(row([API_OPEN, SANDBOX_OPEN]), live("MERGED")).lifecycle?.state).toBe(
+  expect(withLivePrs(row([API_OPEN, WERKMEISTER_OPEN]), live("MERGED")).lifecycle?.state).toBe(
     "pr-open",
   );
   const none = row([API_OPEN]);

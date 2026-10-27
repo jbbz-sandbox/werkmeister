@@ -3,7 +3,7 @@
  * reads by itself — the pipeline carries sequencing, not a hook. Generalised
  * from the hand-built ~/features/icm-ws2 after its run-2 fixes: a `decided`
  * status is the approval, reloads use `docker restart` (`docker exec` for idle
- * services), and the test command is quoted from sandbox-context.md rather than
+ * services), and the test command is quoted from werkmeister-context.md rather than
  * restated.
  */
 
@@ -14,7 +14,7 @@ export interface IcmVars {
   at(name: string): string;
   /** The code worktrees, as paths from a stage dir. */
   repos: string;
-  /** How to reload running code without `sandbox`. */
+  /** How to reload running code without `werkmeister`. */
   restart: string;
   /** This stage's standards Reference line, or "" — the renderer fills it. */
   standards: string;
@@ -49,7 +49,7 @@ export interface Stage {
 }
 
 const RELOAD_RULE =
-  "Never run `sandbox up`, `sandbox restart`, or `sandbox init-workspace` to reload — " +
+  "Never run `werkmeister up`, `werkmeister restart`, or `werkmeister init-workspace` to reload — " +
   "they are slower, and init rewrites the stage contracts.";
 
 const IMPLEMENT_STEPS = [
@@ -57,14 +57,14 @@ const IMPLEMENT_STEPS = [
 ];
 
 const TEST_STEP =
-  "Run the test command exactly as `../../.sandbox/sandbox-context.md` states it. Redirect output to a file, trust the exit code, read back only the failing slice.";
+  "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it. Redirect output to a file, trust the exit code, read back only the failing slice.";
 
 export const SELF_CHECK =
-  "Review `output/` once against `../../BRIEF.md` and the live issue (`sandbox issue view`). " +
+  "Review `output/` once against `../../BRIEF.md` and the live issue (`werkmeister issue view`). " +
   "Flip every `status: proposed` to `status: decided` yourself, and record each decision — and anything you " +
   "would have asked a person — under `## Recommendations for reviewer` in the PR body. Then start the next stage without asking.";
 
-// Decision 11 (sandbox-133): "ship" means reaching a release, so the stage that
+// Decision 11 (sandbox-133): "ship" means reaching a release, so the stage that // name-check: ignore
 // ends at an approved PR file is "propose".
 const EXERCISE_FORMAT =
   "a `| check | result |` table, each result `PASS` or `FAIL`, with the captured output under it";
@@ -73,19 +73,19 @@ const propose: Stage = {
   name: "propose",
   job: "acceptance walk and PR files",
   writes: "one commit per code repo touched, `output/pr-<worktree>.md` per repo",
-  check: "approve each PR file; `sandbox pr open` opens it",
+  check: "approve each PR file; `werkmeister pr open` opens it",
   standards: "none",
   contract: (v) => ({
     oneJob: `One job: prove each acceptance criterion, commit in each code worktree, and write one PR file per repo touched. ${
       v.autonomous ? "You approve it after the self-check" : "Approving is the person's act"
-    }; opening is \`sandbox pr open\`.`,
+    }; opening is \`werkmeister pr open\`.`,
     inputs: [
       "Working (this run): `../../BRIEF.md` § Acceptance criteria",
       "Working (this run): `../*/output/` — every prior stage's artifacts",
       "Working (this run): `git status` and `git diff --stat` in each repo you touched",
       "Reference (every run): `../../_shared/pr-rules.md` — the PR file format and the gate",
     ],
-    doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.sandbox/`.",
+    doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.werkmeister/`.",
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write PASS or FAIL with the file and line in a prior `output/` that proves it. A FAIL routes back to the owning stage — do not fix it here.",
       "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit.",
@@ -99,7 +99,7 @@ const propose: Stage = {
     humanCheck:
       "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `werkmeister pr open` runs the gate and opens it. Merging is yours. After the release, `werkmeister pr status`, then the post-mortem (`postmortem` skill), then ask the person before `werkmeister close-out`. Code written after a PR merged (e.g. found at release) is a follow-up: `werkmeister pr new <worktree> --slug <slug>`.",
     selfCheck:
-      "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `sandbox pr open`. Stop at the PR URL. Merging is the person's.",
+      "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `werkmeister pr open`. Stop at the PR URL. Merging is the person's.",
   }),
 };
 
@@ -117,10 +117,10 @@ const feature: Stage[] = [
         "Working (this run): `../../BRIEF.md`",
         `Working (this run): the files in ${v.repos} that \`BRIEF.md\` names — grep for call sites, don't read whole trees`,
       ],
-      doNotLoad: `\`_shared/standards.md\` (nothing is written here), other stages' contracts, \`.sandbox/*.yml\`, \`${COMPOSE_FILE}\`.`,
+      doNotLoad: `\`_shared/standards.md\` (nothing is written here), other stages' contracts, \`.werkmeister/*.yml\`, \`${COMPOSE_FILE}\`.`,
       process: [
         "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them.",
-        "Find the test command in `../../.sandbox/sandbox-context.md` and copy it verbatim — do not restate it from memory.",
+        "Find the test command in `../../.werkmeister/werkmeister-context.md` and copy it verbatim — do not restate it from memory.",
         "Check what is already installed that could do the job before recommending anything new.",
         "Write `output/inventory.md`: steps 1–3.",
         "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3. Leave the answer blank when only a person can give it (a ticket key, a preference).",
@@ -147,7 +147,7 @@ const feature: Stage[] = [
         "Reference (every run): `../../BRIEF.md` § Acceptance criteria",
       ],
       doNotLoad:
-        "source files already summarised in `inventory.md` (if it looks wrong, fix `inventory.md` and tell the person), `.sandbox/*.yml`, other stages.",
+        "source files already summarised in `inventory.md` (if it looks wrong, fix `inventory.md` and tell the person), `.werkmeister/*.yml`, other stages.",
       process: [
         "Write `output/spec.md`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.",
         "If the change has a machine-checkable artifact (a schema, an API document, a migration), write it in the repo and validate it with a command that needs no new dependency. Record the exact command in `spec.md`.",
@@ -170,15 +170,15 @@ const feature: Stage[] = [
       inputs: [
         `Working (this run): \`${v.at("spec")}/output/spec.md\` and the files it names`,
         `Working (this run): \`${v.at("research")}/output/decisions.md\``,
-        "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports, test command",
+        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — container names, published ports, test command",
       ],
-      doNotLoad: `\`BRIEF.md\` (\`decisions.md\` and \`spec.md\` carry the settled scope), \`inventory.md\`, \`.sandbox/*.yml\`, \`${COMPOSE_FILE}\`, other stages.`,
+      doNotLoad: `\`BRIEF.md\` (\`decisions.md\` and \`spec.md\` carry the settled scope), \`inventory.md\`, \`.werkmeister/*.yml\`, \`${COMPOSE_FILE}\`, other stages.`,
       process: [
         ...IMPLEMENT_STEPS,
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`sandbox-context.md\` describes for each service touched, and capture the output.`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output.`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, the exercise checks as ${EXERCISE_FORMAT}, and any deviation from \`spec.md\` with its reason.`,
       ],
       outputs: [
@@ -205,10 +205,10 @@ const bugfix: Stage[] = [
       inputs: [
         "Working (this run): `../../BRIEF.md`",
         `Working (this run): the files in ${v.repos} on the failing path — follow the call chain, don't read whole trees`,
-        "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports, logs, test command",
+        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — container names, published ports, logs, test command",
       ],
       doNotLoad:
-        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
+        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.werkmeister/*.yml`.",
       process: [
         "Reproduce the failure against the running service or with a test. Record the exact command and its output.",
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
@@ -235,10 +235,10 @@ const bugfix: Stage[] = [
       inputs: [
         `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — must read \`status: decided\`; if not, stop and route back`,
         "Working (this run): the failing test and the files at the root cause",
-        "Reference (every run): `../../.sandbox/sandbox-context.md` — test command",
+        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — test command",
       ],
       doNotLoad:
-        "`BRIEF.md` (`repro.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
+        "`BRIEF.md` (`repro.md` carries the settled scope), `.werkmeister/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
@@ -262,10 +262,10 @@ const bugfix: Stage[] = [
       inputs: [
         `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — the reproduction steps`,
         `Working (this run): \`${v.at("fix")}/output/fix.md\``,
-        "Reference (every run): `../../.sandbox/sandbox-context.md` — container names, published ports",
+        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — container names, published ports",
       ],
       doNotLoad:
-        "`_shared/standards.md` (no code is written here), source files, `.sandbox/*.yml`.",
+        "`_shared/standards.md` (no code is written here), source files, `.werkmeister/*.yml`.",
       process: [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
@@ -294,7 +294,7 @@ const refactor: Stage[] = [
         `Working (this run): the files in ${v.repos} that \`BRIEF.md\` names, and their callers`,
       ],
       doNotLoad:
-        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.sandbox/*.yml`.",
+        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.werkmeister/*.yml`.",
       process: [
         "List the files in scope and every caller outside it.",
         "State the invariants: observable behaviour that must be identical after the refactor.",
@@ -320,10 +320,10 @@ const refactor: Stage[] = [
       inputs: [
         `Working (this run): \`${v.at("scope")}/output/scope.md\` — must read \`status: decided\``,
         "Working (this run): the files in scope",
-        "Reference (every run): `../../.sandbox/sandbox-context.md` — test command",
+        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — test command",
       ],
       doNotLoad:
-        "`BRIEF.md` (`scope.md` carries the settled scope), `.sandbox/*.yml`, other stages.",
+        "`BRIEF.md` (`scope.md` carries the settled scope), `.werkmeister/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
@@ -349,7 +349,7 @@ const spike: Stage[] = [
       oneJob:
         "One job: turn the brief into questions, each with the evidence that would settle it. No code is written in this stage.",
       inputs: ["Working (this run): `../../BRIEF.md`"],
-      doNotLoad: "source trees, `_shared/standards.md`, `.sandbox/*.yml`.",
+      doNotLoad: "source trees, `_shared/standards.md`, `.werkmeister/*.yml`.",
       process: [
         "List the questions the brief asks or implies, most decision-relevant first.",
         "For each: how it will be answered (read code, measure, prototype) and what result settles it.",
@@ -374,10 +374,10 @@ const spike: Stage[] = [
       inputs: [
         `Working (this run): \`${v.at("questions")}/output/questions.md\` — must read \`status: decided\``,
         `Working (this run): whatever each question's method names, in ${v.repos}`,
-        "Reference (every run): `../../.sandbox/sandbox-context.md` — ports, containers",
+        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — ports, containers",
         "Reference (when the brief asks for a repo deliverable): `../../_shared/pr-rules.md` — the PR file format and the gate",
       ],
-      doNotLoad: "`_shared/standards.md` (prototype code is throwaway), `.sandbox/*.yml`.",
+      doNotLoad: "`_shared/standards.md` (prototype code is throwaway), `.werkmeister/*.yml`.",
       process: [
         "Answer each question by its method. Prototype code lives in `output/` or on a scratch branch, never on the workspace branch.",
         "Write `output/findings.md`: per question, the answer, the evidence (commands and output), and confidence.",

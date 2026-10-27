@@ -1,23 +1,23 @@
 #!/bin/bash
-# Generate the self-signed TLS certificate the sandbox ingress terminates.
+# Generate the self-signed TLS certificate the werkmeister ingress terminates.
 #
-# The hostnames are NOT hardcoded here. They come from the sandbox ingress
+# The hostnames are NOT hardcoded here. They come from the werkmeister ingress
 # config (`ingress.local_domain` / `ingress.remote_domain` in
 # ~/.werkmeister/config.yaml, crossed with the routed services in
-# ~/.werkmeister/services.yaml) and are passed in by `sandbox setup` via --domain.
+# ~/.werkmeister/services.yaml) and are passed in by `werkmeister setup` via --domain.
 # That way the certificate SANs, the /etc/hosts entries and the Caddy site
 # blocks all derive from one list instead of three hand-synced copies.
 #
 # Standalone use (no CLI): pass --domain yourself, or set WERKMEISTER_INGRESS_HOSTS
-# to a comma/space-separated list. `sandbox setup` is the normal entry point.
-# WERKMEISTER_HOSTS_FILE overrides /etc/hosts (tests). Each WERKMEISTER_* falls back to SANDBOX_*.
+# to a comma/space-separated list. `werkmeister setup` is the normal entry point.
+# WERKMEISTER_HOSTS_FILE overrides /etc/hosts (tests).
 #
 # Usage:
 #   generate-certs.sh [--domain HOST]... [--certs-dir DIR]
 #                     [--no-trust] [--no-hosts] [--force] [--check]
 #
 #   --domain HOST    Hostname to cover (repeatable). Also seeds /etc/hosts.
-#   --certs-dir DIR  Output directory  [$SANDBOX_CERTS_DIR, else ~/.docker/certs]
+#   --certs-dir DIR  Output directory  [$WERKMEISTER_CERTS_DIR, else ~/.docker/certs]
 #   --no-trust       Skip adding the cert to the macOS System keychain (no sudo)
 #   --no-hosts       Skip the /etc/hosts update (no sudo)
 #   --force          Regenerate even if a certificate already exists
@@ -27,10 +27,10 @@
 
 set -euo pipefail
 
-CERTS_DIR="${WERKMEISTER_CERTS_DIR:-${SANDBOX_CERTS_DIR:-$HOME/.docker/certs}}"
-HOSTS_FILE="${WERKMEISTER_HOSTS_FILE:-${SANDBOX_HOSTS_FILE:-/etc/hosts}}"
-HOSTS_BEGIN="# BEGIN sandbox ingress"
-HOSTS_END="# END sandbox ingress"
+CERTS_DIR="${WERKMEISTER_CERTS_DIR:-$HOME/.docker/certs}"
+HOSTS_FILE="${WERKMEISTER_HOSTS_FILE:-/etc/hosts}"
+HOSTS_BEGIN="# BEGIN sandbox ingress" # name-check: ignore
+HOSTS_END="# END sandbox ingress" # name-check: ignore
 DO_TRUST=true
 DO_HOSTS=true
 FORCE=false
@@ -39,7 +39,7 @@ DOMAINS=()
 
 # Seed from the env fallback (comma or whitespace separated) before parsing
 # flags, so an explicit --domain adds to it rather than being overridden.
-INGRESS_HOSTS="${WERKMEISTER_INGRESS_HOSTS:-${SANDBOX_INGRESS_HOSTS:-}}"
+INGRESS_HOSTS="${WERKMEISTER_INGRESS_HOSTS:-}"
 if [ -n "$INGRESS_HOSTS" ]; then
     IFS=', ' read -r -a DOMAINS <<< "$INGRESS_HOSTS"
 fi
@@ -207,7 +207,7 @@ if [ "$FORCE" != "skip_generate" ]; then
     echo "  Certificate: $CRT"
     echo "  Private Key: $KEY"
     echo ""
-    echo "Note: Docker Compose mounts these into Caddy via \$SANDBOX_CERTS_DIR."
+    echo "Note: Docker Compose mounts these into Caddy via \$WERKMEISTER_CERTS_DIR."
 
     # Trust the certificate on macOS.
     if [ "$DO_TRUST" = true ] && [[ "$OSTYPE" == "darwin"* ]]; then

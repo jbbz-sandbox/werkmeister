@@ -1,9 +1,9 @@
 /**
  * werkmeister migrate [--workspaces] [--check]
  *
- * One-shot move of ~/.sandbox to ~/.werkmeister (SW-92), repointing every file
- * that carries the old path. Safe to re-run; refuses while containers that the
- * move would break are running.
+ * One-shot move of ~/.sandbox to ~/.werkmeister (SW-92). name-check: ignore
+ * Repoints every file that carries the old path. Safe to re-run; refuses while
+ * containers that the move would break are running.
  */
 
 import { migrate } from "werkmeister-core/migrate";

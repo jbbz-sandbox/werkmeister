@@ -7,9 +7,9 @@
 // be one.
 //
 // Renders through both the template and the built-in fallback, like
-// compose-container-names.test.mjs: SANDBOX_ROOT at an empty dir misses the
+// compose-container-names.test.mjs: WERKMEISTER_ROOT at an empty dir misses the
 // template. The template case pins this checkout's apps/cli, not whatever
-// install a developer's own SANDBOX_ROOT points at.
+// install a developer's own WERKMEISTER_ROOT points at.
 
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -49,15 +49,15 @@ setup_services:
 /** Generate *feature*'s compose under *sandboxRoot* and parse it. */
 function compose(feature, sandboxRoot) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-sv-ws-"));
-  const prev = process.env.SANDBOX_ROOT;
-  process.env.SANDBOX_ROOT = sandboxRoot;
+  const prev = process.env.WERKMEISTER_ROOT;
+  process.env.WERKMEISTER_ROOT = sandboxRoot;
   try {
     return YAML.parse(
       fs.readFileSync(generateFeatureCompose(feature, 1, ["backend"], null, ws), "utf8"),
     );
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_ROOT;
-    else process.env.SANDBOX_ROOT = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_ROOT;
+    else process.env.WERKMEISTER_ROOT = prev;
     fs.rmSync(ws, { recursive: true, force: true });
   }
 }

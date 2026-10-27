@@ -1,5 +1,5 @@
 /**
- * sandbox status
+ * werkmeister status
  *
  * Show shared infra, active features, and k8s port-forward health in one view.
  */
@@ -34,7 +34,7 @@ function printInfraSection(containers: InfraContainer[], mcp: WebServerStatus): 
   console.log(`  ${Colors.BOLD}${"Service".padEnd(25)}  Status${Colors.RESET}`);
   console.log(`  ${"─".repeat(40)}`);
   if (!containers.length) {
-    console.log(`  ${Colors.DIM}not running  (start with: sandbox connect)${Colors.RESET}`);
+    console.log(`  ${Colors.DIM}not running  (start with: werkmeister connect)${Colors.RESET}`);
   } else {
     for (const c of containers) {
       const d = c.display;
@@ -176,7 +176,7 @@ async function printFeaturesSection(
   const entries = Object.entries(allSlots);
   if (!entries.length) {
     console.log(
-      `  ${Colors.DIM}No active features.  Start one with: sandbox up <feature>${Colors.RESET}`,
+      `  ${Colors.DIM}No active features.  Start one with: werkmeister up <feature>${Colors.RESET}`,
     );
     console.log();
     return 0;
@@ -229,7 +229,7 @@ async function printFeaturesSection(
 // Intercepts (`--intercepts`)
 // ---------------------------------------------------------------------------
 
-/** Handle `sandbox status --intercepts`: focused Telepresence intercept view. */
+/** Handle `werkmeister status --intercepts`: focused Telepresence intercept view. */
 async function runInterceptsOnly(asJson: boolean): Promise<void> {
   const snapshot = await interceptsSnapshot();
 
@@ -249,7 +249,7 @@ async function runInterceptsOnly(asJson: boolean): Promise<void> {
   }
   if (!snapshot.available) {
     console.log(
-      `  ${Colors.DIM}telepresence not connected — \`sandbox intercept\` connects first.${Colors.RESET}\n`,
+      `  ${Colors.DIM}telepresence not connected — \`werkmeister intercept\` connects first.${Colors.RESET}\n`,
     );
     printInterceptRows(snapshot.intercepts);
     return;
@@ -300,7 +300,7 @@ function printK8sSection(services: ForwardStatus[]): number {
   console.log(`  ${Colors.BOLD}k8s Port-Forwards${Colors.RESET}`);
 
   if (!services.length) {
-    console.log(`  ${Colors.DIM}not running  (start with: sandbox connect)${Colors.RESET}`);
+    console.log(`  ${Colors.DIM}not running  (start with: werkmeister connect)${Colors.RESET}`);
     console.log();
     return 0;
   }
@@ -315,7 +315,9 @@ function printK8sSection(services: ForwardStatus[]): number {
 
   if (services[0].status === "container_down") {
     console.log(`  ${Colors.RED}container ${K8S_FORWARDS_CONTAINER} is down${Colors.RESET}`);
-    console.log(`  ${Colors.DIM}Run 'sandbox connect' to start all infrastructure.${Colors.RESET}`);
+    console.log(
+      `  ${Colors.DIM}Run 'werkmeister connect' to start all infrastructure.${Colors.RESET}`,
+    );
     console.log();
     return 0;
   }
@@ -355,7 +357,7 @@ function printK8sSection(services: ForwardStatus[]): number {
   return alive;
 }
 
-/** Handle `sandbox status --k8s`: focused k8s port-forward view. */
+/** Handle `werkmeister status --k8s`: focused k8s port-forward view. */
 function runK8sOnly(k8s: ForwardStatus[], asJson: boolean): void {
   if (asJson) {
     const k8sAlive = k8s.filter((s) => s.status === "alive").length;
@@ -386,7 +388,7 @@ function runK8sOnly(k8s: ForwardStatus[], asJson: boolean): void {
   }
 }
 
-/** Execute the `sandbox status` command. */
+/** Execute the `werkmeister status` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.k8s) {
     runK8sOnly(await getPerServiceStatus(), Boolean(args.json));
@@ -412,7 +414,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const allSlots = await getAllSlots();
   const mcp = await webStatus();
 
-  console.log(`\n${Colors.BOLD}=== Developer Sandbox Status ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== Werkmeister Status ===${Colors.RESET}\n`);
 
   printInfraSection(infra, mcp);
   await printFeaturesSection(

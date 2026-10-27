@@ -1,4 +1,4 @@
-// sandbox-context.md is loaded on demand, but when it loads it should describe
+// werkmeister-context.md is loaded on demand, but when it loads it should describe
 // this workspace — not every host on the machine and a hardcoded infra table
 // whose ports had already drifted from the registry.
 
@@ -103,7 +103,10 @@ test("Container Lifecycle mentions auto-stop only when it is on (#231)", async (
     async () => {
       const args = ["test", 1, 11100, 11119, ["frontend"], loadServices()];
       const on = buildSandboxContextMd(...args, "", null, ["frontend"], true);
-      assert.match(on, /## Container Lifecycle[\s\S]*Auto-stop is on[\s\S]*sandbox stop --if-idle/);
+      assert.match(
+        on,
+        /## Container Lifecycle[\s\S]*Auto-stop is on[\s\S]*werkmeister stop --if-idle/,
+      );
       assert.doesNotMatch(buildSandboxContextMd(...args), /--if-idle/);
     },
     { services: SERVICES },

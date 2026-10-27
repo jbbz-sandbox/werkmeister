@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Fail when a doc names something the code no longer has: a retired term, a
- * repo path that doesn't exist, a `werkmeister` (or `sandbox`) command or flag
+ * repo path that doesn't exist, a `werkmeister` command or flag
  * the CLI doesn't define, an MCP tool the server doesn't register, a bare
  * `<placeholder>` GitHub would drop, a `#anchor` no heading defines, or a
  * generated region that `docs:gen` would rewrite. See docs/docs-sync.md.
@@ -32,7 +32,7 @@ export const RETIRED = [
   [/\bpackage-lock\.json\b/, "pnpm-lock.yaml"],
   [/stellwerk/i, "Werkmeister (Stellwerk was a dropped name)"],
   [
-    /\b(?:apps\/(?:mcp|sandbox-dashboard)|packages\/(?:sandbox-core|sandbox-ui|vscode-plugin))(?![\w-])/,
+    /\b(?:apps\/(?:mcp|sandbox-dashboard)|packages\/(?:sandbox-core|sandbox-ui|vscode-plugin))(?![\w-])/, // name-check: ignore
     "the `werkmeister-*` directory (SW-30)",
   ],
 ];
@@ -133,15 +133,14 @@ export function checkGenerated(text, regions, report) {
 }
 
 /**
- * `werkmeister`, `w9r` or `sandbox` (the deprecated launcher runs the same CLI)
- * where a command starts the span or a shell statement, elsewhere it's prose
+ * `werkmeister` or `w9r` where a command starts the span or a shell statement, elsewhere it's prose
  * ("werkmeister never…"). Every `--flag` up to the statement's end or a bare
  * `--` is checked against the command's own set: `pr watch` and `cache prune`
  * are `<action>` positionals, so their flags hang on `pr` and `cache`.
  */
 export function checkCommands(line, code, cli, report) {
   for (const m of code.matchAll(
-    /(?:^|[;&|(]\s*|^\s*\$\s+)(werkmeister|w9r|sandbox) ([a-z][\w-]*)([^;&|()]*)/g,
+    /(?:^|[;&|(]\s*|^\s*\$\s+)(werkmeister|w9r) ([a-z][\w-]*)([^;&|()]*)/g,
   )) {
     const flags = cli.commands.get(m[2]);
     if (!flags) {

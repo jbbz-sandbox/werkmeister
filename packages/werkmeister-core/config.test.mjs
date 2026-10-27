@@ -22,19 +22,19 @@ import {
 } from "./dist/config.js";
 
 const VARS = [
-  "SANDBOX_CONFIG_FILE",
-  "SANDBOX_SERVICES_YAML",
-  "SANDBOX_WORKSPACES_ROOT",
-  "SANDBOX_ROOT",
+  "WERKMEISTER_CONFIG_FILE",
+  "WERKMEISTER_SERVICES_YAML",
+  "WERKMEISTER_WORKSPACES_ROOT",
+  "WERKMEISTER_ROOT",
 ];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 
-/** Point SANDBOX_CONFIG_FILE at a temp config.yaml holding *body*. */
+/** Point WERKMEISTER_CONFIG_FILE at a temp config.yaml holding *body*. */
 async function withConfig(body) {
   const dir = await mkdtemp(path.join(tmpdir(), "sandbox-cfg-"));
   const file = path.join(dir, "config.yaml");
   await writeFile(file, body);
-  process.env.SANDBOX_CONFIG_FILE = file;
+  process.env.WERKMEISTER_CONFIG_FILE = file;
   return dir;
 }
 
@@ -50,15 +50,15 @@ afterEach(() => {
 
 test("registry path: overrides.<key> beats the env export beats the default", async () => {
   await withConfig("overrides:\n  services_yaml: /from/yaml/services.yaml\n");
-  process.env.SANDBOX_SERVICES_YAML = "/from/env/services.yaml";
+  process.env.WERKMEISTER_SERVICES_YAML = "/from/env/services.yaml";
   assert.equal(servicesYamlPath(), "/from/yaml/services.yaml");
 
   await withConfig("version: 1\n");
-  process.env.SANDBOX_SERVICES_YAML = "/from/env/services.yaml";
+  process.env.WERKMEISTER_SERVICES_YAML = "/from/env/services.yaml";
   assert.equal(servicesYamlPath(), "/from/env/services.yaml");
 
   const bare = await withConfig("version: 1\n");
-  delete process.env.SANDBOX_SERVICES_YAML;
+  delete process.env.WERKMEISTER_SERVICES_YAML;
   assert.equal(servicesYamlPath(), path.join(bare, "services.yaml"));
   assert.equal(sandboxHome(), bare);
   assert.equal(configPath(), path.join(bare, "config.yaml"));
@@ -66,19 +66,19 @@ test("registry path: overrides.<key> beats the env export beats the default", as
 
 test("workspaces root: config beats env, `~` expands, `~/workspace` is the floor", async () => {
   await withConfig("paths:\n  workspaces_root: ~/from-yaml\n");
-  process.env.SANDBOX_WORKSPACES_ROOT = "/from/env";
+  process.env.WERKMEISTER_WORKSPACES_ROOT = "/from/env";
   assert.equal(workspacesRoot(), path.join(homedir(), "from-yaml"));
 
   await withConfig("version: 1\n");
   assert.equal(workspacesRoot(), "/from/env");
 
   await withConfig("version: 1\n");
-  delete process.env.SANDBOX_WORKSPACES_ROOT;
+  delete process.env.WERKMEISTER_WORKSPACES_ROOT;
   assert.equal(workspacesRoot(), path.join(homedir(), "workspace"));
 });
 
 test("a missing config is empty, not fatal", () => {
-  process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+  process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
   assert.equal(workspacesRoot(), path.join(homedir(), "workspace"));
 });
 
@@ -111,26 +111,26 @@ test("slotPortRange: 100-port stride, span from ports.yaml", () => {
 });
 
 // The two answers must agree, because `infra/` is reached one way from the CLI
-// (which always has SANDBOX_ROOT, exported by the wrapper) and the other way
+// (which always has WERKMEISTER_ROOT, exported by the wrapper) and the other way
 // from a bare import (the dashboard, a script), and they read the same files.
-test("sandboxRoot: SANDBOX_ROOT wins, else a walk-up finds the checkout's apps/cli", () => {
+test("sandboxRoot: WERKMEISTER_ROOT wins, else a walk-up finds the checkout's apps/cli", () => {
   const walked = sandboxRoot();
   assert.equal(path.basename(walked), "cli");
   assert.equal(path.basename(path.dirname(walked)), "apps");
   assert.equal(infraRoot(), path.join(walked, "infra"));
 
-  process.env.SANDBOX_ROOT = "~/elsewhere/apps/cli";
+  process.env.WERKMEISTER_ROOT = "~/elsewhere/apps/cli";
   assert.equal(sandboxRoot(), path.join(homedir(), "elsewhere", "apps", "cli"));
 });
 
-test("stateInfraRoot is <sandboxHome>/infra and follows SANDBOX_CONFIG_FILE", async () => {
+test("stateInfraRoot is <sandboxHome>/infra and follows WERKMEISTER_CONFIG_FILE", async () => {
   const dir = await withConfig("version: 1\n");
   assert.equal(stateInfraRoot(), path.join(dir, "infra"));
   assert.equal(stateInfraRoot(), path.join(sandboxHome(), "infra"));
 });
 
-test("stateInfraRoot is absolute even when SANDBOX_CONFIG_FILE is relative", () => {
-  process.env.SANDBOX_CONFIG_FILE = "rel/config.yaml";
+test("stateInfraRoot is absolute even when WERKMEISTER_CONFIG_FILE is relative", () => {
+  process.env.WERKMEISTER_CONFIG_FILE = "rel/config.yaml";
   assert.ok(path.isAbsolute(stateInfraRoot()), stateInfraRoot());
   assert.equal(stateInfraRoot(), path.resolve("rel", "infra"));
 });

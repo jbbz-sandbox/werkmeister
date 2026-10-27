@@ -1,6 +1,6 @@
 /**
- * `sandbox detect`: generate a repo's `.werkmeister/services.yaml` fragment.
- * See docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc.
+ * `werkmeister detect`: generate a repo's `.werkmeister/services.yaml` fragment.
+ * See docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc. // name-check: ignore
  */
 
 export * from "./allocate.js";

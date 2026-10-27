@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sandbox Feature Selector</title>
+    <title>Werkmeister Feature Selector</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -121,7 +121,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Sandbox Feature Selector</h1>
+        <h1>Werkmeister Feature Selector</h1>
         <p class="subtitle">Route traffic to a feature's local containers via the X-Feature cookie.</p>
 
         <div class="current">
@@ -144,7 +144,7 @@
             return match ? decodeURIComponent(match[2]) : null;
         }
 
-        // Share the X-Feature cookie across the sandbox's faces for this host
+        // Share the X-Feature cookie across the werkmeister faces for this host
         // (e.g. frontend.local.<base> and frontend.remote.<base>) by scoping
         // it to the base domain — the last two labels of the current hostname.
         function cookieDomain() {
@@ -195,7 +195,7 @@
             list.innerHTML = '';
 
             if (!features || features.length === 0) {
-                list.innerHTML = '<div class="no-features">No features running. Start one with: sandbox up &lt;feature&gt;</div>';
+                list.innerHTML = '<div class="no-features">No features running. Start one with: werkmeister up &lt;feature&gt;</div>';
                 // Still add the default button
                 const defaultBtn = document.createElement('button');
                 defaultBtn.className = 'default-btn';

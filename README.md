@@ -1,6 +1,6 @@
 # Werkmeister
 
-Werkmeister (formerly `sandbox`) is a multi-feature concurrent development orchestrator.
+Werkmeister (formerly `sandbox`) is a multi-feature concurrent development orchestrator. <!-- name-check: ignore -->
 Its CLI is `werkmeister`, or `w9r` for short.
 
 Turborepo monorepo ([pnpm](https://pnpm.io) workspaces + [Turbo](https://turbo.build)).
@@ -25,9 +25,9 @@ Docs: <https://werkmeister.io/>
 
 | Package | Path | What |
 | --- | --- | --- |
-| `werkmeister-core` | [packages/werkmeister-core](packages/werkmeister-core) | Shared sandbox library: config/registry resolution, workspace creation and lifecycle, and issue-tracker helpers. Consumed by the CLI, werkmeister-dashboard, and the VS Code extension. |
+| `werkmeister-core` | [packages/werkmeister-core](packages/werkmeister-core) | Shared werkmeister library: config/registry resolution, workspace creation and lifecycle, and issue-tracker helpers. Consumed by the CLI, werkmeister-dashboard, and the VS Code extension. |
 | `werkmeister-ui` | [packages/werkmeister-ui](packages/werkmeister-ui) | The UI modules apps/werkmeister-dashboard and apps/werkmeister-mcp share, and the non-DOM workspace display model every surface reads. |
-| `werkmeister-vscode` | [packages/werkmeister-vscode](packages/werkmeister-vscode) | Manage developer-sandbox feature workspaces — container state, Telepresence intercepts, and the sandbox CLI lifecycle — from a VS Code tree view. |
+| `werkmeister-vscode` | [packages/werkmeister-vscode](packages/werkmeister-vscode) | Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code tree view. |
 
 <!-- /generated -->
 
@@ -56,14 +56,14 @@ werkmeister setup
 
 The global `werkmeister` is a symlink into this checkout, not a copy, so a rebuild
 (`pnpm run build`) after a pull is all it takes to update it. `setup` records
-this checkout as `sandbox_root`, so don't move or delete it while it is linked.
+this checkout as `werkmeister_root`, so don't move or delete it while it is linked.
 Until you rebuild, it keeps running the old bundle, so the CLI
 prints a one-line stderr warning when `apps/cli/dist` was built from a
 different commit than the checkout's `HEAD`. The warning names both SHAs and
 the rebuild command, `pnpm turbo run build --filter=werkmeister`.
 It never shows on a published install, which has no `.git`, and `werkmeister hooks`
 skips it. To skip the global link, run `apps/cli/werkmeister` from the checkout instead. To remove
-the link, delete its shims: `rm "$PNPM_HOME"/{werkmeister,w9r,sandbox}`
+the link, delete its shims: `rm "$PNPM_HOME"/{werkmeister,w9r,sandbox}` <!-- name-check: ignore -->
 (pnpm 10's `pnpm remove --global` refuses with `ERR_PNPM_GLOBAL_BIN_DIR_NOT_IN_PATH`).
 
 A linked CLI doesn't offer to install the VS Code extension. Only the published
@@ -95,12 +95,12 @@ To check what's published, run `npm view werkmeister version`.
 checkout's own `werkmeister` package over the registry (in `apps/cli` it always
 does), so it silently runs your checkout's CLI: nothing is installed,
 `werkmeister` stays off your PATH, and `setup` records the checkout as
-`sandbox_root`.
+`werkmeister_root`.
 
 That one command is the whole onboarding. npx only bootstraps: the wrapper sees
 it is running from `~/.npm/_npx/<hash>/`, installs itself globally, and re-execs
 the stable copy before doing any work. It has to — npm re-hashes and garbage-
-collects that cache, while `setup` persists `sandbox_root` into
+collects that cache, while `setup` persists `werkmeister_root` into
 `~/.werkmeister/config.yaml` and the compose generator bakes it into every
 workspace's `compose.yml` as a bind mount. Running for real from the
 cache would pin permanent state to a directory that is going to vanish.
@@ -128,7 +128,7 @@ entry all work from the package. What stays checkout-only is the workspaces
 dashboard (`apps/werkmeister-dashboard`): the localhost browser page and the MCP App
 UI bundles, so on a package install the App tools answer in text.
 
-One caveat if you keep both: `sandbox_root` is self-derived and last-writer-wins
+One caveat if you keep both: `werkmeister_root` is self-derived and last-writer-wins
 in `~/.werkmeister/env.sh`, so whichever CLI you last ran `werkmeister config` from owns
 that pointer. Pick one per machine.
 
@@ -186,8 +186,8 @@ apps/cli/werkmeister setup            # guided wizard
 The wizard walks through your repo/workspace paths, the ingress base domains,
 and the service registry (generated from each repo's `.werkmeister/services.yaml`),
 then converges the rest: the `werkmeister` and
-`ponytail` plugins (an old `sandbox-tools` install is swapped out; see
-[Migrating from `sandbox-tools`](plugins/werkmeister/README.md#migrating-from-sandbox-tools)), the companion `sandbox-workspace` checkout, a TLS
+`ponytail` plugins (an old `sandbox-tools` install is swapped out; see <!-- name-check: ignore -->
+[Migrating from `sandbox-tools`](plugins/werkmeister/README.md#migrating-from-sandbox-tools)), the companion `sandbox-workspace` checkout, a TLS <!-- name-check: ignore -->
 certificate covering every routed hostname, and the issue-tracker and
 Telepresence prerequisites. It is safe to re-run — nothing already configured
 is overwritten.
@@ -204,11 +204,11 @@ you to run `werkmeister setup`.
 | File | What |
 | --- | --- |
 | `~/.werkmeister/config.yaml` | Paths, ingress domains, optional Jira credentials — the single source of truth. |
-| `~/.werkmeister/services.yaml` | Service registry — GENERATED from each repo's `.sandbox/services.yaml`; do not edit. |
+| `~/.werkmeister/services.yaml` | Service registry — GENERATED from each repo's `.werkmeister/services.yaml`; do not edit. |
 | `~/.werkmeister/services.local.yaml` | Per-machine registry overrides (`k8s_context`, …), merged last. |
 | `~/.werkmeister/ports.yaml` | Feature-slot port allocation. |
 | `~/.werkmeister/secrets.env` | Real credentials, as `<SERVICE>__KEY` or shared `KEY`. Each service gets the keys it declares in its own workspace `.env.<service>`. Never committed. |
-| `~/.werkmeister/env.sh` | Generated `SANDBOX_*` exports, sourced by `~/.zshenv` and the CLI wrapper. |
+| `~/.werkmeister/env.sh` | Generated `WERKMEISTER_*` exports, sourced by `~/.zshenv` and the CLI wrapper. |
 | `~/.werkmeister/corp-ca.crt` | Corporate TLS-proxy root(s), trusted by image builds. Auto-populated on macOS; see below. |
 
 ### Behind a TLS-intercepting proxy
@@ -254,7 +254,7 @@ pnpm run docs:check # docs vs. code: retired names, paths, commands, MCP tools (
 pnpm turbo run test --filter=werkmeister   # one package (and what it depends on)
 ```
 
-The CLI launcher lives at [apps/cli/werkmeister](apps/cli/werkmeister). The old `sandbox` launcher ([apps/cli/sandbox](apps/cli/sandbox), also symlinked at the repo root as `./sandbox`) still works but is deprecated and goes away in SW-11.
+The CLI launcher lives at [apps/cli/werkmeister](apps/cli/werkmeister).
 
 ## Local Kubernetes bootstrap
 

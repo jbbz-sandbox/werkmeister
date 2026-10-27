@@ -5,7 +5,7 @@ This product includes software developed by Jay Boyer.
 The werkmeister npm package bundles third-party packages into dist/*.js under
 the MIT, ISC, BSD-2-Clause and BSD-3-Clause licences. Their names, versions and
 licence texts are in dist/THIRD-PARTY-LICENSES.txt. The bundled VS Code
-extension (dist/sandbox-workspaces.vsix) carries its own LICENSE, NOTICE and
+extension (dist/werkmeister-workspaces.vsix) carries its own LICENSE, NOTICE and
 THIRD-PARTY-LICENSES.txt. It also contains Apache-2.0, BSD-3-Clause, ISC, MIT
 and Unlicense code. None of these packages carries an Apache NOTICE file.
 

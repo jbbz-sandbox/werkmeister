@@ -39,7 +39,7 @@ test("matchService finds the configured service inside a compose container name"
 
 test("matchService reports no match rather than guessing", () => {
   assert.equal(matchService("sandbox-demo-unknown-1", { backend: {} }), null);
-  assert.equal(matchService("sandbox-jaeger", {}), null);
+  assert.equal(matchService("w9r-jaeger", {}), null);
 });
 
 test("cpuLimitOf resolves a container to its configured limit, null when unmatched", () => {
@@ -51,5 +51,5 @@ test("cpuLimitOf resolves a container to its configured limit, null when unmatch
     "2.0",
     "setup containers resolve too",
   );
-  assert.equal(cpuLimitOf("sandbox-jaeger", cpus), null);
+  assert.equal(cpuLimitOf("w9r-jaeger", cpus), null);
 });

@@ -9,8 +9,7 @@
   },
   "bin": {
     "werkmeister": "./werkmeister",
-    "w9r": "./w9r",
-    "sandbox": "./sandbox"
+    "w9r": "./w9r"
   },
   "//files": "dist/ is gitignored build output, and npm drops gitignored paths unless an explicit list opts them back in. That opt-in is indiscriminate, so the negations below keep out files an older CLI generated into a maintainer's checkout — above all tmp/kubeconfig, which held live cluster credentials. Current versions generate under ~/.werkmeister/infra, so these only guard stale local files at pack time.",
   "files": [
@@ -20,7 +19,6 @@
     "bin",
     "werkmeister",
     "w9r",
-    "sandbox",
     "README.md",
     "CONVENTIONS.md",
     "!infra/compose/k8s-port-forward/tmp",
@@ -41,9 +39,9 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && vitest run -c bdd/vitest.config.ts",
-    "prepack": "cd ../../packages/werkmeister-vscode && pnpm run build && pnpm run package --out ../../apps/cli/dist/sandbox-workspaces.vsix"
+    "prepack": "cd ../../packages/werkmeister-vscode && pnpm run build && pnpm run package --out ../../apps/cli/dist/werkmeister-workspaces.vsix"
   },
-  "//prepack": "Ships the VS Code extension in the tarball for `sandbox setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build.",
+  "//prepack": "Ships the VS Code extension in the tarball for `werkmeister setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build.",
   "//dependencies": "Everything else is bundled by esbuild.mjs — see its docstring. dockerode stays external because its ssh2 -> cpu-features requires must be allowed to fail into a pure-JS fallback, and ESM output turns an unresolved require into a shim that throws instead. The Agent SDK is external too, because it locates its bundled Claude Code binary by its own package path. It is optional (SW-73): only `detect --assist` loads it, and that command prints an install hint when it is absent.",
   "dependencies": {
     "dockerode": "^5.0.1"

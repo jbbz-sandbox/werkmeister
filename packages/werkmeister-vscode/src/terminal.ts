@@ -1,13 +1,13 @@
 /**
- * The one place the extension runs a `sandbox` command.
+ * The one place the extension runs a `werkmeister` command.
  *
  * A real terminal rather than an OutputChannel: ANSI colour, scrollback and
- * Ctrl-C come free, `sandbox workspace`'s interactive wizard needs a TTY, and
+ * Ctrl-C come free, `werkmeister workspace`'s interactive wizard needs a TTY, and
  * `cwd` makes the CLI resolve FEATURE/slot from that workspace's .env exactly as
  * a human running the command there would.
  *
  * The binary is the absolute path from resolveSandboxBin() — never a bare
- * `sandbox`, which would depend on the integrated terminal's PATH.
+ * `werkmeister`, which would depend on the integrated terminal's PATH.
  */
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -62,17 +62,17 @@ function whenReady(term: vscode.Terminal): Promise<void> {
 }
 
 /**
- * Run `sandbox <args…>` with `cwd` set to the workspace directory and show the
+ * Run `werkmeister <args…>` with `cwd` set to the workspace directory and show the
  * terminal. Resolves once the command has been sent — not when it finishes;
  * the tree's poll picks up the result.
  *
- * Reuses a terminal only once its foreground command has ended: `sandbox logs`
- * runs `docker compose logs -f` and never exits, and `sandbox up` runs for
+ * Reuses a terminal only once its foreground command has ended: `werkmeister logs`
+ * runs `docker compose logs -f` and never exits, and `werkmeister up` runs for
  * 30-60s — text sent while that process is alive is swallowed by its STDIN
  * instead of running. Reuse is keyed on cwd because the CLI resolves
  * FEATURE/slot from the .env there, so the name is derived from cwd too: a
  * reused terminal keeps the name it was created with, and naming it after the
- * first command would leave `sandbox stop foo` running every later up/down.
+ * first command would leave `werkmeister stop foo` running every later up/down.
  * `name` is for the callers whose cwd says nothing useful (the wizard, `connect`).
  */
 export async function runInTerminal(args: string[], cwd: string, name?: string): Promise<void> {
@@ -84,7 +84,7 @@ export async function runInTerminal(args: string[], cwd: string, name?: string):
     return;
   }
   const term = claim(terminals, cwd, () =>
-    vscode.window.createTerminal({ name: `sandbox ${name ?? path.basename(cwd)}`, cwd }),
+    vscode.window.createTerminal({ name: `werkmeister ${name ?? path.basename(cwd)}`, cwd }),
   );
   await whenReady(term);
   term.sendText([shellQuote(bin), ...args.map(shellQuote)].join(" "), true);

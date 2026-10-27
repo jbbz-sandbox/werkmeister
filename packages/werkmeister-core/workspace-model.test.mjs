@@ -16,7 +16,7 @@ import { claudeResumeCommand, claudeSendArgs } from "./dist/sandbox.js";
 import { writeWorkspaceConfig } from "./dist/workspace_init.js";
 import { _WIZARD_PROMPTS, computePromptSpec, readModel } from "./dist/workspace_prompts.js";
 
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
 function workspace(settings) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ws-model-"));

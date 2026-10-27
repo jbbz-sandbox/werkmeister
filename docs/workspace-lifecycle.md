@@ -58,9 +58,9 @@ One per code repo touched at a time, named `pr-<worktree>[-<slug>].md`, where `<
 
 ```markdown
 ---
-worktree: sandbox              # the code worktree; optional for pr-<worktree>.md, written by werkmeister pr new
+worktree: werkmeister           # the code worktree; optional for pr-<worktree>.md, written by werkmeister pr new
 repo: jbbz-sandbox/werkmeister     # the code repo on GitHub; never the workspace repo
-branch: jayboyer/sandbox-133-workspace-pr-lifecycle
+branch: jayboyer/werkmeister-133-workspace-pr-lifecycle
 base: main
 status: draft                  # draft | approved | open | merged | shipped | closed | abandoned
 url:                           # written by werkmeister pr open
@@ -109,7 +109,7 @@ Code written after a worktree's PR merged, e.g. a problem found while cutting or
 
 **Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix. A file under one of the repo's `no_service_paths` (registry `repo:`, below) touches no service, so a docs-only diff runs no service tests; the release check still runs. Any other file under no mapping marks every service in the repo as touched.
 
-The test commands also appear in `.werkmeister/sandbox-context.md` under "Test commands".
+The test commands also appear in `.werkmeister/werkmeister-context.md` under "Test commands".
 
 ## Ship detection (registry `repo:`)
 
@@ -133,7 +133,7 @@ repo:
 
 | Command | Does |
 |---|---|
-| `werkmeister pr gate [repo]` | run the gate, change nothing. Skips a merged PR file whose worktree has a follow-up in progress. `repo` is a worktree (its PR files) or one PR file's name (`sandbox-why-page`), for every `pr` action |
+| `werkmeister pr gate [repo]` | run the gate, change nothing. Skips a merged PR file whose worktree has a follow-up in progress. `repo` is a worktree (its PR files) or one PR file's name (`werkmeister-why-page`), for every `pr` action |
 | `werkmeister pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to `in_review` ([Issue status](#issue-status)), commit and push the PR file on the record branch |
 | `werkmeister pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
 | `werkmeister pr new <worktree> --slug <slug>` | after that worktree's PRs merged: cut `<branch>-<slug>` from `origin/<base>` and write a draft `pr-<worktree>-<slug>.md` ([Follow-up PR](#follow-up-pr)) |
@@ -227,7 +227,7 @@ The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the wor
 | Lifecycle point | Point | Jira (default) | GitHub (default) | Comment |
 |---|---|---|---|---|
 | Workspace created | — | no change | no change | — |
-| First stage or phase starts: `werkmeister issue start`, run by ICM's first stage contract and JIT's `sb-research` | `in_progress` | `In Progress` | label `status: in progress` | `Work started: stage 01_research in workspace <name>.` |
+| First stage or phase starts: `werkmeister issue start`, run by ICM's first stage contract and JIT's `w9r-research` | `in_progress` | `In Progress` | label `status: in progress` | `Work started: stage 01_research in workspace <name>.` |
 | `werkmeister pr open` | `in_review` | `In Review` | label `status: in review` | `PR opened: <url>` |
 | A review asks for changes (`pr status`: `reviewDecision` or a latest review `CHANGES_REQUESTED`) | `in_progress` (back) | `In Progress` | label `status: in progress` | `Changes requested: <url>` |
 | The changes-requested review clears while the PR is open | `in_review` | `In Review` | label `status: in review` | `Back in review: <url>` |
@@ -271,7 +271,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 - It matches a real invocation: `gh pr create` at the start of a statement (after `;`, `&&`, `|`, `(`, `$(`, a newline, env assignments or `env`/`command`/`exec`). The phrase inside quotes, a heredoc body or a grep pattern is allowed, so a `gh issue create` whose body quotes it goes through. A call hidden in a `bash -c "…"` or `eval` string isn't inspected either; the guard steers skills, it isn't a security boundary.
 - This is what stops `/create-pr`, `superpowers:finishing-a-development-branch` or a raw `gh` call from opening a PR on the wrong repo or skipping the gate.
 - `werkmeister pr open` runs `gh` itself, not through the Bash tool, so the guard never sees it.
-- The `werkmeister:workspace-pr` skill and the `sb-pr` skill steer toward the right path before the guard has to fire.
+- The `werkmeister:workspace-pr` skill and the `w9r-pr` skill steer toward the right path before the guard has to fire.
 
 ## Close-out
 
@@ -279,7 +279,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 
 ### Post-mortem
 
-Lessons found mid-run (SW-104's CI failure on a typecheck the listed test commands never ran, SW-107) are lost with the workspace unless someone asks for them on purpose. So every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it, and every route to close-out points there first (the ICM `CLAUDE.md` row and propose/spike checks, `pr-rules.md` rule 7 for ICM and JIT, `sb-pr`, `workspace-pr`).
+Lessons found mid-run (SW-104's CI failure on a typecheck the listed test commands never ran, SW-107) are lost with the workspace unless someone asks for them on purpose. So every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it, and every route to close-out points there first (the ICM `CLAUDE.md` row and propose/spike checks, `pr-rules.md` rule 7 for ICM and JIT, `w9r-pr`, `workspace-pr`).
 
 1. **Gather** the run's problems: failed checks, Auto-fix commits and change-requesting reviews on each PR file's `url`; issues filed from the workspace (their bodies name it); deviations and FAIL rows in stage outputs or JIT notes; gate failures and the person's corrections in the session transcripts.
 2. **Agree** a change per problem: the agent proposes what could have been done differently, and the person accepts, edits or rejects it.

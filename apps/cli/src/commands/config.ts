@@ -1,21 +1,21 @@
 /**
- * sandbox config [--repos-root PATH] [--workspaces-root PATH] [--show] [--check]
+ * werkmeister config [--repos-root PATH] [--workspaces-root PATH] [--show] [--check]
  *
- * Set up and maintain the machine-global sandbox configuration
+ * Set up and maintain the machine-global werkmeister configuration
  * (``~/.werkmeister/config.yaml`` — the single source of truth). On write it also
  * regenerates ``~/.werkmeister/env.sh``, installs a managed source-block in
- * ``~/.zshenv``, and strips the now-redundant ``env`` block from the sandbox MCP
- * server in ``claude_desktop_config.json`` (the ``sandbox`` wrapper self-loads
+ * ``~/.zshenv``, and strips the now-redundant ``env`` block from the werkmeister MCP
+ * server in ``claude_desktop_config.json`` (the ``werkmeister`` wrapper self-loads
  * env.sh).
  *
- *   sandbox config                       # interactive wizard (create or edit)
- *   sandbox config --repos-root … …      # non-interactive set
- *   sandbox config --show                # print resolved config + origins
- *   sandbox config --check               # validate; nonzero exit on drift
+ *   werkmeister config                       # interactive wizard (create or edit)
+ *   werkmeister config --repos-root … …      # non-interactive set
+ *   werkmeister config --show                # print resolved config + origins
+ *   werkmeister config --check               # validate; nonzero exit on drift
  *
- * Values come only from the YAML at runtime; ``SANDBOX_*`` env vars are a derived
+ * Values come only from the YAML at runtime; ``WERKMEISTER_*`` env vars are a derived
  * export for backward compatibility. On first run the wizard seeds its defaults
- * from any currently-exported ``SANDBOX_*`` so an existing machine migrates by
+ * from any currently-exported ``WERKMEISTER_*`` so an existing machine migrates by
  * pressing Enter through.
  */
 
@@ -31,7 +31,7 @@ function show(cfg: ReturnType<typeof gc.load>): void {
   console.log(`${Colors.BOLD}config file:${Colors.RESET} ${gc.configPath()}`);
   console.log(`${Colors.BOLD}env.sh:${Colors.RESET}      ${gc.envShPath()}`);
   console.log(
-    `${Colors.BOLD}sandbox_root:${Colors.RESET}    ${getSandboxRoot()}  ${Colors.DIM}(self-derived)${Colors.RESET}`,
+    `${Colors.BOLD}werkmeister_root:${Colors.RESET}    ${getSandboxRoot()}  ${Colors.DIM}(self-derived)${Colors.RESET}`,
   );
   for (const key of ["repos_root", "workspaces_root"]) {
     const value = paths[key];
@@ -43,7 +43,7 @@ function show(cfg: ReturnType<typeof gc.load>): void {
       `${Colors.BOLD}${key}:${Colors.RESET}      ${value || gc.builtinPathDefault(key)}  ${Colors.DIM}(${origin})${Colors.RESET}`,
     );
   }
-  // Ingress is owned by `sandbox setup`, but shown here because `--show` is
+  // Ingress is owned by `werkmeister setup`, but shown here because `--show` is
   // meant to be the one place you can see the whole resolved config.
   const ingress = gc.loadIngress(cfg);
   console.log(`${Colors.BOLD}ingress:${Colors.RESET}`);
@@ -70,10 +70,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       for (const p of problems) {
         console.log(`${Colors.RED}✗ ${p}${Colors.RESET}`);
       }
-      warn("Global config out of date — run `sandbox config` to converge.");
+      warn("Global config out of date — run `werkmeister config` to converge.");
       process.exit(1);
     }
-    success("Global sandbox config is in order.");
+    success("Global werkmeister config is in order.");
     return;
   }
 
@@ -99,7 +99,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (missing.length) {
     if (process.stdin.isTTY) {
       await runWizard(gc._CONFIG_PROMPTS, resolved, defaultFor, {
-        intro: "Global sandbox config — press Ctrl-C to abort. Defaults in [brackets].",
+        intro: "Global werkmeister config — press Ctrl-C to abort. Defaults in [brackets].",
       });
     } else {
       // Non-interactive with gaps: fall back to YAML/env/default silently.
@@ -114,16 +114,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const newCfg = {
     version: 1,
     paths: {
-      // sandbox_root is self-derived (the running checkout is authoritative);
-      // stored only so env.sh can export SANDBOX_ROOT for external processes.
-      sandbox_root: String(getSandboxRoot()),
+      // werkmeister_root is self-derived (the running checkout is authoritative);
+      // stored only so env.sh can export WERKMEISTER_ROOT for external processes.
+      werkmeister_root: String(getSandboxRoot()),
       repos_root: resolved.repos_root,
       workspaces_root: resolved.workspaces_root,
     },
     // Preserve any hand-added overrides verbatim.
     overrides: cfg.overrides || {},
     // Same for the sections this command never prompts for: the ingress domains
-    // (owned by `sandbox setup`) and the hand-pasted Jira credentials.
+    // (owned by `werkmeister setup`) and the hand-pasted Jira credentials.
     // Rebuilding the YAML without them would silently drop a working ingress
     // config or a live token.
     ...(cfg.ingress ? { ingress: cfg.ingress } : {}),

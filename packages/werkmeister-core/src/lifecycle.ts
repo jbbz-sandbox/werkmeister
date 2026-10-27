@@ -19,8 +19,8 @@
  * *feature* is a real feature throughout. `infra` is a CLI-level target that
  * routes to `werkmeister-core/infra` before reaching any of this — passing it here
  * finds no slot, which `stop`/`restart` reject as `NOT_RUNNING` and `down`
- * merely warns about. `sandbox up infra` is the one that does not even reach
- * `infra`: it means `sandbox connect`, which is still a command module, so that
+ * merely warns about. `werkmeister up infra` is the one that does not even reach
+ * `infra`: it means `werkmeister connect`, which is still a command module, so that
  * branch stays in the CLI until row 5g moves it.
  */
 
@@ -82,7 +82,7 @@ import {
 } from "./slots.js";
 import { strategyFor } from "./strategies/index.js";
 
-/** Everything `sandbox up` computed, separated from how the CLI renders it. */
+/** Everything `werkmeister up` computed, separated from how the CLI renders it. */
 export interface UpResult {
   feature: string;
   slot: number;
@@ -129,7 +129,7 @@ export async function up(
   if (!fs.existsSync(path.join(workspace, COMPOSE_FILE))) {
     throw new SandboxError(
       `No ${COMPOSE_FILE} found in workspace: ${workspace}\n` +
-        "       Run 'sandbox init-workspace' first to generate it.",
+        "       Run 'werkmeister init-workspace' first to generate it.",
       "NO_COMPOSE",
     );
   }
@@ -288,7 +288,7 @@ async function prepareSlot(
   let staleCompose = false;
   if (regenerated) {
     warn(`Slot changed (${preferredSlot} → ${slot}) — regenerating compose...`);
-    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
+    generateFeatureCompose(feature, slot, localServices, config, workspace, "werkmeister up");
     generateFeatureEnv(feature, slot, localServices, config, workspace);
   } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
     // Rewritten, not just warned about: the file is fully generated, and a
@@ -296,7 +296,7 @@ async function prepareSlot(
     // without a re-init. Hand-edits belong in the registry or workspace.yml.
     staleCompose = true;
     warn(`${COMPOSE_FILE} predates the current template or registry — regenerating...`);
-    generateFeatureCompose(feature, slot, localServices, config, workspace, "sandbox up");
+    generateFeatureCompose(feature, slot, localServices, config, workspace, "werkmeister up");
   }
   return { slot, regenerated, staleCompose };
 }
@@ -321,7 +321,7 @@ export async function startService(
   if (!fs.existsSync(composePath)) {
     throw new SandboxError(
       `No ${COMPOSE_FILE} found in workspace: ${workspace}\n` +
-        "       Run 'sandbox init-workspace' first to generate it.",
+        "       Run 'werkmeister init-workspace' first to generate it.",
       "NO_COMPOSE",
     );
   }
@@ -355,7 +355,7 @@ function requireSharedNetwork(): void {
 // walks up from a start directory and these must read exactly this workspace's
 // .env. Collapse them into one read if a third key is ever needed.
 
-/** Read SANDBOX_SLOT from <workspace>/.env. */
+/** Read WERKMEISTER_SLOT from <workspace>/.env. */
 function readSlotFromWorkspace(workspace: string): number | null {
   const envFile = path.join(workspace, ".env");
   if (!fs.existsSync(envFile) || !fs.statSync(envFile).isFile()) {
@@ -363,8 +363,8 @@ function readSlotFromWorkspace(workspace: string): number | null {
   }
   for (const rawLine of fs.readFileSync(envFile, "utf8").split("\n")) {
     const line = rawLine.trim();
-    if (line.startsWith("SANDBOX_SLOT=")) {
-      const value = line.slice("SANDBOX_SLOT=".length).trim();
+    if (line.startsWith("WERKMEISTER_SLOT=")) {
+      const value = line.slice("WERKMEISTER_SLOT=".length).trim();
       const n = Number(value);
       if (value !== "" && Number.isInteger(n)) {
         return n;
@@ -415,9 +415,9 @@ function requireSecrets(
     throw new SandboxError(
       `Missing required secret(s) in ${secretsPath}: ` +
         `${missing.join(", ")}\n` +
-        `       Run \`sandbox setup\` to write a template to ${secretsPath}, ` +
+        `       Run \`werkmeister setup\` to write a template to ${secretsPath}, ` +
         "then fill in the missing values (or pin them under `env_vars:` in " +
-        ".sandbox/workspace.yml).",
+        ".werkmeister/workspace.yml).",
       "MISSING_SECRETS",
     );
   }
@@ -425,8 +425,9 @@ function requireSecrets(
 
 /**
  * True when this process runs inside *feature*'s own container: every
- * workspace container exports `SANDBOX_FEATURE`, and Docker writes
- * `/.dockerenv`. Reads the caller's env about *itself*, not to pick a feature.
+ * workspace container exports `WERKMEISTER_FEATURE` (`SANDBOX_FEATURE` before
+ * SW-106), and Docker writes `/.dockerenv`. Reads the caller's env about *itself*.
+ * Drop `SANDBOX_FEATURE` with the transition in env.njk.
  */
 export function insideOwnContainer(
   feature: string,
@@ -444,9 +445,9 @@ export function insideOwnContainer(
 function refuseInsideOwnContainer(feature: string, verb: string): void {
   if (insideOwnContainer(feature)) {
     throw new SandboxError(
-      `'sandbox ${verb}' is running inside ${feature}'s own container, which it would ` +
+      `'werkmeister ${verb}' is running inside ${feature}'s own container, which it would ` +
         "recreate or stop and so kill itself.\n" +
-        `       Run it from the host: cd to the workspace and run 'sandbox ${verb}'.`,
+        `       Run it from the host: cd to the workspace and run 'werkmeister ${verb}'.`,
       "INSIDE_OWN_CONTAINER",
     );
   }
@@ -458,7 +459,7 @@ export interface StopResult {
   slot: number;
 }
 
-/** What `sandbox stop --if-idle` knows when a SessionEnd hook runs it (#231). */
+/** What `werkmeister stop --if-idle` knows when a SessionEnd hook runs it (#231). */
 export interface IdleStopInput {
   /** FEATURE from the workspace `.env`. */
   feature: string | undefined;
@@ -879,7 +880,7 @@ export interface DownResult {
  * feature still has containers and generated files worth removing, so this
  * warns and cleans up anyway, and reports the slot as null.
  *
- * Does not touch the reverse proxy: `sandbox down --all-features` tears down N
+ * Does not touch the reverse proxy: `werkmeister down --all-features` tears down N
  * features and reloads once, so the reload is `reloadProxy`, sequenced by the
  * caller. Does not read or print workspace notes either — that is a TTY prompt
  * loop, which §11 of the migration design keeps out of the library.
@@ -1022,7 +1023,7 @@ export interface ProxyReloadResult {
  * than one per feature. `up` reloads inline instead because it may also have to
  * *start* Caddy, which is part of bringing a feature up.
  *
- * `start` selects the whole `sandbox proxy-reload` spelling, not just the
+ * `start` selects the whole `werkmeister proxy-reload` spelling, not just the
  * start-if-down fallback: that command has always used different progress
  * wording and listed the features it wrote, and teardown's three callers
  * (`commands/down.ts` twice, `sandbox.ts` twice) print neither. Defaulting it
@@ -1119,7 +1120,7 @@ export async function reloadProxy(
  * match first and leave part of the base in the extracted feature name.
  *
  * A registry that cannot be read yields `[]`, which classifies nothing as a
- * sandbox volume — volume cleanup is skipped rather than guessing at names.
+ * workspace volume — volume cleanup is skipped rather than guessing at names.
  */
 export function volumeBaseNames(): string[] {
   let bases: string[];
@@ -1136,7 +1137,7 @@ export function volumeBaseNames(): string[] {
 }
 
 /**
- * Every Docker volume name that looks like a sandbox per-feature volume.
+ * Every Docker volume name that looks like a workspace per-feature volume.
  *
  * They follow `<feature>-<volume_base_name>`, identified by checking against the
  * base names the service registry declares.

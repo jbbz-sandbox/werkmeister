@@ -1,4 +1,0 @@
-#!/bin/bash
-# Deprecated alias until SW-11. stderr keeps stdout parseable for --json and pipes.
-echo "sandbox is deprecated and will be removed; use werkmeister (or w9r)." >&2
-exec "$(dirname "$(readlink -f "$0")")/werkmeister" "$@"

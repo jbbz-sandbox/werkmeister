@@ -23,7 +23,7 @@ const GROUPS = [
     "How it works",
     [
       ["Topology", "docs/topology.md"],
-      ["Architecture", "docs/sandbox-architecture.md"],
+      ["Architecture", "docs/werkmeister-architecture.md"],
       ["Claude Code plugin", "plugins/werkmeister/README.md"],
     ],
   ],

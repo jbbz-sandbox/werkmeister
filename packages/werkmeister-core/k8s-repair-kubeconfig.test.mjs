@@ -13,9 +13,9 @@ import { ensurePortForwardsHealthy } from "./dist/k8s.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 
 const VARS = [
-  "SANDBOX_CONFIG_FILE",
-  "SANDBOX_SERVICES_YAML",
-  "SANDBOX_ROOT",
+  "WERKMEISTER_CONFIG_FILE",
+  "WERKMEISTER_SERVICES_YAML",
+  "WERKMEISTER_ROOT",
   "PATH",
   "DOCKER_HOST",
 ];
@@ -31,10 +31,10 @@ function stub(bin, dir, script) {
 
 beforeEach(async () => {
   home = await mkdtemp(path.join(tmpdir(), "sandbox-k8s-repair-"));
-  process.env.SANDBOX_CONFIG_FILE = path.join(home, "config.yaml");
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "config.yaml");
   writeFileSync(path.join(home, "services.yaml"), "services: {}\n");
-  process.env.SANDBOX_SERVICES_YAML = path.join(home, "services.yaml");
-  process.env.SANDBOX_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+  process.env.WERKMEISTER_SERVICES_YAML = path.join(home, "services.yaml");
+  process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
 
   kubeconfig = path.join(home, "infra", "k8s-port-forward", "kubeconfig");
   mkdirSync(kubeconfig, { recursive: true });

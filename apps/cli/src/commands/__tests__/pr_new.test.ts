@@ -30,6 +30,6 @@ it.each([[["new", "app"]], [["new", "--slug", "fix"]]])(
       encoding: "utf-8",
     });
     expect(res.status).toBe(1);
-    expect(res.stderr + res.stdout).toContain("Usage: sandbox pr new <worktree> --slug <slug>");
+    expect(res.stderr + res.stdout).toContain("Usage: werkmeister pr new <worktree> --slug <slug>");
   },
 );

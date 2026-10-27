@@ -6,7 +6,7 @@
  * show the same fields, choices, groups and validation. `runFormWizard` drives a
  * whole bundle; `runWizard` drives `PromptSpec`s one field at a time, prompting
  * only for keys a caller hasn't already resolved. Extracted from init-workspace so
- * `sandbox config` (and any future command) reuses the same prompt loop, pattern
+ * `werkmeister config` (and any future command) reuses the same prompt loop, pattern
  * validation, and multi-value normalisation instead of restating them.
  *
  * Defaults come from the bundle's `formData`, or for `runWizard` from the
@@ -79,7 +79,7 @@ async function readLine(label: string, defaultValue: string): Promise<string> {
  * Render a prompt with an optional default; return input or default.
  *
  * `secret` masks the echo — for credentials like the Jira API token, which
- * otherwise sit in the scrollback of whoever ran `sandbox setup`.
+ * otherwise sit in the scrollback of whoever ran `werkmeister setup`.
  *
  * `multiline` prose (the starting prompt) opens $EDITOR, since paragraphs and
  * an acceptance-criteria checklist don't survive a single input line. Only when

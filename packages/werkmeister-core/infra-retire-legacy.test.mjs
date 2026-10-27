@@ -12,7 +12,13 @@ import { afterEach, beforeEach, test } from "node:test";
 import { down, startSharedInfra } from "./dist/infra.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 
-const VARS = ["PATH", "HOME", "SANDBOX_CONFIG_FILE", "SANDBOX_SERVICES_YAML", "SANDBOX_ROOT"];
+const VARS = [
+  "PATH",
+  "HOME",
+  "WERKMEISTER_CONFIG_FILE",
+  "WERKMEISTER_SERVICES_YAML",
+  "WERKMEISTER_ROOT",
+];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 let dir, log;
 
@@ -34,9 +40,9 @@ esac
   writeFileSync(path.join(dir, "services.yaml"), "services: {}\ninfrastructure: {}\n");
   process.env.PATH = `${dir}:${SAVED.PATH}`;
   process.env.HOME = dir;
-  process.env.SANDBOX_CONFIG_FILE = path.join(dir, "config.yaml");
-  process.env.SANDBOX_SERVICES_YAML = path.join(dir, "services.yaml");
-  process.env.SANDBOX_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(dir, "config.yaml");
+  process.env.WERKMEISTER_SERVICES_YAML = path.join(dir, "services.yaml");
+  process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
 });
 afterEach(() => {
   for (const v of VARS) {

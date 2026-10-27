@@ -15,8 +15,8 @@ const DEFINITIONS = {
     type: "http",
     url: "http://host.docker.internal:3002/mcp",
     headers: {
-      Authorization: "Bearer ${SANDBOX_MCP_TOKEN}",
-      "X-Sandbox-Feature": "${FEATURE}",
+      Authorization: "Bearer ${WERKMEISTER_MCP_TOKEN}",
+      "X-Werkmeister-Feature": "${FEATURE}",
     },
   },
 };
@@ -37,7 +37,7 @@ function readServers(ws) {
 test("a named var is substituted into string values at any depth", () => {
   withWorkspace((ws) => {
     writeWorkspaceMcp(ws, ["sandbox"], DEFINITIONS, { FEATURE: "frontend" });
-    assert.equal(readServers(ws).sandbox.headers["X-Sandbox-Feature"], "frontend");
+    assert.equal(readServers(ws).sandbox.headers["X-Werkmeister-Feature"], "frontend");
   });
 });
 
@@ -45,7 +45,7 @@ test("an unnamed var is written through untouched for the MCP client to expand",
   withWorkspace((ws) => {
     writeWorkspaceMcp(ws, ["sandbox"], DEFINITIONS, { FEATURE: "frontend" });
     // The token must never be baked into a file inside a git worktree.
-    assert.equal(readServers(ws).sandbox.headers.Authorization, "Bearer ${SANDBOX_MCP_TOKEN}");
+    assert.equal(readServers(ws).sandbox.headers.Authorization, "Bearer ${WERKMEISTER_MCP_TOKEN}");
   });
 });
 
@@ -54,8 +54,8 @@ test("two workspaces get two different features from one definition registry", (
     withWorkspace((b) => {
       writeWorkspaceMcp(a, ["sandbox"], DEFINITIONS, { FEATURE: "alpha" });
       writeWorkspaceMcp(b, ["sandbox"], DEFINITIONS, { FEATURE: "beta" });
-      assert.equal(readServers(a).sandbox.headers["X-Sandbox-Feature"], "alpha");
-      assert.equal(readServers(b).sandbox.headers["X-Sandbox-Feature"], "beta");
+      assert.equal(readServers(a).sandbox.headers["X-Werkmeister-Feature"], "alpha");
+      assert.equal(readServers(b).sandbox.headers["X-Werkmeister-Feature"], "beta");
     }),
   );
 });
@@ -63,13 +63,13 @@ test("two workspaces get two different features from one definition registry", (
 test("substitution never mutates the caller's definition registry", () => {
   withWorkspace((ws) => {
     writeWorkspaceMcp(ws, ["sandbox"], DEFINITIONS, { FEATURE: "frontend" });
-    assert.equal(DEFINITIONS.sandbox.headers["X-Sandbox-Feature"], "${FEATURE}");
+    assert.equal(DEFINITIONS.sandbox.headers["X-Werkmeister-Feature"], "${FEATURE}");
   });
 });
 
 test("no vars leaves every definition exactly as given", () => {
   withWorkspace((ws) => {
     writeWorkspaceMcp(ws, ["sandbox"], DEFINITIONS);
-    assert.equal(readServers(ws).sandbox.headers["X-Sandbox-Feature"], "${FEATURE}");
+    assert.equal(readServers(ws).sandbox.headers["X-Werkmeister-Feature"], "${FEATURE}");
   });
 });

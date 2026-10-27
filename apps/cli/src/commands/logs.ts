@@ -1,5 +1,5 @@
 /**
- * sandbox logs <feature> [service]
+ * werkmeister logs <feature> [service]
  *
  * Tail a feature's container logs, optionally filtered to a
  * specific service. Streams output until interrupted with Ctrl+C.

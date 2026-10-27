@@ -112,7 +112,7 @@ const server = http.createServer((req, res) => {
 await new Promise((resolve) => server.listen(sock, resolve));
 process.env.DOCKER_HOST = `unix://${sock}`;
 process.env.HOME = home;
-process.env.SANDBOX_CONFIG_FILE = config;
+process.env.WERKMEISTER_CONFIG_FILE = config;
 process.env.CLAUDE_BIN = path.join(bin, "claude");
 process.env.PATH = `${bin}:${process.env.PATH}`;
 process.chdir(ws);
@@ -154,7 +154,7 @@ test("pause freezes exactly the running containers, dependents first, after writ
   assert.equal(rec.was_working, true);
   // A workspace that predates SW-46 gets the hook that carries the gate.
   const settings = JSON.parse(fs.readFileSync(path.join(ws, ".claude", "settings.json"), "utf8"));
-  assert.match(JSON.stringify(settings.hooks.PreToolUse), /sandbox hooks agent-state/);
+  assert.match(JSON.stringify(settings.hooks.PreToolUse), /werkmeister hooks agent-state/);
 });
 
 test("pause refuses twice and a feature with no slot", async () => {

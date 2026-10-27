@@ -10,7 +10,7 @@ import {
   listWorkspaces,
   resolveSandboxBin,
 } from "werkmeister-core";
-import { DOT_DIRS, getReposRoot, workspacesRoot } from "werkmeister-core/config";
+import { DOT_DIR, getReposRoot, workspacesRoot } from "werkmeister-core/config";
 import type { WsNode } from "./build-tree.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
@@ -40,19 +40,19 @@ async function pickWorkspace(node?: WsNode): Promise<{ name: string; path: strin
       detail: w.path,
       ws: w,
     })),
-    { placeHolder: "Select a sandbox workspace" },
+    { placeHolder: "Select a workspace" },
   );
   return choice ? { name: choice.ws.name, path: choice.ws.path } : null;
 }
 
-/** Lifecycle actions that map 1:1 onto a `sandbox <action>` subcommand. */
+/** Lifecycle actions that map 1:1 onto a `werkmeister <action>` subcommand. */
 const LIFECYCLE = ["up", "stop", "restart", "down", "pause", "resume"] as const;
 
 /** Lazily created so it doesn't clutter the Output dropdown until something fails. */
 let outputChannel: vscode.OutputChannel | undefined;
 
 function getOutputChannel(): vscode.OutputChannel {
-  if (!outputChannel) outputChannel = vscode.window.createOutputChannel("Sandbox Workspaces");
+  if (!outputChannel) outputChannel = vscode.window.createOutputChannel("Werkmeister Workspaces");
   return outputChannel;
 }
 
@@ -96,7 +96,7 @@ async function switchWorkspace(node?: WsNode): Promise<void> {
   if (!ok) void vscode.window.showErrorMessage(`Could not open ${ws.name} in this window.`);
 }
 
-/** A git checkout under `paths.repos_root` — the set `sandbox registry sync` reads fragments from. */
+/** A git checkout under `paths.repos_root` — the set `werkmeister registry sync` reads fragments from. */
 async function pickRepo(): Promise<string | null> {
   const root = getReposRoot();
   let names: string[];
@@ -116,7 +116,7 @@ async function pickRepo(): Promise<string | null> {
   const choice = await vscode.window.showQuickPick(
     names.map((n) => ({
       label: n,
-      description: DOT_DIRS.some((d) => fs.existsSync(join(root, n, d, "services.yaml")))
+      description: fs.existsSync(join(root, n, DOT_DIR, "services.yaml"))
         ? "has services.yaml"
         : "",
       path: join(root, n),
@@ -166,7 +166,7 @@ async function endWorkspace(
     channel.appendLine((e as Error).message);
     channel.show();
     void vscode.window.showErrorMessage(
-      `Failed to close out workspace '${ws.name}' — see the "Sandbox Workspaces" output channel for details.`,
+      `Failed to close out workspace '${ws.name}' — see the "Werkmeister Workspaces" output channel for details.`,
     );
   }
 }
@@ -191,15 +191,18 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     }),
 
     vscode.commands.registerCommand("sandbox.configure", async () => {
-      await vscode.commands.executeCommand("workbench.action.openSettings", "sandbox.");
+      await vscode.commands.executeCommand("workbench.action.openSettings", "sandbox."); // name-check: ignore
     }),
 
     ...LIFECYCLE.map((action) =>
-      vscode.commands.registerCommand(`sandbox.${action}`, async (node?: WsNode) => {
-        const ws = await pickWorkspace(node);
-        if (!ws) return;
-        await runInTerminal([action], ws.path);
-      }),
+      vscode.commands.registerCommand(
+        `sandbox.${action}` /* name-check: ignore */,
+        async (node?: WsNode) => {
+          const ws = await pickWorkspace(node);
+          if (!ws) return;
+          await runInTerminal([action], ws.path);
+        },
+      ),
     ),
 
     vscode.commands.registerCommand("sandbox.toggleIntercept", async (node?: WsNode) => {
@@ -213,7 +216,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     // Menu-only (see commandPalette below): the feature is only known from a
     // tree node — there is nothing for a bare palette invocation to pass.
     //
-    // Unlike its siblings this does not shell out to `sandbox logs`. That
+    // Unlike its siblings this does not shell out to `werkmeister logs`. That
     // command ends in `proc.run` (spawnSync, `stdio: "inherit"`), so nothing
     // here could read its output, and killing it would leave its `docker
     // compose` grandchild tailing. See logs.ts.
@@ -243,7 +246,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       await runInTerminal(["workspace"], root, "workspace");
     }),
 
-    // `sandbox open` blocks for the whole lifetime of the Chrome window (Ctrl-C
+    // `werkmeister open` blocks for the whole lifetime of the Chrome window (Ctrl-C
     // is how you close it), so it gets its own detached process rather than
     // occupying the shared terminal.
     // ponytail: fire-and-forget — a launch failure after spawn is invisible.
@@ -264,7 +267,10 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         stdio: "ignore",
         env: childEnv(),
       });
-      child.on("error", (e) => void vscode.window.showErrorMessage(`sandbox open: ${e.message}`));
+      child.on(
+        "error",
+        (e) => void vscode.window.showErrorMessage(`werkmeister open: ${e.message}`),
+      );
       child.unref();
       void vscode.window.showInformationMessage(`Opening a tagged browser for '${ws.name}'…`);
     }),
@@ -328,7 +334,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     }),
 
     // A Claude session never exits, so it gets its own terminal rather than a
-    // pooled `sandbox` one it would hold busy forever.
+    // pooled `werkmeister` one it would hold busy forever.
     vscode.commands.registerCommand("sandbox.continue", (node?: WsNode) =>
       claudeIn(node, "claude --continue"),
     ),

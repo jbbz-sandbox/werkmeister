@@ -1,7 +1,7 @@
 /**
  * Workspace skill projection — docs/jit-context-system.md §5.
  *
- * The sb-* skills are projected into each workspace's `.claude/skills/`
+ * The w9r-* skills are projected into each workspace's `.claude/skills/`
  * at init-workspace, exactly like the generated agents — NOT shipped through
  * the user-scope werkmeister plugin. Projection scopes them to the sessions
  * they apply to and kills the plugin-refresh lag for the volatile skills:
@@ -10,15 +10,15 @@
  * globally useful ops skills.
  *
  * Two source kinds, one output:
- * - the five sb-*-standard skills render on the fly from docs/standards/*.md
+ * - the five w9r-*-standard skills render on the fly from docs/standards/*.md
  *   (werkmeister-core/skill_gen — no committed generated copies anywhere anymore) as
  *   file bundles: SKILL.md plus, for directory-form modules, references/*.md;
- * - the seven hand-authored entry skills (sb-implement, sb-research, sb-test,
- *   sb-handoff, sb-review, sb-pr, sb-author) are read verbatim from
+ * - the seven hand-authored entry skills (w9r-implement, w9r-research, w9r-test,
+ *   w9r-handoff, w9r-review, w9r-pr, w9r-author) are read verbatim from
  *   infra/skills/ as one-file {"SKILL.md": content} bundles.
  *
  * Mid-feature staleness is handled by {@link checkSkills} / {@link syncSkills}
- * below (`sandbox skills check|sync`). Sessions must start at the workspace root —
+ * below (`werkmeister skills check|sync`). Sessions must start at the workspace root —
  * project skills (like the workspace hooks) resolve from the session's
  * project directory.
  */
@@ -26,7 +26,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { forDotDir, infraRoot } from "./config.js";
+import { infraRoot } from "./config.js";
 import { loadManifest } from "./gate.js";
 import { info, success } from "./reporter.js";
 import { generateSkills, skillNameFor, validateModuleReferences } from "./skill_gen.js";
@@ -40,9 +40,10 @@ import {
 } from "./standards.js";
 import { loadConfigFile, loadSandboxServiceConfigs, planFor } from "./workspace_prompts.js";
 
-// sb-*-prefixed skill dirs under a workspace's .claude/skills/ are managed by
-// this module: written on init/sync, pruned when their source disappears.
-const _MANAGED_PREFIX = "sb-";
+// Skill dirs with these prefixes under a workspace's .claude/skills/ are managed by
+// this module: written on init/sync, pruned when their source disappears. `sb-` is the
+// pre-SW-106 prefix: nothing renders it any more, so its dirs prune as orphans.
+const _MANAGED_PREFIXES = ["w9r-", "sb-"];
 
 /** The hand-authored entry-skill sources: infra/skills/<name>/SKILL.md. */
 export function skillsSourceDir(): string {
@@ -68,7 +69,7 @@ function rglobMd(dir: string): string[] {
 }
 
 /**
- * Render every sb-* skill as {name: {relative-path: content}}.
+ * Render every w9r-* skill as {name: {relative-path: content}}.
  *
  * Standards skills are generated from docs/standards/; entry skills are
  * read from infra/skills/. Either source being absent (e.g. running
@@ -118,9 +119,9 @@ export function workspaceSkillsDir(workspaceRoot: string): string {
 }
 
 /**
- * Project the sb-* skills into the workspace; returns paths written.
+ * Project the w9r-* skills into the workspace; returns paths written.
  *
- * Prunes managed (sb-*) skill dirs whose source no longer exists; anything
+ * Prunes managed (w9r-*) skill dirs whose source no longer exists; anything
  * without the managed prefix is the user's and is never touched.
  */
 export function writeWorkspaceSkills(
@@ -135,7 +136,7 @@ export function writeWorkspaceSkills(
   for (const name of Object.keys(rendered).sort()) {
     const bundle = rendered[name];
     for (const relpath of Object.keys(bundle).sort()) {
-      const content = forDotDir(bundle[relpath], workspaceRoot);
+      const content = bundle[relpath];
       const filePath = path.join(target, name, relpath);
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       if (!fs.existsSync(filePath) || fs.readFileSync(filePath, "utf8") !== content) {
@@ -148,7 +149,7 @@ export function writeWorkspaceSkills(
   if (isDir(target)) {
     for (const entryName of fs.readdirSync(target).sort()) {
       const entry = path.join(target, entryName);
-      if (!(isDir(entry) && entryName.startsWith(_MANAGED_PREFIX))) continue;
+      if (!(isDir(entry) && _MANAGED_PREFIXES.some((p) => entryName.startsWith(p)))) continue;
       if (!(entryName in rendered)) {
         fs.rmSync(entry, { recursive: true, force: true });
         continue;
@@ -170,7 +171,7 @@ export function writeWorkspaceSkills(
 /**
  * Compare a workspace's projected skills against a fresh rendering.
  *
- * Returns human-readable drift strings (missing / stale / orphaned sb-*
+ * Returns human-readable drift strings (missing / stale / orphaned w9r-*
  * skills); empty means the workspace is current.
  */
 export function checkWorkspaceSkills(
@@ -186,7 +187,7 @@ export function checkWorkspaceSkills(
   for (const name of Object.keys(rendered).sort()) {
     const bundle = rendered[name];
     for (const relpath of Object.keys(bundle).sort()) {
-      const content = forDotDir(bundle[relpath], workspaceRoot);
+      const content = bundle[relpath];
       const filePath = path.join(target, name, relpath);
       if (!(fs.existsSync(filePath) && fs.statSync(filePath).isFile())) {
         errors.push(`missing: ${name}/${relpath}`);
@@ -199,7 +200,7 @@ export function checkWorkspaceSkills(
   if (isDir(target)) {
     for (const entryName of fs.readdirSync(target).sort()) {
       const entry = path.join(target, entryName);
-      if (!(isDir(entry) && entryName.startsWith(_MANAGED_PREFIX))) continue;
+      if (!(isDir(entry) && _MANAGED_PREFIXES.some((p) => entryName.startsWith(p)))) continue;
       if (!(entryName in rendered)) {
         errors.push(`orphaned: ${entryName}`);
         continue;
@@ -216,7 +217,7 @@ export function checkWorkspaceSkills(
 }
 
 // ---------------------------------------------------------------------------
-// The `sandbox skills check|sync` verbs
+// The `werkmeister skills check|sync` verbs
 // ---------------------------------------------------------------------------
 
 /** Recursively canonicalize for order-independent value comparison. */
@@ -236,7 +237,7 @@ export function canonical(value: unknown): unknown {
 
 /**
  * The workspace's active standard keys, re-resolved from what it persisted
- * (repo worktrees on disk + `.sandbox/workspace.yml`) — `sandbox skills
+ * (repo worktrees on disk + `.werkmeister/workspace.yml`) — `werkmeister skills
  * sync`/`check` run standalone, without init's original CLI args. Null when
  * no standards modules exist (nothing to scope or check).
  */
@@ -307,7 +308,7 @@ export function checkSkills(workspace: string, active: string[] | null = null): 
 }
 
 /**
- * The third drift source: `.sandbox/standards.json` no longer matching a fresh
+ * The third drift source: `.werkmeister/standards.json` no longer matching a fresh
  * resolution. Returns the drift entry, or null when current (or when the repo
  * has no standards modules to resolve). Takes the caller's resolution so the
  * workspace config is read — and logged — once per command.
@@ -324,7 +325,7 @@ export function checkStandardsManifest(
   if (JSON.stringify(canonical(onDisk)) === JSON.stringify(canonical(manifest))) {
     return null;
   }
-  return "stale: .sandbox/standards.json";
+  return "stale: .werkmeister/standards.json";
 }
 
 export interface SkillsSync {
@@ -334,14 +335,14 @@ export interface SkillsSync {
   manifestPath: string | null;
 }
 
-/** `sandbox skills sync`: reproject the skills and refresh the gate manifest. */
+/** `werkmeister skills sync`: reproject the skills and refresh the gate manifest. */
 export function syncSkills(workspace: string): SkillsSync {
   const resolved = resolveWorkspaceActive(workspace);
   const written = writeWorkspaceSkills(workspace, null, null, resolved?.active ?? null);
   for (const p of written) {
     info(`wrote ${p}`);
   }
-  success(`Projected ${written.length} sb-* skill(s) into ${workspaceSkillsDir(workspace)}`);
+  success(`Projected ${written.length} w9r-* skill(s) into ${workspaceSkillsDir(workspace)}`);
 
   const manifest = resolveWorkspaceManifest(workspace, resolved);
   if (manifest === null) {

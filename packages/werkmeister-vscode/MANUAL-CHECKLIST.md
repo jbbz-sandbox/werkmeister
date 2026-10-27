@@ -1,4 +1,4 @@
-# Sandbox Workspaces — Manual Verification Checklist
+# Werkmeister Workspaces — Manual Verification Checklist
 
 The interactive checks that could not be automated, consolidated into one pass.
 Work through Phase A first (Extension Development Host, no install required),
@@ -15,7 +15,7 @@ obvious — what a failure looks like.
 | `pnpm test` → `src/build-tree.test.mjs` | The tree against the design's sample data (`VSCode Tree.dc.html`): descriptions, agent icons and colours, PR rows, the Markdown tooltip's rows and command links, Markdown escaping, the board 09 tone map, the legend rows, plus service health, the `current` marker (multi-root included), top-sorting, node id stability. |
 | `pnpm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
 | `pnpm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
-| `pnpm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `sandbox <workspace>`, `⚡ Connect infra` runs in a `sandbox connect` terminal, the config tier order — a `sandbox.*` setting overrides the inherited `SANDBOX_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. |
+| `pnpm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `werkmeister <workspace>`, `⚡ Connect infra` runs in a `werkmeister connect` terminal, the config tier order — a `sandbox.*` setting overrides the inherited `WERKMEISTER_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. | <!-- name-check: ignore -->
 
 What is left below needs a human: real container/Telepresence state, the visual
 render, or a live editor.
@@ -27,7 +27,7 @@ render, or a live editor.
 1. **Launch the dev host.** Open `packages/werkmeister-vscode` in VS Code and press
    **F5**. A second VS Code window ("Extension Development Host") opens.
 
-2. **Open the view.** Click the Sandbox icon in the activity bar to open the
+2. **Open the view.** Click the Werkmeister icon in the activity bar to open the
    "Workspaces" view.
 
 3. **Tree renders real data (SW-55 card spec).** Each workspace's icon follows
@@ -47,7 +47,7 @@ render, or a live editor.
      Phase B for the specific regression that indicates.
 
 4. **CLI-not-found recovery.** If the view instead shows "Could not find the
-   sandbox CLI": open Settings in the dev host and set `sandbox.root` (or
+   werkmeister CLI": open Settings in the dev host and set `sandbox.root` (or
    `sandbox.binPath`). Confirm the tree recovers **without a window reload** —
    this exercises `onDidChangeConfiguration` → `applySettingsToEnv()` →
    `provider.refresh()`.
@@ -62,7 +62,7 @@ render, or a live editor.
     with the four agent states, the service marks, Merged · Released and
     `⚙ Auto`, each in its colour. Click `?` again and it goes.
 
-5b. **⚡ Connect infra.** Click `⚡` in the title bar. A `sandbox connect`
+5b. **⚡ Connect infra.** Click `⚡` in the title bar. A `werkmeister connect`
     terminal opens and starts shared infrastructure.
 
 6. *Retired — visibility-gated polling is asserted in `src/poll.test.mjs`. The
@@ -86,7 +86,7 @@ render, or a live editor.
 7b. **Current workspace marker.** The workspace of this window's **first** open
     folder shows `current` first in its description, starts expanded, and is the
     **top row** whatever its alphabetical position. Open a multi-root
-    `.code-workspace` where the sandbox workspace is *not* the first folder and
+    `.code-workspace` where the workspace is *not* the first folder and
     confirm it is still marked — later folders count when the first matches no
     workspace.
 
@@ -94,21 +94,21 @@ render, or a live editor.
 8. **Open issue ↗.** Right-click a workspace with an issue ID → "Open
    issue ↗" opens the browser to that issue.
 
-9. **Open Workspace from the palette.** Command Palette → "Sandbox: Open in
+9. **Open Workspace from the palette.** Command Palette → "Werkmeister: Open in
    New Window", with no tree node focused. It falls back to a QuickPick listing
    all workspaces (name, issue ID, path).
 
-10. **Configure command — the filter only.** Palette → "Sandbox: Configure
-    Sandbox CLI Path". That Settings *opens* is asserted in the host suite; what
-    still needs eyes is that it is filtered to `sandbox.*` rather than opening
+10. **Configure command — the filter only.** Palette → "Werkmeister: Configure
+    Werkmeister CLI Path". That Settings *opens* is asserted in the host suite; what
+    still needs eyes is that it is filtered to `sandbox.*` rather than opening <!-- name-check: ignore -->
     the whole settings tree, which no API reports back.
 
 11. **Lifecycle: Start.** Inline ▶ on a down workspace. A terminal named
-    **`sandbox <workspace>`** opens running `sandbox up` in that workspace's
+    **`werkmeister <workspace>`** opens running `werkmeister up` in that workspace's
     directory; within ~5s (next poll) the description reads `N of N up`.
 
 12. **Lifecycle: Stop.** Inline ⏸ on a running workspace. It reuses the same
-    **`sandbox <workspace>`** terminal and the description reads `0 of N up`. (The *name* is
+    **`werkmeister <workspace>`** terminal and the description reads `0 of N up`. (The *name* is
     asserted in the integration test; what needs eyes here is that the
     container state actually changes.)
 
@@ -117,7 +117,7 @@ render, or a live editor.
 
 14. **One terminal per command — the fix for a real bug.** With a `logs`
     terminal still tailing (see step 15), click ▶ Up on any workspace.
-    Confirm a **separate, newly created terminal** appears and `sandbox up`
+    Confirm a **separate, newly created terminal** appears and `werkmeister up`
     actually runs.
     - Failure looks like: nothing happens at all, no error, the tree never
       changes — the command was typed into the tailing process's stdin and
@@ -130,17 +130,17 @@ render, or a live editor.
 
 
 16. **New Workspace.** Click `+` in the view title. A terminal at the
-    workspaces root runs `sandbox workspace`, and the CLI's own wizard prompts
+    workspaces root runs `werkmeister workspace`, and the CLI's own wizard prompts
     (issue ID included).
 
 17. **Open feature ↗.** Right-click a running workspace → **Open feature ↗**.
-    Spawns `sandbox open` detached — the one command that doesn't use a
+    Spawns `werkmeister open` detached — the one command that doesn't use a
     terminal, because it blocks for the lifetime of the browser window.
 
 --- The remaining two are destructive. They change real state. Do them last. ---
 
 18. **Toggle an intercept (mutates real Telepresence state).** Click `⇄` on an
-    interceptable service. A terminal runs `sandbox intercept -s <service>`;
+    interceptable service. A terminal runs `werkmeister intercept -s <service>`;
     afterwards the description reads "intercepted (yours)". Click `⇄` again —
     it now sends `--leave` and the intercept clears. This reroutes real traffic
     to your machine; only do it on a service you're prepared to reroute.
@@ -157,14 +157,14 @@ render, or a live editor.
       reads **Close out**.
     - Then on a workspace you do intend to end, confirm. A **progress
       notification** appears for the duration (it commits and pushes every
-      worktree, runs `sandbox down`, then deletes — it can take minutes), an
+      worktree, runs `werkmeister down`, then deletes — it can take minutes), an
       information message names the path and says to archive its desktop
-      sessions, the "Sandbox Workspaces" output channel holds the close-out
+      sessions, the "Werkmeister Workspaces" output channel holds the close-out
       output, and the tree refreshes.
     - To exercise the failure path deliberately, make one worktree unpushable
       first (e.g. point its remote at a URL you can't write to). Confirm the
       delete is **aborted**, the workspace still exists, and the multi-line
-      handoff report naming the failing branch appears in the **"Sandbox
+      handoff report naming the failing branch appears in the **"Werkmeister
       Workspaces" output channel** — not truncated into a toast.
 
 ---
@@ -179,8 +179,8 @@ render, or a live editor.
 
 21. **Dock-launched, no shell environment — the check the config tier exists
     for.** Quit VS Code entirely, then relaunch **from the Dock or Finder, not
-    `code .`**, so it inherits no shell environment (no `SANDBOX_ROOT`, no
-    `SANDBOX_WORKSPACES_ROOT`). Open the Sandbox view with **no**
+    `code .`**, so it inherits no shell environment (no `WERKMEISTER_ROOT`, no
+    `WERKMEISTER_WORKSPACES_ROOT`). Open the Werkmeister view with **no**
     `sandbox.root` / `sandbox.binPath` set.
 
     Expected: the same workspaces `werkmeister status` shows.
@@ -189,13 +189,13 @@ render, or a live editor.
     - **Dozens of raw repo checkouts** instead of named workspaces —
       `resolveWorkspacesRoot`'s config-file tier regressed and it fell back to
       `~/workspace`, which is the *repos* root.
-    - **The "Could not find the sandbox CLI" node** — werkmeister-core couldn't
+    - **The "Could not find the werkmeister CLI" node** — werkmeister-core couldn't
       resolve the binary from `~/.werkmeister/config.yaml` with no env present.
 
     Diagnose against werkmeister-core directly, bypassing the extension:
     ```bash
-    env -u SANDBOX_WORKSPACES_ROOT -u SANDBOX_ROOT node -e '
-      const m = await import("/path/to/sandbox/packages/werkmeister-core/dist/sandbox.js");
+    env -u WERKMEISTER_WORKSPACES_ROOT -u WERKMEISTER_ROOT node -e '
+      const m = await import("/path/to/werkmeister/packages/werkmeister-core/dist/sandbox.js");
       console.log((await m.listWorkspaces()).root);
     ' --input-type=module
     ```

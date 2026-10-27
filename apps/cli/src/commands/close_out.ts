@@ -33,7 +33,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     );
     process.exit(1);
   }
-  console.log(`\n${Colors.BOLD}=== sandbox close-out: ${name} ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister close-out: ${name} ===${Colors.RESET}\n`);
   if (!args.yes) {
     console.log(
       `  ${Colors.DIM}${

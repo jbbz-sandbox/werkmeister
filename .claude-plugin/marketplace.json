@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "werkmeister",
-  "description": "Diagnostics and operations tooling for the multi-feature sandbox.",
+  "description": "Diagnostics and operations tooling for the multi-feature werkmeister.",
   "owner": {
     "name": "jbbz-sandbox",
     "url": "https://github.com/jbbz-sandbox"
@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "werkmeister",
-      "description": "Full-stack health checks, URL routing tracing, safe Caddy reloads, workspace creation, and status overviews for the sandbox.",
+      "description": "Full-stack health checks, URL routing tracing, safe Caddy reloads, workspace creation, and status overviews for werkmeister.",
       "source": "./plugins/werkmeister",
       "category": "productivity"
     }

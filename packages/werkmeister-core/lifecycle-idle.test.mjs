@@ -9,7 +9,7 @@ import { test } from "node:test";
 
 import { idleFeatures, idleStopMinutes, liveSessions, stopIdle } from "./dist/lifecycle.js";
 
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
 const NOW = Date.parse("2026-10-19T12:00:00Z");
 const MIN = 60_000;
@@ -166,20 +166,20 @@ test("stopIdle: finds containers under either label set (SW-93), inspecting each
 
 test("idleStopMinutes: 30 by default, overrides.idle_stop_minutes when a whole number ≥ 0", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "idle-config-"));
-  const prev = process.env.SANDBOX_CONFIG_FILE;
+  const prev = process.env.WERKMEISTER_CONFIG_FILE;
   try {
     assert.equal(idleStopMinutes(), 30);
-    process.env.SANDBOX_CONFIG_FILE = path.join(dir, "config.yaml");
+    process.env.WERKMEISTER_CONFIG_FILE = path.join(dir, "config.yaml");
     for (const [yml, want] of [
       ["overrides:\n  idle_stop_minutes: 15\n", 15],
       ["overrides:\n  idle_stop_minutes: 0\n", 0],
       ["overrides:\n  idle_stop_minutes: -1\n", 30],
       ["overrides:\n  idle_stop_minutes: soon\n", 30],
     ]) {
-      fs.writeFileSync(process.env.SANDBOX_CONFIG_FILE, yml);
+      fs.writeFileSync(process.env.WERKMEISTER_CONFIG_FILE, yml);
       assert.equal(idleStopMinutes(), want, yml);
     }
   } finally {
-    process.env.SANDBOX_CONFIG_FILE = prev;
+    process.env.WERKMEISTER_CONFIG_FILE = prev;
   }
 });

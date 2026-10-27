@@ -23,8 +23,8 @@ const HAND = { hooks: [{ type: "command", command: "echo mine" }] };
 function workspace(settings) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-refresh-"));
   fs.mkdirSync(path.join(root, ".claude"));
-  fs.mkdirSync(path.join(root, ".sandbox", ".gate"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".sandbox", ".gate", "s.json"), "{}");
+  fs.mkdirSync(path.join(root, ".werkmeister", ".gate"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".werkmeister", ".gate", "s.json"), "{}");
   fs.writeFileSync(
     path.join(root, ".claude", "settings.json"),
     typeof settings === "string" ? settings : JSON.stringify(settings),
@@ -56,9 +56,9 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
       hooks: await withAgentState({ SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] }),
       permissions: { allow: READ_ONLY_GIT_RULES },
     });
-    assert.ok(!fs.existsSync(path.join(root, ".sandbox", ".gate")));
-    assert.match(log, /sandbox notes context/);
-    assert.match(log, /sandbox hooks gate/);
+    assert.ok(!fs.existsSync(path.join(root, ".werkmeister", ".gate")));
+    assert.match(log, /werkmeister notes context/);
+    assert.match(log, /werkmeister hooks gate/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

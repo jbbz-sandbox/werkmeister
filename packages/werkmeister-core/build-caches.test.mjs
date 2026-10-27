@@ -115,15 +115,15 @@ const envOf = (svc) =>
 
 /** Render *feature*'s compose through the real template for a workspace at *ws*. */
 function renderCompose(feature, ws) {
-  const prev = process.env.SANDBOX_ROOT;
-  process.env.SANDBOX_ROOT = CLI_ROOT;
+  const prev = process.env.WERKMEISTER_ROOT;
+  process.env.WERKMEISTER_ROOT = CLI_ROOT;
   try {
     return YAML.parse(
       fs.readFileSync(generateFeatureCompose(feature, 1, ["backend"], null, ws), "utf8"),
     );
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_ROOT;
-    else process.env.SANDBOX_ROOT = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_ROOT;
+    else process.env.WERKMEISTER_ROOT = prev;
   }
 }
 

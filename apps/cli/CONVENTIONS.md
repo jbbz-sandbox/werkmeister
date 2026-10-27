@@ -14,7 +14,7 @@ by other tooling, so they are not free to drift.
 | `src/lib/<name>.ts` | shared library modules |
 
 Runtime data dirs live alongside the source: `infra/`, `bin/`.
-Path resolution: package root = `WERKMEISTER_ROOT` / `SANDBOX_ROOT` env, else the first
+Path resolution: package root = `WERKMEISTER_ROOT` / `WERKMEISTER_ROOT` env, else the first
 ancestor holding `apps/cli` (`sandboxRoot()` / `infraRoot()` in
 `packages/werkmeister-core/src/config.ts`, re-exported by `src/lib/config.ts` as
 `getSandboxRoot()` / `getInfraRoot()`).
@@ -43,7 +43,7 @@ ancestor holding `apps/cli` (`sandboxRoot()` / `infraRoot()` in
 - ANSI colors come from `packages/werkmeister-core/src/colors.ts` — the single definition site.
 - `console.error` for stderr, `console.log` for stdout.
 - `process.exit(n)` for exit codes. Thrown errors reach `main`, which prints
-  `Error: <msg>` in red and exits 1; `SANDBOX_DEBUG` re-raises with a stack.
+  `Error: <msg>` in red and exits 1; `WERKMEISTER_DEBUG` re-raises with a stack.
 - Interactive prompts use `node:readline/promises`, which makes the enclosing
   function `async` — command `run()` signatures are `async (args) => Promise<void>`.
 - No new npm dependencies beyond: commander, nunjucks, yaml.

@@ -51,6 +51,8 @@ jobs:
       # After the build: commands and flags come from the built CLI's `__complete`.
       # Its unit test runs with `licenses` above (scripts/*.test.mjs).
       - run: pnpm run docs:check
+      # SW-106: the pre-Werkmeister name fails here, outside the kept names in the script.
+      - run: pnpm run name:check
       # The extension host is an Electron app: it needs a display even headless,
       # and it downloads its own VS Code build on first run. With the build
       # cached for the version pinned in .vscode-test.mjs, vscode-test skips

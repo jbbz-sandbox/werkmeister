@@ -37,7 +37,7 @@ Three rows left this section rather than sitting in it unresolved. `chat-panel.t
 `workspace-ui.ts` were invariants wearing a `ponytail:` prefix — "no React/JSX here" is a
 constraint to preserve, not a shortcut to upgrade, and a marker that can never be paid off
 teaches readers to skim the prefix. Both keep the reasoning as plain comments and are no
-longer markers. `sb-implement/SKILL.md` is genuine debt and moved down to a named trigger.
+longer markers. `w9r-implement/SKILL.md` is genuine debt and moved down to a named trigger.
 
 ## Ripe now
 
@@ -67,13 +67,13 @@ calls the same file, so a dead forward is now restarted rather than merely repor
 | [locks.ts:21](../packages/werkmeister-core/src/locks.ts#L21) | O_EXCL PID-stamped lock file (Node has no `fcntl.flock`) | a crashed holder leaves the file behind; compensated by probing the recorded PID | the PID probe proves insufficient → real flock binding |
 | [sandbox.ts:1816](../packages/werkmeister-core/src/sandbox.ts#L1816) | no concurrency cap on the `gh` fan-out | unbounded parallel `gh` calls | workspace × repo count grows large |
 | [sandbox.ts:2133](../packages/werkmeister-core/src/sandbox.ts#L2133) | no concurrency cap on the fan-out (matches the row above) | bounded in practice by my-open-PRs + the approval queue | either grows large |
-| [SKILL.md:64](../apps/cli/infra/skills/sb-implement/SKILL.md#L64) | the redirect-verbose-output rule is stated once, at phase entry | drifts into low-attention context by mid-session, which is exactly when a session starts dumping full test output | the edit gate ([gate.ts](../packages/werkmeister-core/src/gate.ts)) already intercepts governed edits — extend it to re-inject on Bash once a session is seen drifting |
+| [SKILL.md:64](../apps/cli/infra/skills/w9r-implement/SKILL.md#L64) | the redirect-verbose-output rule is stated once, at phase entry | drifts into low-attention context by mid-session, which is exactly when a session starts dumping full test output | the edit gate ([gate.ts](../packages/werkmeister-core/src/gate.ts)) already intercepts governed edits — extend it to re-inject on Bash once a session is seen drifting |
 | [standards.ts:247](../packages/werkmeister-core/src/standards.ts#L247) | fnmatch leaves `/` literal | repo-root files under-match a `**/*.service.ts` glob; worst case one standard not re-injected | root-level matching ever matters → real glob matcher |
 | [generate.ts:240](../packages/werkmeister-core/src/generate.ts#L240) | non-enumerable `Array.prototype.append` patch for Nunjucks `{% do %}` | global prototype patch | it collides with another `append` → template preprocessor |
 | [caddy.ts:47](../packages/werkmeister-core/src/caddy.ts#L47) | regex-level brace stripping | assumes placeholders hold no whitespace and don't nest | that stops holding → a real tokenizer |
-| [intercept.ts:113](../apps/cli/src/commands/intercept.ts#L113) | no long-running supervision of an intercept | lives in the telepresence daemon until `--leave`/`sandbox down` | dangling intercepts become a real problem → `--watch` |
+| [intercept.ts:113](../apps/cli/src/commands/intercept.ts#L113) | no long-running supervision of an intercept | lives in the telepresence daemon until `--leave`/`werkmeister down` | dangling intercepts become a real problem → `--watch` |
 | [commands.ts:249](../packages/werkmeister-vscode/src/commands.ts#L249) | fire-and-forget launch | a failure after spawn is invisible | it ever matters → status check |
-| [build-tree.ts:100](../packages/werkmeister-vscode/src/build-tree.ts#L100) | strip the `sandbox-` prefix instead of reading `workspace.yml` per workspace | breaks if a hand-edited `.env` violates the convention | that happens → read the yml |
+| [build-tree.ts:100](../packages/werkmeister-vscode/src/build-tree.ts#L100) | strip the `werkmeister-` prefix instead of reading `workspace.yml` per workspace | breaks if a hand-edited `.env` violates the convention | that happens → read the yml |
 | [session-stream.ts:13](../apps/werkmeister-dashboard/src/lib/session-stream.ts#L13) | re-read and re-parse the whole transcript on every change | same cost the 3s poller already paid, but push-triggered | large transcripts measurably lag → byte-offset tailing |
 
 ## Keeping this current

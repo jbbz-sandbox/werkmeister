@@ -6,7 +6,7 @@
  * returning empty. A test that borrows the developer's real registry passes
  * locally and fails there — which is exactly how nine of these got merged.
  *
- * `SANDBOX_CONFIG_FILE` relocates the whole set (see `configPath` in config.ts),
+ * `WERKMEISTER_CONFIG_FILE` relocates the whole set (see `configPath` in config.ts),
  * so pointing it at a seeded temp dir makes a test hermetic in one move.
  *
  * Not named `*.test.mjs` on purpose: the suite globs that pattern.
@@ -37,7 +37,7 @@ const PORTS = `feature_slots:
 `;
 
 /**
- * Run *fn* against a seeded temp sandbox home.
+ * Run *fn* against a seeded temp werkmeister home.
  *
  * `overrides` merges extra top-level YAML into config.yaml (e.g. a
  * `standards_dir`). `services`/`ports` replace the defaults above when a test
@@ -47,19 +47,19 @@ export async function withSandboxHome(
   fn,
   { services = SERVICES, ports = PORTS, config = "" } = {},
 ) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-home-"));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-home-"));
   const cfg = path.join(home, "config.yaml");
   fs.writeFileSync(cfg, `version: 1\n${config}`);
   fs.writeFileSync(path.join(home, "services.yaml"), services);
   fs.writeFileSync(path.join(home, "ports.yaml"), ports);
 
-  const prev = process.env.SANDBOX_CONFIG_FILE;
-  process.env.SANDBOX_CONFIG_FILE = cfg;
+  const prev = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = cfg;
   try {
     return await fn(home);
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_CONFIG_FILE;
-    else process.env.SANDBOX_CONFIG_FILE = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = prev;
     fs.rmSync(home, { recursive: true, force: true });
   }
 }
@@ -68,7 +68,7 @@ export async function withSandboxHome(
  * True when a real Docker daemon answers.
  *
  * Tests that need live containers use this to skip rather than fail: CI has no
- * sandbox stack, and "no containers" is indistinguishable from "no daemon" in
+ * werkmeister stack, and "no containers" is indistinguishable from "no daemon" in
  * most of these code paths.
  */
 export async function dockerAvailable() {
@@ -82,7 +82,7 @@ export async function dockerAvailable() {
 }
 
 /**
- * Run *fn* with $SANDBOX_GH_BIN pointing at a fake `gh`: `issue view` prints
+ * Run *fn* with $WERKMEISTER_GH_BIN pointing at a fake `gh`: `issue view` prints
  * `issue` as JSON (exit 1 when null), `auth status` exits `auth`, `repo view` exits `repoView`.
  * Like the real repo, `issue edit --add-label` fails for a label not in `labels`;
  * `label create` adds one. Every call is a line in `<dir>/calls`.
@@ -107,13 +107,13 @@ esac
 `,
     { mode: 0o755 },
   );
-  const prev = process.env.SANDBOX_GH_BIN;
-  process.env.SANDBOX_GH_BIN = bin;
+  const prev = process.env.WERKMEISTER_GH_BIN;
+  process.env.WERKMEISTER_GH_BIN = bin;
   try {
     return await fn(bin);
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_GH_BIN;
-    else process.env.SANDBOX_GH_BIN = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_GH_BIN;
+    else process.env.WERKMEISTER_GH_BIN = prev;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }

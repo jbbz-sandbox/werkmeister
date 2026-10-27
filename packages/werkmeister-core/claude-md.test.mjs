@@ -32,15 +32,15 @@ function withDir(fn) {
 
 test("the standards section states the phase chain once, with no inactive list", () => {
   const out = buildStandardsRoutingSection(["comments", "engineering", "ui"], MODULES, ["demo"]);
-  assert.match(out, /\| ui \| `sb-ui-standard` \| `\*\*\/\*\.tsx` \|/);
+  assert.match(out, /\| ui \| `w9r-ui-standard` \| `\*\*\/\*\.tsx` \|/);
   assert.doesNotMatch(out, /Not active/);
   assert.doesNotMatch(out, /\*\*Phase entry:\*\*/);
   assert.doesNotMatch(out, /workspace root/);
-  assert.equal((out.match(/`sb-implement`/g) ?? []).length, 1);
+  assert.equal((out.match(/`w9r-implement`/g) ?? []).length, 1);
   assert.match(out, /\| Phase \| Invoke first \| Loads \|/);
   assert.match(
     out,
-    /universal base \(`ponytail` \+ `sb-comments-standard` \+ `sb-engineering-standard`\)/,
+    /universal base \(`ponytail` \+ `w9r-comments-standard` \+ `w9r-engineering-standard`\)/,
   );
 });
 
@@ -53,7 +53,7 @@ test("the routing table is two columns: one feature row, contract row only for m
     assert.match(single, /\| Working in a \| a\/CLAUDE\.md \|/);
     assert.match(
       single,
-      /\| Running or validating the change[^|]*\| \.sandbox\/sandbox-context\.md \|/,
+      /\| Running or validating the change[^|]*\| \.werkmeister\/werkmeister-context\.md \|/,
     );
     assert.doesNotMatch(single, /Cross-repo/);
     assert.doesNotMatch(single, /service-map/);
@@ -67,7 +67,7 @@ test("the routing table is two columns: one feature row, contract row only for m
     );
     assert.match(
       multi,
-      /\| Cross-repo contract change \| \.sandbox\/notes\/ \(`contract` notes\) \|/,
+      /\| Cross-repo contract change \| \.werkmeister\/notes\/ \(`contract` notes\) \|/,
     );
     assert.doesNotMatch(multi, /Working in b/, "no row for a repo CLAUDE.md that does not exist");
   });
@@ -87,7 +87,7 @@ test("CLAUDE.md carries no Feature Testing section", () => {
     assert.doesNotMatch(
       out,
       /document\.cookie/,
-      "the cookie one-liner lives in sandbox-context.md now",
+      "the cookie one-liner lives in werkmeister-context.md now",
     );
     assert.match(
       out,
@@ -115,7 +115,7 @@ const byPhase = (out) => out.slice(out.indexOf("**By phase**"));
 
 test("refactor has no research row and no note gate", () => {
   const out = section("refactor");
-  assert.doesNotMatch(byPhase(out), /`sb-research`/);
+  assert.doesNotMatch(byPhase(out), /`w9r-research`/);
   assert.match(
     out,
     /\*\*Work type:\*\* refactor \(bounded path\) — phases: implement → test → review → pr\./,
@@ -125,20 +125,23 @@ test("refactor has no research row and no note gate", () => {
 
 test("spike has no implement, review, or PR row", () => {
   const out = byPhase(section("spike"));
-  assert.doesNotMatch(out, /`sb-implement`|`sb-review`|`sb-pr`/);
+  assert.doesNotMatch(out, /`w9r-implement`|`w9r-review`|`w9r-pr`/);
   assert.match(section("spike"), /Anything built is throwaway/);
 });
 
 test("feature names the decided gate; bugfix names the root cause", () => {
   assert.match(
     section("feature"),
-    /`decision` note in `\.sandbox\/notes\/` reads `status: decided`/,
+    /`decision` note in `\.werkmeister\/notes\/` reads `status: decided`/,
   );
-  assert.match(section("bugfix"), /`finding` note in `\.sandbox\/notes\/` names the root cause/);
+  assert.match(
+    section("bugfix"),
+    /`finding` note in `\.werkmeister\/notes\/` names the root cause/,
+  );
   assert.doesNotMatch(
     byPhase(section("bugfix")),
     /^\| review \(/m,
-    "the pr row still names sb-review; the review row is gone",
+    "the pr row still names w9r-review; the review row is gone",
   );
 });
 
@@ -155,7 +158,7 @@ test("an empty or unknown work type renders today's section exactly", () => {
   assert.equal(section(""), today);
   assert.equal(section("chore"), today);
   assert.doesNotMatch(today, /Work type/);
-  assert.equal((byPhase(today).match(/^\| [^|]+ \| `sb-/gm) ?? []).length, 5);
+  assert.equal((byPhase(today).match(/^\| [^|]+ \| `w9r-/gm) ?? []).length, 5);
 });
 
 test("an issue replaces the inline link with the issue section", () => {

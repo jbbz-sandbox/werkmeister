@@ -35,7 +35,7 @@ export function cacheSource(key: string, cache: CacheEntry): CacheSource {
 
 /** The default volume before SW-93, left behind on machines that had it; SW-11 drops it. */
 function legacyCacheVolume(key: string, cache: CacheEntry): string | null {
-  return cache.host || cache.volume ? null : `sandbox-${key}`;
+  return cache.host || cache.volume ? null : `sandbox-${key}`; // name-check: ignore
 }
 
 /** True when one of *files* is in *from* or a parent of it, up to and including *root*. */
@@ -152,7 +152,7 @@ function dirSize(dir: string): number {
 
 /**
  * One row per registry cache: where it lives, whether it exists yet, its size and
- * creation time. A leftover pre-SW-93 `sandbox-<key>` volume gets a second row, so
+ * creation time. A leftover pre-SW-93 `sandbox-<key>` volume gets a second row, so // name-check: ignore
  * `status` shows it and `cache prune` reaches it.
  */
 export async function cacheSnapshots(

@@ -29,7 +29,7 @@ function walk(root, rel = "") {
 /** A workspace with one repo and a two-module standards tree; returns [root, ctx]. */
 async function withIcmWorkspace(
   fn,
-  { inputs = {}, meta = { FEATURE: "demo", SERVICES: "backend" }, dot = ".sandbox" } = {},
+  { inputs = {}, meta = { FEATURE: "demo", SERVICES: "backend" }, dot = ".werkmeister" } = {},
 ) {
   const std = fs.mkdtempSync(path.join(os.tmpdir(), "icm-std-"));
   fs.mkdirSync(path.join(std, "comments"));
@@ -86,7 +86,9 @@ const icm = strategyById("icm");
 test("init writes the icm layer and nothing of jit's", async () => {
   await withIcmWorkspace(async (root, ctx) => {
     icm.init(ctx);
-    const files = walk(root).filter((f) => !f.startsWith("demo-repo") && !f.startsWith(".sandbox"));
+    const files = walk(root).filter(
+      (f) => !f.startsWith("demo-repo") && !f.startsWith(".werkmeister"),
+    );
     assert.deepEqual(files, [
       ".claude/settings.json",
       "BRIEF.md",
@@ -111,8 +113,8 @@ test("init writes the icm layer and nothing of jit's", async () => {
         permissions: { allow: READ_ONLY_GIT_RULES },
       },
     );
-    assert.ok(!fs.existsSync(path.join(root, ".sandbox", "notes")));
-    assert.ok(!fs.existsSync(path.join(root, ".sandbox", "standards.json")));
+    assert.ok(!fs.existsSync(path.join(root, ".werkmeister", "notes")));
+    assert.ok(!fs.existsSync(path.join(root, ".werkmeister", "standards.json")));
 
     assert.ok(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8").endsWith(`\n${PROMPT}\n`));
 
@@ -123,7 +125,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.match(
       standards,
-      /^`<standards_dir>` is this machine's standards tree: `sandbox standards check` prints its path/m,
+      /^`<standards_dir>` is this machine's standards tree: `werkmeister standards check` prints its path/m,
     );
     assert.ok(!standards.includes(os.tmpdir()) && !standards.includes(os.homedir()), standards);
     assert.match(standards, /^\| ponytail \| already loaded/m);
@@ -143,7 +145,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.match(
       claude,
-      /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `sandbox pr open`, then Auto-fix on \(rule 5\) \| PR URL is in the PR file and Auto-fix is on \|/m,
+      /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `werkmeister pr open`, then Auto-fix on \(rule 5\) \| PR URL is in the PR file and Auto-fix is on \|/m,
     );
     assert.match(
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
@@ -160,7 +162,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.match(implement, /rows `comments`, `ponytail`/);
     assert.doesNotMatch(implement, /`ui`/);
-    assert.match(implement, /never run `sandbox up`/i);
+    assert.match(implement, /never run `werkmeister up`/i);
     for (const f of walk(root)) {
       if (f.endsWith(".md"))
         assert.doesNotMatch(fs.readFileSync(path.join(root, f), "utf8"), /undefined/, f);
@@ -202,7 +204,7 @@ test("another machine's standards_dir: no drift for _shared/standards.md (#163)"
     icm.init(ctx);
     const file = path.join(root, "_shared", "standards.md");
     const before = fs.readFileSync(file, "utf8");
-    const cfg = process.env.SANDBOX_CONFIG_FILE;
+    const cfg = process.env.WERKMEISTER_CONFIG_FILE;
     const here = fs.readFileSync(cfg, "utf8").match(/standards_dir: (.*)/)[1];
     const there = fs.mkdtempSync(path.join(os.tmpdir(), "icm-std-other-"));
     try {
@@ -325,25 +327,25 @@ test("discoverRepos and contextFromDisk agree on dot-prefixed and symlinked repo
   });
 });
 
-test("no feature or services: the restart sentence points at sandbox-context.md", async () => {
+test("no feature or services: the restart sentence points at werkmeister-context.md", async () => {
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init(ctx);
       const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
       assert.doesNotMatch(claude, /docker restart/);
-      assert.match(claude, /as `\.sandbox\/sandbox-context\.md` describes/);
+      assert.match(claude, /as `\.werkmeister\/werkmeister-context\.md` describes/);
     },
     { meta: { FEATURE: "", SERVICES: "" } },
   );
 });
 
-test("no feature (but services present): the restart sentence still points at sandbox-context.md", async () => {
+test("no feature (but services present): the restart sentence still points at werkmeister-context.md", async () => {
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init(ctx);
       const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
       assert.doesNotMatch(claude, /docker restart/);
-      assert.match(claude, /as `\.sandbox\/sandbox-context\.md` describes/);
+      assert.match(claude, /as `\.werkmeister\/werkmeister-context\.md` describes/);
     },
     { meta: { FEATURE: "", SERVICES: "backend" } },
   );
@@ -364,7 +366,7 @@ test("an idle-type service is reloaded by docker exec, not restart (SW-32)", asy
   await withIcmWorkspace(
     async (root, ctx) => {
       fs.appendFileSync(
-        path.join(process.env.SANDBOX_CONFIG_FILE, "..", "services.yaml"),
+        path.join(process.env.WERKMEISTER_CONFIG_FILE, "..", "services.yaml"),
         "  tool:\n    type: cli\n    repo: demo-repo\n",
       );
       icm.init(ctx);
@@ -433,12 +435,12 @@ test("an issue puts the issue section in CLAUDE.md and BRIEF.md", async () => {
       );
       assert.match(
         claude,
-        /\| `\.sandbox\/issue\.md` \| the issue as fetched at creation; refresh with `sandbox init-workspace --refresh-issue` \|/,
+        /\| `\.werkmeister\/issue\.md` \| the issue as fetched at creation; refresh with `werkmeister init-workspace --refresh-issue` \|/,
       );
       const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
       assert.match(
         brief,
-        /^---\nsource: \.sandbox\/workspace\.yml \(description, starting_prompt\), \.sandbox\/issue\.md\n---\n\n# Brief: /,
+        /^---\nsource: \.werkmeister\/workspace\.yml \(description, starting_prompt\), \.werkmeister\/issue\.md\n---\n\n# Brief: /,
       );
       assert.match(brief, /## Issue\n[\s\S]*Fix the thing\.\n\n## Goal/);
       assert.doesNotMatch(brief, /No starting prompt was given/);
@@ -453,7 +455,7 @@ test("an issue with no description or prompt tells the agent to read the copy", 
       icm.init({ ...ctx, issue: ISSUE });
       assert.match(
         fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
-        /_Read `\.sandbox\/issue\.md`, then write the goal, acceptance criteria and open questions here before starting the first stage\._/,
+        /_Read `\.werkmeister\/issue\.md`, then write the goal, acceptance criteria and open questions here before starting the first stage\._/,
       );
     },
     { inputs: { starting_prompt: "" } },
@@ -481,7 +483,7 @@ test("no issue: CLAUDE.md and BRIEF.md are unchanged from before", async () => {
     assert.doesNotMatch(claude, /## Issue|issue\.md/);
     assert.match(
       fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
-      /^---\nsource: \.sandbox\/workspace\.yml \(starting_prompt\)\n---/,
+      /^---\nsource: \.werkmeister\/workspace\.yml \(starting_prompt\)\n---/,
     );
   });
 });
@@ -520,12 +522,12 @@ test("a no-copy issue keeps the placeholder brief; a fetched copy then rebuilds 
       assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), placeholder);
       assert.doesNotMatch(
         fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"),
-        /\| `\.sandbox\/issue\.md` \|/,
+        /\| `\.werkmeister\/issue\.md` \| the issue as fetched at creation; refresh with `werkmeister init-workspace --refresh-issue` \|/,
       );
       icm.init({ ...ctx, issue: ISSUE });
       const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
-      assert.match(brief, /Copy taken 2026-10-11: `\.sandbox\/issue\.md`\./);
-      assert.match(brief, /_Read `\.sandbox\/issue\.md`, then/);
+      assert.match(brief, /Copy taken 2026-10-11: `\.werkmeister\/issue\.md`\./);
+      assert.match(brief, /_Read `\.werkmeister\/issue\.md`, then/);
     },
     { inputs: { starting_prompt: "" } },
   );
@@ -548,7 +550,7 @@ test("a .werkmeister workspace gets docs that name it, and reads as in sync", as
       }
       assert.match(
         fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"),
-        /\.werkmeister\/sandbox-context\.md/,
+        /\.werkmeister\/werkmeister-context\.md/,
       );
       assert.deepEqual(icm.check(root), []);
     },
@@ -557,7 +559,7 @@ test("a .werkmeister workspace gets docs that name it, and reads as in sync", as
 });
 
 test("the first stage contract, and only it, starts the issue when there is one (SW-27)", async () => {
-  const start = /^0\. Run `sandbox issue start`/m;
+  const start = /^0\. Run `werkmeister issue start`/m;
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init(ctx);

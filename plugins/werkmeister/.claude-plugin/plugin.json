@@ -3,13 +3,13 @@
   "name": "werkmeister",
   "displayName": "Werkmeister",
   "version": "0.1.0",
-  "description": "Diagnostics and operations skills for the sandbox: full-stack health checks, URL routing tracing, safe Caddy reloads, and status overviews.",
+  "description": "Diagnostics and operations skills for werkmeister: full-stack health checks, URL routing tracing, safe Caddy reloads, and status overviews.",
   "author": {
     "name": "Sandboxx DevTools"
   },
   "homepage": "https://github.com/jbbz-sandbox/werkmeister",
   "repository": "https://github.com/jbbz-sandbox/werkmeister",
-  "keywords": ["sandbox", "caddy", "diagnostics", "routing"],
+  "keywords": ["werkmeister", "caddy", "diagnostics", "routing"],
   "mcpServers": "./.mcp.json",
   "types": "./types/index.d.ts"
 }

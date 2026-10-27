@@ -1,5 +1,5 @@
 /**
- * ANSI colour/style constants for the developer sandbox CLI.
+ * ANSI colour/style constants for the developer werkmeister CLI.
  *
  * The single ANSI definition site -- import from here rather than
  * re-declaring RED/BOLD/RESET locally.

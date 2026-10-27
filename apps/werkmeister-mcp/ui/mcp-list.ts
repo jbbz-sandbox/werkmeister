@@ -21,7 +21,7 @@ import { initCreateForm } from "werkmeister-ui/create-form";
 import { appRoot } from "werkmeister-ui/theme";
 import { type HostBridge, initWorkspaceUI } from "werkmeister-ui/workspace-ui";
 
-const app = new App({ name: "Sandbox Workspaces", version: "0.2.0" });
+const app = new App({ name: "Werkmeister Workspaces", version: "0.2.0" });
 
 function textOf(result: CallToolResult): string {
   const part = result.content?.find((c) => c.type === "text") as { text?: string } | undefined;

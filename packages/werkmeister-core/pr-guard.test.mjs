@@ -11,18 +11,18 @@ import { decide, findRecordRoot, opensPr } from "./dist/pr_guard.js";
 
 function workspace() {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-guard-"));
-  fs.mkdirSync(path.join(ws, ".sandbox"));
-  fs.writeFileSync(path.join(ws, ".sandbox", "workspace.yml"), "feature: f\n");
+  fs.mkdirSync(path.join(ws, ".werkmeister"));
+  fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "feature: f\n");
   fs.mkdirSync(path.join(ws, "stages", "04_propose", "output"), { recursive: true });
-  // A code worktree carries its own .sandbox/ (the registry fragment).
-  fs.mkdirSync(path.join(ws, "app", ".sandbox"), { recursive: true });
-  fs.writeFileSync(path.join(ws, "app", ".sandbox", "services.yaml"), "services: {}\n");
+  // A code worktree carries its own .werkmeister/ (the registry fragment).
+  fs.mkdirSync(path.join(ws, "app", ".werkmeister"), { recursive: true });
+  fs.writeFileSync(path.join(ws, "app", ".werkmeister", "services.yaml"), "services: {}\n");
   return ws;
 }
 
 const bash = (cwd, command) => ({ cwd, tool_name: "Bash", tool_input: { command } });
 
-test("findRecordRoot skips a code worktree's own .sandbox/", () => {
+test("findRecordRoot skips a code worktree's own .werkmeister/", () => {
   const ws = workspace();
   try {
     assert.equal(findRecordRoot(path.join(ws, "app")), ws);
@@ -32,16 +32,16 @@ test("findRecordRoot skips a code worktree's own .sandbox/", () => {
   }
 });
 
-test("denies gh pr create from the root and from a code worktree, pointing at sandbox pr open", () => {
+test("denies gh pr create from the root and from a code worktree, pointing at werkmeister pr open", () => {
   const ws = workspace();
   try {
     for (const cwd of [ws, path.join(ws, "app")]) {
       const reason = decide(bash(cwd, 'cd app && gh pr create --title "x" --body y'));
-      assert.match(reason ?? "", /only through `sandbox pr open`/);
+      assert.match(reason ?? "", /only through `werkmeister pr open`/);
       assert.match(reason, /`stages\/04_propose\/output\/`/);
       assert.match(
         reason,
-        /Rules: `docs\/workspace-lifecycle\.md in the sandbox repo`/,
+        /Rules: `docs\/workspace-lifecycle\.md in the werkmeister repo`/,
         "no rules file yet",
       );
     }

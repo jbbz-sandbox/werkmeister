@@ -205,8 +205,8 @@ export function markdownToWiki(md: string): string {
     .join("\n");
 }
 
-/** Sandbox-tool issues go to GitHub unless `overrides.sandbox_issues_project` names a Jira project; issues_report.ts names it too. */
-const SANDBOX_ISSUES_REPO = "jbbz-sandbox/werkmeister";
+/** Werkmeister issues go to GitHub unless `overrides.werkmeister_issues_project` names a Jira project; issues_report.ts names it too. */
+const WERKMEISTER_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
 const ISSUE_TYPES: Record<IssueKind, string> = { bug: "Bug", feature: "Story", task: "Task" };
 
@@ -245,20 +245,20 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       const rawBase = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
       const site = isJiraPlaceholder(rawBase) || !rawBase ? "" : ` (${rawBase})`;
       const command = (key?: string) =>
-        `\`sandbox issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file>\`; ` +
+        `\`werkmeister issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file>\`; ` +
         "if it fails for want of a Jira API token, the Atlassian MCP tools if connected, otherwise hand the person the title, type and body to file";
       const jql = (key?: string) =>
         `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "<keywords>"\``;
       const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${site}`;
       return {
         row: `| app code in a worktree | ${where} | ${command(project)} |`,
-        sandbox: sandboxProject
+        werkmeister: sandboxProject
           ? {
               where: `Jira, project \`${sandboxProject}\`${site}`,
               command: command(sandboxProject),
             }
           : undefined,
-        search: `Search first: ${jql(project)}. If it exists, comment on it instead. (Sandbox-tool issues: ${sandboxProject ? jql(sandboxProject) : `\`gh issue list -R ${SANDBOX_ISSUES_REPO} --search "<keywords>" --state all\``}.)`,
+        search: `Search first: ${jql(project)}. If it exists, comment on it instead. (Werkmeister issues: ${sandboxProject ? jql(sandboxProject) : `\`gh issue list -R ${WERKMEISTER_ISSUES_REPO} --search "<keywords>" --state all\``}.)`,
       };
     },
 

@@ -1,5 +1,5 @@
 /**
- * sandbox starting-prompt [--start <dir>]
+ * werkmeister starting-prompt [--start <dir>]
  *
  * Print the enclosing workspace's `starting_prompt` (the starting-prompt
  * skill). Exit 1 when no workspace.yml is found walking up from --start,

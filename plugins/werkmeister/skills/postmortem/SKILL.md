@@ -1,11 +1,11 @@
 ---
 name: postmortem
-description: "Run the post-mortem that comes before `werkmeister close-out` in a werkmeister workspace (a folder with .werkmeister/workspace.yml, or .sandbox/workspace.yml on an older workspace, above it): gather every problem in the run, agree with the person what changes so it doesn't recur, write postmortem.md and act on each change. Use when the user says 'close out', 'post-mortem', 'postmortem', 'retro' or 'what went wrong in this run', shipped or abandoned."
+description: "Run the post-mortem that comes before `werkmeister close-out` in a workspace (a folder with .werkmeister/workspace.yml above it): gather every problem in the run, agree with the person what changes so it doesn't recur, write postmortem.md and act on each change. Use when the user says 'close out', 'post-mortem', 'postmortem', 'retro' or 'what went wrong in this run', shipped or abandoned."
 ---
 
 # postmortem — lessons before close-out
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
 
 Lessons found mid-run are lost when the workspace is removed unless someone asks
 for them on purpose. `werkmeister close-out` refuses until `postmortem.md` exists at

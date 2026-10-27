@@ -16,8 +16,8 @@ before(async () => {
     yaml,
     "services:\n  api:\n    repo: api\n  web:\n    repo: web\ninfrastructure:\n  db:\n    image: pg\n",
   );
-  process.env.SANDBOX_CONFIG_FILE = path.join(dir, "none.yaml");
-  process.env.SANDBOX_SERVICES_YAML = yaml;
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(dir, "none.yaml");
+  process.env.WERKMEISTER_SERVICES_YAML = yaml;
   ({ applyIssueFormAnswer } = await import("./dist/sandbox.js"));
 });
 

@@ -26,13 +26,13 @@ function withStandardsDir(standardsDir, fn) {
   const cfg = path.join(home, "config.yaml");
   fs.writeFileSync(cfg, `version: 1\noverrides:\n  standards_dir: ${standardsDir}\n`);
   fs.writeFileSync(path.join(home, "services.yaml"), "services:\n  demo:\n    type: api\n");
-  const prev = process.env.SANDBOX_CONFIG_FILE;
-  process.env.SANDBOX_CONFIG_FILE = cfg;
+  const prev = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = cfg;
   try {
     return fn();
   } finally {
-    if (prev === undefined) delete process.env.SANDBOX_CONFIG_FILE;
-    else process.env.SANDBOX_CONFIG_FILE = prev;
+    if (prev === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = prev;
     fs.rmSync(home, { recursive: true, force: true });
   }
 }

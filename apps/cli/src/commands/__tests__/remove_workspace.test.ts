@@ -57,5 +57,5 @@ it("--abandon passes the reason through to core", async () => {
 
 it("prints the deprecation notice pointing at close-out --abandon", async () => {
   await runRemove({ name: "ws", yes: true });
-  expect(vi.mocked(warn).mock.calls[0][0]).toMatch(/deprecated.*sandbox close-out --abandon/);
+  expect(vi.mocked(warn).mock.calls[0][0]).toMatch(/deprecated.*werkmeister close-out --abandon/);
 });

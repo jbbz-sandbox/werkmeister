@@ -114,7 +114,7 @@ export function ingressHostnames(
  * Absolute URL for a path on the feature ingress, e.g. `/orders` →
  * `https://frontend.local.werkmeister.io/orders`. Null when nothing is routed.
  *
- * Shared by `sandbox open` and the MCP server's open-feature tool so the two
+ * Shared by `werkmeister open` and the MCP server's open-feature tool so the two
  * land on the same page: the routed host set is per-machine (ingress config +
  * `feature_router:` blocks), so a hardcoded host opens a page that may not
  * exist, and a second copy of this would drift from the first.

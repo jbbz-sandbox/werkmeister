@@ -13,7 +13,7 @@
  * and hand the gate the whole CLI's import cost on every Edit/Write. `mcp`
  * execs `dist/mcp.js`: the headless MCP server lives in the sibling
  * `apps/werkmeister-mcp` workspace, which is private and not published, so it is bundled
- * here from source — the same reason werkmeister-core is. Without it, `sandbox
+ * here from source — the same reason werkmeister-core is. Without it, `werkmeister
  * mcp` and the `werkmeister` plugin's MCP entry have no target on an
  * `npm i -g` install.
  *
@@ -24,7 +24,7 @@
  * into a shim that throws rather than the guarded miss dockerode's ssh2 ->
  * cpu-features path relies on. Letting npm install it keeps the native
  * resolution npm-shaped. `*.node` stays listed so anything else reaching a
- * binding fails at build, not at a user's first `sandbox up`.
+ * binding fails at build, not at a user's first `werkmeister up`.
  *
  * Output stays ESM (the extension's bundle is CJS and has to `define`
  * import.meta away): werkmeister-core resolves paths through `import.meta.dirname`,

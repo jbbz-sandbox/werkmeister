@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const cfgFile = path.join(mkdtempSync(path.join(tmpdir(), "open-prs-")), "config.yaml");
 writeFileSync(cfgFile, "jira:\n  base_url: https://example.atlassian.net/\n");
-process.env.SANDBOX_CONFIG_FILE = cfgFile;
+process.env.WERKMEISTER_CONFIG_FILE = cfgFile;
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const {

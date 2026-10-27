@@ -1,11 +1,11 @@
 /**
- * sandbox pr <gate|open|status> [repo] [--json]
- * sandbox pr adopt <pr-number|url> [repo] | adopt --no-pr "<reason>" [repo]
- * sandbox pr new <worktree> --slug <slug>
+ * werkmeister pr <gate|open|status> [repo] [--json]
+ * werkmeister pr adopt <pr-number|url> [repo] | adopt --no-pr "<reason>" [repo]
+ * werkmeister pr new <worktree> --slug <slug>
  *
  * The workspace's only way to open a PR (docs/workspace-lifecycle.md). Run
  * from anywhere inside a workspace; `repo` is a code worktree's directory name
- * and limits the action to that repo's PR files; a PR file's name (`sandbox-why-page`) limits it to that file.
+ * and limits the action to that repo's PR files; a PR file's name (`werkmeister-why-page`) limits it to that file.
  *   gate    run the pre-PR gate, change nothing
  *   open    gate each `approved` PR file, push, open the PR, record its URL
  *   status  record merged / shipped / closed from GitHub and release tags
@@ -36,14 +36,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.action === "watch") return print(await watchPrs({ desktop: false }), args);
   const ws = findRecordRoot(process.cwd());
   if (!ws) {
-    error(
-      "Not inside a sandbox workspace (no .sandbox/workspace.yml above the current directory).",
-    );
+    error("Not inside a workspace (no .werkmeister/workspace.yml above the current directory).");
     process.exit(1);
   }
   const repo = (args.repo as string | null) ?? undefined;
   if (args.action === "new" && !(repo && args.slug)) {
-    error("Usage: sandbox pr new <worktree> --slug <slug>");
+    error("Usage: werkmeister pr new <worktree> --slug <slug>");
     process.exit(1);
   }
   const result =

@@ -4,7 +4,7 @@
  * Two files: the shipped `infra/compose/shared-infra.yml` (read-only, part of
  * the npm package) and the generated `k8s-forwards.override.yml` under
  * `stateInfraRoot()`, plus `baseline.override.yml` once `connect` has written
- * it (baseline.ts). The shipped file interpolates `${SANDBOX_STATE_DIR}` for
+ * it (baseline.ts). The shipped file interpolates `${WERKMEISTER_STATE_DIR}` for
  * every generated mount, so the env this returns must reach the spawn.
  *
  * A leaf module on purpose: `infra.ts`, `caddy.ts`, `k8s.ts` and `status.ts`
@@ -26,7 +26,7 @@ export const INFRA_PROJECT = "w9r-infra";
  * The project before SW-95. Its containers hold the container names and ports
  * 80/443 the renamed stack needs, so infra start and `down` take it down first.
  */
-export const LEGACY_INFRA_PROJECT = "sandbox-infra";
+export const LEGACY_INFRA_PROJECT = "sandbox-infra"; // name-check: ignore
 
 /** The k8s-forwards service's `container_name:` in shared-infra.yml. */
 export const K8S_FORWARDS_CONTAINER = "w9r-k8s-forwards";
@@ -64,7 +64,7 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv; c
       override,
       ...(fs.existsSync(baseline) ? ["-f", baseline] : []),
       // `-p`, not just the file's `name:`: a workspace container's `.env`
-      // exports COMPOSE_PROJECT_NAME=sandbox-<feature>, which outranks `name:`
+      // exports COMPOSE_PROJECT_NAME=sandbox-<feature>, which outranks `name:` // name-check: ignore
       // and pointed every infra call at the workspace's project (#198). It and
       // the profiles go after the files, because callers read the shipped file
       // at argv[3].
@@ -72,10 +72,10 @@ export function composeInvocation(): { argv: string[]; env: NodeJS.ProcessEnv; c
       INFRA_PROJECT,
       ...infraProfiles().flatMap((p) => ["--profile", p]),
     ],
-    env: { ...process.env, SANDBOX_STATE_DIR: stateInfraRoot() },
+    env: { ...process.env, WERKMEISTER_STATE_DIR: stateInfraRoot() },
     // Compose v5 builds through `buildx bake`, which refuses a secret file
     // outside the working directory unless granted `--allow=fs.read`. The
-    // shipped file's corp_ca secret is `${SANDBOX_STATE_DIR}/../corp-ca.crt`.
+    // shipped file's corp_ca secret is `${WERKMEISTER_STATE_DIR}/../corp-ca.crt`.
     cwd: path.dirname(stateInfraRoot()),
   };
 }

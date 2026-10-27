@@ -57,7 +57,7 @@ test("a new fragment: header, every section, guessed comments, the env rewrite",
   const root = fixture(DEMO, "demo-services");
   const plan = planFragment(root, opts(root));
   const r = renderFragment(plan);
-  assert.ok(r.yaml.startsWith("# Sandbox service-registry fragment for this repo."));
+  assert.ok(r.yaml.startsWith("# Werkmeister service-registry fragment for this repo."));
   const doc = parse(r.yaml);
   assert.deepEqual(Object.keys(doc), ["services", "infrastructure", "setup_services"]);
   assert.deepEqual(Object.keys(doc.services), ["backend", "frontend"]);
@@ -133,13 +133,13 @@ test("gap-filling keeps anchors, flow sequences, comments and hand values byte f
     "    setup_service: demo-install",
     "",
   ].join("\n");
-  const root = fixture({ ...DEMO, ".sandbox/services.yaml": existing }, "demo-services");
+  const root = fixture({ ...DEMO, ".werkmeister/services.yaml": existing }, "demo-services");
   const plan = planFragment(root, opts(root));
   const r = renderFragment(plan);
   assert.equal(
     r.path,
-    path.join(root, ".sandbox", "services.yaml"),
-    "a legacy fragment is updated in place",
+    path.join(root, ".werkmeister", "services.yaml"),
+    "an existing fragment is updated in place",
   );
   assertKeptAllBytes(existing, r.yaml);
   const doc = parse(r.yaml);
@@ -155,7 +155,7 @@ test("gap-filling keeps anchors, flow sequences, comments and hand values byte f
 
 test("an empty or comment-only fragment gets the sections appended after it", () => {
   for (const existing of ["", "# nothing yet\n"]) {
-    const root = fixture({ ...DEMO, ".sandbox/services.yaml": existing }, "demo-services");
+    const root = fixture({ ...DEMO, ".werkmeister/services.yaml": existing }, "demo-services");
     const r = renderFragment(planFragment(root, opts(root)));
     assert.ok(r.yaml.startsWith(existing));
     assert.deepEqual(Object.keys(parse(r.yaml).services), ["backend", "frontend"]);
@@ -210,7 +210,7 @@ test("compose depends_on on a datastore is dropped; on a sibling service it is k
 test("no trailing newline: several edits at EOF keep the last original line intact", () => {
   const existing =
     "services:\n  backend:\n    path: apps/backend\n    port_offset: 7\n    notes: >-\n      x\n      y";
-  const root = fixture({ ...DEMO, ".sandbox/services.yaml": existing }, "demo-services");
+  const root = fixture({ ...DEMO, ".werkmeister/services.yaml": existing }, "demo-services");
   const r = renderFragment(planFragment(root, opts(root)));
   assertKeptAllBytes(existing, r.yaml);
   assert.ok(r.yaml.startsWith(existing + "\n"));
@@ -228,7 +228,7 @@ test("a service the human renamed is matched by path: no duplicate, only missing
         "services:\n  api:\n    build: ./apps/api\n  web:\n    build: ./apps/web\n    depends_on: [api]\n",
       "apps/api/Dockerfile": "FROM golang:1.23\nEXPOSE 8000\n",
       "apps/web/Dockerfile": "FROM node:22\n",
-      ".sandbox/services.yaml": existing,
+      ".werkmeister/services.yaml": existing,
     },
     "shop",
   );
@@ -255,7 +255,7 @@ test("renamed infrastructure is matched by k8s_pod_prefix, and the tunnel uses i
       "apps/api/Dockerfile": "FROM golang:1.23\n",
       "apps/api/k8s.yaml":
         "kind: Deployment\nmetadata: { name: api }\nspec: { template: { spec: { containers: [ { name: api, image: 'api:1', env: [ { name: DATABASE_URL, value: 'postgres://u@postgres:5432/db' } ] } ] } } }\n",
-      ".sandbox/services.yaml": existing,
+      ".werkmeister/services.yaml": existing,
     },
     "shop",
   );
@@ -270,7 +270,7 @@ test("renamed infrastructure is matched by k8s_pod_prefix, and the tunnel uses i
 
 test("a section present but empty, null or flow-styled is left alone, and the skip is reported", () => {
   for (const existing of ["services: {}\n", "services:\n", "services: { other: { path: x } }\n"]) {
-    const root = fixture({ ...DEMO, ".sandbox/services.yaml": existing }, "demo-services");
+    const root = fixture({ ...DEMO, ".werkmeister/services.yaml": existing }, "demo-services");
     const r = renderFragment(planFragment(root, opts(root)));
     assert.ok(r.yaml.startsWith(existing));
     assert.ok(!r.added.some((a) => a.startsWith("services.")));

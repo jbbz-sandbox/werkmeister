@@ -17,8 +17,6 @@ apps/cli/infra/compose/k8s-port-forward/tmp/
 # Per-workspace state (notes, handoffs, standards.json) — not source
 .werkmeister/*
 !.werkmeister/services.yaml
-.sandbox/*
-!.sandbox/services.yaml
 
 # Generated per-workspace env — carries merged values from ~/.werkmeister/secrets.env
 .env

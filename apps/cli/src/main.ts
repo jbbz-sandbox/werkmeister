@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Developer Sandbox CLI
+ * Werkmeister CLI
  *
  * A multi-feature concurrent development orchestrator that lets many
  * Claude Code agents develop features at once (12 slots by default). Each feature runs
@@ -8,42 +8,44 @@
  * port-forwarded from k8s.
  *
  * Usage:
- *     sandbox up <feature|infra>               Start a feature or shared infra
- *     sandbox down <feature|infra> [-v]        Stop and clean up a feature or infra
- *     sandbox restart <feature|infra>          Restart containers
- *     sandbox stop <feature|infra>             Stop containers (preserve slot/volumes)
- *     sandbox pause [feature]                  Freeze containers and hold the Claude session
- *     sandbox resume [feature]                 Thaw what pause froze; the session continues
- *     sandbox status [--k8s]                   Show all active features; --k8s for k8s detail only
- *     sandbox detect [repo] [--dry-run] [--yes] [--assist|--no-assist]  Generate a repo's .werkmeister/services.yaml
- *     sandbox services <feature>               List service endpoints
- *     sandbox logs <feature> [service]         Tail container logs
- *     sandbox remove <feature> <service>       Stop a local service (fall back to k8s)
- *     sandbox test <feature>                   Run Playwright tests
- *     sandbox open <feature> [--path P]        Open a feature-tagged Chrome window (sets X-Feature cookie)
- *     sandbox connect [--k8s]                  Start all shared infra; --k8s for k8s port-forwards only
- *     sandbox proxy-reload                     Regenerate and reload Caddy config
- *     sandbox clean [--all] [--dry-run]        Remove orphaned volumes and files
- *     sandbox stats [--collect N]              Show container resource usage
- *     sandbox optimize [--collect N]           Analyze usage vs limits, recommend changes
- *     sandbox workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
- *     sandbox list-workspaces                  List workspaces under the workspaces root
- *     sandbox issue <view|update|create> [ref] Read, update or file an issue in the configured tracker
- *     sandbox remove-workspace <name>          Deprecated: use `sandbox close-out --abandon <reason>`
- *     sandbox pr <gate|open|status> [repo]     Pre-PR gate, open PRs from approved PR files, record merge/release
- *     sandbox close-out [name]                 End a workspace: after release, or with --abandon <reason>
- *     sandbox code [feature]                   Open a workspace in VS Code
- *     sandbox setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
- *     sandbox registry [sync] [--check]        Regenerate ~/.werkmeister/services.yaml from repo fragments
- *     sandbox migrate [--workspaces] [--check] Move ~/.sandbox to ~/.werkmeister and repoint what names it
- *     sandbox cache prune [name]               Prune build/package caches by their rule (--reset empties)
- *     sandbox dashboard                        Launch the workspace dashboard's MCP server (stdio)
- *     sandbox mcp                              Launch the headless remote MCP surface (stdio)
+ *     werkmeister up <feature|infra>               Start a feature or shared infra
+ *     werkmeister down <feature|infra> [-v]        Stop and clean up a feature or infra
+ *     werkmeister restart <feature|infra>          Restart containers
+ *     werkmeister stop <feature|infra>             Stop containers (preserve slot/volumes)
+ *     werkmeister pause [feature]                  Freeze containers and hold the Claude session
+ *     werkmeister resume [feature]                 Thaw what pause froze; the session continues
+ *     werkmeister status [--k8s]                   Show all active features; --k8s for k8s detail only
+ *     werkmeister detect [repo] [--dry-run] [--yes] [--assist|--no-assist]  Generate a repo's .werkmeister/services.yaml
+ *     werkmeister services <feature>               List service endpoints
+ *     werkmeister logs <feature> [service]         Tail container logs
+ *     werkmeister remove <feature> <service>       Stop a local service (fall back to k8s)
+ *     werkmeister test <feature>                   Run Playwright tests
+ *     werkmeister open <feature> [--path P]        Open a feature-tagged Chrome window (sets X-Feature cookie)
+ *     werkmeister connect [--k8s]                  Start all shared infra; --k8s for k8s port-forwards only
+ *     werkmeister proxy-reload                     Regenerate and reload Caddy config
+ *     werkmeister clean [--all] [--dry-run]        Remove orphaned volumes and files
+ *     werkmeister stats [--collect N]              Show container resource usage
+ *     werkmeister optimize [--collect N]           Analyze usage vs limits, recommend changes
+ *     werkmeister workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
+ *     werkmeister list-workspaces                  List workspaces under the workspaces root
+ *     werkmeister issue <view|update|create> [ref] Read, update or file an issue in the configured tracker
+ *     werkmeister remove-workspace <name>          Deprecated: use `werkmeister close-out --abandon <reason>`
+ *     werkmeister pr <gate|open|status> [repo]     Pre-PR gate, open PRs from approved PR files, record merge/release
+ *     werkmeister close-out [name]                 End a workspace: after release, or with --abandon <reason>
+ *     werkmeister code [feature]                   Open a workspace in VS Code
+ *     werkmeister setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
+ *     werkmeister registry [sync] [--check]        Regenerate ~/.werkmeister/services.yaml from repo fragments
+ *     werkmeister migrate [--workspaces] [--check] Move ~/.sandbox to ~/.werkmeister and repoint what names it // name-check: ignore
+ *     werkmeister cache prune [name]               Prune build/package caches by their rule (--reset empties)
+ *     werkmeister dashboard                        Launch the workspace dashboard's MCP server (stdio)
+ *     werkmeister mcp                              Launch the headless remote MCP surface (stdio)
  *
  *     Feature name can be omitted if FEATURE is set in a .env file in the cwd.
  *     Use "infra" as the feature name to target shared infrastructure.
  */
 
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
@@ -59,11 +61,11 @@ import { STRATEGY_IDS } from "werkmeister-core/strategies";
 import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
 
-// Repo root (contains infra/, docs/, dist/). Exported as SANDBOX_ROOT for the
+// Repo root (contains infra/, docs/, dist/). Exported as WERKMEISTER_ROOT for the
 // config loaders.
 const _REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 if (!envVar("ROOT")) {
-  process.env.SANDBOX_ROOT = _REPO_ROOT;
+  process.env.WERKMEISTER_ROOT = _REPO_ROOT;
 }
 
 // ANSI helpers (duplicated here to stay import-light before dispatch)
@@ -71,7 +73,7 @@ const _RED = "\x1b[31m";
 const _BOLD = "\x1b[1m";
 const _RESET = "\x1b[0m";
 
-const BANNER = `${_BOLD}Developer Sandbox CLI${_RESET}
+const BANNER = `${_BOLD}Werkmeister CLI${_RESET}
 Multi-feature concurrent development orchestrator
 `;
 
@@ -155,7 +157,7 @@ const SPECS: CommandSpec[] = [
         .argument("[feature]", "Feature name (defaults to FEATURE from a .env file in CWD).")
         .option(
           "-s, --service <name>",
-          "Local service to intercept (must be in the workspace's SERVICES and running via `sandbox up`).",
+          "Local service to intercept (must be in the workspace's SERVICES and running via `werkmeister up`).",
         )
         .option(
           "--leave",
@@ -387,7 +389,7 @@ const SPECS: CommandSpec[] = [
         .option(
           "--path <path>",
           "Path appended to the first routed host " +
-            "(default: test_path from .sandbox/workspace.yml, else TEST_PATH from .env, else '/').",
+            "(default: test_path from .werkmeister/workspace.yml, else TEST_PATH from .env, else '/').",
         )
         .option("--size <W,H>", "Window size WIDTH,HEIGHT (default: 1440,900).", "1440,900")
         .option("--position <X,Y>", "Window position X,Y (default: staggered by feature name).");
@@ -429,7 +431,7 @@ const SPECS: CommandSpec[] = [
         .description("Remove orphaned volumes and generated files from stopped features")
         .option(
           "--all",
-          "Also clean volumes for currently active features (implies sandbox down for each)",
+          "Also clean volumes for currently active features (implies werkmeister down for each)",
         )
         .option("--dry-run", "Show what would be cleaned without actually removing anything");
     },
@@ -484,13 +486,13 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Workspace sb-* skill projection: verify freshness against the " +
-            "sandbox repo (check) or rewrite it (sync)",
+          "Workspace w9r-* skill projection: verify freshness against the " +
+            "werkmeister repo (check) or rewrite it (sync)",
         )
         .addArgument(
           new Argument(
             "<action>",
-            "check: exit 1 if the workspace's .claude/skills/sb-* lag the repo; sync: refresh them",
+            "check: exit 1 if the workspace's .claude/skills/w9r-* lag the repo; sync: refresh them",
           ).choices(["check", "sync"]),
         );
     },
@@ -522,7 +524,7 @@ const SPECS: CommandSpec[] = [
         .addArgument(
           new Argument(
             "<action>",
-            "gate: deny or allow an Edit/Write per the standards gate; pr-guard: deny opening a PR except via `sandbox pr open`; " +
+            "gate: deny or allow an Edit/Write per the standards gate; pr-guard: deny opening a PR except via `werkmeister pr open`; " +
               "agent-state: record working / needs-you / done for the workspace pane and dashboard",
           ).choices(["gate", "pr-guard", "agent-state"]),
         );
@@ -535,7 +537,7 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Workspace notes (.sandbox/notes/). `context` prints the latest " +
+          "Workspace notes (.werkmeister/notes/). `context` prints the latest " +
             "handoff + open decisions for session-start injection (hook target); " +
             "`graduate` scaffolds an open decision note into the standards tree.",
         )
@@ -573,18 +575,18 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Create a new workspace under $SANDBOX_WORKSPACES_ROOT (git worktrees " +
+          "Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees " +
             "on a <user>/<workspace> branch) and run init-workspace inside it.",
         )
         .argument(
           "[feature]",
           "Feature name (lower-cased). Combined with --issue-id to form the " +
             "workspace dir name, e.g. an issue + feature -> <issue-slug>-feature. " +
-            "If omitted, resolved from ./.sandbox/workspace.yml, then interactively (TTY).",
+            "If omitted, resolved from ./.werkmeister/workspace.yml, then interactively (TTY).",
         )
         .option(
           "--issue-id <ref>",
-          "Issue ID in this machine's issue tracker (see `sandbox setup`). Its slug is " +
+          "Issue ID in this machine's issue tracker (see `werkmeister setup`). Its slug is " +
             "prefixed to the workspace dir name; passed through to init-workspace.",
         )
         .option(
@@ -633,27 +635,27 @@ const SPECS: CommandSpec[] = [
           new Option(
             "--context-strategy <id>",
             "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
-              "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
+              "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
           ).choices([...STRATEGY_IDS]),
         )
         .option(
           "--autonomous",
           "Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a " +
-            "headless session needs (env: SANDBOX_AUTONOMOUS; config: autonomous).",
+            "headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).",
         )
         .option(
           "--model <id>",
           "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a " +
-            "claude-… id; blank keeps Claude Code's default (env: SANDBOX_MODEL; config: model).",
+            "claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).",
         )
         .option(
           "--auto-stop",
           "Stop this workspace's feature containers when a Claude session in it ends and no " +
-            "other is open (a SessionEnd hook; env: SANDBOX_AUTO_STOP; config: auto_stop).",
+            "other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).",
         )
         .option(
           "--browser-form",
-          "Collect inputs through the Sandbox-branded browser form (the same " +
+          "Collect inputs through the Werkmeister-branded browser form (the same " +
             "form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a " +
             "localhost page in the default browser and blocks until submit/cancel.",
         )
@@ -708,7 +710,7 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Read, update or file an issue in this machine's issue tracker (see `sandbox setup`)",
+          "Read, update or file an issue in this machine's issue tracker (see `werkmeister setup`)",
         )
         .addArgument(
           new Argument(
@@ -718,7 +720,7 @@ const SPECS: CommandSpec[] = [
         )
         .argument(
           "[ref]",
-          "Issue ID; omit inside a workspace to use its .sandbox/workspace.yml issue",
+          "Issue ID; omit inside a workspace to use its .werkmeister/workspace.yml issue",
         )
         .option("--json", "view: print the issue as JSON")
         .option("--status <name>", "update: move the issue to this status")
@@ -749,9 +751,9 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Deprecated: use `sandbox close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace",
+          "Deprecated: use `werkmeister close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace",
         )
-        .argument("<name>", "Workspace directory name, as `sandbox list-workspaces` reports it")
+        .argument("<name>", "Workspace directory name, as `werkmeister list-workspaces` reports it")
         .option("-y, --yes", "Skip the confirmation prompt")
         .option(
           "--abandon <reason>",
@@ -776,7 +778,7 @@ const SPECS: CommandSpec[] = [
         )
         .argument(
           "[args...]",
-          "[repo] — only this code worktree's PR files, or one PR file by its name (`sandbox-why-page`); adopt: <pr-number|url> [repo]; new: <worktree>",
+          "[repo] — only this code worktree's PR files, or one PR file by its name (`werkmeister-why-page`); adopt: <pr-number|url> [repo]; new: <worktree>",
         )
         .option("--slug <slug>", "new: the follow-up's name, in its PR file and branch")
         .option("--no-pr <reason>", "adopt: no PR — the fix is already on base")
@@ -840,7 +842,7 @@ const SPECS: CommandSpec[] = [
         .description("Open a workspace in VS Code")
         .argument(
           "[feature]",
-          "Workspace name, as `sandbox list-workspaces` reports it. If omitted, read from FEATURE in a .env file.",
+          "Workspace name, as `werkmeister list-workspaces` reports it. If omitted, read from FEATURE in a .env file.",
         );
     },
     namespace: ([feature]) => ({ feature: feature ?? null }),
@@ -870,7 +872,7 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Set up and maintain the machine-global sandbox config " +
+          "Set up and maintain the machine-global werkmeister config " +
             "(~/.werkmeister/config.yaml — the single source of truth); regenerates " +
             "env.sh and wires up ~/.zshenv and the Desktop MCP config",
         )
@@ -922,7 +924,7 @@ const SPECS: CommandSpec[] = [
       cmd
         .description(
           "Regenerate ~/.werkmeister/services.yaml from every <repo>/.werkmeister/services.yaml " +
-            "(or legacy .sandbox/services.yaml) under paths.repos_root (merged under " +
+            "under paths.repos_root (merged under " +
             "~/.werkmeister/services.local.yaml)",
         )
         .argument("[action]", "sync — the default and only action")
@@ -936,11 +938,11 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, " +
+          "Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, " + // name-check: ignore
             "env.sh, the ~/.zshenv block, services.yaml, the pr-watch schedule and workspace " +
             "compose files. Safe to re-run; refuses while affected containers are running.",
         )
-        .option("--workspaces", "Also rename each workspace's .sandbox/ to .werkmeister/.")
+        .option("--workspaces", "Also rename each workspace's .sandbox/ to .werkmeister/.") // name-check: ignore
         .option("--check", "Report what would change without writing.");
     },
     namespace: (_args, o) => ({ check: Boolean(o.check), workspaces: Boolean(o.workspaces) }),
@@ -951,23 +953,26 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Reconcile a sandbox workspace from .sandbox/workspace.yml: create/remove " +
+          "Reconcile a workspace from .werkmeister/workspace.yml: create/remove " +
             "repo worktrees to match the `repos`/`services` fields, then (re)generate " +
             `CLAUDE.md / .env / ${COMPOSE_FILE}. Idempotent — edit workspace.yml and ` +
-            "rerun. Inputs resolve as CLI flag > env (SANDBOX_*) > workspace.yml.",
+            "rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.",
         )
-        .option("-t, --task <title>", "Task description / title (env: SANDBOX_TASK; config: task).")
-        .option("--feature <name>", "Feature name for sandbox slot routing (config: feature).")
+        .option(
+          "-t, --task <title>",
+          "Task description / title (env: WERKMEISTER_TASK; config: task).",
+        )
+        .option("--feature <name>", "Feature name for workspace slot routing (config: feature).")
         .option(
           "--services <list>",
-          "Comma-separated list of local services (env: SANDBOX_SERVICES; config: services). " +
+          "Comma-separated list of local services (env: WERKMEISTER_SERVICES; config: services). " +
             "Their owning repos are added to the reconciled worktree set.",
         )
         .option(
           "-r, --repos <list>",
           "Comma-separated repos to keep as git worktrees (union with the repos " +
             "owning --services). Persisted to workspace.yml; the worktree set is reconciled " +
-            "to match on every run (env: SANDBOX_REPOS; config: repos).",
+            "to match on every run (env: WERKMEISTER_REPOS; config: repos).",
         )
         .option(
           "--force",
@@ -977,67 +982,67 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "--issue-id <ref>",
-          "Issue ID in this machine's issue tracker (see `sandbox setup`) " +
-            "(env: SANDBOX_ISSUE_ID; config: issue_id).",
+          "Issue ID in this machine's issue tracker (see `werkmeister setup`) " +
+            "(env: WERKMEISTER_ISSUE_ID; config: issue_id).",
         )
         .option(
           "--project <name>",
           "The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue " +
-            "(env: SANDBOX_PROJECT; config: project).",
+            "(env: WERKMEISTER_PROJECT; config: project).",
         )
         .option(
           "--labels <list>",
           "Comma-separated free-form tags for filtering workspaces in the " +
-            "dashboard search (env: SANDBOX_LABELS; config: labels).",
+            "dashboard search (env: WERKMEISTER_LABELS; config: labels).",
         )
         .option(
           "--test-path <path>",
-          "URL path for feature testing (env: SANDBOX_TEST_PATH; config: test_path).",
+          "URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).",
         )
         .option(
           "--description <text>",
-          "Free-form description for the CLAUDE.md header (env: SANDBOX_DESCRIPTION; config: description).",
+          "Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).",
         )
         .option(
           "--starting-prompt <text>",
-          "First instruction for the agent; persisted to .sandbox/workspace.yml " +
-            "(env: SANDBOX_STARTING_PROMPT; config: starting_prompt).",
+          "First instruction for the agent; persisted to .werkmeister/workspace.yml " +
+            "(env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).",
         )
         .addOption(
           new Option(
             "--work-type <type>",
             "Kind of work; seeds the first-phase handoff note " +
-              "(env: SANDBOX_WORK_TYPE; config: work_type).",
+              "(env: WERKMEISTER_WORK_TYPE; config: work_type).",
           ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
         )
         .addOption(
           new Option(
             "--context-strategy <id>",
             "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
-              "(env: SANDBOX_CONTEXT_STRATEGY; config: context_strategy).",
+              "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
           ).choices([...STRATEGY_IDS]),
         )
         .option(
           "--autonomous",
           "Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a " +
-            "headless session needs (env: SANDBOX_AUTONOMOUS; config: autonomous).",
+            "headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).",
         )
         .option(
           "--model <id>",
           "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a " +
-            "claude-… id; blank keeps Claude Code's default (env: SANDBOX_MODEL; config: model).",
+            "claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).",
         )
         .option(
           "--auto-stop",
           "Stop this workspace's feature containers when a Claude session in it ends and no " +
-            "other is open (a SessionEnd hook; env: SANDBOX_AUTO_STOP; config: auto_stop).",
+            "other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).",
         )
         .option(
           "--config <path>",
           "Path to a YAML config file (JSONC/JSON also accepted). Defaults " +
-            "to <workspace>/.sandbox/workspace.yml; legacy workspace.yaml / " +
+            "to <workspace>/.werkmeister/workspace.yml; legacy workspace.yaml / " +
             "workspace.jsonc / workspace.json are migrated on next write (env: " +
-            "SANDBOX_WORKSPACE_CONFIG).",
+            "WERKMEISTER_WORKSPACE_CONFIG).",
         )
         .option(
           "--prune-context",
@@ -1046,7 +1051,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "--refresh-issue",
-          "Re-fetch the workspace's issue into .sandbox/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).",
+          "Re-fetch the workspace's issue into .werkmeister/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).",
         );
     },
     namespace: (_a, o) => ({
@@ -1074,6 +1079,17 @@ const SPECS: CommandSpec[] = [
 ];
 
 async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
+  // SW-106 dropped the ~/.sandbox fallback: say so instead of running on an empty config. // name-check: ignore
+  const home = os.homedir();
+  if (
+    spec.name !== "migrate" &&
+    fs.existsSync(path.join(home, ".sandbox")) && // name-check: ignore
+    !fs.existsSync(path.join(home, ".werkmeister"))
+  ) {
+    console.error(
+      `${_RED}Found ~/.sandbox but no ~/.werkmeister: run 'werkmeister migrate' first.${_RESET}`, // name-check: ignore
+    );
+  }
   // One-shot migration: remove legacy ~/.werkmeister/slots.json on first run
   // after the labels refactor. Idempotent; no-op once the file is gone.
   try {
@@ -1117,7 +1133,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
 }
 
 /**
- * `sandbox __complete` — the callback behind bash's `complete -C`, which hands
+ * `werkmeister __complete` — the callback behind bash's `complete -C`, which hands
  * us the line in COMP_LINE/COMP_POINT and reads newline-separated candidates
  * back off stdout. One code path covers bash and zsh (via bashcompinit), which
  * is why there is no generated per-shell completion script to keep in sync:
@@ -1126,7 +1142,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
  *
  * Hook it up with (zsh needs the first line, bash does not):
  *     autoload -Uz +X bashcompinit && bashcompinit
- *     complete -C 'sandbox __complete' sandbox
+ *     complete -C 'werkmeister __complete' werkmeister w9r
  */
 async function completeLine(program: Command): Promise<void> {
   const line = (process.env.COMP_LINE ?? "").slice(0, Number(process.env.COMP_POINT ?? 0));
@@ -1190,7 +1206,7 @@ export async function main(): Promise<void> {
   // (it is the only place that can resolve a node runtime), so these two
   // registrations exist for --help parity and to give a useful message to
   // anyone running dist/main.js directly. Neither takes a transport flag: the
-  // wrapper launches `mcp` over stdio, and `sandbox connect` starts the HTTP modes.
+  // wrapper launches `mcp` over stdio, and `werkmeister connect` starts the HTTP modes.
   for (const [name, description] of [
     ["dashboard", "Run the localhost workspaces dashboard in the foreground (checkout only)"],
     [

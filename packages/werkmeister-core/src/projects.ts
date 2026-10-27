@@ -120,7 +120,7 @@ export function loadProjects(cfg?: GlobalConfig): Project[] {
   for (const p of problems) {
     if (warned.has(p)) continue;
     warned.add(p);
-    warn(`${p} — skipped (sandbox config --check)`);
+    warn(`${p} — skipped (werkmeister config --check)`);
   }
   return projects;
 }
