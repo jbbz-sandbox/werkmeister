@@ -120,18 +120,33 @@ export interface JiraRestIssue {
 
 const ISSUE_FIELDS = "summary,description,status,issuetype,assignee,comment";
 
-/** Fetch one issue (summary/description/status/type/assignee/comments). Null on any failure. */
-export async function fetchIssueRest(key: string): Promise<JiraRestIssue | null> {
+/**
+ * Fetch one issue (summary/description/status/type/assignee/comments). Null on any failure,
+ * with the reason pushed onto *why* (SW-109: a bare null hid why `pr open` skipped a move).
+ */
+export async function fetchIssueRest(key: string, why?: string[]): Promise<JiraRestIssue | null> {
   const creds = await jiraCreds();
-  if (!creds) return null;
+  if (!creds) {
+    why?.push("no Jira REST credentials");
+    return null;
+  }
   try {
     return await jiraGet<JiraRestIssue>(
       creds,
       `/rest/api/2/issue/${encodeURIComponent(key)}?fields=${ISSUE_FIELDS}`,
     );
-  } catch {
+  } catch (e) {
+    why?.push(restFailure(e));
     return null;
   }
+}
+
+/** jiraFetch's own message, or fetch's network error with its cause (`fetch failed (ECONNRESET)`). */
+function restFailure(e: unknown): string {
+  const err = e as Error & { cause?: { code?: string; message?: string } };
+  if (err.message?.startsWith("Jira REST ")) return err.message;
+  const cause = err.cause?.code ?? err.cause?.message;
+  return `Jira REST: ${err.message}${cause ? ` (${cause})` : ""}`;
 }
 
 /**
