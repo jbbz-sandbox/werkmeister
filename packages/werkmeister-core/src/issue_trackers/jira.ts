@@ -7,12 +7,14 @@
 import { askClaudeJson } from "../claude_cli.js";
 import { loadJira, loadSandboxIssuesProject } from "../global_config.js";
 import {
+  boardColumnRest,
   createIssueRest,
   fetchIssueRest,
   fetchStatusesRest,
   isJiraPlaceholder,
   type JiraRestIssue,
   jiraMyself,
+  searchIssuesRest,
   updateIssueRest,
 } from "../jira-rest.js";
 import type {
@@ -276,6 +278,18 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
             "or file it with the Atlassian MCP tools",
         );
       return { ref: created.key, title, type: created.issueType, url: created.url };
+    },
+
+    async listReady(board) {
+      if (!board && !key) throw new Error("no Jira project in scope");
+      const issues = board
+        ? await boardColumnRest(board.id, board.ready)
+        : await searchIssuesRest(
+            `project = ${key} AND statusCategory != Done ORDER BY priority DESC, rank ASC`,
+          );
+      if (!issues)
+        throw new Error("listing ready work needs Jira REST credentials (docs/jira-rest-setup.md)");
+      return issues.map(fromRest);
     },
 
     async updateIssue(ref, update) {

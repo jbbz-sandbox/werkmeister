@@ -17,15 +17,15 @@
 
 import type { GlobalConfig } from "./config.js";
 import { load } from "./global_config.js";
-import { TRACKER_IDS, type TrackerId, type TrackerScope } from "./issue_trackers/types.js";
+import {
+  type Board,
+  TRACKER_IDS,
+  type TrackerId,
+  type TrackerScope,
+} from "./issue_trackers/types.js";
 import { warn } from "./reporter.js";
 
-/** A board inside the project's tracker: Jira board id, or GitHub Projects number under `org`. */
-export interface Board {
-  id: string;
-  /** The column whose items are ready to start; board rank orders them. */
-  ready: string;
-}
+export type { Board };
 
 export interface Project {
   name: string;

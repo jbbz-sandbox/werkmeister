@@ -85,11 +85,17 @@ export async function dockerAvailable() {
  * Run *fn* with $WERKMEISTER_GH_BIN pointing at a fake `gh`: `issue view` prints
  * `issue` as JSON (exit 1 when null), `auth status` exits `auth`, `repo view` exits `repoView`.
  * Like the real repo, `issue edit --add-label` fails for a label not in `labels`;
- * `label create` adds one. Every call is a line in `<dir>/calls`.
+ * `label create` adds one. `project item-list` prints `{ items }`, `issue list` prints
+ * `issues` (for every repo). Every call is a line in `<dir>/calls`.
  */
-export async function withFakeGh({ issue = null, auth = 0, repoView = 0, labels = [] } = {}, fn) {
+export async function withFakeGh(
+  { issue = null, auth = 0, repoView = 0, labels = [], items = [], issues = [] } = {},
+  fn,
+) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
   fs.writeFileSync(path.join(dir, "issue.json"), JSON.stringify(issue));
+  fs.writeFileSync(path.join(dir, "items.json"), JSON.stringify({ items }));
+  fs.writeFileSync(path.join(dir, "issues.json"), JSON.stringify(issues));
   fs.writeFileSync(path.join(dir, "labels"), labels.map((l) => `${l}\n`).join(""));
   const bin = path.join(dir, "gh");
   fs.writeFileSync(
@@ -102,6 +108,8 @@ case "$1 $2" in
   "issue view") if [ "$(cat '${dir}/issue.json')" = "null" ]; then echo "could not resolve" >&2; exit 1; fi; cat '${dir}/issue.json';;
   "auth status") if [ ${auth} = 0 ]; then echo "  ✓ Logged in to github.com account octo (keyring)" >&2; else echo "You are not logged into any GitHub hosts." >&2; fi; exit ${auth};;
   "repo view") exit ${repoView};;
+  "project item-list") cat '${dir}/items.json';;
+  "issue list") cat '${dir}/issues.json';;
   *) exit 0;;
 esac
 `,

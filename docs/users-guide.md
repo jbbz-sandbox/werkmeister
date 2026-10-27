@@ -455,10 +455,10 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `--force`: Delete a \<user>/\<workspace> branch an earlier workspace of the same name left on origin, instead of aborting (that branch's work is gone; see the abort message for how to continue it instead).
 - `werkmeister list-workspaces`: List the workspaces under the workspaces root with their issue and labels
 - `werkmeister issue <action> [ref]`: Read, update or file an issue in this machine's issue tracker (see `werkmeister setup`)
-  - `--json`: view: print the issue as JSON
+  - `--json`: view, ready: print JSON
   - `--status <name>`: update: move the issue to this status
   - `--comment <text>`: update: add this comment
-  - `--project <key>`: create: the Jira project to file in
+  - `--project <key>`: create: the Jira project key to file in; ready: a project from projects: in config.yaml
   - `--type <type>`: create: bug, feature or task (mapped to the tracker's issue type)
   - `--title <text>`: create: the issue's summary
   - `--body-file <path>`: create: the issue's description, from a file (- for stdin)
@@ -1555,6 +1555,15 @@ exactly as above.
 form and the wizard ask for the project after the issue. Left blank, it is the project whose
 scope holds the ref, else the `default: true` one; a ref that fits none fails and lists the
 projects. The ref is then checked with that project's tracker.
+
+**What is ready next.** `werkmeister issue ready [--project <name>] [--json]` lists a project's
+open work in priority order. With a board, it is the board's `ready` column in board rank; without
+one, the scope's open issues (Jira: `statusCategory != Done` by priority then rank; GitHub: each
+scoped repo's open issues, oldest first). The project is `--project`, else the workspace's, else
+the `default: true` one, else the only one. The `next-wave` plugin skill reads its tickets from it.
+Jira needs the REST token (`jira.api_token`, [Jira REST setup](jira-rest-setup.md)). A GitHub board
+needs the `read:project` token scope: `gh auth refresh -s read:project`. One page is read: 100
+issues on Jira, 200 board items on GitHub.
 
 `werkmeister config --check` names each invalid project; an invalid project is skipped with a
 warning. `werkmeister connect` checks sign-in for each project's tracker.

@@ -160,6 +160,75 @@ export function githubTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       };
     },
 
+    async listReady(board) {
+      if (board) {
+        const owner = org || loadGithubOrg();
+        // ponytail: one page of 200; paginate when a board's ready column holds more.
+        let out: string;
+        try {
+          out = await gh([
+            "project",
+            "item-list",
+            board.id,
+            "--owner",
+            owner,
+            "--format",
+            "json",
+            "--limit",
+            "200",
+            "--query",
+            `status:"${board.ready}"`,
+          ]);
+        } catch (e) {
+          throw new Error(
+            `${(e as Error).message} (boards need the read:project scope: gh auth refresh -s read:project)`,
+          );
+        }
+        const { items = [] } = JSON.parse(out) as {
+          items?: Array<{
+            status?: string;
+            content?: {
+              type?: string;
+              number?: number;
+              repository?: string;
+              title?: string;
+              url?: string;
+            };
+          }>;
+        };
+        // Order as returned: the board's own. --query already filters; the check also drops PRs and drafts.
+        return items.flatMap(({ status, content: c }) =>
+          c?.type === "Issue" && status?.toLowerCase() === board.ready.toLowerCase()
+            ? [{ ref: `${c.repository}#${c.number}`, title: c.title, status, url: c.url }]
+            : [],
+        );
+      }
+      const scoped = githubIssueRepos(scope);
+      if (!scoped.length) throw new Error("no repos in scope");
+      const lists = await Promise.all(
+        scoped.map(async (repo) => {
+          const list = JSON.parse(
+            await gh([
+              "issue",
+              "list",
+              "-R",
+              repo,
+              "--state",
+              "open",
+              "--limit",
+              "100",
+              "--json",
+              "number,title,url,labels",
+              "--search",
+              "sort:created-asc",
+            ]),
+          ) as Array<GhIssue & { number: number }>;
+          return list.map((i) => fromGh(`${repo}#${i.number}`, { ...i, state: "OPEN" }));
+        }),
+      );
+      return lists.flat();
+    },
+
     async updateIssue(ref, update) {
       const [repo, n] = split(ref);
       const status = update.status?.trim();

@@ -22,6 +22,13 @@ export interface TrackerScope {
   repos?: string[];
 }
 
+/** A board inside the project's tracker: Jira board id, or GitHub Projects number under the scope's org. */
+export interface Board {
+  id: string;
+  /** The column whose items are ready to start; board rank orders them. */
+  ready: string;
+}
+
 export interface IssueComment {
   author: string;
   /** ISO date, when the tracker gives one. */
@@ -109,6 +116,11 @@ export interface IssueTrackerStrategy {
    * file with the tracker's own CLI (GitHub: `gh issue create`). Throws with the tracker's reason.
    */
   createIssue?(issue: NewIssue): Promise<Issue>;
+  /**
+   * Open work in priority order: `board`'s ready column in board rank when given,
+   * else the scope's open issues. Throws with the tracker's reason.
+   */
+  listReady(board?: Board): Promise<Issue[]>;
   /** Move the issue's status and/or add a comment. Throws with the tracker's reason. */
   updateIssue(ref: string, update: IssueUpdate): Promise<void>;
   /** Whether this machine can read issues, and the one command or doc that fixes it. Never throws. */
