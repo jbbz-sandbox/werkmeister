@@ -159,6 +159,50 @@ export async function fetchStatusesRest(keys: string[]): Promise<Record<string, 
   }
 }
 
+// ponytail: one page of 100; paginate when a project or board column holds more.
+const READY_PAGE = "fields=summary,status&maxResults=100";
+
+/** The issues a JQL search returns, in its order. Null without creds; throws on HTTP failure. */
+export async function searchIssuesRest(jql: string): Promise<JiraRestIssue[] | null> {
+  const creds = await jiraCreds();
+  if (!creds) return null;
+  const data = await jiraGet<{ issues?: JiraRestIssue[] }>(
+    creds,
+    `/rest/api/2/search/jql?jql=${encodeURIComponent(jql)}&${READY_PAGE}`,
+  );
+  return data.issues ?? [];
+}
+
+/**
+ * A board column's issues in board rank (the Agile API's own order). Null
+ * without creds; throws on HTTP failure, or naming the board's columns when it has no `column`.
+ */
+export async function boardColumnRest(
+  boardId: string,
+  column: string,
+): Promise<JiraRestIssue[] | null> {
+  const creds = await jiraCreds();
+  if (!creds) return null;
+  const board = encodeURIComponent(boardId);
+  const { columnConfig } = await jiraGet<{
+    columnConfig?: { columns?: Array<{ name?: string; statuses?: Array<{ id?: string }> }> };
+  }>(creds, `/rest/agile/1.0/board/${board}/configuration`);
+  const columns = columnConfig?.columns ?? [];
+  const col = columns.find((c) => c.name?.toLowerCase() === column.toLowerCase());
+  if (!col)
+    throw new Error(
+      `board ${boardId} has no "${column}" column (it has: ${columns.map((c) => c.name).join(", ")})`,
+    );
+  const ids = (col.statuses ?? []).flatMap((s) => (s.id ? [s.id] : []));
+  if (!ids.length) return [];
+  const jql = encodeURIComponent(`status in (${ids.join(",")})`);
+  const data = await jiraGet<{ issues?: JiraRestIssue[] }>(
+    creds,
+    `/rest/agile/1.0/board/${board}/issue?jql=${jql}&${READY_PAGE}`,
+  );
+  return data.issues ?? [];
+}
+
 /**
  * Create an issue in `project`. `issueType` is a Jira type name; when the
  * project has no such type (SW has no Bug) it is filed as a Task labelled

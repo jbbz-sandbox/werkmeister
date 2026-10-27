@@ -2,6 +2,7 @@
  * werkmeister issue <view|update> [ref] [--json] [--status <name>] [--comment <text>]
  * werkmeister issue create --project <key> --type <bug|feature|task> --title <text> --body-file <path|->
  * werkmeister issue start
+ * werkmeister issue ready [--project <name>] [--json]
  *
  * Read or update one issue in this machine's issue tracker (`werkmeister setup`
  * picks it). Every call goes through `issueTracker()`, so nothing here names a
@@ -14,6 +15,9 @@
  * start:  inside a workspace, the first stage or phase began: move its issue to
  *         in progress, forward only (docs/workspace-lifecycle.md § Issue status).
  *         Exits 0 when the tracker refuses, so a stage never fails on it.
+ * ready:  a project's open work in priority order: its board's ready column in
+ *         board rank, else the scope's open issues (SW-104). The project is
+ *         --project, else the workspace's, else the default one, else the only one.
  *
  * `ref` may be omitted inside a workspace: the issue is then read from its
  * `.werkmeister/workspace.yml` (the workspace root is the nearest `.werkmeister/`
@@ -25,6 +29,8 @@ import * as fs from "node:fs";
 import { findWorkspaceRoot } from "werkmeister-core/gate";
 import { startIssue } from "werkmeister-core/issue_status";
 import {
+  defaultProject,
+  type Issue,
   type IssueKind,
   issueBriefing,
   issueIdOf,
@@ -79,7 +85,35 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
+async function ready(args: Record<string, unknown>): Promise<void> {
+  const projects = loadProjects();
+  if (!projects.length)
+    fail(
+      "no project: add one under projects: in ~/.werkmeister/config.yaml (docs/users-guide.md § Projects)",
+    );
+  const workspace = findWorkspaceRoot(process.cwd());
+  const name =
+    (args.project as string | null) ||
+    (workspace === null ? "" : projectOf(loadConfigFile(workspace, null)));
+  const project = name
+    ? projects.find((p) => p.name === name)
+    : (defaultProject() ?? (projects.length === 1 ? projects[0] : undefined));
+  const names = projects.map((p) => p.name).join(", ");
+  if (!project)
+    fail(name ? `no project '${name}' (one of: ${names})` : `pass --project (one of: ${names})`);
+  let issues: Issue[];
+  try {
+    issues = await issueTracker({ project: project.name }).listReady(project.board);
+  } catch (e) {
+    fail(`Could not list ready work in ${project.name}: ${(e as Error).message}`);
+  }
+  if (args.json) console.log(JSON.stringify(issues, null, 2));
+  else if (!issues.length) success(`Nothing ready in ${project.name}.`);
+  else for (const i of issues) console.log(`${i.ref}  ${i.status ?? ""}  ${i.title ?? ""}`);
+}
+
 export async function run(args: Record<string, unknown>): Promise<void> {
+  if (args.action === "ready") return ready(args);
   if (args.action === "create") {
     // A Jira project's key files through Jira even when the machine's tracker is GitHub (SW-104).
     const key = String(args.project ?? "").toUpperCase();

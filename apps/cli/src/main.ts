@@ -715,17 +715,20 @@ const SPECS: CommandSpec[] = [
         .addArgument(
           new Argument(
             "<action>",
-            "view: print the issue; update: change its status and/or add a comment; create: file a new issue and print its URL (Jira); start: move the workspace's issue to in progress (forward only)",
-          ).choices(["view", "update", "create", "start"]),
+            "view: print the issue; update: change its status and/or add a comment; create: file a new issue and print its URL (Jira); start: move the workspace's issue to in progress (forward only); ready: list a project's open work in priority order",
+          ).choices(["view", "update", "create", "start", "ready"]),
         )
         .argument(
           "[ref]",
           "Issue ID; omit inside a workspace to use its .werkmeister/workspace.yml issue",
         )
-        .option("--json", "view: print the issue as JSON")
+        .option("--json", "view, ready: print JSON")
         .option("--status <name>", "update: move the issue to this status")
         .option("--comment <text>", "update: add this comment")
-        .option("--project <key>", "create: the Jira project to file in")
+        .option(
+          "--project <key>",
+          "create: the Jira project key to file in; ready: a project from projects: in config.yaml",
+        )
         .option(
           "--type <type>",
           "create: bug, feature or task (mapped to the tracker's issue type)",
