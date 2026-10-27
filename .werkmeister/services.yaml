@@ -43,7 +43,7 @@ services:
     type: cli
     archetype: node-tool
     # apps/werkmeister-mcp ships inside the CLI (dist/mcp.js), so its tests run here.
-    test: "pnpm turbo run test --filter=werkmeister --filter=werkmeister-mcp"
+    test: "pnpm turbo run typecheck test --filter=werkmeister --filter=werkmeister-mcp"
     validate: "Build, then run the built sandbox binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
     internal_port: 3998
     port_offset: 3
@@ -80,7 +80,7 @@ services:
     path: packages/werkmeister-core
     type: library
     archetype: node-tool
-    test: "pnpm turbo run test --filter=werkmeister-core"
+    test: "pnpm turbo run typecheck test --filter=werkmeister-core"
     internal_port: 3999
     port_offset: 2
     health_endpoint: /
@@ -103,7 +103,7 @@ services:
     path: packages/werkmeister-vscode
     type: extension
     archetype: mcp-client
-    test: "pnpm turbo run test --filter=werkmeister-vscode"
+    test: "pnpm turbo run typecheck test --filter=werkmeister-vscode"
     internal_port: 3997
     port_offset: 4
     health_endpoint: /

@@ -124,3 +124,48 @@ test("a library with no dev/start script is not runnable; a bin makes a cli", ()
   assert.equal(tool.fields.type.value, "cli");
   assert.equal(tool.fields.archetype.value, "node-tool");
 });
+
+test("a typecheck script runs before test in the detected test command (SW-107)", () => {
+  const scripts = { typecheck: "tsc --noEmit", test: "vitest" };
+  const npm = run({
+    "package.json": { workspaces: ["apps/*"] },
+    "apps/api/package.json": { name: "api", scripts },
+  });
+  assert.equal(npm[0].fields.test.value, "npm run typecheck -w api && npm test -w api");
+  assert.match(npm[0].fields.test.source, /scripts\.typecheck/);
+
+  const pnpm = run({
+    "package.json": {},
+    "pnpm-workspace.yaml": "packages: ['apps/*']\n",
+    "apps/api/package.json": { name: "@acme/api", scripts },
+    "apps/x/package.json": { scripts },
+  });
+  assert.equal(
+    pnpm[0].fields.test.value,
+    "pnpm --filter @acme/api run typecheck && pnpm --filter @acme/api test",
+  );
+  assert.equal(
+    pnpm[1].fields.test.value,
+    "pnpm --filter ./apps/x run typecheck && pnpm --filter ./apps/x test",
+  );
+
+  const yarn = run({
+    "package.json": { workspaces: ["apps/*"] },
+    "yarn.lock": "",
+    "apps/api/package.json": { name: "api", scripts },
+    "apps/x/package.json": { scripts },
+  });
+  assert.equal(
+    yarn[0].fields.test.value,
+    "yarn workspace api run typecheck && yarn workspace api test",
+  );
+  assert.equal(yarn[1].fields.test.value, "cd apps/x && yarn run typecheck && yarn test");
+
+  const root = run({ "package.json": { name: "shop", scripts } });
+  assert.equal(root[0].fields.test.value, "npm run typecheck && npm test");
+});
+
+test("a typecheck script without a test script adds no test command", () => {
+  const [svc] = run({ "package.json": { name: "lib", scripts: { typecheck: "tsc --noEmit" } } });
+  assert.equal(svc.fields.test, undefined);
+});
