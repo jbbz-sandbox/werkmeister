@@ -77,3 +77,13 @@ it("--abandon passes the reason through and asks about abandoning", async () => 
   expect(vi.mocked(confirm).mock.calls[0][0]).toBe("Abandon and remove 'ws'?");
   expect(closeOut).toHaveBeenCalledWith("ws", { abandon: "superseded by #170" });
 });
+
+it("--skip-postmortem passes its reason through, alone or beside --abandon (SW-108)", async () => {
+  await run({ name: "ws", yes: true, skipPostmortem: "no time" });
+  expect(closeOut).toHaveBeenLastCalledWith("ws", { skipPostmortem: "no time" });
+  await run({ name: "ws", yes: true, abandon: "superseded", skipPostmortem: "no time" });
+  expect(closeOut).toHaveBeenLastCalledWith("ws", {
+    abandon: "superseded",
+    skipPostmortem: "no time",
+  });
+});

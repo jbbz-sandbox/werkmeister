@@ -471,9 +471,10 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `--install`: watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes
   - `--uninstall`: watch: remove that schedule
   - `--json`: Print the result as JSON
-- `werkmeister close-out [name]`: End a workspace. After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. With --abandon: record the reason, push every branch and keep them, remove the workspace
+- `werkmeister close-out [name]`: End a workspace. After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. With --abandon: record the reason, push every branch and keep them, remove the workspace. Refuses without postmortem.md (run the post-mortem first) unless --skip-postmortem gives a reason
   - `-y, --yes`: Skip the confirmation prompt
   - `--abandon <reason>`: Close out without shipping; the reason goes in closeout.md and the PR files
+  - `--skip-postmortem <reason>`: Close out without a post-mortem; the reason goes in closeout.md
 - `werkmeister code [feature]`: Open a workspace in VS Code
 - `werkmeister setup`: Guided machine setup: walks through paths, ingress domains and the ~/.werkmeister service registry, then converges the plugins, the sandbox-workspace checkout, the TLS certificate and the optional issue tracker, Telepresence and VS Code YAML-schema prerequisites
   - `--check`: Report prerequisite state without prompting or running any install/update commands
@@ -963,7 +964,7 @@ With `--all`, it first stops all active features (equivalent to running `werkmei
 
 ```
 werkmeister pr <gate|open|status> [repo] [--json]
-werkmeister close-out [name] [--yes] [--abandon <reason>]
+werkmeister close-out [name] [--yes] [--abandon <reason>] [--skip-postmortem <reason>]
 ```
 
 | Command | Description |
@@ -971,7 +972,7 @@ werkmeister close-out [name] [--yes] [--abandon <reason>]
 | `werkmeister pr gate` | Run the pre-PR gate for each PR file; change nothing |
 | `werkmeister pr open` | Gate, push and open a PR for each PR file at `status: approved`; record its URL |
 | `werkmeister pr status` | Record merged / shipped / closed from GitHub and the repo's release tags |
-| `werkmeister close-out` | The one way to end a workspace. After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches. With `--abandon "<reason>"`: record the reason, leave the issue, push every branch and keep them, remove the workspace. Lists terminal Claude sessions still open in it |
+| `werkmeister close-out` | The one way to end a workspace. First the post-mortem: it refuses without `postmortem.md` unless `--skip-postmortem "<reason>"`. After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches. With `--abandon "<reason>"`: record the reason, leave the issue, push every branch and keep them, remove the workspace. Lists terminal Claude sessions still open in it |
 | `werkmeister remove-workspace` | Deprecated alias, kept for one release: use `werkmeister close-out --abandon` |
 
 Inside a workspace, `gh pr create` (and so `/create-pr`) is blocked by a PreToolUse hook; `werkmeister pr open` is the way to open a PR.

@@ -109,6 +109,13 @@ test("workspace-scoped tools take one optional `workspace` argument", async () =
   }
 });
 
+test("close-out takes an optional skip_postmortem reason beside abandon (SW-108)", async () => {
+  const { tools } = await (await connect()).listTools();
+  const schema = tools.find((t) => t.name === "close-out")?.inputSchema;
+  assert.equal(schema?.properties?.skip_postmortem?.type, "string");
+  assert.ok(!(schema?.required ?? []).includes("skip_postmortem"));
+});
+
 test("a tool call goes through to core: list-workspaces reads the workspaces root", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-tools-root-"));
   fs.mkdirSync(path.join(root, "alpha"));

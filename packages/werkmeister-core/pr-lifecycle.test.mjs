@@ -47,6 +47,7 @@ function icmWorkspace({
   files = { app: prFile() },
   exercise = "| smoke | PASS |\n",
   researchDone = true,
+  postmortem = "Problems: none\n",
 } = {}) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-life-"));
   const out = (d) => path.join(ws, "stages", d, "output");
@@ -62,6 +63,7 @@ function icmWorkspace({
     "feature: feat\nservices: api,lib\nissue_id: o/app#7\nwork_type: feature\n",
   );
   fs.writeFileSync(path.join(ws, ".env"), "FEATURE=feat\nSANDBOX_SLOT=1\n");
+  if (postmortem !== null) fs.writeFileSync(path.join(ws, "postmortem.md"), postmortem);
   return ws;
 }
 
@@ -935,6 +937,10 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
     };
     const r = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
     assert.deepEqual(issue, ["o/app#7", "closed"]);
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /^Post-mortem: postmortem\.md$/m,
+    );
     assert.deepEqual(order, ["remove", "branch -D"]);
     assert.ok(d.calls.includes("git -C /src/app branch -D me/ws"));
     assert.ok(
@@ -959,6 +965,89 @@ test("closeOut --abandon: needs a reason", async () => {
     assert.ok(err instanceof WorkspaceError, String(err));
     assert.match(err.message, /needs a reason/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
+  } finally {
+    clean(ws);
+  }
+});
+
+const refusal = (ws, opts) =>
+  inWorkspacesRoot(ws, (name) =>
+    closeOut(
+      name,
+      opts,
+      deps([], {
+        tracker: {
+          fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+          updateIssue: async () => assert.fail("issue moved"),
+        },
+        remove: async () => assert.fail("removed"),
+      }),
+    ).then(
+      () => null,
+      (e) => e,
+    ),
+  );
+
+test("closeOut refuses without postmortem.md, before touching anything (SW-108)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped" }) }, postmortem: null });
+  try {
+    const err = await refusal(ws, {});
+    assert.ok(err instanceof WorkspaceError, String(err));
+    assert.match(err.message, /no postmortem\.md/);
+    assert.match(err.message, /--skip-postmortem "<reason>"/);
+    assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon without postmortem.md refuses before abandoning the PR files (SW-108)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: u\n" }) },
+    postmortem: null,
+  });
+  try {
+    const err = await refusal(ws, { abandon: "superseded" });
+    assert.match(String(err), /no postmortem\.md.*--abandon "<reason>" --skip-postmortem/);
+    assert.match(
+      fs.readFileSync(path.join(ws, "stages/03_propose/output/pr-app.md"), "utf8"),
+      /status: open/,
+    );
+    assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut unshipped and without postmortem.md: the ship refusal comes first (SW-108)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "merged" }) }, postmortem: null });
+  try {
+    assert.match(String(await refusal(ws, {})), /is merged \(app: merged\)/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --skip-postmortem: needs a reason (SW-108)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped" }) }, postmortem: null });
+  try {
+    assert.match(String(await refusal(ws, { skipPostmortem: "  " })), /needs a reason/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --skip-postmortem: records the reason and closes out (SW-108)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped" }) }, postmortem: null });
+  try {
+    const r = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, { skipPostmortem: "no time" }, deps([])),
+    );
+    assert.match(r.output, /removed/);
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /^Post-mortem skipped: no time$/m,
+    );
   } finally {
     clean(ws);
   }
@@ -1007,6 +1096,7 @@ test("closeOut --abandon: records why, comments it and closes the issue as not p
 test("closeOut retry after an abandon that failed to remove: still abandoned", async () => {
   const ws = icmWorkspace({
     files: { app: prFile({ status: "abandoned", extra: "reason: gone\nurl: u\n" }) },
+    postmortem: null,
   });
   fs.writeFileSync(path.join(ws, "closeout.md"), "# Close-out\n");
   try {
@@ -1413,7 +1503,7 @@ async function withClaudeHome(sessions, fn) {
 // ---- spikes (SW-83): PR files in the last stage's output -----------------------
 
 /** A temp spike workspace: 01_questions (done), 02_findings holding the PR files. */
-function spikeWorkspace({ files = {} } = {}) {
+function spikeWorkspace({ files = {}, postmortem = "Problems: none\n" } = {}) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "pr-spike-"));
   const out = (d) => path.join(ws, "stages", d, "output");
   for (const d of ["01_questions", "02_findings"]) fs.mkdirSync(out(d), { recursive: true });
@@ -1427,6 +1517,7 @@ function spikeWorkspace({ files = {} } = {}) {
     "feature: feat\nservices: api,lib\nissue_id: o/app#7\nwork_type: spike\n",
   );
   fs.writeFileSync(path.join(ws, ".env"), "FEATURE=feat\nSANDBOX_SLOT=1\n");
+  if (postmortem !== null) fs.writeFileSync(path.join(ws, "postmortem.md"), postmortem);
   return ws;
 }
 

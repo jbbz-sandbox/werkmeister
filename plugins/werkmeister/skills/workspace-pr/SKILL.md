@@ -33,7 +33,10 @@ is `docs/workspace-lifecycle.md` in the sandbox repo.
    `shipped` with the release tag that contains the merge, and moves the issue
    to Done once every PR has shipped. A review asking for changes, or a PR
    closed unmerged, moves it back to In Progress.
-6. **`sandbox close-out`** is the one way to end a workspace, with two outcomes:
+6. **`sandbox close-out`** is the one way to end a workspace. First the
+   post-mortem: the `postmortem` skill writes `postmortem.md`, and close-out
+   refuses without it unless the person says to skip it
+   (`--skip-postmortem "<reason>"`, MCP `skip_postmortem`). Two outcomes:
    - **Shipped** (every PR file shipped, closed or abandoned): moves the issue
      to Done if shipping didn't, writes `closeout.md`, removes the workspace,
      deletes merged branches.

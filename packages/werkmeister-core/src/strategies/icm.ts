@@ -268,7 +268,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
         `| ${i === 0 ? "starting the run" : (s.enter ?? `\`${dirs[i - 1]}\` output ${v.autonomous ? "self-checked" : "approved"}`)} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
     ),
     "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `sandbox pr open`, then Auto-fix on (rule 5) | PR URL is in the PR file and Auto-fix is on |",
-    "| a PR merged or released, or asked to close out | `sandbox pr status`, then ask the person before `sandbox close-out` | closed out after the person says yes |",
+    "| a PR merged or released, or asked to close out | `sandbox pr status`, then the werkmeister `postmortem` skill (writes `postmortem.md`), then ask the person before `sandbox close-out` | `postmortem.md` written, then closed out after the person says yes |",
     "| asked for status | `ls stages/*/output/` | report which stages hold artifacts |",
     "| containers / ports / routing broken | `.sandbox/sandbox-context.md` | — |",
     "| you hit a bug or need to log a feature/task — in the `sandbox` tool or in a repo's code | `_shared/issues-report.md`: if this workspace's changes caused a bug, fix it here; otherwise file an issue where it belongs | fixed, or issue URL reported to the person |",
