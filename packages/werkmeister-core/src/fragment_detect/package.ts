@@ -9,17 +9,25 @@ const API_DEPS = ["express", "fastify", "@nestjs/core", "koa"];
 /** Ship glibc-only prebuilds; an alpine image can't load them (users guide, "Self-hosting the sandbox repo"). */
 const GLIBC_ONLY = ["sharp", "better-sqlite3", "esbuild", "@swc/core"];
 
-function testCommand(ws: Workspace, dir: string, pkgName: string | undefined): string {
-  if (dir === ".") return `${ws.pm} test`;
+/** `scripts` run in order, joined by `&&`; `test` goes through `<pm> test`, the rest through `run`. */
+function testCommand(
+  ws: Workspace,
+  dir: string,
+  pkgName: string | undefined,
+  scripts: string[],
+): string {
+  const verbs = scripts.map((s) => (s === "test" ? s : `run ${s}`));
+  const chain = (cmd: (verb: string) => string) => verbs.map(cmd).join(" && ");
+  if (dir === ".") return chain((v) => `${ws.pm} ${v}`);
   if (pkgName !== undefined) {
-    if (ws.pm === "pnpm") return `pnpm --filter ${pkgName} test`;
-    if (ws.pm === "yarn") return `yarn workspace ${pkgName} test`;
-    return `npm test -w ${pkgName}`;
+    if (ws.pm === "pnpm") return chain((v) => `pnpm --filter ${pkgName} ${v}`);
+    if (ws.pm === "yarn") return chain((v) => `yarn workspace ${pkgName} ${v}`);
+    return chain((v) => `npm ${v} -w ${pkgName}`);
   }
   // Unnamed package: use dir-based fallback
-  if (ws.pm === "pnpm") return `pnpm --filter ./${dir} test`;
-  if (ws.pm === "yarn") return `cd ${dir} && yarn test`;
-  return `npm test -w ${dir}`;
+  if (ws.pm === "pnpm") return chain((v) => `pnpm --filter ./${dir} ${v}`);
+  if (ws.pm === "yarn") return `cd ${dir} && ${chain((v) => `yarn ${v}`)}`;
+  return chain((v) => `npm ${v} -w ${dir}`);
 }
 
 function nodeMajor(
@@ -60,8 +68,14 @@ export function detectPackages(ctx: DetectContext, ws: Workspace): Finding[] {
         `${file} → scripts.${script}`,
       );
     }
-    if (scripts.test)
-      fields.test = stated(testCommand(ws, dir, pkg.name), `${file} → scripts.test`);
+    if (scripts.test) {
+      // Typecheck first: a build that only transpiles (esbuild) lets a type error pass the tests and fail CI (SW-107).
+      const run = scripts.typecheck ? ["typecheck", "test"] : ["test"];
+      fields.test = stated(
+        testCommand(ws, dir, pkg.name, run),
+        `${file} → ${run.map((r) => `scripts.${r}`).join(", ")}`,
+      );
+    }
 
     const web = WEB_DEPS.find((d) => d in deps);
     const api = API_DEPS.find((d) => d in deps);
