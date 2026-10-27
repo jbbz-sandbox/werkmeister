@@ -510,7 +510,11 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const sources = `${count} fragment${count === 1 ? "" : "s"}`;
   const existing = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
   if (existing === text) {
-    return report({ label, ok: true, detail: `up to date (${sources}) at ${target}${seededLocal}` });
+    return report({
+      label,
+      ok: true,
+      detail: `up to date (${sources}) at ${target}${seededLocal}`,
+    });
   }
   if (opts.checkOnly) {
     return report({
