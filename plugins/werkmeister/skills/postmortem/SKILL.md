@@ -46,15 +46,24 @@ the workspace root, unless the person says to skip it
    | 1 | <what went wrong> | <PR #440 CI `test`, transcript, exercise.md, SW-107 …> | <why> | <what changes> | <link or path, or `rejected: <why>`> |
    ```
 
-5. **Do each accepted action** and put its link or path in Action:
-   - **SW issue** (bug, feature or task): the workspace's `issues-report.md`;
-     `werkmeister issue create --project SW …`.
-   - **Standards edit:** in the standards tree (`werkmeister standards check` prints
-     it). Show the person the edit before saving it.
-   - **Memory entry:** your memory tool, in the project memory every workspace
-     shares. Never a note inside the workspace: it is removed at close-out.
-   - **`_shared/` or other generated file:** an SW issue. The workspace's copy
-     is regenerated, and removed at close-out.
+5. **Do each accepted action** and put its link or path in Action. Rank them:
+   pick the highest one that makes the lesson reach every installation of werkmeister.
+   1. **Shipped change, through an SW issue** (bug, feature or task): a code,
+      skill or generated-text change. A `_shared/` or other generated file belongs
+      here too: the workspace's copy is regenerated, and removed at close-out. Use
+      the workspace's `issues-report.md`; `werkmeister issue create --project SW …`.
+   2. **Standards edit:** in the standards tree (`werkmeister standards check`
+      prints it). Show the person the edit before saving it.
+   3. **Memory entry, only for one person's own preferences,** such as their PR
+      rules. It lives in Claude Code's auto-memory on one machine
+      (`~/.claude/projects/<project>/memory/`), in no repo, and never ships with
+      werkmeister: another developer's Claude, or yours on another machine, never
+      sees it. Never use it for a lesson about how werkmeister works. Never a
+      note inside the workspace: it is removed at close-out.
+
+   **Already enforced by `<check>`** (for example `name:check`) is also an action
+   when a shipped check already catches the problem: confirm it does, name the
+   check in Action, and file nothing.
 6. **Commit and push `postmortem.md`** on the workspace (record) branch. Then
    close out as `workspace-pr` step 6 says: ask the person before
    `werkmeister close-out`.
