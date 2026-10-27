@@ -140,5 +140,5 @@ test("docker compose accepts the shipped file merged with both overrides", {
   assert.equal(r.status, 0, r.stderr);
   const demo = JSON.parse(r.stdout).services["baseline-demo"];
   assert.equal(demo.container_name, "w9r-baseline-demo");
-  assert.deepEqual(Object.keys(demo.networks).sort(), ["shared-network", "werkmeister-shared"]);
+  assert.deepEqual(Object.keys(demo.networks), ["werkmeister-shared"]);
 });
