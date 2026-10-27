@@ -1,10 +1,10 @@
 /**
- * sandbox detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
+ * werkmeister detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
  *
  * Generate <repo>/.werkmeister/services.yaml from what the repo already says about
  * itself: package manifests, Dockerfiles, compose, Helm, k8s and kustomize.
  * Re-runs only add what is missing. Spec:
- * docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc.
+ * docs/superpowers/specs/2026-10-02-sandbox-detect-fragment-design.md at 66703fc. name-check: ignore
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -101,13 +101,13 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   if (args.repo) {
     root = path.resolve(deps.cwd, args.repo);
     if (!fs.statSync(root, { throwIfNoEntry: false })?.isDirectory()) {
-      warn(`${root} is not a directory — pass the repo path: sandbox detect <repo>`);
+      warn(`${root} is not a directory — pass the repo path: werkmeister detect <repo>`);
       return 2;
     }
   } else {
     const [rc, out] = deps.runner(["git", "-C", deps.cwd, "rev-parse", "--show-toplevel"]);
     if (rc !== 0) {
-      warn("Not inside a git repo — pass the repo path: sandbox detect <repo>");
+      warn("Not inside a git repo — pass the repo path: werkmeister detect <repo>");
       return 2;
     }
     root = out.trim();
@@ -129,7 +129,7 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
     throw e;
   }
 
-  console.log(`\n${Colors.BOLD}=== sandbox detect: ${plan.repo} ===${Colors.RESET}`);
+  console.log(`\n${Colors.BOLD}=== werkmeister detect: ${plan.repo} ===${Colors.RESET}`);
   printPlan(plan);
   if (!plan.services.length && !plan.infrastructure.length) {
     warn(`No services found in ${root}.`);
@@ -193,10 +193,10 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   success(`Wrote ${rendered.path}`);
   if (rendered.added.some((a) => a.endsWith(".port_offset"))) {
     info(
-      "port_offset is machine-wide — a collision on another machine shows up at `sandbox registry sync`.",
+      "port_offset is machine-wide — a collision on another machine shows up at `werkmeister registry sync`.",
     );
   }
-  info("next: sandbox registry sync");
+  info("next: werkmeister registry sync");
   return 0;
 }
 

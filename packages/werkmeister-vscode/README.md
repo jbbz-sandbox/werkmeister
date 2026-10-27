@@ -1,8 +1,8 @@
-# Sandbox Workspaces (VS Code extension)
+# Werkmeister Workspaces (VS Code extension)
 
-A tree view over the developer-sandbox: every workspace under
+A tree view over werkmeister: every workspace under
 `paths.workspaces_root`, its container state, its Telepresence intercepts, and
-the `sandbox` CLI lifecycle — without leaving the editor.
+the `werkmeister` CLI lifecycle — without leaving the editor.
 
 A consumer of `packages/werkmeister-core`, alongside the `werkmeister-mcp`
 server and the dashboard. Unlike the dashboard it imports werkmeister-core directly: the extension host
@@ -22,18 +22,18 @@ Polled every 5s **only while the view is visible**.
 
 **Writes** — every mutating command runs the CLI in a `vscode.Terminal` with
 `cwd` set to the workspace directory. One terminal per directory, named
-`sandbox <workspace>` and reused once its previous command has ended. The extension never spawns
-`sandbox` itself except for `sandbox open`, which blocks for the lifetime of the
+`werkmeister <workspace>` and reused once its previous command has ended. The extension never spawns
+`werkmeister` itself except for `werkmeister open`, which blocks for the lifetime of the
 browser window it launches.
 
 ## Configuration
 
-Normally none: werkmeister-core resolves paths from `SANDBOX_*` env vars and falls back
+Normally none: werkmeister-core resolves paths from `WERKMEISTER_*` env vars and falls back
 to `~/.werkmeister/config.yaml`, which `werkmeister config` maintains.
 
 | Setting | Use when |
 |---|---|
-| `sandbox.binPath` | You have a non-standard checkout and want to name the `sandbox` wrapper directly |
+| `sandbox.binPath` | You have a non-standard checkout and want to name the `werkmeister` wrapper directly |
 | `sandbox.root` | Same, but naming the checkout directory that contains it |
 
 ## Tests

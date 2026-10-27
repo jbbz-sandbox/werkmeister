@@ -1,5 +1,5 @@
 /**
- * Idempotent core.hooksPath auto-configuration for the sandbox secret-commit guard.
+ * Idempotent core.hooksPath auto-configuration for the werkmeister secret-commit guard.
  *
  * Wires the repo's git hooks to the versioned `.githooks/` directory so the
  * `.githooks/pre-commit` guard (see PLAN 03-02) is active without requiring
@@ -8,7 +8,7 @@
  *
  * Never clobbers a pre-existing, non-default, non-`.githooks` hooksPath — a
  * developer who has intentionally configured a custom hooksPath keeps it, and
- * is warned that the sandbox secret-commit guard was not installed (D-12).
+ * is warned that the werkmeister secret-commit guard was not installed (D-12).
  */
 
 import * as fs from "node:fs";
@@ -33,7 +33,7 @@ export function configureGitHooksPath(repoRoot?: string | null): boolean {
 
   // Installed from npm rather than run from a checkout: there is no repo to
   // guard, and git would answer `fatal: not in a git directory` — a warning on
-  // every `sandbox connect` about a hook nobody wanted. `.git` is a file in a
+  // every `werkmeister connect` about a hook nobody wanted. `.git` is a file in a
   // worktree and a directory in a clone; existsSync accepts both.
   if (!fs.existsSync(path.join(root, ".git"))) {
     return false;
@@ -45,10 +45,10 @@ export function configureGitHooksPath(repoRoot?: string | null): boolean {
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
       // Informational only — a missing git binary should warn, not block
-      // `sandbox connect`.
+      // `werkmeister connect`.
       warn(
         "git was not found on PATH — could not check or configure " +
-          `core.hooksPath. The sandbox secret-commit guard (${HOOKS_PATH}/` +
+          `core.hooksPath. The werkmeister secret-commit guard (${HOOKS_PATH}/` +
           "pre-commit) was NOT installed.",
       );
       return false;
@@ -66,7 +66,7 @@ export function configureGitHooksPath(repoRoot?: string | null): boolean {
   if (current) {
     warn(
       `core.hooksPath is already set to '${current}' — leaving it unchanged. ` +
-        `The sandbox secret-commit guard (${HOOKS_PATH}/pre-commit) was NOT ` +
+        `The werkmeister secret-commit guard (${HOOKS_PATH}/pre-commit) was NOT ` +
         `installed. Run 'git config core.hooksPath ${HOOKS_PATH}' manually if ` +
         "you want to activate it.",
     );
@@ -85,7 +85,7 @@ export function configureGitHooksPath(repoRoot?: string | null): boolean {
         : String(e instanceof Error ? e.message : e);
     warn(
       `Could not set core.hooksPath to ${HOOKS_PATH} (${detail}). ` +
-        `The sandbox secret-commit guard (${HOOKS_PATH}/pre-commit) was NOT ` +
+        `The werkmeister secret-commit guard (${HOOKS_PATH}/pre-commit) was NOT ` +
         "installed.",
     );
     return false;

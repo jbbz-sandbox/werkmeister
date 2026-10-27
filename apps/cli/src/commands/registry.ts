@@ -1,13 +1,13 @@
 /**
- * sandbox registry [sync] [--check]
+ * werkmeister registry [sync] [--check]
  *
  * Regenerate ~/.werkmeister/services.yaml from every <repo>/.werkmeister/services.yaml
  * under paths.repos_root, merged under ~/.werkmeister/services.local.yaml. The
- * same step `sandbox setup` runs, on its own: for the moment you clone a new
+ * same step `werkmeister setup` runs, on its own: for the moment you clone a new
  * repo and want it registered without a full setup pass.
  *
- *   sandbox registry            # regenerate (sync is the default action)
- *   sandbox registry --check    # report drift; nonzero exit when stale
+ *   werkmeister registry            # regenerate (sync is the default action)
+ *   werkmeister registry --check    # report drift; nonzero exit when stale
  */
 
 import { syncRegistry } from "werkmeister-core/registry_sync";
@@ -27,7 +27,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
   if (steps.some((s) => !s.ok)) {
     warn(
-      check ? "Registry is stale — run `sandbox registry sync`." : "Registry was not generated.",
+      check
+        ? "Registry is stale — run `werkmeister registry sync`."
+        : "Registry was not generated.",
     );
     process.exit(1);
   }

@@ -30,7 +30,7 @@ rule: run locally only what you change, and defer the rest to remote.
 Setup went from days to about thirty minutes, and from ten containers to one to
 three. Everyone started from the same baseline, and the drift stopped.
 
-The team called the tool the developer sandbox. It ran one environment at a
+The team called the tool the developer sandbox. It ran one environment at a <!-- name-check: ignore -->
 time, for the feature you were working on right then. Switching to a bug fix
 meant tearing that down, bringing up another, and finding your place again when
 you came back. Context switching was hard because the tool made you pay for
@@ -138,7 +138,7 @@ Kubernetes.
 
 Why not an English word: every English name for the person in charge (foreman,
 conductor, dispatcher, marshal, overseer) is already a developer tool or a
-well-known package. The tool was called `sandbox` for its first year. That word
+well-known package. The tool was called `sandbox` for its first year. That word <!-- name-check: ignore -->
 can't be searched for, and a competitor uses it for their own unit of work, so it
 had to go before the project went open source. The full search, with every
 candidate and why it lost, is in [naming-research.md](naming-research.md).

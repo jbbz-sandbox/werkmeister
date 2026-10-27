@@ -3,7 +3,7 @@
  * daemon, and the single predicate that decides whether a request carries it.
  *
  * 32 random bytes as hex in `~/.werkmeister/mcp-token`, mode 0600, created on first
- * start. The container gets it through its environment (`SANDBOX_MCP_TOKEN`),
+ * start. The container gets it through its environment (`WERKMEISTER_MCP_TOKEN`),
  * never through the `.mcp.json` that lives in a git worktree.
  */
 

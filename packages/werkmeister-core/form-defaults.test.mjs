@@ -9,7 +9,7 @@ import { test } from "node:test";
 
 // A temp HOME named like a user: its name must not become the feature or task.
 process.env.HOME = mkdtempSync(path.join(tmpdir(), "jay-"));
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
 const { getFormSchema } = await import("./dist/sandbox.js");
 

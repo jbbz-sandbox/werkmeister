@@ -7,16 +7,16 @@
  *
  * When the manifest carries `phase_gate` (the work type's pre-implementation
  * gate), source edits are denied *until* a matching note exists in
- * `.sandbox/notes/`. That deny repeats and records no state, because it is
+ * `.werkmeister/notes/`. That deny repeats and records no state, because it is
  * an approval gate, not a delivery gate.
  *
  * Deliberately dependency-light (node builtins only — no commander/yaml/nunjucks,
  * nothing that touches the config/YAML chain): Phase 0 measured the normal
- * `sandbox` entrypoint at 250-460ms cold, well past this design's <200ms budget
+ * `werkmeister` entrypoint at 250-460ms cold, well past this design's <200ms budget
  * for a hook that fires on every Edit/Write. `apps/cli/src/lib/gate.ts` is a
  * six-line esbuild entry that calls {@link main}, so the hook still runs
  * `node dist/lib/gate.js` and bypasses the heavyweight main import chain. The
- * normal `sandbox hooks gate` CLI path (manual runs, tests) imports this same
+ * normal `werkmeister hooks gate` CLI path (manual runs, tests) imports this same
  * module — one implementation either way.
  *
  * **Keep this module import-light.** Anything that pulls the config/YAML chain
@@ -27,7 +27,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { DOT_DIRS, dotDir } from "./dot_dir.js";
+import { DOT_DIR, dotDir } from "./dot_dir.js";
 
 // ponytail: duplicated (not imported) from notes.ts's active-standards
 // precedence sentence — this module must stay import-light (no config/yaml
@@ -40,7 +40,7 @@ const _PRECEDENCE_TEXT =
   "This gate fires once; your retry will proceed.";
 
 const _PHASE_ENTRY_TEXT =
-  "Standards gate: invoke `sb-implement` before coding — it loads the universal " +
+  "Standards gate: invoke `w9r-implement` before coding — it loads the universal " +
   "base (ponytail + comments + engineering) and the workspace notes. Then retry " +
   "this edit.";
 
@@ -89,7 +89,7 @@ function fnmatch(name: string, pat: string): boolean {
 // Gate proper
 // ---------------------------------------------------------------------------
 
-/** Walk up from *start* to the nearest directory containing `.sandbox/`. */
+/** Walk up from *start* to the nearest directory containing `.werkmeister/`. */
 export function findWorkspaceRoot(start: string): string | null {
   let directory = path.resolve(start);
   while (true) {
@@ -124,7 +124,7 @@ function _isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** `.sandbox/standards.json` as a dict, or null when missing/unreadable — never throws. */
+/** `.werkmeister/standards.json` as a dict, or null when missing/unreadable — never throws. */
 export function loadManifest(workspace: string): Record<string, unknown> | null {
   const manifestPath = path.join(dotDir(workspace), "standards.json");
   if (!_isFile(manifestPath)) {
@@ -255,17 +255,17 @@ function _phaseGateText(gate: Record<string, unknown>): string {
   if (gate["status"]) {
     const status = String(gate["status"]);
     return (
-      `Phase gate: no \`${note}\` note in \`.sandbox/notes/\` has \`status: ${status}\`, so ` +
-      "source edits wait for an approved design. Invoke `sb-research`, present the design to " +
+      `Phase gate: no \`${note}\` note in \`.werkmeister/notes/\` has \`status: ${status}\`, so ` +
+      "source edits wait for an approved design. Invoke `w9r-research`, present the design to " +
       `the user, and when they approve write \`NNN-${note}-<slug>.md\` with ` +
       `\`status: ${status}\` recording what was approved. Then retry this edit. Edits under ` +
-      "`.sandbox/` are not gated."
+      "`.werkmeister/` are not gated."
     );
   }
   return (
-    `Phase gate: no \`${note}\` note in \`.sandbox/notes/\` names the root cause yet. Invoke ` +
-    `\`sb-research\`, reproduce the problem, and write \`NNN-${note}-<slug>.md\` stating the ` +
-    "root cause. Then retry this edit. Edits under `.sandbox/` are not gated."
+    `Phase gate: no \`${note}\` note in \`.werkmeister/notes/\` names the root cause yet. Invoke ` +
+    `\`w9r-research\`, reproduce the problem, and write \`NNN-${note}-<slug>.md\` stating the ` +
+    "root cause. Then retry this edit. Edits under `.werkmeister/` are not gated."
   );
 }
 
@@ -298,7 +298,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
   const relPath = filePath ? path.relative(workspace, filePath) : "";
 
   // 2a. Phase gate (§6): deny-until the work type's note exists. Before the
-  // standards logic, records nothing, and never gates `.sandbox/` — the note
+  // standards logic, records nothing, and never gates `.werkmeister/` — the note
   // that satisfies it must be writable.
   const phaseGate = manifest["phase_gate"];
   if (
@@ -307,7 +307,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
     relPath !== ".." &&
     !relPath.startsWith(".." + path.sep) &&
     !path.isAbsolute(relPath) &&
-    !DOT_DIRS.some((d) => relPath.startsWith(d + path.sep)) &&
+    !relPath.startsWith(DOT_DIR + path.sep) &&
     !_phaseGateSatisfied(workspace, phaseGate)
   ) {
     return _phaseGateText(phaseGate);
@@ -346,7 +346,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
     let domainText =
       `Standards gate: you are editing a path governed by the \`${domain}\` ` +
       "standard, which has not been loaded this session. Invoke the " +
-      `\`sb-${domain}-standard\` skill, then retry this edit.`;
+      `\`w9r-${domain}-standard\` skill, then retry this edit.`;
     if (summary) {
       domainText += ` Summary: ${summary}.`;
     }
@@ -367,7 +367,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
 }
 
 /**
- * `sandbox hooks gate` entrypoint: reads the PreToolUse stdin JSON, prints
+ * `werkmeister hooks gate` entrypoint: reads the PreToolUse stdin JSON, prints
  * a deny hookSpecificOutput on deny, prints nothing on allow. Always exits 0
  * — this is a hook, it must never block or fail the tool call.
  */

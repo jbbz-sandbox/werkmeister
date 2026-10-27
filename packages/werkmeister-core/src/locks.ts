@@ -1,8 +1,8 @@
 /**
- * Cross-process file locking for the developer sandbox.
+ * Cross-process file locking for werkmeister.
  *
  * Provides a simple advisory lock to prevent race conditions when multiple
- * `sandbox up` / `sandbox down` commands run concurrently.  All lock files
+ * `werkmeister up` / `werkmeister down` commands run concurrently.  All lock files
  * live under `~/.werkmeister/locks/`.
  *
  * Usage:
@@ -119,7 +119,7 @@ export function sandboxLock<T>(
       throw new Error(
         `Timed out after ${timeout}s waiting for lock ` +
           `'${name}' (${lockPath}). The previous holder may ` +
-          "have crashed without releasing it; if no sandbox " +
+          "have crashed without releasing it; if no werkmeister " +
           "process is running, it is safe to delete this " +
           "file and retry.",
       );

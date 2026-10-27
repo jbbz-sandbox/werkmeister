@@ -1,5 +1,5 @@
 /**
- * Shared Sandbox Workspaces UI — the single source for both surfaces:
+ * Shared Werkmeister Workspaces UI — the single source for both surfaces:
  *
  *   • Browser dashboard     (apps/werkmeister-dashboard/src/browser-main.ts → browser.html)
  *   • MCP App inline view   (apps/werkmeister-mcp/ui/mcp-list.ts → mcp-list.html)
@@ -31,7 +31,7 @@ import {
 
 export interface HostBridge {
   /**
-   * Call a Sandbox server tool by its short name (e.g. "list-workspaces") and
+   * Call a Werkmeister server tool by its short name (e.g. "list-workspaces") and
    * resolve its structured content. Must throw on tool errors and when the
    * host connection isn't available.
    */
@@ -228,7 +228,7 @@ function TopBar({
 
   const connect = async () => {
     setConnecting(true);
-    setMsg({ text: "Running sandbox connect…" });
+    setMsg({ text: "Running werkmeister connect…" });
     try {
       await bridge.callTool("connect", {});
       setMsg({ text: "Infrastructure connected." });
@@ -306,7 +306,7 @@ function TopBar({
           title={
             infraUp
               ? "Shared infrastructure is up and healthy — nothing to connect."
-              : "Start shared infrastructure (sandbox connect)"
+              : "Start shared infrastructure (werkmeister connect)"
           }
           onClick={() => void connect()}
         >

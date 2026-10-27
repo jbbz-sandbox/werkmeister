@@ -5,7 +5,7 @@
  * removed from services.yaml used to leave its explicit SAN and its hosts
  * line behind, and `--check` still reported ok because it only looked for
  * missing hostnames. Runs the real script against a temp hosts file
- * (SANDBOX_HOSTS_FILE), which is user-writable so no step reaches for sudo.
+ * (WERKMEISTER_HOSTS_FILE), which is user-writable so no step reaches for sudo.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -33,7 +33,7 @@ function run(args: string[]) {
   const domains = args.flatMap((a) => (a.startsWith("-") ? [a] : ["--domain", a]));
   const r = spawnSync("bash", [SCRIPT, "--certs-dir", dir, "--no-trust", ...domains], {
     encoding: "utf8",
-    env: { ...process.env, SANDBOX_INGRESS_HOSTS: "", SANDBOX_HOSTS_FILE: hosts },
+    env: { ...process.env, WERKMEISTER_INGRESS_HOSTS: "", WERKMEISTER_HOSTS_FILE: hosts },
   });
   return { rc: r.status, out: r.stdout + r.stderr };
 }

@@ -55,14 +55,14 @@ test("takenPorts reads other repos' fragments, the local overlay and the existin
     writeFileSync(path.join(reposRoot, rel), body);
   };
   write(
-    "other/.sandbox/services.yaml",
+    "other/.werkmeister/services.yaml",
     "services:\n  a: { port_offset: 0, k8s_forward_port: 9052 }\ninfrastructure:\n  redis: { k8s_forward_port: 9050, internal_port: 6379 }\n",
   );
-  write("mine/.sandbox/services.yaml", "services:\n  stale: { port_offset: 5 }\n");
+  write("mine/.werkmeister/services.yaml", "services:\n  stale: { port_offset: 5 }\n");
   write("local.yaml", "services:\n  b: { port_offset: 3 }\n");
   const taken = takenPorts(
     reposRoot,
-    path.join(reposRoot, "mine/.sandbox/services.yaml"),
+    path.join(reposRoot, "mine/.werkmeister/services.yaml"),
     path.join(reposRoot, "local.yaml"),
     { services: { kept: { port_offset: 1 } } },
   );

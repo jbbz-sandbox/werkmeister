@@ -34,7 +34,7 @@ afterEach(() => {
 
 function writeManifest(workspace: string, domains?: Record<string, unknown> | null): void {
   const manifest = {
-    generated_by: "sandbox init-workspace",
+    generated_by: "werkmeister init-workspace",
     universal: ["comments", "engineering"],
     domains:
       domains !== undefined
@@ -46,13 +46,13 @@ function writeManifest(workspace: string, domains?: Record<string, unknown> | nu
             },
           },
   };
-  const sandbox = path.join(workspace, ".sandbox");
+  const sandbox = path.join(workspace, ".werkmeister");
   fs.mkdirSync(sandbox, { recursive: true });
   fs.writeFileSync(path.join(sandbox, "standards.json"), JSON.stringify(manifest));
 }
 
 function state(workspace: string, sessionId: string): Record<string, unknown> | null {
-  const p = path.join(workspace, ".sandbox", ".gate", `${sessionId}.json`);
+  const p = path.join(workspace, ".werkmeister", ".gate", `${sessionId}.json`);
   try {
     if (!fs.statSync(p).isFile()) return null;
   } catch {
@@ -69,7 +69,7 @@ describe("decide — decision table", () => {
   });
 
   it("allows when no manifest", () => {
-    fs.mkdirSync(path.join(tmp, ".sandbox"));
+    fs.mkdirSync(path.join(tmp, ".werkmeister"));
     expect(gate.decide(tmp, "s1", path.join(tmp, "x.tsx"))).toBeNull();
   });
 
@@ -77,7 +77,7 @@ describe("decide — decision table", () => {
     writeManifest(tmp);
     const reason = gate.decide(tmp, "s1", path.join(tmp, "README.md"));
     expect(reason).not.toBeNull();
-    expect(reason).toContain("sb-implement");
+    expect(reason).toContain("w9r-implement");
     expect(reason).toContain("Precedence:");
     expect(state(tmp, "s1")).toEqual({ phase_entry_delivered: true, delivered: [] });
   });
@@ -93,7 +93,7 @@ describe("decide — decision table", () => {
     gate.decide(tmp, "s1", path.join(tmp, "README.md"));
     const reason = gate.decide(tmp, "s1", path.join(tmp, "web", "Button.tsx"));
     expect(reason).not.toBeNull();
-    expect(reason).toContain("sb-ui-standard");
+    expect(reason).toContain("w9r-ui-standard");
     expect(reason).toContain("render/effect ordering");
     expect(state(tmp, "s1")).toEqual({ phase_entry_delivered: true, delivered: ["ui"] });
   });
@@ -109,8 +109,8 @@ describe("decide — decision table", () => {
     writeManifest(tmp);
     const reason = gate.decide(tmp, "s1", path.join(tmp, "web", "Button.tsx"));
     expect(reason).not.toBeNull();
-    expect(reason).toContain("sb-implement");
-    expect(reason).toContain("sb-ui-standard");
+    expect(reason).toContain("w9r-implement");
+    expect(reason).toContain("w9r-ui-standard");
     expect((reason?.match(/Precedence:/g) || []).length).toBe(1);
     expect(state(tmp, "s1")).toEqual({ phase_entry_delivered: true, delivered: ["ui"] });
   });
@@ -134,22 +134,22 @@ describe("decide — decision table", () => {
 describe("decide — fail-open edges", () => {
   it("unreadable state file allows", () => {
     writeManifest(tmp);
-    const stateDir = path.join(tmp, ".sandbox", ".gate");
+    const stateDir = path.join(tmp, ".werkmeister", ".gate");
     fs.mkdirSync(stateDir, { recursive: true });
     fs.writeFileSync(path.join(stateDir, "s1.json"), "{ not json");
     expect(gate.decide(tmp, "s1", path.join(tmp, "README.md"))).toBeNull();
   });
 
   it("malformed manifest allows", () => {
-    fs.mkdirSync(path.join(tmp, ".sandbox"));
-    fs.writeFileSync(path.join(tmp, ".sandbox", "standards.json"), "not json");
+    fs.mkdirSync(path.join(tmp, ".werkmeister"));
+    fs.writeFileSync(path.join(tmp, ".werkmeister", "standards.json"), "not json");
     expect(gate.decide(tmp, "s1", path.join(tmp, "README.md"))).toBeNull();
   });
 
   it("manifest not a dict allows", () => {
-    fs.mkdirSync(path.join(tmp, ".sandbox"));
+    fs.mkdirSync(path.join(tmp, ".werkmeister"));
     fs.writeFileSync(
-      path.join(tmp, ".sandbox", "standards.json"),
+      path.join(tmp, ".werkmeister", "standards.json"),
       JSON.stringify(["not", "a", "dict"]),
     );
     expect(gate.decide(tmp, "s1", path.join(tmp, "README.md"))).toBeNull();
@@ -157,7 +157,7 @@ describe("decide — fail-open edges", () => {
 
   it("unwritable state dir allows instead of denying forever", () => {
     writeManifest(tmp);
-    const gateDir = path.join(tmp, ".sandbox", ".gate");
+    const gateDir = path.join(tmp, ".werkmeister", ".gate");
     fs.mkdirSync(path.dirname(gateDir), { recursive: true });
     fs.writeFileSync(gateDir, "blocking file, not a directory");
     expect(gate.decide(tmp, "s1", path.join(tmp, "README.md"))).toBeNull();
@@ -226,11 +226,11 @@ describe("main", () => {
     const data = JSON.parse(out);
     expect(data.hookSpecificOutput.hookEventName).toBe("PreToolUse");
     expect(data.hookSpecificOutput.permissionDecision).toBe("deny");
-    expect(data.hookSpecificOutput.permissionDecisionReason).toContain("sb-implement");
+    expect(data.hookSpecificOutput.permissionDecisionReason).toContain("w9r-implement");
   });
 
   it("prints nothing on allow", () => {
-    fs.mkdirSync(path.join(tmp, ".sandbox")); // no manifest -> allow
+    fs.mkdirSync(path.join(tmp, ".werkmeister")); // no manifest -> allow
     const payload = JSON.stringify({
       session_id: "s1",
       cwd: tmp,

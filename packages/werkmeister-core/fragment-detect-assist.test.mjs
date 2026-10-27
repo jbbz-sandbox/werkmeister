@@ -126,7 +126,9 @@ test("an unmatched resource attached by Claude only adds fields the service lack
 });
 
 test("no question for a field the existing file already sets", () => {
-  const plan = goRepo({ ".sandbox/services.yaml": "services:\n  api:\n    command: make run\n" });
+  const plan = goRepo({
+    ".werkmeister/services.yaml": "services:\n  api:\n    command: make run\n",
+  });
   assert.ok(!collectQuestions(plan).some((q) => q.id === "api.command"));
 });
 

@@ -1,7 +1,7 @@
 /**
  * Nearest-`.env` lookup for the commands that accept a feature implicitly.
  *
- * `sandbox up`/`down`/`stop`/`restart`/`open`/`intercept` all resolve their
+ * `werkmeister up`/`down`/`stop`/`restart`/`open`/`intercept` all resolve their
  * feature as `args.feature || FEATURE from the nearest .env`, so running one
  * inside a workspace needs no argument. Each carried its own copy of this walk;
  * the copies drifted into four variants, two of which were behind on the fixes
@@ -17,7 +17,7 @@ export function findDotenv(start: string): string | null {
   for (;;) {
     const envFile = path.join(dir, ".env");
     // stat-and-catch rather than existsSync-then-stat: the pair races a
-    // concurrent `sandbox down` deleting the file between the two calls, and
+    // concurrent `werkmeister down` deleting the file between the two calls, and
     // throws on a dangling symlink or an unreadable parent.
     let isFile = false;
     try {

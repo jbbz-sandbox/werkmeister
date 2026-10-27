@@ -59,7 +59,7 @@ interface StandardsWorkspaceConfig {
   [key: string]: unknown;
 }
 
-/** `.sandbox/standards.json`, the PreToolUse gate's manifest. */
+/** `.werkmeister/standards.json`, the PreToolUse gate's manifest. */
 export type StandardsManifest = {
   generated_by: string;
   universal: string[];
@@ -142,7 +142,7 @@ export function fnmatch(name: string, pat: string): boolean {
  * Immediate subdirectories of *workspace* that are git repos/worktrees.
  *
  * The one owner of this rule — `discoverRepos` builds on it so init and icm
- * check never disagree (#110). Dot dirs (`.sandbox/`, `.claude/`) are tool
+ * check never disagree (#110). Dot dirs (`.werkmeister/`, `.claude/`) are tool
  * dirs, never repos; symlinked dirs count. Worktrees carry a `.git` file,
  * standalone clones a `.git` dir — `existsSync` covers both. Not `rev-parse`:
  * it succeeds in any plain subdir of a git-tracked workspace root (#96). Never
@@ -278,7 +278,7 @@ function iterStandardFiles(standardsDir: string): string[] {
   const entries = fs.readdirSync(standardsDir, { withFileTypes: true });
   const flat = entries
     // A flat module is named for its domain, and a domain key is lowercase
-    // kebab (`sb-<domain>-standard` is built from it). That excludes the
+    // kebab (`w9r-<domain>-standard` is built from it). That excludes the
     // README.md / CONTRIBUTING.md a standards repo has at its root — which
     // otherwise parse as modules with no `domain:` and fail the structural
     // gate. Matching on shape rather than an ignore list means there is no
@@ -476,7 +476,7 @@ export function validateStandardModules(standardsDir?: string | null): string[] 
     if (domain.trim() !== expected) {
       errors.push(
         `${rel}: \`domain: ${domain}\` does not match its location ` +
-          `(expected \`${expected}\` — sb-<domain>-standard would diverge ` +
+          `(expected \`${expected}\` — w9r-<domain>-standard would diverge ` +
           `from where the standard lives)`,
       );
     }
@@ -631,7 +631,7 @@ export function resolveActiveStandards(
 }
 
 /**
- * The PreToolUse gate's manifest (`.sandbox/standards.json`, gate design
+ * The PreToolUse gate's manifest (`.werkmeister/standards.json`, gate design
  * §2.2): domain -> {applies_to, summary} for every active non-universal
  * standard, plus the active universal keys, plus `phase_gate` (the work
  * type's pre-implementation gate, `gate.ts`) when the plan has one. Built
@@ -654,12 +654,12 @@ export function buildStandardsManifest(
     };
   }
   const manifest: StandardsManifest = {
-    generated_by: "sandbox init-workspace",
+    generated_by: "werkmeister init-workspace",
     universal: active.filter((key) => universal.includes(key)),
     domains,
   };
   // Omitted rather than null so a workspace with no gate keeps a byte-identical
-  // manifest and `sandbox skills check` does not flag it stale.
+  // manifest and `werkmeister skills check` does not flag it stale.
   if (phaseGate) {
     manifest["phase_gate"] = { ...phaseGate };
   }
@@ -667,7 +667,7 @@ export function buildStandardsManifest(
 }
 
 /**
- * Write the gate manifest to `.sandbox/standards.json` (projected artifact,
+ * Write the gate manifest to `.werkmeister/standards.json` (projected artifact,
  * same do-not-hand-edit contract as the other generated files).
  */
 export function writeStandardsManifest(workspaceRoot: string, manifest: StandardsManifest): string {

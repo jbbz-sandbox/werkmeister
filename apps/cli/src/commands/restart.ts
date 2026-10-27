@@ -1,5 +1,5 @@
 /**
- * sandbox restart <feature>
+ * werkmeister restart <feature>
  *
  * Restart all containers for a feature's stack.
  */
@@ -19,7 +19,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`\n${Colors.BOLD}=== sandbox restart: ${feature} ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister restart: ${feature} ===${Colors.RESET}\n`);
 
   if (feature === "infra") {
     await infraRestart();
@@ -31,8 +31,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // handler cannot reproduce — it only knows how to print the message. So the
   // codes that carry one report themselves; anything else propagates.
   const hints: Record<string, string> = {
-    NOT_RUNNING: `Start it with: sandbox up ${feature}`,
-    COMPOSE_RESTART_FAILED: `Check with: sandbox logs ${feature}`,
+    NOT_RUNNING: `Start it with: werkmeister up ${feature}`,
+    COMPOSE_RESTART_FAILED: `Check with: werkmeister logs ${feature}`,
   };
 
   try {

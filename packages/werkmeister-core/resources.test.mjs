@@ -10,8 +10,8 @@ import { test } from "node:test";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "resources-home-"));
 const root = path.join(home, "features");
 process.env.HOME = home;
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
-process.env.SANDBOX_WORKSPACES_ROOT = root;
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_WORKSPACES_ROOT = root;
 // No daemon: every Engine call fails fast, so status reads take their "unreachable" path.
 process.env.DOCKER_HOST = `unix://${path.join(home, "no-daemon.sock")}`;
 

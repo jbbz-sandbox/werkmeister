@@ -1,10 +1,10 @@
 /**
- * `sandbox hooks pr-guard` — PreToolUse hook installed in every workspace
- * (hooks_gen.ts). Inside a workspace, a PR opens only through `sandbox pr
+ * `werkmeister hooks pr-guard` — PreToolUse hook installed in every workspace
+ * (hooks_gen.ts). Inside a workspace, a PR opens only through `werkmeister pr
  * open`, which runs the gate and records the URL; this denies the other ways
  * in — `gh pr create` in Bash (what `/create-pr` and
  * `finishing-a-development-branch` run) and the GitHub MCP's
- * create_pull_request. `sandbox pr open` spawns `gh` itself, never through the
+ * create_pull_request. `werkmeister pr open` spawns `gh` itself, never through the
  * Bash tool, so it is never seen here.
  *
  * Builtins only and fail-open, like gate.ts: it runs on every Bash call.
@@ -13,12 +13,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { DOT_DIRS, dotDir } from "./dot_dir.js";
+import { DOT_DIR, dotDir } from "./dot_dir.js";
 
 /**
- * The workspace root: nearest ancestor holding `.sandbox/workspace.yml`. Not
- * gate.ts's `findWorkspaceRoot` — a code worktree has its own `.sandbox/`
- * (the repo's registry fragment), so a walk to any `.sandbox/` stops too early.
+ * The workspace root: nearest ancestor holding `.werkmeister/workspace.yml`. Not
+ * gate.ts's `findWorkspaceRoot` — a code worktree has its own `.werkmeister/`
+ * (the repo's registry fragment), so a walk to any `.werkmeister/` stops too early.
  */
 export function findRecordRoot(start: string): string | null {
   let dir = path.resolve(start);
@@ -69,9 +69,9 @@ export function opensPr(command: string): boolean {
 /** The workspace's PR rules page, relative to *root*; the docs when it predates one. */
 export function prRulesPath(root: string): string {
   return (
-    ["_shared/pr-rules.md", ...DOT_DIRS.map((d) => `${d}/pr-rules.md`)].find((p) =>
+    ["_shared/pr-rules.md", `${DOT_DIR}/pr-rules.md`].find((p) =>
       fs.existsSync(path.join(root, p)),
-    ) ?? "docs/workspace-lifecycle.md in the sandbox repo"
+    ) ?? "docs/workspace-lifecycle.md in the werkmeister repo"
   );
 }
 
@@ -84,9 +84,9 @@ export function decide(input: Record<string, any>): string | null {
   if (!((tool === "Bash" && opensPr(command)) || MCP_CREATE_PR.test(tool))) return null;
   const rules = prRulesPath(root);
   return (
-    `Inside sandbox workspace \`${path.basename(root)}\`, PRs open only through \`sandbox pr open\`: ` +
+    `Inside workspace \`${path.basename(root)}\`, PRs open only through \`werkmeister pr open\`: ` +
     "it runs the pre-PR gate and records the URL. Write the PR file in " +
-    `\`${prFileDirName(root)}\`, have the person set \`status: approved\`, then run \`sandbox pr open\`. ` +
+    `\`${prFileDirName(root)}\`, have the person set \`status: approved\`, then run \`werkmeister pr open\`. ` +
     `Rules: \`${rules}\`.`
   );
 }

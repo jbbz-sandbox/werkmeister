@@ -106,7 +106,7 @@ async function adapt(fn: () => Promise<Record<string, unknown>>): Promise<CallTo
 
 /**
  * The one identifier every workspace-scoped tool shares: optional, defaulting
- * to the connection's `X-Sandbox-Feature` header (lib/feature.ts).
+ * to the connection's `X-Werkmeister-Feature` header (lib/feature.ts).
  */
 export const WORKSPACE_ARG = {
   workspace: z
@@ -114,7 +114,7 @@ export const WORKSPACE_ARG = {
     .optional()
     .describe(
       "Workspace directory name (as list-workspaces reports it) or feature name. " +
-        "Defaults to the X-Sandbox-Feature header on the connection.",
+        "Defaults to the X-Werkmeister-Feature header on the connection.",
     ),
 };
 
@@ -422,12 +422,12 @@ const WORKSPACE_FIELDS = {
   issue_id: z
     .string()
     .optional()
-    .describe("Issue ID or URL in this machine's issue tracker (see `sandbox setup`)."),
+    .describe("Issue ID or URL in this machine's issue tracker (see `werkmeister setup`)."),
   work_type: z.string().optional().describe("Work type (drives the workspace phases)."),
   task: z.string().optional().describe("One-line task title."),
   description: z.string().optional().describe("Longer description."),
   labels: z.string().optional().describe("Comma-separated labels."),
-  test_path: z.string().optional().describe("Default path for `sandbox open` and the suite."),
+  test_path: z.string().optional().describe("Default path for `werkmeister open` and the suite."),
   starting_prompt: z
     .string()
     .optional()
@@ -483,7 +483,7 @@ function registerAuthoringTools(server: McpServer): void {
       description:
         "Re-run init-workspace against an existing workspace: reconcile worktrees, regenerate " +
         `CLAUDE.md, .env, ${COMPOSE_FILE}, skills, agents, hooks and .mcp.json from ` +
-        ".sandbox/workspace.yml plus any arguments given here.",
+        ".werkmeister/workspace.yml plus any arguments given here.",
       inputSchema: { ...WORKSPACE_ARG, ...WORKSPACE_FIELDS },
     },
     async (args, extra): Promise<CallToolResult> =>
@@ -503,7 +503,7 @@ function registerAuthoringTools(server: McpServer): void {
       description:
         "`check` reports drift between the workspace's context layer and a fresh rendering; " +
         "`sync` rewrites what drifted. The layer is the workspace's `context_strategy` (jit: " +
-        "sb-* skills and gate manifest; icm: standards and stage contracts).",
+        "w9r-* skills and gate manifest; icm: standards and stage contracts).",
       inputSchema: {
         ...WORKSPACE_ARG,
         action: z.enum(["check", "sync"]).describe("check reports drift; sync fixes it."),
@@ -536,9 +536,9 @@ function registerAuthoringTools(server: McpServer): void {
     {
       title: "Refresh a workspace's context layer",
       description:
-        "Refresh the workspace's context layer the way `sandbox up` does: jit re-merges its " +
+        "Refresh the workspace's context layer the way `werkmeister up` does: jit re-merges its " +
         "SessionStart and PreToolUse hooks into .claude/settings.json; icm removes any " +
-        "sandbox-managed hooks. Never touches hooks it does not own.",
+        "werkmeister-managed hooks. Never touches hooks it does not own.",
       inputSchema: { ...WORKSPACE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>

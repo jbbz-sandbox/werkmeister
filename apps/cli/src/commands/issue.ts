@@ -1,9 +1,9 @@
 /**
- * sandbox issue <view|update> [ref] [--json] [--status <name>] [--comment <text>]
- * sandbox issue create --project <key> --type <bug|feature|task> --title <text> --body-file <path|->
- * sandbox issue start
+ * werkmeister issue <view|update> [ref] [--json] [--status <name>] [--comment <text>]
+ * werkmeister issue create --project <key> --type <bug|feature|task> --title <text> --body-file <path|->
+ * werkmeister issue start
  *
- * Read or update one issue in this machine's issue tracker (`sandbox setup`
+ * Read or update one issue in this machine's issue tracker (`werkmeister setup`
  * picks it). Every call goes through `issueTracker()`, so nothing here names a
  * tracker.
  *
@@ -16,7 +16,7 @@
  *         Exits 0 when the tracker refuses, so a stage never fails on it.
  *
  * `ref` may be omitted inside a workspace: the issue is then read from its
- * `.sandbox/workspace.yml` (the workspace root is the nearest `.sandbox/`
+ * `.werkmeister/workspace.yml` (the workspace root is the nearest `.werkmeister/`
  * above CWD).
  */
 
@@ -104,7 +104,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.action === "start") {
     const workspace = findWorkspaceRoot(process.cwd());
     if (workspace === null)
-      fail("Not inside a werkmeister workspace — run this from a workspace folder or below.");
+      fail("Not inside a workspace — run this from a workspace folder or below.");
     const line = (await startIssue(workspace)) || "left as is (no in_progress status configured)";
     (line.includes("not moved") ? warn : success)(`Issue: ${line}`);
     return;
@@ -117,13 +117,15 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (!text) {
     const workspace = findWorkspaceRoot(process.cwd());
     if (workspace === null) {
-      fail("No issue given and not inside a werkmeister workspace.");
+      fail("No issue given and not inside a workspace.");
     }
     const cfg = loadConfigFile(workspace, null);
     text = issueIdOf(cfg);
     project = projectOf(cfg);
     if (!text)
-      fail("No issue given and this workspace has no issue (issue_id in .sandbox/workspace.yml).");
+      fail(
+        "No issue given and this workspace has no issue (issue_id in .werkmeister/workspace.yml).",
+      );
   }
   const tracker = issueTracker({ project, text });
   const ref = tracker.parseRef(text);

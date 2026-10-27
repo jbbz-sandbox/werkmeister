@@ -1,11 +1,11 @@
 /**
- * Workspace notes — the `.sandbox/notes/` layer (jit-context-system.md §5.7,
+ * Workspace notes — the `.werkmeister/notes/` layer (jit-context-system.md §5.7,
  * conventions in docs/notes-conventions.md).
  *
  * One note per file, `NNN-<type>-<slug>.md`, YAML frontmatter carrying
  * type / phase / author / refs / status. This module owns the shared read/write
  * plumbing: directory resolution, sequence numbering, frontmatter parsing, and the
- * type/status filters used by readers (`sandbox down` printing, tests) — plus
+ * type/status filters used by readers (`werkmeister down` printing, tests) — plus
  * `buildContext`, the SessionStart hook's payload, built from those same reads.
  *
  * Generators never write note *content* here — the two sanctioned writers in the CLI
@@ -214,7 +214,7 @@ export function renderDecisions(decisions: Note[], workspace: string, budget: nu
     const older = names.length - shown.length;
     return (
       `── ${count} older open decision note(s) not shown (context budget) — read them ` +
-      `in .sandbox/notes/: ${shown.join(", ")}${older ? ` (and ${older} older)` : ""} ──\n`
+      `in .werkmeister/notes/: ${shown.join(", ")}${older ? ` (and ${older} older)` : ""} ──\n`
     );
   };
   let keepFrom = rendered.length;
@@ -297,7 +297,7 @@ export function buildContext(workspace: string, source = ""): string {
 
   if (handoff !== null || decisions.length) {
     sections.push(
-      "Workspace notes exist in .sandbox/notes/ — working state that survives " +
+      "Workspace notes exist in .werkmeister/notes/ — working state that survives " +
         "sessions and compaction. `decision` notes are binding: they override " +
         "task-level instincts; if one conflicts with the task as given, raise it " +
         "to the user. Read relevant `finding`/`attempt` notes before " +

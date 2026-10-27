@@ -98,7 +98,7 @@ export function collectQuestions(plan: Plan): Question[] {
       if (!f.secrets) {
         ask("secrets", {
           kind: "secrets",
-          prompt: `Which of these keys must be set for ${s.name} to start at all? A declared secret that is missing stops \`sandbox up\`.`,
+          prompt: `Which of these keys must be set for ${s.name} to start at all? A declared secret that is missing stops \`werkmeister up\`.`,
           facts: { dir: s.dir },
           choices: example,
         });
@@ -260,7 +260,7 @@ export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
 
 export function assistPrompt(questions: Question[]): string {
   return [
-    "You are helping generate a sandbox service-registry fragment for the repository in your working directory.",
+    "You are helping generate a werkmeister service-registry fragment for the repository in your working directory.",
     "A deterministic scan already filled every field it could read from package manifests, Dockerfiles, compose files and Kubernetes manifests.",
     "The questions below are the fields it had to guess. Answer each one from the repository's own files, using Read, Glob and Grep.",
     "",

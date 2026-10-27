@@ -632,7 +632,7 @@ describe("syncVscodeExtension", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "vsix-"));
     fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ version: "0.3.0" }));
     fs.mkdirSync(path.join(root, "dist"));
-    fs.writeFileSync(path.join(root, "dist", "sandbox-workspaces.vsix"), "");
+    fs.writeFileSync(path.join(root, "dist", "werkmeister-workspaces.vsix"), "");
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -656,7 +656,7 @@ describe("syncVscodeExtension", () => {
     expect(runner.calls).toContainEqual([
       "code",
       "--install-extension",
-      path.join(root, "dist", "sandbox-workspaces.vsix"),
+      path.join(root, "dist", "werkmeister-workspaces.vsix"),
       "--force",
     ]);
   });
@@ -682,7 +682,7 @@ describe("syncVscodeExtension", () => {
   });
 
   it("never installs a checkout's build — only a packaged .vsix", () => {
-    fs.rmSync(path.join(root, "dist", "sandbox-workspaces.vsix"));
+    fs.rmSync(path.join(root, "dist", "werkmeister-workspaces.vsix"));
     const runner = fakeRunner({ [LIST]: [0, ""] });
     const steps = sync(runner, false, true);
     expect(steps[0].ok).toBe(true);
@@ -873,7 +873,7 @@ describe("demo-services clone gating and registry ordering", () => {
   });
 
   it("generates the registry from a fragment it finds under repos_root", async () => {
-    const fragmentDir = path.join(home.dir, "demo-services", ".sandbox");
+    const fragmentDir = path.join(home.dir, "demo-services", ".werkmeister");
     fs.mkdirSync(fragmentDir, { recursive: true });
     fs.mkdirSync(path.join(home.dir, "demo-services", ".git"), { recursive: true });
     fs.writeFileSync(
@@ -974,7 +974,10 @@ describe("syncClaudeStandardsDir", () => {
       [false, false],
     ]) {
       const [step] = syncClaudeStandardsDir(checkOnly, install, settings, standards);
-      expect(step).toMatchObject({ ok: true, detail: "not granted (opt in via `sandbox setup`)" });
+      expect(step).toMatchObject({
+        ok: true,
+        detail: "not granted (opt in via `werkmeister setup`)",
+      });
     }
     expect(fs.readFileSync(settings, "utf8")).toBe("{}");
   });
@@ -1022,7 +1025,7 @@ describe("syncEditorSchemas", () => {
     fs.writeFileSync(
       settings,
       '{\n    // mine\n    "editor.tabSize": 2,\n    "yaml.schemas": {\n' +
-        '        "/old/infra/schemas/workspace.schema.json": "**/.sandbox/workspace.yml",\n' +
+        '        "/old/infra/schemas/workspace.schema.json": "**/.werkmeister/workspace.yml",\n' +
         '        "/k8s.json": "*.k8s.yaml",\n    },\n}\n',
     );
     const [step] = syncEditorSchemas(false, true, settings, schemas);
@@ -1036,19 +1039,16 @@ describe("syncEditorSchemas", () => {
     ];
     expect(mapped[`${schemas}/services-fragment.schema.json`]).toEqual([
       "**/.werkmeister/services.yaml",
-      "**/.sandbox/services.yaml",
     ]);
-    expect(mapped[`${schemas}/workspace.schema.json`]).toEqual([
-      "**/.werkmeister/workspace.yml",
-      "**/.sandbox/workspace.yml",
-    ]);
+    expect(mapped[`${schemas}/workspace.schema.json`]).toEqual(["**/.werkmeister/workspace.yml"]);
 
     syncEditorSchemas(false, true, settings, schemas);
     expect(fs.readFileSync(settings, "utf8")).toBe(text);
   });
 
   it("flags a stale mapping in --check without touching it", () => {
-    const before = '{"yaml.schemas": {"/old/workspace.schema.json": "**/.sandbox/workspace.yml"}}';
+    const before =
+      '{"yaml.schemas": {"/old/workspace.schema.json": "**/.werkmeister/workspace.yml"}}';
     fs.writeFileSync(settings, before);
     const [step] = syncEditorSchemas(true, false, settings, schemas);
     expect(step).toMatchObject({ ok: false, optional: true });

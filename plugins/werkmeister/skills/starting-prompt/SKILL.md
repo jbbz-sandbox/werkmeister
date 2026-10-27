@@ -1,18 +1,18 @@
 ---
 name: starting-prompt
-description: "Run the `starting_prompt` defined in the sandbox workspace's `.werkmeister/workspace.yml`. Use when the user says '/werkmeister:starting-prompt', 'run the starting prompt', 'run my workspace starting prompt', 'kick off the workspace task', or asks to execute the task this sandbox workspace was created for."
+description: "Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. Use when the user says '/werkmeister:starting-prompt', 'run the starting prompt', 'run my workspace starting prompt', 'kick off the workspace task', or asks to execute the task this workspace was created for."
 ---
 
-# Sandbox Starting Prompt
+# Werkmeister Starting Prompt
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
 
-Read the `starting_prompt` from the current sandbox workspace's `.werkmeister/workspace.yml` and execute it as the task to perform.
+Read the `starting_prompt` from the current workspace's `.werkmeister/workspace.yml` and execute it as the task to perform.
 
 ## Step 1 — Extract the starting prompt
 
 ```bash
-sandbox starting-prompt
+werkmeister starting-prompt
 ```
 
 It walks up from the current directory to find `.werkmeister/workspace.yml` and prints the `starting_prompt` value to stdout.
@@ -22,7 +22,7 @@ Exit codes:
 | Code | Meaning | What to do |
 |------|---------|------------|
 | 0 | Prompt printed to stdout | Proceed to Step 2 |
-| 1 | No `.werkmeister/workspace.yml` found | Tell the user no sandbox workspace was found from the current directory; stop |
+| 1 | No `.werkmeister/workspace.yml` found | Tell the user no werkmeister workspace was found from the current directory; stop |
 | 2 | File found but `starting_prompt` is empty | Tell the user the workspace has no starting prompt set; stop |
 
 If invoked from outside the workspace root, pass `--start <workspace-dir>`.

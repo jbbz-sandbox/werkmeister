@@ -4,16 +4,16 @@ Status: option B implemented — spec docs/superpowers/specs/2026-09-27-context-
 
 ## Using it
 
-Set `context_strategy: jit | icm` in `.werkmeister/workspace.yml`, or pass `--context-strategy <id>` / `SANDBOX_CONTEXT_STRATEGY` to `werkmeister workspace` / `werkmeister init-workspace`. Every create writes the key: with no strategy given, a new workspace gets `context_strategy: icm`. A `workspace.yml` without the key (one made before the field existed) reads as `jit`. `jit` generates the sb-* skills, generated agents, gate manifest and SessionStart/PreToolUse hooks described below; `icm` instead writes a staged-folder pipeline — `CLAUDE.md`, `CONTEXT.md`, `BRIEF.md`, `_shared/standards.md`, `_shared/issues-report.md` and `stages/NN_*/CONTEXT.md` — with no notes, no gate and one hook, the PR guard shared with jit. Both strategies write the issue-filing guide from `issues_report.ts` (type bug | feature | task → label and template; sandbox issues → `jbbz-sandbox/werkmeister`, app issues → the configured tracker): icm at `_shared/issues-report.md`, routed from `CLAUDE.md`; jit at `.werkmeister/issues-report.md`, linked from `CLAUDE.md`'s `## Issues` section.
+Set `context_strategy: jit | icm` in `.werkmeister/workspace.yml`, or pass `--context-strategy <id>` / `WERKMEISTER_CONTEXT_STRATEGY` to `werkmeister workspace` / `werkmeister init-workspace`. Every create writes the key: with no strategy given, a new workspace gets `context_strategy: icm`. A `workspace.yml` without the key (one made before the field existed) reads as `jit`. `jit` generates the w9r-* skills, generated agents, gate manifest and SessionStart/PreToolUse hooks described below; `icm` instead writes a staged-folder pipeline — `CLAUDE.md`, `CONTEXT.md`, `BRIEF.md`, `_shared/standards.md`, `_shared/issues-report.md` and `stages/NN_*/CONTEXT.md` — with no notes, no gate and one hook, the PR guard shared with jit. Both strategies write the issue-filing guide from `issues_report.ts` (type bug | feature | task → label and template; werkmeister issues → `jbbz-sandbox/werkmeister`, app issues → the configured tracker): icm at `_shared/issues-report.md`, routed from `CLAUDE.md`; jit at `.werkmeister/issues-report.md`, linked from `CLAUDE.md`'s `## Issues` section.
 
 Both strategies share one PR lifecycle — rules file, PR files, pre-PR gate, PR guard hook, close-out: [workspace-lifecycle.md](workspace-lifecycle.md).
 
 ### `autonomous` (#175)
 
-`autonomous: true` in `workspace.yml` (or `--autonomous`, `SANDBOX_AUTONOMOUS=1`, or the form's checkbox; off by default) lets a headless session started with `claude-send "start the run"` go from stage 01 to `werkmeister pr open` with no stop. The person's review moves to the PR; `werkmeister pr gate` still applies.
+`autonomous: true` in `workspace.yml` (or `--autonomous`, `WERKMEISTER_AUTONOMOUS=1`, or the form's checkbox; off by default) lets a headless session started with `claude-send "start the run"` go from stage 01 to `werkmeister pr open` with no stop. The person's review moves to the PR; `werkmeister pr gate` still applies.
 
 - **icm**: each stage contract ends in `## Self-check` instead of `## Human check` — review `output/` once against `BRIEF.md` and the live issue, flip `status: proposed → decided`, and record each decision under `## Recommendations for reviewer` in the PR body. The propose stage's self-check sets the PR file to `status: approved` and runs `werkmeister pr open`. `CLAUDE.md`'s one rule becomes `## Stop points`: the PR URL, a question only a person can answer, or a gate failure outside the issue's scope. `_shared/pr-rules.md` says the agent approves.
-- **both strategies**: `.claude/settings.json` gains `autonomousRules` (`hooks_gen.ts`) in `permissions.allow` and `AUTONOMOUS_DENY` in `permissions.deny`, both recorded in `.werkmeister/claude-permissions.json`, so flipping back to `false` and rerunning `init-workspace` (or `werkmeister up`) removes them. Each CLI rule is written for every launcher name (`werkmeister`, `w9r` and the deprecated `sandbox`), since a prefix rule for one never matches a call through another; the lists below say `werkmeister`. The allow rules stop at the workspace: git, read-only `gh`, the CLI commands that act on this feature (its name, or none for the cwd's), its own containers, local build and test, read-only utilities, and the read-only MCP tools. The deny rules, which outrank any allow including a person's user-level one, cover shared infra, other workspaces, the linked CLI and outward-facing acts. These are prefix rules, a guardrail rather than a boundary: `node -e` or a flag after the package (`npm install x -g`) still gets past. The PR guard still denies `gh pr create`. jit's gates are unchanged. Both lists are generated from `hooks_gen.ts` by `pnpm run docs:gen`; `<feature>` and `<svc>` stand for the workspace's feature and each of its services.
+- **both strategies**: `.claude/settings.json` gains `autonomousRules` (`hooks_gen.ts`) in `permissions.allow` and `AUTONOMOUS_DENY` in `permissions.deny`, both recorded in `.werkmeister/claude-permissions.json`, so flipping back to `false` and rerunning `init-workspace` (or `werkmeister up`) removes them. Each CLI rule is written for every launcher name (`werkmeister` and `w9r`), since a prefix rule for one never matches a call through another; the lists below say `werkmeister`. The allow rules stop at the workspace: git, read-only `gh`, the CLI commands that act on this feature (its name, or none for the cwd's), its own containers, local build and test, read-only utilities, and the read-only MCP tools. The deny rules, which outrank any allow including a person's user-level one, cover shared infra, other workspaces, the linked CLI and outward-facing acts. These are prefix rules, a guardrail rather than a boundary: `node -e` or a flag after the package (`npm install x -g`) still gets past. The PR guard still denies `gh pr create`. jit's gates are unchanged. Both lists are generated from `hooks_gen.ts` by `pnpm run docs:gen`; `<feature>` and `<svc>` stand for the workspace's feature and each of its services.
 
 Autonomous allow rules:
 
@@ -41,12 +41,12 @@ The "context layer" is four of `initWorkspace`'s steps plus one refresh in `up`,
 |---|---|---|
 | 5b active standards | `.werkmeister/standards.json` | `strategies/jit.ts:130`, `standards.ts:531` |
 | 6 notes + CLAUDE.md | `.werkmeister/notes/001-handoff-*`, `CLAUDE.md` | `strategies/jit.ts:164`, `claude_md.ts:247` |
-| 6a skills | `.claude/skills/sb-*` | `strategies/jit.ts:182`, `workspace_skills.ts:118` |
-| 6b agents | `.claude/agents/sb-researcher.md`, `sb-tester-*` | `strategies/jit.ts:187`, `agent_gen.ts:177` |
+| 6a skills | `.claude/skills/w9r-*` | `strategies/jit.ts:182`, `workspace_skills.ts:118` |
+| 6b agents | `.claude/agents/w9r-researcher.md`, `w9r-tester-*` | `strategies/jit.ts:187`, `agent_gen.ts:177` |
 | 6c hooks | `.claude/settings.json` | `strategies/jit.ts:197`, `hooks_gen.ts:107` |
 | `up` refresh | `.claude/settings.json` again (jit); removes it (icm) | `lifecycle.ts:133` |
 
-The same writers are reachable from `werkmeister skills sync`, the SessionStart self-heal, and the MCP tools (`apps/werkmeister-mcp/src/tools.ts:489`, `:518`). `buildContext` (`notes.ts:282`) and `down` (`teardownNotes`) rewrite note frontmatter regardless. Everything else `initWorkspace` produces (worktrees, `.env`, compose, slot, `sandbox-context.md`, service map) is strategy-neutral and both experiments used it unchanged.
+The same writers are reachable from `werkmeister skills sync`, the SessionStart self-heal, and the MCP tools (`apps/werkmeister-mcp/src/tools.ts:489`, `:518`). `buildContext` (`notes.ts:282`) and `down` (`teardownNotes`) rewrite note frontmatter regardless. Everything else `initWorkspace` produces (worktrees, `.env`, compose, slot, `werkmeister-context.md`, service map) is strategy-neutral and both experiments used it unchanged.
 
 There is no selector today. `workspace.yml` has `work_type` (picks the seeded handoff's phase) and `standards_override`, nothing that names a strategy. The schema is `additionalProperties: true`, so a new key costs a row in `_INPUT_FIELDS` (`workspace_prompts.ts:107`) and a schema property.
 
@@ -61,7 +61,7 @@ The hand-built `icm-ws2` maps onto existing data with no new inputs:
 | `BRIEF.md` | `starting_prompt` verbatim |
 | `_shared/issues-report.md` | `buildIssuesReportMd` (`issues_report.ts`) — shared with jit's `.werkmeister/issues-report.md` |
 | `_shared/standards.md` | `resolveActiveStandards` → rows pointing at `<standards_dir>/<domain>/STANDARD.md` (pointers, not copies) |
-| `stages/NN_*/CONTEXT.md` + `output/.gitkeep` | the same template; contracts reference `.werkmeister/sandbox-context.md` for infra facts |
+| `stages/NN_*/CONTEXT.md` + `output/.gitkeep` | the same template; contracts reference `.werkmeister/werkmeister-context.md` for infra facts |
 | nothing in `.claude/`, no `.werkmeister/notes/` | — |
 
 With an issue, both strategies also show it. The stored copy is `.werkmeister/issue.md`:
@@ -77,7 +77,7 @@ The stage template for `feature` is the four-stage research → spec → impleme
 
 `context_strategy: jit | icm | none` in `workspace.yml` (default `icm`; a file without the key reads as `jit`, `--context-strategy` on `workspace`/`init-workspace`, one row in `_INPUT_FIELDS`, one schema property).
 
-- `initWorkspace`: steps 5b–6c run for `jit`; a new `icm_gen.ts` (one module, ~200 lines: five template literals plus the standards table) runs for `icm`; `none` writes nothing but `sandbox-context.md`.
+- `initWorkspace`: steps 5b–6c run for `jit`; a new `icm_gen.ts` (one module, ~200 lines: five template literals plus the standards table) runs for `icm`; `none` writes nothing but `werkmeister-context.md`.
 - `lifecycle.ts:133`: `if (strategy === "jit") writeWorkspaceHooks(...)`.
 - `skills check|sync`, `notes context`, `hooks gate`, MCP `skills`/`hooks`: read the field, print "not applicable for strategy icm" and exit 0. The gate already fails open when `standards.json` is missing, so it is safe even if a stale hook survives.
 - `down`/`teardownNotes`: skip when there is no notes dir (already effectively true).
@@ -99,11 +99,11 @@ interface ContextStrategy {
 
 ## Option C — Claude Code plugins
 
-The exploration confirms the static parts of JIT could ship in a plugin: the seven entry skills are copied verbatim from `apps/cli/infra/skills/`, and `generateSkills` renders **all** `sb-<domain>-standard` modules from the machine-global standards dir, not a per-workspace subset. `sb-researcher` is static too. What is genuinely per-workspace is `CLAUDE.md`, `.werkmeister/standards.json`, `sb-tester-<archetype>`, `.mcp.json`, and the hook *placement*.
+The exploration confirms the static parts of JIT could ship in a plugin: the seven entry skills are copied verbatim from `apps/cli/infra/skills/`, and `generateSkills` renders **all** `w9r-<domain>-standard` modules from the machine-global standards dir, not a per-workspace subset. `w9r-researcher` is static too. What is genuinely per-workspace is `CLAUDE.md`, `.werkmeister/standards.json`, `w9r-tester-<archetype>`, `.mcp.json`, and the hook *placement*.
 
 But a plugin is a delivery vehicle, not a selector:
 
-- Plugin hooks fire in every project the user opens, not just Werkmeister workspaces. The commands fail open (`command -v werkmeister … || true`), so it is noise rather than breakage, but `docs/jit-context-system.md` §5 keeps sb-* out of the plugin on purpose (session scoping, plugin-refresh lag) and that reasoning still holds.
+- Plugin hooks fire in every project the user opens, not just Werkmeister workspaces. The commands fail open (`command -v werkmeister … || true`), so it is noise rather than breakage, but `docs/jit-context-system.md` §5 keeps w9r-* out of the plugin on purpose (session scoping, plugin-refresh lag) and that reasoning still holds.
 - ICM has nothing to put in a plugin. It is per-workspace files; the only reusable piece is the scaffolder, which is what `icm_gen.ts` is. The user-level `icm-architect` skill already covers the hand-built case.
 - A workspace would still need a field to say which plugin's conventions it follows, so C does not remove A/B, it sits beside them.
 

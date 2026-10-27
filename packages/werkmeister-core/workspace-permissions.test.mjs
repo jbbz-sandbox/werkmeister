@@ -1,5 +1,5 @@
 // The workspace's permissions.allow merge: adds once, keeps the person's rules,
-// and removes only what sandbox recorded adding.
+// and removes only what werkmeister recorded adding.
 
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -82,7 +82,7 @@ test("a rule the person already had is not recorded, so removal keeps it", () =>
   assert.ok(!fs.existsSync(recordPath(root)));
 });
 
-test("a rule sandbox added that is no longer wanted is dropped", () => {
+test("a rule werkmeister added that is no longer wanted is dropped", () => {
   const root = workspace();
   writeWorkspacePermissions(root, ["a", "b"]);
   writeWorkspacePermissions(root, ["b", "c"]);
@@ -175,15 +175,14 @@ test("deny rules: added, the person's kept, and dropped once unwanted", () => {
   assert.ok(!fs.existsSync(recordPath(root)));
 });
 
-test("autonomousRules: the feature's own sandbox and docker targets, exact where extra args reach others", () => {
+test("autonomousRules: the feature's own werkmeister and docker targets, exact where extra args reach others", () => {
   const rules = autonomousRules("feat", ["api"]);
   for (const r of [
-    "Bash(sandbox up feat)",
     "Bash(werkmeister up feat)",
     "Bash(w9r up feat)",
-    "Bash(sandbox restart feat)",
-    "Bash(sandbox logs feat:*)",
-    "Bash(sandbox test feat:*)",
+    "Bash(werkmeister restart feat)",
+    "Bash(werkmeister logs feat:*)",
+    "Bash(werkmeister test feat:*)",
     "Bash(docker exec feat-api:*)",
     "Bash(docker restart feat-api)",
   ])
@@ -202,9 +201,8 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     ["Bash(pnpm install --frozen-lockfile:*)"],
   );
   for (const r of [
-    "Bash(sandbox proxy-reload:*)",
-    "Bash(sandbox down:*)",
-    "Bash(sandbox remove-workspace:*)",
+    "Bash(werkmeister proxy-reload:*)",
+    "Bash(werkmeister remove-workspace:*)",
     "Bash(werkmeister down:*)",
     "Bash(w9r proxy-reload:*)",
     "Bash(docker stop:*)",
@@ -227,12 +225,12 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
   assert.ok(![...AUTONOMOUS_DENY, ...allowed].some((r) => r.includes("sandbox-tools")));
 });
 
-// A `Bash(…)` rule is a literal prefix: one written only for `sandbox` never
-// matched a `werkmeister` or `w9r` call, so autonomous runs stalled on them.
+// A `Bash(…)` rule is a literal prefix: one written only for `werkmeister` never
+// matched a `w9r` call, so autonomous runs stalled on them.
 test("every CLI rule covers each launcher name", () => {
-  const names = ["sandbox", "werkmeister", "w9r"];
+  const names = ["werkmeister", "w9r"];
   for (const list of [autonomousRules("feat", ["api"]), AUTONOMOUS_DENY]) {
-    const cliRules = list.filter((r) => /^Bash\((sandbox|werkmeister|w9r) /.test(r));
+    const cliRules = list.filter((r) => /^Bash\((werkmeister|w9r) /.test(r));
     assert.ok(cliRules.length > 0);
     for (const r of cliRules)
       for (const name of names) {
@@ -258,7 +256,7 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   );
   assert.ok(
     settings.hooks.PreToolUse.some((e) =>
-      e.hooks.some((h) => h.command.includes("sandbox hooks pr-guard")),
+      e.hooks.some((h) => h.command.includes("werkmeister hooks pr-guard")),
     ),
     "PR guard still installed",
   );
@@ -281,7 +279,7 @@ test("a refresh replaces the old broad autonomous rules recorded earlier", async
     "mcp__plugin_werkmeister_werkmeister",
   ];
   const root = workspace({ permissions: { allow: ["mine", ...old] } });
-  fs.mkdirSync(path.join(root, ".sandbox"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".werkmeister"), { recursive: true });
   fs.writeFileSync(recordPath(root), JSON.stringify({ allow: old }));
   setAutonomous(root, true);
   strategyById("icm").refresh(root);

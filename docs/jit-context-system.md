@@ -25,8 +25,8 @@ Four gating axes, each wired to its natural mechanism:
 
 | Axis | Mechanism | Resolution time |
 |------|-----------|-----------------|
-| **Phase** (research/implement/test/review/pr) | Phase-entry skills (`sb-implement`, …) + a compiled routing table in the workspace `CLAUDE.md` | runtime, model-invoked |
-| **Domain** (ui/service/data/auth/config/testing/observability) | Generated `sb-<domain>-standard` skills; `applies_to` globs matched against the files being edited | runtime, model-invoked + hook-enforced (§6) |
+| **Phase** (research/implement/test/review/pr) | Phase-entry skills (`w9r-implement`, …) + a compiled routing table in the workspace `CLAUDE.md` | runtime, model-invoked |
+| **Domain** (ui/service/data/auth/config/testing/observability) | Generated `w9r-<domain>-standard` skills; `applies_to` globs matched against the files being edited | runtime, model-invoked + hook-enforced (§6) |
 | **Service presence** | `services.yaml` archetypes → standards keys, resolved per workspace at init | init time, deterministic |
 | **Tools / isolation** | Generated subagents with `tools:` allowlists | init time, deterministic |
 
@@ -53,7 +53,7 @@ Governing principles (each anchored to an internal measurement; the harnesses ar
 ## 3. Content model — the standards tree
 
 Single source of truth for all standards content, in its own repo
-([jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards)), resolved through `overrides.standards_dir`
+([jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards)), resolved through `overrides.standards_dir` <!-- name-check: ignore -->
 in `~/.werkmeister/config.yaml` — the CLI is the machinery, the tree is an org's content.
 Defaults to `<werkmeister root>/docs/standards` when unset, which no longer exists in this
 repo, so an unconfigured install resolves zero modules. Loader:
@@ -110,7 +110,7 @@ task_signatures:           # optional; case-insensitive substrings matched again
   pointer to an exemplar file; when present it renders as a "Full file" link footer, and the
   literal placeholder `canonical: TODO` is rejected.
 - **Authoring / graduation flow:** review findings become `decision` notes; `werkmeister notes
-  graduate` scaffolds a standard entry with `TODO(graduate)` markers; the `sb-author` skill
+  graduate` scaffolds a standard entry with `TODO(graduate)` markers; the `w9r-author` skill
   fills them; the validator blocks committing unfilled markers.
   Eligibility is computed from *content shape* — a STANDARD.md carrying both `## Rules` and
   `## Don't` (`packages/werkmeister-core/src/graduate.ts::eligibleDomains`), not a fixed list.
@@ -135,7 +135,7 @@ archetypes:
   node-web:
     standards:   [ui, config, testing]   # → routing table + generated skills
     mcp_servers: [context7]              # → .mcp.json union
-    test: "npm test"                     # → sb-tester-<archetype> ({service} expands)
+    test: "npm test"                     # → w9r-tester-<archetype> ({service} expands)
 
 services:
   backend: { repo: werkmeister, archetype: node-web, ... }
@@ -216,11 +216,11 @@ Consequence: **sessions must start at the workspace root** — project skills an
 from the session's project directory. Freshness mid-feature is self-healing: the SessionStart
 hook runs `werkmeister skills check` and, only when it reports drift, `werkmeister skills sync`.
 
-### 5.1 Generated domain skills — `.claude/skills/sb-<domain>-standard/`
+### 5.1 Generated domain skills — `.claude/skills/w9r-<domain>-standard/`
 
 Rendered on the fly from the standards tree by `packages/werkmeister-core/src/skill_gen.ts`:
 
-- `description:` is the composed trigger gate: `Sandbox <summary> Use when EDITING,
+- `description:` is the composed trigger gate: `Werkmeister <summary> Use when EDITING,
   IMPLEMENTING[, OR REVIEWING] <domain> code — files matching <applies_to globs>. Not during
   research/planning, and not for edits outside this domain.` (verbs derived from `phase:`).
 - Body = the STANDARD.md body with links rewritten: sibling-module links become skill
@@ -228,7 +228,7 @@ Rendered on the fly from the standards tree by `packages/werkmeister-core/src/sk
   (`GITHUB_REPO_BASE` + `GITHUB_BRANCH = "main"`); `references/` links pass through, since the
   bundle keeps references adjacent.
 - Body ends with a **precedence footer**, so any load path re-establishes precedence — not
-  just `sb-implement`.
+  just `w9r-implement`.
 - Directory-form references project as `references/<name>.md` beside the SKILL.md, loaded only
   on suspicion of the specific anti-pattern.
 - A generated do-not-edit header names the source file and the sync command.
@@ -237,13 +237,13 @@ Rendered on the fly from the standards tree by `packages/werkmeister-core/src/sk
 
 | Skill | Phase | What it loads / does |
 |-------|-------|----------------------|
-| `sb-research` | research/planning | loads nothing; establishes scope, givens and deliverable shape with the user; spawns the read-only `sb-researcher` agent, which carries the investigation method. `sb-research` ends by work type: architectural work ends in a `decision` note with `status: decided` written only on the user's explicit approval, bounded work in a `finding` naming the root cause, a spike in findings only. |
-| `sb-implement` | coding | universal base (`ponytail` plugin + comments + engineering) at entry; reads routing table + notes; loads Active-row standards matching files about to be edited; re-checks per new file type; recitation rule (restate the governing rule at the edit); output-redirect rule (pipe verbose check output to a file, read back only failures); capture-as-you-go notes contract; precedence tiers |
-| `sb-test` | testing | loads nothing; spawns `sb-tester-<archetype>` agent(s), which run the unit tests and a guarded proxy smoke check; names the plugin's `werkmeister:feature-test` skill for headed browser runs |
-| `sb-review` | review | universal base + standards covering files in the diff; inline anti-pattern one-liners are the checklist; decision-note violations are findings; precedence tiers as severity ladder |
-| `sb-pr` | finishing | pre-PR gate, then `sb-review` |
-| `sb-handoff` | any boundary | writes the structured handoff note |
-| `sb-author` | authoring | fills graduation scaffolds in the standards tree |
+| `w9r-research` | research/planning | loads nothing; establishes scope, givens and deliverable shape with the user; spawns the read-only `w9r-researcher` agent, which carries the investigation method. `w9r-research` ends by work type: architectural work ends in a `decision` note with `status: decided` written only on the user's explicit approval, bounded work in a `finding` naming the root cause, a spike in findings only. |
+| `w9r-implement` | coding | universal base (`ponytail` plugin + comments + engineering) at entry; reads routing table + notes; loads Active-row standards matching files about to be edited; re-checks per new file type; recitation rule (restate the governing rule at the edit); output-redirect rule (pipe verbose check output to a file, read back only failures); capture-as-you-go notes contract; precedence tiers |
+| `w9r-test` | testing | loads nothing; spawns `w9r-tester-<archetype>` agent(s), which run the unit tests and a guarded proxy smoke check; names the plugin's `werkmeister:feature-test` skill for headed browser runs |
+| `w9r-review` | review | universal base + standards covering files in the diff; inline anti-pattern one-liners are the checklist; decision-note violations are findings; precedence tiers as severity ladder |
+| `w9r-pr` | finishing | pre-PR gate, then `w9r-review` |
+| `w9r-handoff` | any boundary | writes the structured handoff note |
+| `w9r-author` | authoring | fills graduation scaffolds in the standards tree |
 
 ### 5.3 Workspace `CLAUDE.md` — the compiled routing table
 
@@ -256,10 +256,10 @@ read through `planFor`): a `refactor` has no research row, a `spike` has only re
 path (spike / bounded / architectural) and phase sequence, and a **Gate** line naming the note
 that must exist before the first source edit (§6). An empty or unknown work type renders all
 five rows and no gate. The rest of the file is Current Task, Layout, the
-two-column Routing table (a repo's own `CLAUDE.md` when it exists; `.werkmeister/sandbox-context.md`
+two-column Routing table (a repo's own `CLAUDE.md` when it exists; `.werkmeister/werkmeister-context.md`
 for everything about the running feature — URL, `X-Feature` cookie, ports, lifecycle, health
 checks; `contract` notes for multi-repo workspaces), the Context Budget rule (≤3 files/step), and
-the Notes pointer. `.werkmeister/sandbox-context.md` is written by the compose generator and is
+the Notes pointer. `.werkmeister/werkmeister-context.md` is written by the compose generator and is
 scoped to the workspace: through-Caddy health checks only for its local services' hosts, the
 feature URL and browser cookie, and a Services table carrying each service's path in its repo.
 
@@ -272,14 +272,14 @@ regeneration can never clobber working state.
 Principle: **phase gates tools, archetype gates context.** They are orthogonal — composed,
 never cross-producted, so a 2-archetype workspace generates ~5–7 agent definitions, not 30.
 
-- `sb-researcher`: `tools: Read, Grep, Glob, Write` (Write solely for the finding note).
+- `w9r-researcher`: `tools: Read, Grep, Glob, Write` (Write solely for the finding note).
   Return contract: write `.werkmeister/notes/NNN-finding-<slug>.md`, return a 2–3 sentence summary
   + note path + open questions.
   Its body carries the investigation method (present options, tag claims
   verified/inferred/assumed, hold givens, bound the investigation, validate against named
   standards, deliverable shape): the method loads in the subagent that investigates, not in
   the main agent that dispatches.
-- `sb-tester-<archetype>` (one per archetype present): `tools: Read, Grep, Glob, Bash, Edit`;
+- `w9r-tester-<archetype>` (one per archetype present): `tools: Read, Grep, Glob, Bash, Edit`;
   Edit restricted to test files by role. The definition embeds only that archetype's services,
   their resolved test commands, and pointers to its standards.
   For each service with a `feature_router:` host it also carries a guarded proxy smoke
@@ -357,7 +357,7 @@ list the directory, which is always fresh and needs zero machinery.
 
 A workspace's `starting_prompt` **is** a handoff — from the workspace creator to the first
 session — so `init-workspace` seeds it as the first `handoff` note. It then flows through every
-existing mechanism with no special casing, and the first real `sb-handoff` supersedes it
+existing mechanism with no special casing, and the first real `w9r-handoff` supersedes it
 naturally. Seeding happens only when a prompt exists; a placeholder handoff written by an
 older CLI (author `workspace-creation`, no prompt) is superseded by the next init that has
 one. Any other handoff note blocks re-seeding — including its own prior seed: once a prompt
@@ -386,7 +386,7 @@ Never raises; silently empty outside a workspace. Total output is bounded by the
 ## 6. Enforcement — the PreToolUse standards gate
 
 `packages/werkmeister-core/src/gate.ts` (built entry: `apps/cli/src/lib/gate.ts`). Everything in §5 is *voluntary*: nothing structurally guarantees
-`sb-implement` ran before the first edit. The gate closes that hole.
+`w9r-implement` ran before the first edit. The gate closes that hole.
 
 **Deny-once-with-payload.** On each `Edit`/`Write` it denies the first governed edit per
 session × domain, carrying the loading instructions in the deny reason, then allows everything
@@ -450,7 +450,7 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
   of the forgiving loader, so silent-drop breakage is caught. Exits 1 on any malformed
   standard.
 - **`werkmeister skills check` / `sync`** — per-workspace projection freshness: missing, stale, or
-  orphaned `sb-*` skills. Also run from the SessionStart hook, so a workspace repairs its own
+  orphaned `w9r-*` skills. Also run from the SessionStart hook, so a workspace repairs its own
   projection before the session reads it.
 
 **Automated test coverage is thin.** `apps/cli/src/lib/__tests__/gate.test.ts` (22 tests) and
@@ -467,11 +467,11 @@ the standards tree or the generators.
 ## 8. Context cost profile
 
 - Standing cost: ~3–7 tokens per projected skill (headless-measured; TUI unverified).
-- `sb-implement` entry: ~3.1k tokens (entry skill + comments + engineering).
-- `sb-research` entry: ~0.7k tokens (thin dispatcher; the method lives in the subagent).
+- `w9r-implement` entry: ~3.1k tokens (entry skill + comments + engineering).
+- `w9r-research` entry: ~0.7k tokens (thin dispatcher; the method lives in the subagent).
 - Incremental per domain touched: ui ~340, service ~1,270, config ~330, auth ~440, testing
   ~240, observability ~260 tokens; references ~230–390 each, on suspicion only.
-- `sb-review` entry: ~2.6k + diff-matched domains.
+- `w9r-review` entry: ~2.6k + diff-matched domains.
 - Research/test phases: ~0 main-context tokens (subagent isolation; summary + note pointer
   back).
 - Re-injection block: tens of tokens (pointers + summaries + precedence line, not bodies).
@@ -492,7 +492,7 @@ The harnesses and raw results are not published.
 | 7 | Post-compaction re-inject | summary-only re-anchor fails under conflicting task nudge (0/3 even enriched); precedence directive is the required ingredient |
 | 9 | Gate deny-payload efficacy | ungated floor 0/3; the deny payload (summary + precedence, **no standard body**) reached 7/9 vs harness-6's 9/9 loaded ceiling, and 8/9 with the full body added — a real lift on every bait, short of the ceiling on the one bait whose numeric idiom the summary never names |
 
-Known-unmeasured: whether agents invoke `sb-implement` unprompted in production sessions;
+Known-unmeasured: whether agents invoke `w9r-implement` unprompted in production sessions;
 implement-phase in a subagent; interactive-TUI standing costs; hook coverage across clients;
 recitation in the >135K-burial regime; main-agent mid-session capture compliance; gate
 deny-retry compliance at scale.
@@ -524,7 +524,7 @@ re-implement on a different coding agent, the target must offer:
 | R1. On-demand instruction packages with a standing one-line index and lazy bodies | domain skills, entry skills | `.claude/skills/` | any lazy-loadable instruction file the agent is told to read; worst case a `Read` tool + strong file identifiers |
 | R2. Always-on project instruction file for the routing table | CLAUDE.md routing block | `CLAUDE.md` | `AGENTS.md` or equivalent |
 | R3. Session-start injection hook (fires on new windows *and* post-compaction), stdout→context, with a known output cap | notes + standards re-injection | SessionStart hook (`source` distinguishes compaction) | any session-lifecycle hook that can run a CLI and inject text; if absent, fold re-injection into R2 and accept weaker post-compaction behavior |
-| R4. Subagent definitions with tool allowlists | sb-researcher, sb-tester-* | `.claude/agents/` frontmatter `tools:` | any agent-spawn primitive with tool restriction; if only role-prompting exists, accept "reliably behaves" instead of "cannot misbehave" |
+| R4. Subagent definitions with tool allowlists | w9r-researcher, w9r-tester-* | `.claude/agents/` frontmatter `tools:` | any agent-spawn primitive with tool restriction; if only role-prompting exists, accept "reliably behaves" instead of "cannot misbehave" |
 | R5. Pre-edit tool hook that can deny with a message the model reads | the standards gate | PreToolUse `Edit\|Write` with deny reason | any pre-tool interception returning text to the model; if absent, the enforcement floor is lost and delivery is voluntary again |
 | R6. Plain filesystem access in the workspace | notes, handoffs, generation targets | — | universal |
 | R7. (Optional, upgrade) Path-glob-conditional rule injection evaluated per model call | replaces the voluntary domain-loading chain | `.claude/rules/` `paths:` frontmatter | Cursor rules globs; OpenCode via the `opencode-rules` plugin |
@@ -540,22 +540,22 @@ content without precedence does not produce compliance).
 
 ## 12. Conventions when extending
 
-- **Phases are tool-gates, not workflow stages.** A phase (`sb-research` / `sb-implement` /
-  `sb-test`) exists to bind a **toolset + isolation profile**. Add a phase only when it changes
+- **Phases are tool-gates, not workflow stages.** A phase (`w9r-research` / `w9r-implement` /
+  `w9r-test`) exists to bind a **toolset + isolation profile**. Add a phase only when it changes
   the gate; never add one that shares a gate with an existing phase. Workflow stages map onto
   the existing gates rather than becoming new ones:
 
   | Workflow stage | Rides tool-gate | Why |
   |---|---|---|
-  | research / design / plan | `sb-research` (read-only + doc/notes write) | all three are read-only exploration writing a *doc, never source* — one profile |
-  | implement | `sb-implement` (full edit tools, **main agent**) | live human correction is the point |
-  | test | `sb-test` (run/edit-tests, per-archetype subagent) | — |
+  | research / design / plan | `w9r-research` (read-only + doc/notes write) | all three are read-only exploration writing a *doc, never source* — one profile |
+  | implement | `w9r-implement` (full edit tools, **main agent**) | live human correction is the point |
+  | test | `w9r-test` (run/edit-tests, per-archetype subagent) | — |
 
-  So **do not add `sb-design` / `sb-plan` phases** — they gate nothing new. Design and plan are
+  So **do not add `w9r-design` / `w9r-plan` phases** — they gate nothing new. Design and plan are
   represented by their *artifacts*, which already flow through existing machinery: decisions →
-  `decision` notes (binding, read by `sb-implement`), specs and plans → ordinary docs.
+  `decision` notes (binding, read by `w9r-implement`), specs and plans → ordinary docs.
 - **New standards rules graduate through the pipeline** (`decision` note → `werkmeister notes
-  graduate` → `sb-author`). Repo docs are the deep-reference tier those rules link to, never a
+  graduate` → `w9r-author`). Repo docs are the deep-reference tier those rules link to, never a
   second rules channel.
 - **Point, never copy.** The system's own rule applies to its own docs: this file states
   current state; nothing duplicates a standard body, a rule, or a resolution algorithm that

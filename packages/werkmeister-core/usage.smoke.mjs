@@ -71,7 +71,7 @@ const wsRoot = path.join(tmp, "workspaces");
 const wsPath = path.join(wsRoot, "demo");
 fs.mkdirSync(wsPath, { recursive: true });
 process.env.HOME = home;
-process.env.SANDBOX_WORKSPACES_ROOT = wsRoot;
+process.env.WERKMEISTER_WORKSPACES_ROOT = wsRoot;
 
 const encoded = wsPath.replace(/[^a-zA-Z0-9]/g, "-");
 const projDir = path.join(home, ".claude", "projects", encoded);
@@ -91,7 +91,7 @@ fs.writeFileSync(
   pricingPath,
   "models:\n  claude-opus-4-8: { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 }\n",
 );
-process.env.SANDBOX_MODEL_PRICING_YAML = pricingPath;
+process.env.WERKMEISTER_MODEL_PRICING_YAML = pricingPath;
 
 const { getWorkspaceUsage } = await import("werkmeister-core");
 const ws = await getWorkspaceUsage("demo");

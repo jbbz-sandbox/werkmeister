@@ -1,5 +1,5 @@
 /**
- * k8s port-forward management for the developer sandbox.
+ * k8s port-forward management for werkmeister.
  *
  * Port-forwards run inside a Docker container (k8s-forwards) as part of the
  * shared infrastructure (compose/shared-infra.yml). This module provides
@@ -42,7 +42,7 @@ export async function checkPortForwardHealth(): Promise<Record<string, boolean>>
 
 /**
  * Whether a running feature has a local service that needs the k8s-forwards
- * container (SW-42). `sandbox up` starts the forwarder only then, so a stopped
+ * container (SW-42). `werkmeister up` starts the forwarder only then, so a stopped
  * one is otherwise the normal state, not a fault. A feature's local services
  * are all its containers, running or not; it counts once any of them runs.
  * `null` containers (docker unreachable) count as needed, so an outage still warns.

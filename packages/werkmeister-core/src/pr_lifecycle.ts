@@ -1,6 +1,6 @@
 /**
  * Workspace PR lifecycle (docs/workspace-lifecycle.md): per-repo PR files, the
- * pre-PR gate, `sandbox pr open|status`, the lifecycle state the pane shows,
+ * pre-PR gate, `werkmeister pr open|status`, the lifecycle state the pane shows,
  * and close-out. The PR files are the only state; GitHub and release tags are
  * read on demand and written back into them.
  */
@@ -79,7 +79,7 @@ export interface PrFile {
   path: string;
   /** The code worktree's directory name — also its key in the registry `repos:`. */
   dir: string;
-  /** The file's own name: `sandbox` for `pr-sandbox.md`, `sandbox-why-page` for a follow-up (SW-103). */
+  /** The file's own name: `werkmeister` for `pr-werkmeister.md`, `werkmeister-why-page` for a follow-up (SW-103). */
   stem: string;
   fm: Record<string, unknown>;
   title: string;
@@ -217,7 +217,7 @@ function touchExecMarker(ws: string): void {
 // ---- PR files --------------------------------------------------------------
 
 /**
- * Where PR files live: the propose stage's output (ICM), else `.sandbox/notes`
+ * Where PR files live: the propose stage's output (ICM), else `.werkmeister/notes`
  * (JIT). `_ship` is the stage name before decision 11. A template with neither
  * (spike) keeps them in its last stage's output (SW-83); null only when
  * `stages/` holds no stage.
@@ -563,7 +563,7 @@ async function gateChecks(
       add(
         `test ${svc}`,
         Boolean(why),
-        why ? `skipped: ${why}` : "no running container for this repo — run `sandbox up`",
+        why ? `skipped: ${why}` : "no running container for this repo — run `werkmeister up`",
       );
       continue;
     }
@@ -589,13 +589,13 @@ async function gateChecks(
         : "no exercise.md — record the exercise checks first",
     );
   }
-  const slot = Number(readEnv(ws, "SANDBOX_SLOT"));
+  const slot = Number(readEnv(ws, "WERKMEISTER_SLOT"));
   // Only a served endpoint has a baseline; the test check already proved a container ran the rest.
   const isServed = (s: string) => ["api", "web"].includes(services[s]?.["type"] ?? "");
   for (const svc of touched.filter((s) => local.has(s) && isServed(s))) {
     const def = services[svc] ?? {};
     if (!running.has(containerOf(feature, svc))) {
-      add(`baseline ${svc}`, false, "container not running — run `sandbox up`");
+      add(`baseline ${svc}`, false, "container not running — run `werkmeister up`");
       continue;
     }
     const url = `http://localhost:${getServicePort(slot, def["port_offset"] ?? 0)}${def["health_endpoint"] ?? "/"}`;
@@ -609,7 +609,7 @@ async function gateChecks(
       touched.map(containerFor).find(Boolean) ?? containerFor(repoServices[0] ?? "");
     if (why) add("release", true, `skipped: ${why}`);
     else if (!container)
-      add("release", false, "no running container for this repo — run `sandbox up`");
+      add("release", false, "no running container for this repo — run `werkmeister up`");
     else {
       touchExecMarker(ws);
       const res = await deps.run("docker", ["exec", container, "sh", "-c", repo["release_check"]]);
@@ -745,7 +745,10 @@ export async function openPrs(
     );
     let url = existing.code === 0 ? existing.stdout.trim() : "";
     if (!url) {
-      const bodyFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-pr-")), "body.md");
+      const bodyFile = path.join(
+        fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-pr-")),
+        "body.md",
+      );
       fs.writeFileSync(bodyFile, f.body);
       const created = await deps.run(
         "gh",
@@ -992,9 +995,9 @@ export async function callbackFields(
 
 export function callbackMessage(status: string, url: string, release?: string): string | null {
   if (status === "merged")
-    return `PR ${url} merged. Run \`sandbox pr status\`, then follow the workspace router.`;
+    return `PR ${url} merged. Run \`werkmeister pr status\`, then follow the workspace router.`;
   if (status === "shipped")
-    return `PR ${url} shipped${release ? ` in ${release}` : ""}. Ask the person whether to run \`sandbox close-out\`.`;
+    return `PR ${url} shipped${release ? ` in ${release}` : ""}. Ask the person whether to run \`werkmeister close-out\`.`;
   if (status === "closed") return `PR ${url} was closed. Report it to the person.`;
   return null;
 }
@@ -1130,7 +1133,7 @@ export async function deliverHeadless(cb: PrCallback): Promise<void> {
 }
 
 /**
- * `sandbox pr watch` (desktop: false) and the werkmeister mod's timer (desktop: true): one
+ * `werkmeister pr watch` (desktop: false) and the werkmeister mod's timer (desktop: true): one
  * pass over every workspace. Headless claims are delivered here; desktop claims are returned
  * for the mod to send through the app, then one idle-reaper pass (SW-39). Never merges and
  * never closes out.
@@ -1173,7 +1176,7 @@ export async function watchPrs(
 }
 
 /**
- * `sandbox pr adopt`: record a fix that landed outside the workspace, so close-out can run.
+ * `werkmeister pr adopt`: record a fix that landed outside the workspace, so close-out can run.
  * With *pr*, write the PR from `gh pr view` and let `refreshPrStatus` promote it; with
  * *noPr*, the fix is already on base and the file is `closed` with that reason.
  */
@@ -1249,7 +1252,7 @@ export async function adoptPr(
   // Through the YAML library: a hand-written `release: @scope/pkg@1.0` is invalid YAML.
   fs.writeFileSync(
     file,
-    `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`sandbox pr adopt\`: the work landed outside this workspace.\n`,
+    `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`werkmeister pr adopt\`: the work landed outside this workspace.\n`,
   );
   const lines = [`${path.basename(file, ".md").replace(/^pr-/, "")}: adopted as ${fm["status"]}`];
   if (fm["status"] !== "closed") lines.push(...(await refreshPrStatus(ws, deps)).lines);
@@ -1259,7 +1262,7 @@ export async function adoptPr(
 }
 
 /**
- * `sandbox pr new <worktree> --slug <slug>`: a follow-up PR for code written after *worktree*'s
+ * `werkmeister pr new <worktree> --slug <slug>`: a follow-up PR for code written after *worktree*'s
  * PR merged (SW-103). Cuts `<branch>-<slug>` from base, since a squash-merged branch's commits
  * are not on base, and writes `pr-<worktree>-<slug>.md` at `status: draft`.
  */
@@ -1473,7 +1476,7 @@ export async function closeOut(
   const why = opts.abandon?.trim();
   if (opts.abandon !== undefined && !why) {
     throw new WorkspaceError(
-      `Abandon needs a reason: sandbox close-out ${name} --abandon "<reason>"`,
+      `Abandon needs a reason: werkmeister close-out ${name} --abandon "<reason>"`,
     );
   }
   const ws = await resolveWorkspaceDir(name).catch((e: Error) => {
@@ -1504,7 +1507,7 @@ async function closeOutLocked(
   why: string | undefined,
   deps: Deps,
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
-  const command = `sandbox close-out ${name}${why ? " --abandon" : ""}`;
+  const command = `werkmeister close-out ${name}${why ? " --abandon" : ""}`;
   const cfg = loadConfigFile(ws, null);
   if (why) abandonWorkspace(ws, why);
   const life = lifecycleOf(ws);
@@ -1524,8 +1527,8 @@ async function closeOutLocked(
   ) {
     const detail = life.prs.map((p) => `${p.stem}: ${p.status}`).join(", ") || "no PR files";
     throw new WorkspaceError(
-      `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`sandbox pr status\` after the release, ` +
-        `or give up with \`sandbox close-out ${name} --abandon "<reason>"\`.`,
+      `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`werkmeister pr status\` after the release, ` +
+        `or give up with \`werkmeister close-out ${name} --abandon "<reason>"\`.`,
     );
   }
   // Not from the state alone: shipped + newly abandoned PR files read `shipped`, and a retry reads
@@ -1566,7 +1569,7 @@ async function closeOutLocked(
       renderCloseout(files, issueLine, why ? `Abandoned: ${why}` : undefined),
     );
   } catch (e) {
-    // Removed while the issue moved, by something outside this lock (`sandbox remove`, rm).
+    // Removed while the issue moved, by something outside this lock (`werkmeister remove`, rm).
     if ((e as NodeJS.ErrnoException).code !== "ENOENT" || fs.existsSync(ws)) throw e;
     lines.push(`'${name}' is already closed out or removed: ${ws} is gone.`);
     return { command, output: lines.join("\n"), path: ws, terminals: [] };

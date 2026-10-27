@@ -2,7 +2,7 @@
  * The ambient log sink for this library.
  *
  * Library modules used to print straight to the console, which is what kept
- * them unimportable by `sandbox dashboard`/`sandbox mcp`: those servers use stdout as the
+ * them unimportable by `werkmeister dashboard`/`werkmeister mcp`: those servers use stdout as the
  * MCP JSON-RPC transport, so one `info()` corrupts the protocol stream. They
  * now emit events and the caller decides where those go.
  *

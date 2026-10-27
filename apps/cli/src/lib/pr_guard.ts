@@ -1,6 +1,6 @@
 /**
- * Build entry for the PR-guard PreToolUse hook (`sandbox hooks pr-guard`).
- * Like lib/gate.ts: the `sandbox` wrapper execs `dist/lib/pr_guard.js` directly,
+ * Build entry for the PR-guard PreToolUse hook (`werkmeister hooks pr-guard`).
+ * Like lib/gate.ts: the `werkmeister` wrapper execs `dist/lib/pr_guard.js` directly,
  * because the hook fires on every Bash call and must skip the CLI's import chain.
  */
 

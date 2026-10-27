@@ -33,7 +33,7 @@ test("the workspace skill states the one rule and the batch check", () => {
     "utf8",
   );
   assert.match(skill, /Every create goes through `createWorkspace`/);
-  assert.match(skill, /\.sandbox\/issue\.md/);
+  assert.match(skill, /\.werkmeister\/issue\.md/);
   assert.match(skill, /mcp__plugin_werkmeister_werkmeister__create-workspace-form/);
   assert.doesNotMatch(skill, /mcp__plugin_werkmeister_workspaces__/);
   assert.ok(skill.includes("grep -q '^## Issue$'"));

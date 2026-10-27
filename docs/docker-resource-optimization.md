@@ -10,7 +10,7 @@ By default, Docker containers without resource limits can consume unbounded CPU 
 - Unexpected OOM kills
 - Poor laptop battery life
 
-Werkmeister ships with pre-configured resource limits for all services (defined in each repo's `.sandbox/services.yaml`, merged into `~/.werkmeister/services.yaml`, and `infra/compose/shared-infra.yml`), but you can tune them based on your actual usage patterns.
+Werkmeister ships with pre-configured resource limits for all services (defined in each repo's `.werkmeister/services.yaml`, merged into `~/.werkmeister/services.yaml`, and `infra/compose/shared-infra.yml`), but you can tune them based on your actual usage patterns.
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ werkmeister optimize
 
 ### Feature Services (`.werkmeister/services.yaml`)
 
-Each service in its repo's `.sandbox/services.yaml` (merged into `~/.werkmeister/services.yaml`, which `werkmeister optimize` reads) has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
+Each service in its repo's `.werkmeister/services.yaml` (merged into `~/.werkmeister/services.yaml`, which `werkmeister optimize` reads) has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
 
 ```yaml
 # .werkmeister/services.yaml
@@ -130,7 +130,7 @@ Example output:
 
   Service                         Max Mem     Limit   Usage  Status
   ──────────────────────────────────────────────────────────────────
-  sandbox-redis                       42M       64M     66%  OK - moderate
+  w9r-caddy                       42M       64M     66%  OK - moderate
   feat-myfeature-frontend-1      2.1G     2560M     84%  RISK - near limit
   feat-myfeature-backend-1       892M        4G     22%  OK
 

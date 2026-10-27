@@ -1,12 +1,12 @@
 /**
  * Machine-config locations and the registry semantics derived from them —
- * the layer BOTH the `sandbox` CLI (in-process) and werkmeister-core (which also
+ * the layer BOTH the `werkmeister` CLI (in-process) and werkmeister-core (which also
  * drives the CLI as a subprocess) read.
  *
  * It exists because the two were resolving the same files independently and
  * disagreeing:
  *
- *  - werkmeister-core looked up registry files by `SANDBOX_*_YAML` env var only, so
+ *  - werkmeister-core looked up registry files by `WERKMEISTER_*_YAML` env var only, so
  *    an `overrides.services_yaml` in config.yaml was invisible to it whenever
  *    env.sh had not been sourced — which is exactly the Claude Desktop / MCP
  *    case, since those servers get a minimal env rather than a login shell;
@@ -29,7 +29,7 @@ import * as path from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
-import { DOT_DIRS, dotDir, forDotDir } from "./dot_dir.js";
+import { DOT_DIR, dotDir } from "./dot_dir.js";
 import { error, warn } from "./reporter.js";
 
 /** Expand a leading `~` against the current user's home directory. */
@@ -39,16 +39,12 @@ export function expandUser(p: string): string {
   return p;
 }
 
-/**
- * `WERKMEISTER_<name>`, else the pre-rename `SANDBOX_<name>` (SW-7). `??`, not
- * `||`: a set-but-empty new name still wins, and each caller keeps its own
- * empty-string handling.
- */
+/** `WERKMEISTER_<name>`; set-but-empty is returned as is, each caller handles "". */
 export function envVar(name: string): string | undefined {
-  return process.env[`WERKMEISTER_${name}`] ?? process.env[`SANDBOX_${name}`];
+  return process.env[`WERKMEISTER_${name}`];
 }
 
-export { DOT_DIRS, dotDir, forDotDir };
+export { DOT_DIR, dotDir };
 
 /**
  * Path to the global config YAML.
@@ -118,7 +114,7 @@ function registryPath(overrideKey: string, envName: string, basename: string): s
   return path.join(sandboxHome(), basename);
 }
 
-/** Path to the service registry (`overrides.services_yaml` → `$SANDBOX_SERVICES_YAML` → ~/.werkmeister/services.yaml). */
+/** Path to the service registry (`overrides.services_yaml` → `$WERKMEISTER_SERVICES_YAML` → ~/.werkmeister/services.yaml). */
 export function servicesYamlPath(): string {
   return registryPath("services_yaml", "SERVICES_YAML", "services.yaml");
 }
@@ -128,19 +124,19 @@ export function servicesLocalYamlPath(): string {
   return path.join(path.dirname(servicesYamlPath()), "services.local.yaml");
 }
 
-/** Path to the port allocation map (`overrides.ports_yaml` → `$SANDBOX_PORTS_YAML` → ~/.werkmeister/ports.yaml). */
+/** Path to the port allocation map (`overrides.ports_yaml` → `$WERKMEISTER_PORTS_YAML` → ~/.werkmeister/ports.yaml). */
 export function portsYamlPath(): string {
   return registryPath("ports_yaml", "PORTS_YAML", "ports.yaml");
 }
 
-/** Path to the model pricing table (`overrides.model_pricing_yaml` → `$SANDBOX_MODEL_PRICING_YAML` → ~/.werkmeister/model-pricing.yaml). */
+/** Path to the model pricing table (`overrides.model_pricing_yaml` → `$WERKMEISTER_MODEL_PRICING_YAML` → ~/.werkmeister/model-pricing.yaml). */
 export function modelPricingYamlPath(): string {
   return registryPath("model_pricing_yaml", "MODEL_PRICING_YAML", "model-pricing.yaml");
 }
 
 /**
  * The directory holding per-feature workspaces: `paths.workspaces_root` →
- * `$SANDBOX_WORKSPACES_ROOT` → `~/workspace`.
+ * `$WERKMEISTER_WORKSPACES_ROOT` → `~/workspace`.
  *
  * Same YAML-over-env precedence as `registryPath`, and here the YAML is
  * load-bearing rather than merely fresher: a GUI-launched process (the VS Code
@@ -276,7 +272,7 @@ function asDict(value: unknown): Record<string, string> {
  *
  * Reads `paths.repos_root` from the global config (`~/.werkmeister/config.yaml`
  * — the single source of truth), falling back to `~/workspace`. The
- * `SANDBOX_REPOS_ROOT` env var is a derived export for external processes and
+ * `WERKMEISTER_REPOS_ROOT` env var is a derived export for external processes and
  * is not read at runtime.
  */
 export function getReposRoot(): string {
@@ -331,7 +327,7 @@ export function detectWorkspaceFromCwd(): string | null {
  *
  * A workspace is the parent directory containing git worktrees for a feature:
  *
- *     $SANDBOX_WORKSPACES_ROOT/feature-a/     <- workspace (multi-repo)
+ *     $WERKMEISTER_WORKSPACES_ROOT/feature-a/     <- workspace (multi-repo)
  *         repo-a/                             <- worktree (.git file)
  *         repo-b/                             <- worktree (.git file)
  *
@@ -403,7 +399,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
     if (required) {
       const msg =
         `Required config file not found: ${filePath}\n` +
-        "Run `sandbox setup` to seed the machine-global config in ~/.werkmeister.";
+        "Run `werkmeister setup` to seed the machine-global config in ~/.werkmeister.";
       error(msg);
       throw new Error(msg);
     }
@@ -415,7 +411,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
     if (required) {
       const msg =
         `Required config file is empty or invalid: ${filePath}\n` +
-        "Run `sandbox setup` to seed the machine-global config in ~/.werkmeister.";
+        "Run `werkmeister setup` to seed the machine-global config in ~/.werkmeister.";
       error(msg);
       throw new Error(msg);
     }
@@ -424,7 +420,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
   return data;
 }
 
-/** Service types whose containers idle (`sleep infinity`) unless `sandbox up --dev` (SW-32). */
+/** Service types whose containers idle (`sleep infinity`) unless `werkmeister up --dev` (SW-32). */
 export const IDLE_SERVICE_TYPES = ["cli", "library", "extension"];
 
 /**
@@ -465,7 +461,7 @@ export function needsCluster(localServices: string[], services: ServicesConfig):
 
 /**
  * CPU limit a generated container gets when services.yaml sets no `cpus:`. One
- * home so `sandbox stats` shows the value generation rendered (SW-40). Setup
+ * home so `werkmeister stats` shows the value generation rendered (SW-40). Setup
  * containers get more: a cold `yarn install` is the heaviest single burst.
  */
 export const DEFAULT_CPUS = "1.0";
@@ -589,7 +585,7 @@ export function loadServices(): ServicesConfig {
 /**
  * Kube context for the dev cluster (services.yaml top-level `k8s_context`).
  *
- * Consumed by `sandbox intercept`. Required when interception is used, so a
+ * Consumed by `werkmeister intercept`. Required when interception is used, so a
  * missing key fails loud rather than defaulting to whatever kubectl context
  * happens to be current — intercepting the wrong cluster is the failure mode
  * this guards against.
@@ -742,7 +738,7 @@ function registryVolumeBases(): Set<string> {
  *
  * Compose generation isolates these per feature by prefixing the feature
  * name (`<feature>-<base>`), so this is exactly the set of suffixes that
- * identify a per-feature sandbox volume. Shared (`^`) volumes are not among
+ * identify a per-feature workspace volume. Shared (`^`) volumes are not among
  * them: teardown must never treat one as a feature's.
  */
 export function getVolumeBaseNames(): string[] {
@@ -755,16 +751,16 @@ export function getVolumeBaseNames(): string[] {
 
 /**
  * The CLI package directory (`<checkout>/apps/cli`) — the root of everything
- * that ships as CODE: `infra/`, `dist/`, the `sandbox` wrapper.
+ * that ships as CODE: `infra/`, `dist/`, the `werkmeister` wrapper.
  *
- * Resolution mirrors {@link sandbox.resolveSandboxBin} because it answers the
- * same question: `SANDBOX_ROOT` first (the wrapper re-derives and exports it from
+ * Resolution mirrors {@link sandbox.resolveSandboxBin} because it answers the // name-check: ignore
+ * same question: `WERKMEISTER_ROOT` first (the wrapper re-derives and exports it from
  * the *running* checkout, so it is authoritative and beats a nearer one on
  * disk), then a walk up from this module looking for the checkout that owns
  * `apps/cli`.
  *
  * The walk-up is what a bundled consumer cannot do — a `.vsix` has no monorepo
- * around it — which is why `SANDBOX_ROOT` ranks first rather than as a fallback.
+ * around it — which is why `WERKMEISTER_ROOT` ranks first rather than as a fallback.
  */
 export function sandboxRoot(): string {
   const override = envVar("ROOT");
@@ -779,8 +775,8 @@ export function sandboxRoot(): string {
     dir = parent;
   }
   throw new Error(
-    "Could not locate the sandbox CLI package. Set SANDBOX_ROOT to your " +
-      "sandbox checkout's apps/cli directory.",
+    "Could not locate the werkmeister CLI package. Set WERKMEISTER_ROOT to your " +
+      "werkmeister checkout's apps/cli directory.",
   );
 }
 
@@ -800,9 +796,9 @@ export function infraRoot(): string {
  * Caddyfile, features.json, the pinned kubeconfig, the forwards table and the
  * k8s-forwards compose override. Read-only sibling: {@link infraRoot}.
  *
- * Derived from {@link sandboxHome} so `SANDBOX_CONFIG_FILE` relocates it with
+ * Derived from {@link sandboxHome} so `WERKMEISTER_CONFIG_FILE` relocates it with
  * the rest of `~/.werkmeister`. Always absolute: Compose resolves a relative
- * `${SANDBOX_STATE_DIR}` against the compose file's directory, which is the
+ * `${WERKMEISTER_STATE_DIR}` against the compose file's directory, which is the
  * package — exactly where these files must not go.
  */
 export function stateInfraRoot(): string {
@@ -824,7 +820,7 @@ export function containerOf(feature: string, svc: string): string {
  * {@link sandboxRoot} returns `<repo>/apps/cli` — right for `infra/`, wrong for
  * resolving the sibling apps under `<repo>/apps/`. Walks up looking for `apps/`
  * rather than assuming a fixed depth, so a checkout laid out differently (or a
- * `SANDBOX_ROOT` already pointing at the repo root) still resolves.
+ * `WERKMEISTER_ROOT` already pointing at the repo root) still resolves.
  */
 export function monorepoRoot(): string {
   let dir = sandboxRoot();

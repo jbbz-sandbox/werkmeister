@@ -22,7 +22,7 @@ import { info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
 
 /**
- * The Playwright release `sandbox setup` downloads Chromium for. Each release
+ * The Playwright release `werkmeister setup` downloads Chromium for. Each release
  * expects one exact browser build, so a workspace on another version finds no
  * browser.
  */
@@ -52,7 +52,7 @@ export function playwrightSearchDirs(workspace: string): string[] {
  * The first of *dirs* holding a playwright config, or null when none does.
  *
  * Separated out because it is the one decision here worth testing on its own.
- * There is deliberately no fallback to the sandbox root: running whatever suite
+ * There is deliberately no fallback to the werkmeister root: running whatever suite
  * lives there (or none) against an unrelated workspace reports success either
  * way, which is the false green this guards against.
  */
@@ -135,7 +135,7 @@ export interface TestRunResult {
 /**
  * Run the Playwright suite for *feature*.
  *
- * `SANDBOX_FEATURE` is what the project's playwright config reads to attach the
+ * `WERKMEISTER_FEATURE` (and `SANDBOX_FEATURE`, until suites move) is what the project's playwright config reads to attach the
  * `X-Feature` cookie, so it is set whether or not a slot exists — a feature
  * with no slot still routes by header, which is why the CLI warns rather than
  * refusing.
@@ -155,25 +155,29 @@ export async function runFeatureTests({
     // Not a refusal: routing still works by header, so the suite is worth
     // running -- the caller just needs to know why nothing is on a slot port.
     warn(`Feature '${feature}' does not have an allocated slot`);
-    warn("Start it first with: sandbox up " + feature);
+    warn("Start it first with: werkmeister up " + feature);
     warn("Running tests anyway with feature header routing...");
   }
 
-  const env: NodeJS.ProcessEnv = { ...process.env, SANDBOX_FEATURE: feature };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    WERKMEISTER_FEATURE: feature,
+    SANDBOX_FEATURE: feature,
+  };
   if (slot) {
-    env["SANDBOX_SLOT"] = String(slot);
+    env["WERKMEISTER_SLOT"] = String(slot);
   }
 
   info(`Working directory: ${cwd}`);
   const installed = installedPlaywrightVersion(cwd);
   if (installed !== PLAYWRIGHT_VERSION) {
     warn(
-      `@playwright/test is ${installed ?? "not installed"} here, but \`sandbox setup\` ` +
+      `@playwright/test is ${installed ?? "not installed"} here, but \`werkmeister setup\` ` +
         `installs Chromium for ${PLAYWRIGHT_VERSION} -- the browser may be missing. ` +
         `Fix with: npm install -D @playwright/test@${PLAYWRIGHT_VERSION}`,
     );
   }
-  info(`SANDBOX_FEATURE=${feature}`);
+  info(`WERKMEISTER_FEATURE=${feature}`);
 
   const cmd = ["npx", "playwright", "test", ...extraArgs];
   info(`Running: ${cmd.join(" ")}`);
@@ -223,7 +227,7 @@ export async function runFeatureTests({
 }
 
 // ---------------------------------------------------------------------------
-// Scaffolding a suite (`sandbox test --scaffold`, the feature-test skill)
+// Scaffolding a suite (`werkmeister test --scaffold`, the feature-test skill)
 // ---------------------------------------------------------------------------
 
 export interface FeatureIngress {
@@ -235,7 +239,7 @@ export interface FeatureIngress {
 /**
  * The ingress URL a scaffolded suite targets. Derived like the Caddyfile's
  * hosts -- the first service with a `feature_router:` block -- so it follows
- * whatever `sandbox setup` configured; an explicit *baseUrl* wins.
+ * whatever `werkmeister setup` configured; an explicit *baseUrl* wins.
  */
 export function featureIngress(baseUrl?: string | null): FeatureIngress {
   if (!baseUrl) {
@@ -265,11 +269,11 @@ export default defineConfig({
   retries: 0,
   reporter: 'line',
   use: {
-    // Filled by \`sandbox test --scaffold\` from the configured feature ingress.
+    // Filled by \`werkmeister test --scaffold\` from the configured feature ingress.
     baseURL: '${baseUrl}',
     ignoreHTTPSErrors: true,
     extraHTTPHeaders: {
-      'X-Feature': process.env.SANDBOX_FEATURE || '',
+      'X-Feature': process.env.WERKMEISTER_FEATURE || '',
     },
   },
   projects: [
@@ -284,9 +288,9 @@ export default defineConfig({
 const featureSpec = (feature: string, { baseUrl, cookieDomain }: FeatureIngress) =>
   `import { test, expect } from '@playwright/test';
 
-const FEATURE = process.env.SANDBOX_FEATURE!;
+const FEATURE = process.env.WERKMEISTER_FEATURE!;
 
-// Filled by \`sandbox test --scaffold\` from the configured feature ingress.
+// Filled by \`werkmeister test --scaffold\` from the configured feature ingress.
 const BASE_URL = '${baseUrl}';
 
 test('feature: ${feature}', async ({ page, context }) => {
@@ -346,7 +350,7 @@ export function ensurePlaywright(workspace: string): void {
   }
   if (installed) {
     warn(
-      `workspace pins @playwright/test ${installed}, but \`sandbox setup\` installs Chromium ` +
+      `workspace pins @playwright/test ${installed}, but \`werkmeister setup\` installs Chromium ` +
         `for ${PLAYWRIGHT_VERSION} -- if launch fails, run: npx playwright@${installed} install chromium`,
     );
     return;
@@ -357,7 +361,7 @@ export function ensurePlaywright(workspace: string): void {
   // git repo); never drop a package.json + node_modules there.
   if (!fs.existsSync(dotDir(workspace))) {
     throw new SandboxError(
-      `${workspace} is not a sandbox workspace (no ${path.basename(dotDir(workspace))}/) -- ` +
+      `${workspace} is not a workspace (no ${path.basename(dotDir(workspace))}/) -- ` +
         `pass --workspace, or install manually there: ${cmd.join(" ")}`,
       "NOT_A_WORKSPACE",
     );

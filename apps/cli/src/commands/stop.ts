@@ -1,14 +1,14 @@
 /**
- * sandbox stop <feature>
+ * werkmeister stop <feature>
  *
  * Stop containers for a feature without removing them or releasing the slot.
- * The feature can be resumed with ``sandbox restart <feature>`` or
- * ``sandbox up <feature>``.
+ * The feature can be resumed with ``werkmeister restart <feature>`` or
+ * ``werkmeister up <feature>``.
  *
- * For shared infrastructure use ``sandbox stop infra``.
+ * For shared infrastructure use ``werkmeister stop infra``.
  *
- * ``sandbox stop --if-idle`` is the SessionEnd hook behind ``auto_stop`` (#231).
- * ``sandbox stop --idle <minutes> [feature]`` is one idle-reaper pass (SW-39).
+ * ``werkmeister stop --if-idle`` is the SessionEnd hook behind ``auto_stop`` (#231).
+ * ``werkmeister stop --idle <minutes> [feature]`` is one idle-reaper pass (SW-39).
  */
 
 import { spawn } from "node:child_process";
@@ -23,7 +23,7 @@ import { findDotenv, loadDotenv } from "../lib/dotenv.js";
 /**
  * Stop the workspace's own feature unless another Claude session is open in it.
  * A SessionEnd hook must never hold up or break exit, so this prints nothing,
- * never throws, and hands `sandbox stop <feature>` to a detached child instead of
+ * never throws, and hands `werkmeister stop <feature>` to a detached child instead of
  * waiting on `docker compose stop`.
  */
 function stopIfIdle(): void {
@@ -78,7 +78,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`\n${Colors.BOLD}=== sandbox stop: ${feature} ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister stop: ${feature} ===${Colors.RESET}\n`);
 
   if (feature === "infra") {
     await infraStop();
@@ -95,7 +95,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     // how to print the message. Every other code propagates.
     if (e instanceof SandboxError && e.code === "NOT_RUNNING") {
       error(e.message);
-      info(`Start it with: sandbox up ${feature}`);
+      info(`Start it with: werkmeister up ${feature}`);
       process.exit(1);
     }
     throw e;
@@ -103,10 +103,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' stopped${Colors.RESET}\n`);
   console.log(
-    `  ${Colors.DIM}Slot ${slot} preserved — resume with: sandbox restart ${feature}${Colors.RESET}`,
+    `  ${Colors.DIM}Slot ${slot} preserved — resume with: werkmeister restart ${feature}${Colors.RESET}`,
   );
   console.log(
-    `  ${Colors.DIM}To fully tear down:              sandbox down ${feature}${Colors.RESET}`,
+    `  ${Colors.DIM}To fully tear down:              werkmeister down ${feature}${Colors.RESET}`,
   );
   console.log();
 }

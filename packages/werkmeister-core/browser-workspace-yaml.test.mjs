@@ -13,13 +13,13 @@ import { readWorkspaceYaml } from "./dist/browser.js";
 const workspace = (contents, name = "workspace.yml") => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "ws-"));
   if (contents !== null) {
-    fs.mkdirSync(path.join(ws, ".sandbox"));
-    fs.writeFileSync(path.join(ws, ".sandbox", name), contents);
+    fs.mkdirSync(path.join(ws, ".werkmeister"));
+    fs.writeFileSync(path.join(ws, ".werkmeister", name), contents);
   }
   return ws;
 };
 
-test("reads .sandbox/workspace.yml from the given workspace", () => {
+test("reads .werkmeister/workspace.yml from the given workspace", () => {
   assert.equal(readWorkspaceYaml(workspace("test_path: /checkout\n")).test_path, "/checkout");
 });
 

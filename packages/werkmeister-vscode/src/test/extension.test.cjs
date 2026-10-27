@@ -56,35 +56,35 @@ suite("Sandbox Workspaces", () => {
     const { workspace, bin } = fixture("demo-feature");
     // Tests share the extension host's process, so this is the same `process.env`
     // resolveSandboxBin() reads — no fake checkout or settings write needed.
-    process.env.SANDBOX_BIN = bin;
+    process.env.WERKMEISTER_BIN = bin;
 
     await vscode.commands.executeCommand("sandbox.stop", wsNode(workspace));
     assert.deepEqual(
       vscode.window.terminals.map((t) => t.name),
-      ["sandbox demo-feature"],
+      ["werkmeister demo-feature"],
     );
 
     await vscode.commands.executeCommand("sandbox.up", wsNode(workspace));
     assert.deepEqual(
       [...new Set(vscode.window.terminals.map((t) => t.name))],
-      ["sandbox demo-feature"],
+      ["werkmeister demo-feature"],
     );
   });
 
   // ⚡ Connect infra is view-wide (SW-55): no workspace cwd to name its terminal after.
-  test("Connect infra runs `sandbox connect` in a terminal named for it", async () => {
-    process.env.SANDBOX_BIN = fixture("unused").bin;
+  test("Connect infra runs `werkmeister connect` in a terminal named for it", async () => {
+    process.env.WERKMEISTER_BIN = fixture("unused").bin;
 
     await vscode.commands.executeCommand("sandbox.connect");
     assert.deepEqual(
       vscode.window.terminals.map((t) => t.name),
-      ["sandbox connect"],
+      ["werkmeister connect"],
     );
   });
 
   // From ~ the wizard's feature and task defaults were the username (SW-51).
   test("New Workspace runs the wizard from the workspaces root, creating it", async () => {
-    process.env.SANDBOX_BIN = fixture("unused").bin;
+    process.env.WERKMEISTER_BIN = fixture("unused").bin;
     const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-vsce-")), "workspaces");
     // The YAML outranks the env var, so point it at nothing.
     process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
@@ -93,7 +93,7 @@ suite("Sandbox Workspaces", () => {
     await vscode.commands.executeCommand("sandbox.newWorkspace");
     assert.deepEqual(
       vscode.window.terminals.map((t) => [t.name, t.creationOptions.cwd]),
-      [["sandbox workspace", root]],
+      [["werkmeister workspace", root]],
     );
     assert.ok(fs.statSync(root).isDirectory());
   });

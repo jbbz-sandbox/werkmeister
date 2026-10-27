@@ -1,7 +1,7 @@
 /**
- * sandbox setup [--check] [--yes]
+ * werkmeister setup [--check] [--yes]
  *
- * The guided first-run (and re-run) of a sandbox machine. Walks through every
+ * The guided first-run (and re-run) of a werkmeister machine. Walks through every
  * prerequisite that lives outside the checkout, writing the machine-global
  * config in `~/.werkmeister` and converging the rest:
  *
@@ -10,7 +10,7 @@
  *   1. paths        — repos root and workspaces root (`paths:`), plus the
  *                     GitHub locations `overrides.workspace_repo` and
  *                     `overrides.github_org`
- *   2. browser      — which browser `sandbox open` launches (`overrides.browser`)
+ *   2. browser      — which browser `werkmeister open` launches (`overrides.browser`)
  *   3. ingress      — base domains + cert directory (`ingress:`)
  *   4. registry     — which repo fragments will generate services.yaml; demo clone; k8s context
  *   5. issues       — the issue tracker (`overrides.issue_tracker`), plus that
@@ -20,11 +20,11 @@
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
  *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
  *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings,
- *                     and the Sandbox Workspaces extension the package ships
+ *                     and the Werkmeister Workspaces extension the package ships
  *   9. standards    — OPTIONAL Claude Code read access to the standards dir
  *  10. pr watch     — OPTIONAL launchd agent / crontab line running `pr watch` every 10 minutes
  *
- * then writes the config (including `sandbox` tab completion in ~/.zshrc) and
+ * then writes the config (including `werkmeister` tab completion in ~/.zshrc) and
  * converges the machine (werkmeister-core/machine_setup):
  * seeding the `~/.werkmeister` registry files (or migrating them up from a legacy
  * `infra/config/` checkout), the werkmeister and ponytail plugins, the
@@ -35,9 +35,9 @@
  * domain converges just what changed. Nothing is written before the last
  * question is answered — Ctrl-C at any prompt leaves the machine untouched.
  *
- *   sandbox setup            # interactive wizard
- *   sandbox setup --check    # report only; no prompts, no writes, nonzero on drift
- *   sandbox setup --yes      # non-interactive; accept defaults, skip optional installs
+ *   werkmeister setup            # interactive wizard
+ *   werkmeister setup --check    # report only; no prompts, no writes, nonzero on drift
+ *   werkmeister setup --yes      # non-interactive; accept defaults, skip optional installs
  *
  * `--check` and `--yes` never prompt, so both are safe in CI. Plugin changes
  * reach only NEW Claude Code sessions — a running session keeps the plugin
@@ -179,7 +179,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
 
   if (interactive) {
     await runWizard([BROWSER_PROMPT], resolvedBrowser, browserDefault, {
-      intro: "Which browser `sandbox open` launches.",
+      intro: "Which browser `werkmeister open` launches.",
     });
   } else {
     resolvedBrowser.browser = browserDefault();
@@ -191,7 +191,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   ) {
     warn(
       `  ${BROWSERS[resolvedBrowser.browser].label} isn't wired up yet -- ` +
-        "`sandbox open` will error until it's picked to chrome/chromium/brave/edge/safari.",
+        "`werkmeister open` will error until it's picked to chrome/chromium/brave/edge/safari.",
     );
   }
 
@@ -222,7 +222,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   let demo = false;
   // An existing hand-written registry's context is the default (and the
   // non-interactive value): a `--yes` upgrade must not silently retarget
-  // `sandbox intercept` at the default cluster.
+  // `werkmeister intercept` at the default cluster.
   let k8sContext = inheritedK8sContext(servicesYaml) ?? "orbstack";
 
   let fragments: string[] = [];
@@ -237,7 +237,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     );
   } else {
     info(`No <repo>/${FRAGMENT_REL} found under ${reposRoot}.`);
-    info("Clone your team's repos there and re-run `sandbox setup`, or try the demo apps.");
+    info("Clone your team's repos there and re-run `werkmeister setup`, or try the demo apps.");
   }
   if (!fragments.includes("demo-services")) {
     demo = await confirm(
@@ -248,7 +248,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   }
   if (!fs.existsSync(gc.servicesLocalYamlPath()) && interactive) {
     k8sContext = await prompt(
-      "Kube context for `sandbox intercept` (services.local.yaml k8s_context)",
+      "Kube context for `werkmeister intercept` (services.local.yaml k8s_context)",
       k8sContext,
     );
   }
@@ -314,7 +314,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
 
   // --- 6. telepresence (optional) -----------------------------------------
   heading("6. Telepresence (optional)");
-  info("Only `sandbox intercept` needs it — reroutes cluster traffic to a local container.");
+  info("Only `werkmeister intercept` needs it — reroutes cluster traffic to a local container.");
   const installTelepresence = await confirm(
     "  Install/upgrade the OSS client via Homebrew if it's missing or stale?",
     false,
@@ -325,7 +325,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   heading("7. Superpowers plugin (optional)");
   info(
     "Brainstorming/planning skills, installed alongside ponytail. Writes its " +
-      "plans and specs under docs/superpowers/. Nothing in the sandbox depends " +
+      "plans and specs under docs/superpowers/. Nothing in werkmeister depends " +
       "on it, so declining is a first-class answer and `--check` stays green.",
   );
   const installOptionalPlugins = await confirm(
@@ -346,8 +346,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     info("Already mapped.");
   } else {
     info(
-      "Validates <repo>/.werkmeister/services.yaml and .sandbox/workspace.yml against the " +
-        "sandbox's JSON Schemas (needs the redhat.vscode-yaml extension). Adds " +
+      "Validates <repo>/.werkmeister/services.yaml and .werkmeister/workspace.yml against the " +
+        "werkmeister's JSON Schemas (needs the redhat.vscode-yaml extension). Adds " +
         `\`yaml.schemas\` entries to ${vscodeSettingsPath()}; comments and other settings are kept.`,
     );
     mapEditorSchemas = await confirm(
@@ -360,17 +360,17 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   let installVscodeExtension = false;
   if (ext.cli && ext.bundled && ext.installed !== ext.bundled.version) {
     info(
-      "The Sandbox Workspaces extension shows your feature workspaces, containers " +
+      "The Werkmeister Workspaces extension shows your feature workspaces, containers " +
         `and intercepts in a VS Code side bar (${ext.installed ?? "not installed"} → ${ext.bundled.version}).`,
     );
     installVscodeExtension = await confirm(
-      "  Install the Sandbox Workspaces extension?",
+      "  Install the Werkmeister Workspaces extension?",
       false,
       interactive,
     );
   } else if (ext.cli && !ext.bundled) {
     info(
-      `Sandbox Workspaces extension: ${ext.installed ?? "not installed"}. A checkout bundles no .vsix, so ` +
+      `Werkmeister Workspaces extension: ${ext.installed ?? "not installed"}. A checkout bundles no .vsix, so ` +
         "setup can't install it — build it from packages/werkmeister-vscode (see the README).",
     );
   }
@@ -430,8 +430,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     version: 1,
     paths: {
       // Self-derived — the running checkout is authoritative. Stored only so
-      // env.sh can export SANDBOX_ROOT for external processes.
-      sandbox_root: String(getSandboxRoot()),
+      // env.sh can export WERKMEISTER_ROOT for external processes.
+      werkmeister_root: String(getSandboxRoot()),
       repos_root: resolvedPaths.repos_root,
       workspaces_root: resolvedPaths.workspaces_root,
     },
@@ -539,16 +539,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       steps.unshift({ label: "global config", ok: false, detail: p });
     }
     if (report(steps)) {
-      warn("Prerequisites out of date — run `sandbox setup` to converge.");
+      warn("Prerequisites out of date — run `werkmeister setup` to converge.");
       process.exit(1);
     }
-    success("All required sandbox prerequisites are in order.");
+    success("All required werkmeister prerequisites are in order.");
     return;
   }
 
   const interactive = Boolean(process.stdin.isTTY) && !assumeYes;
   if (interactive) {
-    info("Sandbox setup — press Ctrl-C at any prompt to abort without writing.");
+    info("Werkmeister setup — press Ctrl-C at any prompt to abort without writing.");
   } else if (!process.stdin.isTTY && !assumeYes) {
     warn("Not a TTY — running non-interactively with defaults (same as --yes).");
   }

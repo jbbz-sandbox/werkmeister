@@ -1,7 +1,7 @@
 /**
  * The `jit` context strategy — docs/jit-context-system.md §5–6. What was
  * initWorkspace steps 5b–6c: active standards + gate manifest, notes +
- * CLAUDE.md, sb-* skills, generated agents, hooks. 5b, 6, 6a and 6c moved
+ * CLAUDE.md, w9r-* skills, generated agents, hooks. 5b, 6, 6a and 6c moved
  * verbatim; 6b's present-archetype resolution now goes through the shared
  * `presentArchetypes` helper (archetypes.ts) instead of calling
  * `resolvePresentArchetypes` inline.
@@ -13,7 +13,7 @@ import * as path from "node:path";
 import { buildTesterSpecs, writeWorkspaceAgents } from "../agent_gen.js";
 import { presentArchetypes } from "../archetypes.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../claude_md.js";
-import { DOT_DIRS, dotDir, forDotDir, loadArchetypes } from "../config.js";
+import { DOT_DIR, dotDir, loadArchetypes } from "../config.js";
 import { type FeatureRouter, loadFeatureRouters } from "../feature_routing.js";
 import { main as gateMain, resetSessionState } from "../gate.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
@@ -157,17 +157,14 @@ export function seedStartingHandoff(
     }
     if (prompt) {
       lines.push(
-        "Seeded from `starting_prompt` in .sandbox/workspace.yml when the",
+        "Seeded from `starting_prompt` in .werkmeister/workspace.yml when the",
         "workspace was created. The task below has not begun — confirm",
         "direction with the user before executing it.",
         "",
         prompt,
       );
     }
-    fs.writeFileSync(
-      path.join(directory, filename),
-      forDotDir(lines.join("\n") + "\n", workspaceRoot),
-    );
+    fs.writeFileSync(path.join(directory, filename), lines.join("\n") + "\n");
     success(
       `Seeded starting handoff → ${path.relative(workspaceRoot, path.join(directory, filename))}`,
     );
@@ -218,7 +215,7 @@ function init(ctx: InitContext): void {
     );
   } else {
     // Not fatal — a workspace without standards still works — but it is a
-    // materially degraded one (no routing table, no sb-*-standard skills, no
+    // materially degraded one (no routing table, no w9r-*-standard skills, no
     // gate manifest), and it used to happen in silence.
     warn(
       standardsDirProblem() ||
@@ -249,33 +246,30 @@ function init(ctx: InitContext): void {
     standardsSection,
     ctx.issue ?? null,
   );
-  fs.writeFileSync(claudeMdPath, forDotDir(content, workspaceRoot));
+  fs.writeFileSync(claudeMdPath, content);
   success(`Wrote ${claudeMdPath}`);
   // CLAUDE.md's "## Issues" section points here.
   const issuesReportPath = path.join(dotDir(workspaceRoot), "issues-report.md");
   fs.mkdirSync(path.dirname(issuesReportPath), { recursive: true });
   fs.writeFileSync(
     issuesReportPath,
-    forDotDir(
-      buildIssuesReportMd(
-        workspaceName,
-        issueIdOfMeta(meta),
-        issueTracker({ project: inputs["project"], text: issueIdOfMeta(meta) }),
-      ),
-      workspaceRoot,
+    buildIssuesReportMd(
+      workspaceName,
+      issueIdOfMeta(meta),
+      issueTracker({ project: inputs["project"], text: issueIdOfMeta(meta) }),
     ),
   );
   success(`Wrote ${issuesReportPath}`);
   const prRulesPath = path.join(dotDir(workspaceRoot), "pr-rules.md");
-  fs.writeFileSync(prRulesPath, forDotDir(buildPrRulesMd(".sandbox/notes/"), workspaceRoot));
+  fs.writeFileSync(prRulesPath, buildPrRulesMd(".werkmeister/notes/"));
   success(`Wrote ${prRulesPath}`);
 
-  // 6a. Projected sb-* skills into .claude/skills/.
+  // 6a. Projected w9r-* skills into .claude/skills/.
   for (const skillPath of writeWorkspaceSkills(workspaceRoot, null, null, activeStandards)) {
     success(`Wrote ${skillPath}`);
   }
 
-  // 6b. Generated subagents: sb-researcher plus one sb-tester-<archetype> per
+  // 6b. Generated subagents: w9r-researcher plus one w9r-tester-<archetype> per
   // archetype present. Routers feed the tester's proxy smoke check; a machine
   // with no ingress config gets testers without one, never a failed init.
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
@@ -316,7 +310,7 @@ export const jit: ContextStrategy = {
     writeWorkspaceSettings(workspaceRoot);
   },
   check(workspaceRoot) {
-    // Resolved once, up front: it reads .sandbox/workspace.yml (one [info] line)
+    // Resolved once, up front: it reads .werkmeister/workspace.yml (one [info] line)
     // and both drift sources below take the result.
     const resolved = resolveWorkspaceActive(workspaceRoot);
     const { authoring, drift } = checkSkills(workspaceRoot, resolved?.active ?? null);
@@ -340,15 +334,15 @@ export const jit: ContextStrategy = {
   ownedPaths: () => [
     "CLAUDE.md",
     ".claude/settings.json",
+    ".claude/skills/w9r-*",
+    ".claude/agents/w9r-*",
     ".claude/skills/sb-*",
     ".claude/agents/sb-*",
-    ...DOT_DIRS.flatMap((d) => [
-      `${d}/notes`,
-      `${d}/standards.json`,
-      `${d}/issues-report.md`,
-      `${d}/pr-rules.md`,
-      `${d}/.gate`,
-    ]),
+    `${DOT_DIR}/notes`,
+    `${DOT_DIR}/standards.json`,
+    `${DOT_DIR}/issues-report.md`,
+    `${DOT_DIR}/pr-rules.md`,
+    `${DOT_DIR}/.gate`,
   ],
   decisions: noteDecisions,
 };

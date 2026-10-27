@@ -4,7 +4,7 @@
  * Every workspace-scoped tool takes one optional `workspace` argument: a
  * workspace directory name (as `list-workspaces` reports it) or a feature name.
  * A container agent omits it — the server cannot see the client's cwd, so the
- * feature travels in `X-Sandbox-Feature`, pinned by the workspace's own
+ * feature travels in `X-Werkmeister-Feature`, pinned by the workspace's own
  * generated `.mcp.json`.
  *
  * The directory name is tried first because it is what the UI and the pane hold
@@ -20,7 +20,9 @@ import { workspacesRoot } from "werkmeister-core/config";
 import { SandboxError } from "werkmeister-core/errors";
 
 /** Lower-cased: Node lower-cases incoming header names. */
-export const FEATURE_HEADER = "x-sandbox-feature";
+export const FEATURE_HEADER = "x-werkmeister-feature";
+/** Sent by a `.mcp.json` generated before SW-106; drop once every workspace has re-run init-workspace. */
+const PRE_RENAME_FEATURE_HEADER = "x-sandbox-feature";
 
 export type ReqHeaders = Record<string, string | string[] | undefined> | undefined;
 
@@ -34,13 +36,13 @@ export interface Workspace {
 
 /** The `workspace` argument, else the header, trimmed; a coded error when neither is set. */
 export function workspaceId(explicit: string | undefined, headers: ReqHeaders): string {
-  const raw = headers?.[FEATURE_HEADER];
+  const raw = headers?.[FEATURE_HEADER] ?? headers?.[PRE_RENAME_FEATURE_HEADER];
   const fromHeader = Array.isArray(raw) ? raw[0] : raw;
   const id = (explicit?.trim() || fromHeader?.trim()) ?? "";
   if (!id) {
     throw new SandboxError(
       "No workspace for this call. Pass a `workspace` argument, or set the " +
-        "X-Sandbox-Feature header on the MCP connection (the workspace's " +
+        "X-Werkmeister-Feature header on the MCP connection (the workspace's " +
         ".mcp.json does this for you).",
       "NO_WORKSPACE",
     );

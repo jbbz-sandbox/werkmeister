@@ -1,7 +1,7 @@
 {
   "name": "werkmeister-vscode",
-  "displayName": "Sandbox Workspaces",
-  "description": "Manage developer-sandbox feature workspaces — container state, Telepresence intercepts, and the sandbox CLI lifecycle — from a VS Code tree view.",
+  "displayName": "Werkmeister Workspaces",
+  "description": "Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code tree view.",
   "version": "0.41.0",
   "license": "Apache-2.0",
   "publisher": "JBBZ",
@@ -23,8 +23,8 @@
       "activitybar": [
         {
           "id": "sandbox",
-          "title": "Sandbox",
-          "icon": "resources/sandbox.svg"
+          "title": "Werkmeister",
+          "icon": "resources/werkmeister.svg"
         }
       ]
     },
@@ -41,151 +41,151 @@
       {
         "command": "sandbox.refresh",
         "title": "Refresh",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(refresh)"
       },
       {
         "command": "sandbox.open",
         "title": "Open in New Window",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(folder-opened)"
       },
       {
         "command": "sandbox.switch",
         "title": "→ Switch to",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(arrow-right)"
       },
       {
         "command": "sandbox.openIssue",
         "title": "Open issue ↗",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(link-external)"
       },
       {
         "command": "sandbox.configure",
-        "title": "Configure Sandbox CLI Path",
-        "category": "Sandbox",
+        "title": "Configure Werkmeister CLI Path",
+        "category": "Werkmeister",
         "icon": "$(gear)"
       },
       {
         "command": "sandbox.up",
         "title": "▶ Up",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(play)"
       },
       {
         "command": "sandbox.stop",
         "title": "■ Stop",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(primitive-square)"
       },
       {
         "command": "sandbox.pause",
         "title": "⏸ Pause",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(debug-pause)"
       },
       {
         "command": "sandbox.resume",
         "title": "▶ Resume",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(debug-continue)"
       },
       {
         "command": "sandbox.restart",
         "title": "↻ Restart",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(debug-restart)"
       },
       {
         "command": "sandbox.down",
         "title": "⏻ Down",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(debug-stop)"
       },
       {
         "command": "sandbox.toggleIntercept",
         "title": "Toggle Intercept",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(arrow-swap)"
       },
       {
         "command": "sandbox.logs",
         "title": "Logs",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(output)"
       },
       {
         "command": "sandbox.newWorkspace",
         "title": "New Workspace",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(add)"
       },
       {
         "command": "sandbox.openFeature",
         "title": "Open feature ↗",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(globe)"
       },
       {
         "command": "sandbox.detect",
         "title": "Detect Services in Repo...",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(search)"
       },
       {
         "command": "sandbox.registrySync",
         "title": "Sync Service Registry",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(sync)"
       },
       {
         "command": "sandbox.closeOut",
         "title": "✓ Close out",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(check)"
       },
       {
         "command": "sandbox.continue",
         "title": "↗ Continue in Terminal",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(link-external)"
       },
       {
         "command": "sandbox.newSession",
         "title": "＋ New session",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(add)"
       },
       {
         "command": "sandbox.refreshPrs",
         "title": "↻ Refresh PRs",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(refresh)"
       },
       {
         "command": "sandbox.openPr",
         "title": "Open PR ↗",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(git-pull-request)"
       },
       {
         "command": "sandbox.connect",
         "title": "⚡ Connect infra",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(zap)"
       },
       {
         "command": "sandbox.abandon",
         "title": "✕ Abandon…",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(close)"
       },
       {
         "command": "sandbox.legend",
         "title": "Legend",
-        "category": "Sandbox",
+        "category": "Werkmeister",
         "icon": "$(question)"
       }
     ],
@@ -364,17 +364,17 @@
       ]
     },
     "configuration": {
-      "title": "Sandbox Workspaces",
+      "title": "Werkmeister Workspaces",
       "properties": {
         "sandbox.binPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Absolute path to the `sandbox` wrapper script. Overrides everything, including `#sandbox.root#`. Leave empty to resolve from the environment or `~/.werkmeister/config.yaml`."
+          "markdownDescription": "Absolute path to the `werkmeister` wrapper script. Overrides everything, including `#sandbox.root#`. Leave empty to resolve from the environment or `~/.werkmeister/config.yaml`."
         },
         "sandbox.root": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Absolute path to the developer-sandbox checkout directory that contains the `sandbox` wrapper. Leave empty to resolve from the environment or `~/.werkmeister/config.yaml`."
+          "markdownDescription": "Absolute path to the werkmeister checkout directory that contains the `werkmeister` wrapper. Leave empty to resolve from the environment or `~/.werkmeister/config.yaml`."
         }
       }
     }

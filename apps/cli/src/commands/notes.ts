@@ -1,5 +1,5 @@
 /**
- * sandbox notes <context|graduate>
+ * werkmeister notes <context|graduate>
  *
  * `context`: print the workspace's notes context for injection into a fresh
  * Claude Code window — the SessionStart hook target
@@ -12,7 +12,7 @@
  * (docs/jit-context-system.md §3.2). Mechanical scaffolding is
  * `graduate.ts`; this module resolves domain/kind
  * (interactively at a TTY, or via `--domain`/`--kind` flags otherwise) and is
- * reused by `sandbox down`'s teardown prompt.
+ * reused by `werkmeister down`'s teardown prompt.
  */
 
 import * as fs from "node:fs";
@@ -125,7 +125,7 @@ export async function graduateOne(
 async function runGraduate(args: Record<string, unknown>): Promise<void> {
   const workspace = findWorkspaceRoot(process.cwd());
   if (workspace === null) {
-    error("Not inside a werkmeister workspace — run this from a workspace folder or below.");
+    error("Not inside a workspace — run this from a workspace folder or below.");
     process.exit(1);
   }
 
@@ -178,8 +178,8 @@ async function runGraduate(args: Record<string, unknown>): Promise<void> {
   success(`Scaffolded ${result["scaffold_path"]}`);
   info(`Note marked graduating → ${result["graduated_to"]}`);
   info(
-    "Ask Claude to run the sb-author skill to fill in the placeholder, " +
-      "then `sandbox skills check`.",
+    "Ask Claude to run the w9r-author skill to fill in the placeholder, " +
+      "then `werkmeister skills check`.",
   );
   // The scaffold and the note live in different repos; saying so here is the
   // difference between "two commits" and "one commit and a silent orphan".
@@ -209,7 +209,7 @@ function hookPayload(): Record<string, any> {
   }
 }
 
-/** Execute ``sandbox notes <action>``. */
+/** Execute ``werkmeister notes <action>``. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.action === "graduate") {
     await runGraduate(args);

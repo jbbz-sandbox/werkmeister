@@ -6,7 +6,7 @@ import { type DetectContext, type Finding, guessed, stated, type Workspace } fro
 
 const WEB_DEPS = ["next", "vite", "react", "expo"];
 const API_DEPS = ["express", "fastify", "@nestjs/core", "koa"];
-/** Ship glibc-only prebuilds; an alpine image can't load them (users guide, "Self-hosting the sandbox repo"). */
+/** Ship glibc-only prebuilds; an alpine image can't load them (users guide, "Self-hosting the Werkmeister repo"). */
 const GLIBC_ONLY = ["sharp", "better-sqlite3", "esbuild", "@swc/core"];
 
 /** `scripts` run in order, joined by `&&`; `test` goes through `<pm> test`, the rest through `run`. */

@@ -1,11 +1,11 @@
 ---
 name: routing-test
-description: "Trace a specific URL through the full sandbox routing chain to identify where it breaks. Use when a specific URL isn't working correctly — wrong content, empty response, wrong service handling it, or unexpected redirect. Takes a URL and traces it through every layer: route-config matching, direct service test, Caddy proxy test, and Caddyfile verification."
+description: "Trace a specific URL through the full routing chain to identify where it breaks. Use when a specific URL isn't working correctly — wrong content, empty response, wrong service handling it, or unexpected redirect. Takes a URL and traces it through every layer: route-config matching, direct service test, Caddy proxy test, and Caddyfile verification."
 ---
 
 # routing-test
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename keeps `~/.sandbox/` or `.sandbox/` instead; use whichever exists.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
 
 Trace a URL through the full routing chain. The user provides a URL (full or relative path). If no URL is provided, ask for one.
 
@@ -14,11 +14,11 @@ Trace a URL through the full routing chain. The user provides a URL (full or rel
 Routing is per-hostname, not per-path: Caddy terminates each service's public
 hostname directly. The service handling a URL is the one whose `feature_router:`
 block in `~/.werkmeister/services.yaml` owns that hostname — so read the host from
-the URL and match it there. `sandbox services <feature>` lists the routed
+the URL and match it there. `werkmeister services <feature>` lists the routed
 services for a running feature.
 
 Derive the feature's host ports from its slot — do NOT assume slot 1. Get the
-slot from `sandbox status --json` (each entry in `features` has `slot`; slots
+slot from `werkmeister status --json` (each entry in `features` has `slot`; slots
 are Docker-label-derived, there is no registry file), then:
 
 ```bash
@@ -27,12 +27,12 @@ PORT=$((BASE + OFFSET))              # OFFSET = the service's `port_offset`
 ```
 
 `port_offset` per service lives in `~/.werkmeister/services.yaml` (written by
-`sandbox setup`).
+`werkmeister setup`).
 
 ## Step 2: Test Direct to Expected Service
 
 ```bash
-curl -s -D - -o /tmp/sandbox-route-test-direct "http://localhost:{port}{path}" 2>&1 | head -15
+curl -s -D - -o /tmp/werkmeister-route-test-direct "http://localhost:{port}{path}" 2>&1 | head -15
 ```
 
 Report: HTTP status, content-type, content-length/transfer-encoding, any redirects.
@@ -41,13 +41,13 @@ Report: HTTP status, content-type, content-length/transfer-encoding, any redirec
 
 The ingress host is configured per machine — never hardcode it. Derive it from
 `ingress.local_domain` in `~/.werkmeister/config.yaml` plus the routed service name
-(`sandbox services <feature>` lists them):
+(`werkmeister services <feature>` lists them):
 
 ```bash
-DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.sandbox/config.yaml 2>/dev/null | head -1)
+DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.werkmeister/config.yaml 2>/dev/null | head -1)
 BASE="https://${SERVICE}.${DOMAIN}"   # SERVICE = the routed service under test
 
-curl -sk -D - -o /tmp/sandbox-route-test-caddy "${BASE}{path}" 2>&1 | head -15
+curl -sk -D - -o /tmp/werkmeister-route-test-caddy "${BASE}{path}" 2>&1 | head -15
 ```
 
 Report: HTTP status, content-type, content-length, server header.
@@ -63,7 +63,7 @@ Check for discrepancies:
 ## Step 5: Verify Caddy Route Exists
 
 ```bash
-CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CFG="${WERKMEISTER_CONFIG_FILE:-$HOME/.werkmeister/config.yaml}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 grep -n "path.*{relevant_pattern}" "$CADDYFILE"
 ```
@@ -71,7 +71,7 @@ grep -n "path.*{relevant_pattern}" "$CADDYFILE"
 Also check compiled config:
 
 ```bash
-CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CFG="${WERKMEISTER_CONFIG_FILE:-$HOME/.werkmeister/config.yaml}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker cp "$CADDYFILE" w9r-caddy:/tmp/Caddyfile.check
 docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile.check 2>/dev/null | python3 -c "

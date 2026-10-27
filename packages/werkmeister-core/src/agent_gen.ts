@@ -3,9 +3,9 @@
  * docs/jit-context-system.md (§5.4).
  *
  * Emits agent definitions into each workspace's `.claude/agents/`:
- * `sb-researcher`, the workspace-shared read-only research agent spawned by
- * the `sb-research` entry skill (step 2), and one `sb-tester-<archetype>`
- * per archetype present in the workspace, spawned by `sb-test` (step 4).
+ * `w9r-researcher`, the workspace-shared read-only research agent spawned by
+ * the `w9r-research` entry skill (step 2), and one `w9r-tester-<archetype>`
+ * per archetype present in the workspace, spawned by `w9r-test` (step 4).
  * Phase gates *tools*, archetype gates *context* (§5.4): every tester gets
  * the same test-phase toolset; what differs per archetype is the services, the
  * test commands, and which standard applies to test code.
@@ -15,7 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { serviceTestCommand, serviceValidation } from "./archetypes.js";
-import { type ArchetypeRegistry, forDotDir, type ServicesConfig } from "./config.js";
+import { type ArchetypeRegistry, type ServicesConfig } from "./config.js";
 import type { FeatureRouter } from "./feature_routing.js";
 
 // Agent files must open with the frontmatter block, so the do-not-hand-edit
@@ -23,19 +23,19 @@ import type { FeatureRouter } from "./feature_routing.js";
 // one screen line beyond the marker comment for that reason).
 const _GENERATED_NOTICE = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
-  Generator: sandbox init-workspace  (packages/werkmeister-core/src/agent_gen.ts)
+  Generator: werkmeister init-workspace  (packages/werkmeister-core/src/agent_gen.ts)
   Regenerated on every init-workspace run; edits will be clobbered.
 -->
 `;
 
-export const RESEARCHER_AGENT_NAME = "sb-researcher";
+export const RESEARCHER_AGENT_NAME = "w9r-researcher";
 
-/** Render the sb-researcher agent definition (§5.4, §5.7). */
+/** Render the w9r-researcher agent definition (§5.4, §5.7). */
 export function buildResearcherAgent(): string {
   return `---
 name: ${RESEARCHER_AGENT_NAME}
 description: Research agent for this workspace. Investigates code and reports
-  findings with proposed fixes. Writes findings to .sandbox/notes/; never
+  findings with proposed fixes. Writes findings to .werkmeister/notes/; never
   modifies source files.
 tools: Read, Grep, Glob, Write
 ---
@@ -71,7 +71,7 @@ it under OPEN QUESTIONS; do not silently expand your own mandate.
   three answer it. If it balloons, stop and report what you have plus what is
   still open.
 - Validate against the code standards — named, not loaded. Check each option
-  against \`sb-engineering-standard\` (architectural fit, additive/reversible
+  against \`w9r-engineering-standard\` (architectural fit, additive/reversible
   change, performance budgets, PR sizing) and any domain standard the change
   would touch. Do not load those skills — this phase is read-only; name them
   as the validation target. An option that violates a standard is not viable:
@@ -85,10 +85,10 @@ it under OPEN QUESTIONS; do not silently expand your own mandate.
 
 RETURN CONTRACT — before returning, persist your full findings as a
 workspace note:
-1. List \`.sandbox/notes/\` and take the next free NNN sequence number
+1. List \`.werkmeister/notes/\` and take the next free NNN sequence number
    (001 if the directory is missing or empty — create it; never renumber
    existing notes).
-2. Write \`.sandbox/notes/NNN-finding-<short-slug>.md\` with this exact shape:
+2. Write \`.werkmeister/notes/NNN-finding-<short-slug>.md\` with this exact shape:
    ---
    type: finding
    phase: research
@@ -106,7 +106,7 @@ workspace note:
 `;
 }
 
-export const TESTER_AGENT_PREFIX = "sb-tester-";
+export const TESTER_AGENT_PREFIX = "w9r-tester-";
 
 /**
  * Assemble one tester-agent spec per archetype present in the workspace.
@@ -168,7 +168,7 @@ export function buildTesterSpecs(
   return specs;
 }
 
-/** Render one sb-tester-<archetype> definition (§5.4). */
+/** Render one w9r-tester-<archetype> definition (§5.4). */
 export function buildTesterAgent(spec: TesterSpec): string {
   const archName = spec["archetype"];
   const services = spec["services"];
@@ -212,7 +212,7 @@ ${smokeLines.join("\n")}
   let standardsLine = "";
   if (spec["standards"]?.length) {
     const skills = (spec["standards"] as string[])
-      .map((key) => `\`sb-${key}-standard\``)
+      .map((key) => `\`w9r-${key}-standard\``)
       .join(", ");
     standardsLine =
       `\nWhen writing or editing test code, apply the ${skills} ` +
@@ -253,7 +253,7 @@ RETURN CONTRACT — report, per service tested:
  * Write generated agent definitions; returns the paths written.
  *
  * Tester files for archetypes no longer present are removed — every
- * `sb-tester-*.md` here is a generated projection (the notice says so), so a
+ * `w9r-tester-*.md` here is a generated projection (the notice says so), so a
  * leftover from a previous service selection is stale output, not user content.
  */
 export function writeWorkspaceAgents(
@@ -263,17 +263,21 @@ export function writeWorkspaceAgents(
   const agentsDir = path.join(workspaceRoot, ".claude", "agents");
   fs.mkdirSync(agentsDir, { recursive: true });
   const written: string[] = [path.join(agentsDir, `${RESEARCHER_AGENT_NAME}.md`)];
-  fs.writeFileSync(written[0], forDotDir(buildResearcherAgent(), workspaceRoot));
+  fs.writeFileSync(written[0], buildResearcherAgent());
 
   for (const spec of testerSpecs ?? []) {
     const p = path.join(agentsDir, `${TESTER_AGENT_PREFIX}${spec["archetype"]}.md`);
-    fs.writeFileSync(p, forDotDir(buildTesterAgent(spec), workspaceRoot));
+    fs.writeFileSync(p, buildTesterAgent(spec));
     written.push(p);
   }
 
   const writtenSet = new Set(written);
   for (const entry of fs.readdirSync(agentsDir)) {
-    if (entry.startsWith(TESTER_AGENT_PREFIX) && entry.endsWith(".md")) {
+    // `sb-` agents are the pre-SW-106 names of these projections.
+    if (
+      (entry.startsWith(TESTER_AGENT_PREFIX) || entry.startsWith("sb-")) &&
+      entry.endsWith(".md")
+    ) {
       const stale = path.join(agentsDir, entry);
       if (!writtenSet.has(stale)) {
         fs.unlinkSync(stale);

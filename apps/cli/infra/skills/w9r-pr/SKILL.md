@@ -1,19 +1,19 @@
 ---
-name: sb-pr
-description: "Begin the PR/finishing phase in a sandbox workspace. Use when implementation and tests are done and a pull request is about to be created — the user says 'create a PR', 'ship it', 'open a pull request', or 'finish this branch'."
+name: w9r-pr
+description: "Begin the PR/finishing phase in a workspace. Use when implementation and tests are done and a pull request is about to be created — the user says 'create a PR', 'ship it', 'open a pull request', or 'finish this branch'."
 ---
 
-# sb-pr — enter the PR/finishing phase
+# w9r-pr — enter the PR/finishing phase
 
-PRs open only through `sandbox pr open` (`.sandbox/pr-rules.md`). `gh pr create`,
+PRs open only through `werkmeister pr open` (`.werkmeister/pr-rules.md`). `gh pr create`,
 `/create-pr` and `superpowers:finishing-a-development-branch` are blocked in a
 workspace — don't reach for them.
 
-1. **Self-review.** Invoke `sb-review` on the branch diff (vs the base branch)
+1. **Self-review.** Invoke `w9r-review` on the branch diff (vs the base branch)
    and address its findings before continuing.
-2. **Write one PR file per repo touched:** `.sandbox/notes/pr-<repo>.md`, in the
-   format of `.sandbox/pr-rules.md`, at `status: draft`. Code written after a
-   repo's PR merged is a follow-up: `sandbox pr new <worktree> --slug <slug>`
+2. **Write one PR file per repo touched:** `.werkmeister/notes/pr-<repo>.md`, in the
+   format of `.werkmeister/pr-rules.md`, at `status: draft`. Code written after a
+   repo's PR merged is a follow-up: `werkmeister pr new <worktree> --slug <slug>`
    cuts a fresh branch from base and writes a draft `pr-<worktree>-<slug>.md`.
    - **Title** (the first `#` heading): `<type>(<optional scope>): <ISSUE-ID> <short description>` —
      conventional-commit types (`feat`, `fix`, `refactor`, `chore`, `docs`,
@@ -21,7 +21,7 @@ workspace — don't reach for them.
      app/package.
      Example: `feat(backend): PROJ-1125 Add rating field to the product payload`
      `<ISSUE-ID>` is the workspace's issue (`issue_id` in
-     `.sandbox/workspace.yml`), as the issue tracker writes it. No issue → omit it.
+     `.werkmeister/workspace.yml`), as the issue tracker writes it. No issue → omit it.
    - **Body** (everything after the title):
 
      ```markdown
@@ -46,7 +46,7 @@ workspace — don't reach for them.
      with a reason.
 3. **Approval is the person's.** Ask them to read the PR file and set
    `status: approved`. Don't set it yourself.
-4. **Open:** run `sandbox pr open`. It runs the gate (tests, exercise evidence,
+4. **Open:** run `werkmeister pr open`. It runs the gate (tests, exercise evidence,
    release check), pushes, opens the PR, moves the issue to the review status
    (`overrides.issue_statuses.in_review`, default `In Review`, or the label `status: in review` on GitHub;
    the full flow is To Do → In Progress at the first stage → In Review here → Done at ship,
@@ -55,5 +55,5 @@ workspace — don't reach for them.
    Then, in the Claude desktop app, turn on Auto-fix without asking: `ccd_pr`
    `get_status` (`bind_pr` with the URL if unbound), then `set_monitor` with
    `auto_fix: true`, `address_comments: true` and the PR's `url`. Never auto-merge.
-5. **Checkpoint:** suggest `sb-handoff` so the PR state survives into the next
-   session. After merge and release: `sandbox pr status`, then ask the person before `sandbox close-out`.
+5. **Checkpoint:** suggest `w9r-handoff` so the PR state survives into the next
+   session. After merge and release: `werkmeister pr status`, then ask the person before `werkmeister close-out`.

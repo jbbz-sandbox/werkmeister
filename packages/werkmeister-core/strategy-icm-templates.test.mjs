@@ -124,7 +124,7 @@ test("autonomous renders self-checks and stop points, and turning it off restore
     }
     assert.match(
       on.contracts.at(-1),
-      /set `status: approved` yourself and run `sandbox pr open`\. Stop at the PR URL\./,
+      /set `status: approved` yourself and run `werkmeister pr open`\. Stop at the PR URL\./,
     );
     assert.match(on.contracts[0], /## Recommendations for reviewer/);
     assert.match(on.claude, /## Stop points/);
@@ -132,7 +132,7 @@ test("autonomous renders self-checks and stop points, and turning it off restore
     assert.deepEqual(
       on.claude.split("\n").filter((l) => /^\d\. /.test(l)),
       [
-        "1. the PR URL from `sandbox pr open`",
+        "1. the PR URL from `werkmeister pr open`",
         "2. a question only a person can answer",
         "3. a gate failure outside this issue's scope",
       ],

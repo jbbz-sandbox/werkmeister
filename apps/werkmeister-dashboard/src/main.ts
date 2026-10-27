@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   const port = parseInt(process.env.PORT ?? "3001", 10);
   // Loopback by default: `/api/tool` reaches host-level tools (Docker, VS Code,
   // kubectl, claude, workspace create/remove) with no authentication. HOST=0.0.0.0
-  // exists for one case: a sandbox container, where the listener has to be
+  // exists for one case: a workspace container, where the listener has to be
   // reachable through Docker's published port and the container network is the
   // isolation boundary.
   const host = process.env.HOST ?? "127.0.0.1";

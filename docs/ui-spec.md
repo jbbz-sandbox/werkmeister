@@ -49,7 +49,7 @@ A person must tell, at a glance, for each workspace:
 - **Header:** name, agent chip, autonomous badge; then the work-type tag and the **task title from `workspace.yml`** (never the session title or a slice of the starting prompt); then the issue as `owner/repo#123`.
 - **Needs you** cards show the last question in the header, with the primary action.
 - The agent state comes from the persisted signal of SW-46, not from "the assistant spoke last".
-- Compact: name + chip on one line, then `containers 2 of 2 up · PRs sandbox#231 Draft · CI running · stage 4/5 implement`. VS Code: label = name, description = `● Needs you · 2 of 2 up · stage 2/4 · #143`, tooltip = the four rows.
+- Compact: name + chip on one line, then `containers 2 of 2 up · PRs werkmeister#231 Draft · CI running · stage 4/5 implement`. VS Code: label = name, description = `● Needs you · 2 of 2 up · stage 2/4 · #143`, tooltip = the four rows.
 
 ### Data
 
@@ -151,8 +151,8 @@ Defaults that don't depend on the current directory (`work_type`, `context_strat
 | `status` | `workspace-status` | `status` <!-- docs-check: ignore --> |
 | `up` · `stop` · `restart` · `down` · `pause` · `resume` | `workspace-action` | `up` · `stop` · `restart` · `down` · `pause` · `resume` |
 | `close-out` | `close-out` | `close-out` |
-| `connect` | `sandbox-connect` | `connect` |
+| `connect` | `sandbox-connect` | `connect` | <!-- name-check: ignore -->
 | `open-feature` | `open-feature` | `open` |
 | `remove-service` (drops one service to k8s) | — | `remove` |
 
-Every other tool keeps its name. Tools only the UI calls are marked `_meta.ui.visibility: ["app"]`: `workspace-form-schema`, `issue-form-data`, `refine-prompt`, `issue-statuses`, `claude-turn-status`. Tools take one `workspace` argument; the `X-Sandbox-Feature` header stays the container default.
+Every other tool keeps its name. Tools only the UI calls are marked `_meta.ui.visibility: ["app"]`: `workspace-form-schema`, `issue-form-data`, `refine-prompt`, `issue-statuses`, `claude-turn-status`. Tools take one `workspace` argument; the `X-Werkmeister-Feature` header stays the container default.

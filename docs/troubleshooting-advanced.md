@@ -46,7 +46,7 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 docker cp ~/.werkmeister/infra/proxy/Caddyfile w9r-caddy:/tmp/Caddyfile
 docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
+const {countCompiledRoutes} = await import(process.env.WERKMEISTER_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
 const json = await new Response(process.stdin).text();
 console.log(countCompiledRoutes(JSON.parse(json)), 'compiled routes');
 "
@@ -156,7 +156,7 @@ docker exec w9r-caddy caddy reload --config /tmp/Caddyfile
 ```bash
 docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile 2>/dev/null | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.SANDBOX_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
+const {countCompiledRoutes} = await import(process.env.WERKMEISTER_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
 const total = countCompiledRoutes(JSON.parse(await new Response(process.stdin).text()));
 console.log('Total compiled routes:', total);
 if (total < 15) console.log('WARNING: Routes may have been silently dropped!');
@@ -186,7 +186,7 @@ docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.intern
 ### Docker Network Inspection
 ```bash
 # Check which networks exist
-docker network ls --filter name=sandbox
+docker network ls --filter name=werkmeister
 
 # Check which containers are on each network
 docker network inspect w9r-infra_default --format '{{range .Containers}}{{.Name}} {{end}}'
@@ -233,13 +233,13 @@ When everything is broken:
 werkmeister down --all-features
 
 # 2. Restart shared infrastructure
-cd "$SANDBOX_ROOT"
+cd "$WERKMEISTER_ROOT"
 docker compose -f infra/compose/shared-infra.yml down
 docker compose -f infra/compose/shared-infra.yml up -d
 
 # 3. Wait for infrastructure health
 sleep 30
-docker ps --format "table {{.Names}}\t{{.Status}}" | grep sandbox
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep w9r
 
 # 4. Re-start your feature
 werkmeister up {feature}

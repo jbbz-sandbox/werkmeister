@@ -1,6 +1,6 @@
 ---
 name: status
-description: "Comprehensive health overview of the entire developer sandbox environment. Use when the user asks about sandbox status, wants to know what's running, or as a first step before debugging any issue. Also use after `sandbox up`, `sandbox down`, or system restart to verify state."
+description: "Comprehensive health overview of the entire werkmeister environment. Use when the user asks about werkmeister status, wants to know what's running, or as a first step before debugging any issue. Also use after `werkmeister up`, `werkmeister down`, or system restart to verify state."
 ---
 
 # status
@@ -9,10 +9,10 @@ Run all of the following checks and present a unified status report.
 
 ## Step 1: Structured Snapshot
 
-Get the full sandbox state in one call:
+Get the full werkmeister state in one call:
 
 ```bash
-sandbox status --json
+werkmeister status --json
 ```
 
 This returns structured JSON covering:
@@ -35,9 +35,9 @@ docker logs --tail 30 <container-name> 2>&1
 docker inspect -f 'exit={{.State.ExitCode}} oom={{.State.OOMKilled}} finished={{.State.FinishedAt}}' <container-name>
 ```
 
-Don't use `sandbox logs` here: it follows the log and never exits.
+Don't use `werkmeister logs` here: it follows the log and never exits.
 A feature with `containers_total: 0` has no containers to read: its workspace has no
-`compose.yml` yet (`sandbox init-workspace`, then `sandbox up`, in that workspace).
+`compose.yml` yet (`werkmeister init-workspace`, then `werkmeister up`, in that workspace).
 
 ## Step 3: Service Health Checks
 
@@ -62,7 +62,7 @@ done
 ## Step 4: Caddy Status
 
 ```bash
-CFG="${WERKMEISTER_CONFIG_FILE:-${SANDBOX_CONFIG_FILE:-$(for d in .werkmeister .sandbox; do [ -d "$HOME/$d" ] && echo "$HOME/$d/config.yaml" && break; done)}}"
+CFG="${WERKMEISTER_CONFIG_FILE:-$HOME/.werkmeister/config.yaml}"
 CADDYFILE="$(dirname "$CFG")/infra/proxy/Caddyfile"
 docker exec w9r-caddy caddy validate --config /etc/caddy/Caddyfile 2>&1
 HOST_SIZE=$(wc -c < "$CADDYFILE" 2>/dev/null | tr -d " ")
@@ -76,7 +76,7 @@ echo "Caddyfile: host=${HOST_SIZE}B container=${CONTAINER_SIZE}B"
 If Step 1 shows `k8s_alive < k8s_total`, get the full per-service breakdown:
 
 ```bash
-sandbox status --k8s
+werkmeister status --k8s
 ```
 
 This performs real HTTP health checks against each forward's health endpoint and shows
@@ -98,7 +98,7 @@ docker system df 2>/dev/null
 ## Output Format
 
 ```
-## Sandbox Status Report
+## Werkmeister Status Report
 
 ### Infrastructure
 | Service | Status | Details |

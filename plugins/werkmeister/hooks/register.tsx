@@ -20,8 +20,7 @@ export const PANE = "workspaces";
 // Workspace reads and actions run werkmeister-core in a node child, the way the former /workspace-form mod did:
 // the plugin's own MCP server is not answerable from a hook in the desktop host, a host process is.
 // stdin carries one JSON request { op, ...args }; stdout ends with one JSON line { ok, result | error }.
-// The core package is found from $WERKMEISTER_CORE_PATH or $SANDBOX_CORE_PATH, else from where the `werkmeister`
-// (or deprecated `sandbox`) binary resolves its dependencies: `werkmeister-core`, or `sandbox-core` before SW-6's rename.
+// The core package is found from $WERKMEISTER_CORE_PATH, else from where the `werkmeister` binary resolves `werkmeister-core`.
 const SCRIPT = `
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
@@ -34,9 +33,9 @@ try {
   let s = ''
   for await (const c of process.stdin) s += c
   const { op, ...args } = JSON.parse(s)
-  let file = process.env.WERKMEISTER_CORE_PATH ?? process.env.SANDBOX_CORE_PATH
+  let file = process.env.WERKMEISTER_CORE_PATH
   if (!file) {
-    const which = execFileSync('sh', ['-c', 'command -v werkmeister || command -v sandbox']).toString().trim()
+    const which = execFileSync('sh', ['-c', 'command -v werkmeister']).toString().trim()
     const bin = realpathSync(which)
     // npm's global bin is a symlink into the package. pnpm's (pnpm link --global) is a shell shim
     // in PNPM_HOME, with the package under PNPM_HOME/global/<n>/node_modules.
@@ -44,9 +43,7 @@ try {
     const dirs = [dirname(bin)]
     try { for (const v of readdirSync(pnpmGlobal)) dirs.push(join(pnpmGlobal, v, 'node_modules', 'werkmeister')) } catch {}
     for (const dir of dirs) {
-      for (const name of ['werkmeister-core', 'sandbox-core']) {
-        if (!file) try { file = createRequire(dir + '/x').resolve(name) } catch {}
-      }
+      if (!file) try { file = createRequire(dir + '/x').resolve('werkmeister-core') } catch {}
     }
     if (!file) throw new Error('Cannot find werkmeister-core next to ' + which + '; set WERKMEISTER_CORE_PATH')
   }
@@ -72,9 +69,7 @@ try {
   // core.icmStage is absent from a core older than SW-47: show no stage rather than fail the list.
   const details = async w => {
     let cfg = {}
-    for (const d of ['.werkmeister', '.sandbox']) {
-      try { cfg = yaml.parse(readFileSync(join(w.path, d, 'workspace.yml'), 'utf8')) ?? {}; break } catch { /* not initialised */ }
-    }
+    try { cfg = yaml.parse(readFileSync(join(w.path, '.werkmeister', 'workspace.yml'), 'utf8')) ?? {} } catch { /* not initialised */ }
     let newest = null
     try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
     const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
@@ -92,7 +87,7 @@ try {
     'workspace-status': () => core.getWorkspaceStatuses(),
     'claim-resume-nudge': async () => ({ message: await core.claimResumeNudge(args.name) }),
     'workspace-resources': () => core.getWorkspaceResources(),
-    // The same snapshot \`sandbox status --intercepts --json\` prints: the CLI stays the one source of intercept state.
+    // The same snapshot \`werkmeister status --intercepts --json\` prints: the CLI stays the one source of intercept state.
     intercepts: async () => (await sibling('status.js')).interceptsSnapshot(),
     // docker mode from the pane: it has no TTY for host mode's root-daemon sudo prompt (SW-12).
     'intercept-start': async () => (await sibling('telepresence.js')).startIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }),
@@ -188,7 +183,7 @@ const INTERCEPT = "intercept:";
 const PRS = { plugin: "werkmeister", key: "prs" } as const;
 const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
 const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
-/** BUSY while `sandbox connect` runs; no workspace name has parentheses. */
+/** BUSY while `werkmeister connect` runs; no workspace name has parentheses. */
 const CONNECTING = "(connect)";
 
 const FORM = { plugin: "werkmeister", key: "formSchema" } as const;
@@ -199,7 +194,7 @@ const FOCUSED = { plugin: "werkmeister", key: "focusedField" } as const;
 /** Mobile draws no Input or Select, so there the Create tab hands the form to the model instead. */
 export function createPrompt(issueId: string): string {
   const id = issueId.trim();
-  return `Create a new sandbox workspace with the werkmeister:workspace skill${id ? `, pre-filled from issue ${id}` : ""}.`;
+  return `Create a new workspace with the werkmeister:workspace skill${id ? `, pre-filled from issue ${id}` : ""}.`;
 }
 
 /**
@@ -676,7 +671,7 @@ export function buildRows(
   });
 }
 
-/** With the toggle on, only workspaces labelled `focus` (in `.sandbox/workspace.yml`) are listed. */
+/** With the toggle on, only workspaces labelled `focus` (in `.werkmeister/workspace.yml`) are listed. */
 export function visibleRows(rows: WorkspaceRow[], focus: boolean): WorkspaceRow[] {
   return focus ? rows.filter((r) => r.labels.includes("focus")) : rows;
 }
@@ -841,19 +836,19 @@ const INFRA_COLOR: Record<InfraStatus["state"], "success" | "warning" | "error">
   unknown: "warning",
 };
 
-/** `sandbox connect`: brings up the shared infra, then refreshes so the infra line shows the result. */
+/** `werkmeister connect`: brings up the shared infra, then refreshes so the infra line shows the result. */
 async function connect($: EngineInterface): Promise<void> {
   const { value: busy = "" } = await $.state.get(BUSY);
   if (busy !== "") return;
   await $.state.set(BUSY, CONNECTING);
-  await $.state.set(NOTE, "sandbox connect…");
+  await $.state.set(NOTE, "werkmeister connect…");
   try {
     const r = await core<{ ok: boolean }>($, "connect", {}, 600000);
     await $.state.set(
       NOTE,
       r.ok
-        ? "sandbox connect: done"
-        : "sandbox connect: some infra failed to start; check docker and your kubeconfig",
+        ? "werkmeister connect: done"
+        : "werkmeister connect: some infra failed to start; check docker and your kubeconfig",
     );
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message);
@@ -1431,7 +1426,7 @@ function startCallbacks($: EngineInterface): void {
 }
 
 async function openPane($: EngineInterface): Promise<void> {
-  await $.ui.open({ id: PANE, title: "Sandbox workspaces" });
+  await $.ui.open({ id: PANE, title: "Werkmeister workspaces" });
   await tick($);
   void prTick($);
   void resourceTick($);
@@ -1441,15 +1436,11 @@ async function openPane($: EngineInterface): Promise<void> {
 /** Sidebar group that desktop sessions started in a workspace are filed under, when the person has made it. */
 export const SESSION_GROUP = "Feature Workspaces";
 
-// werkmeister-core's DOT_DIRS (SW-7), new name first; the hook cannot import werkmeister-core.
-const DOT_DIRS = [".werkmeister", ".sandbox"];
-
 async function hasWorkspaceYml($: EngineInterface, dir: string): Promise<boolean> {
-  for (const d of DOT_DIRS) if (await $.fs.exists(`${dir}/${d}/workspace.yml`)) return true;
-  return false;
+  return $.fs.exists(`${dir}/.werkmeister/workspace.yml`);
 }
 
-/** A workspace or a folder inside one: `dir` or some ancestor holds `.sandbox/workspace.yml`. */
+/** A workspace or a folder inside one: `dir` or some ancestor holds `.werkmeister/workspace.yml`. */
 async function inWorkspace($: EngineInterface, dir: string): Promise<boolean> {
   for (let d = dir; d.length > 1; d = d.slice(0, d.lastIndexOf("/")) || "/") {
     if (await hasWorkspaceYml($, d)) return true;
@@ -1474,7 +1465,7 @@ async function fileInGroup($: EngineInterface): Promise<void> {
   }
 }
 
-/** A folder of workspaces (e.g. ~/features): some direct child holds `.sandbox/workspace.yml`. */
+/** A folder of workspaces (e.g. ~/features): some direct child holds `.werkmeister/workspace.yml`. */
 async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean> {
   const entries = await $.fs.list(dir).catch(() => []);
   for (const d of entries) {
@@ -1487,12 +1478,12 @@ export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
     await $.command.register({
       name: "workspaces",
-      description: "Open the sandbox workspaces pane",
+      description: "Open the werkmeister workspaces pane",
     });
     await $.tool.register({
       name: FORM_TOOL,
       description:
-        "Fill fields of the New Sandbox Workspace form in the /workspaces pane's Create tab, so the person can " +
+        "Fill fields of the New Werkmeister Workspace form in the /workspaces pane's Create tab, so the person can " +
         "set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on " +
         'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
         'slug), work_type, context_strategy, autonomous ("true" or "false"), model (an alias like sonnet, or a claude-… id), auto_stop ("true" or "false"), services (a list of choices), labels, test_path, task, ' +

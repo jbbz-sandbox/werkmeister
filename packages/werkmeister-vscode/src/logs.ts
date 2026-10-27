@@ -1,7 +1,7 @@
 /**
  * Container logs, in a terminal the extension owns rather than a shell.
  *
- * A `Pseudoterminal` instead of `runInTerminal`, because `sandbox logs` is the
+ * A `Pseudoterminal` instead of `runInTerminal`, because `werkmeister logs` is the
  * one command that never exits: sent into a shell terminal it strands that
  * terminal busy forever (terminal-pool's deliberate degrade), and nothing holds
  * the tail, so closing the tab orphans it. Here the extension owns the tail —

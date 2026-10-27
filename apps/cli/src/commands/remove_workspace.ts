@@ -1,7 +1,7 @@
 /**
- * sandbox remove-workspace <name> [--yes] [--abandon <reason>]
+ * werkmeister remove-workspace <name> [--yes] [--abandon <reason>]
  *
- * Deprecated for one release (#160): `sandbox close-out --abandon` is the
+ * Deprecated for one release (#160): `werkmeister close-out --abandon` is the
  * public verb, and `removeWorkspace` is the internal step it calls.
  *
  * Hand off and delete a workspace: commit + push every worktree branch, tear
@@ -25,12 +25,14 @@ import { confirm } from "../lib/wizard.js";
 export async function run(args: Record<string, unknown>): Promise<void> {
   const name = args.name as string;
 
-  warn('sandbox remove-workspace is deprecated — use `sandbox close-out --abandon "<reason>"`');
-  console.log(`\n${Colors.BOLD}=== sandbox remove-workspace: ${name} ===${Colors.RESET}\n`);
+  warn(
+    'werkmeister remove-workspace is deprecated — use `werkmeister close-out --abandon "<reason>"`',
+  );
+  console.log(`\n${Colors.BOLD}=== werkmeister remove-workspace: ${name} ===${Colors.RESET}\n`);
 
   if (!args.yes) {
     console.log(
-      `  ${Colors.DIM}Pushes every branch, runs sandbox down, then deletes the ` +
+      `  ${Colors.DIM}Pushes every branch, runs werkmeister down, then deletes the ` +
         `workspace directory.${Colors.RESET}`,
     );
     if (!(await confirm(`Delete workspace '${name}'?`, false))) {

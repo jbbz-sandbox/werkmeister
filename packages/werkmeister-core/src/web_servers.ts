@@ -1,12 +1,12 @@
 /**
- * Lifecycle for the sandbox's host web servers — the workspaces dashboard /
+ * Lifecycle for werkmeister's host web servers — the workspaces dashboard /
  * MCP app (apps/werkmeister-dashboard) and the remote MCP surface (apps/werkmeister-mcp).
  *
  * All run as plain host `node` processes — NOT containers — because their
  * tools drive host-local things (Docker, VS Code, Terminal, kubectl, the
- * `sandbox` and `claude` CLIs) that a container can't reach. `sandbox connect`
- * builds and starts them alongside the shared-infra containers; `sandbox
- * down/stop/restart infra` tears them down or bounces them; `sandbox status`
+ * `werkmeister` and `claude` CLIs) that a container can't reach. `werkmeister connect`
+ * builds and starts them alongside the shared-infra containers; `werkmeister
+ * down/stop/restart infra` tears them down or bounces them; `werkmeister status`
  * reports the dashboard.
  *
  * Each is tracked by a PID file under `~/.werkmeister/` (same state dir as the slot
@@ -72,16 +72,16 @@ export const DASHBOARD: WebApp = {
 
 /**
  * The remote MCP surface (`apps/werkmeister-mcp`) — the authenticated, headless sibling of
- * DASHBOARD. Its stem is `sandbox-mcp` and not `mcp-server`, which DASHBOARD
+ * DASHBOARD. Its stem is `sandbox-mcp` and not `mcp-server`, which DASHBOARD // name-check: ignore
  * already holds: a shared stem means a shared PID file and two apps reaping
  * each other. Port 3002 is free — dashboard 3001, feature slots
  * from 11100 (`getPortRange`).
  */
 export const MCP: WebApp = {
-  label: "Sandbox MCP server",
+  label: "Werkmeister MCP server",
   dir: "werkmeister-mcp",
   port: 3002,
-  stem: "sandbox-mcp",
+  stem: "sandbox-mcp", // name-check: ignore
   entry: "dist/main.js",
   buildRef: "dist/main.js",
   bundled: "dist/mcp.js",
@@ -96,7 +96,7 @@ export const MCP: WebApp = {
   env: { HOST: "0.0.0.0" },
 };
 
-/** Every app `sandbox connect` brings up (and `down`/`stop`/`restart` manage). */
+/** Every app `werkmeister connect` brings up (and `down`/`stop`/`restart` manage). */
 export const ALL: readonly WebApp[] = [DASHBOARD, MCP];
 
 function sleep(seconds: number): Promise<void> {
@@ -234,7 +234,7 @@ function distStale(app: WebApp): boolean {
  * True if the build was refreshed after the current server was launched.
  *
  * `start()` rewrites the PID file on every launch, so its mtime marks when the
- * live process began. A direct `pnpm run build` (outside `sandbox connect`)
+ * live process began. A direct `pnpm run build` (outside `werkmeister connect`)
  * updates `dist/` without bouncing the server, leaving it serving a stale
  * bundle — this catches that: the build artifact newer than the PID file means
  * the running process predates the build. Best-effort: unknown → false (don't
@@ -309,7 +309,7 @@ export interface WebServerStatus {
   healthy: boolean;
 }
 
-/** Snapshot for `sandbox status` (and its --json). */
+/** Snapshot for `werkmeister status` (and its --json). */
 export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> {
   const [running, pid] = isRunning(app);
   return {
@@ -324,9 +324,9 @@ export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> 
 /**
  * Build (optional) and start one web server.
  *
- * Non-fatal: on any failure it warns and returns false so `sandbox connect`
+ * Non-fatal: on any failure it warns and returns false so `werkmeister connect`
  * still finishes bringing up the infra. With `force` it rebuilds and bounces
- * an already-running server (so `sandbox connect` picks up code changes);
+ * an already-running server (so `werkmeister connect` picks up code changes);
  * without it, an already-running server is left as-is.
  */
 export async function start(
@@ -336,7 +336,7 @@ export async function start(
 ): Promise<boolean> {
   const [running, pid] = isRunning(app);
 
-  // Never bounce ourselves. `sandbox connect` is a tool on apps/werkmeister-mcp, and it
+  // Never bounce ourselves. `werkmeister connect` is a tool on apps/werkmeister-mcp, and it
   // reaches infra.up() -> startAll(): a stale dist/ would otherwise make this
   // call SIGTERM the pid in the file, which is the process serving the request.
   if (running && pid === process.pid) {

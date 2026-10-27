@@ -10,8 +10,8 @@ import { test } from "node:test";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "card-fields-home-"));
 const root = path.join(home, "features");
 process.env.HOME = home;
-process.env.SANDBOX_CONFIG_FILE = "/nonexistent/config.yaml";
-process.env.SANDBOX_WORKSPACES_ROOT = root;
+process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+process.env.WERKMEISTER_WORKSPACES_ROOT = root;
 
 const { ciOf, getWorkspaceStatuses, icmStage } = await import("./dist/sandbox.js");
 
@@ -69,7 +69,7 @@ test("icmStage: first stage with an empty output/, dotfiles don't count", async 
 
 test("getWorkspaceStatuses: card fields for an ICM and a JIT workspace", async () => {
   const icm = path.join(root, "a-icm");
-  write(path.join(icm, ".sandbox", "workspace.yml"), "autonomous: true\nmodel: sonnet\n");
+  write(path.join(icm, ".werkmeister", "workspace.yml"), "autonomous: true\nmodel: sonnet\n");
   stages(icm, { "01_research": [], "02_spec": [] });
   const project = path.join(home, ".claude", "projects", icm.replace(/[^a-zA-Z0-9]/g, "-"));
   write(
@@ -80,9 +80,9 @@ test("getWorkspaceStatuses: card fields for an ICM and a JIT workspace", async (
   fs.utimesSync(path.join(project, "s1.jsonl"), when, when);
 
   const jit = path.join(root, "b-jit");
-  write(path.join(jit, ".sandbox", "workspace.yml"), "autonomous: true\nauto_stop: false\n");
+  write(path.join(jit, ".werkmeister", "workspace.yml"), "autonomous: true\nauto_stop: false\n");
   const note = (file, fm) =>
-    write(path.join(jit, ".sandbox", "notes", file), `---\n${fm}\n---\nbody\n`);
+    write(path.join(jit, ".werkmeister", "notes", file), `---\n${fm}\n---\nbody\n`);
   note("001-handoff-start.md", "type: handoff\nphase: research");
   note("002-decision-plan.md", "type: decision\nphase: implement\nstatus: decided");
   note("003-finding-old.md", "type: finding\nphase: test\nstatus: superseded");

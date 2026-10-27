@@ -1,8 +1,8 @@
 /**
- * sandbox pause <feature>
+ * werkmeister pause <feature>
  *
  * Freeze a feature's running containers and hold its Claude session until
- * `sandbox resume` (SW-70).
+ * `werkmeister resume` (SW-70).
  */
 
 import { SandboxError } from "werkmeister-core/errors";
@@ -36,19 +36,19 @@ export function reportHint(e: unknown, hints: Record<string, string>): void {
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const feature = featureArg(args, "Pausing");
-  console.log(`\n${Colors.BOLD}=== sandbox pause: ${feature} ===${Colors.RESET}\n`);
+  console.log(`\n${Colors.BOLD}=== werkmeister pause: ${feature} ===${Colors.RESET}\n`);
   try {
     const { containers } = await pause(feature);
     console.log(
       `\n${Colors.GREEN}${Colors.BOLD}Paused '${feature}': ${containers.length} container(s) frozen, ` +
-        `its Claude session is held.${Colors.RESET} Resume with: sandbox resume ${feature}\n`,
+        `its Claude session is held.${Colors.RESET} Resume with: werkmeister resume ${feature}\n`,
     );
   } catch (e) {
     reportHint(e, {
-      NOT_RUNNING: `Nothing to pause. Start it with: sandbox up ${feature}`,
-      ALREADY_PAUSED: `Resume it with: sandbox resume ${feature}`,
-      NO_WORKSPACE: "Run it from the workspace folder, or check: sandbox list-workspaces",
-      COMPOSE_PAUSE_FAILED: `Undo what did freeze with: sandbox resume ${feature}`,
+      NOT_RUNNING: `Nothing to pause. Start it with: werkmeister up ${feature}`,
+      ALREADY_PAUSED: `Resume it with: werkmeister resume ${feature}`,
+      NO_WORKSPACE: "Run it from the workspace folder, or check: werkmeister list-workspaces",
+      COMPOSE_PAUSE_FAILED: `Undo what did freeze with: werkmeister resume ${feature}`,
     });
   }
 }

@@ -3,8 +3,8 @@
 > The `.werkmeister/notes/` layer specced in
 > [jit-context-system.md](jit-context-system.md) (§5.7). This file is
 > the canonical convention reference for anything that reads or writes notes: the
-> generated CLAUDE.md `## Notes` pointer, the `sb-implement` / `sb-research` /
-> `sb-handoff` skills, subagent return contracts, and `werkmeister down` printing.
+> generated CLAUDE.md `## Notes` pointer, the `w9r-implement` / `w9r-research` /
+> `w9r-handoff` skills, subagent return contracts, and `werkmeister down` printing.
 
 ## What notes are
 
@@ -25,9 +25,9 @@ Three rules keep the layer honest:
    arrives). This is one-time: once a prompt has been seeded, a later edit to
    `starting_prompt` does not update the note — the earlier seed blocks re-seeding.
 2. **Writes are contracted; reads are phase-entry.** Notes never emerge spontaneously
-   (measured: 0/3 uncontracted) — they are written by return contracts, the `sb-handoff`
-   skill, and the `sb-implement` capture rule. They are read at phase entry by the
-   `sb-research` / `sb-implement` skills (measured: 3/3 with an entry skill, 2/3 with a
+   (measured: 0/3 uncontracted) — they are written by return contracts, the `w9r-handoff`
+   skill, and the `w9r-implement` capture rule. They are read at phase entry by the
+   `w9r-research` / `w9r-implement` skills (measured: 3/3 with an entry skill, 2/3 with a
    pointer alone).
 3. **Graduation is explicit.** Knowledge that outlives the feature moves *out*
    deliberately: per-repo quirks → the standards tree's `repos/*`, process lessons →

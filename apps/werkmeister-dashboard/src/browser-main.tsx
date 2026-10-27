@@ -1,5 +1,5 @@
 /**
- * Plain-browser entrypoint for the Sandbox Workspaces dashboard — the fallback
+ * Plain-browser entrypoint for the Werkmeister Workspaces dashboard — the fallback
  * surface for MCP hosts that don't render `ui://` resources (Claude Code CLI,
  * the VS Code extension).
  *
@@ -8,7 +8,7 @@
  *   • New workspace       — the create form (werkmeister-ui/create-form)
  *   • Open Pull Requests  — the PR review tab (prs-ui.tsx)
  *   • Health              — infra/k8s/kube status (health-ui.tsx)
- *   • Links               — sandbox feature-selector links (sandbox-links-ui.tsx)
+ *   • Links               — werkmeister feature-selector links (werkmeister-links-ui.tsx)
  * All drive their tool calls through the same bridge (same-origin `POST
  * /api/tool`, dispatched into the real MCP tools by lib/browser-ui.ts).
  *
@@ -23,7 +23,7 @@ import { appRoot, Css } from "werkmeister-ui/theme";
 import { type HostBridge, WorkspaceList } from "werkmeister-ui/workspace-ui";
 import { HealthTab } from "./health-ui.js";
 import { PrsTab } from "./prs-ui.js";
-import { LinksTab } from "./sandbox-links-ui.js";
+import { LinksTab } from "./werkmeister-links-ui.js";
 
 const bridge: HostBridge = {
   async callTool(name, args) {
@@ -93,11 +93,11 @@ const TABS: [Tab, string][] = [
 ];
 
 const TAB_TITLES: Record<Tab, string> = {
-  list: "Sandbox Workspaces",
-  new: "New workspace · Sandbox Workspaces",
-  prs: "Open Pull Requests · Sandbox Workspaces",
-  health: "Health · Sandbox Workspaces",
-  links: "Links · Sandbox Workspaces",
+  list: "Werkmeister Workspaces",
+  new: "New workspace · Werkmeister Workspaces",
+  prs: "Open Pull Requests · Werkmeister Workspaces",
+  health: "Health · Werkmeister Workspaces",
+  links: "Links · Werkmeister Workspaces",
 };
 
 function tabFromHash(): Tab {

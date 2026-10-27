@@ -35,10 +35,10 @@ function makeTree(remote: string | null): string {
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "std-links-"));
-  process.env.SANDBOX_CONFIG_FILE = path.join(tmp, "config.yaml");
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(tmp, "config.yaml");
 });
 afterEach(() => {
-  delete process.env.SANDBOX_CONFIG_FILE;
+  delete process.env.WERKMEISTER_CONFIG_FILE;
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -104,7 +104,7 @@ describe("generateSkills link rewriting", () => {
   it("rewrites a doc-relative link to the derived tree URL", () => {
     const dir = makeTree("git@github.com:acme/eng-standards.git");
     writeModule(dir, "See [the notes](repos/widgets.md).");
-    expect(generateSkills()["sb-widgets-standard"]["SKILL.md"]).toContain(
+    expect(generateSkills()["w9r-widgets-standard"]["SKILL.md"]).toContain(
       "[the notes](https://github.com/acme/eng-standards/blob/HEAD/docs/standards/repos/widgets.md)",
     );
   });
@@ -112,7 +112,7 @@ describe("generateSkills link rewriting", () => {
   it("degrades to plain text when no source resolves, rather than a dangling path", () => {
     const dir = makeTree(null);
     writeModule(dir, "See [the notes](repos/widgets.md).");
-    const skill = generateSkills()["sb-widgets-standard"]["SKILL.md"];
+    const skill = generateSkills()["w9r-widgets-standard"]["SKILL.md"];
     expect(skill).toContain("See the notes.");
     expect(skill).not.toContain("(repos/widgets.md)");
   });

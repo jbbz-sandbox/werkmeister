@@ -1,5 +1,5 @@
 /**
- * CLAUDE.md / routing-table / sandbox-context builders — extracted from
+ * CLAUDE.md / routing-table / werkmeister-context builders — extracted from
  * init-workspace per DEBT-03 (it was the largest file in the codebase,
  * mixing workspace discovery,
  * input resolution, interactive prompting, CLAUDE.md generation, and compose
@@ -7,7 +7,7 @@
  *
  * This module owns pure string-rendering logic for the workspace-facing
  * markdown artifacts: the workspace `CLAUDE.md`, its routing table, and
- * `.sandbox/sandbox-context.md`.
+ * `.werkmeister/werkmeister-context.md`.
  */
 
 import * as fs from "node:fs";
@@ -70,7 +70,7 @@ function isDict(value: unknown): value is Record<string, any> {
  * Per-repo routing rows are only emitted when `{repo}/CLAUDE.md` actually
  * exists — pointing at a file that isn't there is worse than no row at all.
  * Everything about the running feature (URL, cookie, ports, lifecycle, health
- * checks) is one row: it all lives in sandbox-context.md.
+ * checks) is one row: it all lives in werkmeister-context.md.
  */
 export function buildRoutingTable(
   repos: Array<[string, string]>,
@@ -93,16 +93,16 @@ export function buildRoutingTable(
 
   if (hasFeature) {
     rows.push(
-      "| Running or validating the change — test commands, how to validate, ports, lifecycle | .sandbox/sandbox-context.md |",
+      "| Running or validating the change — test commands, how to validate, ports, lifecycle | .werkmeister/werkmeister-context.md |",
     );
   }
 
   if (repos.length > 1) {
-    rows.push("| Cross-repo contract change | .sandbox/notes/ (`contract` notes) |");
+    rows.push("| Cross-repo contract change | .werkmeister/notes/ (`contract` notes) |");
   }
 
   rows.push(
-    "| Open or create a PR (including `/create-pr`), merge, close out | .sandbox/pr-rules.md |",
+    "| Open or create a PR (including `/create-pr`), merge, close out | .werkmeister/pr-rules.md |",
   );
 
   if (rows.length === 0) {
@@ -118,16 +118,16 @@ function gateLine(plan: WorkTypePlan): string {
     return "No implement, review, or PR phase. Deliverable: `finding` notes. Anything built is throwaway.";
   }
   if (plan.gate === null) {
-    return "Gate: none — `sb-implement` loads the standards.";
+    return "Gate: none — `w9r-implement` loads the standards.";
   }
   if (plan.gate.status) {
     return (
-      `Gate: no source edit until a \`${plan.gate.note}\` note in \`.sandbox/notes/\` reads ` +
+      `Gate: no source edit until a \`${plan.gate.note}\` note in \`.werkmeister/notes/\` reads ` +
       `\`status: ${plan.gate.status}\`. Write it at the end of research, after the user approves ` +
       "the design; the flip *is* the approval — do not ask again."
     );
   }
-  return `Gate: no source edit until a \`${plan.gate.note}\` note in \`.sandbox/notes/\` names the root cause.`;
+  return `Gate: no source edit until a \`${plan.gate.note}\` note in \`.werkmeister/notes/\` names the root cause.`;
 }
 
 /**
@@ -135,10 +135,10 @@ function gateLine(plan: WorkTypePlan): string {
  *
  * The compiled, inspectable projection of services.yaml `standards:` +
  * workspace.yml `standards_override` — the ICM Layer-1 table. The
- * `sb-<key>-standard` skills it references are generated from
+ * `w9r-<key>-standard` skills it references are generated from
  * docs/standards/ and projected into the workspace's `.claude/skills/` by
- * init-workspace (`workspace_skills.ts`); `sb-implement`/`sb-research`/
- * `sb-test`/`sb-review` are the phase-entry skills that read this table (docs/jit-context-system.md §5.2 — the
+ * init-workspace (`workspace_skills.ts`); `w9r-implement`/`w9r-research`/
+ * `w9r-test`/`w9r-review` are the phase-entry skills that read this table (docs/jit-context-system.md §5.2 — the
  * CLAUDE.md-table → entry-skill chain is the measured 15/15 PREVENTIVE
  * mechanism). *workType* selects which By-phase rows render and adds the Work type / Gate lines; an empty or unknown type renders all five rows and no gate (`DEFAULT_PLAN`).
  */
@@ -158,7 +158,7 @@ export function buildStandardsRoutingSection(
     } else {
       loadsOn = ((meta["applies_to"] || []) as string[]).map((g) => `\`${g}\``).join(", ") || "—";
     }
-    rows.push(`| ${key} | \`sb-${key}-standard\` | ${loadsOn} |`);
+    rows.push(`| ${key} | \`w9r-${key}-standard\` | ${loadsOn} |`);
   }
 
   const reposLabel = repoNames.length > 0 ? repoNames.join(", ") : "none discovered";
@@ -174,19 +174,19 @@ export function buildStandardsRoutingSection(
   // whose base is not comments+engineering would otherwise read a phase-entry
   // instruction listing skills its workspace does not have. `ponytail` is a
   // plugin, not a standard, so it stays literal.
-  const universalSkills = ["`ponytail`", ...universal.map((k) => `\`sb-${k}-standard\``)].join(
+  const universalSkills = ["`ponytail`", ...universal.map((k) => `\`w9r-${k}-standard\``)].join(
     " + ",
   );
 
   const plan = planFor(workType);
   const phaseRows: Record<Phase, string> = {
     research:
-      "| research / planning | `sb-research` | nothing — spawns the read-only `sb-researcher` agent |",
-    implement: `| implementing (before the first code edit) | \`sb-implement\` | universal base (${universalSkills}) + rows matching the files you edit |`,
-    test: "| testing | `sb-test` | nothing — spawns the matching `sb-tester-<archetype>` agent(s) |",
+      "| research / planning | `w9r-research` | nothing — spawns the read-only `w9r-researcher` agent |",
+    implement: `| implementing (before the first code edit) | \`w9r-implement\` | universal base (${universalSkills}) + rows matching the files you edit |`,
+    test: "| testing | `w9r-test` | nothing — spawns the matching `w9r-tester-<archetype>` agent(s) |",
     review:
-      "| review (before reading any diff or PR) | `sb-review` | the standards covering files in the diff |",
-    pr: "| PR / finishing | `sb-pr` | `.sandbox/pr-rules.md` — PRs open only via `sandbox pr open` |",
+      "| review (before reading any diff or PR) | `w9r-review` | the standards covering files in the diff |",
+    pr: "| PR / finishing | `w9r-pr` | `.werkmeister/pr-rules.md` — PRs open only via `werkmeister pr open` |",
   };
   const workTypeBlock =
     plan === DEFAULT_PLAN
@@ -196,7 +196,7 @@ export function buildStandardsRoutingSection(
 
   return `## Standards routing
 
-> Compiled from services.yaml + .sandbox/workspace.yml (\`standards_override\`) — regenerated by \`sandbox init-workspace\`. Do not hand-edit.${sourceLine}
+> Compiled from services.yaml + .werkmeister/workspace.yml (\`standards_override\`) — regenerated by \`werkmeister init-workspace\`. Do not hand-edit.${sourceLine}
 
 **Active in this workspace** (repos: ${reposLabel}):
 
@@ -239,7 +239,7 @@ export function buildClaudeMd(
       ? "This is a multi-repo workspace. Repositories:"
       : "This is a single-repo workspace. Repository:";
 
-  // Notes — a generated pointer to the durable .sandbox/notes/ store
+  // Notes — a generated pointer to the durable .werkmeister/notes/ store
   // (jit-context-system.md §5.3: this file is a compiled projection
   // and holds no handoff state, so regen loses nothing). Multi-repo
   // workspaces get the cross-repo contract-note rule folded into the
@@ -252,7 +252,7 @@ export function buildClaudeMd(
       : "";
   const notesSection = `## Notes
 
-Working notes live in [.sandbox/notes/](.sandbox/notes/) — \`NNN-<type>-<slug>.md\`. Types and rules: docs/notes-conventions.md in the sandbox repo.
+Working notes live in [.werkmeister/notes/](.werkmeister/notes/) — \`NNN-<type>-<slug>.md\`. Types and rules: docs/notes-conventions.md in the werkmeister repo.
 
 Read relevant notes first; skip \`status: superseded\`. \`decision\` notes are binding and override task-level instincts — on conflict, raise it to the user rather than picking a side.
 ${contractRule}`;
@@ -303,12 +303,12 @@ ${routingSection}
 ${codeStandardsSection}${notesSection}
 ## Issues
 
-Hit a bug, or need to log a feature or task, in the \`sandbox\` tool or a repo's code? If this workspace's changes caused a bug, fix it here; otherwise file an issue (bug | feature | task) where it belongs (the sandbox repo, or this machine's issue tracker) and report the URL. Rules, labels and templates: [.sandbox/issues-report.md](.sandbox/issues-report.md).
+Hit a bug, or need to log a feature or task, in the \`werkmeister\` tool or a repo's code? If this workspace's changes caused a bug, fix it here; otherwise file an issue (bug | feature | task) where it belongs (the werkmeister repo, or this machine's issue tracker) and report the URL. Rules, labels and templates: [.werkmeister/issues-report.md](.werkmeister/issues-report.md).
 `;
 }
 
 // ---------------------------------------------------------------------------
-// sandbox-context.md generation
+// werkmeister-context.md generation
 // ---------------------------------------------------------------------------
 
 function testCommandLine(
@@ -324,7 +324,7 @@ function testCommandLine(
 }
 
 /**
- * Render .sandbox/sandbox-context.md — how to validate, then (when they apply)
+ * Render .werkmeister/werkmeister-context.md — how to validate, then (when they apply)
  * ports, service topology, lifecycle commands, health checks.
  *
  * `candidates` is the workspace's services (selected, else its repos'); routing
@@ -487,7 +487,7 @@ docker compose restart ${sampleSvc}
 
 ### Test commands
 
-The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`sandbox pr gate\`).
+The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`werkmeister pr gate\`).
 
 ${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? loadArchetypes())).join("\n")}
 
@@ -571,23 +571,23 @@ ${validationTable}
   const lifecycleBlock = hasLocal
     ? `## Container Lifecycle
 
-Run from anywhere in the workspace — \`sandbox\` reads \`FEATURE\` from \`.env\` at the workspace root.
+Run from anywhere in the workspace — \`werkmeister\` reads \`FEATURE\` from \`.env\` at the workspace root.
 
 \`\`\`bash
-sandbox up          # start containers + configure Caddy proxy
-sandbox stop        # stop (slot preserved, fast resume)
-sandbox restart     # restart all containers
-sandbox down        # tear down + release slot
-sandbox down -v     # tear down + remove volumes (node_modules, caches)
+werkmeister up          # start containers + configure Caddy proxy
+werkmeister stop        # stop (slot preserved, fast resume)
+werkmeister restart     # restart all containers
+werkmeister down        # tear down + release slot
+werkmeister down -v     # tear down + remove volumes (node_modules, caches)
 \`\`\`
 ${
   autoStop
     ? `
-**Auto-stop is on** (\`auto_stop: true\` in \`.sandbox/workspace.yml\`): when a Claude session here ends and no other session is open in this workspace, a SessionEnd hook runs \`sandbox stop --if-idle\`, which stops this feature's containers (slot and volumes kept — \`sandbox up\` resumes). Shared infra is never stopped.
+**Auto-stop is on** (\`auto_stop: true\` in \`.werkmeister/workspace.yml\`): when a Claude session here ends and no other session is open in this workspace, a SessionEnd hook runs \`werkmeister stop --if-idle\`, which stops this feature's containers (slot and volumes kept — \`werkmeister up\` resumes). Shared infra is never stopped.
 `
     : ""
 }
-> **Fallback:** If \`sandbox\` CLI is unavailable, \`docker compose up -d --build\` / \`docker compose down\` from the workspace root works equivalently. Prefer \`sandbox\` — it also manages slot allocation and Caddy proxy regeneration.
+> **Fallback:** If \`werkmeister\` CLI is unavailable, \`docker compose up -d --build\` / \`docker compose down\` from the workspace root works equivalently. Prefer \`werkmeister\` — it also manages slot allocation and Caddy proxy regeneration.
 
 `
     : "";
@@ -638,12 +638,12 @@ jq '[.[].name]' "$HOME/.werkmeister/infra/proxy/features.json"
 
 Resync:
 \`\`\`bash
-sandbox proxy-reload      # regenerates Caddyfile + features.json, reloads Caddy
+werkmeister proxy-reload      # regenerates Caddyfile + features.json, reloads Caddy
 \`\`\`
 
 ### Caddy returns \`content-length: 0\` but direct service hit works
 
-Caddy routing issue, not an app issue. Try \`sandbox proxy-reload\` first; if Caddy is still misrouting, check \`docker logs w9r-caddy --tail 50\`.
+Caddy routing issue, not an app issue. Try \`werkmeister proxy-reload\` first; if Caddy is still misrouting, check \`docker logs w9r-caddy --tail 50\`.
 
 `
     : ""
@@ -651,9 +651,9 @@ Caddy routing issue, not an app issue. Try \`sandbox proxy-reload\` first; if Ca
   hasLocal
     ? `### Containers expected per the table above are missing from \`docker ps\`
 
-\`sandbox up\` may have partially failed. Re-run from the workspace root:
+\`werkmeister up\` may have partially failed. Re-run from the workspace root:
 \`\`\`bash
-sandbox up                # idempotent — starts missing containers
+werkmeister up                # idempotent — starts missing containers
 docker compose logs -f    # watch startup if something crashes
 \`\`\`
 `
@@ -664,14 +664,14 @@ docker compose logs -f    # watch startup if something crashes
   return `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
   Source:    ~/.werkmeister/services.yaml + ports.yaml
-             + .sandbox/workspace.yml (feature, services, slot)
+             + .werkmeister/workspace.yml (feature, services, slot)
   Generator: packages/werkmeister-core/src/claude_md.ts :: buildSandboxContextMd
-  Regen:     sandbox init-workspace  (or \`sandbox up\` after slot changes)
+  Regen:     werkmeister init-workspace  (or \`werkmeister up\` after slot changes)
   To change ports/health endpoints/services, edit services.yaml / ports.yaml.
-  To change which services run locally, edit .sandbox/workspace.yml and rerun.
+  To change which services run locally, edit .werkmeister/workspace.yml and rerun.
 -->
 
-# Sandbox Context: ${feature}
+# Werkmeister Context: ${feature}
 
 ${validateBlock}${slotBlock}${lifecycleBlock}${servicesBlock}${containerCommandsBlock}${healthBlock}${proxyBlock}${troubleshootingBlock}`;
 }

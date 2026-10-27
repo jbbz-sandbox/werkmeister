@@ -22,7 +22,7 @@
         "noAssignInExpressions": "off",
         "noImplicitAnyLet": "off",
         // The hits are deliberate docker-compose `${VAR}` strings (e.g.
-        // `${SANDBOX_STATE_DIR}/proxy/Caddyfile`), interpolated by compose, not JS.
+        // `${WERKMEISTER_STATE_DIR}/proxy/Caddyfile`), interpolated by compose, not JS.
         "noTemplateCurlyInString": "off"
       }
     }
