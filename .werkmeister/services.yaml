@@ -24,8 +24,9 @@ services:
   # --- The werkmeister repo's own workspaces (self-hosting) -----------------------
   # All five share one repo bind mount at /app and one per-feature node_modules
   # volume; werkmeister-install populates it and builds werkmeister-core/dist first.
-  # 1G each: the pre-PR gate can run the dashboard's build in any of them, and
-  # it runs out of heap at 512M.
+  # 2G each: the pre-PR gate runs cli's cold typecheck + test (~900M anon) in any of
+  # them, beside the dashboard's dev server (~180M); 1G left no headroom (SW-130,
+  # SW-128), and the dashboard's build runs out of heap at 512M.
   # cli, werkmeister-core and werkmeister-vscode (types cli/library/extension) idle under
   # `sleep infinity` with no healthcheck; their `command:` watchers run only under
   # `werkmeister up --dev`. The port is still published, so they keep their slot.
@@ -51,7 +52,7 @@ services:
     setup_service: werkmeister-install
     image: node:22
     command: "cd apps/cli && exec pnpm run watch"
-    memory_limit: 1G
+    memory_limit: 2G
     memory_reservation: 128M
     node_modules_volume: node-modules
     extra_volumes: &host_mounts
@@ -87,7 +88,7 @@ services:
     setup_service: werkmeister-install
     image: node:22
     command: "cd packages/werkmeister-core && exec pnpm exec tsc --watch --preserveWatchOutput"
-    memory_limit: 1G
+    memory_limit: 2G
     memory_reservation: 128M
     node_modules_volume: node-modules
     # Same host access as cli: the repos mount makes the worktree's .git
@@ -113,7 +114,7 @@ services:
     image: werkmeister-vscode:local
     dockerfile: Dockerfile
     command: "cd packages/werkmeister-vscode && exec pnpm run watch"
-    memory_limit: 1G
+    memory_limit: 2G
     memory_reservation: 128M
     node_modules_volume: node-modules
     extra_volumes: *host_mounts
@@ -133,7 +134,7 @@ services:
     setup_service: werkmeister-install
     image: node:22
     command: "cd apps/werkmeister-dashboard && exec pnpm run dev"
-    memory_limit: 1G
+    memory_limit: 2G
     memory_reservation: 256M
     node_modules_volume: node-modules
     extra_volumes: *host_mounts
