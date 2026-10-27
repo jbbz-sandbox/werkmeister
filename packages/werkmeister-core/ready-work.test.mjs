@@ -147,7 +147,9 @@ test("GitHub, no board: open issues of each scoped repo, sorted by repo", () =>
         ["acme/api#1", "acme/web#1"],
       );
       assert.deepEqual(
-        ghCalls(bin).map((c) => c.split(" ").slice(0, 4).join(" ")),
+        ghCalls(bin)
+          .map((c) => c.split(" ").slice(0, 4).join(" "))
+          .sort(),
         ["issue list -R acme/api", "issue list -R acme/web"],
       );
     }),
