@@ -97,6 +97,18 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
           assert.match(c, /A subagent you brief to run tests/, `${wt}/${d}`);
         }
+        // SW-143: every exercise step carries the library/CLI path, not only the service reload.
+        if (c.includes("Reload")) {
+          assert.match(c, /library or CLI-only change has no service to restart/, `${wt}/${d}`);
+          assert.match(c, /`services\.yaml`, `ports\.yaml` and a `config\.yaml`/, `${wt}/${d}`);
+          assert.match(c, /`WERKMEISTER_CONFIG_FILE` pointing at that `config\.yaml`/, `${wt}/${d}`);
+          assert.match(c, /Run a CLI from a temp folder/, `${wt}/${d}`);
+          assert.match(c, /only read-only commands \(e\.g\. `werkmeister skills check`\)/, `${wt}/${d}`);
+        }
+      }
+      if (EXPECTED[wt].includes("exercise")) {
+        const ex = fs.readFileSync(path.join(root, "stages", "03_exercise", "CONTEXT.md"), "utf8");
+        assert.match(ex, /library or CLI-only change/, `${wt}/03_exercise`);
       }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
