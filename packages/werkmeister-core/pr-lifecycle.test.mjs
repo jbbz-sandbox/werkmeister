@@ -292,15 +292,50 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
   }
 });
 
-test("gate fails on an unfinished stage, a FAIL row and missing exercise evidence", async () => {
+test("gate fails on an unfinished stage, a FAIL row and an unapproved file, before the tests (SW-150)", async () => {
   const ws = icmWorkspace({
     researchDone: false,
-    exercise: null,
-    files: { app: prFile({ body: "| x | FAIL |\n" }) },
+    files: { app: prFile({ status: "draft", body: "| x | FAIL |\n" }) },
   });
   try {
-    const g = await gate(ws, deps([DIFF_API]));
-    assert.deepEqual(failed(g), ["stages", "acceptance", "exercise"]);
+    const d = deps([DIFF_API]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["stages", "acceptance", "approved", "tests"]);
+    assert.ok(!d.calls.some((c) => c.startsWith("docker exec")));
+  } finally {
+    clean(ws);
+  }
+});
+
+/** Exercise evidence missing from a stage that has other output, so the stages check passes. */
+function noExercise(opts = {}) {
+  const ws = icmWorkspace({ exercise: null, ...opts });
+  fs.writeFileSync(path.join(ws, "stages", "02_implement", "output", "fix.md"), "x");
+  return ws;
+}
+
+test("gate fails on missing exercise evidence", async () => {
+  const ws = noExercise();
+  try {
+    assert.deepEqual(failed(await gate(ws, deps([DIFF_API]))), ["exercise"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a malformed acceptance row fails before any test command runs, naming the cell format (SW-150)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ body: "| works | PASS: repro.md section 1 |\n" }) },
+  });
+  try {
+    const d = deps([DIFF_API]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["acceptance", "tests"]);
+    assert.match(g.checks.find((c) => c.name === "acceptance").detail, /exactly `PASS` or `FAIL`/);
+    assert.deepEqual(
+      d.calls.filter((c) => /^(docker exec|start )/.test(c)),
+      [],
+    );
   } finally {
     clean(ws);
   }
@@ -610,8 +645,8 @@ test("gate: a broken branch fragment fails the gate with its error, not a crash"
   }
 });
 
-test("gate: dirty worktree, failing test, down health endpoint, unapproved", async () => {
-  const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
+test("gate: dirty worktree, failing test, down health endpoint", async () => {
+  const ws = icmWorkspace();
   try {
     const d = deps(
       [
@@ -623,7 +658,7 @@ test("gate: dirty worktree, failing test, down health endpoint, unapproved", asy
         httpStatus: async () => 502,
       },
     );
-    assert.deepEqual(failed(await gate(ws, d)), ["clean", "test api", "baseline api", "approved"]);
+    assert.deepEqual(failed(await gate(ws, d)), ["clean", "test api", "baseline api"]);
   } finally {
     clean(ws);
   }
@@ -1608,10 +1643,7 @@ test("spike: a doc PR file in 02_findings passes the gate with skip_exercise and
 });
 
 test("gate: skip_exercise needs a non-empty reason", async () => {
-  const blank = icmWorkspace({
-    exercise: null,
-    files: { app: prFile({ extra: 'skip_exercise: " "\n' }) },
-  });
+  const blank = noExercise({ files: { app: prFile({ extra: 'skip_exercise: " "\n' }) } });
   try {
     const g = await gate(blank, deps([DIFF_API]));
     assert.deepEqual(

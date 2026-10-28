@@ -325,9 +325,12 @@ export interface GateResult {
 const PASS_CELL = /\|\s*PASS\s*\|/;
 const FAIL_CELL = /\|\s*FAIL\s*\|/;
 
+const CELL_FORMAT =
+  "each row needs a result cell that is exactly `PASS` or `FAIL`, evidence in its own column: `| criterion | PASS | evidence |`";
+
 function passTable(text: string): string | null {
   if (FAIL_CELL.test(text)) return "has a FAIL row";
-  if (!PASS_CELL.test(text)) return "has no PASS row";
+  if (!PASS_CELL.test(text)) return `has no PASS row — ${CELL_FORMAT}`;
   return null;
 }
 
@@ -466,6 +469,12 @@ async function gateChecks(
 
   const table = passTable(file.body);
   add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
+  add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
+  // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).
+  if (checks.some((c) => !c.ok)) {
+    add("tests", false, "not run — fix the PR-file checks above first");
+    return { ok: false, checks };
+  }
 
   const dir = path.join(ws, file.dir);
   const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
@@ -684,7 +693,6 @@ async function gateChecks(
     }
   }
 
-  add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
   return { ok: checks.every((c) => c.ok), checks };
 }
 
@@ -1376,7 +1384,7 @@ export async function newPr(
   const fm = { worktree, repo: prev.fm["repo"], branch, base, status: "draft" };
   fs.writeFileSync(
     file,
-    `---\n${YAML.stringify(fm)}---\n# <PR title>\n\n<body: summary, test and exercise results, acceptance table (PASS/FAIL) — see ${path.basename(prRulesPath(ws))}>\n`,
+    `---\n${YAML.stringify(fm)}---\n# <PR title>\n\n<body: summary, test and exercise results, acceptance table: a result cell of exactly PASS or FAIL, evidence in its own column — see ${path.basename(prRulesPath(ws))}>\n`,
   );
   const rel = path.relative(ws, file);
   return {

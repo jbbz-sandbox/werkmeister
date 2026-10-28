@@ -94,12 +94,12 @@ Code written after a worktree's PR merged, e.g. a problem found while cutting or
 
 ## The gate
 
-`werkmeister pr gate [repo]` runs the checks and changes nothing. `werkmeister pr open` runs them again before opening.
+`werkmeister pr gate [repo]` runs the checks and changes nothing. `werkmeister pr open` runs them again before opening. The PR-file checks (stages, acceptance, approved) run first. If one fails, the gate stops there and reports `tests: not run`, so a malformed PR file never waits on the test commands (SW-150).
 
 | Check | Passes when |
 |---|---|
 | stages | ICM: every stage before the one holding PR files has output. JIT: no open decision notes. |
-| acceptance | the PR body has a `PASS` table cell and no `FAIL` cell |
+| acceptance | the PR body has a `PASS` table cell and no `FAIL` cell. The result cell holds exactly `PASS` or `FAIL`, with evidence in its own column: `\| criterion \| PASS \| evidence \|`. `\| criterion \| PASS: repro.md §1 \|` has no `PASS` cell. |
 | clean | `git status --porcelain` in the code worktree is empty |
 | test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, or in any running container of its repo, because they all mount the worktree at `/app` with its `node_modules`. When the repo has none running, the gate starts one (`docker compose up -d --wait <svc>`, preferring a cli/library/extension service, which only sleeps) and stops it when the gate ends, pass or fail. When the branch's own fragment renders a touched service differently from `compose.yml` (a new `environment:` entry, `node_modules_volume`, image, …), the gate starts that service from a gate-only `compose.gate.yml` rendered from the branch, runs its checks there, then recreates it from `compose.yml` (or stops it, if it wasn't running) and deletes the file (SW-118). A service with no command, or one whose container could not be started, fails unless `skip_tests` names it with a reason. |
 | exercise | `exercise.md` (ICM: any stage output; JIT: `.werkmeister/notes/`) has a `PASS` cell and no `FAIL`, unless `skip_exercise` gives a reason |
