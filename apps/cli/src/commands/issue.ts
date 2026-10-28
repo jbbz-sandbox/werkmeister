@@ -20,13 +20,14 @@
  *         --project, else the workspace's, else the default one, else the only one.
  *
  * `ref` may be omitted inside a workspace: the issue is then read from its
- * `.werkmeister/workspace.yml` (the workspace root is the nearest `.werkmeister/`
- * above CWD).
+ * `.werkmeister/workspace.yml` (the workspace is the folder under a configured
+ * workspace root that holds CWD).
  */
 
 import * as fs from "node:fs";
 
 import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { candidateWorkspaceRoots } from "werkmeister-core/global_config";
 import { startIssue } from "werkmeister-core/issue_status";
 import {
   defaultProject,
@@ -91,7 +92,7 @@ async function ready(args: Record<string, unknown>): Promise<void> {
     fail(
       "no project: add one under projects: in ~/.werkmeister/config.yaml (docs/users-guide.md § Projects)",
     );
-  const workspace = findWorkspaceRoot(process.cwd());
+  const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
   const name =
     (args.project as string | null) ||
     (workspace === null ? "" : projectOf(loadConfigFile(workspace, null)));
@@ -136,7 +137,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
   if (args.action === "start") {
-    const workspace = findWorkspaceRoot(process.cwd());
+    const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
     if (workspace === null)
       fail("Not inside a workspace — run this from a workspace folder or below.");
     const line = (await startIssue(workspace)) || "left as is (no in_progress status configured)";
@@ -149,7 +150,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   let text = (args.ref as string | null) ?? "";
   let project = "";
   if (!text) {
-    const workspace = findWorkspaceRoot(process.cwd());
+    const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
     if (workspace === null) {
       fail("No issue given and not inside a workspace.");
     }

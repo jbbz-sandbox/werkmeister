@@ -15,6 +15,7 @@ vi.mock("../../lib/config.js", () => ({
 }));
 vi.mock("werkmeister-core/projects", () => ({ loadProjects: () => s.projects }));
 vi.mock("werkmeister-core/gate", () => ({ findWorkspaceRoot: () => s.workspace }));
+vi.mock("werkmeister-core/global_config", () => ({ candidateWorkspaceRoots: () => [] }));
 vi.mock("werkmeister-core/workspace_prompts", () => ({ loadConfigFile: () => ({}) }));
 vi.mock("werkmeister-core/issue_status", () => ({ startIssue: async () => "" }));
 vi.mock("werkmeister-core/issue_tracker", () => ({

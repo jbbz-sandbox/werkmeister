@@ -44,8 +44,9 @@ import {
   loadServices,
 } from "./config.js";
 import { SandboxError } from "./errors.js";
+import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
-import { loadPaths } from "./global_config.js";
+import { candidateWorkspaceRoots, loadPaths } from "./global_config.js";
 import {
   fetchIssueSnapshot,
   IssueFetchError,
@@ -423,39 +424,13 @@ async function selectRepos(
 // Workspace detection
 // ---------------------------------------------------------------------------
 
-/** Build the search order for the workspaces-container directory. */
-function candidateWorkspaceRoots(): string[] {
-  const roots: string[] = [];
-  const configured = loadPaths()["workspaces_root"];
-  if (configured) {
-    roots.push(path.resolve(expandUserPath(configured)));
-  }
-  roots.push(path.join(os.homedir(), "workspace"));
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const r of roots) {
-    if (!seen.has(r)) {
-      seen.add(r);
-      unique.push(r);
-    }
-  }
-  return unique;
-}
-
 /** Resolve the feature-workspace directory containing the current invocation. */
 export function findWorkspaceRoot(): string {
   const cwd = path.resolve(process.cwd());
 
-  for (const root of candidateWorkspaceRoots()) {
-    const rel = path.relative(root, cwd);
-    if (rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
-      continue;
-    }
-    if (rel === "") {
-      // CWD is the workspace root itself — no feature dir to select.
-      continue;
-    }
-    return path.join(root, rel.split(path.sep)[0]);
+  const workspace = workspaceUnder(cwd, candidateWorkspaceRoots());
+  if (workspace !== null) {
+    return workspace;
   }
 
   for (const directory of [cwd, ...ancestors(cwd)]) {

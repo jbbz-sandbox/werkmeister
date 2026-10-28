@@ -11,11 +11,12 @@
  * sync:  run the workspace strategy's sync — rewrite whatever check reported
  *       as drifted.
  *
- * Run from anywhere inside a workspace — the workspace root is resolved by
- * walking up to the nearest `.werkmeister/` directory.
+ * Run from anywhere inside a workspace — the workspace is the folder under a
+ * configured workspace root that holds CWD.
  */
 
 import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { candidateWorkspaceRoots } from "werkmeister-core/global_config";
 import { strategyFor } from "werkmeister-core/strategies";
 
 import { Colors, error, success } from "../lib/config.js";
@@ -25,7 +26,7 @@ function printDrift(entry: string): void {
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
-  const workspace = findWorkspaceRoot(process.cwd());
+  const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
   if (workspace === null) {
     error("Not inside a workspace — run this from a workspace folder or below.");
     process.exit(1);

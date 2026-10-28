@@ -16,6 +16,7 @@ import { run as hooks } from "../hooks.js";
 import { run as notes } from "../notes.js";
 import { run as skills } from "../skills.js";
 
+let wsRoot: string;
 let root: string;
 let home: string;
 let prevCfg: string | undefined;
@@ -24,16 +25,18 @@ let strategyId: StrategyId;
 
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-cmd-home-"));
+  wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-cmd-ws-"));
   fs.writeFileSync(
     path.join(home, "config.yaml"),
-    `version: 1\noverrides:\n  standards_dir: ${path.join(home, "none")}\n`,
+    `version: 1\npaths:\n  workspaces_root: ${wsRoot}\n` +
+      `overrides:\n  standards_dir: ${path.join(home, "none")}\n`,
   );
   fs.writeFileSync(path.join(home, "services.yaml"), "services: {}\n");
   prevCfg = process.env.WERKMEISTER_CONFIG_FILE;
   process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "config.yaml");
 
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "strategy-cmd-ws-"));
-  fs.mkdirSync(path.join(root, ".werkmeister"));
+  root = path.join(wsRoot, "ws");
+  fs.mkdirSync(path.join(root, ".werkmeister"), { recursive: true });
   fs.writeFileSync(
     path.join(root, ".werkmeister", "workspace.yml"),
     "context_strategy: icm\nwork_type: feature\n",
@@ -59,7 +62,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   if (prevCfg === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
   else process.env.WERKMEISTER_CONFIG_FILE = prevCfg;
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(wsRoot, { recursive: true, force: true });
   fs.rmSync(home, { recursive: true, force: true });
 });
 

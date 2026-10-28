@@ -178,7 +178,7 @@ const feature: Stage[] = [
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output.`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. Run a CLI from a temp folder, not only with a temp HOME: it reads its workspace from the current folder.`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, the exercise checks as ${EXERCISE_FORMAT}, and any deviation from \`spec.md\` with its reason.`,
       ],
       outputs: [
