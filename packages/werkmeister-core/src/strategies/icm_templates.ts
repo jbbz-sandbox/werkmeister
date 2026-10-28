@@ -48,8 +48,11 @@ export interface Stage {
   contract(v: IcmVars): Contract;
 }
 
+// SW-135: a container that never started has no `pnpm` in /opt/werkmeister-tools until `werkmeister up`
+// bootstraps it, so `docker restart` on it loops on "pnpm: not found".
 const RELOAD_RULE =
-  "Never run `werkmeister up`, `werkmeister restart`, or `werkmeister init-workspace` to reload — " +
+  "If the container is not running, run `werkmeister up` once first; `docker restart` only reloads one that is already running. " +
+  "Never run `werkmeister restart` or `werkmeister init-workspace` to reload — " +
   "they are slower, and init rewrites the stage contracts.";
 
 const IMPLEMENT_STEPS = [
