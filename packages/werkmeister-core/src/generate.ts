@@ -56,6 +56,7 @@ import {
   getServicePort,
   type SlotEntry,
 } from "./slots.js";
+import { tempHomeWrapper } from "./temp_home.js";
 import { readAutoStop } from "./workspace_prompts.js";
 import { ensureGeneratedIgnored } from "./worktrees.js";
 
@@ -1705,6 +1706,7 @@ export async function generateWorkspaceCompose(
     null,
     candidateServiceNames(repoNames, loadReposConfig(), localServices),
     readAutoStop(workspaceRoot),
+    tempHomeWrapper(workspaceRoot),
   );
   const sandboxDir = dotDir(workspaceRoot);
   fs.mkdirSync(sandboxDir, { recursive: true });

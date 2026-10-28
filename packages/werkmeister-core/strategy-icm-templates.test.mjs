@@ -77,6 +77,11 @@ test("each template renders with no undefined and a route per stage", async () =
         assert.match(claude, new RegExp(`stages/${d}/CONTEXT\\.md`), `${wt}: no route to ${d}`);
         const c = fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8");
         assert.doesNotMatch(c, /undefined/, `${wt}/${d}`);
+        // SW-124: every test step, and the subagents it briefs, go through the wrapper.
+        if (c.includes("Run the test command")) {
+          assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
+          assert.match(c, /A subagent you brief to run tests/, `${wt}/${d}`);
+        }
       }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });

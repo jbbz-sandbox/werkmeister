@@ -98,6 +98,36 @@ test("each local service's test command runs in its container; none says so", as
   );
 });
 
+test("the host test command is stated through the temp-HOME wrapper; the container form is not (SW-124)", async () => {
+  await withSandboxHome(
+    async () => {
+      const args = [
+        "test",
+        1,
+        11100,
+        11119,
+        ["frontend"],
+        loadServices(),
+        "",
+        {},
+        ["frontend"],
+        false,
+      ];
+      const wrapped = buildSandboxContextMd(...args, "/ws/.werkmeister/bin/with-temp-home");
+      assert.match(
+        wrapped,
+        /\| `\/ws\/\.werkmeister\/bin\/with-temp-home npm test -w frontend` \|/,
+      );
+      assert.match(
+        wrapped,
+        /^- `frontend`: `docker exec test-frontend sh -c 'npm test -w frontend'`$/m,
+      );
+      assert.doesNotMatch(buildSandboxContextMd(...args), /with-temp-home/);
+    },
+    { services: SERVICES },
+  );
+});
+
 test("Container Lifecycle mentions auto-stop only when it is on (#231)", async () => {
   await withSandboxHome(
     async () => {

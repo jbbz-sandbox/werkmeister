@@ -125,6 +125,12 @@ test("buildAllowRules: container form + bare prefix per command, then git; no ru
   );
 });
 
+test("buildAllowRules: the command through the temp-HOME wrapper, never the wrapper alone (SW-124)", () => {
+  const rules = buildAllowRules("feat", ["svc"], { svc: { test: "npm test" } }, {}, "/ws/w");
+  assert.ok(rules.includes("Bash(/ws/w npm test:*)"), rules.join("\n"));
+  assert.ok(!rules.includes("Bash(/ws/w:*)"));
+});
+
 test("buildAllowRules: an archetype's {service} template is expanded", () => {
   const rules = buildAllowRules(
     "feat",
