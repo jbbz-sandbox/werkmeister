@@ -59,6 +59,11 @@ const IMPLEMENT_STEPS = [
 const TEST_STEP =
   "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it. Redirect output to a file, trust the exit code, read back only the failing slice.";
 
+// SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
+const NAME_HISTORY_STEP =
+  "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
+  'When that commit marks it as a transition or legacy alias, list "remove" as an option beside rename and keep.';
+
 export const SELF_CHECK =
   "Review `output/` once against `../../BRIEF.md` and the live issue (`werkmeister issue view`). " +
   "Flip every `status: proposed` to `status: decided` yourself, and record each decision — and anything you " +
@@ -123,7 +128,8 @@ const feature: Stage[] = [
         "Find the test command in `../../.werkmeister/werkmeister-context.md` and copy it verbatim — do not restate it from memory.",
         "Check what is already installed that could do the job before recommending anything new.",
         "Write `output/inventory.md`: steps 1–3.",
-        "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3. Leave the answer blank when only a person can give it (a ticket key, a preference).",
+        NAME_HISTORY_STEP,
+        "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference).",
       ],
       outputs: ["`output/inventory.md`", "`output/decisions.md`"],
       humanCheck:
@@ -214,7 +220,8 @@ const bugfix: Stage[] = [
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         "List every other caller of the function at the root cause — a fix there reaches them too.",
-        "Write `output/repro.md`: steps 1–4, and a proposed fix in one paragraph under a `status: proposed` line.",
+        NAME_HISTORY_STEP,
+        "Write `output/repro.md`: steps 1–5, and a proposed fix in one paragraph under a `status: proposed` line.",
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
       humanCheck:
