@@ -89,6 +89,9 @@ test("a non-interactive create with no strategy writes context_strategy: icm (#1
         const yml = fs.readFileSync(path.join(dotDir(workspacePath), "workspace.yml"), "utf8");
         assert.match(yml, /^context_strategy: icm$/m);
         assert.ok(fs.existsSync(path.join(workspacePath, "stages")), "ICM layout");
+        // SW-124: the generated workspace ships its temp-HOME wrapper, executable.
+        const wrapper = path.join(dotDir(workspacePath), "bin", "with-temp-home");
+        assert.ok(fs.statSync(wrapper).mode & 0o100, "with-temp-home is executable");
         // SW-66: a container built here outlives the tmp dir and crash-loops on the real daemon.
         if (await dockerAvailable()) {
           const { docker } = await import("./dist/docker.js");

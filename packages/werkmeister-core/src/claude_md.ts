@@ -341,6 +341,7 @@ export function buildSandboxContextMd(
   archetypes: ArchetypeRegistry | null = null,
   candidates: string[] = localServices,
   autoStop = false,
+  tempHome = "",
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the
   // same source Caddy's site blocks are generated from — so this file can never
@@ -385,7 +386,7 @@ export function buildSandboxContextMd(
     validationRows(candidates, servicesConfig, archetypes, urlServices)
       .map(
         (r) =>
-          `| \`${r.service}\` | ${r.repo} | \`${r.path}\` | ${r.test ? `\`${r.test}\`` : "—"} | ${r.validate} |`,
+          `| \`${r.service}\` | ${r.repo} | \`${r.path}\` | ${r.test ? `\`${tempHome ? `${tempHome} ${r.test}` : r.test}\`` : "—"} | ${r.validate} |`,
       )
       .join("\n");
 
@@ -555,7 +556,11 @@ or visit https://${proxy.host}/__werkmeister and select \`${feature}\` — the s
 
   const validateBlock = `## How to validate
 
-How to exercise a change to each service in this workspace.
+How to exercise a change to each service in this workspace.${
+    tempHome
+      ? " Each test command runs through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME and deletes it on exit: never hand-roll `HOME=…`."
+      : ""
+  }
 
 ${validationTable}
 
