@@ -10,7 +10,8 @@ import { test } from "node:test";
 
 import YAML from "yaml";
 
-import { generateFeatureCompose } from "./dist/generate.js";
+import { loadServices } from "./dist/config.js";
+import { GATE_COMPOSE_FILE, generateFeatureCompose, renderGateCompose } from "./dist/generate.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
 function render(local, { checkout = true } = {}) {
@@ -51,4 +52,24 @@ test("a repo that is not checked out adds nothing", async () => {
   const { text, compose } = await render(["backend"], { checkout: false });
   assert.deepEqual(Object.keys(compose.services), ["backend"]);
   assert.doesNotMatch(text, /On-demand/);
+});
+
+test("renderGateCompose names only the services a branch's settings change (SW-118)", async () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-gate-ws-"));
+  fs.mkdirSync(path.join(ws, "demo-repo"));
+  try {
+    await withSandboxHome(async () => {
+      generateFeatureCompose("f", 1, ["backend"], null, ws);
+      const services = loadServices();
+      assert.deepEqual(renderGateCompose("f", 1, ["backend"], services, ws), []);
+      const backend = { ...services.backend, environment: { REDIS_URL: "redis://redis:6379" } };
+      assert.deepEqual(renderGateCompose("f", 1, ["backend"], { ...services, backend }, ws), [
+        "backend",
+      ]);
+      const gate = YAML.parse(fs.readFileSync(path.join(ws, GATE_COMPOSE_FILE), "utf8"));
+      assert.ok(gate.services.backend.environment.includes("REDIS_URL=redis://redis:6379"));
+    });
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
 });

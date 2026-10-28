@@ -13,6 +13,7 @@ import YAML from "yaml";
 
 import { serviceTestCommand } from "./archetypes.js";
 import { childEnv } from "./claude_cli.js";
+import { COMPOSE_FILE } from "./compose_file.js";
 import {
   type ArchetypeRegistry,
   containerOf,
@@ -26,6 +27,7 @@ import {
   type ServicesConfig,
   sandboxHome,
 } from "./config.js";
+import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
 import { updateNoteStatus } from "./graduate.js";
 import { type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
 import { issueIdOf, issueTracker, projectOf } from "./issue_tracker.js";
@@ -33,6 +35,7 @@ import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import {
   idleStopMinutes,
   lastExecMarker,
+  readServicesFromWorkspace,
   startService,
   stop as stopFeature,
   stopIdle,
@@ -124,7 +127,14 @@ export interface Deps {
   /** One idle-reaper pass over every workspace (SW-39). */
   reapIdle: () => Promise<{ lines: string[] }>;
   /** Start one of the feature's services and wait for it (SW-34); throws on failure. */
-  startService: (ws: string, feature: string, service: string) => Promise<void>;
+  startService: (
+    ws: string,
+    feature: string,
+    service: string,
+    composeName?: string,
+  ) => Promise<void>;
+  /** Write compose.gate.yml from *services*; the services whose compose.yml entry it changes (SW-118). */
+  gateCompose: (ws: string, feature: string, services: ServicesConfig) => string[];
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
@@ -175,7 +185,16 @@ export function defaultDeps(): Deps {
       const minutes = idleStopMinutes();
       return minutes ? stopIdle(minutes) : { lines: [] };
     },
-    startService: (ws, feature, service) => startService(feature, ws, service),
+    startService: (ws, feature, service, composeName) =>
+      startService(feature, ws, service, composeName),
+    gateCompose: (ws, feature, services) =>
+      renderGateCompose(
+        feature,
+        Number(readEnv(ws, "WERKMEISTER_SLOT")),
+        readServicesFromWorkspace(ws),
+        services,
+        ws,
+      ),
   };
 }
 
@@ -397,6 +416,7 @@ function readEnv(ws: string, key: string): string {
 /**
  * The pre-PR gate for one repo. A container it had to start for the repo's
  * tests is stopped again, pass or fail; what was running before stays (SW-34).
+ * One it recreated from the branch's settings is recreated from compose.yml (SW-118).
  */
 export async function runGate(
   ws: string,
@@ -404,10 +424,22 @@ export async function runGate(
   deps: Deps = defaultDeps(),
 ): Promise<GateResult> {
   const started: string[] = [];
+  const recreated: string[] = [];
   let result!: GateResult;
   try {
-    result = await gateChecks(ws, file, deps, started);
+    result = await gateChecks(ws, file, deps, started, recreated);
   } finally {
+    fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
+    const feature = String(loadConfigFile(ws, null)["feature"] ?? readEnv(ws, "FEATURE")).trim();
+    for (const svc of recreated) {
+      let detail = `recreated ${svc} from the branch's container settings for the gate, then from ${COMPOSE_FILE} again`;
+      try {
+        await deps.startService(ws, feature, svc);
+      } catch (e) {
+        detail = `recreated ${svc} from the branch's container settings for the gate; could not restore it from ${COMPOSE_FILE} — ${e instanceof Error ? e.message : String(e)}`;
+      }
+      result?.checks.push({ name: "containers", ok: true, detail });
+    }
     if (started.length) {
       const stop = await deps.run("docker", ["stop", ...started]);
       result?.checks.push({
@@ -427,6 +459,7 @@ async function gateChecks(
   file: PrFile,
   deps: Deps,
   started: string[],
+  recreated: string[],
 ): Promise<GateResult> {
   const checks: GateCheck[] = [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
@@ -450,8 +483,9 @@ async function gateChecks(
   // must be tested with its own `test:` filters and path mappings (SW-25).
   let services = deps.services;
   let repo = deps.repos[file.dir] ?? {};
+  let own: MergedRegistry | null = null;
   try {
-    const own = deps.branchRegistry(file.dir, dir);
+    own = deps.branchRegistry(file.dir, dir);
     if (own) {
       services = own.services;
       repo = own.repos[file.dir] ?? {};
@@ -498,6 +532,35 @@ async function gateChecks(
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
   const releaseRuns =
     repo["ship"] === "tag" && Boolean(repo["release_check"]) && !reason(file.fm["skip_release"]);
+
+  // Running containers come from compose.yml, rendered from the machine registry; a
+  // touched service whose branch settings render differently runs from compose.gate.yml (SW-118).
+  if (own) {
+    let changed: string[] = [];
+    try {
+      changed = deps.gateCompose(ws, feature, services).filter((s) => touched.includes(s));
+    } catch (e) {
+      add("containers", false, `branch compose: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    for (const svc of changed) {
+      const container = containerOf(feature, svc);
+      const wasRunning = running.has(container);
+      // Before the start: a recreate that fails halfway still needs compose.yml's container back.
+      if (wasRunning) recreated.push(svc);
+      touchExecMarker(ws);
+      try {
+        await deps.startService(ws, feature, svc, GATE_COMPOSE_FILE);
+        if (!wasRunning) started.push(container);
+        running.add(container);
+      } catch (e) {
+        add(
+          `start ${svc}`,
+          false,
+          `with the branch's container settings: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+  }
 
   const repoServices = (repo["services"] ?? []) as string[];
   const needsContainer =

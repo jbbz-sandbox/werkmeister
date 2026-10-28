@@ -126,9 +126,11 @@ function deps(table, over = {}) {
       return "containers stopped";
     },
     reapIdle: async () => ({ lines: [] }),
-    startService: async (_ws, feature, service) => {
+    startService: async (_ws, feature, service, composeName) => {
       started.push(`${feature}-${service}`);
+      r.calls.push(`start ${feature}-${service} from ${composeName ?? "compose.yml"}`);
     },
+    gateCompose: () => [],
     ...over,
   };
 }
@@ -546,6 +548,45 @@ test("gate: runs the branch's own test commands, not the shared registry's (SW-2
     assert.deepEqual(seen, [["app", path.join(ws, "app")]]);
     assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api-renamed"));
     assert.ok(!d.calls.includes("docker exec feat-api sh -c npm test -w api"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a touched service whose branch settings change compose runs from compose.gate.yml, then compose.yml again (SW-118)", async () => {
+  // compose.yml, and so feat-api, comes from the machine registry; the branch adds REDIS_URL.
+  const ws = icmWorkspace();
+  try {
+    const api = { ...REGISTRY.services.api, environment: { REDIS_URL: "redis://redis:6379" } };
+    const rendered = [];
+    const d = deps([DIFF_API], {
+      branchRegistry: () => ({ services: { ...REGISTRY.services, api }, repos: REGISTRY.repos }),
+      gateCompose: (_ws, _feature, services) => {
+        rendered.push(services.api.environment);
+        return ["api", "lib"];
+      },
+    });
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.deepEqual(rendered, [{ REDIS_URL: "redis://redis:6379" }]);
+    const order = d.calls.filter((c) => /^start |^docker exec feat-api sh -c npm/.test(c));
+    assert.deepEqual(order, [
+      "start feat-api from compose.gate.yml",
+      "docker exec feat-api sh -c npm test -w api",
+      "start feat-api from compose.yml",
+    ]);
+    assert.match(
+      g.checks.find((c) => c.name === "containers").detail,
+      /recreated api from the branch's container settings for the gate, then from compose\.yml again/,
+    );
+
+    // Not running before: started from the branch's settings, then stopped (SW-34).
+    const cold = deps([], { branchRegistry: d.branchRegistry, gateCompose: () => ["api"] });
+    const r = stubRun([[/^docker ps/, { stdout: "feat-lib\n" }], DIFF_API]);
+    Object.assign(cold, { run: r.run, calls: r.calls });
+    assert.deepEqual(failed(await gate(ws, cold)), []);
+    assert.deepEqual(cold.started, ["feat-api"]);
+    assert.ok(cold.calls.includes("docker stop feat-api"), cold.calls.join("\n"));
   } finally {
     clean(ws);
   }
