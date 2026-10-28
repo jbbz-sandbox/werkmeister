@@ -708,7 +708,7 @@ export function check(cfg: GlobalConfig): string[] {
   const problems: string[] = [];
 
   if (!fs.existsSync(configPath())) {
-    problems.push(`config file missing: ${configPath()} — run \`werkmeister config\``);
+    problems.push(`config file missing: ${configPath()} — run \`werkmeister config --write\``);
     return problems;
   }
 
@@ -733,14 +733,14 @@ export function check(cfg: GlobalConfig): string[] {
 
   const envPath = envShPath();
   if (!fs.existsSync(envPath)) {
-    problems.push(`${envPath} missing — run \`werkmeister config\``);
+    problems.push(`${envPath} missing — run \`werkmeister config --write\``);
   } else if (fs.readFileSync(envPath, "utf8") !== renderEnvSh(cfg)) {
-    problems.push(`${envPath} is stale — run \`werkmeister config\` to regenerate`);
+    problems.push(`${envPath} is stale — run \`werkmeister config --write\` to regenerate`);
   }
 
   const zpath = zshenvPath();
   if (!fs.existsSync(zpath) || !fs.readFileSync(zpath, "utf8").includes(_ZSH_BEGIN)) {
-    problems.push(`${zpath} does not source env.sh — run \`werkmeister config\``);
+    problems.push(`${zpath} does not source env.sh — run \`werkmeister config --write\``);
   }
 
   const dpath = desktopConfigPath();
@@ -751,7 +751,7 @@ export function check(cfg: GlobalConfig): string[] {
         if (isDict(body) && isSandboxServer(body) && "env" in body) {
           problems.push(
             `${dpath}: werkmeister server still has a stale \`env\` block — ` +
-              "run `werkmeister config`",
+              "run `werkmeister config --write`",
           );
         }
       }

@@ -444,7 +444,7 @@ export function findWorkspaceRoot(): string {
     `${Colors.RED}[err]  Not inside a workspace (checked: ` +
       `${rootsDisplay}) and no parent \`.git\` directory found.\n` +
       "       The workspaces root comes from ~/.werkmeister/config.yaml — run " +
-      "`werkmeister config` to set it (or `werkmeister config --check` to verify). " +
+      "`werkmeister config --write` to set it (or `werkmeister config --check` to verify). " +
       `See docs/known-issues.md for details.${Colors.RESET}`,
   );
 }

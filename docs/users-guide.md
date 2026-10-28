@@ -482,9 +482,10 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `--check`: Report prerequisite state without prompting or running any install/update commands
   - `--yes`: Non-interactive: accept every default and skip optional installs
 - `werkmeister config`: Set up and maintain the machine-global werkmeister config (~/.werkmeister/config.yaml — the single source of truth); regenerates env.sh and wires up ~/.zshenv and the Desktop MCP config
+  - `--write`: Write config.yaml (prompting on a TTY for unset values), regenerate env.sh, and wire up ~/.zshenv and the Desktop MCP config. Without it (or a value to set) the command only prints the config.
   - `--repos-root <path>`: Absolute path to the canonical source-repo clones (non-interactive set).
   - `--workspaces-root <path>`: Absolute path to the per-feature worktree workspaces (non-interactive set).
-  - `--show`: Print the resolved config and each value's origin, without writing.
+  - `--show`: Print the resolved config and each value's origin (the default).
   - `--check`: Validate config + derived files; nonzero exit on drift.
 - `werkmeister cache <action> [name]`: Prune the shared build and package caches (`caches:` in the registry) by each one's age or prune rule
   - `--reset`: Empty the cache(s) instead of applying the rule.
@@ -1225,7 +1226,7 @@ the pieces that are not obvious from the demo services:
 - **`werkmeister` inside the container is the worktree's own build.** `PATH` puts
   `/app/apps/cli` first. `werkmeister_root` in `~/.werkmeister/config.yaml` still points at the main
   checkout, so templates and `infra/` come from there (see the known issue on machine-global
-  `werkmeister_root`). **Never run `werkmeister config` or `werkmeister setup` from a worktree**, on the
+  `werkmeister_root`). **Never run `werkmeister config --write` or `werkmeister setup` from a worktree**, on the
   host or in the container: it silently repoints the whole machine.
 - **The dashboard binds `HOST`.** It defaults to loopback for the reasons in `main.ts`; the
   registry sets `HOST=0.0.0.0` because the container network is the isolation boundary and

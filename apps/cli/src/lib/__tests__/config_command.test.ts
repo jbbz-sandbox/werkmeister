@@ -91,6 +91,27 @@ describe("config command", () => {
     expect(saved.overrides.services_yaml).toBe("/custom/services.yaml");
   });
 
+  it("no arguments prints the config and writes nothing", async () => {
+    // Regression (SW-136): the bare form used to rebuild config.yaml, env.sh,
+    // ~/.zshenv and the Desktop config from defaults.
+    gc.save({ paths: { repos_root: "/custom/repos" } });
+    const before = fs.readFileSync(cfgFile, "utf8");
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+      logs.push(a.join(" "));
+    });
+    const zsh = vi.spyOn(gc, "ensureZshenvSources");
+    const desktop = vi.spyOn(gc, "patchDesktopConfig");
+
+    await run(args());
+
+    expect(fs.readFileSync(cfgFile, "utf8")).toBe(before);
+    expect(fs.existsSync(gc.envShPath())).toBe(false);
+    expect(zsh).not.toHaveBeenCalled();
+    expect(desktop).not.toHaveBeenCalled();
+    expect(logs.join("\n")).toContain("/custom/repos");
+  });
+
   it("show reports origin", async () => {
     gc.save({ paths: { repos_root: "/custom/repos" } });
     const logs: string[] = [];
