@@ -653,7 +653,8 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(f.fm.session, "s-1", "the callback rides on the PR file (#236)");
     assert.equal(f.fm.host_session, "local_h1");
     assert.equal(
-      r.lines.filter((l) => l === "<pr-created>https://github.com/o/app/pull/9</pr-created>").length,
+      r.lines.filter((l) => l === "<pr-created>https://github.com/o/app/pull/9</pr-created>")
+        .length,
       1,
       "one marker per opened PR, so the desktop app counts the session as the opener (SW-145)",
     );
