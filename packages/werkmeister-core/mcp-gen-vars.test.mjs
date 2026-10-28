@@ -8,7 +8,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { writeWorkspaceMcp } from "./dist/mcp_gen.js";
+import { resolveWorkspaceMcpServers, writeWorkspaceMcp } from "./dist/mcp_gen.js";
+import { REGISTRY_DEFAULTS } from "./dist/scaffold.js";
 
 const DEFINITIONS = {
   sandbox: {
@@ -71,5 +72,15 @@ test("no vars leaves every definition exactly as given", () => {
   withWorkspace((ws) => {
     writeWorkspaceMcp(ws, ["sandbox"], DEFINITIONS);
     assert.equal(readServers(ws).sandbox.headers["X-Werkmeister-Feature"], "${FEATURE}");
+  });
+});
+
+// SW-115: a shipped archetype projecting it breaks every host session.
+test("no default archetype projects the container-only werkmeister server", () => {
+  withWorkspace((ws) => {
+    const { archetypes, mcp_servers } = REGISTRY_DEFAULTS;
+    const present = Object.fromEntries(Object.keys(archetypes).map((a) => [a, ["svc"]]));
+    writeWorkspaceMcp(ws, resolveWorkspaceMcpServers(present, archetypes), mcp_servers);
+    assert.equal(readServers(ws).werkmeister, undefined);
   });
 });
