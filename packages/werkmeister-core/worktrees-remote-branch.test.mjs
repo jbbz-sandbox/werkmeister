@@ -78,3 +78,15 @@ test("force deletes the remote branch and cuts from main", async () => {
   assert.ok(!fs.existsSync(path.join(dest, "old")));
   assert.equal(git(src, "ls-remote", "--heads", "origin", "u/ws"), "");
 });
+
+test("a fresh branch tracks its own name on origin, not main, so a plain push works", async () => {
+  const { src, dest } = setup();
+  await quiet(() => createWorktree(src, dest, "u/fresh"));
+  assert.equal(git(dest, "config", "branch.u/fresh.remote"), "origin");
+  assert.equal(git(dest, "config", "branch.u/fresh.merge"), "refs/heads/u/fresh");
+  fs.writeFileSync(path.join(dest, "new"), "new");
+  git(dest, "add", "new");
+  git(dest, "commit", "-qm", "first");
+  git(dest, "push");
+  assert.ok(git(src, "ls-remote", "--heads", "origin", "u/fresh").includes("refs/heads/u/fresh"));
+});
