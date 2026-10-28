@@ -25,6 +25,7 @@ Origin: the ui-surfaces spike, tracked in Jira [SW-43](https://jory-group.atlass
 | **No Remove.** The only destructive verbs are Close out and Abandon…. `remove-workspace` is deprecated in favour of `close-out --abandon` (#160). | 2026-10-16 |
 | **Pane buttons grouped by what they act on** (session · containers · work); `⇆ Open beside` replaces `↗ Continue in Desktop` on the pane (SW-105). | 2026-10-26 |
 | **Pane: `▶ Start work`** starts a fresh workspace's run in a Desktop session with the title, model, prompt and run limits werkmeister-core builds (SW-153). | 2026-10-28 |
+| **`▶ Start work` falls back to this session.** When the pane's own `start_session` call is refused (always, in auto mode), the pane drafts a message in this session's prompt box asking its model to make the same call with the same arguments; the person's Enter sends it. The app starts a session only on the person's own turn, never on one a plugin submits (SW-157). | 2026-10-28 |
 
 ## Rules
 

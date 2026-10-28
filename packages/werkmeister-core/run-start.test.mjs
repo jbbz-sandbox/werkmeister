@@ -49,6 +49,15 @@ test("buildStartArgs: title, model only when set, and a background of at least 8
   assert.equal(buildStartArgs({ ...W, task: "t".repeat(100) }).title.length, 59);
 });
 
+test("buildStartArgs cuts a long title at a word, not mid-word (SW-157)", () => {
+  const task = "Add the missing record branch directory to the workspace pane cards";
+  const full = `SW-9 ${task}`;
+  const { title } = buildStartArgs({ ...W, task });
+  const kept = title.replace(/…$/, "");
+  assert.ok(title.length < 60, title);
+  assert.ok(full.startsWith(kept) && full[kept.length] === " ", title);
+});
+
 test("startArgs reads the workspace's own workspace.yml", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "start-args-"));
   try {
