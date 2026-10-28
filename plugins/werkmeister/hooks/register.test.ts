@@ -991,8 +991,59 @@ test("no second ▶ Start work while the first is starting (SW-153)", async ($, 
   await ui.unmount();
 });
 
-test("a refused ▶ Start work shows the reason and keeps New session (SW-153)", async ($, on) => {
-  const w = world(
+for (const [kind, answer] of [
+  [
+    "refused",
+    () => ({
+      content: [{ type: "text" as const, text: "auto mode gave no verdict" }],
+      isError: true,
+    }),
+  ],
+  [
+    "failed",
+    () => {
+      throw new Error("auto mode gave no verdict");
+    },
+  ],
+] as const)
+  test(`a ${kind} ▶ Start work drafts start_session's exact arguments for the person to send (SW-157)`, async ($, on) => {
+    const filled: string[] = [];
+    const w = world(
+      on,
+      stubs({
+        [`${WS}/list-workspaces`]: () => ok(FRESH),
+        [`${WS}/start-args`]: () => ok(AUTONOMOUS_ARGS),
+        "ccd_session/start_session": answer,
+      }),
+    );
+    on("prompt.fill", (_$, e) => {
+      filled.push(e.text);
+      return { isFilled: true };
+    });
+    await openPane($);
+    const ui = await mountPane($);
+    await tap(ui, "start:empty");
+    expect(filled).toHaveLength(1);
+    expect(filled[0]).toContain(
+      JSON.stringify({
+        initiation: "user_asked",
+        cwd: "/ws/empty",
+        use_worktree: false,
+        context: "fresh",
+        ...AUTONOMOUS_ARGS,
+      }),
+    );
+    expect(w.calls.filter((c) => c.key === "ccd_session/start_session")).toHaveLength(1);
+    expect((await ui.find({ key: "note" }))?.text).toBe(
+      "empty: press Enter in the chat to start the run",
+    );
+    expect(w.toasts).toEqual([]);
+    expect(await seek(ui, "new:empty")).toBeDefined();
+    await ui.unmount();
+  });
+
+test("a refused ▶ Start work with no prompt box to draft in shows the reason (SW-157)", async ($, on) => {
+  world(
     on,
     stubs({
       [`${WS}/list-workspaces`]: () => ok(FRESH),
@@ -1003,14 +1054,13 @@ test("a refused ▶ Start work shows the reason and keeps New session (SW-153)",
       }),
     }),
   );
+  on("prompt.fill", () => ({ isFilled: false }));
   await openPane($);
   const ui = await mountPane($);
   await tap(ui, "start:empty");
   expect((await ui.find({ key: "note" }))?.text).toBe(
     "empty: start refused: auto mode gave no verdict",
   );
-  expect(w.toasts).toEqual([]);
-  expect(await seek(ui, "new:empty")).toBeDefined();
   await ui.unmount();
 });
 

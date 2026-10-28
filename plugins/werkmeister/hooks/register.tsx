@@ -1200,9 +1200,14 @@ async function runAction(
   await tick($);
 }
 
+function startDraft(name: string, args: Record<string, unknown>): string {
+  return `Start the run for \`${name}\`: call \`mcp__ccd_session__start_session\` once with exactly these arguments, then reply with the new session's link:\n\n\`\`\`json\n${JSON.stringify(args)}\n\`\`\``;
+}
+
 /**
  * ▶ Start work: one Desktop session in the workspace folder, with the title, model, prompt and background
- * werkmeister-core builds (the same ones `werkmeister start-args` prints for next-wave). BUSY drops a second press.
+ * werkmeister-core builds (the same ones `werkmeister start-args` prints for next-wave). A refused or failed call
+ * becomes a draft in this session's prompt box asking its model to make it. BUSY drops a second press.
  */
 async function startWork($: EngineInterface, name: string): Promise<void> {
   const { value: rows = [] } = await $.state.get(ROWS);
@@ -1216,21 +1221,33 @@ async function startWork($: EngineInterface, name: string): Promise<void> {
       "start-args",
       { path: row.path },
     );
-    const r = await $.mcp.call("ccd_session", "start_session", {
+    const args = {
       initiation: "user_asked",
       cwd: row.path,
       use_worktree: false,
       context: "fresh",
       ...a,
-    });
+    };
+    const r = await $.mcp
+      .call("ccd_session", "start_session", args)
+      .catch((e: Error) => ({ isError: true, content: [{ text: e.message }] }));
     const text = r.content
       .map((c) => c.text ?? "")
       .join(" ")
       .trim();
-    if (r.isError) await $.state.set(NOTE, `${name}: start refused: ${text}`);
-    else {
+    if (!r.isError) {
       await $.state.set(NOTE, "");
       $.ui.toast(`Started "${a.title}". ⇆ Open beside on its card opens it.`);
+    } else {
+      // Auto mode refuses the pane's own call, and the app refuses a start on a turn a plugin submits; the
+      // person's Enter on a draft makes it their own request (SW-157).
+      const draft = await $.prompt.fill({ text: startDraft(name, args) });
+      await $.state.set(
+        NOTE,
+        draft.isFilled
+          ? `${name}: press Enter in the chat to start the run`
+          : `${name}: start refused: ${text}`,
+      );
     }
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message);

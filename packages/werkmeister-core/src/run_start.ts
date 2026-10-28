@@ -41,8 +41,11 @@ export function buildStartArgs(w: {
   model: string | null;
   autonomous: boolean;
 }): StartArgs {
-  // start_session takes a title under 60 characters.
-  const title = ([w.issueId, w.task].filter(Boolean).join(" ") || w.name).slice(0, 59);
+  // start_session takes a title under 60 characters: cut at the last word that fits beside the "…" (SW-157).
+  const full = [w.issueId, w.task].filter(Boolean).join(" ") || w.name;
+  const space = full.lastIndexOf(" ", 58);
+  // ponytail: a space before 40 means one huge "word" (a URL, a path); cut that mid-word rather than keep only the key.
+  const title = full.length < 60 ? full : `${full.slice(0, space > 40 ? space : 58).trimEnd()}…`;
   return {
     title,
     ...(w.model ? { model: w.model } : {}),
