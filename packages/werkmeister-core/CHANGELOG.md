@@ -1,5 +1,13 @@
 # sandbox-core
 
+## 0.44.2
+
+### Patch Changes
+
+- ff1cff8: SW-109: when `pr open` (or any lifecycle move) can't read the issue, it retries the read once, and if that fails too the warning now gives the reason (Jira's HTTP status and message, the network error code, the MCP fallback, or `gh`'s error) and the `werkmeister issue update <ref> --status … --comment …` command that makes the move by hand. `werkmeister issue view` prints the same reasons when it can't read an issue.
+- 09d62c8: SW-115: the shipped `mcp-client` archetype no longer projects the `werkmeister` MCP server into a workspace's `.mcp.json`. That file is shared by host and container sessions, and the entry's `http://host.docker.internal:3002/mcp` only resolves in a container, so every host session hit `ENOTFOUND` on start. Host sessions get the same server from the `werkmeister` plugin. The next `init-workspace` prunes the entry from existing workspaces. A container agent opts back in with an archetype of its own (`docs/users-guide.md`, edit 3).
+- c380936: SW-120: the Open PRs tab searches the org from `overrides.github_org` (default: the workspace repo's owner) instead of the stale `sandbox` owner, and fails with a message naming that setting when no org is known rather than searching all of GitHub.
+
 ## 0.44.1
 
 ## 0.44.0

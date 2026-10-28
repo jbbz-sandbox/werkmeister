@@ -1,5 +1,13 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.44.2
+
+### Patch Changes
+
+- ff1cff8: SW-109: when `pr open` (or any lifecycle move) can't read the issue, it retries the read once, and if that fails too the warning now gives the reason (Jira's HTTP status and message, the network error code, the MCP fallback, or `gh`'s error) and the `werkmeister issue update <ref> --status … --comment …` command that makes the move by hand. `werkmeister issue view` prints the same reasons when it can't read an issue.
+- 5dde4d0: SW-112: `werkmeister pr new` refusing over an open or approved PR file now adds "If it has merged, run werkmeister pr status first to record it.", since the file may only be stale.
+- 9961fe6: SW-113: `werkmeister issue`, `notes`, `skills` and `hooks gate` find their workspace by the same rule as `init-workspace`: the folder directly under `paths.workspaces_root` (or `~/workspace`) that holds the current folder. A run with a temp config no longer resolves a real workspace from its current folder, and a command run inside a code worktree resolves the workspace instead of stopping at the worktree's own `.werkmeister/`. Migration: a workspace kept outside those roots is no longer found by these commands; move it under `workspaces_root`, or point `workspaces_root` at its parent with `werkmeister config`. The 03_implement contract's exercise step now says to run a CLI from a temp folder, not only with a temp HOME.
+
 ## 0.44.1
 
 ### Patch Changes
