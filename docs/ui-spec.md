@@ -24,6 +24,7 @@ Origin: the ui-surfaces spike, tracked in Jira [SW-43](https://jory-group.atlass
 | **Containers may call every MCP tool.** There is no host-only tier; the bearer token is the only gate. | 2026-10-16 |
 | **No Remove.** The only destructive verbs are Close out and Abandon…. `remove-workspace` is deprecated in favour of `close-out --abandon` (#160). | 2026-10-16 |
 | **Pane buttons grouped by what they act on** (session · containers · work); `⇆ Open beside` replaces `↗ Continue in Desktop` on the pane (SW-105). | 2026-10-26 |
+| **Pane: `▶ Start work`** starts a fresh workspace's run in a Desktop session with the title, model, prompt and run limits werkmeister-core builds (SW-153). | 2026-10-28 |
 
 ## Rules
 
@@ -81,6 +82,7 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 | Pause / resume | `⏸ Pause` · `▶ Resume` | ✓ | ✓ | ✓ | ✓ |
 | Continue a session | `↗ Continue in Terminal` · `↗ Continue in Desktop`; Pane: `⇆ Open beside` for a Desktop session, `↗ Continue in Terminal` · `↗ Continue in VS Code` otherwise | ✓ | ✓ | ✓ | Terminal |
 | New session | `＋ New session` | ✓ | ✓ | ✓ | ✓ |
+| Start the run | `▶ Start work` | ✗ | ✗ | ✓ | ✗ |
 | Refresh PRs | `↻ Refresh PRs` | ✓ | ✓ | ✓ | ✓ |
 | Open the feature | `Open feature ↗` | ✓ | ✓ | ✓ | ✓ |
 | Open the issue | `Open issue ↗` | ✓ | ✓ | ✓ | ✓ |
@@ -93,11 +95,11 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 | Finish settled work | `✓ Close out` | ✓ | ✓ | ✓ | ✓ |
 | Stop unsettled work | `✕ Abandon…` | ✓ | ✓ | ✓ | ✓ |
 
-✗ = the platform can't (a browser page or MCP iframe can't drive Claude Code panes; VS Code has no pin or split for folders). Desktop sessions can't be reached from VS Code.
+✗ = the platform can't (a browser page or MCP iframe can't drive Claude Code panes or start a Desktop session; VS Code has no pin or split for folders). Desktop sessions can't be reached from VS Code.
 
 On the dashboard and MCP App, `↗ Continue in Desktop` opens the workspace folder in Desktop (`claude://code/new?folder=…`): a browser page or MCP iframe can't read the app's session list, so it can't link the previous Desktop session. `＋ New session` there opens a fresh `claude` in Terminal (`claude-resume` with `new: true`).
 
-**Primary action:** Paused → `▶ Resume` · Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …` (`＋ New session` when there is no session).
+**Primary action:** Paused → `▶ Resume` · Needs you → `↗ Continue in …` · Ready to close out → `✓ Close out` · containers down → `▶ Up` · otherwise `↗ Continue in …` (`＋ New session` when there is no session). Pane: `▶ Start work`, unless ready to close out, when there is no session and the first stage has no output.
 
 **Dashboard, MCP App, VS Code:** the bar shows the primary plus two secondaries: `■ Stop` · `⏸ Pause` while containers run (`↻ Restart` moves to `⋯`), `■ Stop` · `⏻ Down` while paused. Everything else goes in `⋯`, in this order: Pin · ↻ Refresh PRs · Open feature ↗ · Open issue ↗ · Logs · ✕ Abandon….
 
@@ -105,7 +107,7 @@ On the dashboard and MCP App, `↗ Continue in Desktop` opens the workspace fold
 
 | Group | Buttons, in order |
 |---|---|
-| `session` | `⇆ Open beside` (Desktop; tries the split, else opens the session in this chat's place and toasts how to split it) or `↗ Continue in Terminal` / `VS Code` · `＋ New session` · `📌 Pin` |
+| `session` | `⇆ Open beside` (Desktop; tries the split, else opens the session in this chat's place and toasts how to split it) or `↗ Continue in Terminal` / `VS Code` · `▶ Start work` (no session, first stage with no output) · `＋ New session` · `📌 Pin` |
 | `containers` | `▶ Resume` or `▶ Up` · `■ Stop` · `⏸ Pause` · `↻ Restart` · `⏻ Down`, then on a second line, while containers run, `Logs` (a Terminal window following them) · `Open feature ↗` |
 | `work` | `↻ Refresh PRs` · `Open issue ↗` · `✓ Close out` · `✕ Abandon…` |
 

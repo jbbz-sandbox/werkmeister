@@ -44,8 +44,10 @@ import {
   runCapture,
   stripAnsi,
 } from "./claude_cli.js";
+import { buildStartArgs, type StartArgs } from "./run_start.js";
 
 export { childEnv } from "./claude_cli.js";
+export * from "./run_start.js";
 
 // Type-only: erased at build, so this adds nothing to the bundle.
 import { isOneShotService, projectName } from "./compose.js";
@@ -823,6 +825,11 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
       workType: null,
     };
   }
+}
+
+/** start_session's arguments for the workspace at `dir` (SW-153): the pane's ▶ Start work and `werkmeister start-args`. */
+export async function startArgs(dir: string): Promise<StartArgs> {
+  return buildStartArgs({ name: path.basename(dir), ...(await readWorkspaceConfig(dir)) });
 }
 
 /**

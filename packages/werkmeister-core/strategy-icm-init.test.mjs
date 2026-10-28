@@ -9,6 +9,8 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { buildPrGuardEntry, READ_ONLY_GIT_RULES } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
+import { RUN_LIMITS } from "./dist/run_start.js";
+import { PLACEHOLDER_BRIEF_RE } from "./dist/strategies/icm.js";
 import { templateFor } from "./dist/strategies/icm_templates.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { discoverRepos } from "./dist/workspace_init.js";
@@ -494,6 +496,23 @@ test("no issue: CLAUDE.md and BRIEF.md are unchanged from before", async () => {
       /^---\nsource: \.werkmeister\/workspace\.yml \(starting_prompt\)\n---/,
     );
   });
+});
+
+test("an autonomous brief carries the run limits; an interactive one and the placeholder don't (SW-153)", async () => {
+  const brief = async (inputs) => {
+    let text;
+    await withIcmWorkspace(
+      async (root, ctx) => {
+        icm.init({ ...ctx, issue: null });
+        text = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+      },
+      { inputs },
+    );
+    return text;
+  };
+  assert.ok((await brief({ autonomous: "true" })).endsWith(`\n## Run limits\n\n${RUN_LIMITS}\n`));
+  assert.doesNotMatch(await brief({}), /## Run limits/);
+  assert.match(await brief({ autonomous: "true", starting_prompt: "" }), PLACEHOLDER_BRIEF_RE);
 });
 
 test("same context twice gives byte-identical files", async () => {
