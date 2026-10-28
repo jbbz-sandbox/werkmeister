@@ -518,14 +518,15 @@ describe("generateFeatureEnv", () => {
     expect(fs.readFileSync(path.join(tmp, ".env.backend"), "utf8")).toBe("API_KEY=dev\n");
   });
 
-  it("adds the /.env.* ignore rule to a workspace .gitignore that predates it, once", () => {
+  it("adds the missing generated-file ignore rules to a workspace .gitignore that predates them, once", () => {
     // remove-workspace commits `git add -A` and pushes, so an unignored
     // .env.<svc> would publish its secrets.
     fs.writeFileSync(path.join(tmp, ".gitignore"), "/sandbox/\n/.env");
     generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
     generateFeatureEnv("myfeat", 1, ["backend"], null, tmp);
     expect(fs.readFileSync(path.join(tmp, ".gitignore"), "utf8")).toBe(
-      "/sandbox/\n/.env\n/.env.*\n",
+      "/sandbox/\n/.env\n/.env.*\n/compose.yml\n/compose.gate.yml\n" +
+        "/.werkmeister/agent-state.json\n/.werkmeister/last-exec\n/.werkmeister/starts.json\n",
     );
   });
 

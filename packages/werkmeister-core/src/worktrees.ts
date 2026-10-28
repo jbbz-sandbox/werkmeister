@@ -25,19 +25,37 @@ const _GITIGNORE_HEADER =
   "# Repo worktrees nested in this workspace, ignored by name. Rewritten by\n" +
   "# `werkmeister init-workspace` on each run; rules above come from the repo's main.\n";
 
-// Ignored besides the repo worktree dirs: only secrets (.env.<svc> holds each
-// service's resolved secrets). The generated projections (.claude/, CLAUDE.md,
-// .mcp.json, .werkmeister/*) are deliberately TRACKED — versioned workspace state
-// is the point of the dedicated root repo.
-const _SECRET_ENVS_RULE = "/.env.*";
-const _GITIGNORE_GENERATED = ["/.env", _SECRET_ENVS_RULE] as const;
+// Ignored besides the repo worktree dirs: secrets (.env.<svc> holds each
+// service's resolved secrets) and files `up`, the PR gate and the agent-state hook
+// rewrite at runtime — compose.yml carries the slot's ports, and the slot lives on
+// container labels — which would otherwise leave the record branch dirty (SW-144).
+// The other generated projections (.claude/, CLAUDE.md, .mcp.json, .werkmeister/*)
+// are deliberately TRACKED — versioned workspace state is the point of the root repo.
+const _RUNTIME_FILES = [
+  "compose.yml",
+  "compose.gate.yml",
+  ".werkmeister/agent-state.json",
+  ".werkmeister/last-exec",
+  ".werkmeister/starts.json",
+];
+const _GITIGNORE_GENERATED = [
+  "/.env",
+  "/.env.*",
+  ..._RUNTIME_FILES.map((file) => `/${file}`),
+] as const;
+
+/** An ignore rule does not untrack a file an older init committed (compose.yml was). */
+function untrackRuntimeFiles(workspaceDir: string): void {
+  const untrack = ["rm", "--cached", "--quiet", "--ignore-unmatch", "--", ..._RUNTIME_FILES];
+  run(["git", "-C", workspaceDir, ...untrack], { capture: true });
+}
 
 /**
- * Add the `/.env.*` rule to a workspace .gitignore written before it existed.
- * `werkmeister up` writes per-service secret files without rerunning
- * init-workspace, and close-out (removeWorkspace) commits tracked changes and pushes.
+ * Append the generated-file rules a workspace .gitignore written before them lacks.
+ * `werkmeister up` writes these files without rerunning init-workspace, and
+ * close-out (removeWorkspace) commits tracked changes and pushes.
  */
-export function ensureSecretEnvsIgnored(workspaceDir: string): void {
+export function ensureGeneratedIgnored(workspaceDir: string): void {
   const gitignorePath = path.join(workspaceDir, ".gitignore");
   let existing = "";
   try {
@@ -45,18 +63,19 @@ export function ensureSecretEnvsIgnored(workspaceDir: string): void {
   } catch {
     /* absent */
   }
-  if (existing.split("\n").some((line) => line.trim() === _SECRET_ENVS_RULE)) {
-    return;
-  }
+  const have = new Set(existing.split("\n").map((line) => line.trim()));
+  const missing = _GITIGNORE_GENERATED.filter((rule) => !have.has(rule));
+  if (!missing.length) return;
   const joiner = existing && !existing.endsWith("\n") ? "\n" : "";
-  fs.appendFileSync(gitignorePath, `${joiner}${_SECRET_ENVS_RULE}\n`);
+  fs.appendFileSync(gitignorePath, `${joiner}${missing.join("\n")}\n`);
+  untrackRuntimeFiles(workspaceDir);
 }
 
 /**
  * Rewrite the managed section of the workspace root's .gitignore.
  *
  * Ignores the nested repo worktree dirs (which vary per workspace and change
- * as repos are added/removed) plus .env. Everything else — the projected
+ * as repos are added/removed) plus .env and runtime files. Everything else — the projected
  * .claude/, generated context files, workspace.yml, notes — stays tracked.
  * The repo's own .gitignore rules (the branch is cut from its main) sit above
  * the marker and are preserved; only the managed section below it is replaced,
@@ -76,6 +95,7 @@ export function writeWorkspaceGitignore(workspaceDir: string, repos: string[]): 
   }
   const joiner = existing && !existing.endsWith("\n") ? "\n" : "";
   fs.writeFileSync(gitignorePath, existing + joiner + (existing ? "\n" : "") + section);
+  untrackRuntimeFiles(workspaceDir);
 }
 
 // ---------------------------------------------------------------------------

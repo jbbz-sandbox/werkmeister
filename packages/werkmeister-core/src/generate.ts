@@ -57,7 +57,7 @@ import {
   type SlotEntry,
 } from "./slots.js";
 import { readAutoStop } from "./workspace_prompts.js";
-import { ensureSecretEnvsIgnored } from "./worktrees.js";
+import { ensureGeneratedIgnored } from "./worktrees.js";
 
 function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -1138,7 +1138,7 @@ export function writeServiceSecretEnvs(
   localServices: string[],
   servicesConfig: ServicesConfig,
 ): void {
-  ensureSecretEnvsIgnored(workspaceRoot);
+  ensureGeneratedIgnored(workspaceRoot);
   const { byService } = resolveSecrets(
     loadSecrets(getSecretsPath()),
     servicesConfig,

@@ -753,6 +753,13 @@ export async function initWorkspace(
 
   logMeta(task, meta);
 
+  // 5a. Seed workspace metadata into .env before the strategy writes settings:
+  //     the allow rules read FEATURE/SERVICES from it, and rules computed without
+  //     them are what `up` would append to the record later (SW-144).
+  const envPath = path.join(workspaceRoot, ".env");
+  seedWorkspaceMetadataEnv(envPath, meta);
+  success(`Wrote ${envPath}`);
+
   // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
   // beside it — belongs to the workspace's strategy (docs/context-strategies.md).
   strategy.init({
@@ -804,11 +811,6 @@ export async function initWorkspace(
   for (const warning of pluginDriftWarnings()) {
     warn(warning);
   }
-
-  // 7. Seed workspace metadata into .env.
-  const envPath = path.join(workspaceRoot, ".env");
-  seedWorkspaceMetadataEnv(envPath, meta);
-  success(`Wrote ${envPath}`);
 
   // 8. Generate compose.yml, allocate slot, write .werkmeister/werkmeister-context.md
   const feature = (meta["FEATURE"] ?? "").trim();
