@@ -251,11 +251,21 @@ export function createWorktree(
       );
     }
     info(`  ${repo}: worktree → ${branch} (from ${base})`);
-    cmd = ["git", "-C", src, "worktree", "add", "-b", branch, dest, base];
+    // --no-track: branching from origin/main would set it as upstream, and a plain `git push` then fails (SW-146).
+    cmd = ["git", "-C", src, "worktree", "add", "--no-track", "-b", branch, dest, base];
   }
   const result = run(cmd, { capture: true });
   if (result.status !== 0) {
     throw new Error(result.stderr.trim() || `git worktree add failed for ${repo}`);
+  }
+  if (exists.status !== 0) {
+    // Point upstream at the not-yet-pushed same-named branch so the first plain `git push` creates it.
+    for (const [key, value] of [
+      ["remote", "origin"],
+      ["merge", `refs/heads/${branch}`],
+    ]) {
+      run(["git", "-C", src, "config", `branch.${branch}.${key}`, value], { capture: true });
+    }
   }
 }
 
