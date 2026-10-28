@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { REBUILD_COMMAND, staleBuildWarning } from "../build_freshness.js";
+import { BUNDLE_SOURCES, REBUILD_COMMAND, staleBuildWarning } from "../build_freshness.js";
 
 let tmp: string;
 
@@ -75,5 +75,21 @@ describe("staleBuildWarning", () => {
     commit(tmp);
     expect(staleBuildWarning(undefined, tmp)).toBeNull();
     expect(staleBuildWarning({ sha: "", dirty: false }, tmp)).toBeNull();
+  });
+});
+
+// SW-131: turbo hashes a package's own files plus its workspace dependencies', so a
+// bundled package apps/cli does not declare is invisible to `werkmeister#build`.
+describe("BUNDLE_SOURCES", () => {
+  it("names only workspace packages apps/cli depends on, so turbo's hash covers them", () => {
+    const repo = path.resolve(import.meta.dirname, "../../../../..");
+    const pkg = (dir: string) =>
+      JSON.parse(fs.readFileSync(path.join(repo, dir, "package.json"), "utf8"));
+    const cli = pkg("apps/cli");
+    const declared = { ...cli.dependencies, ...cli.devDependencies };
+    const missing = BUNDLE_SOURCES.filter((s) => /^(apps|packages)\//.test(s) && s !== "apps/cli")
+      .map((s) => pkg(s).name)
+      .filter((name) => !(name in declared));
+    expect(missing).toEqual([]);
   });
 });
