@@ -72,6 +72,7 @@ import {
   strategyById,
 } from "./strategies/index.js";
 import type { IssueRef } from "./strategies/types.js";
+import { writeTempHomeWrapper } from "./temp_home.js";
 import {
   _INPUT_FIELDS,
   _WORKSPACE_CONFIG_NAMES,
@@ -759,6 +760,7 @@ export async function initWorkspace(
   const envPath = path.join(workspaceRoot, ".env");
   seedWorkspaceMetadataEnv(envPath, meta);
   success(`Wrote ${envPath}`);
+  success(`Wrote ${writeTempHomeWrapper(workspaceRoot)}`);
 
   // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
   // beside it — belongs to the workspace's strategy (docs/context-strategies.md).

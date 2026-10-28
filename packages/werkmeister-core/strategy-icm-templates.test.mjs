@@ -92,6 +92,11 @@ test("each template renders with no undefined and a route per stage", async () =
         } else {
           assert.doesNotMatch(c, /git log -S/, `${wt}/${d}`);
         }
+        // SW-124: every test step, and the subagents it briefs, go through the wrapper.
+        if (c.includes("Run the test command")) {
+          assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
+          assert.match(c, /A subagent you brief to run tests/, `${wt}/${d}`);
+        }
       }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });

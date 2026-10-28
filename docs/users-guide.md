@@ -1141,7 +1141,7 @@ The shipped archetypes give `node-tool` (libraries) and `mcp-client` (editor ext
 
 **Where each is used, in order:**
 
-1. **`.werkmeister/werkmeister-context.md`.** The first section, "How to validate", has one row per workspace service: repo, path, test command, validation. Both keys are read from here, not from the registry directly.
+1. **`.werkmeister/werkmeister-context.md`.** The first section, "How to validate", has one row per workspace service: repo, path, test command, validation. Both keys are read from here, not from the registry directly. The test command is prefixed with the workspace's `.werkmeister/bin/with-temp-home`, which `init-workspace` writes: it runs the command with a fresh temporary `HOME` and deletes it on exit, so no test reaches the real `~/.werkmeister`.
 2. **Implement stage (ICM)**, or the test phase in JIT (`w9r-test` and the tester agents):
    - The **test step** runs each touched service's test command exactly as `werkmeister-context.md` states it.
    - The **exercise step** reloads the running code, then checks the change the way the service's validation text says. It records the result in `output/exercise.md` as a `| check | result |` table.

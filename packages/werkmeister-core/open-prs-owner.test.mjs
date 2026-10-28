@@ -1,46 +1,29 @@
 // SW-120: the Open PRs tab searches the configured GitHub org, not a hard-coded
-// owner. `gh` is a shim in a temp HOME's ~/.local/bin, which childEnv() puts first
-// on PATH (a PATH prefix would lose to /usr/local/bin/gh); nothing reaches GitHub.
+// owner. `gh` is withFakeGh's fake, reached through $WERKMEISTER_GH_BIN (SW-148);
+// nothing reaches GitHub.
 
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { runCapture } from "./dist/claude_cli.js";
 import { getOpenPrs } from "./dist/sandbox.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
-async function withShimGh(fn) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "shim-gh-"));
-  const dir = path.join(home, ".local", "bin");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "gh"),
-    `#!/bin/sh
-echo "$*" >> '${dir}/calls'
-case "$1 $2" in
-  "api user") echo octo;;
-  "search prs") echo '[]';;
-esac
-`,
-    { mode: 0o755 },
-  );
-  const prev = process.env.HOME;
-  process.env.HOME = home;
-  try {
-    return await fn(() => fs.readFileSync(path.join(dir, "calls"), "utf8").trim().split("\n"));
-  } finally {
-    process.env.HOME = prev;
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-}
+const callsOf = (bin) =>
+  fs
+    .readFileSync(path.join(path.dirname(bin), "calls"), "utf8")
+    .trim()
+    .split("\n");
 
 test("getOpenPrs searches the configured github_org", async () => {
   await withSandboxHome(
     async () => {
-      await withShimGh(async (calls) => {
+      await withFakeGh({}, async (bin) => {
         await getOpenPrs();
-        const searches = calls().filter((c) => c.startsWith("search prs"));
+        const calls = callsOf(bin);
+        assert.equal(calls[0], "api user --jq .login");
+        const searches = calls.filter((c) => c.startsWith("search prs"));
         assert.equal(searches.length, 2);
         for (const s of searches) {
           assert.match(s, /--owner=acme-corp(\s|$)/);
@@ -54,12 +37,21 @@ test("getOpenPrs searches the configured github_org", async () => {
 
 test("getOpenPrs refuses to search without a known github_org", async () => {
   await withSandboxHome(async () => {
-    await withShimGh(async (calls) => {
+    await withFakeGh({}, async (bin) => {
       await assert.rejects(getOpenPrs(), /overrides\.github_org/);
       assert.deepEqual(
-        calls().filter((c) => c.startsWith("search")),
+        callsOf(bin).filter((c) => c.startsWith("search")),
         [],
       );
     });
+  });
+});
+
+test("runCapture's gh is the fake, which fails closed on a subcommand it doesn't cover", async () => {
+  await withFakeGh({}, async (bin) => {
+    const res = await runCapture("gh", ["repo", "delete", "acme-corp/x"]);
+    assert.equal(res.code, 1);
+    assert.match(res.stderr, /fake gh: unhandled: repo delete/);
+    assert.deepEqual(callsOf(bin), ["repo delete acme-corp/x"]);
   });
 });

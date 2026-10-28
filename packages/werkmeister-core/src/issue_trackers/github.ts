@@ -6,8 +6,8 @@
  * A `status:` label replaces the issue's other `status:` labels, so one is present (SW-27).
  */
 
-import { childEnv } from "../claude_cli.js";
-import { envVar, loadReposConfig } from "../config.js";
+import { childEnv, ghBin } from "../claude_cli.js";
+import { loadReposConfig } from "../config.js";
 import { loadGithubOrg } from "../global_config.js";
 import { runAsync } from "../proc.js";
 import type { Issue, IssueTrackerStrategy, TrackerScope } from "./types.js";
@@ -52,8 +52,7 @@ function split(ref: string): [string, string] {
   return [m[1], m[2]];
 }
 
-/** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake). */
-export const ghBin = () => envVar("GH_BIN") || "gh";
+export { ghBin };
 
 /** `gh` with its stdout; throws with gh's own message on a non-zero exit. */
 async function gh(args: string[]): Promise<string> {

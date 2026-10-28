@@ -48,16 +48,22 @@ export interface Stage {
   contract(v: IcmVars): Contract;
 }
 
+// SW-135: a container that never started has no `pnpm` in /opt/werkmeister-tools until `werkmeister up`
+// bootstraps it, so `docker restart` on it loops on "pnpm: not found".
 const RELOAD_RULE =
-  "Never run `werkmeister up`, `werkmeister restart`, or `werkmeister init-workspace` to reload — " +
+  "If the container is not running, run `werkmeister up` once first; `docker restart` only reloads one that is already running. " +
+  "Never run `werkmeister restart` or `werkmeister init-workspace` to reload — " +
   "they are slower, and init rewrites the stage contracts.";
 
 const IMPLEMENT_STEPS = [
   "Confirm ponytail is active (see `_shared/standards.md`; invoke the skill only if it is not), then read the standards rows above. Restate the rule you are applying beside each edit.",
 ];
 
+// SW-124: one wrapper, so no session or subagent hand-rolls (or forgets) its temp HOME.
 const TEST_STEP =
-  "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it. Redirect output to a file, trust the exit code, read back only the failing slice.";
+  "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it: through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME — never hand-roll `HOME=…`. " +
+  "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
+  "Redirect output to a file, trust the exit code, read back only the failing slice.";
 
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =

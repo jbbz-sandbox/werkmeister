@@ -51,6 +51,7 @@ import {
   loadServices,
   type ServicesConfig,
 } from "./config.js";
+import { tempHomeWrapper } from "./temp_home.js";
 import { readAutonomous, readAutoStop, readModel } from "./workspace_prompts.js";
 
 // Markers doubling as the payload: entries containing them are werkmeister-managed.
@@ -481,18 +482,22 @@ const permissionsRecord = (workspaceRoot: string) =>
 /**
  * Allow rules for each local service's registered test command, then read-only
  * git. Each command gets the container form the agent is told to run, plus the
- * bare command as a prefix. A service with no command gets none.
+ * bare command as a prefix, plus the bare command through *tempHome* (the
+ * form werkmeister-context.md states; never the wrapper alone, which runs anything).
+ * A service with no command gets none.
  */
 export function buildAllowRules(
   feature: string,
   services: string[],
   servicesConfig: ServicesConfig,
   archetypes: ArchetypeRegistry,
+  tempHome = "",
 ): string[] {
   const rules: string[] = [];
   for (const svc of services) {
     const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
     if (cmd) rules.push(`Bash(${containerTestCommand(feature, svc, cmd)})`, `Bash(${cmd}:*)`);
+    if (cmd && tempHome) rules.push(`Bash(${tempHome} ${cmd}:*)`);
   }
   return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
 }
@@ -527,7 +532,13 @@ export function workspaceAllowRules(workspaceRoot: string): string[] {
     .filter(Boolean);
   const rules =
     feature && services.length
-      ? buildAllowRules(feature, services, loadServices(), loadArchetypes())
+      ? buildAllowRules(
+          feature,
+          services,
+          loadServices(),
+          loadArchetypes(),
+          tempHomeWrapper(workspaceRoot),
+        )
       : [...READ_ONLY_GIT_RULES];
   return readAutonomous(workspaceRoot)
     ? [...new Set([...rules, ...autonomousRules(feature, services)])]
