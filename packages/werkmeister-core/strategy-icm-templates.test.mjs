@@ -77,6 +77,21 @@ test("each template renders with no undefined and a route per stage", async () =
         assert.match(claude, new RegExp(`stages/${d}/CONTEXT\\.md`), `${wt}: no route to ${d}`);
         const c = fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8");
         assert.doesNotMatch(c, /undefined/, `${wt}/${d}`);
+        // SW-123: only the two stages that settle decisions carry the name-history step.
+        if (d.endsWith("_research") || d.endsWith("_reproduce")) {
+          assert.match(c, /definition site \(file and line\)/, `${wt}/${d}`);
+          assert.match(c, /`git log -S <name>`/, `${wt}/${d}`);
+          assert.match(c, /list "remove" as an option/, `${wt}/${d}`);
+          assert.match(
+            c,
+            d.endsWith("_research")
+              ? /evidence from steps 1–3 and 5/
+              : /`output\/repro\.md`: steps 1–5/,
+            `${wt}/${d}`,
+          );
+        } else {
+          assert.doesNotMatch(c, /git log -S/, `${wt}/${d}`);
+        }
         // SW-124: every test step, and the subagents it briefs, go through the wrapper.
         if (c.includes("Run the test command")) {
           assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
