@@ -172,7 +172,11 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.match(implement, /rows `comments`, `ponytail`/);
     assert.doesNotMatch(implement, /`ui`/);
-    assert.match(implement, /never run `werkmeister up`/i);
+    // SW-135: a never-started container has no pnpm until `werkmeister up` bootstraps it.
+    assert.match(implement, /not running, run `werkmeister up` once first/);
+    assert.match(implement, /`docker restart` only reloads one that is already running/);
+    assert.match(implement, /never run `werkmeister restart` or `werkmeister init-workspace`/i);
+    assert.doesNotMatch(implement, /never run `werkmeister up`/i);
     for (const f of walk(root)) {
       if (f.endsWith(".md"))
         assert.doesNotMatch(fs.readFileSync(path.join(root, f), "utf8"), /undefined/, f);
