@@ -28,7 +28,8 @@ is `docs/workspace-lifecycle.md` in the werkmeister repo.
    PR file and moves the issue to In Review. Then, in the Claude desktop app, turn on Auto-fix without asking:
    `ccd_pr` `get_status` (`bind_pr` with the URL if the PR isn't bound), then
    `set_monitor` with `auto_fix: true`, `address_comments: true` and the PR's
-   `url`. Never auto-merge. Merging is the person's act.
+   `url`. If `set_monitor` is refused, don't retry: ask the person to turn Auto-fix on
+   from the PR bar. Never auto-merge. Merging is the person's act.
 5. **`werkmeister pr status`** after merge and release: records `merged`, then
    `shipped` with the release tag that contains the merge, and moves the issue
    to Done once every PR has shipped. A review asking for changes, or a PR

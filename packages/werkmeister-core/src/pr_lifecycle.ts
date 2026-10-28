@@ -844,6 +844,8 @@ export async function openPrs(
     writePrFields(f, { status: "open", url, ...(await deps.session(ws)) });
     opened.push(path.relative(ws, f.path));
     lines.push(`${f.stem}: open ${url}`);
+    // The desktop app binds a PR, and lets the session turn on Auto-fix, only for a URL the session reports in this tag.
+    lines.push(`<pr-created>${url}</pr-created>`);
     // Squash and rebase rewrite SHAs, so a blame-ignore entry added here would match nothing on base.
     const ignored = await deps.run("git", [
       "-C",
