@@ -12,6 +12,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import nunjucks from "nunjucks";
 import * as YAML from "yaml";
@@ -953,6 +954,36 @@ export function isFeatureComposeStale(
   } catch {
     return false;
   }
+}
+
+/** Beside compose.yml, so its relative `env_file:` paths resolve the same. */
+export const GATE_COMPOSE_FILE = "compose.gate.yml";
+
+/**
+ * Render *feature*'s compose from *services* (a branch's own registry) into
+ * `<workspace>/compose.gate.yml` and return the services whose entry differs from
+ * compose.yml's: their running containers lack the branch's container settings (SW-118).
+ */
+export function renderGateCompose(
+  feature: string,
+  slot: number,
+  localServices: string[],
+  services: ServicesConfig,
+  workspace: string,
+): string[] {
+  const [outPath, content] = renderFeatureCompose(
+    feature,
+    slot,
+    localServices,
+    { services },
+    workspace,
+    "werkmeister pr gate",
+  );
+  type Doc = { services?: Record<string, unknown> } | null;
+  const gate = (YAML.parse(content) as Doc)?.services ?? {};
+  const current = (YAML.parse(fs.readFileSync(outPath, "utf8")) as Doc)?.services ?? {};
+  fs.writeFileSync(path.join(path.dirname(outPath), GATE_COMPOSE_FILE), content);
+  return Object.keys(gate).filter((s) => !isDeepStrictEqual(gate[s], current[s]));
 }
 
 // ---------------------------------------------------------------------------

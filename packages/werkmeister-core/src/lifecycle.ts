@@ -305,7 +305,8 @@ async function prepareSlot(
  * Start one of *feature*'s services and wait for it, without the rest of `up`
  * (no Caddy, no port-forward check). The PR gate calls this for a repo with no
  * container running (SW-34). *service* may be outside the workspace's services:
- * compose.yml carries those behind the `on-demand` profile.
+ * compose.yml carries those behind the `on-demand` profile. *composeName* is
+ * the gate's own render of a branch's settings (SW-118) when not compose.yml.
  *
  * Throws `INSIDE_OWN_CONTAINER`, `NO_COMPOSE`, `MISSING_SECRETS`, `SLOT_ALLOC`
  * or `COMPOSE_UP_FAILED`.
@@ -314,6 +315,7 @@ export async function startService(
   feature: string,
   workspace: string,
   service: string,
+  composeName: string = COMPOSE_FILE,
 ): Promise<void> {
   refuseInsideOwnContainer(feature, "pr gate");
   migrateWorkspaceCompose(workspace);
@@ -332,7 +334,7 @@ export async function startService(
   await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
   requireSharedNetwork();
   const started = await withStartRecord(workspace, "gate", () =>
-    composeUpServiceAsync(feature, service, composePath),
+    composeUpServiceAsync(feature, service, path.join(workspace, composeName)),
   );
   if (!started) {
     // A timed-out or cancelled up leaves the container Created, never started (SW-86).
