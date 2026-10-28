@@ -1,7 +1,9 @@
 # Proposal: reorganizing Werkmeister's CLI, runtime placement, resource budget, and harness coupling
 
-Status: proposal for discussion. Written 2026-10-28 against commit `07af58b`.
-Nothing in this document is implemented.
+Status: adopted with changes, 2026-10-28 (SW-178). Written against commit `07af58b`,
+checked against `615eaf1`. Sections 0–6 are the proposal as written; section 7 records
+the owner's decisions and section 8 the findings that correct it. Where they disagree,
+7 and 8 win. The work is tracked in epic SW-179. Nothing is implemented yet.
 
 ## How to read this document
 
@@ -582,3 +584,148 @@ Suggested order:
    It can be turned off, but the default has to be chosen.
 6. **Which second harness matters first?** Cursor has the most stable hook
    documentation; Codex has the plugin format closest to Claude Code's.
+
+## 7. Decisions
+
+Made by the owner on 2026-10-28 in SW-178. Section 6's numbering is kept; 7 to 9 were
+added during the spike.
+
+1. **No permanent top-level verbs.** The `w9r` short form gets no alias list. The
+   groups in 1.3 are the grammar; breaking renames are fine.
+2. **Deprecation window:** several minor releases, per the frozen surface rule in
+   `CONVENTIONS.md`. Old spellings warn through the window, then go.
+3. **Agent-in-container stays opt-in** in `setup`. Section 8.2 explains why it cannot
+   be the secure default yet.
+4. **Default budget on a 16 GB laptop:** two features with two services each, measured
+   once the scheduler exists (SW-181).
+5. **Preemption of autonomous runs by a person's session:** on by default, can be
+   turned off.
+6. **Second harness: Codex.** Its hooks accept Claude Code's payloads, deny format and
+   matcher names (8.4). OpenCode was chosen first and then dropped: it has no
+   session-end event and two incompatible plugin lines. Cursor comes later; Gemini CLI
+   is dropped.
+7. **Order:** the one in 8.5, not section 5's. The scheduler does not need the host
+   daemon.
+8. **One verdict per area,** not one for the whole proposal (8.1).
+9. **Where this is recorded:** here, plus a comment on SW-178 that links to it.
+
+## 8. Findings
+
+From the SW-178 spike: every open SW ticket was read, every "what exists" claim was
+checked against `615eaf1`, and the harness claims were rechecked against vendor docs on
+2026-10-28. Of 63 claims about the code, 46 held, 1 had changed since `07af58b` and 15
+were wrong. The ones that change a step are below.
+
+### 8.1 Verdict per area
+
+| Area | Verdict | What changes |
+|---|---|---|
+| 1. CLI | Adopt | No aliases (7.1). Did-you-mean is already on, so that item is dropped. The renames ship a tested `migrate`. |
+| 2. Host daemon | Adopt, changed | Not a security boundary yet (8.2). Hook fast paths stay local. Starts from the existing HTTP server. Locks go async first. |
+| 3. Scheduler | Adopt, changed, moved earlier | File-backed first, no daemon needed. Covers slots, CPU and swap (8.3). |
+| 4. Harness | Adopt, changed | Wider inventory than 4.1. Codex second (7.6). Moves after the daemon. |
+
+The proposal as written fully fixes one open SW ticket out of 45 (SW-138). The steps in
+8.5 take in the ticket clusters it missed: port slots, Claude Desktop Auto-fix, CPU load
+and swap.
+
+### 8.2 Runtime placement (section 2)
+
+- **A per-workspace token is not a boundary.** Every documented isolation shape mounts
+  `~/repos` and `~/features` read-write at host paths (`docs/users-guide.md`, the
+  isolation shapes). As `docs/docker-socket-replacement.md` shows, that alone lets code
+  in a container run on the host, for example by rewriting the CLI's `dist/main.js` or
+  another workspace's settings. A secure default needs a narrower mount plan first.
+- **The HTTP MCP server already has 46 tools**, not "about twenty" (2.4) or "every
+  verb" (0). What has no tool: `clean`, `stats`, `optimize`, `cache`, `registry`.
+- **Hook fast paths stay local.** `hooks gate`, `pr-guard` and `agent-state`
+  (`apps/cli/werkmeister`) read and write workspace files only, never Docker, and run
+  within 200 ms. Only the `stop` that SessionEnd spawns needs forwarding.
+- **The VS Code extension calls core in-process.** Its status poll (5 s), resources
+  (30 s), intercepts and the teardown in `closeOut` forward to the daemon. Log streaming
+  needs a streaming endpoint.
+- **Cannot move to the daemon:** the `workspace` wizard (needs a terminal), `connect`
+  (starts the daemon), `open` (launches a browser), the `claude` terminals and
+  `openFolder` (run in the caller's process and folder).
+- **Locks go async first.** `locks.ts` waits with `Atomics.wait`, and the HTTP server
+  runs `up` in its own process, so two concurrent `up` calls likely deadlock it (not yet
+  reproduced).
+- **Pause does not read `~/.claude/sessions`;** idle-stop and the resume nudge do.
+- **Cost (2.5):** still unmeasured. Today each Claude session runs its own stdio MCP
+  server at 46–85 MB RSS, which suggests one daemon at roughly 50–100 MB that replaces
+  them. SW-184 measures it.
+
+### 8.3 Resource budget (section 3)
+
+- **The scheduler does not need the daemon.** `allocateSlot` already checks for room
+  under a file lock and re-reads state from Docker labels (`slots.ts`), and 3.4 itself
+  says a file-backed scheduler can ship first. This contradicts section 5's first
+  dependency.
+- **Leases are derived from Docker on each read,** as slots are. A process id does not
+  work, because `up` exits once the containers start.
+- **Slots become leases.** The most-filed resource problem is slots (SW-166, 169, 173,
+  174): back-to-back creates share a slot, and the gate re-allocates a slot another
+  workspace holds. 3.2's budget does not cover them.
+- **Admission counts CPU, not memory alone.** The overloads in SW-28 and SW-158 were
+  CPU (load averages of 155 to 308).
+- **Set `memswap_limit` equal to `memory_limit`** (SW-151). Otherwise "the kernel
+  enforces limits" (3.2) is false on hosts with swap.
+- **Builds stay at one at a time.** The build lock exists because turbo names temp files
+  by pid and identical containers get the same pids
+  (`werkmeister-install-startup.sh`, SW-35). Raising it to two (3.3) brings that
+  collision back until the temp naming is fixed.
+- **Confirmed:** `docker info` reports engine memory and CPU; a paused container keeps
+  its memory; a Claude session costs 0.27–0.6 GB.
+
+### 8.4 Harness coupling (section 4)
+
+- **The 4.1 inventory covers core only.** Also Claude-specific: the Agent SDK in
+  `apps/cli` (`detect --assist`), the MCP tools `claude-transcript`, `claude-send`,
+  `claude-turn-status` and `claude-resume`, `refine-prompt`'s `claude -p`, the VS Code
+  extension's `claude --continue` terminals, `mcp__ccd_turn__wrap_up` in
+  `agent_state.ts`, `~/.werkmeister/model-pricing.yaml`, and PR rule 5's dependency on
+  Claude Desktop Auto-fix (SW-160 removes it). "Tests pass unchanged" does not hold once
+  files move.
+- **The daemon needs only a liveness record,** not the whole harness interface. Moving
+  liveness into Werkmeister's files is 2.6 step 3, not "the first step of section 4" as
+  section 5 says.
+- **Codex hooks are settled,** not unsettled: documented, on by default, 12 events, and
+  they accept Claude Code's stdin fields, deny JSON or exit 2, and matcher names. Its
+  plugins bundle hooks. It is the cheapest first hooks adapter.
+- **Gemini CLI has been replaced** by Antigravity CLI (closed source); from 18 June 2026
+  it stopped serving free and Pro/Ultra users.
+- **Cursor is confirmed** and supports more than 4.2 says (session, prompt, tool, stop,
+  MCP and file hooks; reads `.claude/skills`).
+
+### 8.5 Order and tickets
+
+Each step is one ticket under epic SW-179. "Closes" lists the open tickets it should fix.
+
+| Step | Ticket | Blocked by | Closes |
+|---|---|---|---|
+| 1. CLI help: Commander 14, grouped help, help, guide and man pages from one source (1.1–1.2) | SW-180 | — | — |
+| 2. File-backed scheduler with slot leases, CPU admission and the swap cap (3) | SW-181 | — | SW-166, 169, 173, 174, 151; part of SW-28, 158 |
+| 3. Session liveness record in Werkmeister's files (2.6 step 3) | SW-182 | — | — |
+| 4. Async locks in core | SW-183 | — | — |
+| 5. Host daemon and thin client (2) | SW-184 | SW-182, 183 | SW-138; part of SW-164 |
+| 6. Scheduler moves into the daemon (3.4) | SW-185 | SW-181, 183, 184 | — |
+| 7. Noun groups, renames and a tested `migrate` (1.3) | SW-186 | SW-180, 181, 184 | SW-132, 162; part of SW-121, 122, 161 |
+| 8. Harness interface with the Claude adapter (4.4 step 1) | SW-187 | — | part of SW-172 |
+| 9. Generic MCP adapter (4.4 step 2) | SW-188 | SW-184, 187 | — |
+| 10. Codex hooks adapter (4.4 step 3) | SW-189 | SW-187 | — |
+
+SW-160 (`pr watch` wakes the session itself) sits outside the epic but is worth doing
+early: it fixes five Auto-fix tickets and removes a Claude Desktop dependency.
+
+### 8.6 Smaller corrections
+
+- 1.1 says "five spellings" but lists six; the `pr` action string is 355 characters,
+  not 400; `__reference` never appears in `--help`; `claude://` links are only in
+  `register.tsx`.
+- "An agent types `werkmeister up` hundreds of times a day": about 10 a day across
+  seven days of transcripts. `issue`, `pr` and `close-out` are used far more.
+- `docs:check` does not read `__complete`; `docs/docs-sync.md` is stale on this.
+- The architecture doc's "measured numbers" are a worked estimate.
+- The agent-state hook writes its file only when the state changes, and the file carries
+  no session id. `GATE_LINE` reaches autonomous ICM runs only.
+- The table in section 0 has no row for werkmeister-vscode, werkmeister-ui or docs-site.
