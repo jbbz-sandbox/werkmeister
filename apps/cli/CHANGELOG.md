@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.46.0
+
+### Minor Changes
+
+- 9273365: SW-136: `werkmeister config` with no arguments is now read-only — it prints the resolved config (what `--show` printed) and changes nothing. Writing `config.yaml`, `env.sh`, `~/.zshenv` and the Desktop MCP config takes `--write` (the wizard on a TTY, as the bare form ran before) or a value to set (`--repos-root`, `--workspaces-root`). `--show` still works; the `--check` hints now say `werkmeister config --write`.
+
 ## 0.45.0
 
 ## 0.44.4

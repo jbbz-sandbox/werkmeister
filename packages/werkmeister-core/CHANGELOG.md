@@ -1,5 +1,13 @@
 # sandbox-core
 
+## 0.46.0
+
+### Patch Changes
+
+- 9273365: SW-136: `werkmeister config` with no arguments is now read-only — it prints the resolved config (what `--show` printed) and changes nothing. Writing `config.yaml`, `env.sh`, `~/.zshenv` and the Desktop MCP config takes `--write` (the wizard on a TTY, as the bare form ran before) or a value to set (`--repos-root`, `--workspaces-root`). `--show` still works; the `--check` hints now say `werkmeister config --write`.
+- 59b5340: `werkmeister up` leaves a workspace's record branch clean (SW-144). The managed `.gitignore` now ignores compose.yml, compose.gate.yml and the runtime state files (`agent-state.json`, `last-exec`, `starts.json`). `up` adds those rules to an older workspace and untracks a committed compose.yml once. init-workspace seeds `.env` before writing settings, so its allow rules already match what `up` writes.
+- d688847: ▶ Start work no longer dead-ends in auto mode (SW-157): when the pane's own `start_session` call is refused, it drafts a message in the hosting session's prompt box asking its model to make the same call with the same arguments, and the person presses Enter to send it. Run titles from `startArgs()` / `werkmeister start-args` are cut at a word with a trailing `…` instead of mid-word.
+
 ## 0.45.0
 
 ### Minor Changes
