@@ -1,5 +1,16 @@
 # sandbox-core
 
+## 0.47.0
+
+### Minor Changes
+
+- 5556fd4: Workspaces ship a temp-HOME test wrapper (SW-124). `init-workspace` writes `.werkmeister/bin/with-temp-home <cmd…>`, which runs a command with a fresh `mktemp -d` HOME and removes it on exit (keeping corepack's cache, so pnpm isn't re-downloaded). `werkmeister-context.md` states each host test command through it, the allow rules pre-approve the wrapped form, and the ICM test step tells agents, and the subagents they brief, to run every test command through it.
+
+### Patch Changes
+
+- ddf7977: The reload step of generated stage contracts no longer forbids `werkmeister up` outright (SW-135): if the container is not running, the agent runs `werkmeister up` once first, because a never-started container has no `pnpm` and `docker restart` on it loops on "pnpm: not found". `docker restart` is only for reloading a running container. Applies to the feature `03_implement`, bugfix `03_exercise` and refactor `02_implement` contracts of new workspaces.
+- 9b2283a: SW-148: `runCapture("gh", …)` resolves the binary through `WERKMEISTER_GH_BIN`, so `withFakeGh` fakes every core `gh` call and a test can no longer reach the real `gh` past `childEnv()`'s PATH. The fake now covers `api user` and `search prs` and fails closed on any other subcommand.
+
 ## 0.46.0
 
 ### Patch Changes
