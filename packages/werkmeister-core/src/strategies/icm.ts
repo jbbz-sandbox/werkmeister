@@ -18,6 +18,7 @@ import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd } from "../pr_rules.js";
 import { info, success, warn } from "../reporter.js";
+import { RUN_LIMITS } from "../run_start.js";
 import {
   loadStandardsModules,
   repoDirs,
@@ -331,6 +332,7 @@ function renderBrief(ctx: InitContext): string {
   const prompt = (ctx.inputs["starting_prompt"] ?? "").trim();
   const description = (ctx.inputs["description"] ?? "").trim();
   const copy = !!ctx.issue?.fetchedAt;
+  const limits = isTrue(ctx.inputs["autonomous"]) ? ["## Run limits", "", RUN_LIMITS, ""] : [];
   if (!ctx.issue || (!copy && !description && !prompt)) {
     // Unchanged from before the issue copy existed; with no copy yet, still the placeholder --refresh-issue rebuilds.
     return [
@@ -342,6 +344,8 @@ function renderBrief(ctx: InitContext): string {
       "",
       prompt || NO_PROMPT,
       "",
+      // Never on the placeholder: PLACEHOLDER_BRIEF_RE must still match it.
+      ...(prompt ? limits : []),
     ].join("\n");
   }
   return [
@@ -355,6 +359,7 @@ function renderBrief(ctx: InitContext): string {
     ...(description ? [description, ""] : []),
     ...(prompt ? [prompt, ""] : []),
     ...(copy && !description && !prompt ? [READ_ISSUE, ""] : []),
+    ...limits,
   ].join("\n");
 }
 

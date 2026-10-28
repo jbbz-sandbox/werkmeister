@@ -409,6 +409,8 @@ Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` w
   - `--base-url <url>`: --scaffold: ingress URL to target (default: the first feature_router service)
 - `werkmeister starting-prompt`: Print the enclosing workspace's starting_prompt from workspace.yml
   - `--start <dir>`: Directory to search up from (default: cwd)
+- `werkmeister start-args`: Print the start_session arguments (title, model, prompt, background) for the enclosing workspace, as JSON
+  - `--start <dir>`: Directory to search up from (default: cwd)
 - `werkmeister open [feature]`: Open a feature-tagged Chrome window with the X-Feature cookie set (no Playwright)
   - `--url <url>`: Full start URL (overrides --path). Default: the first routed host's homepage.
   - `--path <path>`: Path appended to the first routed host (default: test_path from .werkmeister/workspace.yml, else TEST_PATH from .env, else '/').

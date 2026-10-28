@@ -48,25 +48,9 @@ werkmeister workspace <slug> --issue-id <ref> --repos <repo> \
 - List only the services the ticket says to run (usually none). The gate starts one container per touched repo and stops it (SW-34), so zero services is fine for a code change. Every listed service is a container plus an install and build on `werkmeister up`, so extra ones cost real CPU (SW-28).
 - Batch check each one: the workspace dir holds `.werkmeister/issue.md` and `CLAUDE.md` has a `## Issue` section.
 
-## 5. Add run limits to each autonomous brief — before it starts
+## 5. Start each one in Claude Desktop
 
-`BRIEF.md` is written once and never overwritten, so limits must be in the starting prompt **and** the brief regenerated, while no stage has output yet:
-
-1. Confirm `find stages -path '*/output/*' -type f ! -name .gitkeep` is empty.
-2. `werkmeister init-workspace --starting-prompt "<current starting_prompt + limits>"` (read the current one from the workspace's `workspace.yml`).
-3. `rm BRIEF.md && werkmeister init-workspace`, then confirm the limits appear in `BRIEF.md`.
-
-Limits block (adapt to the ticket):
-- Tests never call the real Jira or GitHub APIs; the tracker is mocked. The only real issue update is the one `werkmeister pr open` makes for this ticket.
-- Never read or write the real `~/.werkmeister`; tests use a temporary HOME.
-- No `npm link`, `npm`/`pnpm install -g`, `npm publish`, `werkmeister proxy-reload`, and no other workspaces.
-- Where the ticket says "to confirm", use it as written unless the code shows a reason to change it, and record each choice in the stage output for PR review.
-
-## 6. Start each one in Claude Desktop
-
-`start_session` with `initiation: "user_asked"`, `cwd` = the workspace dir, `use_worktree: false`, `context: "fresh"`, prompt `start the run` (interactive ones: add "This is an interactive run: check with me at each stage's human check." and the decisions it must ask about). Pass the workspace's model. Start them **one at a time** in one message each preceded by a bold title line; mark a chapter first when starting two or more.
-
-Add to every brief's limits: "Run `werkmeister up` only when the gate needs it, and `werkmeister stop` this workspace's containers right after `werkmeister pr open` succeeds."
+`werkmeister start-args --start <workspace dir>` prints the run's `title`, `model`, `prompt` and `background` as JSON: the same ones the pane's ▶ Start work sends, with the run limits (autonomous) or the interactive line already in `prompt`. An autonomous workspace's `BRIEF.md` carries the same limits from create. Pass them to `start_session` unchanged, with `initiation: "user_asked"`, `cwd` = the workspace dir, `use_worktree: false`, `context: "fresh"`; for an interactive one, append the decisions it must ask about to `prompt`. Start them **one at a time** in one message each preceded by a bold title line; mark a chapter first when starting two or more.
 
 Everything started carries the `focus` label (set at create, or `werkmeister init-workspace --labels focus`), so `/check-in` cycles only this wave.
 
@@ -77,7 +61,6 @@ Everything started carries the `focus` label (set at create, or `werkmeister ini
 | Two tickets that edit the same module in one wave | Rebases and conflicts for every later PR | Split by file overlap (step 3) |
 | Creating workspaces in parallel | Worktree and slot races on the shared source repo | One `werkmeister workspace` at a time |
 | Every service on every workspace | Watchers and parallel installs saturate the host (load 155 with 5 runs) | Only what the ticket says to run; stop after `pr open` |
-| Limits added to `workspace.yml` only | The run reads the stale `BRIEF.md` and stops to ask, or ignores the limits | Regenerate `BRIEF.md` (step 5) |
 | Starting a ticket that waits on an unmerged or unreleased one | Wasted run, or a PR built on stale main | Classify it Blocked |
 | Running headless (`claude-send`) when the person asked for Desktop | Nothing in the sidebar to watch or steer | `start_session` with the workspace `cwd` |
 

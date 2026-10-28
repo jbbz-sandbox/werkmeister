@@ -889,6 +889,131 @@ test("actionsFor groups each container state's buttons, with and without a sessi
   expect(actionsFor(r, display(r, [], NOW), false).work).toEqual(["prs", "issue"]);
 });
 
+test("▶ Start work shows, as the primary, only with no session and nothing in the first stage (SW-153)", () => {
+  const NOW = new Date("2026-10-20T12:00:00Z");
+  const FIRST = { index: 1, total: 4, name: "research" };
+  const NONE = { sessionTitle: null, sessionOrigin: null };
+  const card = (over: Partial<WorkspaceRow>) => {
+    const r = sample(over);
+    const a = actionsFor(r, display(r, [], NOW), true);
+    return [a.primary, a.session];
+  };
+  for (const state of [
+    { state: "up" },
+    { state: "down", running: 0 },
+    { state: "stopped", running: 0 },
+  ] as const)
+    expect(card({ ...state, ...NONE, stage: FIRST })).toEqual(["start", ["start", "new"]]);
+  expect(card({ stage: FIRST })).toEqual(["continue", ["continue", "new"]]);
+  expect(card({ stage: FIRST, session: DESKTOP })[1]).toEqual(["continue", "new", "pin"]);
+  expect(card({ ...NONE, stage: { ...FIRST, index: 2 } })).toEqual(["new", ["new"]]);
+  expect(card({ ...NONE, stage: null })).toEqual(["new", ["new"]]);
+});
+
+/** LIST with `empty` (no session) on its first stage, so its card offers ▶ Start work. */
+const FRESH = {
+  ...LIST,
+  workspaces: LIST.workspaces.map((w) =>
+    w.name === "empty" ? { ...w, stage: { index: 1, total: 4, name: "research" } } : w,
+  ),
+};
+const AUTONOMOUS_ARGS = {
+  title: "SW-1 Do it",
+  model: "sonnet",
+  prompt: "start the run\n\nRun limits:\n- …",
+  background: "Workspace `empty` for SW-1. Read `CLAUDE.md`, then `.werkmeister/issue.md`.",
+};
+const INTERACTIVE_ARGS = {
+  title: "empty",
+  prompt: "start the run\n\nThis is an interactive run: check with me at each stage's human check.",
+  background: "Workspace `empty`. Read `CLAUDE.md`, then `.werkmeister/issue.md`.",
+};
+
+for (const [kind, args] of [
+  ["autonomous", AUTONOMOUS_ARGS],
+  ["interactive", INTERACTIVE_ARGS],
+] as const)
+  test(`▶ Start work passes core's ${kind} start args to start_session in the workspace folder (SW-153)`, async ($, on) => {
+    const w = world(
+      on,
+      stubs({
+        [`${WS}/list-workspaces`]: () => ok(FRESH),
+        [`${WS}/start-args`]: () => ok(args),
+        "ccd_session/start_session": () => ok(undefined, "started local_42"),
+      }),
+    );
+    await openPane($);
+    const ui = await mountPane($);
+    await tap(ui, "start:empty");
+    expect(w.calls.find((c) => c.key === `${WS}/start-args`)?.args).toEqual({ path: "/ws/empty" });
+    expect(w.calls.filter((c) => c.key === "ccd_session/start_session").map((c) => c.args)).toEqual(
+      [
+        {
+          initiation: "user_asked",
+          cwd: "/ws/empty",
+          use_worktree: false,
+          context: "fresh",
+          ...args,
+        },
+      ],
+    );
+    expect(w.toasts).toContain(`Started "${args.title}". ⇆ Open beside on its card opens it.`);
+    await ui.unmount();
+  });
+
+test("no second ▶ Start work while the first is starting (SW-153)", async ($, on) => {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/list-workspaces`]: () => ok(FRESH),
+      [`${WS}/start-args`]: () => ok(INTERACTIVE_ARGS),
+      "ccd_session/start_session": async () => {
+        await gate;
+        return ok(undefined, "started");
+      },
+    }),
+  );
+  await openPane($);
+  const ui = await mountPane($);
+  const first = tap(ui, "start:empty");
+  await w.clock.settle();
+  // While it starts the card draws "working…" in place of its buttons; BUSY drops any other press.
+  expect(await seek(ui, "start:empty")).toBeUndefined();
+  expect((await ui.find({ key: "busy:empty" }))?.text).toBe("working…");
+  await tap(ui, "restart:ab");
+  release();
+  await first;
+  expect(w.calls.filter((c) => c.key === "ccd_session/start_session")).toHaveLength(1);
+  await ui.unmount();
+});
+
+test("a refused ▶ Start work shows the reason and keeps New session (SW-153)", async ($, on) => {
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/list-workspaces`]: () => ok(FRESH),
+      [`${WS}/start-args`]: () => ok(INTERACTIVE_ARGS),
+      "ccd_session/start_session": () => ({
+        content: [{ type: "text", text: "auto mode gave no verdict" }],
+        isError: true,
+      }),
+    }),
+  );
+  await openPane($);
+  const ui = await mountPane($);
+  await tap(ui, "start:empty");
+  expect((await ui.find({ key: "note" }))?.text).toBe(
+    "empty: start refused: auto mode gave no verdict",
+  );
+  expect(w.toasts).toEqual([]);
+  expect(await seek(ui, "new:empty")).toBeDefined();
+  await ui.unmount();
+});
+
 test("Logs and Open feature run their core op for the card's workspace (SW-105)", async ($, on) => {
   const w = world(
     on,

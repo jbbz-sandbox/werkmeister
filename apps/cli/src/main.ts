@@ -371,6 +371,18 @@ const SPECS: CommandSpec[] = [
     namespace: (_args, o) => ({ start: o.start ?? null }),
   },
   {
+    name: "start-args",
+    load: () => import("./commands/start_args.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Print the start_session arguments (title, model, prompt, background) for the enclosing workspace, as JSON",
+        )
+        .option("--start <dir>", "Directory to search up from (default: cwd)");
+    },
+    namespace: (_args, o) => ({ start: o.start ?? null }),
+  },
+  {
     name: "open",
     load: () => import("./commands/open.js"),
     configure: (cmd) => {

@@ -96,6 +96,7 @@ try {
     connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
+    'start-args': () => core.startArgs(args.path),
     'pr-status': async () => ({ command: (await core.refreshPrStatus(args.path)).lines.join('\\n') || 'no PR files' }),
     'pr-watch': () => core.watchPrs({ desktop: true }),
     'close-out': () => core.closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {}),
@@ -814,6 +815,11 @@ export function newSessionLink(path: string): string {
   return `claude://code/new?folder=${encodeURIComponent(path)}&source=services`;
 }
 
+/** ▶ Start work (SW-153): a run nobody has started — no session, and the first stage has no output yet. */
+export function canStart(r: WorkspaceRow): boolean {
+  return !hasSession(r) && r.stage?.index === 1;
+}
+
 /** The infra line: `infra partial · 4 of 5 up · down: caddy`; services not healthy or running are named. */
 export function infraLine(
   i: InfraStatus | null,
@@ -1013,6 +1019,7 @@ export type Action =
   | "pause"
   | "resume"
   | "new"
+  | "start"
   | "continue"
   | "pin"
   | "prs"
@@ -1032,6 +1039,7 @@ const LABEL: Record<Exclude<Action, "continue" | "pin">, string> = {
   pause: "⏸ Pause",
   resume: "▶ Resume",
   new: "＋ New session",
+  start: "▶ Start work",
   prs: "↻ Refresh PRs",
   logs: "Logs",
   feature: "Open feature ↗",
@@ -1058,8 +1066,11 @@ export function actionsFor(r: WorkspaceRow, d: WorkspaceDisplay, canType: boolea
   const live = r.state === "up" || r.state === "partial";
   const shipped = r.lifecycle?.state === "shipped";
   const want: Action = d.primary.action === "close-out" ? "closeout" : d.primary.action;
+  const start = canStart(r);
+  // A fresh run outranks ▶ Up: the run brings its containers up itself at the gate.
   // Continue with no session would resume nothing: New session takes its place.
-  const primary: Action = want === "continue" && !session ? "new" : want;
+  const primary: Action =
+    start && want !== "closeout" ? "start" : want === "continue" && !session ? "new" : want;
   const containers: Action[] =
     r.paused != null
       ? ["resume", "stop", "down"]
@@ -1076,6 +1087,7 @@ export function actionsFor(r: WorkspaceRow, d: WorkspaceDisplay, canType: boolea
     primary,
     session: [
       ...(session ? (["continue"] as const) : []),
+      ...(start ? (["start"] as const) : []),
       "new",
       ...(r.session ? (["pin"] as const) : []),
     ],
@@ -1188,6 +1200,46 @@ async function runAction(
   await tick($);
 }
 
+/**
+ * ▶ Start work: one Desktop session in the workspace folder, with the title, model, prompt and background
+ * werkmeister-core builds (the same ones `werkmeister start-args` prints for next-wave). BUSY drops a second press.
+ */
+async function startWork($: EngineInterface, name: string): Promise<void> {
+  const { value: rows = [] } = await $.state.get(ROWS);
+  const row = rows.find((r) => r.name === name);
+  if (!row) return;
+  await $.state.set(BUSY, name);
+  await $.state.set(NOTE, `${name}: starting the run…`);
+  try {
+    const a = await core<{ title: string; model?: string; prompt: string; background: string }>(
+      $,
+      "start-args",
+      { path: row.path },
+    );
+    const r = await $.mcp.call("ccd_session", "start_session", {
+      initiation: "user_asked",
+      cwd: row.path,
+      use_worktree: false,
+      context: "fresh",
+      ...a,
+    });
+    const text = r.content
+      .map((c) => c.text ?? "")
+      .join(" ")
+      .trim();
+    if (r.isError) await $.state.set(NOTE, `${name}: start refused: ${text}`);
+    else {
+      await $.state.set(NOTE, "");
+      $.ui.toast(`Started "${a.title}". ⇆ Open beside on its card opens it.`);
+    }
+  } catch (err) {
+    await $.state.set(NOTE, (err as Error).message);
+  } finally {
+    await $.state.set(BUSY, "");
+  }
+  await tick($);
+}
+
 /** Every row button lands here. A press while any action runs is ignored, never queued. */
 async function press($: EngineInterface, action: Action, name: string): Promise<void> {
   const { value: busy = "" } = await $.state.get(BUSY);
@@ -1202,6 +1254,8 @@ async function press($: EngineInterface, action: Action, name: string): Promise<
     await $.state.set(REASON, "");
   }
   if (action === "cancel") return;
+
+  if (action === "start") return startWork($, name);
 
   if (action === "new") {
     const { value: rows = [] } = await $.state.get(ROWS);
