@@ -151,6 +151,14 @@ test("init writes the icm layer and nothing of jit's", async () => {
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
       /`stages\/04_propose\/output\/pr-<worktree>\[-<slug>\]\.md`/,
     );
+    const rule5 = fs
+      .readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8")
+      .match(/^5\. .*$/m)[0];
+    assert.match(rule5, /`<pr-created>`/);
+    assert.match(
+      rule5,
+      /If `set_monitor` is refused, don't retry: ask the person .* from the PR bar/,
+    );
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);

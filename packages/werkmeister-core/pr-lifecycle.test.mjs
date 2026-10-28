@@ -652,6 +652,12 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(f.fm.url, "https://github.com/o/app/pull/9");
     assert.equal(f.fm.session, "s-1", "the callback rides on the PR file (#236)");
     assert.equal(f.fm.host_session, "local_h1");
+    assert.equal(
+      r.lines.filter((l) => l === "<pr-created>https://github.com/o/app/pull/9</pr-created>")
+        .length,
+      1,
+      "one marker per opened PR, so the desktop app counts the session as the opener (SW-145)",
+    );
     assert.deepEqual(
       updated,
       ["o/app#7", "Peer Review", "PR opened: https://github.com/o/app/pull/9"],
@@ -676,6 +682,7 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.ok(!d.calls.some((c) => c.startsWith("gh pr create")));
     assert.equal(readPrFiles(bad)[0].fm.status, "approved");
     assert.deepEqual(d.stopped, [], "a failed gate keeps the containers for the fix");
+    assert.ok(!r.lines.some((l) => l.includes("<pr-created>")), "no PR opened, no marker");
   } finally {
     clean(bad);
   }
