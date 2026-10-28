@@ -86,7 +86,9 @@ export async function dockerAvailable() {
  * `issue` as JSON (exit 1 when null), `auth status` exits `auth`, `repo view` exits `repoView`.
  * Like the real repo, `issue edit --add-label` fails for a label not in `labels`;
  * `label create` adds one. `project item-list` prints `{ items }`, `issue list` prints
- * `issues` (for every repo). Every call is a line in `<dir>/calls`.
+ * `issues` (for every repo). `api user` prints `octo`, `search prs` prints `[]`.
+ * Every call is a line in `<dir>/calls`; any other subcommand exits 1, so a code path
+ * the fake doesn't cover fails the test instead of passing on empty output (SW-148).
  */
 export async function withFakeGh(
   { issue = null, auth = 0, repoView = 0, labels = [], items = [], issues = [] } = {},
@@ -110,7 +112,10 @@ case "$1 $2" in
   "repo view") exit ${repoView};;
   "project item-list") cat '${dir}/items.json';;
   "issue list") cat '${dir}/issues.json';;
-  *) exit 0;;
+  "issue close"|"issue comment") ;;
+  "api user") echo octo;;
+  "search prs") echo '[]';;
+  *) echo "fake gh: unhandled: $*" >&2; exit 1;;
 esac
 `,
     { mode: 0o755 },

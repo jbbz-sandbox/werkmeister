@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
+import { envVar } from "./config.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 
 export function stripAnsi(s: string): string {
@@ -46,6 +47,9 @@ export function childEnv(): NodeJS.ProcessEnv {
   return { ...process.env, PATH: merged };
 }
 
+/** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake). */
+export const ghBin = () => envVar("GH_BIN") || "gh";
+
 /**
  * Locate the `claude` CLI, robust to Claude Desktop's minimal PATH. Order:
  * $CLAUDE_BIN → the usual install locations → bare `claude` (resolved against
@@ -68,6 +72,7 @@ export async function resolveClaudeBin(): Promise<string> {
 /**
  * Run a binary, capturing stdout/stderr, with stdin CLOSED so `claude -p`
  * doesn't stall 3s waiting for piped input. Rejects on spawn error or timeout.
+ * `"gh"` resolves through {@link ghBin}: childEnv()'s PATH would beat a test's fake (SW-148).
  */
 export function runCapture(
   bin: string,
@@ -75,7 +80,7 @@ export function runCapture(
   cwd: string = os.homedir(),
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
+    const child = spawn(bin === "gh" ? ghBin() : bin, args, {
       cwd,
       env: childEnv(),
       stdio: ["ignore", "pipe", "pipe"],
