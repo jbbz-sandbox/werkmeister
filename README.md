@@ -129,7 +129,7 @@ dashboard (`apps/werkmeister-dashboard`): the localhost browser page and the MCP
 UI bundles, so on a package install the App tools answer in text.
 
 One caveat if you keep both: `werkmeister_root` is self-derived and last-writer-wins
-in `~/.werkmeister/env.sh`, so whichever CLI you last ran `werkmeister config` from owns
+in `~/.werkmeister/env.sh`, so whichever CLI you last ran `werkmeister config --write` from owns
 that pointer. Pick one per machine.
 
 ### Releasing

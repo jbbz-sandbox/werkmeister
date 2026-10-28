@@ -1,5 +1,5 @@
 /**
- * werkmeister config [--repos-root PATH] [--workspaces-root PATH] [--show] [--check]
+ * werkmeister config [--write] [--repos-root PATH] [--workspaces-root PATH] [--show] [--check]
  *
  * Set up and maintain the machine-global werkmeister configuration
  * (``~/.werkmeister/config.yaml`` — the single source of truth). On write it also
@@ -8,9 +8,9 @@
  * server in ``claude_desktop_config.json`` (the ``werkmeister`` wrapper self-loads
  * env.sh).
  *
- *   werkmeister config                       # interactive wizard (create or edit)
+ *   werkmeister config                       # print resolved config + origins (read-only)
+ *   werkmeister config --write               # interactive wizard (create or edit), then write
  *   werkmeister config --repos-root … …      # non-interactive set
- *   werkmeister config --show                # print resolved config + origins
  *   werkmeister config --check               # validate; nonzero exit on drift
  *
  * Values come only from the YAML at runtime; ``WERKMEISTER_*`` env vars are a derived
@@ -70,14 +70,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       for (const p of problems) {
         console.log(`${Colors.RED}✗ ${p}${Colors.RESET}`);
       }
-      warn("Global config out of date — run `werkmeister config` to converge.");
+      warn("Global config out of date — run `werkmeister config --write` to converge.");
       process.exit(1);
     }
     success("Global werkmeister config is in order.");
     return;
   }
 
-  if (args.show) {
+  // SW-136: the bare form is read-only; writing the machine files takes --write
+  // or a value to set. --show stays as an alias for scripts that pass it.
+  if (args.show || !(args.write || args.repos_root || args.workspaces_root)) {
     show(cfg);
     return;
   }

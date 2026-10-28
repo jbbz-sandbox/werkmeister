@@ -892,6 +892,12 @@ const SPECS: CommandSpec[] = [
             "env.sh and wires up ~/.zshenv and the Desktop MCP config",
         )
         .option(
+          "--write",
+          "Write config.yaml (prompting on a TTY for unset values), regenerate env.sh, " +
+            "and wire up ~/.zshenv and the Desktop MCP config. Without it (or a value " +
+            "to set) the command only prints the config.",
+        )
+        .option(
           "--repos-root <path>",
           "Absolute path to the canonical source-repo clones (non-interactive set).",
         )
@@ -899,10 +905,11 @@ const SPECS: CommandSpec[] = [
           "--workspaces-root <path>",
           "Absolute path to the per-feature worktree workspaces (non-interactive set).",
         )
-        .option("--show", "Print the resolved config and each value's origin, without writing.")
+        .option("--show", "Print the resolved config and each value's origin (the default).")
         .option("--check", "Validate config + derived files; nonzero exit on drift.");
     },
     namespace: (_a, o) => ({
+      write: Boolean(o.write),
       repos_root: o.reposRoot ?? null,
       workspaces_root: o.workspacesRoot ?? null,
       show: Boolean(o.show),

@@ -7,10 +7,10 @@ Tracked concurrency and isolation issues in Werkmeister.
 ## Werkmeister Env Vars in `.zshrc` Are Invisible to Non-Interactive Shells
 
 **Severity:** Moderate (breaks tooling, easy to misdiagnose)
-**Status:** Resolved by tooling — `werkmeister config` writes `~/.zshenv` for you
+**Status:** Resolved by tooling — `werkmeister config --write` writes `~/.zshenv` for you
 **Affects:** Shell setup / installation (`WERKMEISTER_WORKSPACES_ROOT`, `WERKMEISTER_ROOT`)
 
-`werkmeister config` now manages a marked block in `~/.zshenv` that sources
+`werkmeister config --write` manages a marked block in `~/.zshenv` that sources
 `~/.werkmeister/env.sh` (`zshenvPath()` / the managed-block markers in
 `packages/werkmeister-core/src/global_config.ts`), and strips the old hardcoded exports it
 finds there. So a fresh install no longer hits this. The rest of the entry is kept
@@ -310,7 +310,7 @@ needs.
 
 `werkmeister_root` is a single machine-global pointer at one CLI checkout (here,
 `<werkmeister-checkout>/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
-and is what `infraRoot()` resolves from — so **whichever install ran `werkmeister config` last
+and is what `infraRoot()` resolves from — so **whichever install ran `werkmeister config --write` last
 wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
 serving `infra/` out of the other one.
 
