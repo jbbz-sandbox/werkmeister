@@ -54,6 +54,9 @@ importers:
       werkmeister-core:
         specifier: workspace:*
         version: link:../../packages/werkmeister-core
+      werkmeister-mcp:
+        specifier: workspace:*
+        version: link:../werkmeister-mcp
       yaml:
         specifier: ^2.7.0
         version: 2.9.0

@@ -49,6 +49,7 @@
   "optionalDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.288"
   },
+  "//devDependencies": "werkmeister-core and werkmeister-mcp are bundled from source by esbuild.mjs. They are declared only so turbo's hash for `build` covers their sources (SW-131); keep in step with BUNDLE_SOURCES in src/lib/build_freshness.ts.",
   "devDependencies": {
     "@inquirer/prompts": "^8.5.2",
     "@types/node": "^22.13.0",
@@ -60,6 +61,7 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
     "werkmeister-core": "workspace:*",
+    "werkmeister-mcp": "workspace:*",
     "yaml": "^2.7.0"
   }
 }

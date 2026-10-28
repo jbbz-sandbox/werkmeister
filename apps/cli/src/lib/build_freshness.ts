@@ -25,7 +25,7 @@ export const BUILD_STAMP: BuildStamp | undefined =
 export const REBUILD_COMMAND = "pnpm turbo run build --filter=werkmeister";
 
 /** esbuild.mjs's entry points, the workspace package they import, and the lockfile pinning the rest. */
-const BUNDLE_SOURCES = [
+export const BUNDLE_SOURCES = [
   "apps/cli",
   "apps/werkmeister-mcp",
   "packages/werkmeister-core",
