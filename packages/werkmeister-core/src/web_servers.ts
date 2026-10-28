@@ -292,6 +292,28 @@ function portOpen(port: number): Promise<boolean> {
   });
 }
 
+/**
+ * True if the server on *port* can still serve a request (SW-137). A server
+ * whose checkout was deleted keeps its port and PID but answers 400 to every
+ * request: both apps parse JSON bodies before routing or auth, and the parser
+ * loads files from that checkout on demand. A JSON POST to an unrouted path
+ * reaches the parser and nothing else — a working server answers 401 (MCP's
+ * token check) or 404 (dashboard).
+ */
+async function serves(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/__werkmeister-health`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.status !== 400 && res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 /** [running, pid] from the PID file, verified against the live process. */
 export function isRunning(app: WebApp = DASHBOARD): [boolean, number | null] {
   const pid = readPid(app);
@@ -317,7 +339,7 @@ export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> 
     pid,
     port: app.port,
     url: `http://localhost:${app.port}/`,
-    healthy: running && (await portOpen(app.port)),
+    healthy: running && (await serves(app.port)),
   };
 }
 
@@ -327,7 +349,7 @@ export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> 
  * Non-fatal: on any failure it warns and returns false so `werkmeister connect`
  * still finishes bringing up the infra. With `force` it rebuilds and bounces
  * an already-running server (so `werkmeister connect` picks up code changes);
- * without it, an already-running server is left as-is.
+ * without it, an already-running server that still serves is left as-is.
  */
 export async function start(
   app: WebApp = DASHBOARD,
@@ -342,6 +364,13 @@ export async function start(
   if (running && pid === process.pid) {
     success(`${app.label} is this process (pid ${pid}); leaving it running`);
     return true;
+  }
+
+  // A live PID is not a working server: bounce one that can't serve rather
+  // than report it "already running" (SW-137).
+  if (running && !(await serves(app.port))) {
+    info(`${app.label} (pid ${pid}) is not serving on port ${app.port}; restarting it.`);
+    force = true;
   }
 
   let dir = appDir(app);
