@@ -163,6 +163,41 @@ test("moveIssue: an unreadable issue is not moved; a null status does nothing un
   assert.deepEqual(t.updates, [["X-1", { comment: "Abandoned: why" }]]);
 });
 
+test("moveIssue: a failed read is retried once; a second failure says why and how to move it by hand (SW-109)", async () => {
+  let reads = 0;
+  const flaky = {
+    updates: [],
+    fetchIssue: async (_ref, why) => {
+      if (++reads === 1) {
+        why?.push("Jira REST: fetch failed (ECONNRESET)");
+        return null;
+      }
+      return { ref: "X-1", status: "In Progress", statusCategory: "indeterminate" };
+    },
+    updateIssue: async (ref, u) => flaky.updates.push([ref, u]),
+  };
+  assert.equal(
+    await moveIssue(flaky, "X-1", "in_review", JIRA, { comment: "PR opened: u" }),
+    "X-1 → In Review",
+  );
+  assert.equal(reads, 2);
+
+  const down = {
+    fetchIssue: async (_ref, why) => {
+      why?.push("Jira REST /rest/api/2/issue/X-1 → HTTP 503");
+      why?.push("the Atlassian MCP fallback returned no issue");
+      return null;
+    },
+    updateIssue: async () => assert.fail("an unread issue is never moved"),
+  };
+  assert.equal(
+    await moveIssue(down, "X-1", "in_review", JIRA, { comment: "PR opened: u" }),
+    'X-1 not moved to "In Review": could not read its current status ' +
+      "(Jira REST /rest/api/2/issue/X-1 → HTTP 503; the Atlassian MCP fallback returned no issue); " +
+      'move it by hand: werkmeister issue update X-1 --status "In Review" --comment "PR opened: u"',
+  );
+});
+
 test("startIssue: names the first stage without output; no issue, no move", async () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "issue-start-"));
   try {

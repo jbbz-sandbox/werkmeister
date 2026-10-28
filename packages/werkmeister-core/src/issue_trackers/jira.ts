@@ -227,9 +227,12 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
     holds: (ref) => !key || ref.toUpperCase().startsWith(`${key}-`),
     url: jiraBrowseUrl,
 
-    async fetchIssue(ref) {
-      const rest = await fetchIssueRest(ref);
-      return rest ? fromRest(rest) : fetchViaMcp(ref);
+    async fetchIssue(ref, why) {
+      const rest = await fetchIssueRest(ref, why);
+      if (rest) return fromRest(rest);
+      const mcp = await fetchViaMcp(ref);
+      if (!mcp) why?.push("the Atlassian MCP fallback returned no issue");
+      return mcp;
     },
 
     async fetchIssues(refs) {

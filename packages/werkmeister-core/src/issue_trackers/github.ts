@@ -93,14 +93,15 @@ function fromGh(ref: string, i: GhIssue): Issue {
   };
 }
 
-async function view(ref: string, fields: string): Promise<Issue | null> {
+async function view(ref: string, fields: string, why?: string[]): Promise<Issue | null> {
   try {
     const [repo, n] = split(ref);
     return fromGh(
       ref,
       JSON.parse(await gh(["issue", "view", n, "-R", repo, "--json", fields])) as GhIssue,
     );
-  } catch {
+  } catch (e) {
+    why?.push((e as Error).message);
     return null;
   }
 }
@@ -138,7 +139,7 @@ export function githubTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       return m ? `https://github.com/${m[1]}/issues/${m[2]}` : null;
     },
 
-    fetchIssue: (ref) => view(ref, "title,state,body,url,labels,assignees,comments"),
+    fetchIssue: (ref, why) => view(ref, "title,state,body,url,labels,assignees,comments", why),
 
     // ponytail: one `gh issue view` per ref; a GraphQL batch when a dashboard shows dozens.
     async fetchIssues(refs) {

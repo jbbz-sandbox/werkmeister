@@ -259,7 +259,7 @@ A key left out takes its default (table above). The flat keys `issue_progress_st
 
 **Rules.**
 
-- **Forward only.** The issue's position comes from Jira's status category (`new` / `indeterminate` / `done`) and status name, or GitHub's open/closed state and `status:` label: new < in progress < in review < merged < done. A move applies only when it is ahead of that, apart from the two backward moves to `in_progress` above, which never leave done. Re-running init, a stage or `pr open` never drags an issue back. An issue that can't be read is not moved.
+- **Forward only.** The issue's position comes from Jira's status category (`new` / `indeterminate` / `done`) and status name, or GitHub's open/closed state and `status:` label: new < in progress < in review < merged < done. A move applies only when it is ahead of that, apart from the two backward moves to `in_progress` above, which never leave done. Re-running init, a stage or `pr open` never drags an issue back. An issue that can't be read is not moved: the read is tried twice, then the warning line gives each failure (Jira's HTTP status, a network error, the MCP fallback, `gh`'s error) and the `werkmeister issue update <ref> --status … --comment …` command that makes the move by hand (SW-109).
 - **One status label on GitHub.** Adding a `status:` label removes the issue's other `status:` labels, and creates the label if the repo lacks it.
 - **Refusals warn.** No transition, no credentials, a status missing from the workflow: the move prints a warning naming the configured status and, for Jira, the transitions available, and the stage, PR open or close-out carries on.
 

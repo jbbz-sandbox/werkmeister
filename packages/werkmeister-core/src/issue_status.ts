@@ -118,9 +118,16 @@ export async function moveIssue(
       await tracker.updateIssue(ref, { comment: opts.comment });
       return `${ref} commented (no ${point} status configured)`;
     }
-    const issue = await tracker.fetchIssue(ref);
+    const why: string[] = [];
+    // One retry: a failed read during a long `pr open` was transient both times it was seen (SW-109).
+    const issue = (await tracker.fetchIssue(ref, why)) ?? (await tracker.fetchIssue(ref, why));
     // Unread means the position is unknown, and a blind move could drag the issue back.
-    if (!issue) return `${ref} not moved to "${status}": could not read its current status`;
+    if (!issue)
+      return (
+        `${ref} not moved to "${status}": could not read its current status ` +
+        `(${[...new Set(why)].join("; ") || "no reason given"}); move it by hand: ` +
+        `werkmeister issue update ${ref} --status ${JSON.stringify(status)} --comment ${JSON.stringify(opts.comment)}`
+      );
     const pos = issuePosition(issue, statuses);
     if (!(RANK[point] > pos || (opts.back && pos >= 2 && pos < 4))) {
       if (opts.alwaysComment) await tracker.updateIssue(ref, { comment: opts.comment });
