@@ -2011,6 +2011,25 @@ test("newPr: refuses while the worktree's branch is in use, and on bad input (SW
   ]);
 });
 
+test("newPr: a refusal over an open or approved PR file says it may be stale and to run pr status (SW-112)", async () => {
+  const hint = /If it has merged, run werkmeister pr status first to record it\./;
+  for (const status of ["open", "approved"]) {
+    const ws = icmWorkspace({ files: { app: prFile({ status }) } });
+    try {
+      await assert.rejects(newPr(ws, "app", "fix", deps([])), hint, status);
+    } finally {
+      clean(ws);
+    }
+  }
+  // A draft has no PR yet, so there is nothing to have merged.
+  const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
+  try {
+    await assert.rejects(newPr(ws, "app", "fix", deps([])), (e) => !hint.test(e.message));
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gatePrs: a superseded PR file is skipped; a worktree or a file name selects (SW-103)", async () => {
   const ws = icmWorkspace({
     files: { app: prFile({ status: "shipped" }), "app-fix": followUp("approved") },
