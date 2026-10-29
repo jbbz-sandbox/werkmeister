@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.48.0
+
+### Minor Changes
+
+- e73d2b1: `werkmeister pr gate` runs a repo's lint/format command, set by `lint:` in its fragment's `repo:` block, as a `lint` row; a failure blocks `pr open` (SW-133).
+
 ## 0.47.4
 
 ### Patch Changes
