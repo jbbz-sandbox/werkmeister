@@ -1,5 +1,11 @@
 # werkmeister-ui
 
+## 0.5.36
+
+### Patch Changes
+
+- werkmeister-core@0.47.4
+
 ## 0.5.35
 
 ### Patch Changes
