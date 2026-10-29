@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { checkDoc, slug } from "./check-docs.mjs";
+import { checkDoc, isIgnored, slug } from "./check-docs.mjs";
 
 const ctx = {
   cli: {
@@ -102,4 +106,12 @@ test("fails a generated region that docs:gen would rewrite", () => {
     check("<!-- generated:x -->\n\nnpm run k8s-connect\n\n<!-- /generated -->").length,
     1,
   );
+});
+
+test("a gitignored directory counts as ignored even when it was never built", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-docs-"));
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "dist/\n");
+  assert.equal(isIgnored("apps/web/dist", root), true);
+  assert.equal(isIgnored("apps/web/src", root), false);
 });
