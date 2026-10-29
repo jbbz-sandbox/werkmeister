@@ -231,6 +231,18 @@ export function checkAnchors(rel, text, read, exists, report) {
   });
 }
 
+/** Whether git ignores `p`. A directory-only pattern (`dist/`) matches the slash form when the directory isn't built (SW-159). */
+export function isIgnored(p, cwd) {
+  return [p, `${p}/`].some((q) => {
+    try {
+      execFileSync("git", ["check-ignore", "-q", "--no-index", q], { cwd });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** The built CLI's commands and their long flags, hidden ones included. */
 function loadCli() {
   return {
@@ -252,14 +264,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // Judged against tracked files, not the disk, so a build product present on
   // this machine (the generated Caddyfile) can't pass here and fail in CI. A
   // gitignored path is generated, so it can't be checked and is accepted.
-  const ignored = (p) => {
-    try {
-      execFileSync("git", ["check-ignore", "-q", "--no-index", p], { cwd: ROOT });
-      return true;
-    } catch {
-      return false;
-    }
-  };
   const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
     .split("\n")
     .filter(Boolean);
@@ -279,7 +283,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     regions: await loadRegions(),
     exists: (p) => {
       const rel = normalize(p).replace(/\/$/, "");
-      return files.has(rel) || dirs.has(rel) || ignored(rel);
+      return files.has(rel) || dirs.has(rel) || isIgnored(rel, ROOT);
     },
     read: (p) => readFileSync(join(ROOT, p), "utf8"),
   };
