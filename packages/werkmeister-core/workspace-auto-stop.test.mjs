@@ -78,42 +78,36 @@ test("auto_stop missing: no auto-stop hook is written, and a lone managed one go
   assert.deepEqual(readHooks(root).SessionEnd, [AGENT]);
 });
 
-function sessionsDir(sessions) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-sessions-"));
-  for (const [i, s] of sessions.entries())
-    fs.writeFileSync(path.join(dir, `${i}.json`), JSON.stringify(s));
-  fs.writeFileSync(path.join(dir, "garbage.json"), "{not json");
-  return dir;
+/** A workspace whose hooks recorded these session ids (SW-182), plus junk to skip. */
+function workspaceWith(...ids) {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "auto-stop-ws-"));
+  const at = new Date().toISOString();
+  const sessions = Object.fromEntries(ids.map((id) => [id, { status: "idle", at }]));
+  sessions.junk = { status: 7 };
+  fs.mkdirSync(path.join(ws, ".werkmeister"));
+  fs.writeFileSync(path.join(ws, ".werkmeister", "agent-state.json"), JSON.stringify({ sessions }));
+  return ws;
 }
 
-const ROOT = "/ws/demo";
 const idle = (over) =>
   idleStopFeature({
     feature: "demo",
-    workspaceRoot: ROOT,
+    workspaceRoot: "/nonexistent/ws",
     sessionId: "ending",
     reason: "prompt_input_exit",
     entrypoint: "claude-desktop",
-    sessionsDir: sessionsDir([]),
     ...over,
   });
 
 test("--if-idle stops only when no other live session is in the workspace", () => {
-  const live = process.pid;
   assert.equal(idle({}), "demo");
-  // the ending session itself, a dead pid, another folder, a sibling prefix: not "other live"
-  const quiet = sessionsDir([
-    { pid: live, sessionId: "ending", cwd: ROOT },
-    { pid: 2 ** 22 + 7, sessionId: "dead", cwd: ROOT },
-    { pid: live, sessionId: "elsewhere", cwd: "/ws/other" },
-    { pid: live, sessionId: "prefix", cwd: "/ws/demo-2" },
-  ]);
-  assert.equal(idle({ sessionsDir: quiet }), "demo");
-  for (const cwd of [ROOT, path.join(ROOT, "sandbox")]) {
-    const busy = sessionsDir([{ pid: live, sessionId: "other", cwd }]);
-    assert.equal(idle({ sessionsDir: busy }), null, cwd);
-  }
-  assert.equal(idle({ sessionsDir: "/nonexistent/sessions" }), "demo");
+  assert.equal(idle({ workspaceRoot: workspaceWith() }), "demo");
+  assert.equal(
+    idle({ workspaceRoot: workspaceWith("ending") }),
+    "demo",
+    "the ending session itself",
+  );
+  assert.equal(idle({ workspaceRoot: workspaceWith("ending", "other") }), null);
 });
 
 test("--if-idle leaves the feature up when the session carries on or is headless", () => {

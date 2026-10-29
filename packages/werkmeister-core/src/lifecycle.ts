@@ -25,9 +25,15 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
-import { clearPaused, nudgePath, readAgentState, readPaused, writePaused } from "./agent_state.js";
+import {
+  clearPaused,
+  nudgePath,
+  readAgentState,
+  readPaused,
+  readSessions,
+  writePaused,
+} from "./agent_state.js";
 import { ensureSharedNetwork, isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
 import {
@@ -473,68 +479,35 @@ export interface IdleStopInput {
   reason: string | null;
   /** `CLAUDE_CODE_ENTRYPOINT` (undocumented; `sdk-*` for `claude -p` and SDK runs). */
   entrypoint: string | null;
-  sessionsDir?: string;
 }
 
 // `/clear` and `/resume` end a session but the same process carries on in the next one.
 const _CONTINUING_REASONS = new Set(["clear", "resume"]);
 
-/** A running Claude Code session, as its `~/.claude/sessions/` file describes it. */
+/** An open harness session in a workspace, from the hooks' liveness record (SW-182). */
 export interface LiveSession {
-  pid: number;
-  sessionId: string | null;
-  /** `busy` / `idle`; null when the file has no status. */
-  status: string | null;
-  /** Epoch ms of the last status change, or null. */
-  statusUpdatedAt: number | null;
+  sessionId: string;
+  status: "busy" | "idle";
+  /** Epoch ms of the last status change. */
+  statusUpdatedAt: number;
 }
 
-/**
- * The Claude Code sessions whose cwd is in *workspaceRoot*. Claude Code keeps one
- * file per running session in `~/.claude/sessions/` "to detect concurrent
- * sessions"; its fields are undocumented, so an unreadable file counts as no
- * session, and a crash leftover is dropped by the pid check.
- */
-export function liveSessions(
-  workspaceRoot: string,
-  sessionsDir = path.join(os.homedir(), ".claude", "sessions"),
-): LiveSession[] {
-  let names: string[];
-  try {
-    names = fs.readdirSync(sessionsDir).filter((n) => n.endsWith(".json"));
-  } catch {
-    return [];
-  }
-  const sessions: LiveSession[] = [];
-  for (const name of names) {
-    try {
-      const s = JSON.parse(fs.readFileSync(path.join(sessionsDir, name), "utf8"));
-      const cwd = String(s.cwd ?? "");
-      const inWorkspace = cwd === workspaceRoot || cwd.startsWith(workspaceRoot + path.sep);
-      if (!inWorkspace || !Number.isInteger(s.pid)) continue;
-      process.kill(s.pid, 0);
-      sessions.push({
-        pid: s.pid,
-        sessionId: typeof s.sessionId === "string" ? s.sessionId : null,
-        status: typeof s.status === "string" ? s.status : null,
-        statusUpdatedAt: Number.isFinite(s.statusUpdatedAt) ? s.statusUpdatedAt : null,
-      });
-    } catch {
-      // unparseable, or the pid is gone
-    }
-  }
-  return sessions;
+// ponytail: a crash never sends SessionEnd, so a record with no status change for a
+// day counts as gone; a heartbeat if a longer silent turn or idle session misreads.
+const STALE_SESSION_MS = 24 * 60 * 60_000;
+
+/** The open sessions in *workspaceRoot*, as Werkmeister's hooks recorded them. */
+export function liveSessions(workspaceRoot: string, now = Date.now()): LiveSession[] {
+  return Object.entries(readSessions(workspaceRoot))
+    .map(([sessionId, s]) => ({ sessionId, status: s.status, statusUpdatedAt: Date.parse(s.at) }))
+    .filter((s) => now - s.statusUpdatedAt < STALE_SESSION_MS);
 }
 
-/** Pids of the sessions in *workspaceRoot* other than *sessionId*. */
-export function otherLiveSessions(
-  workspaceRoot: string,
-  sessionId: string | null,
-  sessionsDir?: string,
-): number[] {
-  return liveSessions(workspaceRoot, sessionsDir)
-    .filter((s) => s.sessionId !== sessionId)
-    .map((s) => s.pid);
+/** Ids of the sessions in *workspaceRoot* other than *sessionId*. */
+export function otherLiveSessions(workspaceRoot: string, sessionId: string | null): string[] {
+  return liveSessions(workspaceRoot)
+    .map((s) => s.sessionId)
+    .filter((id) => id !== sessionId);
 }
 
 /** A feature with running containers, from their compose labels. */
@@ -630,7 +603,6 @@ export interface StopIdleOptions {
   /** Only this feature. */
   only?: string;
   now?: number;
-  sessionsDir?: string;
   run?: (cmd: string[]) => RunResult;
   stop?: (feature: string) => Promise<unknown>;
 }
@@ -649,11 +621,12 @@ export async function stopIdle(
   if (!found) return { ok: true, lines: ["docker unavailable — nothing reaped"] };
   const running = found.filter((f) => !opts.only || f.feature === opts.only);
   if (!running.length) return { ok: true, lines: ["no running feature containers"] };
+  const now = opts.now ?? Date.now();
   const input: IdleInput = {
     minutes,
-    now: opts.now ?? Date.now(),
+    now,
     running,
-    sessions: (ws) => liveSessions(ws, opts.sessionsDir),
+    sessions: (ws) => liveSessions(ws, now),
     lastExec: (ws) => mtimeMs(lastExecMarker(ws)),
   };
   const cutoff = input.now - minutes * 60_000;
@@ -686,12 +659,12 @@ export async function stopIdle(
  * `infra`: it is shared by every workspace.
  */
 export function idleStopFeature(input: IdleStopInput): string | null {
-  const { feature, workspaceRoot, sessionId, reason, entrypoint, sessionsDir } = input;
+  const { feature, workspaceRoot, sessionId, reason, entrypoint } = input;
   if (!feature || feature === "infra") return null;
   if (reason && _CONTINUING_REASONS.has(reason)) return null;
   // A headless turn ends its "session" every turn; the next turn needs the containers.
   if (entrypoint?.startsWith("sdk")) return null;
-  if (otherLiveSessions(workspaceRoot, sessionId, sessionsDir).length) return null;
+  if (otherLiveSessions(workspaceRoot, sessionId).length) return null;
   return feature;
 }
 

@@ -1,5 +1,5 @@
 // The idle reaper (SW-39): `werkmeister stop --idle <minutes>` and the `watchPrs` pass.
-// Docker and the sessions dir are stubbed; nothing here reads ~/.claude or a real daemon.
+// Docker is stubbed, sessions come from temp workspaces; no ~/.claude, no real daemon.
 
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -15,11 +15,12 @@ const NOW = Date.parse("2026-10-19T12:00:00Z");
 const MIN = 60_000;
 const WS = "/ws/demo";
 
-function sessionsDir(entries) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "idle-sessions-"));
-  for (const [i, e] of entries.entries())
-    fs.writeFileSync(path.join(dir, `${i}.json`), JSON.stringify(e));
-  return dir;
+/** A temp workspace whose hooks recorded *sessions* (SW-182). */
+function workspaceWith(sessions) {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "idle-ws-"));
+  fs.mkdirSync(path.join(ws, ".werkmeister"));
+  fs.writeFileSync(path.join(ws, ".werkmeister", "agent-state.json"), JSON.stringify({ sessions }));
+  return ws;
 }
 
 const input = (over = {}) => ({
@@ -55,23 +56,19 @@ test("idleFeatures: an open session idle past the cutoff does not block (D3), an
   assert.deepEqual(idleFeatures(input(infra)), []);
 });
 
-test("liveSessions: live sessions in the workspace with their status; dead pids, other folders and prefixes dropped", () => {
-  const live = process.pid;
-  const dir = sessionsDir([
-    {
-      pid: live,
-      sessionId: "a",
-      cwd: path.join(WS, "sandbox"),
-      status: "idle",
-      statusUpdatedAt: 5,
-    },
-    { pid: 2 ** 22 + 7, sessionId: "dead", cwd: WS, status: "busy" },
-    { pid: live, sessionId: "other", cwd: "/ws/other", status: "busy" },
-    { pid: live, sessionId: "prefix", cwd: "/ws/demo-2", status: "busy" },
+test("liveSessions: the hooks' record with each status; a day-old record and junk dropped", () => {
+  const at = (ms) => new Date(ms).toISOString();
+  const ws = workspaceWith({
+    a: { status: "idle", at: at(NOW - 5 * MIN) },
+    b: { status: "busy", at: at(NOW - 23 * 60 * MIN) },
+    crashed: { status: "busy", at: at(NOW - 25 * 60 * MIN) },
+    junk: { status: "asleep", at: at(NOW) },
+  });
+  assert.deepEqual(liveSessions(ws, NOW), [
+    { sessionId: "a", status: "idle", statusUpdatedAt: NOW - 5 * MIN },
+    { sessionId: "b", status: "busy", statusUpdatedAt: NOW - 23 * 60 * MIN },
   ]);
-  assert.deepEqual(liveSessions(WS, dir), [
-    { pid: live, sessionId: "a", status: "idle", statusUpdatedAt: 5 },
-  ]);
+  assert.deepEqual(liveSessions("/nonexistent/ws", NOW), []);
 });
 
 /** A docker stub: `ps -q` lists the ids, `inspect` prints one tab line per container. */
@@ -86,23 +83,24 @@ function docker(rows) {
 }
 
 test("stopIdle: stops the idle feature, keeps the active one, one line each; only limits it", async () => {
-  const busyWs = fs.mkdtempSync(path.join(os.tmpdir(), "idle-busy-"));
+  const busyWs = workspaceWith({
+    s1: { status: "busy", at: new Date(NOW - 60 * MIN).toISOString() },
+  });
   const run = docker([
     ["demo", WS, new Date(NOW - 60 * MIN).toISOString()],
     ["demo", WS, new Date(NOW - 50 * MIN).toISOString()],
     ["busy", busyWs, new Date(NOW - 60 * MIN).toISOString()],
   ]);
-  const sessions = sessionsDir([{ pid: process.pid, cwd: busyWs, status: "busy" }]);
   const stopped = [];
   const stop = async (f) => stopped.push(f);
-  const r = await stopIdle(30, { now: NOW, run, sessionsDir: sessions, stop });
+  const r = await stopIdle(30, { now: NOW, run, stop });
   assert.deepEqual(r, {
     ok: true,
     lines: ["demo: stopped (idle ≥ 30 min)", "busy: kept (session active)"],
   });
   assert.deepEqual(stopped, ["demo"]);
 
-  const only = await stopIdle(30, { now: NOW, run, sessionsDir: sessions, stop, only: "busy" });
+  const only = await stopIdle(30, { now: NOW, run, stop, only: "busy" });
   assert.deepEqual(only.lines, ["busy: kept (session active)"]);
 });
 
@@ -113,7 +111,6 @@ test("stopIdle: a recent gate exec marker keeps the feature", async () => {
   const run = docker([["demo", ws, new Date(Date.now() - 60 * MIN).toISOString()]]);
   const r = await stopIdle(30, {
     run,
-    sessionsDir: sessionsDir([]),
     stop: async () => assert.fail(),
   });
   assert.deepEqual(r.lines, ["demo: kept (gate ran < 30 min ago)"]);
@@ -124,7 +121,6 @@ test("stopIdle: a failed stop is reported and not ok; no containers and no docke
   const failed = await stopIdle(30, {
     now: NOW,
     run,
-    sessionsDir: sessionsDir([]),
     stop: async () => {
       throw new Error("compose said no");
     },
@@ -155,7 +151,7 @@ test("stopIdle: finds containers under either label set (SW-93), inspecting each
     }
     return { status: 0, stdout: "", stderr: "" };
   };
-  await stopIdle(30, { now: NOW, run, sessionsDir: sessionsDir([]), stop: async () => {} });
+  await stopIdle(30, { now: NOW, run, stop: async () => {} });
   const inspect = calls.find((c) => c[1] === "inspect");
   assert.deepEqual(inspect.slice(4), ["new", "both", "old"]);
   assert.match(
