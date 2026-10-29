@@ -311,11 +311,14 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   }
   if (!stateChanged && !sessionsChanged) return null;
 
-  const body: Partial<AgentStateFile> & { sessions?: Record<string, SessionRecord> } = stateChanged
-    ? { state: next!.state, at: now.toISOString() }
-    : { ...current };
-  if (stateChanged && next!.question) body.question = next!.question;
-  if (stateChanged && next!.via) body.via = next!.via;
+  let body: Partial<AgentStateFile> & { sessions?: Record<string, SessionRecord> } = {
+    ...current,
+  };
+  if (stateChanged && next) {
+    body = { state: next.state, at: now.toISOString() };
+    if (next.question) body.question = next.question;
+    if (next.via) body.via = next.via;
+  }
   if (Object.keys(sessions).length) body.sessions = sessions;
   // ponytail: read-modify-write with no lock, so two sessions' hooks in the same
   // millisecond can drop one's change; a file lock if that shows up.
