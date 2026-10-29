@@ -10,7 +10,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COMPOSE_FILE } from "werkmeister-core/compose_file";
-import { SESSION_START_COMMAND } from "werkmeister-core/hooks_gen";
+import type { HookEntry } from "werkmeister-core/hooks_gen";
+import { AGENT_STATE_COMMAND, SESSION_START_COMMAND } from "werkmeister-core/hooks_gen";
 import type { Reporter } from "werkmeister-core/reporter";
 import { withReporter } from "werkmeister-core/reporter";
 
@@ -77,7 +78,9 @@ describe("lifecycle.up", () => {
     const settings = JSON.parse(
       fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
     );
-    expect(settings.hooks.SessionStart).toHaveLength(1);
-    expect(settings.hooks.SessionStart[0].hooks[0].command).toBe(SESSION_START_COMMAND);
+    expect(settings.hooks.SessionStart.map((e: HookEntry) => e.hooks[0].command)).toEqual([
+      SESSION_START_COMMAND,
+      AGENT_STATE_COMMAND,
+    ]);
   });
 });

@@ -122,7 +122,6 @@ const { claimResumeNudge, resumeAndNudge } = await import("./dist/sandbox.js");
 const { readPaused, writePaused, RESUME_NUDGE } = await import("./dist/agent_state.js");
 
 const nudgeFile = path.join(dot, "resume-nudge.json");
-const sessionsDir = path.join(home, ".claude", "sessions");
 const readLog = () => (fs.existsSync(claudeLog) ? fs.readFileSync(claudeLog, "utf8") : "");
 
 after(() => {
@@ -137,7 +136,6 @@ beforeEach(() => {
   reply = {};
   for (const f of [pausedFile, nudgeFile, claudeLog, path.join(dot, "agent-state.json")])
     fs.rmSync(f, { force: true });
-  fs.rmSync(sessionsDir, { recursive: true, force: true });
 });
 
 test("pause freezes exactly the running containers, dependents first, after writing the record", async () => {
@@ -236,10 +234,9 @@ test("resumeAndNudge: with no live session, continue goes headless", async () =>
 
 test("resumeAndNudge: a live session gets a pending nudge, claimed once", async () => {
   paused(true);
-  fs.mkdirSync(sessionsDir, { recursive: true });
   fs.writeFileSync(
-    path.join(sessionsDir, "1.json"),
-    JSON.stringify({ pid: process.pid, sessionId: "s-1", cwd: ws, status: "idle" }),
+    path.join(dot, "agent-state.json"),
+    JSON.stringify({ sessions: { "s-1": { status: "idle", at: new Date().toISOString() } } }),
   );
   assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "pending");
   assert.equal(readLog(), "", "no second claude on a live transcript");

@@ -33,20 +33,61 @@ const WRAP_UP = "mcp__ccd_turn__wrap_up";
 // idle_prompt repeats a Stop that already happened; auth_success needs nothing.
 const BLOCKING_NOTIFICATIONS = new Set(["permission_prompt", "elicitation_dialog"]);
 
+/**
+ * One open harness session, under `sessions.<session id>` in the same file (SW-182):
+ * what idle-stop and the resume nudge read instead of Claude Code's own session files.
+ * `at` is when `status` began.
+ */
+export interface SessionRecord {
+  status: "busy" | "idle";
+  at: string;
+}
+
 const stateFile = (root: string) => path.join(dotDir(root), "agent-state.json");
 
-/** The recorded state, or null when there is none or it doesn't parse. */
-export function readAgentState(root: string): AgentStateFile | null {
+function readRaw(root: string): Record<string, any> | null {
   try {
     const o = JSON.parse(fs.readFileSync(stateFile(root), "utf8"));
-    if (!STATES.has(o?.state) || typeof o.at !== "string") return null;
-    const file: AgentStateFile = { state: o.state, at: o.at };
-    if (typeof o.question === "string") file.question = o.question;
-    if (o.via === "wrap_up") file.via = "wrap_up";
-    return file;
+    return o && typeof o === "object" && !Array.isArray(o) ? o : null;
   } catch {
     return null;
   }
+}
+
+function stateOf(o: Record<string, any> | null): AgentStateFile | null {
+  if (!STATES.has(o?.state) || typeof o?.at !== "string") return null;
+  const file: AgentStateFile = { state: o.state, at: o.at };
+  if (typeof o.question === "string") file.question = o.question;
+  if (o.via === "wrap_up") file.via = "wrap_up";
+  return file;
+}
+
+function sessionsOf(o: Record<string, any> | null): Record<string, SessionRecord> {
+  const sessions: Record<string, SessionRecord> = {};
+  for (const [id, s] of Object.entries(o?.sessions ?? {}) as [string, any][])
+    if ((s?.status === "busy" || s?.status === "idle") && typeof s.at === "string")
+      sessions[id] = { status: s.status, at: s.at };
+  return sessions;
+}
+
+/** The recorded state, or null when there is none or it doesn't parse. */
+export function readAgentState(root: string): AgentStateFile | null {
+  return stateOf(readRaw(root));
+}
+
+/** The workspace's open sessions by id; empty when there are none or the file doesn't parse. */
+export function readSessions(root: string): Record<string, SessionRecord> {
+  return sessionsOf(readRaw(root));
+}
+
+// Claude Code's own busy/idle: busy from the prompt until Stop.
+const BUSY_EVENTS = new Set(["UserPromptSubmit", "PreToolUse", "PostToolUse"]);
+
+/** The session's status after *event*: null removes it, undefined leaves it as it is. */
+function nextSessionStatus(event: unknown): SessionRecord["status"] | null | undefined {
+  if (event === "SessionEnd") return null;
+  if (event === "SessionStart" || event === "Stop") return "idle";
+  return BUSY_EVENTS.has(event as string) ? "busy" : undefined;
 }
 
 /**
@@ -244,19 +285,43 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
 export function record(input: Record<string, any>, now = new Date()): string | null {
   const root = findRecordRoot(String(input["cwd"] || process.cwd()));
   if (!root) return null;
-  const current = readAgentState(root);
+  const raw = readRaw(root);
+  const current = stateOf(raw);
   const next = nextState(input, current);
-  if (!next) return null;
-  if (
-    current &&
-    current.state === next.state &&
-    current.question === next.question &&
-    current.via === next.via
-  )
-    return null;
-  const body: AgentStateFile = { state: next.state, at: now.toISOString() };
-  if (next.question) body.question = next.question;
-  if (next.via) body.via = next.via;
+  const stateChanged =
+    next !== null &&
+    !(
+      current &&
+      current.state === next.state &&
+      current.question === next.question &&
+      current.via === next.via
+    );
+
+  const sessions = sessionsOf(raw);
+  const id = input["session_id"];
+  const status =
+    typeof id === "string" && id ? nextSessionStatus(input["hook_event_name"]) : undefined;
+  let sessionsChanged = false;
+  if (status === null && id in sessions) {
+    delete sessions[id];
+    sessionsChanged = true;
+  } else if (status && sessions[id]?.status !== status) {
+    sessions[id] = { status, at: now.toISOString() };
+    sessionsChanged = true;
+  }
+  if (!stateChanged && !sessionsChanged) return null;
+
+  let body: Partial<AgentStateFile> & { sessions?: Record<string, SessionRecord> } = {
+    ...current,
+  };
+  if (stateChanged && next) {
+    body = { state: next.state, at: now.toISOString() };
+    if (next.question) body.question = next.question;
+    if (next.via) body.via = next.via;
+  }
+  if (Object.keys(sessions).length) body.sessions = sessions;
+  // ponytail: read-modify-write with no lock, so two sessions' hooks in the same
+  // millisecond can drop one's change; a file lock if that shows up.
   const file = stateFile(root);
   writeAtomic(file, body);
   return file;

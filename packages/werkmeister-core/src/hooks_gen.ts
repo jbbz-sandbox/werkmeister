@@ -18,9 +18,10 @@
  * - SessionEnd: `werkmeister stop --if-idle` stops the workspace's feature when the
  *   session ends and no other is open there (#231). Only while `auto_stop` is
  *   on (`writeAutoStopHook`, every strategy); turning it off removes the entry.
- * - UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop, SessionEnd:
- *   `werkmeister hooks agent-state` records working / needs-you / done in
- *   `.werkmeister/agent-state.json` for the pane and dashboard (SW-46). Every
+ * - SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop,
+ *   SessionEnd: `werkmeister hooks agent-state` records working / needs-you / done in
+ *   `.werkmeister/agent-state.json` for the pane and dashboard (SW-46), and each
+ *   session's busy / idle for idle-stop and the resume nudge (SW-182). Every
  *   strategy (`writeAgentStateHooks`); the event name arrives on stdin.
  *   While `paused.json` exists the same hook blocks every tool call and prompt
  *   (SW-70), so existing workspaces get the pause gate with no settings rewrite.
@@ -82,8 +83,9 @@ export const PR_GUARD_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_PR
 export const SESSION_END_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_AUTO_STOP_MARKER} >/dev/null 2>&1 || true`;
 export const AGENT_STATE_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_AGENT_STATE_MARKER} || true`;
 
-/** The events whose hooks tell working, needs-you and done apart (agent_state.ts `nextState`). */
+/** The events agent_state.ts needs: working / needs-you / done, and session start and end. */
 export const AGENT_STATE_EVENTS = [
+  "SessionStart",
   "UserPromptSubmit",
   "PreToolUse",
   "PostToolUse",

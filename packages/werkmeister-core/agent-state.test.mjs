@@ -207,6 +207,38 @@ test("hooks: outside a workspace, or on junk input, nothing is written", () => {
   assert.equal(readAgentState(dir), null);
 });
 
+// SW-182: the liveness record idle-stop and the resume nudge read, not Claude's session files.
+const { readSessions } = await import("./dist/agent_state.js");
+
+test("hooks: each session id gets a busy/idle record beside the state; SessionEnd drops it", () => {
+  const dir = workspace("i-sessions", null);
+  const fire = (event, session_id, now) =>
+    record({ hook_event_name: event, cwd: dir, session_id }, now);
+  const t0 = new Date("2026-10-29T10:00:00Z");
+  const t1 = new Date("2026-10-29T10:05:00Z");
+
+  fire("SessionStart", "a", t0);
+  assert.deepEqual(readSessions(dir), { a: { status: "idle", at: t0.toISOString() } });
+  assert.equal(readAgentState(dir), null, "a session start alone is no agent state");
+  fire("UserPromptSubmit", "a", t1);
+  assert.equal(fire("PreToolUse", "a", new Date()), null, "still busy: no rewrite");
+  fire("PreToolUse", "b", t1);
+  assert.deepEqual(readSessions(dir), {
+    a: { status: "busy", at: t1.toISOString() },
+    b: { status: "busy", at: t1.toISOString() },
+  });
+  assert.deepEqual(readAgentState(dir), { state: "working", at: t1.toISOString() });
+
+  fire("Stop", "a", t1);
+  assert.equal(readSessions(dir).a.status, "idle");
+  fire("SessionEnd", "b", t1);
+  assert.deepEqual(Object.keys(readSessions(dir)), ["a"]);
+  fire("Notification", "a", t1);
+  assert.equal(readSessions(dir).a.status, "idle", "a notification is no status change");
+  fire("Stop", undefined, t1);
+  assert.deepEqual(Object.keys(readSessions(dir)), ["a"], "no session id: no record");
+});
+
 // SW-70: while `paused.json` exists the same hook holds the session.
 const { pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import("./dist/agent_state.js");
 
