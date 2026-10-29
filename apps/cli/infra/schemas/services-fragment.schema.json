@@ -42,6 +42,10 @@
           "type": "string",
           "description": "Pre-PR gate command, run from the repo root in a service container; non-zero means this branch would not produce a release (e.g. `npx changeset status --since=origin/main`)."
         },
+        "lint": {
+          "type": "string",
+          "description": "Pre-PR gate lint/format command, run from the repo root in a service container for every PR from this repo, so a format error fails locally instead of in CI; non-zero fails the gate (e.g. `pnpm exec biome ci .`)."
+        },
         "no_service_paths": {
           "type": "array",
           "items": { "type": "string" },

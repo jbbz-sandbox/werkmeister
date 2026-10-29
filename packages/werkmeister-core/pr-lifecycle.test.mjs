@@ -19,6 +19,7 @@ import {
   claimCallbacks,
   closeOut,
   deliverHeadless,
+  formatGate,
   gatePrs,
   lifecycleOf,
   mapTouched,
@@ -374,6 +375,54 @@ test("gate: a failing release check fails unless skip_release gives a reason", a
     assert.deepEqual(failed(await gate(skipped, deps([DIFF_API, noChangeset]))), []);
   } finally {
     clean(skipped);
+  }
+});
+
+const WITH_LINT = {
+  repos: { app: { ...REGISTRY.repos.app, lint: "pnpm exec biome ci ." } },
+};
+
+test("gate: a repo's lint command runs and passes with its row (SW-133)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API], WITH_LINT);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.ok(d.calls.includes("docker exec feat-api sh -c pnpm exec biome ci ."));
+    assert.equal(
+      formatGate("app", g).find((l) => l.includes("lint:")),
+      "  ✓ lint: pnpm exec biome ci . → exit 0",
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a failing lint fails the gate and blocks pr open (SW-133)", async () => {
+  const lintError = [/biome ci/, { code: 1, stderr: "packages/x.ts format ━━━━\nFound 1 error." }];
+  const ws = icmWorkspace();
+  try {
+    const g = await gate(ws, deps([DIFF_API, lintError], WITH_LINT));
+    assert.deepEqual(failed(g), ["lint"]);
+    assert.match(g.checks.find((c) => c.name === "lint").detail, /exit 1\n.*\nFound 1 error\./);
+    const d = deps([DIFF_API, lintError], WITH_LINT);
+    const r = await open(ws, d);
+    assert.equal(r.ok, false);
+    assert.ok(!d.calls.some((c) => c.startsWith("gh pr create")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a repo without lint has no lint row and runs no lint (SW-133)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API]);
+    const g = await gate(ws, d);
+    assert.ok(!g.checks.some((c) => c.name === "lint"));
+    assert.ok(!d.calls.some((c) => c.includes("biome")));
+  } finally {
+    clean(ws);
   }
 });
 

@@ -546,6 +546,8 @@ export interface RepoEntry {
   /** Read by pr_lifecycle.ts: `ship: tag` runs `release_check` in the repo's container. */
   ship?: string;
   release_check?: string;
+  /** Read by pr_lifecycle.ts: the gate runs it in the repo's container for every PR (SW-133). */
+  lint?: string;
   [key: string]: unknown;
 }
 

@@ -574,6 +574,7 @@ async function gateChecks(
   const repoServices = (repo["services"] ?? []) as string[];
   const needsContainer =
     releaseRuns ||
+    Boolean(repo["lint"]) ||
     touched.some((s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes));
   if (needsContainer && !repoServices.some(containerFor)) {
     // A branch id maps to the compose id that owns the same path.
@@ -612,6 +613,22 @@ async function gateChecks(
       } catch (e) {
         add(`start ${pick}`, false, e instanceof Error ? e.message : String(e));
       }
+    }
+  }
+
+  const repoContainer = () =>
+    touched.map(containerFor).find(Boolean) ?? containerFor(repoServices[0] ?? "");
+  if (repo["lint"]) {
+    const container = repoContainer();
+    if (!container) add("lint", false, "no running container for this repo — run `werkmeister up`");
+    else {
+      touchExecMarker(ws);
+      const res = await deps.run("docker", ["exec", container, "sh", "-c", repo["lint"]]);
+      add(
+        "lint",
+        res.code === 0,
+        `${repo["lint"]} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-15).join("\n")}` : ""}`,
+      );
     }
   }
 
@@ -677,8 +694,7 @@ async function gateChecks(
 
   if (repo["ship"] === "tag" && repo["release_check"]) {
     const why = reason(file.fm["skip_release"]);
-    const container =
-      touched.map(containerFor).find(Boolean) ?? containerFor(repoServices[0] ?? "");
+    const container = repoContainer();
     if (why) add("release", true, `skipped: ${why}`);
     else if (!container)
       add("release", false, "no running container for this repo — run `werkmeister up`");
