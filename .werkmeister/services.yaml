@@ -47,7 +47,7 @@ services:
     test: "pnpm turbo run typecheck test --filter=werkmeister --filter=werkmeister-mcp"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
     validate: &cli_validate >-
-      Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` at the worktree root,
+      Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION),
       then `pnpm turbo run build --filter=werkmeister` before the first test.
       Fast route for a core-only change: `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
       set HOME on that call only, never for the whole shell (it breaks `pnpm build`).
@@ -119,7 +119,7 @@ services:
     type: extension
     archetype: mcp-client
     test: "pnpm turbo run typecheck test --filter=werkmeister-vscode"
-    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` at the worktree root, then `pnpm turbo run build --filter=werkmeister-vscode` before the first test. Then build, run npm run test:integration (Extension Development Host via @vscode/test-cli), and walk the open items in MANUAL-CHECKLIST.md for anything visual."
+    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-vscode` before the first test. Then build, run npm run test:integration (Extension Development Host via @vscode/test-cli), and walk the open items in MANUAL-CHECKLIST.md for anything visual."
     internal_port: 3997
     port_offset: 4
     health_endpoint: /
@@ -143,7 +143,7 @@ services:
     type: web
     archetype: node-web
     test: "pnpm turbo run test --filter=werkmeister-dashboard"
-    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` at the worktree root, then `pnpm turbo run build --filter=werkmeister-dashboard` before the first test. Then check the URL health (see Quick Health Checks)."
+    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-dashboard` before the first test. Then check the URL health (see Quick Health Checks)."
     internal_port: 3001
     port_offset: 5
     health_endpoint: /
@@ -167,7 +167,7 @@ services:
     type: web
     archetype: node-web
     test: "pnpm turbo run test --filter=docs-site"
-    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` at the worktree root, then `pnpm turbo run build --filter=docs-site` before the first test. Then open the page and the sidebar entry for the doc you changed; `pnpm --filter docs-site build` fails on a dead link."
+    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=docs-site` before the first test. Then open the page and the sidebar entry for the doc you changed; `pnpm --filter docs-site build` fails on a dead link."
     internal_port: 5173
     port_offset: 6
     health_endpoint: /
