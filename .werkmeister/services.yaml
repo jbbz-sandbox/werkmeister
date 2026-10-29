@@ -16,6 +16,8 @@ repo:
   ship: tag
   release_tag: "werkmeister@*"
   release_check: pnpm changeset status --since=origin/main
+  # CI's first step; the gate runs it so a format error fails before the PR opens (SW-133).
+  lint: pnpm exec biome ci .
   # Changes here touch no service, so the gate runs no service tests for them.
   # Anything else outside a service's `path` still touches every service.
   no_service_paths: [docs, .changeset, .gitignore, README.md]

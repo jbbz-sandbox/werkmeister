@@ -32,6 +32,12 @@ test("repo: rejects ship: tag without release_tag, unknown keys and unknown ship
   assert.equal(validate({ ...withoutRepo, repo: { ship: "deploy" } }), false);
 });
 
+test("repo: lint takes a command string (SW-133)", () => {
+  assert.equal(fragment.repo.lint, "pnpm exec biome ci .");
+  assert.ok(validate({ ...withoutRepo, repo: { lint: "pnpm exec biome ci ." } }));
+  assert.equal(validate({ ...withoutRepo, repo: { lint: 1 } }), false);
+});
+
 test("cpus: accepted on services, setup services and extra_services; zero and junk rejected", () => {
   const api = {
     path: "apps/api",

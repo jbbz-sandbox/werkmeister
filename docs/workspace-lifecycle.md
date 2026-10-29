@@ -101,6 +101,7 @@ Code written after a worktree's PR merged, e.g. a problem found while cutting or
 | stages | ICM: every stage before the one holding PR files has output. JIT: no open decision notes. |
 | acceptance | the PR body has a `PASS` table cell and no `FAIL` cell. The result cell holds exactly `PASS` or `FAIL`, with evidence in its own column: `\| criterion \| PASS \| evidence \|`. `\| criterion \| PASS: repro.md §1 \|` has no `PASS` cell. |
 | clean | `git status --porcelain` in the code worktree is empty |
+| lint | when the repo's registry `repo:` sets `lint`, that command exits 0, for any diff. It runs from the repo root in one of the repo's containers, like the release check. A failure shows the last 15 lines of output. No `lint` key means no row (SW-133). |
 | test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, or in any running container of its repo, because they all mount the worktree at `/app` with its `node_modules`. When the repo has none running, the gate starts one (`docker compose up -d --wait <svc>`, preferring a cli/library/extension service, which only sleeps) and stops it when the gate ends, pass or fail. When the branch's own fragment renders a touched service differently from `compose.yml` (a new `environment:` entry, `node_modules_volume`, image, …), the gate starts that service from a gate-only `compose.gate.yml` rendered from the branch, runs its checks there, then recreates it from `compose.yml` (or stops it, if it wasn't running) and deletes the file (SW-118). A service with no command, or one whose container could not be started, fails unless `skip_tests` names it with a reason. |
 | exercise | `exercise.md` (ICM: any stage output; JIT: `.werkmeister/notes/`) has a `PASS` cell and no `FAIL`, unless `skip_exercise` gives a reason |
 | baseline `<svc>` | for a touched local `api`/`web` service: its own container is running and its `health_endpoint` answers below 400 |
@@ -120,6 +121,7 @@ repo:
   ship: tag                                   # merge (default) | tag
   release_tag: "werkmeister@*"  # glob for git tag --list; required for ship: tag
   release_check: pnpm changeset status --since=origin/main
+  lint: pnpm exec biome ci .                  # the gate's lint row; any ship mode
   no_service_paths: [docs, .changeset, .gitignore, README.md]  # prefixes that touch no service in the gate
 ```
 
@@ -128,6 +130,7 @@ repo:
 - With `ship: merge`, a merged PR is shipped as soon as it merges.
 - With `ship: tag`, it is shipped once a tag matching `release_tag` contains its merge commit (`git tag --contains`).
 - `release_check` stops a PR that would never reach a release. For changesets, a branch that changes a package without a changeset fails it.
+- `lint` is the repo's lint/format check (the gate's `lint` row). Set it to CI's own command so a format error fails before the PR opens.
 
 ## Commands
 
