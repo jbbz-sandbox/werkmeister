@@ -55,6 +55,11 @@ const RELOAD_RULE =
   "Never run `werkmeister restart` or `werkmeister init-workspace` to reload — " +
   "they are slower, and init rewrites the stage contracts.";
 
+// SW-143: a library or CLI has nothing to restart. How to exercise one is the service's (or its archetype's)
+// `validate:` text, so app-specific steps stay out of the generic templates.
+const NO_SERVICE_RULE =
+  "A library or CLI has no service to restart: build it, then exercise the built artifact exactly as its Validation text in `werkmeister-context.md` § How to validate says.";
+
 const IMPLEMENT_STEPS = [
   "Confirm ponytail is active (see `_shared/standards.md`; invoke the skill only if it is not), then read the standards rows above. Restate the rule you are applying beside each edit.",
 ];
@@ -190,7 +195,7 @@ const feature: Stage[] = [
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. Run a CLI from a temp folder, not only with a temp HOME: it reads its workspace from the current folder.`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, the exercise checks as ${EXERCISE_FORMAT}, and any deviation from \`spec.md\` with its reason.`,
       ],
       outputs: [
@@ -265,13 +270,13 @@ const bugfix: Stage[] = [
   },
   {
     name: "exercise",
-    job: "prove it against the running service",
+    job: "prove it against the running service or the built CLI",
     writes: "`output/exercise.md`",
     check: "the original reproduction no longer fails",
     standards: "none",
     contract: (v) => ({
       oneJob:
-        "One job: show the original failure is gone in the running service, not just in the test.",
+        "One job: show the original failure is gone in the running service or the built binary, not just in the test.",
       inputs: [
         `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — the reproduction steps`,
         `Working (this run): \`${v.at("fix")}/output/fix.md\``,
@@ -280,7 +285,7 @@ const bugfix: Stage[] = [
       doNotLoad:
         "`_shared/standards.md` (no code is written here), source files, `.werkmeister/*.yml`.",
       process: [
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
         `Write \`output/exercise.md\`: steps 2–3 as ${EXERCISE_FORMAT}.`,
@@ -341,7 +346,7 @@ const refactor: Stage[] = [
         ...IMPLEMENT_STEPS,
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
         `Take the steps in order. After each one: ${TEST_STEP}`,
-        `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE}`,
+        `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, and the final exercise checks as ${EXERCISE_FORMAT}.`,
       ],
       outputs: ["Code changes, uncommitted", "`output/exercise.md`"],

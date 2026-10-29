@@ -45,7 +45,15 @@ services:
     archetype: node-tool
     # apps/werkmeister-mcp ships inside the CLI (dist/mcp.js), so its tests run here.
     test: "pnpm turbo run typecheck test --filter=werkmeister --filter=werkmeister-mcp"
-    validate: "Build, then run the built werkmeister binary against a temp fixture workspace. Assert on exit code, stdout/stderr, and the files it writes."
+    # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
+    validate: &cli_validate >-
+      Build, then run the built werkmeister binary from a temp folder against a fixture workspace in it.
+      Seed the temp folder with `services.yaml`, `ports.yaml` and a `config.yaml` whose `paths.workspaces_root` holds the fixture workspace,
+      and run through `.werkmeister/bin/with-temp-home` with `WERKMEISTER_CONFIG_FILE` pointing at that `config.yaml`.
+      Run from the temp folder, not only with a temp HOME: the CLI reads its workspace from the current folder.
+      Any command that can write (to the workspace, its issue or its PRs) runs against the fixture workspace;
+      only read-only commands (e.g. `werkmeister skills check`) may run from the real workspace.
+      Assert on exit code, stdout/stderr, and the files it writes.
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
@@ -82,6 +90,8 @@ services:
     type: library
     archetype: node-tool
     test: "pnpm turbo run typecheck test --filter=werkmeister-core"
+    # Bundled into the CLI, so a core change is exercised through the built binary, not node-tool's "run the tests".
+    validate: *cli_validate
     internal_port: 3999
     port_offset: 2
     health_endpoint: /

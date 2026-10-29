@@ -97,6 +97,17 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
           assert.match(c, /A subagent you brief to run tests/, `${wt}/${d}`);
         }
+        // SW-143: every exercise step defers a library/CLI to its Validation text, and the
+        // templates stay app-agnostic — the werkmeister recipe lives in its services.yaml.
+        if (c.includes("Reload")) {
+          assert.match(c, /A library or CLI has no service to restart/, `${wt}/${d}`);
+          assert.match(c, /as its Validation text in `werkmeister-context\.md`/, `${wt}/${d}`);
+        }
+        assert.doesNotMatch(c, /WERKMEISTER_CONFIG_FILE|skills check/, `${wt}/${d}`);
+      }
+      if (EXPECTED[wt].includes("exercise")) {
+        const ex = fs.readFileSync(path.join(root, "stages", "03_exercise", "CONTEXT.md"), "utf8");
+        assert.match(ex, /A library or CLI has no service to restart/, `${wt}/03_exercise`);
       }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
