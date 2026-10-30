@@ -243,6 +243,22 @@ export function expandUserPath(p: string): string {
 }
 
 /**
+ * A `.env` value compose reads back unchanged (SW-207). Bare when it can be: the
+ * hand-rolled readers of FEATURE/SERVICES/slot don't unquote.
+ */
+export function quoteEnvValue(value: string): string {
+  // Unquoted, compose parses ' and " as syntax, $ as interpolation and ` #` as a comment.
+  return /['"$#\\]/.test(value) ? `"${value.replace(/[\\"$]/g, "\\$&")}"` : value;
+}
+
+/** Inverse of `quoteEnvValue`; a bare value comes back as it is. */
+export function unquoteEnvValue(value: string): string {
+  return value.length >= 2 && value.startsWith('"') && value.endsWith('"')
+    ? value.slice(1, -1).replace(/\\([\\"$])/g, "$1")
+    : value;
+}
+
+/**
  * Read the metadata keys already present in `<workspace>/.env` so a bare re-run
  * preserves prior workspace config. Only `_INPUT_FIELDS` keys are returned
  * (UPPER_SNAKE → lowercase config-field form).
@@ -268,7 +284,7 @@ function loadExistingEnvMetadata(workspaceRoot: string): Record<string, string> 
     const key = line.slice(0, idx).trim();
     const value = line.slice(idx + 1);
     if (key in wanted) {
-      found[wanted[key]] = value.trim();
+      found[wanted[key]] = unquoteEnvValue(value.trim());
     }
   }
   return found;

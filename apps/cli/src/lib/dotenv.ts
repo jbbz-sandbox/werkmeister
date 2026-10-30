@@ -10,6 +10,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { unquoteEnvValue } from "werkmeister-core/workspace_prompts";
 
 /** Walk up from *start* to the filesystem root; the first `.env` file found, or null. */
 export function findDotenv(start: string): string | null {
@@ -51,7 +52,7 @@ export function loadDotenv(start: string): Record<string, string> {
     const eq = line.indexOf("=");
     const key = line.slice(0, eq);
     const value = line.slice(eq + 1);
-    result[key.trim()] = value.trim();
+    result[key.trim()] = unquoteEnvValue(value.trim());
   }
   return result;
 }

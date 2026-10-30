@@ -57,7 +57,7 @@ import {
   type SlotEntry,
 } from "./slots.js";
 import { tempHomeWrapper } from "./temp_home.js";
-import { readAutoStop } from "./workspace_prompts.js";
+import { quoteEnvValue, readAutoStop } from "./workspace_prompts.js";
 import { ensureGeneratedIgnored } from "./worktrees.js";
 
 function isDict(value: unknown): value is Record<string, unknown> {
@@ -335,9 +335,11 @@ export function seedWorkspaceMetadataEnv(envPath: string, meta: Record<string, s
   const body = Object.entries(meta)
     .map(
       ([k, v]) =>
-        `${k}=${String(v)
-          .replace(/\s*\n\s*/g, " ")
-          .trim()}\n`,
+        `${k}=${quoteEnvValue(
+          String(v)
+            .replace(/\s*\n\s*/g, " ")
+            .trim(),
+        )}\n`,
     )
     .join("");
   fs.writeFileSync(envPath, preservedEnvMetadata(envPath, new Set(Object.keys(meta))) + body);
