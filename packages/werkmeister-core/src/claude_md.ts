@@ -12,11 +12,17 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { containerTestCommand, serviceTestCommand, validationRows } from "./archetypes.js";
+import {
+  containerTestCommand,
+  serviceTestCommand,
+  type ValidationRow,
+  validationRows,
+} from "./archetypes.js";
 import {
   type ArchetypeRegistry,
   baselineUpstream,
   loadArchetypes,
+  type ReposConfig,
   type ServicesConfig,
 } from "./config.js";
 import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
@@ -342,6 +348,7 @@ export function buildSandboxContextMd(
   candidates: string[] = localServices,
   autoStop = false,
   tempHome = "",
+  reposConfig: ReposConfig = {},
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the
   // same source Caddy's site blocks are generated from — so this file can never
@@ -380,13 +387,21 @@ export function buildSandboxContextMd(
   // Caddy/cookie routing. The rest are validated by their test/validate guidance.
   const hasLocal = localServices.length > 0;
   const hasUrl = urlServices.size > 0;
+  // SW-219: the gate's lint joins the test command, so the implement stage that runs it catches a format error.
+  const lintOf = (repo: string) => reposConfig[repo]?.lint;
+  const testCell = (r: ValidationRow) => {
+    if (!r.test) return "—";
+    const lint = lintOf(r.repo);
+    return `\`${tempHome ? `${tempHome} ` : ""}${r.test}${lint ? ` && ${lint}` : ""}\``;
+  };
+  const rows = validationRows(candidates, servicesConfig, archetypes, urlServices);
+  const linted = rows.some((r) => r.test && lintOf(r.repo));
   const validationTable =
     "| Service | Repo | Path in repo | Test command | Validation |\n" +
     "|---------|------|--------------|--------------|------------|\n" +
-    validationRows(candidates, servicesConfig, archetypes, urlServices)
+    rows
       .map(
-        (r) =>
-          `| \`${r.service}\` | ${r.repo} | \`${r.path}\` | ${r.test ? `\`${tempHome ? `${tempHome} ${r.test}` : r.test}\`` : "—"} | ${r.validate} |`,
+        (r) => `| \`${r.service}\` | ${r.repo} | \`${r.path}\` | ${testCell(r)} | ${r.validate} |`,
       )
       .join("\n");
 
@@ -559,6 +574,10 @@ or visit https://${proxy.host}/__werkmeister and select \`${feature}\` — the s
 How to exercise a change to each service in this workspace.${
     tempHome
       ? " Each test command runs through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME and deletes it on exit: never hand-roll `HOME=…`."
+      : ""
+  }${
+    linted
+      ? " A test command ending in `&& <lint>` also runs the repo's lint, the same command the PR gate's lint row runs, so a format error fails here and not first at `werkmeister pr open`."
       : ""
   }
 

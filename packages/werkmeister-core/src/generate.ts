@@ -1697,6 +1697,7 @@ export async function generateWorkspaceCompose(
   const [portStart, portEnd] = getPortRange(slot);
   success(`Compose ready (slot ${slot}, ports ${portStart}-${portEnd})`);
 
+  const reposConfig = loadReposConfig();
   const contextMd = buildSandboxContextMd(
     feature,
     slot,
@@ -1706,9 +1707,10 @@ export async function generateWorkspaceCompose(
     servicesConfig,
     testPath,
     null,
-    candidateServiceNames(repoNames, loadReposConfig(), localServices),
+    candidateServiceNames(repoNames, reposConfig, localServices),
     readAutoStop(workspaceRoot),
     tempHomeWrapper(workspaceRoot),
+    reposConfig,
   );
   const sandboxDir = dotDir(workspaceRoot);
   fs.mkdirSync(sandboxDir, { recursive: true });
