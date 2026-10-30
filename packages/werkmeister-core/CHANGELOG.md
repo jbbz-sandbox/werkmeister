@@ -1,5 +1,16 @@
 # sandbox-core
 
+## 0.52.0
+
+### Minor Changes
+
+- e75909c: SW-206: `werkmeister close-out` (shipped and `--abandon`) writes `usage.md` and `usage.json` into the workspace record before the folder is removed, committed and pushed with `closeout.md`. They hold token totals by model, the USD estimate, per-session rows (first and last turn, turns, models), wall-clock time, approximate per-stage timing, and the run's werkmeister version and commit, model, autonomous setting and ticket. `closeout.md` gets a one-line `Usage:` summary. A retry after a failed removal keeps the first snapshot; a workspace with no transcripts still gets one that says so. The `workspace-usage` MCP tool's sessions gain `firstTurn`, `lastTurn`, `turns` and `models`.
+
+### Patch Changes
+
+- d1fc18a: SW-198: `pr open` prints the full gate output (`<repo>: gate passed` and every ✓/✗ row, the same text as `pr gate`) before it pushes, not only when the gate fails.
+- a8203cc: SW-219: for a repo whose registry entry has a gate `lint` command, the generated `werkmeister-context.md` How to validate test commands end with `&& <lint>`, so the implement stage that runs them catches a format error before `werkmeister pr open`. Repos without `lint` render unchanged; the PR gate's own lint row is unchanged.
+
 ## 0.51.1
 
 ### Patch Changes
