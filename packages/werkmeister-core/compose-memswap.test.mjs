@@ -10,7 +10,9 @@ import { test } from "node:test";
 import YAML from "yaml";
 
 import { generateFeatureCompose } from "./dist/generate.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 test("every service with a memory limit gets memswap_limit equal to it", async () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "memswap-ws-"));

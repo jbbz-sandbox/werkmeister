@@ -12,7 +12,9 @@ import YAML from "yaml";
 
 import { loadServices } from "./dist/config.js";
 import { GATE_COMPOSE_FILE, generateFeatureCompose, renderGateCompose } from "./dist/generate.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 function render(local, { checkout = true } = {}) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-od-ws-"));

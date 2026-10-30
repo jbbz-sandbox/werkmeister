@@ -17,6 +17,9 @@ import { test } from "node:test";
 import { dotDir } from "./dist/dot_dir.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { MCP, start } from "./dist/web_servers.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 /** Run start() against a stub that answers every request with *code*. */
 async function startOverStub(code) {

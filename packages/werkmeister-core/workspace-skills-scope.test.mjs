@@ -8,6 +8,9 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { renderWorkspaceSkills } from "./dist/workspace_skills.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const MODULE = (domain) =>
   `---\ndomain: ${domain}\nsummary: ${domain} rules\napplies_to:\n  - '**/*.ts'\n---\n\n# ${domain}\n`;
