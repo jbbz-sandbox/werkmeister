@@ -78,6 +78,7 @@ import { type RunResult, run } from "./proc.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
 import type { Lease, Rank } from "./scheduler.js";
+import { schedulerOp } from "./scheduler_client.js";
 import {
   dequeue,
   enqueue,
@@ -760,7 +761,21 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
 }
 
 /** Null when *feature* may start now (after any preemption); else its queue position. */
-async function admitOrQueue(
+export function admitOrQueue(
+  feature: string,
+  workspace: string,
+  byPerson: boolean,
+): Promise<number | null> {
+  return schedulerOp(
+    "admit",
+    { feature, workspace, byPerson },
+    () => admitOrQueueHere(feature, workspace, byPerson),
+    // Preemption stops the victims' containers first.
+    15 * 60_000,
+  );
+}
+
+async function admitOrQueueHere(
   feature: string,
   workspace: string,
   byPerson: boolean,
@@ -792,7 +807,26 @@ async function admitOrQueue(
  * Start queued features, first come first served, until one still doesn't fit.
  * Each started one's live session gets a "continue". Returns those started.
  */
-export async function grantWaiters(): Promise<string[]> {
+export function grantWaiters(): Promise<string[]> {
+  return schedulerOp("grant", {}, grantHere, 15 * 60_000);
+}
+
+// One grant at a time in this process: two at once would both start the queue head.
+let granting: Promise<unknown> = Promise.resolve();
+function grantHere(): Promise<string[]> {
+  const next = granting.then(grantWaitersNow, grantWaitersNow);
+  granting = next.catch(() => {});
+  return next;
+}
+
+/** The daemon's side of a client's release (SW-185 D3): start waiters without holding the caller. */
+export function grantInBackground(): number {
+  const queued = readQueue().length;
+  if (queued) void grantHere().catch((e: Error) => warn(`Waiting queue: ${e.message}`));
+  return queued;
+}
+
+async function grantWaitersNow(): Promise<string[]> {
   const started: string[] = [];
   for (const feature of readQueue()) {
     const workspace = readLeases()[feature]?.workspace;
@@ -808,10 +842,19 @@ export async function grantWaiters(): Promise<string[]> {
   return started;
 }
 
-/** After a release: never fails the stop or down that freed the room. */
+/**
+ * After a release: a client hands the queue to the daemon and returns; the
+ * daemon, or a client without one, starts waiters here. Never fails the stop
+ * or down that freed the room.
+ */
 async function grantWaitersQuietly(): Promise<void> {
   try {
-    for (const f of await grantWaiters()) success(`Started '${f}' from the waiting queue`);
+    const handedOff = await schedulerOp<number | null>("grant-later", {}, async () => null);
+    if (handedOff !== null) {
+      if (handedOff) info(`The daemon will start the next waiting feature (${handedOff} waiting)`);
+      return;
+    }
+    for (const f of await grantHere()) success(`Started '${f}' from the waiting queue`);
   } catch (e) {
     warn(`Could not start the next waiting feature: ${e instanceof Error ? e.message : String(e)}`);
   }

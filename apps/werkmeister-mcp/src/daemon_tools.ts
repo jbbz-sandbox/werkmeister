@@ -10,9 +10,17 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { pruneCaches } from "werkmeister-core/build_caches";
 import { containerStats } from "werkmeister-core/docker";
-import { planClean, runClean } from "werkmeister-core/lifecycle";
+import {
+  admitOrQueue,
+  grantInBackground,
+  grantWaiters,
+  planClean,
+  runClean,
+} from "werkmeister-core/lifecycle";
 import { syncRegistry } from "werkmeister-core/registry_sync";
 import { getWorkspaceResources } from "werkmeister-core/resources";
+import { waitingQueue } from "werkmeister-core/scheduler_client";
+import { allocateSlot, releaseSlot, slotLease } from "werkmeister-core/slots";
 import { optimizeReport, runCollection } from "werkmeister-core/stats";
 import { interceptsSnapshot } from "werkmeister-core/status";
 import { z } from "zod";
@@ -156,5 +164,41 @@ export function registerDaemonTools(server: McpServer): void {
       inputSchema: {},
     },
     async (): Promise<CallToolResult> => adapt(async () => ({ ...(await interceptsSnapshot()) })),
+  );
+}
+
+/**
+ * The scheduler's ops for thin clients (SW-185), run here because this process
+ * owns the scheduler. Only `/api/tool` registers it: an agent has no use for it.
+ */
+export function registerSchedulerTool(server: McpServer): void {
+  server.registerTool(
+    "scheduler",
+    {
+      title: "Slot leases and the waiting queue",
+      description:
+        "Internal: the CLI's scheduler calls (scheduler_client.ts), answered by the daemon.",
+      inputSchema: {
+        op: z.enum(["allocate", "lease", "release", "admit", "grant", "grant-later", "queue"]),
+        feature: z.string().optional(),
+        workspace: z.string().nullable().optional(),
+        preferredSlot: z.number().int().nullable().optional(),
+        byPerson: z.boolean().optional(),
+      },
+    },
+    async (a): Promise<CallToolResult> =>
+      adapt(async () => {
+        const feature = a.feature ?? "";
+        const ops: Record<typeof a.op, () => Promise<unknown> | unknown> = {
+          allocate: () => allocateSlot(feature, a.preferredSlot, a.workspace),
+          lease: () => slotLease(feature),
+          release: () => releaseSlot(feature),
+          admit: () => admitOrQueue(feature, a.workspace ?? "", a.byPerson ?? false),
+          grant: () => grantWaiters(),
+          "grant-later": () => grantInBackground(),
+          queue: () => waitingQueue(),
+        };
+        return { value: (await ops[a.op]()) ?? null };
+      }),
   );
 }

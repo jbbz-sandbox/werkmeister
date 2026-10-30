@@ -28,7 +28,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { composeLogsStream } from "werkmeister-core/compose";
 import { DEFAULT_DAEMON_PORT } from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
-import { registerDaemonTools } from "./daemon_tools.js";
+import { ownScheduler } from "werkmeister-core/scheduler_client";
+import { registerDaemonTools, registerSchedulerTool } from "./daemon_tools.js";
 import { resolveFeature, SCOPE_HEADER } from "./lib/feature.js";
 import { connectInMemoryClient } from "./lib/in_memory.js";
 import { readOrCreateToken, type Scope, scopeOf } from "./lib/token.js";
@@ -38,12 +39,16 @@ import { registerWorkspaceTools } from "./workspace_tools.js";
 
 export { connectInMemoryClient };
 
-/** With `scoped`, only the tools a per-workspace token may call are registered. */
-export function createServer(opts: { scoped?: boolean } = {}): McpServer {
+/**
+ * With `scoped`, only the tools a per-workspace token may call are registered;
+ * with `scheduler`, also the scheduler's internal ops (the daemon's `/api/tool`).
+ */
+export function createServer(opts: { scoped?: boolean; scheduler?: boolean } = {}): McpServer {
   const server = new McpServer({ name: "werkmeister", version: "0.1.0" });
   registerTools(server);
   registerWorkspaceTools(server);
   registerDaemonTools(server);
+  if (opts.scheduler) registerSchedulerTool(server);
   if (opts.scoped) {
     // The SDK's private registry is the only list of what was registered.
     const registered = (
@@ -93,6 +98,8 @@ async function startStdio(): Promise<void> {
 }
 
 async function startHttp(): Promise<void> {
+  // This process is the host daemon: it runs the scheduler, every other process asks it (SW-185).
+  ownScheduler();
   const port = parseInt(
     process.env.PORT ?? process.env.WERKMEISTER_MCP_PORT ?? String(DEFAULT_DAEMON_PORT),
     10,
@@ -132,7 +139,7 @@ async function startHttp(): Promise<void> {
   // Host thin clients (VS Code, the SessionEnd stop): plain JSON instead of the
   // MCP handshake on every 5 s poll. One long-lived in-process client; its calls
   // carry no headers, so this route is machine-token only.
-  const toolClient = connectInMemoryClient(createServer(), "werkmeister-daemon");
+  const toolClient = connectInMemoryClient(createServer({ scheduler: true }), "werkmeister-daemon");
   app.post("/api/tool", express.json({ limit: "1mb" }), async (req: Request, res: Response) => {
     if (scopeOfReq(res).scope !== "machine") {
       res.status(403).json({ error: "/api/tool needs the machine token", code: "SCOPE" });
@@ -149,10 +156,12 @@ async function startHttp(): Promise<void> {
     try {
       const result = (await (
         await toolClient
-      ).callTool({
-        name,
-        arguments: args ?? {},
-      })) as CallToolResult;
+      ).callTool(
+        { name, arguments: args ?? {} },
+        undefined,
+        // The SDK's 60 s default cuts off a grant that starts containers, or a close-out.
+        { timeout: 15 * 60_000 },
+      )) as CallToolResult;
       const code = (result.structuredContent as { code?: string } | undefined)?.code;
       if (result.isError) {
         res.status(400).json({ error: textOf(result), code: code ?? "TOOL" });

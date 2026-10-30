@@ -9,8 +9,9 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { readWaiting, waitingPath } from "./dist/agent_state.js";
-import { runningFeatures } from "./dist/lifecycle.js";
+import { grantWaiters, runningFeatures } from "./dist/lifecycle.js";
 import {
+  enqueue,
   featureCost,
   hostLoadLimit,
   loadBudget,
@@ -145,5 +146,14 @@ test("portHolders reports a published port something else binds", async () => {
   await withHome(async (home) => {
     const ws = workspace(home, `services:\n  api:\n    ports: ["${port}:3999"]\n`);
     assert.deepEqual(await portHolders("f", ws), []);
+  });
+});
+
+test("grantWaiters drops a waiter that holds no lease and starts nothing", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    await enqueue("orphan", ws);
+    assert.deepEqual(await grantWaiters(), []);
+    assert.deepEqual(readQueue(), []);
   });
 });

@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { leasesPath, readLeases } from "./dist/scheduler_state.js";
+import { enqueue, leasesPath, readLeases, readQueue } from "./dist/scheduler_state.js";
 import { allocateSlot, releaseSlot, requireLeasedSlot } from "./dist/slots.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
@@ -129,5 +129,17 @@ test("releaseSlot ends the lease; a lease whose workspace is gone is pruned; lab
     assert.equal(leases.gone, undefined);
     assert.equal(leases.old.slot, 3);
     assert.ok(fs.existsSync(leasesPath()));
+  });
+});
+
+test("releaseSlot also drops the feature from the waiting queue", async () => {
+  await withHome(async (home) => {
+    const dir = ws(home, "gone");
+    fs.mkdirSync(path.join(dir, ".werkmeister"));
+    await allocateSlot("gone", null, dir, noContainers);
+    await enqueue("gone", dir);
+    await releaseSlot("gone");
+    assert.deepEqual(readQueue(), []);
+    assert.equal(readLeases()["gone"], undefined);
   });
 });

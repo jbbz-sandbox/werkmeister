@@ -259,3 +259,106 @@ test("/api/logs/stream refuses another workspace on a workspace token", async ()
   });
   assert.equal(res.status, 403);
 });
+
+// SW-185: the daemon owns slot leases and the waiting queue. Its store is the
+// registry home's scheduler/ files; a client asks over /api/tool.
+const leasesFile = () =>
+  JSON.parse(fs.readFileSync(path.join(tmp, "registry", "scheduler", "leases.json"), "utf8"));
+
+const scheduler = async (args) => {
+  const res = await apiTool(machineToken, "scheduler", args);
+  assert.equal(res.status, 200, await res.clone().text());
+  return (await res.json()).structuredContent.value;
+};
+
+test("the scheduler tool leases, reads and releases a slot, on /api/tool only", async () => {
+  const ws = path.join(root, "a");
+  const slot = await scheduler({ op: "allocate", feature: "lease-me", workspace: ws });
+  assert.ok(Number.isInteger(slot));
+  assert.deepEqual(await scheduler({ op: "lease", feature: "lease-me" }), { slot, workspace: ws });
+  assert.equal(leasesFile()["lease-me"].slot, slot);
+  assert.deepEqual(await scheduler({ op: "queue" }), []);
+  await scheduler({ op: "release", feature: "lease-me" });
+  assert.equal(await scheduler({ op: "lease", feature: "lease-me" }), null);
+
+  const client = await mcp(machineToken);
+  try {
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    assert.ok(!names.includes("scheduler"), "agents never see the scheduler's internal ops");
+  } finally {
+    await client.close();
+  }
+});
+
+/** allocateSlot in a fresh client process whose own registry home is *clientHome*. */
+function clientAllocate(feature, workspace, { host, clientHome }) {
+  const script = `
+    import { ttyReporter, withReporter } from "werkmeister-core/reporter";
+    import { allocateSlot } from "werkmeister-core/slots";
+    const slot = await withReporter(ttyReporter, () =>
+      allocateSlot(${JSON.stringify(feature)}, null, ${JSON.stringify(workspace)}));
+    console.log("SLOT=" + slot);`;
+  return new Promise((resolve, reject) => {
+    const c = spawn(process.execPath, ["--input-type=module", "-e", script], {
+      cwd: import.meta.dirname,
+      env: {
+        ...process.env,
+        HOME: home,
+        DOCKER_HOST: `unix://${path.join(tmp, "docker.sock")}`,
+        WERKMEISTER_HOST: host,
+        WERKMEISTER_CONFIG_FILE: path.join(clientHome, "config.yaml"),
+      },
+    });
+    let out = "";
+    c.stdout.on("data", (d) => (out += d));
+    c.stderr.on("data", (d) => (out += d));
+    c.on("exit", (code) =>
+      code === 0 ? resolve(out) : reject(new Error(`client exited ${code}:\n${out}`)),
+    );
+  });
+}
+
+const slotOf = (out) => Number(/SLOT=(\d+)/.exec(out)?.[1]);
+
+test("two clients allocating at once go through the daemon and get distinct slots", async () => {
+  const clientHome = fs.mkdtempSync(path.join(tmp, "client-"));
+  const outs = await Promise.all([
+    clientAllocate("c1", path.join(root, "a"), { host: base, clientHome }),
+    clientAllocate("c2", path.join(root, "b"), { host: base, clientHome }),
+  ]);
+  const slots = outs.map(slotOf);
+  assert.equal(new Set(slots).size, 2, `both got ${slots}`);
+  // In the daemon's store, not the client's own home.
+  assert.deepEqual([leasesFile().c1.slot, leasesFile().c2.slot].sort(), [...slots].sort());
+  assert.equal(fs.existsSync(path.join(clientHome, "scheduler")), false);
+  await scheduler({ op: "release", feature: "c1" });
+  await scheduler({ op: "release", feature: "c2" });
+});
+
+test("with the daemon down a client warns and schedules in its own process (D1 fallback)", async () => {
+  const clientHome = fs.mkdtempSync(path.join(tmp, "client-"));
+  fs.writeFileSync(path.join(clientHome, "config.yaml"), "version: 1\n");
+  for (const f of ["ports.yaml", "services.yaml"]) {
+    fs.copyFileSync(path.join(tmp, "registry", f), path.join(clientHome, f));
+  }
+  const out = await clientAllocate("solo", path.join(root, "a"), {
+    host: "http://127.0.0.1:9",
+    clientHome,
+  });
+  assert.match(out, /daemon not reachable.*Scheduling in this process instead/);
+  const local = JSON.parse(
+    fs.readFileSync(path.join(clientHome, "scheduler", "leases.json"), "utf8"),
+  );
+  assert.equal(local.solo.slot, slotOf(out));
+});
+
+test("grant-later answers at once with the queue length and drains it in the daemon (D3)", async () => {
+  assert.equal(await scheduler({ op: "grant-later" }), 0);
+  // A waiter with no lease: the background grant drops it rather than starting it.
+  fs.writeFileSync(path.join(tmp, "registry", "scheduler", "queue.json"), '["orphan"]');
+  assert.equal(await scheduler({ op: "grant-later" }), 1);
+  for (let i = 0; (await scheduler({ op: "queue" })).length; i++) {
+    assert.ok(i < 50, "the background grant never drained the queue");
+    await sleep(100);
+  }
+});
