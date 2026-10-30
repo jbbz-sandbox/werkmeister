@@ -975,6 +975,63 @@ test("refreshPrStatus: ship: tag ignores skip_release and waits for a release ta
   }
 });
 
+const NOTHING_TO_BUMP =
+  "🦋  info NO packages to be bumped at patch\n🦋  ---\n🦋  info NO packages to be bumped at minor\n🦋  ---\n🦋  info NO packages to be bumped at major\n";
+const BUMPS =
+  "🦋  info Packages to be bumped at patch:\n🦋  info \n🦋  - werkmeister\n🦋  ---\n🦋  info NO packages to be bumped at minor\n🦋  ---\n🦋  info NO packages to be bumped at major\n";
+
+test("openPrs: a release check with nothing to bump records release: none; one with a bump records nothing (SW-193)", async () => {
+  for (const [out, want] of [
+    [NOTHING_TO_BUMP, "none"],
+    [BUMPS, undefined],
+  ]) {
+    const ws = icmWorkspace();
+    try {
+      const d = deps([
+        DIFF_API,
+        [/changeset status/, { stdout: out }],
+        [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }],
+      ]);
+      const r = await open(ws, d);
+      assert.ok(r.ok, r.lines.join("\n"));
+      assert.equal(readPrFiles(ws)[0].fm.release, want);
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
+test("refreshPrStatus: ship: tag with release: none ships on merge without a tag lookup (SW-193)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\nrelease: none\n" }) },
+  });
+  try {
+    const merged = [
+      /^gh pr view/,
+      { stdout: JSON.stringify({ state: "MERGED", mergeCommit: { oid: "abc123" } }) },
+    ];
+    const d = deps([merged, [/tag --contains/, { stdout: "" }]]);
+    const r = await refreshPrStatus(ws, d);
+    assert.equal(readPrFiles(ws)[0].fm.status, "shipped", r.lines.join("\n"));
+    assert.ok(!d.calls.some((c) => c.includes("tag --contains")), "no tag to wait for");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("lifecycleOf: merged + release: none reads shipped after pr status, so close-out proceeds (SW-193)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "merged", extra: "merge_sha: abc\nrelease: none\n" }) },
+  });
+  try {
+    const d = deps([]);
+    await refreshPrStatus(ws, d);
+    assert.equal(lifecycleOf(ws).state, "shipped");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("removalBlockers: an open PR, unmerged commits; merged and closed-out are fine", async () => {
   const ws = icmWorkspace({
     files: {
