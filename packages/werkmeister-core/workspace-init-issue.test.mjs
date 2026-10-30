@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { seedWorkspaceMetadataEnv } from "./dist/generate.js";
 import { issueCopyPath } from "./dist/issue_snapshot.js";
 import { resolveIssueCopy } from "./dist/workspace_init.js";
+import { resolveInputs } from "./dist/workspace_prompts.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
 const GH = "overrides:\n  issue_tracker: github\n";
@@ -58,4 +59,22 @@ test("multi-line DESCRIPTION is one .env line", () => {
   const env = path.join(tmp(), ".env");
   seedWorkspaceMetadataEnv(env, { FEATURE: "f", DESCRIPTION: "line one\n\n  line two" });
   assert.equal(fs.readFileSync(env, "utf8"), "FEATURE=f\nDESCRIPTION=line one line two\n");
+});
+
+// SW-207: an unquoted DESCRIPTION starting with a quote made compose reject the file.
+test("DESCRIPTION with quotes, $, # and \\ is quoted for compose and round-trips", () => {
+  const root = tmp();
+  const env = path.join(root, ".env");
+  const desc = `'werkmeister pr status' stays at 'merged' — "q" costs $5 #tag back\\slash`;
+  seedWorkspaceMetadataEnv(env, { FEATURE: "f", DESCRIPTION: desc });
+  const written = fs.readFileSync(env, "utf8");
+  assert.equal(
+    written,
+    `FEATURE=f\nDESCRIPTION="'werkmeister pr status' stays at 'merged' — \\"q\\" costs \\$5 #tag back\\\\slash"\n`,
+  );
+  // A bare re-run reads the value back from .env and re-seeds it: no double quoting.
+  process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+  assert.equal(resolveInputs({}, root).description, desc);
+  seedWorkspaceMetadataEnv(env, { FEATURE: "f", DESCRIPTION: resolveInputs({}, root).description });
+  assert.equal(fs.readFileSync(env, "utf8"), written);
 });
