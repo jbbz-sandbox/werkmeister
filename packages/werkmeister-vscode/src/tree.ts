@@ -1,23 +1,26 @@
 /**
- * VS Code plumbing for the Workspaces view: fetch the three werkmeister-core payloads,
- * hand them to the pure builder, and map WsNode → TreeItem. No display logic
- * lives here — that is all in build-tree.ts.
+ * VS Code plumbing for the Workspaces view: fetch the three payloads, hand them
+ * to the pure builder, and map WsNode → TreeItem. No display logic lives here —
+ * that is all in build-tree.ts. Docker and telepresence reads go to the host
+ * daemon (SW-184); the workspace list and lifecycle are file reads, kept local.
  */
 
 import * as vscode from "vscode";
 import {
-  getIntercepts,
   getWorkspacePRs,
-  getWorkspaceResources,
-  getWorkspaceStatuses,
+  interceptsFromSnapshot,
   lifecycleOf,
   listWorkspaces,
-  type WorkspaceResources,
+  type WorkspaceStatus,
 } from "werkmeister-core";
+import { callTool, DaemonUnavailable } from "werkmeister-core/daemon_client";
+import type { WorkspaceResources } from "werkmeister-core/resources";
+import type { InterceptsSnapshot } from "werkmeister-core/status";
 import type { PrInput } from "werkmeister-ui";
 import {
   buildTree,
   cliNotFoundNode,
+  daemonDownNode,
   LEGEND_NODE,
   TOOLTIP_COMMANDS,
   type WsNode,
@@ -85,7 +88,7 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
     if (this.sweeping) return;
     this.sweeping = true;
     try {
-      this.resources = await getWorkspaceResources();
+      this.resources = (await callTool<WorkspaceResources>("resources")).data;
     } catch {
       this.resources = null;
     } finally {
@@ -104,8 +107,8 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
       // Independent reads — a failed intercept lookup must not cost the list.
       const [workspaces, statuses, intercepts] = await Promise.all([
         listWorkspaces(),
-        getWorkspaceStatuses(),
-        getIntercepts(),
+        callTool<{ statuses: WorkspaceStatus[] }>("status").then((r) => r.data),
+        callTool<InterceptsSnapshot>("intercepts").then((r) => interceptsFromSnapshot(r.data)),
       ]);
       this.roots = buildTree(
         workspaces.workspaces,
@@ -123,7 +126,11 @@ export class SandboxTreeProvider implements vscode.TreeDataProvider<WsNode> {
         },
       );
     } catch (e) {
-      this.roots = [cliNotFoundNode((e as Error).message)];
+      this.roots = [
+        e instanceof DaemonUnavailable
+          ? daemonDownNode(e.message)
+          : cliNotFoundNode((e as Error).message),
+      ];
     } finally {
       this.loading = false;
       this.changed.fire(undefined);
