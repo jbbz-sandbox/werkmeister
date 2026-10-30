@@ -636,8 +636,9 @@ and swap.
   isolation shapes). As `docs/docker-socket-replacement.md` shows, that alone lets code
   in a container run on the host, for example by rewriting the CLI's `dist/main.js` or
   another workspace's settings. A secure default needs a narrower mount plan first.
-- **The HTTP MCP server already has 46 tools**, not "about twenty" (2.4) or "every
-  verb" (0). What has no tool: `clean`, `stats`, `optimize`, `cache`, `registry`.
+- **The HTTP MCP server had 46 tools**, not "about twenty" (2.4) or "every verb" (0).
+  SW-184 added the five with no tool (`clean`, `stats`, `optimize`, `cache`,
+  `registry`) plus `resources` and `intercepts`: 55 now.
 - **Hook fast paths stay local.** `hooks gate`, `pr-guard` and `agent-state`
   (`apps/cli/werkmeister`) read and write workspace files only, never Docker, and run
   within 200 ms. Only the `stop` that SessionEnd spawns needs forwarding.
@@ -651,9 +652,11 @@ and swap.
   runs `up` in its own process, so two concurrent `up` calls likely deadlock it (not yet
   reproduced).
 - **Pause does not read `~/.claude/sessions`;** idle-stop and the resume nudge do.
-- **Cost (2.5):** still unmeasured. Today each Claude session runs its own stdio MCP
-  server at 46–85 MB RSS, which suggests one daemon at roughly 50–100 MB that replaces
-  them. SW-184 measures it.
+- **Cost (2.5), measured in SW-184** (macOS, Node 22, fake Engine): the daemon holds
+  118 MB RSS idle, 127 MB after status and resources calls and while following logs,
+  and stays at 127 MB. A fresh stdio server holds 115 MB, so the daemon costs about one
+  more server. Claude sessions keep their own stdio servers; long-idle ones sit at
+  16–32 MB resident because macOS compresses their pages.
 
 ### 8.3 Resource budget (section 3)
 

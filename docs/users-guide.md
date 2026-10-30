@@ -1520,9 +1520,10 @@ the pieces that are not obvious from the demo services:
   `werkmeister intercept` and `werkmeister connect` must run on the host — either from a host
   terminal, or through the `intercept` and `connect` tools on `apps/werkmeister-mcp`,
   which run host-side with exactly the authority a host terminal has.
-- **A container can instead hold no daemon at all.** `apps/werkmeister-mcp` (port 3002, started by
-  `werkmeister connect`) exposes twenty Werkmeister verbs over authenticated HTTP, so a container
-  needs only `~/repos`, `~/features` and `WERKMEISTER_MCP_TOKEN` — no docker socket, no docker
+- **A container can instead hold no daemon at all.** `apps/werkmeister-mcp` is the host daemon
+  (port 3002; kept up by launchd once `werkmeister setup` installs it on macOS, else started by
+  `werkmeister connect`). It exposes every Werkmeister verb over authenticated HTTP, so a container
+  needs only `~/repos`, `~/features` and a token — no docker socket, no docker
   CLI, no kubectl, no `werkmeister` binary. It is the only managed web server that binds
   `0.0.0.0`, via a per-app `env` on its `WebApp` entry; never arrange that by exporting
   `HOST` before `werkmeister connect`, which would also expose the unauthenticated dashboard.
@@ -1574,9 +1575,13 @@ It does need:
 - `HOME` matching the host user, and `GIT_CONFIG_COUNT=1`,
   `GIT_CONFIG_KEY_0=safe.directory`, `GIT_CONFIG_VALUE_0=*` — the mounts arrive owned by
   a different uid.
-- `WERKMEISTER_MCP_TOKEN` from `~/.werkmeister/mcp-token` and `FEATURE` set to the workspace's
-  feature, which the projected `.mcp.json` expands into the bearer header and
-  `X-Werkmeister-Feature`.
+- `WERKMEISTER_MCP_TOKEN` from the workspace's own `.werkmeister/token`, which
+  `init-workspace` writes. The projected `.mcp.json` expands it into the bearer header.
+  The token names the workspace, so no feature header is needed: the daemon lists only
+  that workspace's verbs (`up`, `status`, `logs`, `stop`, `down`, …) and refuses any other
+  workspace with error code `SCOPE`. It is an identity, not a security boundary: with
+  `~/repos` and `~/features` mounted read-write, the agent can already change what the
+  host runs. Use `~/.werkmeister/mcp-token`, the machine token, only for host-wide tools.
 - A route to the host's 3002: `host.docker.internal` resolving to the host gateway.
 - The workspace's archetype carrying `mcp_servers: [werkmeister]` (edit 3 above). Nothing
   else makes the entry survive `init-workspace`.
@@ -1587,14 +1592,14 @@ no binary there, use the tools the HTTP server exposes instead. And the
 dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
 
 **1. A plain container, by hand.** Nothing Werkmeister-managed; the host just has to have
-run `werkmeister connect` so the server is up.
+the daemon up (`werkmeister setup` on macOS, else `werkmeister connect`).
 
 ```bash
 docker run -it --rm \
   -v "$HOME/repos:$HOME/repos" -v "$HOME/features:$HOME/features" \
   -e HOME="$HOME" \
   -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
-  -e WERKMEISTER_MCP_TOKEN="$(cat ~/.werkmeister/mcp-token)" -e FEATURE=my-feature \
+  -e WERKMEISTER_MCP_TOKEN="$(cat ~/features/my-feature/.werkmeister/token)" \
   --add-host host.docker.internal:host-gateway \
   -w "$HOME/features/my-feature" node:22 bash
 ```
