@@ -1,5 +1,14 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.50.1
+
+### Patch Changes
+
+- 18d4490: SW-193: a merged PR that needs no release now reaches `shipped`. When the gate's release check runs and reports nothing to bump (changesets' `NO packages to be bumped`), `werkmeister pr open` writes `release: none` into the PR file, and `werkmeister pr status` ships that PR on merge instead of waiting for a release tag that will never contain it, so close-out is no longer stuck. A PR that needs a release still waits for its tag, and `skip_release` still only skips the gate's check.
+- 16e90f7: SW-194: `werkmeister pr gate` and `pr open` fail fast when a PR file's `repo:` is not the code worktree's `git remote get-url origin` (SSH and HTTPS forms, with or without `.git`). The `repo` row names the field and shows both values, where the mismatch used to surface as a `gh pr create` GraphQL error. The Stage 04 contract and PR rules now say to take `repo:` from that command.
+- 3c5fda4: SW-196: `init-workspace` and `workspace` regenerate `~/.werkmeister/services.yaml` from the repo fragments first, so a fragment change merged to main reaches the next workspace's werkmeister-context.md without a manual `werkmeister registry sync`. A hand-written registry is left as is, with a warning.
+- 5d2bdcf: SW-199: `pr open` with PR files that exist but are not approved now lists each file and its status (`pr-app.md is at status: draft; set status: approved to open it.`) instead of telling the person to write a file that is already there. "No matching PR file … Write …" is kept for a workspace with no PR files.
+
 ## 0.50.0
 
 ### Minor Changes
