@@ -926,7 +926,11 @@ test("openPrs: nothing approved is refused and stops nothing (SW-39)", async () 
   const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
   try {
     const d = deps([DIFF_API]);
-    await assert.rejects(open(ws, d), /No matching PR file/);
+    await assert.rejects(open(ws, d), (e) => {
+      assert.match(e.message, /pr-app\.md is at status: draft; set status: approved to open it\./);
+      assert.doesNotMatch(e.message, /No matching PR file/);
+      return true;
+    });
     assert.deepEqual(d.stopped, []);
   } finally {
     clean(ws);

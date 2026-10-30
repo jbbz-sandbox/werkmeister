@@ -814,12 +814,23 @@ function selectFiles(
   only: string | undefined,
   keep: (f: PrFile) => boolean,
 ): PrFile[] {
+  let found = all;
   let files = all.filter(keep);
   if (only) {
-    files = all.filter((f) => f.stem === only || f.dir === only);
+    found = files = all.filter((f) => f.stem === only || f.dir === only);
     if (files.length > 1) files = files.filter(keep);
   }
   if (!files.length) {
+    // Files exist but none qualify: name each one's status, not "write a file" (SW-199).
+    if (found.length)
+      throw new WorkspaceError(
+        found
+          .map(
+            (f) =>
+              `${path.basename(f.path)} is at status: ${statusOf(f)}; set status: approved to open it.`,
+          )
+          .join("\n"),
+      );
     const where = prFileDir(ws) ?? "this workspace (no stage holds PR files)";
     const format = `format: ${prRulesPath(ws)}`;
     throw new WorkspaceError(
