@@ -804,6 +804,7 @@ Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.
 
 - `--slug <slug>`: new: the follow-up's name, in its PR file and branch
 - `--no-pr <reason>`: adopt: no PR — the fix is already on base
+- `--no-wait`: gate/open: don't wait for host load under budget.host_load before each check
 - `--install`: watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes
 - `--uninstall`: watch: remove that schedule
 - `--json`: Print the result as JSON
@@ -812,6 +813,7 @@ Opens PRs from a workspace and tracks them to a release. Each action:
 
 - `gate` runs the pre-PR gate for each PR file and changes nothing.
 - `open` gates, pushes and opens a PR for each PR file at `status: approved`, and records its URL.
+- Before each gate check (lint, tests, release), `gate` and `open` wait while the host's 1-minute load is above `budget.host_load` in `~/.werkmeister/config.yaml` (default: 2 × CPUs; `0` turns it off), for up to 30 minutes, then run anyway. `--no-wait` skips the wait. A failed check ends with the host load.
 - `status` records merged, shipped or closed from GitHub and the repo's release tags.
 - `adopt` records a PR opened outside the workspace.
 - `watch` resumes each opening session once its PR merges, ships or closes; `--install` schedules it.
