@@ -1,5 +1,36 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.52.0
+
+### Minor Changes
+
+- 08536f2: The HTTP MCP server on port 3002 is now the host daemon (SW-184). Each workspace gets its own token, so a dev-container agent can drive that workspace's lifecycle (and only that workspace's) through the daemon. The VS Code extension and the SessionEnd auto-stop go through the daemon too.
+
+  - **Per-workspace tokens:** `init-workspace` writes `~/.werkmeister/tokens/<workspace>`, with a copy in the git-ignored `.werkmeister/token`. On `/mcp` the token lists only that workspace's verbs and refuses any other workspace (code `SCOPE`). `close-out` deletes it.
+  - **New endpoints:** `POST /api/tool` (machine token) for host thin clients, and `GET /api/logs/stream` (SSE) for following logs.
+  - **New tools:** `clean`, `stats`, `optimize`, `cache`, `registry`, `resources` and `intercepts`.
+  - **VS Code:** the extension's status (5 s), resources (30 s), intercepts, close-out and log follow now go through the daemon. It shows "werkmeister daemon not running" when the daemon is down.
+  - **SessionEnd auto-stop:** `stop --if-idle` hands the stop to the daemon, and falls back to a local stop when the daemon is down. The hook fast paths (`hooks gate`, `pr-guard`, `agent-state`) are unchanged.
+  - **Test switch:** `WERKMEISTER_FIXTURE=1` keeps a run off Caddy, k8s forwards, telepresence, `/etc/hosts` and the real `gh`.
+  - **Fix:** the `status` tool's output schema accepts every workspace field, so an MCP client that lists tools first no longer rejects its result.
+  - **Port setting:** `overrides.mcp_port` / `WERKMEISTER_MCP_PORT` now sets the daemon's port.
+
+  **Breaking, on upgrade:**
+
+  1. On macOS, run `werkmeister setup` and accept "Install the launchd agent?". It installs `com.werkmeister.daemon`, which keeps the daemon up, and replaces the 3002 process `connect` started. Elsewhere, keep using `werkmeister connect`.
+  2. Re-run `werkmeister init-workspace` in every open workspace. It writes the workspace token and regenerates `.mcp.json`. The pre-SW-106 `x-sandbox-feature` header is no longer read.
+  3. Container agents set `WERKMEISTER_MCP_TOKEN` from the workspace's `.werkmeister/token`, not `~/.werkmeister/mcp-token`.
+  4. Reload VS Code windows so the extension picks up the change.
+
+  **Rollback:** reinstall the previous version and run `launchctl bootout gui/$(id -u)/com.werkmeister.daemon`. Older versions ignore the token files.
+
+- e75909c: SW-206: `werkmeister close-out` (shipped and `--abandon`) writes `usage.md` and `usage.json` into the workspace record before the folder is removed, committed and pushed with `closeout.md`. They hold token totals by model, the USD estimate, per-session rows (first and last turn, turns, models), wall-clock time, approximate per-stage timing, and the run's werkmeister version and commit, model, autonomous setting and ticket. `closeout.md` gets a one-line `Usage:` summary. A retry after a failed removal keeps the first snapshot; a workspace with no transcripts still gets one that says so. The `workspace-usage` MCP tool's sessions gain `firstTurn`, `lastTurn`, `turns` and `models`.
+
+### Patch Changes
+
+- d1fc18a: SW-198: `pr open` prints the full gate output (`<repo>: gate passed` and every ✓/✗ row, the same text as `pr gate`) before it pushes, not only when the gate fails.
+- a8203cc: SW-219: for a repo whose registry entry has a gate `lint` command, the generated `werkmeister-context.md` How to validate test commands end with `&& <lint>`, so the implement stage that runs them catches a format error before `werkmeister pr open`. Repos without `lint` render unchanged; the PR gate's own lint row is unchanged.
+
 ## 0.51.1
 
 ### Patch Changes
