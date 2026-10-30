@@ -113,7 +113,7 @@ server. Until that is widened, use:
 
 <!-- generated:mcp-tools -->
 
-55 tools (6 UI-only).
+56 tools (6 UI-only).
 
 | Tool | What it does |
 | --- | --- |
@@ -124,6 +124,7 @@ server. Until that is widened, use:
 | `registry` | Regenerate the service registry |
 | `resources` | CPU and memory per workspace |
 | `intercepts` | Telepresence intercept state |
+| `scheduler` | Slot leases and the waiting queue |
 | `up` | Bring a feature up |
 | `down` | Tear a feature down |
 | `stop` | Stop a feature's containers |
