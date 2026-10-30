@@ -11,6 +11,9 @@ new: the follow\-up's name, in its PR file and branch
 \fB\-\-no\-pr <reason>\fR
 adopt: no PR — the fix is already on base
 .TP
+\fB\-\-no\-wait\fR
+gate/open: don't wait for host load under budget.host_load before each check
+.TP
 \fB\-\-install\fR
 watch: install a schedule (launchd on macOS, else crontab) that runs \fBpr watch\fR every 10 minutes
 .TP
@@ -26,6 +29,8 @@ Opens PRs from a workspace and tracks them to a release. Each action:
 \fBgate\fR runs the pre\-PR gate for each PR file and changes nothing.
 .IP \(bu 3
 \fBopen\fR gates, pushes and opens a PR for each PR file at \fBstatus: approved\fR, and records its URL.
+.IP \(bu 3
+Before each gate check (lint, tests, release), \fBgate\fR and \fBopen\fR wait while the host's 1\-minute load is above \fBbudget.host_load\fR in \fB~/.werkmeister/config.yaml\fR (default: 2 × CPUs; \fB0\fR turns it off), for up to 30 minutes, then run anyway. \fB\-\-no\-wait\fR skips the wait. A failed check ends with the host load.
 .IP \(bu 3
 \fBstatus\fR records merged, shipped or closed from GitHub and the repo's release tags.
 .IP \(bu 3

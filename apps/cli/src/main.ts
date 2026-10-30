@@ -912,6 +912,10 @@ const SPECS: CommandSpec[] = [
         .option("--slug <slug>", "new: the follow-up's name, in its PR file and branch")
         .option("--no-pr <reason>", "adopt: no PR — the fix is already on base")
         .option(
+          "--no-wait",
+          "gate/open: don't wait for host load under budget.host_load before each check",
+        )
+        .option(
           "--install",
           "watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes",
         )
@@ -929,6 +933,7 @@ const SPECS: CommandSpec[] = [
         noPr,
         repo: args[pr ? 1 : 0] ?? null,
         slug: o.slug ?? null,
+        wait: o.wait !== false,
         json: Boolean(o.json),
         install: Boolean(o.install),
         uninstall: Boolean(o.uninstall),

@@ -57,6 +57,20 @@ test("exit status passes through; no command is a usage error", () => {
   }
 });
 
+test("a failing command reports host load on stderr; a passing one prints nothing extra (SW-209)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const failed = spawnSync(bin, ["sh", "-c", "exit 3"], { encoding: "utf8" });
+    assert.equal(failed.status, 3);
+    assert.match(failed.stderr, /^with-temp-home: exit 3; host load [\d. ]+ on \d+ cores$/m);
+    const passed = spawnSync(bin, ["true"], { encoding: "utf8" });
+    assert.equal(passed.status, 0);
+    assert.equal(passed.stderr, "");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("corepack keeps the caller's cache unless COREPACK_HOME is already set", () => {
   const { root, bin } = wrapper();
   const corepackHome = (env) =>

@@ -29,14 +29,23 @@ beforeEach(() => {
 it("open goes to openPrs for the workspace and the named repo", async () => {
   vi.mocked(openPrs).mockResolvedValue({ ok: true, lines: ["app: open u"] });
   await run({ action: "open", repo: "app", json: false });
-  expect(openPrs).toHaveBeenCalledWith("/features/ws", "app");
+  expect(openPrs).toHaveBeenCalledWith("/features/ws", "app", undefined, { wait: true });
   expect(exit).not.toHaveBeenCalled();
+});
+
+it("--no-wait reaches gatePrs and openPrs as { wait: false } (SW-209)", async () => {
+  vi.mocked(gatePrs).mockResolvedValue({ ok: true, lines: [] });
+  vi.mocked(openPrs).mockResolvedValue({ ok: true, lines: [] });
+  await run({ action: "gate", repo: null, wait: false, json: false });
+  expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined, undefined, { wait: false });
+  await run({ action: "open", repo: "app", wait: false, json: false });
+  expect(openPrs).toHaveBeenCalledWith("/features/ws", "app", undefined, { wait: false });
 });
 
 it("a failed gate exits 1", async () => {
   vi.mocked(gatePrs).mockResolvedValue({ ok: false, lines: ["app: gate FAILED"] });
   await run({ action: "gate", repo: null, json: false });
-  expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined);
+  expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined, undefined, { wait: true });
   expect(exit).toHaveBeenCalledWith(1);
 });
 

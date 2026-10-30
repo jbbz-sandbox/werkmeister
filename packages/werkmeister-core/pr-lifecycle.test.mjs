@@ -135,6 +135,8 @@ function deps(table, over = {}) {
     },
     gateCompose: () => [],
     portHolders: async () => [],
+    hostLoad: () => ({ load: [0.5, 0.5, 0.5], cores: 4 }),
+    sleep: async () => {},
     ...over,
   };
 }
@@ -947,6 +949,100 @@ test("runGate: touches the idle reaper's exec marker before docker exec (SW-39)"
       d.calls.join("\n"),
     );
     assert.ok(fs.existsSync(path.join(dotDir(ws), "last-exec")));
+  } finally {
+    clean(ws);
+  }
+});
+
+/** A host whose 1-min load reads *loads* in turn (the last one repeats), on 4 cores: limit 8. */
+function loaded(loads) {
+  const slept = [];
+  let i = 0;
+  return {
+    slept,
+    hostLoad: () => {
+      const l = loads[Math.min(i++, loads.length - 1)];
+      return { load: [l, l, l], cores: 4 };
+    },
+    sleep: async (ms) => {
+      slept.push(ms);
+    },
+  };
+}
+const testRow = (g) => g.checks.find((c) => c.name === "test api");
+
+test("runGate: a failed test row ends with the host load (SW-209)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const host = loaded([1, 90]);
+    const timedOut = [
+      /^docker exec .* npm test -w api/,
+      { code: 1, stderr: "Test timed out in 60000ms" },
+    ];
+    const g = await gate(ws, deps([DIFF_API, timedOut], host));
+    const row = testRow(g);
+    assert.equal(row.ok, false);
+    assert.match(row.detail, /Test timed out in 60000ms/);
+    assert.match(
+      row.detail.split("\n").at(-1),
+      /^host load 90\.0 \/ 90\.0 \/ 90\.0 \(1, 5, 15 min\) on 4 cores$/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: over the load limit it waits, then runs and says how long (SW-209)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const host = loaded([90, 90, 1]);
+    const d = deps([DIFF_API], host);
+    const g = await gate(ws, d);
+    assert.deepEqual(host.slept.slice(0, 2), [15000, 15000]);
+    assert.ok(
+      d.calls.some((c) => /^docker exec .* npm test -w api/.test(c)),
+      d.calls.join("\n"),
+    );
+    assert.equal(testRow(g).ok, true);
+    assert.match(testRow(g).detail, /waited 30 s for host load/);
+    assert.doesNotMatch(testRow(g).detail, /host load \d/, "a passing row gets no load line");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: still over after 30 min it runs anyway and says so (SW-209)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const host = loaded([90]);
+    const d = deps([DIFF_API], host);
+    const g = await gate(ws, d);
+    // 120 polls of 15 s for each check that runs (test, then release).
+    assert.ok(host.slept.length >= 120 && host.slept.length % 120 === 0, `${host.slept.length}`);
+    assert.ok(
+      d.calls.some((c) => /^docker exec .* npm test -w api/.test(c)),
+      d.calls.join("\n"),
+    );
+    assert.equal(testRow(g).ok, true, "load never decides pass or fail");
+    assert.match(testRow(g).detail, /ran with host load 90\.0 over 8 after a 30 min wait/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: --no-wait and host_load: 0 never sleep (SW-209)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const noWait = loaded([90]);
+    await withSandboxHome(() =>
+      runGate(ws, readPrFiles(ws)[0], deps([DIFF_API], noWait), { wait: false }),
+    );
+    assert.deepEqual(noWait.slept, []);
+    const off = loaded([90]);
+    await withSandboxHome(() => runGate(ws, readPrFiles(ws)[0], deps([DIFF_API], off)), {
+      config: "budget:\n  host_load: 0\n",
+    });
+    assert.deepEqual(off.slept, []);
   } finally {
     clean(ws);
   }
