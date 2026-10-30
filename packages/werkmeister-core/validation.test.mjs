@@ -144,3 +144,42 @@ test("a local non-URL service gets lifecycle but no direct curl", async () => {
     { services: SERVICES },
   );
 });
+
+// SW-219: the implement stage runs this test command, so the gate's lint rides on it.
+test("a repo with a gate lint: its test commands end with the lint; a repo without one never mentions lint", async () => {
+  await withSandboxHome(
+    async () => {
+      const build = (repos) =>
+        buildSandboxContextMd(
+          "t",
+          1,
+          11100,
+          11119,
+          [],
+          loadServices(),
+          "",
+          null,
+          ["core", "elsewhere"],
+          false,
+          "/ws/.werkmeister/bin/with-temp-home",
+          repos,
+        );
+      const out = build({ demo: { lint: "npx biome ci ." } });
+      assert.match(
+        out,
+        /\| `core` \| demo \| `packages\/core` \| `\/ws\/\.werkmeister\/bin\/with-temp-home npm test && npx biome ci \.` \|/,
+      );
+      assert.match(out, /also runs the repo's lint, the same command the PR gate's lint row runs/);
+      assert.doesNotMatch(
+        out,
+        /\| `elsewhere` \|[^\n]*biome/,
+        "no test command, so no lint either",
+      );
+
+      for (const repos of [{}, { demo: {} }, undefined]) {
+        assert.doesNotMatch(build(repos), /lint/i);
+      }
+    },
+    { services: SERVICES },
+  );
+});
