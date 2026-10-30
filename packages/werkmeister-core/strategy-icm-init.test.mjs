@@ -519,6 +519,31 @@ test("an autonomous brief carries the run limits; an interactive one and the pla
   assert.match(await brief({ autonomous: "true", starting_prompt: "" }), PLACEHOLDER_BRIEF_RE);
 });
 
+test("an autonomous brief's open questions are decided, not asked; an interactive one still asks (SW-235)", async () => {
+  const starting_prompt =
+    "## Goal\n\nShip it.\n\n## Open questions\n\n- A or B? The ticket says either works. Confirm with the user before choosing.\n- Prompt or rewrite? Ask the user before choosing.\n\n## Notes\n\nAsk the user about nothing else.";
+  const brief = async (inputs) => {
+    let text;
+    await withIcmWorkspace(
+      async (root, ctx) => {
+        icm.init({ ...ctx, issue: null });
+        text = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+      },
+      { inputs: { starting_prompt, ...inputs } },
+    );
+    return text;
+  };
+  const open = (t) => t.split("## Open questions")[1].split("\n## ")[0];
+  const auto = await brief({ autonomous: "true" });
+  assert.doesNotMatch(open(auto), /confirm with the user|ask the user/i);
+  assert.match(open(auto), /- A or B\? The ticket says either works\.\n- Prompt or rewrite\?\n/);
+  assert.match(open(auto), /## Recommendations for reviewer/);
+  assert.match(auto, /## Notes\n\nAsk the user about nothing else\./); // only the open questions change
+  const interactive = await brief({});
+  assert.match(open(interactive), /Confirm with the user before choosing\./);
+  assert.doesNotMatch(interactive, /Recommendations for reviewer/);
+});
+
 test("same context twice gives byte-identical files", async () => {
   const snap = async (ctxPatch) => {
     let files;

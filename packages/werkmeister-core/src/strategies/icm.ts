@@ -328,11 +328,26 @@ const READ_ISSUE =
 export const PLACEHOLDER_BRIEF_RE =
   /^---\nsource: \.(?:sandbox|werkmeister)\/workspace\.yml \(starting_prompt\)\n---\n\n# Brief: [^\n]*\n\n_No starting prompt was given\. [^\n]*_\n$/; // name-check: ignore
 
+// SW-235: the distill phrases open questions for a person to answer; an autonomous run has none to ask.
+const ASK_A_PERSON_RE =
+  /(?<=[.?!]) +(?:Ask|Confirm with|Check with) the (?:user|person)\b[^\n.?!]*[.?!]?/g;
+const DECIDE_OPEN_QUESTIONS =
+  "Nobody is asked during this run: decide each question yourself per the run limits, and record the choice and why under `## Recommendations for reviewer`.";
+
+function settleOpenQuestions(prompt: string): string {
+  return prompt.replace(
+    /^#+ Open questions\n[\s\S]*?(?=\n+#+ |$(?![\s\S]))/m,
+    (section) => `${section.replace(ASK_A_PERSON_RE, "")}\n\n${DECIDE_OPEN_QUESTIONS}`,
+  );
+}
+
 function renderBrief(ctx: InitContext): string {
-  const prompt = (ctx.inputs["starting_prompt"] ?? "").trim();
+  const autonomous = isTrue(ctx.inputs["autonomous"]);
+  const raw = (ctx.inputs["starting_prompt"] ?? "").trim();
+  const prompt = autonomous ? settleOpenQuestions(raw) : raw;
   const description = (ctx.inputs["description"] ?? "").trim();
   const copy = !!ctx.issue?.fetchedAt;
-  const limits = isTrue(ctx.inputs["autonomous"]) ? ["## Run limits", "", RUN_LIMITS, ""] : [];
+  const limits = autonomous ? ["## Run limits", "", RUN_LIMITS, ""] : [];
   if (!ctx.issue || (!copy && !description && !prompt)) {
     // Unchanged from before the issue copy existed; with no copy yet, still the placeholder --refresh-issue rebuilds.
     return [
