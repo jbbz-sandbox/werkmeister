@@ -9,7 +9,7 @@
  *
  *     import { sandboxLock } from "./locks.js";
  *
- *     sandboxLock("slots", () => {
+ *     await sandboxLock("slots", () => {
  *       const data = readSlots();
  *       // ... mutate ...
  *       writeSlots(data);
@@ -17,6 +17,8 @@
  *
  * The lock is automatically released when the callback returns (even on
  * exceptions; async callbacks release when the returned promise settles).
+ * The wait between retries awaits a timer, so a holder in the same process
+ * that is suspended at an await can still run and release (SW-183).
  *
  * ponytail: Node has no fcntl.flock, so this uses an O_EXCL PID-stamped lock
  * file instead. Unlike flock, a crashed holder leaves the file behind — we
@@ -28,6 +30,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { dotDir } from "./config.js";
 
@@ -35,11 +38,6 @@ const lockDir = () => path.join(dotDir(os.homedir()), "locks");
 
 // Poll interval (seconds) for the retry loop.
 const _RETRY_INTERVAL = 0.1;
-
-/** Synchronous sleep without spinning (main-thread Atomics.wait). */
-function sleepSync(seconds: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, seconds * 1000);
-}
 
 /** True when the PID recorded in the lock file no longer belongs to a live process. */
 function holderIsDead(lockPath: string): boolean {
@@ -97,18 +95,18 @@ function tryAcquire(lockPath: string): boolean {
  *     The critical section. Its return value is passed through. If it
  *     returns a promise, the lock is held until the promise settles.
  * timeout
- *     `undefined` (default) blocks forever until the lock is acquired —
+ *     `undefined` (default) waits forever until the lock is acquired —
  *     identical to historical behavior, safe for all existing callers.
- *     A finite value (seconds) retries until it elapses, then throws
+ *     A finite value (seconds) retries until it elapses, then rejects
  *     instead of hanging forever. This lets a caller recover from a
  *     crashed lock holder without requiring manual deletion of the lock
  *     file.
  */
-export function sandboxLock<T>(
+export async function sandboxLock<T>(
   name: string,
-  fn: () => T,
+  fn: () => T | Promise<T>,
   { timeout }: { timeout?: number } = {},
-): T {
+): Promise<T> {
   const dir = lockDir();
   fs.mkdirSync(dir, { recursive: true });
   const lockPath = path.join(dir, `${name}.lock`);
@@ -124,33 +122,16 @@ export function sandboxLock<T>(
           "file and retry.",
       );
     }
-    sleepSync(_RETRY_INTERVAL);
+    await sleep(_RETRY_INTERVAL * 1000);
   }
 
-  const release = () => {
+  try {
+    return await fn();
+  } finally {
     try {
       fs.unlinkSync(lockPath);
     } catch {
       /* already gone */
     }
-  };
-
-  let result: T;
-  try {
-    result = fn();
-  } catch (err) {
-    release();
-    throw err;
   }
-  if (result instanceof Promise) {
-    // ponytail: an async `fn` holds the lock across its awaits, and the acquire
-    // loop above blocks the event loop (Atomics.wait). So a second acquisition
-    // *in the same process*, while an async holder is suspended, deadlocks —
-    // the holder can never resume to release. Unreachable today: the CLI runs
-    // one command at a time and fans out nowhere (no Promise.all over slot or
-    // Caddyfile work). Make the wait await a timer if that ever stops being true.
-    return result.finally(release) as T;
-  }
-  release();
-  return result;
 }

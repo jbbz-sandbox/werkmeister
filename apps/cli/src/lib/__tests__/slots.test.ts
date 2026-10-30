@@ -53,7 +53,7 @@ vi.mock("werkmeister-core/config", async (importOriginal) => {
 });
 
 vi.mock("werkmeister-core/locks", () => ({
-  sandboxLock: (name: string, fn: () => unknown, opts?: { timeout?: number }) => {
+  sandboxLock: async (name: string, fn: () => unknown, opts?: { timeout?: number }) => {
     h.lastLockOpts = opts;
     if (h.simulateLockTimeout) {
       throw new Error(`Timed out after ${opts?.timeout}s waiting for lock '${name}'`);

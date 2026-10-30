@@ -294,7 +294,7 @@ export async function requireLeasedSlot(
   deps: SlotDeps = defaultSlotDeps,
 ): Promise<number> {
   const dockerSlots = await deps.labels();
-  const lease = sandboxLock("allocate", () => readLeases()[feature], {
+  const lease = await sandboxLock("allocate", () => readLeases()[feature], {
     timeout: _ALLOCATE_LOCK_TIMEOUT,
   });
   if (!lease) {
