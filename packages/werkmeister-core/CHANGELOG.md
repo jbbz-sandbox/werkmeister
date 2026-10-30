@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.52.1
+
+### Patch Changes
+
+- 29a1404: SW-224: the generated `with-temp-home` waits before its command while the host's 1-minute load is above `budget.host_load`, using the pr gate's wait (same default, same 30-minute cap, then it runs anyway and says so), through the new internal `werkmeister wait-load`. `WERKMEISTER_NO_WAIT=1` skips it; with no `werkmeister` on PATH the wrapper runs at once.
+- a69799c: SW-235: an autonomous workspace's BRIEF.md no longer tells the agent to ask the user about its open questions. `## Open questions` drops the "Ask / Confirm with the user …" sentences that follow each question, and says to decide each one per the run limits and record the choice under `## Recommendations for reviewer`. Interactive briefs are unchanged.
+
 ## 0.52.0
 
 ### Minor Changes
