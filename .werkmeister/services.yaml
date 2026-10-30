@@ -54,8 +54,11 @@ services:
       Fast route for a core-only change: `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
       set HOME on that call only, never for the whole shell (it breaks `pnpm build`).
       Then build, run the built werkmeister binary from a temp folder against a fixture workspace in it.
-      Seed the temp folder with `services.yaml`, `ports.yaml` and a `config.yaml` whose `paths.workspaces_root` holds the fixture workspace,
-      and run through `.werkmeister/bin/with-temp-home` with `WERKMEISTER_CONFIG_FILE` pointing at that `config.yaml`.
+      Export `WERKMEISTER_ROOT=<worktree>/apps/cli` for the run (or `env -u WERKMEISTER_ROOT`): the shell may export the main checkout's, and `with-temp-home` only swaps HOME, so templates and infra would come from main, not the branch under test.
+      The fixture workspace must be a git repo (`git init` plus an empty commit); otherwise `init-workspace` fails with `Not inside a workspace … and no parent .git directory found`.
+      Seed the temp folder with `services.yaml`, `ports.yaml` and a `config.yaml` that sets `paths.workspaces_root` (holding the fixture workspace), `overrides.services_yaml` and `overrides.ports_yaml` (the seeded files; the temp HOME has no `~/.werkmeister/services.yaml`, so otherwise you get `Required config file not found: services.yaml`), e.g.
+      `paths.workspaces_root: <tmp>/ws`, `overrides.services_yaml: <tmp>/services.yaml`, `overrides.ports_yaml: <tmp>/ports.yaml`,
+      and run through `.werkmeister/bin/with-temp-home` with `WERKMEISTER_CONFIG_FILE` set to the absolute path of that `config.yaml` (the CLI runs from the fixture folder).
       Run from the temp folder, not only with a temp HOME: the CLI reads its workspace from the current folder.
       Any command that can write (to the workspace, its issue or its PRs) runs against the fixture workspace;
       only read-only commands (e.g. `werkmeister skills check`) may run from the real workspace.
