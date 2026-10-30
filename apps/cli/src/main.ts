@@ -97,6 +97,7 @@ import statusHelp from "./commands/status.help.md";
 import stopHelp from "./commands/stop.help.md";
 import testHelp from "./commands/test.help.md";
 import upHelp from "./commands/up.help.md";
+import waitLoadHelp from "./commands/wait-load.help.md";
 import workspaceHelp from "./commands/workspace.help.md";
 import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
@@ -468,6 +469,18 @@ const SPECS: CommandSpec[] = [
         .option("--start <dir>", "Directory to search up from (default: cwd)");
     },
     namespace: (_args, o) => ({ start: o.start ?? null }),
+  },
+  {
+    name: "wait-load",
+    group: "Internal:",
+    help: waitLoadHelp,
+    load: () => import("./commands/wait_load.js"),
+    configure: (cmd) => {
+      cmd.description(
+        "Wait, up to 30 min, while host load is above budget.host_load; with-temp-home runs it first",
+      );
+    },
+    namespace: () => ({}),
   },
   {
     name: "open",

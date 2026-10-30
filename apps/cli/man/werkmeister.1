@@ -125,6 +125,9 @@ Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.y
 \fBstart\-args\fR
 Print the start_session arguments (title, model, prompt, background) for the enclosing workspace, as JSON
 .TP
+\fBwait\-load\fR
+Wait, up to 30 min, while host load is above budget.host_load; with\-temp\-home runs it first
+.TP
 \fBhooks\fR <action>
 Claude Code hook entrypoints: the standards gate, the PR guard and the agent state
 .TP
@@ -171,6 +174,7 @@ Launch the werkmeister MCP server over stdio (Claude Desktop, the werkmeister pl
 \fBwerkmeister\-registry\fR(1),
 \fBwerkmeister\-migrate\fR(1),
 \fBwerkmeister\-start\-args\fR(1),
+\fBwerkmeister\-wait\-load\fR(1),
 \fBwerkmeister\-hooks\fR(1),
 \fBwerkmeister\-dashboard\fR(1),
 \fBwerkmeister\-mcp\fR(1)

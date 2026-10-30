@@ -138,6 +138,8 @@ export {
   readPrFiles,
   refreshPrStatus,
   runGate,
+  waitForHostLoad,
+  waitForHostLoadNow,
   watchPrs,
 } from "./pr_lifecycle.js";
 
