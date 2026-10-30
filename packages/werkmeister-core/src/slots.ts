@@ -30,6 +30,7 @@ import { SandboxError } from "./errors.js";
 import { sandboxLock } from "./locks.js";
 import { error, info, success, warn } from "./reporter.js";
 import { pickSlot } from "./scheduler.js";
+import { schedulerOp } from "./scheduler_client.js";
 import { dequeue, readLeases, type SlotLease, writeLeases } from "./scheduler_state.js";
 
 export const LABEL_PREFIX = "com.werkmeister";
@@ -250,11 +251,24 @@ function heldSlots(dockerSlots: Record<string, SlotEntry> | null): {
  *
  * Throws if all slots are held.
  */
-export async function allocateSlot(
+export function allocateSlot(
   feature: string,
   preferredSlot?: number | null,
   workspace?: string | null,
   deps: SlotDeps = defaultSlotDeps,
+): Promise<number> {
+  return schedulerOp(
+    "allocate",
+    { feature, preferredSlot: preferredSlot ?? null, workspace: workspace ?? null },
+    () => allocateSlotHere(feature, preferredSlot, workspace, deps),
+  );
+}
+
+function allocateSlotHere(
+  feature: string,
+  preferredSlot: number | null | undefined,
+  workspace: string | null | undefined,
+  deps: SlotDeps,
 ): Promise<number> {
   const count = slotCount();
   return sandboxLock(
@@ -294,9 +308,7 @@ export async function requireLeasedSlot(
   deps: SlotDeps = defaultSlotDeps,
 ): Promise<number> {
   const dockerSlots = await deps.labels();
-  const lease = await sandboxLock("allocate", () => readLeases()[feature], {
-    timeout: _ALLOCATE_LOCK_TIMEOUT,
-  });
+  const lease = await slotLease(feature);
   if (!lease) {
     try {
       return await allocateSlot(feature, preferredSlot, workspace, deps);
@@ -318,8 +330,21 @@ export async function requireLeasedSlot(
   return lease.slot;
 }
 
+/** *feature*'s lease, or null when it holds none. */
+export function slotLease(feature: string): Promise<SlotLease | null> {
+  return schedulerOp("lease", { feature }, () =>
+    sandboxLock("allocate", () => readLeases()[feature] ?? null, {
+      timeout: _ALLOCATE_LOCK_TIMEOUT,
+    }),
+  );
+}
+
 /** End *feature*'s lease and drop it from the waiting queue. Called by `down`. */
-export async function releaseSlot(feature: string): Promise<void> {
+export function releaseSlot(feature: string): Promise<void> {
+  return schedulerOp("release", { feature }, () => releaseSlotHere(feature));
+}
+
+async function releaseSlotHere(feature: string): Promise<void> {
   await sandboxLock(
     "allocate",
     () => {

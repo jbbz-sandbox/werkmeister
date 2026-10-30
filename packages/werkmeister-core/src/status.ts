@@ -35,7 +35,7 @@ import {
 // whose other caller already lives there. Splitting it out would touch a second
 // module for no gain.
 
-import { readQueue } from "./scheduler_state.js";
+import { waitingQueue } from "./scheduler_client.js";
 import { getAllSlots, getPortRange, type SlotEntry, slotCount } from "./slots.js";
 import {
   type InterceptState,
@@ -308,7 +308,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
     mcp_web_server: mcp,
     k8s_forwards: k8s,
     features,
-    waiting: readQueue(),
+    waiting: await waitingQueue(),
     caches: await caches,
     summary: {
       total_features: features.length,

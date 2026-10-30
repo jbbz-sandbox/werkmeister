@@ -4,6 +4,10 @@
  * Every daemon read is mocked; the formatting and the row joins are real.
  */
 
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("werkmeister-core/compose", async (orig) => ({
@@ -190,5 +194,23 @@ describe("a stopped k8s-forwards container", () => {
     out = [];
     await run({ k8s: true });
     expect(out.join("\n")).toContain("docker restart w9r-k8s-forwards");
+  });
+});
+
+// SW-181: the waiting queue prints in order; SW-185 must keep it when the daemon owns it.
+describe("the waiting queue", () => {
+  it("lists each waiting feature with its position", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "status-queue-"));
+    vi.stubEnv("WERKMEISTER_CONFIG_FILE", path.join(home, "config.yaml"));
+    try {
+      fs.mkdirSync(path.join(home, "scheduler"));
+      fs.writeFileSync(path.join(home, "scheduler", "queue.json"), '["b","c"]');
+      vi.mocked(featureVitals).mockResolvedValue({ health: new Map(), resources: null });
+      await run({});
+      expect(out.join("\n")).toContain("Waiting for capacity:\x1b[0m b (#1), c (#2)");
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });

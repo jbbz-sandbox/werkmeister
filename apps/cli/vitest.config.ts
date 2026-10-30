@@ -9,6 +9,10 @@ export default defineConfig({
   test: {
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    env: { DOCKER_HOST: "unix:///nonexistent/werkmeister-tests.sock" },
+    // Likewise no werkmeister daemon: the scheduler falls back in-process rather than reach the host's (SW-185).
+    env: {
+      DOCKER_HOST: "unix:///nonexistent/werkmeister-tests.sock",
+      WERKMEISTER_HOST: "http://127.0.0.1:9",
+    },
   },
 });
