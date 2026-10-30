@@ -383,6 +383,8 @@ export interface SyncRegistryOptions {
   checkOnly?: boolean;
   /** Clock for the backup suffix (tests). */
   now?: () => number;
+  /** Leave a hand-written registry untouched (a failing step) instead of backing it up and replacing it. */
+  generatedOnly?: boolean;
 }
 
 function placeholderPaths(): PlaceholderPaths {
@@ -449,6 +451,19 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const reposRoot = opts.reposRoot ?? getReposRoot();
   const target = servicesYamlPath();
   const localPath = servicesLocalYamlPath();
+  if (
+    opts.generatedOnly &&
+    fs.existsSync(target) &&
+    !isGenerated(fs.readFileSync(target, "utf8"))
+  ) {
+    return [
+      {
+        label,
+        ok: false,
+        detail: `${target} is hand-written — left as is; \`werkmeister registry sync\` converts it (with a backup)`,
+      },
+    ];
+  }
 
   let split: DisabledSplit;
   let merged: MergedRegistry;

@@ -407,6 +407,27 @@ test("syncRegistry backs up a hand-written registry once, never a generated one"
   );
 });
 
+test("generatedOnly leaves a hand-written registry alone and still refreshes a generated one (SW-196)", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  writeFileSync(registryPath(), "services:\n  hand-edited: {}\n");
+  const [skipped] = syncRegistry({ reposRoot: repos, generatedOnly: true });
+  assert.equal(skipped.ok, false);
+  assert.match(skipped.detail, /services\.yaml is hand-written — left as is/);
+  assert.equal(readFileSync(registryPath(), "utf8"), "services:\n  hand-edited: {}\n");
+  assert.deepEqual(
+    readdirSync(home).filter((f) => f !== "config.yaml"),
+    ["services.yaml"],
+    "no backup, no seeded services.local.yaml",
+  );
+
+  rmSync(registryPath());
+  syncRegistry({ reposRoot: repos });
+  writeFragment("demo", "services:\n  backend:\n    port_offset: 1\n");
+  const [refreshed] = syncRegistry({ reposRoot: repos, generatedOnly: true });
+  assert.match(refreshed.detail, /^generated /);
+  assert.equal(parse(readFileSync(registryPath(), "utf8")).services.backend.port_offset, 1);
+});
+
 test("syncRegistry seeds services.local.yaml when absent so k8s_context is never dropped", () => {
   writeFragment("demo", "services:\n  backend: {}\n");
   const localPath = path.join(home, "services.local.yaml");

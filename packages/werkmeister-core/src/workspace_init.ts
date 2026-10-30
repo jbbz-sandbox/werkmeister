@@ -63,6 +63,7 @@ import {
 } from "./mcp_gen.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
+import { syncRegistry } from "./registry_sync.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { repoDirs } from "./standards.js";
 import {
@@ -391,6 +392,15 @@ function commitWorkspaceState(workspaceDir: string, workspaceName: string): void
     warn(`Could not commit initial workspace state: ${(exc as Error).message}`);
   }
 }
+/** SW-196: render from the fragments on disk, not whatever the last manual `registry sync` left. */
+// ponytail: reads each main checkout's working tree, not origin/main; a checkout behind origin renders stale text.
+function refreshRegistry(): void {
+  for (const step of syncRegistry({ generatedOnly: true })) {
+    if (!step.ok) warn(`Registry not refreshed: ${step.detail}`);
+    else if (step.detail.startsWith("generated")) info(`Registry: ${step.detail}`);
+  }
+}
+
 async function selectRepos(
   reposValue: string | null | undefined,
   servicesValue: string | null | undefined,
@@ -662,6 +672,7 @@ export async function initWorkspace(
 
   const workspaceName = path.basename(workspaceRoot);
   info(`Workspace root: ${workspaceRoot}`);
+  refreshRegistry();
 
   // 2. Resolve generic inputs from the config file (CLI flag > WERKMEISTER_* env >
   //    .werkmeister/workspace.yml > existing .env).
@@ -955,6 +966,7 @@ export async function provisionWorkspace(
   if (fs.existsSync(workspaceDir)) {
     info(`Workspace already exists: ${workspaceDir} — re-running init-workspace.`);
   } else {
+    refreshRegistry();
     const repos = await selectRepos(resolved.repos, resolved.services);
     resolved.repos = repos.join(",");
     createWorkspaceRoot(workspaceDir, branch, Boolean(opts.force));

@@ -1296,7 +1296,9 @@ Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g.
 The registry is `~/.werkmeister/services.yaml`, and it is **generated**: `werkmeister setup`
 (or `werkmeister registry sync`) merges every `<repo>/.werkmeister/services.yaml` found
 under `paths.repos_root`, then applies `~/.werkmeister/services.local.yaml` on top.
-Edit a repo's fragment or the local file, never the generated one. The demo
+Edit a repo's fragment or the local file, never the generated one.
+`werkmeister workspace` and `init-workspace` regenerate it first, so a new workspace
+renders the fragments as they are on disk; a hand-written registry is left alone with a warning. The demo
 registry comes from the `demo-services` repo's own fragment (our private example app;
 see [Local Kubernetes bootstrap](../README.md#local-kubernetes-bootstrap)):
 
