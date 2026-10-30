@@ -469,6 +469,29 @@ export async function runGate(
   return result;
 }
 
+/** `owner/repo` from an origin URL (SSH or HTTPS, with or without `.git`), or null. */
+export function originSlug(url: string): string | null {
+  return /[:/]([^/:]+\/[^/]+?)(?:\.git)?\/*$/.exec(url.trim())?.[1] ?? null;
+}
+
+/** The PR file's `repo:` must be the code worktree's origin; `gh pr create` fails obscurely otherwise (SW-194). */
+async function repoCheck(dir: string, file: PrFile, deps: Deps): Promise<[boolean, string]> {
+  const got = String(file.fm["repo"] ?? "");
+  const r = await deps.run("git", ["-C", dir, "remote", "get-url", "origin"]);
+  const want = r.code === 0 ? originSlug(r.stdout) : null;
+  if (!want)
+    return [
+      false,
+      `cannot read ${file.dir}'s origin: ${r.stderr.trim() || r.stdout.trim() || "no URL"}`,
+    ];
+  return want.toLowerCase() === got.toLowerCase()
+    ? [true, `repo: ${got}`]
+    : [
+        false,
+        `PR file repo: is ${got || "missing"}, but ${file.dir}'s origin is ${want} — set repo: to ${want} (git -C ${file.dir} remote get-url origin)`,
+      ];
+}
+
 async function gateChecks(
   ws: string,
   file: PrFile,
@@ -482,6 +505,7 @@ async function gateChecks(
   const table = passTable(file.body);
   add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
   add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
+  add("repo", ...(await repoCheck(path.join(ws, file.dir), file, deps)));
   // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).
   if (checks.some((c) => !c.ok)) {
     add("tests", false, "not run — fix the PR-file checks above first");

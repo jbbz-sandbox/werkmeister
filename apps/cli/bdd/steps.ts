@@ -46,12 +46,13 @@ Given(
     write(path.join(world.ws, "stages/01_implement/output/exercise.md"), PASS);
     write(
       path.join(world.ws, "stages/02_propose/output/pr-app.md"),
-      `---\nstatus: approved\n---\n# Spike\n\n${PASS}`,
+      `---\nrepo: o/app\nstatus: approved\n---\n# Spike\n\n${PASS}`,
     );
 
     const app = path.join(world.ws, "app");
     write(path.join(app, "README.md"), "app\n");
     git(app, "init", "-q", "-b", "main");
+    git(app, "remote", "add", "origin", "git@github.com:o/app.git");
     git(app, "add", ".");
     git(app, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base");
     git(app, "update-ref", "refs/remotes/origin/main", "HEAD");

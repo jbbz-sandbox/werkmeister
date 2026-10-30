@@ -76,7 +76,9 @@ function stubRun(table) {
     calls.push(line);
     for (const [re, res] of table)
       if (re.test(line)) return { stdout: "", stderr: "", code: 0, ...res };
-    return { stdout: "", stderr: "", code: 0 };
+    // The origin the PR file's `repo: o/app` must match (SW-194).
+    const origin = /remote get-url origin$/.test(line) ? "git@github.com:o/app.git\n" : "";
+    return { stdout: origin, stderr: "", code: 0 };
   };
   return { run, calls };
 }
@@ -306,6 +308,42 @@ test("gate fails on an unfinished stage, a FAIL row and an unapproved file, befo
     assert.ok(!d.calls.some((c) => c.startsWith("docker exec")));
   } finally {
     clean(ws);
+  }
+});
+
+test("gate: repo: that is not the worktree's origin fails naming repo:, expected and actual, before the tests (SW-194)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile().replace("repo: o/app", "repo: JayAndCory/sandbox") },
+  });
+  try {
+    const d = deps([DIFF_API]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["repo", "tests"]);
+    const detail = g.checks.find((c) => c.name === "repo").detail;
+    assert.match(detail, /repo: is JayAndCory\/sandbox/);
+    assert.match(detail, /origin is o\/app/);
+    assert.ok(!d.calls.some((c) => c.startsWith("docker exec")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: repo: matches an SSH, HTTPS or .git-less origin (SW-194)", async () => {
+  for (const url of [
+    "git@github.com:o/app.git",
+    "https://github.com/o/app.git",
+    "https://github.com/O/app/",
+  ]) {
+    const ws = icmWorkspace();
+    try {
+      const g = await gate(
+        ws,
+        deps([[/remote get-url origin$/, { stdout: `${url}\n` }], DIFF_API]),
+      );
+      assert.deepEqual(failed(g), [], url);
+    } finally {
+      clean(ws);
+    }
   }
 });
 

@@ -29,7 +29,7 @@ These hold for every PR this workspace produces, whatever skill or command was a
 \`\`\`markdown
 ---
 worktree: <code worktree dir>  # optional for pr-<worktree>.md; written by werkmeister pr new
-repo: <owner>/<name>     # the code repo on GitHub; never the workspace repo
+repo: <owner>/<name>     # from \`git -C <worktree> remote get-url origin\`; never the workspace repo
 branch: <code worktree branch>
 base: main
 status: draft            # draft | approved | open | merged | shipped | closed | abandoned
