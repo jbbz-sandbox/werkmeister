@@ -898,9 +898,9 @@ export async function openPrs(
       continue;
     }
     const g = await runGate(ws, f, deps, { wait });
+    lines.push(...formatGate(f.stem, g));
     if (!g.ok) {
       ok = false;
-      lines.push(...formatGate(f.stem, g));
       continue;
     }
     const dir = path.join(ws, f.dir);

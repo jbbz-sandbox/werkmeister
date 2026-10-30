@@ -822,6 +822,10 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
     assert.deepEqual(d.stopped, [ws], "containers stop once the PR is open (SW-39)");
     assert.equal(r.lines.at(-1), "containers stopped");
+    const passed = r.lines.indexOf("app: gate passed");
+    assert.ok(passed >= 0, "a passing open prints the gate header (SW-198)");
+    assert.match(r.lines[passed + 1], /^ {2}✓ /, "and each ✓ row");
+    assert.ok(passed < r.lines.findIndex((l) => l.includes("<pr-created>")), "before the PR URL");
   } finally {
     clean(ws);
   }
@@ -833,6 +837,7 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.ok(!d.calls.some((c) => c.startsWith("gh pr create")));
     assert.equal(readPrFiles(bad)[0].fm.status, "approved");
     assert.deepEqual(d.stopped, [], "a failed gate keeps the containers for the fix");
+    assert.ok(r.lines.includes("app: gate FAILED"), "failing rows still print");
     assert.ok(!r.lines.some((l) => l.includes("<pr-created>")), "no PR opened, no marker");
   } finally {
     clean(bad);
