@@ -58,6 +58,46 @@ import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 // werkmeister-core is already this CLI's core dependency and every command
 // module loads far more of it on demand.
 import { STRATEGY_IDS } from "werkmeister-core/strategies";
+import cacheHelp from "./commands/cache.help.md";
+import cleanHelp from "./commands/clean.help.md";
+import closeOutHelp from "./commands/close-out.help.md";
+import codeHelp from "./commands/code.help.md";
+import configHelp from "./commands/config.help.md";
+import connectHelp from "./commands/connect.help.md";
+import dashboardHelp from "./commands/dashboard.help.md";
+import detectHelp from "./commands/detect.help.md";
+import downHelp from "./commands/down.help.md";
+import hooksHelp from "./commands/hooks.help.md";
+import initWorkspaceHelp from "./commands/init-workspace.help.md";
+import interceptHelp from "./commands/intercept.help.md";
+import issueHelp from "./commands/issue.help.md";
+import listWorkspacesHelp from "./commands/list-workspaces.help.md";
+import logsHelp from "./commands/logs.help.md";
+import mcpHelp from "./commands/mcp.help.md";
+import migrateHelp from "./commands/migrate.help.md";
+import notesHelp from "./commands/notes.help.md";
+import openHelp from "./commands/open.help.md";
+import optimizeHelp from "./commands/optimize.help.md";
+import pauseHelp from "./commands/pause.help.md";
+import prHelp from "./commands/pr.help.md";
+import proxyReloadHelp from "./commands/proxy-reload.help.md";
+import registryHelp from "./commands/registry.help.md";
+import removeHelp from "./commands/remove.help.md";
+import removeWorkspaceHelp from "./commands/remove-workspace.help.md";
+import restartHelp from "./commands/restart.help.md";
+import resumeHelp from "./commands/resume.help.md";
+import servicesHelp from "./commands/services.help.md";
+import setupHelp from "./commands/setup.help.md";
+import skillsHelp from "./commands/skills.help.md";
+import standardsHelp from "./commands/standards.help.md";
+import startArgsHelp from "./commands/start-args.help.md";
+import startingPromptHelp from "./commands/starting-prompt.help.md";
+import statsHelp from "./commands/stats.help.md";
+import statusHelp from "./commands/status.help.md";
+import stopHelp from "./commands/stop.help.md";
+import testHelp from "./commands/test.help.md";
+import upHelp from "./commands/up.help.md";
+import workspaceHelp from "./commands/workspace.help.md";
 import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
 
@@ -84,8 +124,22 @@ Multi-feature concurrent development orchestrator
  */
 export type Namespace = Record<string, unknown>;
 
+// Root --help sections, in this order (commander orders sections by first registration).
+const GROUPS = [
+  "Everyday:",
+  "Workspaces:",
+  "PRs and issues:",
+  "Services and infra:",
+  "Agent context:",
+  "Machine:",
+  "Internal:",
+] as const;
+
 type CommandSpec = {
   name: string;
+  group: (typeof GROUPS)[number];
+  /** The command's help.md, bundled as text (esbuild.mjs) and printed after its options. */
+  help: string;
   /**
    * Import the command module. A thunk around a *literal* specifier, not a
    * `./commands/${name}.js` built from a string field: only the literal form is
@@ -102,6 +156,8 @@ type CommandSpec = {
 const SPECS: CommandSpec[] = [
   {
     name: "up",
+    group: "Everyday:",
+    help: upHelp,
     load: () => import("./commands/up.js"),
     configure: (cmd) => {
       cmd
@@ -128,6 +184,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "down",
+    group: "Everyday:",
+    help: downHelp,
     load: () => import("./commands/down.js"),
     configure: (cmd) => {
       cmd
@@ -150,6 +208,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "intercept",
+    group: "Services and infra:",
+    help: interceptHelp,
     load: () => import("./commands/intercept.js"),
     configure: (cmd) => {
       cmd
@@ -187,6 +247,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "restart",
+    group: "Everyday:",
+    help: restartHelp,
     load: () => import("./commands/restart.js"),
     configure: (cmd) => {
       cmd
@@ -200,6 +262,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "pause",
+    group: "Everyday:",
+    help: pauseHelp,
     load: () => import("./commands/pause.js"),
     configure: (cmd) => {
       cmd
@@ -212,6 +276,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "resume",
+    group: "Everyday:",
+    help: resumeHelp,
     load: () => import("./commands/resume.js"),
     configure: (cmd) => {
       cmd
@@ -224,6 +290,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "stop",
+    group: "Everyday:",
+    help: stopHelp,
     load: () => import("./commands/stop.js"),
     configure: (cmd) => {
       cmd
@@ -254,6 +322,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "status",
+    group: "Everyday:",
+    help: statusHelp,
     load: () => import("./commands/status.js"),
     configure: (cmd) => {
       cmd
@@ -278,6 +348,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "detect",
+    group: "Machine:",
+    help: detectHelp,
     load: () => import("./commands/detect.js"),
     configure: (cmd) => {
       cmd
@@ -303,6 +375,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "services",
+    group: "Services and infra:",
+    help: servicesHelp,
     load: () => import("./commands/services.js"),
     configure: (cmd) => {
       cmd
@@ -313,6 +387,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "logs",
+    group: "Everyday:",
+    help: logsHelp,
     load: () => import("./commands/logs.js"),
     configure: (cmd) => {
       cmd
@@ -324,6 +400,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "remove",
+    group: "Services and infra:",
+    help: removeHelp,
     load: () => import("./commands/remove.js"),
     configure: (cmd) => {
       cmd
@@ -335,6 +413,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "test",
+    group: "Everyday:",
+    help: testHelp,
     load: () => import("./commands/test.js"),
     configure: (cmd) => {
       cmd
@@ -362,6 +442,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "starting-prompt",
+    group: "Workspaces:",
+    help: startingPromptHelp,
     load: () => import("./commands/starting_prompt.js"),
     configure: (cmd) => {
       cmd
@@ -372,6 +454,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "start-args",
+    group: "Internal:",
+    help: startArgsHelp,
     load: () => import("./commands/start_args.js"),
     configure: (cmd) => {
       cmd
@@ -384,6 +468,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "open",
+    group: "Everyday:",
+    help: openHelp,
     load: () => import("./commands/open.js"),
     configure: (cmd) => {
       cmd
@@ -416,6 +502,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "connect",
+    group: "Services and infra:",
+    help: connectHelp,
     load: () => import("./commands/connect.js"),
     configure: (cmd) => {
       cmd
@@ -429,6 +517,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "proxy-reload",
+    group: "Services and infra:",
+    help: proxyReloadHelp,
     load: () => import("./commands/proxy_reload.js"),
     configure: (cmd) => {
       cmd.description("Regenerate Caddyfile and reload Caddy");
@@ -437,6 +527,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "clean",
+    group: "Machine:",
+    help: cleanHelp,
     load: () => import("./commands/clean.js"),
     configure: (cmd) => {
       cmd
@@ -451,6 +543,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "stats",
+    group: "Machine:",
+    help: statsHelp,
     load: () => import("./commands/stats.js"),
     configure: (cmd) => {
       cmd
@@ -473,6 +567,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "optimize",
+    group: "Machine:",
+    help: optimizeHelp,
     load: () => import("./commands/optimize.js"),
     configure: (cmd) => {
       cmd
@@ -494,6 +590,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "skills",
+    group: "Agent context:",
+    help: skillsHelp,
     load: () => import("./commands/skills.js"),
     configure: (cmd) => {
       cmd
@@ -512,6 +610,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "standards",
+    group: "Agent context:",
+    help: standardsHelp,
     load: () => import("./commands/standards.js"),
     configure: (cmd) => {
       cmd
@@ -527,6 +627,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "hooks",
+    group: "Internal:",
+    help: hooksHelp,
     load: () => import("./commands/hooks.js"),
     configure: (cmd) => {
       cmd
@@ -545,6 +647,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "notes",
+    group: "Agent context:",
+    help: notesHelp,
     load: () => import("./commands/notes.js"),
     configure: (cmd) => {
       cmd
@@ -583,6 +687,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "workspace",
+    group: "Workspaces:",
+    help: workspaceHelp,
     load: () => import("./commands/workspace.js"),
     configure: (cmd) => {
       cmd
@@ -710,6 +816,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "list-workspaces",
+    group: "Workspaces:",
+    help: listWorkspacesHelp,
     load: () => import("./commands/list_workspaces.js"),
     configure: (cmd) => {
       cmd.description("List the workspaces under the workspaces root with their issue and labels");
@@ -718,6 +826,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "issue",
+    group: "PRs and issues:",
+    help: issueHelp,
     load: () => import("./commands/issue.js"),
     configure: (cmd) => {
       cmd
@@ -762,6 +872,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "remove-workspace",
+    group: "Workspaces:",
+    help: removeWorkspaceHelp,
     load: () => import("./commands/remove_workspace.js"),
     configure: (cmd) => {
       cmd
@@ -779,6 +891,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "pr",
+    group: "PRs and issues:",
+    help: prHelp,
     load: () => import("./commands/pr.js"),
     configure: (cmd) => {
       cmd
@@ -823,6 +937,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "close-out",
+    group: "Workspaces:",
+    help: closeOutHelp,
     load: () => import("./commands/close_out.js"),
     configure: (cmd) => {
       cmd
@@ -851,6 +967,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "code",
+    group: "Workspaces:",
+    help: codeHelp,
     load: () => import("./commands/code.js"),
     configure: (cmd) => {
       cmd
@@ -864,6 +982,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "setup",
+    group: "Machine:",
+    help: setupHelp,
     load: () => import("./commands/setup.js"),
     configure: (cmd) => {
       cmd
@@ -883,6 +1003,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "config",
+    group: "Machine:",
+    help: configHelp,
     load: () => import("./commands/config.js"),
     configure: (cmd) => {
       cmd
@@ -918,6 +1040,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "cache",
+    group: "Machine:",
+    help: cacheHelp,
     load: () => import("./commands/cache.js"),
     configure: (cmd) => {
       cmd
@@ -941,6 +1065,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "registry",
+    group: "Machine:",
+    help: registryHelp,
     load: () => import("./commands/registry.js"),
     configure: (cmd) => {
       cmd
@@ -956,6 +1082,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "migrate",
+    group: "Machine:",
+    help: migrateHelp,
     load: () => import("./commands/migrate.js"),
     configure: (cmd) => {
       cmd
@@ -971,6 +1099,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "init-workspace",
+    group: "Workspaces:",
+    help: initWorkspaceHelp,
     load: () => import("./commands/init_workspace.js"),
     configure: (cmd) => {
       cmd
@@ -1204,13 +1334,21 @@ export async function main(): Promise<void> {
   installDefaultInterrupt(process, () => console.log(`\n${_RED}Interrupted${_RESET}`));
 
   const program = new Command();
+  // Kept for `__reference`: commander keeps after-help text only as an event listener.
+  const helpText = new Map<string, string>();
+  const withHelp = (cmd: Command, text: string) => {
+    helpText.set(cmd.name(), text);
+    cmd.addHelpText("after", `\n${text}`);
+  };
   program
     .name("werkmeister")
     .description(BANNER)
     .helpOption("-h, --help", "show this help message and exit");
 
-  for (const spec of SPECS) {
-    const cmd = program.command(spec.name);
+  const byGroup = [...SPECS].sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group));
+  for (const spec of byGroup) {
+    const cmd = program.command(spec.name).helpGroup(spec.group);
+    withHelp(cmd, spec.help);
     spec.configure(cmd);
     cmd.action(async (...actionArgs) => {
       // commander passes (positional..., opts, command)
@@ -1229,27 +1367,33 @@ export async function main(): Promise<void> {
   // registrations exist for --help parity and to give a useful message to
   // anyone running dist/main.js directly. Neither takes a transport flag: the
   // wrapper launches `mcp` over stdio, and `werkmeister connect` starts the HTTP modes.
-  for (const [name, description] of [
-    ["dashboard", "Run the localhost workspaces dashboard in the foreground (checkout only)"],
+  for (const [name, description, help] of [
+    [
+      "dashboard",
+      "Run the localhost workspaces dashboard in the foreground (checkout only)",
+      dashboardHelp,
+    ],
     [
       "mcp",
       "Launch the werkmeister MCP server over stdio (Claude Desktop, the werkmeister plugin; no token needed)",
+      mcpHelp,
     ],
   ] as const) {
-    program
-      .command(name)
-      .description(description)
-      .action(() => {
-        // stderr, not stdout: an MCP client that got this far is reading stdout
-        // as JSON-RPC, and printing English onto that channel is what made the
-        // previous version of this stub look like a crashed server.
-        console.error(
-          `\`werkmeister ${name}\` launches a sibling app and must be run through the ` +
-            "./werkmeister wrapper, which locates a node runtime and the app's entrypoint.",
-        );
-        process.exit(1);
-      });
+    const cmd = program.command(name).helpGroup("Internal:").description(description);
+    withHelp(cmd, help);
+    cmd.action(() => {
+      // stderr, not stdout: an MCP client that got this far is reading stdout
+      // as JSON-RPC, and printing English onto that channel is what made the
+      // previous version of this stub look like a crashed server.
+      console.error(
+        `\`werkmeister ${name}\` launches a sibling app and must be run through the ` +
+          "./werkmeister wrapper, which locates a node runtime and the app's entrypoint.",
+      );
+      process.exit(1);
+    });
   }
+
+  program.commandsGroup("Internal:").helpCommand(true);
 
   if (process.argv[2] === "__complete") {
     return completeLine(program);
@@ -1261,8 +1405,10 @@ export async function main(): Promise<void> {
       name: c.name(),
       usage: c.usage().replace(/^\[options\] ?/, ""),
       description: c.description(),
-      // commander 13 has no public getter for `.hidden`.
+      // commander has no public getter for `.hidden`.
       hidden: Boolean((c as unknown as { _hidden?: boolean })._hidden),
+      group: c.helpGroup(),
+      help: helpText.get(c.name()) ?? "",
       options: c.options.map((o) => ({
         flags: o.flags,
         long: o.long,

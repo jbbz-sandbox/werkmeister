@@ -11,10 +11,21 @@
  * mentions that are meant to name the old thing (migration notes, history).
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { dirname, join, normalize, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cliReference, fill, loadRegions, mcpSource, mcpTools, REGION } from "./gen-docs.mjs";
+import {
+  CLI_PACKAGE,
+  cliReference,
+  fill,
+  loadRegions,
+  MAN_DIR,
+  manPages,
+  mcpSource,
+  mcpTools,
+  REGION,
+  withMan,
+} from "./gen-docs.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -37,6 +48,20 @@ export const RETIRED = [
   ],
 ];
 
+/** Each man page in `dir` that differs from `pages` (what `docs:gen` writes), is missing, or has no command. */
+export function checkMan(pages, dir) {
+  const have = existsSync(dir) ? readdirSync(dir) : [];
+  const at = (f) => relative(ROOT, join(dir, f));
+  return [
+    ...Object.entries(pages)
+      .filter(([f, text]) => !have.includes(f) || readFileSync(join(dir, f), "utf8") !== text)
+      .map(([f]) => `${at(f)}: out of date, run \`pnpm run docs:gen\``),
+    ...have
+      .filter((f) => !(f in pages))
+      .map((f) => `${at(f)}: no such command, run \`pnpm run docs:gen\``),
+  ];
+}
+
 /** Point-in-time records: they are meant to name things as they were. */
 const SKIP = [
   /CHANGELOG\.md$/,
@@ -44,6 +69,8 @@ const SKIP = [
   /^docs\/research\//,
   /^docs\/(naming|context-management)-research\.md$/,
   /^docs\/scamper-/,
+  // SW-180: written to read from docs/users-guide.md, where gen-docs renders them and this checks them.
+  /\.help\.md$/,
 ];
 
 const PATH_ROOTS = /^(apps|packages|plugins|docs|scripts|\.github)\//;
@@ -287,7 +314,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     },
     read: (p) => readFileSync(join(ROOT, p), "utf8"),
   };
-  const problems = docs.flatMap((rel) => checkDoc(rel, readFileSync(join(ROOT, rel), "utf8"), ctx));
+  const pages = manPages(cliReference().filter((c) => !c.hidden));
+  const problems = [
+    ...docs.flatMap((rel) => checkDoc(rel, readFileSync(join(ROOT, rel), "utf8"), ctx)),
+    ...checkMan(pages, MAN_DIR),
+    ...(withMan(readFileSync(CLI_PACKAGE, "utf8"), pages) === readFileSync(CLI_PACKAGE, "utf8")
+      ? []
+      : ["apps/cli/package.json: `man` doesn't list the man pages, run `pnpm run docs:gen`"]),
+  ];
   for (const p of problems) console.error(p);
   console.log(`${docs.length} docs checked, ${problems.length} problem(s).`);
   process.exit(problems.length ? 1 : 0);

@@ -16,7 +16,7 @@ covers what now catches them automatically and what is still open.
 | Retired names and paths (`k8s-connect`, `infra/config/`, `npm run`, Stellwerk, …) | the `RETIRED` list in the script <!-- docs-check: ignore --> |
 | Relative Markdown links that don't resolve | the file system |
 | Repo paths in code spans (`apps/…`, `packages/…`, `plugins/…`, `docs/…`); `file.ts::symbol` also checks the symbol | the file system <!-- docs-check: ignore --> |
-| `werkmeister <command>` or `w9r <command>` at the start of a code span or shell line, and every `--flag` after it up to a bare `--` | the built CLI's `__complete` |
+| `werkmeister <command>` or `w9r <command>` at the start of a code span or shell line, and every `--flag` after it up to a bare `--` | the built CLI's `__reference` |
 | Bare `<placeholder>`s outside code, which GitHub drops silently | `HTML_TAGS` in the script (the elements GitHub keeps) |
 | `#anchor` links, in the same doc or another `.md` | that doc's headings, as GitHub slugs them |
 | MCP tool names (`` `x` tool ``, `MCP tool `x``, `mcp__plugin_werkmeister_werkmeister__x`) | `registerTool` / `registerAppTool` in `apps/werkmeister-mcp/src`, plus the plugin's `*_TOOL` constants <!-- docs-check: ignore --> |
@@ -50,10 +50,12 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 | --- | --- | --- |
 | `autonomous-allow`, `autonomous-deny` | `docs/context-strategies.md` | `packages/werkmeister-core/src/hooks_gen.ts::autonomousRules`, `AUTONOMOUS_DENY` |
 | `mcp-tools` | `apps/werkmeister-mcp/README.md` | each `registerTool` / `registerAppTool` call's name and `title` in `apps/werkmeister-mcp/src` |
-| `cli-reference` | `docs/users-guide.md` | commander's commands, arguments and options, through the CLI's hidden `__reference` mode |
+| `cli-reference` | `docs/users-guide.md` | commander's commands, groups, arguments and options, through the CLI's hidden `__reference` mode, plus each command's `apps/cli/src/commands/<command>.help.md` |
 | `workspaces` | `README.md` | each `apps/*` and `packages/*` `package.json`'s `name` and `description` |
 
 A new region is a key in `loadRegions()` plus its markers in a doc.
+
+`docs:gen` also writes the CLI's man pages from the same source (SW-180): `apps/cli/man/werkmeister.1` lists the commands by group, and `werkmeister-<command>.1` holds one command's synopsis, options and help.md. It lists them in the `man` array of `apps/cli/package.json`, which npm links on a global install. `docs:check` fails when a page or that array differs from what `docs:gen` would write. To change a command's long help, edit its help.md: `--help` prints it, and the guide and man pages are generated from it. The help.md files themselves are skipped by `docs:check`, because their links are written to resolve from `docs/users-guide.md`, where they are checked.
 
 ## Writing docs that stay checkable
 

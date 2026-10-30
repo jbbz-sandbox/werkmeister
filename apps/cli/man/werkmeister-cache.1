@@ -1,0 +1,29 @@
+.TH WERKMEISTER-CACHE 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-cache \- Prune the shared build and package caches (\fBcaches:\fR in the registry) by each one's age or prune rule
+.SH SYNOPSIS
+\fBwerkmeister cache\fR <action> [name]
+.SH OPTIONS
+.TP
+\fB\-\-reset\fR
+Empty the cache(s) instead of applying the rule.
+.TP
+\fB\-\-force\fR
+Prune a cache even while a running container mounts it.
+.TP
+\fB\-\-dry\-run\fR
+Report what would be deleted; change nothing.
+.SH DESCRIPTION
+.PP
+Applies each shared cache's rule from the registry's \fBcaches:\fR: \fBmax_age\fR deletes older entries, \fBprune\fR runs the tool's own command. \fB\-\-reset\fR empties the cache instead. A cache that a running container mounts is skipped unless \fB\-\-force\fR.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister cache prune
+werkmeister cache prune \-\-dry\-run
+werkmeister cache prune \-\-reset
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

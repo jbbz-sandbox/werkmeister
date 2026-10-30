@@ -1,0 +1,14 @@
+.TH WERKMEISTER-START-ARGS 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-start\-args \- Print the start_session arguments (title, model, prompt, background) for the enclosing workspace, as JSON
+.SH SYNOPSIS
+\fBwerkmeister start\-args\fR
+.SH OPTIONS
+.TP
+\fB\-\-start <dir>\fR
+Directory to search up from (default: cwd)
+.SH DESCRIPTION
+.PP
+Prints the arguments for starting the enclosing workspace's Claude session (title, model, prompt and background) as JSON. The next\-wave skill passes them to \fBstart_session\fR; the workspaces pane's Start button builds the same ones.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

@@ -18,20 +18,14 @@
    - [Which services run locally](#which-services-run-locally)
 5. [Getting Started](#getting-started)
 6. [CLI Reference](#cli-reference)
-   - [All commands](#all-commands)
-   - [werkmeister up](#werkmeister-up)
-   - [werkmeister down](#werkmeister-down)
-   - [werkmeister restart](#werkmeister-restart)
-   - [werkmeister status](#werkmeister-status)
-   - [werkmeister detect](#werkmeister-detect)
-   - [werkmeister services](#werkmeister-services)
-   - [werkmeister logs](#werkmeister-logs)
-   - [werkmeister remove](#werkmeister-remove)
-   - [werkmeister test](#werkmeister-test)
-   - [werkmeister intercept](#werkmeister-intercept)
-   - [werkmeister connect --k8s](#werkmeister-connect---k8s)
-   - [werkmeister status --k8s](#werkmeister-status---k8s)
-   - [werkmeister proxy-reload](#werkmeister-proxy-reload)
+   - [Everyday](#everyday)
+   - [Workspaces](#workspaces)
+   - [PRs and issues](#prs-and-issues)
+   - [Services and infra](#services-and-infra)
+   - [Agent context](#agent-context)
+   - [Machine](#machine)
+   - [Internal](#internal)
+   - [Debugging](#debugging)
 7. [Services Reference](#services-reference)
    - [Application Services](#application-services)
    - [Infrastructure Services](#infrastructure-services)
@@ -366,183 +360,20 @@ the issue tracker and, on a terminal, offers `gh auth login`.
 
 All commands are invoked as `werkmeister` (or `w9r`), which `pnpm link --global` (run in `apps/cli`) or a global install puts on your PATH; from a bare checkout use the `apps/cli/werkmeister` wrapper script. The examples below write `werkmeister`. Run `werkmeister --help` for a list of commands, or `werkmeister <command> --help` for command-specific help.
 
-### All commands
-
-Every command and option, from the CLI's own descriptions (`pnpm run docs:gen` writes this list). The sections after it cover the main ones in depth.
+Every command and option, grouped as `werkmeister --help` groups them. Each command's text below comes from its `apps/cli/src/commands/<command>.help.md`, which its `--help` also prints; `pnpm run docs:gen` writes this section, so edit the help.md, not this page.
 
 <!-- generated:cli-reference -->
 
-- `werkmeister up [feature]`: Detect services, allocate slot, generate config, start containers
-  - `-w, --workspace <path>`: Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).
-  - `--dev`: Run the file watchers in cli/library/extension containers, which otherwise idle.
-- `werkmeister down [feature]`: Stop containers, release slot, update proxy (use 'infra' for shared infra)
-  - `-v, --volumes`: Also remove Docker volumes (node_modules, caches)
-  - `--all-features`: Stop and clean up all active features (ignores \<feature> argument)
-- `werkmeister intercept [feature]`: Route header-scoped k8s dev traffic to a local service (Telepresence OSS).
-  - `-s, --service <name>`: Local service to intercept (must be in the workspace's SERVICES and running via `werkmeister up`).
-  - `--leave`: End the intercept for -s (or all of this feature's intercepts without -s).
-  - `--status`: Show telepresence connection and intercept status.
-  - `--docker-daemon`: Run the telepresence daemon in a container (connect --docker) — avoids the host TUN device, its sudo prompt, and VPN routing conflicts. In exchange the host loses cluster DNS: nothing on your laptop resolves \<svc>.\<ns> while connected this way.
-  - `--workspace <path>`: Explicit workspace path (default: resolve from the feature name).
-- `werkmeister restart [feature]`: Restart containers (use 'infra' for shared infra)
-- `werkmeister pause [feature]`: Freeze a workspace's running containers and hold its Claude session until resume
-- `werkmeister resume [feature]`: Thaw exactly the containers pause froze, release the session, and tell it to continue
-- `werkmeister stop [feature]`: Stop containers without removing them or releasing the slot (use 'infra' for shared infra)
-  - `--if-idle`: SessionEnd hook mode: stop the workspace's own feature unless another Claude session is open there; silent, always exits 0, never stops infra
-  - `--idle <minutes>`: Stop every workspace's feature containers nothing has used for \<minutes> (a busy or recently active session, a gate exec or a fresh start all count as use); with [feature], only that one
-- `werkmeister status`: Show all features, services, resource usage
-  - `-v, --verbose`: Show individual container details
-  - `--k8s`: Show k8s port-forward health only (replaces standalone k8s-status command)
-  - `--intercepts`: Show Telepresence intercept state only (per feature service; cheap — skips docker and k8s probes).
-  - `--json`: Output structured JSON (useful for agent-driven diagnosis)
-- `werkmeister detect [repo]`: Generate \<repo>/.werkmeister/services.yaml from the repo's package manifests, Dockerfiles, compose, Helm and k8s files (re-runs only add what is missing)
-  - `--dry-run`: Show the report and the proposed YAML; write nothing
-  - `-y, --yes`: Write without asking
-  - `--assist`: Ask Claude to resolve the fields the scan had to guess
-  - `--no-assist`: Never ask Claude
-- `werkmeister services <feature>`: List services and their endpoints for a feature
-- `werkmeister logs <feature> [service]`: Tail a feature's container logs
-- `werkmeister remove <feature> <service>`: Stop a local service, fall back to k8s
-- `werkmeister test <feature> [extra...]`: Run Playwright tests against a feature's stack
-  - `--scaffold`: Don't run: write playwright.config.ts + \<feature>.spec.ts into the workspace (if missing) and install the pinned @playwright/test
-  - `-w, --workspace <path>`: --scaffold: workspace directory (default: from cwd)
-  - `--base-url <url>`: --scaffold: ingress URL to target (default: the first feature_router service)
-- `werkmeister starting-prompt`: Print the enclosing workspace's starting_prompt from workspace.yml
-  - `--start <dir>`: Directory to search up from (default: cwd)
-- `werkmeister start-args`: Print the start_session arguments (title, model, prompt, background) for the enclosing workspace, as JSON
-  - `--start <dir>`: Directory to search up from (default: cwd)
-- `werkmeister open [feature]`: Open a feature-tagged Chrome window with the X-Feature cookie set (no Playwright)
-  - `--url <url>`: Full start URL (overrides --path). Default: the first routed host's homepage.
-  - `--path <path>`: Path appended to the first routed host (default: test_path from .werkmeister/workspace.yml, else TEST_PATH from .env, else '/').
-  - `--size <W,H>`: Window size WIDTH,HEIGHT (default: 1440,900).
-  - `--position <X,Y>`: Window position X,Y (default: staggered by feature name).
-- `werkmeister connect`: Start all shared infrastructure (local + k8s port-forwards)
-  - `--k8s`: Start/restart k8s port-forwards container only (replaces standalone k8s-connect command)
-- `werkmeister proxy-reload`: Regenerate Caddyfile and reload Caddy
-- `werkmeister clean`: Remove orphaned volumes and generated files from stopped features
-  - `--all`: Also clean volumes for currently active features (implies werkmeister down for each)
-  - `--dry-run`: Show what would be cleaned without actually removing anything
-- `werkmeister stats`: Show Docker container resource usage (CPU, memory)
-  - `--collect <MINUTES>`: Collect stats over N minutes (default: snapshot only)
-  - `-i, --interval <SECS>`: Sampling interval in seconds (default: 10)
-  - `--save`: Save results to stats/ directory
-- `werkmeister optimize`: Analyze resource usage vs configured limits, recommend changes
-  - `--collect <MINUTES>`: Collect stats over N minutes before analyzing (default: quick snapshot)
-  - `-i, --interval <SECS>`: Sampling interval in seconds (default: 10)
-- `werkmeister skills <action>`: Workspace w9r-* skill projection: verify freshness against the werkmeister repo (check) or rewrite it (sync)
-- `werkmeister standards <action>`: Validate the configured standards tree (structural regression gate)
-- `werkmeister hooks <action>`: Claude Code hook entrypoints: the standards gate, the PR guard and the agent state
-- `werkmeister notes <action> [note_num]`: Workspace notes (.werkmeister/notes/). `context` prints the latest handoff + open decisions for session-start injection (hook target); `graduate` scaffolds an open decision note into the standards tree.
-  - `--domain <domain>`: graduate: target \<domain> in the standards tree (omit to infer from refs, or prompt)
-  - `--kind <kind>`: graduate: content kind to scaffold (omit to prompt)
-  - `--slug <slug>`: graduate: override the derived reference-file slug
-- `werkmeister workspace [feature]`: Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \<user>/\<workspace> branch) and run init-workspace inside it.
-  - `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `werkmeister setup`). Its slug is prefixed to the workspace dir name; passed through to init-workspace.
-  - `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue. Default: the one whose scope holds --issue-id, else the default project.
-  - `-s, --services <list>`: Comma-separated services to run locally. Their owning repos are added as worktrees, and the list is passed through to init-workspace.
-  - `-r, --repos <list>`: Comma-separated repos to create worktrees for (union with the repos derived from --services). Interactive multi-select if neither --repos nor --services is given.
-  - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search; passed through to init-workspace.
-  - `-t, --task <title>`: Task title for the workspace CLAUDE.md; passed through to init-workspace.
-  - `--test-path <path>`: URL path for feature testing; passed through to init-workspace.
-  - `--description <text>`: Free-form description for the CLAUDE.md header; passed through to init-workspace.
-  - `--starting-prompt <text>`: First instruction for the agent; passed through to init-workspace.
-  - `--work-type <type>`: Kind of work; seeds the first-phase handoff note. Passed through to init-workspace.
-  - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
-  - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
-  - `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
-  - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
-  - `--browser-form`: Collect inputs through the Werkmeister-branded browser form (the same form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a localhost page in the default browser and blocks until submit/cancel.
-  - `--no-distill`: Store the issue but don't have a model rewrite it into description/starting_prompt.
-  - `--open`: With --browser-form: launch VS Code on the new workspace after creating.
-  - `--force`: Delete a \<user>/\<workspace> branch an earlier workspace of the same name left on origin, instead of aborting (that branch's work is gone; see the abort message for how to continue it instead).
-- `werkmeister list-workspaces`: List the workspaces under the workspaces root with their issue and labels
-- `werkmeister issue <action> [ref]`: Read, update or file an issue in this machine's issue tracker (see `werkmeister setup`)
-  - `--json`: view, ready: print JSON
-  - `--status <name>`: update: move the issue to this status
-  - `--comment <text>`: update: add this comment
-  - `--project <key>`: create: the Jira project key to file in; ready: a project from projects: in config.yaml
-  - `--type <type>`: create: bug, feature or task (mapped to the tracker's issue type)
-  - `--title <text>`: create: the issue's summary
-  - `--body-file <path>`: create: the issue's description, from a file (- for stdin)
-- `werkmeister remove-workspace <name>`: Deprecated: use `werkmeister close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace
-  - `-y, --yes`: Skip the confirmation prompt
-  - `--abandon <reason>`: Remove despite unshipped work; records the reason in closeout.md and the PR files
-- `werkmeister pr <action> [args...]`: Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)
-  - `--slug <slug>`: new: the follow-up's name, in its PR file and branch
-  - `--no-pr <reason>`: adopt: no PR — the fix is already on base
-  - `--install`: watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes
-  - `--uninstall`: watch: remove that schedule
-  - `--json`: Print the result as JSON
-- `werkmeister close-out [name]`: End a workspace. After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. With --abandon: record the reason, push every branch and keep them, remove the workspace. Refuses without postmortem.md (run the post-mortem first) unless --skip-postmortem gives a reason
-  - `-y, --yes`: Skip the confirmation prompt
-  - `--abandon <reason>`: Close out without shipping; the reason goes in closeout.md and the PR files
-  - `--skip-postmortem <reason>`: Close out without a post-mortem; the reason goes in closeout.md
-- `werkmeister code [feature]`: Open a workspace in VS Code
-- `werkmeister setup`: Guided machine setup: walks through paths, ingress domains and the ~/.werkmeister service registry, then converges the plugins, the sandbox-workspace checkout, the TLS certificate and the optional issue tracker, Telepresence and VS Code YAML-schema prerequisites <!-- name-check: ignore -->
-  - `--check`: Report prerequisite state without prompting or running any install/update commands
-  - `--yes`: Non-interactive: accept every default and skip optional installs
-- `werkmeister config`: Set up and maintain the machine-global werkmeister config (~/.werkmeister/config.yaml — the single source of truth); regenerates env.sh and wires up ~/.zshenv and the Desktop MCP config
-  - `--write`: Write config.yaml (prompting on a TTY for unset values), regenerate env.sh, and wire up ~/.zshenv and the Desktop MCP config. Without it (or a value to set) the command only prints the config.
-  - `--repos-root <path>`: Absolute path to the canonical source-repo clones (non-interactive set).
-  - `--workspaces-root <path>`: Absolute path to the per-feature worktree workspaces (non-interactive set).
-  - `--show`: Print the resolved config and each value's origin (the default).
-  - `--check`: Validate config + derived files; nonzero exit on drift.
-- `werkmeister cache <action> [name]`: Prune the shared build and package caches (`caches:` in the registry) by each one's age or prune rule
-  - `--reset`: Empty the cache(s) instead of applying the rule.
-  - `--force`: Prune a cache even while a running container mounts it.
-  - `--dry-run`: Report what would be deleted; change nothing.
-- `werkmeister registry [action]`: Regenerate ~/.werkmeister/services.yaml from every \<repo>/.werkmeister/services.yaml under paths.repos_root (merged under ~/.werkmeister/services.local.yaml)
-  - `--check`: Report drift without writing; nonzero exit when stale.
-- `werkmeister migrate`: Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, env.sh, the ~/.zshenv block, services.yaml, the pr-watch schedule and workspace compose files. Safe to re-run; refuses while affected containers are running. <!-- name-check: ignore -->
-  - `--workspaces`: Also rename each workspace's .sandbox/ to .werkmeister/. <!-- name-check: ignore -->
-  - `--check`: Report what would change without writing.
-- `werkmeister init-workspace`: Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the `repos`/`services` fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
-  - `-t, --task <title>`: Task description / title (env: WERKMEISTER_TASK; config: task).
-  - `--feature <name>`: Feature name for workspace slot routing (config: feature).
-  - `--services <list>`: Comma-separated list of local services (env: WERKMEISTER_SERVICES; config: services). Their owning repos are added to the reconciled worktree set.
-  - `-r, --repos <list>`: Comma-separated repos to keep as git worktrees (union with the repos owning --services). Persisted to workspace.yml; the worktree set is reconciled to match on every run (env: WERKMEISTER_REPOS; config: repos).
-  - `--force`: When reconciling, delete repo worktrees dropped from workspace.yml even if they have uncommitted changes, and delete a \<user>/\<workspace> branch an earlier workspace left on origin instead of aborting (default: abort without changes).
-  - `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `werkmeister setup`) (env: WERKMEISTER_ISSUE_ID; config: issue_id).
-  - `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue (env: WERKMEISTER_PROJECT; config: project).
-  - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search (env: WERKMEISTER_LABELS; config: labels).
-  - `--test-path <path>`: URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).
-  - `--description <text>`: Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).
-  - `--starting-prompt <text>`: First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).
-  - `--work-type <type>`: Kind of work; seeds the first-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
-  - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
-  - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
-  - `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
-  - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
-  - `--config <path>`: Path to a YAML config file (JSONC/JSON also accepted). Defaults to \<workspace>/.werkmeister/workspace.yml; legacy workspace.yaml / workspace.jsonc / workspace.json are migrated on next write (env: WERKMEISTER_WORKSPACE_CONFIG).
-  - `--prune-context`: After a context_strategy change, delete the previous strategy's files that git tracks unmodified (anything else is kept and reported).
-  - `--refresh-issue`: Re-fetch the workspace's issue into .werkmeister/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).
-- `werkmeister dashboard`: Run the localhost workspaces dashboard in the foreground (checkout only)
-- `werkmeister mcp`: Launch the werkmeister MCP server over stdio (Claude Desktop, the werkmeister plugin; no token needed)
+### Everyday
 
-<!-- /generated -->
+#### werkmeister up
 
-### Debugging
+Detect services, allocate slot, generate config, start containers
 
-Set the `WERKMEISTER_DEBUG` environment variable to get full stack traces on errors:
+`werkmeister up [feature]`
 
-```bash
-WERKMEISTER_DEBUG=1 werkmeister up my-feature
-```
-
----
-
-### werkmeister up
-
-**Start a feature's local development environment.**
-
-```
-werkmeister up <feature> [--workspace <path>]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name (arbitrary label for slot allocation and proxy routing) |
-| `--workspace`, `-w` | No | Path to directory containing repo checkouts. Default: `~/workspace/`. Also settable via `WORKSPACE` env var. |
+- `-w, --workspace <path>`: Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).
+- `--dev`: Run the file watchers in cli/library/extension containers, which otherwise idle.
 
 The local services come from the workspace's `.werkmeister/workspace.yml` (via `werkmeister init-workspace`), not from a flag.
 
@@ -580,20 +411,16 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **If every slot is taken** (12 by default, `feature_slots.count`), the command exits with an error. Free a slot by running `werkmeister down` on another feature.
 
----
+**Adding a service to a running feature.** `werkmeister up` takes no service list. To run another service locally, add it to the `services` field in the workspace's `.werkmeister/workspace.yml`, rerun `werkmeister init-workspace` (this also adds the owning repo's worktree if it isn't there yet), then `werkmeister up`.
 
-### werkmeister down
+#### werkmeister down
 
-**Stop a feature and release its resources.**
+Stop containers, release slot, update proxy (use 'infra' for shared infra)
 
-```
-werkmeister down <feature> [--volumes]
-```
+`werkmeister down [feature]`
 
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name |
-| `--volumes`, `-v` | No | Also remove per-feature Docker volumes (node_modules, caches) |
+- `-v, --volumes`: Also remove Docker volumes (node_modules, caches)
+- `--all-features`: Stop and clean up all active features (ignores \<feature> argument)
 
 **What it does:**
 
@@ -607,35 +434,78 @@ By default, per-feature Docker volumes (node_modules, build caches) are preserve
 
 The command is safe to run even if the feature is already stopped — it will clean up any leftover state.
 
----
+#### werkmeister restart
 
-### werkmeister restart
+Restart containers (use 'infra' for shared infra)
 
-**Restart a feature's containers without regenerating config.**
-
-```
-werkmeister restart <feature>
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name |
+`werkmeister restart [feature]`
 
 Useful after making code changes that hot-reload doesn't pick up. If the feature doesn't have a slot, prints an error suggesting `werkmeister up` instead.
 
----
+#### werkmeister pause
 
-### werkmeister status
+Freeze a workspace's running containers and hold its Claude session until resume
 
-**Show all active features and their status.**
+`werkmeister pause [feature]`
 
+Freezes a workspace's running containers and holds its Claude session until `werkmeister resume`. Nothing is removed: the slot, the containers and their state stay as they are.
+
+**Examples**
+
+```bash
+werkmeister pause my-feature
+werkmeister resume my-feature
 ```
-werkmeister status [-v]
+
+#### werkmeister resume
+
+Thaw exactly the containers pause froze, release the session, and tell it to continue
+
+`werkmeister resume [feature]`
+
+Thaws exactly the containers `werkmeister pause` froze, releases the Claude session, and tells it to continue if the pause cut a turn short.
+
+**Examples**
+
+```bash
+werkmeister resume my-feature
 ```
 
-| Flag | Description |
-|---|---|
-| `-v`, `--verbose` | Show individual container details (name, status, ports) |
+#### werkmeister stop
+
+Stop containers without removing them or releasing the slot (use 'infra' for shared infra)
+
+`werkmeister stop [feature]`
+
+- `--if-idle`: SessionEnd hook mode: stop the workspace's own feature unless another Claude session is open there; silent, always exits 0, never stops infra
+- `--idle <minutes>`: Stop every workspace's feature containers nothing has used for \<minutes> (a busy or recently active session, a gate exec or a fresh start all count as use); with [feature], only that one
+
+Stops a feature's containers without removing them or releasing its slot. Bring it back with `werkmeister restart` or `werkmeister up`. Use `infra` as the feature name to stop the shared infrastructure.
+
+Two modes run without a person: `--if-idle` is the SessionEnd hook behind a workspace's `auto_stop`, and `--idle` is one pass of the idle reaper over every workspace.
+
+**Examples**
+
+```bash
+werkmeister stop my-feature
+werkmeister stop infra
+werkmeister stop --idle 30
+```
+
+**See also**
+
+`werkmeister down` also releases the slot; `werkmeister pause` freezes the containers instead.
+
+#### werkmeister status
+
+Show all features, services, resource usage
+
+`werkmeister status`
+
+- `-v, --verbose`: Show individual container details
+- `--k8s`: Show k8s port-forward health only (replaces standalone k8s-status command)
+- `--intercepts`: Show Telepresence intercept state only (per feature service; cheap — skips docker and k8s probes).
+- `--json`: Output structured JSON (useful for agent-driven diagnosis)
 
 **Output example:**
 
@@ -654,69 +524,28 @@ werkmeister status [-v]
 - `down (0/M)` (red) — no containers running
 - `no containers` (dim) — compose file exists but no containers found
 
----
-
-### werkmeister detect
-
-**Generate a repo's `.werkmeister/services.yaml` from what the repo already contains.**
+**`--k8s`** checks only the k8s port-forwards container. Checks the Docker container health of `w9r-k8s-forwards` and reports the status of each forwarded port:
 
 ```
-werkmeister detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
+  Container: w9r-k8s-forwards    Status: healthy
+
+  Service                Port   k8s Target                            Status
+  ─────────────────────────────────────────────────────────────────────────────────
+  redis                  9050   default/redis:6379                    healthy
+  postgres               9051   default/postgres:5432                 healthy
+  backend             9052   default/backend:80                 healthy
+  redis                  9050   dev:6379                              healthy
+  frontend             9053   default/frontend:8080               down
+
+  11/12 healthy, 1 down
+  Run 'werkmeister connect --k8s' to restart the k8s-forwards container
 ```
 
-| Argument | Description |
-|---|---|
-| `repo` | Repo directory. Default: the git repo containing the current directory. |
-| `--dry-run` | Print the report and the proposed YAML; write nothing. |
-| `--yes`, `-y` | Write without asking. |
-| `--assist` / `--no-assist` | Ask Claude about the fields the scan had to guess, or never ask. Without either flag an interactive run asks first (default no), and a non-interactive run never asks. |
+#### werkmeister logs
 
-It reads `package.json` and workspaces (npm, pnpm, yarn), Dockerfiles, docker-compose files, Helm charts (rendered with `helm template`), raw k8s manifests and kustomize overlays (`kubectl kustomize`). For each value the report shows where it came from, and every guess is marked. Guesses are written with a `# guessed:` comment, so they're easy to find and fix.
+Tail a feature's container logs
 
-`port_offset` is picked from the offsets no other repo under `paths.repos_root` uses. Infrastructure (redis, postgres and other datastores) gets the next free `k8s_forward_port` from 9050.
-
-Re-running only adds services and keys the file doesn't have yet. Nothing already in the file changes: not values, comments or formatting. After writing, run `werkmeister registry sync`.
-
-`--assist` runs one read-only Claude session (Read, Glob and Grep only) over the repo. It only answers the listed questions: a non-Node service's dev command, health path, environment, secrets, `depends_on`, and which service an unmatched Deployment belongs to. Answers are written with `# inferred by Claude:` and never replace a value the scan read from a file.
-
-
----
-
-### werkmeister services
-
-**List service endpoints for a running feature.**
-
-```
-werkmeister services <feature>
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name |
-
-Shows each service with its source (local container or k8s forward) and endpoint:
-
-```
-  Service                Source    Endpoint              Type
-  ────────────────────────────────────────────────────────────
-  backend             k8s      localhost:9052         api
-  frontend             local    localhost:11101        web
-```
-
----
-
-### werkmeister logs
-
-**Tail Docker Compose logs for a feature.**
-
-```
-werkmeister logs <feature> [service]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name |
-| `service` | No | Specific service to tail (omit for all services) |
+`werkmeister logs <feature> [service]`
 
 Streams logs in real-time (equivalent to `docker compose logs -f --tail 100`). Press `Ctrl+C` to stop.
 
@@ -728,52 +557,15 @@ werkmeister logs my-feature
 werkmeister logs my-feature frontend
 ```
 
----
+#### werkmeister test
 
-### Adding a service to a running feature
+Run Playwright tests against a feature's stack
 
-There is no `werkmeister add` command, and `werkmeister up` takes no service list. To run a <!-- docs-check: ignore -->
-service locally, add it to the `services` field in the workspace's
-`.werkmeister/workspace.yml`, rerun `werkmeister init-workspace` — this also adds the owning
-repo's worktree if it isn't present yet — then `werkmeister up`.
+`werkmeister test <feature> [extra...]`
 
----
-
-### werkmeister remove
-
-**Remove a local service, falling back to k8s.**
-
-```
-werkmeister remove <feature> <service>
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name |
-| `service` | Yes | Service name |
-
-Removes the service from the feature's local stack. The service will now be served from k8s. Config files are regenerated and Caddy is reloaded.
-
-If removing the last service, the feature's containers are fully stopped (though the slot remains allocated — use `werkmeister down` to release it).
-
-```bash
-werkmeister remove my-feature frontend
-```
-
----
-
-### werkmeister test
-
-**Run Playwright tests against a feature.**
-
-```
-werkmeister test <feature> [-- extra-args...]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | Yes | Feature name |
-| extra args | No | Additional arguments passed to `npx playwright test` |
+- `--scaffold`: Don't run: write playwright.config.ts + \<feature>.spec.ts into the workspace (if missing) and install the pinned @playwright/test
+- `-w, --workspace <path>`: --scaffold: workspace directory (default: from cwd)
+- `--base-url <url>`: --scaffold: ingress URL to target (default: the first feature_router service)
 
 **What it does:**
 
@@ -794,25 +586,264 @@ werkmeister test my-feature -- --headed
 
 The feature doesn't need to have an active slot — if it doesn't, the command warns but proceeds with just the feature header routing.
 
----
+#### werkmeister open
 
-### werkmeister intercept
+Open a feature-tagged Chrome window with the X-Feature cookie set (no Playwright)
 
-**Route a header-scoped slice of live cluster traffic to your local container.**
+`werkmeister open [feature]`
 
+- `--url <url>`: Full start URL (overrides --path). Default: the first routed host's homepage.
+- `--path <path>`: Path appended to the first routed host (default: test_path from .werkmeister/workspace.yml, else TEST_PATH from .env, else '/').
+- `--size <W,H>`: Window size WIDTH,HEIGHT (default: 1440,900).
+- `--position <X,Y>`: Window position X,Y (default: staggered by feature name).
+
+Launches an isolated Chrome window for a feature: it sets the `X-Feature` routing cookie and tags the window (title prefix and corner badge) so it is plainly that feature's window. It drives Chrome over the DevTools Protocol, without Playwright.
+
+Routing only resolves while the feature is running (`werkmeister up`). Otherwise the cookie is set but traffic falls through to the k8s baseline.
+
+**Examples**
+
+```bash
+werkmeister open my-feature
+werkmeister open my-feature --path /settings
+werkmeister open my-feature --size 1280,800 --position 0,0
 ```
-werkmeister intercept <feature> -s <service> [--docker-daemon]
-werkmeister intercept <feature> --leave [-s <service>]
-werkmeister intercept --status
+
+### Workspaces
+
+#### werkmeister starting-prompt
+
+Print the enclosing workspace's starting_prompt from workspace.yml
+
+`werkmeister starting-prompt`
+
+- `--start <dir>`: Directory to search up from (default: cwd)
+
+Prints the enclosing workspace's `starting_prompt`, for the starting-prompt skill.
+
+**Exit codes**
+
+1 when no `workspace.yml` is found walking up from `--start`; 2 when it has no `starting_prompt`.
+
+#### werkmeister workspace
+
+Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \<user>/\<workspace> branch) and run init-workspace inside it.
+
+`werkmeister workspace [feature]`
+
+- `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `werkmeister setup`). Its slug is prefixed to the workspace dir name; passed through to init-workspace.
+- `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue. Default: the one whose scope holds --issue-id, else the default project.
+- `-s, --services <list>`: Comma-separated services to run locally. Their owning repos are added as worktrees, and the list is passed through to init-workspace.
+- `-r, --repos <list>`: Comma-separated repos to create worktrees for (union with the repos derived from --services). Interactive multi-select if neither --repos nor --services is given.
+- `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search; passed through to init-workspace.
+- `-t, --task <title>`: Task title for the workspace CLAUDE.md; passed through to init-workspace.
+- `--test-path <path>`: URL path for feature testing; passed through to init-workspace.
+- `--description <text>`: Free-form description for the CLAUDE.md header; passed through to init-workspace.
+- `--starting-prompt <text>`: First instruction for the agent; passed through to init-workspace.
+- `--work-type <type>`: Kind of work; seeds the first-phase handoff note. Passed through to init-workspace.
+- `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
+- `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
+- `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
+- `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
+- `--browser-form`: Collect inputs through the Werkmeister-branded browser form (the same form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a localhost page in the default browser and blocks until submit/cancel.
+- `--no-distill`: Store the issue but don't have a model rewrite it into description/starting_prompt.
+- `--open`: With --browser-form: launch VS Code on the new workspace after creating.
+- `--force`: Delete a \<user>/\<workspace> branch an earlier workspace of the same name left on origin, instead of aborting (that branch's work is gone; see the abort message for how to continue it instead).
+
+Creates a new workspace under the workspaces root and initializes it. It resolves its inputs (flags, an existing `workspace.yml`, or the interactive wizard), creates the workspace folder as a git worktree of the workspace record repo (`overrides.workspace_repo`) on a `user/workspace` branch, writes `.werkmeister/workspace.yml`, and runs `werkmeister init-workspace` inside it. The initial state is committed, not pushed.
+
+**Examples**
+
+```bash
+werkmeister workspace my-feature --issue-id SW-180 --services backend,frontend
+werkmeister workspace my-feature --context-strategy icm --work-type refactor
 ```
 
-| Argument | Required | Description |
-|---|---|---|
-| `feature` | No | Feature name. Falls back to `FEATURE` in a `.env` file in the current directory tree |
-| `-s, --service` | Yes (to start) | Local service to intercept. Must be in the workspace's `SERVICES` and already running via `werkmeister up` |
-| `--leave` | No | End the intercept for `-s`, or all of this feature's intercepts without it |
-| `--status` | No | Show the telepresence connection and active intercepts |
-| `--docker-daemon` | No | Run the telepresence daemon in a container instead of on the host — see below |
+**See also**
+
+`werkmeister init-workspace` owns everything derived from `workspace.yml`; `werkmeister close-out` ends a workspace.
+
+#### werkmeister list-workspaces
+
+List the workspaces under the workspaces root with their issue and labels
+
+`werkmeister list-workspaces`
+
+Lists the workspaces under the workspaces root with their issue and labels. The dashboard and the MCP server list workspaces the same way.
+
+**Examples**
+
+```bash
+werkmeister list-workspaces
+```
+
+#### werkmeister remove-workspace
+
+Deprecated: use `werkmeister close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace
+
+`werkmeister remove-workspace <name>`
+
+- `-y, --yes`: Skip the confirmation prompt
+- `--abandon <reason>`: Remove despite unshipped work; records the reason in closeout.md and the PR files
+
+Deprecated, kept for one release: use `werkmeister close-out --abandon` with a reason.
+
+#### werkmeister close-out
+
+End a workspace. After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. With --abandon: record the reason, push every branch and keep them, remove the workspace. Refuses without postmortem.md (run the post-mortem first) unless --skip-postmortem gives a reason
+
+`werkmeister close-out [name]`
+
+- `-y, --yes`: Skip the confirmation prompt
+- `--abandon <reason>`: Close out without shipping; the reason goes in closeout.md and the PR files
+- `--skip-postmortem <reason>`: Close out without a post-mortem; the reason goes in closeout.md
+
+The one way to end a workspace. First the post-mortem: it refuses without `postmortem.md` unless `--skip-postmortem` gives a reason. After every PR shipped, it closes the issue, writes `closeout.md`, removes the workspace and deletes merged branches. With `--abandon` and a reason, it records the reason, leaves the issue, pushes every branch and keeps them, and removes the workspace. It lists terminal Claude sessions still open in the workspace.
+
+The full process is in [docs/workspace-lifecycle.md](workspace-lifecycle.md).
+
+**Examples**
+
+```bash
+werkmeister close-out
+werkmeister close-out my-feature --abandon "superseded by SW-200"
+```
+
+#### werkmeister code
+
+Open a workspace in VS Code
+
+`werkmeister code [feature]`
+
+Opens a workspace in VS Code. The dashboard's `open-workspace` tool does the same lookup and launch.
+
+**Examples**
+
+```bash
+werkmeister code my-feature
+```
+
+#### werkmeister init-workspace
+
+Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the `repos`/`services` fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
+
+`werkmeister init-workspace`
+
+- `-t, --task <title>`: Task description / title (env: WERKMEISTER_TASK; config: task).
+- `--feature <name>`: Feature name for workspace slot routing (config: feature).
+- `--services <list>`: Comma-separated list of local services (env: WERKMEISTER_SERVICES; config: services). Their owning repos are added to the reconciled worktree set.
+- `-r, --repos <list>`: Comma-separated repos to keep as git worktrees (union with the repos owning --services). Persisted to workspace.yml; the worktree set is reconciled to match on every run (env: WERKMEISTER_REPOS; config: repos).
+- `--force`: When reconciling, delete repo worktrees dropped from workspace.yml even if they have uncommitted changes, and delete a \<user>/\<workspace> branch an earlier workspace left on origin instead of aborting (default: abort without changes).
+- `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `werkmeister setup`) (env: WERKMEISTER_ISSUE_ID; config: issue_id).
+- `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue (env: WERKMEISTER_PROJECT; config: project).
+- `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search (env: WERKMEISTER_LABELS; config: labels).
+- `--test-path <path>`: URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).
+- `--description <text>`: Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).
+- `--starting-prompt <text>`: First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).
+- `--work-type <type>`: Kind of work; seeds the first-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
+- `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
+- `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
+- `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
+- `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
+- `--config <path>`: Path to a YAML config file (JSONC/JSON also accepted). Defaults to \<workspace>/.werkmeister/workspace.yml; legacy workspace.yaml / workspace.jsonc / workspace.json are migrated on next write (env: WERKMEISTER_WORKSPACE_CONFIG).
+- `--prune-context`: After a context_strategy change, delete the previous strategy's files that git tracks unmodified (anything else is kept and reported).
+- `--refresh-issue`: Re-fetch the workspace's issue into .werkmeister/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).
+
+Reconciles a workspace from its `.werkmeister/workspace.yml` and regenerates its context files. It adds a git worktree for each repo the config needs (its `repos` plus the repos owning its `services`) and removes worktrees for repos it dropped; a dirty worktree stops the run unless `--force`. Then it writes CLAUDE.md, `.env`, `compose.yml`, the `.claude/` skills and agents, `.mcp.json` and `.werkmeister/*`.
+
+It is idempotent: edit `workspace.yml` and rerun. It never prompts, and refuses to run in a bare folder; create a workspace with `werkmeister workspace`.
+
+**Examples**
+
+```bash
+werkmeister init-workspace
+werkmeister init-workspace --services backend,frontend
+werkmeister init-workspace --refresh-issue
+```
+
+### PRs and issues
+
+#### werkmeister issue
+
+Read, update or file an issue in this machine's issue tracker (see `werkmeister setup`)
+
+`werkmeister issue <action> [ref]`
+
+- `--json`: view, ready: print JSON
+- `--status <name>`: update: move the issue to this status
+- `--comment <text>`: update: add this comment
+- `--project <key>`: create: the Jira project key to file in; ready: a project from projects: in config.yaml
+- `--type <type>`: create: bug, feature or task (mapped to the tracker's issue type)
+- `--title <text>`: create: the issue's summary
+- `--body-file <path>`: create: the issue's description, from a file (- for stdin)
+
+Reads or updates one issue in this machine's tracker (`werkmeister setup` picks it).
+
+- `view` prints the issue's briefing; `--json` prints it as JSON.
+- `update` moves its status and/or adds a comment; at least one is required.
+- `create` files a new issue and prints its URL. Only trackers with an API path (Jira); file GitHub issues with `gh issue create`.
+- `start` moves the workspace's issue to in progress, forward only. It exits 0 when the tracker refuses, so a stage never fails on it.
+- `ready` lists a project's open work in priority order: its board's ready column, else the open issues.
+
+Inside a workspace the issue reference can be left out: it is read from `.werkmeister/workspace.yml`.
+
+**Examples**
+
+```bash
+werkmeister issue view
+werkmeister issue update --status "In Review" --comment "PR opened"
+werkmeister issue create --project SW --type bug --title "Short summary" --body-file body.md
+werkmeister issue ready --json
+```
+
+#### werkmeister pr
+
+Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)
+
+`werkmeister pr <action> [args...]`
+
+- `--slug <slug>`: new: the follow-up's name, in its PR file and branch
+- `--no-pr <reason>`: adopt: no PR — the fix is already on base
+- `--install`: watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes
+- `--uninstall`: watch: remove that schedule
+- `--json`: Print the result as JSON
+
+Opens PRs from a workspace and tracks them to a release. Each action:
+
+- `gate` runs the pre-PR gate for each PR file and changes nothing.
+- `open` gates, pushes and opens a PR for each PR file at `status: approved`, and records its URL.
+- `status` records merged, shipped or closed from GitHub and the repo's release tags.
+- `adopt` records a PR opened outside the workspace.
+- `watch` resumes each opening session once its PR merges, ships or closes; `--install` schedules it.
+- `new` starts a follow-up PR file and branch for a worktree whose PRs have merged.
+
+Inside a workspace, `gh pr create` (and so `/create-pr`) is blocked by a PreToolUse hook; `werkmeister pr open` is the way to open a PR. The full process (PR files, the gate, ship detection, the PR guard) is in [docs/workspace-lifecycle.md](workspace-lifecycle.md).
+
+**Examples**
+
+```bash
+werkmeister pr gate
+werkmeister pr open
+werkmeister pr status --json
+```
+
+**See also**
+
+`werkmeister close-out` ends the workspace once its PRs have shipped.
+
+### Services and infra
+
+#### werkmeister intercept
+
+Route header-scoped k8s dev traffic to a local service (Telepresence OSS).
+
+`werkmeister intercept [feature]`
+
+- `-s, --service <name>`: Local service to intercept (must be in the workspace's SERVICES and running via `werkmeister up`).
+- `--leave`: End the intercept for -s (or all of this feature's intercepts without -s).
+- `--status`: Show telepresence connection and intercept status.
+- `--docker-daemon`: Run the telepresence daemon in a container (connect --docker) — avoids the host TUN device, its sudo prompt, and VPN routing conflicts. In exchange the host loses cluster DNS: nothing on your laptop resolves \<svc>.\<ns> while connected this way.
+- `--workspace <path>`: Explicit workspace path (default: resolve from the feature name).
 
 Only requests carrying `x-feature: <feature>` are rerouted; teammates and baseline dev
 traffic reach the cluster workload untouched. The intercept target is the container
@@ -871,17 +902,44 @@ A service can only be intercepted if it declares `k8s_deployment`, `k8s_namespac
 `k8s_port` in the registry; `werkmeister status --intercepts` reports what is interceptable and
 what is currently intercepted.
 
----
+#### werkmeister services
 
-### werkmeister connect --k8s
+List services and their endpoints for a feature
 
-**Start or check the containerized k8s port-forwards.**
+`werkmeister services <feature>`
+
+Shows each service with its source (local container or k8s forward) and endpoint:
 
 ```
-werkmeister connect --k8s
+  Service                Source    Endpoint              Type
+  ────────────────────────────────────────────────────────────
+  backend             k8s      localhost:9052         api
+  frontend             local    localhost:11101        web
 ```
 
-No arguments. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`) which runs all 12 `kubectl port-forward` processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
+#### werkmeister remove
+
+Stop a local service, fall back to k8s
+
+`werkmeister remove <feature> <service>`
+
+Removes the service from the feature's local stack. The service will now be served from k8s. Config files are regenerated and Caddy is reloaded.
+
+If removing the last service, the feature's containers are fully stopped (though the slot remains allocated — use `werkmeister down` to release it).
+
+```bash
+werkmeister remove my-feature frontend
+```
+
+#### werkmeister connect
+
+Start all shared infrastructure (local + k8s port-forwards)
+
+`werkmeister connect`
+
+- `--k8s`: Start/restart k8s port-forwards container only (replaces standalone k8s-connect command)
+
+**`--k8s`** starts or checks only the containerized k8s port-forwards. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`) which runs all 12 `kubectl port-forward` processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
 
 The container runs on the `werkmeister-shared` Docker network and is accessible to other containers via the DNS name `k8s-forwards`. Port-forward processes inside the container auto-restart if they disconnect, managed by the container's entrypoint script.
 
@@ -892,59 +950,101 @@ After starting, it runs a health check and reports the status.
 [ok]   k8s-forwards container is healthy. 12/12 forwards active.
 ```
 
----
+#### werkmeister proxy-reload
 
-### werkmeister status --k8s
+Regenerate Caddyfile and reload Caddy
 
-**Check the health of the k8s port-forwards container.**
+`werkmeister proxy-reload`
 
-```
-werkmeister status --k8s
-```
+Reads all active slot assignments, regenerates `~/.werkmeister/infra/proxy/Caddyfile`, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
 
-No arguments. Checks the Docker container health of `w9r-k8s-forwards` and reports the status of each forwarded port:
+### Agent context
 
-```
-  Container: w9r-k8s-forwards    Status: healthy
+#### werkmeister skills
 
-  Service                Port   k8s Target                            Status
-  ─────────────────────────────────────────────────────────────────────────────────
-  redis                  9050   default/redis:6379                    healthy
-  postgres               9051   default/postgres:5432                 healthy
-  backend             9052   default/backend:80                 healthy
-  redis                  9050   dev:6379                              healthy
-  frontend             9053   default/frontend:8080               down
+Workspace w9r-* skill projection: verify freshness against the werkmeister repo (check) or rewrite it (sync)
 
-  11/12 healthy, 1 down
-  Run 'werkmeister connect --k8s' to restart the k8s-forwards container
-```
+`werkmeister skills <action>`
 
----
+Keeps a workspace's context layer fresh. `check` renders it again and diffs that with what is on disk, exiting 1 with a per-entry report when anything is stale. `sync` rewrites whatever `check` reports. What counts as the context layer depends on the workspace's strategy: for jit, the w9r-* skills in `.claude/skills/` and the gate manifest; for icm, `_shared/standards.md` and the stage contracts.
 
-### werkmeister proxy-reload
+Run it from anywhere inside a workspace.
 
-**Regenerate the Caddyfile and reload Caddy.**
+**Examples**
 
-```
-werkmeister proxy-reload
+```bash
+werkmeister skills check
+werkmeister skills sync
 ```
 
-No arguments. Reads all active slot assignments, regenerates `~/.werkmeister/infra/proxy/Caddyfile`, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
+**Exit codes**
 
----
+0 when fresh (or synced), 1 when `check` finds drift.
 
-### werkmeister clean
+#### werkmeister standards
 
-**Remove orphaned Docker volumes and generated files from stopped features.**
+Validate the configured standards tree (structural regression gate)
 
+`werkmeister standards <action>`
+
+Checks the configured standards tree for structural errors and exits 1 on any, so a malformed standards edit fails loudly instead of silently dropping out. It prints the tree's path. Unlike `werkmeister skills check`, it is not tied to a workspace.
+
+**Examples**
+
+```bash
+werkmeister standards check
 ```
-werkmeister clean [--all] [--dry-run]
+
+#### werkmeister notes
+
+Workspace notes (.werkmeister/notes/). `context` prints the latest handoff + open decisions for session-start injection (hook target); `graduate` scaffolds an open decision note into the standards tree.
+
+`werkmeister notes <action> [note_num]`
+
+- `--domain <domain>`: graduate: target \<domain> in the standards tree (omit to infer from refs, or prompt)
+- `--kind <kind>`: graduate: content kind to scaffold (omit to prompt)
+- `--slug <slug>`: graduate: override the derived reference-file slug
+
+`context` prints the workspace's notes context for a fresh Claude Code window. It is the SessionStart hook's target: it reads the hook's payload on stdin, never fails, and always exits 0.
+
+`graduate` scaffolds an open `decision` note into the standards tree. At a terminal it asks for the domain and kind; otherwise pass `--domain` and `--kind`.
+
+**Examples**
+
+```bash
+werkmeister notes context
+werkmeister notes graduate 3 --domain testing --kind rule
 ```
 
-| Argument | Required | Description |
-|---|---|---|
-| `--all` | No | Also tear down and clean all active features |
-| `--dry-run` | No | Show what would be removed without taking action |
+### Machine
+
+#### werkmeister detect
+
+Generate \<repo>/.werkmeister/services.yaml from the repo's package manifests, Dockerfiles, compose, Helm and k8s files (re-runs only add what is missing)
+
+`werkmeister detect [repo]`
+
+- `--dry-run`: Show the report and the proposed YAML; write nothing
+- `-y, --yes`: Write without asking
+- `--assist`: Ask Claude to resolve the fields the scan had to guess
+- `--no-assist`: Never ask Claude
+
+It reads `package.json` and workspaces (npm, pnpm, yarn), Dockerfiles, docker-compose files, Helm charts (rendered with `helm template`), raw k8s manifests and kustomize overlays (`kubectl kustomize`). For each value the report shows where it came from, and every guess is marked. Guesses are written with a `# guessed:` comment, so they're easy to find and fix.
+
+`port_offset` is picked from the offsets no other repo under `paths.repos_root` uses. Infrastructure (redis, postgres and other datastores) gets the next free `k8s_forward_port` from 9050.
+
+Re-running only adds services and keys the file doesn't have yet. Nothing already in the file changes: not values, comments or formatting. After writing, run `werkmeister registry sync`.
+
+`--assist` runs one read-only Claude session (Read, Glob and Grep only) over the repo. It only answers the listed questions: a non-Node service's dev command, health path, environment, secrets, `depends_on`, and which service an unmatched Deployment belongs to. Answers are written with `# inferred by Claude:` and never replace a value the scan read from a file.
+
+#### werkmeister clean
+
+Remove orphaned volumes and generated files from stopped features
+
+`werkmeister clean`
+
+- `--all`: Also clean volumes for currently active features (implies werkmeister down for each)
+- `--dry-run`: Show what would be cleaned without actually removing anything
 
 **What it does:**
 
@@ -959,26 +1059,195 @@ With `--all`, it first stops all active features (equivalent to running `werkmei
 - Before a fresh start: `werkmeister clean --all`
 - To check what would be cleaned: `werkmeister clean --dry-run`
 
----
+#### werkmeister stats
 
-### Workspace lifecycle: werkmeister pr, close-out
+Show Docker container resource usage (CPU, memory)
 
-**Open PRs from a workspace, track them to a release, then close the workspace out.** The full process — PR files, the pre-PR gate, ship detection, the PR guard — is in [workspace-lifecycle.md](workspace-lifecycle.md).
+`werkmeister stats`
 
+- `--collect <MINUTES>`: Collect stats over N minutes (default: snapshot only)
+- `-i, --interval <SECS>`: Sampling interval in seconds (default: 10)
+- `--save`: Save results to stats/ directory
+
+Shows Docker resource usage for every werkmeister container: one snapshot by default, or samples collected over a period.
+
+**Examples**
+
+```bash
+werkmeister stats                     # snapshot of current usage
+werkmeister stats --collect 5         # collect for 5 minutes
+werkmeister stats --collect 30 -i 5   # 30 minutes, 5-second intervals
 ```
-werkmeister pr <gate|open|status> [repo] [--json]
-werkmeister close-out [name] [--yes] [--abandon <reason>] [--skip-postmortem <reason>]
+
+**See also**
+
+`werkmeister optimize` compares the same numbers with the configured limits.
+
+#### werkmeister optimize
+
+Analyze resource usage vs configured limits, recommend changes
+
+`werkmeister optimize`
+
+- `--collect <MINUTES>`: Collect stats over N minutes before analyzing (default: quick snapshot)
+- `-i, --interval <SECS>`: Sampling interval in seconds (default: 10)
+
+Compares running containers' actual usage with their configured limits, shows which services are over- or under-provisioned, and recommends changes.
+
+**Examples**
+
+```bash
+werkmeister optimize              # analyze current usage against the limits
+werkmeister optimize --collect 5  # collect for 5 minutes first, then analyze
 ```
 
-| Command | Description |
-|---|---|
-| `werkmeister pr gate` | Run the pre-PR gate for each PR file; change nothing |
-| `werkmeister pr open` | Gate, push and open a PR for each PR file at `status: approved`; record its URL |
-| `werkmeister pr status` | Record merged / shipped / closed from GitHub and the repo's release tags |
-| `werkmeister close-out` | The one way to end a workspace. First the post-mortem: it refuses without `postmortem.md` unless `--skip-postmortem "<reason>"`. After every PR shipped: close the issue, write `closeout.md`, remove the workspace, delete merged branches. With `--abandon "<reason>"`: record the reason, leave the issue, push every branch and keep them, remove the workspace. Lists terminal Claude sessions still open in it |
-| `werkmeister remove-workspace` | Deprecated alias, kept for one release: use `werkmeister close-out --abandon` |
+#### werkmeister setup
 
-Inside a workspace, `gh pr create` (and so `/create-pr`) is blocked by a PreToolUse hook; `werkmeister pr open` is the way to open a PR.
+Guided machine setup: walks through paths, ingress domains and the ~/.werkmeister service registry, then converges the plugins, the sandbox-workspace checkout, the TLS certificate and the optional issue tracker, Telepresence and VS Code YAML-schema prerequisites <!-- name-check: ignore -->
+
+`werkmeister setup`
+
+- `--check`: Report prerequisite state without prompting or running any install/update commands
+- `--yes`: Non-interactive: accept every default and skip optional installs
+
+The guided first run (and re-run) of a werkmeister machine. It asks everything up front, then walks through each prerequisite that lives outside the checkout: paths, browser, ingress, the service registry, the issue tracker, and optional tools (telepresence, the superpowers plugin, editor settings). It writes the machine-global config in `~/.werkmeister` and converges the rest.
+
+**Examples**
+
+```bash
+werkmeister setup           # guided
+werkmeister setup --check   # report state, change nothing
+werkmeister setup --yes     # accept every default
+```
+
+#### werkmeister config
+
+Set up and maintain the machine-global werkmeister config (~/.werkmeister/config.yaml — the single source of truth); regenerates env.sh and wires up ~/.zshenv and the Desktop MCP config
+
+`werkmeister config`
+
+- `--write`: Write config.yaml (prompting on a TTY for unset values), regenerate env.sh, and wire up ~/.zshenv and the Desktop MCP config. Without it (or a value to set) the command only prints the config.
+- `--repos-root <path>`: Absolute path to the canonical source-repo clones (non-interactive set).
+- `--workspaces-root <path>`: Absolute path to the per-feature worktree workspaces (non-interactive set).
+- `--show`: Print the resolved config and each value's origin (the default).
+- `--check`: Validate config + derived files; nonzero exit on drift.
+
+Sets up and maintains the machine-global configuration, `~/.werkmeister/config.yaml`, the single source of truth. Writing it also regenerates `~/.werkmeister/env.sh` and keeps a managed block in `~/.zshenv` that sources it. The `WERKMEISTER_*` environment variables are derived from the YAML, not read as input.
+
+**Examples**
+
+```bash
+werkmeister config                       # print the resolved config and origins
+werkmeister config --write               # interactive wizard, then write
+werkmeister config --check               # validate; nonzero exit on drift
+```
+
+#### werkmeister cache
+
+Prune the shared build and package caches (`caches:` in the registry) by each one's age or prune rule
+
+`werkmeister cache <action> [name]`
+
+- `--reset`: Empty the cache(s) instead of applying the rule.
+- `--force`: Prune a cache even while a running container mounts it.
+- `--dry-run`: Report what would be deleted; change nothing.
+
+Applies each shared cache's rule from the registry's `caches:`: `max_age` deletes older entries, `prune` runs the tool's own command. `--reset` empties the cache instead. A cache that a running container mounts is skipped unless `--force`.
+
+**Examples**
+
+```bash
+werkmeister cache prune
+werkmeister cache prune --dry-run
+werkmeister cache prune --reset
+```
+
+#### werkmeister registry
+
+Regenerate ~/.werkmeister/services.yaml from every \<repo>/.werkmeister/services.yaml under paths.repos_root (merged under ~/.werkmeister/services.local.yaml)
+
+`werkmeister registry [action]`
+
+- `--check`: Report drift without writing; nonzero exit when stale.
+
+Regenerates `~/.werkmeister/services.yaml` from every repo's `.werkmeister/services.yaml` fragment under `paths.repos_root`, merged under `~/.werkmeister/services.local.yaml`. It is the same step `werkmeister setup` runs, on its own: use it after cloning a new repo.
+
+**Examples**
+
+```bash
+werkmeister registry            # regenerate (sync is the default action)
+werkmeister registry --check    # report drift; nonzero exit when stale
+```
+
+#### werkmeister migrate
+
+Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, env.sh, the ~/.zshenv block, services.yaml, the pr-watch schedule and workspace compose files. Safe to re-run; refuses while affected containers are running. <!-- name-check: ignore -->
+
+`werkmeister migrate`
+
+- `--workspaces`: Also rename each workspace's .sandbox/ to .werkmeister/. <!-- name-check: ignore -->
+- `--check`: Report what would change without writing.
+
+A one-shot move of the pre-rename machine folder to `~/.werkmeister`, repointing every file that carries the old path. Safe to re-run; it refuses while containers the move would break are running. Pull and rebuild the CLI before you migrate.
+
+**Examples**
+
+```bash
+werkmeister migrate --check
+werkmeister migrate --workspaces
+```
+
+### Internal
+
+#### werkmeister start-args
+
+Print the start_session arguments (title, model, prompt, background) for the enclosing workspace, as JSON
+
+`werkmeister start-args`
+
+- `--start <dir>`: Directory to search up from (default: cwd)
+
+Prints the arguments for starting the enclosing workspace's Claude session (title, model, prompt and background) as JSON. The next-wave skill passes them to `start_session`; the workspaces pane's Start button builds the same ones.
+
+#### werkmeister hooks
+
+Claude Code hook entrypoints: the standards gate, the PR guard and the agent state
+
+`werkmeister hooks <action>`
+
+The Claude Code hook entry points: `gate` (PreToolUse, per edit), `pr-guard` (blocks `gh pr create` inside a workspace) and `agent-state` (records the session's state on every tool call). The hooks a workspace installs call them; the `werkmeister` wrapper runs the same modules directly on a fast path. Run them by hand only to debug a hook.
+
+**Examples**
+
+```bash
+werkmeister hooks gate
+```
+
+#### werkmeister dashboard
+
+Run the localhost workspaces dashboard in the foreground (checkout only)
+
+`werkmeister dashboard`
+
+Runs the localhost workspaces dashboard in the foreground. Only from a checkout: the `werkmeister` wrapper launches it, so running `dist/main.js` directly just prints that.
+
+#### werkmeister mcp
+
+Launch the werkmeister MCP server over stdio (Claude Desktop, the werkmeister plugin; no token needed)
+
+`werkmeister mcp`
+
+Launches the werkmeister MCP server over stdio, for Claude Desktop and the werkmeister plugin. The `werkmeister` wrapper launches it; `werkmeister connect` starts the HTTP modes.
+
+<!-- /generated -->
+
+### Debugging
+
+Set the `WERKMEISTER_DEBUG` environment variable to get full stack traces on errors:
+
+```bash
+WERKMEISTER_DEBUG=1 werkmeister up my-feature
+```
 
 ---
 

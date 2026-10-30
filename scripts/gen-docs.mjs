@@ -8,7 +8,7 @@
  * Reads the built core and CLI, so run after `pnpm run build`.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -98,6 +98,183 @@ const rules = (list) =>
 // `migrate` names the old paths on purpose (its source line carries the same marker).
 const kept = (line) => (/sandbox/i.test(line) ? `${line} <!-- name-check: ignore -->` : line);
 
+/** Commands in their `--help` groups, in order: [heading without its colon, commands]. */
+export function byGroup(commands) {
+  const groups = new Map();
+  for (const c of commands) {
+    const heading = c.group.replace(/:$/, "");
+    groups.set(heading, [...(groups.get(heading) ?? []), c]);
+  }
+  return [...groups];
+}
+
+/**
+ * A help.md body for the guide: its `## Description` heading goes (the command's
+ * heading already says what it is), other sections become bold labels so they
+ * don't nest below the guide's own headings.
+ */
+export function guideBody(help) {
+  return help
+    .replace(/^## Description\n+/m, "")
+    .replace(/^## (.+)$/gm, "**$1**")
+    .trim();
+}
+
+/** The users guide's command reference: each group, then each command's usage, flags and help.md. */
+export function cliGuide(commands) {
+  return byGroup(commands)
+    .map(([heading, cmds]) =>
+      [
+        `### ${heading}`,
+        ...cmds.map((c) =>
+          [
+            `#### werkmeister ${c.name}`,
+            kept(md(c.description)),
+            kept(`\`werkmeister ${c.name}${c.usage ? ` ${c.usage}` : ""}\``),
+            c.options
+              .filter((o) => !o.hidden)
+              .map((o) => kept(`- \`${o.flags}\`: ${md(o.description)}`))
+              .join("\n"),
+            guideBody(c.help),
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        ),
+      ].join("\n\n"),
+    )
+    .join("\n\n");
+}
+
+/** Escape text for roff: backslashes, hyphens (else they render as a typographic dash), inline Markdown. */
+function roffText(s) {
+  return s
+    .replace(/\\/g, "\\e")
+    .replace(/-/g, "\\-")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*|`([^`]+)`/g, (_, b, c) => `\\fB${b ?? c}\\fR`)
+    .replace(/^[.']/, "\\&$&");
+}
+
+/**
+ * The Markdown subset help.md uses, as man(7) roff: `##` sections, paragraphs,
+ * `-`/`1.` lists, fenced blocks and tables (both kept verbatim), inline bold,
+ * code and links. ponytail: hand-written, not a converter dependency; extend it
+ * when a help.md needs more.
+ */
+export function roff(markdown) {
+  const out = [];
+  let verbatim = false;
+  let para = [];
+  const flush = () => {
+    if (para.length) out.push(roffText(para.join(" ")));
+    para = [];
+  };
+  for (const line of markdown.trim().split("\n")) {
+    if (/^\s*```/.test(line)) {
+      flush();
+      verbatim = !verbatim;
+      out.push(verbatim ? ".PP\n.nf\n.RS 4" : ".RE\n.fi");
+    } else if (verbatim) {
+      out.push(roffText(line).replace(/\\fB|\\fR/g, ""));
+    } else if (line.startsWith("|")) {
+      flush();
+      if (!/^\|[\s|:-]+\|$/.test(line)) out.push(`.nf\n${roffText(line)}\n.fi`);
+    } else if (/^## /.test(line)) {
+      flush();
+      out.push(`.SH ${roffText(line.slice(3).toUpperCase())}`);
+    } else if (/^\s*(- |\d+\. )/.test(line)) {
+      flush();
+      const [, indent, mark, rest] = line.match(/^(\s*)(- |\d+\. )(.*)/);
+      const tag = mark === "- " ? "\\(bu" : mark.trim();
+      out.push(`.IP ${tag} ${indent ? 6 : 3}`);
+      para.push(rest);
+    } else if (!line.trim()) {
+      flush();
+      out.push(".PP");
+    } else {
+      para.push(line.trim());
+    }
+  }
+  flush();
+  return out
+    .join("\n")
+    .replace(/(\.PP\n)+(?=\.(SH|PP|IP))/g, "")
+    .replace(/\.PP\n(\.PP\n)+/g, ".PP\n");
+}
+
+const TH = (name) => `.TH ${name.toUpperCase()} 1 "" "werkmeister" "Werkmeister Manual"`;
+
+/**
+ * `apps/cli/man/*.1`, keyed by file name: `werkmeister.1` lists the commands by
+ * group, and `werkmeister-<command>.1` (git's convention, so `man werkmeister-up`
+ * works) holds its synopsis, options and help.md. No version or date in `.TH`:
+ * either would make every release PR fail docs:check.
+ */
+export function manPages(commands) {
+  const pages = {
+    "werkmeister.1": [
+      TH("werkmeister"),
+      ".SH NAME",
+      "werkmeister \\- multi\\-feature concurrent development orchestrator",
+      ".SH SYNOPSIS",
+      "\\fBwerkmeister\\fR \\fIcommand\\fR [\\fIoptions\\fR]",
+      ".SH DESCRIPTION",
+      "Runs many features at once, each in its own slot, with only the services it changes running locally. \\fBwerkmeister\\fR \\fIcommand\\fR \\fB\\-\\-help\\fR and \\fBwerkmeister\\-\\fR\\fIcommand\\fR(1) describe each command.",
+      ".SH COMMANDS",
+      ...byGroup(commands).flatMap(([heading, cmds]) => [
+        `.SS ${roffText(heading)}`,
+        ...cmds.flatMap((c) => [
+          ".TP",
+          `\\fB${roffText(c.name)}\\fR ${roffText(c.usage)}`.trim(),
+          roffText(md(c.description)),
+        ]),
+      ]),
+      ".SH SEE ALSO",
+      commands.map((c) => `\\fBwerkmeister\\-${roffText(c.name)}\\fR(1)`).join(",\n"),
+    ].join("\n"),
+  };
+  for (const c of commands) {
+    const options = c.options.filter((o) => !o.hidden);
+    pages[`werkmeister-${c.name}.1`] = [
+      TH(`werkmeister-${c.name}`),
+      ".SH NAME",
+      `werkmeister\\-${roffText(c.name)} \\- ${roffText(md(c.description))}`,
+      ".SH SYNOPSIS",
+      `\\fBwerkmeister ${roffText(c.name)}\\fR ${roffText(c.usage)}`.trim(),
+      ...(options.length
+        ? [
+            ".SH OPTIONS",
+            ...options.flatMap((o) => [
+              ".TP",
+              `\\fB${roffText(o.flags)}\\fR`,
+              roffText(md(o.description)),
+            ]),
+          ]
+        : []),
+      roff(c.help),
+      ".SH SEE ALSO",
+      "\\fBwerkmeister\\fR(1)",
+    ].join("\n");
+  }
+  // A roff comment carries `kept`'s marker without showing on the page.
+  const keptRoff = (text) =>
+    text
+      .split("\n")
+      .map((l) => (/sandbox/i.test(l) ? `${l} \\" name-check: ignore` : l))
+      .join("\n");
+  return Object.fromEntries(Object.entries(pages).map(([f, text]) => [f, `${keptRoff(text)}\n`]));
+}
+
+export const MAN_DIR = join(ROOT, "apps/cli/man");
+export const CLI_PACKAGE = join(ROOT, "apps/cli/package.json");
+
+/** The CLI's package.json with its `man` array listing `pages`, which npm links on a global install. */
+export function withMan(packageJson, pages) {
+  const pkg = JSON.parse(packageJson);
+  pkg.man = Object.keys(pages).map((f) => `./man/${f}`);
+  return `${JSON.stringify(pkg, null, 2)}\n`;
+}
+
 /** Every region's Markdown, keyed by name. */
 export async function loadRegions() {
   const hooks = await import(
@@ -127,16 +304,7 @@ export async function loadRegions() {
       "| --- | --- |",
       ...tools.map((t) => `| \`${t.name}\` | ${md(t.title, true)}${t.app ? " (UI-only)" : ""} |`),
     ].join("\n"),
-    "cli-reference": commands
-      .map((c) =>
-        [
-          kept(`- \`werkmeister ${c.name}${c.usage ? ` ${c.usage}` : ""}\`: ${md(c.description)}`),
-          ...c.options
-            .filter((o) => !o.hidden)
-            .map((o) => kept(`  - \`${o.flags}\`: ${md(o.description)}`)),
-        ].join("\n"),
-      )
-      .join("\n"),
+    "cli-reference": cliGuide(commands),
     workspaces: workspaces.join("\n\n"),
   };
 }
@@ -157,6 +325,24 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       writeFileSync(join(ROOT, rel), text);
       console.log(`rewrote ${rel}`);
     }
+  }
+  const pages = manPages(cliReference().filter((c) => !c.hidden));
+  mkdirSync(MAN_DIR, { recursive: true });
+  for (const f of readdirSync(MAN_DIR))
+    if (!(f in pages)) {
+      rmSync(join(MAN_DIR, f));
+      console.log(`removed apps/cli/man/${f}`);
+    }
+  for (const [f, text] of Object.entries(pages)) {
+    const file = join(MAN_DIR, f);
+    if (existsSync(file) && readFileSync(file, "utf8") === text) continue;
+    writeFileSync(file, text);
+    console.log(`rewrote apps/cli/man/${f}`);
+  }
+  const pkg = readFileSync(CLI_PACKAGE, "utf8");
+  if (withMan(pkg, pages) !== pkg) {
+    writeFileSync(CLI_PACKAGE, withMan(pkg, pages));
+    console.log("rewrote apps/cli/package.json");
   }
   process.exit(failed ? 1 : 0);
 }
