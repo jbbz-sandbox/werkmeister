@@ -33,6 +33,7 @@ import { type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js"
 import { issueIdOf, issueTracker, projectOf } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import {
+  grantWaiters,
   idleStopMinutes,
   lastExecMarker,
   readServicesFromWorkspace,
@@ -55,6 +56,7 @@ import {
   WorkspaceError,
   worktreeSources,
 } from "./sandbox.js";
+import { portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
@@ -135,6 +137,12 @@ export interface Deps {
   ) => Promise<void>;
   /** Write compose.gate.yml from *services*; the services whose compose.yml entry it changes (SW-118). */
   gateCompose: (ws: string, feature: string, services: ServicesConfig) => string[];
+  /** Host ports *services* would publish that something else binds (SW-173). */
+  portHolders: (
+    ws: string,
+    feature: string,
+    services: string[],
+  ) => Promise<{ port: number; holder: string }[]>;
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
@@ -183,10 +191,14 @@ export function defaultDeps(): Deps {
     stop: stopWorkspace,
     reapIdle: async () => {
       const minutes = idleStopMinutes();
-      return minutes ? stopIdle(minutes) : { lines: [] };
+      const { lines } = minutes ? await stopIdle(minutes) : { lines: [] };
+      // The tick is the wake-up for a queue no stop has drained (SW-181).
+      const granted = await grantWaiters().catch((e: Error) => [`waiting queue: ${e.message}`]);
+      return { lines: [...lines, ...granted.map((f) => `${f}: started from the waiting queue`)] };
     },
     startService: (ws, feature, service, composeName) =>
       startService(feature, ws, service, composeName),
+    portHolders: (ws, feature, services) => portHolders(feature, ws, services),
     gateCompose: (ws, feature, services) =>
       renderGateCompose(
         feature,
@@ -532,6 +544,19 @@ async function gateChecks(
     return sibling ?? null;
   };
 
+  // Fails before any test runs: a start that hits a bound port fails ten minutes late otherwise (SW-173).
+  const portsFree = async (svcs: string[]): Promise<boolean> => {
+    const clash = svcs.length ? await deps.portHolders(ws, feature, svcs) : [];
+    if (!clash.length) return true;
+    add(
+      "ports",
+      false,
+      `${clash.map((c) => `port ${c.port} held by ${c.holder}`).join("; ")} — free them, then rerun`,
+    );
+    add("tests", false, "not run — a port this workspace starts on is taken");
+    return false;
+  };
+
   const base = String(file.fm["base"] ?? "main");
   const diff = await deps.run("git", ["-C", dir, "diff", "--name-only", `origin/${base}...HEAD`]);
   if (diff.code !== 0) {
@@ -551,6 +576,7 @@ async function gateChecks(
     } catch (e) {
       add("containers", false, `branch compose: ${e instanceof Error ? e.message : String(e)}`);
     }
+    if (!(await portsFree(changed))) return { ok: false, checks };
     for (const svc of changed) {
       const container = containerOf(feature, svc);
       const wasRunning = running.has(container);
@@ -604,6 +630,7 @@ async function gateChecks(
     const pick =
       candidates.find((s) => IDLE_SERVICE_TYPES.includes(deps.services[s]?.["type"] ?? "")) ??
       candidates[0];
+    if (pick && !(await portsFree([pick]))) return { ok: false, checks };
     if (pick) {
       touchExecMarker(ws);
       try {

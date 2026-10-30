@@ -9,6 +9,7 @@ import { getContainerStatus, liveProject } from "werkmeister-core/compose";
 import { K8S_FORWARDS_CONTAINER } from "werkmeister-core/compose_infra";
 import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
 import type { HostSummary, ProjectHealth, Usage } from "werkmeister-core/resources";
+import { readQueue } from "werkmeister-core/scheduler_state";
 import { getAllSlots, type SlotEntry, slotCount } from "werkmeister-core/slots";
 import {
   buildInterceptRows,
@@ -423,6 +424,11 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     buildInterceptRows(allSlots, loadServices(), listIntercepts()),
     await vitals,
   );
+  const waiting = readQueue();
+  if (waiting.length) {
+    const queue = waiting.map((f, i) => `${f} (#${i + 1})`).join(", ");
+    console.log(`  ${Colors.CYAN}Waiting for capacity:${Colors.RESET} ${queue}\n`);
+  }
   printCachesSection(await caches);
   const alive = printK8sSection(k8s);
 

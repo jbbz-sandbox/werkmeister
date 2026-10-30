@@ -20,6 +20,13 @@ import { interruptSignal } from "../lib/interrupt.js";
 function printSummary(result: UpResult): void {
   const { feature, slot, portRange, localServices, urls, servicePorts } = result;
   const [portStart, portEnd] = portRange;
+  if (result.waiting !== undefined) {
+    console.log(
+      `\n${Colors.CYAN}${Colors.BOLD}=== Feature '${feature}' is waiting for capacity (position ${result.waiting}) ===${Colors.RESET}\n` +
+        "  It starts when another feature stops; `werkmeister status` shows the queue.\n",
+    );
+    return;
+  }
 
   console.log(
     `\n${Colors.GREEN}${Colors.BOLD}=== Feature '${feature}' is ready ===${Colors.RESET}\n`,

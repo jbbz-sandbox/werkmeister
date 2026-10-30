@@ -46,7 +46,7 @@ vi.mock("werkmeister-core/secrets", () => ({
   resolveSecrets: () => ({ byService: {}, missing: [] }),
 }));
 vi.mock("werkmeister-core/slots", () => ({
-  allocateSlot: async () => 3,
+  requireLeasedSlot: async () => 3,
   getPortRange: () => [3300, 3399],
   getServicePort: () => 3300,
 }));

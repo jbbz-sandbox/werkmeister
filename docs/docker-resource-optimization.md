@@ -187,6 +187,57 @@ docker compose -f infra/compose/shared-infra.yml up -d
 
 **Rule of thumb:** Set reservations to ~50% of limits.
 
+The generated compose also sets `memswap_limit` equal to each service's memory
+limit (SW-151). Without it Docker allows twice the limit in swap, so a container
+near its limit slows down on a host with swap and is killed on one without.
+
+## Default budget
+
+`werkmeister up` admits a feature only when the budget has room for it (SW-181).
+A feature's cost is what its compose file asks Docker for: the sum of each
+service's `memory_reservation` and `cpus` limit, leaving out services behind the
+`on-demand` profile. Running features' cost is read from Docker on every `up`.
+When there is no room, the feature waits in a queue and its session is held
+until another feature stops.
+
+The defaults come from `docker info`, so a new machine needs no setup:
+
+| Key | Default |
+|---|---|
+| `memory` | the Docker engine's memory minus 1G |
+| `cpus` | the engine's CPU count |
+| `preempt` | `true`: a person's `up` may stop an autonomous feature to make room |
+
+Override any of them in `~/.werkmeister/config.yaml`:
+
+```yaml
+budget:
+  memory: 6G
+  cpus: 8
+  preempt: false
+```
+
+### Measured on a 16 GB laptop
+
+Measured 2026-10-29 for SW-181 on a 16 GB MacBook with Docker Desktop's engine
+at 7.8 GiB and 12 CPUs, so the default budget is 6.8 GiB and 12 CPUs. The feature
+was the werkmeister repo with `werkmeister-core` and `cli`, plus the setup
+container that installs their dependencies. Each gate command ran cold
+(`turbo --force`, nothing cached), one after the other as the gate runs them,
+while `anon` in each container's `memory.stat` was sampled every 0.5 s.
+
+| | Memory | CPUs |
+|---|---|---|
+| Admission cost (compose: setup 512M/2.0, two services 128M/1.0 each) | 768 MiB | 4.0 |
+| Cold peak, `werkmeister-core` gate (109 s) | 632 MiB | |
+| Cold peak, `cli` gate (187 s) | 689 MiB | |
+| Features that fit the default budget | 9 | **3** |
+
+CPU fills up first: three features of this shape fit, and a fourth waits. Memory
+would allow nine, by cost or by measured peak. No container was OOM-killed.
+Agent sessions run outside Docker (about 0.3–0.6 GB each), so the laptop's own
+memory, not the engine's, limits how many sessions run beside them.
+
 ## Step 4: Verify and Adjust
 
 After applying limits, verify containers are running correctly:

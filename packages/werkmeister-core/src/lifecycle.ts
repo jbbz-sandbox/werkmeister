@@ -28,10 +28,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   clearPaused,
+  clearWaiting,
   nudgePath,
   readAgentState,
   readPaused,
   readSessions,
+  writeNudge,
   writePaused,
 } from "./agent_state.js";
 import { ensureSharedNetwork, isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
@@ -75,9 +77,17 @@ import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
+import type { Lease, Rank } from "./scheduler.js";
+import {
+  dequeue,
+  enqueue,
+  loadBudget,
+  readLeases,
+  readQueue,
+  requestAdmission,
+} from "./scheduler_state.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
-  allocateSlot,
   getAllSlots,
   getPortRange,
   getServicePort,
@@ -85,8 +95,10 @@ import {
   LABEL_FEATURE,
   LEGACY_LABEL_FEATURE,
   releaseSlot,
+  requireLeasedSlot,
 } from "./slots.js";
 import { strategyFor } from "./strategies/index.js";
+import { readAutonomous } from "./workspace_prompts.js";
 
 /** Everything `werkmeister up` computed, separated from how the CLI renders it. */
 export interface UpResult {
@@ -105,6 +117,8 @@ export interface UpResult {
   containersStarted: boolean;
   /** "skipped": Caddy was stopped and nothing in this workspace is routed (SW-42). */
   caddy: "reloaded" | "started" | "skipped";
+  /** Queue position when the budget had no room: nothing was started (SW-181). */
+  waiting?: number;
 }
 
 /**
@@ -123,11 +137,15 @@ export interface UpResult {
  * when the forwards are restarted and their tunnels never reconnect, and
  * `COMPOSE_UP_FAILED` when `docker compose up` reports failure, and
  * `INSIDE_OWN_CONTAINER` before any of it when run inside *feature*'s own container.
+ *
+ * With no room in the budget it queues the feature instead and returns with
+ * `waiting` set; *byPerson* (default: the workspace is not autonomous) may stop
+ * autonomous features to make room (SW-181).
  */
 export async function up(
   feature: string,
   workspace: string,
-  { signal }: { signal?: AbortSignal } = {},
+  { signal, byPerson }: { signal?: AbortSignal; byPerson?: boolean } = {},
 ): Promise<UpResult> {
   refuseInsideOwnContainer(feature, "up");
   refusePaused(feature, workspace);
@@ -163,6 +181,26 @@ export async function up(
     localServices,
   );
   const [portStart, portEnd] = getPortRange(slot);
+
+  if (localServices.length) {
+    const waiting = await admitOrQueue(feature, workspace, byPerson ?? !readAutonomous(workspace));
+    if (waiting !== null) {
+      warn(`Waiting for capacity, position ${waiting} — it starts when another feature stops`);
+      return {
+        feature,
+        slot,
+        portRange: [portStart, portEnd],
+        localServices,
+        urls: [],
+        servicePorts: [],
+        regenerated,
+        staleCompose,
+        containersStarted: false,
+        caddy: "skipped",
+        waiting,
+      };
+    }
+  }
   // Every `up`, not just on a slot change: the file is fully generated and
   // nothing reads it, and with no subgraph this removes a stale copy (#120).
   generateSupergraphConfig(feature, slot, localServices, config, workspace);
@@ -276,16 +314,8 @@ async function prepareSlot(
 ): Promise<{ slot: number; regenerated: boolean; staleCompose: boolean }> {
   info("Allocating feature slot...");
   const preferredSlot = readSlotFromWorkspace(workspace);
-  let slot: number;
-  try {
-    slot = await allocateSlot(feature, localServices, preferredSlot);
-  } catch (e) {
-    // Rewrapped rather than left to propagate: allocation reports failure as a
-    // plain Error, whose message already carries the stale-lock recovery
-    // guidance, and `main.ts` prints a bare Error as `Error: <msg>` instead of
-    // the `[err] <msg>` this site has always produced.
-    throw new SandboxError(e instanceof Error ? e.message : String(e), "SLOT_ALLOC");
-  }
+  // Never moves a leased slot (SW-169); SLOT_ALLOC names whoever sits on it.
+  const slot = await requireLeasedSlot(feature, workspace, preferredSlot);
 
   const [portStart, portEnd] = getPortRange(slot);
   info(`Slot ${slot} -> port range ${portStart}-${portEnd}`);
@@ -337,6 +367,8 @@ export async function startService(
   requireSecrets(config.services, [service], workspace);
   // compose refuses to start a service whose `.env.<svc>` is missing.
   writeServiceSecretEnvs(workspace, [service], config.services);
+  // ponytail: no budget check here; the gate only adds services to a feature `up`
+  // already admitted. Admit per service if gates start whole features on their own.
   await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
   requireSharedNetwork();
   const started = await withStartRecord(workspace, "gate", () =>
@@ -516,6 +548,10 @@ export interface RunningFeature {
   workspace: string;
   /** Each running container's `State.StartedAt`, epoch ms. */
   startedAt: number[];
+  /** Σ `HostConfig.MemoryReservation`, bytes. */
+  memory: number;
+  /** Σ `HostConfig.NanoCpus`, cores. */
+  cpus: number;
 }
 
 export interface IdleInput {
@@ -571,7 +607,9 @@ function mtimeMs(p: string): number | null {
 const LABEL_WORKDIR = "com.docker.compose.project.working_dir";
 
 /** Running feature containers grouped by feature; null when docker cannot be read. */
-function runningFeatures(runCmd: (cmd: string[]) => RunResult): RunningFeature[] | null {
+export function runningFeatures(
+  runCmd: (cmd: string[]) => RunResult = (cmd) => run(cmd, { capture: true, timeout: 20 }),
+): RunningFeature[] | null {
   try {
     // One `ps` per label set: docker ANDs repeated label filters.
     const list = new Set<string>();
@@ -582,15 +620,17 @@ function runningFeatures(runCmd: (cmd: string[]) => RunResult): RunningFeature[]
     }
     if (!list.size) return [];
     const feature = `or (index .Config.Labels "${LABEL_FEATURE}") (index .Config.Labels "${LEGACY_LABEL_FEATURE}")`;
-    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}`;
+    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}\t{{.HostConfig.MemoryReservation}}\t{{.HostConfig.NanoCpus}}`;
     const inspect = runCmd(["docker", "inspect", "--format", fmt, ...list]);
     if (inspect.status !== 0) return null;
     const byFeature = new Map<string, RunningFeature>();
     for (const line of inspect.stdout.split("\n").filter(Boolean)) {
-      const [feature, workspace, started] = line.split("\t");
+      const [feature, workspace, started, memory, nanoCpus] = line.split("\t");
       if (!feature || !workspace) continue;
-      const f = byFeature.get(feature) ?? { feature, workspace, startedAt: [] };
+      const f = byFeature.get(feature) ?? { feature, workspace, startedAt: [], memory: 0, cpus: 0 };
       f.startedAt.push(Date.parse(started));
+      f.memory += Number(memory) || 0;
+      f.cpus += (Number(nanoCpus) || 0) / 1e9;
       byFeature.set(feature, f);
     }
     return [...byFeature.values()];
@@ -674,6 +714,106 @@ export interface RestartResult {
   slot: number;
 }
 
+const GRANTED_NUDGE =
+  "Capacity freed: this workspace's containers are up. Continue where you left off.";
+
+/**
+ * Every running feature as the scheduler sees it, read from Docker now (never a
+ * pid: `up` exits once containers start). Longest-inactive first, so ties in
+ * preemption go to the feature nothing has touched longest. Null when Docker
+ * can't be read.
+ *
+ * A non-autonomous workspace is a person's and is never preempted; nor is the
+ * shared infra.
+ */
+export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | null {
+  const found = runningFeatures(runCmd);
+  if (!found) return null;
+  const gateCutoff = Date.now() - idleStopMinutes() * 60_000;
+  return found
+    .map((f) => {
+      const state = readAgentState(f.workspace);
+      const rank: Rank =
+        f.feature === "infra" || !readAutonomous(f.workspace)
+          ? "person"
+          : state?.state === "working"
+            ? "working"
+            : state?.state === "needs-you"
+              ? "human-check"
+              : "idle";
+      const busy =
+        readPaused(f.workspace) !== null ||
+        (mtimeMs(lastExecMarker(f.workspace)) ?? 0) > gateCutoff;
+      const lease: Lease = {
+        feature: f.feature,
+        cost: { memory: f.memory, cpus: f.cpus },
+        rank,
+        busy,
+      };
+      return { lease, at: state ? Date.parse(state.at) : 0 };
+    })
+    .sort((a, b) => a.at - b.at)
+    .map((x) => x.lease);
+}
+
+/** Null when *feature* may start now (after any preemption); else its queue position. */
+async function admitOrQueue(
+  feature: string,
+  workspace: string,
+  byPerson: boolean,
+): Promise<number | null> {
+  const running = runningLeases();
+  // Docker unreadable: let compose up report it rather than queue on a guess.
+  if (running === null) return null;
+  const decision = await requestAdmission(
+    feature,
+    workspace,
+    byPerson,
+    running,
+    await loadBudget(),
+  );
+  if (decision.kind === "wait") return decision.position;
+  if (decision.kind === "preempt") {
+    for (const victim of decision.victims) {
+      // stop, not pause: a paused container keeps its memory.
+      await stop(victim, { grant: false });
+      const victimWs = readLeases()[victim]?.workspace || workspaceForFeature(victim);
+      if (victimWs) await enqueue(victim, victimWs);
+      info(`Stopped '${victim}' to make room (preemption; budget.preempt: false turns it off)`);
+    }
+  }
+  return null;
+}
+
+/**
+ * Start queued features, first come first served, until one still doesn't fit.
+ * Each started one's live session gets a "continue". Returns those started.
+ */
+export async function grantWaiters(): Promise<string[]> {
+  const started: string[] = [];
+  for (const feature of readQueue()) {
+    const workspace = readLeases()[feature]?.workspace;
+    if (!workspace) {
+      await dequeue(feature);
+      continue;
+    }
+    const r = await up(feature, workspace, { byPerson: false });
+    if (r.waiting !== undefined) break;
+    started.push(feature);
+    if (liveSessions(workspace).length) writeNudge(workspace, GRANTED_NUDGE);
+  }
+  return started;
+}
+
+/** After a release: never fails the stop or down that freed the room. */
+async function grantWaitersQuietly(): Promise<void> {
+  try {
+    for (const f of await grantWaiters()) success(`Started '${f}' from the waiting queue`);
+  } catch (e) {
+    warn(`Could not start the next waiting feature: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 /**
  * Stop *feature*'s containers, leaving them and its slot in place so
  * `restart`/`up` can resume it.
@@ -681,7 +821,10 @@ export interface RestartResult {
  * Throws `NOT_RUNNING` when the feature holds no slot, and
  * `COMPOSE_STOP_FAILED` when a container fails to stop.
  */
-export async function stop(feature: string): Promise<StopResult> {
+export async function stop(
+  feature: string,
+  { grant = true }: { grant?: boolean } = {},
+): Promise<StopResult> {
   refuseInsideOwnContainer(feature, "stop");
   const slot = await requireSlot(feature);
 
@@ -690,6 +833,7 @@ export async function stop(feature: string): Promise<StopResult> {
     throw new SandboxError(`Failed to stop containers for '${feature}'`, "COMPOSE_STOP_FAILED");
   }
 
+  if (grant) await grantWaitersQuietly();
   return { feature, slot };
 }
 
@@ -898,13 +1042,15 @@ export async function down(
   }
 
   info("Releasing feature slot...");
-  releaseSlot(feature);
-  // Tearing down ends a pause: there is nothing left to resume.
+  await releaseSlot(feature);
+  // Tearing down ends a pause, and a wait: there is nothing left to resume or start.
   if (workspace) {
     clearPaused(workspace);
+    clearWaiting(workspace);
     fs.rmSync(nudgePath(workspace), { force: true });
   }
 
+  await grantWaitersQuietly();
   return { feature, slot };
 }
 
@@ -1254,7 +1400,7 @@ export async function runClean({
       if (!composeDown(feature, { removeVolumes: true })) {
         warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
       }
-      releaseSlot(feature);
+      await releaseSlot(feature);
     }
     if (!dryRun) {
       await generateCaddyfile();
@@ -1324,7 +1470,7 @@ export async function runClean({
         if (dryRun) {
           raw(`    ${Colors.DIM}[dry-run] Would release slot: ${feature}${Colors.RESET}\n`);
         } else {
-          releaseSlot(feature);
+          await releaseSlot(feature);
           releasedSlots.push(feature);
           raw(`    ${Colors.GREEN}Released:${Colors.RESET} ${feature}\n`);
         }

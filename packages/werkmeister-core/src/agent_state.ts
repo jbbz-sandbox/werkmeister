@@ -205,9 +205,11 @@ export const RESUME_NUDGE = "Workspace resumed by the person. Continue where you
 
 export const pausedPath = (root: string) => path.join(dotDir(root), "paused.json");
 export const nudgePath = (root: string) => path.join(dotDir(root), "resume-nudge.json");
+/** `<dot-dir>/waiting.json` (SW-181): the feature is queued for capacity; {@link pauseGate} holds the session. */
+export const waitingPath = (root: string) => path.join(dotDir(root), "waiting.json");
 
 // Rename so a reader (the status sweep, the hook) never sees half a file.
-function writeAtomic(file: string, body: unknown): void {
+export function writeAtomic(file: string, body: unknown): void {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(body)}\n`);
   fs.renameSync(tmp, file);
@@ -232,6 +234,30 @@ export function clearPaused(root: string): void {
   fs.rmSync(pausedPath(root), { force: true });
 }
 
+export interface WaitingFile {
+  position: number;
+  reason: string;
+}
+
+/** The waiting record, or null when there is none or it doesn't parse. */
+export function readWaiting(root: string): WaitingFile | null {
+  try {
+    const o = JSON.parse(fs.readFileSync(waitingPath(root), "utf8"));
+    if (!Number.isInteger(o?.position)) return null;
+    return { position: o.position, reason: String(o.reason ?? "") };
+  } catch {
+    return null;
+  }
+}
+
+export function writeWaiting(root: string, w: WaitingFile): void {
+  writeAtomic(waitingPath(root), w);
+}
+
+export function clearWaiting(root: string): void {
+  fs.rmSync(waitingPath(root), { force: true });
+}
+
 /** The pending "continue" for a live session, left by Resume for the pane to deliver. */
 export function readNudge(root: string): string | null {
   try {
@@ -254,27 +280,35 @@ export function claimNudge(root: string): string | null {
 }
 
 /**
- * The hook's stdout while the workspace is paused, or null. `continue: false` ends
+ * The hook's stdout while the workspace is paused or waiting for capacity, or null. `continue: false` ends
  * the turn with the transcript intact; the deny also holds where a host ignores it.
  */
 export function pauseGate(input: Record<string, any>, root: string): object | null {
-  if (!fs.existsSync(pausedPath(root))) return null;
+  // Paused wins: Resume, not a grant, is what the person is waiting to press.
+  const paused = fs.existsSync(pausedPath(root));
+  const waiting = paused ? null : readWaiting(root);
+  if (!paused && !waiting) return null;
+  const reason = waiting
+    ? `Waiting for capacity (position ${waiting.position}). End your turn now; it starts when another feature stops.`
+    : PAUSED_REASON;
   switch (input["hook_event_name"]) {
     case "PreToolUse":
       return {
         continue: false,
-        stopReason: PAUSED_REASON,
+        stopReason: reason,
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: PAUSED_REASON,
+          permissionDecisionReason: reason,
         },
       };
     case "UserPromptSubmit":
       // One guard for every sender: the person, claude-send, PR callbacks, check-in.
       return {
         decision: "block",
-        reason: "This workspace is paused. Press ▶ Resume on its card first.",
+        reason: waiting
+          ? "This workspace is waiting for capacity; it starts on its own."
+          : "This workspace is paused. Press ▶ Resume on its card first.",
       };
     default:
       return null;

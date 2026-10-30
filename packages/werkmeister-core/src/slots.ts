@@ -9,29 +9,28 @@
  *     ...
  *     slot 12 -> ports 12200-12219
  *
- * Docker container labels (the `com.werkmeister.*` family stamped
- * by `generateFeatureCompose`) are the single source of truth for slot
- * ownership. `allocateSlot` scans live container labels to find a free
- * slot; the next `docker compose up` stamps the slot label onto the new
- * containers, making that allocation authoritative. There is no separate
- * registry file -- `~/.werkmeister/slots.json` was removed in the labels
- * refactor.
+ * A slot is held by a lease in `~/.werkmeister/scheduler/leases.json`
+ * (`scheduler_state.ts`), written the moment it is allocated, and by the
+ * `com.werkmeister.*` labels on the feature's containers. Labels alone were not
+ * enough: init-workspace allocates and starts nothing, so the next create saw
+ * the slot as free (SW-166), and the gate re-allocated a slot a sibling held
+ * (SW-169). A held lease is never moved; `releaseSlot` (from `down`) ends it.
  *
- * Allocation is protected by an advisory file lock at
- * `~/.werkmeister/locks/allocate.lock` so concurrent `werkmeister up` runs
- * cannot race onto the same slot between the scan and the
- * `docker compose up` that stamps the label.
+ * Every lease read-modify-write is under `~/.werkmeister/locks/allocate.lock`.
  */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { workspaceForFeature } from "./compose.js";
 import { baselineUpstream, dotDir, loadPorts, loadServices, slotPortRange } from "./config.js";
 import { docker } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { sandboxLock } from "./locks.js";
 import { error, info, success, warn } from "./reporter.js";
+import { pickSlot } from "./scheduler.js";
+import { dequeue, readLeases, type SlotLease, writeLeases } from "./scheduler_state.js";
 
 export const LABEL_PREFIX = "com.werkmeister";
 export const LABEL_FEATURE = `${LABEL_PREFIX}.feature`;
@@ -201,98 +200,138 @@ export async function getAllSlotsFromDocker(): Promise<Record<string, SlotEntry>
   return byFeature;
 }
 
-/**
- * Return the set of slot numbers held in *dockerSlots*.
- *
- * Returns an empty set if *dockerSlots* is `null` (Docker unreachable)
- * -- the subsequent `docker compose up` would also fail, so no harm.
- */
-function takenSlots(dockerSlots: Record<string, SlotEntry> | null): Set<number> {
-  if (!dockerSlots || Object.keys(dockerSlots).length === 0) {
-    return new Set();
-  }
-  return new Set(Object.values(dockerSlots).map((entry) => entry.slot));
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Reads Docker labels; injectable so tests need no daemon. */
+export interface SlotDeps {
+  labels: () => Promise<Record<string, SlotEntry> | null>;
+}
+
+const defaultSlotDeps: SlotDeps = { labels: getAllSlotsFromDocker };
+
 /**
- * Allocate the next available slot for *feature*.
+ * Leases pruned and backfilled, plus the slot → owner map. Caller holds the lock.
  *
- * The slot is picked by scanning live container labels for occupancy. If
- * *feature* already owns a slot (a labeled container exists), that slot
- * is returned -- the call is idempotent. Otherwise, *preferredSlot* is
- * used if free, else the lowest free slot is returned.
+ * Prune: a lease whose workspace folder is gone. Backfill: a labelled feature
+ * with no lease, so workspaces from before leases keep their slot. Where a
+ * label and a lease disagree on a slot's owner the label wins: those
+ * containers are what bind its ports.
+ */
+function heldSlots(dockerSlots: Record<string, SlotEntry> | null): {
+  leases: Record<string, SlotLease>;
+  held: Map<number, string>;
+} {
+  const leases = readLeases();
+  for (const [f, l] of Object.entries(leases)) {
+    if (l.workspace && !fs.existsSync(l.workspace)) delete leases[f];
+  }
+  for (const [f, e] of Object.entries(dockerSlots ?? {})) {
+    leases[f] ??= { slot: e.slot, workspace: workspaceForFeature(f) ?? "" };
+  }
+  const held = new Map<number, string>();
+  for (const [f, l] of Object.entries(leases)) held.set(l.slot, f);
+  for (const [f, e] of Object.entries(dockerSlots ?? {})) {
+    const leaseOwner = held.get(e.slot);
+    if (leaseOwner && leaseOwner !== f) {
+      warn(`Slot ${e.slot} is leased to '${leaseOwner}' but '${f}' has containers on it`);
+    }
+    held.set(e.slot, f);
+  }
+  return { leases, held };
+}
+
+/**
+ * Allocate *feature*'s slot and lease it before the lock is released.
  *
- * Nothing is persisted. The next `docker compose up` stamps the slot
- * label onto the new containers, which becomes the authoritative record.
- * An advisory file lock serializes concurrent allocations so two
- * parallel `werkmeister up` invocations cannot pick the same slot between
- * the scan and container creation.
+ * Idempotent: a feature that already holds a slot (lease or label) gets it
+ * back. Otherwise *preferredSlot* if free, else the lowest free slot.
  *
- * *services* is accepted for back-compat with the slots.json era and
- * ignored -- services are now derived from container labels at read time.
- *
- * Throws if all slots are occupied.
+ * Throws if all slots are held.
  */
 export async function allocateSlot(
   feature: string,
-  _services?: string[] | null, // kept for back-compat
   preferredSlot?: number | null,
+  workspace?: string | null,
+  deps: SlotDeps = defaultSlotDeps,
 ): Promise<number> {
   const count = slotCount();
   return sandboxLock(
     "allocate",
     async () => {
-      // Query Docker labels exactly once for this operation and derive
-      // both "does this feature already have a slot" and "which slots
-      // are taken" from that single result -- no stale cross-call reads.
-      const dockerSlots = await getAllSlotsFromDocker();
-      const existingEntry = dockerSlots?.[feature];
-      if (existingEntry) {
-        return existingEntry.slot;
+      const { leases, held } = heldSlots(await deps.labels());
+      const slot = pickSlot(feature, held, count, preferredSlot ?? null);
+      if (slot === null) {
+        error(`All ${count} feature slots are occupied!`);
+        throw new Error(
+          "No available slots. Stop an existing feature with 'werkmeister down <feature>' first.",
+        );
       }
-
-      const taken = takenSlots(dockerSlots);
-
-      if (
-        preferredSlot !== null &&
-        preferredSlot !== undefined &&
-        preferredSlot >= 1 &&
-        preferredSlot <= count &&
-        !taken.has(preferredSlot)
-      ) {
-        success(`Allocated slot ${preferredSlot} for '${feature}'`);
-        return preferredSlot;
-      }
-
-      for (let candidate = 1; candidate <= count; candidate++) {
-        if (!taken.has(candidate)) {
-          success(`Allocated slot ${candidate} for '${feature}'`);
-          return candidate;
-        }
-      }
-
-      error(`All ${count} feature slots are occupied!`);
-      throw new Error(
-        "No available slots. Stop an existing feature with 'werkmeister down <feature>' first.",
-      );
+      if (leases[feature]?.slot !== slot) success(`Allocated slot ${slot} for '${feature}'`);
+      leases[feature] = {
+        slot,
+        workspace: workspace ?? leases[feature]?.workspace ?? workspaceForFeature(feature) ?? "",
+      };
+      writeLeases(leases);
+      return slot;
     },
     { timeout: _ALLOCATE_LOCK_TIMEOUT },
   );
 }
 
 /**
- * No-op kept for call-site symmetry.
+ * The slot `up` and the gate start *feature* on: its lease, never another.
+ * With no lease yet, allocate one preferring *preferredSlot* (the `.env` slot).
  *
- * Slot ownership lives on container labels. `docker compose down`
- * (called by `werkmeister down`) removes the containers, which is what
- * actually frees the slot. Callers in `down.ts` and `clean.ts`
- * still invoke this for readability; there is no cache to invalidate.
+ * Throws `SLOT_ALLOC` when another feature's containers sit on the leased slot,
+ * naming them, rather than moving to a slot whose ports may be someone else's.
  */
-export function releaseSlot(_feature: string): void {}
+export async function requireLeasedSlot(
+  feature: string,
+  workspace: string,
+  preferredSlot: number | null,
+  deps: SlotDeps = defaultSlotDeps,
+): Promise<number> {
+  const dockerSlots = await deps.labels();
+  const lease = sandboxLock("allocate", () => readLeases()[feature], {
+    timeout: _ALLOCATE_LOCK_TIMEOUT,
+  });
+  if (!lease) {
+    try {
+      return await allocateSlot(feature, preferredSlot, workspace, deps);
+    } catch (e) {
+      throw new SandboxError(e instanceof Error ? e.message : String(e), "SLOT_ALLOC");
+    }
+  }
+  const squatter = Object.entries(dockerSlots ?? {}).find(
+    ([f, e]) => f !== feature && e.slot === lease.slot,
+  );
+  if (squatter) {
+    const [other] = squatter;
+    throw new SandboxError(
+      `Slot ${lease.slot} is leased to '${feature}' but '${other}' has containers on it — ` +
+        `stop it or run 'werkmeister down ${other}'`,
+      "SLOT_ALLOC",
+    );
+  }
+  return lease.slot;
+}
+
+/** End *feature*'s lease and drop it from the waiting queue. Called by `down`. */
+export async function releaseSlot(feature: string): Promise<void> {
+  await sandboxLock(
+    "allocate",
+    () => {
+      const leases = readLeases();
+      if (!(feature in leases)) return;
+      delete leases[feature];
+      writeLeases(leases);
+    },
+    { timeout: _ALLOCATE_LOCK_TIMEOUT },
+  );
+  await dequeue(feature);
+}
 
 /** Return the slot number for *feature*, or `null` if not allocated. */
 export async function getSlot(feature: string): Promise<number | null> {
