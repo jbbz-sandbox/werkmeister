@@ -421,7 +421,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   await printFeaturesSection(
     allSlots,
     Boolean(args.verbose),
-    buildInterceptRows(allSlots, loadServices(), listIntercepts()),
+    buildInterceptRows(allSlots, loadServices(), await listIntercepts()),
     await vitals,
   );
   const waiting = readQueue();

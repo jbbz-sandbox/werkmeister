@@ -17,37 +17,36 @@ const h = vi.hoisted(() => ({
 
 vi.mock("werkmeister-core/proc", async (importOriginal) => {
   const actual = await importOriginal<typeof import("werkmeister-core/proc")>();
-  return {
-    ...actual,
-    run: (cmd: string[]) => {
-      if (h.telepresence === "absent") {
-        throw new actual.ProcError("not found", cmd, -1, "", "", "ENOENT");
-      }
-      h.calls.push(cmd[1]);
-      if (h.telepresence === "disconnected") {
-        return {
-          status: 1,
-          stdout: '{"error":"root daemon: telepresence root daemon is not running"}',
-          stderr: "",
-        };
-      }
-      if (cmd[1] === "list") {
-        return {
-          status: 0,
-          stdout: fs.readFileSync(
-            new URL("./fixtures/telepresence-list-active.json", import.meta.url),
-            "utf8",
-          ),
-          stderr: "",
-        };
-      }
+  const run = (cmd: string[]) => {
+    if (h.telepresence === "absent") {
+      throw new actual.ProcError("not found", cmd, -1, "", "", "ENOENT");
+    }
+    h.calls.push(cmd[1]);
+    if (h.telepresence === "disconnected") {
       return {
-        status: 0,
-        stdout: JSON.stringify({ daemon: { status: "Connected", namespace: "default" } }),
+        status: 1,
+        stdout: '{"error":"root daemon: telepresence root daemon is not running"}',
         stderr: "",
       };
-    },
+    }
+    if (cmd[1] === "list") {
+      return {
+        status: 0,
+        stdout: fs.readFileSync(
+          new URL("./fixtures/telepresence-list-active.json", import.meta.url),
+          "utf8",
+        ),
+        stderr: "",
+      };
+    }
+    return {
+      status: 0,
+      stdout: JSON.stringify({ daemon: { status: "Connected", namespace: "default" } }),
+      stderr: "",
+    };
   };
+  // The status reads are async since SW-184; `run` stays for any sync caller.
+  return { ...actual, run, runAsync: async (cmd: string[]) => run(cmd) };
 });
 vi.mock("werkmeister-core/slots", async (importOriginal) => ({
   ...(await importOriginal<typeof import("werkmeister-core/slots")>()),

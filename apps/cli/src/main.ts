@@ -312,12 +312,15 @@ const SPECS: CommandSpec[] = [
           "Stop every workspace's feature containers nothing has used for <minutes> (a busy or " +
             "recently active session, a gate exec or a fresh start all count as use); with " +
             "[feature], only that one",
-        );
+        )
+        // Internal: the child --if-idle spawns, which hands the stop to the host daemon (SW-184).
+        .addOption(new Option("--via-daemon").hideHelp());
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
       if_idle: Boolean(o.ifIdle),
       idle: o.idle ?? null,
+      via_daemon: Boolean(o.viaDaemon),
     }),
   },
   {

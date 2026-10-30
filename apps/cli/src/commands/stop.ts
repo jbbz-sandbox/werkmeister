@@ -7,13 +7,15 @@
  *
  * For shared infrastructure use ``werkmeister stop infra``.
  *
- * ``werkmeister stop --if-idle`` is the SessionEnd hook behind ``auto_stop`` (#231).
+ * ``werkmeister stop --if-idle`` is the SessionEnd hook behind ``auto_stop`` (#231);
+ * the stop it decides on goes to the host daemon (``--via-daemon``, SW-184).
  * ``werkmeister stop --idle <minutes> [feature]`` is one idle-reaper pass (SW-39).
  */
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { callTool, DaemonUnavailable } from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
 import { stop as infraStop } from "werkmeister-core/infra";
 import { idleStopFeature, stop as stopFeature, stopIdle } from "werkmeister-core/lifecycle";
@@ -43,7 +45,7 @@ function stopIfIdle(): void {
       entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT ?? null,
     });
     if (!feature) return;
-    spawn(process.execPath, [process.argv[1], "stop", feature], {
+    spawn(process.execPath, [process.argv[1], "stop", feature, "--via-daemon"], {
       cwd: workspaceRoot,
       detached: true,
       stdio: "ignore",
@@ -53,9 +55,26 @@ function stopIfIdle(): void {
   }
 }
 
+/**
+ * The detached child of {@link stopIfIdle}, run in the workspace root: the only
+ * CLI path that forwards to the daemon. Falls back to a local stop when the
+ * daemon is down, and stays silent either way — nobody is watching its output.
+ */
+async function stopViaDaemon(feature: string): Promise<void> {
+  try {
+    await callTool("stop", { workspace: path.basename(process.cwd()) }, { timeoutMs: 60_000 });
+  } catch (e) {
+    if (e instanceof DaemonUnavailable) await stopFeature(feature).catch(() => {});
+  }
+}
+
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.if_idle) {
     stopIfIdle();
+    return;
+  }
+  if (args.via_daemon && args.feature) {
+    await stopViaDaemon(args.feature as string);
     return;
   }
   if (args.idle != null) {

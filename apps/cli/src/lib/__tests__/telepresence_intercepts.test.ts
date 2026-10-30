@@ -11,6 +11,7 @@
 import * as fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  type AsyncRunner,
   interceptBlocker,
   listIntercepts,
   parseInterceptList,
@@ -106,32 +107,34 @@ describe("listIntercepts", () => {
   // Status decides first: `list` only runs against a connected daemon (SW-12).
   const CONNECTED = JSON.stringify({ daemon: { status: "Connected", namespace: "default" } });
   const connected =
-    (list: [number, string]): Runner =>
-    (cmd) =>
+    (list: [number, string]): AsyncRunner =>
+    async (cmd) =>
       cmd[1] === "status" ? [0, CONNECTED] : list;
 
-  it("returns the parsed map from `telepresence list -i`", () => {
-    expect(listIntercepts(connected([0, ACTIVE])).intercepts.get("frontend")).toBe("test-me");
+  it("returns the parsed map from `telepresence list -i`", async () => {
+    expect((await listIntercepts(connected([0, ACTIVE]))).intercepts.get("frontend")).toBe(
+      "test-me",
+    );
   });
 
-  it("reports available when the command succeeds", () => {
-    expect(listIntercepts(connected([0, "[]"])).available).toBe(true);
+  it("reports available when the command succeeds", async () => {
+    expect((await listIntercepts(connected([0, "[]"]))).available).toBe(true);
   });
 
-  it("reports unavailable, not an error, when telepresence exits non-zero", () => {
-    const result = listIntercepts(connected([1, "boom"]));
+  it("reports unavailable, not an error, when telepresence exits non-zero", async () => {
+    const result = await listIntercepts(connected([1, "boom"]));
     expect(result.available).toBe(false);
     expect(result.intercepts.size).toBe(0);
   });
 
-  it("reports not installed, not an error, when the binary is missing", () => {
-    const result = listIntercepts(() => [127, "telepresence: command not found"]);
+  it("reports not installed, not an error, when the binary is missing", async () => {
+    const result = await listIntercepts(async () => [127, "telepresence: command not found"]);
     expect([result.installed, result.available]).toEqual([false, false]);
   });
 
-  it("asks telepresence for intercepts only, as json", () => {
+  it("asks telepresence for intercepts only, as json", async () => {
     const seen: string[][] = [];
-    listIntercepts((cmd) => {
+    await listIntercepts(async (cmd): Promise<[number, string]> => {
       seen.push(cmd);
       return cmd[1] === "status" ? [0, CONNECTED] : [0, "[]"];
     });
