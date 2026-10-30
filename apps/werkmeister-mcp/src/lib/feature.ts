@@ -21,8 +21,17 @@ import { SandboxError } from "werkmeister-core/errors";
 
 /** Lower-cased: Node lower-cases incoming header names. */
 export const FEATURE_HEADER = "x-werkmeister-feature";
-/** Sent by a `.mcp.json` generated before SW-106; drop once every workspace has re-run init-workspace. */
-const PRE_RENAME_FEATURE_HEADER = "x-sandbox-feature";
+/**
+ * The workspace a per-workspace token is scoped to. Set only by the daemon's auth
+ * middleware, which first deletes any value a client sent (SW-184).
+ */
+export const SCOPE_HEADER = "x-werkmeister-scope";
+
+const first = (v: string | string[] | undefined): string | undefined =>
+  (Array.isArray(v) ? v[0] : v)?.trim() || undefined;
+
+export const scopeOfHeaders = (headers: ReqHeaders): string | undefined =>
+  first(headers?.[SCOPE_HEADER]);
 
 export type ReqHeaders = Record<string, string | string[] | undefined> | undefined;
 
@@ -36,9 +45,7 @@ export interface Workspace {
 
 /** The `workspace` argument, else the header, trimmed; a coded error when neither is set. */
 export function workspaceId(explicit: string | undefined, headers: ReqHeaders): string {
-  const raw = headers?.[FEATURE_HEADER] ?? headers?.[PRE_RENAME_FEATURE_HEADER];
-  const fromHeader = Array.isArray(raw) ? raw[0] : raw;
-  const id = (explicit?.trim() || fromHeader?.trim()) ?? "";
+  const id = explicit?.trim() || first(headers?.[FEATURE_HEADER]) || scopeOfHeaders(headers) || "";
   if (!id) {
     throw new SandboxError(
       "No workspace for this call. Pass a `workspace` argument, or set the " +
@@ -60,6 +67,18 @@ function envFeature(dir: string): string | null {
 }
 
 export function resolveWorkspace(explicit: string | undefined, headers: ReqHeaders): Workspace {
+  const ws = resolveUnscoped(explicit, headers);
+  const scope = scopeOfHeaders(headers);
+  if (scope !== undefined && ws.name !== scope) {
+    throw new SandboxError(
+      `This token is scoped to workspace '${scope}'; it cannot act on '${ws.name}'.`,
+      "SCOPE",
+    );
+  }
+  return ws;
+}
+
+function resolveUnscoped(explicit: string | undefined, headers: ReqHeaders): Workspace {
   const id = workspaceId(explicit, headers);
   if (!/[/\\]|\.\./.test(id)) {
     const dir = path.join(workspacesRoot(), id);

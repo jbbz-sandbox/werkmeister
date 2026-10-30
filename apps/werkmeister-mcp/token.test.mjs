@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { authorized, isLoopback, readOrCreateToken, tokenPath } from "./dist/lib/token.js";
+import { authorized, isLoopback, readOrCreateToken, scopeOf, tokenPath } from "./dist/lib/token.js";
 
 function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-token-"));
@@ -58,4 +58,30 @@ test("a malformed or wrong-length credential is refused, not compared", () => {
   assert.equal(authorized("Bearer ", "abc", "0.0.0.0"), false);
   // timingSafeEqual throws on unequal lengths; the length check must come first.
   assert.equal(authorized("Bearer abcdefgh", "abc", "0.0.0.0"), false);
+});
+
+// SW-184: one machine token for the host, one token per workspace under ~/.werkmeister/tokens/.
+test("scopeOf: the machine token is the host, a workspace token is that workspace", () => {
+  withHome((home) => {
+    const tokens = path.join(home, ".werkmeister", "tokens");
+    fs.mkdirSync(tokens, { recursive: true });
+    fs.writeFileSync(path.join(tokens, "proj-a"), `${"a".repeat(64)}\n`);
+    fs.writeFileSync(path.join(tokens, "proj-b"), `${"b".repeat(64)}\n`);
+    const bearer = (t) => `Bearer ${t}`;
+    assert.deepEqual(scopeOf(bearer("m".repeat(64)), "m".repeat(64), "0.0.0.0"), {
+      scope: "machine",
+    });
+    assert.deepEqual(scopeOf(bearer("b".repeat(64)), "m".repeat(64), "0.0.0.0"), {
+      scope: "workspace",
+      name: "proj-b",
+    });
+    assert.equal(scopeOf(bearer("z".repeat(64)), "m".repeat(64), "0.0.0.0"), null);
+  });
+});
+
+test("scopeOf: no header is the host on loopback and nobody on a wide bind", () => {
+  withHome(() => {
+    assert.deepEqual(scopeOf(undefined, "m", "127.0.0.1"), { scope: "machine" });
+    assert.equal(scopeOf(undefined, "m", "0.0.0.0"), null);
+  });
 });

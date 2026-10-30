@@ -13,6 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { dotDir } from "werkmeister-core/config";
+import { tokensDir } from "werkmeister-core/workspace_token";
 
 export function tokenPath(): string {
   return path.join(dotDir(os.homedir()), "mcp-token");
@@ -72,4 +73,37 @@ export function authorized(header: string | undefined, token: string, host: stri
   const given = Buffer.from(match[1], "utf8");
   const expected = Buffer.from(token, "utf8");
   return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+export type Scope = { scope: "machine" } | { scope: "workspace"; name: string };
+
+/**
+ * Who a request is (SW-184): the machine token (or no header on a loopback bind,
+ * exactly as {@link authorized}) is the host; a per-workspace token from
+ * `~/.werkmeister/tokens/` is that one workspace; anything else is nobody.
+ *
+ * ponytail: reads every token file per request (one per open workspace, ~10);
+ * cache by directory mtime if workspace counts grow.
+ */
+export function scopeOf(header: string | undefined, token: string, host: string): Scope | null {
+  if (authorized(header, token, host)) return { scope: "machine" };
+  if (header === undefined) return null;
+  let names: string[];
+  try {
+    names = fs.readdirSync(tokensDir());
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    let workspaceToken: string;
+    try {
+      workspaceToken = fs.readFileSync(path.join(tokensDir(), name), "utf8").trim();
+    } catch {
+      continue;
+    }
+    if (workspaceToken && authorized(header, workspaceToken, host)) {
+      return { scope: "workspace", name };
+    }
+  }
+  return null;
 }
