@@ -105,7 +105,7 @@ const propose: Stage = {
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL, with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
       "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit.",
-      "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`. Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs, the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
+      "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs, the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
       "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],
     outputs: [
@@ -400,7 +400,7 @@ const spike: Stage[] = [
         "Answer each question by its method. Prototype code lives in `output/` or on a scratch branch, never on the workspace branch.",
         "Write `output/findings.md`: per question, the answer, the evidence (commands and output), and confidence.",
         "End `findings.md` with a recommendation: the next work item and its work type.",
-        "If the brief asks for a deliverable in a code repo (e.g. a doc opened as a PR): commit it on that worktree's branch, and write `output/pr-<worktree>.md` in the format of `_shared/pr-rules.md` at `status: draft`, with an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise.",
+        "If the brief asks for a deliverable in a code repo (e.g. a doc opened as a PR): commit it on that worktree's branch, and write `output/pr-<worktree>.md` in the format of `_shared/pr-rules.md` at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value), an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise.",
       ],
       outputs: [
         "`output/findings.md`",
