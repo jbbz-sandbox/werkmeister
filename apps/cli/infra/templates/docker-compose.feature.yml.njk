@@ -112,6 +112,8 @@ services:
       - {{ werkmeister_root }}/infra/compose/scripts/{{ setup_name }}-startup.sh:/usr/local/bin/startup.sh
 {% endif %}
     command: ["/bin/sh", "-c", "{{ setup.command }}"]
+{# SW-151: equal to the memory limit, so swap can't stretch it #}
+    memswap_limit: {{ setup.memory_limit }}
     deploy:
       resources:
         limits:
@@ -227,6 +229,8 @@ services:
 {%- endif %}
         {{ svc.command or "exec sleep infinity" }}
 {% endif %}
+{# SW-151: equal to the memory limit, so swap can't stretch it #}
+    memswap_limit: {{ svc.memory_limit }}
     deploy:
       resources:
         limits:

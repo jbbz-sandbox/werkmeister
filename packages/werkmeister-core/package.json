@@ -56,6 +56,8 @@
     "./resources": "./dist/resources.js",
     "./safari": "./dist/safari.js",
     "./scaffold": "./dist/scaffold.js",
+    "./scheduler": "./dist/scheduler.js",
+    "./scheduler_state": "./dist/scheduler_state.js",
     "./secrets": "./dist/secrets.js",
     "./skill_gen": "./dist/skill_gen.js",
     "./slots": "./dist/slots.js",

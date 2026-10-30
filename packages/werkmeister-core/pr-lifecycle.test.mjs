@@ -132,6 +132,7 @@ function deps(table, over = {}) {
       r.calls.push(`start ${feature}-${service} from ${composeName ?? "compose.yml"}`);
     },
     gateCompose: () => [],
+    portHolders: async () => [],
     ...over,
   };
 }
@@ -421,6 +422,32 @@ test("gate: a repo without lint has no lint row and runs no lint (SW-133)", asyn
     const g = await gate(ws, d);
     assert.ok(!g.checks.some((c) => c.name === "lint"));
     assert.ok(!d.calls.some((c) => c.includes("biome")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a port the start would publish is held, so it fails before starting or testing (SW-173)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ extra: "skip_release: changeset committed, checked on host\n" }) },
+  });
+  fs.writeFileSync(
+    path.join(dotDir(ws), "workspace.yml"),
+    "feature: feat\nservices: backend,frontend\nissue_id: o/app#7\nwork_type: feature\n",
+  );
+  const d = deps([]);
+  d.run = stubRun([[/^docker ps/, { stdout: "" }], DIFF_API]).run;
+  d.portHolders = async (_ws, _feature, services) =>
+    services.map(() => ({ port: 11102, holder: "other-werkmeister-core" }));
+  try {
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["ports", "tests"]);
+    assert.match(
+      g.checks.find((c) => c.name === "ports").detail,
+      /11102 held by other-werkmeister-core/,
+    );
+    assert.deepEqual(d.started, []);
+    assert.ok(!d.calls.some((c) => /test|vitest|node --test/.test(c) && !c.startsWith("git")));
   } finally {
     clean(ws);
   }

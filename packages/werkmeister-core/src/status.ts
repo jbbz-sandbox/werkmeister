@@ -35,6 +35,7 @@ import {
 // whose other caller already lives there. Splitting it out would touch a second
 // module for no gain.
 
+import { readQueue } from "./scheduler_state.js";
 import { getAllSlots, getPortRange, type SlotEntry, slotCount } from "./slots.js";
 import {
   _run,
@@ -238,6 +239,8 @@ export interface StatusSnapshot {
   mcp_web_server: WebServerStatus;
   k8s_forwards: ForwardStatus[];
   features: FeatureSnapshot[];
+  /** SW-181: features queued for capacity, first in line first. */
+  waiting: string[];
   /** SW-69: the registry's build and package caches. */
   caches: CacheSnapshot[];
   summary: {
@@ -312,6 +315,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
     mcp_web_server: mcp,
     k8s_forwards: k8s,
     features,
+    waiting: readQueue(),
     caches: await caches,
     summary: {
       total_features: features.length,

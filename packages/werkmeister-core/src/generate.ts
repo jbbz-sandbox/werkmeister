@@ -1668,7 +1668,7 @@ export async function generateWorkspaceCompose(
 
   let slot: number;
   try {
-    slot = await allocateSlot(feature, localServices);
+    slot = await allocateSlot(feature, null, workspaceRoot);
   } catch (exc) {
     const msg = exc instanceof Error ? exc.message : String(exc);
     warn(`Could not allocate slot: ${msg}`);

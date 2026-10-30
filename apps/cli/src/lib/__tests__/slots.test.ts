@@ -124,12 +124,12 @@ describe("allocateSlot", () => {
 
   it("honors a free preferred slot", async () => {
     h.containers = fakeContainers({ "feat-1": [1, ["frontend"]], "feat-2": [2, ["frontend"]] });
-    expect(await allocateSlot("feat-new", null, 5)).toBe(5);
+    expect(await allocateSlot("feat-new", 5)).toBe(5);
   });
 
   it("falls back when preferred slot taken", async () => {
     h.containers = fakeContainers({ "feat-1": [1, ["frontend"]] });
-    const result = await allocateSlot("feat-new", null, 1);
+    const result = await allocateSlot("feat-new", 1);
     expect(result).not.toBe(1);
     expect(result).toBe(2);
   });
@@ -170,7 +170,7 @@ describe("containers labelled before SW-93 (com.sandbox.local.*)", () => {
   it("are found, and hold their slot against a new allocation", async () => {
     h.containers = fakeContainers({ "feat-old": [1, ["frontend"]] }, "com.sandbox.local");
     expect(await getSlot("feat-old")).toBe(1);
-    expect(await allocateSlot("feat-new", null, 1)).toBe(2);
+    expect(await allocateSlot("feat-new", 1)).toBe(2);
   });
 
   it("share the slot space with new ones: no slot is handed out twice", async () => {
@@ -187,9 +187,12 @@ describe("containers labelled before SW-93 (com.sandbox.local.*)", () => {
 });
 
 describe("releaseSlot", () => {
-  it("is a no-op and never touches docker", () => {
-    // No container fixture: release must not query Docker at all.
-    expect(releaseSlot("any-feature")).toBeUndefined();
+  it("ends the lease without touching docker, so the slot is free again (SW-181)", async () => {
+    expect(await allocateSlot("feat-a", 4)).toBe(4);
+    h.lastListOpts = undefined;
+    await releaseSlot("feat-a");
+    expect(h.lastListOpts).toBeUndefined();
+    expect(await allocateSlot("feat-b", 4)).toBe(4);
   });
 });
 

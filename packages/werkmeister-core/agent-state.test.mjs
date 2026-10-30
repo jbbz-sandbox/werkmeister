@@ -256,6 +256,24 @@ test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, 
     assert.equal(pauseGate({ hook_event_name: e }, dir), null, e);
 });
 
+// SW-181: waiting.json holds the session the same way; paused wins when both exist.
+const { writeWaiting } = await import("./dist/agent_state.js");
+
+test("waiting gate: denies tool calls and blocks prompts with the queue position", () => {
+  const dir = workspace("j-wait", null);
+  writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
+  const pre = pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir);
+  assert.equal(pre.continue, false);
+  assert.match(pre.stopReason, /Waiting for capacity \(position 2\)/);
+  assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
+  assert.match(
+    pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).reason,
+    /waiting for capacity/,
+  );
+  writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
+  assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason, PAUSED_REASON);
+});
+
 /** Run the hook entrypoint as Claude Code does: the event on stdin, the gate on stdout. */
 function hook(event) {
   const entry = new URL("./dist/agent_state.js", import.meta.url).href;
