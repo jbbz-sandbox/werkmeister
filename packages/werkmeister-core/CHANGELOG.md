@@ -1,5 +1,7 @@
 # sandbox-core
 
+## 0.49.0
+
 ## 0.48.0
 
 ### Minor Changes
