@@ -1,5 +1,13 @@
 # sandbox-mcp
 
+## 0.7.18
+
+### Patch Changes
+
+- Updated dependencies [a6b8980]
+  - werkmeister-core@0.51.0
+  - werkmeister-ui@0.5.42
+
 ## 0.7.17
 
 ### Patch Changes
