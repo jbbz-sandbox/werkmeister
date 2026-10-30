@@ -16,7 +16,10 @@ const engine = http.createServer((_req, res) => {
 
 let caddy;
 let claudeCli;
+// The "test" script's default gh stub would beat the fixture stub these tests probe.
+const suiteGhBin = process.env.WERKMEISTER_GH_BIN;
 before(async () => {
+  delete process.env.WERKMEISTER_GH_BIN;
   await new Promise((resolve) => engine.listen(0, "127.0.0.1", resolve));
   process.env.DOCKER_HOST = `tcp://127.0.0.1:${engine.address().port}`;
   process.env.WERKMEISTER_FIXTURE = "1";
@@ -24,6 +27,7 @@ before(async () => {
   claudeCli = await import("./dist/claude_cli.js");
 });
 after(() => {
+  if (suiteGhBin !== undefined) process.env.WERKMEISTER_GH_BIN = suiteGhBin;
   delete process.env.WERKMEISTER_FIXTURE;
   engine.close();
 });
