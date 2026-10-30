@@ -1343,6 +1343,7 @@ export async function main(): Promise<void> {
   program
     .name("werkmeister")
     .description(BANNER)
+    .version(JSON.parse(fs.readFileSync(path.join(_REPO_ROOT, "package.json"), "utf8")).version)
     .helpOption("-h, --help", "show this help message and exit");
 
   const byGroup = [...SPECS].sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group));
