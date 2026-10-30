@@ -71,6 +71,9 @@ jobs:
   # shards on runners of their own, in parallel with `test`.
   core-test:
     runs-on: ubuntu-latest
+    env:
+      # SW-177: the steps below call node directly, not the package's "test" script.
+      WERKMEISTER_GH_BIN: ${{ github.workspace }}/packages/werkmeister-core/no-gh.sh
     strategy:
       matrix:
         shard: [1, 2]
