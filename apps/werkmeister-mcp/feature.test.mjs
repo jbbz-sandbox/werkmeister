@@ -14,6 +14,7 @@ import {
   FEATURE_HEADER,
   resolveFeature,
   resolveWorkspace,
+  SCOPE_HEADER,
   workspaceId,
 } from "./dist/lib/feature.js";
 
@@ -21,8 +22,14 @@ test("the header supplies the workspace when no argument does", () => {
   assert.equal(workspaceId(undefined, { [FEATURE_HEADER]: "frontend" }), "frontend");
 });
 
-test("a .mcp.json from before SW-106 still names the workspace", () => {
-  assert.equal(workspaceId(undefined, { "x-sandbox-feature": "frontend" }), "frontend");
+test("the pre-SW-106 x-sandbox-feature header is no longer read (SW-184)", () => {
+  assert.throws(() => workspaceId(undefined, { "x-sandbox-feature": "frontend" }), {
+    code: "NO_WORKSPACE",
+  });
+});
+
+test("a per-workspace token's scope names the workspace when nothing else does", () => {
+  assert.equal(workspaceId(undefined, { [SCOPE_HEADER]: "proj-a" }), "proj-a");
 });
 
 test("an explicit argument overrides the header", () => {
@@ -99,5 +106,21 @@ test("a name no workspace or container can match is a coded WORKSPACE error", as
         return true;
       },
     );
+  });
+});
+
+test("a scoped token resolves its own workspace and refuses any other (SW-184)", async () => {
+  await withRoot((root) => {
+    for (const name of ["proj-a", "proj-b"]) {
+      fs.mkdirSync(path.join(root, name));
+      fs.writeFileSync(path.join(root, name, ".env"), `FEATURE=${name}\n`);
+    }
+    const scoped = { [SCOPE_HEADER]: "proj-a" };
+    assert.equal(resolveFeature(undefined, scoped).name, "proj-a");
+    assert.equal(resolveWorkspace("proj-a", scoped).name, "proj-a");
+    assert.throws(() => resolveWorkspace("proj-b", scoped), { code: "SCOPE" });
+    assert.throws(() => resolveFeature(undefined, { ...scoped, [FEATURE_HEADER]: "proj-b" }), {
+      code: "SCOPE",
+    });
   });
 });

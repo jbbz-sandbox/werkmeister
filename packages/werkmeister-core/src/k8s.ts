@@ -14,7 +14,13 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { Colors } from "./colors.js";
 import { composeInvocation, INFRA_PROJECT, K8S_FORWARDS_CONTAINER } from "./compose_infra.js";
-import { loadServices, needsCluster, type ServicesConfig, stateInfraRoot } from "./config.js";
+import {
+  isFixture,
+  loadServices,
+  needsCluster,
+  type ServicesConfig,
+  stateInfraRoot,
+} from "./config.js";
 import { containerRunning, type ProjectContainer, projectContainers } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { type ForwardSpec, forwardSpecs } from "./k8s_forwards.js";
@@ -169,6 +175,10 @@ function clusterReachable(): boolean {
  * Verify the k8s-forwards container is healthy, restarting it if not.
  */
 export async function ensurePortForwardsHealthy(): Promise<ForwardsOutcome> {
+  if (isFixture()) {
+    info("k8s port-forwards skipped (WERKMEISTER_FIXTURE)");
+    return "healthy";
+  }
   const health = await checkPortForwardHealth();
   if (health["k8s-forwards"] ?? false) {
     success("k8s port-forwards container is healthy");

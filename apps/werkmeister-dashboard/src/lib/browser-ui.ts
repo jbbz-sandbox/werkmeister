@@ -11,11 +11,9 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express, { type Router } from "express";
-import { createServer } from "werkmeister-mcp";
+import { connectInMemoryClient, createServer } from "werkmeister-mcp";
 import { localOnly } from "./localhost-form.js";
 import { subscribeSession } from "./session-stream.js";
 
@@ -24,16 +22,6 @@ import { subscribeSession } from "./session-stream.js";
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "..", "..", "dist")
   : path.join(import.meta.dirname, "..");
-
-/** A fresh MCP server + client linked in-process; the client advertises no UI
- *  capability, so tools take their non-UI path and return `structuredContent`. */
-async function connectInMemoryClient(): Promise<Client> {
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await createServer().connect(serverTransport);
-  const client = new Client({ name: "workspaces-browser", version: "0.1.0" });
-  await client.connect(clientTransport);
-  return client;
-}
 
 function textOf(result: CallToolResult): string {
   const part = result.content?.find((c) => c.type === "text") as { text?: string } | undefined;
@@ -51,7 +39,7 @@ function textOf(result: CallToolResult): string {
  * same-origin `fetch("/api/tool")` resolves.
  */
 export async function createBrowserUiRouter(): Promise<Router> {
-  const client = await connectInMemoryClient();
+  const client = await connectInMemoryClient(createServer(), "workspaces-browser");
   const router = express.Router();
   router.use(express.json({ limit: "1mb" }));
 

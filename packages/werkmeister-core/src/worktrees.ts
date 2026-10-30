@@ -37,6 +37,7 @@ const _RUNTIME_FILES = [
   ".werkmeister/agent-state.json",
   ".werkmeister/last-exec",
   ".werkmeister/starts.json",
+  ".werkmeister/token",
 ];
 const _GITIGNORE_GENERATED = [
   "/.env",

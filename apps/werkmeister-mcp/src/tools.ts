@@ -80,7 +80,7 @@ export const headersOf = (extra: unknown): ReqHeaders => (extra as Extra).reques
  * `passthrough` is false on this reporter (collectingReporter's default) and
  * must stay false: on `--stdio` this process's stdout is the JSON-RPC channel.
  */
-async function adapt(fn: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {
+export async function adapt(fn: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {
   const reporter = collectingReporter();
   try {
     const structuredContent = await withReporter(reporter, fn);
@@ -114,7 +114,8 @@ export const WORKSPACE_ARG = {
     .optional()
     .describe(
       "Workspace directory name (as list-workspaces reports it) or feature name. " +
-        "Defaults to the X-Werkmeister-Feature header on the connection.",
+        "Defaults to the X-Werkmeister-Feature header on the connection, else the workspace " +
+        "a per-workspace token names.",
     ),
 };
 

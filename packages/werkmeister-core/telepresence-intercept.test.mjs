@@ -81,9 +81,9 @@ const ACTIVE = JSON.stringify([
   { name: "frontend", intercept_info: [{ spec: { header_filters: { "x-feature": "ab" } } }] },
 ]);
 
-test("listIntercepts: a missing binary is not installed, and list never runs", () => {
+test("listIntercepts: a missing binary is not installed, and list never runs", async () => {
   const t = fakeTelepresence([127, "telepresence: command not found"]);
-  const s = listIntercepts(t.runner);
+  const s = await listIntercepts(t.runner);
   assert.deepEqual(
     [s.installed, s.available, s.namespace, s.intercepts.size],
     [false, false, null, 0],
@@ -91,12 +91,12 @@ test("listIntercepts: a missing binary is not installed, and list never runs", (
   assert.deepEqual(t.calls, ["status"]);
 });
 
-test("listIntercepts: disconnected is installed but unavailable, and list never runs", () => {
+test("listIntercepts: disconnected is installed but unavailable, and list never runs", async () => {
   const t = fakeTelepresence([
     1,
     '{"error":"root daemon: telepresence root daemon is not running"}',
   ]);
-  const s = listIntercepts(t.runner);
+  const s = await listIntercepts(t.runner);
   assert.deepEqual(
     [s.installed, s.available, s.namespace, s.intercepts.size],
     [true, false, null, 0],
@@ -104,23 +104,23 @@ test("listIntercepts: disconnected is installed but unavailable, and list never 
   assert.deepEqual(t.calls, ["status"]);
 });
 
-test("listIntercepts: connected reads the namespace and the intercepts", () => {
+test("listIntercepts: connected reads the namespace and the intercepts", async () => {
   const t = fakeTelepresence(CONNECTED, [0, ACTIVE]);
-  const s = listIntercepts(t.runner);
+  const s = await listIntercepts(t.runner);
   assert.deepEqual([s.installed, s.available, s.namespace], [true, true, "default"]);
   assert.deepEqual([...s.intercepts], [["frontend", "ab"]]);
   assert.deepEqual(t.calls, ["status", "list"]);
 });
 
-test("listIntercepts: connected but list failing stays installed, unavailable", () => {
-  const s = listIntercepts(fakeTelepresence(CONNECTED, [1, "boom"]).runner);
+test("listIntercepts: connected but list failing stays installed, unavailable", async () => {
+  const s = await listIntercepts(fakeTelepresence(CONNECTED, [1, "boom"]).runner);
   assert.deepEqual(
     [s.installed, s.available, s.namespace, s.intercepts.size],
     [true, false, "default", 0],
   );
 });
 
-test("listIntercepts: with a host daemon beside the docker one, reads the connected one", () => {
+test("listIntercepts: with a host daemon beside the docker one, reads the connected one", async () => {
   const MULTI =
     "multiple daemons are running, please select orbstack-default or orbstack-default-cn using the --use <match> flag";
   const calls = [];
@@ -133,7 +133,7 @@ test("listIntercepts: with a host daemon beside the docker one, reads the connec
       ? CONNECTED
       : [1, '{"error":"root daemon is not running"}'];
   };
-  const s = listIntercepts(runner);
+  const s = await listIntercepts(runner);
   assert.deepEqual([s.installed, s.available, s.namespace], [true, true, "default"]);
   assert.equal(calls.at(-1), "list -i --format json --use orbstack-default-cn");
 });

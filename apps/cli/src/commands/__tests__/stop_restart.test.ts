@@ -26,8 +26,13 @@ vi.mock("../../lib/dotenv.js", () => ({
   findDotenv: vi.fn(() => null),
 }));
 vi.mock("node:child_process", () => ({ spawn: vi.fn(() => ({ unref: vi.fn() })) }));
+vi.mock("werkmeister-core/daemon_client", async (orig) => ({
+  ...(await orig<typeof import("werkmeister-core/daemon_client")>()),
+  callTool: vi.fn(),
+}));
 
 import { spawn } from "node:child_process";
+import { callTool, DaemonUnavailable } from "werkmeister-core/daemon_client";
 import {
   idleStopFeature,
   restart as restartFeature,
@@ -133,7 +138,7 @@ describe("sandbox stop --if-idle", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it("hands the stop to a detached `sandbox stop <feature>` rather than waiting on it", async () => {
+  it("hands the stop to a detached `stop <feature> --via-daemon` rather than waiting on it", async () => {
     vi.mocked(idleStopFeature).mockReturnValue("demo");
     await ifIdle();
     expect(idleStopFeature).toHaveBeenCalledWith(
@@ -141,8 +146,42 @@ describe("sandbox stop --if-idle", () => {
     );
     expect(spawn).toHaveBeenCalledOnce();
     const [, argv, opts] = vi.mocked(spawn).mock.calls[0];
-    expect(argv.slice(1)).toEqual(["stop", "demo"]);
+    expect(argv.slice(1)).toEqual(["stop", "demo", "--via-daemon"]);
     expect(opts).toMatchObject({ cwd: "/ws/demo", detached: true, stdio: "ignore" });
+  });
+});
+
+// SW-184: the SessionEnd stop is the one CLI path that goes to the host daemon.
+describe("sandbox stop --via-daemon", () => {
+  beforeEach(() => {
+    vi.mocked(callTool).mockReset();
+    vi.mocked(stopFeature).mockReset();
+    vi.spyOn(process, "cwd").mockReturnValue("/ws/demo-workspace");
+  });
+
+  it("asks the daemon to stop this workspace, by directory name, and nothing local", async () => {
+    vi.mocked(callTool).mockResolvedValue({ data: {}, text: "" });
+    await runStop({ feature: "demo", via_daemon: true });
+    expect(callTool).toHaveBeenCalledWith(
+      "stop",
+      { workspace: "demo-workspace" },
+      expect.objectContaining({ timeoutMs: 60_000 }),
+    );
+    expect(stopFeature).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a local stop when the daemon is not running", async () => {
+    vi.mocked(callTool).mockRejectedValue(new DaemonUnavailable("ECONNREFUSED"));
+    vi.mocked(stopFeature).mockResolvedValue({ feature: "demo", slot: 1 });
+    await runStop({ feature: "demo", via_daemon: true });
+    expect(stopFeature).toHaveBeenCalledWith("demo");
+  });
+
+  it("stays silent on any other daemon error: nobody reads a SessionEnd child", async () => {
+    vi.mocked(callTool).mockRejectedValue(new SandboxError("not running", "NOT_RUNNING"));
+    await runStop({ feature: "demo", via_daemon: true });
+    expect(stopFeature).not.toHaveBeenCalled();
+    expect(lines).toEqual([]);
   });
 });
 

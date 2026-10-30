@@ -3,14 +3,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { basename, join } from "node:path";
 import * as vscode from "vscode";
-import {
-  childEnv,
-  closeOut,
-  lifecycleOf,
-  listWorkspaces,
-  resolveSandboxBin,
-} from "werkmeister-core";
+import { childEnv, lifecycleOf, listWorkspaces, resolveSandboxBin } from "werkmeister-core";
 import { DOT_DIR, getReposRoot, workspacesRoot } from "werkmeister-core/config";
+import { callTool } from "werkmeister-core/daemon_client";
 import type { WsNode } from "./build-tree.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
@@ -134,7 +129,7 @@ async function claudeIn(node: WsNode | undefined, command: string): Promise<void
   term.show();
 }
 
-/** Close out (no reason) or abandon (with one) through werkmeister-core's `closeOut`. */
+/** Close out (no reason) or abandon (with one) through the daemon's `close-out` tool. */
 async function endWorkspace(
   provider: SandboxTreeProvider,
   ws: { name: string; path: string },
@@ -151,7 +146,14 @@ async function endWorkspace(
         title: `${abandon ? "Abandoning" : "Closing out"} workspace '${ws.name}'…`,
         cancellable: false,
       },
-      () => (abandon ? closeOut(ws.name, { abandon }) : closeOut(ws.name)),
+      async () =>
+        (
+          await callTool<{ command: string; output: string; path: string }>(
+            "close-out",
+            { workspace: ws.name, ...(abandon ? { abandon } : {}) },
+            { timeoutMs: 15 * 60_000 },
+          )
+        ).data,
     );
     // VS Code can't reach the desktop app's sessions; the output names the terminal ones to /exit.
     channel.appendLine(`${result.command}\n${result.output}`);
@@ -208,9 +210,29 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.toggleIntercept", async (node?: WsNode) => {
       const svc = node?.service;
       if (!svc) return;
-      const args = ["intercept", "-s", svc.name];
-      if (svc.leave) args.push("--leave");
-      await runInTerminal(args, svc.workspacePath);
+      const channel = getOutputChannel();
+      try {
+        const { text } = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `${svc.leave ? "Leaving" : "Starting"} intercept of ${svc.name}…`,
+          },
+          () =>
+            callTool("intercept", {
+              workspace: basename(svc.workspacePath),
+              action: svc.leave ? "leave" : "start",
+              service: svc.name,
+            }),
+        );
+        channel.appendLine(text);
+      } catch (e) {
+        channel.appendLine((e as Error).message);
+        channel.show();
+        void vscode.window.showErrorMessage(
+          `Intercept of ${svc.name} failed — see the "Werkmeister Workspaces" output channel.`,
+        );
+      }
+      provider.refresh();
     }),
 
     // Menu-only (see commandPalette below): the feature is only known from a
@@ -223,12 +245,13 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.logs", (node?: WsNode) => {
       if (!node) return;
       // A service node scopes the logs to itself; a workspace node tails them all.
+      // By directory name: the daemon resolves a feature name with a blocking `docker ps`.
       if (node.service?.feature) {
-        showLogs(node.service.feature, node.service.name);
+        showLogs(basename(node.service.workspacePath), node.service.name);
         return;
       }
       if (node.workspace?.feature) {
-        showLogs(node.workspace.feature, null);
+        showLogs(node.workspace.name, null);
         return;
       }
       const name = node.workspace?.name ?? node.service?.name ?? "this workspace";

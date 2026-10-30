@@ -54,7 +54,7 @@ import {
   workspaceForFeature,
 } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
-import { getVolumeBaseNames, loadPorts, loadServices, needsCluster } from "./config.js";
+import { getVolumeBaseNames, isFixture, loadPorts, loadServices, needsCluster } from "./config.js";
 import { docker, listVolumeNames, projectContainers, removeVolume } from "./docker.js";
 import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
@@ -261,7 +261,10 @@ export async function up(
   await generateCaddyfile(null, config);
 
   let caddy: UpResult["caddy"];
-  if (await isCaddyRunning()) {
+  if (isFixture()) {
+    info("Caddy skipped (WERKMEISTER_FIXTURE)");
+    caddy = "skipped";
+  } else if (await isCaddyRunning()) {
     await reloadCaddy();
     caddy = "reloaded";
   } else if (routed) {

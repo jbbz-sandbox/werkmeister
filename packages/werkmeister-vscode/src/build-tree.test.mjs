@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildTree,
+  daemonDownNode,
   featureOf,
   interceptView,
   LEGEND_NODE,
@@ -644,4 +645,15 @@ test("SW-41: the host row leads once a sweep has landed, and only then", () => {
   const failed = buildTree([ws("a")], [st("a")], null, [], { host: null });
   assert.equal(failed[0].description, "load n/a");
   assert.equal(buildTree([ws("a")], [st("a")], null, [])[0].id, "a", "no sweep yet, no row");
+});
+
+// SW-184: every Docker read goes through the host daemon, so a daemon that is
+// down is its own row with its own fix, not "could not find the CLI".
+test("a daemon that is down is an error row naming setup and connect", () => {
+  const node = daemonDownNode("werkmeister daemon not reachable at http://127.0.0.1:3002");
+  assert.equal(node.kind, "error");
+  assert.equal(node.label, "werkmeister daemon not running");
+  assert.match(node.description, /setup.*connect/);
+  assert.match(node.tooltip, /127\.0\.0\.1:3002/);
+  assert.deepEqual(node.children, []);
 });

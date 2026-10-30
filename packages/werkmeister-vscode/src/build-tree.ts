@@ -475,6 +475,21 @@ function hostNode(host: HostInput | null): WsNode {
 }
 
 /** The single node shown when the CLI can't be located — never an empty view. */
+/** The host daemon is not answering: every Docker read in the view goes through it (SW-184). */
+export function daemonDownNode(message: string): WsNode {
+  return {
+    kind: "error",
+    id: "error:daemon-down",
+    label: "werkmeister daemon not running",
+    description: "run werkmeister setup or connect",
+    tooltip: message,
+    icon: { id: "error", color: TONE_COLORS.err },
+    contextValue: "error",
+    expanded: false,
+    children: [],
+  };
+}
+
 export function cliNotFoundNode(message: string): WsNode {
   return {
     kind: "error",

@@ -59,7 +59,7 @@ import { collectingReporter, withReporter } from "werkmeister-core/reporter";
 import { interceptsSnapshot, statusSnapshot } from "werkmeister-core/status";
 import { DASHBOARD, start as startWebApp } from "werkmeister-core/web_servers";
 import { z } from "zod";
-import { resolveWorkspace, workspaceId } from "./lib/feature.js";
+import { resolveWorkspace, scopeOfHeaders, workspaceId } from "./lib/feature.js";
 import { headersOf, WORKSPACE_ARG } from "./tools.js";
 
 const RESOURCE_URI = "ui://workspace/mcp-app.html";
@@ -930,8 +930,10 @@ export function registerWorkspaceTools(server: McpServer): void {
             }),
           ),
         }),
+        // Loose: WorkspaceStatus carries more than the fields listed here, and an SDK
+        // client that ran tools/list rejects extra keys on a strict object.
         statuses: z.array(
-          z.object({
+          z.looseObject({
             name: z.string(),
             project: z.string().nullable(),
             state: z.enum(["up", "partial", "stopped", "paused", "down", "unknown"]),
@@ -958,12 +960,17 @@ export function registerWorkspaceTools(server: McpServer): void {
         host: z.record(z.string(), z.unknown()).optional(),
       }),
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
-        const { statuses, infra } = await getWorkspaceStatuses();
-        const host = args.detail
-          ? { ...(await statusSnapshot()), telepresence: await interceptsSnapshot() }
-          : undefined;
+        const all = await getWorkspaceStatuses();
+        // A per-workspace token sees its own workspace only (SW-184).
+        const scope = scopeOfHeaders(headersOf(extra));
+        const { infra } = all;
+        const statuses = scope ? all.statuses.filter((s) => s.name === scope) : all.statuses;
+        const host =
+          args.detail && !scope
+            ? { ...(await statusSnapshot()), telepresence: await interceptsSnapshot() }
+            : undefined;
         const claudeNote = (c: { agent: string }): string =>
           c.agent === "idle" ? "" : ` · claude: ${c.agent === "needs-you" ? "needs you" : c.agent}`;
         const wsText = statuses

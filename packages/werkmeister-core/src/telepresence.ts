@@ -13,7 +13,7 @@ import * as net from "node:net";
 import * as path from "node:path";
 
 import { workspaceForFeature } from "./compose.js";
-import { getK8sContext, loadServices } from "./config.js";
+import { getK8sContext, isFixture, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { ProcError, run, runAsync } from "./proc.js";
@@ -392,9 +392,14 @@ export interface InterceptState {
  * status poll (SW-12). Upstream documents `user_daemon` as the host-mode status
  * key, which `parseConnectedNamespace` reads.
  */
-export function listIntercepts(runner: Runner = _run): InterceptState {
-  const [rc, out] = runner(STATUS_ARGS);
+export async function listIntercepts(
+  runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
+): Promise<InterceptState> {
   const none = new Map<string, string | null>();
+  if (isFixture()) {
+    return { installed: false, available: false, namespace: null, intercepts: none };
+  }
+  const [rc, out] = await runner(STATUS_ARGS);
   if (rc === 127) {
     return { installed: false, available: false, namespace: null, intercepts: none };
   }
@@ -402,7 +407,7 @@ export function listIntercepts(runner: Runner = _run): InterceptState {
   let use: string[] = [];
   // Several daemons (see dockerDaemonName): read the one that is connected.
   for (const name of namespace === null ? daemonChoices(out) : []) {
-    namespace = parseConnectedNamespace(...runner([...STATUS_ARGS, "--use", name]));
+    namespace = parseConnectedNamespace(...(await runner([...STATUS_ARGS, "--use", name])));
     if (namespace !== null) {
       use = ["--use", name];
       break;
@@ -411,7 +416,7 @@ export function listIntercepts(runner: Runner = _run): InterceptState {
   if (namespace === null) {
     return { installed: true, available: false, namespace, intercepts: none };
   }
-  const [lrc, lout] = runner([...buildListInterceptsArgs(), ...use]);
+  const [lrc, lout] = await runner([...buildListInterceptsArgs(), ...use]);
   if (lrc !== 0) {
     return { installed: true, available: false, namespace, intercepts: none };
   }
@@ -471,6 +476,7 @@ export async function ensureConnected(
   docker = false,
   runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
 ): Promise<void> {
+  if (isFixture()) return;
   const use = docker ? ["--use", dockerDaemonName(context, namespace)] : [];
   const current = parseConnectedNamespace(...(await runner([...STATUS_ARGS, ...use])));
   if (current === namespace) {
@@ -667,6 +673,9 @@ export interface InterceptResult {
  * spawns anything.
  */
 export async function startIntercept(a: InterceptArgs): Promise<InterceptResult> {
+  if (isFixture()) {
+    throw new SandboxError("Intercepts are off under WERKMEISTER_FIXTURE.", "FIXTURE");
+  }
   const svcDef = resolveServiceDef(a.service, a.localServices);
   const runner: AsyncRunner = (cmd) => runAsyncRunner(cmd, a.signal);
 

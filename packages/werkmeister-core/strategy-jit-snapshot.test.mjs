@@ -55,6 +55,8 @@ test("jit init writes the same files, byte for byte", async () => {
         await withReporter(collectingReporter(), () => initWorkspace({}, root));
         const out = {};
         for (const rel of walk(root)) {
+          // The daemon token is random by design (SW-184).
+          if (rel === path.join(".werkmeister", "token")) continue;
           out[rel] = fs
             .readFileSync(path.join(root, rel), "utf8")
             .replaceAll(root, "<ROOT>")

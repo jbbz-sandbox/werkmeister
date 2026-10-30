@@ -195,3 +195,29 @@ test("notes: an icm workspace lists its stage-output decisions and graduates one
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// SW-184: the CLI verbs that had no tool, and the reads the VS Code extension polls.
+const DAEMON_TOOLS = ["clean", "stats", "optimize", "cache", "registry", "resources", "intercepts"];
+
+test("the daemon tools are listed, and clean/cache prune default to a dry run", async () => {
+  const { tools } = await (await connect()).listTools();
+  for (const n of DAEMON_TOOLS)
+    assert.ok(
+      tools.some((t) => t.name === n),
+      `missing ${n}`,
+    );
+  for (const n of ["clean", "cache"]) {
+    const dryRun = tools.find((t) => t.name === n)?.inputSchema.properties?.dryRun;
+    assert.match(dryRun?.description ?? "", /Default true/, n);
+  }
+});
+
+test("a workspace-scoped server lists only the workspace verbs", async () => {
+  const { WORKSPACE_SCOPED_TOOLS } = await import("./dist/scope.js");
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await createServer({ scoped: true }).connect(serverSide);
+  const client = new Client({ name: "tools.test", version: "0" });
+  await client.connect(clientSide);
+  const names = (await client.listTools()).tools.map((t) => t.name).sort();
+  assert.deepEqual(names, [...WORKSPACE_SCOPED_TOOLS].sort());
+});

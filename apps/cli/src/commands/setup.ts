@@ -91,6 +91,7 @@ interface Answers {
   installVscodeExtension: boolean;
   grantStandardsDir: boolean;
   installPrWatch: boolean;
+  installDaemon: boolean;
   skipSudo: boolean;
 }
 
@@ -441,6 +442,19 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     );
   }
 
+  // --- 11. Host daemon (macOS) --------------------------------------------
+  // Default yes, --yes included: the VS Code extension and the SessionEnd stop
+  // reach Docker only through it (SW-184).
+  let installDaemon = false;
+  if (process.platform === "darwin") {
+    heading("11. Host daemon");
+    info(
+      "Runs the werkmeister daemon (the MCP server on port 3002) under launchd, so it " +
+        "restarts if it dies. The VS Code extension and SessionEnd auto-stop talk to it.",
+    );
+    installDaemon = await confirm("  Install the launchd agent?", true, interactive);
+  }
+
   // --- write ---------------------------------------------------------------
   // Rebuilt rather than merged, but every hand-added section is carried across
   // verbatim: dropping an override or a token the wizard never asked about
@@ -505,6 +519,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     installVscodeExtension,
     grantStandardsDir,
     installPrWatch,
+    installDaemon,
     skipSudo: !interactive,
   };
 }
@@ -591,6 +606,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     installVscodeExtension: answers.installVscodeExtension,
     grantStandardsDir: answers.grantStandardsDir,
     installPrWatch: answers.installPrWatch,
+    installDaemon: answers.installDaemon,
   });
 
   const failed = report(steps);

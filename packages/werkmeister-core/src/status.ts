@@ -38,11 +38,11 @@ import {
 import { readQueue } from "./scheduler_state.js";
 import { getAllSlots, getPortRange, type SlotEntry, slotCount } from "./slots.js";
 import {
-  _run,
   type InterceptState,
   interceptBlocker,
   isRemoteService,
   listIntercepts,
+  runAsyncRunner,
 } from "./telepresence.js";
 import { type WebServerStatus, status as webStatus } from "./web_servers.js";
 
@@ -159,20 +159,13 @@ export function buildInterceptRows(
 }
 
 /**
- * Runner for the telepresence reads below, capped well under `_run`'s 120s
- * default.
- *
- * They are `spawnSync`, so an in-process caller — the VS Code extension, the
- * dashboard server — has its whole event loop blocked for however long a wedged
- * daemon takes to answer, not just the one request waiting on it. 120s of that
- * is a hung app; 15s is a slow refresh. The cap lives here rather than at the
- * call sites because every reader of a *status view* wants it, `werkmeister status`
- * included — and because an in-process caller no longer gets it for free from
- * the 15s timeout on a CLI child.
+ * Runner for the telepresence reads below, capped well under the 120s default.
+ * Async since SW-184: the daemon serves every client from one event loop, so a
+ * wedged telepresence must stall only the request waiting on it.
  *
  * ponytail: one number for every read. Split it if they ever need to differ.
  */
-const STATUS_READ = (cmd: string[]) => _run(cmd, 15);
+const STATUS_READ = (cmd: string[]) => runAsyncRunner(cmd, undefined, 15);
 
 /** What `werkmeister status --intercepts --json` prints. */
 export interface InterceptsSnapshot {
@@ -189,7 +182,7 @@ export interface InterceptsSnapshot {
 }
 
 export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
-  const state = listIntercepts(STATUS_READ);
+  const state = await listIntercepts(STATUS_READ);
   const registry = loadServices();
   // No telepresence, nothing interceptable: rows would claim `interceptable: true` (SW-2).
   const intercepts = state.installed
@@ -282,7 +275,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
 
   // Same intercept data as `--intercepts`, grouped per feature so this stays the
   // one place system state is described.
-  const interceptState = listIntercepts(STATUS_READ);
+  const interceptState = await listIntercepts(STATUS_READ);
   const interceptRows = buildInterceptRows(allSlots, loadServices(), interceptState);
 
   const { health, resources } = await vitals;
