@@ -268,6 +268,26 @@ export function workspaceRepoUrl(slug: string): string {
   return `https://github.com/${slug}.git`;
 }
 
+/** `owner/repo` from an origin URL (SSH or HTTPS, with or without `.git`), or null. */
+export function originSlug(url: string): string | null {
+  return /[:/]([^/:]+\/[^/]+?)(?:\.git)?\/*$/.exec(url.trim())?.[1] ?? null;
+}
+
+/**
+ * *dest*'s origin URL when it names a different owner/repo than *url* ("" when
+ * it has no origin); null when they match. SSH and HTTPS forms are equal.
+ */
+export function originMismatch(
+  dest: string,
+  url: string,
+  runner: Runner = defaultRunner,
+): string | null {
+  const [rc, out] = runner(["git", "-C", dest, "remote", "get-url", "origin"]);
+  const origin = rc === 0 ? out.trim() : "";
+  const slug = (u: string) => originSlug(u)?.toLowerCase();
+  return origin && slug(origin) === slug(url) ? null : origin;
+}
+
 /** A GitHub login: alphanumerics and dashes, nothing else. */
 const isLogin = (s: string): boolean => /^[A-Za-z0-9-]+$/.test(s);
 
@@ -533,14 +553,18 @@ export function syncOptionalPlugin(
  * and on main — worktree source checkouts must never be rebased or reset
  * from here.
  *
- * Every failure is optional: a missing companion repo degrades the setup (see
- * each spec's `missingConsequence`) but never blocks the rest of it.
+ * A missing or unreachable companion repo is optional: it degrades the setup
+ * (see each spec's `missingConsequence`) but never blocks the rest of it. An
+ * origin that is not `spec.url` is required: every workspace record would push
+ * to the wrong repo (SW-205). It is repointed only with *repointOrigin*, and
+ * never fetched before that.
  */
 export function syncRepo(
   reposRoot: string,
   spec: RepoSpec,
   runner: Runner,
   checkOnly: boolean,
+  repointOrigin = false,
 ): Step[] {
   const dest = path.join(reposRoot, spec.name);
   const label = `repo ${spec.name}`;
@@ -585,13 +609,57 @@ export function syncRepo(
     ];
   }
 
+  // The directory name says nothing about which repo this is: changing
+  // overrides.workspace_repo leaves an existing clone on its old origin.
+  let repointed = "";
+  const origin = originMismatch(dest, spec.url, runner);
+  if (origin === "") {
+    return [
+      {
+        label,
+        ok: false,
+        detail: `${dest} has no origin — git -C ${dest} remote add origin ${spec.url}`,
+      },
+    ];
+  }
+  if (origin !== null) {
+    // Keep the old URL reachable under its owner's name, e.g. `jayandcory`.
+    const keep = (originSlug(origin)?.split("/")[0] ?? "previous").toLowerCase();
+    const [kept, keptUrl] = runner(["git", "-C", dest, "remote", "get-url", keep]);
+    const clash = kept === 0 && keptUrl.trim() !== origin;
+    const fix = [
+      ...(kept === 0 ? [] : [["git", "-C", dest, "remote", "add", keep, origin]]),
+      ["git", "-C", dest, "remote", "set-url", "origin", spec.url],
+    ];
+    if (checkOnly || !repointOrigin || clash) {
+      const how = clash
+        ? `remote '${keep}' already points at ${keptUrl.trim()}; rename it, then ` +
+          fix.map((c) => c.join(" ")).join(" && ")
+        : `${fix.map((c) => c.join(" ")).join(" && ")} — or rerun \`werkmeister setup\` and accept`;
+      return [
+        {
+          label,
+          ok: false,
+          detail: `origin is ${origin}, but the configured repo is ${spec.url}; not fetched. Fix: ${how}`,
+        },
+      ];
+    }
+    for (const cmd of fix) {
+      const [rc, out] = runner(cmd);
+      if (rc !== 0) {
+        return [{ label, ok: false, detail: `repointing origin failed: ${briefOutput(out)}` }];
+      }
+    }
+    repointed = `origin ${origin} → ${spec.url} (old URL kept as '${keep}'); `;
+  }
+
   if (checkOnly) {
     return [{ label, ok: true, detail: `present at ${dest}` }];
   }
 
   const [rc, out] = runner(["git", "-C", dest, "fetch", "origin"]);
   if (rc !== 0) {
-    return [{ label, ok: false, detail: `fetch failed: ${out}` }];
+    return [{ label, ok: false, detail: `${repointed}fetch failed: ${out}` }];
   }
 
   const [, branch] = runner(["git", "-C", dest, "branch", "--show-current"]);
@@ -601,11 +669,12 @@ export function syncRepo(
       branch.trim() !== "main"
         ? `on branch ${branch.trim() || "(detached)"}`
         : "working tree dirty";
-    return [{ label, ok: true, detail: `fetched; skipped fast-forward (${why})` }];
+    return [{ label, ok: true, detail: `${repointed}fetched; skipped fast-forward (${why})` }];
   }
 
   const [rc2, out2] = runner(["git", "-C", dest, "pull", "--ff-only", "origin", "main"]);
-  const detail = rc2 === 0 ? "fetched and fast-forwarded main" : `fast-forward failed: ${out2}`;
+  const detail =
+    repointed + (rc2 === 0 ? "fetched and fast-forwarded main" : `fast-forward failed: ${out2}`);
   return [{ label, ok: rc2 === 0, detail }];
 }
 
@@ -1733,6 +1802,8 @@ export interface RunSetupOptions {
   demo?: boolean;
   /** `owner/repo` for the workspace-root checkout; defaults to the config's. */
   workspaceRepo?: string;
+  /** Repoint the workspace-root checkout's origin when it isn't `workspaceRepo` (the wizard asks first). */
+  repointWorkspaceOrigin?: boolean;
   /**
    * Ingress hostnames the certificate must cover; `[]` skips the cert step.
    *
@@ -1831,7 +1902,15 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   const workspaceRepo =
     options.workspaceRepo ?? (loadWorkspaceRepo() || defaultWorkspaceRepo(runner));
   if (workspaceRepo) {
-    steps.push(...syncRepo(reposRoot, workspaceRootSpec(workspaceRepo), runner, checkOnly));
+    steps.push(
+      ...syncRepo(
+        reposRoot,
+        workspaceRootSpec(workspaceRepo),
+        runner,
+        checkOnly,
+        options.repointWorkspaceOrigin,
+      ),
+    );
   } else {
     steps.push({
       label: `repo ${WORKSPACE_ROOT_REPO}`,

@@ -9,6 +9,7 @@
  * openssl or sudo.
  */
 
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -20,6 +21,7 @@ import {
   githubOwners,
   LEGACY_PLUGIN,
   OPTIONAL_PLUGINS,
+  originSlug,
   REQUIRED_PLUGINS,
   type Runner,
   resolveCertScript,
@@ -38,6 +40,7 @@ import {
   syncVscodeExtension,
   vscodeExtensionState,
   WORKSPACE_ROOT_REPO,
+  workspaceRepoUrl,
 } from "werkmeister-core/machine_setup";
 import {
   REGISTRY_DEFAULTS,
@@ -812,6 +815,40 @@ describe("workspace repo", () => {
     ]);
   });
 
+  it("fails --check when the checkout's origin is not the configured repo (SW-205)", async () => {
+    fs.mkdirSync(path.join(home.dir, WORKSPACE_ROOT_REPO, ".git"), { recursive: true });
+    const runner = fakeRunner({
+      "git -C": [0, "https://github.com/JayAndCory/sandbox-workspace.git\n"],
+    });
+    const steps = await runSetup({
+      checkOnly: true,
+      reposRoot: home.dir,
+      runner,
+      workspaceRepo: "jbbz-sandbox/sandbox-workspace",
+      hostnames: [],
+      jira: null,
+      pathDirs: {},
+    });
+    const step = steps.find((s) => s.label === label) as (typeof steps)[number];
+    expect([step.ok, step.optional ?? false]).toEqual([false, false]);
+    expect(step.detail).toContain("JayAndCory/sandbox-workspace");
+    expect(step.detail).toContain("jbbz-sandbox/sandbox-workspace");
+  });
+
+  it("passes --check when origin is the configured repo in SSH form (SW-205)", async () => {
+    fs.mkdirSync(path.join(home.dir, WORKSPACE_ROOT_REPO, ".git"), { recursive: true });
+    const steps = await runSetup({
+      checkOnly: true,
+      reposRoot: home.dir,
+      runner: fakeRunner({ "git -C": [0, "git@github.com:jbbz-sandbox/sandbox-workspace.git\n"] }),
+      workspaceRepo: "jbbz-sandbox/sandbox-workspace",
+      hostnames: [],
+      jira: null,
+      pathDirs: {},
+    });
+    expect(steps.find((s) => s.label === label)?.ok).toBe(true);
+  });
+
   it("warns rather than guessing when no repo can be resolved", async () => {
     const steps = await runSetup({
       checkOnly: true,
@@ -824,6 +861,60 @@ describe("workspace repo", () => {
     const step = steps.find((s) => s.label === label) as (typeof steps)[number];
     expect([step.ok, step.optional]).toEqual([false, true]);
     expect(step.detail).toContain("overrides.workspace_repo");
+  });
+});
+
+describe("workspace repo origin (SW-205)", () => {
+  const OLD = "https://github.com/JayAndCory/sandbox-workspace.git";
+  const spec = {
+    name: WORKSPACE_ROOT_REPO,
+    url: workspaceRepoUrl("jbbz-sandbox/sandbox-workspace"),
+    missingConsequence: "",
+  };
+  let dest: string;
+  // Real git for the remote edits on a fixture checkout; fetch and pull are canned so nothing reaches GitHub.
+  const network: string[][] = [];
+  const gitRunner: Runner = (cmd) => {
+    if (cmd.includes("fetch") || cmd.includes("pull")) {
+      network.push(cmd);
+      return [0, ""];
+    }
+    const r = spawnSync(cmd[0], cmd.slice(1), { encoding: "utf8" });
+    return [r.status ?? 1, r.stdout + r.stderr];
+  };
+  const remotes = () => spawnSync("git", ["-C", dest, "remote", "-v"], { encoding: "utf8" }).stdout;
+
+  beforeEach(() => {
+    network.length = 0;
+    dest = path.join(home.dir, WORKSPACE_ROOT_REPO);
+    spawnSync("git", ["init", "-q", "-b", "main", dest]);
+    spawnSync("git", ["-C", dest, "remote", "add", "origin", OLD]);
+  });
+
+  it("reduces SSH and HTTPS remote URLs to the same owner/repo", () => {
+    for (const url of [
+      "git@github.com:o/r.git",
+      "https://github.com/o/r.git",
+      "https://github.com/o/r",
+    ]) {
+      expect(originSlug(url)).toBe("o/r");
+    }
+  });
+
+  it("repoints origin, keeps the old URL under its owner's name, then fetches", () => {
+    const steps = syncRepo(home.dir, spec, gitRunner, false, true);
+    expect(steps[0].ok).toBe(true);
+    expect(remotes()).toContain(`origin\t${spec.url} (fetch)`);
+    expect(remotes()).toContain(`jayandcory\t${OLD} (fetch)`);
+    expect(network[0]).toEqual(["git", "-C", dest, "fetch", "origin"]);
+  });
+
+  it("without consent changes nothing, fetches nothing, and prints the fix", () => {
+    const steps = syncRepo(home.dir, spec, gitRunner, false, false);
+    expect([steps[0].ok, steps[0].optional ?? false]).toEqual([false, false]);
+    expect(steps[0].detail).toContain(`git -C ${dest} remote set-url origin ${spec.url}`);
+    expect(remotes()).toContain(`origin\t${OLD} (fetch)`);
+    expect(network).toEqual([]);
   });
 });
 

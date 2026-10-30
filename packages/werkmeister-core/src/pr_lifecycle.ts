@@ -41,6 +41,7 @@ import {
   stop as stopFeature,
   stopIdle,
 } from "./lifecycle.js";
+import { originSlug } from "./machine_setup.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
@@ -473,11 +474,6 @@ export async function runGate(
     }
   }
   return result;
-}
-
-/** `owner/repo` from an origin URL (SSH or HTTPS, with or without `.git`), or null. */
-export function originSlug(url: string): string | null {
-  return /[:/]([^/:]+\/[^/]+?)(?:\.git)?\/*$/.exec(url.trim())?.[1] ?? null;
 }
 
 /** The PR file's `repo:` must be the code worktree's origin; `gh pr create` fails obscurely otherwise (SW-194). */
