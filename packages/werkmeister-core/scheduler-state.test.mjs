@@ -12,6 +12,7 @@ import { readWaiting, waitingPath } from "./dist/agent_state.js";
 import { runningFeatures } from "./dist/lifecycle.js";
 import {
   featureCost,
+  hostLoadLimit,
   loadBudget,
   portHolders,
   readQueue,
@@ -70,6 +71,14 @@ test("budget defaults come from the engine, minus 1G; config overrides; preempt 
     const b = await loadBudget(async () => ({ MemTotal: 8 * G, NCPU: 12 }));
     assert.deepEqual(b, { memory: 6 * G, cpus: 8, preempt: false });
   }, "budget:\n  memory: 6G\n  cpus: 8\n  preempt: false\n");
+});
+
+test("hostLoadLimit: 2 × cores by default, budget.host_load wins, 0 is off, junk falls back (SW-209)", async () => {
+  await withHome(async () => assert.equal(hostLoadLimit(12), 24));
+  await withHome(async () => assert.equal(hostLoadLimit(12), 30), "budget:\n  host_load: 30\n");
+  await withHome(async () => assert.equal(hostLoadLimit(12), 0), "budget:\n  host_load: 0\n");
+  await withHome(async () => assert.equal(hostLoadLimit(12), 24), "budget:\n  host_load: lots\n");
+  await withHome(async () => assert.equal(hostLoadLimit(12), 24), "budget:\n  host_load: -1\n");
 });
 
 test("an unreadable engine and no config means no limit", async () => {

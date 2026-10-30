@@ -54,9 +54,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       : args.action === "new"
         ? await newPr(ws, repo as string, args.slug as string)
         : args.action === "gate"
-          ? await gatePrs(ws, repo)
+          ? await gatePrs(ws, repo, undefined, { wait: args.wait !== false })
           : args.action === "open"
-            ? await openPrs(ws, repo)
+            ? await openPrs(ws, repo, undefined, { wait: args.wait !== false })
             : { ok: true, ...(await refreshPrStatus(ws)) };
   print(result, args);
 }

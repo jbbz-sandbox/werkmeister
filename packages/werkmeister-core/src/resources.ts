@@ -254,6 +254,12 @@ export function hostSummary(
   };
 }
 
+/** One line for a failure, so a timeout under load reads as load (SW-209). */
+export function loadNote(load: number[], cores: number): string {
+  const [one, five, fifteen] = load.map((n) => round1(n).toFixed(1));
+  return `host load ${one} / ${five} / ${fifteen} (1, 5, 15 min) on ${cores} cores`;
+}
+
 /**
  * One stats sweep, as `docker stats --no-stream` makes it, for every workspace at
  * once. Cut off after *timeoutMs*: a wedged daemon gives partial numbers, never a hang.

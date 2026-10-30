@@ -9,6 +9,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 
 import { serviceTestCommand } from "./archetypes.js";
@@ -44,6 +45,8 @@ import {
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
+import { info } from "./reporter.js";
+import { loadNote } from "./resources.js";
 import {
   commitAndPush,
   listRepoWorktrees,
@@ -56,7 +59,7 @@ import {
   WorkspaceError,
   worktreeSources,
 } from "./sandbox.js";
-import { portHolders } from "./scheduler_state.js";
+import { hostLoadLimit, portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
@@ -126,6 +129,9 @@ export interface Deps {
   branchRegistry: (repo: string, worktree: string) => MergedRegistry | null;
   /** Stop the workspace's feature containers (SW-39); one line, never throws. */
   stop: (ws: string) => Promise<string>;
+  /** `os.loadavg()` and the core count, read before and after each gate check (SW-209). */
+  hostLoad: () => { load: number[]; cores: number };
+  sleep: (ms: number) => Promise<void>;
   /** One idle-reaper pass over every workspace (SW-39). */
   reapIdle: () => Promise<{ lines: string[] }>;
   /** Start one of the feature's services and wait for it (SW-34); throws on failure. */
@@ -189,6 +195,8 @@ export function defaultDeps(): Deps {
     session: (ws) => callbackFields(ws, process.env),
     branchRegistry: (repo, worktree) => branchRegistry(repo, worktree),
     stop: stopWorkspace,
+    hostLoad: () => ({ load: os.loadavg(), cores: os.availableParallelism() }),
+    sleep: (ms) => delay(ms),
     reapIdle: async () => {
       const minutes = idleStopMinutes();
       const { lines } = minutes ? await stopIdle(minutes) : { lines: [] };
@@ -443,12 +451,13 @@ export async function runGate(
   ws: string,
   file: PrFile,
   deps: Deps = defaultDeps(),
+  { wait = true }: { wait?: boolean } = {},
 ): Promise<GateResult> {
   const started: string[] = [];
   const recreated: string[] = [];
   let result!: GateResult;
   try {
-    result = await gateChecks(ws, file, deps, started, recreated);
+    result = await gateChecks(ws, file, deps, started, recreated, wait);
   } finally {
     fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
     const feature = String(loadConfigFile(ws, null)["feature"] ?? readEnv(ws, "FEATURE")).trim();
@@ -498,15 +507,53 @@ async function repoCheck(dir: string, file: PrFile, deps: Deps): Promise<[boolea
       ];
 }
 
+const LOAD_POLL_MS = 15_000;
+const LOAD_WAIT_MS = 30 * 60_000;
+
+/** Wait for host load under the limit before gate check *check*; the note for its row, or "". */
+async function waitForHostLoad(deps: Deps, wait: boolean, check: string): Promise<string> {
+  let { load, cores } = deps.hostLoad();
+  const limit = hostLoadLimit(cores);
+  if (!wait || limit === 0 || load[0] <= limit) return "";
+  info(
+    `waiting for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${check}; --no-wait skips`,
+  );
+  const polls = LOAD_WAIT_MS / LOAD_POLL_MS;
+  for (let n = 1; n <= polls; n++) {
+    await deps.sleep(LOAD_POLL_MS);
+    ({ load } = deps.hostLoad());
+    if (load[0] <= limit) return `waited ${(n * LOAD_POLL_MS) / 1000} s for host load`;
+  }
+  return `ran with host load ${load[0].toFixed(1)} over ${limit} after a 30 min wait`;
+}
+
 async function gateChecks(
   ws: string,
   file: PrFile,
   deps: Deps,
   started: string[],
   recreated: string[],
+  wait: boolean,
 ): Promise<GateResult> {
   const checks: GateCheck[] = [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+  // A failure ends with the host load, so a timeout under load reads as load (SW-209).
+  const execCheck = async (name: string, container: string, cmd: string, tail: number) => {
+    touchExecMarker(ws);
+    const waited = await waitForHostLoad(deps, wait, name);
+    touchExecMarker(ws);
+    const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
+    const lines = [`${cmd} → exit ${res.code}`];
+    if (res.code)
+      lines.push((res.stdout + res.stderr).trimEnd().split("\n").slice(-tail).join("\n"));
+    if (waited) lines.push(waited);
+    if (res.code) {
+      const { load, cores } = deps.hostLoad();
+      lines.push(loadNote(load, cores));
+    }
+    add(name, res.code === 0, lines.join("\n"));
+    return res;
+  };
 
   const table = passTable(file.body);
   add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
@@ -679,13 +726,7 @@ async function gateChecks(
     const container = repoContainer();
     if (!container) add("lint", false, "no running container for this repo — run `werkmeister up`");
     else {
-      touchExecMarker(ws);
-      const res = await deps.run("docker", ["exec", container, "sh", "-c", repo["lint"]]);
-      add(
-        "lint",
-        res.code === 0,
-        `${repo["lint"]} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-15).join("\n")}` : ""}`,
-      );
+      await execCheck("lint", container, repo["lint"], 15);
     }
   }
 
@@ -713,13 +754,7 @@ async function gateChecks(
       );
       continue;
     }
-    touchExecMarker(ws);
-    const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
-    add(
-      `test ${svc}`,
-      res.code === 0,
-      `${cmd} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-15).join("\n")}` : ""}`,
-    );
+    await execCheck(`test ${svc}`, container, cmd, 15);
   }
 
   const skipExercise = reason(file.fm["skip_exercise"]);
@@ -757,13 +792,7 @@ async function gateChecks(
     else if (!container)
       add("release", false, "no running container for this repo — run `werkmeister up`");
     else {
-      touchExecMarker(ws);
-      const res = await deps.run("docker", ["exec", container, "sh", "-c", repo["release_check"]]);
-      add(
-        "release",
-        res.code === 0,
-        `${repo["release_check"]} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-5).join("\n")}` : ""}`,
-      );
+      const res = await execCheck("release", container, repo["release_check"], 5);
       if (res.code === 0 && nothingToBump(res.stdout + res.stderr)) release = "none";
     }
   }
@@ -786,13 +815,14 @@ export async function gatePrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
+  { wait = true }: { wait?: boolean } = {},
 ): Promise<{ ok: boolean; lines: string[] }> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => !superseded(f, all));
   const lines: string[] = [];
   let ok = true;
   for (const f of files) {
-    const g = await runGate(ws, f, deps);
+    const g = await runGate(ws, f, deps, { wait });
     ok &&= g.ok;
     lines.push(...formatGate(f.stem, g));
   }
@@ -846,6 +876,7 @@ export async function openPrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
+  { wait = true }: { wait?: boolean } = {},
 ): Promise<{ ok: boolean; lines: string[] }> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => statusOf(f) === "approved");
@@ -869,7 +900,7 @@ export async function openPrs(
       );
       continue;
     }
-    const g = await runGate(ws, f, deps);
+    const g = await runGate(ws, f, deps, { wait });
     if (!g.ok) {
       ok = false;
       lines.push(...formatGate(f.stem, g));

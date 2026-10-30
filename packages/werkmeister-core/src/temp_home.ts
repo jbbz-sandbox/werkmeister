@@ -20,6 +20,10 @@ trap 'exit 130' HUP INT TERM
 # Corepack keeps pnpm under HOME; without this a fresh HOME re-downloads it every run.
 export COREPACK_HOME="\${COREPACK_HOME:-$HOME/.cache/node/corepack}"
 HOME=$tmp "$@"
+status=$?
+# A failure under load reads as load (SW-209).
+[ "$status" -eq 0 ] || echo "with-temp-home: exit $status; host load $(uptime | sed 's/.*load averages*: //; s/,//g') on $(getconf _NPROCESSORS_ONLN) cores" >&2
+exit "$status"
 `;
 
 export function tempHomeWrapper(workspaceRoot: string): string {

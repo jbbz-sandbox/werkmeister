@@ -20,6 +20,7 @@ const {
   healthOf,
   hostSummary,
   isCrashLoop,
+  loadNote,
   readStarts,
   recordStart,
   startedBy,
@@ -159,6 +160,13 @@ test("usageByProject / hostSummary: one sweep summed per project; infra is not a
     cores: 10,
     featureCpuPercent: 13.4,
   });
+});
+
+test("loadNote: rounds 1/5/15 and names the cores (SW-209)", () => {
+  assert.equal(
+    loadNote([41.234, 38, 22.06], 12),
+    "host load 41.2 / 38.0 / 22.1 (1, 5, 15 min) on 12 cores",
+  );
 });
 
 test("getWorkspaceStatuses: docker unreachable → no start, no crash loops", async () => {
