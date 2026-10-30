@@ -197,7 +197,7 @@ export function defaultDeps(): Deps {
     session: (ws) => callbackFields(ws, process.env),
     branchRegistry: (repo, worktree) => branchRegistry(repo, worktree),
     stop: stopWorkspace,
-    hostLoad: () => ({ load: os.loadavg(), cores: os.availableParallelism() }),
+    hostLoad: readHostLoad,
     sleep: (ms) => delay(ms),
     reapIdle: async () => {
       const minutes = idleStopMinutes();
@@ -507,13 +507,20 @@ async function repoCheck(dir: string, file: PrFile, deps: Deps): Promise<[boolea
 const LOAD_POLL_MS = 15_000;
 const LOAD_WAIT_MS = 30 * 60_000;
 
+const readHostLoad = () => ({ load: os.loadavg(), cores: os.availableParallelism() });
+
 /** Wait for host load under the limit before gate check *check*; the note for its row, or "". */
-async function waitForHostLoad(deps: Deps, wait: boolean, check: string): Promise<string> {
+export async function waitForHostLoad(
+  deps: Pick<Deps, "hostLoad" | "sleep">,
+  wait: boolean,
+  check: string,
+  skip = "--no-wait",
+): Promise<string> {
   let { load, cores } = deps.hostLoad();
   const limit = hostLoadLimit(cores);
   if (!wait || limit === 0 || load[0] <= limit) return "";
   info(
-    `waiting for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${check}; --no-wait skips`,
+    `waiting for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${check}; ${skip} skips`,
   );
   const polls = LOAD_WAIT_MS / LOAD_POLL_MS;
   for (let n = 1; n <= polls; n++) {
@@ -522,6 +529,16 @@ async function waitForHostLoad(deps: Deps, wait: boolean, check: string): Promis
     if (load[0] <= limit) return `waited ${(n * LOAD_POLL_MS) / 1000} s for host load`;
   }
   return `ran with host load ${load[0].toFixed(1)} over ${limit} after a 30 min wait`;
+}
+
+/** The gate's wait for `werkmeister wait-load`, which the generated with-temp-home runs first (SW-224). */
+export function waitForHostLoadNow(): Promise<string> {
+  return waitForHostLoad(
+    { hostLoad: readHostLoad, sleep: (ms) => delay(ms) },
+    true,
+    "with-temp-home",
+    "WERKMEISTER_NO_WAIT=1",
+  );
 }
 
 async function gateChecks(

@@ -14,6 +14,9 @@ const SCRIPT = `#!/bin/sh
 # Runs <cmd...> with HOME set to a fresh temporary directory, removed on exit,
 # so no test or CLI exercise reads or writes the real ~/.werkmeister.
 [ "$#" -gt 0 ] || { echo "usage: with-temp-home <cmd> [args...]" >&2; exit 2; }
+# Wait like the pr gate while host load is over budget.host_load (SW-224), before HOME
+# changes so the real config's budget applies; no werkmeister on PATH, no wait.
+[ -n "\${WERKMEISTER_NO_WAIT:-}" ] || ! command -v werkmeister >/dev/null 2>&1 || werkmeister wait-load >&2 || :
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM

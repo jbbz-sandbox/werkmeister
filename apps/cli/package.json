@@ -66,6 +66,7 @@
     "./man/werkmeister-registry.1",
     "./man/werkmeister-migrate.1",
     "./man/werkmeister-start-args.1",
+    "./man/werkmeister-wait-load.1",
     "./man/werkmeister-hooks.1",
     "./man/werkmeister-dashboard.1",
     "./man/werkmeister-mcp.1"

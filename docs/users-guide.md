@@ -813,7 +813,7 @@ Opens PRs from a workspace and tracks them to a release. Each action:
 
 - `gate` runs the pre-PR gate for each PR file and changes nothing.
 - `open` gates, pushes and opens a PR for each PR file at `status: approved`, and records its URL.
-- Before each gate check (lint, tests, release), `gate` and `open` wait while the host's 1-minute load is above `budget.host_load` in `~/.werkmeister/config.yaml` (default: 2 × CPUs; `0` turns it off), for up to 30 minutes, then run anyway. `--no-wait` skips the wait. A failed check ends with the host load.
+- Before each gate check (lint, tests, release), `gate` and `open` wait while the host's 1-minute load is above `budget.host_load` in `~/.werkmeister/config.yaml` (default: 2 × CPUs; `0` turns it off), for up to 30 minutes, then run anyway. `--no-wait` skips the wait. `.werkmeister/bin/with-temp-home` runs the same wait before its command (`WERKMEISTER_NO_WAIT=1` skips it). A failed check ends with the host load.
 - `status` records merged, shipped or closed from GitHub and the repo's release tags.
 - `adopt` records a PR opened outside the workspace.
 - `watch` resumes each opening session once its PR merges, ships or closes; `--install` schedules it.
@@ -1210,6 +1210,14 @@ Print the start_session arguments (title, model, prompt, background) for the enc
 - `--start <dir>`: Directory to search up from (default: cwd)
 
 Prints the arguments for starting the enclosing workspace's Claude session (title, model, prompt and background) as JSON. The next-wave skill passes them to `start_session`; the workspaces pane's Start button builds the same ones.
+
+#### werkmeister wait-load
+
+Wait, up to 30 min, while host load is above budget.host_load; with-temp-home runs it first
+
+`werkmeister wait-load`
+
+Waits while the host's 1-minute load is above `budget.host_load` in `~/.werkmeister/config.yaml` (default: 2 × CPUs; `0` turns it off), for up to 30 minutes, then returns and says so: the same wait `pr gate` and `pr open` run before each check. `.werkmeister/bin/with-temp-home` runs it before its command; `WERKMEISTER_NO_WAIT=1` makes the wrapper skip it.
 
 #### werkmeister hooks
 

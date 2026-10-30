@@ -31,9 +31,11 @@ import {
   refreshPrStatus,
   removalBlockers,
   runGate,
+  waitForHostLoad,
   watchPrs,
   writePrFields,
 } from "./dist/pr_lifecycle.js";
+import { withReporter } from "./dist/reporter.js";
 import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
@@ -1051,6 +1053,27 @@ test("runGate: --no-wait and host_load: 0 never sleep (SW-209)", async () => {
   } finally {
     clean(ws);
   }
+});
+
+test("waitForHostLoad: with-temp-home's wait polls, caps at 30 min and names its skip (SW-224)", async () => {
+  const lines = [];
+  const reporter = { emit: (e) => lines.push(e.msg) };
+  const falls = loaded([90, 90, 1]);
+  const waited = await withSandboxHome(() =>
+    withReporter(reporter, () =>
+      waitForHostLoad(falls, true, "with-temp-home", "WERKMEISTER_NO_WAIT=1"),
+    ),
+  );
+  assert.equal(waited, "waited 30 s for host load");
+  assert.deepEqual(falls.slept, [15000, 15000]);
+  assert.match(
+    lines.join("\n"),
+    /waiting for host load 90\.0 to fall to 8 \(budget\.host_load\) before with-temp-home; WERKMEISTER_NO_WAIT=1 skips/,
+  );
+  const stuck = loaded([90]);
+  const capped = await withSandboxHome(() => waitForHostLoad(stuck, true, "with-temp-home"));
+  assert.equal(stuck.slept.length, 120);
+  assert.equal(capped, "ran with host load 90.0 over 8 after a 30 min wait");
 });
 
 test("refreshPrStatus: merged, then shipped once a release tag contains the merge", async () => {
