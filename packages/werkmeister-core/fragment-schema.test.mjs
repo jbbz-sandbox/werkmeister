@@ -33,7 +33,7 @@ test("repo: rejects ship: tag without release_tag, unknown keys and unknown ship
 });
 
 test("repo: lint takes a command string (SW-133)", () => {
-  assert.equal(fragment.repo.lint, "pnpm exec biome ci .");
+  assert.match(fragment.repo.lint, /^pnpm exec biome ci \. && .*pnpm run docs:check$/); // SW-225
   assert.ok(validate({ ...withoutRepo, repo: { lint: "pnpm exec biome ci ." } }));
   assert.equal(validate({ ...withoutRepo, repo: { lint: 1 } }), false);
 });
