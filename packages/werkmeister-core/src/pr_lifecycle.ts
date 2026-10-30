@@ -62,6 +62,7 @@ import {
 } from "./sandbox.js";
 import { hostLoadLimit, portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
+import { writeUsageSnapshot } from "./usage_snapshot.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
 export type PrStatus =
@@ -1779,6 +1780,8 @@ async function closeOutLocked(
 
   const files = readPrFiles(ws);
   try {
+    // Before removal: the transcripts it reads are keyed by this folder's path (SW-206).
+    const usage = await writeUsageSnapshot(ws, name, cfg, abandoned ? "abandoned" : "shipped");
     fs.writeFileSync(
       path.join(ws, "closeout.md"),
       renderCloseout(
@@ -1789,6 +1792,7 @@ async function closeOutLocked(
           skip
             ? `Post-mortem skipped: ${skip}`
             : fs.existsSync(postmortem) && "Post-mortem: postmortem.md",
+          usage,
         ]
           .filter(Boolean)
           .join("\n") || undefined,
