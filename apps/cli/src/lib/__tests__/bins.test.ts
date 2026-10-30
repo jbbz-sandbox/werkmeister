@@ -25,6 +25,13 @@ function help(bin: string) {
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
+function cli(...argv: string[]) {
+  return spawnSync(process.execPath, [path.join(CLI_DIR, "dist/main.js"), ...argv], {
+    encoding: "utf8",
+    env: { ...process.env, HOME: home },
+  });
+}
+
 describe("bin scripts", () => {
   for (const bin of ["werkmeister", "w9r"]) {
     it(`${bin} --help works and prints no notice`, () => {
@@ -48,5 +55,41 @@ describe("no sandbox name", () => {
     // Kept on purpose: the sandbox-workspace record repo, and `migrate` naming what it moves.
     const kept = /sandbox-workspace|Move ~\/\.sandbox to/g;
     expect(help("werkmeister").stdout.replace(kept, "")).not.toMatch(/sandbox/i);
+  });
+});
+
+// SW-180: grouping reorders the root help; it must not drop, repeat or hide a command.
+describe("root --help", () => {
+  it("lists every command exactly once", () => {
+    const names = JSON.parse(cli("__reference").stdout).map((c: { name: string }) => c.name);
+    const terms = help("werkmeister").stdout.match(/^ {2}[a-z][\w-]*/gm) ?? [];
+    for (const name of names) expect(terms.filter((t) => t.trim() === name)).toHaveLength(1);
+  });
+
+  it("groups commands with the everyday ones first", () => {
+    expect(
+      help("werkmeister")
+        .stdout.match(/^\S.*:$/gm)
+        ?.slice(1),
+    ).toEqual([
+      "Everyday:",
+      "Workspaces:",
+      "PRs and issues:",
+      "Services and infra:",
+      "Agent context:",
+      "Machine:",
+      "Internal:",
+    ]);
+  });
+
+  it("ends a command's --help with its help.md, built in", () => {
+    const md = fs.readFileSync(path.join(CLI_DIR, "src/commands/up.help.md"), "utf8");
+    expect(cli("up", "--help").stdout.trimEnd().endsWith(md.trimEnd())).toBe(true);
+  });
+
+  it("still suggests a near-miss command", () => {
+    const r = cli("stauts");
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("Did you mean one of stats, status?");
   });
 });

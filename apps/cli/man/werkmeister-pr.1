@@ -1,0 +1,52 @@
+.TH WERKMEISTER-PR 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-pr \- Open and track this workspace's PRs from its PR files (docs/workspace\-lifecycle.md)
+.SH SYNOPSIS
+\fBwerkmeister pr\fR <action> [args...]
+.SH OPTIONS
+.TP
+\fB\-\-slug <slug>\fR
+new: the follow\-up's name, in its PR file and branch
+.TP
+\fB\-\-no\-pr <reason>\fR
+adopt: no PR — the fix is already on base
+.TP
+\fB\-\-install\fR
+watch: install a schedule (launchd on macOS, else crontab) that runs \fBpr watch\fR every 10 minutes
+.TP
+\fB\-\-uninstall\fR
+watch: remove that schedule
+.TP
+\fB\-\-json\fR
+Print the result as JSON
+.SH DESCRIPTION
+.PP
+Opens PRs from a workspace and tracks them to a release. Each action:
+.IP \(bu 3
+\fBgate\fR runs the pre\-PR gate for each PR file and changes nothing.
+.IP \(bu 3
+\fBopen\fR gates, pushes and opens a PR for each PR file at \fBstatus: approved\fR, and records its URL.
+.IP \(bu 3
+\fBstatus\fR records merged, shipped or closed from GitHub and the repo's release tags.
+.IP \(bu 3
+\fBadopt\fR records a PR opened outside the workspace.
+.IP \(bu 3
+\fBwatch\fR resumes each opening session once its PR merges, ships or closes; \fB\-\-install\fR schedules it.
+.IP \(bu 3
+\fBnew\fR starts a follow\-up PR file and branch for a worktree whose PRs have merged.
+.PP
+Inside a workspace, \fBgh pr create\fR (and so \fB/create\-pr\fR) is blocked by a PreToolUse hook; \fBwerkmeister pr open\fR is the way to open a PR. The full process (PR files, the gate, ship detection, the PR guard) is in docs/workspace\-lifecycle.md.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister pr gate
+werkmeister pr open
+werkmeister pr status \-\-json
+.RE
+.fi
+.SH SEE ALSO
+.PP
+\fBwerkmeister close\-out\fR ends the workspace once its PRs have shipped.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

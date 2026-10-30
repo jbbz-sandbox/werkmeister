@@ -1,0 +1,23 @@
+.TH WERKMEISTER-SKILLS 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-skills \- Workspace w9r\-* skill projection: verify freshness against the werkmeister repo (check) or rewrite it (sync)
+.SH SYNOPSIS
+\fBwerkmeister skills\fR <action>
+.SH DESCRIPTION
+.PP
+Keeps a workspace's context layer fresh. \fBcheck\fR renders it again and diffs that with what is on disk, exiting 1 with a per\-entry report when anything is stale. \fBsync\fR rewrites whatever \fBcheck\fR reports. What counts as the context layer depends on the workspace's strategy: for jit, the w9r\-* skills in \fB.claude/skills/\fR and the gate manifest; for icm, \fB_shared/standards.md\fR and the stage contracts.
+.PP
+Run it from anywhere inside a workspace.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister skills check
+werkmeister skills sync
+.RE
+.fi
+.SH EXIT CODES
+.PP
+0 when fresh (or synced), 1 when \fBcheck\fR finds drift.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

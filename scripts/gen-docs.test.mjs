@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fill, mcpTools } from "./gen-docs.mjs";
+import { cliGuide, fill, mcpTools, roff, withMan } from "./gen-docs.mjs";
 
 test("fill rewrites each region's body and nothing else, idempotently", () => {
   const once = fill("a\n<!-- generated:x -->\nold\n<!-- /generated -->\nb", { x: "| t |" }).text;
@@ -35,4 +35,55 @@ test("mcpTools reads name, title and UI-only from each registration", () => {
     { name: "up", title: "Bring a feature up", app: false },
     { name: "issue-statuses", title: "Issue Statuses", app: true },
   ]);
+});
+
+// SW-180: one help.md feeds --help, the guide and the man pages.
+const cmd = (name, group, help) => ({
+  name,
+  group,
+  usage: "[feature]",
+  description: "Does it",
+  options: [],
+  help,
+});
+
+test("cliGuide groups commands and folds help.md's sections under each one", () => {
+  const guide = cliGuide([
+    cmd(
+      "up",
+      "Everyday:",
+      "## Description\n\nStarts it.\n\n## Examples\n\n```bash\nwerkmeister up x\n```\n",
+    ),
+    cmd("setup", "Machine:", "## Description\n\nSets up.\n"),
+  ]);
+  assert.equal(
+    guide,
+    "### Everyday\n\n#### werkmeister up\n\nDoes it\n\n`werkmeister up [feature]`\n\nStarts it.\n\n**Examples**\n\n```bash\nwerkmeister up x\n```\n\n" +
+      "### Machine\n\n#### werkmeister setup\n\nDoes it\n\n`werkmeister setup [feature]`\n\nSets up.",
+  );
+});
+
+test("roff escapes what roff would eat and keeps code blocks verbatim", () => {
+  assert.equal(
+    roff("## Exit codes\n\nRun `a-b` [here](x.md).\n.dot \\ ok\n\n- one\n\n```\n.x --y\n```"),
+    [
+      ".SH EXIT CODES",
+      ".PP",
+      "Run \\fBa\\-b\\fR here. .dot \\e ok",
+      ".IP \\(bu 3",
+      "one",
+      ".PP\n.nf\n.RS 4",
+      "\\&.x \\-\\-y",
+      ".RE\n.fi",
+    ].join("\n"),
+  );
+});
+
+test("withMan lists every page and leaves the rest of package.json alone", () => {
+  const pkg = `${JSON.stringify({ name: "werkmeister", man: ["./man/gone.1"], files: [] }, null, 2)}\n`;
+  assert.deepEqual(JSON.parse(withMan(pkg, { "werkmeister.1": "", "werkmeister-up.1": "" })), {
+    name: "werkmeister",
+    man: ["./man/werkmeister.1", "./man/werkmeister-up.1"],
+    files: [],
+  });
 });

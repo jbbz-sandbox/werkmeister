@@ -1,0 +1,64 @@
+.TH WERKMEISTER-UP 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-up \- Detect services, allocate slot, generate config, start containers
+.SH SYNOPSIS
+\fBwerkmeister up\fR [feature]
+.SH OPTIONS
+.TP
+\fB\-w, \-\-workspace <path>\fR
+Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).
+.TP
+\fB\-\-dev\fR
+Run the file watchers in cli/library/extension containers, which otherwise idle.
+.SH DESCRIPTION
+.PP
+The local services come from the workspace's \fB.werkmeister/workspace.yml\fR (via \fBwerkmeister init\-workspace\fR), not from a flag.
+.PP
+\fBWhat it does:\fR
+.IP 1. 3
+Loads service registry and port configuration
+.IP 2. 3
+Resolves the workspace (default: \fB~/workspace/\fR) and reads its local services from the \fBSERVICES=\fR line \fBwerkmeister init\-workspace\fR wrote to the workspace \fB.env\fR
+.IP 3. 3
+Allocates a slot (1–12) if the feature doesn't already have one
+.IP 4. 3
+Generates per\-feature files in the feature's workspace:
+.IP \(bu 6
+\fBcompose.yml\fR — Docker Compose stack definition (workspace root)
+.IP \(bu 6
+\fB.env\fR — Environment variables with resolved service URLs (workspace root)
+.IP \(bu 6
+\fB<workspace>/.werkmeister/supergraph\-config.yml\fR — GraphQL federation config (only when a service has a GraphQL type: \fBgraphql\-subgraph\fR, \fBgraphql\fR, \fBsubgraph\fR or \fBfederation\fR)
+.IP 5. 3
+Verifies k8s port\-forwards are healthy (restarts if needed)
+.IP 6. 3
+Starts containers with \fBdocker compose up \-d \-\-build \-\-remove\-orphans\fR
+.IP 7. 3
+Regenerates \fB~/.werkmeister/infra/proxy/Caddyfile\fR and reloads Caddy
+.PP
+\fBOutput example:\fR
+.PP
+.nf
+.RS 4
+[info] Scanning workspace for feature: my\-feature
+[info] Detected 2 service(s): backend, frontend
+[ok]   Allocated slot 1 (ports 11100\-11119)
+[info] Generating config files...
+[info] Starting containers...
+[ok]   Feature 'my\-feature' is up!
+
+  URL:       https://frontend.local.werkmeister.io
+  Header:    X\-Feature: my\-feature
+  Slot:      1
+  Ports:     11100\-11119
+  Services:  backend (:11100), frontend (:11101)
+.RE
+.fi
+.PP
+\fBIf the workspace lists no services\fR, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in \fB.werkmeister/workspace.yml\fR, rerun \fBwerkmeister init\-workspace\fR, then \fBwerkmeister up\fR.
+.PP
+\fBIf every slot is taken\fR (12 by default, \fBfeature_slots.count\fR), the command exits with an error. Free a slot by running \fBwerkmeister down\fR on another feature.
+.PP
+\fBAdding a service to a running feature.\fR \fBwerkmeister up\fR takes no service list. To run another service locally, add it to the \fBservices\fR field in the workspace's \fB.werkmeister/workspace.yml\fR, rerun \fBwerkmeister init\-workspace\fR (this also adds the owning repo's worktree if it isn't there yet), then \fBwerkmeister up\fR.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

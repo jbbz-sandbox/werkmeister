@@ -11,6 +11,7 @@ by other tooling, so they are not free to drift.
 |---|---|
 | `src/main.ts` | the commander program and command registry |
 | `src/commands/<name>.ts` | one module per CLI command |
+| `src/commands/<command>.help.md` | that command's long help: printed after its options by `--help`, and the source of its users-guide section and man page (`pnpm run docs:gen`) |
 | `src/lib/<name>.ts` | shared library modules |
 
 Runtime data dirs live alongside the source: `infra/`, `bin/`.

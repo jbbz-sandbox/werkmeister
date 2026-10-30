@@ -1,0 +1,54 @@
+.TH WERKMEISTER-ISSUE 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-issue \- Read, update or file an issue in this machine's issue tracker (see \fBwerkmeister setup\fR)
+.SH SYNOPSIS
+\fBwerkmeister issue\fR <action> [ref]
+.SH OPTIONS
+.TP
+\fB\-\-json\fR
+view, ready: print JSON
+.TP
+\fB\-\-status <name>\fR
+update: move the issue to this status
+.TP
+\fB\-\-comment <text>\fR
+update: add this comment
+.TP
+\fB\-\-project <key>\fR
+create: the Jira project key to file in; ready: a project from projects: in config.yaml
+.TP
+\fB\-\-type <type>\fR
+create: bug, feature or task (mapped to the tracker's issue type)
+.TP
+\fB\-\-title <text>\fR
+create: the issue's summary
+.TP
+\fB\-\-body\-file <path>\fR
+create: the issue's description, from a file (\- for stdin)
+.SH DESCRIPTION
+.PP
+Reads or updates one issue in this machine's tracker (\fBwerkmeister setup\fR picks it).
+.IP \(bu 3
+\fBview\fR prints the issue's briefing; \fB\-\-json\fR prints it as JSON.
+.IP \(bu 3
+\fBupdate\fR moves its status and/or adds a comment; at least one is required.
+.IP \(bu 3
+\fBcreate\fR files a new issue and prints its URL. Only trackers with an API path (Jira); file GitHub issues with \fBgh issue create\fR.
+.IP \(bu 3
+\fBstart\fR moves the workspace's issue to in progress, forward only. It exits 0 when the tracker refuses, so a stage never fails on it.
+.IP \(bu 3
+\fBready\fR lists a project's open work in priority order: its board's ready column, else the open issues.
+.PP
+Inside a workspace the issue reference can be left out: it is read from \fB.werkmeister/workspace.yml\fR.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister issue view
+werkmeister issue update \-\-status "In Review" \-\-comment "PR opened"
+werkmeister issue create \-\-project SW \-\-type bug \-\-title "Short summary" \-\-body\-file body.md
+werkmeister issue ready \-\-json
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

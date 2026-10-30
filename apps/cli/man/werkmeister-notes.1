@@ -1,0 +1,30 @@
+.TH WERKMEISTER-NOTES 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-notes \- Workspace notes (.werkmeister/notes/). \fBcontext\fR prints the latest handoff + open decisions for session\-start injection (hook target); \fBgraduate\fR scaffolds an open decision note into the standards tree.
+.SH SYNOPSIS
+\fBwerkmeister notes\fR <action> [note_num]
+.SH OPTIONS
+.TP
+\fB\-\-domain <domain>\fR
+graduate: target \e<domain> in the standards tree (omit to infer from refs, or prompt)
+.TP
+\fB\-\-kind <kind>\fR
+graduate: content kind to scaffold (omit to prompt)
+.TP
+\fB\-\-slug <slug>\fR
+graduate: override the derived reference\-file slug
+.SH DESCRIPTION
+.PP
+\fBcontext\fR prints the workspace's notes context for a fresh Claude Code window. It is the SessionStart hook's target: it reads the hook's payload on stdin, never fails, and always exits 0.
+.PP
+\fBgraduate\fR scaffolds an open \fBdecision\fR note into the standards tree. At a terminal it asks for the domain and kind; otherwise pass \fB\-\-domain\fR and \fB\-\-kind\fR.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister notes context
+werkmeister notes graduate 3 \-\-domain testing \-\-kind rule
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

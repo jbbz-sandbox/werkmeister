@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { checkDoc, isIgnored, slug } from "./check-docs.mjs";
+import { checkDoc, checkMan, isIgnored, slug } from "./check-docs.mjs";
 
 const ctx = {
   cli: {
@@ -114,4 +114,20 @@ test("a gitignored directory counts as ignored even when it was never built", ()
   writeFileSync(join(root, ".gitignore"), "dist/\n");
   assert.equal(isIgnored("apps/web/dist", root), true);
   assert.equal(isIgnored("apps/web/src", root), false);
+});
+
+test("checkMan flags a stale, a missing and an orphaned man page", () => {
+  const dir = mkdtempSync(join(tmpdir(), "man-"));
+  writeFileSync(join(dir, "werkmeister.1"), "old\n");
+  writeFileSync(join(dir, "werkmeister-gone.1"), "x\n");
+  const problems = checkMan({ "werkmeister.1": "new\n", "werkmeister-up.1": "up\n" }, dir);
+  assert.deepEqual(
+    problems.map((p) => p.replace(/^.*\//, "")),
+    [
+      "werkmeister.1: out of date, run `pnpm run docs:gen`",
+      "werkmeister-up.1: out of date, run `pnpm run docs:gen`",
+      "werkmeister-gone.1: no such command, run `pnpm run docs:gen`",
+    ],
+  );
+  assert.deepEqual(checkMan({ "werkmeister.1": "old\n", "werkmeister-gone.1": "x\n" }, dir), []);
 });

@@ -1,0 +1,22 @@
+.TH WERKMEISTER-REGISTRY 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-registry \- Regenerate ~/.werkmeister/services.yaml from every \e<repo>/.werkmeister/services.yaml under paths.repos_root (merged under ~/.werkmeister/services.local.yaml)
+.SH SYNOPSIS
+\fBwerkmeister registry\fR [action]
+.SH OPTIONS
+.TP
+\fB\-\-check\fR
+Report drift without writing; nonzero exit when stale.
+.SH DESCRIPTION
+.PP
+Regenerates \fB~/.werkmeister/services.yaml\fR from every repo's \fB.werkmeister/services.yaml\fR fragment under \fBpaths.repos_root\fR, merged under \fB~/.werkmeister/services.local.yaml\fR. It is the same step \fBwerkmeister setup\fR runs, on its own: use it after cloning a new repo.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister registry            # regenerate (sync is the default action)
+werkmeister registry \-\-check    # report drift; nonzero exit when stale
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

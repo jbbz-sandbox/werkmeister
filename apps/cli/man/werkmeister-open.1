@@ -1,0 +1,34 @@
+.TH WERKMEISTER-OPEN 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-open \- Open a feature\-tagged Chrome window with the X\-Feature cookie set (no Playwright)
+.SH SYNOPSIS
+\fBwerkmeister open\fR [feature]
+.SH OPTIONS
+.TP
+\fB\-\-url <url>\fR
+Full start URL (overrides \-\-path). Default: the first routed host's homepage.
+.TP
+\fB\-\-path <path>\fR
+Path appended to the first routed host (default: test_path from .werkmeister/workspace.yml, else TEST_PATH from .env, else '/').
+.TP
+\fB\-\-size <W,H>\fR
+Window size WIDTH,HEIGHT (default: 1440,900).
+.TP
+\fB\-\-position <X,Y>\fR
+Window position X,Y (default: staggered by feature name).
+.SH DESCRIPTION
+.PP
+Launches an isolated Chrome window for a feature: it sets the \fBX\-Feature\fR routing cookie and tags the window (title prefix and corner badge) so it is plainly that feature's window. It drives Chrome over the DevTools Protocol, without Playwright.
+.PP
+Routing only resolves while the feature is running (\fBwerkmeister up\fR). Otherwise the cookie is set but traffic falls through to the k8s baseline.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister open my\-feature
+werkmeister open my\-feature \-\-path /settings
+werkmeister open my\-feature \-\-size 1280,800 \-\-position 0,0
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

@@ -1,0 +1,32 @@
+.TH WERKMEISTER-STATS 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-stats \- Show Docker container resource usage (CPU, memory)
+.SH SYNOPSIS
+\fBwerkmeister stats\fR
+.SH OPTIONS
+.TP
+\fB\-\-collect <MINUTES>\fR
+Collect stats over N minutes (default: snapshot only)
+.TP
+\fB\-i, \-\-interval <SECS>\fR
+Sampling interval in seconds (default: 10)
+.TP
+\fB\-\-save\fR
+Save results to stats/ directory
+.SH DESCRIPTION
+.PP
+Shows Docker resource usage for every werkmeister container: one snapshot by default, or samples collected over a period.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister stats                     # snapshot of current usage
+werkmeister stats \-\-collect 5         # collect for 5 minutes
+werkmeister stats \-\-collect 30 \-i 5   # 30 minutes, 5\-second intervals
+.RE
+.fi
+.SH SEE ALSO
+.PP
+\fBwerkmeister optimize\fR compares the same numbers with the configured limits.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

@@ -68,6 +68,8 @@ const options = {
   // jsonc-parser's `main` is UMD, which loads its own files with a dynamic
   // require esbuild can't follow; its ESM build is plain imports.
   alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
+  // SW-180: each command's help.md is embedded in its --help.
+  loader: { ".md": "text" },
   format: "esm",
   platform: "node",
   target: "node22",
