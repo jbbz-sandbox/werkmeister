@@ -339,6 +339,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .optional()
           .describe("Launch VS Code on the new workspace (default false)."),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({
         command: z.string(),
         output: z.string(),
@@ -376,6 +377,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "built from the terminal wizard's prompt definitions. Data-only; used by the browser dashboard's " +
         "create-workspace tab.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         schema: z.record(z.string(), z.unknown()),
         uiSchema: z.record(z.string(), z.unknown()),
@@ -415,6 +417,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       inputSchema: {
         ref: z.string().describe("An issue ID or URL, or any string containing one."),
       },
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({ formData: z.record(z.string(), z.unknown()) }),
       _meta: APP_ONLY,
     },
@@ -455,6 +458,7 @@ export function registerWorkspaceTools(server: McpServer): void {
               "background context, alongside the service registry, to ground the rewrite.",
           ),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({ refined: z.string() }),
       _meta: APP_ONLY,
     },
@@ -489,6 +493,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "Desktop), otherwise a markdown table. To open one in VS Code, call `open-workspace` " +
         "with the name.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         root: z.string(),
         workspaces: z.array(
@@ -499,6 +504,7 @@ export function registerWorkspaceTools(server: McpServer): void {
             issueId: z.string().nullable(),
             issueUrl: z.string().nullable(),
             labels: z.array(z.string()),
+            model: z.string().nullable(),
             task: z.string().nullable(),
             workType: z.string().nullable(),
             lifecycle: z.string(),
@@ -538,6 +544,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "same UI Claude Desktop renders inline, as a fallback for hosts that don't render MCP App " +
         "UI. Starts the localhost dashboard on port 3001 if it isn't running, and returns its URL.",
       inputSchema: {},
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({ url: z.string() }),
     },
     async (): Promise<CallToolResult> => {
@@ -567,6 +574,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       inputSchema: {
         ...WORKSPACE_ARG,
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({ path: z.string() }),
     },
     async (args, extra): Promise<CallToolResult> => {
@@ -596,6 +604,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "one's branch (via the `gh` CLI). Best-effort — a repo with no PR (or when `gh` is " +
         "unavailable) reports a null PR.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         workspaces: z.array(
           z.object({
@@ -656,6 +665,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .optional()
           .describe("Bypass the cache and re-fetch every issue from the tracker."),
       },
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({ statuses: z.record(z.string(), z.string()) }),
       _meta: APP_ONLY,
     },
@@ -716,6 +726,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "members' ready-for-human-approval PRs, each with review/check/label state and its issue " +
         "ID. Best-effort — a PR whose details can't be read degrades to a stub card.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         me: z.string(),
         mine: z.array(openPrSchema),
@@ -744,6 +755,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "Approve a pull request via `gh pr review <url> --approve`. Does not change labels.",
       inputSchema: { url: z.string().describe("The pull request URL.") },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({ ok: z.literal(true) }),
     },
     async (args): Promise<CallToolResult> => {
@@ -772,6 +784,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         title: z.string().optional().describe("The PR title, for a readable message."),
         author: z.string().optional().describe("The PR author's login."),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({ ok: z.literal(true) }),
     },
     async (args): Promise<CallToolResult> => {
@@ -803,6 +816,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       inputSchema: {
         ref: z.string().describe("An issue ID or URL, or any string containing one."),
       },
+      annotations: { readOnlyHint: true },
       outputSchema: issueSchema,
     },
     async (args): Promise<CallToolResult> => {
@@ -836,6 +850,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .optional()
           .describe("Issue ID hint; inferred from the PR when omitted."),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({
         sessionKey: z.string(),
         slug: z.string(),
@@ -875,6 +890,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         action: z.enum(["gate", "open", "status"]),
         repo: z.string().optional().describe("Only this code worktree's PR file."),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({ ok: z.boolean(), lines: z.array(z.string()) }),
     },
     async (args, extra): Promise<CallToolResult> => {
@@ -918,6 +934,7 @@ export function registerWorkspaceTools(server: McpServer): void {
             "Add the host-wide `werkmeister status` snapshot. Slower: it probes every k8s forward.",
           ),
       },
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         infra: z.object({
           state: z.enum(["up", "partial", "down", "unknown"]),
@@ -1031,6 +1048,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "Sum a workspace's Claude Code token usage by model and session, with a " +
         "rough USD estimate (rates from ~/.werkmeister/model-pricing.yaml). On-demand.",
       inputSchema: { ...WORKSPACE_ARG },
+      annotations: { readOnlyHint: true },
       outputSchema: {
         name: z.string(),
         totals: z.object({
@@ -1099,6 +1117,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "Report the Docker provider and its browser dashboard URL, if any (OrbStack → " +
         "https://orb.local; Docker Desktop has no browser UI, so url is null).",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({ provider: z.string(), url: z.string().nullable() }),
     },
     async (): Promise<CallToolResult> => {
@@ -1132,6 +1151,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "none. Returns per-forward health plus healthy/total counts; `stopped` when the " +
         "forwarder is down and no running workspace needs the cluster (normal, not a fault).",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         forwards: z.array(
           z.object({
@@ -1171,6 +1191,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       title: "Current Kube Context",
       description: "Report the active kubectl context and its environment (dev / stage / prod).",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         context: z.string().nullable(),
         env: z.enum(["dev", "stage", "prod", "other"]),
@@ -1205,6 +1226,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .default("dev")
           .describe("Target environment (default dev)."),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({
         context: z.string(),
         env: z.enum(["dev", "stage", "prod", "other"]),
@@ -1253,6 +1275,7 @@ export function registerWorkspaceTools(server: McpServer): void {
             "Read this specific session instead of the newest (from `sessions[]`); stale/unknown ids fall back to newest.",
           ),
       },
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         sessionId: z.string().nullable(),
         workspacePath: z.string(),
@@ -1323,6 +1346,7 @@ export function registerWorkspaceTools(server: McpServer): void {
             "Resume this specific session instead of the newest; `--resume` bumps it back to newest afterwards.",
           ),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({
         sessionId: z.string().nullable(),
         started: z.boolean(),
@@ -1360,6 +1384,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       inputSchema: {
         ...SESSION_ARG,
       },
+      annotations: { readOnlyHint: true },
       outputSchema: z.object({
         state: z.enum(["idle", "running", "done", "failed"]),
         startedAt: z.string().nullable(),
@@ -1407,6 +1432,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .optional()
           .describe("Start a fresh session instead of resuming one; ignores `sessionId`."),
       },
+      annotations: { readOnlyHint: false },
       outputSchema: z.object({
         path: z.string(),
         sessionId: z.string().nullable(),
