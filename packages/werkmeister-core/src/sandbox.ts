@@ -2537,10 +2537,10 @@ export async function removeWorkspace(
   //    the handoff commit, and that becomes a junk PR (SW-91). The record branch always goes.
   const abandoned = !!opts.abandon?.trim();
   const keepDir = path.join(sandboxHome(), "handoff", name);
-  // close-out writes closeout.md just before this, and postmortem.md (SW-108) may be uncommitted;
-  // both belong on the record branch, but the handoff only commits tracked changes, so stage them
-  // by name (docs/workspace-lifecycle.md).
-  for (const record of ["closeout.md", "postmortem.md"])
+  // close-out writes closeout.md and the usage snapshot (SW-206) just before this, and
+  // postmortem.md (SW-108) may be uncommitted; all belong on the record branch, but the handoff
+  // only commits tracked changes, so stage them by name (docs/workspace-lifecycle.md).
+  for (const record of ["closeout.md", "postmortem.md", "usage.md", "usage.json"])
     if (existsSync(path.join(target, record)))
       await runCapture("git", ["-C", target, "add", "--", record]).catch(() => {});
   const pushes = [];
@@ -3194,6 +3194,11 @@ export interface SessionUsage {
   sessionId: string;
   title: string;
   updatedAt: string;
+  firstTurn: string | null;
+  lastTurn: string | null;
+  /** Assistant lines with usage: the lines the token totals count. */
+  turns: number;
+  models: string[];
   totals: UsageTotals;
   estUsd: number | null;
 }
@@ -3213,25 +3218,46 @@ function addTotals(into: UsageTotals, t: UsageTotals): void {
   into.cacheRead += t.cacheRead;
 }
 
+export interface SessionReduction {
+  byModel: Map<string, UsageTotals>;
+  firstTurn: string | null;
+  lastTurn: string | null;
+  turns: number;
+  models: string[];
+}
+
 /**
- * Sum one session file's assistant `message.usage` by model. Reads only the
- * TOP-LEVEL usage fields (never `iterations[]`, which itemizes a single
- * tool-loop turn and would double-count). Unparseable lines are skipped.
+ * Sum one session file's assistant `message.usage` by model, with its first and last
+ * timestamps. Reads only the TOP-LEVEL usage fields (never `iterations[]`, which
+ * itemizes a single tool-loop turn and would double-count). Unparseable lines are skipped.
  */
-export function reduceUsageLines(text: string): Map<string, UsageTotals> {
+export function reduceSession(text: string): SessionReduction {
   const byModel = new Map<string, UsageTotals>();
+  let firstTurn: string | null = null;
+  let lastTurn: string | null = null;
+  let turns = 0;
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
-    let e: { type?: string; message?: { model?: string; usage?: Record<string, number> } };
+    let e: {
+      type?: string;
+      timestamp?: string;
+      message?: { model?: string; usage?: Record<string, number> };
+    };
     try {
       e = JSON.parse(line);
     } catch {
       continue;
     }
+    if (typeof e.timestamp === "string") {
+      // ISO strings in one zone compare as times.
+      if (!firstTurn || e.timestamp < firstTurn) firstTurn = e.timestamp;
+      if (!lastTurn || e.timestamp > lastTurn) lastTurn = e.timestamp;
+    }
     if (e.type !== "assistant") continue;
     const u = e.message?.usage;
     const model = e.message?.model;
     if (!u || !model) continue;
+    turns++;
     let acc = byModel.get(model);
     if (!acc) {
       acc = zeroTotals();
@@ -3242,7 +3268,11 @@ export function reduceUsageLines(text: string): Map<string, UsageTotals> {
     acc.cacheCreation += u.cache_creation_input_tokens ?? 0;
     acc.cacheRead += u.cache_read_input_tokens ?? 0;
   }
-  return byModel;
+  return { byModel, firstTurn, lastTurn, turns, models: [...byModel.keys()] };
+}
+
+export function reduceUsageLines(text: string): Map<string, UsageTotals> {
+  return reduceSession(text).byModel;
 }
 
 /** Estimate USD for one model's totals, or null when the model has no rate. */
@@ -3300,6 +3330,11 @@ async function loadPriceTable(): Promise<Record<string, ModelRate>> {
  * lines. Counts only sessions in the workspace-root project dir.
  */
 export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
+  return usageForDir(name, await resolveWorkspaceDir(name));
+}
+
+/** {@link getWorkspaceUsage} for a folder already resolved (close-out's snapshot, SW-206). */
+export async function usageForDir(name: string, target: string): Promise<WorkspaceUsage> {
   const empty: WorkspaceUsage = {
     name,
     totals: zeroTotals(),
@@ -3307,7 +3342,6 @@ export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
     byModel: [],
     sessions: [],
   };
-  const target = await resolveWorkspaceDir(name);
   const projectDir = await findClaudeProjectDir(target);
   if (!projectDir) return empty;
   const files = await listSessionFiles(projectDir); // newest first
@@ -3323,7 +3357,8 @@ export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
     } catch {
       continue;
     }
-    const perModel = reduceUsageLines(text);
+    const session = reduceSession(text);
+    const perModel = session.byModel;
     if (!perModel.size) continue;
     const sessionTotals = zeroTotals();
     let sessionUsd: number | null = null;
@@ -3343,6 +3378,10 @@ export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
       sessionId,
       title: await readSessionTitle(f.file, sessionId),
       updatedAt: f.mtime.toISOString(),
+      firstTurn: session.firstTurn,
+      lastTurn: session.lastTurn,
+      turns: session.turns,
+      models: session.models,
       totals: sessionTotals,
       estUsd: sessionUsd,
     });

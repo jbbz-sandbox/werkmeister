@@ -1447,6 +1447,186 @@ test("closeOut --abandon: records why, comments it and closes the issue as not p
   }
 });
 
+// ---- usage snapshot (SW-206) ------------------------------------------------------------------
+
+/** A temp HOME whose Claude Code project dir for *ws* holds `{ id: [line objects] }` transcripts. */
+async function withTranscripts(ws, sessions, fn) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "usage-home-"));
+  const prev = process.env.HOME;
+  const dir = path.join(home, ".claude", "projects", ws.replace(/[^a-zA-Z0-9]/g, "-"));
+  const write = (more) => {
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [id, lines] of Object.entries(more))
+      fs.writeFileSync(
+        path.join(dir, `${id}.jsonl`),
+        lines.map((l) => JSON.stringify(l)).join("\n"),
+      );
+  };
+  write(sessions);
+  process.env.HOME = home;
+  try {
+    return await fn(write);
+  } finally {
+    process.env.HOME = prev;
+    clean(home);
+  }
+}
+
+const turn = (timestamp, model, usage) => ({
+  type: "assistant",
+  timestamp,
+  message: { model, usage },
+});
+const TRANSCRIPTS = {
+  s1: [
+    { type: "user", timestamp: "2026-10-30T10:00:00.000Z" },
+    turn("2026-10-30T10:01:00.000Z", "claude-sonnet-5", {
+      input_tokens: 1_000_000,
+      output_tokens: 100_000,
+    }),
+    turn("2026-10-30T10:30:00.000Z", "claude-mystery", { input_tokens: 10, output_tokens: 5 }),
+  ],
+  s2: [
+    turn("2026-10-30T11:00:00.000Z", "claude-sonnet-5", {
+      cache_creation_input_tokens: 200_000,
+      cache_read_input_tokens: 1_000_000,
+    }),
+  ],
+};
+const readUsage = (ws) => JSON.parse(fs.readFileSync(path.join(ws, "usage.json"), "utf8"));
+
+test("closeOut writes usage.md + usage.json before removal, and a summary line in closeout.md", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: u\n" }) },
+  });
+  fs.appendFileSync(path.join(dotDir(ws), "workspace.yml"), "model: sonnet\nautonomous: true\n");
+  try {
+    let atRemoval = [];
+    const d = deps([[/ls-remote/, { code: 2 }]], {
+      remove: async () => {
+        atRemoval = ["usage.md", "usage.json"].filter((f) => fs.existsSync(path.join(ws, f)));
+        return { output: "removed" };
+      },
+    });
+    await withTranscripts(ws, TRANSCRIPTS, () =>
+      inWorkspacesRoot(ws, (name) => closeOut(name, {}, d)),
+    );
+    assert.deepEqual(atRemoval, ["usage.md", "usage.json"]);
+    const u = readUsage(ws);
+    assert.equal(u.schema, 1);
+    assert.equal(u.outcome, "shipped");
+    assert.equal(u.ticket, "o/app#7");
+    assert.equal(u.model, "sonnet");
+    assert.equal(u.autonomous, true);
+    assert.deepEqual(u.totals, {
+      input: 1_000_010,
+      output: 100_005,
+      cacheCreation: 200_000,
+      cacheRead: 1_000_000,
+    });
+    // Only claude-sonnet-5 is priced: 3 + 1.5 + 0.75 + 0.3.
+    assert.equal(u.estUsd.toFixed(2), "5.55");
+    assert.equal(u.sessionCount, 2);
+    assert.equal(u.turns, 3);
+    assert.equal(u.firstTurn, "2026-10-30T10:00:00.000Z");
+    const s1 = u.sessions.find((s) => s.sessionId === "s1");
+    assert.equal(s1.lastTurn, "2026-10-30T10:30:00.000Z");
+    assert.deepEqual(s1.models, ["claude-sonnet-5", "claude-mystery"]);
+    assert.deepEqual(
+      u.byModel.map((m) => [m.model, m.estUsd === null]),
+      [
+        ["claude-sonnet-5", false],
+        ["claude-mystery", true],
+      ],
+    );
+    assert.deepEqual(
+      u.stages.map((s) => [s.stage, !!s.finishedAt]),
+      [
+        ["01_research", true],
+        ["02_implement", true],
+        ["03_propose", true],
+      ],
+    );
+    assert.ok(!u.note);
+
+    const md = fs.readFileSync(path.join(ws, "usage.md"), "utf8");
+    assert.match(md, /^# Usage\n\nUsage: 2\.3M tokens, ~\$5\.55 across 2 sessions\n/);
+    for (const h of ["## Tokens by model", "## Sessions", "## Stages"])
+      assert.match(md, new RegExp(`^${h}`, "m"));
+    assert.match(
+      md,
+      /^\| \*\*total\*\* \| 1,000,010 \| 100,005 \| 200,000 \| 1,000,000 \| \$5\.55 \|$/m,
+    );
+    assert.match(
+      md,
+      /^\| s1 \| .* \| 2 \| 1\.1M \| claude-sonnet-5, claude-mystery \| \$4\.50 \|$/m,
+    );
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /^Usage: 2\.3M tokens, ~\$5\.55 across 2 sessions; see usage\.md$/m,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon with no transcripts: the snapshot says so and close-out finishes", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
+  try {
+    const d = deps([]);
+    const r = await withTranscripts(ws, {}, () =>
+      inWorkspacesRoot(ws, (name) => closeOut(name, { abandon: "superseded" }, d)),
+    );
+    assert.match(r.output, /removed/);
+    const u = readUsage(ws);
+    assert.equal(u.outcome, "abandoned");
+    assert.deepEqual(u.sessions, []);
+    assert.equal(u.estUsd, null);
+    assert.match(u.note, /no Claude Code transcripts/);
+    assert.match(
+      fs.readFileSync(path.join(ws, "usage.md"), "utf8"),
+      /^Note: no Claude Code transcripts/m,
+    );
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /^Usage: no transcripts found; see usage\.md$/m,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut retry after a failed removal keeps the first usage snapshot", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: u\n" }) },
+  });
+  try {
+    const failing = deps([[/ls-remote/, { code: 2 }]], {
+      remove: async () => {
+        throw new Error("Handoff failed");
+      },
+    });
+    await withTranscripts(ws, TRANSCRIPTS, async (write) => {
+      await assert.rejects(
+        inWorkspacesRoot(ws, (name) => closeOut(name, {}, failing)),
+        /Handoff failed/,
+      );
+      const first = fs.readFileSync(path.join(ws, "usage.json"), "utf8");
+      const firstMd = fs.readFileSync(path.join(ws, "usage.md"), "utf8");
+      write({ s3: [turn("2026-10-30T12:00:00.000Z", "claude-sonnet-5", { output_tokens: 1 })] });
+      await inWorkspacesRoot(ws, (name) => closeOut(name, {}, deps([[/ls-remote/, { code: 2 }]])));
+      assert.equal(fs.readFileSync(path.join(ws, "usage.json"), "utf8"), first);
+      assert.equal(fs.readFileSync(path.join(ws, "usage.md"), "utf8"), firstMd);
+      assert.match(
+        fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+        /^Usage: .* across 2 sessions; see usage\.md$/m,
+      );
+    });
+  } finally {
+    clean(ws);
+  }
+});
+
 test("closeOut retry after an abandon that failed to remove: still abandoned", async () => {
   const ws = icmWorkspace({
     files: { app: prFile({ status: "abandoned", extra: "reason: gone\nurl: u\n" }) },
