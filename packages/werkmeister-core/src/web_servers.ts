@@ -27,6 +27,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { dotDir, monorepoRoot, sandboxRoot } from "./config.js";
+import { daemonPort } from "./daemon_client.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
 
@@ -80,7 +81,10 @@ export const DASHBOARD: WebApp = {
 export const MCP: WebApp = {
   label: "Werkmeister MCP server",
   dir: "werkmeister-mcp",
-  port: 3002,
+  // overrides.mcp_port / WERKMEISTER_MCP_PORT; read late so a test's env applies.
+  get port() {
+    return daemonPort();
+  },
   stem: "sandbox-mcp", // name-check: ignore
   entry: "dist/main.js",
   buildRef: "dist/main.js",
@@ -95,6 +99,32 @@ export const MCP: WebApp = {
   // this: it's unauthenticated and must stay loopback-only.
   env: { HOST: "0.0.0.0" },
 };
+
+/** The launchd agent `werkmeister setup` installs for {@link MCP} on macOS (SW-184; daemon_agent.ts). */
+export const DAEMON_LABEL = "com.werkmeister.daemon";
+
+export function daemonPlistPath(home = os.homedir()): string {
+  return path.join(home, "Library", "LaunchAgents", `${DAEMON_LABEL}.plist`);
+}
+
+/** launchd owns the daemon's process: PID-file starts and stops would fight its KeepAlive. */
+function launchdOwns(app: WebApp): boolean {
+  return app === MCP && process.platform === "darwin" && fs.existsSync(daemonPlistPath());
+}
+
+function kickstart(app: WebApp, restart: boolean): boolean {
+  const target = `gui/${process.getuid?.() ?? 0}/${DAEMON_LABEL}`;
+  const res = run(["launchctl", "kickstart", ...(restart ? ["-k"] : []), target], {
+    capture: true,
+    timeout: 15,
+  });
+  if (res.status !== 0) {
+    error(`launchctl kickstart ${target} failed: ${(res.stderr || res.stdout).trim()}`);
+    return false;
+  }
+  success(`${app.label} ${restart ? "restarted" : "started"} by launchd (${DAEMON_LABEL})`);
+  return true;
+}
 
 /** Every app `werkmeister connect` brings up (and `down`/`stop`/`restart` manage). */
 export const ALL: readonly WebApp[] = [DASHBOARD, MCP];
@@ -344,6 +374,20 @@ export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> 
 }
 
 /**
+ * Where *app* runs from: its sibling app in a checkout, else (package install)
+ * the bundle the CLI ships, which there is nothing to build for. Null when neither exists.
+ */
+export function appEntry(app: WebApp): { dir: string; entry: string; bundled: boolean } | null {
+  const dir = appDir(app);
+  if (fs.existsSync(path.join(dir, "package.json"))) {
+    return { dir, entry: app.entry, bundled: false };
+  }
+  const bundled = app.bundled ? path.join(sandboxRoot(), app.bundled) : null;
+  if (!bundled || !fs.existsSync(bundled)) return null;
+  return { dir: sandboxRoot(), entry: bundled, bundled: true };
+}
+
+/**
  * Build (optional) and start one web server.
  *
  * Non-fatal: on any failure it warns and returns false so `werkmeister connect`
@@ -365,6 +409,13 @@ export async function start(
     success(`${app.label} is this process (pid ${pid}); leaving it running`);
     return true;
   }
+  if (launchdOwns(app)) {
+    if (!force && (await serves(app.port))) {
+      success(`${app.label} already running under launchd (http://localhost:${app.port}/)`);
+      return true;
+    }
+    return kickstart(app, force);
+  }
 
   // A live PID is not a working server: bounce one that can't serve rather
   // than report it "already running" (SW-137).
@@ -373,21 +424,14 @@ export async function start(
     force = true;
   }
 
-  let dir = appDir(app);
-  let entry = app.entry;
-  let buildRef = path.join(dir, app.buildRef);
-  if (!fs.existsSync(path.join(dir, "package.json"))) {
-    // No sibling app to build (package install): run the bundle the CLI ships.
-    const bundled = app.bundled ? path.join(sandboxRoot(), app.bundled) : null;
-    if (!bundled || !fs.existsSync(bundled)) {
-      warn(`${app.label} not found at ${dir}; skipping`);
-      return false;
-    }
-    dir = sandboxRoot();
-    entry = bundled;
-    buildRef = bundled;
-    build = false;
+  const where = appEntry(app);
+  if (!where) {
+    warn(`${app.label} not found at ${appDir(app)}; skipping`);
+    return false;
   }
+  const { dir, entry } = where;
+  const buildRef = where.bundled ? entry : path.join(dir, app.buildRef);
+  if (where.bundled) build = false;
 
   let rebuilt = false;
   if (build && distStale(app)) {
@@ -493,6 +537,10 @@ export async function start(
 
 /** Stop one web server (SIGTERM, then SIGKILL). Returns true if it was running. */
 export async function stop(app: WebApp = DASHBOARD): Promise<boolean> {
+  if (launchdOwns(app)) {
+    info(`${app.label} is kept up by launchd (${DAEMON_LABEL}); leaving it running`);
+    return false;
+  }
   const [running, pid] = isRunning(app);
   if (!running || pid === null) {
     fs.rmSync(pidFile(app), { force: true });

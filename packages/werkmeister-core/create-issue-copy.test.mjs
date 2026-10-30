@@ -91,14 +91,17 @@ test("jit: the same create twice gives byte-identical files", async () => {
       "task: Fix it\nwork_type: bugfix\nissue_id: o/r#5\nstarting_prompt: Fix the stale config.\n",
       async (root) => {
         await initWorkspace({}, root, { issue: SNAP });
+        // The daemon token is random by design (SW-184); every other file must repeat.
         return Object.fromEntries(
-          walk(root).map((f) => [
-            f,
-            fs
-              .readFileSync(path.join(root, f), "utf8")
-              .replace(/create-copy-ws-[A-Za-z0-9]+/g, "<WS>")
-              .replaceAll(os.tmpdir(), "<TMP>"),
-          ]),
+          walk(root)
+            .filter((f) => f !== path.join(".werkmeister", "token"))
+            .map((f) => [
+              f,
+              fs
+                .readFileSync(path.join(root, f), "utf8")
+                .replace(/create-copy-ws-[A-Za-z0-9]+/g, "<WS>")
+                .replaceAll(os.tmpdir(), "<TMP>"),
+            ]),
         );
       },
     );

@@ -59,6 +59,7 @@ import { applyEdits, modify, type ParseError, parse as parseJsonc } from "jsonc-
 import {
   expandUser,
   getReposRoot,
+  isFixture,
   sandboxHome,
   sandboxRoot,
   servicesLocalYamlPath,
@@ -97,6 +98,13 @@ import {
   versionLt,
 } from "./telepresence.js";
 import { PLAYWRIGHT_VERSION } from "./test_run.js";
+import {
+  appEntry,
+  DAEMON_LABEL,
+  daemonPlistPath,
+  MCP,
+  stop as stopWebServer,
+} from "./web_servers.js";
 
 // A command runner: argv in, [returncode, combined-output] out. Injected in
 // tests; the default shells out with a timeout and never throws.
@@ -881,6 +889,7 @@ export function syncIngressCerts(
   interactive?: InteractiveRunner | null,
 ): Step[] {
   const label = "ingress certificate";
+  if (isFixture()) return [{ label, ok: true, detail: "skipped (WERKMEISTER_FIXTURE)" }];
   const { hostnames } = options;
 
   if (!hostnames.length) {
@@ -1334,6 +1343,36 @@ function prWatchPlist(r: ResolvedPrWatch): string {
 `;
 }
 
+/**
+ * Write a launchd agent's plist and (re)load it; untouched when the content is unchanged.
+ * ponytail: an unchanged plist booted out by hand stays out until it is removed and reinstalled.
+ */
+function writeLaunchAgent(
+  label: string,
+  plistPath: string,
+  plist: string,
+  uid: number,
+  runner: Runner,
+): { changed: boolean } | { error: string[] } {
+  if (fs.existsSync(plistPath) && fs.readFileSync(plistPath, "utf8") === plist) {
+    return { changed: false };
+  }
+  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+  fs.writeFileSync(plistPath, plist);
+  // Fails when nothing is loaded yet; bootstrap refuses a label that already is.
+  runner(["launchctl", "bootout", `gui/${uid}/${label}`]);
+  const [rc, out] = runner(["launchctl", "bootstrap", `gui/${uid}`, plistPath]);
+  if (rc !== 0) {
+    return {
+      error: [
+        `launchctl bootstrap failed: ${briefOutput(out)}`,
+        `${plistPath} is written; re-run to retry.`,
+      ],
+    };
+  }
+  return { changed: true };
+}
+
 // Single-quoted for sh, then `%` escaped: cron turns a bare `%` into a newline.
 const cronQuote = (s: string): string => `'${s.replace(/'/g, "'\\''")}'`.replace(/%/g, "\\%");
 
@@ -1413,27 +1452,10 @@ export function installPrWatchSchedule(opts: PrWatchScheduleOptions = {}): {
   fs.mkdirSync(path.dirname(r.logFile), { recursive: true });
 
   if (r.kind === "launchd") {
-    const where = `launchd agent ${r.plist}`;
-    const plist = prWatchPlist(r);
-    // ponytail: an unchanged plist booted out by hand stays out until --uninstall + --install.
-    if (fs.existsSync(r.plist) && fs.readFileSync(r.plist, "utf8") === plist) {
-      return done(where, false);
-    }
-    fs.mkdirSync(path.dirname(r.plist), { recursive: true });
-    fs.writeFileSync(r.plist, plist);
-    // Fails when nothing is loaded yet; bootstrap refuses a label that already is.
-    r.runner(["launchctl", "bootout", `gui/${r.uid}/${PR_WATCH_LABEL}`]);
-    const [rc, out] = r.runner(["launchctl", "bootstrap", `gui/${r.uid}`, r.plist]);
-    if (rc !== 0) {
-      return {
-        ok: false,
-        lines: [
-          `launchctl bootstrap failed: ${briefOutput(out)}`,
-          `${r.plist} is written; re-run to retry.`,
-        ],
-      };
-    }
-    return done(where, true);
+    const res = writeLaunchAgent(PR_WATCH_LABEL, r.plist, prWatchPlist(r), r.uid, r.runner);
+    return "error" in res
+      ? { ok: false, lines: res.error }
+      : done(`launchd agent ${r.plist}`, res.changed);
   }
 
   const tab = readCrontab(r.runner);
@@ -1495,6 +1517,126 @@ export function syncPrWatchSchedule(
   const stale = state.current ? "" : "; stale — re-run `werkmeister setup`";
   return [
     { label, ok: true, detail: `installed (${state.where}), logs → ${state.logFile}${stale}` },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Host daemon (SW-184): the HTTP MCP server on daemonPort(), kept up by launchd
+// on macOS because the VS Code extension and the SessionEnd stop depend on it.
+// Elsewhere `werkmeister connect` starts it with a PID file, as before.
+// ---------------------------------------------------------------------------
+
+export interface DaemonAgentOptions {
+  platform?: NodeJS.Platform;
+  home?: string;
+  /** Absolute node binary: launchd starts with no PATH to find one. */
+  node?: string;
+  /** The daemon entry and its working directory (web_servers.ts appEntry). */
+  entry?: { dir: string; entry: string } | null;
+  /** Baked in: the daemon shells out to docker, gh and telepresence. */
+  pathEnv?: string;
+  port?: number;
+  logFile?: string;
+  uid?: number;
+  runner?: Runner;
+  /** Stops the PID-file server before the first install (tests stub it). */
+  stopPidServer?: () => Promise<unknown>;
+}
+
+function resolveDaemonAgent(opts: DaemonAgentOptions) {
+  return {
+    darwin: (opts.platform ?? process.platform) === "darwin",
+    plist: daemonPlistPath(opts.home ?? os.homedir()),
+    node: opts.node ?? process.execPath,
+    entry: opts.entry === undefined ? appEntry(MCP) : opts.entry,
+    pathEnv: opts.pathEnv ?? process.env.PATH ?? "",
+    port: opts.port ?? MCP.port,
+    logFile: opts.logFile ?? path.join(sandboxHome(), `${MCP.stem}.log`),
+    uid: opts.uid ?? process.getuid?.() ?? 0,
+    runner: opts.runner ?? defaultRunner,
+  };
+}
+
+export function daemonPlist(opts: DaemonAgentOptions = {}): string | null {
+  const r = resolveDaemonAgent(opts);
+  if (!r.entry) return null;
+  const x = xmlEscape;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${DAEMON_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${x(r.node)}</string>
+    <string>${x(r.entry.entry)}</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>${x(r.entry.dir)}</string>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${x(r.pathEnv)}</string>
+    <key>PORT</key>
+    <string>${r.port}</string>
+    <key>HOST</key>
+    <string>${x(MCP.env?.["HOST"] ?? "127.0.0.1")}</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>${x(r.logFile)}</string>
+  <key>StandardErrorPath</key>
+  <string>${x(r.logFile)}</string>
+</dict>
+</plist>
+`;
+}
+
+/**
+ * Setup's daemon step: with *install* (the wizard's yes), install or refresh the
+ * launchd agent on macOS; otherwise only report it. Never installs uninvited, so
+ * a setup test can't write a LaunchAgent or stop the host's daemon.
+ */
+export async function syncDaemonAgent(
+  checkOnly: boolean,
+  install: boolean,
+  opts: DaemonAgentOptions = {},
+): Promise<Step[]> {
+  const label = "werkmeister daemon";
+  const r = resolveDaemonAgent(opts);
+  if (!r.darwin) {
+    return [{ label, ok: true, detail: "not on macOS: `werkmeister connect` starts it" }];
+  }
+  const plist = daemonPlist(opts);
+  if (plist === null) {
+    return [{ label, ok: false, detail: `${MCP.label} not built or bundled; run the build first` }];
+  }
+  if (checkOnly || !install) {
+    const existing = fs.existsSync(r.plist) ? fs.readFileSync(r.plist, "utf8") : null;
+    const state = existing === null ? "not installed" : existing === plist ? "installed" : "stale";
+    return [
+      {
+        label,
+        ok: existing === plist,
+        optional: true,
+        detail: `launchd agent ${r.plist}: ${state}${existing === plist ? "" : " — run `werkmeister setup`"}`,
+      },
+    ];
+  }
+  // The PID-file server `connect` started holds the port; launchd's copy replaces it.
+  if (!fs.existsSync(r.plist)) await (opts.stopPidServer ?? (() => stopWebServer(MCP)))();
+  const res = writeLaunchAgent(DAEMON_LABEL, r.plist, plist, r.uid, r.runner);
+  if ("error" in res) return [{ label, ok: false, detail: res.error.join(" ") }];
+  return [
+    {
+      label,
+      ok: true,
+      detail: `${res.changed ? "installed" : "up to date"}: launchd agent ${r.plist}, logs → ${r.logFile}`,
+    },
   ];
 }
 
@@ -1828,6 +1970,8 @@ export interface RunSetupOptions {
   grantStandardsDir?: boolean;
   /** Install the `pr watch` schedule (the wizard asks first). */
   installPrWatch?: boolean;
+  /** Hand the host daemon to launchd on macOS (the wizard asks first; SW-184). */
+  installDaemon?: boolean;
 }
 
 /**
@@ -1955,5 +2099,6 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
     ),
   );
   steps.push(...syncPrWatchSchedule(checkOnly, options.installPrWatch ?? false, { runner }));
+  steps.push(...(await syncDaemonAgent(checkOnly, options.installDaemon ?? false, { runner })));
   return steps;
 }

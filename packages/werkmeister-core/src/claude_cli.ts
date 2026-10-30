@@ -5,11 +5,12 @@
  * (whose Atlassian-MCP fallback is a `claude -p` run).
  */
 import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { envVar } from "./config.js";
+import { envVar, isFixture } from "./config.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
 
 export function stripAnsi(s: string): string {
@@ -47,8 +48,19 @@ export function childEnv(): NodeJS.ProcessEnv {
   return { ...process.env, PATH: merged };
 }
 
-/** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake). */
-export const ghBin = () => envVar("GH_BIN") || "gh";
+/** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake); under WERKMEISTER_FIXTURE a stub that fails (SW-177). */
+export const ghBin = () => envVar("GH_BIN") || (isFixture() ? fixtureGhStub() : "gh");
+
+let ghStub: string | null = null;
+function fixtureGhStub(): string {
+  if (ghStub) return ghStub;
+  const file = path.join(os.tmpdir(), `werkmeister-fixture-gh-${process.pid}`);
+  writeFileSync(file, '#!/bin/sh\necho "gh called under WERKMEISTER_FIXTURE: $*" >&2\nexit 1\n', {
+    mode: 0o755,
+  });
+  ghStub = file;
+  return file;
+}
 
 /**
  * Locate the `claude` CLI, robust to Claude Desktop's minimal PATH. Order:

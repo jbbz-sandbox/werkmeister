@@ -88,6 +88,7 @@ import {
   resolveInputs,
   slugToTask,
 } from "./workspace_prompts.js";
+import { mintWorkspaceToken, workspaceTokenFile } from "./workspace_token.js";
 import {
   createWorktree,
   removeWorktree,
@@ -835,6 +836,8 @@ export async function initWorkspace(
   if (mcpPath) {
     success(`Wrote ${mcpPath}`);
   }
+  mintWorkspaceToken(workspaceName, workspaceRoot);
+  success(`Workspace token: ${path.relative(workspaceRoot, workspaceTokenFile(workspaceRoot))}`);
 
   // 6e. Plugin-version guard. Never blocks.
   for (const warning of pluginDriftWarnings()) {

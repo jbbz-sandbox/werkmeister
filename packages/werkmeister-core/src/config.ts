@@ -44,6 +44,13 @@ export function envVar(name: string): string | undefined {
   return process.env[`WERKMEISTER_${name}`];
 }
 
+/**
+ * `WERKMEISTER_FIXTURE=1`: the one switch that keeps a test or fixture run off the
+ * host's shared plumbing — Caddy, k8s forwards, telepresence, /etc/hosts and real
+ * `gh` (SW-164, SW-177, SW-184). Docker itself is isolated by DOCKER_HOST.
+ */
+export const isFixture = (): boolean => envVar("FIXTURE") === "1";
+
 export { DOT_DIR, dotDir };
 
 /**

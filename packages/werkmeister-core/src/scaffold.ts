@@ -207,11 +207,9 @@ export const REGISTRY_DEFAULTS: Record<string, any> = {
     },
     werkmeister: {
       type: "http",
-      url: "http://host.docker.internal:3002/mcp",
-      headers: {
-        Authorization: "Bearer ${WERKMEISTER_MCP_TOKEN}",
-        "X-Werkmeister-Feature": "${FEATURE}",
-      },
+      // The workspace token (.werkmeister/token) names the workspace; no feature header (SW-184).
+      url: "http://host.docker.internal:${WERKMEISTER_MCP_PORT:-3002}/mcp",
+      headers: { Authorization: "Bearer ${WERKMEISTER_MCP_TOKEN}" },
     },
   },
 };

@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import { Colors } from "./colors.js";
 import { stopOrRestart } from "./compose.js";
 import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
-import { stateInfraRoot } from "./config.js";
+import { isFixture, stateInfraRoot } from "./config.js";
 import { copyFileToContainer, execCapture, projectContainers } from "./docker.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, raw, success, warn } from "./reporter.js";
@@ -323,6 +323,11 @@ function _runCaddyCompose(
  * Returns True on success.
  */
 export async function reloadCaddy(): Promise<boolean> {
+  // dockerode skips any PATH docker shim, so a fixture run would reload the real w9r-caddy (SW-164).
+  if (isFixture()) {
+    info("Caddy reload skipped (WERKMEISTER_FIXTURE)");
+    return true;
+  }
   const hostCaddyfile = `${stateInfraRoot()}/proxy/Caddyfile`;
 
   info("Copying Caddyfile into Caddy container...");
@@ -394,6 +399,10 @@ export async function reloadCaddy(): Promise<boolean> {
  * Returns True on success.
  */
 export function startCaddy(): boolean {
+  if (isFixture()) {
+    info("Caddy start skipped (WERKMEISTER_FIXTURE)");
+    return true;
+  }
   info("Starting Caddy reverse proxy...");
   const ok = _runCaddyCompose(["up", "-d", "caddy"], { capture: true });
   if (ok) {

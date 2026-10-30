@@ -82,7 +82,7 @@ import { checkForwardHealth, forwarderNeeded } from "./k8s.js";
 import { loadProjects } from "./projects.js";
 import { type CrashLoop, type ProjectHealth, projectHealth, type Started } from "./resources.js";
 import { labelOf } from "./slots.js";
-import { type InterceptRow, interceptsSnapshot } from "./status.js";
+import { type InterceptRow, type InterceptsSnapshot, interceptsSnapshot } from "./status.js";
 
 export { mergeFormData, repoSelectionError, validateFormData } from "./form_schema.js";
 export {
@@ -123,6 +123,7 @@ import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { provisionWorkspace, WorkspaceInitError } from "./workspace_init.js";
 import { computePromptSpec, isTrue, loadConfigFile, resolveInputs } from "./workspace_prompts.js";
+import { revokeWorkspaceToken } from "./workspace_token.js";
 
 export {
   adoptPr,
@@ -1785,7 +1786,11 @@ export interface InterceptsResult {
  * a core object and parse it straight back (note 086 row 2, note 087).
  */
 export async function getIntercepts(): Promise<InterceptsResult> {
-  const parsed = await interceptsSnapshot();
+  return interceptsFromSnapshot(await interceptsSnapshot());
+}
+
+/** The JSON-safe snapshot (the daemon's `intercepts` tool) as the Map shape the extension renders. */
+export function interceptsFromSnapshot(parsed: InterceptsSnapshot): InterceptsResult {
   const byFeature = new Map<string, Map<string, InterceptRow>>();
   for (const row of parsed.intercepts) {
     let svcs = byFeature.get(row.feature);
@@ -2585,6 +2590,7 @@ export async function removeWorkspace(
 
   // 3. Delete the directory, then prune the now-dangling worktree registrations.
   await fs.rm(target, { recursive: true, force: true });
+  revokeWorkspaceToken(name);
   for (const src of sources) {
     await runCapture("git", ["-C", src, "worktree", "prune"]).catch(() => {});
   }

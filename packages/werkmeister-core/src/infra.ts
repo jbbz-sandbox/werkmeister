@@ -30,7 +30,7 @@ import {
   infraProfiles,
   LEGACY_INFRA_PROJECT,
 } from "./compose_infra.js";
-import { sandboxHome } from "./config.js";
+import { isFixture, sandboxHome } from "./config.js";
 import { projectContainers } from "./docker.js";
 import { generateCaddyfile } from "./generate.js";
 import { configureGitHooksPath } from "./git_hooks.js";
@@ -149,6 +149,10 @@ async function ensureProxyFiles(): Promise<void> {
  * k8s-forwards image, which routinely outlasts the cap.
  */
 export async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
+  if (isFixture()) {
+    info("Shared infra (Caddy, k8s forwards) skipped (WERKMEISTER_FIXTURE)");
+    return true;
+  }
   const { argv, env, cwd } = composeInvocation();
   const composeFile = argv[3];
 
