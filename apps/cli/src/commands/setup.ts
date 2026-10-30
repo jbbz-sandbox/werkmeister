@@ -58,12 +58,14 @@ import {
   claudeUserSettingsPath,
   editorSchemaState,
   githubOwners,
+  originMismatch,
   prWatchScheduleState,
   runSetup,
   type Step,
   vscodeExtensionState,
   vscodeSettingsPath,
   WORKSPACE_ROOT_REPO,
+  workspaceRepoUrl,
 } from "werkmeister-core/machine_setup";
 import {
   discoverFragments,
@@ -80,6 +82,7 @@ function heading(text: string): void {
 /** What the wizard collected, handed to `runSetup` as options. */
 interface Answers {
   workspaceRepo: string;
+  repointWorkspaceOrigin: boolean;
   demo: boolean;
   k8sContext: string;
   installTelepresence: boolean;
@@ -171,6 +174,22 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       info(`  ${spec.key}: ${resolvedGh[spec.key] || "(unset — `gh` named no user)"}`);
     }
   }
+
+  // SW-205: an existing clone keeps its old origin when workspace_repo changes.
+  // Non-interactive runs leave it alone; the repo step then fails with the commands.
+  const recordCheckout = path.join(expandUser(resolvedPaths.repos_root), WORKSPACE_ROOT_REPO);
+  const staleOrigin =
+    resolvedGh.workspace_repo && fs.existsSync(path.join(recordCheckout, ".git"))
+      ? originMismatch(recordCheckout, workspaceRepoUrl(resolvedGh.workspace_repo))
+      : null;
+  const repointWorkspaceOrigin =
+    interactive && staleOrigin
+      ? await confirm(
+          `  ${recordCheckout}'s origin is ${staleOrigin}. Repoint it to ` +
+            `${workspaceRepoUrl(resolvedGh.workspace_repo)} (keeping the old URL as a remote)?`,
+          true,
+        )
+      : false;
 
   // --- 2. browser -----------------------------------------------------------
   heading("2. Browser");
@@ -477,6 +496,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
 
   return {
     workspaceRepo: resolvedGh.workspace_repo,
+    repointWorkspaceOrigin,
     demo,
     k8sContext,
     installTelepresence,
@@ -560,6 +580,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     demo: answers.demo,
     registry: { k8sContext: answers.k8sContext },
     workspaceRepo: answers.workspaceRepo,
+    repointWorkspaceOrigin: answers.repointWorkspaceOrigin,
     // A thunk, not a list: on a first run services.yaml does not exist yet, and
     // runSetup calls this only after its registry step has generated it.
     hostnames: resolveHostnames,

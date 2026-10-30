@@ -46,7 +46,7 @@ import {
 import { SandboxError } from "./errors.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
-import { candidateWorkspaceRoots, loadPaths } from "./global_config.js";
+import { candidateWorkspaceRoots, loadPaths, loadWorkspaceRepo } from "./global_config.js";
 import {
   fetchIssueSnapshot,
   IssueFetchError,
@@ -55,7 +55,12 @@ import {
   writeIssueCopy,
 } from "./issue_snapshot.js";
 import { issueTracker, projectForIssue } from "./issue_tracker.js";
-import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
+import {
+  defaultWorkspaceRepo,
+  originMismatch,
+  WORKSPACE_ROOT_REPO,
+  workspaceRepoUrl,
+} from "./machine_setup.js";
 import {
   resolveWorkspaceMcpServers,
   validateArchetypeMcpServers,
@@ -347,6 +352,17 @@ function createWorkspaceRoot(workspaceDir: string, branch: string, force: boolea
   info(`Branch:     ${branch}`);
 
   if (fs.existsSync(path.join(rootRepoSrc, ".git"))) {
+    // SW-205: the record branch pushes to this checkout's origin, so it must be
+    // the configured repo — the same default `werkmeister setup` clones from.
+    const want = loadWorkspaceRepo() || defaultWorkspaceRepo();
+    const origin = want ? originMismatch(rootRepoSrc, workspaceRepoUrl(want)) : null;
+    if (origin !== null) {
+      fail(
+        `${rootRepoSrc}'s origin is ${origin || "unset"}, but the configured workspace repo is ` +
+          `${want} — this workspace's record would push to the wrong repo. ` +
+          "Run `werkmeister setup` to repoint it, then rerun.",
+      );
+    }
     try {
       createWorktree(rootRepoSrc, workspaceDir, branch, { force });
     } catch (exc) {

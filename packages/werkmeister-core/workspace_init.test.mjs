@@ -112,3 +112,63 @@ test("a non-interactive create with no strategy writes context_strategy: icm (#1
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("create refuses a record worktree when sandbox-workspace's origin is not overrides.workspace_repo (SW-205)", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "create-origin-"));
+  const repos = path.join(tmp, "repos");
+  const git = (...args) => execFileSync("git", args);
+  const seed = path.join(tmp, "seed");
+  fs.mkdirSync(seed);
+  git("-C", seed, "init", "-q", "-b", "main");
+  git(
+    "-C",
+    seed,
+    "-c",
+    "user.name=t",
+    "-c",
+    "user.email=t@t",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "init",
+  );
+  git("clone", "-q", seed, path.join(repos, "demo-repo"));
+  const record = path.join(repos, "sandbox-workspace");
+  git("clone", "-q", seed, record);
+  git(
+    "-C",
+    record,
+    "remote",
+    "set-url",
+    "origin",
+    "https://github.com/JayAndCory/sandbox-workspace.git",
+  );
+  const prevRoot = process.env.WERKMEISTER_ROOT;
+  process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+  try {
+    await withSandboxHome(
+      async () => {
+        const { err } = await abort(() =>
+          createWorkspace(
+            { feature: "demo", services: "backend", work_type: "feature" },
+            { open: false, cwd: tmp, distill: false, build: false },
+          ),
+        );
+        assert.ok(err, "create must fail");
+        assert.match(err.message, /JayAndCory\/sandbox-workspace/);
+        assert.match(err.message, /jbbz-sandbox\/sandbox-workspace/);
+        assert.ok(!fs.existsSync(path.join(tmp, "ws", "demo")), "no workspace root made");
+      },
+      {
+        config:
+          `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(tmp, "ws")}\n` +
+          "overrides:\n  workspace_repo: jbbz-sandbox/sandbox-workspace\n",
+      },
+    );
+  } finally {
+    if (prevRoot === undefined) delete process.env.WERKMEISTER_ROOT;
+    else process.env.WERKMEISTER_ROOT = prevRoot;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
