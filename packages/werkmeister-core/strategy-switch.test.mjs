@@ -14,7 +14,9 @@ import { buildPrGuardEntry, READ_ONLY_GIT_RULES } from "./dist/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { leftoverPaths, reportLeftovers, strategyById } from "./dist/strategies/index.js";
 import { initWorkspace } from "./dist/workspace_init.js";
-import { withAgentState, withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withAgentState, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const jit = strategyById("jit");
 const icm = strategyById("icm");

@@ -8,6 +8,9 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { canonical, checkSkills, resolveWorkspaceManifest } from "./dist/workspace_skills.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 test("canonical sorts object keys at every depth", () => {
   const a = { b: 1, a: { d: 2, c: [3, { f: 4, e: 5 }] } };

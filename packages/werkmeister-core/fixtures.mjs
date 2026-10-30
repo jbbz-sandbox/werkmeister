@@ -14,6 +14,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { after, before } from "node:test";
 
 /** Two services with the coordinates the endpoint and detect paths read. */
 const SERVICES = `services:
@@ -35,6 +36,27 @@ const PORTS = `feature_slots:
   base_port: 11100
   ports_per_slot: 20
 `;
+
+/**
+ * Pin `WERKMEISTER_ROOT` to this checkout's `apps/cli` for the calling test file.
+ *
+ * Developer shells export it at the main checkout, and `sandboxRoot()` honours it
+ * first, so a direct `node --test x.test.mjs` would otherwise build, spawn or
+ * write there (SW-137, SW-168). `turbo` filters it out, which hides the problem.
+ * Call once at the top level of any test that reaches `sandboxRoot()` and does
+ * not set its own root.
+ */
+export function pinWerkmeisterRoot() {
+  let prev;
+  before(() => {
+    prev = process.env.WERKMEISTER_ROOT;
+    process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+  });
+  after(() => {
+    if (prev === undefined) delete process.env.WERKMEISTER_ROOT;
+    else process.env.WERKMEISTER_ROOT = prev;
+  });
+}
 
 /**
  * Run *fn* against a seeded temp werkmeister home.

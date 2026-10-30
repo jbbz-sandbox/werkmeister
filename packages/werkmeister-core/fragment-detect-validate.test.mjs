@@ -12,7 +12,10 @@ import {
   validateFragment,
   writeFragment,
 } from "./dist/fragment_detect/index.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
 import { fixture, noTools } from "./fragment-detect-helpers.mjs";
+
+pinWerkmeisterRoot();
 
 const opts = (root) => ({
   reposRoot: path.dirname(root),
