@@ -65,7 +65,7 @@ base: main
 status: draft                  # draft | approved | open | merged | shipped | closed | abandoned
 url:                           # written by werkmeister pr open
 merge_sha:                     # written by werkmeister pr status
-release:                       # the release tag that shipped it, written by werkmeister pr status
+release:                       # the release tag that shipped it, written by werkmeister pr status; `none` when the gate's release check found nothing to bump, written by werkmeister pr open
 reason:                        # required for closed / abandoned
 skip_tests: {}                 # <service>: <reason> — for a service with no test command or no running container
 skip_release:                  # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag
@@ -105,7 +105,7 @@ Code written after a worktree's PR merged, e.g. a problem found while cutting or
 | test `<svc>` | the registry command for each touched service exits 0. It runs with `docker exec` in the service's container, or in any running container of its repo, because they all mount the worktree at `/app` with its `node_modules`. When the repo has none running, the gate starts one (`docker compose up -d --wait <svc>`, preferring a cli/library/extension service, which only sleeps) and stops it when the gate ends, pass or fail. When the branch's own fragment renders a touched service differently from `compose.yml` (a new `environment:` entry, `node_modules_volume`, image, …), the gate starts that service from a gate-only `compose.gate.yml` rendered from the branch, runs its checks there, then recreates it from `compose.yml` (or stops it, if it wasn't running) and deletes the file (SW-118). A service with no command, or one whose container could not be started, fails unless `skip_tests` names it with a reason. |
 | exercise | `exercise.md` (ICM: any stage output; JIT: `.werkmeister/notes/`) has a `PASS` cell and no `FAIL`, unless `skip_exercise` gives a reason |
 | baseline `<svc>` | for a touched local `api`/`web` service: its own container is running and its `health_endpoint` answers below 400 |
-| release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `werkmeister pr status` still waits for the release tag. |
+| release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `werkmeister pr status` still waits for the release tag. When the check runs and reports nothing to bump (changesets' `NO packages to be bumped`), `werkmeister pr open` writes `release: none`. |
 | approved | `status: approved` |
 
 **Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix. A file under one of the repo's `no_service_paths` (registry `repo:`, below) touches no service, so a docs-only diff runs no service tests; the release check still runs. Any other file under no mapping marks every service in the repo as touched.
@@ -128,7 +128,7 @@ repo:
 `werkmeister registry sync` merges this into `repos.<repo>` of `~/.werkmeister/services.yaml`.
 
 - With `ship: merge`, a merged PR is shipped as soon as it merges.
-- With `ship: tag`, it is shipped once a tag matching `release_tag` contains its merge commit (`git tag --contains`).
+- With `ship: tag`, it is shipped once a tag matching `release_tag` contains its merge commit (`git tag --contains`). A PR file with `release: none` needs no release, so it is shipped as soon as it merges.
 - `release_check` stops a PR that would never reach a release. For changesets, a branch that changes a package without a changeset fails it.
 - `lint` is the repo's lint/format check (the gate's `lint` row). Set it to CI's own command so a format error fails before the PR opens.
 

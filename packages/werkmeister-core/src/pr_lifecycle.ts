@@ -332,7 +332,13 @@ export interface GateCheck {
 export interface GateResult {
   ok: boolean;
   checks: GateCheck[];
+  /** `none` when the release check ran and found nothing to bump: the merge ships without a tag (SW-193). */
+  release?: "none";
 }
+
+// ponytail: reads changesets' wording, since its status exits 0 either way; another release tool never matches and waits for a tag.
+const nothingToBump = (out: string): boolean =>
+  /NO packages to be bumped/.test(out) && !/\bPackages to be bumped at \w+:/.test(out);
 
 const PASS_CELL = /\|\s*PASS\s*\|/;
 const FAIL_CELL = /\|\s*FAIL\s*\|/;
@@ -719,6 +725,7 @@ async function gateChecks(
     add(`baseline ${svc}`, code > 0 && code < 400, `GET ${url} → ${code || "unreachable"}`);
   }
 
+  let release: GateResult["release"];
   if (repo["ship"] === "tag" && repo["release_check"]) {
     const why = reason(file.fm["skip_release"]);
     const container = repoContainer();
@@ -733,10 +740,11 @@ async function gateChecks(
         res.code === 0,
         `${repo["release_check"]} → exit ${res.code}${res.code ? `\n${(res.stdout + res.stderr).trimEnd().split("\n").slice(-5).join("\n")}` : ""}`,
       );
+      if (res.code === 0 && nothingToBump(res.stdout + res.stderr)) release = "none";
     }
   }
 
-  return { ok: checks.every((c) => c.ok), checks };
+  return { ok: checks.every((c) => c.ok), checks, ...(release && { release }) };
 }
 
 export function formatGate(dir: string, g: GateResult): string[] {
@@ -892,7 +900,12 @@ export async function openPrs(
         continue;
       }
     }
-    writePrFields(f, { status: "open", url, ...(await deps.session(ws)) });
+    writePrFields(f, {
+      status: "open",
+      url,
+      ...(g.release && { release: g.release }),
+      ...(await deps.session(ws)),
+    });
     opened.push(path.relative(ws, f.path));
     lines.push(`${f.stem}: open ${url}`);
     // The desktop app binds a PR, and lets the session turn on Auto-fix, only for a URL the session reports in this tag.
@@ -995,7 +1008,8 @@ export async function refreshPrStatus(
     if (statusOf(f) === "merged") {
       const repo = deps.repos[f.dir] ?? {};
       // skip_release only skips the gate's release check; a ship: tag repo still ships with its tag (#145).
-      if (repo["ship"] !== "tag") {
+      // release: none is the gate's finding that nothing needed a release (SW-193).
+      if (repo["ship"] !== "tag" || f.fm["release"] === "none") {
         writePrFields(f, { status: "shipped" });
       } else {
         const dir = path.join(ws, f.dir);
@@ -1037,7 +1051,7 @@ export async function refreshPrStatus(
 }
 
 const shippedComment = (files: PrFile[]): string =>
-  `Shipped: ${files.map((f) => `${f.fm["release"] ?? "merge"} — ${f.fm["url"]}`).join("; ") || "no PRs"}`;
+  `Shipped: ${files.map((f) => `${f.fm["release"] === "none" ? "merge, no release" : (f.fm["release"] ?? "merge")} — ${f.fm["url"]}`).join("; ") || "no PRs"}`;
 
 /** The one issue move a `pr status` pass owes, first rule that holds; "" when none. */
 async function moveIssueForPrs(
@@ -1113,7 +1127,7 @@ export function callbackMessage(status: string, url: string, release?: string): 
   if (status === "merged")
     return `PR ${url} merged. Run \`werkmeister pr status\`, then follow the workspace router.`;
   if (status === "shipped")
-    return `PR ${url} shipped${release ? ` in ${release}` : ""}. Ask the person whether to run \`werkmeister close-out\`.`;
+    return `PR ${url} shipped${release && release !== "none" ? ` in ${release}` : ""}. Ask the person whether to run \`werkmeister close-out\`.`;
   if (status === "closed") return `PR ${url} was closed. Report it to the person.`;
   return null;
 }
