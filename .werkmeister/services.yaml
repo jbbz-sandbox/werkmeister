@@ -104,7 +104,7 @@ services:
     path: packages/werkmeister-core
     type: library
     archetype: node-tool
-    test: "pnpm turbo run typecheck test --filter=werkmeister-core"
+    test: "pnpm turbo run typecheck test --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core"
     # Bundled into the CLI, so a core change is exercised through the built binary, not node-tool's "run the tests".
     validate: *cli_validate
     internal_port: 3999
