@@ -8,11 +8,17 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import * as http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import Dockerode from "dockerode";
+
 import { cpuPercent, endpointOptions, memMib, resolveEndpoint } from "./dist/docker.js";
+import { useDockerEngine } from "./fixtures.mjs";
+
+useDockerEngine();
 
 test("endpointOptions maps the context URL forms dockerode understands", () => {
   assert.deepEqual(endpointOptions("unix:///Users/me/.orbstack/run/docker.sock"), {
@@ -124,6 +130,49 @@ function withEnv(vars, fn) {
     apply(saved);
   }
 }
+
+test("SW-259: a test without useDockerEngine() gets a dead socket, even with a tcp DOCKER_HOST", async () => {
+  let requests = 0;
+  const engine = http.createServer((_, res) => {
+    requests++;
+    res.writeHead(200, { "content-type": "application/json" }).end("[]");
+  });
+  await new Promise((r) => engine.listen(0, "127.0.0.1", r));
+  const stderr = [];
+  const write = process.stderr.write;
+  process.stderr.write = (chunk) => stderr.push(String(chunk));
+  let client;
+  try {
+    withEnv(
+      {
+        WERKMEISTER_DOCKER_ENGINE: undefined,
+        DOCKER_HOST: `tcp://127.0.0.1:${engine.address().port}`,
+      },
+      // dockerode reads DOCKER_HOST when it is built, so build it inside the env.
+      () => (client = new Dockerode(resolveEndpoint())),
+    );
+  } finally {
+    process.stderr.write = write;
+  }
+  try {
+    await assert.rejects(client.listContainers(), { code: "ENOENT" });
+  } finally {
+    engine.close();
+  }
+  assert.equal(requests, 0);
+  assert.match(stderr.join(""), /useDockerEngine\(\)/);
+});
+
+test("SW-259: outside a test context the guard is inert", () => {
+  withEnv(
+    {
+      NODE_TEST_CONTEXT: undefined,
+      WERKMEISTER_DOCKER_ENGINE: undefined,
+      DOCKER_HOST: "tcp://127.0.0.1:2375",
+    },
+    () => assert.deepEqual(resolveEndpoint(), { host: "127.0.0.1", port: 2375, protocol: "http" }),
+  );
+});
 
 // A real payload captured from this machine's daemon. Run side by side against
 // `docker stats --no-stream`, these two conversions reproduced its numbers to

@@ -10,6 +10,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
+import { useDockerEngine } from "./fixtures.mjs";
+
+useDockerEngine();
 
 const dir = fs.mkdtempSync(path.join(tmpdir(), "sandbox-pause-"));
 const sock = path.join(dir, "docker.sock");

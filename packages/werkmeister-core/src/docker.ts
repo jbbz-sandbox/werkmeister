@@ -38,8 +38,18 @@ import { ProcError, run } from "./proc.js";
  * learn something two file reads already know.
  */
 export function resolveEndpoint(): DockerOptions {
+  // SW-259: a test reading the host engine sees other workspaces' containers and fails at random.
+  if (process.env.NODE_TEST_CONTEXT && !process.env.WERKMEISTER_DOCKER_ENGINE) {
+    process.stderr.write(
+      "Docker engine reached in a test without useDockerEngine() (fixtures.mjs); using a dead socket\n",
+    );
+    // docker-modem fills `host` from a tcp DOCKER_HOST, and `host` beats `socketPath`.
+    return { socketPath: TEST_DEAD_SOCKET, host: undefined };
+  }
   return endpointOptions(storeContextHost() ?? cliContextHost() ?? "");
 }
+
+const TEST_DEAD_SOCKET = "/nonexistent/werkmeister-test-docker.sock";
 
 /** The built-in `default` context: no meta.json on disk, it *is* the local socket. */
 const DEFAULT_CONTEXT_HOST = "unix:///var/run/docker.sock";

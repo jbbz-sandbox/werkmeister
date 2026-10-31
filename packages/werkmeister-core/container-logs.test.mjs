@@ -6,6 +6,9 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { PassThrough } from "node:stream";
 import { after, before, test } from "node:test";
+import { useDockerEngine } from "./fixtures.mjs";
+
+useDockerEngine();
 
 const PROJECT = "sandbox-demo";
 

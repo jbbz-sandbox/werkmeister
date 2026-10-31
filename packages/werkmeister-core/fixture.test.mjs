@@ -6,6 +6,9 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import * as http from "node:http";
 import { after, before, test } from "node:test";
+import { useDockerEngine } from "./fixtures.mjs";
+
+useDockerEngine();
 
 // Any Docker call fails the test: the fixture switch must return before one.
 let dockerHits = 0;
