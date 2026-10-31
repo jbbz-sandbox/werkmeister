@@ -20,6 +20,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { mintWorkspaceToken } from "werkmeister-core/workspace_token";
 
+import { useDockerEngine } from "../../packages/werkmeister-core/fixtures.mjs";
+
+useDockerEngine();
+
 /** One Engine multiplex frame: stream type, three zero bytes, big-endian length, payload. */
 function frame(type, text) {
   const body = Buffer.from(text);
