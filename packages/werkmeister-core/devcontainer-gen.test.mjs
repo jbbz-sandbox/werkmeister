@@ -40,18 +40,22 @@ test("mounts, env and add-host use the host's paths", () => {
   assert.doesNotMatch(JSON.stringify(dc), /\/workspaces\//);
 });
 
-test("registers werkmeister per workspace with its own token, no feature header", () => {
+test("registers werkmeister per workspace, reading its token file at every connect", () => {
   const cmd = buildDevcontainer(OPTS).postCreateCommand;
-  assert.match(
-    cmd,
-    /claude mcp add --scope user --transport http werkmeister http:\/\/host\.docker\.internal:3002\/mcp /,
-  );
-  assert.ok(cmd.includes('--header "Authorization: Bearer $(cat .werkmeister/token)"'));
-  // The per-workspace volume outlives a rebuild, where a bare `mcp add` would refuse the name.
+  const json = cmd
+    .match(/claude mcp add-json --scope user werkmeister '(.*)'$/)[1]
+    .replaceAll("'\\''", "'");
+  assert.deepEqual(JSON.parse(json), {
+    type: "http",
+    url: "http://host.docker.internal:3002/mcp",
+    headersHelper:
+      'printf \'{"Authorization":"Bearer %s"}\' "$(cat "/Users/u/features/ws-1/.werkmeister/token")"',
+  });
+  // A reused config keeps the entry, where a bare `mcp add-json` would refuse the name.
   assert.ok(
-    cmd.indexOf("claude mcp remove --scope user werkmeister") < cmd.indexOf("claude mcp add"),
+    cmd.indexOf("claude mcp remove --scope user werkmeister") < cmd.indexOf("claude mcp add-json"),
   );
-  assert.doesNotMatch(cmd, /X-Werkmeister-Feature|mcp-token|--scope local/);
+  assert.doesNotMatch(cmd, /X-Werkmeister-Feature|mcp-token|--scope local|--header/);
 });
 
 test("one mount when the repos root equals the workspaces root", () => {

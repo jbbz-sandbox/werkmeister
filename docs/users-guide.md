@@ -1583,7 +1583,7 @@ It does need:
   host runs. Use `~/.werkmeister/mcp-token`, the machine token, only for host-wide tools.
 - A route to the host's 3002: `host.docker.internal` resolving to the host gateway.
 - A container-only MCP registration for `http://host.docker.internal:3002/mcp` carrying
-  that header, made inside the container (`claude mcp add`). Never put it in the
+  that header, made inside the container. Never put it in the
   workspace's `.mcp.json`: host sessions share that file, and `host.docker.internal` does
   not resolve on the host (SW-115).
 
@@ -1597,15 +1597,16 @@ dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unrea
 (as the workspace mount) and `~/repos` bound at their host paths, `HOME` and the
 `GIT_CONFIG_*` trio in `containerEnv`, `--add-host host.docker.internal:host-gateway` in
 `runArgs`, and a `postCreateCommand` that installs `claude` and runs
-`claude mcp add --scope user --transport http werkmeister http://host.docker.internal:3002/mcp`
-with the token read from the mounted `.werkmeister/token`. It is regenerated on every
+`claude mcp add-json --scope user werkmeister` for `http://host.docker.internal:3002/mcp`
+with a `headersHelper` that reads the mounted `.werkmeister/token` at every connect, so a
+re-minted token needs only a reconnect (`/mcp`), not a rebuild. It is regenerated on every
 `init-workspace`; don't edit it. Open the workspace folder in VS Code and pick **Reopen in
 Container**, or run `npx @devcontainers/cli up --workspace-folder ~/features/<workspace>`.
 
-`~/.claude` inside is the volume `features-claude-home-<workspace>`, one per workspace:
-Claude keeps `.claude.json`, which holds the registration and its token, inside
-`~/.claude`, so a shared volume would let one workspace's token overwrite another's. The
-login and the registration survive a rebuild; log in to `claude` once per workspace.
+`~/.claude` inside is the volume `features-claude-home-<workspace>`, one per workspace, so
+the login survives a rebuild; log in to `claude` once per workspace, or pass a
+`claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN`. The registration is made again
+on every create.
 Remove the volume with `docker volume rm features-claude-home-<workspace>` once the
 workspace is gone. The volume holds no plugins,
 so only the HTTP server's tools appear. Check it with `claude mcp list` inside: it should

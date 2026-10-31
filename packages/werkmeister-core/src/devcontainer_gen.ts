@@ -27,6 +27,7 @@ const HEADER =
   " — do not edit; rerun init-workspace.\n";
 
 const bind = (p: string): string => `source=${p},target=${p},type=bind`;
+const shellQuote = (s: string): string => `'${s.replaceAll("'", "'\\''")}'`;
 const within = (child: string, parent: string): boolean => {
   const rel = path.relative(parent, child);
   return !rel.startsWith("..") && !path.isAbsolute(rel);
@@ -40,16 +41,21 @@ export function buildDevcontainer(opts: DevcontainerOptions): Record<string, unk
     : opts.workspaceRoot;
   // Docker refuses a duplicate mount target; a repos root already inside the workspace mount needs none.
   const repoMounts = within(opts.reposRoot, workspaceMount) ? [] : [bind(opts.reposRoot)];
+  // Read at every connect, so a re-minted token reaches a running container; absolute because the helper's cwd varies.
+  const headersHelper = `printf '{"Authorization":"Bearer %s"}' "$(cat ${JSON.stringify(path.join(opts.workspaceRoot, ".werkmeister/token"))})"`;
+  const server = {
+    type: "http",
+    url: `http://host.docker.internal:${opts.port}/mcp`,
+    headersHelper,
+  };
   const postCreate = [
     // Docker creates HOME root-owned as the parent of the bind mounts.
     `sudo chown node:node "$HOME" "$HOME/.claude"`,
     "npm install -g @anthropic-ai/claude-code",
-    // The volume outlives a rebuild and `mcp add` refuses an existing name; re-adding also picks up a re-minted token.
+    // `mcp add-json` refuses an existing name, which a reused config keeps.
     "(claude mcp remove --scope user werkmeister >/dev/null 2>&1 || true)",
     // No feature header: the per-workspace token names the workspace (SW-184).
-    "claude mcp add --scope user --transport http werkmeister " +
-      `http://host.docker.internal:${opts.port}/mcp ` +
-      `--header "Authorization: Bearer $(cat .werkmeister/token)"`,
+    `claude mcp add-json --scope user werkmeister ${shellQuote(JSON.stringify(server))}`,
   ].join(" && ");
   return {
     name: opts.workspaceName,
@@ -58,7 +64,7 @@ export function buildDevcontainer(opts: DevcontainerOptions): Record<string, unk
     // Host paths, never /workspaces/...: each worktree's .git holds an absolute gitdir: into reposRoot.
     workspaceMount: bind(workspaceMount),
     workspaceFolder: opts.workspaceRoot,
-    // One volume per workspace: Claude keeps .claude.json (the registration and its token) inside ~/.claude.
+    // One volume per workspace: the login and Claude state stay with their workspace.
     mounts: [
       ...repoMounts,
       `source=${CLAUDE_HOME_VOLUME}-${opts.workspaceName},target=${claudeHome},type=volume`,
