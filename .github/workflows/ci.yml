@@ -71,9 +71,6 @@ jobs:
   # shards on runners of their own, in parallel with `test`.
   core-test:
     runs-on: ubuntu-latest
-    env:
-      # SW-177: the steps below call node directly, not the package's "test" script.
-      WERKMEISTER_GH_BIN: ${{ github.workspace }}/packages/werkmeister-core/no-gh.sh
     strategy:
       matrix:
         shard: [1, 2]
@@ -90,11 +87,8 @@ jobs:
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-node24-
       - run: pnpm turbo run build --filter=werkmeister-core
-      - run: node --test --test-shard=${{ matrix.shard }}/2 *.test.mjs
-        working-directory: packages/werkmeister-core
-      # The smoke files are a few seconds in total; one shard takes them all.
-      - if: matrix.shard == 2
-        run: for f in *.smoke.mjs; do node "$f" || exit 1; done
+      # The smoke files are a few seconds in total; the last shard takes them all.
+      - run: pnpm test ${{ matrix.shard }}/2
         working-directory: packages/werkmeister-core
 
   # SW-77: engines promises Node >=22, so the suites the gate names run on 22
