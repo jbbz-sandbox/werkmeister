@@ -114,3 +114,23 @@ esac`,
   assert.match(reporter.text(), /No reachable k8s cluster/);
   assert.throws(() => statSync(upLog), /ENOENT/, "compose up never ran");
 });
+
+// SW-260: a loaded host can take longer than the old 10 s cap just to run
+// `kubectl config view`; simulate that lag instead of loading the host (SW-214).
+test("still finds the cluster unreachable when kubectl is slow to answer (SW-260)", async () => {
+  stub(
+    "kubectl",
+    path.join(home, "bin"),
+    `
+case "$*" in
+  *"config view"*) sleep 11; printf 'clusters:\\n- cluster:\\n    server: https://127.0.0.1:26443\\n' ;;
+  *current-context*) echo orbstack ;;
+  *"get --raw"*) echo 'connection refused' >&2; exit 1 ;;
+esac`,
+  );
+
+  const reporter = collectingReporter();
+  assert.equal(await withReporter(reporter, async () => ensurePortForwardsHealthy()), "failed");
+  assert.match(reporter.text(), /No reachable k8s cluster/);
+  assert.throws(() => statSync(upLog), /ENOENT/, "compose up never ran");
+});

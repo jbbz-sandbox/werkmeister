@@ -133,13 +133,13 @@ export function refreshKubeconfig(): boolean {
   try {
     const result = run(["kubectl", "config", "view", "--raw", "--minify", "--flatten"], {
       capture: true,
-      timeout: 10,
+      timeout: 30,
     });
     if (result.status === 0) {
       fs.writeFileSync(kubeconfig, shimLocalApiServer(result.stdout));
       const ctx = run(["kubectl", "--kubeconfig", kubeconfig, "config", "current-context"], {
         capture: true,
-        timeout: 5,
+        timeout: 15,
       });
       const ctxName = ctx.status === 0 ? ctx.stdout.trim() : "?";
       success(`Kubeconfig pinned to context: ${ctxName}`);
