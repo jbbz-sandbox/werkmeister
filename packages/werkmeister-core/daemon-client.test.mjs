@@ -16,12 +16,19 @@ const daemon = http.createServer(async (req, res) => {
   seen.push({ url: req.url, auth: req.headers.authorization, body });
   if (req.url === "/api/tool") {
     const { name } = JSON.parse(body);
-    res.writeHead(name === "boom" ? 400 : 200, { "content-type": "application/json" });
+    // SW-254: a daemon older than the CLI doesn't register newer tools; the MCP SDK says so.
+    const unknown = name === "scheduler" || name === "lost";
+    res.writeHead(name === "boom" || unknown ? 400 : 200, { "content-type": "application/json" });
     return res.end(
       JSON.stringify(
         name === "boom"
           ? { error: "it broke", code: "NOT_RUNNING" }
-          : { structuredContent: { ok: name }, text: "done" },
+          : unknown
+            ? {
+                error: `${name === "lost" ? "" : "MCP error -32602: "}Tool ${name} not found`,
+                code: "TOOL",
+              }
+            : { structuredContent: { ok: name }, text: "done" },
       ),
     );
   }
@@ -93,6 +100,19 @@ test("a tool error is a SandboxError with the daemon's code", async () => {
     code: "NOT_RUNNING",
     message: "it broke",
   });
+});
+
+test("a tool the daemon doesn't register names the older daemon and `werkmeister daemon restart`", async () => {
+  for (const name of ["scheduler", "lost"]) {
+    await assert.rejects(client.callTool(name, {}, { token: "t" }), (e) => {
+      assert.equal(e.name, "SandboxError");
+      assert.equal(e.code, "DAEMON_STALE");
+      assert.match(e.message, new RegExp(`\`${name}\``));
+      assert.match(e.message, /older than this CLI/);
+      assert.match(e.message, /`werkmeister daemon restart`/);
+      return true;
+    });
+  }
 });
 
 test("a daemon that is not listening is DaemonUnavailable, so a caller can fall back", async () => {

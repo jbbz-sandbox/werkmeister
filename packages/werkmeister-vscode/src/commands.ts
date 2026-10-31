@@ -6,10 +6,13 @@ import * as vscode from "vscode";
 import { childEnv, lifecycleOf, listWorkspaces, resolveSandboxBin } from "werkmeister-core";
 import { DOT_DIR, getReposRoot, workspacesRoot } from "werkmeister-core/config";
 import { callTool } from "werkmeister-core/daemon_client";
+import { ARGV, LIFECYCLE } from "./argv.js";
 import type { WsNode } from "./build-tree.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
 import type { SandboxTreeProvider } from "./tree.js";
+
+export { ALL_ARGV, ARGV } from "./argv.js";
 
 /**
  * The workspace a command should act on: the tree node it was invoked from, or —
@@ -39,9 +42,6 @@ async function pickWorkspace(node?: WsNode): Promise<{ name: string; path: strin
   );
   return choice ? { name: choice.ws.name, path: choice.ws.path } : null;
 }
-
-/** Lifecycle actions that map 1:1 onto a `werkmeister <action>` subcommand. */
-const LIFECYCLE = ["up", "stop", "restart", "down", "pause", "resume"] as const;
 
 /** Lazily created so it doesn't clutter the Output dropdown until something fails. */
 let outputChannel: vscode.OutputChannel | undefined;
@@ -202,7 +202,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         async (node?: WsNode) => {
           const ws = await pickWorkspace(node);
           if (!ws) return;
-          await runInTerminal(["feature", action], ws.path);
+          await runInTerminal(ARGV.lifecycle(action), ws.path);
         },
       ),
     ),
@@ -266,7 +266,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.newWorkspace", async () => {
       const root = workspacesRoot();
       fs.mkdirSync(root, { recursive: true });
-      await runInTerminal(["workspace", "new"], root, "workspace");
+      await runInTerminal(ARGV.newWorkspace, root, "workspace");
     }),
 
     // `werkmeister feature open` blocks for the whole lifetime of the Chrome window (Ctrl-C
@@ -284,7 +284,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         void vscode.window.showErrorMessage((e as Error).message);
         return;
       }
-      const child = spawn(bin, ["feature", "open"], {
+      const child = spawn(bin, ARGV.openFeature, {
         cwd: ws.path,
         detached: true,
         stdio: "ignore",
@@ -302,11 +302,11 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     // newWorkspace it runs in a terminal rather than being reimplemented here.
     vscode.commands.registerCommand("sandbox.detect", async () => {
       const repo = await pickRepo();
-      if (repo) await runInTerminal(["machine", "detect", repo], repo);
+      if (repo) await runInTerminal(ARGV.detect(repo), repo);
     }),
 
     vscode.commands.registerCommand("sandbox.registrySync", async () => {
-      await runInTerminal(["registry", "sync"], getReposRoot(), "registry");
+      await runInTerminal(ARGV.registrySync, getReposRoot(), "registry");
     }),
 
     // SW-55 splits #160's one verb back in two, as every surface shows them:
@@ -389,7 +389,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.legend", () => provider.toggleLegend()),
 
     vscode.commands.registerCommand("sandbox.connect", async () => {
-      await runInTerminal(["infra", "connect"], os.homedir(), "infra connect");
+      await runInTerminal(ARGV.connect, os.homedir(), "infra connect");
     }),
   ];
 }
