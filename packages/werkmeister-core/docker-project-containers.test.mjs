@@ -8,6 +8,9 @@ import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
+import { useDockerEngine } from "./fixtures.mjs";
+
+useDockerEngine();
 
 const CADDY_PORTS = [
   { IP: "0.0.0.0", PrivatePort: 80, PublicPort: 80, Type: "tcp" },

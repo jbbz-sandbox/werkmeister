@@ -25,8 +25,6 @@ import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
 pinWerkmeisterRoot();
 
 const G = 2 ** 30;
-// Real containers on a leased slot fail `up` with SLOT_ALLOC (SW-245's test hit one); no engine here.
-process.env.DOCKER_HOST = "unix:///nonexistent/docker.sock";
 
 async function withHome(fn, config = "") {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "sched-home-"));

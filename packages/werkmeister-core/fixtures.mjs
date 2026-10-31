@@ -65,6 +65,27 @@ export function pinWerkmeisterRoot() {
 }
 
 /**
+ * Let the calling test file reach a Docker engine: the real one, or the fake
+ * its own `DOCKER_HOST` points at.
+ *
+ * Without it, `resolveEndpoint()` hands a test a dead socket (SW-259), so a test
+ * can't read host containers by accident — another workspace's containers on a
+ * test's slot failed SW-245's gate. Call once at the top level, like
+ * `pinWerkmeisterRoot()`.
+ */
+export function useDockerEngine() {
+  let prev;
+  before(() => {
+    prev = process.env.WERKMEISTER_DOCKER_ENGINE;
+    process.env.WERKMEISTER_DOCKER_ENGINE = "1";
+  });
+  after(() => {
+    if (prev === undefined) delete process.env.WERKMEISTER_DOCKER_ENGINE;
+    else process.env.WERKMEISTER_DOCKER_ENGINE = prev;
+  });
+}
+
+/**
  * Run *fn* against a seeded temp werkmeister home.
  *
  * `overrides` merges extra top-level YAML into config.yaml (e.g. a

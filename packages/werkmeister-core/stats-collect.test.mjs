@@ -11,6 +11,9 @@ import { test } from "node:test";
 
 import { containerStats } from "./dist/docker.js";
 import { runCollection } from "./dist/stats.js";
+import { useDockerEngine } from "./fixtures.mjs";
+
+useDockerEngine();
 
 test("an aborted run stops early and reports what it actually did", {
   timeout: 20_000,

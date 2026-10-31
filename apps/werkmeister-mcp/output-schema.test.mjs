@@ -11,7 +11,13 @@ import { after, test } from "node:test";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { withFakeGh, withSandboxHome } from "../../packages/werkmeister-core/fixtures.mjs";
+import {
+  useDockerEngine,
+  withFakeGh,
+  withSandboxHome,
+} from "../../packages/werkmeister-core/fixtures.mjs";
+
+useDockerEngine();
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-output-schema-"));
 process.env.HOME = path.join(tmp, "home");

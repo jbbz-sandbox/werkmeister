@@ -8,6 +8,9 @@ import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
+import { useDockerEngine } from "./fixtures.mjs";
+
+useDockerEngine();
 
 let projects = [];
 const dir = mkdtempSync(path.join(tmpdir(), "live-project-"));
