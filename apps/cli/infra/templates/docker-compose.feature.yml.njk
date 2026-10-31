@@ -163,7 +163,10 @@ services:{% if not local_services | length %} {}{% endif %}
       com.werkmeister.slot: "{{ slot }}"
       com.werkmeister.service: "{{ svc.name }}"
       com.werkmeister.role: "app"
+{# SW-230: no repo = image-only: no /app mount, the image's own workdir and CMD. #}
+{% if svc.repo %}
     working_dir: /app
+{% endif %}
 {% if idle %}
     restart: on-failure:3
 {# `sleep` as PID 1 ignores SIGTERM, so stop would wait out compose's 10 s. #}
@@ -171,9 +174,14 @@ services:{% if not local_services | length %} {}{% endif %}
 {% else %}
     restart: unless-stopped
 {% endif %}
+{# A bare `volumes:` is YAML null, which compose rejects. #}
+{% if svc.repo or svc.node_modules_volume or svc.extra_volumes | length or svc.dev_links | length %}
     volumes:
+{% endif %}
+{% if svc.repo %}
       - {{ workspace_path }}/{{ svc.repo }}:/app
-{% if svc.worktree_gitdir %}
+{% endif %}
+{% if svc.repo and svc.worktree_gitdir %}
       - {{ svc.worktree_gitdir }}:{{ svc.worktree_gitdir }}:ro
 {% endif %}
 {% if svc.node_modules_volume %}
@@ -211,7 +219,14 @@ services:{% if not local_services | length %} {}{% endif %}
       - "{{ key }}={{ value }}"
 {% endfor %}
 {% endif %}
-{% if svc.command or idle %}
+{# Image-only: the image may have no git, so no token preamble. #}
+{% if not svc.repo and svc.command %}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        {{ svc.command }}
+{% elif svc.command or idle %}
     command:
       - /bin/sh
       - -c

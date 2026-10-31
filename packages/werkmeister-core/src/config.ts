@@ -481,6 +481,8 @@ export const DEFAULT_SETUP_CPUS = "2.0";
  */
 export interface ServiceEntry {
   repo?: string;
+  /** Container image (default node:22); with no `repo` the service is image-only (SW-230). */
+  image?: string;
   path?: string;
   type?: string;
   archetype?: string;

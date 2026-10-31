@@ -111,7 +111,8 @@ export function writeWorkspaceGitignore(workspaceDir: string, repos: string[]): 
  * - `repos`: sorted, de-duplicated repo names — the union of the explicit
  *   `repos` list and the repos that own each requested `service`.
  * - `services`: the cleaned `services` list.
- * - `unknownServices`: requested services not found in `services.yaml`.
+ * - `unknownServices`: requested services with neither a `repo` nor an `image`
+ *   in `services.yaml` (missing ones included).
  */
 export function resolveRepos(
   reposArg: string | null | undefined,
@@ -135,13 +136,12 @@ export function resolveRepos(
   const unknown: string[] = [];
   for (const svc of services) {
     const svcDef = servicesConfig[svc];
-    const repo =
-      typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef)
-        ? svcDef["repo"]
-        : null;
-    if (repo) {
-      repos.add(repo);
-    } else {
+    const def =
+      typeof svcDef === "object" && svcDef !== null && !Array.isArray(svcDef) ? svcDef : {};
+    if (def["repo"]) {
+      repos.add(def["repo"]);
+    } else if (typeof def["image"] !== "string" || !def["image"]) {
+      // An image-only service (SW-230) runs with no worktree; one with neither has nothing to run.
       unknown.push(svc);
     }
   }

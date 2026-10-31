@@ -1870,7 +1870,17 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
 **Top-level keys:**
 
 - **`services`** — Map of service name to service definition. Each service has:
-  - `repo` (string) — Repository name (directory name in workspace)
+  - `repo` (string | omitted) — Repository name (directory name in workspace). Omit it, and set `image`, for an image-only service
+  - `image` (string) — Container image, default `node:22`. With no `repo` the service is **image-only**: no repo mount, no build, and the image's own CMD unless `command` is set (run with `/bin/sh -c`). Useful for a stock container such as `nginx:alpine` in a fixture workspace. Declare it in the machine `services.yaml` (or its overrides), not in a repo fragment, which always ties a service to its repo:
+
+    ```yaml
+    services:
+      web:
+        image: nginx:alpine
+        internal_port: 80
+        port_offset: 0
+        command: nginx -g 'daemon off;'   # optional
+    ```
   - `path` (string) — Path within the repo (`.` for entire repo, `apps/frontend` for monorepo packages) <!-- docs-check: ignore -->
   - `type` (string) — Service category: `web`, `api`, `graphql-subgraph` (also `graphql`, `subgraph`, `federation`), `graphql-gateway`
   - `internal_port` (int) — Port the service listens on inside its container

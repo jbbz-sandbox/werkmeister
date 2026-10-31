@@ -427,7 +427,7 @@ async function selectRepos(
   const servicesConfig = loadServices();
   // `reposValue` already reflects CLI/env/config *and* any wizard answer (both
   // land in the resolved inputs), so repos chosen interactively take effect.
-  const [resolvedRepos, , unknown] = resolveRepos(
+  const [resolvedRepos, services, unknown] = resolveRepos(
     reposValue ?? null,
     servicesValue ?? null,
     servicesConfig,
@@ -439,7 +439,8 @@ async function selectRepos(
     );
   }
 
-  if (!resolvedRepos.length) {
+  // Services left after the unknown check are all runnable; image-only ones need no repo.
+  if (!resolvedRepos.length && !services.length) {
     // On a TTY the wizard already offered services + repos; a non-TTY run had
     // only flags/config. Either way, nothing selected means nothing to create.
     fail(
