@@ -51,6 +51,19 @@ export function envVar(name: string): string | undefined {
  */
 export const isFixture = (): boolean => envVar("FIXTURE") === "1";
 
+/**
+ * Why this process must leave the one shared w9r-caddy alone, or undefined when it
+ * may reload or start it. Only the default home owns it: a `WERKMEISTER_CONFIG_FILE`
+ * home pushing its Caddyfile there takes routing down for every workspace (SW-279).
+ */
+export function sharedProxySkipReason(): string | undefined {
+  if (isFixture()) return "WERKMEISTER_FIXTURE";
+  if (path.resolve(configPath()) !== path.join(dotDir(os.homedir()), "config.yaml")) {
+    return "WERKMEISTER_CONFIG_FILE is not the default home";
+  }
+  return undefined;
+}
+
 export { DOT_DIR, dotDir };
 
 /**
