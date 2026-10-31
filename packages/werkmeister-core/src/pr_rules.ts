@@ -18,7 +18,7 @@ These hold for every PR this workspace produces, whatever skill or command was a
 2. **PRs come only from code worktrees** — one per repo touched at a time, from that repo's PR file (below).
 3. **Gate.** Before a PR opens, all of these hold: every earlier stage/phase is done; the PR file's acceptance table is all PASS; the code worktree is clean; each touched service's registry test command passes (\`.werkmeister/werkmeister-context.md\`); the exercise evidence is all PASS (or \`skip_exercise\` gives the reason); the repo's release check passes; the PR file reads \`status: approved\`. The PR-file checks (stages, acceptance table, approved) run first; if one fails, the gate stops before any test command.
 4. **Only \`werkmeister pr open\` opens PRs.** \`gh pr create\`, \`/create-pr\` and \`finishing-a-development-branch\` are blocked inside a workspace.
-5. **Auto-fix is always on.** \`werkmeister pr open\` prints a \`<pr-created>\` line with each PR's URL; the Claude desktop app counts the session as the PR's opener from it. Right after, in the desktop app: bind the PR to this session (\`ccd_pr\` \`get_status\`; \`bind_pr\` with the PR's URL if it isn't bound), then turn on Auto-fix with \`ccd_pr\` \`set_monitor\` (\`auto_fix: true\`, \`address_comments: true\`, the PR's \`url\`). Don't ask first. If \`set_monitor\` is refused, don't retry: ask the person to turn Auto-fix on from the PR bar, and don't rely on \`get_status\` to confirm it. Never turn on auto-merge.
+5. **Auto-fix is always on.** \`werkmeister pr watch\` wakes the session that opened the PR when a check fails, a review comes in or the PR conflicts with its base, with the cause in the message. Don't turn on Auto-fix in the Claude desktop app (\`ccd_pr\`). Never turn on auto-merge.
 6. **Merge is the person's act.** Tooling never merges. Squash is the default. A PR whose commit SHAs must survive (e.g. a commit listed in \`.git-blame-ignore-revs\`) says "Merge with a merge commit" at the top of its body, and the person merges it that way; squash and rebase both rewrite SHAs.
 7. **Close out only when every PR file is \`shipped\`, \`closed\` or \`abandoned\`, and after the post-mortem:** the werkmeister \`postmortem\` skill writes \`postmortem.md\` at the workspace root. \`werkmeister workspace close\` refuses without it unless \`--skip-postmortem "<reason>"\`.
 
@@ -75,7 +75,7 @@ Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out
 | Command | Does |
 |---|---|
 | \`werkmeister pr gate [repo]\` | run the gate, change nothing |
-| \`werkmeister pr open [repo]\` | gate, push, open the PR, record its URL; then turn on Auto-fix (rule 5) |
+| \`werkmeister pr open [repo]\` | gate, push, open the PR, record its URL; \`pr watch\` then watches it (rule 5) |
 | \`werkmeister pr status\` | record merged / shipped / closed from GitHub and release tags |
 | \`werkmeister pr new <worktree> --slug <slug>\` | after that worktree's PR merged: cut a fresh branch from base and write a draft follow-up PR file |
 | \`werkmeister pr adopt <pr-number\\|url> [repo]\` | the fix landed outside this workspace: write the PR file from that PR, then record its status |

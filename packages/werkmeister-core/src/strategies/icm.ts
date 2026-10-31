@@ -268,7 +268,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
       (s, i) =>
         `| ${i === 0 ? "starting the run" : (s.enter ?? `\`${dirs[i - 1]}\` output ${v.autonomous ? "self-checked" : "approved"}`)} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
     ),
-    "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `werkmeister pr open`, then Auto-fix on (rule 5) | PR URL is in the PR file and Auto-fix is on |",
+    "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `werkmeister pr open` (rule 5: `pr watch` is the auto-fix) | PR URL is in the PR file |",
     "| a PR merged or released, or asked to close out | `werkmeister pr status`, then the werkmeister `postmortem` skill (writes `postmortem.md`), then ask the person before `werkmeister workspace close` | `postmortem.md` written, then closed out after the person says yes |",
     "| asked for status | `ls stages/*/output/` | report which stages hold artifacts |",
     "| containers / ports / routing broken | `.werkmeister/werkmeister-context.md` | — |",

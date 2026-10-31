@@ -50,7 +50,11 @@ it("a failed gate exits 1", async () => {
 });
 
 it("status goes to refreshPrStatus", async () => {
-  vi.mocked(refreshPrStatus).mockResolvedValue({ lines: ["app: shipped"], changed: true });
+  vi.mocked(refreshPrStatus).mockResolvedValue({
+    lines: ["app: shipped"],
+    changed: true,
+    views: new Map(),
+  });
   await run({ action: "status", repo: null, json: false });
   expect(refreshPrStatus).toHaveBeenCalledWith("/features/ws");
 });
