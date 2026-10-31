@@ -10,12 +10,12 @@ import { test } from "node:test";
 
 import { checkForwardHealth, checkWireHealth } from "./dist/k8s.js";
 
-/** Listen on an ephemeral port. `reply` of null = accept and stay silent. */
-function fakeForward(reply) {
+/** Listen on an ephemeral port. `reply` of null = accept and stay silent; `delayMs` holds the reply back. */
+function fakeForward(reply, delayMs = 0) {
   return new Promise((resolve) => {
     const srv = net.createServer((sock) => {
       sock.on("data", () => {
-        if (reply !== null) sock.write(reply);
+        if (reply !== null) setTimeout(() => sock.write(reply), delayMs);
       });
     });
     srv.listen(0, "127.0.0.1", () =>
@@ -24,10 +24,13 @@ function fakeForward(reply) {
   });
 }
 
-async function probe(reply, kind) {
-  const srv = await fakeForward(reply);
+// A reply ends the probe at once, so the limit only matters on a loaded host (SW-299).
+const LOAD_TOLERANT_MS = 30_000;
+
+async function probe(reply, kind, delayMs = 0, timeoutMs = LOAD_TOLERANT_MS) {
+  const srv = await fakeForward(reply, delayMs);
   try {
-    return await checkWireHealth(srv.port, kind, 300);
+    return await checkWireHealth(srv.port, kind, timeoutMs);
   } finally {
     srv.close();
   }
@@ -37,6 +40,12 @@ test("redis answering PING is healthy", async () => {
   assert.equal((await probe("+PONG\r\n", "redis")).ok, true);
 });
 
+// SW-299: a loaded host can delay the reply past a short probe limit; that is load, not a dead forward.
+test("a slow reply is still healthy", async () => {
+  assert.equal((await probe("+PONG\r\n", "redis", 500)).ok, true);
+  assert.equal((await probe("N", "postgres", 500)).ok, true);
+});
+
 test("postgres answering the SSLRequest is healthy", async () => {
   assert.equal((await probe("N", "postgres")).ok, true);
   assert.equal((await probe("S", "postgres")).ok, true);
@@ -44,7 +53,7 @@ test("postgres answering the SSLRequest is healthy", async () => {
 
 test("a forward that accepts and never replies is unhealthy", async () => {
   for (const kind of ["redis", "postgres"]) {
-    const r = await probe(null, kind);
+    const r = await probe(null, kind, 0, 300); // waits out the whole limit by design
     assert.equal(r.ok, false, `${kind} silent`);
     assert.match(r.detail, /timeout/);
   }
