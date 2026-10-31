@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.57.0
+
+### Patch Changes
+
+- 1cbdd5d: SW-208: `pr open`, `pr status` and `pr gate` resolve `gh` through `WERKMEISTER_GH_BIN` and `docker` through the new `WERKMEISTER_DOCKER_BIN`, as do `runCapture` and `proc.run`/`runAsync`. A fixture run of the built CLI can therefore fake every gh and docker call. A fake first on PATH is not enough, because `childEnv()` puts `/opt/homebrew/bin` and `/usr/local/bin` ahead of it.
+- 11d002e: SW-257: taking down the pre-rename `sandbox-infra` stack no longer gives up when the `docker ps` / `docker volume ls` check for held containers takes over 10 s on a loaded host; the check now waits as long as the teardown does, so `infra start` and `down` still free the old stack's ports and volumes.
+
 ## 0.56.0
 
 ### Minor Changes
