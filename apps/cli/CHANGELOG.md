@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.58.0
+
+### Minor Changes
+
+- 8d6063f: SW-230: a `services.yaml` service can be image-only: `image:` with no `repo:`, plus an optional `internal_port`/`port_offset` and `command`. `workspace init` accepts it (a service with neither a repo nor an image is still an unknown service), and the compose template renders it like an app service, with no repo mount, `working_dir` or build, and the image's own CMD unless `command` is set. A fixture workspace can now run a real `up` → `stop` → `down` on e.g. `nginx:alpine`. Declare it in the machine `services.yaml` or its overrides, not in a repo fragment.
+- 80b6117: SW-249: the generated `.devcontainer/devcontainer.json` passes `CLAUDE_CODE_OAUTH_TOKEN` from the host at every attach (`remoteEnv`, `${localEnv:CLAUDE_CODE_OAUTH_TOKEN}`), so a container started with a `claude setup-token` token set needs no Claude login, and no generated file holds the token. Every workspace's container now mounts one shared `~/.claude` volume, `werkmeister-claude-home`, so you log in once; each container still reaches only its own workspace, because the werkmeister registration lives outside the volume and sends that workspace's token. Close-out never removes the shared volume. The per-workspace `features-claude-home-<workspace>` volumes from 0.54.0 are no longer used; drop them with `docker volume rm`.
+
 ## 0.57.0
 
 ### Minor Changes
