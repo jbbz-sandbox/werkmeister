@@ -303,6 +303,33 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
   }
 });
 
+test("gate: changed files that map to no service fail a tests row unless skip_tests.tests gives a reason (SW-278)", async () => {
+  const diff = [/diff --name-only/, { stdout: "src/x.ts\n" }];
+  const noRepo = { repos: {} }; // no `repos:` entry for the worktree
+  const ws = icmWorkspace();
+  try {
+    const g = await gate(ws, deps([diff], noRepo));
+    assert.deepEqual(failed(g), ["tests"]);
+    assert.match(g.checks.find((c) => c.name === "tests").detail, /no service maps to src\/x\.ts/);
+    // An empty diff still passes with no tests row.
+    const empty = await gate(ws, deps([[/diff --name-only/, { stdout: "" }]], noRepo));
+    assert.deepEqual(failed(empty), []);
+    assert.ok(!empty.checks.some((c) => c.name === "tests"));
+  } finally {
+    clean(ws);
+  }
+  const skipped = icmWorkspace({
+    files: { app: prFile({ extra: "skip_tests:\n  tests: scripts only, ran by hand\n" }) },
+  });
+  try {
+    const g = await gate(skipped, deps([diff], noRepo));
+    assert.deepEqual(failed(g), []);
+    assert.match(g.checks.find((c) => c.name === "tests").detail, /skipped: scripts only/);
+  } finally {
+    clean(skipped);
+  }
+});
+
 test("gate fails on an unfinished stage, a FAIL row and an unapproved file, before the tests (SW-150)", async () => {
   const ws = icmWorkspace({
     researchDone: false,

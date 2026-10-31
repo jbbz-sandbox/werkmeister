@@ -689,8 +689,28 @@ async function gateChecks(
   if (diff.code !== 0) {
     add("tests", false, `cannot diff against origin/${base}: ${diff.stderr.trim()}`);
   }
-  const touched = diff.code === 0 ? mapTouched(diff.stdout.split("\n").filter(Boolean), repo) : [];
+  const files = diff.code === 0 ? diff.stdout.split("\n").filter(Boolean) : [];
+  const touched = mapTouched(files, repo);
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
+  // Nothing touched yet files outside no_service_paths: the repo has no services to map to
+  // (no `repos:` entry), so zero tests would run unannounced (SW-278).
+  const noService = ((repo["no_service_paths"] ?? []) as string[]).map((p) =>
+    p.replace(/\/+$/, ""),
+  );
+  const unmapped = touched.length
+    ? []
+    : files.filter((f) => !noService.some((p) => f === p || f.startsWith(p + "/")));
+  if (unmapped.length) {
+    const why = reason(skips["tests"]);
+    add(
+      "tests",
+      Boolean(why),
+      why
+        ? `skipped: ${why}`
+        : `no service maps to ${unmapped.slice(0, 5).join(", ")}${unmapped.length > 5 ? ", …" : ""} — ` +
+            `add a \`repos: { ${file.dir}: { services, path_mappings } }\` registry entry, or \`skip_tests: { tests: <reason> }\``,
+    );
+  }
   const releaseRuns =
     repo["ship"] === "tag" && Boolean(repo["release_check"]) && !reason(file.fm["skip_release"]);
 
