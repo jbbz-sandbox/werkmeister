@@ -1,5 +1,12 @@
 # werkmeister-ui
 
+## 0.5.46
+
+### Patch Changes
+
+- Updated dependencies [c22be3d]
+  - werkmeister-core@0.53.0
+
 ## 0.5.45
 
 ### Patch Changes
