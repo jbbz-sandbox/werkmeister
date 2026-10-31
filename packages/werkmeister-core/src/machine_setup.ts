@@ -1346,8 +1346,8 @@ function prWatchPlist(r: ResolvedPrWatch): string {
 }
 
 /**
- * Write a launchd agent's plist and (re)load it; untouched when the content is unchanged.
- * ponytail: an unchanged plist booted out by hand stays out until it is removed and reinstalled.
+ * Write a launchd agent's plist and (re)load it; an unchanged plist is only
+ * bootstrapped when its label is not loaded, so a re-run retries a failed load.
  */
 function writeLaunchAgent(
   label: string,
@@ -1357,13 +1357,20 @@ function writeLaunchAgent(
   runner: Runner,
 ): { changed: boolean } | { error: string[] } {
   if (fs.existsSync(plistPath) && fs.readFileSync(plistPath, "utf8") === plist) {
-    return { changed: false };
+    if (runner(["launchctl", "print", `gui/${uid}/${label}`])[0] === 0) return { changed: false };
+  } else {
+    fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+    fs.writeFileSync(plistPath, plist);
+    // Fails when nothing is loaded yet; bootstrap refuses a label that already is.
+    runner(["launchctl", "bootout", `gui/${uid}/${label}`]);
   }
-  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
-  fs.writeFileSync(plistPath, plist);
-  // Fails when nothing is loaded yet; bootstrap refuses a label that already is.
-  runner(["launchctl", "bootout", `gui/${uid}/${label}`]);
-  const [rc, out] = runner(["launchctl", "bootstrap", `gui/${uid}`, plistPath]);
+  // SW-236: bootout returns before launchd drops the label, so bootstrap can fail
+  // with 5 for a moment. `sleep` goes through the runner so tests never wait.
+  let [rc, out] = runner(["launchctl", "bootstrap", `gui/${uid}`, plistPath]);
+  for (let attempt = 1; rc !== 0 && attempt < 5; attempt++) {
+    runner(["sleep", "1"]);
+    [rc, out] = runner(["launchctl", "bootstrap", `gui/${uid}`, plistPath]);
+  }
   if (rc !== 0) {
     return {
       error: [
