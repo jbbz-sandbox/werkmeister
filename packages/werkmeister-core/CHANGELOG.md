@@ -1,5 +1,23 @@
 # sandbox-core
 
+## 0.55.0
+
+### Minor Changes
+
+- b64c8ea: SW-186 (breaking): the CLI is grouped by noun — `feature`, `workspace` (`ws`), `pr`, `issue`, `infra`, `machine`, `budget`, `daemon` and `internal` — e.g. `up f` is now `feature up f`, `init-workspace` is `workspace init`, `close-out --abandon` is `workspace abandon <reason>`, and the hook commands are `internal gate|pr-guard|agent-state|session-end`. Every old spelling still runs, with the same arguments, and prints one deprecation line on stderr; they are removed in 0.58.0. `werkmeister --help` lists the groups.
+
+  After upgrading, run `werkmeister machine migrate` (`--check` first to see what it would change): it rewrites each workspace's hooks, permission rules and `with-temp-home`, replaces the stale `SANDBOX_MCP_TOKEN` in `secrets.env`, and points Claude Desktop at `werkmeister internal mcp`. Upgrade the CLI and the Claude Code plugin together, and restart open Claude sessions.
+
+  Also: `feature up <f> --service <name>` starts one service (SW-132); `machine config --check` names `--write` only for problems it fixes (SW-162); new `budget status` and `daemon status|install|uninstall|restart`; gen-docs writes one man page per `noun verb`.
+
+### Patch Changes
+
+- 5816545: SW-236: `werkmeister machine setup` no longer leaves the host daemon (or the pr-watch agent) down when `launchctl bootstrap` races the bootout and fails with 5: it retries up to 5 times, 1 s apart. A re-run now bootstraps an agent whose plist is unchanged but isn't loaded, so "re-run to retry" works.
+- 662dcfd: SW-239: under `node --test`, `sandboxRoot()` (and so `monorepoRoot()`) throws unless the test called `pinWerkmeisterRoot()`, so a new core test can no longer depend on the unpinned root. Outside a test run nothing changes.
+- 1200605: SW-245: `up` now removes a feature with no local services from the waiting queue when it starts it, so the scheduler no longer leaves it waiting and re-ups it on every grant.
+- 3e0b4a0: SW-246: the scheduler writes a feature's `waiting.json` before `queue.json` when it queues it (`admit` waiting, or preempted), so a workspace with no `.werkmeister/` gets the ENOENT error and stays out of the queue instead of showing as waiting in `status` with a session that never learns it is queued.
+- 2237edb: SW-247: the PR gate's exercise and acceptance checks fail on a result cell that is not exactly `PASS`, such as `FAIL — reason` or `skipped`, in any table with a `result` column. Before, only a cell reading exactly `FAIL` was caught.
+
 ## 0.54.0
 
 ### Minor Changes
