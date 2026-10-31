@@ -201,6 +201,10 @@ export async function up(
         waiting,
       };
     }
+  } else {
+    // No admission to dequeue it, so a queued k8s-only feature would stay waiting and be re-upped on every grant (SW-245).
+    await dequeue(feature);
+    clearWaiting(workspace);
   }
   // Every `up`, not just on a slot change: the file is fully generated and
   // nothing reads it, and with no subgraph this removes a stale copy (#120).
