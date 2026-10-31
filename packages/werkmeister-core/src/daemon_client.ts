@@ -96,6 +96,14 @@ export async function callTool<T = unknown>(
     code?: string;
   };
   if (!res.ok) {
+    // SW-254: the daemon has no tool this CLI knows, so it runs older code; the MCP SDK's own words.
+    if (body.error?.replace(/^MCP error -?\d+: /, "") === `Tool ${name} not found`) {
+      throw new SandboxError(
+        `The werkmeister daemon is older than this CLI: it has no \`${name}\` tool. ` +
+          "Run `werkmeister daemon restart`.",
+        "DAEMON_STALE",
+      );
+    }
     throw new SandboxError(
       body.error ?? `daemon answered HTTP ${res.status} to ${name}`,
       body.code ?? `HTTP_${res.status}`,
