@@ -51,9 +51,9 @@ const ARGS = {
   "claude-turn-status": { workspace: "alpha" },
 };
 
-test("every tool with an outputSchema says whether it is read-only", async () => {
+test("every tool says whether it is read-only", async () => {
   const { tools } = await (await connect()).listTools();
-  for (const t of tools.filter((t) => t.outputSchema)) {
+  for (const t of tools) {
     assert.equal(typeof t.annotations?.readOnlyHint, "boolean", `${t.name}: set readOnlyHint`);
   }
 });
@@ -67,10 +67,12 @@ test("every read-only tool's structuredContent matches its outputSchema after to
         const client = await connect();
         const { tools } = await client.listTools();
         const covered = tools.filter((t) => t.outputSchema && t.annotations?.readOnlyHint);
-        assert.ok(
-          covered.some((t) => t.name === "status"),
-          "status is covered",
-        );
+        for (const name of ["status", "resources", "intercepts"]) {
+          assert.ok(
+            covered.some((t) => t.name === name),
+            `${name} is covered`,
+          );
+        }
         for (const { name } of covered) {
           // callTool rejects with -32602 when structuredContent doesn't match the schema.
           const r = await client
@@ -83,5 +85,28 @@ test("every read-only tool's structuredContent matches its outputSchema after to
     {
       config: `paths:\n  workspaces_root: ${root}\noverrides:\n  issue_tracker: github\n  github_org: acme\n`,
     },
+  );
+});
+
+test("intercepts without a telepresence binary is not an error and matches its schema", async () => {
+  const root = path.join(tmp, "ws-no-tp");
+  fs.mkdirSync(root, { recursive: true });
+  const emptyBin = fs.mkdtempSync(path.join(tmp, "empty-bin-"));
+  const prevPath = process.env.PATH;
+  await withSandboxHome(
+    async () => {
+      const client = await connect();
+      await client.listTools(); // the SDK validates a result only after tools/list
+      process.env.PATH = emptyBin;
+      try {
+        const r = await client.callTool({ name: "intercepts", arguments: {} });
+        assert.ok(!r.isError, JSON.stringify(r.content));
+        assert.equal(r.structuredContent.installed, false);
+        assert.deepEqual(r.structuredContent.intercepts, []);
+      } finally {
+        process.env.PATH = prevPath;
+      }
+    },
+    { config: `paths:\n  workspaces_root: ${root}\n` },
   );
 });
