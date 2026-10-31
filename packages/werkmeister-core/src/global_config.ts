@@ -289,6 +289,33 @@ function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// By key name, not a list: config is hand-edited, so a new secret must be masked by default.
+const SECRET_KEY = /token|secret|pass(word|wd)|credential|api_?key|private_?key|access_?key|auth/i;
+
+const isEmpty = (v: unknown): boolean =>
+  v === "" || v == null || (typeof v === "object" && Object.keys(v).length === 0);
+
+/** Deep copy of *value* with every non-empty value under a secret-named key replaced by `<redacted>`. */
+export function redact(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(redact);
+  }
+  if (!isDict(value)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([k, v]) => [
+      k,
+      SECRET_KEY.test(k) && !isEmpty(v) ? "<redacted>" : redact(v),
+    ]),
+  );
+}
+
+/** The whole config as YAML with secrets masked: the one view safe to print. */
+export function redactedYaml(cfg: GlobalConfig): string {
+  return YAML.stringify(redact(cfg));
+}
+
 /** Load the config YAML; missing/invalid file → `{}` (callers apply defaults). */
 export function load(): GlobalConfig {
   try {

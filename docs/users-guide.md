@@ -1262,7 +1262,7 @@ Sets up and maintains the machine-global configuration, `~/.werkmeister/config.y
 **Examples**
 
 ```bash
-werkmeister machine config                       # print the resolved config and origins
+werkmeister machine config                       # print the resolved config, origins and the whole YAML with secrets (e.g. jira.api_token) masked; safe for agents
 werkmeister machine config --write               # interactive wizard, then write
 werkmeister machine config --check               # validate; nonzero exit on drift
 ```

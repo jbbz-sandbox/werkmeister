@@ -8,7 +8,7 @@
  * server in ``claude_desktop_config.json`` (the ``werkmeister`` wrapper self-loads
  * env.sh).
  *
- *   werkmeister machine config                       # print resolved config + origins (read-only)
+ *   werkmeister machine config                       # print resolved config + origins + the whole YAML, secrets masked (read-only)
  *   werkmeister machine config --write               # interactive wizard (create or edit), then write
  *   werkmeister machine config --repos-root … …      # non-interactive set
  *   werkmeister machine config --check               # validate; nonzero exit on drift
@@ -58,6 +58,12 @@ function show(cfg: ReturnType<typeof gc.load>): void {
     for (const [k, v] of Object.entries(overrides)) {
       console.log(`  ${k}: ${v}`);
     }
+  }
+
+  // Agents are pointed here instead of the raw file, so this must never print a secret (SW-268).
+  if (Object.keys(cfg).length) {
+    console.log(`${Colors.BOLD}config (secrets masked):${Colors.RESET}`);
+    console.log(gc.redactedYaml(cfg).trimEnd());
   }
 }
 
