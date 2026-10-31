@@ -80,7 +80,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "docs:links": "typedoc",
-    "test": "export WERKMEISTER_GH_BIN=\"$PWD/no-gh.sh\" && node --test --test-concurrency=2 *.test.mjs && for f in *.smoke.mjs; do node \"$f\" || exit 1; done"
+    "test": "sh ./run-tests.sh"
   },
   "dependencies": {
     "@types/dockerode": "^4.0.1",
