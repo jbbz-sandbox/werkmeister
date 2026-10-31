@@ -1276,7 +1276,7 @@ Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.y
 
 A one-shot move of the pre-rename machine folder to `~/.werkmeister`, repointing every file that carries the old path. Safe to re-run; it refuses while containers the move would break are running. Pull and rebuild the CLI before you migrate.
 
-It also brings what an older CLI wrote up to the noun-group spellings (SW-186): each workspace's hooks, permission rules and `with-temp-home`, the stale `SANDBOX_MCP_TOKEN` in `secrets.env`, and Claude Desktop's server args. A workspace whose `.env` still exports only `SANDBOX_FEATURE` is listed; run `werkmeister workspace init` there.
+It also brings what an older CLI wrote up to the noun-group spellings (SW-186): each workspace's hooks, permission rules and `with-temp-home`, the stale pre-rename MCP token in `secrets.env`, and Claude Desktop's server args. A workspace whose `.env` still exports only `SANDBOX_FEATURE` is listed; run `werkmeister workspace init` there.
 
 **Examples**
 
