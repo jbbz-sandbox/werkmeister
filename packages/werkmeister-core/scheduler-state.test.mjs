@@ -20,7 +20,9 @@ import {
   requestAdmission,
   writeLeases,
 } from "./dist/scheduler_state.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const G = 2 ** 30;
 // Real containers on a leased slot fail `up` with SLOT_ALLOC (SW-245's test hit one); no engine here.

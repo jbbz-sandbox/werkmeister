@@ -98,9 +98,17 @@ describe("launchd", () => {
     const res = installPrWatchSchedule(opts("darwin"));
     expect(res.ok).toBe(true);
     expect(res.lines[0]).toMatch(/^Already installed/);
-    expect(calls).toEqual([]);
+    expect(calls).toEqual([["launchctl", "print", "gui/501/com.werkmeister.pr-watch"]]);
     expect(fs.statSync(plistPath()).mtimeMs).toBe(mtime);
     expect(fs.readdirSync(path.dirname(plistPath()))).toHaveLength(1);
+  });
+
+  it("bootstraps an unchanged plist whose agent was booted out", () => {
+    installPrWatchSchedule(opts("darwin"));
+    calls = [];
+    const runner = fakeRunner({ "launchctl print": [113, "Could not find service"] });
+    expect(installPrWatchSchedule(opts("darwin", { runner })).ok).toBe(true);
+    expect(calls.map((c) => c[1])).toEqual(["print", "bootstrap"]);
   });
 
   it("rewrites and reloads when the PATH moved", () => {
