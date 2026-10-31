@@ -75,3 +75,8 @@ test("startArgs reads the workspace's own workspace.yml", async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("the run limits point at the redacted config view", () => {
+  assert.ok(RUN_LIMITS.includes("`werkmeister machine config`"));
+  assert.ok(RUN_LIMITS.includes("jira.api_token"));
+});
