@@ -16,9 +16,9 @@ repo:
   ship: tag
   release_tag: "werkmeister@*"
   release_check: pnpm changeset status --since=origin/main
-  # CI's first step plus its docs check; the gate runs them so a format error or stale generated
-  # docs fail before the PR opens (SW-133, SW-225). docs:check reads the built CLI and core.
-  lint: pnpm exec biome ci . && pnpm turbo run build --filter=werkmeister && pnpm run docs:check
+  # CI's first step plus its docs and name checks; the gate runs them so a format error, stale generated
+  # docs or an old-name mention fail before the PR opens (SW-133, SW-225, SW-252). docs:check reads the built CLI and core.
+  lint: pnpm exec biome ci . && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
   # Anything else outside a service's `path` still touches every service.
   no_service_paths: [docs, .changeset, .gitignore, README.md]
