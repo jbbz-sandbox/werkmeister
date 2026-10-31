@@ -102,8 +102,9 @@ export function enqueue(feature: string, workspace: string): Promise<void> {
     "scheduler",
     async () => {
       const queue = readQueue().filter((f) => f !== feature);
-      writeQueue([...queue, feature]);
+      // waiting.json first: if it can't be written, the queue must not move (SW-246).
       writeWaiting(workspace, { position: queue.length + 1, reason: "preempted" });
+      writeQueue([...queue, feature]);
     },
     { timeout: LOCK_TIMEOUT },
   );
@@ -190,8 +191,9 @@ export function requestAdmission(
       const queue = readQueue();
       const d = admit(budget, running, queue, { feature, cost, byPerson });
       if (d.kind === "wait") {
-        if (!queue.includes(feature)) writeQueue([...queue, feature]);
+        // waiting.json first: if it can't be written, the queue must not move (SW-246).
         writeWaiting(workspace, { position: d.position, reason: "waiting for capacity" });
+        if (!queue.includes(feature)) writeQueue([...queue, feature]);
       } else {
         if (queue.includes(feature)) writeQueue(queue.filter((f) => f !== feature));
         clearWaiting(workspace);
