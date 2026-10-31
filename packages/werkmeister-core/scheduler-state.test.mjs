@@ -18,10 +18,13 @@ import {
   portHolders,
   readQueue,
   requestAdmission,
+  writeLeases,
 } from "./dist/scheduler_state.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
 const G = 2 ** 30;
+// Real containers on a leased slot fail `up` with SLOT_ALLOC (SW-245's test hit one); no engine here.
+process.env.DOCKER_HOST = "unix:///nonexistent/docker.sock";
 
 async function withHome(fn, config = "") {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "sched-home-"));
@@ -156,4 +159,25 @@ test("grantWaiters drops a waiter that holds no lease and starts nothing", async
     assert.deepEqual(await grantWaiters(), []);
     assert.deepEqual(readQueue(), []);
   });
+});
+
+test("grantWaiters dequeues a waiter with no local services once up starts it (SW-245)", async () => {
+  const prev = process.env.WERKMEISTER_FIXTURE;
+  process.env.WERKMEISTER_FIXTURE = "1"; // Caddy skipped: nothing here touches Docker
+  try {
+    await withHome(async (home) => {
+      const ws = workspace(home, "services: {}\n");
+      fs.writeFileSync(path.join(ws, ".env"), "FEATURE=k8s\nSLOT=4\n"); // no SERVICES=
+      writeLeases({ k8s: { slot: 4, workspace: ws } });
+      await enqueue("k8s", ws);
+      assert.deepEqual(await grantWaiters(), ["k8s"]);
+      assert.deepEqual(readQueue(), []);
+      assert.equal(fs.existsSync(waitingPath(ws)), false);
+      // A later grant has nothing left to re-up.
+      assert.deepEqual(await grantWaiters(), []);
+    });
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_FIXTURE;
+    else process.env.WERKMEISTER_FIXTURE = prev;
+  }
 });
