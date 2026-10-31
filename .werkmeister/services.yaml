@@ -63,6 +63,7 @@ services:
       Run from the temp folder, not only with a temp HOME: the CLI reads its workspace from the current folder.
       Any command that can write (to the workspace, its issue or its PRs) runs against the fixture workspace;
       only read-only commands (e.g. `werkmeister skills check`) may run from the real workspace.
+      Point every `gh` and `docker` call at fakes with `WERKMEISTER_GH_BIN` and `WERKMEISTER_DOCKER_BIN` (absolute paths); a fake first on PATH is not enough, because the CLI puts `/opt/homebrew/bin` and `/usr/local/bin` ahead of it.
       A change to `pr gate`, `pr open` or `runGate` (`pr_lifecycle.ts` runGate/gatePrs, `pr gate`/`pr open` in apps/cli) is exercised by running this branch's built gate against the workspace: the built `apps/cli` binary run with `node`, never `npm link`.
       Record one passing and one failing case in exercise.md (e.g. `lint: pnpm exec biome ci .` → exit 0, and exit 1 with an over-width line left uncommitted).
       `werkmeister pr open` runs the globally installed CLI, built from main, so it would check the PR with the old gate.
