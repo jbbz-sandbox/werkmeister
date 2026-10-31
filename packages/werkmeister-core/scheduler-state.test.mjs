@@ -129,6 +129,27 @@ test("no room: the feature queues and gets waiting.json; room: it leaves both", 
   });
 });
 
+// SW-246: no .werkmeister/ means waiting.json can't be written; the queue must not move.
+test("requestAdmission: a failed waiting.json write leaves queue.json as it was", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    fs.rmSync(path.join(ws, ".werkmeister"), { recursive: true });
+    const budget = { memory: G, cpus: 4, preempt: true };
+    const full = [{ feature: "x", cost: { memory: G, cpus: 1 }, rank: "idle", busy: false }];
+    await assert.rejects(requestAdmission("f", ws, false, full, budget), { code: "ENOENT" });
+    assert.deepEqual(readQueue(), []);
+  });
+});
+
+test("enqueue: a failed waiting.json write leaves queue.json as it was", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    fs.rmSync(path.join(ws, ".werkmeister"), { recursive: true });
+    await assert.rejects(enqueue("f", ws), { code: "ENOENT" });
+    assert.deepEqual(readQueue(), []);
+  });
+});
+
 test("portHolders reports a published port something else binds", async () => {
   const srv = net.createServer();
   await new Promise((r) => srv.listen(0, "0.0.0.0", r));
