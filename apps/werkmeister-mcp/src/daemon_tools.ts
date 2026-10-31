@@ -46,6 +46,7 @@ export function registerDaemonTools(server: McpServer): void {
     "clean",
     {
       title: "Remove orphaned volumes and stale slots",
+      annotations: { readOnlyHint: false },
       description:
         "`werkmeister clean`: remove Docker volumes and slot entries whose feature is gone. " +
         "Dry run unless `dryRun: false`. With `all`, tears down active features first.",
@@ -65,6 +66,7 @@ export function registerDaemonTools(server: McpServer): void {
     "stats",
     {
       title: "Container resource usage",
+      annotations: { readOnlyHint: false },
       description:
         "`werkmeister stats`: CPU and memory per container, now or sampled over `collect` " +
         "minutes with recommended limits.",
@@ -94,6 +96,7 @@ export function registerDaemonTools(server: McpServer): void {
     "optimize",
     {
       title: "Usage against configured limits",
+      annotations: { readOnlyHint: true },
       description:
         "`werkmeister optimize`: each service's observed memory against its configured limit, " +
         "flagging the ones at risk or over-provisioned.",
@@ -107,6 +110,7 @@ export function registerDaemonTools(server: McpServer): void {
     "cache",
     {
       title: "Prune the shared build caches",
+      annotations: { readOnlyHint: false },
       description:
         "`werkmeister cache prune`: apply each registry cache's rule (max_age, prune command), " +
         "or empty it with `reset`. Dry run unless `dryRun: false`.",
@@ -132,6 +136,7 @@ export function registerDaemonTools(server: McpServer): void {
     "registry",
     {
       title: "Regenerate the service registry",
+      annotations: { readOnlyHint: false },
       description:
         "`werkmeister registry sync`: rebuild ~/.werkmeister/services.yaml from every repo's " +
         ".werkmeister/services.yaml. With `check`, only report drift.",
@@ -145,10 +150,22 @@ export function registerDaemonTools(server: McpServer): void {
     "resources",
     {
       title: "CPU and memory per workspace",
+      annotations: { readOnlyHint: true },
       description:
         "Container CPU and memory summed per Compose project, plus the host's load: what the " +
         "VS Code extension polls every 30 s.",
       inputSchema: {},
+      outputSchema: z.looseObject({
+        projects: z.record(
+          z.string(),
+          z.looseObject({ cpuPercent: z.number(), memMib: z.number() }),
+        ),
+        host: z.looseObject({
+          load: z.tuple([z.number(), z.number(), z.number()]),
+          cores: z.number(),
+          featureCpuPercent: z.number(),
+        }),
+      }),
     },
     async (): Promise<CallToolResult> =>
       adapt(async () => ({ ...(await getWorkspaceResources()) })),
@@ -158,10 +175,28 @@ export function registerDaemonTools(server: McpServer): void {
     "intercepts",
     {
       title: "Telepresence intercept state",
+      annotations: { readOnlyHint: true },
       description:
         "The telepresence connection and every feature's intercepts, without `status detail`'s " +
         "k8s forward probes: what the VS Code extension polls every 5 s.",
       inputSchema: {},
+      outputSchema: z.looseObject({
+        available: z.boolean(),
+        installed: z.boolean(),
+        connected_namespace: z.string().nullable(),
+        intercepts: z.array(
+          z.looseObject({
+            feature: z.string(),
+            service: z.string(),
+            deployment: z.string().nullable(),
+            interceptable: z.boolean(),
+            blocker: z.string().nullable(),
+            intercepted: z.boolean(),
+            intercepted_by: z.string().nullable(),
+          }),
+        ),
+        remote_services: z.array(z.string()),
+      }),
     },
     async (): Promise<CallToolResult> => adapt(async () => ({ ...(await interceptsSnapshot()) })),
   );
@@ -176,6 +211,7 @@ export function registerSchedulerTool(server: McpServer): void {
     "scheduler",
     {
       title: "Slot leases and the waiting queue",
+      annotations: { readOnlyHint: false },
       description:
         "Internal: the CLI's scheduler calls (scheduler_client.ts), answered by the daemon.",
       inputSchema: {

@@ -216,6 +216,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     "create-workspace-form",
     {
       title: "New Werkmeister Workspace",
+      annotations: { readOnlyHint: false },
       description:
         "Open the New Werkmeister Workspace form and create the workspace from it (git worktrees on a " +
         "<user>/<workspace> branch under $WERKMEISTER_WORKSPACES_ROOT, then init-workspace). With an " +
@@ -1015,6 +1016,7 @@ export function registerWorkspaceTools(server: McpServer): void {
     "check-in",
     {
       title: "Check-in Triage",
+      annotations: { readOnlyHint: false },
       description:
         "One sweep for the check-in skill: every workspace's labels, container and Claude " +
         "state, proposed stage gates, and whether its transcript changed since the last " +

@@ -134,6 +134,7 @@ function registerLifecycleTools(server: McpServer): void {
     "up",
     {
       title: "Bring a feature up",
+      annotations: { readOnlyHint: false },
       description:
         "Allocate the feature's slot, start its containers, and point the reverse proxy at " +
         "them. Returns the slot, port range, local services and their URLs.",
@@ -150,6 +151,7 @@ function registerLifecycleTools(server: McpServer): void {
     "down",
     {
       title: "Tear a feature down",
+      annotations: { readOnlyHint: false },
       description:
         "Leave the feature's k8s intercepts, remove its containers, release its slot, and " +
         "reload the reverse proxy so nothing routes to the removed containers.",
@@ -177,6 +179,7 @@ function registerLifecycleTools(server: McpServer): void {
     "stop",
     {
       title: "Stop a feature's containers",
+      annotations: { readOnlyHint: false },
       description:
         "Stop the containers, leaving them and the slot in place so restart or " +
         "up can resume the feature.",
@@ -192,6 +195,7 @@ function registerLifecycleTools(server: McpServer): void {
     "pause",
     {
       title: "Pause a workspace",
+      annotations: { readOnlyHint: false },
       description:
         "Pause a workspace: freeze its containers and hold its Claude session until resume.",
       inputSchema: { ...WORKSPACE_ARG },
@@ -206,6 +210,7 @@ function registerLifecycleTools(server: McpServer): void {
     "resume",
     {
       title: "Resume a paused workspace",
+      annotations: { readOnlyHint: false },
       description:
         "Resume a paused workspace: thaw exactly the containers paused, release its Claude " +
         "session, and tell it to continue if Pause cut a turn.",
@@ -222,6 +227,7 @@ function registerLifecycleTools(server: McpServer): void {
     "restart",
     {
       title: "Restart a feature's containers",
+      annotations: { readOnlyHint: false },
       description: "Bounce the feature's containers, reusing its slot.",
       inputSchema: { ...WORKSPACE_ARG },
     },
@@ -235,6 +241,7 @@ function registerLifecycleTools(server: McpServer): void {
     "detect",
     {
       title: "Generate a repo's service-registry fragment",
+      annotations: { readOnlyHint: false },
       description:
         "Scan a repo (package manifests, Dockerfiles, compose, Helm, k8s, kustomize) and propose its " +
         ".werkmeister/services.yaml. Returns the report, the proposed YAML and the questions the scan could " +
@@ -296,6 +303,7 @@ function registerLifecycleTools(server: McpServer): void {
     "services",
     {
       title: "Where a feature's services answer",
+      annotations: { readOnlyHint: true },
       description:
         "Every registered service and its endpoint for this feature — local container, k8s " +
         "forward, or not configured.",
@@ -311,6 +319,7 @@ function registerLifecycleTools(server: McpServer): void {
     "logs",
     {
       title: "Read a feature's container logs",
+      annotations: { readOnlyHint: true },
       description:
         "A bounded read of the feature's container logs, optionally one service. This " +
         "is not a subscription: it never follows, and returns the last `tail` lines.",
@@ -347,6 +356,7 @@ function registerLifecycleTools(server: McpServer): void {
     "remove-service",
     {
       title: "Drop a service from a feature",
+      annotations: { readOnlyHint: false },
       description:
         "Remove one service from the feature's local services so it falls back to k8s: " +
         "regenerate the workspace files, restart (or stop) the containers, re-point the proxy.",
@@ -368,6 +378,7 @@ function registerLifecycleTools(server: McpServer): void {
     "test",
     {
       title: "Run a feature's Playwright suite",
+      annotations: { readOnlyHint: false },
       description:
         "Run the feature's Playwright tests with SANDBOX_FEATURE set, so the suite carries the " +
         "X-Feature routing cookie. Runs only when the workspace has a Playwright config; otherwise nothing runs " +
@@ -399,6 +410,7 @@ function registerLifecycleTools(server: McpServer): void {
     "proxy-reload",
     {
       title: "Regenerate and reload the reverse proxy",
+      annotations: { readOnlyHint: false },
       description:
         "Rebuild the Caddyfile from the active features and hand it to Caddy, starting Caddy if " +
         "it is down. Call this after tearing features down.",
@@ -444,6 +456,7 @@ function registerAuthoringTools(server: McpServer): void {
     "close-out",
     {
       title: "End a workspace",
+      annotations: { readOnlyHint: false },
       description:
         "The one way to end a workspace. After every PR shipped: close the issue, write closeout.md, " +
         "commit and push every branch, tear the feature down, delete the workspace directory and the " +
@@ -488,6 +501,7 @@ function registerAuthoringTools(server: McpServer): void {
     "init-workspace",
     {
       title: "Reconcile a workspace",
+      annotations: { readOnlyHint: false },
       description:
         "Re-run init-workspace against an existing workspace: reconcile worktrees, regenerate " +
         `CLAUDE.md, .env, ${COMPOSE_FILE}, skills, agents, hooks and .mcp.json from ` +
@@ -508,6 +522,7 @@ function registerAuthoringTools(server: McpServer): void {
     "skills",
     {
       title: "Check or sync a workspace's context layer",
+      annotations: { readOnlyHint: false },
       description:
         "`check` reports drift between the workspace's context layer and a fresh rendering; " +
         "`sync` rewrites what drifted. The layer is the workspace's `context_strategy` (jit: " +
@@ -531,6 +546,7 @@ function registerAuthoringTools(server: McpServer): void {
     "standards",
     {
       title: "Validate the standards tree",
+      annotations: { readOnlyHint: true },
       description:
         "Run every structural validator over the configured standards tree. Errors come back as " +
         "data — an empty `errors` with a non-zero `moduleCount` is a clean tree.",
@@ -543,6 +559,7 @@ function registerAuthoringTools(server: McpServer): void {
     "hooks",
     {
       title: "Refresh a workspace's context layer",
+      annotations: { readOnlyHint: false },
       description:
         "Refresh the workspace's context layer the way `werkmeister up` does: jit re-merges its " +
         "SessionStart and PreToolUse hooks into .claude/settings.json; icm removes any " +
@@ -562,6 +579,7 @@ function registerAuthoringTools(server: McpServer): void {
     "notes",
     {
       title: "Read or graduate a workspace's notes",
+      annotations: { readOnlyHint: false },
       description:
         "`context` renders the session-start standards + notes block. `list` returns the " +
         "workspace's notes and its open `decisions` (icm reads them from stage outputs). " +
@@ -637,6 +655,7 @@ function registerHostTools(server: McpServer): void {
     "connect",
     {
       title: "Start shared infrastructure",
+      annotations: { readOnlyHint: false },
       description:
         "Bring up the shared infra every feature depends on: generated proxy files, the " +
         "corporate CA, the compose stack (caddy, k8s forwards, and jaeger / redisinsight " +
@@ -665,6 +684,7 @@ function registerHostTools(server: McpServer): void {
     "open-feature",
     {
       title: "Open a feature-tagged browser window",
+      annotations: { readOnlyHint: false },
       description:
         "Launch a browser window on the HOST, pre-configured with the feature's X-Feature " +
         "routing cookie and tagged so it is unmistakably this feature's window. The window " +
@@ -716,6 +736,7 @@ function registerHostTools(server: McpServer): void {
     "intercept",
     {
       title: "Start or leave a k8s traffic intercept",
+      annotations: { readOnlyHint: false },
       description:
         "Route the slice of live k8s dev traffic carrying `x-feature: <feature>` to this " +
         "feature's local container, or stop doing so. Runs host-side, where the telepresence " +
