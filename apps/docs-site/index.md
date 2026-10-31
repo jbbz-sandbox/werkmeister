@@ -6,11 +6,11 @@ hero:
   said: VAIRK-my-ster
   grammar: "<i>m</i> -s, -"
   senses:
-    - works foreman; the one who runs the building of the thing, not the one who builds it.
+    - foreman; the one who runs the building of the thing, not the one who builds it.
     - "<i>(Comput)</i> <code>w9r</code>: runs many pieces of work at once, each in its own workspace, and stops only where a person has to decide."
   etymology: "<i>German</i>, from <b>Werk</b> work (<i>Old High German</i> werc, akin to English <i>work</i>) + <b>Meister</b> master (<i>Old High German</i> meistar, from <i>Latin</i> magister)"
   text: Autonomous where it can be. Human where it must be.
-  tagline: Make the agent do the work and the person do the deciding.
+  tagline: Make the agent do the work and the person bring the intention.
   actions:
     - theme: brand
       text: Get started
