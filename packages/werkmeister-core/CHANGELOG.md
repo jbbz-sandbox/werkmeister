@@ -1,5 +1,13 @@
 # sandbox-core
 
+## 0.55.1
+
+### Patch Changes
+
+- a1a40a1: SW-260: give `refreshKubeconfig`'s local `kubectl` calls 30 s and 15 s instead of 10 s and 5 s, so a loaded host no longer reports a missing kubeconfig.
+- 378260d: SW-254: a daemon older than the CLI no longer fails with only `Tool scheduler not found`. When the daemon answers that it has no tool the CLI called, the error says the daemon is older than the CLI and names `werkmeister daemon restart` (code `DAEMON_STALE`). Other daemon errors are unchanged.
+- 6cf6e82: SW-259: under `node --test`, the Docker client gets a dead socket unless the test file called `useDockerEngine()` (fixtures.mjs), so a core test can no longer read the host engine's containers by accident, even when `DOCKER_HOST` is set. Outside a test run nothing changes.
+
 ## 0.55.0
 
 ### Minor Changes
