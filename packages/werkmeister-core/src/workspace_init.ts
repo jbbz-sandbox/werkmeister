@@ -43,6 +43,8 @@ import {
   loadMcpServers,
   loadServices,
 } from "./config.js";
+import { daemonPort } from "./daemon_client.js";
+import { writeWorkspaceDevcontainer } from "./devcontainer_gen.js";
 import { SandboxError } from "./errors.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
@@ -838,6 +840,15 @@ export async function initWorkspace(
   }
   mintWorkspaceToken(workspaceName, workspaceRoot);
   success(`Workspace token: ${path.relative(workspaceRoot, workspaceTokenFile(workspaceRoot))}`);
+  const devcontainerPath = writeWorkspaceDevcontainer({
+    workspaceName,
+    workspaceRoot,
+    workspacesRoot: resolveWorkspacesRoot(),
+    reposRoot: resolveReposRoot(),
+    home: os.homedir(),
+    port: daemonPort(),
+  });
+  success(`Wrote ${path.relative(workspaceRoot, devcontainerPath)}`);
 
   // 6e. Plugin-version guard. Never blocks.
   for (const warning of pluginDriftWarnings()) {

@@ -749,7 +749,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--prune-context`: After a context_strategy change, delete the previous strategy's files that git tracks unmodified (anything else is kept and reported).
 - `--refresh-issue`: Re-fetch the workspace's issue into .werkmeister/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).
 
-Reconciles a workspace from its `.werkmeister/workspace.yml` and regenerates its context files. It adds a git worktree for each repo the config needs (its `repos` plus the repos owning its `services`) and removes worktrees for repos it dropped; a dirty worktree stops the run unless `--force`. Then it writes CLAUDE.md, `.env`, `compose.yml`, the `.claude/` skills and agents, `.mcp.json` and `.werkmeister/*`.
+Reconciles a workspace from its `.werkmeister/workspace.yml` and regenerates its context files. It adds a git worktree for each repo the config needs (its `repos` plus the repos owning its `services`) and removes worktrees for repos it dropped; a dirty worktree stops the run unless `--force`. Then it writes CLAUDE.md, `.env`, `compose.yml`, the `.claude/` skills and agents, `.mcp.json`, `.devcontainer/devcontainer.json` and `.werkmeister/*`.
 
 It is idempotent: edit `workspace.yml` and rerun. It never prompts, and refuses to run in a bare folder; create a workspace with `werkmeister workspace`.
 
@@ -1570,8 +1570,8 @@ the pieces that are not obvious from the demo services:
 
 The four-edits recipe above wires a *compose service* that Werkmeister manages. The
 same server also lets you put the whole agent — Claude Code, the editor, your shell —
-somewhere isolated from the host, with port 3002 as the only bridge back. Three
-shapes, in order of how much they share with the host.
+somewhere isolated from the host, with port 3002 as the only bridge back. Shape 0 is
+generated for you; 1–3 are by hand, in order of how much they share with the host.
 
 **What every shape needs.** The server holds the Docker privilege, so the isolated side
 needs none of the socket, `kubectl`, `~/.kube`, `~/.werkmeister` or the `werkmeister` binary.
@@ -1583,21 +1583,42 @@ It does need:
 - `HOME` matching the host user, and `GIT_CONFIG_COUNT=1`,
   `GIT_CONFIG_KEY_0=safe.directory`, `GIT_CONFIG_VALUE_0=*` — the mounts arrive owned by
   a different uid.
-- `WERKMEISTER_MCP_TOKEN` from the workspace's own `.werkmeister/token`, which
-  `init-workspace` writes. The projected `.mcp.json` expands it into the bearer header.
-  The token names the workspace, so no feature header is needed: the daemon lists only
+- The workspace's own token, `.werkmeister/token`, which `init-workspace` writes, sent as
+  `Authorization: Bearer <token>`. The token names the workspace, so no feature header is needed: the daemon lists only
   that workspace's verbs (`up`, `status`, `logs`, `stop`, `down`, …) and refuses any other
   workspace with error code `SCOPE`. It is an identity, not a security boundary: with
   `~/repos` and `~/features` mounted read-write, the agent can already change what the
   host runs. Use `~/.werkmeister/mcp-token`, the machine token, only for host-wide tools.
 - A route to the host's 3002: `host.docker.internal` resolving to the host gateway.
-- The workspace's archetype carrying `mcp_servers: [werkmeister]` (edit 3 above). Nothing
-  else makes the entry survive `init-workspace`.
+- A container-only MCP registration for `http://host.docker.internal:3002/mcp` carrying
+  that header, made inside the container. Never put it in the
+  workspace's `.mcp.json`: host sessions share that file, and `host.docker.internal` does
+  not resolve on the host (SW-115).
 
 Two things stop working on the isolated side, by design. The `werkmeister` plugin's
 MCP entry runs `werkmeister mcp` over stdio, and its skills shell out to the CLI; with
 no binary there, use the tools the HTTP server exposes instead. And the
 dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
+
+**0. The generated devcontainer.** `init-workspace` writes
+`<workspace>/.devcontainer/devcontainer.json`, which sets every item above: `~/features`
+(as the workspace mount) and `~/repos` bound at their host paths, `HOME` and the
+`GIT_CONFIG_*` trio in `containerEnv`, `--add-host host.docker.internal:host-gateway` in
+`runArgs`, and a `postCreateCommand` that installs `claude` and runs
+`claude mcp add-json --scope user werkmeister` for `http://host.docker.internal:3002/mcp`
+with a `headersHelper` that reads the mounted `.werkmeister/token` at every connect, so a
+re-minted token needs only a reconnect (`/mcp`), not a rebuild. It is regenerated on every
+`init-workspace`; don't edit it. Open the workspace folder in VS Code and pick **Reopen in
+Container**, or run `npx @devcontainers/cli up --workspace-folder ~/features/<workspace>`.
+
+`~/.claude` inside is the volume `features-claude-home-<workspace>`, one per workspace, so
+the login survives a rebuild; log in to `claude` once per workspace, or pass a
+`claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN`. The registration is made again
+on every create.
+Remove the volume with `docker volume rm features-claude-home-<workspace>` once the
+workspace is gone. The volume holds no plugins,
+so only the HTTP server's tools appear. Check it with `claude mcp list` inside: it should
+show `werkmeister` as connected.
 
 **1. A plain container, by hand.** Nothing Werkmeister-managed; the host just has to have
 the daemon up (`werkmeister setup` on macOS, else `werkmeister connect`).
