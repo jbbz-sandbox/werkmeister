@@ -1,4 +1,4 @@
-// The merge is what makes `werkmeister setup` repeatable: every repo's
+// The merge is what makes `werkmeister machine setup` repeatable: every repo's
 // .werkmeister/services.yaml fragment lands in one generated registry, with the
 // collisions that would silently break port allocation or detection failing
 // loud instead. These tests pin the merge rules; the filesystem step
@@ -285,7 +285,7 @@ test("renderRegistry emits the marker, sources and the fixed key order", () => {
   assert.equal(parse(text).mcp_servers.context7.env.CONTEXT7_API_KEY, "${CONTEXT7_API_KEY:-}");
 });
 
-// --- syncRegistry: the step `werkmeister setup` and `werkmeister registry` run -------
+// --- syncRegistry: the step `werkmeister machine setup` and `werkmeister registry` run -------
 // Config lives in a temp ~/.werkmeister via WERKMEISTER_CONFIG_FILE, the same seam the
 // CLI's tests use, so servicesYamlPath() lands in the temp dir.
 const ENV = ["WERKMEISTER_CONFIG_FILE", "WERKMEISTER_SERVICES_YAML", "WERKMEISTER_WORKSPACES_ROOT"];
@@ -316,7 +316,7 @@ test("syncRegistry fails loud with nothing written when no fragment exists", () 
   assert.equal(step.label, "config services.yaml");
   assert.equal(step.ok, false);
   assert.match(step.detail, /no .werkmeister\/services\.yaml found under/);
-  assert.match(step.detail, /werkmeister setup/);
+  assert.match(step.detail, /werkmeister machine setup/);
   assert.equal(existsSync(registryPath()), false);
 });
 

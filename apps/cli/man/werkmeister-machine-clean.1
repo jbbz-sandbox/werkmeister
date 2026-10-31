@@ -1,0 +1,33 @@
+.TH WERKMEISTER-MACHINE-CLEAN 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-machine\-clean \- Remove orphaned volumes and generated files from stopped features
+.SH SYNOPSIS
+\fBwerkmeister machine clean\fR
+.SH OPTIONS
+.TP
+\fB\-\-all\fR
+Also clean volumes for currently active features (implies werkmeister down for each)
+.TP
+\fB\-\-dry\-run\fR
+Show what would be cleaned without actually removing anything
+.SH DESCRIPTION
+.PP
+\fBWhat it does:\fR
+.IP 1. 3
+Identifies per\-feature Docker volumes (node_modules, build caches) that belong to stopped features
+.IP 2. 3
+Removes those orphaned volumes
+.IP 3. 3
+Releases stale slot entries (features with no running containers or compose file)
+.PP
+With \fB\-\-all\fR, it first stops all active features (equivalent to running \fBwerkmeister feature down \-\-volumes\fR for each), then cleans everything.
+.PP
+\fBWhen to use:\fR
+.IP \(bu 3
+After extended development with many features started and stopped — volumes accumulate
+.IP \(bu 3
+Before a fresh start: \fBwerkmeister machine clean \-\-all\fR
+.IP \(bu 3
+To check what would be cleaned: \fBwerkmeister machine clean \-\-dry\-run\fR
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

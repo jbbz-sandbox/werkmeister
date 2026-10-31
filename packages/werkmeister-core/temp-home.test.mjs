@@ -110,7 +110,7 @@ test("waits through werkmeister wait-load on stderr, then runs the command once 
       env: stubbedPath(root),
     });
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(calls(root), "werkmeister wait-load\ncmd\n");
+    assert.equal(calls(root), "werkmeister internal wait-load\ncmd\n");
     assert.equal(r.stdout, "out", "the wait never writes to the command's stdout");
     assert.match(r.stderr, /waiting for host load 90\.0/);
   } finally {
@@ -139,7 +139,7 @@ test("no werkmeister on PATH, or a failing wait-load, still runs the command (SW
     assert.equal(bare.status, 4);
     const failing = spawnSync(bin, ["sh", "-c", "exit 5"], { env: stubbedPath(root, 1) });
     assert.equal(failing.status, 5);
-    assert.equal(calls(root), "werkmeister wait-load\n");
+    assert.equal(calls(root), "werkmeister internal wait-load\n");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -12,7 +12,7 @@
  * (docs/jit-context-system.md §3.2). Mechanical scaffolding is
  * `graduate.ts`; this module resolves domain/kind
  * (interactively at a TTY, or via `--domain`/`--kind` flags otherwise) and is
- * reused by `werkmeister down`'s teardown prompt.
+ * reused by `werkmeister feature down`'s teardown prompt.
  */
 
 import * as fs from "node:fs";

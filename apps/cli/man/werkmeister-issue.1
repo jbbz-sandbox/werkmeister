@@ -1,33 +1,11 @@
 .TH WERKMEISTER-ISSUE 1 "" "werkmeister" "Werkmeister Manual"
 .SH NAME
-werkmeister\-issue \- Read, update or file an issue in this machine's issue tracker (see \fBwerkmeister setup\fR)
+werkmeister\-issue \- Read, update or file an issue in this machine's issue tracker (see \fBwerkmeister machine setup\fR)
 .SH SYNOPSIS
-\fBwerkmeister issue\fR <action> [ref]
-.SH OPTIONS
-.TP
-\fB\-\-json\fR
-view, ready: print JSON
-.TP
-\fB\-\-status <name>\fR
-update: move the issue to this status
-.TP
-\fB\-\-comment <text>\fR
-update: add this comment
-.TP
-\fB\-\-project <key>\fR
-create: the Jira project key to file in; ready: a project from projects: in config.yaml
-.TP
-\fB\-\-type <type>\fR
-create: bug, feature or task (mapped to the tracker's issue type)
-.TP
-\fB\-\-title <text>\fR
-create: the issue's summary
-.TP
-\fB\-\-body\-file <path>\fR
-create: the issue's description, from a file (\- for stdin)
+\fBwerkmeister issue\fR [command]
 .SH DESCRIPTION
 .PP
-Reads or updates one issue in this machine's tracker (\fBwerkmeister setup\fR picks it).
+Reads or updates one issue in this machine's tracker (\fBwerkmeister machine setup\fR picks it).
 .IP \(bu 3
 \fBview\fR prints the issue's briefing; \fB\-\-json\fR prints it as JSON.
 .IP \(bu 3

@@ -1,0 +1,20 @@
+.TH WERKMEISTER-WORKSPACE-PROMPT 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-workspace\-prompt \- Print the enclosing workspace's starting_prompt from workspace.yml
+.SH SYNOPSIS
+\fBwerkmeister workspace prompt\fR
+.SH OPTIONS
+.TP
+\fB\-\-start <dir>\fR
+Directory to search up from (default: cwd)
+.TP
+\fB\-\-args\fR
+Print the start_session arguments (title, model, prompt, background) as JSON instead
+.SH DESCRIPTION
+.PP
+Prints the enclosing workspace's \fBstarting_prompt\fR, for the starting\-prompt skill.
+.SH EXIT CODES
+.PP
+1 when no \fBworkspace.yml\fR is found walking up from \fB\-\-start\fR; 2 when it has no \fBstarting_prompt\fR.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

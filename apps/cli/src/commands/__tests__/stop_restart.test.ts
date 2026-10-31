@@ -77,7 +77,7 @@ describe("sandbox stop", () => {
 
     await expect(go(() => runStop({ feature: "demo" }))).rejects.toThrow(Exited);
     expect(lines).toContain("[error] Feature 'demo' is not running (no slot allocated)");
-    expect(lines.indexOf("[info] Start it with: werkmeister up demo")).toBe(
+    expect(lines.indexOf("[info] Start it with: werkmeister feature up demo")).toBe(
       lines.indexOf("[error] Feature 'demo' is not running (no slot allocated)") + 1,
     );
   });
@@ -138,7 +138,7 @@ describe("sandbox stop --if-idle", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it("hands the stop to a detached `stop <feature> --via-daemon` rather than waiting on it", async () => {
+  it("hands the stop to a detached `feature stop <feature> --via-daemon` rather than waiting on it", async () => {
     vi.mocked(idleStopFeature).mockReturnValue("demo");
     await ifIdle();
     expect(idleStopFeature).toHaveBeenCalledWith(
@@ -146,7 +146,7 @@ describe("sandbox stop --if-idle", () => {
     );
     expect(spawn).toHaveBeenCalledOnce();
     const [, argv, opts] = vi.mocked(spawn).mock.calls[0];
-    expect(argv.slice(1)).toEqual(["stop", "demo", "--via-daemon"]);
+    expect(argv.slice(1)).toEqual(["feature", "stop", "demo", "--via-daemon"]);
     expect(opts).toMatchObject({ cwd: "/ws/demo", detached: true, stdio: "ignore" });
   });
 });
@@ -219,7 +219,7 @@ describe("sandbox restart", () => {
     );
 
     await expect(go(() => runRestart({ feature: "demo" }))).rejects.toThrow(Exited);
-    expect(lines.indexOf("[info] Check with: werkmeister logs demo")).toBe(
+    expect(lines.indexOf("[info] Check with: werkmeister feature logs demo")).toBe(
       lines.indexOf("[error] Failed to restart containers for 'demo'") + 1,
     );
   });

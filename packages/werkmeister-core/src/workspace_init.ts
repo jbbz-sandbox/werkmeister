@@ -1,6 +1,6 @@
 /**
- * Workspace creation and reconciliation — the work behind `werkmeister workspace`
- * and `werkmeister init-workspace`.
+ * Workspace creation and reconciliation — the work behind `werkmeister workspace new`
+ * and `werkmeister workspace init`.
  *
  * Moved here from `apps/cli/src/commands/workspace.ts` and
  * `.../init_workspace.ts` (note 086 row 5) so `createWorkspace` can call it
@@ -163,7 +163,7 @@ export async function resolveIssueCopy(
     } catch (e) {
       if (e instanceof IssueFetchError)
         throw new WorkspaceInitError(
-          `${e.message}; run \`werkmeister connect\` to check the issue tracker.`,
+          `${e.message}; run \`werkmeister infra connect\` to check the issue tracker.`,
         );
       throw e;
     }
@@ -223,14 +223,14 @@ function hasWorkspaceConfig(workspaceRoot: string, override: string | null): boo
 
 // No schema modeline or `$schema` key: the repo is private, so a GitHub URL
 // 404s in the editor, and either one outranks the local `yaml.schemas`
-// mapping `werkmeister setup` writes (machine_setup.ts :: syncEditorSchemas).
+// mapping `werkmeister machine setup` writes (machine_setup.ts :: syncEditorSchemas).
 const _WORKSPACE_CONFIG_HEADER =
   "# AUTO-GENERATED — durable source of truth for workspace inputs.\n" +
-  "# Tool:    werkmeister init-workspace\n" +
+  "# Tool:    werkmeister workspace init\n" +
   "# Source:  src/commands/init_workspace.ts :: _write_workspace_config\n" +
   "# Edit:    Hand-edit `feature`, `repos`, `services`, `issue_id`, `task`,\n" +
   "#          `test_path`, `description`, `labels`, or `starting_prompt` below; rerun\n" +
-  "#          `werkmeister init-workspace` to propagate changes into\n" +
+  "#          `werkmeister workspace init` to propagate changes into\n" +
   `#          CLAUDE.md / .env / ${COMPOSE_FILE} / .werkmeister/*.\n` +
   "#          Adding/removing a repo here reconciles git worktrees on rerun;\n" +
   "#          removing a repo with uncommitted edits needs `--force`.\n" +
@@ -356,14 +356,14 @@ function createWorkspaceRoot(workspaceDir: string, branch: string, force: boolea
 
   if (fs.existsSync(path.join(rootRepoSrc, ".git"))) {
     // SW-205: the record branch pushes to this checkout's origin, so it must be
-    // the configured repo — the same default `werkmeister setup` clones from.
+    // the configured repo — the same default `werkmeister machine setup` clones from.
     const want = loadWorkspaceRepo() || defaultWorkspaceRepo();
     const origin = want ? originMismatch(rootRepoSrc, workspaceRepoUrl(want)) : null;
     if (origin !== null) {
       fail(
         `${rootRepoSrc}'s origin is ${origin || "unset"}, but the configured workspace repo is ` +
           `${want} — this workspace's record would push to the wrong repo. ` +
-          "Run `werkmeister setup` to repoint it, then rerun.",
+          "Run `werkmeister machine setup` to repoint it, then rerun.",
       );
     }
     try {
@@ -435,7 +435,7 @@ async function selectRepos(
   if (unknown.length) {
     fail(
       `Unknown service(s): ${unknown.join(", ")}. ` +
-        "See `werkmeister services` / config/services.yaml.",
+        "See `werkmeister feature services` / config/services.yaml.",
     );
   }
 
@@ -474,7 +474,7 @@ export function findWorkspaceRoot(): string {
     `${Colors.RED}[err]  Not inside a workspace (checked: ` +
       `${rootsDisplay}) and no parent \`.git\` directory found.\n` +
       "       The workspaces root comes from ~/.werkmeister/config.yaml — run " +
-      "`werkmeister config --write` to set it (or `werkmeister config --check` to verify). " +
+      "`werkmeister machine config --write` to set it (or `werkmeister machine config --check` to verify). " +
       `See docs/known-issues.md for details.${Colors.RESET}`,
   );
 }
@@ -613,9 +613,9 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
  * Resolve the task title: `--task` > the caller's stdin reader > a hint derived
  * from the workspace slug.
  *
- * Reading fd 0 is the CLI's affordance (`echo "…" | werkmeister init-workspace`),
+ * Reading fd 0 is the CLI's affordance (`echo "…" | werkmeister workspace init`),
  * so only the CLI supplies a reader. In-process fd 0 belongs to the host — for
- * `werkmeister dashboard` it is the JSON-RPC channel — and must not be read.
+ * `werkmeister internal dashboard` it is the JSON-RPC channel — and must not be read.
  */
 function resolveTask(
   argsTask: string | null | undefined,
@@ -672,9 +672,9 @@ function logMeta(task: string, meta: Record<string, string>): void {
 }
 
 /**
- * Execute `werkmeister init-workspace`.
+ * Execute `werkmeister workspace init`.
  *
- * `workspaceRootOverride` is how `werkmeister workspace` hands over the directory it
+ * `workspaceRootOverride` is how `werkmeister workspace new` hands over the directory it
  * just created: everything below resolves paths from the root rather than the
  * cwd, so with it supplied this runs in-process instead of `workspace` having to
  * re-exec the CLI in the new directory just to move `findWorkspaceRoot`'s
@@ -705,8 +705,8 @@ export async function initWorkspace(
   if (!hasConfig && !inputs["feature"]) {
     fail(
       "No .werkmeister/workspace.yml found and no --feature given. " +
-        "Run `werkmeister workspace <name>` to create and initialise a workspace, " +
-        "then rerun `werkmeister init-workspace` from inside it to reconcile changes.",
+        "Run `werkmeister workspace new <name>` to create and initialise a workspace, " +
+        "then rerun `werkmeister workspace init` from inside it to reconcile changes.",
     );
   }
 
@@ -917,7 +917,7 @@ async function runInitWorkspace(
   resolved: Record<string, string>,
   opts: InitWorkspaceOptions,
 ): Promise<number> {
-  info(`Running: werkmeister init-workspace (feature: ${featureSlug})`);
+  info(`Running: werkmeister workspace init (feature: ${featureSlug})`);
   try {
     await initWorkspace(
       { ...resolved, feature: featureSlug, force: opts.force },
@@ -1009,9 +1009,9 @@ export async function provisionWorkspace(
   const rc = await runInitWorkspace(workspaceDir, featureSlug, resolved, opts);
   if (rc !== 0) {
     const message =
-      `werkmeister init-workspace exited with status ${rc}. ` +
+      `werkmeister workspace init exited with status ${rc}. ` +
       `The workspace root exists at ${workspaceDir}; ` +
-      "re-run `werkmeister init-workspace` from there once resolved.";
+      "re-run `werkmeister workspace init` from there once resolved.";
     warn(message);
     throw new WorkspaceInitError(message);
   }

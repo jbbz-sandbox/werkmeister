@@ -1,0 +1,35 @@
+.TH WERKMEISTER-MACHINE-CONFIG 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-machine\-config \- Set up and maintain the machine\-global werkmeister config (~/.werkmeister/config.yaml — the single source of truth); regenerates env.sh and wires up ~/.zshenv and the Desktop MCP config
+.SH SYNOPSIS
+\fBwerkmeister machine config\fR
+.SH OPTIONS
+.TP
+\fB\-\-write\fR
+Write config.yaml (prompting on a TTY for unset values), regenerate env.sh, and wire up ~/.zshenv and the Desktop MCP config. Without it (or a value to set) the command only prints the config.
+.TP
+\fB\-\-repos\-root <path>\fR
+Absolute path to the canonical source\-repo clones (non\-interactive set).
+.TP
+\fB\-\-workspaces\-root <path>\fR
+Absolute path to the per\-feature worktree workspaces (non\-interactive set).
+.TP
+\fB\-\-show\fR
+Print the resolved config and each value's origin (the default).
+.TP
+\fB\-\-check\fR
+Validate config + derived files; nonzero exit on drift.
+.SH DESCRIPTION
+.PP
+Sets up and maintains the machine\-global configuration, \fB~/.werkmeister/config.yaml\fR, the single source of truth. Writing it also regenerates \fB~/.werkmeister/env.sh\fR and keeps a managed block in \fB~/.zshenv\fR that sources it. The \fBWERKMEISTER_*\fR environment variables are derived from the YAML, not read as input.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister machine config                       # print the resolved config and origins
+werkmeister machine config \-\-write               # interactive wizard, then write
+werkmeister machine config \-\-check               # validate; nonzero exit on drift
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

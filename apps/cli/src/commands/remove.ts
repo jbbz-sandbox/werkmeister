@@ -1,5 +1,5 @@
 /**
- * werkmeister remove <feature> <service>
+ * werkmeister feature drop <feature> <service>
  *
  * Remove a local service from a feature, falling back to k8s for that
  * service. Re-generates compose and proxy configuration.

@@ -1,5 +1,5 @@
 /**
- * werkmeister down <feature>
+ * werkmeister feature down <feature>
  *
  * Stop containers, release the feature's slot, update the reverse proxy
  * configuration, and clean up generated files.
@@ -120,7 +120,7 @@ async function teardown(feature: string, removeVolumes: boolean): Promise<DownRe
   return downFeature(feature, { removeVolumes, signal: interruptSignal() });
 }
 
-/** Execute the `werkmeister down` command. */
+/** Execute the `werkmeister feature down` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());
   const removeVolumes = Boolean(args.volumes);

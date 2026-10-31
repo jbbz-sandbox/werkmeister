@@ -184,11 +184,11 @@ test("deny rules: added, the person's kept, and dropped once unwanted", () => {
 test("autonomousRules: the feature's own werkmeister and docker targets, exact where extra args reach others", () => {
   const rules = autonomousRules("feat", ["api"]);
   for (const r of [
-    "Bash(werkmeister up feat)",
-    "Bash(w9r up feat)",
-    "Bash(werkmeister restart feat)",
-    "Bash(werkmeister logs feat:*)",
-    "Bash(werkmeister test feat:*)",
+    "Bash(werkmeister feature up feat)",
+    "Bash(w9r feature up feat)",
+    "Bash(werkmeister feature restart feat)",
+    "Bash(werkmeister feature logs feat:*)",
+    "Bash(werkmeister feature test feat:*)",
     "Bash(docker exec feat-api:*)",
     "Bash(docker restart feat-api)",
   ])
@@ -207,10 +207,10 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
     ["Bash(pnpm install --frozen-lockfile:*)"],
   );
   for (const r of [
-    "Bash(werkmeister proxy-reload:*)",
+    "Bash(werkmeister infra proxy-reload:*)",
     "Bash(werkmeister remove-workspace:*)",
-    "Bash(werkmeister down:*)",
-    "Bash(w9r proxy-reload:*)",
+    "Bash(werkmeister feature down:*)",
+    "Bash(w9r infra proxy-reload:*)",
     "Bash(docker stop:*)",
     "Bash(docker rm:*)",
     "Bash(npm publish:*)",
@@ -229,6 +229,47 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
   assert.ok(!AUTONOMOUS_DENY.some((r) => allowed.has(r)), "no rule both allowed and denied");
   // SW-23: the pre-SW-9 plugin prefix is no longer generated.
   assert.ok(![...AUTONOMOUS_DENY, ...allowed].some((r) => r.includes("sandbox-tools")));
+});
+
+test("SW-186: each pre-rename spelling keeps its rule through the window, beside its noun-group twin", () => {
+  for (const name of ["werkmeister", "w9r"]) {
+    for (const [old, now] of [
+      ["up", "feature up"],
+      ["restart", "feature restart"],
+      ["init-workspace:*", "workspace init:*"],
+      ["status:*", "feature status:*"],
+      ["status:*", "infra status:*"],
+    ]) {
+      assert.ok(AUTONOMOUS_RULES.includes(`Bash(${name} ${old})`), `${name} ${old}`);
+      assert.ok(AUTONOMOUS_RULES.includes(`Bash(${name} ${now})`), `${name} ${now}`);
+    }
+    for (const [old, now] of [
+      ["proxy-reload", "infra proxy-reload"],
+      ["down", "feature down"],
+      ["remove", "feature drop"],
+      ["clean", "machine clean"],
+      ["setup", "machine setup"],
+      ["connect", "infra connect"],
+      ["intercept", "infra intercept"],
+      ["up infra", "infra up"],
+      ["down", "infra down"],
+      ["restart infra", "infra restart"],
+      ["stop infra", "infra stop"],
+    ]) {
+      assert.ok(AUTONOMOUS_DENY.includes(`Bash(${name} ${old}:*)`), `deny ${name} ${old}`);
+      assert.ok(AUTONOMOUS_DENY.includes(`Bash(${name} ${now}:*)`), `deny ${name} ${now}`);
+    }
+    // `workspace:*` would also deny `workspace init`, so creating is denied by verb.
+    assert.ok(!AUTONOMOUS_DENY.includes(`Bash(${name} workspace:*)`));
+    for (const verb of ["workspace new", "ws new"])
+      assert.ok(AUTONOMOUS_DENY.includes(`Bash(${name} ${verb}:*)`), verb);
+  }
+  // The own feature's one-service start (SW-132) is the only new prefix rule on `feature up`.
+  const featureUp = autonomousRules("feat", ["api"]).filter((r) => r.includes(" feature up"));
+  assert.ok(
+    featureUp.every((r) => !r.endsWith(":*)") || r.includes("--service:*")),
+    featureUp.join(),
+  );
 });
 
 // A `Bash(…)` rule is a literal prefix: one written only for `werkmeister` never
@@ -262,7 +303,7 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   );
   assert.ok(
     settings.hooks.PreToolUse.some((e) =>
-      e.hooks.some((h) => h.command.includes("werkmeister hooks pr-guard")),
+      e.hooks.some((h) => h.command.includes("werkmeister internal pr-guard")),
     ),
     "PR guard still installed",
   );

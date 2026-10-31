@@ -1,0 +1,27 @@
+.TH WERKMEISTER-MACHINE-MIGRATE 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-machine\-migrate \- Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, env.sh, the ~/.zshenv block, services.yaml, the pr\-watch schedule and workspace compose files; then rewrite workspace hooks, permission rules and with\-temp\-home, secrets.env and Claude Desktop's args to the noun\-group spellings. Safe to re\-run; refuses while affected containers are running. \" name-check: ignore
+.SH SYNOPSIS
+\fBwerkmeister machine migrate\fR
+.SH OPTIONS
+.TP
+\fB\-\-workspaces\fR
+Also rename each workspace's .sandbox/ to .werkmeister/. \" name-check: ignore
+.TP
+\fB\-\-check\fR
+Report what would change without writing.
+.SH DESCRIPTION
+.PP
+A one\-shot move of the pre\-rename machine folder to \fB~/.werkmeister\fR, repointing every file that carries the old path. Safe to re\-run; it refuses while containers the move would break are running. Pull and rebuild the CLI before you migrate.
+.PP
+It also brings what an older CLI wrote up to the noun\-group spellings (SW\-186): each workspace's hooks, permission rules and \fBwith\-temp\-home\fR, the stale pre\-rename MCP token in \fBsecrets.env\fR, and Claude Desktop's server args. A workspace whose \fB.env\fR still exports only \fBSANDBOX_FEATURE\fR is listed; run \fBwerkmeister workspace init\fR there. \" name-check: ignore
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister machine migrate \-\-check
+werkmeister machine migrate \-\-workspaces
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

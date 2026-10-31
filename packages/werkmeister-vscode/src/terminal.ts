@@ -2,7 +2,7 @@
  * The one place the extension runs a `werkmeister` command.
  *
  * A real terminal rather than an OutputChannel: ANSI colour, scrollback and
- * Ctrl-C come free, `werkmeister workspace`'s interactive wizard needs a TTY, and
+ * Ctrl-C come free, `werkmeister workspace new`'s interactive wizard needs a TTY, and
  * `cwd` makes the CLI resolve FEATURE/slot from that workspace's .env exactly as
  * a human running the command there would.
  *
@@ -66,13 +66,13 @@ function whenReady(term: vscode.Terminal): Promise<void> {
  * terminal. Resolves once the command has been sent — not when it finishes;
  * the tree's poll picks up the result.
  *
- * Reuses a terminal only once its foreground command has ended: `werkmeister logs`
- * runs `docker compose logs -f` and never exits, and `werkmeister up` runs for
+ * Reuses a terminal only once its foreground command has ended: `werkmeister feature logs`
+ * runs `docker compose logs -f` and never exits, and `werkmeister feature up` runs for
  * 30-60s — text sent while that process is alive is swallowed by its STDIN
  * instead of running. Reuse is keyed on cwd because the CLI resolves
  * FEATURE/slot from the .env there, so the name is derived from cwd too: a
  * reused terminal keeps the name it was created with, and naming it after the
- * first command would leave `werkmeister stop foo` running every later up/down.
+ * first command would leave `werkmeister feature stop foo` running every later up/down.
  * `name` is for the callers whose cwd says nothing useful (the wizard, `connect`).
  */
 export async function runInTerminal(args: string[], cwd: string, name?: string): Promise<void> {

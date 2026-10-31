@@ -1,5 +1,5 @@
 /**
- * werkmeister restart <feature>
+ * werkmeister feature restart <feature>
  *
  * Restart all containers for a feature's stack.
  */
@@ -31,8 +31,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // handler cannot reproduce — it only knows how to print the message. So the
   // codes that carry one report themselves; anything else propagates.
   const hints: Record<string, string> = {
-    NOT_RUNNING: `Start it with: werkmeister up ${feature}`,
-    COMPOSE_RESTART_FAILED: `Check with: werkmeister logs ${feature}`,
+    NOT_RUNNING: `Start it with: werkmeister feature up ${feature}`,
+    COMPOSE_RESTART_FAILED: `Check with: werkmeister feature logs ${feature}`,
   };
 
   try {

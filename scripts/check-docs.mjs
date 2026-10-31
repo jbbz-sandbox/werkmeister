@@ -31,9 +31,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Names and paths that were renamed or removed. A hit is drift unless the line opts out. */
 export const RETIRED = [
-  [/\bk8s-connect\b/, "`werkmeister connect --k8s`"],
-  [/\bk8s-status\b/, "`werkmeister status --k8s`"],
-  [/\binfra-up\b/, "`werkmeister up infra`"],
+  [/\bk8s-connect\b/, "`werkmeister infra connect --k8s`"],
+  [/\bk8s-status\b/, "`werkmeister infra status`"],
+  [/\binfra-up\b/, "`werkmeister infra up`"],
   [/\bworkspace-status\b/, "the `status` MCP tool"],
   [/\bstandards build\b/, "retired; standards render at init-workspace"],
   [/\binfra\/config\//, "`~/.werkmeister/` (services.yaml, ports.yaml)"],
@@ -46,6 +46,45 @@ export const RETIRED = [
     /\b(?:apps\/(?:mcp|sandbox-dashboard)|packages\/(?:sandbox-core|sandbox-ui|vscode-plugin))(?![\w-])/, // name-check: ignore
     "the `werkmeister-*` directory (SW-30)",
   ],
+  // SW-186's noun groups. Only a command (after a backtick, `$ ` or `&&`), not prose.
+  ...Object.entries({
+    up: "feature up` or `infra up",
+    down: "feature down` or `infra down",
+    restart: "feature restart` or `infra restart",
+    stop: "feature stop`, `infra stop`, `internal session-end` or `internal reap",
+    status: "feature status` or `infra status",
+    pause: "feature pause",
+    resume: "feature resume",
+    services: "feature services",
+    logs: "feature logs",
+    remove: "feature drop",
+    test: "feature test",
+    open: "feature open",
+    connect: "infra connect",
+    "proxy-reload": "infra proxy-reload",
+    intercept: "infra intercept",
+    "init-workspace": "workspace init",
+    "list-workspaces": "workspace list",
+    "close-out": "workspace close` or `workspace abandon",
+    "remove-workspace": "workspace abandon",
+    code: "workspace code",
+    "starting-prompt": "workspace prompt",
+    "start-args": "workspace prompt --args",
+    "wait-load": "internal wait-load",
+    hooks: "internal gate`, `internal pr-guard` or `internal agent-state",
+    setup: "machine setup",
+    config: "machine config",
+    detect: "machine detect",
+    migrate: "machine migrate",
+    clean: "machine clean",
+    stats: "machine stats",
+    optimize: "machine optimize",
+    mcp: "internal mcp",
+    dashboard: "internal dashboard",
+  }).map(([old, now]) => [
+    new RegExp(`(?<=\`|\\$ |&& )(?:werkmeister|w9r) ${old}(?![\\w.-])`),
+    `\`werkmeister ${now}\` (SW-186)`,
+  ]),
 ];
 
 /** Each man page in `dir` that differs from `pages` (what `docs:gen` writes), is missing, or has no command. */
@@ -169,7 +208,12 @@ export function checkCommands(line, code, cli, report) {
   for (const m of code.matchAll(
     /(?:^|[;&|(]\s*|^\s*\$\s+)(werkmeister|w9r) ([a-z][\w-]*)([^;&|()]*)/g,
   )) {
-    const flags = cli.commands.get(m[2]);
+    // SW-186: `<noun> <verb>` names one command, with its own flags.
+    // `ws` is `workspace`'s alias; a permission rule's verb ends in `:*`.
+    const noun = m[2] === "ws" ? "workspace" : m[2];
+    const verb = m[3].trim().match(/^[a-z][\w-]*/)?.[0];
+    const name = cli.commands.has(`${noun} ${verb}`) ? `${noun} ${verb}` : m[2];
+    const flags = cli.commands.get(name);
     if (!flags) {
       report(line, `unknown command \`${m[1]} ${m[2]}\``);
       continue;
@@ -179,7 +223,7 @@ export function checkCommands(line, code, cli, report) {
     for (const arg of end < 0 ? args : args.slice(0, end)) {
       const flag = arg.match(/^--[a-z][\w-]*/)?.[0];
       if (flag && !flags.has(flag) && flag !== "--help")
-        report(line, `unknown flag \`${m[1]} ${m[2]} ${flag}\``);
+        report(line, `unknown flag \`${m[1]} ${name} ${flag}\``);
     }
   }
 }

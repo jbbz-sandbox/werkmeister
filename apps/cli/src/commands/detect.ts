@@ -1,5 +1,5 @@
 /**
- * werkmeister detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
+ * werkmeister machine detect [repo] [--dry-run] [--yes] [--assist | --no-assist]
  *
  * Generate <repo>/.werkmeister/services.yaml from what the repo already says about
  * itself: package manifests, Dockerfiles, compose, Helm, k8s and kustomize.
@@ -101,13 +101,13 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   if (args.repo) {
     root = path.resolve(deps.cwd, args.repo);
     if (!fs.statSync(root, { throwIfNoEntry: false })?.isDirectory()) {
-      warn(`${root} is not a directory — pass the repo path: werkmeister detect <repo>`);
+      warn(`${root} is not a directory — pass the repo path: werkmeister machine detect <repo>`);
       return 2;
     }
   } else {
     const [rc, out] = deps.runner(["git", "-C", deps.cwd, "rev-parse", "--show-toplevel"]);
     if (rc !== 0) {
-      warn("Not inside a git repo — pass the repo path: werkmeister detect <repo>");
+      warn("Not inside a git repo — pass the repo path: werkmeister machine detect <repo>");
       return 2;
     }
     root = out.trim();

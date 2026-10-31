@@ -210,6 +210,9 @@ const TH = (name) => `.TH ${name.toUpperCase()} 1 "" "werkmeister" "Werkmeister 
  * works) holds its synopsis, options and help.md. No version or date in `.TH`:
  * either would make every release PR fail docs:check.
  */
+// One page per command; `feature up` (SW-186) is `werkmeister-feature-up(1)`, as git names `git-remote`.
+const page = (c) => c.name.replaceAll(" ", "-");
+
 export function manPages(commands) {
   const pages = {
     "werkmeister.1": [
@@ -230,15 +233,15 @@ export function manPages(commands) {
         ]),
       ]),
       ".SH SEE ALSO",
-      commands.map((c) => `\\fBwerkmeister\\-${roffText(c.name)}\\fR(1)`).join(",\n"),
+      commands.map((c) => `\\fBwerkmeister\\-${roffText(page(c))}\\fR(1)`).join(",\n"),
     ].join("\n"),
   };
   for (const c of commands) {
     const options = c.options.filter((o) => !o.hidden);
-    pages[`werkmeister-${c.name}.1`] = [
-      TH(`werkmeister-${c.name}`),
+    pages[`werkmeister-${page(c)}.1`] = [
+      TH(`werkmeister-${page(c)}`),
       ".SH NAME",
-      `werkmeister\\-${roffText(c.name)} \\- ${roffText(md(c.description))}`,
+      `werkmeister\\-${roffText(page(c))} \\- ${roffText(md(c.description))}`,
       ".SH SYNOPSIS",
       `\\fBwerkmeister ${roffText(c.name)}\\fR ${roffText(c.usage)}`.trim(),
       ...(options.length

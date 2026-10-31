@@ -1,5 +1,5 @@
 /**
- * The Resolver behind `werkmeister detect --assist`: one Claude Agent SDK session
+ * The Resolver behind `werkmeister machine detect --assist`: one Claude Agent SDK session
  * over the repo, read-only, returning answers as structured output. Imported
  * lazily so the SDK loads only when the user opts in.
  */

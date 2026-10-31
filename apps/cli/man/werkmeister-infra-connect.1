@@ -1,0 +1,25 @@
+.TH WERKMEISTER-INFRA-CONNECT 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-infra\-connect \- Start all shared infrastructure (local + k8s port\-forwards)
+.SH SYNOPSIS
+\fBwerkmeister infra connect\fR
+.SH OPTIONS
+.TP
+\fB\-\-k8s\fR
+Start/restart k8s port\-forwards container only (replaces standalone k8s\-connect command)
+.SH DESCRIPTION
+.PP
+\fB`\-\-k8s`\fR starts or checks only the containerized k8s port\-forwards. Starts the \fBk8s\-forwards\fR Docker container (part of \fBinfra/compose/shared\-infra.yml\fR) which runs all 12 \fBkubectl port\-forward\fR processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
+.PP
+The container runs on the \fBwerkmeister\-shared\fR Docker network and is accessible to other containers via the DNS name \fBk8s\-forwards\fR. Port\-forward processes inside the container auto\-restart if they disconnect, managed by the container's entrypoint script.
+.PP
+After starting, it runs a health check and reports the status.
+.PP
+.nf
+.RS 4
+[info] Starting k8s\-forwards container...
+[ok]   k8s\-forwards container is healthy. 12/12 forwards active.
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

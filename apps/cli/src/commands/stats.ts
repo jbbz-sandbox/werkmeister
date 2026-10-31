@@ -1,13 +1,13 @@
 /**
- * werkmeister stats
+ * werkmeister machine stats
  *
  * Collect and display Docker container resource usage for all werkmeister containers.
  * Supports a one-shot snapshot or continuous collection over a time period.
  *
  * Examples:
- *     werkmeister stats                     # Snapshot of current usage
- *     werkmeister stats --collect 5         # Collect for 5 minutes
- *     werkmeister stats --collect 30 -i 5   # 30 minutes, 5-second intervals
+ *     werkmeister machine stats                     # Snapshot of current usage
+ *     werkmeister machine stats --collect 5         # Collect for 5 minutes
+ *     werkmeister machine stats --collect 30 -i 5   # 30 minutes, 5-second intervals
  */
 
 import { containerStats } from "werkmeister-core/docker";
@@ -103,7 +103,7 @@ function formatRecommendations(recommendations: Recommendation[]): string {
   return lines.join("\n");
 }
 
-/** Execute the ``werkmeister stats`` command. */
+/** Execute the ``werkmeister machine stats`` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const duration = (args.collect as number) ?? 0;
   const interval = (args.interval as number) ?? 10;

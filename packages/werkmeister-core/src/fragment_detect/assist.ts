@@ -98,7 +98,7 @@ export function collectQuestions(plan: Plan): Question[] {
       if (!f.secrets) {
         ask("secrets", {
           kind: "secrets",
-          prompt: `Which of these keys must be set for ${s.name} to start at all? A declared secret that is missing stops \`werkmeister up\`.`,
+          prompt: `Which of these keys must be set for ${s.name} to start at all? A declared secret that is missing stops \`werkmeister feature up\`.`,
           facts: { dir: s.dir },
           choices: example,
         });

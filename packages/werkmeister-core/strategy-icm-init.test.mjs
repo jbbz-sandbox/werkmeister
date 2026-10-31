@@ -172,11 +172,14 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.match(implement, /rows `comments`, `ponytail`/);
     assert.doesNotMatch(implement, /`ui`/);
-    // SW-135: a never-started container has no pnpm until `werkmeister up` bootstraps it.
-    assert.match(implement, /not running, run `werkmeister up` once first/);
+    // SW-135: a never-started container has no pnpm until `werkmeister feature up` bootstraps it.
+    assert.match(implement, /not running, run `werkmeister feature up` once first/);
     assert.match(implement, /`docker restart` only reloads one that is already running/);
-    assert.match(implement, /never run `werkmeister restart` or `werkmeister init-workspace`/i);
-    assert.doesNotMatch(implement, /never run `werkmeister up`/i);
+    assert.match(
+      implement,
+      /never run `werkmeister feature restart` or `werkmeister workspace init`/i,
+    );
+    assert.doesNotMatch(implement, /never run `werkmeister feature up`/i);
     for (const f of walk(root)) {
       if (f.endsWith(".md"))
         assert.doesNotMatch(fs.readFileSync(path.join(root, f), "utf8"), /undefined/, f);
@@ -399,11 +402,11 @@ test("the merged-or-released router row runs the post-mortem, then asks the pers
     const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
     assert.match(
       read("CLAUDE.md"),
-      /^\| a PR merged or released, or asked to close out \| `werkmeister pr status`, then the werkmeister `postmortem` skill \(writes `postmortem\.md`\), then ask the person before `werkmeister close-out` \| .* \|$/m,
+      /^\| a PR merged or released, or asked to close out \| `werkmeister pr status`, then the werkmeister `postmortem` skill \(writes `postmortem\.md`\), then ask the person before `werkmeister workspace close` \| .* \|$/m,
     );
     assert.match(
       read("stages/04_propose/CONTEXT.md"),
-      /then the post-mortem \(`postmortem` skill\), then ask the person before `werkmeister close-out`/,
+      /then the post-mortem \(`postmortem` skill\), then ask the person before `werkmeister workspace close`/,
     );
     assert.match(read("_shared/pr-rules.md"), /^7\. .*`postmortem\.md`.*--skip-postmortem/m);
   });
@@ -449,7 +452,7 @@ test("an issue puts the issue section in CLAUDE.md and BRIEF.md", async () => {
       );
       assert.match(
         claude,
-        /\| `\.werkmeister\/issue\.md` \| the issue as fetched at creation; refresh with `werkmeister init-workspace --refresh-issue` \|/,
+        /\| `\.werkmeister\/issue\.md` \| the issue as fetched at creation; refresh with `werkmeister workspace init --refresh-issue` \|/,
       );
       const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
       assert.match(
@@ -578,7 +581,7 @@ test("a no-copy issue keeps the placeholder brief; a fetched copy then rebuilds 
       assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), placeholder);
       assert.doesNotMatch(
         fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"),
-        /\| `\.werkmeister\/issue\.md` \| the issue as fetched at creation; refresh with `werkmeister init-workspace --refresh-issue` \|/,
+        /\| `\.werkmeister\/issue\.md` \| the issue as fetched at creation; refresh with `werkmeister workspace init --refresh-issue` \|/,
       );
       icm.init({ ...ctx, issue: ISSUE });
       const brief = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");

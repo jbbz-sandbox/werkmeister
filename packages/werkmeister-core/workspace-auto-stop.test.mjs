@@ -1,5 +1,5 @@
 // The opt-in `auto_stop` (#231): workspace.yml → the managed SessionEnd hook in
-// settings.json, the idle check behind `werkmeister stop --if-idle` and the create
+// settings.json, the idle check behind `werkmeister internal session-end` and the create
 // form. werkmeister-context.md's line is in werkmeister-context.test.mjs.
 
 import assert from "node:assert/strict";
@@ -54,8 +54,30 @@ test("auto_stop on: one managed SessionEnd entry, user entries kept, no duplicat
   const hooks = readHooks(root);
   assert.deepEqual(hooks.SessionEnd, [USER_END, buildSessionEndEntry(), AGENT]);
   assert.deepEqual(hooks.PreToolUse, [USER_PRE, AGENT]);
-  assert.match(hooks.SessionEnd[1].hooks[0].command, /werkmeister stop --if-idle/);
+  assert.match(hooks.SessionEnd[1].hooks[0].command, /werkmeister internal session-end/);
   assert.equal(hooks.SessionEnd[1].hooks[0].timeout, 10);
+});
+
+test("SW-186: hooks written with the pre-rename spellings are replaced, not doubled", () => {
+  const pre186 = (entry) =>
+    JSON.parse(
+      JSON.stringify(entry)
+        .replace("werkmeister internal session-end", "werkmeister stop --if-idle")
+        .replace(/werkmeister internal (gate|pr-guard|agent-state)/g, "werkmeister hooks $1"),
+    );
+  const root = workspace("feature: f\nauto_stop: true\n", {
+    hooks: {
+      SessionEnd: [USER_END, pre186(buildSessionEndEntry()), pre186(AGENT)],
+      PreToolUse: [USER_PRE, pre186(AGENT)],
+    },
+  });
+  writeWorkspaceSettings(root);
+  const hooks = readHooks(root);
+  assert.deepEqual(hooks.SessionEnd, [USER_END, buildSessionEndEntry(), AGENT]);
+  assert.deepEqual(hooks.PreToolUse[0], USER_PRE);
+  assert.equal(hooks.PreToolUse.filter((e) => JSON.stringify(e).includes("agent-state")).length, 1);
+  const text = JSON.stringify(hooks);
+  assert.ok(!/werkmeister (hooks |stop --if-idle)/.test(text), text);
 });
 
 test("auto_stop off: the managed entry is removed, the user's stays", () => {

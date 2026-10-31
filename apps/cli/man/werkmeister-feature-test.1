@@ -1,0 +1,41 @@
+.TH WERKMEISTER-FEATURE-TEST 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-feature\-test \- Run Playwright tests against a feature's stack
+.SH SYNOPSIS
+\fBwerkmeister feature test\fR <feature> [extra...]
+.SH OPTIONS
+.TP
+\fB\-\-scaffold\fR
+Don't run: write playwright.config.ts + \e<feature>.spec.ts into the workspace (if missing) and install the pinned @playwright/test
+.TP
+\fB\-w, \-\-workspace <path>\fR
+\-\-scaffold: workspace directory (default: from cwd)
+.TP
+\fB\-\-base\-url <url>\fR
+\-\-scaffold: ingress URL to target (default: the first feature_router service)
+.SH DESCRIPTION
+.PP
+\fBWhat it does:\fR
+.IP 1. 3
+Looks for a \fBplaywright.config.ts\fR (or \fB.js\fR/\fB.mjs\fR) in the workspace root, then in each repo worktree under it (\fB~/workspace/<feature>/<repo>/\fR). There is no fallback to the Werkmeister root.
+.IP 2. 3
+If none is found, runs nothing and exits non\-zero. The message lists each workspace service's test command and \fBvalidate:\fR guidance. Libraries, CLIs and extensions are validated that way, not with Playwright; see Test commands and validation guidance.
+.IP 3. 3
+Otherwise sets \fBSANDBOX_FEATURE\fR and \fBWERKMEISTER_SLOT\fR for the Playwright process and runs \fBnpx playwright test\fR from that directory with a 10\-minute timeout \" name-check: ignore
+.PP
+.nf
+.RS 4
+# Run all tests
+werkmeister feature test my\-feature
+
+# Run specific test file
+werkmeister feature test my\-feature \-\- tests/homepage.spec.ts
+
+# Run with headed browser
+werkmeister feature test my\-feature \-\- \-\-headed
+.RE
+.fi
+.PP
+The feature doesn't need to have an active slot — if it doesn't, the command warns but proceeds with just the feature header routing.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

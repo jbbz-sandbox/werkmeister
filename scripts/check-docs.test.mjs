@@ -10,8 +10,12 @@ const ctx = {
   cli: {
     commands: new Map([
       ["status", new Set(["--k8s", "--json"])],
-      ["down", new Set(["--volumes"])],
-      ["pr", new Set(["--install", "--no-pr", "--json"])],
+      ["feature status", new Set(["--json"])],
+      ["infra status", new Set(["--json"])],
+      ["workspace new", new Set()],
+      ["feature down", new Set(["--volumes"])],
+      ["pr watch", new Set(["--install", "--json"])],
+      ["pr adopt", new Set(["--no-pr", "--json"])],
     ]),
   },
   tools: new Set(["status"]),
@@ -37,14 +41,25 @@ test("flags broken relative links and missing repo paths, not pinned ones", () =
 });
 
 test("checks commands and flags only where a command starts", () => {
-  assert.deepEqual(check("`werkmeister status --k8s`"), []);
+  assert.deepEqual(check("`werkmeister infra status`"), []);
   assert.equal(check("`werkmeister k9s`").length, 1);
-  assert.equal(check("`werkmeister status --all`").length, 1);
+  assert.equal(check("`werkmeister feature status --all`").length, 1);
   assert.deepEqual(
-    check("```\n# werkmeister never overwrites\ncd x && werkmeister status --json\n```"),
+    check("```\n# werkmeister never overwrites\ncd x && werkmeister feature status --json\n```"),
     [],
   );
   assert.deepEqual(check("`npm view werkmeister version`"), []);
+});
+
+test("a noun's verb is its own command, and a pre-SW-186 spelling is retired", () => {
+  assert.equal(check("`werkmeister feature status --k8s`").length, 1);
+  assert.match(
+    check("`werkmeister status --k8s`")[0],
+    /retired `werkmeister status` — use .*`infra status`/,
+  );
+  assert.match(check("`w9r up feat`")[0], /werkmeister feature up/);
+  assert.deepEqual(check("the werkmeister status of a run"), []);
+  assert.deepEqual(check("`Bash(werkmeister feature status:*)` and `w9r ws new`"), []);
 });
 
 test("checks MCP tool names", () => {
@@ -54,18 +69,18 @@ test("checks MCP tool names", () => {
 });
 
 test("checks flags anywhere in a command, up to a bare --", () => {
-  assert.deepEqual(check("`werkmeister down my-feature --volumes`"), []);
+  assert.deepEqual(check("`werkmeister feature down my-feature --volumes`"), []);
   assert.deepEqual(check("`werkmeister pr watch --install`"), []);
-  assert.deepEqual(check("`werkmeister down x -- --nope`"), []);
+  assert.deepEqual(check("`werkmeister feature down x -- --nope`"), []);
   assert.deepEqual(check('`werkmeister pr adopt --no-pr "a --b"`'), []);
-  assert.equal(check("`werkmeister down my-feature --nope`").length, 1);
+  assert.equal(check("`werkmeister feature down my-feature --nope`").length, 1);
   assert.equal(check("`werkmeister pr watch --all`").length, 1);
 });
 
 test("checks w9r <cmd> lines like werkmeister ones", () => {
-  assert.deepEqual(check("`w9r status --k8s`"), []);
-  assert.deepEqual(check("`cd sandbox && werkmeister status`"), []);
-  assert.equal(check("`w9r status --all`").length, 1);
+  assert.deepEqual(check("`w9r infra status`"), []);
+  assert.deepEqual(check("`cd sandbox && werkmeister feature status`"), []);
+  assert.equal(check("`w9r feature status --all`").length, 1);
   assert.equal(check("`w9r k9s`").length, 1);
 });
 

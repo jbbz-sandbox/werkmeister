@@ -321,7 +321,7 @@ function composeCommand(
   if (composePath === null || !isFile(composePath)) {
     error(
       `No ${COMPOSE_FILE} found for feature '${feature}'.\n` +
-        `       Run 'werkmeister init-workspace' (and 'werkmeister up') from the ` +
+        `       Run 'werkmeister workspace init' (and 'werkmeister feature up') from the ` +
         `feature's workspace first.`,
     );
     return null;
@@ -544,7 +544,7 @@ export async function composeDownAsync(
  * Stop (but do not remove) containers for *feature*.
  *
  * The slot and generated files are preserved so the feature can be
- * resumed with `werkmeister restart <feature>` or `werkmeister up <feature>`.
+ * resumed with `werkmeister feature restart <feature>` or `werkmeister feature up <feature>`.
  *
  * Returns true on success.
  */
@@ -677,7 +677,7 @@ export async function composeLogs(
 ): Promise<void> {
   if ((await getSlot(feature)) === null) {
     warn(`Feature '${feature}' is not running (no slot allocated)`);
-    warn(`Start it with: werkmeister up ${feature}`);
+    warn(`Start it with: werkmeister feature up ${feature}`);
     return;
   }
 

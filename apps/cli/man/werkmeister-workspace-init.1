@@ -1,0 +1,79 @@
+.TH WERKMEISTER-WORKSPACE-INIT 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-workspace\-init \- Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the \fBrepos\fR/\fBservices\fR fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
+.SH SYNOPSIS
+\fBwerkmeister workspace init\fR
+.SH OPTIONS
+.TP
+\fB\-t, \-\-task <title>\fR
+Task description / title (env: WERKMEISTER_TASK; config: task).
+.TP
+\fB\-\-feature <name>\fR
+Feature name for workspace slot routing (config: feature).
+.TP
+\fB\-\-services <list>\fR
+Comma\-separated list of local services (env: WERKMEISTER_SERVICES; config: services). Their owning repos are added to the reconciled worktree set.
+.TP
+\fB\-r, \-\-repos <list>\fR
+Comma\-separated repos to keep as git worktrees (union with the repos owning \-\-services). Persisted to workspace.yml; the worktree set is reconciled to match on every run (env: WERKMEISTER_REPOS; config: repos).
+.TP
+\fB\-\-force\fR
+When reconciling, delete repo worktrees dropped from workspace.yml even if they have uncommitted changes, and delete a \e<user>/\e<workspace> branch an earlier workspace left on origin instead of aborting (default: abort without changes).
+.TP
+\fB\-\-issue\-id <ref>\fR
+Issue ID in this machine's issue tracker (see \fBwerkmeister machine setup\fR) (env: WERKMEISTER_ISSUE_ID; config: issue_id).
+.TP
+\fB\-\-project <name>\fR
+The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue (env: WERKMEISTER_PROJECT; config: project).
+.TP
+\fB\-\-labels <list>\fR
+Comma\-separated free\-form tags for filtering workspaces in the dashboard search (env: WERKMEISTER_LABELS; config: labels).
+.TP
+\fB\-\-test\-path <path>\fR
+URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).
+.TP
+\fB\-\-description <text>\fR
+Free\-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).
+.TP
+\fB\-\-starting\-prompt <text>\fR
+First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).
+.TP
+\fB\-\-work\-type <type>\fR
+Kind of work; seeds the first\-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
+.TP
+\fB\-\-context\-strategy <id>\fR
+Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
+.TP
+\fB\-\-autonomous\fR
+Run an icm workspace stage\-to\-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
+.TP
+\fB\-\-model <id>\fR
+Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude\-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
+.TP
+\fB\-\-auto\-stop\fR
+Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
+.TP
+\fB\-\-config <path>\fR
+Path to a YAML config file (JSONC/JSON also accepted). Defaults to \e<workspace>/.werkmeister/workspace.yml; legacy workspace.yaml / workspace.jsonc / workspace.json are migrated on next write (env: WERKMEISTER_WORKSPACE_CONFIG).
+.TP
+\fB\-\-prune\-context\fR
+After a context_strategy change, delete the previous strategy's files that git tracks unmodified (anything else is kept and reported).
+.TP
+\fB\-\-refresh\-issue\fR
+Re\-fetch the workspace's issue into .werkmeister/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).
+.SH DESCRIPTION
+.PP
+Reconciles a workspace from its \fB.werkmeister/workspace.yml\fR and regenerates its context files. It adds a git worktree for each repo the config needs (its \fBrepos\fR plus the repos owning its \fBservices\fR) and removes worktrees for repos it dropped; a dirty worktree stops the run unless \fB\-\-force\fR. Then it writes CLAUDE.md, \fB.env\fR, \fBcompose.yml\fR, the \fB.claude/\fR skills and agents, \fB.mcp.json\fR, \fB.devcontainer/devcontainer.json\fR and \fB.werkmeister/*\fR.
+.PP
+It is idempotent: edit \fBworkspace.yml\fR and rerun. It never prompts, and refuses to run in a bare folder; create a workspace with \fBwerkmeister workspace new\fR.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister workspace init
+werkmeister workspace init \-\-services backend,frontend
+werkmeister workspace init \-\-refresh\-issue
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

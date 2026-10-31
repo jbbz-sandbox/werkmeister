@@ -406,7 +406,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
     if (required) {
       const msg =
         `Required config file not found: ${filePath}\n` +
-        "Run `werkmeister setup` to seed the machine-global config in ~/.werkmeister.";
+        "Run `werkmeister machine setup` to seed the machine-global config in ~/.werkmeister.";
       error(msg);
       throw new Error(msg);
     }
@@ -418,7 +418,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
     if (required) {
       const msg =
         `Required config file is empty or invalid: ${filePath}\n` +
-        "Run `werkmeister setup` to seed the machine-global config in ~/.werkmeister.";
+        "Run `werkmeister machine setup` to seed the machine-global config in ~/.werkmeister.";
       error(msg);
       throw new Error(msg);
     }
@@ -427,7 +427,7 @@ function loadYaml(filePath: string, { required = false } = {}): Record<string, u
   return data;
 }
 
-/** Service types whose containers idle (`sleep infinity`) unless `werkmeister up --dev` (SW-32). */
+/** Service types whose containers idle (`sleep infinity`) unless `werkmeister feature up --dev` (SW-32). */
 export const IDLE_SERVICE_TYPES = ["cli", "library", "extension"];
 
 /**
@@ -468,7 +468,7 @@ export function needsCluster(localServices: string[], services: ServicesConfig):
 
 /**
  * CPU limit a generated container gets when services.yaml sets no `cpus:`. One
- * home so `werkmeister stats` shows the value generation rendered (SW-40). Setup
+ * home so `werkmeister machine stats` shows the value generation rendered (SW-40). Setup
  * containers get more: a cold `yarn install` is the heaviest single burst.
  */
 export const DEFAULT_CPUS = "1.0";
@@ -594,7 +594,7 @@ export function loadServices(): ServicesConfig {
 /**
  * Kube context for the dev cluster (services.yaml top-level `k8s_context`).
  *
- * Consumed by `werkmeister intercept`. Required when interception is used, so a
+ * Consumed by `werkmeister infra intercept`. Required when interception is used, so a
  * missing key fails loud rather than defaulting to whatever kubectl context
  * happens to be current — intercepting the wrong cluster is the failure mode
  * this guards against.

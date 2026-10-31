@@ -4,7 +4,7 @@
  * These files used to be committed under `<repo>/infra/config/`. They describe
  * the developer's machine — which services exist, which ports they get, what
  * models cost — not the checkout, so they now live in `~/.werkmeister` and this
- * module is the only place their initial content is defined. `werkmeister setup`
+ * module is the only place their initial content is defined. `werkmeister machine setup`
  * writes each one exactly once: seeding NEVER overwrites an existing file, so
  * a re-run can't clobber hand edits.
  *
@@ -67,7 +67,7 @@ models:
  * Render the starter secrets.env template.
  *
  * Empty by default: a service opts into a required secret by listing it in
- * its own `secrets:` entry in services.yaml, and `werkmeister up` only fails fast
+ * its own `secrets:` entry in services.yaml, and `werkmeister feature up` only fails fast
  * on the keys the feature's own services declare (secrets.ts
  * `resolveSecrets`). Add real values here as your services need them.
  */
@@ -77,7 +77,7 @@ export function renderSecretsEnv(): string {
       "# Machine-global secrets — real values, never committed.",
       "#",
       "# A service declares the keys it needs via `secrets:` in its services.yaml",
-      "# entry; `werkmeister up` writes them, as plain KEY, into that service's own",
+      "# entry; `werkmeister feature up` writes them, as plain KEY, into that service's own",
       "# <workspace>/.env.<service>, and fails fast when one is missing or empty.",
       "#",
       "# Namespace a key by service as <SERVICE>__KEY (service name uppercased,",
@@ -101,7 +101,7 @@ export function renderSecretsEnv(): string {
 export function renderServicesLocalYaml(k8sContext: string): string {
   return `# Machine-local registry overrides — hand-edit freely.
 #
-# \`werkmeister registry sync\` (and \`werkmeister setup\`) regenerate ~/.werkmeister/services.yaml
+# \`werkmeister registry sync\` (and \`werkmeister machine setup\`) regenerate ~/.werkmeister/services.yaml
 # from every <repo>/.werkmeister/services.yaml under paths.repos_root, then merge
 # this file over the result: maps merge, scalars and lists replace. A key here
 # beats every fragment, e.g.
@@ -115,7 +115,7 @@ export function renderServicesLocalYaml(k8sContext: string): string {
 #
 #   disabled_fragments: [demo-services]
 #
-# Kube context for a dev cluster — consumed by \`werkmeister intercept\`.
+# Kube context for a dev cluster — consumed by \`werkmeister infra intercept\`.
 k8s_context: ${k8sContext.trim() || "orbstack"}
 `;
 }
@@ -127,7 +127,7 @@ k8s_context: ${k8sContext.trim() || "orbstack"}
 /**
  * Write *content* to *target* only when it does not already exist.
  *
- * The never-overwrite rule is what makes `werkmeister setup` safe to re-run: the
+ * The never-overwrite rule is what makes `werkmeister machine setup` safe to re-run: the
  * registry files accumulate hand edits, and a setup pass must converge the
  * machine without touching them.
  */

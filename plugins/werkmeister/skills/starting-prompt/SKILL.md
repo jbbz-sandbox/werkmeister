@@ -5,14 +5,14 @@ description: "Run the `starting_prompt` defined in the workspace's `.werkmeister
 
 # Werkmeister Starting Prompt
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
 Read the `starting_prompt` from the current workspace's `.werkmeister/workspace.yml` and execute it as the task to perform.
 
 ## Step 1 — Extract the starting prompt
 
 ```bash
-werkmeister starting-prompt
+werkmeister workspace prompt
 ```
 
 It walks up from the current directory to find `.werkmeister/workspace.yml` and prints the `starting_prompt` value to stdout.

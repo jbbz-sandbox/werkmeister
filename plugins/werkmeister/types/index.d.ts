@@ -80,7 +80,7 @@ export type ServiceHealth = {
   state: "healthy" | "starting" | "unhealthy" | "running" | "down";
 };
 
-/** Shared infra (`werkmeister connect`): the `infra` block of workspace-status. */
+/** Shared infra (`werkmeister infra connect`): the `infra` block of workspace-status. */
 export type InfraStatus = {
   state: "up" | "partial" | "down" | "unknown";
   running: number;
@@ -94,7 +94,7 @@ export type WorkspaceResources = {
   host: { load: [number, number, number]; cores: number; featureCpuPercent: number };
 };
 
-/** One feature×service row of `werkmeister status --intercepts --json` (werkmeister-core `InterceptRow`). */
+/** One feature×service row of `werkmeister feature status --intercepts --json` (werkmeister-core `InterceptRow`). */
 export type InterceptRow = {
   feature: string;
   service: string;
@@ -106,7 +106,7 @@ export type InterceptRow = {
   intercepted_by: string | null;
 };
 
-/** What `werkmeister status --intercepts --json` prints (werkmeister-core `InterceptsSnapshot`). */
+/** What `werkmeister feature status --intercepts --json` prints (werkmeister-core `InterceptsSnapshot`). */
 export type InterceptsSnapshot = {
   available: boolean;
   /** On PATH, connected or not. Absent from a core older than SW-12: fall back to `available`. */

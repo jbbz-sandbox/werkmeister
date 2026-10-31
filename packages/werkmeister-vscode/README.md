@@ -16,20 +16,20 @@ is plain Node, so there is no HTTP or stdio hop.
 |---|---|
 | Names, paths, issue IDs, labels | `listWorkspaces()` |
 | State, slot, ports, per-service health | `getWorkspaceStatuses()` — one `docker ps -a` sweep |
-| Per-service intercept state | `getIntercepts()` — in process, what `werkmeister status --intercepts --json` prints |
+| Per-service intercept state | `getIntercepts()` — in process, what `werkmeister feature status --intercepts --json` prints |
 
 Polled every 5s **only while the view is visible**.
 
 **Writes** — every mutating command runs the CLI in a `vscode.Terminal` with
 `cwd` set to the workspace directory. One terminal per directory, named
 `werkmeister <workspace>` and reused once its previous command has ended. The extension never spawns
-`werkmeister` itself except for `werkmeister open`, which blocks for the lifetime of the
+`werkmeister` itself except for `werkmeister feature open`, which blocks for the lifetime of the
 browser window it launches.
 
 ## Configuration
 
 Normally none: werkmeister-core resolves paths from `WERKMEISTER_*` env vars and falls back
-to `~/.werkmeister/config.yaml`, which `werkmeister config` maintains.
+to `~/.werkmeister/config.yaml`, which `werkmeister machine config` maintains.
 
 | Setting | Use when |
 |---|---|
@@ -50,7 +50,7 @@ and terminal naming. What neither can reach is in [MANUAL-CHECKLIST.md](https://
 
 ## Install
 
-`werkmeister setup` installs it (section 8): the published CLI package ships the
+`werkmeister machine setup` installs it (section 8): the published CLI package ships the
 `.vsix`, at the CLI's version. A CLI run from a checkout (`./werkmeister` or
 `pnpm link --global` in `apps/cli`) has no `.vsix`, so `setup` skips it. Build and install
 it yourself from this directory:

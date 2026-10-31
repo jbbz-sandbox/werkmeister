@@ -1,0 +1,26 @@
+.TH WERKMEISTER-MACHINE-SETUP 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-machine\-setup \- Guided machine setup: walks through paths, ingress domains and the ~/.werkmeister service registry, then converges the plugins, the sandbox\-workspace checkout, the TLS certificate and the optional issue tracker, Telepresence and VS Code YAML\-schema prerequisites \" name-check: ignore
+.SH SYNOPSIS
+\fBwerkmeister machine setup\fR
+.SH OPTIONS
+.TP
+\fB\-\-check\fR
+Report prerequisite state without prompting or running any install/update commands
+.TP
+\fB\-\-yes\fR
+Non\-interactive: accept every default and skip optional installs
+.SH DESCRIPTION
+.PP
+The guided first run (and re\-run) of a werkmeister machine. It asks everything up front, then walks through each prerequisite that lives outside the checkout: paths, browser, ingress, the service registry, the issue tracker, and optional tools (telepresence, the superpowers plugin, editor settings). It writes the machine\-global config in \fB~/.werkmeister\fR and converges the rest.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister machine setup           # guided
+werkmeister machine setup \-\-check   # report state, change nothing
+werkmeister machine setup \-\-yes     # accept every default
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

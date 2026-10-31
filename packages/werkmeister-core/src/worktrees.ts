@@ -1,8 +1,8 @@
 /**
  * Shared git-worktree helpers for workspaces.
  *
- * `werkmeister workspace` creates the workspace ROOT (a worktree of the
- * sandbox-workspace repo); `werkmeister init-workspace` reconciles the nested
+ * `werkmeister workspace new` creates the workspace ROOT (a worktree of the
+ * sandbox-workspace repo); `werkmeister workspace init` reconciles the nested
  * per-repo worktrees against the desired set declared in
  * `.werkmeister/workspace.yml`. Both commands share the primitives here so
  * worktree creation/removal behaves identically wherever it runs — and so the
@@ -23,7 +23,7 @@ const _GITIGNORE_MARKER = "# --- sandbox workspace (managed section)"; // name-c
 const _GITIGNORE_HEADER =
   `${_GITIGNORE_MARKER} -----------------------------------\n` +
   "# Repo worktrees nested in this workspace, ignored by name. Rewritten by\n" +
-  "# `werkmeister init-workspace` on each run; rules above come from the repo's main.\n";
+  "# `werkmeister workspace init` on each run; rules above come from the repo's main.\n";
 
 // Ignored besides the repo worktree dirs: secrets (.env.<svc> holds each
 // service's resolved secrets) and files `up`, the PR gate and the agent-state hook
@@ -53,7 +53,7 @@ function untrackRuntimeFiles(workspaceDir: string): void {
 
 /**
  * Append the generated-file rules a workspace .gitignore written before them lacks.
- * `werkmeister up` writes these files without rerunning init-workspace, and
+ * `werkmeister feature up` writes these files without rerunning init-workspace, and
  * close-out (removeWorkspace) commits tracked changes and pushes.
  */
 export function ensureGeneratedIgnored(workspaceDir: string): void {

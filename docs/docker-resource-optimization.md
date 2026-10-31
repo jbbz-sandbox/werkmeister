@@ -16,13 +16,13 @@ Werkmeister ships with pre-configured resource limits for all services (defined 
 
 ```bash
 # 1. Check current resource usage (snapshot)
-werkmeister stats
+werkmeister machine stats
 
 # 2. Collect stats over a longer period during typical work
-werkmeister stats --collect 15 --save
+werkmeister machine stats --collect 15 --save
 
 # 3. Compare usage against configured limits
-werkmeister optimize
+werkmeister machine optimize
 
 # 4. Adjust limits in .werkmeister/services.yaml or infra/compose/shared-infra.yml
 ```
@@ -31,7 +31,7 @@ werkmeister optimize
 
 ### Feature Services (`.werkmeister/services.yaml`)
 
-Each service in its repo's `.werkmeister/services.yaml` (merged into `~/.werkmeister/services.yaml`, which `werkmeister optimize` reads) has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
+Each service in its repo's `.werkmeister/services.yaml` (merged into `~/.werkmeister/services.yaml`, which `werkmeister machine optimize` reads) has `memory_limit` and `memory_reservation` fields. The Werkmeister CLI uses these when generating per-feature Docker Compose files:
 
 ```yaml
 # .werkmeister/services.yaml
@@ -71,7 +71,7 @@ services:
 ### Quick Snapshot
 
 ```bash
-werkmeister stats
+werkmeister machine stats
 ```
 
 Shows current CPU and memory usage for all Werkmeister containers, including the configured memory limit and a usage percentage.
@@ -82,10 +82,10 @@ For more accurate data, collect over a period while doing typical development wo
 
 ```bash
 # Collect for 15 minutes with 10-second intervals (default)
-werkmeister stats --collect 15
+werkmeister machine stats --collect 15
 
 # Collect for 30 minutes with 5-second intervals, save to stats/
-werkmeister stats --collect 30 -i 5 --save
+werkmeister machine stats --collect 30 -i 5 --save
 ```
 
 Press `Ctrl+C` at any time to stop collection early — results from samples already taken are still displayed.
@@ -114,7 +114,7 @@ When using `--save`, two files are written to the `stats/` directory:
 ## Step 2: Analyze and Optimize
 
 ```bash
-werkmeister optimize
+werkmeister machine optimize
 ```
 
 This command:
@@ -155,7 +155,7 @@ services:
 Then restart the affected feature:
 
 ```bash
-werkmeister restart my-feature
+werkmeister feature restart my-feature
 ```
 
 ### For Shared Infrastructure
@@ -193,7 +193,7 @@ near its limit slows down on a host with swap and is killed on one without.
 
 ## Default budget
 
-`werkmeister up` admits a feature only when the budget has room for it (SW-181).
+`werkmeister feature up` admits a feature only when the budget has room for it (SW-181).
 A feature's cost is what its compose file asks Docker for: the sum of each
 service's `memory_reservation` and `cpus` limit, leaving out services behind the
 `on-demand` profile. Running features' cost is read from Docker on every `up`.
@@ -219,7 +219,7 @@ budget:
   host_load: 24
 ```
 
-`host_load` limits the gate by live host load, not by reservations (SW-209): the gate's checks run inside a container that is already admitted, and agents' direct test runs happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the same wait (`werkmeister wait-load`) before its command unless `WERKMEISTER_NO_WAIT=1` is set (SW-224). A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
+`host_load` limits the gate by live host load, not by reservations (SW-209): the gate's checks run inside a container that is already admitted, and agents' direct test runs happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the same wait (`werkmeister internal wait-load`) before its command unless `WERKMEISTER_NO_WAIT=1` is set (SW-224). A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
 
 ### Measured on a 16 GB laptop
 
@@ -248,7 +248,7 @@ After applying limits, verify containers are running correctly:
 
 ```bash
 # Quick check
-werkmeister stats
+werkmeister machine stats
 
 # Look for OOM kills
 docker inspect <container> --format='{{.State.OOMKilled}}'
@@ -270,9 +270,9 @@ docker logs <container> 2>&1 | grep -i "memory\|heap\|oom"
 
 | Symptom | Solution |
 |---------|----------|
-| `werkmeister optimize` shows OVER-PROVISIONED | Reduce memory limit to max + 50% headroom |
+| `werkmeister machine optimize` shows OVER-PROVISIONED | Reduce memory limit to max + 50% headroom |
 | CPU consistently low | Reduce CPU limit |
-| Container mostly idle | Consider removing from feature with `werkmeister remove` |
+| Container mostly idle | Consider removing from feature with `werkmeister feature drop` |
 
 ## Reference: Current Default Limits
 
@@ -293,7 +293,7 @@ From `.werkmeister/services.yaml` and `infra/compose/shared-infra.yml`:
 Your total reservations exceed available Docker memory. Either:
 - Reduce reservations in `.werkmeister/services.yaml`
 - Increase Docker Desktop memory allocation (Settings > Resources)
-- Run fewer services with `werkmeister remove <feature> <service>`
+- Run fewer services with `werkmeister feature drop <feature> <service>`
 
 ### Container repeatedly restarting
 
@@ -314,15 +314,15 @@ Node.js builds are CPU-intensive. Ensure:
 
 Check if the container is being throttled:
 ```bash
-werkmeister stats
+werkmeister machine stats
 ```
 
 If CPU is consistently at the limit, increase it.
 
 ## Summary
 
-1. **Monitor** with `werkmeister stats` during real development work
-2. **Analyze** with `werkmeister optimize` to compare usage vs limits
+1. **Monitor** with `werkmeister machine stats` during real development work
+2. **Analyze** with `werkmeister machine optimize` to compare usage vs limits
 3. **Adjust** limits in `.werkmeister/services.yaml` (features) or `infra/compose/shared-infra.yml` (infra)
-4. **Restart** affected containers with `werkmeister restart <feature>`
+4. **Restart** affected containers with `werkmeister feature restart <feature>`
 5. **Iterate** as your development patterns change

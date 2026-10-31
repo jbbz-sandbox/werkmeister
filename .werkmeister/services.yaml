@@ -1,6 +1,6 @@
 # Werkmeister service-registry fragment for this repo.
 #
-# `werkmeister registry sync` (run by `werkmeister setup`) merges every
+# `werkmeister registry sync` (run by `werkmeister machine setup`) merges every
 # <repo>/.werkmeister/services.yaml under paths.repos_root into
 # ~/.werkmeister/services.yaml. Only `services:`, `setup_services:`,
 # `infrastructure:` and `repo:` (this repo's own settings, merged into
@@ -32,7 +32,7 @@ services:
   # SW-128), and the dashboard's build runs out of heap at 512M.
   # cli, werkmeister-core and werkmeister-vscode (types cli/library/extension) idle under
   # `sleep infinity` with no healthcheck; their `command:` watchers run only under
-  # `werkmeister up --dev`. The port is still published, so they keep their slot.
+  # `werkmeister feature up --dev`. The port is still published, so they keep their slot.
   # See docs/users-guide.md "Self-hosting the Werkmeister repo" in the werkmeister repo.
   # Fully functional CLI: the host's docker socket plus ~/.werkmeister, ~/repos,
   # ~/features and ~/.kube mounted at their host paths, because the compose
@@ -117,7 +117,7 @@ services:
     environment: *host_env
 
   # Also the MCP client bed: WERKMEISTER_MCP_TOKEN arrives via the feature .env
-  # (a missing one makes `werkmeister up` refuse the workspace). Its archetype
+  # (a missing one makes `werkmeister feature up` refuse the workspace). Its archetype
   # no longer wires the werkmeister server into the shared .mcp.json (SW-115).
   # It has cli's host access too, so its tests can use docker directly (#134).
   werkmeister-vscode:
@@ -216,7 +216,7 @@ setup_services:
   # one at a time.
   # SW-69: the turbo cache and pnpm store are the built-in `turbo` and
   # `pnpm-store` caches, attached here and to the app services by turbo.json and
-  # pnpm-lock.yaml. See them with `werkmeister status`; clear them with
+  # pnpm-lock.yaml. See them with `werkmeister feature status`; clear them with
   # `werkmeister cache prune`.
   werkmeister-install:
     image: node:22

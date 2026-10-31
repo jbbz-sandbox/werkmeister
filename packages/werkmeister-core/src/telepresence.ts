@@ -1,5 +1,5 @@
 /**
- * Telepresence OSS wrapper for `werkmeister intercept` (live testing in k8s dev).
+ * Telepresence OSS wrapper for `werkmeister infra intercept` (live testing in k8s dev).
  *
  * Design: this module is the single seam between the werkmeister CLI and the
  * interception tool — arg builders
@@ -23,7 +23,7 @@ import { getServicePort, getSlot } from "./slots.js";
 export const MIN_VERSION: [number, number, number] = [2, 30, 0];
 
 /**
- * Homebrew formula for the OSS client, used by `werkmeister setup`.
+ * Homebrew formula for the OSS client, used by `werkmeister machine setup`.
  *
  * Note the tap: `telepresenceio/telepresence` (upstream's own) ships the
  * `-oss` formula at a current version. The `datawire/blackbird` tap does NOT —
@@ -273,8 +273,8 @@ export function buildListInterceptsArgs(): string[] {
 /**
  * Why *service* can't be intercepted, or null if it can.
  *
- * The single definition of "interceptable", shared by `werkmeister intercept` (which
- * turns a non-null into a fatal error) and `werkmeister status --intercepts` (which
+ * The single definition of "interceptable", shared by `werkmeister infra intercept` (which
+ * turns a non-null into a fatal error) and `werkmeister feature status --intercepts` (which
  * reports it). Returns the predicate half of a sentence — callers prefix the
  * service name, e.g. `'frontend' ${blocker}`.
  */
@@ -493,7 +493,7 @@ export async function ensureConnected(
   }
 }
 
-/** SERVICES list from a workspace .env (same format `werkmeister up` reads). */
+/** SERVICES list from a workspace .env (same format `werkmeister feature up` reads). */
 function servicesFromEnv(envPath: string): string[] {
   let text: string;
   try {
@@ -518,7 +518,7 @@ function servicesFromEnv(envPath: string): string[] {
 /**
  * Best-effort: leave the intercepts of *feature*'s local services.
  *
- * Called from `werkmeister down` — must never block teardown, so a missing
+ * Called from `werkmeister feature down` — must never block teardown, so a missing
  * binary, missing workspace, or failed leave is silently skipped. Returns
  * the deployments actually left.
  */
@@ -624,11 +624,11 @@ function resolveServiceDef(service: string, localServices: string[]): Record<str
     throw new SandboxError(
       `'${service}' is not a local service of this workspace ` +
         `(SERVICES=${localServices.join(",") || "(none)"}). Add it to ` +
-        "workspace.yml services and rerun `werkmeister init-workspace`.",
+        "workspace.yml services and rerun `werkmeister workspace init`.",
       "NOT_LOCAL",
     );
   }
-  // Interceptability is defined once, in interceptBlocker, so `werkmeister status
+  // Interceptability is defined once, in interceptBlocker, so `werkmeister feature status
   // --intercepts` reports exactly what this function enforces.
   const svcDef = loadServices()[service];
   const blocker = interceptBlocker(svcDef);
@@ -687,7 +687,7 @@ export async function startIntercept(a: InterceptArgs): Promise<InterceptResult>
   const slot = await getSlot(a.feature);
   if (slot === null) {
     throw new SandboxError(
-      `Feature '${a.feature}' has no allocated slot — run \`werkmeister up ${a.feature}\` first.`,
+      `Feature '${a.feature}' has no allocated slot — run \`werkmeister feature up ${a.feature}\` first.`,
       "NOT_RUNNING",
     );
   }
@@ -695,7 +695,7 @@ export async function startIntercept(a: InterceptArgs): Promise<InterceptResult>
   if (!(await portOpen(localPort))) {
     throw new SandboxError(
       `${a.service} is not listening on localhost:${localPort} — ` +
-        `run \`werkmeister up ${a.feature}\` first (the local container is the intercept target).`,
+        `run \`werkmeister feature up ${a.feature}\` first (the local container is the intercept target).`,
       "PORT_CLOSED",
     );
   }
@@ -756,7 +756,7 @@ export interface LeaveInterceptArgs {
  * With *service* set this is strict — an unknown service or a failed detach
  * throws, because the caller named one thing and it did not happen. Without it
  * the sweep is best-effort, matching {@link leaveFeatureIntercepts}, which
- * `werkmeister down` calls where a failure must never block teardown.
+ * `werkmeister feature down` calls where a failure must never block teardown.
  */
 export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
   // Every call, the post-leave cleanup included, goes to the daemon the intercept used.

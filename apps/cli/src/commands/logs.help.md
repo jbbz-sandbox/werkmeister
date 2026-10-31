@@ -4,8 +4,8 @@ Streams logs in real-time (equivalent to `docker compose logs -f --tail 100`). P
 
 ```bash
 # All services
-werkmeister logs my-feature
+werkmeister feature logs my-feature
 
 # Just frontend
-werkmeister logs my-feature frontend
+werkmeister feature logs my-feature frontend
 ```

@@ -204,7 +204,7 @@ the task as given is raised to the user, never silently resolved.
 
 These artifacts are written by the `jit` context strategy (`packages/werkmeister-core/src/strategies/jit.ts`); `context_strategy: jit` in `workspace.yml` selects it (the default for new workspaces is `icm`).
 
-Everything below is **generated or copied into the workspace** at `werkmeister init-workspace` —
+Everything below is **generated or copied into the workspace** at `werkmeister workspace init` —
 nothing is distributed through a plugin. Projection scopes the skills to the sessions they
 apply to and kills plugin-refresh lag: init renders fresh from this repo, so a standards edit
 reaches new workspaces with no marketplace step. The `werkmeister` plugin keeps only the
@@ -363,7 +363,7 @@ older CLI (author `workspace-creation`, no prompt) is superseded by the next ini
 one. Any other handoff note blocks re-seeding — including its own prior seed: once a prompt
 has been seeded, a later edit to `starting_prompt` does not update the note.
 
-`werkmeister down` prints the latest `handoff` and all open `decision` notes to the terminal
+`werkmeister feature down` prints the latest `handoff` and all open `decision` notes to the terminal
 before removing the workspace, and offers graduation of decision notes into the standards
 tree. No automatic writes to PR bodies or tickets — the human decides what graduates.
 
@@ -425,7 +425,7 @@ builtins-only.
 {applies_to, summary}` for every active non-universal standard, the active universal keys, and
 `phase_gate` when the work type has one) from the same `resolveActiveStandards` output that
 produces the CLAUDE.md routing table. It cannot diverge from the table. The one exception is
-`phase_gate`: only `werkmeister init-workspace` introduces it, alongside the CLAUDE.md that explains
+`phase_gate`: only `werkmeister workspace init` introduces it, alongside the CLAUDE.md that explains
 it. `werkmeister skills sync` recompiles `phase_gate` from `.werkmeister/workspace.yml`'s `work_type`
 only when the on-disk manifest already carries one — so a gate survives sync, and a work type
 without a gate (`refactor`) drops it — and never adds one to a workspace whose manifest has
@@ -434,7 +434,7 @@ none; `werkmeister skills check` does not call such a workspace stale.
 **Latency.** The gate fires on every `Edit`/`Write`, so the module is deliberately
 dependency-light — node builtins only, no commander/yaml/nunjucks, nothing touching the
 config/YAML chain. The hook runs `node dist/lib/gate.js` directly, bypassing the argparse-heavy
-main entrypoint (measured at 250–460ms cold, well past the <200ms budget). `werkmeister hooks gate`
+main entrypoint (measured at 250–460ms cold, well past the <200ms budget). `werkmeister internal gate`
 imports the same module for manual runs and tests — one implementation either way.
 
 One deliberate duplication: the precedence sentence is copied from `notes.ts` rather than
@@ -460,7 +460,7 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
 scoping; `apps/cli/src/lib/__tests__/universal_standards.test.ts` covers standards resolution
 and the manifest, `hooks_gen.test.ts` the hooks, `packages/werkmeister-core/notes-context.test.mjs`
 notes re-injection, and `mcp-gen-vars.test.mjs` MCP variable handling. Everything else is
-exercised only by running `werkmeister init-workspace` and the two check commands above. Treat
+exercised only by running `werkmeister workspace init` and the two check commands above. Treat
 `standards check` and `skills check` as the regression gates, and run them after any change to
 the standards tree or the generators.
 

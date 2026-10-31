@@ -5,7 +5,7 @@ description: "Create a brand-new workspace (git worktrees on a <user>/<workspace
 
 # Werkmeister Workspace
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
 **Every create goes through `createWorkspace`** (packages/werkmeister-core/src/sandbox.ts) — the CLI,
 the browser form, the MCP server and the /workspaces pane all call it. Never write
@@ -13,7 +13,7 @@ workspace files by hand.
 
 With an `issue_id`, `createWorkspace` always:
 1. fetches the issue and stores it verbatim in `.werkmeister/issue.md` — it **fails the create**
-   if the issue can't be read (run `werkmeister connect` to check tracker sign-in);
+   if the issue can't be read (run `werkmeister infra connect` to check tracker sign-in);
 2. fills `task` from the issue title when empty;
 3. has a model rewrite the issue into `description` / `starting_prompt` for whichever is
    empty (`--no-distill` skips it; a failed rewrite only warns);
@@ -29,18 +29,18 @@ runs `werkmeister issue start` → In Review at `werkmeister pr open` → Done a
 
 | Situation | Do |
 |---|---|
-| every input known (feature, issue, repos) | `werkmeister workspace <feature> --issue-id <ref> --repos <r1,r2> [--services <a,b>] [--work-type <t>] [--context-strategy icm] [--autonomous] [--model <alias|id>]`. Pass `--task` only to override the issue title. Leave `--services` out unless the ticket names services to run (see **Services** below) |
+| every input known (feature, issue, repos) | `werkmeister workspace new <feature> --issue-id <ref> --repos <r1,r2> [--services <a,b>] [--work-type <t>] [--context-strategy icm] [--autonomous] [--model <alias|id>]`. Pass `--task` only to override the issue title. Leave `--services` out unless the ticket names services to run (see **Services** below) |
 | the person should review the fields first | the /workspaces pane's Create tab, or the browser form (below) |
-| many issues at once | one `werkmeister workspace` call per issue, **in sequence** (they share source repos), then run the batch check. Before the first: the `werkmeister` CLI runs from the werkmeister repo's `apps/cli/dist`, so check that checkout is on an up-to-date `main` and rebuilt (`pnpm run build` at its root), or the batch comes out with stale defaults |
+| many issues at once | one `werkmeister workspace new` call per issue, **in sequence** (they share source repos), then run the batch check. Before the first: the `werkmeister` CLI runs from the werkmeister repo's `apps/cli/dist`, so check that checkout is on an up-to-date `main` and rebuilt (`pnpm run build` at its root), or the batch comes out with stale defaults |
 | many issues, run unattended | as above with `--autonomous` on each create, plus `--model sonnet` (or `haiku`) when the job is mechanical (lint passes, renames, timeout bumps). Then start one Claude Code session per workspace folder with the prompt `start the run`, **one at a time**: each new folder raises a trust prompt, and parallel starts collide. Start each session on the workspace's `model` when it has one (`list-workspaces` returns it) |
 
-**Services** (none by default): list only the services the ticket says to run locally, e.g. a web app it changes and someone will click through. Never list every service "so the gate has containers". `werkmeister pr gate` starts one container for each touched repo that has none running, and stops it afterwards (SW-34). Each listed service is a container that `werkmeister up` starts.
+**Services** (none by default): list only the services the ticket says to run locally, e.g. a web app it changes and someone will click through. Never list every service "so the gate has containers". `werkmeister pr gate` starts one container for each touched repo that has none running, and stops it afterwards (SW-34). Each listed service is a container that `werkmeister feature up` starts.
 
-**`autonomous`** (off by default; `--autonomous`, `WERKMEISTER_AUTONOMOUS=1`, `autonomous: true` in `workspace.yml`, or the form's checkbox): an icm workspace runs stage 01 → `werkmeister pr open` with self-checks instead of human checks, and `.claude/settings.json` allows the git/werkmeister/docker/gh/node/python3 calls a headless `claude-send "start the run"` needs. Set it only when the person asked for an unattended run — they then review only the PR. Off again: `autonomous: false`, then `werkmeister init-workspace`.
+**`autonomous`** (off by default; `--autonomous`, `WERKMEISTER_AUTONOMOUS=1`, `autonomous: true` in `workspace.yml`, or the form's checkbox): an icm workspace runs stage 01 → `werkmeister pr open` with self-checks instead of human checks, and `.claude/settings.json` allows the git/werkmeister/docker/gh/node/python3 calls a headless `claude-send "start the run"` needs. Set it only when the person asked for an unattended run — they then review only the PR. Off again: `autonomous: false`, then `werkmeister workspace init`.
 
-**`model`** (blank by default = Claude Code's default; `--model <alias|id>`, `WERKMEISTER_MODEL`, `model:` in `workspace.yml`, or the form's field): an alias (`opus`, `sonnet`, `haiku`) or a full `claude-…` id. Written to the workspace's `.claude/settings.json`, passed as `--model` by `claude-send` / `claude-resume`, and returned by `list-workspaces` / `status`. A `model` the person set in `settings.json` by hand is never overwritten. Clear it: delete `model:` from `workspace.yml`, then `werkmeister init-workspace`.
+**`model`** (blank by default = Claude Code's default; `--model <alias|id>`, `WERKMEISTER_MODEL`, `model:` in `workspace.yml`, or the form's field): an alias (`opus`, `sonnet`, `haiku`) or a full `claude-…` id. Written to the workspace's `.claude/settings.json`, passed as `--model` by `claude-send` / `claude-resume`, and returned by `list-workspaces` / `status`. A `model` the person set in `settings.json` by hand is never overwritten. Clear it: delete `model:` from `workspace.yml`, then `werkmeister workspace init`.
 
-**`auto_stop`** (off by default; `--auto-stop`, `WERKMEISTER_AUTO_STOP=1`, `auto_stop: true` in `workspace.yml`, or the form's checkbox): writes a SessionEnd hook to the workspace's `.claude/settings.json` that runs `werkmeister stop --if-idle`. When a session in the workspace ends (not `/clear` or `/resume`, not a headless `claude -p` turn) and no other Claude session is open there, the feature's containers stop; the slot and volumes stay, so `werkmeister up` resumes fast. Shared infra is never stopped. Off again: `auto_stop: false`, then `werkmeister init-workspace` (or `werkmeister up`) removes the hook.
+**`auto_stop`** (off by default; `--auto-stop`, `WERKMEISTER_AUTO_STOP=1`, `auto_stop: true` in `workspace.yml`, or the form's checkbox): writes a SessionEnd hook to the workspace's `.claude/settings.json` that runs `werkmeister internal session-end`. When a session in the workspace ends (not `/clear` or `/resume`, not a headless `claude -p` turn) and no other Claude session is open there, the feature's containers stop; the slot and volumes stay, so `werkmeister feature up` resumes fast. Shared infra is never stopped. Off again: `auto_stop: false`, then `werkmeister workspace init` (or `werkmeister feature up`) removes the hook.
 
 **Batch check** — after creating, for each new workspace:
 
@@ -68,7 +68,7 @@ component (`packages/werkmeister-ui/src/create-form.ts`).
 | **Claude Code desktop app** (the system prompt says so, and the `mcp__Claude_Browser__*` tools are present) | In the app's own Browser pane: see *Claude Code desktop* below. |
 | **VS Code extension**, a **terminal**, or anywhere else | In the system browser: the foreground `--browser-form` command below. Do this even if some browser tool happens to be available. |
 
-## Preferred path — `werkmeister workspace --browser-form`
+## Preferred path — `werkmeister workspace new --browser-form`
 
 This is the self-contained path; it works in **Claude Code / VS Code** without any
 MCP-server connection. It opens the form on localhost in the **system browser** (the same
@@ -76,9 +76,9 @@ form, styling, and create path the Desktop MCP App uses), blocks until submit/ca
 creates the workspace, and prints a single outcome JSON to **stdout** (progress → stderr).
 
 ```bash
-werkmeister workspace --browser-form                      # open the form; create on submit
-werkmeister workspace --browser-form --issue-id <ref>      # pre-fill from an issue
-werkmeister workspace --browser-form --open               # also launch VS Code afterward
+werkmeister workspace new --browser-form                      # open the form; create on submit
+werkmeister workspace new --browser-form --issue-id <ref>      # pre-fill from an issue
+werkmeister workspace new --browser-form --open               # also launch VS Code afterward
 ```
 
 Every flag given alongside `--browser-form` pre-fills the form.
@@ -128,19 +128,19 @@ Desktop.
 ### Prerequisites
 - The `werkmeister` CLI on `PATH` (e.g. `~/.local/bin/werkmeister`) and `node`.
 - The app built once: `cd apps/werkmeister-dashboard && pnpm run build` (produces `dist/form-cli.js`
-  for `--browser-form` and `dist/main.js` for `werkmeister dashboard`). Without the build, `--browser-form` errors with a clear message.
+  for `--browser-form` and `dist/main.js` for `werkmeister internal dashboard`). Without the build, `--browser-form` errors with a clear message.
   The form page (`dist/form.html`) is fully self-contained — no internet needed.
 
 ## Common pitfalls
 
-- **Issue can't be read.** The create fails before anything is made; run `werkmeister connect`, fix sign-in, retry.
+- **Issue can't be read.** The create fails before anything is made; run `werkmeister infra connect`, fix sign-in, retry.
 - **No repos resolvable.** Worktree repos come from `--repos` plus the repos owning the
-  selected **services**; with neither, `werkmeister workspace` has nothing to make worktrees from
+  selected **services**; with neither, `werkmeister workspace new` has nothing to make worktrees from
   and exits nonzero. Pass `--repos r1,r2` (the form's "Additional repos" field).
 - **Source repo missing.** Worktrees are cut from `$WERKMEISTER_REPOS_ROOT/<repo>`; a missing
   checkout fails the create.
-- **Workspace already exists.** `werkmeister workspace` skips worktree creation and just re-runs
+- **Workspace already exists.** `werkmeister workspace new` skips worktree creation and just re-runs
   `init-workspace` (idempotent) — not an error.
 - **After creation:** tell the user to `cd <workspace-path>` and open a Claude Code session
-  there; the next step is `werkmeister up <feature>` from inside the workspace — do not run
-  `werkmeister up` yourself.
+  there; the next step is `werkmeister feature up <feature>` from inside the workspace — do not run
+  `werkmeister feature up` yourself.

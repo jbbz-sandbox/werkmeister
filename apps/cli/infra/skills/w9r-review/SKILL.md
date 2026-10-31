@@ -54,7 +54,7 @@ status: open
 ---
 ```
 
-`werkmeister down` will offer to graduate it into the standards tree (`overrides.standards_dir`).
+`werkmeister feature down` will offer to graduate it into the standards tree (`overrides.standards_dir`).
 
 If the workspace `CLAUDE.md` has no "Standards routing" block (not a
 werkmeister-initialized workspace), load `w9r-comments-standard` +

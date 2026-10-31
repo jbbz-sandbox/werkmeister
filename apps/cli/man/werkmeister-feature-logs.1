@@ -1,0 +1,20 @@
+.TH WERKMEISTER-FEATURE-LOGS 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-feature\-logs \- Tail a feature's container logs
+.SH SYNOPSIS
+\fBwerkmeister feature logs\fR <feature> [service]
+.SH DESCRIPTION
+.PP
+Streams logs in real\-time (equivalent to \fBdocker compose logs \-f \-\-tail 100\fR). Press \fBCtrl+C\fR to stop.
+.PP
+.nf
+.RS 4
+# All services
+werkmeister feature logs my\-feature
+
+# Just frontend
+werkmeister feature logs my\-feature frontend
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

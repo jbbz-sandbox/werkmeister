@@ -152,7 +152,7 @@ test("pause freezes exactly the running containers, dependents first, after writ
   assert.equal(rec.was_working, true);
   // A workspace that predates SW-46 gets the hook that carries the gate.
   const settings = JSON.parse(fs.readFileSync(path.join(ws, ".claude", "settings.json"), "utf8"));
-  assert.match(JSON.stringify(settings.hooks.PreToolUse), /werkmeister hooks agent-state/);
+  assert.match(JSON.stringify(settings.hooks.PreToolUse), /werkmeister internal agent-state/);
 });
 
 test("pause refuses twice and a feature with no slot", async () => {

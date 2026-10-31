@@ -1,7 +1,7 @@
 /**
  * The issue-tracker registry: which tracker this machine files work and bugs
  * against — `overrides.issue_tracker` in ~/.werkmeister/config.yaml, set by
- * `werkmeister setup` — and the one door every issue read and write goes through.
+ * `werkmeister machine setup` — and the one door every issue read and write goes through.
  * Callers ask `issueTracker()` and never name a tracker.
  *
  *   jira   (default) — refs are issue keys (`PROJ-12`); bugs are filed in
@@ -14,7 +14,7 @@
  * .env. Workspaces made before the rename hold `jira_id` / `github_issue` and
  * `JIRA_ID` / `GITHUB_ISSUE`: those are read, never written.
  *
- * Lives in `overrides:` so `werkmeister config`, which rebuilds the YAML and keeps
+ * Lives in `overrides:` so `werkmeister machine config`, which rebuilds the YAML and keeps
  * overrides verbatim, cannot drop it.
  *
  * Projects (SW-104, projects.ts) narrow this per workspace: a workspace's

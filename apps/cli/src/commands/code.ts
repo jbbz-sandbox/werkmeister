@@ -1,5 +1,5 @@
 /**
- * werkmeister code [feature]
+ * werkmeister workspace code [feature]
  *
  * Open a workspace in VS Code. The lookup and launch are `werkmeister-core`'s
  * `openWorkspace` -- the same call the dashboard's `open-workspace` tool makes.

@@ -4,12 +4,12 @@
 # The hostnames are NOT hardcoded here. They come from the werkmeister ingress
 # config (`ingress.local_domain` / `ingress.remote_domain` in
 # ~/.werkmeister/config.yaml, crossed with the routed services in
-# ~/.werkmeister/services.yaml) and are passed in by `werkmeister setup` via --domain.
+# ~/.werkmeister/services.yaml) and are passed in by `werkmeister machine setup` via --domain.
 # That way the certificate SANs, the /etc/hosts entries and the Caddy site
 # blocks all derive from one list instead of three hand-synced copies.
 #
 # Standalone use (no CLI): pass --domain yourself, or set WERKMEISTER_INGRESS_HOSTS
-# to a comma/space-separated list. `werkmeister setup` is the normal entry point.
+# to a comma/space-separated list. `werkmeister machine setup` is the normal entry point.
 # WERKMEISTER_HOSTS_FILE overrides /etc/hosts (tests).
 #
 # Usage:

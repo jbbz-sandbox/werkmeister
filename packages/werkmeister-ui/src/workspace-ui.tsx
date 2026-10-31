@@ -306,7 +306,7 @@ function TopBar({
           title={
             infraUp
               ? "Shared infrastructure is up and healthy — nothing to connect."
-              : "Start shared infrastructure (werkmeister connect)"
+              : "Start shared infrastructure (werkmeister infra connect)"
           }
           onClick={() => void connect()}
         >

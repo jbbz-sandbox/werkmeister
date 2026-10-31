@@ -1,7 +1,7 @@
 # werkmeister-mcp
 
 The one werkmeister MCP server (SW-48): every tool, one name per verb, over
-stdio (`werkmeister mcp`) and authenticated HTTP on :3002. Host-side: it holds
+stdio (`werkmeister internal mcp`) and authenticated HTTP on :3002. Host-side: it holds
 the Docker privilege so a container agent does not have to. The dashboard
 (`apps/werkmeister-dashboard`) has no MCP server of its own; its browser page calls
 this one's `createServer()` in process.
@@ -19,28 +19,28 @@ Docker privilege for every client — container agents over `/mcp`, the VS Code
 extension and the CLI's SessionEnd auto-stop over `/api/tool` and
 `/api/logs/stream`.
 
-On macOS `werkmeister setup` installs it as the launchd agent
+On macOS `werkmeister machine setup` installs it as the launchd agent
 `com.werkmeister.daemon` (`KeepAlive`, so it restarts if it dies); from then on
-`werkmeister connect`/`stop`/`restart` hand it to launchd rather than touching a PID file.
-Elsewhere `werkmeister connect` starts it, like the dashboard: it is a `WebApp`
+`werkmeister infra connect`/`stop`/`restart` hand it to launchd rather than touching a PID file.
+Elsewhere `werkmeister infra connect` starts it, like the dashboard: it is a `WebApp`
 in `packages/werkmeister-core/src/web_servers.ts` (stem `sandbox-mcp`, PID <!-- name-check: ignore -->
 and log under `~/.werkmeister`). The port is 3002, or `overrides.mcp_port`
 (`WERKMEISTER_MCP_PORT`). A host-local MCP client gets it over stdio instead:
 
-    werkmeister mcp                          # stdio -- no token, no port
+    werkmeister internal mcp                          # stdio -- no token, no port
 
 There is no transport flag on that verb: stdio is the only thing a client
-launching a subprocess can use, and the HTTP mode is `werkmeister connect`'s job.
-`werkmeister dashboard` is the same arrangement for the other app. By hand:
+launching a subprocess can use, and the HTTP mode is `werkmeister infra connect`'s job.
+`werkmeister internal dashboard` is the same arrangement for the other app. By hand:
 
     pnpm run build && pnpm run serve:http    # Streamable HTTP on :3002
-    pnpm run serve:stdio                     # what `werkmeister mcp` execs
+    pnpm run serve:stdio                     # what `werkmeister internal mcp` execs
 
 **It binds `0.0.0.0`, deliberately and uniquely.** `WebApp` carries an optional
 per-app `env`, and only this app sets `HOST=0.0.0.0` — a container reaches the
 host through `host.docker.internal`, and a loopback listener is unreachable that
 way. The dashboard still binds loopback; do **not** try to arrange this by
-exporting `HOST` before `werkmeister connect`, because `start()` passes the
+exporting `HOST` before `werkmeister infra connect`, because `start()` passes the
 environment to both apps and the dashboard is unauthenticated.
 
 ## Authentication
@@ -58,7 +58,7 @@ Two kinds of bearer token, both 32 random bytes of hex at mode 0600:
   `~/repos` and `~/features` mount read-write into the container.
 
 A bearer token is required whenever the bind is not loopback — which,
-under the daemon, is always. A host-local client should use `werkmeister mcp`,
+under the daemon, is always. A host-local client should use `werkmeister internal mcp`,
 which needs no token. Any request carrying an `Origin` header is refused: this
 server has no browser UI, so an `Origin` means a browser found something that
 was not meant for it.
@@ -76,7 +76,7 @@ forwards, telepresence, `/etc/hosts` and the real `gh`: the switch tests use.
 
 ## How a container reaches it
 
-`werkmeister init-workspace` projects the workspace's `.mcp.json` from the
+`werkmeister workspace init` projects the workspace's `.mcp.json` from the
 `mcp_servers:` registry in `~/.werkmeister/services.yaml`. The `werkmeister` entry there
 points at `http://host.docker.internal:${WERKMEISTER_MCP_PORT:-3002}/mcp` and leaves
 `${WERKMEISTER_MCP_TOKEN}` for the MCP client to expand from the container's
@@ -102,7 +102,7 @@ isolation" in `docs/users-guide.md`.
 
 ## Watching it
 
-`werkmeister status` reports the *dashboard* under `mcp_web_server`, not this
+`werkmeister feature status` reports the *dashboard* under `mcp_web_server`, not this
 server. Until that is widened, use:
 
     lsof -nP -iTCP:3002 -sTCP:LISTEN

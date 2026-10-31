@@ -24,7 +24,7 @@
  * into a shim that throws rather than the guarded miss dockerode's ssh2 ->
  * cpu-features path relies on. Letting npm install it keeps the native
  * resolution npm-shaped. `*.node` stays listed so anything else reaching a
- * binding fails at build, not at a user's first `werkmeister up`.
+ * binding fails at build, not at a user's first `werkmeister feature up`.
  *
  * Output stays ESM (the extension's bundle is CJS and has to `define`
  * import.meta away): werkmeister-core resolves paths through `import.meta.dirname`,

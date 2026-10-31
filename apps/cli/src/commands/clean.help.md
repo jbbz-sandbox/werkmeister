@@ -6,9 +6,9 @@
 2. Removes those orphaned volumes
 3. Releases stale slot entries (features with no running containers or compose file)
 
-With `--all`, it first stops all active features (equivalent to running `werkmeister down --volumes` for each), then cleans everything.
+With `--all`, it first stops all active features (equivalent to running `werkmeister feature down --volumes` for each), then cleans everything.
 
 **When to use:**
 - After extended development with many features started and stopped — volumes accumulate
-- Before a fresh start: `werkmeister clean --all`
-- To check what would be cleaned: `werkmeister clean --dry-run`
+- Before a fresh start: `werkmeister machine clean --all`
+- To check what would be cleaned: `werkmeister machine clean --dry-run`

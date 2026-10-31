@@ -1,5 +1,5 @@
 /**
- * werkmeister connect
+ * werkmeister infra connect
  *
  * Start shared infrastructure: the k8s port-forwards (redis, postgres) and
  * caddy, plus jaeger and redisinsight when `infra.profiles` turns them on.
@@ -73,7 +73,7 @@ async function checkOne(tracker: IssueTrackerStrategy, project: string): Promise
   }
 }
 
-/** Handle `werkmeister connect --k8s`: start/restart the k8s port-forwards container only. */
+/** Handle `werkmeister infra connect --k8s`: start/restart the k8s port-forwards container only. */
 async function runK8sOnly(): Promise<void> {
   console.log(`\n${Colors.BOLD}=== k8s Connect ===${Colors.RESET}\n`);
 
@@ -83,14 +83,14 @@ async function runK8sOnly(): Promise<void> {
       `  ${Colors.DIM}Ensure Docker is running and your kubeconfig is valid.${Colors.RESET}`,
     );
     console.log(
-      `  ${Colors.DIM}Run 'werkmeister connect' to start all infrastructure.${Colors.RESET}`,
+      `  ${Colors.DIM}Run 'werkmeister infra connect' to start all infrastructure.${Colors.RESET}`,
     );
   }
 
   console.log();
 }
 
-/** Execute the `werkmeister connect` command. */
+/** Execute the `werkmeister infra connect` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.k8s) {
     await runK8sOnly();

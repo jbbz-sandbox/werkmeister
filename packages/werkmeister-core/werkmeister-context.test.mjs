@@ -135,7 +135,7 @@ test("Container Lifecycle mentions auto-stop only when it is on (#231)", async (
       const on = buildSandboxContextMd(...args, "", null, ["frontend"], true);
       assert.match(
         on,
-        /## Container Lifecycle[\s\S]*Auto-stop is on[\s\S]*werkmeister stop --if-idle/,
+        /## Container Lifecycle[\s\S]*Auto-stop is on[\s\S]*werkmeister internal session-end/,
       );
       assert.doesNotMatch(buildSandboxContextMd(...args), /--if-idle/);
     },

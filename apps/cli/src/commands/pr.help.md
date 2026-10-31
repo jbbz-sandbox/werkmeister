@@ -22,4 +22,4 @@ werkmeister pr status --json
 
 ## See also
 
-`werkmeister close-out` ends the workspace once its PRs have shipped.
+`werkmeister workspace close` ends the workspace once its PRs have shipped.

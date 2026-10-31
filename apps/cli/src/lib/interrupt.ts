@@ -3,7 +3,7 @@
  *
  * The CLI installs one default SIGINT handler for every command: print
  * `Interrupted`, exit 130. That is right for the commands that just stop —
- * but not for one that has cleanup to run first. `werkmeister open` closes the
+ * but not for one that has cleanup to run first. `werkmeister feature open` closes the
  * browser window and removes its throwaway Chrome profile when its poll loop
  * winds down, and the default handler is registered *first*, so it called
  * `process.exit(130)` before the command's own listener ever ran. The cleanup

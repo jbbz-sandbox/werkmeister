@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/jbbz-sandbox/werkmeister/main/apps/cli/infra/schemas/workspace.schema.json",
   "title": "Werkmeister workspace config (.werkmeister/workspace.yml)",
-  "description": "Durable source of truth for a workspace's inputs. Generated and re-read by `werkmeister init-workspace`. Unmanaged keys are preserved across writes, so additional properties are allowed.",
+  "description": "Durable source of truth for a workspace's inputs. Generated and re-read by `werkmeister workspace init`. Unmanaged keys are preserved across writes, so additional properties are allowed.",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -36,11 +36,11 @@
     "auto_stop": {
       "type": "boolean",
       "default": false,
-      "description": "Write a SessionEnd hook to .claude/settings.json that runs `werkmeister stop --if-idle` (#231): when a session in the workspace ends and no other Claude session is open there, this feature's containers stop (slot and volumes kept; `werkmeister up` resumes). Never stops shared infra. Turning it off removes the hook on the next init-workspace / up."
+      "description": "Write a SessionEnd hook to .claude/settings.json that runs `werkmeister internal session-end` (#231): when a session in the workspace ends and no other Claude session is open there, this feature's containers stop (slot and volumes kept; `werkmeister feature up` resumes). Never stops shared infra. Turning it off removes the hook on the next init-workspace / up."
     },
     "repos": {
       "type": "string",
-      "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `werkmeister init-workspace` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."
+      "description": "Comma-separated repos kept as git worktrees in this workspace (union with the repos owning `services`). `werkmeister workspace init` reconciles the worktree set to match on every run; removing a repo whose worktree has uncommitted changes requires --force."
     },
     "services": {
       "type": "string",
@@ -48,7 +48,7 @@
     },
     "issue_id": {
       "type": "string",
-      "description": "Issue ID in this machine's issue tracker (overrides.issue_tracker, set by `werkmeister setup`)."
+      "description": "Issue ID in this machine's issue tracker (overrides.issue_tracker, set by `werkmeister machine setup`)."
     },
     "project": {
       "type": "string",

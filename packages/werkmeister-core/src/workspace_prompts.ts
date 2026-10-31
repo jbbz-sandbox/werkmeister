@@ -6,7 +6,7 @@
  * these prompts in a terminal wizard (`runWizard` — rendering stays CLI-side)
  * and the dashboard/extension turn the same spec into an RJSF form via
  * {@link buildFormSchema}. Core used to reach the second path by spawning
- * `werkmeister workspace --print-form-schema`, which made core depend on the CLI
+ * `werkmeister workspace new --print-form-schema`, which made core depend on the CLI
  * that depends on core — see note 087, `core never drives the CLI`.
  *
  * Moved verbatim from `apps/cli/src/commands/init_workspace.ts` and
@@ -533,8 +533,8 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Auto-stop on session end",
     help:
       "On by default for autonomous workspaces, off otherwise. On: when a Claude session in the workspace ends and no other one is open " +
-      "there, a SessionEnd hook runs `werkmeister stop --if-idle`, which stops this feature's " +
-      "containers (slot and volumes kept; `werkmeister up` resumes). Shared infra is never stopped.",
+      "there, a SessionEnd hook runs `werkmeister internal session-end`, which stops this feature's " +
+      "containers (slot and volumes kept; `werkmeister feature up` resumes). Shared infra is never stopped.",
     boolean: true,
   },
   {
@@ -748,7 +748,7 @@ export const REPOS_PROMPT: PromptSpec = {
 };
 
 /**
- * Resolve inputs and build the prompt spec `werkmeister workspace` presents:
+ * Resolve inputs and build the prompt spec `werkmeister workspace new` presents:
  * `_WIZARD_PROMPTS` with {@link REPOS_PROMPT} spliced in after `services`.
  *
  * Callers that print the result as JSON on stdout must silence stdout

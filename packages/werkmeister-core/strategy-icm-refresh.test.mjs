@@ -58,7 +58,7 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
     });
     assert.ok(!fs.existsSync(path.join(root, ".werkmeister", ".gate")));
     assert.match(log, /werkmeister notes context/);
-    assert.match(log, /werkmeister hooks gate/);
+    assert.match(log, /werkmeister internal gate/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

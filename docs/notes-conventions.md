@@ -4,7 +4,7 @@
 > [jit-context-system.md](jit-context-system.md) (§5.7). This file is
 > the canonical convention reference for anything that reads or writes notes: the
 > generated CLAUDE.md `## Notes` pointer, the `w9r-implement` / `w9r-research` /
-> `w9r-handoff` skills, subagent return contracts, and `werkmeister down` printing.
+> `w9r-handoff` skills, subagent return contracts, and `werkmeister feature down` printing.
 
 ## What notes are
 
@@ -15,8 +15,8 @@ and phase → phase. They live and die with the workspace.
 Three rules keep the layer honest:
 
 1. **Generated files point; notes persist.** The workspace CLAUDE.md links to
-   `.werkmeister/notes/` and holds no durable state. Generators (`werkmeister init-workspace`,
-   `werkmeister up`) never write into the notes directory — with two one-time, write-once
+   `.werkmeister/notes/` and holds no durable state. Generators (`werkmeister workspace init`,
+   `werkmeister feature up`) never write into the notes directory — with two one-time, write-once
    exceptions in init-workspace: the salvage of a legacy CLAUDE.md `## Handoff Notes`
    section into a `contract` note, and seeding the workspace's `starting_prompt` as its
    first `handoff` note (`author: workspace-creation`; written only when a prompt
@@ -31,7 +31,7 @@ Three rules keep the layer honest:
    pointer alone).
 3. **Graduation is explicit.** Knowledge that outlives the feature moves *out*
    deliberately: per-repo quirks → the standards tree's `repos/*`, process lessons →
-   auto-memory, interface contracts → the PR description. `werkmeister down` prints
+   auto-memory, interface contracts → the PR description. `werkmeister feature down` prints
    surviving notes so the human decides what graduates — nothing is auto-published.
 
 ## Layout

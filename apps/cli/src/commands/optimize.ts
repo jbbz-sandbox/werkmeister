@@ -1,12 +1,12 @@
 /**
- * werkmeister optimize
+ * werkmeister machine optimize
  *
  * Analyze running containers and compare actual usage against configured limits.
  * Shows which services are over/under-provisioned and generates recommendations.
  *
  * Examples:
- *     werkmeister optimize              # Analyze current usage vs configured limits
- *     werkmeister optimize --collect 5  # Collect for 5 minutes first, then analyze
+ *     werkmeister machine optimize              # Analyze current usage vs configured limits
+ *     werkmeister machine optimize --collect 5  # Collect for 5 minutes first, then analyze
  */
 
 import { formatMem, optimizeReport, type ServiceUsage } from "werkmeister-core/stats";
@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<ServiceUsage["status"], string> = {
   no_limit: `${Colors.DIM}no limit set${Colors.RESET}`,
 };
 
-/** Execute the ``werkmeister optimize`` command. */
+/** Execute the ``werkmeister machine optimize`` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const duration = (args.collect as number) ?? 0;
   const interval = (args.interval as number) ?? 10;

@@ -202,7 +202,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         async (node?: WsNode) => {
           const ws = await pickWorkspace(node);
           if (!ws) return;
-          await runInTerminal([action], ws.path);
+          await runInTerminal(["feature", action], ws.path);
         },
       ),
     ),
@@ -238,7 +238,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     // Menu-only (see commandPalette below): the feature is only known from a
     // tree node — there is nothing for a bare palette invocation to pass.
     //
-    // Unlike its siblings this does not shell out to `werkmeister logs`. That
+    // Unlike its siblings this does not shell out to `werkmeister feature logs`. That
     // command ends in `proc.run` (spawnSync, `stdio: "inherit"`), so nothing
     // here could read its output, and killing it would leave its `docker
     // compose` grandchild tailing. See logs.ts.
@@ -266,10 +266,10 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.newWorkspace", async () => {
       const root = workspacesRoot();
       fs.mkdirSync(root, { recursive: true });
-      await runInTerminal(["workspace"], root, "workspace");
+      await runInTerminal(["workspace", "new"], root, "workspace");
     }),
 
-    // `werkmeister open` blocks for the whole lifetime of the Chrome window (Ctrl-C
+    // `werkmeister feature open` blocks for the whole lifetime of the Chrome window (Ctrl-C
     // is how you close it), so it gets its own detached process rather than
     // occupying the shared terminal.
     // ponytail: fire-and-forget — a launch failure after spawn is invisible.
@@ -284,7 +284,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
         void vscode.window.showErrorMessage((e as Error).message);
         return;
       }
-      const child = spawn(bin, ["open"], {
+      const child = spawn(bin, ["feature", "open"], {
         cwd: ws.path,
         detached: true,
         stdio: "ignore",
@@ -292,7 +292,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       });
       child.on(
         "error",
-        (e) => void vscode.window.showErrorMessage(`werkmeister open: ${e.message}`),
+        (e) => void vscode.window.showErrorMessage(`werkmeister feature open: ${e.message}`),
       );
       child.unref();
       void vscode.window.showInformationMessage(`Opening a tagged browser for '${ws.name}'…`);
@@ -302,7 +302,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     // newWorkspace it runs in a terminal rather than being reimplemented here.
     vscode.commands.registerCommand("sandbox.detect", async () => {
       const repo = await pickRepo();
-      if (repo) await runInTerminal(["detect", repo], repo);
+      if (repo) await runInTerminal(["machine", "detect", repo], repo);
     }),
 
     vscode.commands.registerCommand("sandbox.registrySync", async () => {
@@ -389,7 +389,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.legend", () => provider.toggleLegend()),
 
     vscode.commands.registerCommand("sandbox.connect", async () => {
-      await runInTerminal(["connect"], os.homedir(), "connect");
+      await runInTerminal(["infra", "connect"], os.homedir(), "infra connect");
     }),
   ];
 }

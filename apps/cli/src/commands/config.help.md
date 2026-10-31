@@ -5,7 +5,7 @@ Sets up and maintains the machine-global configuration, `~/.werkmeister/config.y
 ## Examples
 
 ```bash
-werkmeister config                       # print the resolved config and origins
-werkmeister config --write               # interactive wizard, then write
-werkmeister config --check               # validate; nonzero exit on drift
+werkmeister machine config                       # print the resolved config and origins
+werkmeister machine config --write               # interactive wizard, then write
+werkmeister machine config --check               # validate; nonzero exit on drift
 ```

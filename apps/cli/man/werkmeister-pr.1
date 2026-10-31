@@ -2,26 +2,7 @@
 .SH NAME
 werkmeister\-pr \- Open and track this workspace's PRs from its PR files (docs/workspace\-lifecycle.md)
 .SH SYNOPSIS
-\fBwerkmeister pr\fR <action> [args...]
-.SH OPTIONS
-.TP
-\fB\-\-slug <slug>\fR
-new: the follow\-up's name, in its PR file and branch
-.TP
-\fB\-\-no\-pr <reason>\fR
-adopt: no PR — the fix is already on base
-.TP
-\fB\-\-no\-wait\fR
-gate/open: don't wait for host load under budget.host_load before each check
-.TP
-\fB\-\-install\fR
-watch: install a schedule (launchd on macOS, else crontab) that runs \fBpr watch\fR every 10 minutes
-.TP
-\fB\-\-uninstall\fR
-watch: remove that schedule
-.TP
-\fB\-\-json\fR
-Print the result as JSON
+\fBwerkmeister pr\fR [command]
 .SH DESCRIPTION
 .PP
 Opens PRs from a workspace and tracks them to a release. Each action:
@@ -52,6 +33,6 @@ werkmeister pr status \-\-json
 .fi
 .SH SEE ALSO
 .PP
-\fBwerkmeister close\-out\fR ends the workspace once its PRs have shipped.
+\fBwerkmeister workspace close\fR ends the workspace once its PRs have shipped.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)

@@ -19,7 +19,7 @@ test("renderIssueRef with a stored copy", () => {
 test("renderIssueRef without a copy or url (Jira, no base_url)", () => {
   assert.equal(
     renderIssueRef({ ref: "PROJ-12", url: null, title: "", fetchedAt: null }),
-    "## Issue\n\nPROJ-12. No stored copy; run `werkmeister init-workspace --refresh-issue`.\n" +
+    "## Issue\n\nPROJ-12. No stored copy; run `werkmeister workspace init --refresh-issue`.\n" +
       "Before each stage, re-read the live issue for newer direction: `werkmeister issue view`\n" +
       "Its status moves by itself (In Progress → In Review → Done): `docs/workspace-lifecycle.md` § Issue status in the werkmeister repo.\n",
   );

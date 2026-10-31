@@ -1,4 +1,4 @@
-// The idle reaper (SW-39): `werkmeister stop --idle <minutes>` and the `watchPrs` pass.
+// The idle reaper (SW-39): `werkmeister internal reap <minutes>` and the `watchPrs` pass.
 // Docker is stubbed, sessions come from temp workspaces; no ~/.claude, no real daemon.
 
 import assert from "node:assert/strict";

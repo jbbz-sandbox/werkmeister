@@ -1,5 +1,5 @@
 /**
- * The issue-tracker interface. `werkmeister setup` picks one tracker per machine
+ * The issue-tracker interface. `werkmeister machine setup` picks one tracker per machine
  * (`overrides.issue_tracker`); every read and write of an issue goes through
  * `issueTracker()` in ../issue_tracker.ts and never names a tracker.
  *

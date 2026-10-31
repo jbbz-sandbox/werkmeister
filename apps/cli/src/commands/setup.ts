@@ -1,5 +1,5 @@
 /**
- * werkmeister setup [--check] [--yes]
+ * werkmeister machine setup [--check] [--yes]
  *
  * The guided first-run (and re-run) of a werkmeister machine. Walks through every
  * prerequisite that lives outside the checkout, writing the machine-global
@@ -10,7 +10,7 @@
  *   1. paths        — repos root and workspaces root (`paths:`), plus the
  *                     GitHub locations `overrides.workspace_repo` and
  *                     `overrides.github_org`
- *   2. browser      — which browser `werkmeister open` launches (`overrides.browser`)
+ *   2. browser      — which browser `werkmeister feature open` launches (`overrides.browser`)
  *   3. ingress      — base domains + cert directory (`ingress:`)
  *   4. registry     — which repo fragments will generate services.yaml; demo clone; k8s context
  *   5. issues       — the issue tracker (`overrides.issue_tracker`), plus that
@@ -35,9 +35,9 @@
  * domain converges just what changed. Nothing is written before the last
  * question is answered — Ctrl-C at any prompt leaves the machine untouched.
  *
- *   werkmeister setup            # interactive wizard
- *   werkmeister setup --check    # report only; no prompts, no writes, nonzero on drift
- *   werkmeister setup --yes      # non-interactive; accept defaults, skip optional installs
+ *   werkmeister machine setup            # interactive wizard
+ *   werkmeister machine setup --check    # report only; no prompts, no writes, nonzero on drift
+ *   werkmeister machine setup --yes      # non-interactive; accept defaults, skip optional installs
  *
  * `--check` and `--yes` never prompt, so both are safe in CI. Plugin changes
  * reach only NEW Claude Code sessions — a running session keeps the plugin
@@ -199,7 +199,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
 
   if (interactive) {
     await runWizard([BROWSER_PROMPT], resolvedBrowser, browserDefault, {
-      intro: "Which browser `werkmeister open` launches.",
+      intro: "Which browser `werkmeister feature open` launches.",
     });
   } else {
     resolvedBrowser.browser = browserDefault();
@@ -211,7 +211,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   ) {
     warn(
       `  ${BROWSERS[resolvedBrowser.browser].label} isn't wired up yet -- ` +
-        "`werkmeister open` will error until it's picked to chrome/chromium/brave/edge/safari.",
+        "`werkmeister feature open` will error until it's picked to chrome/chromium/brave/edge/safari.",
     );
   }
 
@@ -242,7 +242,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   let demo = false;
   // An existing hand-written registry's context is the default (and the
   // non-interactive value): a `--yes` upgrade must not silently retarget
-  // `werkmeister intercept` at the default cluster.
+  // `werkmeister infra intercept` at the default cluster.
   let k8sContext = inheritedK8sContext(servicesYaml) ?? "orbstack";
 
   let fragments: string[] = [];
@@ -257,7 +257,9 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     );
   } else {
     info(`No <repo>/${FRAGMENT_REL} found under ${reposRoot}.`);
-    info("Clone your team's repos there and re-run `werkmeister setup`, or try the demo apps.");
+    info(
+      "Clone your team's repos there and re-run `werkmeister machine setup`, or try the demo apps.",
+    );
   }
   if (!fragments.includes("demo-services")) {
     demo = await confirm(
@@ -268,7 +270,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   }
   if (!fs.existsSync(gc.servicesLocalYamlPath()) && interactive) {
     k8sContext = await prompt(
-      "Kube context for `werkmeister intercept` (services.local.yaml k8s_context)",
+      "Kube context for `werkmeister infra intercept` (services.local.yaml k8s_context)",
       k8sContext,
     );
   }
@@ -334,7 +336,9 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
 
   // --- 6. telepresence (optional) -----------------------------------------
   heading("6. Telepresence (optional)");
-  info("Only `werkmeister intercept` needs it — reroutes cluster traffic to a local container.");
+  info(
+    "Only `werkmeister infra intercept` needs it — reroutes cluster traffic to a local container.",
+  );
   const installTelepresence = await confirm(
     "  Install/upgrade the OSS client via Homebrew if it's missing or stale?",
     false,
@@ -574,7 +578,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       steps.unshift({ label: "global config", ok: false, detail: p });
     }
     if (report(steps)) {
-      warn("Prerequisites out of date — run `werkmeister setup` to converge.");
+      warn("Prerequisites out of date — run `werkmeister machine setup` to converge.");
       process.exit(1);
     }
     success("All required werkmeister prerequisites are in order.");

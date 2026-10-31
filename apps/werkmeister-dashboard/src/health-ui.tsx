@@ -188,7 +188,7 @@ function Features({ features, bridge }: { features: FeatureStatus[]; bridge: Hos
   if (!active.length)
     return (
       <div className="row">
-        {"No feature sandboxes up (start one with `werkmeister up <feature>`)"}
+        {"No feature sandboxes up (start one with `werkmeister feature up <feature>`)"}
       </div>
     );
   return active.map((f) => (
@@ -341,7 +341,9 @@ export function HealthTab({ bridge, active }: { bridge: HostBridge; active: bool
           (ws.infra.services.length ? (
             ws.infra.services.map((s) => <ServiceRow key={s.name} s={s} nested={false} />)
           ) : (
-            <div className="row">No infra containers found (is `werkmeister connect` running?)</div>
+            <div className="row">
+              No infra containers found (is `werkmeister infra connect` running?)
+            </div>
           ))}
       </div>
       <div className="sec-h">k8s Forwards</div>

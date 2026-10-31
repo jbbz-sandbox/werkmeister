@@ -1,0 +1,499 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`command spellings > ["cache","prune","pnpm","--dry-run"] 1`] = `
+{
+  "action": "prune",
+  "dry_run": true,
+  "force": false,
+  "name": "pnpm",
+  "reset": false,
+}
+`;
+
+exports[`command spellings > ["clean","--dry-run"] 1`] = `
+{
+  "all": false,
+  "dry_run": true,
+}
+`;
+
+exports[`command spellings > ["close-out","n","--abandon","why"] 1`] = `
+{
+  "abandon": "why",
+  "name": "n",
+  "skipPostmortem": null,
+  "yes": false,
+}
+`;
+
+exports[`command spellings > ["close-out","n","-y"] 1`] = `
+{
+  "abandon": null,
+  "name": "n",
+  "skipPostmortem": null,
+  "yes": true,
+}
+`;
+
+exports[`command spellings > ["code","f"] 1`] = `
+{
+  "feature": "f",
+}
+`;
+
+exports[`command spellings > ["config","--check"] 1`] = `
+{
+  "check": true,
+  "repos_root": null,
+  "show": false,
+  "workspaces_root": null,
+  "write": false,
+}
+`;
+
+exports[`command spellings > ["connect","--k8s"] 1`] = `
+{
+  "k8s": true,
+}
+`;
+
+exports[`command spellings > ["detect","r","--dry-run","--no-assist"] 1`] = `
+{
+  "assist": false,
+  "dryRun": true,
+  "repo": "r",
+  "yes": false,
+}
+`;
+
+exports[`command spellings > ["down","f","-v","--all-features"] 1`] = `
+{
+  "all_features": true,
+  "feature": "f",
+  "volumes": true,
+}
+`;
+
+exports[`command spellings > ["down","infra","-v"] 1`] = `
+{
+  "all_features": false,
+  "feature": "infra",
+  "volumes": true,
+}
+`;
+
+exports[`command spellings > ["hooks","agent-state"] 1`] = `
+{
+  "action": "agent-state",
+}
+`;
+
+exports[`command spellings > ["hooks","gate"] 1`] = `
+{
+  "action": "gate",
+}
+`;
+
+exports[`command spellings > ["hooks","pr-guard"] 1`] = `
+{
+  "action": "pr-guard",
+}
+`;
+
+exports[`command spellings > ["init-workspace","--feature","f","--refresh-issue"] 1`] = `
+{
+  "auto_stop": null,
+  "autonomous": null,
+  "config_file": null,
+  "context_strategy": null,
+  "description": null,
+  "feature": "f",
+  "force": false,
+  "issue_id": null,
+  "labels": null,
+  "model": null,
+  "project": null,
+  "prune_context": false,
+  "refresh_issue": true,
+  "repos": null,
+  "services": null,
+  "starting_prompt": null,
+  "task": null,
+  "test_path": null,
+  "work_type": null,
+}
+`;
+
+exports[`command spellings > ["intercept","f","-s","api","--leave"] 1`] = `
+{
+  "docker_daemon": false,
+  "feature": "f",
+  "leave": true,
+  "service": "api",
+  "status": false,
+  "workspace": null,
+}
+`;
+
+exports[`command spellings > ["issue","create","--project","SW","--type","bug","--title","t"] 1`] = `
+{
+  "action": "create",
+  "bodyFile": null,
+  "comment": null,
+  "json": false,
+  "project": "SW",
+  "ref": null,
+  "status": null,
+  "title": "t",
+  "type": "bug",
+}
+`;
+
+exports[`command spellings > ["issue","update","--status","Done","--comment","c"] 1`] = `
+{
+  "action": "update",
+  "bodyFile": null,
+  "comment": "c",
+  "json": false,
+  "project": null,
+  "ref": null,
+  "status": "Done",
+  "title": null,
+  "type": null,
+}
+`;
+
+exports[`command spellings > ["issue","view","SW-1","--json"] 1`] = `
+{
+  "action": "view",
+  "bodyFile": null,
+  "comment": null,
+  "json": true,
+  "project": null,
+  "ref": "SW-1",
+  "status": null,
+  "title": null,
+  "type": null,
+}
+`;
+
+exports[`command spellings > ["list-workspaces"] 1`] = `{}`;
+
+exports[`command spellings > ["logs","f","api"] 1`] = `
+{
+  "feature": "f",
+  "service": "api",
+}
+`;
+
+exports[`command spellings > ["migrate","--check","--workspaces"] 1`] = `
+{
+  "check": true,
+  "workspaces": true,
+}
+`;
+
+exports[`command spellings > ["notes","graduate","3","--kind","rule"] 1`] = `
+{
+  "action": "graduate",
+  "domain": null,
+  "kind": "rule",
+  "note_num": 3,
+  "slug": null,
+}
+`;
+
+exports[`command spellings > ["open","f","--path","/p"] 1`] = `
+{
+  "feature": "f",
+  "path": "/p",
+  "position": null,
+  "size": "1440,900",
+  "url": null,
+}
+`;
+
+exports[`command spellings > ["optimize","-i","3"] 1`] = `
+{
+  "collect": 0,
+  "interval": 3,
+}
+`;
+
+exports[`command spellings > ["pause","f"] 1`] = `
+{
+  "feature": "f",
+}
+`;
+
+exports[`command spellings > ["pr","adopt","--no-pr","on base","sandbox"] 1`] = `
+{
+  "action": "adopt",
+  "install": false,
+  "json": false,
+  "noPr": "on base",
+  "pr": null,
+  "repo": "sandbox",
+  "slug": null,
+  "uninstall": false,
+  "wait": true,
+}
+`;
+
+exports[`command spellings > ["pr","adopt","12","sandbox"] 1`] = `
+{
+  "action": "adopt",
+  "install": false,
+  "json": false,
+  "noPr": null,
+  "pr": "12",
+  "repo": "sandbox",
+  "slug": null,
+  "uninstall": false,
+  "wait": true,
+}
+`;
+
+exports[`command spellings > ["pr","new","sandbox","--slug","s"] 1`] = `
+{
+  "action": "new",
+  "install": false,
+  "json": false,
+  "noPr": null,
+  "pr": null,
+  "repo": "sandbox",
+  "slug": "s",
+  "uninstall": false,
+  "wait": true,
+}
+`;
+
+exports[`command spellings > ["pr","open","sandbox","--no-wait"] 1`] = `
+{
+  "action": "open",
+  "install": false,
+  "json": false,
+  "noPr": null,
+  "pr": null,
+  "repo": "sandbox",
+  "slug": null,
+  "uninstall": false,
+  "wait": false,
+}
+`;
+
+exports[`command spellings > ["pr","watch","--install"] 1`] = `
+{
+  "action": "watch",
+  "install": true,
+  "json": false,
+  "noPr": null,
+  "pr": null,
+  "repo": null,
+  "slug": null,
+  "uninstall": false,
+  "wait": true,
+}
+`;
+
+exports[`command spellings > ["proxy-reload"] 1`] = `{}`;
+
+exports[`command spellings > ["registry","--check"] 1`] = `
+{
+  "action": "sync",
+  "check": true,
+}
+`;
+
+exports[`command spellings > ["remove","f","api"] 1`] = `
+{
+  "feature": "f",
+  "service": "api",
+}
+`;
+
+exports[`command spellings > ["remove-workspace","n","--abandon","why"] 1`] = `
+{
+  "abandon": "why",
+  "name": "n",
+  "yes": false,
+}
+`;
+
+exports[`command spellings > ["restart","f"] 1`] = `
+{
+  "feature": "f",
+}
+`;
+
+exports[`command spellings > ["restart","infra"] 1`] = `
+{
+  "feature": "infra",
+}
+`;
+
+exports[`command spellings > ["resume","f"] 1`] = `
+{
+  "feature": "f",
+}
+`;
+
+exports[`command spellings > ["services","f"] 1`] = `
+{
+  "feature": "f",
+}
+`;
+
+exports[`command spellings > ["setup","--check"] 1`] = `
+{
+  "check": true,
+  "yes": false,
+}
+`;
+
+exports[`command spellings > ["skills","check"] 1`] = `
+{
+  "action": "check",
+}
+`;
+
+exports[`command spellings > ["standards","check"] 1`] = `
+{
+  "action": "check",
+}
+`;
+
+exports[`command spellings > ["start-args","--start","/d"] 1`] = `
+{
+  "start": "/d",
+}
+`;
+
+exports[`command spellings > ["starting-prompt","--start","/d"] 1`] = `
+{
+  "start": "/d",
+}
+`;
+
+exports[`command spellings > ["stats","--collect","5"] 1`] = `
+{
+  "collect": 5,
+  "interval": 10,
+  "save": false,
+}
+`;
+
+exports[`command spellings > ["status","--k8s"] 1`] = `
+{
+  "intercepts": false,
+  "json": false,
+  "k8s": true,
+  "verbose": false,
+}
+`;
+
+exports[`command spellings > ["status","-v","--intercepts","--json"] 1`] = `
+{
+  "intercepts": true,
+  "json": true,
+  "k8s": false,
+  "verbose": true,
+}
+`;
+
+exports[`command spellings > ["stop","--if-idle","--via-daemon"] 1`] = `
+{
+  "feature": null,
+  "idle": null,
+  "if_idle": true,
+  "via_daemon": true,
+}
+`;
+
+exports[`command spellings > ["stop","f","--idle","30"] 1`] = `
+{
+  "feature": "f",
+  "idle": "30",
+  "if_idle": false,
+  "via_daemon": false,
+}
+`;
+
+exports[`command spellings > ["stop","f","--via-daemon"] 1`] = `
+{
+  "feature": "f",
+  "idle": null,
+  "if_idle": false,
+  "via_daemon": true,
+}
+`;
+
+exports[`command spellings > ["stop","f"] 1`] = `
+{
+  "feature": "f",
+  "idle": null,
+  "if_idle": false,
+  "via_daemon": false,
+}
+`;
+
+exports[`command spellings > ["stop","infra"] 1`] = `
+{
+  "feature": "infra",
+  "idle": null,
+  "if_idle": false,
+  "via_daemon": false,
+}
+`;
+
+exports[`command spellings > ["test","f","--scaffold","--base-url","https://x"] 1`] = `
+{
+  "base_url": "https://x",
+  "extra": [],
+  "feature": "f",
+  "scaffold": true,
+  "workspace": null,
+}
+`;
+
+exports[`command spellings > ["up","f","--dev","-w","/ws"] 1`] = `
+{
+  "dev": true,
+  "feature": "f",
+  "workspace": "/ws",
+}
+`;
+
+exports[`command spellings > ["up","infra"] 1`] = `
+{
+  "dev": false,
+  "feature": "infra",
+  "workspace": null,
+}
+`;
+
+exports[`command spellings > ["wait-load"] 1`] = `{}`;
+
+exports[`command spellings > ["workspace","f","--issue-id","SW-1","-s","api,web","--autonomous"] 1`] = `
+{
+  "auto_stop": null,
+  "autonomous": true,
+  "browser_form": false,
+  "context_strategy": null,
+  "description": null,
+  "feature": "f",
+  "force": false,
+  "issue_id": "SW-1",
+  "labels": null,
+  "model": null,
+  "no_distill": false,
+  "open_vscode": false,
+  "project": null,
+  "repos": null,
+  "services": "api,web",
+  "starting_prompt": null,
+  "task": null,
+  "test_path": null,
+  "work_type": null,
+}
+`;

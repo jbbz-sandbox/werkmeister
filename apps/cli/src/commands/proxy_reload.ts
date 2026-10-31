@@ -1,5 +1,5 @@
 /**
- * werkmeister proxy-reload
+ * werkmeister infra proxy-reload
  *
  * Regenerate the Caddyfile from all active features and reload the
  * Caddy reverse proxy container.

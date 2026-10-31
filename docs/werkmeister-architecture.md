@@ -63,7 +63,7 @@ k8s services are reached via the k8s-forwards container (e.g., `k8s-forwards:905
 - Copies an `X-Feature` cookie value into an `X-Feature` header on the upstream call, so the app can read the selected feature.
 - Proxies to `host.docker.internal:<port>` for a local feature container, or to `k8s-<service>:<forward_port>` for the k8s baseline.
 
-**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`werkmeister proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.werkmeister/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `packages/werkmeister-core/src/feature_routing.ts`).
+**Caddyfile generation**: the orchestrator CLI regenerates the Caddyfile whenever a feature is started or stopped (`werkmeister infra proxy-reload`, and implicitly on `up`/`down`/`connect`). The file carries a do-not-edit header; hostnames derive from the base domains in `~/.werkmeister/config.yaml` and the `feature_router:` blocks in `services.yaml` (see `packages/werkmeister-core/src/feature_routing.ts`).
 
 ```
 # Example generated Caddyfile snippet
@@ -185,7 +185,7 @@ For a given feature workspace:
 ```
 
 **Re-detection triggers**:
-- On `werkmeister up` (initial)
+- On `werkmeister feature up` (initial)
 - On Vibe Kanban status change (e.g., moving to "in review")
 - Optionally: file watcher that re-detects when new files are committed
 
@@ -195,33 +195,33 @@ The core tool that agents and developers invoke.
 
 ```bash
 # Lifecycle
-werkmeister up <feature>         # detect services, start containers, configure proxy
-werkmeister down <feature>        # stop containers, remove proxy routes
-werkmeister restart <feature>     # restart feature's containers
-werkmeister status               # show all features, their services, resource usage
+werkmeister feature up <feature>         # detect services, start containers, configure proxy
+werkmeister feature down <feature>        # stop containers, remove proxy routes
+werkmeister feature restart <feature>     # restart feature's containers
+werkmeister feature status               # show all features, their services, resource usage
 
 # Inspection
-werkmeister detect [repo]        # generate the repo's .werkmeister/services.yaml (--dry-run to preview)
-werkmeister services <feature>   # list services and their endpoints for this feature
-werkmeister logs <feature> [svc] # tail logs for a feature's service
+werkmeister machine detect [repo]        # generate the repo's .werkmeister/services.yaml (--dry-run to preview)
+werkmeister feature services <feature>   # list services and their endpoints for this feature
+werkmeister feature logs <feature> [svc] # tail logs for a feature's service
 
 # Manual overrides (to run a service locally: add it to .werkmeister/workspace.yml, then init-workspace + up)
-werkmeister remove <feature> <svc> # stop a local service, fall back to k8s
+werkmeister feature drop <feature> <svc> # stop a local service, fall back to k8s
 
 # Testing
-werkmeister test <feature>       # run Playwright against this feature's stack
+werkmeister feature test <feature>       # run Playwright against this feature's stack
 
 # Infrastructure
-werkmeister up infra             # start shared infrastructure (k8s-forwards, caddy; jaeger, redisinsight if enabled)
-werkmeister status --k8s         # check k8s-forwards container health
-werkmeister proxy-reload         # regenerate Caddyfile and reload Caddy
+werkmeister infra up             # start shared infrastructure (k8s-forwards, caddy; jaeger, redisinsight if enabled)
+werkmeister infra status         # check k8s-forwards container health
+werkmeister infra proxy-reload         # regenerate Caddyfile and reload Caddy
 ```
 
 **Implementation**: A TypeScript CLI that lives in the Werkmeister repo. Each command is a module in `apps/cli/src/commands/`.
 
 ### 5. Per-Feature Docker Compose Generation
 
-When `werkmeister up <feature>` runs, it dynamically generates the workspace's `compose.yml`:
+When `werkmeister feature up <feature>` runs, it dynamically generates the workspace's `compose.yml`:
 
 ```yaml
 # Auto-generated for feature: payment-refactor
@@ -340,7 +340,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 
 **Health checks**: Docker Compose healthcheck runs `/usr/local/bin/probe.sh` (`infra/compose/k8s-port-forward/probe.sh`). The container reports healthy only when the critical forwards are established. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
-**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs w9r-k8s-forwards`. The `werkmeister status --k8s` command checks the container's health status.
+**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs w9r-k8s-forwards`. The `werkmeister infra status` command checks the container's health status.
 
 ### 8. Playwright Integration
 
@@ -361,7 +361,7 @@ export default defineConfig({
 
 **Execution**:
 ```bash
-werkmeister test payment-refactor
+werkmeister feature test payment-refactor
 # Equivalent to:
 # SANDBOX_FEATURE=payment-refactor npx playwright test
 ```
@@ -378,7 +378,7 @@ Caddy reads the `X-Feature` cookie/header and routes to the correct containers. 
 
 ## Routing applies only to front-door services
 
-Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.werkmeister/werkmeister-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `werkmeister test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
+Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.werkmeister/werkmeister-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `werkmeister feature test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
 
 ## Directory Structure
 
@@ -431,7 +431,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 
 ---
 
-## Lifecycle: `werkmeister up payment-refactor`
+## Lifecycle: `werkmeister feature up payment-refactor`
 
 ```
 1. DETECT
@@ -523,13 +523,13 @@ STATUS="$VIBE_NEW_STATUS"
 
 case "$STATUS" in
   "in-progress")
-    werkmeister up "$FEATURE"
+    werkmeister feature up "$FEATURE"
     ;;
   "in-review")
-    werkmeister test "$FEATURE"
+    werkmeister feature test "$FEATURE"
     ;;
   "done"|"cancelled")
-    werkmeister down "$FEATURE"
+    werkmeister feature down "$FEATURE"
     ;;
 esac
 ```
@@ -540,17 +540,17 @@ Each Claude Code agent operates in its own workspace and can invoke `werkmeister
 
 ```bash
 # Agent starting work on a feature
-werkmeister up payment-refactor
+werkmeister feature up payment-refactor
 
 # Agent wants to check its work
-werkmeister test payment-refactor
+werkmeister feature test payment-refactor
 
 # Agent adds a service it now needs (after listing graphql-orders in .werkmeister/workspace.yml)
-werkmeister init-workspace
-werkmeister up payment-refactor
+werkmeister workspace init
+werkmeister feature up payment-refactor
 
 # Agent checks what's running
-werkmeister status
+werkmeister feature status
 ```
 
 ---

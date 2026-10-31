@@ -1,5 +1,5 @@
 /**
- * Machine-prerequisite sync backing `werkmeister setup`.
+ * Machine-prerequisite sync backing `werkmeister machine setup`.
  *
  * The prerequisites of werkmeister live outside this repo and outside
  * any workspace, on the developer's machine:
@@ -20,7 +20,7 @@
  *     the wizard asks and the answer is yes. Nothing references it, so a
  *     decline is reported ok rather than as drift;
  *   * the **companion sandbox-workspace checkout** under the repos root —
- *     `werkmeister workspace` creates each workspace root as a worktree of it
+ *     `werkmeister workspace new` creates each workspace root as a worktree of it
  *     (plain-directory fallback with a warning when it is missing). Which repo
  *     that is comes from `overrides.workspace_repo`, defaulting to the
  *     authenticated GitHub user's own `<user>/sandbox-workspace`;
@@ -30,7 +30,7 @@
  *     is reported ok with guidance, and only a filled-but-rejected token fails
  *     the step;
  *   * the **Telepresence OSS client** (OPTIONAL) — installed via Homebrew on
- *     request, since only `werkmeister intercept` needs it;
+ *     request, since only `werkmeister infra intercept` needs it;
  *   * the **Werkmeister Workspaces VS Code extension** (OPTIONAL) — installed on
  *     request from the .vsix the published CLI package ships.
  *
@@ -47,7 +47,7 @@
  * Unlike plugin_check (which stays silent when Claude's plugin state is
  * unreadable, because a false alarm on every init trains people to ignore
  * it), this module treats absent state as a fresh machine and converges it —
- * `werkmeister setup` only runs when explicitly invoked.
+ * `werkmeister machine setup` only runs when explicitly invoked.
  */
 
 import * as fs from "node:fs";
@@ -131,7 +131,7 @@ export interface PluginSpec {
  *
  * `ok` means converged/healthy. `optional` means a not-ok result must NOT fail
  * the run: werkmeister works without this, so the step renders as a warning and
- * `werkmeister setup` still exits 0. Telepresence, Jira and the companion workspace
+ * `werkmeister machine setup` still exits 0. Telepresence, Jira and the companion workspace
  * checkout are all things you can simply not have — a broken Homebrew or a
  * typo'd token is not a reason to call machine setup a failure.
  */
@@ -198,7 +198,7 @@ export function retireLegacyPlugin(
       {
         label,
         ok: false,
-        detail: `old name still set up; run \`w9r setup\` to switch to ${PLUGIN_NAME}`,
+        detail: `old name still set up; run \`w9r machine setup\` to switch to ${PLUGIN_NAME}`,
       },
     ];
   }
@@ -241,7 +241,7 @@ export function retireLegacyPlugin(
  * Plugins installed only when the wizard asks and the answer is yes.
  *
  * Separate from REQUIRED_PLUGINS because absence must stay a non-event: no w9r-*
- * skill references these, so `werkmeister setup --check` reports them ok when they
+ * skill references these, so `werkmeister machine setup --check` reports them ok when they
  * were never wanted. Once installed they are kept current on every run like any
  * other plugin — opting in is the one-time decision, not a per-run one.
  */
@@ -263,7 +263,7 @@ export const OPTIONAL_PLUGINS: readonly PluginSpec[] = [
 // and generated context files — gets git history and a push target. The
 // repo's main holds only the scaffold (README, .gitignore, starting
 // .claude), so there is no unrelated content to contend with on feature
-// branches. `werkmeister workspace` consumes the checkout; `werkmeister setup`
+// branches. `werkmeister workspace new` consumes the checkout; `werkmeister machine setup`
 // clones/updates it.
 // WHICH repo that is, is machine config (`overrides.workspace_repo`): a solo
 // developer uses their own, a team points every machine at one shared
@@ -344,12 +344,12 @@ export function defaultWorkspaceRepo(runner: Runner = defaultRunner): string {
 // The demo registry's two apps (backend, frontend) live here, checked out
 // alongside `werkmeister` under repos_root so workspaces can worktree it. Cloned
 // only when setup seeds the demo registry — someone bringing their own
-// services.yaml has no use for it, and `werkmeister setup` should not litter
+// services.yaml has no use for it, and `werkmeister machine setup` should not litter
 // repos_root with a repo they'll never open.
 export const DEMO_SERVICES_REPO = "demo-services";
 export const DEMO_SERVICES_REPO_URL = "git@github.com:jbbz-sandbox/demo-services.git";
 
-/** A repo `werkmeister setup` keeps checked out under repos_root. */
+/** A repo `werkmeister machine setup` keeps checked out under repos_root. */
 interface RepoSpec {
   name: string;
   url: string;
@@ -544,7 +544,9 @@ export function syncOptionalPlugin(
 
   if (!installed && (checkOnly || !install)) {
     const why = spec.note ? `; ${spec.note}` : "";
-    return [{ label, ok: true, detail: `not installed (opt in via \`werkmeister setup\`${why})` }];
+    return [
+      { label, ok: true, detail: `not installed (opt in via \`werkmeister machine setup\`${why})` },
+    ];
   }
 
   return syncPlugin(spec, claudePluginsDir, runner, checkOnly).map((step) => ({
@@ -643,7 +645,7 @@ export function syncRepo(
       const how = clash
         ? `remote '${keep}' already points at ${keptUrl.trim()}; rename it, then ` +
           fix.map((c) => c.join(" ")).join(" && ")
-        : `${fix.map((c) => c.join(" ")).join(" && ")} — or rerun \`werkmeister setup\` and accept`;
+        : `${fix.map((c) => c.join(" ")).join(" && ")} — or rerun \`werkmeister machine setup\` and accept`;
       return [
         {
           label,
@@ -694,7 +696,7 @@ export function syncRepo(
  * The wizard asks where repos and workspaces live, and `check()` then reports
  * drift when those paths are absent — so a first run that answered the prompts
  * would immediately fail its own health check. Creating them here closes that
- * loop: everything downstream (the workspace-repo clone, `werkmeister workspace`)
+ * loop: everything downstream (the workspace-repo clone, `werkmeister workspace new`)
  * assumes both directories are present.
  */
 export function syncPathDirs(
@@ -752,7 +754,7 @@ export interface RegistryOptions {
  *     the file, and a copy is the reversible choice);
  *   * created  — written fresh from lib/scaffold.
  *
- * These files are the reason `werkmeister up` can run at all, so in check mode a
+ * These files are the reason `werkmeister feature up` can run at all, so in check mode a
  * missing one is a hard failure rather than a hint.
  */
 export function syncRegistryConfigs(checkOnly: boolean, options: RegistryOptions = {}): Step[] {
@@ -813,7 +815,7 @@ export function syncRegistryConfigs(checkOnly: boolean, options: RegistryOptions
     }
   }
 
-  // secrets.env is a template of empty keys — `werkmeister up` validates it and
+  // secrets.env is a template of empty keys — `werkmeister feature up` validates it and
   // names what's unfilled, so seeding it is a convenience, not a prerequisite.
   const label = "config secrets.env";
   const secrets = secretsPath();
@@ -828,7 +830,7 @@ export function syncRegistryConfigs(checkOnly: boolean, options: RegistryOptions
       steps.push({
         label,
         ok: true,
-        detail: `created ${result.path} — fill in the values before \`werkmeister up\``,
+        detail: `created ${result.path} — fill in the values before \`werkmeister feature up\``,
       });
     } catch (e) {
       steps.push({ label, ok: false, detail: `could not write ${secrets}: ${e}` });
@@ -929,7 +931,7 @@ export function syncIngressCerts(
         detail:
           rc === 0
             ? `${ingress.certs_dir}/localhost.crt covers ${hostnames.length} hostname(s)`
-            : `${out.trim() || `exit ${rc}`} — run \`werkmeister setup\` to (re)generate`,
+            : `${out.trim() || `exit ${rc}`} — run \`werkmeister machine setup\` to (re)generate`,
       },
     ];
   }
@@ -1025,7 +1027,7 @@ export async function syncJiraToken(
       {
         label,
         ok: true,
-        detail: `configured for ${jira.email} (run \`werkmeister setup\` to live-verify)`,
+        detail: `configured for ${jira.email} (run \`werkmeister machine setup\` to live-verify)`,
       },
     ];
   }
@@ -1141,10 +1143,10 @@ export function syncEditorSchemas(
             label,
             ok: false,
             optional: true,
-            detail: "mapped to an old install path — re-run `werkmeister setup`",
+            detail: "mapped to an old install path — re-run `werkmeister machine setup`",
           },
         ]
-      : [{ label, ok: true, detail: "not mapped (opt in via `werkmeister setup`)" }];
+      : [{ label, ok: true, detail: "not mapped (opt in via `werkmeister machine setup`)" }];
   }
   let text = state.text;
   const fmt = { formattingOptions: { insertSpaces: true, tabSize: 4 } };
@@ -1243,7 +1245,7 @@ export function syncClaudeStandardsDir(
   }
   if (state.granted) return [{ label, ok: true, detail: `granted in ${settingsPath}` }];
   if (checkOnly || !install)
-    return [{ label, ok: true, detail: "not granted (opt in via `werkmeister setup`)" }];
+    return [{ label, ok: true, detail: "not granted (opt in via `werkmeister machine setup`)" }];
   const fmt = { formattingOptions: { insertSpaces: true, tabSize: 2 } };
   const hasList = Array.isArray(
     parseJsonc(state.text, [], { allowTrailingComma: true })?.["permissions"]?.[
@@ -1510,11 +1512,11 @@ export function syncPrWatchSchedule(
         label,
         ok: true,
         detail:
-          "not installed (opt in via `werkmeister setup` or `werkmeister pr watch --install`)",
+          "not installed (opt in via `werkmeister machine setup` or `werkmeister pr watch --install`)",
       },
     ];
   }
-  const stale = state.current ? "" : "; stale — re-run `werkmeister setup`";
+  const stale = state.current ? "" : "; stale — re-run `werkmeister machine setup`";
   return [
     { label, ok: true, detail: `installed (${state.where}), logs → ${state.logFile}${stale}` },
   ];
@@ -1523,7 +1525,7 @@ export function syncPrWatchSchedule(
 // ---------------------------------------------------------------------------
 // Host daemon (SW-184): the HTTP MCP server on daemonPort(), kept up by launchd
 // on macOS because the VS Code extension and the SessionEnd stop depend on it.
-// Elsewhere `werkmeister connect` starts it with a PID file, as before.
+// Elsewhere `werkmeister infra connect` starts it with a PID file, as before.
 // ---------------------------------------------------------------------------
 
 export interface DaemonAgentOptions {
@@ -1609,7 +1611,7 @@ export async function syncDaemonAgent(
   const label = "werkmeister daemon";
   const r = resolveDaemonAgent(opts);
   if (!r.darwin) {
-    return [{ label, ok: true, detail: "not on macOS: `werkmeister connect` starts it" }];
+    return [{ label, ok: true, detail: "not on macOS: `werkmeister infra connect` starts it" }];
   }
   const plist = daemonPlist(opts);
   if (plist === null) {
@@ -1623,7 +1625,7 @@ export async function syncDaemonAgent(
         label,
         ok: existing === plist,
         optional: true,
-        detail: `launchd agent ${r.plist}: ${state}${existing === plist ? "" : " — run `werkmeister setup`"}`,
+        detail: `launchd agent ${r.plist}: ${state}${existing === plist ? "" : " — run `werkmeister machine setup`"}`,
       },
     ];
   }
@@ -1638,6 +1640,16 @@ export async function syncDaemonAgent(
       detail: `${res.changed ? "installed" : "up to date"}: launchd agent ${r.plist}, logs → ${r.logFile}`,
     },
   ];
+}
+
+/** `werkmeister daemon uninstall`: hand the daemon back to `connect`'s PID-file start (SW-186). */
+export function uninstallDaemonAgent(opts: DaemonAgentOptions = {}): Step {
+  const label = "werkmeister daemon";
+  const r = resolveDaemonAgent(opts);
+  if (!fs.existsSync(r.plist)) return { label, ok: true, detail: "no launchd agent installed" };
+  r.runner(["launchctl", "bootout", `gui/${r.uid}/${DAEMON_LABEL}`]);
+  fs.rmSync(r.plist, { force: true });
+  return { label, ok: true, detail: `removed launchd agent ${r.plist}` };
 }
 
 /** `<publisher>.<name>` from packages/werkmeister-vscode/package.json, as `code` lists it. */
@@ -1716,10 +1728,10 @@ export function syncVscodeExtension(
             label,
             ok: false,
             optional: true,
-            detail: `${state.installed} < bundled ${want} — re-run \`werkmeister setup\``,
+            detail: `${state.installed} < bundled ${want} — re-run \`werkmeister machine setup\``,
           },
         ]
-      : [{ label, ok: true, detail: "not installed (opt in via `werkmeister setup`)" }];
+      : [{ label, ok: true, detail: "not installed (opt in via `werkmeister machine setup`)" }];
   }
   const [rc, out] = runner(["code", "--install-extension", state.bundled.path, "--force"]);
   if (rc !== 0) {
@@ -1744,7 +1756,7 @@ export function syncVscodeExtension(
 /**
  * Report — and optionally install via Homebrew — the Telepresence OSS client.
  *
- * Optional prerequisite: only `werkmeister intercept` needs it, so absence is
+ * Optional prerequisite: only `werkmeister infra intercept` needs it, so absence is
  * ok=true with a hint rather than a failure. Installation only happens when the
  * caller passes `install: true` (the setup wizard asks first); check mode never
  * installs. An installed-but-stale client is ok=false either way, because
@@ -1794,7 +1806,7 @@ export function syncTelepresence(
       {
         label,
         ok: true,
-        detail: `not installed (needed only for \`werkmeister intercept\`; ${INSTALL_HINT})`,
+        detail: `not installed (needed only for \`werkmeister infra intercept\`; ${INSTALL_HINT})`,
       },
     ];
   }
@@ -1824,7 +1836,7 @@ export function syncTelepresence(
         detail:
           `brew ${action} ${BREW_FORMULA} failed: ${briefOutput(out)}\n` +
           `    Telepresence stays optional — this does not block anything except ` +
-          `\`werkmeister intercept\`. Install manually with: ${DOWNLOAD_HINT}`,
+          `\`werkmeister infra intercept\`. Install manually with: ${DOWNLOAD_HINT}`,
       },
     ];
   }
@@ -1904,7 +1916,7 @@ export function syncPlaywright(
         label,
         ok: false,
         optional: true,
-        detail: `chromium for ${pkg} missing — re-run \`werkmeister setup\``,
+        detail: `chromium for ${pkg} missing — re-run \`werkmeister machine setup\``,
       },
     ];
   }
@@ -2014,7 +2026,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
         `not found on PATH — the ${PLUGIN_NAME} and ponytail plugins cannot be ` +
         "installed without it. Install Claude Code from " +
         "https://claude.com/claude-code (the VS Code extension alone does not " +
-        "put `claude` on PATH), then re-run `werkmeister setup`.",
+        "put `claude` on PATH), then re-run `werkmeister machine setup`.",
     });
   } else {
     for (const spec of REQUIRED_PLUGINS) {
@@ -2062,7 +2074,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
       optional: true,
       detail:
         "no workspace repo configured and `gh` could not name one — set " +
-        "overrides.workspace_repo (or run `gh auth login`, then `werkmeister setup`). " +
+        "overrides.workspace_repo (or run `gh auth login`, then `werkmeister machine setup`). " +
         "Workspaces will fall back to plain directories.",
     });
   }

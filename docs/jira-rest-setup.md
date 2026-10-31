@@ -4,9 +4,9 @@ An optional Jira API token lets Werkmeister read Jira over REST directly (status
 pills, issue cards and briefings in `apps/werkmeister-dashboard`) instead of a
 `claude -p` round-trip through the Atlassian MCP.
 
-> **Mostly automated:** `werkmeister setup` asks "Configure Jira credentials now?" and
+> **Mostly automated:** `werkmeister machine setup` asks "Configure Jira credentials now?" and
 > writes them to the `jira:` section of `~/.werkmeister/config.yaml`;
-> `werkmeister connect` live-verifies them against `/rest/api/3/myself`.
+> `werkmeister infra connect` live-verifies them against `/rest/api/3/myself`.
 > Only step 1 below (creating the token) remains manual. The step is
 > optional — with no credentials reads go through the Atlassian MCP, and only
 > placeholder values or a token Jira rejects are reported as a fault.
@@ -24,7 +24,7 @@ pills, issue cards and briefings in `apps/werkmeister-dashboard`) instead of a
    - Copy the token immediately (it is shown once).
 
 2. **Add the credentials** to `~/.werkmeister/config.yaml` (or answer
-   `werkmeister setup`'s prompts):
+   `werkmeister machine setup`'s prompts):
 
    ```yaml
    jira:

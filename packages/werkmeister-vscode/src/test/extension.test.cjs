@@ -72,13 +72,13 @@ suite("Sandbox Workspaces", () => {
   });
 
   // ⚡ Connect infra is view-wide (SW-55): no workspace cwd to name its terminal after.
-  test("Connect infra runs `werkmeister connect` in a terminal named for it", async () => {
+  test("Connect infra runs `werkmeister infra connect` in a terminal named for it", async () => {
     process.env.WERKMEISTER_BIN = fixture("unused").bin;
 
     await vscode.commands.executeCommand("sandbox.connect");
     assert.deepEqual(
       vscode.window.terminals.map((t) => t.name),
-      ["werkmeister connect"],
+      ["werkmeister infra connect"],
     );
   });
 

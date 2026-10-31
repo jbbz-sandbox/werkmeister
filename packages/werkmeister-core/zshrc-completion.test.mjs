@@ -1,4 +1,4 @@
-// `werkmeister setup` installs tab completion into ~/.zshrc as a managed block.
+// `werkmeister machine setup` installs tab completion into ~/.zshrc as a managed block.
 // Pinned here because it edits a file the user also owns: re-running must
 // replace its own block and nothing else, and the block must be valid zsh on a
 // machine where `werkmeister` is not (yet) on PATH.

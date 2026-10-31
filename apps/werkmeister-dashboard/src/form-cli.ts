@@ -2,7 +2,7 @@
  * Standalone browser-form CLI for creating a workspace.
  *
  * This is the entry point the `/werkmeister:workspace` skill (Claude Code) calls via
- * `werkmeister workspace --browser-form`. It reuses the exact same pieces as the
+ * `werkmeister workspace new --browser-form`. It reuses the exact same pieces as the
  * Desktop MCP App and the MCP server's CLI fallback:
  *
  *   getFormSchema()  →  promptViaLocalhostForm()  →  createWorkspace()

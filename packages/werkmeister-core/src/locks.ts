@@ -2,7 +2,7 @@
  * Cross-process file locking for werkmeister.
  *
  * Provides a simple advisory lock to prevent race conditions when multiple
- * `werkmeister up` / `werkmeister down` commands run concurrently.  All lock files
+ * `werkmeister feature up` / `werkmeister feature down` commands run concurrently.  All lock files
  * live under `~/.werkmeister/locks/`.
  *
  * Usage:

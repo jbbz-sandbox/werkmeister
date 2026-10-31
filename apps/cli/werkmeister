@@ -76,7 +76,25 @@ fi
 # global install these siblings are absent. apps/werkmeister-mcp is bundled into this
 # package as dist/mcp.js (esbuild.mjs), so `mcp` always has a target. The
 # dashboard is checkout-only.
+# SW-186 moved these five under `internal`; the old spellings warn until REMOVE_IN
+# (keep in step with src/main.ts). stderr only: stdout is JSON-RPC or hook output.
+deprecated() {
+    echo "werkmeister: '$1' is deprecated and will be removed in 0.58.0; use 'werkmeister internal $2'. Run 'werkmeister machine migrate' to update hooks and permission rules." >&2
+}
+verb=""
 case "${1:-}" in
+    internal)
+        case "${2:-}" in mcp|dashboard|gate|pr-guard|agent-state) verb="$2"; shift 2 ;; esac
+        ;;
+    hooks)
+        case "${2:-}" in gate|pr-guard|agent-state) verb="$2"; deprecated "hooks $2" "$2"; shift 2 ;; esac
+        ;;
+    mcp|dashboard)
+        verb="$1"; deprecated "$1" "$1"; shift
+        ;;
+esac
+
+case "$verb" in
     mcp)
         app_entry="$(cd "$WERKMEISTER_ROOT/.." && pwd)/werkmeister-mcp/dist/main.js"
         [ -f "$app_entry" ] || app_entry="$WERKMEISTER_ROOT/dist/mcp.js"
@@ -84,7 +102,6 @@ case "${1:-}" in
             echo "Error: 'mcp' is not available -- missing $app_entry (run 'pnpm run build')." >&2
             exit 1
         fi
-        shift
         exec "$node_bin" "$app_entry" --stdio "$@"
         ;;
     dashboard)
@@ -93,23 +110,13 @@ case "${1:-}" in
             echo "Error: the workspaces dashboard ships with a werkmeister checkout only -- missing $app_entry." >&2
             exit 1
         fi
-        shift
         exec "$node_bin" "$app_entry" "$@"
         ;;
+    # The hook entry points skip the commander/yaml import chain: `gate` fires on
+    # every Edit/Write, `pr-guard` on every Bash call, `agent-state` on every tool call.
+    gate) exec "$node_bin" "$WERKMEISTER_ROOT/dist/lib/gate.js" ;;
+    pr-guard) exec "$node_bin" "$WERKMEISTER_ROOT/dist/lib/pr_guard.js" ;;
+    agent-state) exec "$node_bin" "$WERKMEISTER_ROOT/dist/lib/agent_state.js" ;;
 esac
-
-# `hooks gate` is the PreToolUse standards gate — it fires on every Edit/Write,
-# so it skips the commander/yaml import chain via a dedicated entrypoint.
-if [ "${1:-}" = "hooks" ] && [ "${2:-}" = "gate" ]; then
-    exec "$node_bin" "$WERKMEISTER_ROOT/dist/lib/gate.js"
-fi
-# `hooks pr-guard` fires on every Bash call in every workspace — same reason.
-if [ "${1:-}" = "hooks" ] && [ "${2:-}" = "pr-guard" ]; then
-    exec "$node_bin" "$WERKMEISTER_ROOT/dist/lib/pr_guard.js"
-fi
-# `hooks agent-state` runs on every tool call too (PreToolUse and PostToolUse).
-if [ "${1:-}" = "hooks" ] && [ "${2:-}" = "agent-state" ]; then
-    exec "$node_bin" "$WERKMEISTER_ROOT/dist/lib/agent_state.js"
-fi
 
 exec "$node_bin" "$entry" "$@"

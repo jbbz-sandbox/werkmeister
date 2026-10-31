@@ -31,7 +31,7 @@ test("a service the workspace does not run locally raises NOT_LOCAL", async () =
   assert.equal(
     err.message,
     "'frontend' is not a local service of this workspace (SERVICES=backend). " +
-      "Add it to workspace.yml services and rerun `werkmeister init-workspace`.",
+      "Add it to workspace.yml services and rerun `werkmeister workspace init`.",
   );
 });
 

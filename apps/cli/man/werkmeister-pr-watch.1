@@ -1,0 +1,18 @@
+.TH WERKMEISTER-PR-WATCH 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-pr\-watch \- Resume each opening session once its PR merges, ships or closes (any workspace)
+.SH SYNOPSIS
+\fBwerkmeister pr watch\fR
+.SH OPTIONS
+.TP
+\fB\-\-install\fR
+Install a schedule (launchd on macOS, else crontab) that runs \fBpr watch\fR every 10 minutes
+.TP
+\fB\-\-uninstall\fR
+Remove that schedule
+.TP
+\fB\-\-json\fR
+Print the result as JSON
+.PP
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

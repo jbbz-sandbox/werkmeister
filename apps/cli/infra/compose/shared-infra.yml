@@ -45,7 +45,7 @@ services:
         - linux/amd64
       # See Dockerfile: corp-ca.crt is appended to alpine's trust store so
       # `apk add` validates through a corporate TLS proxy (Netskope/Zscaler).
-      # `werkmeister connect` writes ~/.werkmeister/corp-ca.crt if it can find a
+      # `werkmeister infra connect` writes ~/.werkmeister/corp-ca.crt if it can find a
       # proxy root in the System keychain; otherwise the file is empty and
       # the build path is a no-op.
       secrets:
@@ -58,7 +58,7 @@ services:
     volumes:
       - ${HOME}/.kube:/root/.kube:ro
       - ${WERKMEISTER_STATE_DIR}/k8s-port-forward/kubeconfig:/tmp/kubeconfig:ro
-      # Forward table generated from services.yaml by `werkmeister connect`.
+      # Forward table generated from services.yaml by `werkmeister infra connect`.
       - ${WERKMEISTER_STATE_DIR}/k8s-port-forward/forwards:/tmp/forwards:ro
     env_file:
       - ${WERKMEISTER_STATE_DIR}/../secrets.env

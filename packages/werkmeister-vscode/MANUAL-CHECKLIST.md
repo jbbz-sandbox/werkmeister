@@ -15,7 +15,7 @@ obvious — what a failure looks like.
 | `pnpm test` → `src/build-tree.test.mjs` | The tree against the design's sample data (`VSCode Tree.dc.html`): descriptions, agent icons and colours, PR rows, the Markdown tooltip's rows and command links, Markdown escaping, the board 09 tone map, the legend rows, plus service health, the `current` marker (multi-root included), top-sorting, node id stability. |
 | `pnpm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
 | `pnpm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
-| `pnpm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `werkmeister <workspace>`, `⚡ Connect infra` runs in a `werkmeister connect` terminal, the config tier order — a `sandbox.*` setting overrides the inherited `WERKMEISTER_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. | <!-- name-check: ignore -->
+| `pnpm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `werkmeister <workspace>`, `⚡ Connect infra` runs in a `werkmeister infra connect` terminal, the config tier order — a `sandbox.*` setting overrides the inherited `WERKMEISTER_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. | <!-- name-check: ignore -->
 
 What is left below needs a human: real container/Telepresence state, the visual
 render, or a live editor.
@@ -40,7 +40,7 @@ render, or a live editor.
    icon once merged). Hover a workspace: a Markdown card with Containers / PRs /
    Workflow / Agent rows, `⚙ Autonomous` on an autonomous run, the agent's
    question as a quote, and three links that work (primary action, `→ Switch
-   to`, `Open feature ↗`). Cross-check against `werkmeister status` in a terminal —
+   to`, `Open feature ↗`). Cross-check against `werkmeister feature status` in a terminal —
    names, paths, and states should match.
    - Failure looks like: an empty tree with real workspaces running, or a tree
      showing dozens of raw repo checkouts instead of workspace names — see
@@ -62,7 +62,7 @@ render, or a live editor.
     with the four agent states, the service marks, Merged · Released and
     `⚙ Auto`, each in its colour. Click `?` again and it goes.
 
-5b. **⚡ Connect infra.** Click `⚡` in the title bar. A `werkmeister connect`
+5b. **⚡ Connect infra.** Click `⚡` in the title bar. A `werkmeister infra connect`
     terminal opens and starts shared infrastructure.
 
 6. *Retired — visibility-gated polling is asserted in `src/poll.test.mjs`. The
@@ -104,7 +104,7 @@ render, or a live editor.
     the whole settings tree, which no API reports back.
 
 11. **Lifecycle: Start.** Inline ▶ on a down workspace. A terminal named
-    **`werkmeister <workspace>`** opens running `werkmeister up` in that workspace's
+    **`werkmeister <workspace>`** opens running `werkmeister feature up` in that workspace's
     directory; within ~5s (next poll) the description reads `N of N up`.
 
 12. **Lifecycle: Stop.** Inline ⏸ on a running workspace. It reuses the same
@@ -117,7 +117,7 @@ render, or a live editor.
 
 14. **One terminal per command — the fix for a real bug.** With a `logs`
     terminal still tailing (see step 15), click ▶ Up on any workspace.
-    Confirm a **separate, newly created terminal** appears and `werkmeister up`
+    Confirm a **separate, newly created terminal** appears and `werkmeister feature up`
     actually runs.
     - Failure looks like: nothing happens at all, no error, the tree never
       changes — the command was typed into the tailing process's stdin and
@@ -130,17 +130,17 @@ render, or a live editor.
 
 
 16. **New Workspace.** Click `+` in the view title. A terminal at the
-    workspaces root runs `werkmeister workspace`, and the CLI's own wizard prompts
+    workspaces root runs `werkmeister workspace new`, and the CLI's own wizard prompts
     (issue ID included).
 
 17. **Open feature ↗.** Right-click a running workspace → **Open feature ↗**.
-    Spawns `werkmeister open` detached — the one command that doesn't use a
+    Spawns `werkmeister feature open` detached — the one command that doesn't use a
     terminal, because it blocks for the lifetime of the browser window.
 
 --- The remaining two are destructive. They change real state. Do them last. ---
 
 18. **Toggle an intercept (mutates real Telepresence state).** Click `⇄` on an
-    interceptable service. A terminal runs `werkmeister intercept -s <service>`;
+    interceptable service. A terminal runs `werkmeister infra intercept -s <service>`;
     afterwards the description reads "intercepted (yours)". Click `⇄` again —
     it now sends `--leave` and the intercept clears. This reroutes real traffic
     to your machine; only do it on a service you're prepared to reroute.
@@ -157,7 +157,7 @@ render, or a live editor.
       reads **Close out**.
     - Then on a workspace you do intend to end, confirm. A **progress
       notification** appears for the duration (it commits and pushes every
-      worktree, runs `werkmeister down`, then deletes — it can take minutes), an
+      worktree, runs `werkmeister feature down`, then deletes — it can take minutes), an
       information message names the path and says to archive its desktop
       sessions, the "Werkmeister Workspaces" output channel holds the close-out
       output, and the tree refreshes.
@@ -183,7 +183,7 @@ render, or a live editor.
     `WERKMEISTER_WORKSPACES_ROOT`). Open the Werkmeister view with **no**
     `sandbox.root` / `sandbox.binPath` set.
 
-    Expected: the same workspaces `werkmeister status` shows.
+    Expected: the same workspaces `werkmeister feature status` shows.
 
     Failure looks like either:
     - **Dozens of raw repo checkouts** instead of named workspaces —

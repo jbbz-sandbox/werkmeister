@@ -1,9 +1,9 @@
 /**
- * werkmeister init-workspace [options]
+ * werkmeister workspace init [options]
  *
  * Reconcile a workspace from its `.werkmeister/workspace.yml` and
  * (re)generate its context files. This is the config-driven half of workspace
- * management: `werkmeister workspace` creates the workspace ROOT and writes
+ * management: `werkmeister workspace new` creates the workspace ROOT and writes
  * workspace.yml; `init-workspace` (run there, by `workspace` or directly)
  * does the rest and is idempotent — edit workspace.yml and rerun to apply changes.
  *
@@ -17,8 +17,8 @@
  *    .claude/ skills+agents, .mcp.json, and .werkmeister/* from that config.
  *
  * It refuses to run against a bare directory (no workspace.yml and no --feature),
- * pointing the user at `werkmeister workspace` — it never prompts (the interactive
- * wizard lives in `werkmeister workspace`).
+ * pointing the user at `werkmeister workspace new` — it never prompts (the interactive
+ * wizard lives in `werkmeister workspace new`).
  *
  * The workspace root is inferred from CWD: the script honours
  * WERKMEISTER_WORKSPACES_ROOT (then WERKMEISTER_WORKSPACE_ROOT and WORKSPACE for
@@ -41,7 +41,7 @@ import {
 } from "werkmeister-core/workspace_init";
 
 /**
- * Read a task title piped on stdin (`echo "…" | werkmeister init-workspace`).
+ * Read a task title piped on stdin (`echo "…" | werkmeister workspace init`).
  *
  * This is the CLI's affordance, not the library's: only a process that owns fd
  * 0 may consume it, which is why `initWorkspace` takes this as a callback and
@@ -62,7 +62,7 @@ export function readStdinTask(): string {
 // Entry point
 // ---------------------------------------------------------------------------
 
-/** Execute `werkmeister init-workspace`. */
+/** Execute `werkmeister workspace init`. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   try {
     await initWorkspace(args, undefined, { readStdinTask });

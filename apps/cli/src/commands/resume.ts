@@ -1,7 +1,7 @@
 /**
- * werkmeister resume <feature>
+ * werkmeister feature resume <feature>
  *
- * Bring back exactly the containers `werkmeister pause` froze, release the Claude
+ * Bring back exactly the containers `werkmeister feature pause` froze, release the Claude
  * session, and tell it to continue if Pause cut a turn (SW-70).
  */
 
@@ -26,8 +26,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' resumed${Colors.RESET}\n`);
   } catch (e) {
     reportHint(e, {
-      NOT_PAUSED: `Nothing to resume. Check with: werkmeister status`,
-      COMPOSE_RESUME_FAILED: `Check with: werkmeister logs ${feature}`,
+      NOT_PAUSED: `Nothing to resume. Check with: werkmeister feature status`,
+      COMPOSE_RESUME_FAILED: `Check with: werkmeister feature logs ${feature}`,
     });
   }
 }

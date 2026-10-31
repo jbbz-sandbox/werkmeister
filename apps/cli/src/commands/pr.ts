@@ -22,11 +22,8 @@ import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { error } from "../lib/config.js";
 
 export async function run(args: Record<string, unknown>): Promise<void> {
+  // Only `pr watch` takes --install/--uninstall (SW-186 gave each verb its own flags).
   if (args.install || args.uninstall) {
-    if (args.action !== "watch") {
-      error("--install/--uninstall go with `pr watch`.");
-      process.exit(1);
-    }
     if (args.install && args.uninstall) {
       error("Pick one of --install or --uninstall.");
       process.exit(1);

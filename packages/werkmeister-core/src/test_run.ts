@@ -22,7 +22,7 @@ import { info, passthrough, raw, success, warn } from "./reporter.js";
 import { getSlot } from "./slots.js";
 
 /**
- * The Playwright release `werkmeister setup` downloads Chromium for. Each release
+ * The Playwright release `werkmeister machine setup` downloads Chromium for. Each release
  * expects one exact browser build, so a workspace on another version finds no
  * browser.
  */
@@ -155,7 +155,7 @@ export async function runFeatureTests({
     // Not a refusal: routing still works by header, so the suite is worth
     // running -- the caller just needs to know why nothing is on a slot port.
     warn(`Feature '${feature}' does not have an allocated slot`);
-    warn("Start it first with: werkmeister up " + feature);
+    warn("Start it first with: werkmeister feature up " + feature);
     warn("Running tests anyway with feature header routing...");
   }
 
@@ -172,7 +172,7 @@ export async function runFeatureTests({
   const installed = installedPlaywrightVersion(cwd);
   if (installed !== PLAYWRIGHT_VERSION) {
     warn(
-      `@playwright/test is ${installed ?? "not installed"} here, but \`werkmeister setup\` ` +
+      `@playwright/test is ${installed ?? "not installed"} here, but \`werkmeister machine setup\` ` +
         `installs Chromium for ${PLAYWRIGHT_VERSION} -- the browser may be missing. ` +
         `Fix with: npm install -D @playwright/test@${PLAYWRIGHT_VERSION}`,
     );
@@ -227,7 +227,7 @@ export async function runFeatureTests({
 }
 
 // ---------------------------------------------------------------------------
-// Scaffolding a suite (`werkmeister test --scaffold`, the feature-test skill)
+// Scaffolding a suite (`werkmeister feature test --scaffold`, the feature-test skill)
 // ---------------------------------------------------------------------------
 
 export interface FeatureIngress {
@@ -239,7 +239,7 @@ export interface FeatureIngress {
 /**
  * The ingress URL a scaffolded suite targets. Derived like the Caddyfile's
  * hosts -- the first service with a `feature_router:` block -- so it follows
- * whatever `werkmeister setup` configured; an explicit *baseUrl* wins.
+ * whatever `werkmeister machine setup` configured; an explicit *baseUrl* wins.
  */
 export function featureIngress(baseUrl?: string | null): FeatureIngress {
   if (!baseUrl) {
@@ -269,7 +269,7 @@ export default defineConfig({
   retries: 0,
   reporter: 'line',
   use: {
-    // Filled by \`werkmeister test --scaffold\` from the configured feature ingress.
+    // Filled by \`werkmeister feature test --scaffold\` from the configured feature ingress.
     baseURL: '${baseUrl}',
     ignoreHTTPSErrors: true,
     extraHTTPHeaders: {
@@ -290,7 +290,7 @@ const featureSpec = (feature: string, { baseUrl, cookieDomain }: FeatureIngress)
 
 const FEATURE = process.env.WERKMEISTER_FEATURE!;
 
-// Filled by \`werkmeister test --scaffold\` from the configured feature ingress.
+// Filled by \`werkmeister feature test --scaffold\` from the configured feature ingress.
 const BASE_URL = '${baseUrl}';
 
 test('feature: ${feature}', async ({ page, context }) => {
@@ -350,7 +350,7 @@ export function ensurePlaywright(workspace: string): void {
   }
   if (installed) {
     warn(
-      `workspace pins @playwright/test ${installed}, but \`werkmeister setup\` installs Chromium ` +
+      `workspace pins @playwright/test ${installed}, but \`werkmeister machine setup\` installs Chromium ` +
         `for ${PLAYWRIGHT_VERSION} -- if launch fails, run: npx playwright@${installed} install chromium`,
     );
     return;

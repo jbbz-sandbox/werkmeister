@@ -1,4 +1,4 @@
-// SW-144: `werkmeister up` must leave a workspace's record branch clean. The
+// SW-144: `werkmeister feature up` must leave a workspace's record branch clean. The
 // files it writes are either ignored (slot-dependent compose, runtime state) or
 // already what init-workspace wrote (settings allows).
 

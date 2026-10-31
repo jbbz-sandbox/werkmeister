@@ -6,82 +6,130 @@ werkmeister \- multi\-feature concurrent development orchestrator
 .SH DESCRIPTION
 Runs many features at once, each in its own slot, with only the services it changes running locally. \fBwerkmeister\fR \fIcommand\fR \fB\-\-help\fR and \fBwerkmeister\-\fR\fIcommand\fR(1) describe each command.
 .SH COMMANDS
-.SS Everyday
+.SS Features
 .TP
-\fBup\fR [feature]
+\fBfeature up\fR [feature]
 Detect services, allocate slot, generate config, start containers
 .TP
-\fBdown\fR [feature]
-Stop containers, release slot, update proxy (use 'infra' for shared infra)
+\fBfeature down\fR [feature]
+Stop containers, release slot, update proxy (\fBinfra <verb>\fR for shared infra)
 .TP
-\fBrestart\fR [feature]
-Restart containers (use 'infra' for shared infra)
+\fBfeature restart\fR [feature]
+Restart containers (\fBinfra <verb>\fR for shared infra)
 .TP
-\fBpause\fR [feature]
+\fBfeature pause\fR [feature]
 Freeze a workspace's running containers and hold its Claude session until resume
 .TP
-\fBresume\fR [feature]
+\fBfeature resume\fR [feature]
 Thaw exactly the containers pause froze, release the session, and tell it to continue
 .TP
-\fBstop\fR [feature]
-Stop containers without removing them or releasing the slot (use 'infra' for shared infra)
-.TP
-\fBstatus\fR
-Show all features, services, resource usage
-.TP
-\fBlogs\fR <feature> [service]
-Tail a feature's container logs
-.TP
-\fBtest\fR <feature> [extra...]
-Run Playwright tests against a feature's stack
-.TP
-\fBopen\fR [feature]
-Open a feature\-tagged Chrome window with the X\-Feature cookie set (no Playwright)
-.SS Workspaces
-.TP
-\fBstarting\-prompt\fR
-Print the enclosing workspace's starting_prompt from workspace.yml
-.TP
-\fBworkspace\fR [feature]
-Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \e<user>/\e<workspace> branch) and run init\-workspace inside it.
-.TP
-\fBlist\-workspaces\fR
-List the workspaces under the workspaces root with their issue and labels
-.TP
-\fBremove\-workspace\fR <name>
-Deprecated: use \fBwerkmeister close\-out \-\-abandon <reason>\fR. Hand off (commit + push) and delete a workspace
-.TP
-\fBclose\-out\fR [name]
-End a workspace. After every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. With \-\-abandon: record the reason, push every branch and keep them, remove the workspace. Refuses without postmortem.md (run the post\-mortem first) unless \-\-skip\-postmortem gives a reason
-.TP
-\fBcode\fR [feature]
-Open a workspace in VS Code
-.TP
-\fBinit\-workspace\fR
-Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the \fBrepos\fR/\fBservices\fR fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
-.SS PRs and issues
-.TP
-\fBissue\fR <action> [ref]
-Read, update or file an issue in this machine's issue tracker (see \fBwerkmeister setup\fR)
-.TP
-\fBpr\fR <action> [args...]
-Open and track this workspace's PRs from its PR files (docs/workspace\-lifecycle.md)
-.SS Services and infra
-.TP
-\fBintercept\fR [feature]
-Route header\-scoped k8s dev traffic to a local service (Telepresence OSS).
-.TP
-\fBservices\fR <feature>
+\fBfeature services\fR <feature>
 List services and their endpoints for a feature
 .TP
-\fBremove\fR <feature> <service>
+\fBfeature logs\fR <feature> [service]
+Tail a feature's container logs
+.TP
+\fBfeature drop\fR <feature> <service>
 Stop a local service, fall back to k8s
 .TP
-\fBconnect\fR
+\fBfeature test\fR <feature> [extra...]
+Run Playwright tests against a feature's stack
+.TP
+\fBfeature open\fR [feature]
+Open a feature\-tagged Chrome window with the X\-Feature cookie set (no Playwright)
+.TP
+\fBfeature stop\fR [feature]
+Stop containers without removing them or releasing the slot
+.TP
+\fBfeature status\fR
+Show all features, services, resource usage
+.SS Workspaces
+.TP
+\fBworkspace prompt\fR
+Print the enclosing workspace's starting_prompt from workspace.yml
+.TP
+\fBworkspace new\fR [feature]
+Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \e<user>/\e<workspace> branch) and run init\-workspace inside it.
+.TP
+\fBworkspace list\fR
+List the workspaces under the workspaces root with their issue and labels
+.TP
+\fBworkspace code\fR [feature]
+Open a workspace in VS Code
+.TP
+\fBworkspace init\fR
+Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the \fBrepos\fR/\fBservices\fR fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
+.TP
+\fBworkspace close\fR [name]
+End a workspace after every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. Refuses without postmortem.md (run the post\-mortem first) unless \-\-skip\-postmortem gives a reason
+.TP
+\fBworkspace abandon\fR <reason> [name]
+End a workspace without shipping: record the reason in closeout.md and the PR files, push every branch and keep them, remove the workspace
+.SS PRs and issues
+.TP
+\fBpr\fR [command]
+Open and track this workspace's PRs from its PR files (docs/workspace\-lifecycle.md)
+.TP
+\fBpr gate\fR [repo]
+Run the pre\-PR gate
+.TP
+\fBpr open\fR [repo]
+Gate, push and open each approved PR file
+.TP
+\fBpr status\fR [repo]
+Record merged, shipped or closed for each PR file
+.TP
+\fBpr adopt\fR [pr] [repo]
+Record a PR opened outside the workspace
+.TP
+\fBpr watch\fR
+Resume each opening session once its PR merges, ships or closes (any workspace)
+.TP
+\fBpr new\fR [worktree]
+Start a follow\-up PR file and branch for a worktree whose PRs have merged
+.TP
+\fBissue\fR [command]
+Read, update or file an issue in this machine's issue tracker (see \fBwerkmeister machine setup\fR)
+.TP
+\fBissue view\fR [ref]
+Print the issue
+.TP
+\fBissue update\fR [ref]
+Change the issue's status and/or add a comment
+.TP
+\fBissue create\fR
+File a new issue and print its URL (Jira)
+.TP
+\fBissue start\fR [ref]
+Move the workspace's issue to in progress (forward only)
+.TP
+\fBissue ready\fR
+List a project's open work in priority order
+.SS Services and infra
+.TP
+\fBinfra intercept\fR [feature]
+Route header\-scoped k8s dev traffic to a local service (Telepresence OSS).
+.TP
+\fBinfra connect\fR
 Start all shared infrastructure (local + k8s port\-forwards)
 .TP
-\fBproxy\-reload\fR
+\fBinfra proxy\-reload\fR
 Regenerate Caddyfile and reload Caddy
+.TP
+\fBinfra up\fR
+Up the shared infrastructure (Caddy, k8s port\-forwards)
+.TP
+\fBinfra down\fR
+Down the shared infrastructure (Caddy, k8s port\-forwards)
+.TP
+\fBinfra restart\fR
+Restart the shared infrastructure (Caddy, k8s port\-forwards)
+.TP
+\fBinfra stop\fR
+Stop the shared infrastructure (Caddy, k8s port\-forwards)
+.TP
+\fBinfra status\fR
+Show k8s port\-forward health
 .SS Agent context
 .TP
 \fBskills\fR <action>
@@ -94,23 +142,26 @@ Validate the configured standards tree (structural regression gate)
 Workspace notes (.werkmeister/notes/). \fBcontext\fR prints the latest handoff + open decisions for session\-start injection (hook target); \fBgraduate\fR scaffolds an open decision note into the standards tree.
 .SS Machine
 .TP
-\fBdetect\fR [repo]
+\fBmachine detect\fR [repo]
 Generate \e<repo>/.werkmeister/services.yaml from the repo's package manifests, Dockerfiles, compose, Helm and k8s files (re\-runs only add what is missing)
 .TP
-\fBclean\fR
+\fBmachine clean\fR
 Remove orphaned volumes and generated files from stopped features
 .TP
-\fBstats\fR
+\fBmachine stats\fR
 Show Docker container resource usage (CPU, memory)
 .TP
-\fBoptimize\fR
+\fBmachine optimize\fR
 Analyze resource usage vs configured limits, recommend changes
 .TP
-\fBsetup\fR
+\fBmachine setup\fR
 Guided machine setup: walks through paths, ingress domains and the ~/.werkmeister service registry, then converges the plugins, the sandbox\-workspace checkout, the TLS certificate and the optional issue tracker, Telepresence and VS Code YAML\-schema prerequisites \" name-check: ignore
 .TP
-\fBconfig\fR
+\fBmachine config\fR
 Set up and maintain the machine\-global werkmeister config (~/.werkmeister/config.yaml — the single source of truth); regenerates env.sh and wires up ~/.zshenv and the Desktop MCP config
+.TP
+\fBmachine migrate\fR
+Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, env.sh, the ~/.zshenv block, services.yaml, the pr\-watch schedule and workspace compose files; then rewrite workspace hooks, permission rules and with\-temp\-home, secrets.env and Claude Desktop's args to the noun\-group spellings. Safe to re\-run; refuses while affected containers are running. \" name-check: ignore
 .TP
 \fBcache\fR <action> [name]
 Prune the shared build and package caches (\fBcaches:\fR in the registry) by each one's age or prune rule
@@ -118,63 +169,83 @@ Prune the shared build and package caches (\fBcaches:\fR in the registry) by eac
 \fBregistry\fR [action]
 Regenerate ~/.werkmeister/services.yaml from every \e<repo>/.werkmeister/services.yaml under paths.repos_root (merged under ~/.werkmeister/services.local.yaml)
 .TP
-\fBmigrate\fR
-Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, env.sh, the ~/.zshenv block, services.yaml, the pr\-watch schedule and workspace compose files. Safe to re\-run; refuses while affected containers are running. \" name-check: ignore
-.SS Internal
+\fBbudget\fR [command]
+The scheduler's budget, the slots held and the features Waiting for room
 .TP
-\fBstart\-args\fR
-Print the start_session arguments (title, model, prompt, background) for the enclosing workspace, as JSON
+\fBbudget status\fR
+Show the budget, the slots held and the features Waiting for room
 .TP
-\fBwait\-load\fR
-Wait, up to 30 min, while host load is above budget.host_load; with\-temp\-home runs it first
+\fBdaemon\fR [command]
+The host daemon (the MCP server on port 3002)
 .TP
-\fBhooks\fR <action>
-Claude Code hook entrypoints: the standards gate, the PR guard and the agent state
+\fBdaemon status\fR
+Say whether the daemon is serving and its launchd agent is current
 .TP
-\fBdashboard\fR
-Run the localhost workspaces dashboard in the foreground (checkout only)
+\fBdaemon install\fR
+Install or refresh the launchd agent (macOS)
 .TP
-\fBmcp\fR
-Launch the werkmeister MCP server over stdio (Claude Desktop, the werkmeister plugin; no token needed)
+\fBdaemon uninstall\fR
+Remove the launchd agent; \fBinfra connect\fR starts the daemon again
+.TP
+\fBdaemon restart\fR
+Restart the daemon, through launchd when launchd owns it
 .SH SEE ALSO
-\fBwerkmeister\-up\fR(1),
-\fBwerkmeister\-down\fR(1),
-\fBwerkmeister\-restart\fR(1),
-\fBwerkmeister\-pause\fR(1),
-\fBwerkmeister\-resume\fR(1),
-\fBwerkmeister\-stop\fR(1),
-\fBwerkmeister\-status\fR(1),
-\fBwerkmeister\-logs\fR(1),
-\fBwerkmeister\-test\fR(1),
-\fBwerkmeister\-open\fR(1),
-\fBwerkmeister\-starting\-prompt\fR(1),
-\fBwerkmeister\-workspace\fR(1),
-\fBwerkmeister\-list\-workspaces\fR(1),
-\fBwerkmeister\-remove\-workspace\fR(1),
-\fBwerkmeister\-close\-out\fR(1),
-\fBwerkmeister\-code\fR(1),
-\fBwerkmeister\-init\-workspace\fR(1),
-\fBwerkmeister\-issue\fR(1),
+\fBwerkmeister\-feature\-up\fR(1),
+\fBwerkmeister\-feature\-down\fR(1),
+\fBwerkmeister\-feature\-restart\fR(1),
+\fBwerkmeister\-feature\-pause\fR(1),
+\fBwerkmeister\-feature\-resume\fR(1),
+\fBwerkmeister\-feature\-services\fR(1),
+\fBwerkmeister\-feature\-logs\fR(1),
+\fBwerkmeister\-feature\-drop\fR(1),
+\fBwerkmeister\-feature\-test\fR(1),
+\fBwerkmeister\-feature\-open\fR(1),
+\fBwerkmeister\-feature\-stop\fR(1),
+\fBwerkmeister\-feature\-status\fR(1),
+\fBwerkmeister\-workspace\-prompt\fR(1),
+\fBwerkmeister\-workspace\-new\fR(1),
+\fBwerkmeister\-workspace\-list\fR(1),
+\fBwerkmeister\-workspace\-code\fR(1),
+\fBwerkmeister\-workspace\-init\fR(1),
+\fBwerkmeister\-workspace\-close\fR(1),
+\fBwerkmeister\-workspace\-abandon\fR(1),
 \fBwerkmeister\-pr\fR(1),
-\fBwerkmeister\-intercept\fR(1),
-\fBwerkmeister\-services\fR(1),
-\fBwerkmeister\-remove\fR(1),
-\fBwerkmeister\-connect\fR(1),
-\fBwerkmeister\-proxy\-reload\fR(1),
+\fBwerkmeister\-pr\-gate\fR(1),
+\fBwerkmeister\-pr\-open\fR(1),
+\fBwerkmeister\-pr\-status\fR(1),
+\fBwerkmeister\-pr\-adopt\fR(1),
+\fBwerkmeister\-pr\-watch\fR(1),
+\fBwerkmeister\-pr\-new\fR(1),
+\fBwerkmeister\-issue\fR(1),
+\fBwerkmeister\-issue\-view\fR(1),
+\fBwerkmeister\-issue\-update\fR(1),
+\fBwerkmeister\-issue\-create\fR(1),
+\fBwerkmeister\-issue\-start\fR(1),
+\fBwerkmeister\-issue\-ready\fR(1),
+\fBwerkmeister\-infra\-intercept\fR(1),
+\fBwerkmeister\-infra\-connect\fR(1),
+\fBwerkmeister\-infra\-proxy\-reload\fR(1),
+\fBwerkmeister\-infra\-up\fR(1),
+\fBwerkmeister\-infra\-down\fR(1),
+\fBwerkmeister\-infra\-restart\fR(1),
+\fBwerkmeister\-infra\-stop\fR(1),
+\fBwerkmeister\-infra\-status\fR(1),
 \fBwerkmeister\-skills\fR(1),
 \fBwerkmeister\-standards\fR(1),
 \fBwerkmeister\-notes\fR(1),
-\fBwerkmeister\-detect\fR(1),
-\fBwerkmeister\-clean\fR(1),
-\fBwerkmeister\-stats\fR(1),
-\fBwerkmeister\-optimize\fR(1),
-\fBwerkmeister\-setup\fR(1),
-\fBwerkmeister\-config\fR(1),
+\fBwerkmeister\-machine\-detect\fR(1),
+\fBwerkmeister\-machine\-clean\fR(1),
+\fBwerkmeister\-machine\-stats\fR(1),
+\fBwerkmeister\-machine\-optimize\fR(1),
+\fBwerkmeister\-machine\-setup\fR(1),
+\fBwerkmeister\-machine\-config\fR(1),
+\fBwerkmeister\-machine\-migrate\fR(1),
 \fBwerkmeister\-cache\fR(1),
 \fBwerkmeister\-registry\fR(1),
-\fBwerkmeister\-migrate\fR(1),
-\fBwerkmeister\-start\-args\fR(1),
-\fBwerkmeister\-wait\-load\fR(1),
-\fBwerkmeister\-hooks\fR(1),
-\fBwerkmeister\-dashboard\fR(1),
-\fBwerkmeister\-mcp\fR(1)
+\fBwerkmeister\-budget\fR(1),
+\fBwerkmeister\-budget\-status\fR(1),
+\fBwerkmeister\-daemon\fR(1),
+\fBwerkmeister\-daemon\-status\fR(1),
+\fBwerkmeister\-daemon\-install\fR(1),
+\fBwerkmeister\-daemon\-uninstall\fR(1),
+\fBwerkmeister\-daemon\-restart\fR(1)
