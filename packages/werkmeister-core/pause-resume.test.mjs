@@ -35,7 +35,11 @@ fs.writeFileSync(
 // The compose-label lookup shells out to `docker ps`; this one names the workspace.
 const bin = path.join(dir, "bin");
 fs.mkdirSync(bin);
-fs.writeFileSync(path.join(bin, "docker"), `#!/bin/sh\necho "${ws}"\n`, { mode: 0o755 });
+fs.writeFileSync(
+  path.join(bin, "docker"),
+  `#!/bin/sh\nsleep "\${DOCKER_DELAY:-0}"\necho "${ws}"\n`,
+  { mode: 0o755 },
+);
 const claudeLog = path.join(dir, "claude.log");
 fs.writeFileSync(path.join(bin, "claude"), `#!/bin/sh\necho "$@" >> "${claudeLog}"\n`, {
   mode: 0o755,
@@ -112,6 +116,9 @@ const server = http.createServer((req, res) => {
   res.statusCode = 204;
   res.end();
 });
+// The Engine shares this process's loop: a slow docker stub blocks it past the 5 s
+// keep-alive default, and the next test's request would land on a closed socket (SW-299).
+server.keepAliveTimeout = 0;
 await new Promise((resolve) => server.listen(sock, resolve));
 process.env.DOCKER_HOST = `unix://${sock}`;
 process.env.HOME = home;
@@ -137,6 +144,7 @@ beforeEach(() => {
   calls = [];
   markerAtCall = [];
   reply = {};
+  delete process.env.DOCKER_DELAY;
   for (const f of [pausedFile, nudgeFile, claudeLog, path.join(dot, "agent-state.json")])
     fs.rmSync(f, { force: true });
 });
@@ -162,6 +170,12 @@ test("pause refuses twice and a feature with no slot", async () => {
   await pause("demo");
   await assert.rejects(pause("demo"), { code: "ALREADY_PAUSED" });
   await assert.rejects(pause("nope"), { code: "NOT_RUNNING" });
+});
+
+// SW-299: a loaded host can make the label lookup's `docker ps` slow; that must not lose the workspace.
+test("a slow docker lookup still finds the workspace", async () => {
+  process.env.DOCKER_DELAY = "11";
+  assert.deepEqual((await pause("demo")).containers, ["demo-db", "demo-api", "demo-install"]);
 });
 
 test("pause counts 409 as done; any other failure names it and keeps the record", async () => {

@@ -112,7 +112,8 @@ function workspaceFromContainerLabel(feature: string): string | null {
           "--format",
           '{{.Label "com.docker.compose.project.working_dir"}}',
         ],
-        { capture: true, timeout: 10 },
+        // A lookup starved on a loaded host must not read as "no workspace" (SW-299, as SW-257).
+        { capture: true, timeout: COMPOSE_TIMEOUT_S },
       );
     } catch (err) {
       if (err instanceof ProcError) {
