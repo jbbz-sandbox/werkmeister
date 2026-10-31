@@ -10,6 +10,9 @@ import { test } from "node:test";
 
 import { dotDir } from "./dist/config.js";
 import { generateSupergraphConfig } from "./dist/generate.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const PORTS = { slots: { start: 11000, size: 20 } };
 

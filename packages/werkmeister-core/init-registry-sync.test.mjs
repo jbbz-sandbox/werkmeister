@@ -11,7 +11,9 @@ import { test } from "node:test";
 import { syncRegistry } from "./dist/registry_sync.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const fragment = (validate) =>
   `services:\n  backend:\n    type: api\n    port_offset: 2\n    validate: ${validate}\n`;

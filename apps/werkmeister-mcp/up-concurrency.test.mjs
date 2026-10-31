@@ -19,6 +19,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { pinWerkmeisterRoot } from "../../packages/werkmeister-core/fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const DOCKER_DELAY_MS = 300;
 

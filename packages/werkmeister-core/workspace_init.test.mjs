@@ -15,7 +15,9 @@ import { dotDir } from "./dist/config.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { createWorkspace } from "./dist/sandbox.js";
 import { provisionWorkspace, WorkspaceInitError } from "./dist/workspace_init.js";
-import { dockerAvailable, withSandboxHome } from "./fixtures.mjs";
+import { dockerAvailable, pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 /** Run `fn`, returning its rejection and everything it printed. */
 async function abort(fn) {

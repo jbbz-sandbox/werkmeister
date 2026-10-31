@@ -11,6 +11,9 @@ import { afterEach, beforeEach, test } from "node:test";
 
 import { down, startSharedInfra } from "./dist/infra.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const VARS = [
   "PATH",

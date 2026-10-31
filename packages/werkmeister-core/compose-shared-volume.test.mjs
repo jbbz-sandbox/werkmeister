@@ -22,7 +22,9 @@ import YAML from "yaml";
 import { getVolumeBaseNames } from "./dist/config.js";
 import { generateFeatureCompose } from "./dist/generate.js";
 import { featureFromVolume, volumeBaseNames } from "./dist/lifecycle.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const CLI_ROOT = path.resolve(import.meta.dirname, "../../apps/cli");
 

@@ -9,7 +9,9 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const SNAPSHOT = path.join(import.meta.dirname, "strategy-jit.snapshot.json");
 const REPO = path.resolve(import.meta.dirname, "..", "..");

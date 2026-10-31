@@ -15,7 +15,9 @@ import YAML from "yaml";
 import { applyCaches, cacheSnapshots, pruneCaches, serviceCaches } from "./dist/build_caches.js";
 import { generateFeatureCompose } from "./dist/generate.js";
 import { REGISTRY_DEFAULTS } from "./dist/scaffold.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const CLI_ROOT = path.resolve(import.meta.dirname, "../../apps/cli");
 const CACHES = {
