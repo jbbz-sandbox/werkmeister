@@ -47,6 +47,7 @@ werkmeister workspace new <slug> --issue-id <ref> --repos <repo> \
 - Before the first create: the code checkout the CLI runs from is on an up-to-date `main` and rebuilt (`pnpm run build` at its root; the plugin's MCP server runs `apps/werkmeister-mcp/dist`).
 - List only the services the ticket says to run (usually none). The gate starts one container per touched repo and stops it (SW-34), so zero services is fine for a code change. Every listed service is a container plus an install and build on `werkmeister feature up`, so extra ones cost real CPU (SW-28).
 - Batch check each one: the workspace dir holds `.werkmeister/issue.md` and `CLAUDE.md` has a `## Issue` section.
+- The CLI writes `starting_prompt` from the ticket. When you edit one by hand, don't copy in a step that writes machine state (`werkmeister registry sync`, `werkmeister infra proxy-reload`, `npm link`, global installs) as a run step: the run limits forbid it. Say it happens after merge instead, e.g. "the next `registry sync` after merge picks up the fragment edit". The CLI drops such steps from the distilled prompt and the autonomous brief too (SW-296).
 
 ## 5. Start each one in Claude Desktop
 

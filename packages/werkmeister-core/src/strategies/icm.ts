@@ -18,7 +18,7 @@ import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd } from "../pr_rules.js";
 import { info, success, warn } from "../reporter.js";
-import { RUN_LIMITS } from "../run_start.js";
+import { deferMachineSteps, RUN_LIMITS } from "../run_start.js";
 import {
   loadStandardsModules,
   repoDirs,
@@ -344,7 +344,7 @@ function settleOpenQuestions(prompt: string): string {
 function renderBrief(ctx: InitContext): string {
   const autonomous = isTrue(ctx.inputs["autonomous"]);
   const raw = (ctx.inputs["starting_prompt"] ?? "").trim();
-  const prompt = autonomous ? settleOpenQuestions(raw) : raw;
+  const prompt = autonomous ? deferMachineSteps(settleOpenQuestions(raw)) : raw;
   const description = (ctx.inputs["description"] ?? "").trim();
   const copy = !!ctx.issue?.fetchedAt;
   const limits = autonomous ? ["## Run limits", "", RUN_LIMITS, ""] : [];

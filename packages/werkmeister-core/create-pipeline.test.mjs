@@ -42,6 +42,26 @@ test("an issue fills task from the title and distils only empty fields", async (
   );
 });
 
+test("a distilled starting_prompt never lists a machine-writing step (SW-296)", async () => {
+  await withSandboxHome(
+    async () => {
+      await withFakeGh({ issue: ISSUE }, async () => {
+        const answer =
+          '<result>{"starting_prompt":"## Where to start\\n\\n- After editing, run `werkmeister registry sync` so the registry picks it up."}</result>';
+        const { resolved } = await quiet(() =>
+          prepareCreate({ issue_id: "o/r#5" }, { cwd: cwd(), distill: async () => answer }),
+        );
+        assert.doesNotMatch(resolved.starting_prompt, /run `werkmeister registry sync`/);
+        assert.match(
+          resolved.starting_prompt,
+          /## After merge[\s\S]*the next `werkmeister registry sync` after merge/,
+        );
+      });
+    },
+    { config: GH },
+  );
+});
+
 test("an unattended create takes only description and starting_prompt from the model", async () => {
   await withSandboxHome(
     async () => {

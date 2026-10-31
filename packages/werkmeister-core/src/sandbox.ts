@@ -44,7 +44,7 @@ import {
   runCapture,
   stripAnsi,
 } from "./claude_cli.js";
-import { buildStartArgs, type StartArgs } from "./run_start.js";
+import { buildStartArgs, deferMachineSteps, type StartArgs } from "./run_start.js";
 
 export { childEnv } from "./claude_cli.js";
 export * from "./run_start.js";
@@ -372,7 +372,10 @@ const STARTING_PROMPT_FORMAT =
   "4. Open questions — anything that cannot be confidently derived, phrased as questions " +
   "the executing agent must ask the user before proceeding rather than guessing. Omit the " +
   "section entirely when there are none.\n" +
-  "Derive every section from the source material; never invent scope, services, or criteria.";
+  "Derive every section from the source material; never invent scope, services, or criteria.\n" +
+  "Never list a step that writes machine state under `~/.werkmeister` or installs globally " +
+  "(`werkmeister registry sync`, `werkmeister infra proxy-reload`, `npm link`, `npm install -g`) " +
+  "as a step for the agent; where the source asks for one, say it happens after merge.";
 
 /**
  * The prompt that rewrites a starting-prompt draft. It tells the model to
@@ -1040,7 +1043,8 @@ export async function distillIssue(
   const fields: Record<string, string> = {};
   for (const k of DISTILLED) {
     const v = data[k];
-    if (typeof v === "string" && v.trim()) fields[k] = v.trim();
+    if (typeof v === "string" && v.trim())
+      fields[k] = k === "starting_prompt" ? deferMachineSteps(v.trim()) : v.trim();
     else if (Array.isArray(v) && v.length) fields[k] = v.map(String).join(",");
   }
   return Object.keys(fields).length
