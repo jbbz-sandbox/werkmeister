@@ -65,7 +65,8 @@ volumes:
 {% endfor %}
 {% endif %}
 
-services:
+{# No services renders a bare `services:` (YAML null), which compose rejects #}
+services:{% if not local_services | length %} {}{% endif %}
 {% for setup_name in setup_services_needed %}
 {% set setup = setup_configs[setup_name] %}
 {# Same `image` hook the app services get below. A setup container installs deps #}
