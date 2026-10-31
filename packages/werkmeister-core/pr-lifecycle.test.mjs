@@ -367,6 +367,29 @@ test("gate fails on missing exercise evidence", async () => {
   }
 });
 
+test("gate: an exercise result cell of `FAIL — why`, or neither PASS nor FAIL, fails the exercise check (SW-247)", async () => {
+  const table = (cell) => `| check | result |\n|---|---|\n| smoke | PASS |\n| x | ${cell} |\n`;
+  for (const [cell, detail] of [
+    ["FAIL — why", /has a FAIL row/],
+    ["skipped, no container", /neither PASS nor FAIL/],
+  ]) {
+    const ws = icmWorkspace({ exercise: table(cell) });
+    try {
+      const g = await gate(ws, deps([DIFF_API]));
+      assert.deepEqual(failed(g), ["exercise"], cell);
+      assert.match(g.checks.find((c) => c.name === "exercise").detail, detail);
+    } finally {
+      clean(ws);
+    }
+  }
+  const pass = icmWorkspace({ exercise: table("PASS") });
+  try {
+    assert.deepEqual(failed(await gate(pass, deps([DIFF_API]))), []);
+  } finally {
+    clean(pass);
+  }
+});
+
 test("gate: a malformed acceptance row fails before any test command runs, naming the cell format (SW-150)", async () => {
   const ws = icmWorkspace({
     files: { app: prFile({ body: "| works | PASS: repro.md section 1 |\n" }) },
