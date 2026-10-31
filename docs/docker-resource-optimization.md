@@ -223,22 +223,35 @@ budget:
 
 ### Measured on a 16 GB laptop
 
-Measured 2026-10-29 for SW-181 on a 16 GB MacBook with Docker Desktop's engine
-at 7.8 GiB and 12 CPUs, so the default budget is 6.8 GiB and 12 CPUs. The feature
-was the werkmeister repo with `werkmeister-core` and `cli`, plus the setup
-container that installs their dependencies. Each gate command ran cold
-(`turbo --force`, nothing cached), one after the other as the gate runs them,
-while `anon` in each container's `memory.stat` was sampled every 0.5 s.
+Re-measured 2026-10-31 for SW-204 on a 16 GB MacBook with Docker Desktop's engine
+at 7.8 GiB and 12 CPUs, so the default budget is 6.8 GiB and 12 CPUs. Each
+service's gate command ran cold (`turbo --force`, nothing cached) in a `node:22`
+container limited to 2G, one after the other, while `anon` in the container's
+`memory.stat` was sampled every 0.5 s. A reservation is the peak plus about 10%,
+rounded up to 64M. The `cli` peak is higher than the 689 MiB measured on
+2026-10-29 for SW-181, and one `werkmeister-core` test failed in the bare
+container, so its peak is for a gate that ran to the end.
+
+| Service | Cold gate | Peak anon | Reservation (was) |
+|---|---|---|---|
+| `werkmeister-core` | 238 s | 644 MiB | 768M (128M) |
+| `cli` | 181 s | 1436 MiB | 1600M (128M) |
+| `werkmeister-dashboard` | 62 s | 549 MiB | 640M (256M) |
+| `werkmeister-vscode` | 45 s | 581 MiB | 640M (128M) |
+| `docs-site` | 48 s | 670 MiB | 768M (128M) |
+
+Idle `anon` was about 0 MiB and nothing was OOM-killed.
 
 | | Memory | CPUs |
 |---|---|---|
-| Admission cost (compose: setup 512M/2.0, two services 128M/1.0 each) | 768 MiB | 4.0 |
-| Cold peak, `werkmeister-core` gate (109 s) | 632 MiB | |
-| Cold peak, `cli` gate (187 s) | 689 MiB | |
-| Features that fit the default budget | 9 | **3** |
+| Admission cost (compose: setup 512M/2.0, `werkmeister-core` 768M/1.0, `cli` 1600M/1.0) | 2880 MiB | 4.0 |
+| Features that fit the 7.8 GiB engine (budget 6.8 GiB, 12 CPUs) | 2 | 3 |
+| Features that fit a 4 GiB engine (budget 3 GiB, 4 CPUs) | 1 | 1 |
 
-CPU fills up first: three features of this shape fit, and a fourth waits. Memory
-would allow nine, by cost or by measured peak. No container was OOM-killed.
+On this laptop memory now fills up first: two features of this shape fit, and a
+third waits (CPU alone would allow three). On a 4 GiB engine one fits. The
+reservations were 128M each before, which cost 768 MiB and let in nine
+features by memory, more than a smaller engine could hold.
 Agent sessions run outside Docker (about 0.3–0.6 GB each), so the laptop's own
 memory, not the engine's, limits how many sessions run beside them.
 
