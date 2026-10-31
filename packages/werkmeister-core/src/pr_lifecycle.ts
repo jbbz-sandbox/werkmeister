@@ -13,7 +13,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 
 import { serviceTestCommand } from "./archetypes.js";
-import { childEnv } from "./claude_cli.js";
+import { childEnv, toolBin } from "./claude_cli.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
   type ArchetypeRegistry,
@@ -159,7 +159,7 @@ export interface Deps {
 const execRun: Run = (bin, args, cwd) =>
   new Promise((resolve) => {
     execFile(
-      bin,
+      toolBin(bin),
       args,
       { cwd, env: childEnv(), maxBuffer: 64 * 1024 * 1024, timeout: 30 * 60_000 },
       (err, stdout, stderr) => {

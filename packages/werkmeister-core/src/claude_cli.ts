@@ -30,6 +30,7 @@ export async function isExecutable(p: string): Promise<boolean> {
  * Env for a child `werkmeister` process. The wrapper has to find a `node` runtime
  * (and `docker`, `git`, `gh` downstream of it), which the stripped PATH a
  * GUI-launched process inherits often can't — prepend the usual tool dirs.
+ * Those dirs beat a fake earlier on PATH, so fake gh/docker through {@link toolBin}'s overrides.
  *
  * Exported for the same reason as {@link sandbox.resolveSandboxBin}: callers that spawn // name-check: ignore
  * the CLI themselves need this env, not a hand-rolled approximation of it.
@@ -50,6 +51,13 @@ export function childEnv(): NodeJS.ProcessEnv {
 
 /** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake); under WERKMEISTER_FIXTURE a stub that fails (SW-177). */
 export const ghBin = () => envVar("GH_BIN") || (isFixture() ? fixtureGhStub() : "gh");
+
+/** `docker`, or $WERKMEISTER_DOCKER_BIN (tests and fixture exercises point it at a fake; SW-208). */
+export const dockerBin = () => envVar("DOCKER_BIN") || "docker";
+
+/** *bin*, with `gh` and `docker` resolved through their overrides: childEnv()'s PATH would beat a fake (SW-148, SW-208). */
+export const toolBin = (bin: string): string =>
+  bin === "gh" ? ghBin() : bin === "docker" ? dockerBin() : bin;
 
 let ghStub: string | null = null;
 function fixtureGhStub(): string {
@@ -84,7 +92,7 @@ export async function resolveClaudeBin(): Promise<string> {
 /**
  * Run a binary, capturing stdout/stderr, with stdin CLOSED so `claude -p`
  * doesn't stall 3s waiting for piped input. Rejects on spawn error or timeout.
- * `"gh"` resolves through {@link ghBin}: childEnv()'s PATH would beat a test's fake (SW-148).
+ * `"gh"` and `"docker"` resolve through {@link toolBin}.
  */
 export function runCapture(
   bin: string,
@@ -92,7 +100,7 @@ export function runCapture(
   cwd: string = os.homedir(),
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin === "gh" ? ghBin() : bin, args, {
+    const child = spawn(toolBin(bin), args, {
       cwd,
       env: childEnv(),
       stdio: ["ignore", "pipe", "pipe"],

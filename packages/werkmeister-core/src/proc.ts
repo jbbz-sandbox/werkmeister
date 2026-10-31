@@ -11,6 +11,7 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
+import { toolBin } from "./claude_cli.js";
 
 export interface RunOptions {
   /** Throw a ProcError when the command exits non-zero. */
@@ -65,7 +66,7 @@ export function run(cmd: string[], opts: RunOptions = {}): RunResult {
     : ["inherit", "inherit", "inherit"];
   if (opts.input !== undefined) stdio[0] = "pipe";
 
-  const res = spawnSync(cmd[0], cmd.slice(1), {
+  const res = spawnSync(toolBin(cmd[0]), cmd.slice(1), {
     cwd: opts.cwd,
     env: opts.env,
     input: opts.input,
@@ -151,7 +152,7 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
       : ["inherit", "inherit", "inherit"];
     if (opts.input !== undefined) stdio[0] = "pipe";
 
-    const child = spawn(cmd[0], cmd.slice(1), {
+    const child = spawn(toolBin(cmd[0]), cmd.slice(1), {
       cwd: opts.cwd,
       env: opts.env,
       stdio,
