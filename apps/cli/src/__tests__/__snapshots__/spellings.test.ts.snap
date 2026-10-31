@@ -104,6 +104,7 @@ exports[`command spellings > ["init-workspace","--feature","f","--refresh-issue"
 {
   "auto_stop": null,
   "autonomous": null,
+  "build": true,
   "config_file": null,
   "context_strategy": null,
   "description": null,

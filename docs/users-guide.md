@@ -728,6 +728,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--services <list>`: Comma-separated list of local services (env: WERKMEISTER_SERVICES; config: services). Their owning repos are added to the reconciled worktree set.
 - `-r, --repos <list>`: Comma-separated repos to keep as git worktrees (union with the repos owning --services). Persisted to workspace.yml; the worktree set is reconciled to match on every run (env: WERKMEISTER_REPOS; config: repos).
 - `--force`: When reconciling, delete repo worktrees dropped from workspace.yml even if they have uncommitted changes, and delete a \<user>/\<workspace> branch an earlier workspace left on origin instead of aborting (default: abort without changes).
+- `--no-build`: Write compose.yml and the context files but skip the image build (`docker compose up --build --no-start`), so no docker call is made.
 - `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `werkmeister machine setup`) (env: WERKMEISTER_ISSUE_ID; config: issue_id).
 - `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue (env: WERKMEISTER_PROJECT; config: project).
 - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search (env: WERKMEISTER_LABELS; config: labels).
@@ -753,6 +754,7 @@ It is idempotent: edit `workspace.yml` and rerun. It never prompts, and refuses 
 werkmeister workspace init
 werkmeister workspace init --services backend,frontend
 werkmeister workspace init --refresh-issue
+werkmeister workspace init --no-build
 ```
 
 #### werkmeister workspace close

@@ -65,7 +65,8 @@ export function readStdinTask(): string {
 /** Execute `werkmeister workspace init`. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   try {
-    await initWorkspace(args, undefined, { readStdinTask });
+    // `--no-build` arrives as build: false; absent, commander leaves it true.
+    await initWorkspace(args, undefined, { readStdinTask, build: args["build"] !== false });
   } catch (exc) {
     // Both carry a message that has already been shown: WorkspaceRootError's is
     // pre-rendered (it predates the reporter), WorkspaceInitError's went out as

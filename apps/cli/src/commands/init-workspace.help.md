@@ -10,4 +10,5 @@ It is idempotent: edit `workspace.yml` and rerun. It never prompts, and refuses 
 werkmeister workspace init
 werkmeister workspace init --services backend,frontend
 werkmeister workspace init --refresh-issue
+werkmeister workspace init --no-build
 ```

@@ -1126,6 +1126,11 @@ const SPECS: CommandSpec[] = [
             "workspace left on origin instead of aborting (default: abort without changes).",
         )
         .option(
+          "--no-build",
+          "Write compose.yml and the context files but skip the image build " +
+            "(`docker compose up --build --no-start`), so no docker call is made.",
+        )
+        .option(
           "--issue-id <ref>",
           "Issue ID in this machine's issue tracker (see `werkmeister machine setup`) " +
             "(env: WERKMEISTER_ISSUE_ID; config: issue_id).",
@@ -1219,6 +1224,7 @@ const SPECS: CommandSpec[] = [
       config_file: o.config ?? null,
       prune_context: Boolean(o.pruneContext),
       refresh_issue: Boolean(o.refreshIssue),
+      build: o.build !== false,
     }),
   },
   {
