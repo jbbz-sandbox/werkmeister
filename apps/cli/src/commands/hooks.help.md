@@ -5,5 +5,5 @@ The Claude Code hook entry points: `gate` (PreToolUse, per edit), `pr-guard` (bl
 ## Examples
 
 ```bash
-werkmeister hooks gate
+werkmeister internal gate
 ```

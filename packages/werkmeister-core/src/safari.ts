@@ -1,5 +1,5 @@
 /**
- * Safari launcher for `werkmeister open`, via Apple's bundled `safaridriver`
+ * Safari launcher for `werkmeister feature open`, via Apple's bundled `safaridriver`
  * (W3C WebDriver classic) -- Safari has no CDP, so this is a separate
  * protocol client from the Chromium one in `browser.ts`.
  *
@@ -81,7 +81,7 @@ async function waitForPort(port: number, timeoutMs = 10_000): Promise<void> {
  * up and tagged.
  *
  * Mirrors `launchChromiumWindow`: the caller decides whether to await
- * {@link FeatureWindow.supervise} (`werkmeister open`) or leave it running in the
+ * {@link FeatureWindow.supervise} (`werkmeister feature open`) or leave it running in the
  * background (the MCP server's open-feature tool). Signal handling belongs to
  * the caller — see the `FeatureWindow` docstring.
  *

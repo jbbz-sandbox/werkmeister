@@ -94,7 +94,7 @@ export interface PlaceholderPaths {
   home: string;
   repos_root: string;
   workspaces_root: string;
-  /** The tool's home folder: `~/.werkmeister`, or `~/.werkmeister` until `werkmeister migrate` (SW-92). */
+  /** The tool's home folder: `~/.werkmeister`, or `~/.werkmeister` until `werkmeister machine migrate` (SW-92). */
   werkmeister_home: string;
   /** The machine's ingress domain, so a fragment needn't hard-code one (SW-93). */
   local_domain: string;
@@ -327,7 +327,7 @@ export function renderRegistry(
   const header = [
     GENERATED_MARKER,
     "# Edit a repo's .werkmeister/services.yaml fragment, or the machine overrides file, then",
-    "# run `werkmeister registry sync` (or `werkmeister setup`). Regenerated from:",
+    "# run `werkmeister registry sync` (or `werkmeister machine setup`). Regenerated from:",
     ...sources.map((s) => `# Source: ${s}`),
     ...disabled.map((s) => `# Disabled: ${s}`),
     `# Machine overrides: ${localPath}`,
@@ -470,7 +470,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   let text: string;
   // A standalone `werkmeister registry sync` on a machine that never ran the new
   // setup would otherwise merge with no overlay and silently drop k8s_context
-  // (which `werkmeister intercept` requires). Seed the overlay the way setup does;
+  // (which `werkmeister infra intercept` requires). Seed the overlay the way setup does;
   // seedFile never overwrites, so an existing file is untouched.
   let seededLocal = "";
   try {
@@ -487,7 +487,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
           ok: false,
           detail:
             `no ${FRAGMENT_REL} found under ${reposRoot} — clone your team's repos there and ` +
-            "re-run `werkmeister setup` (or answer yes to the demo apps)",
+            "re-run `werkmeister machine setup` (or answer yes to the demo apps)",
         },
       ];
     }

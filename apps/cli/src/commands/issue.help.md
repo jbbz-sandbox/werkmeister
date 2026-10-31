@@ -1,6 +1,6 @@
 ## Description
 
-Reads or updates one issue in this machine's tracker (`werkmeister setup` picks it).
+Reads or updates one issue in this machine's tracker (`werkmeister machine setup` picks it).
 
 - `view` prints the issue's briefing; `--json` prints it as JSON.
 - `update` moves its status and/or adds a comment; at least one is required.

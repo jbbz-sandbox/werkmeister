@@ -31,5 +31,5 @@
   frontend             9053   default/frontend:8080               down
 
   11/12 healthy, 1 down
-  Run 'werkmeister connect --k8s' to restart the k8s-forwards container
+  Run 'werkmeister infra connect --k8s' to restart the k8s-forwards container
 ```

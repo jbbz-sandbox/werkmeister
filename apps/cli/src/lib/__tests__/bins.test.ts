@@ -60,19 +60,39 @@ describe("no sandbox name", () => {
 
 // SW-180: grouping reorders the root help; it must not drop, repeat or hide a command.
 describe("root --help", () => {
-  it("lists every command exactly once", () => {
-    const names = JSON.parse(cli("__reference").stdout).map((c: { name: string }) => c.name);
-    const terms = help("werkmeister").stdout.match(/^ {2}[a-z][\w-]*/gm) ?? [];
-    for (const name of names) expect(terms.filter((t) => t.trim() === name)).toHaveLength(1);
+  it("lists every visible noun and command exactly once, and each verb under its noun", () => {
+    const visible = JSON.parse(cli("__reference").stdout).filter(
+      (c: { hidden: boolean }) => !c.hidden,
+    );
+    const terms = (text: string) => text.match(/^ {2}[a-z][\w|-]*/gm)?.map((t) => t.trim()) ?? [];
+    const root = terms(help("werkmeister").stdout);
+    for (const { name } of visible) {
+      const [noun, verb] = name.split(" ");
+      expect(root.filter((t) => t.split("|")[0] === noun)).toHaveLength(1);
+      if (verb) expect(terms(cli(noun, "--help").stdout).filter((t) => t === verb)).toHaveLength(1);
+    }
   });
 
-  it("groups commands with the everyday ones first", () => {
+  it("gives docs:gen one entry per verb, with that verb's own flags (SW-186)", () => {
+    type Entry = { name: string; hidden: boolean; group: string; options: { long?: string }[] };
+    const ref: Entry[] = JSON.parse(cli("__reference").stdout);
+    const flags = (name: string) => ref.find((c) => c.name === name)?.options.map((o) => o.long);
+    expect(flags("pr open")).toEqual(expect.arrayContaining(["--no-wait", "--json"]));
+    expect(flags("pr open")).not.toContain("--install");
+    expect(flags("pr watch")).toEqual(expect.arrayContaining(["--install", "--uninstall"]));
+    expect(ref.find((c) => c.name === "feature up")?.group).toBe("Features:");
+    expect(ref.find((c) => c.name === "internal gate")?.hidden).toBe(true);
+    expect(ref.find((c) => c.name === "up")?.hidden).toBe(true);
+    expect(ref.some((c) => c.name === "feature")).toBe(false);
+  });
+
+  it("groups commands with features first", () => {
     expect(
       help("werkmeister")
         .stdout.match(/^\S.*:$/gm)
         ?.slice(1),
     ).toEqual([
-      "Everyday:",
+      "Features:",
       "Workspaces:",
       "PRs and issues:",
       "Services and infra:",
@@ -84,12 +104,15 @@ describe("root --help", () => {
 
   it("ends a command's --help with its help.md, built in", () => {
     const md = fs.readFileSync(path.join(CLI_DIR, "src/commands/up.help.md"), "utf8");
-    expect(cli("up", "--help").stdout.trimEnd().endsWith(md.trimEnd())).toBe(true);
+    expect(cli("feature", "up", "--help").stdout.trimEnd().endsWith(md.trimEnd())).toBe(true);
   });
 
   it("still suggests a near-miss command", () => {
-    const r = cli("stauts");
+    const r = cli("featur");
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain("Did you mean one of stats, status?");
+    expect(r.stderr).toContain("Did you mean feature?");
+    const v = cli("feature", "stauts");
+    expect(v.status).toBe(1);
+    expect(v.stderr).toContain("Did you mean status?");
   });
 });

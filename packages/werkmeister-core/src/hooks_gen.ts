@@ -15,11 +15,11 @@
  *   pr-guard` denies opening a PR any way but `werkmeister pr open`
  *   (docs/workspace-lifecycle.md). Unlike the two above it is installed for
  *   every strategy (`writePrGuardHook`), and `removeWorkspaceHooks` keeps it.
- * - SessionEnd: `werkmeister stop --if-idle` stops the workspace's feature when the
+ * - SessionEnd: `werkmeister internal session-end` stops the workspace's feature when the
  *   session ends and no other is open there (#231). Only while `auto_stop` is
  *   on (`writeAutoStopHook`, every strategy); turning it off removes the entry.
  * - SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop,
- *   SessionEnd: `werkmeister hooks agent-state` records working / needs-you / done in
+ *   SessionEnd: `werkmeister internal agent-state` records working / needs-you / done in
  *   `.werkmeister/agent-state.json` for the pane and dashboard (SW-46), and each
  *   session's busy / idle for idle-stop and the resume nudge (SW-182). Every
  *   strategy (`writeAgentStateHooks`); the event name arrives on stdin.
@@ -57,10 +57,18 @@ import { readAutonomous, readAutoStop, readModel } from "./workspace_prompts.js"
 
 // Markers doubling as the payload: entries containing them are werkmeister-managed.
 const _HOOK_MARKER = "werkmeister notes context";
-const _GATE_MARKER = "werkmeister hooks gate";
-const _PR_GUARD_MARKER = "werkmeister hooks pr-guard";
-const _AUTO_STOP_MARKER = "werkmeister stop --if-idle";
-const _AGENT_STATE_MARKER = "werkmeister hooks agent-state";
+const _GATE_MARKER = "werkmeister internal gate";
+const _PR_GUARD_MARKER = "werkmeister internal pr-guard";
+const _AUTO_STOP_MARKER = "werkmeister internal session-end";
+const _AGENT_STATE_MARKER = "werkmeister internal agent-state";
+
+// The same hooks as written before SW-186's renames, so the next write replaces them.
+const _PRE_SW186_MARKERS: Record<string, string> = {
+  [_GATE_MARKER]: "werkmeister hooks gate",
+  [_PR_GUARD_MARKER]: "werkmeister hooks pr-guard",
+  [_AUTO_STOP_MARKER]: "werkmeister stop --if-idle",
+  [_AGENT_STATE_MARKER]: "werkmeister hooks agent-state",
+};
 
 // Projections lag whenever the standards tree moves on after a workspace was
 // inited, and nothing else re-runs the writer — so the session that would read a
@@ -140,7 +148,11 @@ export function buildAgentStateEntry(): HookEntry {
 
 // A pre-SW-106 entry ran `sandbox …`: recognising it lets the next write replace it, not add a twin. // name-check: ignore
 const isManagedCommand = (command: string, marker: string) =>
-  command.includes(marker) || command.includes(marker.replace(/^werkmeister /, "sandbox ")); // name-check: ignore
+  [marker, _PRE_SW186_MARKERS[marker]].some(
+    (m) =>
+      m !== undefined &&
+      (command.includes(m) || command.includes(m.replace(/^werkmeister /, "sandbox "))), // name-check: ignore
+  );
 
 function _isManaged(entry: unknown, marker: string = _HOOK_MARKER): boolean {
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
@@ -364,14 +376,19 @@ export const AUTONOMOUS_RULES = [
     (cmd) => `Bash(gh ${cmd}:*)`,
   ),
   // No-arg forms act on the cwd's FEATURE; `autonomousRules` adds the named ones.
-  ...cli("up"),
-  ...cli("restart"),
+  // Each pre-SW-186 spelling keeps its rule until the CLI drops it, beside its new one.
+  ...["up", "restart", "feature up", "feature restart"].flatMap(cli),
+  // SW-132: one of its own services, on-demand ones included, the way the PR gate starts them.
+  ...cli("feature up --service:*"),
   ...[
     "status",
+    "feature status",
+    "infra status",
     "pr",
     "issue view",
     "issue start",
     "init-workspace",
+    "workspace init",
     "skills",
     "standards",
     "notes context",
@@ -404,10 +421,14 @@ export function autonomousRules(feature: string, services: string[]): string[] {
   if (!feature) return AUTONOMOUS_RULES;
   return [
     ...AUTONOMOUS_RULES,
-    // Exact: `werkmeister restart <f> infra` and `docker restart <f>-a <other>` stay out.
-    ...cli(`up ${feature}`),
-    ...cli(`restart ${feature}`),
-    ...["logs", "test", "services"].flatMap((cmd) => cli(`${cmd} ${feature}:*`)),
+    // Exact: `werkmeister feature restart <f> infra` and `docker restart <f>-a <other>` stay out.
+    ...["up", "restart", "feature up", "feature restart"].flatMap((cmd) =>
+      cli(`${cmd} ${feature}`),
+    ),
+    ...cli(`feature up ${feature} --service:*`),
+    ...["logs", "test", "services", "feature logs", "feature test", "feature services"].flatMap(
+      (cmd) => cli(`${cmd} ${feature}:*`),
+    ),
     ...services.flatMap((svc) => [
       `Bash(docker exec ${feature}-${svc}:*)`,
       `Bash(docker logs ${feature}-${svc}:*)`,
@@ -433,11 +454,28 @@ export const AUTONOMOUS_DENY = [
     "registry",
     "connect",
     "intercept",
-    "workspace",
     "notes graduate",
     "up infra",
     "restart infra",
     "stop infra",
+    // SW-186's spellings of the same; `workspace:*` became `workspace new`, as a bare
+    // `workspace` prefix would also deny `workspace init`.
+    "infra proxy-reload",
+    "feature down",
+    "infra down",
+    "feature drop",
+    "machine clean",
+    "machine setup",
+    "infra connect",
+    "infra intercept",
+    "workspace new",
+    "ws new",
+    "infra up",
+    "infra restart",
+    "infra stop",
+    "daemon install",
+    "daemon uninstall",
+    "daemon restart",
   ].flatMap((cmd) => cli(`${cmd}:*`)),
   ...["stop", "kill", "rm", "rmi", "compose down", "system prune", "volume rm", "network rm"].map(
     (cmd) => `Bash(docker ${cmd}:*)`,

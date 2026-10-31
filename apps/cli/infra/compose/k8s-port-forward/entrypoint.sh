@@ -31,13 +31,13 @@ CLUSTER_WAIT_INTERVAL="${CLUSTER_WAIT_INTERVAL:-10}"
 # configuration.
 #
 # The table is NOT hardcoded here — it is generated from ~/.werkmeister/services.yaml
-# by `werkmeister connect` (src/lib/k8s_forwards.ts) and mounted at /tmp/forwards.
+# by `werkmeister infra connect` (src/lib/k8s_forwards.ts) and mounted at /tmp/forwards.
 # This keeps the container, services.yaml, and shared-infra.yml ports/aliases in
 # lockstep. Blank lines and #-comments in the file are ignored.
 FORWARDS_FILE="${FORWARDS_FILE:-/tmp/forwards}"
 if [ ! -f "$FORWARDS_FILE" ]; then
     echo -e "${RED}FATAL: forward table $FORWARDS_FILE not found.${NC}" >&2
-    echo "Run 'werkmeister connect' on the host to generate it (from ~/.werkmeister/services.yaml)." >&2
+    echo "Run 'werkmeister infra connect' on the host to generate it (from ~/.werkmeister/services.yaml)." >&2
     exit 1
 fi
 FORWARDS=()

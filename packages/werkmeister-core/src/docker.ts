@@ -498,7 +498,7 @@ export interface ContainerLogsOptions {
  *
  * Without `follow` it resolves once every backlog is out. With it, it runs until
  * *signal* aborts, attaching to each container that starts meanwhile, which is
- * what keeps a tail alive across `werkmeister restart`. No containers, or an unknown
+ * what keeps a tail alive across `werkmeister feature restart`. No containers, or an unknown
  * *service*, is one stderr line, as compose prints one.
  */
 export async function containerLogs(

@@ -180,7 +180,7 @@ type FormCliOutcome =
 
 /**
  * The browser form for a client that can't render `ui://`: the dashboard's
- * `form-cli.js` (what `werkmeister workspace --browser-form` runs) serves the
+ * `form-cli.js` (what `werkmeister workspace new --browser-form` runs) serves the
  * form on localhost, waits for submit or cancel, creates the workspace and
  * prints one JSON outcome.
  */
@@ -229,7 +229,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .string()
           .optional()
           .describe(
-            "Issue ID or URL in this machine's issue tracker (see `werkmeister setup`). When set, " +
+            "Issue ID or URL in this machine's issue tracker (see `werkmeister machine setup`). When set, " +
               "the issue is fetched and used to pre-fill the form (feature, issue_id, task, " +
               "description, starting_prompt).",
           ),
@@ -923,7 +923,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "Report live container status for every workspace (up / partial / stopped / down) and the " +
         "shared infra, from a single `docker ps` sweep matched to each workspace's Compose project, " +
-        "with each workspace's agent state. With `detail: true`, also everything `werkmeister status` " +
+        "with each workspace's agent state. With `detail: true`, also everything `werkmeister feature status` " +
         "knows (as `host`): infrastructure containers, the host web servers, k8s forward health, " +
         "every feature's slot and containers, and telepresence intercepts.",
       inputSchema: {
@@ -931,7 +931,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           .boolean()
           .optional()
           .describe(
-            "Add the host-wide `werkmeister status` snapshot. Slower: it probes every k8s forward.",
+            "Add the host-wide `werkmeister feature status` snapshot. Slower: it probes every k8s forward.",
           ),
       },
       annotations: { readOnlyHint: true },

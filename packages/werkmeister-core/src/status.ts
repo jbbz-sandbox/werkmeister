@@ -1,12 +1,12 @@
 /**
- * The computing half of `werkmeister status`: the collectors and the machine-readable
+ * The computing half of `werkmeister feature status`: the collectors and the machine-readable
  * snapshot, with no rendering.
  *
  * The boundary is §4's: what derives state lives here, what formats it stays in
  * the CLI command. Every `print*` function and the argv branching are still
  * there, and nothing in this module writes to stdout.
  *
- * `StatusSnapshot` is snake_case on purpose. It *is* `werkmeister status --json`'s
+ * `StatusSnapshot` is snake_case on purpose. It *is* `werkmeister feature status --json`'s
  * shape, key for key, so the renderer is a bare `JSON.stringify` and there is one
  * type rather than two that can drift apart.
  */
@@ -167,7 +167,7 @@ export function buildInterceptRows(
  */
 const STATUS_READ = (cmd: string[]) => runAsyncRunner(cmd, undefined, 15);
 
-/** What `werkmeister status --intercepts --json` prints. */
+/** What `werkmeister feature status --intercepts --json` prints. */
 export interface InterceptsSnapshot {
   available: boolean;
   /** Telepresence is on PATH, connected or not: a disconnected install can still intercept (SW-12). */
@@ -263,7 +263,7 @@ export async function featureVitals(): Promise<FeatureVitals> {
   return { health, resources };
 }
 
-/** Everything `werkmeister status` knows, in one machine-readable read. */
+/** Everything `werkmeister feature status` knows, in one machine-readable read. */
 export async function statusSnapshot(): Promise<StatusSnapshot> {
   const vitals = featureVitals();
   // A missing or old registry must not cost the rest of status.

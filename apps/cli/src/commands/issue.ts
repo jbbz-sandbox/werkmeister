@@ -4,7 +4,7 @@
  * werkmeister issue start
  * werkmeister issue ready [--project <name>] [--json]
  *
- * Read or update one issue in this machine's issue tracker (`werkmeister setup`
+ * Read or update one issue in this machine's issue tracker (`werkmeister machine setup`
  * picks it). Every call goes through `issueTracker()`, so nothing here names a
  * tracker.
  *

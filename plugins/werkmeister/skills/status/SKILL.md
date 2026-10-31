@@ -1,6 +1,6 @@
 ---
 name: status
-description: "Comprehensive health overview of the entire werkmeister environment. Use when the user asks about werkmeister status, wants to know what's running, or as a first step before debugging any issue. Also use after `werkmeister up`, `werkmeister down`, or system restart to verify state."
+description: "Comprehensive health overview of the entire werkmeister environment. Use when the user asks about werkmeister status, wants to know what's running, or as a first step before debugging any issue. Also use after `werkmeister feature up`, `werkmeister feature down`, or system restart to verify state."
 ---
 
 # status
@@ -12,7 +12,7 @@ Run all of the following checks and present a unified status report.
 Get the full werkmeister state in one call:
 
 ```bash
-werkmeister status --json
+werkmeister feature status --json
 ```
 
 This returns structured JSON covering:
@@ -35,9 +35,9 @@ docker logs --tail 30 <container-name> 2>&1
 docker inspect -f 'exit={{.State.ExitCode}} oom={{.State.OOMKilled}} finished={{.State.FinishedAt}}' <container-name>
 ```
 
-Don't use `werkmeister logs` here: it follows the log and never exits.
+Don't use `werkmeister feature logs` here: it follows the log and never exits.
 A feature with `containers_total: 0` has no containers to read: its workspace has no
-`compose.yml` yet (`werkmeister init-workspace`, then `werkmeister up`, in that workspace).
+`compose.yml` yet (`werkmeister workspace init`, then `werkmeister feature up`, in that workspace).
 
 ## Step 3: Service Health Checks
 
@@ -76,7 +76,7 @@ echo "Caddyfile: host=${HOST_SIZE}B container=${CONTAINER_SIZE}B"
 If Step 1 shows `k8s_alive < k8s_total`, get the full per-service breakdown:
 
 ```bash
-werkmeister status --k8s
+werkmeister infra status
 ```
 
 This performs real HTTP health checks against each forward's health endpoint and shows

@@ -1,4 +1,4 @@
-// SW-184: on macOS `werkmeister setup` hands the daemon to launchd (KeepAlive),
+// SW-184: on macOS `werkmeister machine setup` hands the daemon to launchd (KeepAlive),
 // and from then on the PID-file start/stop in web_servers.ts leaves it alone.
 // launchctl is the injected runner; nothing here reaches the real launchd.
 
@@ -8,7 +8,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 
-const { daemonPlist, syncDaemonAgent } = await import("./dist/machine_setup.js");
+const { daemonPlist, syncDaemonAgent, uninstallDaemonAgent } = await import(
+  "./dist/machine_setup.js"
+);
 const { DAEMON_LABEL, daemonPlistPath, MCP, stop } = await import("./dist/web_servers.js");
 
 let home;
@@ -79,6 +81,16 @@ test("setup installs it once: stops the PID-file server, writes the plist, boots
   assert.equal(stopped, 1);
 });
 
+test("daemon uninstall boots the agent out and removes the plist; again, it says none is installed", async () => {
+  await syncDaemonAgent(false, true, opts());
+  calls = [];
+  const step = uninstallDaemonAgent(opts());
+  assert.equal(step.ok, true);
+  assert.deepEqual(calls, [`launchctl bootout gui/501/${DAEMON_LABEL}`]);
+  assert.equal(fs.existsSync(daemonPlistPath(home)), false);
+  assert.match(uninstallDaemonAgent(opts()).detail, /no launchd agent installed/);
+});
+
 test("--check reports without installing", async () => {
   const [step] = await syncDaemonAgent(true, true, opts());
   assert.equal(step.ok, false);
@@ -95,10 +107,10 @@ test("without the wizard's yes it only reports, so a setup run never installs un
   assert.equal(stopped, 0);
 });
 
-test("off macOS the step only points at `werkmeister connect`", async () => {
+test("off macOS the step only points at `werkmeister infra connect`", async () => {
   const [step] = await syncDaemonAgent(false, true, opts({ platform: "linux" }));
   assert.equal(step.ok, true);
-  assert.match(step.detail, /werkmeister connect/);
+  assert.match(step.detail, /werkmeister infra connect/);
   assert.deepEqual(calls, []);
 });
 

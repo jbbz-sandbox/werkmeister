@@ -8,13 +8,13 @@
 
 ```bash
 # Run all tests
-werkmeister test my-feature
+werkmeister feature test my-feature
 
 # Run specific test file
-werkmeister test my-feature -- tests/homepage.spec.ts
+werkmeister feature test my-feature -- tests/homepage.spec.ts
 
 # Run with headed browser
-werkmeister test my-feature -- --headed
+werkmeister feature test my-feature -- --headed
 ```
 
 The feature doesn't need to have an active slot — if it doesn't, the command warns but proceeds with just the feature header routing.

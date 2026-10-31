@@ -168,7 +168,7 @@ export interface FormSchemaBundle {
 }
 
 export interface CreateResult {
-  /** The CLI command that was run, e.g. `werkmeister workspace foo --services bar`. */
+  /** The CLI command that was run, e.g. `werkmeister workspace new foo --services bar`. */
   command: string;
   /** info/ok lines from the create run, ANSI-stripped. */
   output: string;
@@ -830,7 +830,7 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
   }
 }
 
-/** start_session's arguments for the workspace at `dir` (SW-153): the pane's ▶ Start work and `werkmeister start-args`. */
+/** start_session's arguments for the workspace at `dir` (SW-153): the pane's ▶ Start work and `werkmeister workspace prompt --args`. */
 export async function startArgs(dir: string): Promise<StartArgs> {
   return buildStartArgs({ name: path.basename(dir), ...(await readWorkspaceConfig(dir)) });
 }
@@ -920,7 +920,7 @@ function kebab(key: string): string {
 }
 
 /**
- * Build the `werkmeister workspace` argv from submitted form data. `feature` is the
+ * Build the `werkmeister workspace new` argv from submitted form data. `feature` is the
  * positional; every other non-empty field becomes `--<kebab-key> <value>`
  * (arrays comma-joined). Keys map 1:1 onto the CLI flags
  * (issue_id → --issue-id, services → --services, test_path → --test-path, …),
@@ -934,7 +934,7 @@ export function buildWorkspaceArgs(formData: Record<string, unknown>): string[] 
     );
   }
 
-  const args = ["workspace", feature];
+  const args = ["workspace", "new", feature];
   for (const [key, raw] of Object.entries(formData)) {
     if (key === "feature" || RESERVED_KEYS.has(key)) continue;
     // A checkbox is a bare switch on the CLI.
@@ -1078,7 +1078,7 @@ export async function prepareCreate(
       if (e instanceof IssueFetchError) {
         const auth = await tracker.checkAuth();
         const hint = auth.ok
-          ? "run `werkmeister connect` to check the issue tracker"
+          ? "run `werkmeister infra connect` to check the issue tracker"
           : `${tracker.label}: ${auth.reason}; run: ${auth.fix}`;
         throw new WorkspaceError(`${e.message}; ${hint}.`);
       }
@@ -1104,7 +1104,7 @@ export async function prepareCreate(
  * fetch fails the create before anything is made) and fills empty fields from it.
  *
  * The creation itself is `workspace_init`'s, called in this process — it used
- * to be a `werkmeister workspace` child, which made this package depend on the CLI
+ * to be a `werkmeister workspace new` child, which made this package depend on the CLI
  * that depends on it (note 087). `command` still names that invocation because
  * it is what a caller shows the user, and `output` is still the transcript the
  * CLI would have printed: the reporter renders the same lines, and `onData`
@@ -1395,14 +1395,14 @@ async function claudeSessionSignal(
   return signal(Date.now() - Date.parse(lastActivity) < LIVE_TURN_MS ? "working" : "idle");
 }
 
-/** Shared-infrastructure (`werkmeister connect`) container state — the `w9r-infra` Compose project. */
+/** Shared-infrastructure (`werkmeister infra connect`) container state — the `w9r-infra` Compose project. */
 export interface InfraStatus {
   state: "up" | "partial" | "down" | "unknown";
   running: number;
   total: number;
   /**
    * Per-container health for the Health tab's itemized view. Mirrors
-   * `werkmeister status`: `healthy` (healthcheck passed), `starting` (healthcheck
+   * `werkmeister feature status`: `healthy` (healthcheck passed), `starting` (healthcheck
    * warming up), `running` (up, no/failing healthcheck), or `down`.
    */
   services: { name: string; state: ServiceHealth }[];
@@ -1599,7 +1599,7 @@ export async function getWorkspaceStatuses(): Promise<{
     infra = { state: "unknown", running: 0, total: 0, services: [] };
   } else {
     const c = projects.get(INFRA_PROJECT);
-    // A stopped forwarder no running workspace needs is how `werkmeister up` leaves
+    // A stopped forwarder no running workspace needs is how `werkmeister feature up` leaves
     // it (SW-42), not a fault: leave it out so infra doesn't read partial.
     let infraServices = c?.services ?? [];
     const forwarder = infraServices.find((s) => s.name === "k8s-forwards");
@@ -1614,7 +1614,7 @@ export async function getWorkspaceStatuses(): Promise<{
     const total = infraServices.length;
     const state =
       total === 0 ? "down" : running === total ? "up" : running > 0 ? "partial" : "down";
-    // Same buckets as `werkmeister status` (_get_infra_status): healthcheck wins,
+    // Same buckets as `werkmeister feature status` (_get_infra_status): healthcheck wins,
     // then falls back to the raw container state.
     const services = infraServices.map((s) => ({
       name: s.name,
@@ -1783,7 +1783,7 @@ export interface InterceptsResult {
 /**
  * Telepresence intercept state for every active feature, grouped feature → service.
  *
- * Calls {@link interceptsSnapshot} directly — the same function `werkmeister status
+ * Calls {@link interceptsSnapshot} directly — the same function `werkmeister feature status
  * --intercepts --json` serialises, so this used to spawn the CLI to JSON-encode
  * a core object and parse it straight back (note 086 row 2, note 087).
  */
@@ -2502,7 +2502,7 @@ async function keepUntracked(dir: string, tarball: string): Promise<string[] | s
  * Hand off a workspace, then tear it down. The "handoff": commit + push every
  * branch (the sandbox-workspace root branch AND each repo subdir) so the work
  * survives on the remote and can be picked up elsewhere. Only once every push
- * succeeds does it `werkmeister down` (stop containers + release the slot), delete
+ * succeeds does it `werkmeister feature down` (stop containers + release the slot), delete
  * the workspace directory, and `git worktree prune` each source clone.
  *
  * If ANY push fails the workspace is left untouched (nothing deleted) so no work
@@ -2524,7 +2524,7 @@ export async function removeWorkspace(
     if (blockers.length && !opts.abandon?.trim()) {
       throw new WorkspaceError(
         `Workspace '${name}' NOT removed — it holds unshipped work:\n${blockers.map((b) => `  ${b}`).join("\n")}\n` +
-          `Ship it and run \`werkmeister close-out\`, or give up with \`werkmeister close-out ${name} --abandon "<reason>"\`.`,
+          `Ship it and run \`werkmeister workspace close\`, or give up with \`werkmeister workspace abandon "<reason>" ${name}\`.`,
       );
     }
     if (opts.abandon?.trim()) abandonWorkspace(target, opts.abandon.trim());
@@ -2575,7 +2575,7 @@ export async function removeWorkspace(
     try {
       await withReporter(collector, async () => {
         // The workspace is going away, so its per-feature volumes go with it;
-        // plain `werkmeister down` keeps them for the next `up`.
+        // plain `werkmeister feature down` keeps them for the next `up`.
         await down(feature, { removeVolumes: true });
         // Not part of `down()` — the CLI reloads separately (note 063), and
         // skipping it leaves Caddy routing to containers that no longer exist.
@@ -2662,14 +2662,14 @@ export async function switchKubeContext(
  * Launch a feature-tagged incognito Chrome window for a workspace: sets the
  * `X-Feature` routing cookie and tags the window (title prefix + corner badge).
  *
- * This used to spawn `werkmeister open` detached, because that command blocks for
+ * This used to spawn `werkmeister feature open` detached, because that command blocks for
  * the window's lifetime and the window has to outlive the call — the last place
  * core drove the CLI it depends on (note 087). `launchFeatureWindow` now
  * returns as soon as the window is up and tagged, and `supervise()` — which
  * keeps tabs opened later tagged, and owns the cleanup — runs unawaited. The
  * browser itself is spawned detached, so the window survives this process.
  *
- * Feature name and start path come from the workspace, the way `werkmeister open`
+ * Feature name and start path come from the workspace, the way `werkmeister feature open`
  * reads them from its cwd. Routing only *resolves* if the feature is `up`;
  * otherwise the cookie is set and traffic falls through to k8s.
  */
@@ -2679,7 +2679,7 @@ export async function openFeatureBrowser(name: string): Promise<{ path: string }
   const feature = await readEnvValue(target, "FEATURE");
   if (!feature) {
     throw new WorkspaceError(
-      `Workspace '${name}' has no FEATURE in its .env — run \`werkmeister init-workspace\` there first.`,
+      `Workspace '${name}' has no FEATURE in its .env — run \`werkmeister workspace init\` there first.`,
     );
   }
   const testPath =
@@ -2757,9 +2757,9 @@ export async function runConnect(): Promise<{ command: string; output: string }>
     const detail = stripAnsi(
       `${collector.text()}\n${e instanceof Error ? e.message : String(e)}`.trim(),
     );
-    throw new WorkspaceError(`werkmeister connect failed:\n${detail}`);
+    throw new WorkspaceError(`werkmeister infra connect failed:\n${detail}`);
   }
-  return { command: "werkmeister connect", output: stripAnsi(collector.text().trim()) };
+  return { command: "werkmeister infra connect", output: stripAnsi(collector.text().trim()) };
 }
 
 /**
@@ -2851,11 +2851,11 @@ export async function runWorkspaceAction(
   const feature = await readEnvValue(target, "FEATURE");
   if (!feature) {
     throw new WorkspaceError(
-      `Workspace '${name}' has no FEATURE in its .env — run 'werkmeister init-workspace' there first.`,
+      `Workspace '${name}' has no FEATURE in its .env — run 'werkmeister workspace init' there first.`,
     );
   }
   if (feature === "infra") {
-    // `werkmeister up/down infra` means the shared infra stack, which the CLI routes
+    // `werkmeister feature up/down infra` means the shared infra stack, which the CLI routes
     // to `connect`/`werkmeister-core/infra` — a different code path entirely. Refuse
     // rather than quietly running a feature lifecycle against it.
     throw new WorkspaceError(
@@ -3694,7 +3694,7 @@ export async function getK8sForwardsHealth(): Promise<{
   const file = await resolveServicesYaml();
   if (!file) {
     throw new WorkspaceError(
-      "Could not locate the service registry (~/.werkmeister/services.yaml) — run `werkmeister setup`.",
+      "Could not locate the service registry (~/.werkmeister/services.yaml) — run `werkmeister machine setup`.",
     );
   }
   const doc = (parseYaml(await fs.readFile(file, "utf-8")) ?? {}) as Record<string, any>;
@@ -3802,11 +3802,11 @@ export async function followLogsInTerminal(name: string): Promise<{ feature: str
   const feature = await readEnvValue(target, "FEATURE");
   if (!feature) {
     throw new WorkspaceError(
-      `Workspace '${name}' has no FEATURE in its .env — run \`werkmeister init-workspace\` there first.`,
+      `Workspace '${name}' has no FEATURE in its .env — run \`werkmeister workspace init\` there first.`,
     );
   }
   // ponytail: `werkmeister` must be on the Terminal's PATH, as `claude` already is for Continue in Terminal.
-  await openTerminalRunning(`werkmeister logs ${shellQuote(feature)}`);
+  await openTerminalRunning(`werkmeister feature logs ${shellQuote(feature)}`);
   return { feature };
 }
 

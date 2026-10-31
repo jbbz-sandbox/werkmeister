@@ -45,7 +45,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (drift.length) {
     console.log(
       `${Colors.YELLOW}Context layer lags the werkmeister repo — run ` +
-        "`werkmeister skills sync` (or `werkmeister init-workspace`) to refresh." +
+        "`werkmeister skills sync` (or `werkmeister workspace init`) to refresh." +
         `${Colors.RESET}`,
     );
     process.exit(1);

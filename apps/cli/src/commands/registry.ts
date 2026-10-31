@@ -3,7 +3,7 @@
  *
  * Regenerate ~/.werkmeister/services.yaml from every <repo>/.werkmeister/services.yaml
  * under paths.repos_root, merged under ~/.werkmeister/services.local.yaml. The
- * same step `werkmeister setup` runs, on its own: for the moment you clone a new
+ * same step `werkmeister machine setup` runs, on its own: for the moment you clone a new
  * repo and want it registered without a full setup pass.
  *
  *   werkmeister registry            # regenerate (sync is the default action)

@@ -7,41 +7,10 @@
  * only the services it modifies locally, with everything else
  * port-forwarded from k8s.
  *
- * Usage:
- *     werkmeister up <feature|infra>               Start a feature or shared infra
- *     werkmeister down <feature|infra> [-v]        Stop and clean up a feature or infra
- *     werkmeister restart <feature|infra>          Restart containers
- *     werkmeister stop <feature|infra>             Stop containers (preserve slot/volumes)
- *     werkmeister pause [feature]                  Freeze containers and hold the Claude session
- *     werkmeister resume [feature]                 Thaw what pause froze; the session continues
- *     werkmeister status [--k8s]                   Show all active features; --k8s for k8s detail only
- *     werkmeister detect [repo] [--dry-run] [--yes] [--assist|--no-assist]  Generate a repo's .werkmeister/services.yaml
- *     werkmeister services <feature>               List service endpoints
- *     werkmeister logs <feature> [service]         Tail container logs
- *     werkmeister remove <feature> <service>       Stop a local service (fall back to k8s)
- *     werkmeister test <feature>                   Run Playwright tests
- *     werkmeister open <feature> [--path P]        Open a feature-tagged Chrome window (sets X-Feature cookie)
- *     werkmeister connect [--k8s]                  Start all shared infra; --k8s for k8s port-forwards only
- *     werkmeister proxy-reload                     Regenerate and reload Caddy config
- *     werkmeister clean [--all] [--dry-run]        Remove orphaned volumes and files
- *     werkmeister stats [--collect N]              Show container resource usage
- *     werkmeister optimize [--collect N]           Analyze usage vs limits, recommend changes
- *     werkmeister workspace <feature> [opts]       Create a new workspace (worktrees + branch) and init it
- *     werkmeister list-workspaces                  List workspaces under the workspaces root
- *     werkmeister issue <view|update|create> [ref] Read, update or file an issue in the configured tracker
- *     werkmeister remove-workspace <name>          Deprecated: use `werkmeister close-out --abandon <reason>`
- *     werkmeister pr <gate|open|status> [repo]     Pre-PR gate, open PRs from approved PR files, record merge/release
- *     werkmeister close-out [name]                 End a workspace: after release, or with --abandon <reason>
- *     werkmeister code [feature]                   Open a workspace in VS Code
- *     werkmeister setup [--check]                  Install/update machine prerequisites (plugins + sandbox-workspace repo)
- *     werkmeister registry [sync] [--check]        Regenerate ~/.werkmeister/services.yaml from repo fragments
- *     werkmeister migrate [--workspaces] [--check] Move ~/.sandbox to ~/.werkmeister and repoint what names it // name-check: ignore
- *     werkmeister cache prune [name]               Prune build/package caches by their rule (--reset empties)
- *     werkmeister dashboard                        Launch the workspace dashboard's MCP server (stdio)
- *     werkmeister mcp                              Launch the headless remote MCP surface (stdio)
+ * Usage: werkmeister <noun> <verb> [args] (SW-186). `werkmeister --help` lists the
+ * nouns, `werkmeister <noun> --help` their verbs; both come from SPECS below.
  *
- *     Feature name can be omitted if FEATURE is set in a .env file in the cwd.
- *     Use "infra" as the feature name to target shared infrastructure.
+ * Feature name can be omitted if FEATURE is set in a .env file in the cwd.
  */
 
 import fs from "node:fs";
@@ -58,12 +27,14 @@ import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 // werkmeister-core is already this CLI's core dependency and every command
 // module loads far more of it on demand.
 import { STRATEGY_IDS } from "werkmeister-core/strategies";
+import budgetHelp from "./commands/budget.help.md";
 import cacheHelp from "./commands/cache.help.md";
 import cleanHelp from "./commands/clean.help.md";
 import closeOutHelp from "./commands/close-out.help.md";
 import codeHelp from "./commands/code.help.md";
 import configHelp from "./commands/config.help.md";
 import connectHelp from "./commands/connect.help.md";
+import daemonHelp from "./commands/daemon.help.md";
 import dashboardHelp from "./commands/dashboard.help.md";
 import detectHelp from "./commands/detect.help.md";
 import downHelp from "./commands/down.help.md";
@@ -127,7 +98,7 @@ export type Namespace = Record<string, unknown>;
 
 // Root --help sections, in this order (commander orders sections by first registration).
 const GROUPS = [
-  "Everyday:",
+  "Features:",
   "Workspaces:",
   "PRs and issues:",
   "Services and infra:",
@@ -136,7 +107,38 @@ const GROUPS = [
   "Internal:",
 ] as const;
 
+// SW-186: the pre-noun-group spellings warn until this release, then go (three minor releases).
+const REMOVE_IN = "0.58.0";
+
+// The `<noun>` level of `werkmeister <noun> <verb>` (SW-186, proposal 1.3).
+const NOUNS: Record<string, { description: string; help?: string; alias?: string }> = {
+  feature: { description: "Run a feature's containers: up, down, stop, logs, test and the rest" },
+  workspace: {
+    description: "Create, reconcile, list, open and close workspaces",
+    alias: "ws",
+  },
+  pr: {
+    description:
+      "Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)",
+    help: prHelp,
+  },
+  issue: {
+    description:
+      "Read, update or file an issue in this machine's issue tracker (see `werkmeister machine setup`)",
+    help: issueHelp,
+  },
+  infra: { description: "Shared infrastructure: Caddy, k8s port-forwards and Telepresence" },
+  machine: { description: "Machine-wide setup, config, migration and housekeeping" },
+  budget: {
+    description: "The scheduler's budget, the slots held and the features Waiting for room",
+    help: budgetHelp,
+  },
+  daemon: { description: "The host daemon (the MCP server on port 3002)", help: daemonHelp },
+  internal: { description: "Hook, tool and sibling-app entry points; not typed by people" },
+};
+
 type CommandSpec = {
+  /** `<noun> <verb>`, or one word for a command that takes its own `<action>` (`skills check`). */
   name: string;
   group: (typeof GROUPS)[number];
   /** The command's help.md, bundled as text (esbuild.mjs) and printed after its options. */
@@ -148,16 +150,30 @@ type CommandSpec = {
    * (note 038 — a computed specifier compiles and bundles clean while resolving
    * nowhere, which is how the same class of bug survived three PRs).
    */
-  load: () => Promise<{ run: (args: Namespace) => void | Promise<void> }>;
+  load: (args: Namespace) => Promise<{ run: (args: Namespace) => void | Promise<void> }>;
   configure: (cmd: Command) => void;
   // Map commander (positionals, opts) → the args namespace.
   namespace: (args: unknown[], opts: Record<string, unknown>) => Namespace;
+  /** The pre-SW-186 top-level spelling: hidden, warns until REMOVE_IN, then runs this spec. */
+  old?: string;
+  /**
+   * A pre-SW-186 command kept whole because its flags now split across several
+   * commands (`stop --if-idle`): hidden, and warns naming the spelling this returns.
+   */
+  deprecated?: (args: Namespace) => string;
+  /** Runs when its noun is given no verb: `workspace <feature>` predates `workspace new`. */
+  isDefault?: boolean;
 };
+
+const deprecation = (old: string, now: string) =>
+  `werkmeister: '${old}' is deprecated and will be removed in ${REMOVE_IN}; use 'werkmeister ${now}'. ` +
+  "Run 'werkmeister machine migrate' to update hooks and permission rules.";
 
 const SPECS: CommandSpec[] = [
   {
-    name: "up",
-    group: "Everyday:",
+    name: "feature up",
+    old: "up",
+    group: "Features:",
     help: upHelp,
     load: () => import("./commands/up.js"),
     configure: (cmd) => {
@@ -175,22 +191,31 @@ const SPECS: CommandSpec[] = [
         .option(
           "--dev",
           "Run the file watchers in cli/library/extension containers, which otherwise idle.",
+        )
+        .option(
+          "--service <name>",
+          "Start only this service and wait for it, the way the PR gate does — including one " +
+            "behind the on-demand profile (SW-132). `feature stop` stops it.",
         );
     },
     namespace: ([feature], o) => ({
       feature: feature ?? null,
       workspace: o.workspace ?? null,
       dev: o.dev ?? false,
+      ...(o.service ? { service: o.service } : {}),
     }),
   },
   {
-    name: "down",
-    group: "Everyday:",
+    name: "feature down",
+    old: "down",
+    group: "Features:",
     help: downHelp,
     load: () => import("./commands/down.js"),
     configure: (cmd) => {
       cmd
-        .description("Stop containers, release slot, update proxy (use 'infra' for shared infra)")
+        .description(
+          "Stop containers, release slot, update proxy (`infra <verb>` for shared infra)",
+        )
         .argument(
           "[feature]",
           "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.",
@@ -208,7 +233,8 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "intercept",
+    name: "infra intercept",
+    old: "intercept",
     group: "Services and infra:",
     help: interceptHelp,
     load: () => import("./commands/intercept.js"),
@@ -218,7 +244,7 @@ const SPECS: CommandSpec[] = [
         .argument("[feature]", "Feature name (defaults to FEATURE from a .env file in CWD).")
         .option(
           "-s, --service <name>",
-          "Local service to intercept (must be in the workspace's SERVICES and running via `werkmeister up`).",
+          "Local service to intercept (must be in the workspace's SERVICES and running via `werkmeister feature up`).",
         )
         .option(
           "--leave",
@@ -247,13 +273,14 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "restart",
-    group: "Everyday:",
+    name: "feature restart",
+    old: "restart",
+    group: "Features:",
     help: restartHelp,
     load: () => import("./commands/restart.js"),
     configure: (cmd) => {
       cmd
-        .description("Restart containers (use 'infra' for shared infra)")
+        .description("Restart containers (`infra <verb>` for shared infra)")
         .argument(
           "[feature]",
           "Feature name or 'infra'. If omitted, read from FEATURE in a .env file.",
@@ -262,8 +289,9 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature]) => ({ feature: feature ?? null }),
   },
   {
-    name: "pause",
-    group: "Everyday:",
+    name: "feature pause",
+    old: "pause",
+    group: "Features:",
     help: pauseHelp,
     load: () => import("./commands/pause.js"),
     configure: (cmd) => {
@@ -276,8 +304,9 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature]) => ({ feature: feature ?? null }),
   },
   {
-    name: "resume",
-    group: "Everyday:",
+    name: "feature resume",
+    old: "resume",
+    group: "Features:",
     help: resumeHelp,
     load: () => import("./commands/resume.js"),
     configure: (cmd) => {
@@ -291,13 +320,21 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "stop",
-    group: "Everyday:",
+    deprecated: (a) =>
+      a.if_idle
+        ? "internal session-end"
+        : a.idle
+          ? "internal reap <minutes>"
+          : a.feature === "infra"
+            ? "infra stop"
+            : "feature stop",
+    group: "Features:",
     help: stopHelp,
     load: () => import("./commands/stop.js"),
     configure: (cmd) => {
       cmd
         .description(
-          "Stop containers without removing them or releasing the slot (use 'infra' for shared infra)",
+          "Stop containers without removing them or releasing the slot (`infra <verb>` for shared infra)",
         )
         .argument(
           "[feature]",
@@ -326,7 +363,8 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "status",
-    group: "Everyday:",
+    deprecated: (a) => (a.k8s ? "infra status" : "feature status"),
+    group: "Features:",
     help: statusHelp,
     load: () => import("./commands/status.js"),
     configure: (cmd) => {
@@ -351,7 +389,8 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "detect",
+    name: "machine detect",
+    old: "detect",
     group: "Machine:",
     help: detectHelp,
     load: () => import("./commands/detect.js"),
@@ -378,8 +417,9 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "services",
-    group: "Services and infra:",
+    name: "feature services",
+    old: "services",
+    group: "Features:",
     help: servicesHelp,
     load: () => import("./commands/services.js"),
     configure: (cmd) => {
@@ -390,8 +430,9 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature]) => ({ feature }),
   },
   {
-    name: "logs",
-    group: "Everyday:",
+    name: "feature logs",
+    old: "logs",
+    group: "Features:",
     help: logsHelp,
     load: () => import("./commands/logs.js"),
     configure: (cmd) => {
@@ -403,8 +444,9 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature, service]) => ({ feature, service: service ?? null }),
   },
   {
-    name: "remove",
-    group: "Services and infra:",
+    name: "feature drop",
+    old: "remove",
+    group: "Features:",
     help: removeHelp,
     load: () => import("./commands/remove.js"),
     configure: (cmd) => {
@@ -416,8 +458,9 @@ const SPECS: CommandSpec[] = [
     namespace: ([feature, service]) => ({ feature, service }),
   },
   {
-    name: "test",
-    group: "Everyday:",
+    name: "feature test",
+    old: "test",
+    group: "Features:",
     help: testHelp,
     load: () => import("./commands/test.js"),
     configure: (cmd) => {
@@ -445,19 +488,26 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "starting-prompt",
+    name: "workspace prompt",
+    old: "starting-prompt",
     group: "Workspaces:",
     help: startingPromptHelp,
-    load: () => import("./commands/starting_prompt.js"),
+    load: (a) =>
+      a.args ? import("./commands/start_args.js") : import("./commands/starting_prompt.js"),
     configure: (cmd) => {
       cmd
         .description("Print the enclosing workspace's starting_prompt from workspace.yml")
-        .option("--start <dir>", "Directory to search up from (default: cwd)");
+        .option("--start <dir>", "Directory to search up from (default: cwd)")
+        .option(
+          "--args",
+          "Print the start_session arguments (title, model, prompt, background) as JSON instead",
+        );
     },
-    namespace: (_args, o) => ({ start: o.start ?? null }),
+    namespace: (_args, o) => ({ start: o.start ?? null, ...(o.args ? { args: true } : {}) }),
   },
   {
     name: "start-args",
+    deprecated: () => "workspace prompt --args",
     group: "Internal:",
     help: startArgsHelp,
     load: () => import("./commands/start_args.js"),
@@ -471,7 +521,8 @@ const SPECS: CommandSpec[] = [
     namespace: (_args, o) => ({ start: o.start ?? null }),
   },
   {
-    name: "wait-load",
+    name: "internal wait-load",
+    old: "wait-load",
     group: "Internal:",
     help: waitLoadHelp,
     load: () => import("./commands/wait_load.js"),
@@ -483,8 +534,9 @@ const SPECS: CommandSpec[] = [
     namespace: () => ({}),
   },
   {
-    name: "open",
-    group: "Everyday:",
+    name: "feature open",
+    old: "open",
+    group: "Features:",
     help: openHelp,
     load: () => import("./commands/open.js"),
     configure: (cmd) => {
@@ -517,7 +569,8 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "connect",
+    name: "infra connect",
+    old: "connect",
     group: "Services and infra:",
     help: connectHelp,
     load: () => import("./commands/connect.js"),
@@ -532,7 +585,8 @@ const SPECS: CommandSpec[] = [
     namespace: (_a, o) => ({ k8s: Boolean(o.k8s) }),
   },
   {
-    name: "proxy-reload",
+    name: "infra proxy-reload",
+    old: "proxy-reload",
     group: "Services and infra:",
     help: proxyReloadHelp,
     load: () => import("./commands/proxy_reload.js"),
@@ -542,7 +596,8 @@ const SPECS: CommandSpec[] = [
     namespace: () => ({}),
   },
   {
-    name: "clean",
+    name: "machine clean",
+    old: "clean",
     group: "Machine:",
     help: cleanHelp,
     load: () => import("./commands/clean.js"),
@@ -558,7 +613,8 @@ const SPECS: CommandSpec[] = [
     namespace: (_a, o) => ({ all: Boolean(o.all), dry_run: Boolean(o.dryRun) }),
   },
   {
-    name: "stats",
+    name: "machine stats",
+    old: "stats",
     group: "Machine:",
     help: statsHelp,
     load: () => import("./commands/stats.js"),
@@ -582,7 +638,8 @@ const SPECS: CommandSpec[] = [
     namespace: (_a, o) => ({ collect: o.collect, interval: o.interval, save: Boolean(o.save) }),
   },
   {
-    name: "optimize",
+    name: "machine optimize",
+    old: "optimize",
     group: "Machine:",
     help: optimizeHelp,
     load: () => import("./commands/optimize.js"),
@@ -643,6 +700,7 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "hooks",
+    deprecated: (a) => `internal ${a.action}`,
     group: "Internal:",
     help: hooksHelp,
     load: () => import("./commands/hooks.js"),
@@ -702,7 +760,8 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "workspace",
+    name: "workspace new",
+    isDefault: true,
     group: "Workspaces:",
     help: workspaceHelp,
     load: () => import("./commands/workspace.js"),
@@ -720,7 +779,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "--issue-id <ref>",
-          "Issue ID in this machine's issue tracker (see `werkmeister setup`). Its slug is " +
+          "Issue ID in this machine's issue tracker (see `werkmeister machine setup`). Its slug is " +
             "prefixed to the workspace dir name; passed through to init-workspace.",
         )
         .option(
@@ -831,7 +890,8 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "list-workspaces",
+    name: "workspace list",
+    old: "list-workspaces",
     group: "Workspaces:",
     help: listWorkspacesHelp,
     load: () => import("./commands/list_workspaces.js"),
@@ -841,62 +901,17 @@ const SPECS: CommandSpec[] = [
     namespace: () => ({}),
   },
   {
-    name: "issue",
-    group: "PRs and issues:",
-    help: issueHelp,
-    load: () => import("./commands/issue.js"),
-    configure: (cmd) => {
-      cmd
-        .description(
-          "Read, update or file an issue in this machine's issue tracker (see `werkmeister setup`)",
-        )
-        .addArgument(
-          new Argument(
-            "<action>",
-            "view: print the issue; update: change its status and/or add a comment; create: file a new issue and print its URL (Jira); start: move the workspace's issue to in progress (forward only); ready: list a project's open work in priority order",
-          ).choices(["view", "update", "create", "start", "ready"]),
-        )
-        .argument(
-          "[ref]",
-          "Issue ID; omit inside a workspace to use its .werkmeister/workspace.yml issue",
-        )
-        .option("--json", "view, ready: print JSON")
-        .option("--status <name>", "update: move the issue to this status")
-        .option("--comment <text>", "update: add this comment")
-        .option(
-          "--project <key>",
-          "create: the Jira project key to file in; ready: a project from projects: in config.yaml",
-        )
-        .option(
-          "--type <type>",
-          "create: bug, feature or task (mapped to the tracker's issue type)",
-        )
-        .option("--title <text>", "create: the issue's summary")
-        .option("--body-file <path>", "create: the issue's description, from a file (- for stdin)");
-    },
-    namespace: ([action, ref], o) => ({
-      action,
-      ref: ref ?? null,
-      json: Boolean(o.json),
-      status: o.status ?? null,
-      comment: o.comment ?? null,
-      project: o.project ?? null,
-      type: o.type ?? null,
-      title: o.title ?? null,
-      bodyFile: o.bodyFile ?? null,
-    }),
-  },
-  {
     name: "remove-workspace",
+    deprecated: () => "workspace abandon <reason>",
     group: "Workspaces:",
     help: removeWorkspaceHelp,
     load: () => import("./commands/remove_workspace.js"),
     configure: (cmd) => {
       cmd
         .description(
-          "Deprecated: use `werkmeister close-out --abandon <reason>`. Hand off (commit + push) and delete a workspace",
+          "Deprecated: use `werkmeister workspace abandon <reason>`. Hand off (commit + push) and delete a workspace",
         )
-        .argument("<name>", "Workspace directory name, as `werkmeister list-workspaces` reports it")
+        .argument("<name>", "Workspace directory name, as `werkmeister workspace list` reports it")
         .option("-y, --yes", "Skip the confirmation prompt")
         .option(
           "--abandon <reason>",
@@ -906,58 +921,8 @@ const SPECS: CommandSpec[] = [
     namespace: ([name], o) => ({ name, yes: Boolean(o.yes), abandon: o.abandon ?? null }),
   },
   {
-    name: "pr",
-    group: "PRs and issues:",
-    help: prHelp,
-    load: () => import("./commands/pr.js"),
-    configure: (cmd) => {
-      cmd
-        .description(
-          "Open and track this workspace's PRs from its PR files (docs/workspace-lifecycle.md)",
-        )
-        .addArgument(
-          new Argument(
-            "<action>",
-            "gate: run the pre-PR gate; open: gate, push and open each approved PR file; status: record merged/shipped/closed; adopt: record a PR opened outside the workspace; watch: resume each opening session once its PR merges, ships or closes (any workspace; `--install` schedules it); new: start a follow-up PR file and branch for a worktree whose PRs have merged",
-          ).choices(["gate", "open", "status", "adopt", "watch", "new"]),
-        )
-        .argument(
-          "[args...]",
-          "[repo] — only this code worktree's PR files, or one PR file by its name (`werkmeister-why-page`); adopt: <pr-number|url> [repo]; new: <worktree>",
-        )
-        .option("--slug <slug>", "new: the follow-up's name, in its PR file and branch")
-        .option("--no-pr <reason>", "adopt: no PR — the fix is already on base")
-        .option(
-          "--no-wait",
-          "gate/open: don't wait for host load under budget.host_load before each check",
-        )
-        .option(
-          "--install",
-          "watch: install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes",
-        )
-        .option("--uninstall", "watch: remove that schedule")
-        .option("--json", "Print the result as JSON");
-    },
-    namespace: ([action, rest], o) => {
-      const args = rest as string[];
-      // Commander reads `--no-pr <reason>` as `pr`: true by default, the reason when given.
-      const noPr = typeof o.pr === "string" ? o.pr : null;
-      const pr = action === "adopt" && noPr === null ? (args[0] ?? null) : null;
-      return {
-        action,
-        pr,
-        noPr,
-        repo: args[pr ? 1 : 0] ?? null,
-        slug: o.slug ?? null,
-        wait: o.wait !== false,
-        json: Boolean(o.json),
-        install: Boolean(o.install),
-        uninstall: Boolean(o.uninstall),
-      };
-    },
-  },
-  {
     name: "close-out",
+    deprecated: (a) => (a.abandon ? "workspace abandon <reason>" : "workspace close"),
     group: "Workspaces:",
     help: closeOutHelp,
     load: () => import("./commands/close_out.js"),
@@ -987,7 +952,8 @@ const SPECS: CommandSpec[] = [
     }),
   },
   {
-    name: "code",
+    name: "workspace code",
+    old: "code",
     group: "Workspaces:",
     help: codeHelp,
     load: () => import("./commands/code.js"),
@@ -996,13 +962,14 @@ const SPECS: CommandSpec[] = [
         .description("Open a workspace in VS Code")
         .argument(
           "[feature]",
-          "Workspace name, as `werkmeister list-workspaces` reports it. If omitted, read from FEATURE in a .env file.",
+          "Workspace name, as `werkmeister workspace list` reports it. If omitted, read from FEATURE in a .env file.",
         );
     },
     namespace: ([feature]) => ({ feature: feature ?? null }),
   },
   {
-    name: "setup",
+    name: "machine setup",
+    old: "setup",
     group: "Machine:",
     help: setupHelp,
     load: () => import("./commands/setup.js"),
@@ -1023,7 +990,8 @@ const SPECS: CommandSpec[] = [
     namespace: (_a, o) => ({ check: Boolean(o.check), yes: Boolean(o.yes) }),
   },
   {
-    name: "config",
+    name: "machine config",
+    old: "config",
     group: "Machine:",
     help: configHelp,
     load: () => import("./commands/config.js"),
@@ -1102,7 +1070,8 @@ const SPECS: CommandSpec[] = [
     namespace: ([action], o) => ({ action: action ?? "sync", check: Boolean(o.check) }),
   },
   {
-    name: "migrate",
+    name: "machine migrate",
+    old: "migrate",
     group: "Machine:",
     help: migrateHelp,
     load: () => import("./commands/migrate.js"),
@@ -1111,7 +1080,9 @@ const SPECS: CommandSpec[] = [
         .description(
           "Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.yaml, " + // name-check: ignore
             "env.sh, the ~/.zshenv block, services.yaml, the pr-watch schedule and workspace " +
-            "compose files. Safe to re-run; refuses while affected containers are running.",
+            "compose files; then rewrite workspace hooks, permission rules and with-temp-home, " +
+            "secrets.env and Claude Desktop's args to the noun-group spellings. Safe to re-run; " +
+            "refuses while affected containers are running.",
         )
         .option("--workspaces", "Also rename each workspace's .sandbox/ to .werkmeister/.") // name-check: ignore
         .option("--check", "Report what would change without writing.");
@@ -1119,7 +1090,8 @@ const SPECS: CommandSpec[] = [
     namespace: (_args, o) => ({ check: Boolean(o.check), workspaces: Boolean(o.workspaces) }),
   },
   {
-    name: "init-workspace",
+    name: "workspace init",
+    old: "init-workspace",
     group: "Workspaces:",
     help: initWorkspaceHelp,
     load: () => import("./commands/init_workspace.js"),
@@ -1155,7 +1127,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "--issue-id <ref>",
-          "Issue ID in this machine's issue tracker (see `werkmeister setup`) " +
+          "Issue ID in this machine's issue tracker (see `werkmeister machine setup`) " +
             "(env: WERKMEISTER_ISSUE_ID; config: issue_id).",
         )
         .option(
@@ -1249,18 +1221,369 @@ const SPECS: CommandSpec[] = [
       refresh_issue: Boolean(o.refreshIssue),
     }),
   },
+  {
+    name: "budget status",
+    group: "Machine:",
+    help: "",
+    load: () => import("./commands/budget.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Show the budget, the slots held and the features Waiting for room")
+        .option("--json", "Print JSON");
+    },
+    namespace: (_a, o) => ({ json: Boolean(o.json) }),
+  },
+  ...(
+    [
+      ["status", "Say whether the daemon is serving and its launchd agent is current"],
+      ["install", "Install or refresh the launchd agent (macOS)"],
+      ["uninstall", "Remove the launchd agent; `infra connect` starts the daemon again"],
+      ["restart", "Restart the daemon, through launchd when launchd owns it"],
+    ] as const
+  ).map(
+    ([action, description]): CommandSpec => ({
+      name: `daemon ${action}`,
+      group: "Machine:",
+      help: "",
+      load: () => import("./commands/daemon.js"),
+      configure: (cmd) => {
+        cmd.description(description);
+        if (action === "status") cmd.option("--json", "Print JSON");
+      },
+      namespace: (_a, o) => ({ action, json: Boolean(o.json) }),
+    }),
+  ),
+  // SW-186 split these out of `stop`, `status` and `close-out`, whose specs above stay whole (deprecated).
+  {
+    name: "feature stop",
+    group: "Features:",
+    help: stopHelp,
+    load: () => import("./commands/stop.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Stop containers without removing them or releasing the slot")
+        .argument("[feature]", "Feature name. If omitted, read from FEATURE in a .env file.")
+        // Internal: the child `internal session-end` spawns, which hands the stop to the host daemon (SW-184).
+        .addOption(new Option("--via-daemon").hideHelp());
+    },
+    namespace: ([feature], o) => ({
+      feature: feature ?? null,
+      if_idle: false,
+      idle: null,
+      via_daemon: Boolean(o.viaDaemon),
+    }),
+  },
+  {
+    name: "feature status",
+    group: "Features:",
+    help: statusHelp,
+    load: () => import("./commands/status.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Show all features, services, resource usage")
+        .option("-v, --verbose", "Show individual container details")
+        .option(
+          "--intercepts",
+          "Show Telepresence intercept state only (per feature service; cheap — skips docker and k8s probes).",
+        )
+        .option("--json", "Output structured JSON (useful for agent-driven diagnosis)");
+    },
+    namespace: (_a, o) => ({
+      verbose: Boolean(o.verbose),
+      k8s: false,
+      intercepts: Boolean(o.intercepts),
+      json: Boolean(o.json),
+    }),
+  },
+  ...(["up", "down", "restart", "stop"] as const).map(
+    (verb): CommandSpec => ({
+      name: `infra ${verb}`,
+      group: "Services and infra:",
+      help: "",
+      load: {
+        up: () => import("./commands/up.js"),
+        down: () => import("./commands/down.js"),
+        restart: () => import("./commands/restart.js"),
+        stop: () => import("./commands/stop.js"),
+      }[verb],
+      configure: (cmd) => {
+        cmd.description(
+          `${verb[0].toUpperCase()}${verb.slice(1)} the shared infrastructure (Caddy, k8s port-forwards)`,
+        );
+        if (verb === "down") cmd.option("-v, --volumes", "Also remove Docker volumes");
+      },
+      // The namespace `<verb> infra` produced before SW-186.
+      namespace: (_a, o) =>
+        ({
+          up: { feature: "infra", workspace: null, dev: false },
+          down: { feature: "infra", volumes: Boolean(o.volumes), all_features: false },
+          restart: { feature: "infra" },
+          stop: { feature: "infra", if_idle: false, idle: null, via_daemon: false },
+        })[verb],
+    }),
+  ),
+  {
+    name: "infra status",
+    group: "Services and infra:",
+    help: "",
+    load: () => import("./commands/status.js"),
+    configure: (cmd) => {
+      cmd
+        .description("Show k8s port-forward health")
+        .option("--json", "Output structured JSON (useful for agent-driven diagnosis)");
+    },
+    namespace: (_a, o) => ({ verbose: false, k8s: true, intercepts: false, json: Boolean(o.json) }),
+  },
+  {
+    name: "workspace close",
+    group: "Workspaces:",
+    help: closeOutHelp,
+    load: () => import("./commands/close_out.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "End a workspace after every PR shipped: close the issue, write closeout.md, remove the workspace, " +
+            "delete merged branches. Refuses without postmortem.md (run the post-mortem first) unless " +
+            "--skip-postmortem gives a reason",
+        )
+        .argument("[name]", "Workspace directory name; defaults to the workspace you are in")
+        .option("-y, --yes", "Skip the confirmation prompt")
+        .option(
+          "--skip-postmortem <reason>",
+          "Close out without a post-mortem; the reason goes in closeout.md",
+        );
+    },
+    namespace: ([name], o) => ({
+      name: name ?? null,
+      yes: Boolean(o.yes),
+      abandon: null,
+      skipPostmortem: o.skipPostmortem ?? null,
+    }),
+  },
+  {
+    name: "workspace abandon",
+    group: "Workspaces:",
+    help: closeOutHelp,
+    load: () => import("./commands/close_out.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "End a workspace without shipping: record the reason in closeout.md and the PR files, " +
+            "push every branch and keep them, remove the workspace",
+        )
+        .argument("<reason>", "Why the work is abandoned")
+        .argument("[name]", "Workspace directory name; defaults to the workspace you are in")
+        .option("-y, --yes", "Skip the confirmation prompt")
+        .option(
+          "--skip-postmortem <reason>",
+          "Close out without a post-mortem; the reason goes in closeout.md",
+        );
+    },
+    namespace: ([reason, name], o) => ({
+      name: name ?? null,
+      yes: Boolean(o.yes),
+      abandon: reason,
+      skipPostmortem: o.skipPostmortem ?? null,
+    }),
+  },
+  ...(
+    [
+      ["gate", "Deny or allow an Edit/Write per the standards gate"],
+      ["pr-guard", "Deny opening a PR except via `werkmeister pr open`"],
+      ["agent-state", "Record working / needs-you / done for the workspace pane and dashboard"],
+    ] as const
+  ).map(
+    ([action, description]): CommandSpec => ({
+      name: `internal ${action}`,
+      group: "Internal:",
+      help: action === "gate" ? hooksHelp : "",
+      load: () => import("./commands/hooks.js"),
+      configure: (cmd) => {
+        cmd.description(`Claude Code hook: ${description}`);
+      },
+      namespace: () => ({ action }),
+    }),
+  ),
+  {
+    name: "internal session-end",
+    group: "Internal:",
+    help: "",
+    load: () => import("./commands/stop.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "SessionEnd hook: stop the workspace's own feature unless another Claude session is " +
+            "open there; silent, always exits 0, never stops infra",
+        )
+        // The child session-end spawns, which hands the stop to the host daemon (SW-184).
+        .addOption(new Option("--via-daemon").hideHelp());
+    },
+    namespace: (_a, o) => ({
+      feature: null,
+      if_idle: true,
+      idle: null,
+      via_daemon: Boolean(o.viaDaemon),
+    }),
+  },
+  {
+    name: "internal reap",
+    group: "Internal:",
+    help: "",
+    load: () => import("./commands/stop.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Stop every workspace's feature containers nothing has used for <minutes> (a busy or " +
+            "recently active session, a gate exec or a fresh start all count as use)",
+        )
+        .argument("<minutes>", "Idle minutes before a feature is stopped")
+        .argument("[feature]", "Only this feature");
+    },
+    namespace: ([minutes, feature]) => ({
+      feature: feature ?? null,
+      if_idle: false,
+      idle: minutes,
+      via_daemon: false,
+    }),
+  },
+  ...(
+    [
+      ["gate", "Run the pre-PR gate", ["[repo]"], ["wait", "json"]],
+      ["open", "Gate, push and open each approved PR file", ["[repo]"], ["wait", "json"]],
+      ["status", "Record merged, shipped or closed for each PR file", ["[repo]"], ["json"]],
+      ["adopt", "Record a PR opened outside the workspace", ["[pr]", "[repo]"], ["no-pr", "json"]],
+      [
+        "watch",
+        "Resume each opening session once its PR merges, ships or closes (any workspace)",
+        [],
+        ["install", "json"],
+      ],
+      [
+        "new",
+        "Start a follow-up PR file and branch for a worktree whose PRs have merged",
+        // Optional to commander: pr.ts prints the usage when it is missing.
+        ["[worktree]"],
+        ["slug", "json"],
+      ],
+    ] as const
+  ).map(
+    ([action, description, positionals, flags]): CommandSpec => ({
+      name: `pr ${action}`,
+      group: "PRs and issues:",
+      help: "",
+      load: () => import("./commands/pr.js"),
+      configure: (cmd) => {
+        cmd.description(description);
+        const argHelp: Record<string, string> = {
+          "[repo]":
+            "Only this code worktree's PR files, or one PR file by its name (`werkmeister-why-page`)",
+          "[pr]": "The PR number or URL",
+          "[worktree]": "The code worktree the follow-up is for",
+        };
+        for (const p of positionals) cmd.argument(p, argHelp[p]);
+        const has = (f: string) => (flags as readonly string[]).includes(f);
+        if (has("slug"))
+          cmd.option("--slug <slug>", "The follow-up's name, in its PR file and branch");
+        if (has("no-pr")) cmd.option("--no-pr <reason>", "No PR — the fix is already on base");
+        if (has("wait"))
+          cmd.option(
+            "--no-wait",
+            "Don't wait for host load under budget.host_load before each check",
+          );
+        if (has("install"))
+          cmd
+            .option(
+              "--install",
+              "Install a schedule (launchd on macOS, else crontab) that runs `pr watch` every 10 minutes",
+            )
+            .option("--uninstall", "Remove that schedule");
+        cmd.option("--json", "Print the result as JSON");
+      },
+      namespace: (positionals, o) => {
+        const args = positionals.filter((a) => a != null) as string[];
+        // Commander reads `--no-pr <reason>` as `pr`: true by default, the reason when given.
+        const noPr = typeof o.pr === "string" ? o.pr : null;
+        const pr = action === "adopt" && noPr === null ? (args[0] ?? null) : null;
+        return {
+          action,
+          pr,
+          noPr,
+          repo: args[pr ? 1 : 0] ?? null,
+          slug: o.slug ?? null,
+          wait: o.wait !== false,
+          json: Boolean(o.json),
+          install: Boolean(o.install),
+          uninstall: Boolean(o.uninstall),
+        };
+      },
+    }),
+  ),
+  ...(
+    [
+      ["view", "Print the issue", ["json"]],
+      ["update", "Change the issue's status and/or add a comment", ["status", "comment"]],
+      [
+        "create",
+        "File a new issue and print its URL (Jira)",
+        ["project", "type", "title", "body-file"],
+      ],
+      ["start", "Move the workspace's issue to in progress (forward only)", []],
+      ["ready", "List a project's open work in priority order", ["project", "json"]],
+    ] as const
+  ).map(
+    ([action, description, flags]): CommandSpec => ({
+      name: `issue ${action}`,
+      group: "PRs and issues:",
+      help: "",
+      load: () => import("./commands/issue.js"),
+      configure: (cmd) => {
+        cmd.description(description);
+        if (action !== "create" && action !== "ready")
+          cmd.argument(
+            "[ref]",
+            "Issue ID; omit inside a workspace to use its .werkmeister/workspace.yml issue",
+          );
+        const options: Record<string, [string, string]> = {
+          json: ["--json", "Print JSON"],
+          status: ["--status <name>", "Move the issue to this status"],
+          comment: ["--comment <text>", "Add this comment"],
+          project: [
+            "--project <key>",
+            action === "create"
+              ? "The Jira project key to file in"
+              : "A project from projects: in config.yaml",
+          ],
+          type: ["--type <type>", "bug, feature or task (mapped to the tracker's issue type)"],
+          title: ["--title <text>", "The issue's summary"],
+          "body-file": ["--body-file <path>", "The issue's description, from a file (- for stdin)"],
+        };
+        for (const f of flags) cmd.option(...options[f]);
+      },
+      namespace: ([ref], o) => ({
+        action,
+        ref: ref ?? null,
+        json: Boolean(o.json),
+        status: o.status ?? null,
+        comment: o.comment ?? null,
+        project: o.project ?? null,
+        type: o.type ?? null,
+        title: o.title ?? null,
+        bodyFile: o.bodyFile ?? null,
+      }),
+    }),
+  ),
 ];
 
 async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
   // SW-106 dropped the ~/.sandbox fallback: say so instead of running on an empty config. // name-check: ignore
   const home = os.homedir();
   if (
-    spec.name !== "migrate" &&
+    spec.name !== "machine migrate" &&
     fs.existsSync(path.join(home, ".sandbox")) && // name-check: ignore
     !fs.existsSync(path.join(home, ".werkmeister"))
   ) {
     console.error(
-      `${_RED}Found ~/.sandbox but no ~/.werkmeister: run 'werkmeister migrate' first.${_RESET}`, // name-check: ignore
+      `${_RED}Found ~/.sandbox but no ~/.werkmeister: run 'werkmeister machine migrate' first.${_RESET}`, // name-check: ignore
     );
   }
   // One-shot migration: remove legacy ~/.werkmeister/slots.json on first run
@@ -1274,7 +1597,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
 
   let mod: { run: (args: Namespace) => void | Promise<void> };
   try {
-    mod = await spec.load();
+    mod = await spec.load(args);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ERR_MODULE_NOT_FOUND") {
       console.log(`${_RED}Failed to load command '${spec.name}': ${(e as Error).message}${_RESET}`);
@@ -1357,8 +1680,8 @@ export async function main(): Promise<void> {
   const program = new Command();
   // Kept for `__reference`: commander keeps after-help text only as an event listener.
   const helpText = new Map<string, string>();
-  const withHelp = (cmd: Command, text: string) => {
-    helpText.set(cmd.name(), text);
+  const withHelp = (cmd: Command, key: string, text: string) => {
+    helpText.set(key, text);
     cmd.addHelpText("after", `\n${text}`);
   };
   program
@@ -1367,20 +1690,81 @@ export async function main(): Promise<void> {
     .version(JSON.parse(fs.readFileSync(path.join(_REPO_ROOT, "package.json"), "utf8")).version)
     .helpOption("-h, --help", "show this help message and exit");
 
-  const byGroup = [...SPECS].sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group));
-  for (const spec of byGroup) {
-    const cmd = program.command(spec.name).helpGroup(spec.group);
-    withHelp(cmd, spec.help);
+  // `__parse <argv…>`: print the command and args namespace instead of running it, so a
+  // test can pin every spelling's parse without docker or a workspace.
+  const parseOnly = process.argv[2] === "__parse";
+  if (parseOnly) process.argv.splice(2, 1);
+
+  const nouns = new Map<string, Command>();
+  const nounCommand = (noun: string, group: string): Command => {
+    let cmd = nouns.get(noun);
+    if (!cmd) {
+      const meta = NOUNS[noun];
+      if (!meta) throw new Error(`SPECS names unknown noun '${noun}'`);
+      cmd = program
+        .command(noun, { hidden: noun === "internal" })
+        .helpGroup(group)
+        .description(meta.description);
+      if (meta.alias) cmd.alias(meta.alias);
+      if (meta.help) withHelp(cmd, noun, meta.help);
+      nouns.set(noun, cmd);
+    }
+    return cmd;
+  };
+
+  // `workspace <feature>` reached the default verb; `ws` is new, so only the old noun warns.
+  const isImplicit = (noun: string, verb: string) => {
+    const at = process.argv.indexOf(noun);
+    return at >= 0 && process.argv[at + 1] !== verb;
+  };
+
+  // *warnAs* marks a hidden pre-SW-186 spelling: it warns on stderr (stdout carries
+  // hook and --json output), then runs exactly what the new spelling runs.
+  const addCommand = (
+    parent: Command,
+    spec: CommandSpec,
+    name: string,
+    warnAs?: (args: Namespace) => string,
+  ) => {
+    const cmd = parent.command(name, {
+      hidden: Boolean(warnAs),
+      isDefault: !warnAs && spec.isDefault,
+    });
+    if (parent === program && !warnAs) cmd.helpGroup(spec.group);
+    if (spec.help) withHelp(cmd, warnAs ? name : spec.name, spec.help);
     spec.configure(cmd);
     cmd.action(async (...actionArgs) => {
       // commander passes (positional..., opts, command)
       const cmdObj = actionArgs.at(-1) as Command;
       const opts = cmdObj.opts();
       const positionals = actionArgs.slice(0, -2);
+      const args = spec.namespace(positionals, opts);
+      if (warnAs) console.error(deprecation(name, warnAs(args)));
+      else if (spec.isDefault && isImplicit(parent.name(), name))
+        console.error(deprecation(`${parent.name()} <feature>`, spec.name));
+      if (parseOnly) {
+        console.log(JSON.stringify({ command: spec.name, args }));
+        return;
+      }
       // One wrap per command: everything it and the library call print through
       // this reporter, and nothing outside a command has a sink at all.
-      await withReporter(ttyReporter, () => dispatch(spec, spec.namespace(positionals, opts)));
+      await withReporter(ttyReporter, () => dispatch(spec, args));
     });
+  };
+
+  const byGroup = [...SPECS].sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group));
+  for (const spec of byGroup) {
+    const [noun, verb] = spec.name.split(" ");
+    if (spec.deprecated) addCommand(program, spec, spec.name, spec.deprecated);
+    else if (verb) addCommand(nounCommand(noun, spec.group), spec, verb);
+    else addCommand(program, spec, spec.name);
+    // `up infra` and the like moved to `infra <verb>`, not `feature <verb>`.
+    const infraVerb = `infra ${verb}`;
+    const hasInfraVerb = SPECS.some((s) => s.name === infraVerb);
+    if (spec.old)
+      addCommand(program, spec, spec.old, (a) =>
+        hasInfraVerb && a.feature === "infra" ? infraVerb : spec.name,
+      );
   }
 
   // `dashboard` and `mcp` name the two sibling apps, each with its own
@@ -1388,7 +1772,7 @@ export async function main(): Promise<void> {
   // (it is the only place that can resolve a node runtime), so these two
   // registrations exist for --help parity and to give a useful message to
   // anyone running dist/main.js directly. Neither takes a transport flag: the
-  // wrapper launches `mcp` over stdio, and `werkmeister connect` starts the HTTP modes.
+  // wrapper launches `mcp` over stdio, and `werkmeister infra connect` starts the HTTP modes.
   for (const [name, description, help] of [
     [
       "dashboard",
@@ -1401,18 +1785,24 @@ export async function main(): Promise<void> {
       mcpHelp,
     ],
   ] as const) {
-    const cmd = program.command(name).helpGroup("Internal:").description(description);
-    withHelp(cmd, help);
-    cmd.action(() => {
-      // stderr, not stdout: an MCP client that got this far is reading stdout
-      // as JSON-RPC, and printing English onto that channel is what made the
-      // previous version of this stub look like a crashed server.
-      console.error(
-        `\`werkmeister ${name}\` launches a sibling app and must be run through the ` +
-          "./werkmeister wrapper, which locates a node runtime and the app's entrypoint.",
-      );
-      process.exit(1);
-    });
+    // The pre-SW-186 spellings stay registered (hidden) so `node dist/main.js mcp` still explains itself.
+    for (const [parent, key] of [
+      [nounCommand("internal", "Internal:"), `internal ${name}`],
+      [program, name],
+    ] as const) {
+      const cmd = parent.command(name, { hidden: parent === program }).description(description);
+      withHelp(cmd, key, help);
+      cmd.action(() => {
+        // stderr, not stdout: an MCP client that got this far is reading stdout
+        // as JSON-RPC, and printing English onto that channel is what made the
+        // previous version of this stub look like a crashed server.
+        console.error(
+          `\`werkmeister ${key}\` launches a sibling app and must be run through the ` +
+            "./werkmeister wrapper, which locates a node runtime and the app's entrypoint.",
+        );
+        process.exit(1);
+      });
+    }
   }
 
   program.commandsGroup("Internal:").helpCommand(true);
@@ -1423,28 +1813,40 @@ export async function main(): Promise<void> {
 
   // SW-81: commander's model as JSON, for docs:gen's CLI reference and docs:check's flag list.
   if (process.argv[2] === "__reference") {
-    const reference = program.commands.map((c) => ({
-      name: c.name(),
+    // commander has no public getter for `.hidden`.
+    const isHidden = (c: Command) => Boolean((c as unknown as { _hidden?: boolean })._hidden);
+    const entry = (c: Command, name: string, group: string, hidden: boolean) => ({
+      name,
       usage: c.usage().replace(/^\[options\] ?/, ""),
       description: c.description(),
-      // commander has no public getter for `.hidden`.
-      hidden: Boolean((c as unknown as { _hidden?: boolean })._hidden),
-      group: c.helpGroup(),
-      help: helpText.get(c.name()) ?? "",
+      hidden,
+      group,
+      help: helpText.get(name) ?? "",
       options: c.options.map((o) => ({
         flags: o.flags,
         long: o.long,
         description: o.description,
         hidden: o.hidden,
       })),
-    }));
+    });
+    // SW-186: one entry per `<noun> <verb>`; a noun gets its own entry only when it has a help.md (pr, issue).
+    const reference = program.commands.flatMap((c) => {
+      const self = entry(c, c.name(), c.helpGroup(), isHidden(c));
+      if (!c.commands.length) return [self];
+      const verbs = c.commands.map((v) =>
+        entry(v, `${c.name()} ${v.name()}`, c.helpGroup(), isHidden(c) || isHidden(v)),
+      );
+      return helpText.has(c.name()) ? [self, ...verbs] : verbs;
+    });
     console.log(JSON.stringify(reference));
     return;
   }
 
-  // Not for `hooks`: they run on every tool call, and git would be a spawn each.
-  // Not for `stop --if-idle` either: it runs inside SessionEnd's exit budget.
-  if (process.argv[2] !== "hooks" && !process.argv.includes("--if-idle")) {
+  // Not for hooks (`internal`, or `hooks` before SW-186): they run on every tool call,
+  // and git would be a spawn each. Nor SessionEnd's stop, inside its exit budget.
+  const hookCall =
+    ["internal", "hooks"].includes(process.argv[2] ?? "") || process.argv.includes("--if-idle");
+  if (!parseOnly && !hookCall) {
     const warning = staleBuildWarning(BUILD_STAMP, path.resolve(_REPO_ROOT, "../.."));
     if (warning) console.error(warning);
   }

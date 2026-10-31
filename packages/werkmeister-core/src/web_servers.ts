@@ -4,9 +4,9 @@
  *
  * All run as plain host `node` processes — NOT containers — because their
  * tools drive host-local things (Docker, VS Code, Terminal, kubectl, the
- * `werkmeister` and `claude` CLIs) that a container can't reach. `werkmeister connect`
+ * `werkmeister` and `claude` CLIs) that a container can't reach. `werkmeister infra connect`
  * builds and starts them alongside the shared-infra containers; `werkmeister
- * down/stop/restart infra` tears them down or bounces them; `werkmeister status`
+ * down/stop/restart infra` tears them down or bounces them; `werkmeister feature status`
  * reports the dashboard.
  *
  * Each is tracked by a PID file under `~/.werkmeister/` (same state dir as the slot
@@ -100,7 +100,7 @@ export const MCP: WebApp = {
   env: { HOST: "0.0.0.0" },
 };
 
-/** The launchd agent `werkmeister setup` installs for {@link MCP} on macOS (SW-184; daemon_agent.ts). */
+/** The launchd agent `werkmeister machine setup` installs for {@link MCP} on macOS (SW-184; daemon_agent.ts). */
 export const DAEMON_LABEL = "com.werkmeister.daemon";
 
 export function daemonPlistPath(home = os.homedir()): string {
@@ -126,7 +126,7 @@ function kickstart(app: WebApp, restart: boolean): boolean {
   return true;
 }
 
-/** Every app `werkmeister connect` brings up (and `down`/`stop`/`restart` manage). */
+/** Every app `werkmeister infra connect` brings up (and `down`/`stop`/`restart` manage). */
 export const ALL: readonly WebApp[] = [DASHBOARD, MCP];
 
 function sleep(seconds: number): Promise<void> {
@@ -264,7 +264,7 @@ function distStale(app: WebApp): boolean {
  * True if the build was refreshed after the current server was launched.
  *
  * `start()` rewrites the PID file on every launch, so its mtime marks when the
- * live process began. A direct `pnpm run build` (outside `werkmeister connect`)
+ * live process began. A direct `pnpm run build` (outside `werkmeister infra connect`)
  * updates `dist/` without bouncing the server, leaving it serving a stale
  * bundle — this catches that: the build artifact newer than the PID file means
  * the running process predates the build. Best-effort: unknown → false (don't
@@ -330,7 +330,7 @@ function portOpen(port: number): Promise<boolean> {
  * reaches the parser and nothing else — a working server answers 401 (MCP's
  * token check) or 404 (dashboard).
  */
-async function serves(port: number): Promise<boolean> {
+export async function serves(port: number): Promise<boolean> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/__werkmeister-health`, {
       method: "POST",
@@ -361,7 +361,7 @@ export interface WebServerStatus {
   healthy: boolean;
 }
 
-/** Snapshot for `werkmeister status` (and its --json). */
+/** Snapshot for `werkmeister feature status` (and its --json). */
 export async function status(app: WebApp = DASHBOARD): Promise<WebServerStatus> {
   const [running, pid] = isRunning(app);
   return {
@@ -390,9 +390,9 @@ export function appEntry(app: WebApp): { dir: string; entry: string; bundled: bo
 /**
  * Build (optional) and start one web server.
  *
- * Non-fatal: on any failure it warns and returns false so `werkmeister connect`
+ * Non-fatal: on any failure it warns and returns false so `werkmeister infra connect`
  * still finishes bringing up the infra. With `force` it rebuilds and bounces
- * an already-running server (so `werkmeister connect` picks up code changes);
+ * an already-running server (so `werkmeister infra connect` picks up code changes);
  * without it, an already-running server that still serves is left as-is.
  */
 export async function start(
@@ -402,7 +402,7 @@ export async function start(
 ): Promise<boolean> {
   const [running, pid] = isRunning(app);
 
-  // Never bounce ourselves. `werkmeister connect` is a tool on apps/werkmeister-mcp, and it
+  // Never bounce ourselves. `werkmeister infra connect` is a tool on apps/werkmeister-mcp, and it
   // reaches infra.up() -> startAll(): a stale dist/ would otherwise make this
   // call SIGTERM the pid in the file, which is the process serving the request.
   if (running && pid === process.pid) {

@@ -2,7 +2,7 @@
 
 Only requests carrying `x-feature: <feature>` are rerouted; teammates and baseline dev
 traffic reach the cluster workload untouched. The intercept target is the container
-`werkmeister up` already published on the feature's slot port, so hot reload keeps working.
+`werkmeister feature up` already published on the feature's slot port, so hot reload keeps working.
 
 **Two daemon modes.** Telepresence has to get cluster traffic onto your laptop, and there
 are two places its daemon can live. [docs/topology.md](topology.md) draws the whole picture,
@@ -27,7 +27,7 @@ Switching modes means dropping the current daemon first:
 
 ```bash
 telepresence quit -s
-werkmeister intercept my-feature -s backend --docker-daemon
+werkmeister infra intercept my-feature -s backend --docker-daemon
 ```
 
 **On OrbStack** (the default `k8s_context`), docker mode works with no extra configuration.
@@ -43,16 +43,16 @@ Two details, both verified live rather than assumed:
 
 ```bash
 # Start the feature first (with backend in workspace.yml's services) — the local container is the intercept target
-werkmeister up my-feature
-werkmeister intercept my-feature -s backend --docker-daemon
+werkmeister feature up my-feature
+werkmeister infra intercept my-feature -s backend --docker-daemon
 
 # From inside the cluster: the header reaches your laptop, bare traffic does not
 kubectl run probe --rm -i --restart=Never --image=curlimages/curl:latest --quiet -- \
   curl -s -H "x-feature: my-feature" http://backend.default/
 
-werkmeister intercept my-feature --leave -s backend
+werkmeister infra intercept my-feature --leave -s backend
 ```
 
 A service can only be intercepted if it declares `k8s_deployment`, `k8s_namespace` and
-`k8s_port` in the registry; `werkmeister status --intercepts` reports what is interceptable and
+`k8s_port` in the registry; `werkmeister feature status --intercepts` reports what is interceptable and
 what is currently intercepted.

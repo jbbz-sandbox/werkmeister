@@ -23,9 +23,11 @@ function registeredCommands(): string[] {
   return (JSON.parse(res.stdout) as { name: string }[]).map((c) => c.name);
 }
 
-/** The first word after `werkmeister` in every backticked span of *source*. */
+/** The command after `werkmeister` in every backticked span of *source*: `<noun> <verb>` since SW-186. */
 function hintedCommands(source: string): string[] {
-  return [...source.matchAll(/`werkmeister ([a-z][a-z-]*)[^`]*`/g)].map((m) => m[1] as string);
+  return [...source.matchAll(/`werkmeister ([a-z][a-z-]*(?: [a-z][a-z-]*)?)[^`]*`/g)].map(
+    (m) => m[1] as string,
+  );
 }
 
 describe("migrate hints", () => {
@@ -37,6 +39,11 @@ describe("migrate hints", () => {
 
   it("names only registered CLI commands", () => {
     const registered = registeredCommands();
-    for (const name of hinted) expect(registered, `werkmeister ${name}`).toContain(name);
+    // `skills sync` is one command taking an action; `machine migrate` is a noun and verb.
+    for (const name of hinted)
+      expect(
+        registered.includes(name) || registered.includes(name.split(" ")[0] as string),
+        `werkmeister ${name}`,
+      ).toBe(true);
   });
 });

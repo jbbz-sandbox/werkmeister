@@ -4,7 +4,7 @@
  * A cache is data — a mount point, the env that points a tool at it, the
  * files that mean a repo uses that tool, and how to prune it — so a new
  * toolchain is a registry entry, not code. Compose generation reads it through
- * `applyCaches`; `werkmeister status` and `cache prune` read the same entries.
+ * `applyCaches`; `werkmeister feature status` and `cache prune` read the same entries.
  */
 
 import * as fs from "node:fs";

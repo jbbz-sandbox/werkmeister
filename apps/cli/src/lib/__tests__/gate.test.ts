@@ -34,7 +34,7 @@ afterEach(() => {
 
 function writeManifest(workspace: string, domains?: Record<string, unknown> | null): void {
   const manifest = {
-    generated_by: "werkmeister init-workspace",
+    generated_by: "werkmeister workspace init",
     universal: ["comments", "engineering"],
     domains:
       domains !== undefined

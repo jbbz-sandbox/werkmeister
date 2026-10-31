@@ -1,8 +1,8 @@
 /**
- * werkmeister up <feature>
+ * werkmeister feature up <feature>
  *
  * Starts containers for a feature workspace. Expects a compose.yml to
- * have been generated in the workspace root by 'werkmeister init-workspace'. If the
+ * have been generated in the workspace root by 'werkmeister workspace init'. If the
  * slot assigned at init time was released and is now taken by another feature,
  * the compose file is regenerated with a new slot before starting.
  *
@@ -11,7 +11,7 @@
  */
 
 import type { UpResult } from "werkmeister-core/lifecycle";
-import { up as upFeature } from "werkmeister-core/lifecycle";
+import { startService, up as upFeature } from "werkmeister-core/lifecycle";
 import { Colors, error, resolveWorkspace } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
@@ -23,7 +23,7 @@ function printSummary(result: UpResult): void {
   if (result.waiting !== undefined) {
     console.log(
       `\n${Colors.CYAN}${Colors.BOLD}=== Feature '${feature}' is waiting for capacity (position ${result.waiting}) ===${Colors.RESET}\n` +
-        "  It starts when another feature stops; `werkmeister status` shows the queue.\n",
+        "  It starts when another feature stops; `werkmeister feature status` shows the queue.\n",
     );
     return;
   }
@@ -51,14 +51,14 @@ function printSummary(result: UpResult): void {
   console.log(`  ${Colors.DIM}k8s services: (everything not listed above)${Colors.RESET}`);
   console.log();
   console.log(`  ${Colors.DIM}Useful commands:${Colors.RESET}`);
-  console.log("    werkmeister status            # view all features");
-  console.log(`    werkmeister logs ${feature}    # tail logs`);
-  console.log(`    werkmeister test ${feature}    # run Playwright tests`);
-  console.log(`    werkmeister down ${feature}    # tear down`);
+  console.log("    werkmeister feature status            # view all features");
+  console.log(`    werkmeister feature logs ${feature}    # tail logs`);
+  console.log(`    werkmeister feature test ${feature}    # run Playwright tests`);
+  console.log(`    werkmeister feature down ${feature}    # tear down`);
   console.log();
 }
 
-/** Execute the `werkmeister up <feature>` command. */
+/** Execute the `werkmeister feature up <feature>` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const dotenv = loadDotenv(process.cwd());
 
@@ -69,7 +69,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (feature === "infra") {
-    // `werkmeister up infra` is `werkmeister connect` — the command, not
+    // `werkmeister infra up` is `werkmeister infra connect` — the command, not
     // `werkmeister-core/infra`'s `up()`, because this path prints connect's whole
     // rendering (banner, health table, tools block) and `up()` returns before
     // any of it. Imported as a literal so tsc resolves it: this call lived in
@@ -82,6 +82,14 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   const workspace = resolveWorkspace(feature, (args.workspace as string | null) ?? null);
+
+  // SW-132: one service, started the way the PR gate starts it, including an on-demand one.
+  if (args.service) {
+    const service = args.service as string;
+    await startService(feature, workspace, service);
+    console.log(`${Colors.GREEN}Started ${feature}-${service}${Colors.RESET}`);
+    return;
+  }
 
   console.log(`\n${Colors.BOLD}=== werkmeister up: ${feature} ===${Colors.RESET}\n`);
   // The compose child inherits it; the template's idle gate reads it (SW-32).

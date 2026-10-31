@@ -72,7 +72,7 @@ interface LabelRow {
  *
  * The daemon already holds these as fields; `docker ps --format` only
  * flattened them to tabs for us to split back apart, and charged ~45ms of CLI
- * startup to do it (66ms shelled vs 21ms here, warmed). `werkmeister status`,
+ * startup to do it (66ms shelled vs 21ms here, warmed). `werkmeister feature status`,
  * `down` and `clean` each query twice, so each pays that twice.
  *
  * Returns `null` if the daemon is unreachable; `[]` if reachable but no
@@ -279,7 +279,7 @@ function allocateSlotHere(
       if (slot === null) {
         error(`All ${count} feature slots are occupied!`);
         throw new Error(
-          "No available slots. Stop an existing feature with 'werkmeister down <feature>' first.",
+          "No available slots. Stop an existing feature with 'werkmeister feature down <feature>' first.",
         );
       }
       if (leases[feature]?.slot !== slot) success(`Allocated slot ${slot} for '${feature}'`);
@@ -323,7 +323,7 @@ export async function requireLeasedSlot(
     const [other] = squatter;
     throw new SandboxError(
       `Slot ${lease.slot} is leased to '${feature}' but '${other}' has containers on it — ` +
-        `stop it or run 'werkmeister down ${other}'`,
+        `stop it or run 'werkmeister feature down ${other}'`,
       "SLOT_ALLOC",
     );
   }
@@ -526,7 +526,7 @@ export async function migrateSlotsJson(): Promise<void> {
       `~/.werkmeister/slots.json had features with no labeled containers: ` +
         `${orphans.join(", ")}`,
     );
-    warn("These are now forgotten — restart them with 'werkmeister up' to re-register.");
+    warn("These are now forgotten — restart them with 'werkmeister feature up' to re-register.");
   }
 
   info("Migrating: removing legacy ~/.werkmeister/slots.json (labels are now authoritative)");

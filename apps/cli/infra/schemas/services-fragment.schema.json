@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/jbbz-sandbox/werkmeister/main/apps/cli/infra/schemas/services-fragment.schema.json",
   "title": "Werkmeister service-registry fragment (<repo>/.werkmeister/services.yaml)",
-  "description": "A repo's slice of the service registry. `werkmeister registry sync` (run by `werkmeister setup`) merges every fragment under paths.repos_root into ~/.werkmeister/services.yaml. `{{home}}`, `{{repos_root}}`, `{{workspaces_root}}`, `{{werkmeister_home}}` and `{{local_domain}}` expand in any string at merge time. Mirrors the checks in packages/werkmeister-core/src/registry_sync.ts.",
+  "description": "A repo's slice of the service registry. `werkmeister registry sync` (run by `werkmeister machine setup`) merges every fragment under paths.repos_root into ~/.werkmeister/services.yaml. `{{home}}`, `{{repos_root}}`, `{{workspaces_root}}`, `{{werkmeister_home}}` and `{{local_domain}}` expand in any string at merge time. Mirrors the checks in packages/werkmeister-core/src/registry_sync.ts.",
   "type": "object",
   "properties": {
     "services": {
@@ -27,7 +27,7 @@
     },
     "repo": {
       "type": "object",
-      "description": "Settings for this repo as a whole; merged into `repos.<repo>` of the generated registry. Read by `werkmeister pr` and `werkmeister close-out` (docs/workspace-lifecycle.md).",
+      "description": "Settings for this repo as a whole; merged into `repos.<repo>` of the generated registry. Read by `werkmeister pr` and `werkmeister workspace close` (docs/workspace-lifecycle.md).",
       "properties": {
         "ship": {
           "enum": ["merge", "tag"],
@@ -157,7 +157,7 @@
         "secrets": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Keys `werkmeister up` requires in ~/.werkmeister/secrets.env, as `<SERVICE>__KEY` or plain `KEY`; delivered as plain `KEY` via the service's own `<workspace>/.env.<service>` env_file."
+          "description": "Keys `werkmeister feature up` requires in ~/.werkmeister/secrets.env, as `<SERVICE>__KEY` or plain `KEY`; delivered as plain `KEY` via the service's own `<workspace>/.env.<service>` env_file."
         },
         "depends_on": {
           "type": "array",
@@ -200,7 +200,7 @@
         },
         "k8s_deployment": {
           "type": "string",
-          "description": "Deployment `werkmeister intercept` targets."
+          "description": "Deployment `werkmeister infra intercept` targets."
         },
         "k8s_namespace": { "type": "string" },
         "k8s_port": {

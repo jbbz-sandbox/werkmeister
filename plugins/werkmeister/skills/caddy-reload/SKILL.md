@@ -1,17 +1,17 @@
 ---
 name: caddy-reload
-description: "Safely reload the Caddy proxy configuration with validation and smoke testing. Use after editing ~/.werkmeister/infra/proxy/Caddyfile, after running `werkmeister proxy-reload`, or when the Caddyfile on disk has been updated but Caddy is still serving old config. Validates config, counts compiled routes to detect silent drops, reloads, and smoke tests key URLs."
+description: "Safely reload the Caddy proxy configuration with validation and smoke testing. Use after editing ~/.werkmeister/infra/proxy/Caddyfile, after running `werkmeister infra proxy-reload`, or when the Caddyfile on disk has been updated but Caddy is still serving old config. Validates config, counts compiled routes to detect silent drops, reloads, and smoke tests key URLs."
 ---
 
 # caddy-reload
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
 Safely reload Caddy with validation and smoke tests.
 
-## Step 0: Prefer `werkmeister proxy-reload` (primary path)
+## Step 0: Prefer `werkmeister infra proxy-reload` (primary path)
 
-`werkmeister proxy-reload` runs a CLI-native pipeline internally
+`werkmeister infra proxy-reload` runs a CLI-native pipeline internally
 (`werkmeister-core/caddy.ts::reloadCaddy`) that already does the
 `docker cp` -> structural lint (advisory) -> `caddy adapt` (validates AND
 yields the compiled route count in one call) -> compare against a
@@ -23,16 +23,16 @@ failed adapt.
 **Your first move for "Caddyfile changed, need to reload" should be:**
 
 ```bash
-werkmeister proxy-reload
+werkmeister infra proxy-reload
 ```
 
 Read its output. If it reports success, you're done -- skip the rest of this
 skill. If it reports a route-count drop or an adapt failure, it already named
 the problem; go fix the Caddyfile (see the handle-vs-route gotcha in
-`CLAUDE.md`) and re-run `werkmeister proxy-reload`, rather than falling through to
+`CLAUDE.md`) and re-run `werkmeister infra proxy-reload`, rather than falling through to
 the manual steps below.
 
-Only use the manual procedure below (Steps 1-5) when `werkmeister proxy-reload`
+Only use the manual procedure below (Steps 1-5) when `werkmeister infra proxy-reload`
 itself is broken or unavailable -- e.g. a CLI bug, or you need to push and
 reload a hand-edited Caddyfile outside the generator. This manual path stays
 independent of the reload *pipeline* (`reloadCaddy`), but the route counting
@@ -44,7 +44,7 @@ number.
 Copy into container (avoids Docker Desktop VirtioFS sync lag) and validate.
 This uses `/tmp/Caddyfile.new` rather than the CLI's `/tmp/Caddyfile` path
 specifically so a manual reload never collides with a concurrently running
-`werkmeister proxy-reload` (which owns `/tmp/Caddyfile`):
+`werkmeister infra proxy-reload` (which owns `/tmp/Caddyfile`):
 
 ```bash
 CFG="${WERKMEISTER_CONFIG_FILE:-$HOME/.werkmeister/config.yaml}"
@@ -70,7 +70,7 @@ console.log('Compiled routes:', Object.values(servers).reduce((n,sv)=>n+walk(sv.
 This mirrors the CLI's canonical counter
 (`werkmeister-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
 leaf, across **all** compiled servers, not just `srv0`), so the manual path
-and `werkmeister proxy-reload` agree on the number. The CLI ships as one bundle
+and `werkmeister infra proxy-reload` agree on the number. The CLI ships as one bundle
 with no importable `dist/lib/caddy.js`, so the walk is inlined here.
 
 **Expected:** compare the printed compiled count against the number of
@@ -99,13 +99,13 @@ The ingress host is configured per machine — never hardcode it. Derive it from
 
 ```bash
 DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.werkmeister/config.yaml 2>/dev/null | head -1)
-SERVICE=frontend   # the routed service under test; `werkmeister services <feature>` lists them
+SERVICE=frontend   # the routed service under test; `werkmeister feature services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
 curl -sk -o /dev/null -w "homepage: HTTP %{http_code} | Size: %{size_download}\n" "$BASE/"
 ```
 
-Smoke-test every hostname the reload affects, not just one — `werkmeister services
+Smoke-test every hostname the reload affects, not just one — `werkmeister feature services
 <feature>` lists the routed endpoints for the feature you just reloaded.
 
 **Critical:** Any `Size: 0` when the service is known healthy means the reload introduced a routing bug. Report immediately.

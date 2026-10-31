@@ -5,7 +5,7 @@ description: "Trace a specific URL through the full routing chain to identify wh
 
 # routing-test
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
 Trace a URL through the full routing chain. The user provides a URL (full or relative path). If no URL is provided, ask for one.
 
@@ -14,11 +14,11 @@ Trace a URL through the full routing chain. The user provides a URL (full or rel
 Routing is per-hostname, not per-path: Caddy terminates each service's public
 hostname directly. The service handling a URL is the one whose `feature_router:`
 block in `~/.werkmeister/services.yaml` owns that hostname — so read the host from
-the URL and match it there. `werkmeister services <feature>` lists the routed
+the URL and match it there. `werkmeister feature services <feature>` lists the routed
 services for a running feature.
 
 Derive the feature's host ports from its slot — do NOT assume slot 1. Get the
-slot from `werkmeister status --json` (each entry in `features` has `slot`; slots
+slot from `werkmeister feature status --json` (each entry in `features` has `slot`; slots
 are Docker-label-derived, there is no registry file), then:
 
 ```bash
@@ -27,7 +27,7 @@ PORT=$((BASE + OFFSET))              # OFFSET = the service's `port_offset`
 ```
 
 `port_offset` per service lives in `~/.werkmeister/services.yaml` (written by
-`werkmeister setup`).
+`werkmeister machine setup`).
 
 ## Step 2: Test Direct to Expected Service
 
@@ -41,7 +41,7 @@ Report: HTTP status, content-type, content-length/transfer-encoding, any redirec
 
 The ingress host is configured per machine — never hardcode it. Derive it from
 `ingress.local_domain` in `~/.werkmeister/config.yaml` plus the routed service name
-(`werkmeister services <feature>` lists them):
+(`werkmeister feature services <feature>` lists them):
 
 ```bash
 DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.werkmeister/config.yaml 2>/dev/null | head -1)

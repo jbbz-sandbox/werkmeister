@@ -1,0 +1,79 @@
+.TH WERKMEISTER-INFRA-INTERCEPT 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-infra\-intercept \- Route header\-scoped k8s dev traffic to a local service (Telepresence OSS).
+.SH SYNOPSIS
+\fBwerkmeister infra intercept\fR [feature]
+.SH OPTIONS
+.TP
+\fB\-s, \-\-service <name>\fR
+Local service to intercept (must be in the workspace's SERVICES and running via \fBwerkmeister feature up\fR).
+.TP
+\fB\-\-leave\fR
+End the intercept for \-s (or all of this feature's intercepts without \-s).
+.TP
+\fB\-\-status\fR
+Show telepresence connection and intercept status.
+.TP
+\fB\-\-docker\-daemon\fR
+Run the telepresence daemon in a container (connect \-\-docker) — avoids the host TUN device, its sudo prompt, and VPN routing conflicts. In exchange the host loses cluster DNS: nothing on your laptop resolves \e<svc>.\e<ns> while connected this way.
+.TP
+\fB\-\-workspace <path>\fR
+Explicit workspace path (default: resolve from the feature name).
+.SH DESCRIPTION
+.PP
+Only requests carrying \fBx\-feature: <feature>\fR are rerouted; teammates and baseline dev traffic reach the cluster workload untouched. The intercept target is the container \fBwerkmeister feature up\fR already published on the feature's slot port, so hot reload keeps working.
+.PP
+\fBTwo daemon modes.\fR Telepresence has to get cluster traffic onto your laptop, and there are two places its daemon can live. docs/topology.md draws the whole picture, including what changes when the cluster is a managed one in the cloud.
+.PP
+.nf
+| | host mode (default) | \fB\-\-docker\-daemon\fR |
+.fi
+.nf
+| Asks for your password | \fBYes\fR — root creates a TUN device, writes \fB/etc/resolver/*\fR, adds routes | \fBNo\fR |
+.fi
+.nf
+| Cluster DNS on the host (\fBbackend.default\fR resolves in your shell) | Yes | \fBNo\fR |
+.fi
+.nf
+| VPN routing conflicts | Possible — both want the routing table | Avoided |
+.fi
+.nf
+| Requires a working Docker | Only for your services | Yes, for the daemon too |
+.fi
+.PP
+The password prompt is telepresence's own \fBsudo\fR, not Werkmeister's. It comes once per root daemon lifetime — until \fBtelepresence quit \-s\fR or a reboot — not once per intercept.
+.PP
+Pick host mode when you want to \fBcurl backend.default\fR or point host\-side tooling at cluster names. Pick \fB\-\-docker\-daemon\fR when the password prompt or a VPN is in your way, and accept that cluster names resolve nowhere on the host while it is connected. Traffic flowing cluster → laptop, which is what an intercept is for, behaves identically in both.
+.PP
+Switching modes means dropping the current daemon first:
+.PP
+.nf
+.RS 4
+telepresence quit \-s
+werkmeister infra intercept my\-feature \-s backend \-\-docker\-daemon
+.RE
+.fi
+.PP
+\fBOn OrbStack\fR (the default \fBk8s_context\fR), docker mode works with no extra configuration. Two details, both verified live rather than assumed:
+.IP \(bu 3
+The kubeconfig points at \fBhttps://127.0.0.1:26443\fR, which inside a container would be the container itself. Telepresence ≥ 2.31 rewrites it to \fBhost.docker.internal\fR on its own, and OrbStack's API certificate already covers that name — so \fBconnect \-\-docker\fR needs no \fB\-\-server\fR override.
+.IP \(bu 3
+The intercept does need \fB\-\-address host.docker.internal\fR, which the CLI passes for you. Without it telepresence forwards to \fB127.0.0.1\fR *inside the daemon container*, and the cluster's request dies as \fB{"error":"EOF"}\fR while your local container sits idle.
+.PP
+.nf
+.RS 4
+# Start the feature first (with backend in workspace.yml's services) — the local container is the intercept target
+werkmeister feature up my\-feature
+werkmeister infra intercept my\-feature \-s backend \-\-docker\-daemon
+
+# From inside the cluster: the header reaches your laptop, bare traffic does not
+kubectl run probe \-\-rm \-i \-\-restart=Never \-\-image=curlimages/curl:latest \-\-quiet \-\- \e
+  curl \-s \-H "x\-feature: my\-feature" http://backend.default/
+
+werkmeister infra intercept my\-feature \-\-leave \-s backend
+.RE
+.fi
+.PP
+A service can only be intercepted if it declares \fBk8s_deployment\fR, \fBk8s_namespace\fR and \fBk8s_port\fR in the registry; \fBwerkmeister feature status \-\-intercepts\fR reports what is interceptable and what is currently intercepted.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

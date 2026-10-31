@@ -8,7 +8,7 @@ Origin: the ui-surfaces spike, tracked in Jira [SW-43](https://jory-group.atlass
 
 | Surface | Code | Renders with | Density |
 |---|---|---|---|
-| **Dashboard** | `apps/werkmeister-dashboard` (browser page, `werkmeister dashboard`) | DOM | full |
+| **Dashboard** | `apps/werkmeister-dashboard` (browser page, `werkmeister internal dashboard`) | DOM | full |
 | **MCP App** | the same modules, served as `ui://` resources inside Claude Desktop | DOM, host theme | full (≤720px) |
 | **Pane** | `plugins/werkmeister/hooks/register.tsx` | Claude Code's `Box` / `Text` / `Button` | compact |
 | **VS Code** | `packages/werkmeister-vscode` | native TreeView: label, description, Markdown tooltip, codicons | compact |
@@ -145,7 +145,7 @@ Defaults that don't depend on the current directory (`work_type`, `context_strat
 
 ## One MCP server
 
-`apps/werkmeister-mcp` (server `werkmeister`) is the only MCP server, and `plugins/werkmeister/.mcp.json` launches it. The dashboard's server (`workspaces`, `apps/werkmeister-dashboard/src/server.ts`) is gone; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/werkmeister-mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister mcp`) and HTTP :3002 with the bearer token. Details: SW-48. <!-- docs-check: ignore -->
+`apps/werkmeister-mcp` (server `werkmeister`) is the only MCP server, and `plugins/werkmeister/.mcp.json` launches it. The dashboard's server (`workspaces`, `apps/werkmeister-dashboard/src/server.ts`) is gone; the dashboard keeps only its localhost browser page and the `--browser-form` page, and its `/api/tool` calls `apps/werkmeister-mcp`'s `createServer()` in process. Both transports carry every tool: stdio (`werkmeister internal mcp`) and HTTP :3002 with the bearer token. Details: SW-48. <!-- docs-check: ignore -->
 
 | Merged tool | `workspaces` (dashboard) today | `werkmeister` (apps/werkmeister-mcp) today |
 |---|---|---|

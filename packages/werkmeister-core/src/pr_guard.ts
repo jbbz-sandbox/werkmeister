@@ -1,5 +1,5 @@
 /**
- * `werkmeister hooks pr-guard` — PreToolUse hook installed in every workspace
+ * `werkmeister internal pr-guard` — PreToolUse hook installed in every workspace
  * (hooks_gen.ts). Inside a workspace, a PR opens only through `werkmeister pr
  * open`, which runs the gate and records the URL; this denies the other ways
  * in — `gh pr create` in Bash (what `/create-pr` and

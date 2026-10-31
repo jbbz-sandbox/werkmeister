@@ -6,7 +6,7 @@ export function renderIssueRef(issue: IssueRef): string {
   const title = issue.title ? `: ${issue.title}` : "";
   const copy = issue.fetchedAt
     ? `Copy taken ${issue.fetchedAt.slice(0, 10)}: \`.werkmeister/issue.md\`.`
-    : "No stored copy; run `werkmeister init-workspace --refresh-issue`.";
+    : "No stored copy; run `werkmeister workspace init --refresh-issue`.";
   return [
     "## Issue",
     "",

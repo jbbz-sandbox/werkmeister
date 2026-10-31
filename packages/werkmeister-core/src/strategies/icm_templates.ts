@@ -48,11 +48,11 @@ export interface Stage {
   contract(v: IcmVars): Contract;
 }
 
-// SW-135: a container that never started has no `pnpm` in /opt/werkmeister-tools until `werkmeister up`
+// SW-135: a container that never started has no `pnpm` in /opt/werkmeister-tools until `werkmeister feature up`
 // bootstraps it, so `docker restart` on it loops on "pnpm: not found".
 const RELOAD_RULE =
-  "If the container is not running, run `werkmeister up` once first; `docker restart` only reloads one that is already running. " +
-  "Never run `werkmeister restart` or `werkmeister init-workspace` to reload — " +
+  "If the container is not running, run `werkmeister feature up` once first; `docker restart` only reloads one that is already running. " +
+  "Never run `werkmeister feature restart` or `werkmeister workspace init` to reload — " +
   "they are slower, and init rewrites the stage contracts.";
 
 // SW-143: a library or CLI has nothing to restart. How to exercise one is the service's (or its archetype's)
@@ -113,7 +113,7 @@ const propose: Stage = {
       "`output/pr-<worktree>.md` per repo",
     ],
     humanCheck:
-      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `werkmeister pr open` runs the gate and opens it. Merging is yours. After the release, `werkmeister pr status`, then the post-mortem (`postmortem` skill), then ask the person before `werkmeister close-out`. Code written after a PR merged (e.g. found at release) is a follow-up: `werkmeister pr new <worktree> --slug <slug>`.",
+      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `werkmeister pr open` runs the gate and opens it. Merging is yours. After the release, `werkmeister pr status`, then the post-mortem (`postmortem` skill), then ask the person before `werkmeister workspace close`. Code written after a PR merged (e.g. found at release) is a follow-up: `werkmeister pr new <worktree> --slug <slug>`.",
     selfCheck:
       "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `werkmeister pr open`. Stop at the PR URL. Merging is the person's.",
   }),
@@ -407,7 +407,7 @@ const spike: Stage[] = [
         "`output/pr-<worktree>.md` per repo — only when the brief asks for a repo deliverable",
       ],
       humanCheck:
-        "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here. If there is a `pr-*.md`, set `status: approved`; `werkmeister pr open` runs the gate and opens it, and close-out waits for it to ship. Otherwise, when the recommendation is recorded where it is needed, the post-mortem (`postmortem` skill), then `werkmeister close-out`.",
+        "Read `findings.md`. The recommendation becomes the brief of the next workspace, or the spike ends here. If there is a `pr-*.md`, set `status: approved`; `werkmeister pr open` runs the gate and opens it, and close-out waits for it to ship. Otherwise, when the recommendation is recorded where it is needed, the post-mortem (`postmortem` skill), then `werkmeister workspace close`.",
     }),
   },
 ];

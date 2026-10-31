@@ -1,0 +1,20 @@
+.TH WERKMEISTER-BUDGET 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-budget \- The scheduler's budget, the slots held and the features Waiting for room
+.SH SYNOPSIS
+\fBwerkmeister budget\fR [command]
+.SH DESCRIPTION
+.PP
+Shows the scheduler's budget and who is using it: the memory and CPUs a feature's containers may take in total (\fBbudget:\fR in \fB~/.werkmeister/config.yaml\fR, else the Docker engine's memory less 1 GiB and every CPU), the host\-load ceiling the PR gate waits under, whether a person's \fBfeature up\fR may preempt an autonomous run, the features holding a slot, and the features \fBWaiting\fR for room in the order they will start.
+.PP
+It reads only: with the host daemon up it asks the daemon for the queue, otherwise it reads \fB~/.werkmeister/scheduler/\fR itself.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister budget status
+werkmeister budget status \-\-json
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

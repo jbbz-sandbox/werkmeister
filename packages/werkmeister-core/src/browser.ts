@@ -45,9 +45,9 @@ export function cookieDomain(): string {
 // Browser choice
 // --------------------------------------------------------------------------
 /**
- * Browsers `werkmeister setup` can offer for `werkmeister open`.
+ * Browsers `werkmeister machine setup` can offer for `werkmeister feature open`.
  *
- * `werkmeister open` drives the Chrome DevTools Protocol (CDP) over a raw
+ * `werkmeister feature open` drives the Chrome DevTools Protocol (CDP) over a raw
  * websocket -- only Chromium-engine browsers speak that. Firefox
  * (WebDriver BiDi) and the WebKit browsers (Safari, DuckDuckGo) are listed
  * so they show up as recognized choices, but picking one is a clear error
@@ -99,10 +99,10 @@ export const BROWSERS: Record<string, BrowserSpec> = {
 
 export const DEFAULT_BROWSER = "chrome";
 
-/** `werkmeister setup` prompt for `overrides.browser`. */
+/** `werkmeister machine setup` prompt for `overrides.browser`. */
 export const BROWSER_PROMPT: PromptSpec = {
   key: "browser",
-  label: "Browser for `werkmeister open`",
+  label: "Browser for `werkmeister feature open`",
   help:
     "Chromium browsers (chrome, chromium, brave, edge) work via CDP; safari works via " +
     "Apple's bundled safaridriver. Firefox/DuckDuckGo are listed for visibility but " +
@@ -137,9 +137,9 @@ export function resolveBrowserBinary(): string | null {
     const engineName = spec.engine === "webkit" ? "WebKit" : "Gecko";
     const chromiumChoices = Object.keys(BROWSERS).filter((k) => BROWSERS[k].engine === "chromium");
     error(
-      `${spec.label} uses ${engineName}, not Chromium -- \`werkmeister open\` only speaks the ` +
+      `${spec.label} uses ${engineName}, not Chromium -- \`werkmeister feature open\` only speaks the ` +
         `Chrome DevTools Protocol, which just Chromium-based browsers support. ` +
-        `Run \`werkmeister setup\` and pick one of: ${chromiumChoices.join(", ")}.`,
+        `Run \`werkmeister machine setup\` and pick one of: ${chromiumChoices.join(", ")}.`,
     );
     return null;
   }
@@ -589,7 +589,7 @@ function wantsSafari(): boolean {
  * A launched, tagged browser window, handed back once it is up.
  *
  * The split exists because the two callers want opposite things from the same
- * window: `werkmeister open` blocks on it and cleans up on Ctrl-C, while an
+ * window: `werkmeister feature open` blocks on it and cleans up on Ctrl-C, while an
  * in-process caller (the MCP server's open-feature tool) must return
  * immediately and let the window outlive the call. Both still need
  * {@link supervise} to run for the window's life — that is what keeps tabs
@@ -650,7 +650,7 @@ async function launchChromiumWindow(
   if (!fs.existsSync(CHROME)) {
     error(
       `Browser not found at ${CHROME} (set CHROME_BIN, or overrides.browser_path in ` +
-        "config.yaml, to override -- or run `werkmeister setup` to pick an installed browser)",
+        "config.yaml, to override -- or run `werkmeister machine setup` to pick an installed browser)",
     );
     return null;
   }
@@ -678,7 +678,7 @@ async function launchChromiumWindow(
   // Detached so the window survives the launcher: an in-process caller (the MCP
   // server) hands the window to a human and then returns, and a SIGTERM to that
   // server's process group must not take the browser with it. `cleanup()` kills
-  // the pid explicitly, so `werkmeister open`'s Ctrl-C still closes it.
+  // the pid explicitly, so `werkmeister feature open`'s Ctrl-C still closes it.
   const proc: ChildProcess = spawn(CHROME, chromeArgs, { stdio: "ignore", detached: true });
   proc.unref();
   let procExited = false;

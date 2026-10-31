@@ -1,11 +1,11 @@
 ---
 name: w9r-author
-description: "Fill in a scaffolded standards graduation after `werkmeister notes graduate` or `werkmeister down` has created a placeholder. Use when asked to 'graduate this note', 'fill in the standards scaffold', or finish a TODO(graduate) marker left by graduation."
+description: "Fill in a scaffolded standards graduation after `werkmeister notes graduate` or `werkmeister feature down` has created a placeholder. Use when asked to 'graduate this note', 'fill in the standards scaffold', or finish a TODO(graduate) marker left by graduation."
 ---
 
 # w9r-author — fill in a graduation scaffold
 
-`werkmeister notes graduate` / `werkmeister down` do the mechanical part: they scaffold
+`werkmeister notes graduate` / `werkmeister feature down` do the mechanical part: they scaffold
 placeholder content and wire the structural links, then mark the source
 `decision` note `status: graduated` with a `graduated_to:` path. They never
 write the actual prose — that judgment call is this skill's job.

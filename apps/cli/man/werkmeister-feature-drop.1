@@ -1,0 +1,18 @@
+.TH WERKMEISTER-FEATURE-DROP 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-feature\-drop \- Stop a local service, fall back to k8s
+.SH SYNOPSIS
+\fBwerkmeister feature drop\fR <feature> <service>
+.SH DESCRIPTION
+.PP
+Removes the service from the feature's local stack. The service will now be served from k8s. Config files are regenerated and Caddy is reloaded.
+.PP
+If removing the last service, the feature's containers are fully stopped (though the slot remains allocated — use \fBwerkmeister feature down\fR to release it).
+.PP
+.nf
+.RS 4
+werkmeister feature drop my\-feature frontend
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

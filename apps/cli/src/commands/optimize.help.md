@@ -5,6 +5,6 @@ Compares running containers' actual usage with their configured limits, shows wh
 ## Examples
 
 ```bash
-werkmeister optimize              # analyze current usage against the limits
-werkmeister optimize --collect 5  # collect for 5 minutes first, then analyze
+werkmeister machine optimize              # analyze current usage against the limits
+werkmeister machine optimize --collect 5  # collect for 5 minutes first, then analyze
 ```

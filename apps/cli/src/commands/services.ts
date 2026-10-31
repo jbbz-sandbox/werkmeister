@@ -1,5 +1,5 @@
 /**
- * werkmeister services <feature>
+ * werkmeister feature services <feature>
  *
  * List all services for a feature with their endpoints -- whether they
  * are running locally (with port) or via k8s port-forward.
@@ -39,7 +39,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     // fair question, and the answer is "start it". Every other code propagates.
     if (e instanceof SandboxError && e.code === "NOT_RUNNING") {
       warn(e.message);
-      info("Start it with: werkmeister up " + feature);
+      info("Start it with: werkmeister feature up " + feature);
       console.log();
       return;
     }

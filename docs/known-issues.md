@@ -7,10 +7,10 @@ Tracked concurrency and isolation issues in Werkmeister.
 ## Werkmeister Env Vars in `.zshrc` Are Invisible to Non-Interactive Shells
 
 **Severity:** Moderate (breaks tooling, easy to misdiagnose)
-**Status:** Resolved by tooling — `werkmeister config --write` writes `~/.zshenv` for you
+**Status:** Resolved by tooling — `werkmeister machine config --write` writes `~/.zshenv` for you
 **Affects:** Shell setup / installation (`WERKMEISTER_WORKSPACES_ROOT`, `WERKMEISTER_ROOT`)
 
-`werkmeister config --write` manages a marked block in `~/.zshenv` that sources
+`werkmeister machine config --write` manages a marked block in `~/.zshenv` that sources
 `~/.werkmeister/env.sh` (`zshenvPath()` / the managed-block markers in
 `packages/werkmeister-core/src/global_config.ts`), and strips the old hardcoded exports it
 finds there. So a fresh install no longer hits this. The rest of the entry is kept
@@ -24,7 +24,7 @@ cron jobs, CI runners, editor "run task" integrations, MCP servers — sources
 `~/.zshenv` instead and never sees these exports.
 
 **Symptoms:**
-- `werkmeister init-workspace` (or other `werkmeister` subcommands) run by an agent or
+- `werkmeister workspace init` (or other `werkmeister` subcommands) run by an agent or
   automation fails with:
   `[err]  Not inside a workspace (checked: /Users/<you>/workspace) and no parent .git directory found.`
   even though it works fine when *you* run it in your terminal.
@@ -49,7 +49,7 @@ and `docker compose` interpolation may rely on the exported value, so set it in
 `.zshenv` for consistency.
 
 **Workaround (one-off):** Prefix the invocation with the var, e.g.
-`WERKMEISTER_WORKSPACES_ROOT="$HOME/.vibe-kanban-workspaces" werkmeister init-workspace`.
+`WERKMEISTER_WORKSPACES_ROOT="$HOME/.vibe-kanban-workspaces" werkmeister workspace init`.
 
 ---
 
@@ -104,7 +104,7 @@ Each forward now gets the probe its `health_endpoint` names — `redis-cli ping`
 an HTTP GET, or a bare connect for anything that names nothing
 ([probe.sh](../apps/cli/infra/compose/k8s-port-forward/probe.sh)). The entrypoint's monitor
 and the compose healthcheck both call it, so a dead forward is restarted within ~45s and
-reads unhealthy until it is. `werkmeister status` and the dashboard use the matching
+reads unhealthy until it is. `werkmeister feature status` and the dashboard use the matching
 `checkWireHealth` in werkmeister-core.
 
 **If it hangs anyway** (a forward wedged inside that 45s window, or a datastore that names
@@ -137,7 +137,7 @@ In standalone mode, all features share the same source code checkout. Two featur
 
 The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in the same browser. Users testing multiple features simultaneously need separate browser profiles or use the `X-Feature` HTTP header directly (e.g., via ModHeader browser extension).
 
-**Easiest workaround:** `werkmeister open <feature>` launches an isolated incognito Chrome (its own throwaway profile) with the cookie already set and the window tagged `[feature]`, so each feature gets its own window with no cookie collision.
+**Easiest workaround:** `werkmeister feature open <feature>` launches an isolated incognito Chrome (its own throwaway profile) with the cookie already set and the window tagged `[feature]`, so each feature gets its own window with no cookie collision.
 
 ---
 
@@ -147,7 +147,7 @@ The `X-Feature` cookie is set with `path=/`, meaning it applies to all tabs in t
 **Status:** Resolved
 **Affects:** `packages/werkmeister-core/src/compose.ts` — `composeDown()`
 
-`werkmeister down` preserves per-feature Docker volumes by default (for faster subsequent startups). Use `werkmeister down --volumes` to remove them, or `werkmeister clean` to bulk-remove orphaned volumes from stopped features.
+`werkmeister feature down` preserves per-feature Docker volumes by default (for faster subsequent startups). Use `werkmeister feature down --volumes` to remove them, or `werkmeister machine clean` to bulk-remove orphaned volumes from stopped features.
 
 ---
 
@@ -310,7 +310,7 @@ needs.
 
 `werkmeister_root` is a single machine-global pointer at one CLI checkout (here,
 `<werkmeister-checkout>/apps/cli`). It ranks above the walk-up in `resolveSandboxBin`
-and is what `infraRoot()` resolves from — so **whichever install ran `werkmeister config --write` last
+and is what `infraRoot()` resolves from — so **whichever install ran `werkmeister machine config --write` last
 wins**, and a second checkout (or a feature worktree, or an `npx` install) silently starts
 serving `infra/` out of the other one.
 
@@ -318,7 +318,7 @@ Generated state used to live *inside* that package tree: `apps/cli/infra/proxy/C
 and `apps/cli/infra/proxy/ui/features.json` were gitignored build products under a <!-- docs-check: ignore -->
 directory that ships in the published package, so reinstalling or upgrading
 `werkmeister` could discard or stale them. Resolved 2026-10-01: everything
-`werkmeister connect` generates now lives under `~/.werkmeister/infra/`
+`werkmeister infra connect` generates now lives under `~/.werkmeister/infra/`
 (`docs/superpowers/specs/2026-10-01-generated-state-dir-design.md` at 66703fc).
 
 **Fix direction:** generated artifacts belong under `~/.werkmeister/` (like `services.yaml` and
@@ -331,7 +331,7 @@ locate templates, not mutable state.
 
 **Severity:** Moderate (wastes the first agent turn on every workspace)
 **Status:** Open
-**Affects:** `werkmeister workspace` / `werkmeister init-workspace` (`--task`, `--description`, `--starting-prompt`), the CLAUDE.md template, `w9r-research`
+**Affects:** `werkmeister workspace new` / `werkmeister workspace init` (`--task`, `--description`, `--starting-prompt`), the CLAUDE.md template, `w9r-research`
 
 Observed in the JIT-vs-ICM comparison run of 2026-09-27 (`jit-ws2`, claude-sonnet-5, headless `claude -p`; per-turn JSON in `~/features/runs/jit-ws2/`, write-up in `~/features/COMPARISON.md`).
 
@@ -411,9 +411,9 @@ Left over from the final review of the work-type phase gate
 **Affects:** `packages/werkmeister-core/{compose,lifecycle,hooks_gen}.ts`
 
 `composeDown()` returns false when `docker compose down` fails (true only for a feature with no
-compose file, which it now checks itself), and `lifecycle.down`, `werkmeister remove`, and
-`werkmeister clean` warn on it. The volumes line reads "Per-feature Docker volumes will be removed".
-`lifecycle.up` calls the workspace strategy's `refresh` on every `werkmeister up` (which for `jit`
+compose file, which it now checks itself), and `lifecycle.down`, `werkmeister feature drop`, and
+`werkmeister machine clean` warn on it. The volumes line reads "Per-feature Docker volumes will be removed".
+`lifecycle.up` calls the workspace strategy's `refresh` on every `werkmeister feature up` (which for `jit`
 re-merges the hooks), so a stale hook is reconciled the next time the feature starts.
 
 Code that used to be a CLI command and is now a library function still reads like a command
@@ -423,7 +423,7 @@ in three places:
 |---|---|
 | `compose.ts` — `composeDown()` | Returns a success `boolean` that **all three callers discard** (`lifecycle.ts:381`, `commands/remove.ts:72`, `commands/clean.ts:119`). A teardown that failed is indistinguishable from one that worked. |
 | `lifecycle.ts:377` | Emits `info("--volumes: per-feature Docker volumes will be removed")` — a **CLI flag name** in library output, so the dashboard shows a flag its user never typed. |
-| `hooks_gen.ts` — `writeWorkspaceHooks()` | Called only from `initWorkspace`. A workspace created before a hook-template change keeps the stale hook until someone re-runs `werkmeister init-workspace` there by hand; nothing reconciles it. |
+| `hooks_gen.ts` — `writeWorkspaceHooks()` | Called only from `initWorkspace`. A workspace created before a hook-template change keeps the stale hook until someone re-runs `werkmeister workspace init` there by hand; nothing reconciles it. |
 
 ---
 
@@ -439,7 +439,7 @@ Cleanup (kill the browser, remove the throwaway `--user-data-dir`) lives in `sup
 `finally`, which only runs if the caller is still alive when the window closes.
 
 So a long-lived caller that exits first — an MCP server restart, say — leaves the profile
-directory behind. The spawned `werkmeister open` child this replaced owned its own cleanup and
+directory behind. The spawned `werkmeister feature open` child this replaced owned its own cleanup and
 did it regardless.
 
 **Not a leak of anything sensitive:** the profile is a throwaway created per launch under
@@ -578,6 +578,6 @@ Each cache used to be wired by hand, per tool and per service: turbo as a host d
 - **Attachment:** a service gets every cache whose `detect` file is in its directory or a parent up to its repo root, plus its archetype's `caches`. Its own `caches:` list replaces both, and `[]` opts out. Its setup service gets the union, so the install fills the store the apps read.
 - **Storage:** a shared named volume (`werkmeister-<key>` unless `volume:` names one). `host:` is the explicit opt-out.
 - **Per workspace:** `ensureSharedVolumes()` creates only the volumes the workspace's generated compose marks `external`.
-- **Visible and bounded:** `werkmeister status` lists each cache's size and age; `werkmeister cache prune [name]` applies `max_age` or `prune`, and `--reset` empties a cache.
+- **Visible and bounded:** `werkmeister feature status` lists each cache's size and age; `werkmeister cache prune [name]` applies `max_age` or `prune`, and `--reset` empties a cache.
 
 **Still not covered:** install flags such as Yarn 1's `--mutex`, and yarn or bun installs in `werkmeister-install`, which runs pnpm or npm only. The built-in fallback compose (used only when the template is missing) still renders no service `environment:`, so a cache's env applies through the template only.

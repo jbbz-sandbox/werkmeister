@@ -16,7 +16,7 @@ Each term means one thing here.
 | **Merge** | the person merges the PR |
 | **Ship** | the merge is part of a release — the work is done here |
 | **Verify** | checking the change in production. Defined, not built. |
-| **Close out** | `werkmeister close-out`: record, close the issue, remove the workspace, delete merged branches |
+| **Close out** | `werkmeister workspace close`: record, close the issue, remove the workspace, delete merged branches |
 
 ## States
 
@@ -142,10 +142,10 @@ repo:
 | `werkmeister pr new <worktree> --slug <slug>` | after that worktree's PRs merged: cut `<branch>-<slug>` from `origin/<base>` and write a draft `pr-<worktree>-<slug>.md` ([Follow-up PR](#follow-up-pr)) |
 | `werkmeister issue start` | the first stage or phase began: move the workspace's issue to `in_progress` ([Issue status](#issue-status)) |
 | `werkmeister pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. When `pr-<repo>.md` is taken, writes `pr-<repo>-<number>.md` with `worktree: <repo>`. Refuses if a PR file already has that PR's URL, or the PR closed unmerged. |
-| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). `werkmeister setup` offers to run it every 10 minutes (launchd on macOS, a crontab line elsewhere). `werkmeister pr watch --install` / `--uninstall` add or remove that schedule directly. Logs: `~/.werkmeister/pr-watch.log` |
+| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). `werkmeister machine setup` offers to run it every 10 minutes (launchd on macOS, a crontab line elsewhere). `werkmeister pr watch --install` / `--uninstall` add or remove that schedule directly. Logs: `~/.werkmeister/pr-watch.log` |
 | `werkmeister pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
-| `werkmeister close-out [name] [--abandon "<reason>"]` | end the workspace (below). The one end-of-workspace verb |
-| `werkmeister remove-workspace <name>` | deprecated alias, kept for one release: prints "use `werkmeister close-out --abandon`" and removes as before |
+| `werkmeister workspace close [name]`, `werkmeister workspace abandon "<reason>" [name]` | end the workspace (below): shipped, or not |
+| `werkmeister remove-workspace <name>` | deprecated alias, kept for one release: prints "use `werkmeister workspace abandon`" and removes as before | <!-- docs-check: ignore -->
 
 The workspaces pane shows the state on each card. It offers **↻ PRs** (`werkmeister pr status`) while a PR is open or merged, and one end button, which asks twice:
 
@@ -163,13 +163,13 @@ A pass runs `werkmeister pr status` for each workspace with a callback and tells
 | Status | Message |
 |---|---|
 | merged | PR `<url>` merged. Run `werkmeister pr status`, then follow the workspace router. |
-| shipped | PR `<url>` shipped in `<tag>`. Ask the person whether to run `werkmeister close-out`. |
+| shipped | PR `<url>` shipped in `<tag>`. Ask the person whether to run `werkmeister workspace close`. |
 | closed | PR `<url>` was closed. Report it to the person. |
 
 `notified` is written before the message goes out, so a failed delivery is logged and not repeated. Once the PR is shipped, closed or abandoned the callback fields are removed. A pass never merges and never closes out.
 
 - Desktop sessions: the werkmeister mod runs a pass when a desktop session starts and every 10 minutes, and sends each message through the app (a visible turn in that session). While the app is closed they wait.
-- Terminal sessions: `werkmeister pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder), on the schedule `werkmeister setup` installs ([Commands](#commands)). A session id the workspace no longer has is reported, never swapped for another session.
+- Terminal sessions: `werkmeister pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder), on the schedule `werkmeister machine setup` installs ([Commands](#commands)). A session id the workspace no longer has is reported, never swapped for another session.
 
 One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
 
@@ -186,15 +186,15 @@ Before it reports, it ships merged PRs: for each kept workspace with a `merged` 
 | `readyToClose` | lifecycle `shipped` or `abandoned` and no Claude turn working. Listed whether or not the transcript moved, and never also in `candidates`. A workspace the label filter dropped is not listed. |
 | `workspaces[].paused` | true while the workspace is [paused](#pause-and-resume). A paused workspace is never in `candidates` or `readyToClose`. |
 
-The skill asks the person before `werkmeister close-out` ([Close-out](#close-out)).
+The skill asks the person before `werkmeister workspace close` ([Close-out](#close-out)).
 
 ## Containers after a PR
 
-A workspace's feature containers stop (SW-39) at these points. Stopping keeps the containers, the slot and the volumes, and `werkmeister up` brings them back. Shared infra is never stopped.
+A workspace's feature containers stop (SW-39) at these points. Stopping keeps the containers, the slot and the volumes, and `werkmeister feature up` brings them back. Shared infra is never stopped.
 
-- `werkmeister pr open`: once a pass opens a PR and nothing in it failed. If any file failed its gate or push, the containers stay up so the session can fix it. A session woken for a CI fix runs `werkmeister up` before it re-gates.
+- `werkmeister pr open`: once a pass opens a PR and nothing in it failed. If any file failed its gate or push, the containers stay up so the session can fix it. A session woken for a CI fix runs `werkmeister feature up` before it re-gates.
 - `werkmeister pr status`: when a pass records a PR as merged or shipped.
-- The idle reaper: `werkmeister stop --idle <minutes> [feature]` stops each feature that nothing has used for that many minutes. Without `[feature]` it covers every workspace. Something counts as use when:
+- The idle reaper: `werkmeister internal reap <minutes> [feature]` stops each feature that nothing has used for that many minutes. Without `[feature]` it covers every workspace. Something counts as use when:
   - a Claude session in the workspace is busy, or became idle less than N minutes ago (an open session that has sat idle longer does not keep the containers);
   - a container started less than N minutes ago;
   - the gate ran a `docker exec` less than N minutes ago (it touches `.werkmeister/last-exec`).
@@ -203,17 +203,17 @@ Every PR callback pass (the werkmeister mod's 10-minute timer and `werkmeister p
 
 A `docker exec` typed by hand in a terminal outside Claude is not seen.
 
-`auto_stop` (a SessionEnd hook, `werkmeister stop --if-idle`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
+`auto_stop` (a SessionEnd hook, `werkmeister internal session-end`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
 
 ## Pause and resume
 
-`⏸ Pause` on a card (or `werkmeister pause`, the `pause` MCP tool) takes a workspace's load off the host without losing its place (SW-70):
+`⏸ Pause` on a card (or `werkmeister feature pause`, the `pause` MCP tool) takes a workspace's load off the host without losing its place (SW-70):
 
 - It writes `.werkmeister/paused.json`: when, the containers that were running, and whether the agent was mid-turn.
 - While that file exists, the agent-state hook ends the session's turn at its next tool call and blocks new prompts, from the person or from claude-send, PR callbacks and check-in. A tool call already running finishes first.
 - It then runs `docker pause` on each of those containers, `<feature>-werkmeister-install` included. CPU is freed at once; memory is kept.
 
-`▶ Resume` (`werkmeister resume`, `resume`) unpauses exactly the recorded containers, starts any that were stopped meanwhile (■ Stop or the idle reaper), and deletes the record. When Pause cut a working turn it also tells the session `Workspace resumed by the person. Continue where you left off.`:
+`▶ Resume` (`werkmeister feature resume`, `resume`) unpauses exactly the recorded containers, starts any that were stopped meanwhile (■ Stop or the idle reaper), and deletes the record. When Pause cut a working turn it also tells the session `Workspace resumed by the person. Continue where you left off.`:
 
 | Session | How it continues |
 |---|---|
@@ -238,8 +238,8 @@ The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the wor
 | Every PR merged | `merged` | no change | no change | `Merged: <url>` |
 | Shipped: every PR settled, one shipped (release tag contains the merge, or merged where `ship: merge`) | `done` | `Done` | close as completed | `Shipped: <release> — <url>` |
 | `werkmeister pr open` for a follow-up after the issue is Done | — | no change | no change | `Follow-up PR opened: <url>` |
-| `werkmeister close-out` | `done` if not already | `Done` | close if still open | `Shipped: …` |
-| `werkmeister close-out --abandon "<reason>"` | `abandoned` | no status, comment only | close as not planned | `Abandoned: <reason>` |
+| `werkmeister workspace close` | `done` if not already | `Done` | close if still open | `Shipped: …` |
+| `werkmeister workspace abandon "<reason>"` | `abandoned` | no status, comment only | close as not planned | `Abandoned: <reason>` |
 | Spike | `done` at close-out | `Done` | closed | `Shipped: no PRs` |
 
 `pr status` runs by hand and in every PR watch pass, so the ship move needs no person.
@@ -268,7 +268,7 @@ A key left out takes its default (table above). The flat keys `issue_progress_st
 
 ## The PR guard
 
-Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `werkmeister hooks pr-guard`, with matcher `Bash|mcp__.*create_pull_request`. It is installed by `werkmeister up` / `init-workspace` for both strategies.
+Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `werkmeister internal pr-guard`, with matcher `Bash|mcp__.*create_pull_request`. It is installed by `werkmeister feature up` / `init-workspace` for both strategies.
 
 - Inside a workspace (any folder under one holding `.werkmeister/workspace.yml`), it denies `gh pr create` in Bash and the GitHub MCP's `create_pull_request`. The deny message points to `werkmeister pr open`.
 - It matches a real invocation: `gh pr create` at the start of a statement (after `;`, `&&`, `|`, `(`, `$(`, a newline, env assignments or `env`/`command`/`exec`). The phrase inside quotes, a heredoc body or a grep pattern is allowed, so a `gh issue create` whose body quotes it goes through. A call hidden in a `bash -c "…"` or `eval` string isn't inspected either; the guard steers skills, it isn't a security boundary.
@@ -278,7 +278,7 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 
 ## Close-out
 
-`werkmeister close-out` is the only way to end a workspace. A post-mortem comes first; then it has two outcomes.
+`werkmeister workspace close` is the only way to end a workspace. A post-mortem comes first; then it has two outcomes.
 
 ### Post-mortem
 
@@ -301,10 +301,10 @@ Without `postmortem.md`, close-out refuses before it changes anything: an unship
 
 1. **Issue.** The safety net: if the workspace has one and it isn't already done (shipping normally moved it), move it to `done` ([Issue status](#issue-status)). The comment names the release and PR. A tracker refusal is a warning in the output and in `closeout.md`; close-out goes on.
 2. **Record.** Write `closeout.md`: one row per PR (repo, URL, status, merge SHA, release, reason), the issue line, and `Post-mortem: postmortem.md` (or `Post-mortem skipped: <reason>`).
-3. **Remove.** `removeWorkspace`, the internal step: commit tracked changes and push every branch (the record branch now carries `closeout.md`), `werkmeister down`, reload the proxy, delete the directory, prune the worktrees. If any push fails, nothing is deleted. Untracked files never go on a branch: they are saved to `handoff/<workspace>/<repo>.tgz` in the werkmeister home, and the output lists them with each handoff commit's `--stat`.
+3. **Remove.** `removeWorkspace`, the internal step: commit tracked changes and push every branch (the record branch now carries `closeout.md`), `werkmeister feature down`, reload the proxy, delete the directory, prune the worktrees. If any push fails, nothing is deleted. Untracked files never go on a branch: they are saved to `handoff/<workspace>/<repo>.tgz` in the werkmeister home, and the output lists them with each handoff commit's `--stat`.
 4. **Branches.** Delete each merged code branch locally, and on origin if it is still there (GitHub's "delete branch on merge" may have done it already). An `adopted` PR's branch was never the workspace's, so it is kept. The record branch is kept.
 
-**Abandoned.** `werkmeister close-out <name> --abandon "<reason>"` ends a workspace whose work won't ship. The reason is required.
+**Abandoned.** `werkmeister workspace abandon "<reason>" <name>` ends a workspace whose work won't ship. The reason is required.
 
 1. Every unsettled PR file becomes `abandoned` with the reason.
 2. The issue gets a comment with the reason and moves to `abandoned` when one is configured (GitHub: closed as not planned). A refusal is a warning.
@@ -325,5 +325,5 @@ The workspace's Claude sessions are cleaned up as part of close-out:
 
 A spike (`01_questions`, `02_findings`) has no propose stage. Its PR files, when it has any, live in its last stage's output: `stages/02_findings/output/pr-<repo>.md`, and its `_shared/pr-rules.md` says so.
 
-- **No repo deliverable.** No PR file. When `findings.md` is recorded where it is needed (the next workspace's brief, or the issue), `werkmeister close-out` removes the workspace.
+- **No repo deliverable.** No PR file. When `findings.md` is recorded where it is needed (the next workspace's brief, or the issue), `werkmeister workspace close` removes the workspace.
 - **A repo deliverable** (e.g. a write-up in `docs/research/` "opened as a PR"). The findings stage commits it on the code worktree's branch and writes `pr-<repo>.md` at `status: draft`, with an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise. The person sets `status: approved`, `werkmeister pr open` runs the gate and opens it, and close-out follows the normal PR path: it waits for the PR to ship. `werkmeister pr adopt` writes the file there too.

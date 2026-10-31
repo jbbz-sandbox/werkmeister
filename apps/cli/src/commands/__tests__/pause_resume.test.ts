@@ -53,7 +53,7 @@ describe("sandbox pause", () => {
     vi.mocked(pause).mockResolvedValue({ feature: "demo", slot: 3, containers: ["a", "b"] });
     await go(() => runPause({ feature: null }));
     expect(pause).toHaveBeenCalledWith("demo");
-    expect(lines.join("\n")).toMatch(/2 container\(s\) frozen.*werkmeister resume demo/s);
+    expect(lines.join("\n")).toMatch(/2 container\(s\) frozen.*werkmeister feature resume demo/s);
   });
 
   it("refuses the shared infra stack", async () => {
@@ -66,7 +66,7 @@ describe("sandbox pause", () => {
       new SandboxError("'demo' is already paused", "ALREADY_PAUSED"),
     );
     await expect(go(() => runPause({ feature: "demo" }))).rejects.toThrow(Exited);
-    expect(lines.indexOf("[info] Resume it with: werkmeister resume demo")).toBe(
+    expect(lines.indexOf("[info] Resume it with: werkmeister feature resume demo")).toBe(
       lines.indexOf("[error] 'demo' is already paused") + 1,
     );
   });
@@ -96,6 +96,6 @@ describe("sandbox resume", () => {
       new SandboxError("'demo' is not paused", "NOT_PAUSED"),
     );
     await expect(go(() => runResume({ feature: "demo" }))).rejects.toThrow(Exited);
-    expect(lines).toContain("[info] Nothing to resume. Check with: werkmeister status");
+    expect(lines).toContain("[info] Nothing to resume. Check with: werkmeister feature status");
   });
 });

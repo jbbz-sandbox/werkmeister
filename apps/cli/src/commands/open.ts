@@ -1,12 +1,12 @@
 /**
- * werkmeister open <feature> [--url URL | --path PATH] [--size W,H] [--position X,Y]
+ * werkmeister feature open <feature> [--url URL | --path PATH] [--size W,H] [--position X,Y]
  *
  * Launch an isolated Chrome window pre-configured for a feature: sets the
  * ``X-Feature`` routing cookie and tags the window (title prefix + corner
  * badge) so it is unmistakably the window for this feature. No Playwright -- it
  * drives Chrome over the DevTools Protocol with a stdlib-only client.
  *
- * Routing only *resolves* if the feature is running (``werkmeister up <feature>``);
+ * Routing only *resolves* if the feature is running (``werkmeister feature up <feature>``);
  * otherwise the cookie is set but traffic falls through to the k8s baseline.
  */
 
@@ -75,7 +75,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   if ((await getSlot(feature)) === null) {
     warn(`Feature '${feature}' has no running slot — the cookie will be set, but`);
-    warn(`traffic falls through to the k8s baseline. Start it with: werkmeister up ${feature}`);
+    warn(
+      `traffic falls through to the k8s baseline. Start it with: werkmeister feature up ${feature}`,
+    );
   }
 
   const window = await launchFeatureWindow(feature, url, {

@@ -5,7 +5,7 @@ crosses the boundary between your laptop and the cluster.
 
 The short version: **containers are local, Kubernetes is remote, and telepresence
 is the only piece that can sit on either side.** That last choice is
-`werkmeister intercept --docker-daemon`, and it is the only decision in this document.
+`werkmeister infra intercept --docker-daemon`, and it is the only decision in this document.
 Without a cluster, the same shape holds with a baseline container in `w9r-infra`
 or a manual tunnel standing in for `k8s-forwards`; see *Without Kubernetes*.
 
@@ -221,7 +221,7 @@ the intercepts have no stand-in. What holds today, checked against the code:
    Point it at a baseline container (item 5) or any Docker DNS name or remote
    address the containers can reach; not `host.docker.internal`, which only
    Caddy and `k8s-forwards` map.
-4. **No intercepts.** Telepresence is Kubernetes-only: `werkmeister intercept`
+4. **No intercepts.** Telepresence is Kubernetes-only: `werkmeister infra intercept`
    needs the traffic-manager and a traffic-agent sidecar, and refuses a service
    without `k8s_deployment`, `k8s_namespace` and `k8s_port`. Remote → laptop by
    header has no equivalent off-cluster. `ssh -R` from the host is the nearest
@@ -245,11 +245,11 @@ the intercepts have no stand-in. What holds today, checked against the code:
        baseline_upstream: "baseline-backend:3000"      # the service's internal_port
    ```
 
-   `werkmeister connect` writes them into a generated `baseline.override.yml`
+   `werkmeister infra connect` writes them into a generated `baseline.override.yml`
    and starts `w9r-baseline-<service>` on the shared network; a tag-only image
    is refused. No host port is published: set `feature_router.remote_upstream`
    to the same alias to make it the browser's no-cookie default too. Removing
-   an entry leaves its container running until `werkmeister down infra`.
+   an entry leaves its container running until `werkmeister infra down`.
 
 ### The local-cluster variant
 
@@ -262,6 +262,6 @@ no cloud cluster is available.
 
 ---
 
-**See also:** [`werkmeister intercept` in the users guide](users-guide.md#werkmeister-intercept)
+**See also:** [`werkmeister infra intercept` in the users guide](users-guide.md#werkmeister-infra-intercept)
 for flags and worked commands; [architecture](werkmeister-architecture.md) for how
 Caddy chooses between a local container and the cluster baseline.

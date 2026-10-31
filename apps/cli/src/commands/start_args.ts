@@ -1,5 +1,5 @@
 /**
- * werkmeister start-args [--start <dir>]
+ * werkmeister workspace prompt --args [--start <dir>]
  *
  * Print start_session's title, model, prompt and background for the enclosing
  * workspace as JSON (SW-153): what the next-wave skill passes to start_session,

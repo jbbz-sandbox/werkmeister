@@ -19,8 +19,8 @@
  * *feature* is a real feature throughout. `infra` is a CLI-level target that
  * routes to `werkmeister-core/infra` before reaching any of this — passing it here
  * finds no slot, which `stop`/`restart` reject as `NOT_RUNNING` and `down`
- * merely warns about. `werkmeister up infra` is the one that does not even reach
- * `infra`: it means `werkmeister connect`, which is still a command module, so that
+ * merely warns about. `werkmeister infra up` is the one that does not even reach
+ * `infra`: it means `werkmeister infra connect`, which is still a command module, so that
  * branch stays in the CLI until row 5g moves it.
  */
 
@@ -101,7 +101,7 @@ import {
 import { strategyFor } from "./strategies/index.js";
 import { readAutonomous } from "./workspace_prompts.js";
 
-/** Everything `werkmeister up` computed, separated from how the CLI renders it. */
+/** Everything `werkmeister feature up` computed, separated from how the CLI renders it. */
 export interface UpResult {
   feature: string;
   slot: number;
@@ -154,7 +154,7 @@ export async function up(
   if (!fs.existsSync(path.join(workspace, COMPOSE_FILE))) {
     throw new SandboxError(
       `No ${COMPOSE_FILE} found in workspace: ${workspace}\n` +
-        "       Run 'werkmeister init-workspace' first to generate it.",
+        "       Run 'werkmeister workspace init' first to generate it.",
       "NO_COMPOSE",
     );
   }
@@ -328,7 +328,14 @@ async function prepareSlot(
   let staleCompose = false;
   if (regenerated) {
     warn(`Slot changed (${preferredSlot} → ${slot}) — regenerating compose...`);
-    generateFeatureCompose(feature, slot, localServices, config, workspace, "werkmeister up");
+    generateFeatureCompose(
+      feature,
+      slot,
+      localServices,
+      config,
+      workspace,
+      "werkmeister feature up",
+    );
     generateFeatureEnv(feature, slot, localServices, config, workspace);
   } else if (isFeatureComposeStale(feature, slot, localServices, config, workspace)) {
     // Rewritten, not just warned about: the file is fully generated, and a
@@ -336,7 +343,14 @@ async function prepareSlot(
     // without a re-init. Hand-edits belong in the registry or workspace.yml.
     staleCompose = true;
     warn(`${COMPOSE_FILE} predates the current template or registry — regenerating...`);
-    generateFeatureCompose(feature, slot, localServices, config, workspace, "werkmeister up");
+    generateFeatureCompose(
+      feature,
+      slot,
+      localServices,
+      config,
+      workspace,
+      "werkmeister feature up",
+    );
   }
   return { slot, regenerated, staleCompose };
 }
@@ -363,7 +377,7 @@ export async function startService(
   if (!fs.existsSync(composePath)) {
     throw new SandboxError(
       `No ${COMPOSE_FILE} found in workspace: ${workspace}\n` +
-        "       Run 'werkmeister init-workspace' first to generate it.",
+        "       Run 'werkmeister workspace init' first to generate it.",
       "NO_COMPOSE",
     );
   }
@@ -459,7 +473,7 @@ function requireSecrets(
     throw new SandboxError(
       `Missing required secret(s) in ${secretsPath}: ` +
         `${missing.join(", ")}\n` +
-        `       Run \`werkmeister setup\` to write a template to ${secretsPath}, ` +
+        `       Run \`werkmeister machine setup\` to write a template to ${secretsPath}, ` +
         "then fill in the missing values (or pin them under `env_vars:` in " +
         ".werkmeister/workspace.yml).",
       "MISSING_SECRETS",
@@ -503,7 +517,7 @@ export interface StopResult {
   slot: number;
 }
 
-/** What `werkmeister stop --if-idle` knows when a SessionEnd hook runs it (#231). */
+/** What `werkmeister internal session-end` knows when a SessionEnd hook runs it (#231). */
 export interface IdleStopInput {
   /** FEATURE from the workspace `.env`. */
   feature: string | undefined;
@@ -652,7 +666,7 @@ export interface StopIdleOptions {
 }
 
 /**
- * `werkmeister stop --idle <minutes>` and the `watchPrs` reaper (SW-39): stop each
+ * `werkmeister internal reap <minutes>` and the `watchPrs` reaper (SW-39): stop each
  * feature nothing has used for *minutes*. One line per running feature; never
  * throws, so a watch pass is never failed by it.
  */
@@ -1045,7 +1059,7 @@ export interface DownResult {
  * feature still has containers and generated files worth removing, so this
  * warns and cleans up anyway, and reports the slot as null.
  *
- * Does not touch the reverse proxy: `werkmeister down --all-features` tears down N
+ * Does not touch the reverse proxy: `werkmeister feature down --all-features` tears down N
  * features and reloads once, so the reload is `reloadProxy`, sequenced by the
  * caller. Does not read or print workspace notes either — that is a TTY prompt
  * loop, which §11 of the migration design keeps out of the library.
@@ -1190,7 +1204,7 @@ export interface ProxyReloadResult {
  * than one per feature. `up` reloads inline instead because it may also have to
  * *start* Caddy, which is part of bringing a feature up.
  *
- * `start` selects the whole `werkmeister proxy-reload` spelling, not just the
+ * `start` selects the whole `werkmeister infra proxy-reload` spelling, not just the
  * start-if-down fallback: that command has always used different progress
  * wording and listed the features it wrote, and teardown's three callers
  * (`commands/down.ts` twice, `sandbox.ts` twice) print neither. Defaulting it

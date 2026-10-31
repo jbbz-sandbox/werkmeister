@@ -47,7 +47,7 @@ export interface ContextStrategy {
   sync(workspaceRoot: string): { wrote: string[] };
   /** SessionStart re-injection text, or null. Backs `werkmeister notes context`. */
   sessionContext(workspaceRoot: string, hookPayload: Record<string, unknown>): string | null;
-  /** PreToolUse gate. Backs `werkmeister hooks gate`; must fail open. */
+  /** PreToolUse gate. Backs `werkmeister internal gate`; must fail open. */
   gate(): void;
   /** Workspace-relative paths this strategy owns. A trailing `*` in the last segment is a prefix glob. */
   ownedPaths(): string[];

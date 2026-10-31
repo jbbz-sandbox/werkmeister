@@ -1,4 +1,4 @@
-// `werkmeister migrate` (SW-92) against a temp HOME holding a legacy ~/.sandbox
+// `werkmeister machine migrate` (SW-92) against a temp HOME holding a legacy ~/.sandbox
 // tree: the move, every file that carried the old absolute path, a second run that
 // changes nothing, and each refusal leaving the tree untouched. Docker and
 // launchctl are stubbed at the options seam; nothing reaches the real home.
@@ -124,8 +124,8 @@ test("migrate moves the home and repoints every file that carried the old path",
   assert.match(config, /^# mine, kept$/m);
   assert.match(config, /model_pricing_yaml: ~\/\.werkmeister\/model-pricing\.yaml/);
   assert.ok(config.includes(`certs_dir: ${target}/certs`));
-  assert.match(config, /^  werkmeister_root: \/opt\/w9r$/m);
-  assert.match(config, /^  werkmeister_issues_project: SW$/m);
+  assert.match(config, /^ {2}werkmeister_root: \/opt\/w9r$/m);
+  assert.match(config, /^ {2}werkmeister_issues_project: SW$/m);
   assert.doesNotMatch(config, /sandbox_(root|issues_project):/);
 
   const envSh = fs.readFileSync(path.join(target, "env.sh"), "utf8");
@@ -261,5 +261,119 @@ test("the pre-rename ~/.zshrc completion block and ${SANDBOX_ROOT} volume specs 
   assert.match(
     fs.readFileSync(path.join(target, "services.local.yaml"), "utf8"),
     /'\$\{WERKMEISTER_ROOT\}:\/src'/,
+  );
+});
+
+/** A machine already on ~/.werkmeister (SW-92 done), so only the SW-186 steps have work. */
+function movedHome() {
+  fs.rmSync(legacy, { recursive: true });
+  write(
+    path.join(target, "config.yaml"),
+    `paths:\n  repos_root: ${home}/repos\n  workspaces_root: ${features}\n`,
+  );
+}
+
+// SW-186: what a pre-noun-group CLI left behind — old hook spellings, missing permission
+// twins, with-temp-home's `wait-load`, the stale SANDBOX_MCP_TOKEN, Desktop's `mcp` args.
+test("SW-186: rewrites pre-rename hooks, rules, wrapper, secrets and Desktop args; a re-run changes nothing", async () => {
+  const { writeWorkspaceHooks, writeWorkspaceSettings } = await import("./dist/hooks_gen.js");
+  const { tempHomeWrapper, writeTempHomeWrapper } = await import("./dist/temp_home.js");
+  movedHome();
+  write(path.join(target, "secrets.env"), "OTHER=1\nSANDBOX_MCP_TOKEN=old\n");
+  write(path.join(target, "mcp-token"), "fresh\n");
+  const desktop = path.join(
+    home,
+    "Library",
+    "Application Support",
+    "Claude",
+    "claude_desktop_config.json",
+  );
+  write(
+    desktop,
+    JSON.stringify({ mcpServers: { w: { command: "/x/werkmeister", args: ["mcp"] } } }),
+  );
+
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\nautonomous: true\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\n");
+  writeWorkspaceHooks(ws);
+  writeWorkspaceSettings(ws);
+  writeTempHomeWrapper(ws);
+  const settingsFile = path.join(ws, ".claude", "settings.json");
+  const fresh = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  const old = JSON.parse(
+    JSON.stringify(fresh)
+      .replaceAll("werkmeister internal session-end", "werkmeister stop --if-idle")
+      .replace(/werkmeister internal (gate|pr-guard|agent-state)/g, "werkmeister hooks $1"),
+  );
+  // The new twins of the old rules: missing from settings and from the record alike.
+  const pre186 = (rules) => rules.filter((r) => !r.includes("feature up"));
+  old.permissions.allow = pre186(old.permissions.allow);
+  const record = path.join(ws, ".werkmeister", "claude-permissions.json");
+  const recorded = JSON.parse(fs.readFileSync(record, "utf8"));
+  write(record, JSON.stringify({ ...recorded, allow: pre186(recorded.allow) }));
+  const mine = { hooks: [{ type: "command", command: "echo mine" }] };
+  old.hooks.SessionEnd.unshift(mine);
+  write(settingsFile, JSON.stringify(old));
+  const wrapper = tempHomeWrapper(ws);
+  write(
+    wrapper,
+    fs
+      .readFileSync(wrapper, "utf8")
+      .replace("werkmeister internal wait-load", "werkmeister wait-load"),
+  );
+  assert.match(fs.readFileSync(wrapper, "utf8"), /werkmeister wait-load/);
+
+  const before = snapshot(home);
+  const checked = await run({ checkOnly: true });
+  assert.ok(
+    checked.every((s) => s.ok),
+    JSON.stringify(checked, null, 2),
+  );
+  assert.deepEqual(snapshot(home), before, "--check writes nothing");
+  assert.match(JSON.stringify(checked), /would rewrite 1: demo/);
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  const text = fs.readFileSync(settingsFile, "utf8");
+  assert.doesNotMatch(text, /werkmeister (hooks |stop --if-idle)/);
+  assert.match(text, /werkmeister internal gate/);
+  assert.match(text, /werkmeister internal pr-guard/);
+  const after = JSON.parse(text);
+  assert.deepEqual(after.hooks.SessionEnd[0], mine, "the person's hook is kept");
+  // Re-added rules go last: compare the sets.
+  assert.deepEqual(after.permissions.allow.toSorted(), fresh.permissions.allow.toSorted());
+  assert.deepEqual(after.permissions.deny, fresh.permissions.deny);
+  assert.match(fs.readFileSync(wrapper, "utf8"), /werkmeister internal wait-load/);
+  assert.equal(
+    fs.readFileSync(path.join(target, "secrets.env"), "utf8"),
+    "OTHER=1\nWERKMEISTER_MCP_TOKEN=fresh\n",
+  );
+  assert.deepEqual(JSON.parse(fs.readFileSync(desktop, "utf8")).mcpServers.w.args, [
+    "internal",
+    "mcp",
+  ]);
+  const env = steps.find((s) => s.label === "feature env");
+  assert.ok(env?.optional && /workspace init.* demo/.test(env.detail), JSON.stringify(steps));
+
+  const settled = snapshot(home);
+  const again = await run();
+  assert.deepEqual(snapshot(home), settled, "a second run changes nothing");
+  assert.match(JSON.stringify(again), /every workspace uses the noun-group spellings/);
+  assert.match(JSON.stringify(again), /no pre-rename keys/);
+});
+
+test("SW-186: a stale token with no mcp-token file is not ok and the old line stays", async () => {
+  movedHome();
+  write(path.join(target, "secrets.env"), "SANDBOX_MCP_TOKEN=s3cr3t\n");
+  const step = (await run()).find((s) => s.label === "secrets.env");
+  assert.equal(step.ok, false);
+  assert.doesNotMatch(step.detail, /s3cr3t/);
+  assert.equal(
+    fs.readFileSync(path.join(target, "secrets.env"), "utf8"),
+    "SANDBOX_MCP_TOKEN=s3cr3t\n",
   );
 });

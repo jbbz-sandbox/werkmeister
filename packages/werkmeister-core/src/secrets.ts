@@ -3,7 +3,7 @@
  *
  * A service in services.yaml declares the secret keys it needs via an
  * optional `secrets: [KEY, ...]` list, satisfied in secrets.env by
- * `<SERVICE>__KEY` or plain `KEY` (see `resolveSecrets`). `werkmeister up`
+ * `<SERVICE>__KEY` or plain `KEY` (see `resolveSecrets`). `werkmeister feature up`
  * requires only the keys declared by the services actually in the feature's
  * own workspace (its local `SERVICES=` list) -- a feature that uses no such
  * services needs no secrets.env entries at all. This replaces a fixed global key list, which

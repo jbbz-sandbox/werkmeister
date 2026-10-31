@@ -16,7 +16,7 @@
  * for a hook that fires on every Edit/Write. `apps/cli/src/lib/gate.ts` is a
  * six-line esbuild entry that calls {@link main}, so the hook still runs
  * `node dist/lib/gate.js` and bypasses the heavyweight main import chain. The
- * normal `werkmeister hooks gate` CLI path (manual runs, tests) imports this same
+ * normal `werkmeister internal gate` CLI path (manual runs, tests) imports this same
  * module — one implementation either way.
  *
  * **Keep this module import-light.** Anything that pulls the config/YAML chain
@@ -390,7 +390,7 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
 }
 
 /**
- * `werkmeister hooks gate` entrypoint: reads the PreToolUse stdin JSON, prints
+ * `werkmeister internal gate` entrypoint: reads the PreToolUse stdin JSON, prints
  * a deny hookSpecificOutput on deny, prints nothing on allow. Always exits 0
  * — this is a hook, it must never block or fail the tool call.
  */

@@ -1,0 +1,21 @@
+.TH WERKMEISTER-ISSUE-CREATE 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-issue\-create \- File a new issue and print its URL (Jira)
+.SH SYNOPSIS
+\fBwerkmeister issue create\fR
+.SH OPTIONS
+.TP
+\fB\-\-project <key>\fR
+The Jira project key to file in
+.TP
+\fB\-\-type <type>\fR
+bug, feature or task (mapped to the tracker's issue type)
+.TP
+\fB\-\-title <text>\fR
+The issue's summary
+.TP
+\fB\-\-body\-file <path>\fR
+The issue's description, from a file (\- for stdin)
+.PP
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

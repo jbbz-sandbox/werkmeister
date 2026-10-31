@@ -1,5 +1,6 @@
 /**
- * `werkmeister migrate`: move `~/.sandbox` to `~/.werkmeister` (SW-92).
+ * `werkmeister machine migrate`: move `~/.sandbox` to `~/.werkmeister` (SW-92), then
+ * move what names the CLI's pre-SW-186 spellings to the noun groups.
  *
  * Readers only know `~/.werkmeister` and the post-SW-106 names, so every file
  * written under the old home or with an old name needs repair. Each step below
@@ -23,18 +24,27 @@ import {
   workspacesRoot,
 } from "./config.js";
 import { docker } from "./docker.js";
-import { DOT_DIR } from "./dot_dir.js";
+import { DOT_DIR, dotDir } from "./dot_dir.js";
 import {
   ensureZshenvSources,
   ensureZshrcCompletion,
   envShPath,
   load,
+  patchDesktopConfig,
   renderEnvSh,
+  secretsPath,
   stripBlock,
   writeEnvSh,
   zshenvPath,
   zshrcPath,
 } from "./global_config.js";
+import {
+  workspaceAllowRules,
+  workspaceDenyRules,
+  writePrGuardHook,
+  writeWorkspaceHooks,
+  writeWorkspaceSettings,
+} from "./hooks_gen.js";
 import {
   installPrWatchSchedule,
   type PrWatchScheduleOptions,
@@ -42,6 +52,7 @@ import {
   type Step,
 } from "./machine_setup.js";
 import { syncRegistry } from "./registry_sync.js";
+import { tempHomeWrapper, writeTempHomeWrapper } from "./temp_home.js";
 
 export const LEGACY_DOT_DIR = ".sandbox";
 
@@ -170,7 +181,7 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
           ok: false,
           detail:
             `still running: ${blocking.map((c) => c.name).join(", ")} — stop them ` +
-            "(`werkmeister stop <feature>`, `werkmeister down infra`) and re-run; nothing was changed",
+            "(`werkmeister feature stop <feature>`, `werkmeister infra down`) and re-run; nothing was changed",
         },
       ];
     }
@@ -306,7 +317,7 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
       ok: true,
       detail: legacyWorkspaces.length
         ? `${would("renamed", "would rename")} .sandbox/ → .werkmeister/ in ${legacyWorkspaces.map((d) => path.basename(d)).join(", ")}; ` +
-          "their CLAUDE.md and contexts say .sandbox/ until each one's next `werkmeister init-workspace`"
+          "their CLAUDE.md and contexts say .sandbox/ until each one's next `werkmeister workspace init`"
         : "none left on .sandbox/",
     });
   }
@@ -316,8 +327,123 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
       label: "shared infra",
       ok: true,
       detail:
-        "its files moved as they are (no host paths in them); the next `werkmeister connect` mounts them from the new home",
+        "its files moved as they are (no host paths in them); the next `werkmeister infra connect` mounts them from the new home",
     });
   }
+  // A home half-moved is not one to rewrite settings in.
+  if (steps.every((s) => s.ok)) steps.push(...nounGroupSteps(wsRoot, checkOnly));
   return steps;
+}
+
+// What the CLI wrote with a pre-SW-186 spelling: hook commands and with-temp-home's load wait.
+const PRE_SW186_HOOK = /werkmeister (?:hooks (?:gate|pr-guard|agent-state)|stop --if-idle)/;
+const PRE_SW186_WAIT = "werkmeister wait-load";
+
+function readJson(file: string): Record<string, any> | null {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/** True when *dir*'s hooks, permission rules or with-temp-home predate SW-186's spellings. */
+function workspaceStale(dir: string): boolean {
+  const settingsFile = path.join(dir, ".claude", "settings.json");
+  // Never inited by this CLI: `workspace init` writes it, not migrate.
+  if (!fs.existsSync(settingsFile)) return false;
+  const settings = readJson(settingsFile);
+  const has = (key: "allow" | "deny") => new Set<string>(settings?.["permissions"]?.[key] ?? []);
+  const allow = has("allow");
+  const deny = has("deny");
+  const wrapper = tempHomeWrapper(dir);
+  return (
+    PRE_SW186_HOOK.test(fs.readFileSync(settingsFile, "utf8")) ||
+    workspaceAllowRules(dir).some((r) => !allow.has(r)) ||
+    workspaceDenyRules(dir).some((r) => !deny.has(r)) ||
+    (fs.existsSync(wrapper) && fs.readFileSync(wrapper, "utf8").includes(PRE_SW186_WAIT))
+  );
+}
+
+/**
+ * SW-161: drop the pre-rename `SANDBOX_MCP_TOKEN` and set `WERKMEISTER_MCP_TOKEN` from
+ * the server-owned token file, never the old value (it no longer matches the server).
+ */
+function secretsStep(checkOnly: boolean): Step {
+  const label = "secrets.env";
+  const file = secretsPath();
+  const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  if (!/^\s*SANDBOX_MCP_TOKEN=/m.test(text)) {
+    return { label, ok: true, detail: "no pre-rename keys" };
+  }
+  const tokenFile = path.join(dotDir(os.homedir()), "mcp-token");
+  const token = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8").trim() : "";
+  if (!token) {
+    return {
+      label,
+      ok: false,
+      detail: `SANDBOX_MCP_TOKEN is stale and ${tokenFile} does not exist yet — run \`werkmeister infra connect\`, then re-run`,
+    };
+  }
+  const kept = text
+    .split("\n")
+    .filter((l) => !/^\s*(?:SANDBOX|WERKMEISTER)_MCP_TOKEN=/.test(l))
+    .join("\n")
+    .replace(/\n*$/, "\n");
+  writeIfChanged(file, `${kept}WERKMEISTER_MCP_TOKEN=${token}\n`, checkOnly);
+  return {
+    label,
+    ok: true,
+    detail: `${checkOnly ? "would replace" : "replaced"} SANDBOX_MCP_TOKEN with WERKMEISTER_MCP_TOKEN from ${tokenFile}`,
+  };
+}
+
+/** SW-186: each workspace's hooks, permission rules and with-temp-home; secrets; Claude Desktop. */
+function nounGroupSteps(wsRoot: string, checkOnly: boolean): Step[] {
+  const dirs = workspaceDirs(wsRoot).filter((d) => fs.existsSync(path.join(d, DOT_DIR)));
+  const stale = dirs.filter(workspaceStale);
+  if (!checkOnly) {
+    for (const dir of stale) {
+      // The gate and PR guard belong to the strategy: re-spell the ones it has, add none.
+      const hooks = fs.readFileSync(path.join(dir, ".claude", "settings.json"), "utf8");
+      if (/werkmeister hooks gate/.test(hooks)) writeWorkspaceHooks(dir);
+      else if (/werkmeister hooks pr-guard/.test(hooks)) writePrGuardHook(dir);
+      writeWorkspaceSettings(dir);
+      if (fs.existsSync(tempHomeWrapper(dir))) writeTempHomeWrapper(dir);
+    }
+  }
+  const names = (list: string[]) => list.map((d) => path.basename(d)).join(", ");
+  // SW-122 removes SANDBOX_FEATURE once every workspace exports the new name; `.env` is init's to render.
+  const oldEnv = dirs.filter((d) => {
+    const env = path.join(d, ".env");
+    return fs.existsSync(env) && !/^WERKMEISTER_FEATURE=/m.test(fs.readFileSync(env, "utf8"));
+  });
+  const desktop = patchDesktopConfig(undefined, checkOnly);
+  return [
+    {
+      label: "workspace hooks and permission rules",
+      ok: true,
+      detail: stale.length
+        ? `${checkOnly ? "would rewrite" : "rewrote"} ${stale.length}: ${names(stale)}`
+        : "every workspace uses the noun-group spellings",
+    },
+    secretsStep(checkOnly),
+    {
+      label: "Claude Desktop config",
+      ok: true,
+      detail: desktop
+        ? `${checkOnly ? "would launch" : "now launches"} \`werkmeister internal mcp\``
+        : "up to date",
+    },
+    ...(oldEnv.length
+      ? [
+          {
+            label: "feature env",
+            ok: true,
+            optional: true,
+            detail: `${oldEnv.length} still export only SANDBOX_FEATURE — run \`werkmeister workspace init\` in ${names(oldEnv)}`,
+          },
+        ]
+      : []),
+  ];
 }

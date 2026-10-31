@@ -1,5 +1,5 @@
 /**
- * werkmeister config [--write] [--repos-root PATH] [--workspaces-root PATH] [--show] [--check]
+ * werkmeister machine config [--write] [--repos-root PATH] [--workspaces-root PATH] [--show] [--check]
  *
  * Set up and maintain the machine-global werkmeister configuration
  * (``~/.werkmeister/config.yaml`` — the single source of truth). On write it also
@@ -8,10 +8,10 @@
  * server in ``claude_desktop_config.json`` (the ``werkmeister`` wrapper self-loads
  * env.sh).
  *
- *   werkmeister config                       # print resolved config + origins (read-only)
- *   werkmeister config --write               # interactive wizard (create or edit), then write
- *   werkmeister config --repos-root … …      # non-interactive set
- *   werkmeister config --check               # validate; nonzero exit on drift
+ *   werkmeister machine config                       # print resolved config + origins (read-only)
+ *   werkmeister machine config --write               # interactive wizard (create or edit), then write
+ *   werkmeister machine config --repos-root … …      # non-interactive set
+ *   werkmeister machine config --check               # validate; nonzero exit on drift
  *
  * Values come only from the YAML at runtime; ``WERKMEISTER_*`` env vars are a derived
  * export for backward compatibility. On first run the wizard seeds its defaults
@@ -43,7 +43,7 @@ function show(cfg: ReturnType<typeof gc.load>): void {
       `${Colors.BOLD}${key}:${Colors.RESET}      ${value || gc.builtinPathDefault(key)}  ${Colors.DIM}(${origin})${Colors.RESET}`,
     );
   }
-  // Ingress is owned by `werkmeister setup`, but shown here because `--show` is
+  // Ingress is owned by `werkmeister machine setup`, but shown here because `--show` is
   // meant to be the one place you can see the whole resolved config.
   const ingress = gc.loadIngress(cfg);
   console.log(`${Colors.BOLD}ingress:${Colors.RESET}`);
@@ -70,7 +70,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       for (const p of problems) {
         console.log(`${Colors.RED}✗ ${p}${Colors.RESET}`);
       }
-      warn("Global config out of date — run `werkmeister config --write` to converge.");
+      // SW-162: only some problems are --write's to fix; each line above names its own fix.
+      warn(
+        problems.some((p) => p.includes("config --write"))
+          ? "Global config out of date — run `werkmeister machine config --write` to converge."
+          : "Global config has problems `--write` does not fix — see each one above.",
+      );
       process.exit(1);
     }
     success("Global werkmeister config is in order.");
@@ -125,7 +130,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     // Preserve any hand-added overrides verbatim.
     overrides: cfg.overrides || {},
     // Same for the sections this command never prompts for: the ingress domains
-    // (owned by `werkmeister setup`) and the hand-pasted Jira credentials.
+    // (owned by `werkmeister machine setup`) and the hand-pasted Jira credentials.
     // Rebuilding the YAML without them would silently drop a working ingress
     // config or a live token.
     ...(cfg.ingress ? { ingress: cfg.ingress } : {}),

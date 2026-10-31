@@ -1,5 +1,5 @@
 /**
- * werkmeister test <feature> [--scaffold]
+ * werkmeister feature test <feature> [--scaffold]
  *
  * Run a feature's Playwright suite, if the workspace has one. Sets the
  * SANDBOX_FEATURE environment variable so the Playwright config can
@@ -58,7 +58,7 @@ async function scaffold(feature: string, workspaceOverride: string | null, baseU
   // A running feature already owns this name; a new suite for it would test someone else's stack.
   if ((await getSlot(feature)) !== null) {
     error(`Feature '${feature}' is already allocated`);
-    error(`Choose a different name, or run: werkmeister down ${feature}`);
+    error(`Choose a different name, or run: werkmeister feature down ${feature}`);
     process.exit(1);
   }
   const workspace = resolveWorkspace(feature, workspaceOverride);

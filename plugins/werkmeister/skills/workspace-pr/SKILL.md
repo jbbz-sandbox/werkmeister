@@ -5,7 +5,7 @@ description: "Open, check or close out pull requests in a workspace. Use instead
 
 # workspace-pr — PRs from a workspace
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
 Inside a workspace, a PR opens only through `werkmeister pr open`. A PreToolUse hook
 blocks `gh pr create` and the GitHub MCP's `create_pull_request`, so generic PR
@@ -34,14 +34,14 @@ is `docs/workspace-lifecycle.md` in the werkmeister repo.
    `shipped` with the release tag that contains the merge, and moves the issue
    to Done once every PR has shipped. A review asking for changes, or a PR
    closed unmerged, moves it back to In Progress.
-6. **`werkmeister close-out`** is the one way to end a workspace. First the
+6. **`werkmeister workspace close`** is the one way to end a workspace. First the
    post-mortem: the `postmortem` skill writes `postmortem.md`, and close-out
    refuses without it unless the person says to skip it
    (`--skip-postmortem "<reason>"`, MCP `skip_postmortem`). Two outcomes:
    - **Shipped** (every PR file shipped, closed or abandoned): moves the issue
      to Done if shipping didn't, writes `closeout.md`, removes the workspace,
      deletes merged branches.
-   - **Abandoned**: `werkmeister close-out <name> --abandon "<reason>"` records the
+   - **Abandoned**: `werkmeister workspace abandon "<reason>" <name>` records the
      reason, comments it on the issue (and applies the `abandoned` status if
      configured; on GitHub, closes it as not planned), pushes every branch and
      keeps them, then removes.
@@ -52,7 +52,7 @@ is `docs/workspace-lifecycle.md` in the werkmeister repo.
    Either way, the workspace's desktop Claude sessions are archived (by the pane
    and the MCP tool; from the CLI, archive them in the sidebar), and terminal
    sessions still open are listed for the person to `/exit`.
-   `werkmeister remove-workspace` is a deprecated alias; don't use it.
+   `werkmeister remove-workspace` is a deprecated alias; don't use it. <!-- docs-check: ignore -->
 
 MCP equivalents (werkmeister server): `workspace-pr` (`gate|open|status`),
 `close-out` (with `abandon` for the second outcome).

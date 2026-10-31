@@ -1,10 +1,10 @@
 /**
- * werkmeister workspace <feature> [options]
+ * werkmeister workspace new <feature> [options]
  *
  * Create a brand-new workspace under ``$WERKMEISTER_WORKSPACES_ROOT`` and
  * initialise it.
  *
- * This command owns workspace *creation*; ``werkmeister init-workspace`` owns
+ * This command owns workspace *creation*; ``werkmeister workspace init`` owns
  * everything derived from the config. Concretely, ``workspace``:
  *
  *   1. resolves inputs (CLI switches / an existing workspace.yml / the interactive
@@ -16,7 +16,7 @@
  *      back to a plain directory (no history);
  *   3. writes ``.werkmeister/workspace.yml`` (the durable source of truth, including
  *      the resolved ``repos`` set); and
- *   4. runs ``werkmeister init-workspace`` inside it, which creates the nested repo
+ *   4. runs ``werkmeister workspace init`` inside it, which creates the nested repo
  *      worktrees from that config and writes CLAUDE.md / .env /
  *      compose.yml / .claude/ / .werkmeister/*. The initial state is then
  *      committed (not pushed).
@@ -109,7 +109,7 @@ export async function resolveWorkspaceInputs(
           issue = await fetchIssueSnapshot(ref, undefined, tracker);
         } catch {
           throw new WorkspaceError(
-            `couldn't read ${ref} from ${tracker.label}; run \`werkmeister connect\` to check the issue tracker.`,
+            `couldn't read ${ref} from ${tracker.label}; run \`werkmeister infra connect\` to check the issue tracker.`,
           );
         }
         // The project prompt comes next: default it to the project whose scope holds the ref.
@@ -207,7 +207,7 @@ function runBrowserForm(args: Record<string, unknown>): void {
   if (!(fs.existsSync(cliJs) && fs.statSync(cliJs).isFile())) {
     error(
       `Browser form not built: ${cliJs} is missing. ` +
-        "Run `npm --prefix apps/werkmeister-dashboard run build` (or `werkmeister dashboard` once) first.",
+        "Run `npm --prefix apps/werkmeister-dashboard run build` (or `werkmeister internal dashboard` once) first.",
     );
     process.exit(1);
   }

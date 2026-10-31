@@ -1,5 +1,5 @@
 /**
- * werkmeister clean [--all] [--dry-run]
+ * werkmeister machine clean [--all] [--dry-run]
  *
  * Remove orphaned Docker volumes and stale slot entries from stopped
  * features. With --all, also tears down active features first.
@@ -12,7 +12,7 @@
 import { planClean, runClean } from "werkmeister-core/lifecycle";
 import { Colors } from "../lib/config.js";
 
-/** Execute the ``werkmeister clean`` command. */
+/** Execute the ``werkmeister machine clean`` command. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   const all = Boolean(args.all);
   const dryRun = Boolean(args.dry_run);

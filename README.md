@@ -7,7 +7,7 @@ Turborepo monorepo ([pnpm](https://pnpm.io) workspaces + [Turbo](https://turbo.b
 
 pnpm is for working on this repo. To *use* Werkmeister, nothing changes: the
 published package doesn't depend on the repo's package manager, so
-`npx werkmeister setup` and `npm install -g werkmeister` work as they always have
+`npx werkmeister machine setup` and `npm install -g werkmeister` work as they always have
 (see "Install the CLI without a clone").
 
 Docs: <https://werkmeister.io/>
@@ -51,7 +51,7 @@ corepack enable            # pnpm, at the version package.json pins
 pnpm install && pnpm run build
 pnpm setup                 # once per machine: a global bin dir on PATH (open a new shell after)
 (cd apps/cli && pnpm link --global)   # puts `werkmeister` and `w9r` on PATH, pointing into apps/cli
-werkmeister setup
+werkmeister machine setup
 ```
 
 The global `werkmeister` is a symlink into this checkout, not a copy, so a rebuild
@@ -61,8 +61,8 @@ Until you rebuild, it keeps running the old bundle, so the CLI
 prints a one-line stderr warning when `apps/cli/dist` was built from a
 different commit than the checkout's `HEAD`. The warning names both SHAs and
 the rebuild command, `pnpm turbo run build --filter=werkmeister`.
-It never shows on a published install, which has no `.git`, and `werkmeister hooks`
-skips it. To skip the global link, run `apps/cli/werkmeister` from the checkout instead. To remove
+It never shows on a published install, which has no `.git`, and the `internal` hook commands
+skip it. To skip the global link, run `apps/cli/werkmeister` from the checkout instead. To remove
 the link, delete its shims: `rm "$PNPM_HOME"/{werkmeister,w9r,sandbox}` <!-- name-check: ignore -->
 (pnpm 10's `pnpm remove --global` refuses with `ERR_PNPM_GLOBAL_BIN_DIR_NOT_IN_PATH`).
 
@@ -86,7 +86,7 @@ the CLI never has to clone this repo, and no token is needed. Install from
 
 ```bash
 cd ~
-npx werkmeister setup    # installs globally, then runs the wizard
+npx werkmeister machine setup    # installs globally, then runs the wizard
 ```
 
 To check what's published, run `npm view werkmeister version`.
@@ -105,7 +105,7 @@ collects that cache, while `setup` persists `werkmeister_root` into
 workspace's `compose.yml` as a bind mount. Running for real from the
 cache would pin permanent state to a directory that is going to vanish.
 
-`npm install -g werkmeister && werkmeister setup` is the same thing
+`npm install -g werkmeister && werkmeister machine setup` is the same thing
 spelled out, if you would rather see the install happen. It is unaffected by the
 current directory.
 
@@ -120,16 +120,16 @@ The package is a single esbuild bundle plus `infra/` — the templates, compose
 files, proxy UI and skills the CLI reads at runtime. `werkmeister-core` and the
 CLI's other libraries are bundled in, so the only dependencies npm resolves are
 `dockerode` and, optionally, `@anthropic-ai/claude-agent-sdk` (only `detect --assist` uses it;
-without it the command prints how to install it). `werkmeister setup` still seeds `~/.werkmeister` exactly as it does from a
+without it the command prints how to install it). `werkmeister machine setup` still seeds `~/.werkmeister` exactly as it does from a
 checkout, which is what makes the two installs interchangeable. The MCP server
-(`apps/werkmeister-mcp`, every tool) is bundled in too, as `dist/mcp.js`: `werkmeister mcp`,
-`werkmeister connect`'s MCP server on 3002 and the `werkmeister` plugin's MCP
+(`apps/werkmeister-mcp`, every tool) is bundled in too, as `dist/mcp.js`: `werkmeister internal mcp`,
+`werkmeister infra connect`'s MCP server on 3002 and the `werkmeister` plugin's MCP
 entry all work from the package. What stays checkout-only is the workspaces
 dashboard (`apps/werkmeister-dashboard`): the localhost browser page and the MCP App
 UI bundles, so on a package install the App tools answer in text.
 
 One caveat if you keep both: `werkmeister_root` is self-derived and last-writer-wins
-in `~/.werkmeister/env.sh`, so whichever CLI you last ran `werkmeister config --write` from owns
+in `~/.werkmeister/env.sh`, so whichever CLI you last ran `werkmeister machine config --write` from owns
 that pointer. Pick one per machine.
 
 ### Releasing
@@ -180,7 +180,7 @@ On a fresh clone, seed it before anything else:
 
 ```bash
 corepack enable && pnpm install && pnpm run build
-apps/cli/werkmeister setup            # guided wizard
+apps/cli/werkmeister machine setup            # guided wizard
 ```
 
 The wizard walks through your repo/workspace paths, the ingress base domains,
@@ -193,13 +193,13 @@ Telepresence prerequisites. It is safe to re-run — nothing already configured
 is overwritten.
 
 ```bash
-apps/cli/werkmeister setup --check    # report drift; no prompts, no writes
-apps/cli/werkmeister setup --yes      # non-interactive (CI); accepts defaults, skips optional installs
+apps/cli/werkmeister machine setup --check    # report drift; no prompts, no writes
+apps/cli/werkmeister machine setup --yes      # non-interactive (CI); accepts defaults, skips optional installs
 apps/cli/werkmeister pr watch --install   # schedule PR callbacks for terminal sessions (setup offers this)
 ```
 
-`werkmeister up` will fail until `~/.werkmeister/services.yaml` exists, and will tell
-you to run `werkmeister setup`.
+`werkmeister feature up` will fail until `~/.werkmeister/services.yaml` exists, and will tell
+you to run `werkmeister machine setup`.
 
 | File | What |
 | --- | --- |
@@ -217,7 +217,7 @@ On a corporate network that intercepts TLS (Netskope, Zscaler, Palo Alto), the
 `k8s-forwards` image build fails: `apk add` can't verify the proxy-minted cert
 served for `dl-cdn.alpinelinux.org`, and shared infra comes up degraded.
 
-`werkmeister connect` handles this automatically on macOS — it extracts the proxy
+`werkmeister infra connect` handles this automatically on macOS — it extracts the proxy
 root(s) from the System keychain into `~/.werkmeister/corp-ca.crt`, which the build
 mounts as a BuildKit secret and appends to alpine's trust store. Off-proxy the
 file is empty and the build is unchanged.
@@ -228,7 +228,7 @@ outside that list — or a non-macOS host — needs the CA placed by hand:
 ```bash
 # any PEM bundle; werkmeister never overwrites a file that already has a cert in it
 cat /path/to/corp-root.crt > ~/.werkmeister/corp-ca.crt
-apps/cli/werkmeister connect
+apps/cli/werkmeister infra connect
 ```
 
 The symptom that this is what you're hitting: `docker compose build` failing on

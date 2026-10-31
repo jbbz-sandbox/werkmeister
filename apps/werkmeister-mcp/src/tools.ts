@@ -423,12 +423,15 @@ const WORKSPACE_FIELDS = {
   issue_id: z
     .string()
     .optional()
-    .describe("Issue ID or URL in this machine's issue tracker (see `werkmeister setup`)."),
+    .describe("Issue ID or URL in this machine's issue tracker (see `werkmeister machine setup`)."),
   work_type: z.string().optional().describe("Work type (drives the workspace phases)."),
   task: z.string().optional().describe("One-line task title."),
   description: z.string().optional().describe("Longer description."),
   labels: z.string().optional().describe("Comma-separated labels."),
-  test_path: z.string().optional().describe("Default path for `werkmeister open` and the suite."),
+  test_path: z
+    .string()
+    .optional()
+    .describe("Default path for `werkmeister feature open` and the suite."),
   starting_prompt: z
     .string()
     .optional()
@@ -544,7 +547,7 @@ function registerAuthoringTools(server: McpServer): void {
     {
       title: "Refresh a workspace's context layer",
       description:
-        "Refresh the workspace's context layer the way `werkmeister up` does: jit re-merges its " +
+        "Refresh the workspace's context layer the way `werkmeister feature up` does: jit re-merges its " +
         "SessionStart and PreToolUse hooks into .claude/settings.json; icm removes any " +
         "werkmeister-managed hooks. Never touches hooks it does not own.",
       inputSchema: { ...WORKSPACE_ARG },

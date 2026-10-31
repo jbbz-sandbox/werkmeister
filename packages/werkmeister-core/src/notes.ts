@@ -5,7 +5,7 @@
  * One note per file, `NNN-<type>-<slug>.md`, YAML frontmatter carrying
  * type / phase / author / refs / status. This module owns the shared read/write
  * plumbing: directory resolution, sequence numbering, frontmatter parsing, and the
- * type/status filters used by readers (`werkmeister down` printing, tests) — plus
+ * type/status filters used by readers (`werkmeister feature down` printing, tests) — plus
  * `buildContext`, the SessionStart hook's payload, built from those same reads.
  *
  * Generators never write note *content* here — the two sanctioned writers in the CLI

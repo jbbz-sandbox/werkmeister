@@ -15,7 +15,7 @@ containers, PRs and CI, the workflow stage, and the lifecycle buttons. Tabs for
 creating a workspace, reviewing open pull requests, infra health and the
 feature-selector links. Source: `apps/werkmeister-dashboard`.
 
-**Where you open it.** `werkmeister dashboard`, or the server `werkmeister connect`
+**Where you open it.** `werkmeister internal dashboard`, or the server `werkmeister infra connect`
 keeps on port 3001. From a Claude Code session, the `open-workspaces-ui` tool
 opens the same page in your browser.
 

@@ -1,3 +1,3 @@
 ## Description
 
-Deprecated, kept for one release: use `werkmeister close-out --abandon` with a reason.
+Deprecated, kept for one release: use `werkmeister workspace abandon` with a reason.

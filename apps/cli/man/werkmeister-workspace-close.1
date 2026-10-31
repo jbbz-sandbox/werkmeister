@@ -1,0 +1,27 @@
+.TH WERKMEISTER-WORKSPACE-CLOSE 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-workspace\-close \- End a workspace after every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. Refuses without postmortem.md (run the post\-mortem first) unless \-\-skip\-postmortem gives a reason
+.SH SYNOPSIS
+\fBwerkmeister workspace close\fR [name]
+.SH OPTIONS
+.TP
+\fB\-y, \-\-yes\fR
+Skip the confirmation prompt
+.TP
+\fB\-\-skip\-postmortem <reason>\fR
+Close out without a post\-mortem; the reason goes in closeout.md
+.SH DESCRIPTION
+.PP
+The one way to end a workspace. First the post\-mortem: it refuses without \fBpostmortem.md\fR unless \fB\-\-skip\-postmortem\fR gives a reason. After every PR shipped, it closes the issue, writes \fBcloseout.md\fR, removes the workspace and deletes merged branches. \fBwerkmeister workspace abandon "<reason>"\fR instead records the reason, leaves the issue, pushes every branch and keeps them, and removes the workspace. It lists terminal Claude sessions still open in the workspace.
+.PP
+The full process is in docs/workspace\-lifecycle.md.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister workspace close
+werkmeister workspace abandon "superseded by SW\-200" my\-feature
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

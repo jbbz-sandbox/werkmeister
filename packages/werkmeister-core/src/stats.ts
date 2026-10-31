@@ -453,7 +453,7 @@ function classifyUsage(limitMib: number, usagePct: number): UsageStatus {
  * memory limit.
  *
  * *collectMinutes* of 0 takes a quick 15-second snapshot instead, which is what
- * `werkmeister optimize` does with no `--collect`.
+ * `werkmeister machine optimize` does with no `--collect`.
  *
  * Only `memory_limit` is read from services.yaml: `memory_reservation` sits
  * beside it in the config but no comparison here uses it.

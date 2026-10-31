@@ -101,7 +101,7 @@ farm outside the worktree:
 
 This was run against the live daemon (see Evidence):
 - **CLI.** The bundle's one runtime external is `dockerode`, so the worktree's
-  `apps/cli/dist/main.js` drives the host daemon with nothing else. `werkmeister status` listed every
+  `apps/cli/dist/main.js` drives the host daemon with nothing else. `werkmeister feature status` listed every
   feature with real container state.
 - **Dashboard.** The worktree's `apps/werkmeister-dashboard/dist/main.js`, on top of the worktree's
   `werkmeister-core`, answered `workspace-status`, `kube-context` and `docker-ui` over stdio with real <!-- docs-check: ignore -->

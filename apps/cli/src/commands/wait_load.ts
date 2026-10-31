@@ -1,5 +1,5 @@
 /**
- * werkmeister wait-load
+ * werkmeister internal wait-load
  *
  * The pr gate's host-load wait (SW-209), run by the generated with-temp-home
  * before its command (SW-224). Always exits 0: load never decides whether the

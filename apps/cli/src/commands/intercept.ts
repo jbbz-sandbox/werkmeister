@@ -1,9 +1,9 @@
 /**
- * werkmeister intercept <feature> -s <service>
+ * werkmeister infra intercept <feature> -s <service>
  *
  * Route a header-scoped slice of live k8s **dev** traffic to the feature's
  * local service via Telepresence OSS.
- * Additive to the compose path: the container `werkmeister up` publishes on the
+ * Additive to the compose path: the container `werkmeister feature up` publishes on the
  * slot host port is the intercept target, so hot-reload keeps working. Only
  * requests carrying `x-feature: <feature>` are rerouted; teammates and
  * baseline dev traffic are untouched.
@@ -33,7 +33,7 @@ function localServicesOf(workspace: string): string[] {
     .filter(Boolean);
 }
 
-/** Execute ``werkmeister intercept``. */
+/** Execute ``werkmeister infra intercept``. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.status) {
     for (const cmd of [
@@ -76,7 +76,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
 
   if (!service) {
-    fail("Service required: werkmeister intercept <feature> -s <service>");
+    fail("Service required: werkmeister infra intercept <feature> -s <service>");
   }
 
   const r = await tp.startIntercept({
@@ -106,10 +106,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       `  Send cluster requests with header '${r.header}: ${feature}' to reach your local ${r.service}.`,
     );
   }
-  console.log(`  End:  werkmeister intercept ${feature} --leave -s ${r.service}`);
+  console.log(`  End:  werkmeister infra intercept ${feature} --leave -s ${r.service}`);
   console.log();
 }
 
 // ponytail: no long-running supervision — the intercept lives in the
-// telepresence daemon until `--leave`/`werkmeister down`; add a `--watch` mode
+// telepresence daemon until `--leave`/`werkmeister feature down`; add a `--watch` mode
 // only if dangling intercepts become a real problem.

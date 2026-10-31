@@ -5,5 +5,5 @@ Lists the workspaces under the workspaces root with their issue and labels. The 
 ## Examples
 
 ```bash
-werkmeister list-workspaces
+werkmeister workspace list
 ```

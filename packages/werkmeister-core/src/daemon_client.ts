@@ -51,7 +51,7 @@ export class DaemonUnavailable extends SandboxError {
   constructor(detail: string) {
     super(
       `werkmeister daemon not reachable at ${daemonUrl()} (${detail}). ` +
-        "Run `werkmeister setup` (macOS) or `werkmeister connect`.",
+        "Run `werkmeister machine setup` (macOS) or `werkmeister infra connect`.",
       "DAEMON_DOWN",
     );
   }

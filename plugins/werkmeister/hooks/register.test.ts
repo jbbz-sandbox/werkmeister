@@ -2099,7 +2099,7 @@ test("Connect runs werkmeister connect, refreshes, and the infra line shows stat
   await ui.press({ key: "connect" });
   expect(w.calls.filter((c) => c.key === `${WS}/connect`)).toHaveLength(1);
   expect(w.calls.filter((c) => c.key === `${WS}/workspace-status`).length).toBe(before + 1);
-  expect((await ui.find({ key: "note" }))?.text).toBe("werkmeister connect: done");
+  expect((await ui.find({ key: "note" }))?.text).toBe("werkmeister infra connect: done");
   await ui.unmount();
 });
 

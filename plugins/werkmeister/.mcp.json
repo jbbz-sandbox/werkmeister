@@ -2,7 +2,7 @@
   "mcpServers": {
     "werkmeister": {
       "command": "werkmeister",
-      "args": ["mcp"]
+      "args": ["internal", "mcp"]
     }
   }
 }

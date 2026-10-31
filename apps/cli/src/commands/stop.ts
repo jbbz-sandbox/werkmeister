@@ -1,15 +1,15 @@
 /**
- * werkmeister stop <feature>
+ * werkmeister feature stop <feature>
  *
  * Stop containers for a feature without removing them or releasing the slot.
- * The feature can be resumed with ``werkmeister restart <feature>`` or
- * ``werkmeister up <feature>``.
+ * The feature can be resumed with ``werkmeister feature restart <feature>`` or
+ * ``werkmeister feature up <feature>``.
  *
- * For shared infrastructure use ``werkmeister stop infra``.
+ * For shared infrastructure use ``werkmeister infra stop``.
  *
- * ``werkmeister stop --if-idle`` is the SessionEnd hook behind ``auto_stop`` (#231);
+ * ``werkmeister internal session-end`` is the SessionEnd hook behind ``auto_stop`` (#231);
  * the stop it decides on goes to the host daemon (``--via-daemon``, SW-184).
- * ``werkmeister stop --idle <minutes> [feature]`` is one idle-reaper pass (SW-39).
+ * ``werkmeister internal reap <minutes> [feature]`` is one idle-reaper pass (SW-39).
  */
 
 import { spawn } from "node:child_process";
@@ -25,7 +25,7 @@ import { findDotenv, loadDotenv } from "../lib/dotenv.js";
 /**
  * Stop the workspace's own feature unless another Claude session is open in it.
  * A SessionEnd hook must never hold up or break exit, so this prints nothing,
- * never throws, and hands `werkmeister stop <feature>` to a detached child instead of
+ * never throws, and hands `werkmeister feature stop <feature>` to a detached child instead of
  * waiting on `docker compose stop`.
  */
 function stopIfIdle(): void {
@@ -45,7 +45,7 @@ function stopIfIdle(): void {
       entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT ?? null,
     });
     if (!feature) return;
-    spawn(process.execPath, [process.argv[1], "stop", feature, "--via-daemon"], {
+    spawn(process.execPath, [process.argv[1], "feature", "stop", feature, "--via-daemon"], {
       cwd: workspaceRoot,
       detached: true,
       stdio: "ignore",
@@ -114,7 +114,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     // how to print the message. Every other code propagates.
     if (e instanceof SandboxError && e.code === "NOT_RUNNING") {
       error(e.message);
-      info(`Start it with: werkmeister up ${feature}`);
+      info(`Start it with: werkmeister feature up ${feature}`);
       process.exit(1);
     }
     throw e;
@@ -122,10 +122,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' stopped${Colors.RESET}\n`);
   console.log(
-    `  ${Colors.DIM}Slot ${slot} preserved — resume with: werkmeister restart ${feature}${Colors.RESET}`,
+    `  ${Colors.DIM}Slot ${slot} preserved — resume with: werkmeister feature restart ${feature}${Colors.RESET}`,
   );
   console.log(
-    `  ${Colors.DIM}To fully tear down:              werkmeister down ${feature}${Colors.RESET}`,
+    `  ${Colors.DIM}To fully tear down:              werkmeister feature down ${feature}${Colors.RESET}`,
   );
   console.log();
 }

@@ -25,7 +25,7 @@ import { loadGithubOrg, standardsDirPath } from "./global_config.js";
 import { run } from "./proc.js";
 import { loadStandardsModules, parseFrontmatter } from "./standards.js";
 
-const _GIT_TIMEOUT = 5; // seconds; never hang `werkmeister init-workspace` on a git hiccup
+const _GIT_TIMEOUT = 5; // seconds; never hang `werkmeister workspace init` on a git hiccup
 
 /** Where a standards tree lives on GitHub: repo URL + the tree's path inside it. */
 export interface StandardsSource {
@@ -108,7 +108,7 @@ function serviceRepoBase(): string {
 const _GENERATED_HEADER = `<!--
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
   Source:    {source} (edit that file instead)
-  Generator: werkmeister init-workspace / werkmeister skills sync
+  Generator: werkmeister workspace init / werkmeister skills sync
              (packages/werkmeister-core/src/workspace_skills.ts)
   Freshness: werkmeister skills check
 -->

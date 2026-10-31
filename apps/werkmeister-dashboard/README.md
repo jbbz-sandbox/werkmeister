@@ -1,9 +1,9 @@
 # workspaces dashboard
 
-The localhost **workspaces dashboard** (`werkmeister dashboard`, and the server
-`werkmeister connect` keeps on :3001), the `--browser-form` create page, and the
+The localhost **workspaces dashboard** (`werkmeister internal dashboard`, and the server
+`werkmeister infra connect` keeps on :3001), the `--browser-form` create page, and the
 MCP App UI bundles. It has no MCP server: every tool lives in
-[`apps/werkmeister-mcp`](../werkmeister-mcp) (`werkmeister mcp`), and this app's `/api/tool` calls that
+[`apps/werkmeister-mcp`](../werkmeister-mcp) (`werkmeister internal mcp`), and this app's `/api/tool` calls that
 server's `createServer()` over an in-memory transport.
 
 ## UI degradation ladder
@@ -35,7 +35,7 @@ sampling (no host implements it) — prompt refinement goes through the
 
 The tool table is in [`apps/werkmeister-mcp/README.md`](../werkmeister-mcp/README.md#tools).
 
-Issue reads and status lookups go through the issue tracker `werkmeister setup`
+Issue reads and status lookups go through the issue tracker `werkmeister machine setup`
 configured (`issueTracker()` in `werkmeister-core/issue_tracker`); the dashboard never
 names a tracker, and the create form's "Fetch from …" button takes its label from
 the bundle (`ui:options.trackerLabel` on `issue_id`).
@@ -48,7 +48,7 @@ The CLI owns the inputs and the create logic:
   RJSF bundle (`{schema, uiSchema, formData, title}`) built from the same prompt
   definitions as the terminal wizard (`packages/werkmeister-core/src/workspace_prompts.ts`,
   converted by `form_schema.ts`). Change a prompt there and every form tracks it.
-- **Creation** runs `werkmeister workspace <feature> [--flag value …]`; form keys
+- **Creation** runs `werkmeister workspace new <feature> [--flag value …]`; form keys
   map 1:1 onto CLI flags. The CLI validates, refuses existing branches, and
   rolls back partial worktrees.
 
@@ -57,7 +57,7 @@ The CLI owns the inputs and the create logic:
 | File | Role |
 |------|------|
 | `src/main.ts` | The localhost dashboard: `GET /` and `/api/*` on `PORT` (default 3001) |
-| `src/form-cli.ts` | `werkmeister workspace --browser-form` — the no-MCP standalone form path |
+| `src/form-cli.ts` | `werkmeister workspace new --browser-form` — the no-MCP standalone form path |
 | `src/lib/browser-ui.ts` | Localhost dashboard server (`/api/tool` dispatch via in-memory MCP client, SSE session stream) |
 | `src/lib/localhost-form.ts` | Blocking localhost create-form server (localhost-callback pattern) |
 | `src/lib/session-stream.ts` | Claude session tailer behind `claude-transcript`/SSE |
@@ -80,8 +80,8 @@ repo root) — they import the package by name, never by relative path.
 
 ## Wiring
 
-The MCP wiring is `werkmeister mcp` (see `apps/werkmeister-mcp/README.md`). This app only
-needs building: `werkmeister mcp` reads its `dist/` for the `ui://` HTML and the
+The MCP wiring is `werkmeister internal mcp` (see `apps/werkmeister-mcp/README.md`). This app only
+needs building: `werkmeister internal mcp` reads its `dist/` for the `ui://` HTML and the
 browser form.
 
 ```bash

@@ -376,7 +376,7 @@ describe("retireLegacyPlugin", () => {
     const runner = fakeRunner({});
     const steps = retireLegacyPlugin(pluginsDir(true), runner, true);
     expect(steps[0].ok).toBe(false);
-    expect(steps[0].detail).toContain("w9r setup");
+    expect(steps[0].detail).toContain("w9r machine setup");
     expect(runner.calls).toEqual([]);
   });
 
@@ -1067,7 +1067,7 @@ describe("syncClaudeStandardsDir", () => {
       const [step] = syncClaudeStandardsDir(checkOnly, install, settings, standards);
       expect(step).toMatchObject({
         ok: true,
-        detail: "not granted (opt in via `werkmeister setup`)",
+        detail: "not granted (opt in via `werkmeister machine setup`)",
       });
     }
     expect(fs.readFileSync(settings, "utf8")).toBe("{}");

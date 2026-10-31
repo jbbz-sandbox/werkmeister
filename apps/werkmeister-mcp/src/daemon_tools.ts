@@ -47,7 +47,7 @@ export function registerDaemonTools(server: McpServer): void {
     {
       title: "Remove orphaned volumes and stale slots",
       description:
-        "`werkmeister clean`: remove Docker volumes and slot entries whose feature is gone. " +
+        "`werkmeister machine clean`: remove Docker volumes and slot entries whose feature is gone. " +
         "Dry run unless `dryRun: false`. With `all`, tears down active features first.",
       inputSchema: {
         all: z.boolean().optional().describe("Also tear down active features. Default false."),
@@ -66,7 +66,7 @@ export function registerDaemonTools(server: McpServer): void {
     {
       title: "Container resource usage",
       description:
-        "`werkmeister stats`: CPU and memory per container, now or sampled over `collect` " +
+        "`werkmeister machine stats`: CPU and memory per container, now or sampled over `collect` " +
         "minutes with recommended limits.",
       inputSchema: {
         ...COLLECT,
@@ -95,7 +95,7 @@ export function registerDaemonTools(server: McpServer): void {
     {
       title: "Usage against configured limits",
       description:
-        "`werkmeister optimize`: each service's observed memory against its configured limit, " +
+        "`werkmeister machine optimize`: each service's observed memory against its configured limit, " +
         "flagging the ones at risk or over-provisioned.",
       inputSchema: { ...COLLECT },
     },

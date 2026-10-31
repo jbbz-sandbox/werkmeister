@@ -5,5 +5,5 @@ Opens a workspace in VS Code. The dashboard's `open-workspace` tool does the sam
 ## Examples
 
 ```bash
-werkmeister code my-feature
+werkmeister workspace code my-feature
 ```

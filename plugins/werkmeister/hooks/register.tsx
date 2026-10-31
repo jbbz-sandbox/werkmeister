@@ -87,7 +87,7 @@ try {
     'workspace-status': () => core.getWorkspaceStatuses(),
     'claim-resume-nudge': async () => ({ message: await core.claimResumeNudge(args.name) }),
     'workspace-resources': () => core.getWorkspaceResources(),
-    // The same snapshot \`werkmeister status --intercepts --json\` prints: the CLI stays the one source of intercept state.
+    // The same snapshot \`werkmeister feature status --intercepts --json\` prints: the CLI stays the one source of intercept state.
     intercepts: async () => (await sibling('status.js')).interceptsSnapshot(),
     // docker mode from the pane: it has no TTY for host mode's root-daemon sudo prompt (SW-12).
     'intercept-start': async () => (await sibling('telepresence.js')).startIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }),
@@ -184,7 +184,7 @@ const INTERCEPT = "intercept:";
 const PRS = { plugin: "werkmeister", key: "prs" } as const;
 const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
 const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
-/** BUSY while `werkmeister connect` runs; no workspace name has parentheses. */
+/** BUSY while `werkmeister infra connect` runs; no workspace name has parentheses. */
 const CONNECTING = "(connect)";
 
 const FORM = { plugin: "werkmeister", key: "formSchema" } as const;
@@ -842,19 +842,19 @@ const INFRA_COLOR: Record<InfraStatus["state"], "success" | "warning" | "error">
   unknown: "warning",
 };
 
-/** `werkmeister connect`: brings up the shared infra, then refreshes so the infra line shows the result. */
+/** `werkmeister infra connect`: brings up the shared infra, then refreshes so the infra line shows the result. */
 async function connect($: EngineInterface): Promise<void> {
   const { value: busy = "" } = await $.state.get(BUSY);
   if (busy !== "") return;
   await $.state.set(BUSY, CONNECTING);
-  await $.state.set(NOTE, "werkmeister connect…");
+  await $.state.set(NOTE, "werkmeister infra connect…");
   try {
     const r = await core<{ ok: boolean }>($, "connect", {}, 600000);
     await $.state.set(
       NOTE,
       r.ok
-        ? "werkmeister connect: done"
-        : "werkmeister connect: some infra failed to start; check docker and your kubeconfig",
+        ? "werkmeister infra connect: done"
+        : "werkmeister infra connect: some infra failed to start; check docker and your kubeconfig",
     );
   } catch (err) {
     await $.state.set(NOTE, (err as Error).message);
@@ -1206,7 +1206,7 @@ function startDraft(name: string, args: Record<string, unknown>): string {
 
 /**
  * ▶ Start work: one Desktop session in the workspace folder, with the title, model, prompt and background
- * werkmeister-core builds (the same ones `werkmeister start-args` prints for next-wave). A refused or failed call
+ * werkmeister-core builds (the same ones `werkmeister workspace prompt --args` prints for next-wave). A refused or failed call
  * becomes a draft in this session's prompt box asking its model to make it. BUSY drops a second press.
  */
 async function startWork($: EngineInterface, name: string): Promise<void> {

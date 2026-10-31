@@ -82,7 +82,7 @@ docker logs {container_name} --tail 100 2>&1
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `ECONNREFUSED` to database | postgres forward not ready | `docker restart w9r-k8s-forwards` or check k8s forwards |
-| `yarn: command not found` | Bad Docker image or missing node_modules volume | `werkmeister down --volumes && werkmeister up` |
+| `yarn: command not found` | Bad Docker image or missing node_modules volume | `werkmeister feature down --volumes && werkmeister feature up` |
 | OOM Killed | Container exceeded memory limit | Increase `memory_limit` in the repo's `.werkmeister/services.yaml` |
 | Port already in use | Another process using the port | `lsof -i :{port}` to find the conflict |
 | `ENOSPC` | Docker disk full | `docker system prune -a` |
@@ -127,9 +127,9 @@ kubectl config current-context
 kubectl get nodes >/dev/null 2>&1 && echo "Cluster OK" || echo "Cluster unreachable"
 
 # The container reads the generated kubeconfig, not your live one —
-# `werkmeister connect` regenerates it (rewriting the API server to
+# `werkmeister infra connect` regenerates it (rewriting the API server to
 # host.docker.internal so it resolves from inside the container).
-werkmeister connect
+werkmeister infra connect
 
 # Restart forwards afterwards
 docker restart w9r-k8s-forwards
@@ -230,7 +230,7 @@ When everything is broken:
 
 ```bash
 # 1. Stop all feature services
-werkmeister down --all-features
+werkmeister feature down --all-features
 
 # 2. Restart shared infrastructure
 cd "$WERKMEISTER_ROOT"
@@ -242,17 +242,17 @@ sleep 30
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep w9r
 
 # 4. Re-start your feature
-werkmeister up {feature}
+werkmeister feature up {feature}
 
 # 5. Verify
-werkmeister status
+werkmeister feature status
 ```
 
 ### Nuclear Option (full reset)
 
 ```bash
 # Stop everything
-werkmeister down --all-features --volumes
+werkmeister feature down --all-features --volumes
 docker compose -f infra/compose/shared-infra.yml down -v
 
 # Clean up
@@ -260,7 +260,7 @@ docker system prune -a --volumes  # WARNING: removes ALL unused Docker resources
 
 # Start fresh
 docker compose -f infra/compose/shared-infra.yml up -d
-werkmeister up {feature}
+werkmeister feature up {feature}
 ```
 
 ## Canonical test URLs

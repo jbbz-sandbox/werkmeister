@@ -5,7 +5,7 @@ The guided first run (and re-run) of a werkmeister machine. It asks everything u
 ## Examples
 
 ```bash
-werkmeister setup           # guided
-werkmeister setup --check   # report state, change nothing
-werkmeister setup --yes     # accept every default
+werkmeister machine setup           # guided
+werkmeister machine setup --check   # report state, change nothing
+werkmeister machine setup --yes     # accept every default
 ```

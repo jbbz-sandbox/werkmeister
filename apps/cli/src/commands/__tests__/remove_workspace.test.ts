@@ -55,7 +55,7 @@ it("--abandon passes the reason through to core", async () => {
   expect(removeWorkspace).toHaveBeenCalledWith("ws", { abandon: "superseded by #140" });
 });
 
-it("prints the deprecation notice pointing at close-out --abandon", async () => {
+it("prints the deprecation notice pointing at workspace abandon", async () => {
   await runRemove({ name: "ws", yes: true });
-  expect(vi.mocked(warn).mock.calls[0][0]).toMatch(/deprecated.*werkmeister close-out --abandon/);
+  expect(vi.mocked(warn).mock.calls[0][0]).toMatch(/deprecated.*werkmeister workspace abandon/);
 });

@@ -238,7 +238,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     // Menu-only (see commandPalette below): the feature is only known from a
     // tree node — there is nothing for a bare palette invocation to pass.
     //
-    // Unlike its siblings this does not shell out to `werkmeister logs`. That
+    // Unlike its siblings this does not shell out to `werkmeister feature logs`. That
     // command ends in `proc.run` (spawnSync, `stdio: "inherit"`), so nothing
     // here could read its output, and killing it would leave its `docker
     // compose` grandchild tailing. See logs.ts.
@@ -269,7 +269,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       await runInTerminal(["workspace"], root, "workspace");
     }),
 
-    // `werkmeister open` blocks for the whole lifetime of the Chrome window (Ctrl-C
+    // `werkmeister feature open` blocks for the whole lifetime of the Chrome window (Ctrl-C
     // is how you close it), so it gets its own detached process rather than
     // occupying the shared terminal.
     // ponytail: fire-and-forget — a launch failure after spawn is invisible.
@@ -292,7 +292,7 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       });
       child.on(
         "error",
-        (e) => void vscode.window.showErrorMessage(`werkmeister open: ${e.message}`),
+        (e) => void vscode.window.showErrorMessage(`werkmeister feature open: ${e.message}`),
       );
       child.unref();
       void vscode.window.showInformationMessage(`Opening a tagged browser for '${ws.name}'…`);

@@ -1,5 +1,5 @@
 /**
- * werkmeister list-workspaces
+ * werkmeister workspace list
  *
  * The workspaces under $WERKMEISTER_WORKSPACES_ROOT with their issue and
  * labels. The scan is `werkmeister-core`'s `listWorkspaces` -- the same call the
@@ -16,7 +16,7 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
 
   if (!workspaces.length) {
     console.log(
-      `  ${Colors.DIM}No workspaces. Create one with: werkmeister workspace <feature>${Colors.RESET}\n`,
+      `  ${Colors.DIM}No workspaces. Create one with: werkmeister workspace new <feature>${Colors.RESET}\n`,
     );
     return;
   }
@@ -38,6 +38,6 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
   }
 
   console.log();
-  console.log(`  ${Colors.DIM}End one with: werkmeister close-out <name>${Colors.RESET}`);
+  console.log(`  ${Colors.DIM}End one with: werkmeister workspace close <name>${Colors.RESET}`);
   console.log();
 }

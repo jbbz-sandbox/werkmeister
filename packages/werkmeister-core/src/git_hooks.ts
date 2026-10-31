@@ -33,7 +33,7 @@ export function configureGitHooksPath(repoRoot?: string | null): boolean {
 
   // Installed from npm rather than run from a checkout: there is no repo to
   // guard, and git would answer `fatal: not in a git directory` — a warning on
-  // every `werkmeister connect` about a hook nobody wanted. `.git` is a file in a
+  // every `werkmeister infra connect` about a hook nobody wanted. `.git` is a file in a
   // worktree and a directory in a clone; existsSync accepts both.
   if (!fs.existsSync(path.join(root, ".git"))) {
     return false;
@@ -45,7 +45,7 @@ export function configureGitHooksPath(repoRoot?: string | null): boolean {
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
       // Informational only — a missing git binary should warn, not block
-      // `werkmeister connect`.
+      // `werkmeister infra connect`.
       warn(
         "git was not found on PATH — could not check or configure " +
           `core.hooksPath. The werkmeister secret-commit guard (${HOOKS_PATH}/` +

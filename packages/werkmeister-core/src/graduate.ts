@@ -45,7 +45,7 @@ export class GraduationError extends SandboxError {
  *
  * `overrides.standards_dir` can point at a shared clone, a packaged tree, or
  * someone else's repo, and graduation writes *into* it. Checked as a
- * precondition rather than left to the write itself: `werkmeister down` reports a
+ * precondition rather than left to the write itself: `werkmeister feature down` reports a
  * GraduationError but swallows anything else so teardown is never blocked, so
  * an EACCES escaping from writeFileSync would present as a graduation that
  * quietly did nothing.

@@ -1,9 +1,9 @@
 /**
- * werkmeister migrate [--workspaces] [--check]
+ * werkmeister machine migrate [--workspaces] [--check]
  *
  * One-shot move of ~/.sandbox to ~/.werkmeister (SW-92). name-check: ignore
- * Repoints every file that carries the old path. Safe to re-run; refuses while
- * containers that the move would break are running.
+ * Repoints every file that carries the old path, then rewrites what the CLI wrote with
+ * pre-SW-186 spellings. Safe to re-run; refuses while containers that the move would break are running.
  */
 
 import { migrate } from "werkmeister-core/migrate";
@@ -20,5 +20,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     warn(check ? "Migration would not complete." : "Migration did not complete.");
     process.exit(1);
   }
-  success(check ? "Nothing written (--check)." : "Migrated to ~/.werkmeister.");
+  success(
+    check
+      ? "Nothing written (--check)."
+      : "Migrated: ~/.werkmeister and every workspace use the current spellings.",
+  );
 }

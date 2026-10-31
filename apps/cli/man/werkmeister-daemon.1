@@ -1,0 +1,26 @@
+.TH WERKMEISTER-DAEMON 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-daemon \- The host daemon (the MCP server on port 3002)
+.SH SYNOPSIS
+\fBwerkmeister daemon\fR [command]
+.SH DESCRIPTION
+.PP
+The host daemon is the werkmeister MCP server on port 3002 (\fBoverrides.mcp_port\fR). The VS Code extension, the SessionEnd stop and the scheduler reach it over HTTP. On macOS, launchd keeps it up once it is installed; elsewhere \fBwerkmeister infra connect\fR starts it with a PID file.
+.IP \(bu 3
+\fBstatus\fR says whether it is serving and whether the launchd agent is installed and current.
+.IP \(bu 3
+\fBinstall\fR writes or refreshes the launchd agent: the same step \fBwerkmeister machine setup\fR offers.
+.IP \(bu 3
+\fBuninstall\fR removes the agent and stops launchd's copy; \fBinfra connect\fR starts it again.
+.IP \(bu 3
+\fBrestart\fR restarts it, through launchd when launchd owns it.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister daemon status
+werkmeister daemon install
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

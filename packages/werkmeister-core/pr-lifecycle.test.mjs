@@ -1263,7 +1263,7 @@ test("removeWorkspace refuses while a PR is open, before touching anything", asy
     );
     assert.ok(err instanceof WorkspaceError, String(err));
     assert.match(err.message, /app: PR is open/);
-    assert.match(err.message, /--abandon/);
+    assert.match(err.message, /workspace abandon "<reason>"/);
     assert.ok(fs.existsSync(ws));
   } finally {
     clean(ws);
@@ -1390,7 +1390,10 @@ test("closeOut --abandon without postmortem.md refuses before abandoning the PR 
   });
   try {
     const err = await refusal(ws, { abandon: "superseded" });
-    assert.match(String(err), /no postmortem\.md.*--abandon "<reason>" --skip-postmortem/);
+    assert.match(
+      String(err),
+      /no postmortem\.md.*workspace abandon "<reason>" pr-life-\w+ --skip-postmortem/,
+    );
     assert.match(
       fs.readFileSync(path.join(ws, "stages/03_propose/output/pr-app.md"), "utf8"),
       /status: open/,
@@ -1469,7 +1472,7 @@ test("closeOut --abandon: records why, comments it and closes the issue as not p
     assert.match(r.output, /removed abandoned=true/, "remove skips pushing handoff-only branches");
     assert.deepEqual(r.terminals, [`terminal session: pid 9 on ttys001 in ${ws} — /exit it`]);
     assert.equal(r.path, ws);
-    assert.match(r.command, /--abandon$/);
+    assert.match(r.command, /^werkmeister workspace abandon <reason> /);
   } finally {
     clean(ws);
   }
@@ -2241,7 +2244,7 @@ test("callbackMessage: the issue's texts", () => {
   );
   assert.equal(
     callbackMessage("shipped", URL9, "v1.2.0"),
-    `PR ${URL9} shipped in v1.2.0. Ask the person whether to run \`werkmeister close-out\`.`,
+    `PR ${URL9} shipped in v1.2.0. Ask the person whether to run \`werkmeister workspace close\`.`,
   );
   assert.equal(callbackMessage("closed", URL9), `PR ${URL9} was closed. Report it to the person.`);
   assert.equal(callbackMessage("open", URL9), null);

@@ -1,19 +1,19 @@
 /**
  * The one copy of a workspace run's start prompt and run limits (SW-153): the pane's
- * ▶ Start work, `werkmeister start-args` (the next-wave skill) and an autonomous BRIEF.md.
+ * ▶ Start work, `werkmeister workspace prompt --args` (the next-wave skill) and an autonomous BRIEF.md.
  */
 
 export const INTERACTIVE_LINE =
   "This is an interactive run: check with me at each stage's human check.";
 
 export const GATE_LINE =
-  "Run `werkmeister up` only when the gate needs it, and `werkmeister stop` this workspace's containers right after `werkmeister pr open` succeeds.";
+  "Run `werkmeister feature up` only when the gate needs it, and `werkmeister feature stop` this workspace's containers right after `werkmeister pr open` succeeds.";
 
 /** What an autonomous run may not do, as markdown bullets. */
 export const RUN_LIMITS = [
   "Tests never call the real Jira or GitHub APIs; the tracker is mocked. The only real issue update is the one `werkmeister pr open` makes for this ticket.",
   "Never read or write the real `~/.werkmeister`; tests use a temporary HOME.",
-  "No `npm link`, `npm`/`pnpm install -g`, `npm publish`, `werkmeister proxy-reload`, and no other workspaces.",
+  "No `npm link`, `npm`/`pnpm install -g`, `npm publish`, `werkmeister infra proxy-reload`, and no other workspaces.",
   'Where the ticket says "to confirm", use it as written unless the code shows a reason to change it, and record each choice in the stage output for PR review.',
   GATE_LINE,
 ]

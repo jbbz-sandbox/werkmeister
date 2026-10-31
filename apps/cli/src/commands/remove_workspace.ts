@@ -1,7 +1,7 @@
 /**
  * werkmeister remove-workspace <name> [--yes] [--abandon <reason>]
  *
- * Deprecated for one release (#160): `werkmeister close-out --abandon` is the
+ * Deprecated for one release (#160): `werkmeister workspace abandon` is the
  * public verb, and `removeWorkspace` is the internal step it calls.
  *
  * Hand off and delete a workspace: commit + push every worktree branch, tear
@@ -26,7 +26,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const name = args.name as string;
 
   warn(
-    'werkmeister remove-workspace is deprecated — use `werkmeister close-out --abandon "<reason>"`',
+    'werkmeister remove-workspace is deprecated — use `werkmeister workspace abandon "<reason>"`',
   );
   console.log(`\n${Colors.BOLD}=== werkmeister remove-workspace: ${name} ===${Colors.RESET}\n`);
 

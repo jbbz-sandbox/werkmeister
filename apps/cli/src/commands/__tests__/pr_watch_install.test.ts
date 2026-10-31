@@ -117,6 +117,6 @@ describe("pr watch --install / --uninstall (built binary)", () => {
   it("refuses the flags on another action", () => {
     const res = cli("status", "--install");
     expect(res.status).toBe(1);
-    expect(res.stdout + res.stderr).toContain("--install/--uninstall go with `pr watch`.");
+    expect(res.stderr).toContain("unknown option '--install'");
   });
 });

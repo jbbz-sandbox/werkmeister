@@ -83,7 +83,7 @@ services:
       com.werkmeister.feature: "{{ feature_name }}"
       com.werkmeister.slot: "{{ slot }}"
       com.werkmeister.service: "{{ setup_name }}"
-      {#- One-shot: `werkmeister status` and the VS Code tree read this to keep a
+      {#- One-shot: `werkmeister feature status` and the VS Code tree read this to keep a
           finished setup container out of the running/total tally. #}
       com.werkmeister.role: "setup"
     working_dir: /app
@@ -140,7 +140,7 @@ services:
 {% endfor %}
 {% for svc in local_services %}
 {# SW-32: nothing reads a cli/library/extension watcher's output (the gate only #}
-{# docker-execs the test), so these idle unless `werkmeister up --dev`.             #}
+{# docker-execs the test), so these idle unless `werkmeister feature up --dev`.             #}
 {% set idle = svc.type in idle_types %}
   {{ svc.name }}:
     image: {{ svc.image | default('node:22') }}
@@ -224,7 +224,7 @@ services:
           git config --global --add url."https://$${GITHUB_AUTH_TOKEN}@github.com/".insteadOf "git+ssh://git@github.com/"
         fi
 {%- if idle %}
-        # WERKMEISTER_DEV is interpolated by compose from the env of `werkmeister up --dev`.
+        # WERKMEISTER_DEV is interpolated by compose from the env of `werkmeister feature up --dev`.
         [ "${WERKMEISTER_DEV:-}" = 1 ] || exec sleep infinity
 {%- endif %}
         {{ svc.command or "exec sleep infinity" }}

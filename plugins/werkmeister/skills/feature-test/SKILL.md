@@ -5,7 +5,7 @@ description: "Start a werkmeister feature environment and open a headed browser 
 
 # Werkmeister Feature Test
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
 Spins up a named feature, scaffolds test files if needed, and opens a headed Playwright browser paused at the home page for interactive inspection.
 
@@ -13,7 +13,7 @@ Spins up a named feature, scaffolds test files if needed, and opens a headed Pla
 
 - `werkmeister` CLI on PATH (its checkout is `paths.werkmeister_root` in `~/.werkmeister/config.yaml`)
 - `npx` / Node.js available
-- `werkmeister setup` run once on this machine — it downloads the Chromium build for the pinned Playwright (`werkmeister test --scaffold` installs the matching `@playwright/test` in the workspace)
+- `werkmeister machine setup` run once on this machine — it downloads the Chromium build for the pinned Playwright (`werkmeister feature test --scaffold` installs the matching `@playwright/test` in the workspace)
 - Shared infra may or may not be running — this skill ensures it is
 
 ## Routing model (important)
@@ -22,8 +22,8 @@ This skill is for front-door services (those with a `feature_router:`). A librar
 
 The ingress host is configured per machine, not hardcoded here: it derives from
 `ingress.local_domain` in `~/.werkmeister/config.yaml` joined to a service that
-declares a `feature_router:` block in `~/.werkmeister/services.yaml`. `werkmeister setup`
-owns those values, and `werkmeister test --scaffold` resolves them when it scaffolds the
+declares a `feature_router:` block in `~/.werkmeister/services.yaml`. `werkmeister machine setup`
+owns those values, and `werkmeister feature test --scaffold` resolves them when it scaffolds the
 test files (override with `--base-url`).
 
 Every request to that host is routed to a feature's containers via:
@@ -44,7 +44,7 @@ If the user has not provided a feature name, ask for one. Feature names must:
 ### Step 2 — Validate and scaffold
 
 ```bash
-werkmeister test <feature-name> --scaffold
+werkmeister feature test <feature-name> --scaffold
 ```
 
 This will:
@@ -58,7 +58,7 @@ Parse `WORKSPACE_PATH` from the output. All subsequent file operations and test 
 ### Step 3 — Ensure shared infrastructure
 
 ```bash
-werkmeister connect
+werkmeister infra connect
 ```
 
 This is idempotent — safe to run even if infra is already up. It starts Caddy and the k8s port-forwards, plus Jaeger and RedisInsight when `infra.profiles` in `~/.werkmeister/config.yaml` enables them.
@@ -66,7 +66,7 @@ This is idempotent — safe to run even if infra is already up. It starts Caddy 
 ### Step 4 — Start feature containers
 
 ```bash
-werkmeister up <feature-name>
+werkmeister feature up <feature-name>
 ```
 
 Starts containers only for the services in the workspace's `.env` `SERVICES=` list (from `workspace.yml`'s `services`). The rest are forwarded from k8s. Wait for the command to complete before proceeding.
@@ -77,11 +77,11 @@ Starts containers only for the services in the workspace's `.env` `SERVICES=` li
 cd <WORKSPACE_PATH> && SANDBOX_FEATURE=<feature-name> npx playwright test <feature-name>.spec.ts --headed
 ```
 
-Do NOT use `werkmeister test` (without `--scaffold`) here — run `npx playwright test` directly to ensure `--headed` is passed correctly.
+Do NOT use `werkmeister feature test` (without `--scaffold`) here — run `npx playwright test` directly to ensure `--headed` is passed correctly.
 
 The test will:
 1. Set the `X-Feature` cookie on `.<local_domain>`
-2. Navigate to the resolved base URL (printed by `werkmeister test --scaffold` as `base URL:`)
+2. Navigate to the resolved base URL (printed by `werkmeister feature test --scaffold` as `base URL:`)
 3. Call `page.pause()` → Playwright Inspector opens, browser stays open
 
 The terminal will block until the developer closes the Inspector or presses Resume. This is expected.
@@ -99,8 +99,8 @@ Key patterns already in the template:
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| `Feature 'X' already allocated` | Name collision with running feature | Choose different name or `werkmeister down X` |
+| `Feature 'X' already allocated` | Name collision with running feature | Choose different name or `werkmeister feature down X` |
 | Browser shows wrong feature | Cookie not set before `goto` | Ensure `addCookies` runs before `page.goto` |
-| HTTP 502 or connection refused | Feature containers not healthy yet | Wait ~30s and retry, or check `werkmeister status` |
+| HTTP 502 or connection refused | Feature containers not healthy yet | Wait ~30s and retry, or check `werkmeister feature status` |
 | `npx: command not found` | Node.js not on PATH in this shell | Add Node.js to PATH or use full path |
-| `Executable doesn't exist at .../ms-playwright/chromium-NNNN` | Chromium for this Playwright version not downloaded | Re-run `werkmeister setup`; if the workspace pins its own `@playwright/test`, run `npx playwright install chromium` in it |
+| `Executable doesn't exist at .../ms-playwright/chromium-NNNN` | Chromium for this Playwright version not downloaded | Re-run `werkmeister machine setup`; if the workspace pins its own `@playwright/test`, run `npx playwright install chromium` in it |

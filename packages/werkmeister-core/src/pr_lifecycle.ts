@@ -239,7 +239,7 @@ async function stopWorkspace(ws: string): Promise<string> {
   if (!feature) return "containers already stopped";
   try {
     await stopFeature(feature);
-    return "containers stopped (slot and volumes kept; `werkmeister up` resumes)";
+    return "containers stopped (slot and volumes kept; `werkmeister feature up` resumes)";
   } catch (e) {
     if ((e as { code?: string }).code === "NOT_RUNNING") return "containers already stopped";
     return `could not stop containers — ${(e as Error).message}`;
@@ -531,7 +531,7 @@ export async function waitForHostLoad(
   return `ran with host load ${load[0].toFixed(1)} over ${limit} after a 30 min wait`;
 }
 
-/** The gate's wait for `werkmeister wait-load`, which the generated with-temp-home runs first (SW-224). */
+/** The gate's wait for `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224). */
 export function waitForHostLoadNow(): Promise<string> {
   return waitForHostLoad(
     { hostLoad: readHostLoad, sleep: (ms) => delay(ms) },
@@ -738,7 +738,8 @@ async function gateChecks(
     touched.map(containerFor).find(Boolean) ?? containerFor(repoServices[0] ?? "");
   if (repo["lint"]) {
     const container = repoContainer();
-    if (!container) add("lint", false, "no running container for this repo — run `werkmeister up`");
+    if (!container)
+      add("lint", false, "no running container for this repo — run `werkmeister feature up`");
     else {
       await execCheck("lint", container, repo["lint"], 15);
     }
@@ -764,7 +765,9 @@ async function gateChecks(
       add(
         `test ${svc}`,
         Boolean(why),
-        why ? `skipped: ${why}` : "no running container for this repo — run `werkmeister up`",
+        why
+          ? `skipped: ${why}`
+          : "no running container for this repo — run `werkmeister feature up`",
       );
       continue;
     }
@@ -790,7 +793,7 @@ async function gateChecks(
   for (const svc of touched.filter((s) => local.has(s) && isServed(s))) {
     const def = services[svc] ?? {};
     if (!running.has(containerOf(feature, svc))) {
-      add(`baseline ${svc}`, false, "container not running — run `werkmeister up`");
+      add(`baseline ${svc}`, false, "container not running — run `werkmeister feature up`");
       continue;
     }
     const url = `http://localhost:${getServicePort(slot, def["port_offset"] ?? 0)}${def["health_endpoint"] ?? "/"}`;
@@ -804,7 +807,7 @@ async function gateChecks(
     const container = repoContainer();
     if (why) add("release", true, `skipped: ${why}`);
     else if (!container)
-      add("release", false, "no running container for this repo — run `werkmeister up`");
+      add("release", false, "no running container for this repo — run `werkmeister feature up`");
     else {
       const res = await execCheck("release", container, repo["release_check"], 5);
       if (res.code === 0 && nothingToBump(res.stdout + res.stderr)) release = "none";
@@ -1207,7 +1210,7 @@ export function callbackMessage(status: string, url: string, release?: string): 
   if (status === "merged")
     return `PR ${url} merged. Run \`werkmeister pr status\`, then follow the workspace router.`;
   if (status === "shipped")
-    return `PR ${url} shipped${release && release !== "none" ? ` in ${release}` : ""}. Ask the person whether to run \`werkmeister close-out\`.`;
+    return `PR ${url} shipped${release && release !== "none" ? ` in ${release}` : ""}. Ask the person whether to run \`werkmeister workspace close\`.`;
   if (status === "closed") return `PR ${url} was closed. Report it to the person.`;
   return null;
 }
@@ -1690,13 +1693,13 @@ export async function closeOut(
   const why = opts.abandon?.trim();
   if (opts.abandon !== undefined && !why) {
     throw new WorkspaceError(
-      `Abandon needs a reason: werkmeister close-out ${name} --abandon "<reason>"`,
+      `Abandon needs a reason: werkmeister workspace abandon "<reason>" ${name}`,
     );
   }
   const skip = opts.skipPostmortem?.trim();
   if (opts.skipPostmortem !== undefined && !skip) {
     throw new WorkspaceError(
-      `Skipping the post-mortem needs a reason: werkmeister close-out ${name} --skip-postmortem "<reason>"`,
+      `Skipping the post-mortem needs a reason: werkmeister workspace close ${name} --skip-postmortem "<reason>"`,
     );
   }
   const ws = await resolveWorkspaceDir(name).catch((e: Error) => {
@@ -1728,7 +1731,7 @@ async function closeOutLocked(
   skip: string | undefined,
   deps: Deps,
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
-  const command = `werkmeister close-out ${name}${why ? " --abandon" : ""}`;
+  const command = `werkmeister workspace ${why ? "abandon <reason>" : "close"} ${name}`;
   const cfg = loadConfigFile(ws, null);
   // SW-108: a run's lessons go with the workspace unless someone asks for them on purpose.
   // A retry (closeout.md written, removal failed) already passed this.
@@ -1736,7 +1739,7 @@ async function closeOutLocked(
   const postmortemRefusal =
     !skip && !fs.existsSync(path.join(ws, "closeout.md")) && !fs.existsSync(postmortem)
       ? `'${name}' has no postmortem.md. Run the post-mortem first: ask Claude to close out (the werkmeister \`postmortem\` skill), ` +
-        `or skip it with \`werkmeister close-out ${name}${why ? ' --abandon "<reason>"' : ""} --skip-postmortem "<reason>"\`.`
+        `or skip it with \`werkmeister workspace ${why ? 'abandon "<reason>"' : "close"} ${name} --skip-postmortem "<reason>"\`.`
       : null;
   // Before abandonWorkspace, which rewrites the PR files: a refusal changes nothing.
   if (why && postmortemRefusal) throw new WorkspaceError(postmortemRefusal);
@@ -1759,7 +1762,7 @@ async function closeOutLocked(
     const detail = life.prs.map((p) => `${p.stem}: ${p.status}`).join(", ") || "no PR files";
     throw new WorkspaceError(
       `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`werkmeister pr status\` after the release, ` +
-        `or give up with \`werkmeister close-out ${name} --abandon "<reason>"\`.`,
+        `or give up with \`werkmeister workspace abandon "<reason>" ${name}\`.`,
     );
   }
   // After the ship check, so an unshipped workspace hears that first.
@@ -1816,7 +1819,7 @@ async function closeOutLocked(
       ),
     );
   } catch (e) {
-    // Removed while the issue moved, by something outside this lock (`werkmeister remove`, rm).
+    // Removed while the issue moved, by something outside this lock (`werkmeister feature drop`, rm).
     if ((e as NodeJS.ErrnoException).code !== "ENOENT" || fs.existsSync(ws)) throw e;
     lines.push(`'${name}' is already closed out or removed: ${ws} is gone.`);
     return { command, output: lines.join("\n"), path: ws, terminals: [] };

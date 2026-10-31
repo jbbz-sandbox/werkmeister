@@ -24,7 +24,7 @@ const SKIP = [
   /\.smoke\.mjs$/,
   /(^|\/)(__tests__|test|bdd)\//,
   /\.snapshot\.json$/,
-  // `werkmeister migrate` is the one reader of the pre-rename names.
+  // `werkmeister machine migrate` is the one reader of the pre-rename names.
   /^packages\/werkmeister-core\/src\/migrate\.ts$/,
   /^scripts\/check-name\.mjs$/,
 ];

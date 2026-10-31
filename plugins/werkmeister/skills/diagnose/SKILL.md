@@ -1,11 +1,11 @@
 ---
 name: diagnose
-description: "Diagnose werkmeister issues by running comprehensive health checks across all layers: containers, networking, Caddy routing, and service connectivity. Use when a workspace URL isn't working, returns empty responses, shows wrong content, or any werkmeister infrastructure issue is suspected. Also use proactively after `werkmeister up` or `werkmeister proxy-reload` to verify everything is healthy."
+description: "Diagnose werkmeister issues by running comprehensive health checks across all layers: containers, networking, Caddy routing, and service connectivity. Use when a workspace URL isn't working, returns empty responses, shows wrong content, or any werkmeister infrastructure issue is suspected. Also use proactively after `werkmeister feature up` or `werkmeister infra proxy-reload` to verify everything is healthy."
 ---
 
 # diagnose
 
-> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister migrate`.
+> Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
 Run the following diagnostic steps in order. Report findings as a structured summary with PASS/FAIL/WARN for each check.
 
@@ -14,7 +14,7 @@ Run the following diagnostic steps in order. Report findings as a structured sum
 Get a structured baseline of all werkmeister state in one call:
 
 ```bash
-werkmeister status --json
+werkmeister feature status --json
 ```
 
 Parse the JSON to identify:
@@ -33,7 +33,7 @@ Host ports are slot-allocated per feature, so they are never fixed constants —
 ask the CLI for the feature's actual endpoints rather than assuming a range:
 
 ```bash
-werkmeister services <feature>
+werkmeister feature services <feature>
 ```
 
 Then probe each reported port with its health path from `~/.werkmeister/services.yaml`:
@@ -44,7 +44,7 @@ curl -s -o /dev/null -w "<service> (<port>): HTTP %{http_code} | Size: %{size_do
 ```
 
 Port ranges live in `~/.werkmeister/ports.yaml` and service health paths in
-`~/.werkmeister/services.yaml`; both are written by `werkmeister setup` and differ per
+`~/.werkmeister/services.yaml`; both are written by `werkmeister machine setup` and differ per
 machine.
 
 ## Step 3: Caddy Routing Verification
@@ -57,7 +57,7 @@ declares a `feature_router:` block in `~/.werkmeister/services.yaml`:
 
 ```bash
 DOMAIN=$(sed -n 's/^[[:space:]]*local_domain:[[:space:]]*//p' ~/.werkmeister/config.yaml ~/.werkmeister/config.yaml 2>/dev/null | head -1)
-SERVICE=frontend   # the routed service under test; `werkmeister services <feature>` lists them
+SERVICE=frontend   # the routed service under test; `werkmeister feature services <feature>` lists them
 BASE="https://${SERVICE}.${DOMAIN}"
 
 curl -sk -o /dev/null -w "homepage: HTTP %{http_code} | Size: %{size_download}\n" "$BASE/"
@@ -92,7 +92,7 @@ console.log('PASS: Caddyfile valid,', Object.values(servers).reduce((n,sv)=>n+wa
 
 This mirrors the CLI's canonical counter
 (`werkmeister-core/caddy.ts::countCompiledRoutes` — one count per `reverse_proxy`
-leaf, across **all** compiled servers, same unit `werkmeister proxy-reload`
+leaf, across **all** compiled servers, same unit `werkmeister infra proxy-reload`
 compares; the CLI ships as one bundle, so the walk is inlined here rather than
 imported). **Expected:** the printed count matches
 `grep -c 'reverse_proxy ' "$CADDYFILE"` — there is no
@@ -112,7 +112,7 @@ docker exec w9r-caddy wget -q -O /dev/null --timeout=3 http://host.docker.intern
 If Step 1 flagged any dead k8s forwards, get the full per-service table with HTTP health status:
 
 ```bash
-werkmeister status --k8s
+werkmeister infra status
 ```
 
 This performs real HTTP health checks (not just TCP) against each forward's health endpoint.
@@ -126,7 +126,7 @@ To check logs for a specific failing service (e.g. frontend on port 9053):
 docker logs w9r-k8s-forwards 2>&1 | grep "\[frontend\]" | tail -20
 ```
 
-Note: the correct host port for k8s-forwarded services is the `listen_port` from `werkmeister status --k8s`
+Note: the correct host port for k8s-forwarded services is the `listen_port` from `werkmeister infra status`
 output, **not** the remote k8s pod port. For example, frontend is at `localhost:9053`,
 not `localhost:4321`.
 

@@ -654,7 +654,7 @@ export function buildStandardsManifest(
     };
   }
   const manifest: StandardsManifest = {
-    generated_by: "werkmeister init-workspace",
+    generated_by: "werkmeister workspace init",
     universal: active.filter((key) => universal.includes(key)),
     domains,
   };
