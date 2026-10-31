@@ -366,7 +366,9 @@ const STARTING_PROMPT_FORMAT =
   "executing agent to re-read the ticket (including comments) for the latest direction " +
   "before starting.\n" +
   "2. Where to start — the services, repos, or code areas the work most likely touches, " +
-  "plus any explicit non-goals or out-of-scope notes from the source material.\n" +
+  "plus any explicit non-goals or out-of-scope notes from the source material. When the " +
+  "work measures or exercises a service's container, name that service here and say to " +
+  "measure in its container (started by `werkmeister feature up`), not in a throwaway one.\n" +
   "3. Acceptance criteria — a `- [ ]` checklist of concrete, verifiable conditions that " +
   "define done; where derivable, note how to verify each (command, test, or URL).\n" +
   "4. Open questions — anything that cannot be confidently derived, phrased as questions " +
@@ -609,7 +611,9 @@ function buildIssueExtractPrompt(
     : "";
 
   const servicesLine = serviceNames.length
-    ? '   - "services": array of service names the work most likely touches; [] if unclear. ' +
+    ? '   - "services": array of the services the issue says to run locally, including any ' +
+      "whose container it measures or exercises (memory, cold build or gate timings, its " +
+      "runtime); [] if none or unclear. " +
       "Choose ONLY from the registry above: " +
       serviceNames.join(", ") +
       "\n"

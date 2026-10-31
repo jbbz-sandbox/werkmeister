@@ -40,12 +40,12 @@ One `werkmeister workspace new` per ticket, **in sequence** (they share source r
 
 ```bash
 werkmeister workspace new <slug> --issue-id <ref> --repos <repo> \
-  [--services <only what the ticket says to run, e.g. a web app it changes>] --work-type <feature|bugfix|refactor|spike> \
+  [--services <only what the ticket says to run or measures>] --work-type <feature|bugfix|refactor|spike> \
   --labels focus [--autonomous] [--model sonnet]
 ```
 
 - Before the first create: the code checkout the CLI runs from is on an up-to-date `main` and rebuilt (`pnpm run build` at its root; the plugin's MCP server runs `apps/werkmeister-mcp/dist`).
-- List only the services the ticket says to run (usually none). The gate starts one container per touched repo and stops it (SW-34), so zero services is fine for a code change. Every listed service is a container plus an install and build on `werkmeister feature up`, so extra ones cost real CPU (SW-28).
+- List only the services the ticket says to run (usually none), and any service whose container the ticket measures or exercises (memory, cold build or gate timings, its runtime): without it `werkmeister feature up` starts nothing and the run measures in a throwaway container (SW-280). The gate starts one container per touched repo and stops it (SW-34), so zero services is fine for a plain code change. Every listed service is a container plus an install and build on `werkmeister feature up`, so extra ones cost real CPU (SW-28).
 - Batch check each one: the workspace dir holds `.werkmeister/issue.md` and `CLAUDE.md` has a `## Issue` section.
 
 ## 5. Start each one in Claude Desktop
