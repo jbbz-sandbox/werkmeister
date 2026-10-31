@@ -144,3 +144,36 @@ test("no werkmeister on PATH, or a failing wait-load, still runs the command (SW
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// SW-264: a temp HOME isolates files, not the daemon on :3002.
+test("WERKMEISTER_HOST defaults to an unreachable host; a caller's value is kept (SW-264)", () => {
+  const { root, bin } = wrapper();
+  const host = (env) =>
+    spawnSync(bin, ["sh", "-c", 'printf %s "$WERKMEISTER_HOST"'], { encoding: "utf8", env }).stdout;
+  try {
+    const { WERKMEISTER_HOST: _, ...env } = process.env;
+    assert.equal(host(env), "http://127.0.0.1:1");
+    assert.equal(host({ ...env, WERKMEISTER_HOST: "http://mine:9" }), "http://mine:9");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a daemon call under the wrapper raises DaemonUnavailable, never reaching :3002 (SW-264)", () => {
+  const { root, bin } = wrapper();
+  const client = new URL("./dist/daemon_client.js", import.meta.url).href;
+  const script = `import(${JSON.stringify(client)}).then(async (m) => {
+    console.log(m.daemonUrl());
+    await m.callTool("scheduler", {}, { timeoutMs: 5000 }).then(
+      () => console.log("reached"),
+      (e) => console.log(e instanceof m.DaemonUnavailable ? e.code : e.message));
+  })`;
+  try {
+    const { WERKMEISTER_HOST: _, ...env } = process.env;
+    const r = spawnSync(bin, ["node", "-e", script], { encoding: "utf8", env });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "http://127.0.0.1:1\nDAEMON_DOWN\n");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

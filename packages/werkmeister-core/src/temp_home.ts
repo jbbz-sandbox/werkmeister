@@ -22,6 +22,8 @@ trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM
 # Corepack keeps pnpm under HOME; without this a fresh HOME re-downloads it every run.
 export COREPACK_HOME="\${COREPACK_HOME:-$HOME/.cache/node/corepack}"
+# A temp HOME isolates files, not the daemon: unreachable unless the caller sets it (SW-264).
+export WERKMEISTER_HOST="\${WERKMEISTER_HOST:-http://127.0.0.1:1}"
 HOME=$tmp "$@"
 status=$?
 # A failure under load reads as load (SW-209).
