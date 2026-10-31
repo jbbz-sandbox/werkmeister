@@ -1757,12 +1757,16 @@ re-minted token needs only a reconnect (`/mcp`), not a rebuild. It is regenerate
 `init-workspace`; don't edit it. Open the workspace folder in VS Code and pick **Reopen in
 Container**, or run `npx @devcontainers/cli up --workspace-folder ~/features/<workspace>`.
 
-`~/.claude` inside is the volume `features-claude-home-<workspace>`, one per workspace, so
-the login survives a rebuild; log in to `claude` once per workspace, or pass a
-`claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN`. The registration is made again
-on every create.
-Remove the volume with `docker volume rm features-claude-home-<workspace>` once the
-workspace is gone. The volume holds no plugins,
+`~/.claude` inside is one volume, `werkmeister-claude-home`, shared by every workspace's
+container, so you log in to `claude` once. Or skip the login: export a `claude setup-token`
+token as `CLAUDE_CODE_OAUTH_TOKEN` on the host before the container is created; the
+devcontainer reads it at every attach (`remoteEnv`), so no generated file or container holds it
+and a new token needs only a reopen.
+Each container still reaches only its own workspace: the registration lives in
+`~/.claude.json`, outside the volume, is made again on every create, and sends that
+workspace's token. Close-out, abandon and `clean` never remove the volume; to reset the
+shared login, `docker volume rm werkmeister-claude-home` with no devcontainer running.
+The volume holds no plugins,
 so only the HTTP server's tools appear. Check it with `claude mcp list` inside: it should
 show `werkmeister` as connected.
 
