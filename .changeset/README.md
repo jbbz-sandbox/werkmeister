@@ -3,6 +3,8 @@
 A changeset is one file per user-visible change, written in the PR that makes it.
 `npx changeset` writes one interactively.
 
+A change that ships nothing to a package (tests, CI, docs) still needs `pnpm changeset add --empty`: the gate's release check fails on any changed package without a changeset.
+
 **Name the CLI, not `werkmeister-core`.** `werkmeister` is the only
 package that publishes, and the changeset's text lands in the changelog of
 whichever package it names — a changeset naming `werkmeister-core` still releases,
