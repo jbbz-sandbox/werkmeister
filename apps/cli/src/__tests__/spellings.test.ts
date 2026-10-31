@@ -5,21 +5,21 @@
  * Driven through `__parse`, which stops after commander and prints the command and
  * namespace, so no case touches docker, a workspace or the tracker.
  */
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../..");
 /** Built by the `test` script; a cold `tsx src/main.ts` per case transpiles the whole CLI each time (#206). */
 const MAIN = path.join(CLI_DIR, "dist/main.js");
 
-function parse(argv: string[]) {
-  const res = spawnSync(process.execPath, [MAIN, "__parse", ...argv], {
-    cwd: CLI_DIR,
-    encoding: "utf-8",
-  });
-  expect(res.status, res.stderr).toBe(0);
+const run = promisify(execFile);
+
+// Async: 56 sync cases never yield the worker's event loop, and past 60 s vitest's RPC times out.
+async function parse(argv: string[]) {
+  const res = await run(process.execPath, [MAIN, "__parse", ...argv], { cwd: CLI_DIR });
   return { ...JSON.parse(res.stdout), stderr: res.stderr };
 }
 
@@ -243,10 +243,9 @@ const CASES: [string[], string[]][] = [
 ];
 
 describe("command spellings", () => {
-  it.each(CASES)("%j", (oldArgv, newArgv) => {
-    const before = parse(oldArgv);
+  it.each(CASES)("%j", async (oldArgv, newArgv) => {
+    const [before, after] = await Promise.all([parse(oldArgv), parse(newArgv)]);
     expect(before.args).toMatchSnapshot();
-    const after = parse(newArgv);
     expect(after.args).toMatchObject(before.args);
     expect(after.stderr).toBe("");
     if (newArgv.join(" ") === oldArgv.join(" ")) return;

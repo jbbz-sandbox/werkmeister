@@ -5,14 +5,16 @@
  * HOME points at an empty dir so the wrapper never sources the developer's
  * ~/.werkmeister/env.sh.
  */
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { afterAll, describe, expect, it } from "vitest";
 
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
+const run = promisify(execFile);
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "bins-home-"));
 
 afterAll(() => fs.rmSync(home, { recursive: true, force: true }));
@@ -60,16 +62,32 @@ describe("no sandbox name", () => {
 
 // SW-180: grouping reorders the root help; it must not drop, repeat or hide a command.
 describe("root --help", () => {
-  it("lists every visible noun and command exactly once, and each verb under its noun", () => {
-    const visible = JSON.parse(cli("__reference").stdout).filter(
+  it("lists every visible noun and command exactly once, and each verb under its noun", async () => {
+    const visible: { name: string }[] = JSON.parse(cli("__reference").stdout).filter(
       (c: { hidden: boolean }) => !c.hidden,
     );
     const terms = (text: string) => text.match(/^ {2}[a-z][\w|-]*/gm)?.map((t) => t.trim()) ?? [];
     const root = terms(help("werkmeister").stdout);
+    // One async --help per noun: ~60 spawnSync calls blocked the worker past vitest's RPC timeout.
+    const nouns = [...new Set(visible.map((c) => c.name.split(" ")[0]))];
+    const nounHelp = new Map(
+      await Promise.all(
+        nouns.map(async (n) => {
+          const { stdout } = await run(
+            process.execPath,
+            [path.join(CLI_DIR, "dist/main.js"), n, "--help"],
+            {
+              env: { ...process.env, HOME: home },
+            },
+          );
+          return [n, terms(stdout)] as const;
+        }),
+      ),
+    );
     for (const { name } of visible) {
       const [noun, verb] = name.split(" ");
       expect(root.filter((t) => t.split("|")[0] === noun)).toHaveLength(1);
-      if (verb) expect(terms(cli(noun, "--help").stdout).filter((t) => t === verb)).toHaveLength(1);
+      if (verb) expect(nounHelp.get(noun)?.filter((t) => t === verb)).toHaveLength(1);
     }
   });
 
