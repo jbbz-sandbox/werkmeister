@@ -257,4 +257,10 @@ describe("command spellings", () => {
       ),
     );
   });
+
+  // SW-216: the flag must survive main.ts's namespace whitelist, or init always builds.
+  it("workspace init --no-build parses to build: false; the default stays true", async () => {
+    expect((await parse(["workspace", "init", "--no-build"])).args.build).toBe(false);
+    expect((await parse(["workspace", "init"])).args.build).toBe(true);
+  });
 });

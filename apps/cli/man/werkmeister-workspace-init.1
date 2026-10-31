@@ -20,6 +20,9 @@ Comma\-separated repos to keep as git worktrees (union with the repos owning \-\
 \fB\-\-force\fR
 When reconciling, delete repo worktrees dropped from workspace.yml even if they have uncommitted changes, and delete a \e<user>/\e<workspace> branch an earlier workspace left on origin instead of aborting (default: abort without changes).
 .TP
+\fB\-\-no\-build\fR
+Write compose.yml and the context files but skip the image build (\fBdocker compose up \-\-build \-\-no\-start\fR), so no docker call is made.
+.TP
 \fB\-\-issue\-id <ref>\fR
 Issue ID in this machine's issue tracker (see \fBwerkmeister machine setup\fR) (env: WERKMEISTER_ISSUE_ID; config: issue_id).
 .TP
@@ -73,6 +76,7 @@ It is idempotent: edit \fBworkspace.yml\fR and rerun. It never prompts, and refu
 werkmeister workspace init
 werkmeister workspace init \-\-services backend,frontend
 werkmeister workspace init \-\-refresh\-issue
+werkmeister workspace init \-\-no\-build
 .RE
 .fi
 .SH SEE ALSO
