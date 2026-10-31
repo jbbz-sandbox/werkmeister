@@ -214,7 +214,9 @@ export function takeDownProject(
   try {
     const held = [["docker", "ps", "-aq", "--filter", label]];
     if (removeVolumes) held.push(["docker", "volume", "ls", "-q", "--filter", label]);
-    if (!held.some((cmd) => run(cmd, { capture: true, timeout: 10 }).stdout.trim())) return;
+    // A probe starved on a loaded host must not read as "nothing held" and skip the teardown (SW-257).
+    if (!held.some((cmd) => run(cmd, { capture: true, timeout: COMPOSE_TIMEOUT_S }).stdout.trim()))
+      return;
     info(`Taking down ${what} ${project}`);
     const args = ["down", "--remove-orphans", ...(removeVolumes ? ["--volumes"] : [])];
     // From an empty dir: compose finds the project by label, and must not load the

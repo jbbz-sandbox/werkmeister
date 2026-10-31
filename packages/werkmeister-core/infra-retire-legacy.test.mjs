@@ -34,7 +34,7 @@ beforeEach(() => {
     `#!/bin/sh
 echo "$(pwd -P) | $*" >> "${log}"
 case "$*" in
-  "ps -aq "*) printf "%s" "$HELD_PS" ;;
+  "ps -aq "*) sleep "\${PS_DELAY:-0}"; printf "%s" "$HELD_PS" ;;
   "compose -p sandbox-infra "*) exit \${LEGACY_DOWN_EXIT:-0} ;;
 esac
 `,
@@ -54,6 +54,7 @@ afterEach(() => {
   }
   delete process.env.HELD_PS;
   delete process.env.LEGACY_DOWN_EXIT;
+  delete process.env.PS_DELAY;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -99,4 +100,12 @@ test("down --volumes takes the old stack's volumes too", async () => {
   const legacy = legacyIndex(lines);
   assert.equal(argvOf(lines[legacy]), "compose -p sandbox-infra down --remove-orphans --volumes");
   assert.ok(legacy < newIndex(lines, " down"));
+});
+
+// SW-257: a loaded host can make the held-containers probe slow; that must not skip the teardown.
+test("a slow probe does not skip the old stack's teardown", async () => {
+  process.env.HELD_PS = "abc123\n";
+  process.env.PS_DELAY = "11";
+  await withReporter(collectingReporter(), () => down(true));
+  assert.notEqual(legacyIndex(calls()), -1);
 });
