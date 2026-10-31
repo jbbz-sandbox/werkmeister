@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.55.1
+
+### Patch Changes
+
+- ed3210a: SW-222: a workspace with no services now gets `services: {}` in its compose.yml instead of a bare `services:` (YAML null), so `docker compose` no longer rejects it with "services must be a mapping".
+
 ## 0.55.0
 
 ### Minor Changes
