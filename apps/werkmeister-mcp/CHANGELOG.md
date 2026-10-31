@@ -1,5 +1,13 @@
 # sandbox-mcp
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [eaa500b]
+  - werkmeister-core@0.54.0
+  - werkmeister-ui@0.5.47
+
 ## 0.8.0
 
 ### Minor Changes

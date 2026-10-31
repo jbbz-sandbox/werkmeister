@@ -1,5 +1,12 @@
 # werkmeister-ui
 
+## 0.5.47
+
+### Patch Changes
+
+- Updated dependencies [eaa500b]
+  - werkmeister-core@0.54.0
+
 ## 0.5.46
 
 ### Patch Changes
