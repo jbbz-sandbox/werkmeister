@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 export const DEVCONTAINER_FILE = ".devcontainer/devcontainer.json";
-export const CLAUDE_HOME_VOLUME = "features-claude-home";
+export const CLAUDE_HOME_VOLUME = "werkmeister-claude-home";
 
 export interface DevcontainerOptions {
   workspaceName: string;
@@ -64,11 +64,8 @@ export function buildDevcontainer(opts: DevcontainerOptions): Record<string, unk
     // Host paths, never /workspaces/...: each worktree's .git holds an absolute gitdir: into reposRoot.
     workspaceMount: bind(workspaceMount),
     workspaceFolder: opts.workspaceRoot,
-    // One volume per workspace: the login and Claude state stay with their workspace.
-    mounts: [
-      ...repoMounts,
-      `source=${CLAUDE_HOME_VOLUME}-${opts.workspaceName},target=${claudeHome},type=volume`,
-    ],
+    // Shared by every workspace (SW-249): the registration lives in ~/.claude.json, outside it, so only the login is shared.
+    mounts: [...repoMounts, `source=${CLAUDE_HOME_VOLUME},target=${claudeHome},type=volume`],
     runArgs: ["--add-host=host.docker.internal:host-gateway"],
     containerEnv: {
       HOME: opts.home,
@@ -76,6 +73,8 @@ export function buildDevcontainer(opts: DevcontainerOptions): Record<string, unk
       GIT_CONFIG_KEY_0: "safe.directory",
       GIT_CONFIG_VALUE_0: "*",
     },
+    // remoteEnv, not containerEnv: read from the host at every attach, so a new token needs no rebuild and none is baked into the container.
+    remoteEnv: { CLAUDE_CODE_OAUTH_TOKEN: "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}" },
     remoteUser: "node",
     postCreateCommand: postCreate,
   };
