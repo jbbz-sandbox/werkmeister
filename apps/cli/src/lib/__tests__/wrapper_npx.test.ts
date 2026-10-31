@@ -12,11 +12,12 @@
  * `npm` on PATH stands in for the global install, and a stub `sandbox` for the
  * installed binary the wrapper should exec.
  */
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const WRAPPER = path.resolve(fileURLToPath(import.meta.url), "../../../..", "werkmeister");
@@ -56,21 +57,22 @@ function stubNpm(binDir: string, prefix: string): void {
  * would miss the half this asserts on. Throws with both streams on a non-zero
  * exit, which is what the not-built case checks.
  */
-function run(wrapper: string, args: string[], pathPrefix: string): string {
-  const result = spawnSync("bash", [wrapper, ...args], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      WERKMEISTER_ROOT: "",
-      HOME: tmp, // no ~/.sandbox/env.sh to source
-      PATH: `${pathPrefix}:${process.env.PATH}`,
-    },
-  });
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-  if (result.status !== 0) {
-    throw new Error(output);
+async function run(wrapper: string, args: string[], pathPrefix: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await promisify(execFile)("bash", [wrapper, ...args], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        WERKMEISTER_ROOT: "",
+        HOME: tmp, // no ~/.sandbox/env.sh to source
+        PATH: `${pathPrefix}:${process.env.PATH}`,
+      },
+    });
+    return `${stdout}${stderr}`;
+  } catch (e) {
+    const { stdout = "", stderr = "" } = e as { stdout?: string; stderr?: string };
+    throw new Error(`${stdout}${stderr}` || String(e));
   }
-  return output;
 }
 
 beforeEach(() => {
@@ -81,15 +83,17 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-// Each case drives the real bash wrapper through spawnSync, which forks bash,
-// an npm stub and an exec'd stand-in binary. ~1.6s idle, but >5s under a full
-// `turbo run test` -- so vitest's 5s default fails these on load, not on merit.
-const SPAWNS_BASH = 30_000;
+// The bootstrap case execs a fresh npm stub and a fresh stand-in binary. macOS
+// checks each newly written executable on its first exec (~6s for this case at
+// load ~24), and that check slows with host load: 30s timed out at load 250-400
+// on 12 cores (SW-277). The limit is for load, not merit. `run` is async because
+// a worker blocked past vitest's 60s RPC timeout fails the whole run.
+const SPAWNS_BASH = 120_000;
 
 describe("werkmeister wrapper: npx bootstrap", () => {
   it(
     "installs globally and execs the installed binary when run from npx's cache",
-    () => {
+    async () => {
       const prefix = path.join(tmp, "prefix");
       fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
       // Stand-in for the globally installed CLI: prove the wrapper reached it,
@@ -106,7 +110,7 @@ describe("werkmeister wrapper: npx bootstrap", () => {
         path.join(tmp, "_npx", "deadbeef", "node_modules", "werkmeister"),
       );
 
-      const out = run(wrapper, ["setup", "--check"], stubs);
+      const out = await run(wrapper, ["setup", "--check"], stubs);
       // Pinned to the version npx resolved (9.9.9 here), not @latest — otherwise
       // `npx pkg@1.2.3 setup` would onboard the machine onto a different release.
       expect(out).toContain("STUB-INSTALL install -g werkmeister@9.9.9");
@@ -115,13 +119,13 @@ describe("werkmeister wrapper: npx bootstrap", () => {
     SPAWNS_BASH,
   );
 
-  it("does not bootstrap from a normal install path", () => {
+  it("does not bootstrap from a normal install path", async () => {
     const stubs = path.join(tmp, "stubs");
     stubNpm(stubs, path.join(tmp, "unused"));
     // No _npx in the path, and no dist/ — so it must fall through to the
     // not-built error rather than trying to install anything.
     const wrapper = installWrapper(path.join(tmp, "lib", "node_modules", "werkmeister"));
 
-    expect(() => run(wrapper, ["--help"], stubs)).toThrowError(/CLI not built/);
+    await expect(run(wrapper, ["--help"], stubs)).rejects.toThrowError(/CLI not built/);
   });
 });

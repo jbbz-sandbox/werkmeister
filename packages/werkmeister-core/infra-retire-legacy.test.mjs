@@ -59,7 +59,15 @@ afterEach(() => {
 });
 
 const calls = () => readFileSync(log, "utf8").trim().split("\n");
-const argvOf = (line) => line.split(" | ")[1];
+// A lookup that found no call passes undefined here (SW-277): name it, with the whole log.
+const argvOf = (line) => {
+  const argv = line?.split(" | ")[1];
+  if (argv === undefined)
+    throw new Error(
+      `expected a docker-stub line "<cwd> | <argv>", got ${JSON.stringify(line)}; docker-stub log:\n${readFileSync(log, "utf8")}`,
+    );
+  return argv;
+};
 const legacyIndex = (lines) =>
   lines.findIndex((l) => argvOf(l).startsWith("compose -p sandbox-infra"));
 const newIndex = (lines, verb) =>
