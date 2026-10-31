@@ -19,6 +19,7 @@ import {
   claimCallbacks,
   closeOut,
   deliverHeadless,
+  failureExcerpt,
   formatGate,
   gatePrs,
   lifecycleOf,
@@ -32,6 +33,7 @@ import {
   removalBlockers,
   runGate,
   waitForHostLoad,
+  wakeMessage,
   watchPrs,
   writePrFields,
 } from "./dist/pr_lifecycle.js";
@@ -125,6 +127,7 @@ function deps(table, over = {}) {
     terminals: async () => [],
     sourceOf: async () => "/src/app",
     session: async () => ({}),
+    sessionBusy: async () => false,
     branchRegistry: () => null,
     stop: async (ws) => {
       stopped.push(ws);
@@ -828,11 +831,13 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(f.fm.url, "https://github.com/o/app/pull/9");
     assert.equal(f.fm.session, "s-1", "the callback rides on the PR file (#236)");
     assert.equal(f.fm.host_session, "local_h1");
-    assert.equal(
-      r.lines.filter((l) => l === "<pr-created>https://github.com/o/app/pull/9</pr-created>")
-        .length,
-      1,
-      "one marker per opened PR, so the desktop app counts the session as the opener (SW-145)",
+    assert.ok(
+      !r.lines.some((l) => l.includes("<pr-created>")),
+      "no desktop Auto-fix marker (SW-160)",
+    );
+    assert.ok(
+      !Number.isNaN(Date.parse(f.fm.notified_review)),
+      "review news starts at the open, so an early review still wakes (SW-160)",
     );
     assert.deepEqual(
       updated,
@@ -850,7 +855,10 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     const passed = r.lines.indexOf("app: gate passed");
     assert.ok(passed >= 0, "a passing open prints the gate header (SW-198)");
     assert.match(r.lines[passed + 1], /^ {2}✓ /, "and each ✓ row");
-    assert.ok(passed < r.lines.findIndex((l) => l.includes("<pr-created>")), "before the PR URL");
+    assert.ok(
+      passed < r.lines.indexOf("app: open https://github.com/o/app/pull/9"),
+      "before the PR URL",
+    );
   } finally {
     clean(ws);
   }
@@ -863,7 +871,6 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     assert.equal(readPrFiles(bad)[0].fm.status, "approved");
     assert.deepEqual(d.stopped, [], "a failed gate keeps the containers for the fix");
     assert.ok(r.lines.includes("app: gate FAILED"), "failing rows still print");
-    assert.ok(!r.lines.some((l) => l.includes("<pr-created>")), "no PR opened, no marker");
   } finally {
     clean(bad);
   }
@@ -2367,6 +2374,325 @@ test("claimCallbacks: a held lock claims nothing; a stale one is taken over", as
     fs.utimesSync(lockIn(ws), old, old);
     assert.equal((await claim(ws, deps([MERGED, NO_TAG]))).claimed.length, 1);
     assert.ok(!fs.existsSync(lockIn(ws)), "released after the pass");
+  } finally {
+    clean(ws);
+  }
+});
+
+// ---- Open-PR wakes (SW-160) ----
+
+const SHA1 = "1111111";
+const SHA2 = "2222222";
+const JOB = (n) => `https://github.com/o/app/actions/runs/5/job/${n}`;
+const run = (name, conclusion, job = 1) => ({
+  __typename: "CheckRun",
+  name,
+  conclusion,
+  detailsUrl: JOB(job),
+});
+const openView = (over = {}) =>
+  prView({
+    state: "OPEN",
+    number: 9,
+    headRefOid: SHA1,
+    baseRefName: "main",
+    mergeable: "MERGEABLE",
+    statusCheckRollup: [],
+    reviews: [],
+    comments: [],
+    ...over,
+  });
+const LOG = [
+  "test\tRun tests\t2026-10-31T10:00:00.1234567Z ##[group]Run pnpm test",
+  "test\tRun tests\t2026-10-31T10:00:01.0000000Z warning: deprecated flag",
+  "test\tRun tests\t2026-10-31T10:00:02.0000000Z src/a.ts:12:5 - error TS2322: bad type",
+  "test\tRun tests\t2026-10-31T10:00:03.0000000Z ##[error]Process completed with exit code 1.",
+].join("\n");
+const JOB_LOG = [/^gh run view --job 1 /, { stdout: LOG }];
+const INLINE = (items) => [
+  /^gh api repos\/o\/app\/pulls\/9\/comments/,
+  { stdout: JSON.stringify(items) },
+];
+// Past pr open's own mark, so a review after it is news.
+const openFile = (extra = "") => callbackFile(`notified_review: "2026-10-31T09:00:00Z"\n${extra}`);
+const wakes = (r) => r.claimed.map((c) => c.message);
+
+test("failureExcerpt: strips job, step and time, drops warnings, keeps file:line", () => {
+  assert.equal(
+    failureExcerpt(LOG),
+    "src/a.ts:12:5 - error TS2322: bad type\nerror: Process completed with exit code 1.",
+  );
+  assert.equal(
+    failureExcerpt("j\ts\t2026-10-31T10:00:00Z one\nj\ts\t2026-10-31T10:00:01Z two"),
+    "one\ntwo",
+    "no error line: the tail",
+  );
+});
+
+test("wakeMessage: each event opens with the ticket's sentence, all in one message", () => {
+  const m = wakeMessage(URL9, [
+    { kind: "conflict", base: "main", moved: "abc fix: x" },
+    { kind: "review", quote: "ann: rename it" },
+    { kind: "check", name: "test", cause: "src/a.ts:1 error" },
+  ]);
+  assert.equal(
+    m,
+    [
+      `check test failed on PR ${URL9}, fix it.\n  Cause:\n    src/a.ts:1 error`,
+      `address the review on PR ${URL9}:\n    ann: rename it`,
+      `PR ${URL9} conflicts with main, resolve it.\n  Base moved:\n    abc fix: x`,
+      "Follow the workspace router; push the fix to the PR's branch.",
+    ].join("\n\n"),
+  );
+});
+
+test("claimCallbacks: a failed check wakes once with its cause; the next pass sends nothing", async () => {
+  const ws = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const view = openView({
+      statusCheckRollup: [run("test", "FAILURE"), run("lint", "SUCCESS", 2)],
+    });
+    const r = await claim(ws, deps([view, JOB_LOG]));
+    assert.equal(r.claimed.length, 1);
+    assert.equal(r.claimed[0].hostSession, null);
+    assert.ok(r.claimed[0].message.startsWith(`check test failed on PR ${URL9}, fix it.`));
+    assert.match(r.claimed[0].message, /src\/a\.ts:12:5 - error TS2322/);
+    assert.doesNotMatch(r.claimed[0].message, /deprecated/);
+    assert.equal(readPrFiles(ws)[0].fm.notified_checks, `${SHA1}: test`);
+
+    const again = deps([view, JOB_LOG]);
+    assert.deepEqual(wakes(await claim(ws, again)), [], "nothing new, nothing sent");
+    assert.ok(
+      !again.calls.some((c) => c.startsWith("gh run view")),
+      "an announced check is not refetched",
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a new head announces what still fails; the same head only new names", async () => {
+  const ws = icmWorkspace({ files: { app: openFile(`notified_checks: "${SHA1}: test"\n`) } });
+  try {
+    const head2 = {
+      headRefOid: SHA2,
+      statusCheckRollup: [run("test", "FAILURE"), run("lint", "TIMED_OUT", 2)],
+    };
+    const r = await claim(ws, deps([openView(head2)]));
+    assert.match(wakes(r)[0], /check lint failed/);
+    assert.match(wakes(r)[0], /check test failed/, "the fix didn't work: still news on a new head");
+    assert.equal(readPrFiles(ws)[0].fm.notified_checks, `${SHA2}: lint, test`);
+
+    const more = {
+      ...head2,
+      statusCheckRollup: [...head2.statusCheckRollup, run("docs", "FAILURE", 3)],
+    };
+    const r2 = await claim(ws, deps([openView(more)]));
+    assert.equal(r2.claimed.length, 1);
+    assert.doesNotMatch(wakes(r2)[0], /check (lint|test) failed/);
+    assert.match(wakes(r2)[0], /check docs failed/);
+
+    const cancelled = {
+      ...more,
+      statusCheckRollup: [run("e2e", "CANCELLED", 4), run("skip", "SKIPPED", 5)],
+    };
+    assert.deepEqual(wakes(await claim(ws, deps([openView(cancelled)]))), []);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a changes-requested review wakes once, even after pr status recorded it", async () => {
+  // `review` is pr status's key for the issue move; the wake must not depend on who saw it first.
+  const ws = icmWorkspace({ files: { app: openFile("review: changes_requested\n") } });
+  try {
+    const view = openView({
+      reviewDecision: "CHANGES_REQUESTED",
+      reviews: [
+        {
+          author: { login: "ann" },
+          state: "CHANGES_REQUESTED",
+          body: "rename it",
+          submittedAt: "2026-10-31T10:00:00Z",
+        },
+      ],
+    });
+    const r = await claim(ws, deps([view]));
+    assert.equal(r.claimed.length, 1);
+    assert.match(
+      wakes(r)[0],
+      new RegExp(`^address the review on PR ${URL9}:\\n    ann: rename it`),
+    );
+    assert.equal(readPrFiles(ws)[0].fm.notified_review, "2026-10-31T10:00:00Z");
+    assert.deepEqual(wakes(await claim(ws, deps([view]))), []);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: inline comments are quoted with path:line; the session's own replies don't wake", async () => {
+  const ws = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const mine = {
+      user: { login: "me" },
+      body: "Done.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+      path: "a.ts",
+      line: 3,
+      created_at: "2026-10-31T10:05:00Z",
+    };
+    const theirs = {
+      user: { login: "ann" },
+      body: "off by one",
+      path: "src/a.ts",
+      line: 12,
+      created_at: "2026-10-31T10:00:00Z",
+    };
+    const r = await claim(ws, deps([openView(), INLINE([theirs, mine])]));
+    assert.match(wakes(r)[0], /ann on src\/a\.ts:12: off by one/);
+    assert.doesNotMatch(wakes(r)[0], /Done\./);
+    const r2 = await claim(ws, deps([openView(), INLINE([theirs, mine])]));
+    assert.deepEqual(wakes(r2), []);
+    const onlyMine = icmWorkspace({ files: { app: openFile() } });
+    try {
+      assert.deepEqual(wakes(await claim(onlyMine, deps([openView(), INLINE([mine])]))), []);
+    } finally {
+      clean(onlyMine);
+    }
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a PR opened before SW-160 takes its old comments as history", async () => {
+  const ws = icmWorkspace({ files: { app: callbackFile() } });
+  try {
+    const view = openView({
+      comments: [{ author: { login: "ann" }, body: "old", createdAt: "2026-10-01T00:00:00Z" }],
+    });
+    const r = await claim(ws, deps([view]));
+    assert.deepEqual(wakes(r), []);
+    assert.equal(readPrFiles(ws)[0].fm.notified_review, "2026-10-01T00:00:00Z");
+    const newer = openView({
+      comments: [{ author: { login: "ann" }, body: "new", createdAt: "2026-10-02T00:00:00Z" }],
+    });
+    assert.match(wakes(await claim(ws, deps([newer])))[0], /ann: new/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a conflict wakes once with the base commits; resolved resets it; UNKNOWN changes nothing", async () => {
+  const ws = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const moved = [/log --oneline -10 HEAD\.\.origin\/main/, { stdout: "abc1234 feat: moved\n" }];
+    const conflicting = openView({ mergeable: "CONFLICTING" });
+    const r = await claim(ws, deps([conflicting, moved]));
+    assert.equal(
+      wakes(r)[0].split("\n\n")[0],
+      `PR ${URL9} conflicts with main, resolve it.\n  Base moved:\n    abc1234 feat: moved`,
+    );
+    assert.equal(readPrFiles(ws)[0].fm.notified_conflict, "true");
+    assert.deepEqual(wakes(await claim(ws, deps([conflicting, moved]))), []);
+    assert.deepEqual(wakes(await claim(ws, deps([openView({ mergeable: "UNKNOWN" })]))), []);
+    assert.equal(readPrFiles(ws)[0].fm.notified_conflict, "true", "still computing: no flicker");
+
+    assert.deepEqual(wakes(await claim(ws, deps([openView()]))), []);
+    assert.ok(!("notified_conflict" in readPrFiles(ws)[0].fm), "resolved: the flag is gone");
+    assert.equal(
+      (await claim(ws, deps([conflicting, moved]))).claimed.length,
+      1,
+      "a later conflict is news",
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a check, a review and a conflict in one pass are one message", async () => {
+  const ws = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const view = openView({
+      mergeable: "CONFLICTING",
+      statusCheckRollup: [run("test", "FAILURE")],
+      comments: [{ author: { login: "ann" }, body: "why?", createdAt: "2026-10-31T10:00:00Z" }],
+    });
+    const r = await claim(ws, deps([view, JOB_LOG]));
+    assert.equal(r.claimed.length, 1);
+    for (const s of [
+      `check test failed on PR ${URL9}, fix it.`,
+      `address the review on PR ${URL9}:`,
+      `PR ${URL9} conflicts with main, resolve it.`,
+    ])
+      assert.ok(wakes(r)[0].includes(s), s);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a PR that merged sends the merged message, not a wake", async () => {
+  const ws = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const r = await claim(ws, deps([MERGED, NO_TAG]));
+    assert.deepEqual(wakes(r), [callbackMessage("merged", URL9)]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a terminal session in use is held, unclaimed, and woken once idle", async () => {
+  const ws = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const view = openView({ statusCheckRollup: [run("test", "FAILURE")] });
+    const busy = await claim(ws, deps([view, JOB_LOG], { sessionBusy: async () => true }));
+    assert.deepEqual(wakes(busy), []);
+    assert.ok(busy.lines.includes("app: wake held, session s-1 in use"), busy.lines.join("\n"));
+    assert.ok(!("notified_checks" in readPrFiles(ws)[0].fm), "nothing claimed while held");
+    assert.equal((await claim(ws, deps([view, JOB_LOG]))).claimed.length, 1);
+  } finally {
+    clean(ws);
+  }
+  const merged = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const held = await claim(merged, deps([MERGED, NO_TAG], { sessionBusy: async () => true }));
+    assert.deepEqual(wakes(held), []);
+    assert.ok(!("notified" in readPrFiles(merged)[0].fm), "a status message is held the same way");
+    assert.deepEqual(wakes(await claim(merged, deps([NO_TAG]))), [callbackMessage("merged", URL9)]);
+  } finally {
+    clean(merged);
+  }
+});
+
+test("claimCallbacks: a desktop PR's wake goes to the mod and is never held", async () => {
+  const ws = icmWorkspace({ files: { app: openFile("host_session: local_h1\n") } });
+  try {
+    const view = openView({ statusCheckRollup: [run("test", "FAILURE")] });
+    assert.deepEqual(wakes(await claim(ws, deps([view, JOB_LOG]))), [], "not the CLI pass's");
+    let asked = false;
+    const mod = await claim(
+      ws,
+      deps([view, JOB_LOG], { sessionBusy: async () => (asked = true) }),
+      true,
+    );
+    assert.deepEqual(
+      mod.claimed.map((c) => c.hostSession),
+      ["local_h1"],
+    );
+    assert.match(wakes(mod)[0], /^check test failed/);
+    assert.equal(asked, false, "the app delivers to a live session itself");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: settled drops the wake marks with the callback", async () => {
+  const ws = icmWorkspace({
+    files: { app: openFile(`notified_checks: "${SHA1}: test"\nnotified_conflict: "true"\n`) },
+  });
+  try {
+    await claim(ws, deps([[/^gh pr view/, { stdout: JSON.stringify({ state: "CLOSED" }) }]]));
+    const fm = readPrFiles(ws)[0].fm;
+    for (const k of ["notified_checks", "notified_review", "notified_conflict", "session"])
+      assert.ok(!(k in fm), k);
   } finally {
     clean(ws);
   }

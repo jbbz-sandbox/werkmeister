@@ -25,11 +25,9 @@ is `docs/workspace-lifecycle.md` in the werkmeister repo.
    table, a dirty worktree, each touched service's test command, the exercise
    evidence, the release check (e.g. a missing changeset).
 4. **`werkmeister pr open`** gates, pushes, opens the PR, records its URL in the
-   PR file and moves the issue to In Review. Then, in the Claude desktop app, turn on Auto-fix without asking:
-   `ccd_pr` `get_status` (`bind_pr` with the URL if the PR isn't bound), then
-   `set_monitor` with `auto_fix: true`, `address_comments: true` and the PR's
-   `url`. If `set_monitor` is refused, don't retry: ask the person to turn Auto-fix on
-   from the PR bar. Never auto-merge. Merging is the person's act.
+   PR file and moves the issue to In Review. `werkmeister pr watch` then wakes this
+   session on a failed check, a review or a conflict (rule 5); don't turn on the
+   desktop app's Auto-fix. Never auto-merge. Merging is the person's act.
 5. **`werkmeister pr status`** after merge and release: records `merged`, then
    `shipped` with the release tag that contains the merge, and moves the issue
    to Done once every PR has shipped. A review asking for changes, or a PR

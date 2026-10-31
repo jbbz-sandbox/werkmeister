@@ -52,8 +52,7 @@ workspace — don't reach for them.
    the full flow is To Do → In Progress at the first stage → In Review here → Done at ship,
    docs/workspace-lifecycle.md § Issue status),
    and records the URL in the PR file. A failed gate check names what to fix.
-   Then, in the Claude desktop app, turn on Auto-fix without asking: `ccd_pr`
-   `get_status` (`bind_pr` with the URL if unbound), then `set_monitor` with
-   `auto_fix: true`, `address_comments: true` and the PR's `url`. Never auto-merge.
+   `werkmeister pr watch` then wakes this session on a failed check, a review or a
+   conflict (rule 5); don't turn on the desktop app's Auto-fix. Never auto-merge.
 5. **Checkpoint:** suggest `w9r-handoff` so the PR state survives into the next
    session. After merge and release: `werkmeister pr status`, then the post-mortem (werkmeister `postmortem` skill), then ask the person before `werkmeister workspace close`.

@@ -147,7 +147,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.match(
       claude,
-      /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `werkmeister pr open`, then Auto-fix on \(rule 5\) \| PR URL is in the PR file and Auto-fix is on \|/m,
+      /^\| asked to open or create a PR — including `\/create-pr` .*`_shared\/pr-rules\.md`, then `werkmeister pr open` \(rule 5: `pr watch` is the auto-fix\) \| PR URL is in the PR file \|/m,
     );
     assert.match(
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
@@ -156,11 +156,8 @@ test("init writes the icm layer and nothing of jit's", async () => {
     const rule5 = fs
       .readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8")
       .match(/^5\. .*$/m)[0];
-    assert.match(rule5, /`<pr-created>`/);
-    assert.match(
-      rule5,
-      /If `set_monitor` is refused, don't retry: ask the person .* from the PR bar/,
-    );
+    assert.match(rule5, /`werkmeister pr watch` wakes the session that opened the PR/);
+    assert.doesNotMatch(rule5, /set_monitor|<pr-created>/, "no desktop Auto-fix (SW-160)");
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);

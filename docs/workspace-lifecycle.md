@@ -43,7 +43,7 @@ The state is read from the PR files alone (`lifecycleOf` in `packages/werkmeiste
 2. **PRs come only from code worktrees**, one per repo touched, each from its PR file.
 3. **The gate** (below) passes before a PR opens.
 4. **Only `werkmeister pr open` opens PRs.** A PreToolUse hook enforces this.
-5. **Auto-fix is always on.** `werkmeister pr open` prints a `<pr-created>` line with each PR's URL; the Claude desktop app counts the session as the PR's opener from it. Right after, in the desktop app: bind the PR to this session (`ccd_pr` `get_status`; `bind_pr` with the PR's URL if it isn't bound), then turn on Auto-fix with `ccd_pr` `set_monitor` (`auto_fix: true`, `address_comments: true`, the PR's `url`). Don't ask first. If `set_monitor` is refused, don't retry: ask the person to turn Auto-fix on from the PR bar, and don't rely on `get_status` to confirm it. Never turn on auto-merge.
+5. **Auto-fix is always on.** `werkmeister pr watch` wakes the session that opened the PR when a check fails, a review comes in or the PR conflicts with its base, with the cause in the message. Don't turn on Auto-fix in the Claude desktop app (`ccd_pr`). Never turn on auto-merge.
 6. **Merge is the person's act.** Tooling never merges. Squash is the default. A PR whose commit SHAs must survive (e.g. a commit listed in `.git-blame-ignore-revs`) says "Merge with a merge commit" at the top of its body, and the person merges it that way; squash and rebase both rewrite SHAs.
 7. **Close out only once every PR file is `shipped`, `closed` or `abandoned`.**
 
@@ -73,6 +73,9 @@ skip_exercise:                 # <reason> — skips the gate's exercise check, e
 session:                       # the Claude Code session that ran werkmeister pr open (PR callbacks, below)
 host_session:                  # its desktop app id (local_…), only when opened from the desktop app
 notified:                      # the last status that session was told
+notified_checks:               # written by pr watch: <head sha>: <failing checks announced on it>
+notified_review:               # written by pr watch: time of the newest review or comment announced
+notified_conflict:             # written by pr watch while an announced conflict lasts
 ---
 # feat(cli): owner/repo#133 Workspace PR lifecycle
 <body: summary, test and exercise results, acceptance table, Fixes owner/repo#133>
@@ -142,7 +145,7 @@ repo:
 | `werkmeister pr new <worktree> --slug <slug>` | after that worktree's PRs merged: cut `<branch>-<slug>` from `origin/<base>` and write a draft `pr-<worktree>-<slug>.md` ([Follow-up PR](#follow-up-pr)) |
 | `werkmeister issue start` | the first stage or phase began: move the workspace's issue to `in_progress` ([Issue status](#issue-status)) |
 | `werkmeister pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. When `pr-<repo>.md` is taken, writes `pr-<repo>-<number>.md` with `worktree: <repo>`. Refuses if a PR file already has that PR's URL, or the PR closed unmerged. |
-| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). `werkmeister machine setup` offers to run it every 10 minutes (launchd on macOS, a crontab line elsewhere). `werkmeister pr watch --install` / `--uninstall` add or remove that schedule directly. Logs: `~/.werkmeister/pr-watch.log` |
+| `werkmeister pr watch` | from anywhere: one PR callback pass (below) over every workspace, for terminal sessions: status changes, and failed checks, reviews and conflicts on open PRs, then one idle-reaper pass ([Containers after a PR](#containers-after-a-pr)). `werkmeister machine setup` offers to run it every 10 minutes (launchd on macOS, a crontab line elsewhere). `werkmeister pr watch --install` / `--uninstall` add or remove that schedule directly. Logs: `~/.werkmeister/pr-watch.log` |
 | `werkmeister pr adopt --no-pr "<reason>" [repo]` | for a fix already on base with no PR: write a `closed` PR file with the reason |
 | `werkmeister workspace close [name]`, `werkmeister workspace abandon "<reason>" [name]` | end the workspace (below): shipped, or not |
 | `werkmeister remove-workspace <name>` | deprecated alias, kept for one release: prints "use `werkmeister workspace abandon`" and removes as before | <!-- docs-check: ignore -->
@@ -168,8 +171,18 @@ A pass runs `werkmeister pr status` for each workspace with a callback and tells
 
 `notified` is written before the message goes out, so a failed delivery is logged and not repeated. Once the PR is shipped, closed or abandoned the callback fields are removed. A pass never merges and never closes out.
 
+While the PR is open, the same pass also wakes the session when it needs work (rule 5), all new events in one message:
+
+| Event | Message starts | Cause in the message | Claimed in |
+|---|---|---|---|
+| a check on the head commit fails (`FAILURE`, `TIMED_OUT`, `STARTUP_FAILURE`; a status `FAILURE`/`ERROR`) | check `<name>` failed on PR `<url>`, fix it. | the first error lines of `gh run view --job <id> --log-failed` | `notified_checks`: the head SHA and the names announced on it. A new head announces every failing check again |
+| a CHANGES_REQUESTED review, a review or PR comment, or an inline comment | address the review on PR `<url>`: | the comments, quoted (`path:line` for inline ones) | `notified_review`: the time of the newest one. `pr open` sets it, so an early review still counts; a PR opened before this keeps its old comments as history |
+| `mergeable` is `CONFLICTING` | PR `<url>` conflicts with `<base>`, resolve it. | `git log --oneline HEAD..origin/<base>` | `notified_conflict`, cleared once GitHub reports it mergeable again, so a later conflict counts |
+
+Comments carrying the Claude Code footer (`Generated with [Claude Code]`) are the session's own replies and don't wake it. A merged or closed PR gets its status message, not a wake.
+
 - Desktop sessions: the werkmeister mod runs a pass when a desktop session starts and every 10 minutes, and sends each message through the app (a visible turn in that session). While the app is closed they wait.
-- Terminal sessions: `werkmeister pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder), on the schedule `werkmeister machine setup` installs ([Commands](#commands)). A session id the workspace no longer has is reported, never swapped for another session.
+- Terminal sessions (VS Code included: only the desktop app sets `host_session`): `werkmeister pr watch` resumes them headlessly (`claude -p --resume <session>`, run in the workspace folder), on the schedule `werkmeister machine setup` installs ([Commands](#commands)). A session id the workspace no longer has is reported, never swapped for another session. A session whose transcript changed in the last 5 minutes is in use: its message is held unclaimed (`wake held` in the log) and goes out on the first pass after it has gone quiet, so a headless turn never runs beside a live one.
 
 One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
 

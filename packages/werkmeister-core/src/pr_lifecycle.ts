@@ -127,6 +127,8 @@ export interface Deps {
   sourceOf: (dir: string) => Promise<string | null>;
   /** The PR file's callback fields for the session running `pr open` (#236). */
   session: (ws: string) => Promise<Record<string, string>>;
+  /** Whether a terminal session wrote its transcript lately, so a headless resume would run beside it (SW-160). */
+  sessionBusy: (ws: string, session: string, cwd: string | null) => Promise<boolean>;
   /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. */
   branchRegistry: (repo: string, worktree: string) => MergedRegistry | null;
   /** Stop the workspace's feature containers (SW-39); one line, never throws. */
@@ -195,6 +197,16 @@ export function defaultDeps(): Deps {
     terminals: (ws) => openTerminalSessions(ws),
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
     session: (ws) => callbackFields(ws, process.env),
+    sessionBusy: async (ws, session, cwd) => {
+      const s = await resolveSessionSource(path.basename(ws), session, cwd ?? undefined).catch(
+        () => null,
+      );
+      return (
+        s?.sessionId === session &&
+        !!s.updatedAt &&
+        Date.now() - Date.parse(s.updatedAt) < SESSION_BUSY_MS
+      );
+    },
     branchRegistry: (repo, worktree) => branchRegistry(repo, worktree),
     stop: stopWorkspace,
     hostLoad: readHostLoad,
@@ -1012,11 +1024,11 @@ export async function openPrs(
       url,
       ...(g.release && { release: g.release }),
       ...(await deps.session(ws)),
+      // Marks where review news starts, so a review before the first pr watch pass still wakes.
+      notified_review: new Date().toISOString(),
     });
     opened.push(path.relative(ws, f.path));
     lines.push(`${f.stem}: open ${url}`);
-    // The desktop app binds a PR, and lets the session turn on Auto-fix, only for a URL the session reports in this tag.
-    lines.push(`<pr-created>${url}</pr-created>`);
     // Squash and rebase rewrite SHAs, so a blame-ignore entry added here would match nothing on base.
     const ignored = await deps.run("git", [
       "-C",
@@ -1055,9 +1067,10 @@ export async function refreshPrStatus(
   deps: Deps = defaultDeps(),
   // `gh: false` is check-in's sweep (SW-65): open → merged stays with `gh` in `pr status`.
   opts: { gh?: boolean } = {},
-): Promise<{ lines: string[]; changed: boolean }> {
+): Promise<{ lines: string[]; changed: boolean; views: Map<string, PrView> }> {
   const lines: string[] = [];
   const changed: string[] = [];
+  const views = new Map<string, PrView>();
   // What this pass saw, by PR URL; it picks at most one issue move after the loop.
   const seen = {
     shipped: [] as PrFile[],
@@ -1075,18 +1088,14 @@ export async function refreshPrStatus(
         "view",
         String(f.fm["url"]),
         "--json",
-        "state,mergeCommit,reviewDecision,latestReviews",
+        "state,mergeCommit,reviewDecision,latestReviews,number,headRefOid,baseRefName,mergeable,statusCheckRollup,reviews,comments",
       ]);
       if (v.code !== 0) {
         lines.push(`${f.stem}: gh pr view failed — ${v.stderr.trim()}`);
         continue;
       }
-      const view = JSON.parse(v.stdout) as {
-        state?: string;
-        mergeCommit?: { oid?: string } | null;
-        reviewDecision?: string;
-        latestReviews?: Array<{ state?: string }>;
-      };
+      const view = JSON.parse(v.stdout) as PrView;
+      if (view.state === "OPEN") views.set(f.path, view);
       // reviewDecision stays empty on a repo that requires no review; latestReviews still says it.
       const changesRequested =
         view.reviewDecision === "CHANGES_REQUESTED" ||
@@ -1154,7 +1163,7 @@ export async function refreshPrStatus(
   if (seen.merged.length || seen.shipped.length) lines.push(await deps.stop(ws));
   if (changed.length)
     lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
-  return { lines, changed: changed.length > 0 };
+  return { lines, changed: changed.length > 0, views };
 }
 
 const shippedComment = (files: PrFile[]): string =>
@@ -1212,6 +1221,8 @@ export interface PrCallback {
 }
 
 const LOCK_STALE_MS = 15 * 60_000;
+// A headless resume beside a live VS Code panel would run two turns on one session.
+const SESSION_BUSY_MS = 5 * 60_000;
 
 /**
  * Claude Code exports both ids to every Bash command, so the session running `pr open`
@@ -1237,6 +1248,200 @@ export function callbackMessage(status: string, url: string, release?: string): 
     return `PR ${url} shipped${release && release !== "none" ? ` in ${release}` : ""}. Ask the person whether to run \`werkmeister workspace close\`.`;
   if (status === "closed") return `PR ${url} was closed. Report it to the person.`;
   return null;
+}
+
+// ---- Open-PR wakes (SW-160) ------------------------------------------------
+// While a PR is open, a pass also wakes its session on a failed check, a review or a
+// conflict, claimed in `notified_checks` / `notified_review` / `notified_conflict`.
+
+/** The `gh pr view` fields `refreshPrStatus` reads; the wake fields only on an open PR. */
+interface PrView {
+  state?: string;
+  mergeCommit?: { oid?: string } | null;
+  reviewDecision?: string;
+  latestReviews?: Array<{ state?: string }>;
+  number?: number;
+  headRefOid?: string;
+  baseRefName?: string;
+  mergeable?: string;
+  statusCheckRollup?: Array<{
+    __typename?: string;
+    name?: string;
+    context?: string;
+    conclusion?: string;
+    state?: string;
+    detailsUrl?: string;
+    targetUrl?: string;
+  }>;
+  reviews?: Array<{
+    author?: { login?: string };
+    state?: string;
+    body?: string;
+    submittedAt?: string;
+  }>;
+  comments?: Array<{ author?: { login?: string }; body?: string; createdAt?: string }>;
+}
+
+export type WakeEvent =
+  | { kind: "check"; name: string; cause: string }
+  | { kind: "review"; quote: string }
+  | { kind: "conflict"; base: string; moved: string };
+
+const FAILED_RUN = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE"]);
+const FAILED_STATUS = new Set(["FAILURE", "ERROR"]);
+// The session's own replies post as the same GitHub account; this footer is how they differ.
+const OWN_FOOTER = "Generated with [Claude Code]";
+
+/** The first error lines of `gh run view --job <id> --log-failed`: `<job>\t<step>\t<time> <text>` per line. */
+export function failureExcerpt(log: string): string {
+  const text = log
+    .split("\n")
+    .map((l) => l.split("\t").slice(2).join("\t") || l)
+    .map((l) => l.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").replace(/^##\[error\]/, "error: "))
+    .filter((l) => l.trim() && !/\bwarn(ing)?\b/i.test(l) && !/^##\[(end)?group\]/.test(l));
+  const errors = text.filter((l) => /error|fail|✖|not ok|assert/i.test(l));
+  return (errors.length ? errors.slice(0, 20) : text.slice(-20)).join("\n");
+}
+
+const indent = (s: string) =>
+  s
+    .split("\n")
+    .map((l) => `    ${l}`)
+    .join("\n");
+
+/** One message for every new event on a PR; each block opens with SW-160's sentence. */
+export function wakeMessage(url: string, events: WakeEvent[]): string {
+  const blocks = [
+    ...events.flatMap((e) =>
+      e.kind === "check"
+        ? [`check ${e.name} failed on PR ${url}, fix it.\n  Cause:\n${indent(e.cause)}`]
+        : [],
+    ),
+    ...(events.some((e) => e.kind === "review")
+      ? [
+          `address the review on PR ${url}:\n${events
+            .flatMap((e) => (e.kind === "review" ? [indent(e.quote)] : []))
+            .join("\n")}`,
+        ]
+      : []),
+    ...events.flatMap((e) =>
+      e.kind === "conflict"
+        ? [
+            `PR ${url} conflicts with ${e.base}, resolve it.${e.moved ? `\n  Base moved:\n${indent(e.moved)}` : ""}`,
+          ]
+        : [],
+    ),
+  ];
+  return `${blocks.join("\n\n")}\n\nFollow the workspace router; push the fix to the PR's branch.`;
+}
+
+const quoteOf = (author: string | undefined, body: string, where = "") =>
+  `${author ?? "someone"}${where ? ` on ${where}` : ""}: ${body
+    .trim()
+    .split("\n")
+    .slice(0, 5)
+    .map((l) => l.slice(0, 200))
+    .join("\n  ")}`;
+
+/** The events on an open PR that its `notified_*` fields haven't claimed, and the fields that claim them. */
+async function wakeEvents(
+  ws: string,
+  f: PrFile,
+  view: PrView,
+  deps: Deps,
+): Promise<{ events: WakeEvent[]; claim: Record<string, string | undefined>; lines: string[] }> {
+  const events: WakeEvent[] = [];
+  const claim: Record<string, string | undefined> = {};
+  const lines: string[] = [];
+  const repo = String(f.fm["repo"] ?? "");
+
+  const head = view.headRefOid ?? "";
+  const [seenSha, seenNames = ""] = reason(f.fm["notified_checks"]).split(": ");
+  const announced = new Set(seenSha === head ? seenNames.split(", ").filter(Boolean) : []);
+  const failing = (view.statusCheckRollup ?? []).filter((c) =>
+    c.__typename === "StatusContext"
+      ? FAILED_STATUS.has(c.state ?? "")
+      : FAILED_RUN.has(c.conclusion ?? ""),
+  );
+  for (const c of failing) {
+    const name = c.name ?? c.context ?? "";
+    if (!name || announced.has(name)) continue;
+    announced.add(name);
+    const link = c.detailsUrl ?? c.targetUrl ?? "";
+    const job = /\/actions\/runs\/\d+\/job\/(\d+)/.exec(link)?.[1];
+    const log = job
+      ? await deps.run("gh", ["run", "view", "--job", job, "--log-failed", "--repo", repo])
+      : null;
+    const cause = log?.code === 0 ? failureExcerpt(log.stdout) : "";
+    events.push({ kind: "check", name, cause: cause || `see ${link}` });
+  }
+  if (events.length) claim["notified_checks"] = `${head}: ${[...announced].sort().join(", ")}`;
+
+  const inline = await deps.run("gh", [
+    "api",
+    `repos/${repo}/pulls/${view.number}/comments`,
+    "--paginate",
+  ]);
+  if (inline.code !== 0)
+    lines.push(`${f.stem}: inline review comments unread — ${inline.stderr.trim()}`);
+  const items = [
+    ...(view.reviews ?? [])
+      .filter((r) => r.state === "CHANGES_REQUESTED" || (r.state === "COMMENTED" && r.body?.trim()))
+      .map((r) => ({
+        at: r.submittedAt ?? "",
+        body: r.body ?? "",
+        quote: quoteOf(r.author?.login, r.body || "requested changes"),
+      })),
+    ...(view.comments ?? []).map((c) => ({
+      at: c.createdAt ?? "",
+      body: c.body ?? "",
+      quote: quoteOf(c.author?.login, c.body ?? ""),
+    })),
+    ...(inline.code === 0
+      ? (JSON.parse(inline.stdout || "[]") as Array<{
+          user?: { login?: string };
+          body?: string;
+          path?: string;
+          line?: number | null;
+          created_at?: string;
+        }>)
+      : []
+    ).map((c) => ({
+      at: c.created_at ?? "",
+      body: c.body ?? "",
+      quote: quoteOf(c.user?.login, c.body ?? "", `${c.path}${c.line ? `:${c.line}` : ""}`),
+    })),
+  ]
+    .filter((i) => i.at && !i.body.includes(OWN_FOOTER))
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const newest = items.at(-1)?.at;
+  const since = reason(f.fm["notified_review"]);
+  // A PR opened before SW-160 has no mark: its old comments are history, not news.
+  if (!since) claim["notified_review"] = newest ?? new Date().toISOString();
+  else {
+    const fresh = items.filter((i) => Date.parse(i.at) > Date.parse(since));
+    if (fresh.length) {
+      const shown = fresh.slice(0, 3).map((i) => i.quote);
+      if (fresh.length > 3) shown.push(`… and ${fresh.length - 3} more`);
+      events.push({ kind: "review", quote: shown.join("\n") });
+      claim["notified_review"] = newest;
+    }
+  }
+
+  const flagged = reason(f.fm["notified_conflict"]) === "true";
+  if (view.mergeable === "CONFLICTING" && !flagged) {
+    const base = view.baseRefName ?? String(f.fm["base"] ?? "main");
+    const dir = path.join(ws, f.dir);
+    const fetched = await deps.run("git", ["-C", dir, "fetch", "-q", "origin", base]);
+    const log =
+      fetched.code === 0
+        ? await deps.run("git", ["-C", dir, "log", "--oneline", "-10", `HEAD..origin/${base}`])
+        : null;
+    events.push({ kind: "conflict", base, moved: log?.code === 0 ? log.stdout.trim() : "" });
+    claim["notified_conflict"] = "true";
+  } else if (view.mergeable === "MERGEABLE" && flagged) claim["notified_conflict"] = undefined;
+
+  return { events, claim, lines };
 }
 
 function takeLock(file: string): boolean {
@@ -1287,36 +1492,54 @@ export async function claimCallbacks(
       };
       const before = callbacks();
       if (!before.length) continue;
-      if (before.some((f) => statusOf(f) === "open" || statusOf(f) === "merged"))
-        for (const l of (await refreshPrStatus(ws, deps)).lines)
-          lines.push(`${path.basename(ws)}/${l}`);
+      let views = new Map<string, PrView>();
+      if (before.some((f) => statusOf(f) === "open" || statusOf(f) === "merged")) {
+        const refreshed = await refreshPrStatus(ws, deps);
+        views = refreshed.views;
+        for (const l of refreshed.lines) lines.push(`${path.basename(ws)}/${l}`);
+      }
       const changed: string[] = [];
       for (const f of callbacks()) {
         const status = statusOf(f);
-        if (status === (reason(f.fm["notified"]) || "open")) continue;
         const url = String(f.fm["url"] ?? "");
-        const message = callbackMessage(status, url, reason(f.fm["release"]) || undefined);
-        if (message)
-          claimed.push({
-            ws,
-            dir: f.dir,
-            url,
-            session: String(f.fm["session"]),
-            sessionDir: reason(f.fm["session_cwd"]) || null,
-            hostSession: reason(f.fm["host_session"]) || null,
-            message,
-          });
-        writePrFields(
-          f,
-          SETTLED.has(status)
+        const session = String(f.fm["session"]);
+        const sessionDir = reason(f.fm["session_cwd"]) || null;
+        const hostSession = reason(f.fm["host_session"]) || null;
+        // A held message stays unclaimed, so the next pass sends it once the session is idle.
+        const held = async () => {
+          if (hostSession || !(await deps.sessionBusy(ws, session, sessionDir))) return false;
+          lines.push(`${f.dir}: wake held, session ${session} in use`);
+          return true;
+        };
+        let message: string | null;
+        let fields: Record<string, string | undefined>;
+        if (status !== (reason(f.fm["notified"]) || "open")) {
+          message = callbackMessage(status, url, reason(f.fm["release"]) || undefined);
+          if (message && (await held())) continue;
+          fields = SETTLED.has(status)
             ? {
                 session: undefined,
                 session_cwd: undefined,
                 host_session: undefined,
                 notified: undefined,
+                notified_checks: undefined,
+                notified_review: undefined,
+                notified_conflict: undefined,
               }
-            : { notified: status },
-        );
+            : { notified: status };
+        } else {
+          const view = views.get(f.path);
+          if (status !== "open" || !view) continue;
+          const wake = await wakeEvents(ws, f, view, deps);
+          lines.push(...wake.lines.map((l) => `${path.basename(ws)}/${l}`));
+          message = wake.events.length ? wakeMessage(url, wake.events) : null;
+          if (message && (await held())) continue;
+          fields = wake.claim;
+          if (!Object.keys(fields).length) continue;
+        }
+        if (message)
+          claimed.push({ ws, dir: f.dir, url, session, sessionDir, hostSession, message });
+        writePrFields(f, fields);
         changed.push(path.relative(ws, f.path));
       }
       if (changed.length)
