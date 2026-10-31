@@ -7,6 +7,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import {
   buildStartArgs,
+  deferMachineSteps,
   GATE_LINE,
   INTERACTIVE_LINE,
   RUN_LIMITS,
@@ -79,4 +80,61 @@ test("startArgs reads the workspace's own workspace.yml", async () => {
 test("the run limits point at the redacted config view", () => {
   assert.ok(RUN_LIMITS.includes("`werkmeister machine config`"));
   assert.ok(RUN_LIMITS.includes("jira.api_token"));
+});
+
+// SW-296: the SW-278 brief told the run to `registry sync`, which the run limits forbid.
+const SW278 =
+  "- Edit the fragment. After editing, run `werkmeister registry sync` so the generated registry picks up the change.";
+
+test("a registry sync step is dropped and moved to an after-merge note (SW-296)", () => {
+  const out = deferMachineSteps(
+    `## Where to start\n\n${SW278}\n\n## Acceptance criteria\n\n- [ ] Tests pass.`,
+  );
+  assert.ok(out.startsWith("## Where to start\n\n- Edit the fragment.\n\n## Acceptance criteria"));
+  assert.doesNotMatch(out, /run `werkmeister registry sync`/);
+  assert.match(
+    out,
+    /\n## After merge\n\n.*\n- Registry sync: the next `werkmeister registry sync` after merge/,
+  );
+});
+
+test("proxy-reload, linking and global installs get the same handling, one note each (SW-296)", () => {
+  const out = deferMachineSteps(
+    [
+      "- Run `werkmeister infra proxy-reload` to apply it.",
+      "1. `npm link` the CLI. Then check it.",
+      "- [ ] run `pnpm add -g foo`.",
+      "Then run `npm install --global bar` and `npm link` again.",
+    ].join("\n"),
+  );
+  assert.equal(out.split("## After merge")[0], "1. Then check it.\n\n");
+  const notes = out.split("\n").filter((l) => /^- [A-Z]/.test(l));
+  assert.deepEqual(
+    notes.map((l) => l.split(":")[0]),
+    ["- Proxy reload", "- Linking the CLI", "- Global installs"],
+  );
+});
+
+test("mentions that aren't run steps are kept, and a clean prompt comes back unchanged (SW-296)", () => {
+  const prose = [
+    'The ticket says "run `werkmeister registry sync`" and that broke SW-278.',
+    "The gate never needs werkmeister registry sync during a run.",
+    "Run `npm install` in the worktree.",
+  ].join("\n");
+  assert.equal(deferMachineSteps(prose), prose);
+});
+
+test("deferring twice changes nothing more (SW-296)", () => {
+  const once = deferMachineSteps(`${SW278}\n- Run \`npm link\`.`);
+  assert.equal(deferMachineSteps(once), once);
+});
+
+test("the run limits name the commands the brief defers (SW-296)", () => {
+  for (const cmd of [
+    "`npm link`",
+    "install -g",
+    "werkmeister infra proxy-reload",
+    "`~/.werkmeister`",
+  ])
+    assert.ok(RUN_LIMITS.includes(cmd), cmd);
 });

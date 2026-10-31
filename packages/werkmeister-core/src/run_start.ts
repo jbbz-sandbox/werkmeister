@@ -20,6 +20,56 @@ export const RUN_LIMITS = [
   .map((l) => `- ${l}`)
   .join("\n");
 
+// SW-296: steps that write machine state, which RUN_LIMITS forbid; a ticket's fix often asks for one.
+// Each note avoids starting with a backtick so a second pass doesn't take it for a step.
+const MACHINE_STEPS: Array<[RegExp, string]> = [
+  [
+    /werkmeister registry sync/,
+    "- Registry sync: the next `werkmeister registry sync` after merge picks up the change; the gate reads the branch's own `.werkmeister/services.yaml` fragment.",
+  ],
+  [
+    /werkmeister infra proxy-reload/,
+    "- Proxy reload: the next `werkmeister infra proxy-reload` after merge applies the change.",
+  ],
+  [
+    /(?:npm|pnpm|yarn) link\b/,
+    "- Linking the CLI: after merge, if at all; the run runs the built binary with `node`.",
+  ],
+  [
+    /(?:(?:npm|pnpm|yarn) (?:install|i|add)\b[^`\n]*?(?: -g\b| --global\b)|yarn global add\b)/,
+    "- Global installs: after merge, if at all; the run uses the workspace's own install.",
+  ],
+];
+
+// A step is imperative: the command opens the sentence, or follows "run" that isn't quoting the ticket.
+const stepRe = (cmd: RegExp) => new RegExp(`(?:^|(?<!["“'])\\brun )\`?${cmd.source}`, "i");
+const STEP_RES = MACHINE_STEPS.map(([cmd]) => stepRe(cmd));
+const LIST_PREFIX_RE = /^(\s*(?:[-*]|\d+\.) +(?:\[[ x]\] +)?)?(.*)$/;
+
+/** Drop machine-writing run steps from a starting prompt and say they happen after merge instead. */
+export function deferMachineSteps(prompt: string): string {
+  const found = new Set<number>();
+  const lines = prompt.split("\n").flatMap((line) => {
+    const [, prefix = "", rest = ""] = LIST_PREFIX_RE.exec(line) ?? [];
+    const kept = rest.split(/(?<=[.!?]) +/).filter((sentence) => {
+      const hits = STEP_RES.flatMap((re, i) => (re.test(sentence) ? [i] : []));
+      for (const i of hits) found.add(i);
+      return !hits.length;
+    });
+    if (kept.join(" ") === rest) return [line];
+    return kept.length ? [prefix + kept.join(" ")] : [];
+  });
+  if (!found.size) return prompt;
+  return [
+    lines.join("\n").trimEnd(),
+    "",
+    "## After merge",
+    "",
+    "Not steps for this run: the run limits forbid writing machine state under `~/.werkmeister` and global installs. These happen after the PR merges:",
+    ...MACHINE_STEPS.filter((_, i) => found.has(i)).map(([, note]) => note),
+  ].join("\n");
+}
+
 export function startPrompt(autonomous: boolean): string {
   return autonomous
     ? `start the run\n\nRun limits:\n${RUN_LIMITS}`

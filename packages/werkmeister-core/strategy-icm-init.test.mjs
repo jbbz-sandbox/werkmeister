@@ -544,6 +544,29 @@ test("an autonomous brief's open questions are decided, not asked; an interactiv
   assert.doesNotMatch(interactive, /Recommendations for reviewer/);
 });
 
+test("an autonomous brief moves a registry sync step to after merge; an interactive one keeps it (SW-296)", async () => {
+  const starting_prompt =
+    "## Where to start\n\n- Edit the fragment. After editing, run `werkmeister registry sync` so the generated registry picks up the change.";
+  const brief = async (inputs) => {
+    let text;
+    await withIcmWorkspace(
+      async (root, ctx) => {
+        icm.init({ ...ctx, issue: null });
+        text = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+      },
+      { inputs: { starting_prompt, ...inputs } },
+    );
+    return text;
+  };
+  const auto = await brief({ autonomous: "true" });
+  assert.doesNotMatch(auto, /run `werkmeister registry sync`/);
+  assert.match(
+    auto,
+    /- Edit the fragment\.\n\n## After merge\n[\s\S]*- Registry sync: [\s\S]*\n## Run limits/,
+  );
+  assert.match(await brief({}), /run `werkmeister registry sync`/);
+});
+
 test("same context twice gives byte-identical files", async () => {
   const snap = async (ctxPatch) => {
     let files;
