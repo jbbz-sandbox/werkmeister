@@ -356,8 +356,32 @@ const FAIL_CELL = /\|\s*FAIL\s*\|/;
 const CELL_FORMAT =
   "each row needs a result cell that is exactly `PASS` or `FAIL`, evidence in its own column: `| criterion | PASS | evidence |`";
 
+const cellsOf = (row: string): string[] =>
+  row
+    .trim()
+    .replace(/^\||\|$/g, "")
+    .split(/(?<!\\)\|/)
+    .map((c) => c.trim());
+
+/** The result cell of every row in a table whose header names a `result` column (SW-247). */
+function resultCells(text: string): string[] {
+  const lines = text.split("\n").map((l) => l.trim());
+  const cells: string[] = [];
+  for (let i = 0; i + 1 < lines.length; i++) {
+    if (!lines[i].startsWith("|") || !/^\|[\s:|-]+\|$/.test(lines[i + 1])) continue;
+    const col = cellsOf(lines[i]).findIndex((c) => c.toLowerCase() === "result");
+    for (i += 2; lines[i]?.startsWith("|"); i++)
+      if (col >= 0) cells.push(cellsOf(lines[i])[col] ?? "");
+  }
+  return cells;
+}
+
 function passTable(text: string): string | null {
-  if (FAIL_CELL.test(text)) return "has a FAIL row";
+  const results = resultCells(text);
+  if (FAIL_CELL.test(text) || results.some((c) => c.startsWith("FAIL"))) return "has a FAIL row";
+  const other = results.find((c) => c !== "PASS");
+  if (other !== undefined)
+    return `has a result \`${other}\` that is neither PASS nor FAIL — ${CELL_FORMAT}`;
   if (!PASS_CELL.test(text)) return `has no PASS row — ${CELL_FORMAT}`;
   return null;
 }
