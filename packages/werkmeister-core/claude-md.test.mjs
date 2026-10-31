@@ -13,6 +13,9 @@ import {
   buildRoutingTable,
   buildStandardsRoutingSection,
 } from "./dist/claude_md.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 // `universal: <n>` is what the loader stamps on UNIVERSAL_STANDARDS modules.
 const MODULES = {

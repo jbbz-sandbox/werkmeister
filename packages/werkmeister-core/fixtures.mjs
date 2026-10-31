@@ -44,17 +44,23 @@ const PORTS = `feature_slots:
  * first, so a direct `node --test x.test.mjs` would otherwise build, spawn or
  * write there (SW-137, SW-168). `turbo` filters it out, which hides the problem.
  * Call once at the top level of any test that reaches `sandboxRoot()` and does
- * not set its own root.
+ * not set its own root. It also sets `WERKMEISTER_ROOT_PINNED`, which disarms the
+ * SW-239 guard in `sandboxRoot()`: a test that never pins fails there.
  */
 export function pinWerkmeisterRoot() {
   let prev;
+  let prevPinned;
   before(() => {
     prev = process.env.WERKMEISTER_ROOT;
+    prevPinned = process.env.WERKMEISTER_ROOT_PINNED;
     process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "apps", "cli");
+    process.env.WERKMEISTER_ROOT_PINNED = "1";
   });
   after(() => {
     if (prev === undefined) delete process.env.WERKMEISTER_ROOT;
     else process.env.WERKMEISTER_ROOT = prev;
+    if (prevPinned === undefined) delete process.env.WERKMEISTER_ROOT_PINNED;
+    else process.env.WERKMEISTER_ROOT_PINNED = prevPinned;
   });
 }
 

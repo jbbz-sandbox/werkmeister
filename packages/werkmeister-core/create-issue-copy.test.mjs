@@ -10,7 +10,9 @@ import { test } from "node:test";
 import { issueCopyPath } from "./dist/issue_snapshot.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const REPO = path.resolve(import.meta.dirname, "..", "..");
 process.env.WERKMEISTER_ROOT = path.join(REPO, "apps", "cli");

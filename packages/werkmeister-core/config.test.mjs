@@ -5,6 +5,7 @@
 // the built-in default.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -13,6 +14,7 @@ import {
   configPath,
   forwardSpecs,
   infraRoot,
+  monorepoRoot,
   sandboxHome,
   sandboxRoot,
   servicesYamlPath,
@@ -26,6 +28,7 @@ const VARS = [
   "WERKMEISTER_SERVICES_YAML",
   "WERKMEISTER_WORKSPACES_ROOT",
   "WERKMEISTER_ROOT",
+  "WERKMEISTER_ROOT_PINNED",
 ];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 
@@ -114,6 +117,7 @@ test("slotPortRange: 100-port stride, span from ports.yaml", () => {
 // (which always has WERKMEISTER_ROOT, exported by the wrapper) and the other way
 // from a bare import (the dashboard, a script), and they read the same files.
 test("sandboxRoot: WERKMEISTER_ROOT wins, else a walk-up finds the checkout's apps/cli", () => {
+  process.env.WERKMEISTER_ROOT_PINNED = "1";
   const walked = sandboxRoot();
   assert.equal(path.basename(walked), "cli");
   assert.equal(path.basename(path.dirname(walked)), "apps");
@@ -121,6 +125,27 @@ test("sandboxRoot: WERKMEISTER_ROOT wins, else a walk-up finds the checkout's ap
 
   process.env.WERKMEISTER_ROOT = "~/elsewhere/apps/cli";
   assert.equal(sandboxRoot(), path.join(homedir(), "elsewhere", "apps", "cli"));
+});
+
+test("SW-239: sandboxRoot() and monorepoRoot() throw in a test that has not pinned the root", () => {
+  assert.throws(() => sandboxRoot(), /pinWerkmeisterRoot/);
+  assert.throws(() => monorepoRoot(), /pinWerkmeisterRoot/);
+  process.env.WERKMEISTER_ROOT_PINNED = "1";
+  assert.equal(path.basename(sandboxRoot()), "cli");
+  assert.equal(path.join(monorepoRoot(), "apps", "cli"), sandboxRoot());
+});
+
+test("SW-239: outside a test context the guard is inert", () => {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  delete env.WERKMEISTER_ROOT;
+  delete env.WERKMEISTER_ROOT_PINNED;
+  const out = execFileSync(
+    process.execPath,
+    ["-e", 'import("./dist/config.js").then((c) => console.log(c.sandboxRoot()))'],
+    { env, cwd: import.meta.dirname, encoding: "utf8" },
+  );
+  assert.equal(path.basename(out.trim()), "cli");
 });
 
 test("stateInfraRoot is <sandboxHome>/infra and follows WERKMEISTER_CONFIG_FILE", async () => {

@@ -16,6 +16,9 @@ import { parse as parseYaml } from "yaml";
 import { baselineOverridePath } from "./dist/baseline.js";
 import { composeInvocation, infraProfiles } from "./dist/compose_infra.js";
 import { infraRoot, stateInfraRoot } from "./dist/config.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const VARS = [
   "WERKMEISTER_CONFIG_FILE",

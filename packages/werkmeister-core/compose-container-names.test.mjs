@@ -17,7 +17,9 @@ import { test } from "node:test";
 import YAML from "yaml";
 
 import { generateFeatureCompose } from "./dist/generate.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 const FEATURE = "demo-feature";
 const SERVICES = ["backend", "frontend"];

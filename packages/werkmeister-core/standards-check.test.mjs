@@ -13,6 +13,9 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { buildStandardsManifest, checkStandards } from "./dist/standards.js";
+import { pinWerkmeisterRoot } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 /**
  * Run `fn` with the standards tree pointed at `standardsDir`.

@@ -772,6 +772,10 @@ export function getVolumeBaseNames(): string[] {
  * around it — which is why `WERKMEISTER_ROOT` ranks first rather than as a fallback.
  */
 export function sandboxRoot(): string {
+  // SW-239: an unpinned test silently builds or writes in main's checkout (or turbo's walk-up).
+  if (process.env.NODE_TEST_CONTEXT && !process.env.WERKMEISTER_ROOT_PINNED) {
+    throw new Error("sandboxRoot() reached in a test without pinWerkmeisterRoot() (fixtures.mjs)");
+  }
   const override = envVar("ROOT");
   if (override) return path.resolve(expandUser(override));
 

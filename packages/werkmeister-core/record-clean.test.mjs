@@ -13,7 +13,9 @@ import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { initWorkspace } from "./dist/workspace_init.js";
 import { ensureGeneratedIgnored, writeWorkspaceGitignore } from "./dist/worktrees.js";
-import { withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
 
 test("compose and runtime state are ignored; the record's own files are not", () => {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "record-gi-"));
