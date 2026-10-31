@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.59.0
+
+### Minor Changes
+
+- 6e4707d: SW-268: `werkmeister machine config` (bare or `--show`) now also prints the whole `config.yaml` as YAML with secrets masked: any value under a key named like `token`, `secret`, `password`, `credential`, `api_key`, `private_key`, `access_key` or `auth` (so `jira.api_token`) prints as `<redacted>`, and empty values stay empty. The autonomous run limit that says not to read the real `~/.werkmeister` now points agents at this view.
+
+### Patch Changes
+
+- 0b6e9c3: SW-277: test-only. The wrapper npx-bootstrap test runs the wrapper async with a 120 s limit (macOS's first-exec check of its fresh stubs slows with host load), and `infra-retire-legacy`'s `argvOf` names a missing docker-stub line and prints the whole log instead of throwing a TypeError.
+- d7ba2ba: SW-278: `werkmeister pr gate` no longer passes silently with zero tests run when a PR's changed files map to no service (for example, the registry has no `repos:` entry for the worktree). It fails a `tests` row that names the files, unless the PR file sets `skip_tests: { tests: <reason> }`. An empty diff and a docs-only diff (all `no_service_paths`) behave as before. The `cli` validate text now says what a gate fixture needs.
+
 ## 0.58.0
 
 ### Minor Changes
