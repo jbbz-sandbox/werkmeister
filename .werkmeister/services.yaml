@@ -76,7 +76,7 @@ services:
     image: node:22
     command: "cd apps/cli && exec pnpm run watch"
     memory_limit: 2G
-    memory_reservation: 128M
+    memory_reservation: 1600M
     node_modules_volume: node-modules
     extra_volumes: &host_mounts
       - /var/run/docker.sock:/var/run/docker.sock
@@ -114,7 +114,7 @@ services:
     image: node:22
     command: "cd packages/werkmeister-core && exec pnpm exec tsc --watch --preserveWatchOutput"
     memory_limit: 2G
-    memory_reservation: 128M
+    memory_reservation: 768M
     node_modules_volume: node-modules
     # Same host access as cli: the repos mount makes the worktree's .git
     # resolve, and the socket + tools let its docker tests run (#134).
@@ -141,7 +141,7 @@ services:
     dockerfile: Dockerfile
     command: "cd packages/werkmeister-vscode && exec pnpm run watch"
     memory_limit: 2G
-    memory_reservation: 128M
+    memory_reservation: 640M
     node_modules_volume: node-modules
     extra_volumes: *host_mounts
     environment: *host_env
@@ -162,7 +162,7 @@ services:
     image: node:22
     command: "cd apps/werkmeister-dashboard && exec pnpm run dev"
     memory_limit: 2G
-    memory_reservation: 256M
+    memory_reservation: 640M
     node_modules_volume: node-modules
     extra_volumes: *host_mounts
     environment: *host_env
@@ -188,7 +188,7 @@ services:
     # 2G, above the others' 1G: the gate can run cli's cold typecheck + test here
     # (~900M) beside the dev server (~220M); 512M and 1G OOM-killed it (SW-128).
     memory_limit: 2G
-    memory_reservation: 128M
+    memory_reservation: 768M
     node_modules_volume: node-modules
     extra_volumes:
       - tools:/opt/werkmeister-tools
