@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.59.4
+
+### Patch Changes
+
+- ab40ce4: SW-280: the issue extractor and brief format now pick and name a service whose container the ticket measures, so `werkmeister feature up` starts it.
+
 ## 0.59.3
 
 ### Patch Changes
