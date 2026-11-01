@@ -178,7 +178,7 @@ const MAX_COMMENT = 1000;
  * Plain-text briefing of an issue (title, status line, description, recent
  * comments): refine's background context and the form pre-fill's input.
  */
-export function issueBriefing(issue: Issue): string {
+export function issueBriefing(issue: Issue, opts: { full?: boolean } = {}): string {
   const lines: string[] = [`${issue.ref}: ${issue.title ?? "(no title)"}`];
   const meta = [
     issue.status && `Status: ${issue.status}`,
@@ -186,8 +186,13 @@ export function issueBriefing(issue: Issue): string {
     issue.assignee && `Assignee: ${issue.assignee}`,
   ].filter(Boolean);
   if (meta.length) lines.push(meta.join(" · "));
-  if (issue.description)
-    lines.push("", "Description:", issue.description.slice(0, MAX_DESCRIPTION));
+  if (issue.description) {
+    const d = issue.description;
+    // SW-324: say so when the cap drops text; `issue view` passes full to print it all.
+    const left = opts.full ? 0 : Math.max(0, d.length - MAX_DESCRIPTION);
+    lines.push("", "Description:", left ? d.slice(0, MAX_DESCRIPTION) : d);
+    if (left) lines.push(`[cut: ${left} more characters not shown]`);
+  }
   const comments = issue.comments ?? [];
   if (comments.length) {
     lines.push(
