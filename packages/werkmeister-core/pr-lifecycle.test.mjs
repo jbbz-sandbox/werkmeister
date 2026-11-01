@@ -1075,20 +1075,22 @@ test("runGate: over the load limit it waits, then runs and says how long (SW-209
   }
 });
 
-test("runGate: still over after 30 min it runs anyway and says so (SW-209)", async () => {
+test("runGate: one 10 min wait budget is shared across checks, then it runs anyway (SW-262)", async () => {
   const ws = icmWorkspace();
   try {
     const host = loaded([90]);
     const d = deps([DIFF_API], host);
     const g = await gate(ws, d);
-    // 120 polls of 15 s for each check that runs (test, then release).
-    assert.ok(host.slept.length >= 120 && host.slept.length % 120 === 0, `${host.slept.length}`);
+    // 40 polls of 15 s for the whole run: the test spends it, the release check doesn't wait.
+    assert.equal(host.slept.length, 40);
     assert.ok(
       d.calls.some((c) => /^docker exec .* npm test -w api/.test(c)),
       d.calls.join("\n"),
     );
     assert.equal(testRow(g).ok, true, "load never decides pass or fail");
-    assert.match(testRow(g).detail, /ran with host load 90\.0 over 8 after a 30 min wait/);
+    const spent = /ran with host load 90\.0 over 8; the 10 min host-load wait is spent/;
+    assert.match(testRow(g).detail, spent);
+    assert.match(g.checks.find((c) => c.name === "release").detail, spent);
   } finally {
     clean(ws);
   }
@@ -1112,7 +1114,7 @@ test("runGate: --no-wait and host_load: 0 never sleep (SW-209)", async () => {
   }
 });
 
-test("waitForHostLoad: with-temp-home's wait polls, caps at 30 min and names its skip (SW-224)", async () => {
+test("waitForHostLoad: with-temp-home's wait polls, caps at 10 min and says so up front (SW-224, SW-262)", async () => {
   const lines = [];
   const reporter = { emit: (e) => lines.push(e.msg) };
   const falls = loaded([90, 90, 1]);
@@ -1125,12 +1127,41 @@ test("waitForHostLoad: with-temp-home's wait polls, caps at 30 min and names its
   assert.deepEqual(falls.slept, [15000, 15000]);
   assert.match(
     lines.join("\n"),
-    /waiting for host load 90\.0 to fall to 8 \(budget\.host_load\) before with-temp-home; WERKMEISTER_NO_WAIT=1 skips/,
+    /waiting up to 10 min for host load 90\.0 to fall to 8 \(budget\.host_load\) before with-temp-home; WERKMEISTER_NO_WAIT=1 skips/,
   );
   const stuck = loaded([90]);
   const capped = await withSandboxHome(() => waitForHostLoad(stuck, true, "with-temp-home"));
-  assert.equal(stuck.slept.length, 120);
-  assert.equal(capped, "ran with host load 90.0 over 8 after a 30 min wait");
+  assert.equal(stuck.slept.length, 40);
+  assert.equal(capped, "ran with host load 90.0 over 8; the 10 min host-load wait is spent");
+});
+
+test("waitForHostLoad: prints progress each minute and spends the budget it is given (SW-262)", async () => {
+  const lines = [];
+  const reporter = { emit: (e) => lines.push(e.msg) };
+  const stuck = loaded([90]);
+  const budget = { leftMs: 150_000 };
+  const note = await withSandboxHome(() =>
+    withReporter(reporter, () => waitForHostLoad(stuck, true, "lint", "--no-wait", budget)),
+  );
+  assert.equal(stuck.slept.length, 10);
+  assert.equal(budget.leftMs, 0);
+  assert.match(
+    lines[0],
+    /^waiting up to 2\.5 min for host load 90\.0 to fall to 8 .* before lint; --no-wait skips$/,
+  );
+  assert.deepEqual(lines.slice(1), [
+    "still waiting for host load: 90.0 over 8, 60 s so far, up to 1.5 min left",
+    "still waiting for host load: 90.0 over 8, 120 s so far, up to 0.5 min left",
+  ]);
+  assert.match(note, /the 10 min host-load wait is spent/);
+  lines.length = 0;
+  const again = loaded([90]);
+  const second = await withSandboxHome(() =>
+    withReporter(reporter, () => waitForHostLoad(again, true, "release", "--no-wait", budget)),
+  );
+  assert.deepEqual(again.slept, []);
+  assert.deepEqual(lines, []);
+  assert.equal(second, note);
 });
 
 test("refreshPrStatus: merged, then shipped once a release tag contains the merge", async () => {

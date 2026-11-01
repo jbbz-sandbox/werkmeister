@@ -11,7 +11,7 @@ Opens PRs from a workspace and tracks them to a release. Each action:
 .IP \(bu 3
 \fBopen\fR gates, pushes and opens a PR for each PR file at \fBstatus: approved\fR, and records its URL.
 .IP \(bu 3
-Before each gate check (lint, tests, release), \fBgate\fR and \fBopen\fR wait while the host's 1\-minute load is above \fBbudget.host_load\fR in \fB~/.werkmeister/config.yaml\fR (default: 2 × CPUs; \fB0\fR turns it off), for up to 30 minutes, then run anyway. \fB\-\-no\-wait\fR skips the wait. \fB.werkmeister/bin/with\-temp\-home\fR runs the same wait before its command (\fBWERKMEISTER_NO_WAIT=1\fR skips it). A failed check ends with the host load.
+Before each gate check (lint, tests, release), \fBgate\fR and \fBopen\fR wait while the host's 1\-minute load is above \fBbudget.host_load\fR in \fB~/.werkmeister/config.yaml\fR (default: 2 × CPUs; \fB0\fR turns it off), for up to 10 minutes in all across the run, saying up front how long they may wait and printing progress each minute, then run anyway. \fB\-\-no\-wait\fR skips the wait. With tests on top, a gate under load can run well past a 10\-minute tool call: run \fBpr open\fR detached, as rule 3 of \fB_shared/pr\-rules.md\fR shows. \fB.werkmeister/bin/with\-temp\-home\fR runs the same wait before its command (\fBWERKMEISTER_NO_WAIT=1\fR skips it). A failed check ends with the host load.
 .IP \(bu 3
 \fBstatus\fR records merged, shipped or closed from GitHub and the repo's release tags.
 .IP \(bu 3

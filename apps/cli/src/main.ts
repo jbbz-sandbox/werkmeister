@@ -528,7 +528,7 @@ const SPECS: CommandSpec[] = [
     load: () => import("./commands/wait_load.js"),
     configure: (cmd) => {
       cmd.description(
-        "Wait, up to 30 min, while host load is above budget.host_load; with-temp-home runs it first",
+        "Wait, up to 10 min, while host load is above budget.host_load; with-temp-home runs it first",
       );
     },
     namespace: () => ({}),

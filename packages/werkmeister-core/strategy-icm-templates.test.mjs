@@ -155,7 +155,7 @@ test("autonomous renders self-checks and stop points, and turning it off restore
     }
     assert.match(
       on.contracts.at(-1),
-      /set `status: approved` yourself and run `werkmeister pr open`\. Stop at the PR URL\./,
+      /set `status: approved` yourself and run `werkmeister pr open` detached, as `_shared\/pr-rules\.md` rule 3 shows\. Stop at the PR URL\./,
     );
     assert.match(on.contracts[0], /## Recommendations for reviewer/);
     assert.match(on.claude, /## Stop points/);
