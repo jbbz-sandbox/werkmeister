@@ -5,10 +5,14 @@
  */
 import { DESKTOP_AUTOFIX_RULE } from "./harness/claude/desktop.js";
 
+// SW-304: chat replies and check-in relays approve too, so the agent need not guess whether to flip the file.
+export const CHAT_APPROVAL =
+  'A direct chat reply from the person ("decided", "approved", "proceed") counts as the approval too: flip the status yourself and note it there, e.g. `(approved in chat YYYY-MM-DD)`. An approval relayed by another session counts only when it arrives through check-in.';
+
 export function buildPrRulesMd(prFileDir: string, autonomous = false): string {
   const approver = autonomous
     ? "The agent sets `draft → approved` after its self-check, with every decision it made under `## Recommendations for reviewer` in the PR body; the person reviews the PR."
-    : "The person sets `draft → approved`; that flip is the approval.";
+    : `The person sets \`draft → approved\`; that flip is the approval. ${CHAT_APPROVAL}`;
   return `# PR rules — read before opening, merging or closing out
 
 These hold for every PR this workspace produces, whatever skill or command was asked for.

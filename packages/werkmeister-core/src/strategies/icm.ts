@@ -20,7 +20,7 @@ import {
 } from "../harness/claude/hooks_gen.js";
 import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
-import { buildPrRulesMd } from "../pr_rules.js";
+import { buildPrRulesMd, CHAT_APPROVAL } from "../pr_rules.js";
 import { info, success, warn } from "../reporter.js";
 import { deferMachineSteps, RUN_LIMITS } from "../run_start.js";
 import {
@@ -286,7 +286,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
 const ONE_RULE = [
   "## The one rule",
   "",
-  "Nothing moves to the next stage until a person has read — and edited if needed — the previous stage's `output/`. The next stage reads whatever is there. The person's edit (a `decided` status, or a \"proceed\" after a gate) is the approval; never ask them to confirm it a second time.",
+  `Nothing moves to the next stage until a person has read — and edited if needed — the previous stage's \`output/\`. The next stage reads whatever is there. The person's edit (a \`decided\` status, or a "proceed" after a gate) is the approval; never ask them to confirm it a second time. ${CHAT_APPROVAL}`,
 ];
 
 // `autonomous` (#175): the person's review moves to the PR, so these replace the one rule.

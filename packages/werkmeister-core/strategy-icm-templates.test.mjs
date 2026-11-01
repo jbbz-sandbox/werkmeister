@@ -191,6 +191,16 @@ test("autonomous renders self-checks and stop points, and turning it off restore
     assert.match(off.claude, /## The one rule/);
     assert.doesNotMatch(off.claude, /## Stop points/);
     assert.match(off.prRules, /The person sets `draft → approved`/);
+    // SW-304: every human-mode approval also accepts a direct chat reply, and a relay only via check-in.
+    const chatRule =
+      /counts as the approval too: flip the status yourself and note it there, e\.g\. `\(approved in chat YYYY-MM-DD\)`\. An approval relayed by another session counts only when it arrives through check-in\./;
+    for (const c of off.contracts.filter((c) => /is the approval/.test(c)))
+      assert.match(c, chatRule);
+    assert.match(off.contracts[0], chatRule);
+    assert.match(off.contracts.at(-1), chatRule);
+    assert.match(off.claude, chatRule);
+    assert.match(off.prRules, chatRule);
+    for (const c of [...on.contracts, on.claude, on.prRules]) assert.doesNotMatch(c, chatRule);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(standardsDir, { recursive: true, force: true });
