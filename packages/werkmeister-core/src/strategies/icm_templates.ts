@@ -82,8 +82,9 @@ export const SELF_CHECK =
 
 // Decision 11 (sandbox-133): "ship" means reaching a release, so the stage that // name-check: ignore
 // ends at an approved PR file is "propose".
-const EXERCISE_FORMAT =
-  "a `| check | result |` table, each result `PASS` or `FAIL`, with the captured output under it";
+// The gate reads every `result` column and rejects any other cell text (SW-247, SW-286).
+const exerciseFormat = (col: string) =>
+  `a \`| check | result | ${col} |\` table whose result cell is exactly \`PASS\` or \`FAIL\` — nothing else in the cell — with the captured output in the ${col} column. The rule holds for every table in \`exercise.md\`; describe a superseded run in prose, not as a \`FAIL\` row`;
 
 const propose: Stage = {
   name: "propose",
@@ -105,7 +106,7 @@ const propose: Stage = {
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL, with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
       "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit.",
-      "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs, the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
+      "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` or `FAIL` and the output in its own column), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
       "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],
     outputs: [
@@ -196,7 +197,7 @@ const feature: Stage[] = [
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, the exercise checks as ${EXERCISE_FORMAT}, and any deviation from \`spec.md\` with its reason.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
       ],
       outputs: [
         "Code changes, uncommitted — the next stage commits after the person reads the diff",
@@ -288,7 +289,7 @@ const bugfix: Stage[] = [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
-        `Write \`output/exercise.md\`: steps 2–3 as ${EXERCISE_FORMAT}.`,
+        `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
       ],
       outputs: ["`output/exercise.md`"],
       humanCheck: "Read `exercise.md`. A FAIL sends the run back to the fix stage.",
@@ -347,7 +348,7 @@ const refactor: Stage[] = [
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
         `Take the steps in order. After each one: ${TEST_STEP}`,
         `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, and the final exercise checks as ${EXERCISE_FORMAT}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, and the final exercise checks as ${exerciseFormat("evidence")}.`,
       ],
       outputs: ["Code changes, uncommitted", "`output/exercise.md`"],
       humanCheck: "Read the diff against `scope.md`. Anything outside scope goes back.",

@@ -625,6 +625,20 @@ async function gateChecks(
   add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
   add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
   add("repo", ...(await repoCheck(path.join(ws, file.dir), file, deps)));
+  // exercise.md is a file read too, so a malformed table fails before the tests (SW-286).
+  const skipExercise = reason(file.fm["skip_exercise"]);
+  if (skipExercise) add("exercise", true, `skipped: ${skipExercise}`);
+  else {
+    const evidence = exerciseFile(ws);
+    const evidenceProblem = evidence ? passTable(fs.readFileSync(evidence, "utf8")) : "is missing";
+    add(
+      "exercise",
+      evidenceProblem === null,
+      evidence
+        ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
+        : "no exercise.md — record the exercise checks first",
+    );
+  }
   // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).
   if (checks.some((c) => !c.ok)) {
     add("tests", false, "not run — fix the PR-file checks above first");
@@ -846,19 +860,6 @@ async function gateChecks(
     await execCheck(`test ${svc}`, container, cmd, 15);
   }
 
-  const skipExercise = reason(file.fm["skip_exercise"]);
-  if (skipExercise) add("exercise", true, `skipped: ${skipExercise}`);
-  else {
-    const evidence = exerciseFile(ws);
-    const evidenceProblem = evidence ? passTable(fs.readFileSync(evidence, "utf8")) : "is missing";
-    add(
-      "exercise",
-      evidenceProblem === null,
-      evidence
-        ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
-        : "no exercise.md — record the exercise checks first",
-    );
-  }
   const slot = Number(readEnv(ws, "WERKMEISTER_SLOT"));
   // Only a served endpoint has a baseline; the test check already proved a container ran the rest.
   const isServed = (s: string) => ["api", "web"].includes(services[s]?.["type"] ?? "");

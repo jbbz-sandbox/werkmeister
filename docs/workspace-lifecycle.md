@@ -97,7 +97,7 @@ Code written after a worktree's PR merged, e.g. a problem found while cutting or
 
 ## The gate
 
-`werkmeister pr gate [repo]` runs the checks and changes nothing. `werkmeister pr open` runs them again before opening. The PR-file checks (stages, acceptance, approved) run first. If one fails, the gate stops there and reports `tests: not run`, so a malformed PR file never waits on the test commands (SW-150).
+`werkmeister pr gate [repo]` runs the checks and changes nothing. `werkmeister pr open` runs them again before opening. The PR-file checks (stages, acceptance, approved) and the exercise.md check run first (SW-286). If one fails, the gate stops there and reports `tests: not run`, so a malformed PR file never waits on the test commands (SW-150).
 
 | Check | Passes when |
 |---|---|

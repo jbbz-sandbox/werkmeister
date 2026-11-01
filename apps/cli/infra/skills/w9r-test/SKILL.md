@@ -30,8 +30,9 @@ description: "Begin the test phase in a workspace. Use when running or writing t
   `package.json`; edit only
   test files; never "fix" application source in this phase.
 - **Record the exercise evidence** the PR gate reads: write `.werkmeister/notes/exercise.md`
-  with the smoke check and every change-specific check as a `| check | result |` table,
-  each result `PASS` or `FAIL`, the captured output under it.
+  with the smoke check and every change-specific check as a `| check | result | evidence |`
+  table whose result cell is exactly `PASS` or `FAIL` (nothing else in the cell), the
+  captured output in the evidence column; describe a superseded run in prose, not as a `FAIL` row.
 - Relay the results per service, then put the testers' OPEN QUESTIONS / AMBIGUITIES to
   the user (AskUserQuestion) and let them resolve those **before** proposing fixes.
 - Fixing a failure is the implement phase: invoke `w9r-implement` first (it loads the

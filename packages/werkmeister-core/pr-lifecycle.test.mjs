@@ -391,9 +391,25 @@ function noExercise(opts = {}) {
 test("gate fails on missing exercise evidence", async () => {
   const ws = noExercise();
   try {
-    assert.deepEqual(failed(await gate(ws, deps([DIFF_API]))), ["exercise"]);
+    assert.deepEqual(failed(await gate(ws, deps([DIFF_API]))), ["exercise", "tests"]);
   } finally {
     clean(ws);
+  }
+});
+
+test("gate: a malformed exercise.md fails before any test command runs (SW-286)", async () => {
+  const table = (cell) => `| check | result |\n|---|---|\n| x | ${cell} |\n`;
+  for (const cell of ["PASS: ok", "(reproduces bug)"]) {
+    const ws = icmWorkspace({ exercise: table(cell) });
+    try {
+      const d = deps([DIFF_API]);
+      const g = await gate(ws, d);
+      assert.deepEqual(failed(g), ["exercise", "tests"], cell);
+      assert.match(g.checks.find((c) => c.name === "tests").detail, /^not run/);
+      assert.ok(!d.calls.some((c) => c.startsWith("docker exec")), d.calls.join("\n"));
+    } finally {
+      clean(ws);
+    }
   }
 });
 
@@ -406,7 +422,7 @@ test("gate: an exercise result cell of `FAIL — why`, or neither PASS nor FAIL,
     const ws = icmWorkspace({ exercise: table(cell) });
     try {
       const g = await gate(ws, deps([DIFF_API]));
-      assert.deepEqual(failed(g), ["exercise"], cell);
+      assert.deepEqual(failed(g), ["exercise", "tests"], cell);
       assert.match(g.checks.find((c) => c.name === "exercise").detail, detail);
     } finally {
       clean(ws);
