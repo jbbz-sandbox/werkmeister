@@ -1596,9 +1596,13 @@ export const register: Register = (on) => {
 
   // A regex: the tool-name type only lists tools laid when the types were written, and this one registers at start.
   // The call's input fields arrive on the event itself, beside `tool` and `tool_use_id`.
-  on("tool.call", { tool: /^mcp__werkmeister__workspaces_pane_fill_create_form$/ }, async ($, e) => ({
-    result: await fillFormTool($, e as unknown as Record<string, unknown>),
-  })).catch(() => ({
+  on(
+    "tool.call",
+    { tool: /^mcp__werkmeister__workspaces_pane_fill_create_form$/ },
+    async ($, e) => ({
+      result: await fillFormTool($, e as unknown as Record<string, unknown>),
+    }),
+  ).catch(() => ({
     deny: "The workspace form could not be filled; open /workspaces and fill it by hand.",
   }));
 
