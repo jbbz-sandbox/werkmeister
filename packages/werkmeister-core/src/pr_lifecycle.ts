@@ -44,6 +44,7 @@ import {
   stopIdle,
 } from "./lifecycle.js";
 import { originSlug } from "./machine_setup.js";
+import { isQuestionFile } from "./md_form.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
@@ -423,7 +424,7 @@ function stagesCheck(ws: string): GateCheck {
       try {
         return !fs
           .readdirSync(path.join(ws, "stages", d, "output"))
-          .some((f) => !f.startsWith("."));
+          .some((f) => !f.startsWith(".") && !isQuestionFile(f));
       } catch {
         return true;
       }

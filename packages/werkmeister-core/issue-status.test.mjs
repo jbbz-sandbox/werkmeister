@@ -204,6 +204,8 @@ test("startIssue: names the first stage without output; no issue, no move", asyn
     for (const d of ["01_research", "02_spec"])
       fs.mkdirSync(path.join(ws, "stages", d, "output"), { recursive: true });
     fs.writeFileSync(path.join(ws, "stages", "01_research", "output", ".gitkeep"), "");
+    // SW-309: a question form doesn't make its stage look done.
+    fs.writeFileSync(path.join(ws, "stages", "01_research", "output", "question-x.md"), "");
     fs.mkdirSync(dotDir(ws), { recursive: true });
     fs.writeFileSync(path.join(dotDir(ws), "workspace.yml"), "feature: f\nissue_id: X-1\n");
     const t = tracker({ ref: "X-1", status: "To Do", statusCategory: "new" });

@@ -7,7 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { ICM_TEMPLATES, templateFor } from "./dist/strategies/icm_templates.js";
+import { ICM_TEMPLATES, QUESTION_RULE, templateFor } from "./dist/strategies/icm_templates.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { WORK_TYPE_PHASES } from "./dist/workspace_prompts.js";
 import { withSandboxHome } from "./fixtures.mjs";
@@ -178,7 +178,7 @@ test("autonomous renders self-checks and stop points, and turning it off restore
       on.claude.split("\n").filter((l) => /^\d\. /.test(l)),
       [
         "1. the PR URL from `werkmeister pr open`",
-        "2. a question only a person can answer",
+        `2. ${QUESTION_RULE}`,
         "3. a gate failure outside this issue's scope",
       ],
     );
@@ -201,6 +201,57 @@ test("autonomous renders self-checks and stop points, and turning it off restore
     assert.match(off.claude, chatRule);
     assert.match(off.prRules, chatRule);
     for (const c of [...on.contracts, on.claude, on.prRules]) assert.doesNotMatch(c, chatRule);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(standardsDir, { recursive: true, force: true });
+  }
+});
+
+// SW-309: questions and stage approvals are Markdown forms answered on the /workspaces pane's workspace cards.
+test("human mode: decisions.md is a form, each later stage ends with an approval form, questions go to files", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-forms-"));
+  const standardsDir = fs.mkdtempSync(path.join(os.tmpdir(), "icm-forms-standards-"));
+  try {
+    const off = await initIcm(root, standardsDir, "false");
+    const [research, spec, implement, propose] = off.contracts;
+    assert.match(research, /Write `output\/decisions\.md` as a form\. Form syntax:/);
+    assert.match(research, /`- \( \)` pick one, `- \[ \]` pick any/);
+    assert.match(
+      research,
+      /Answer `output\/decisions\.md` on its workspace card in the \/workspaces pane/,
+    );
+    assert.doesNotMatch(research, /question-approval\.md/);
+    for (const [dir, c] of [
+      ["02_spec", spec],
+      ["03_implement", implement],
+    ]) {
+      assert.match(
+        c,
+        new RegExp(`Last, write \`output/question-approval\\.md\`: \`# Approve ${dir}\``),
+      );
+      assert.match(c, /^- `output\/question-approval\.md`$/m);
+      assert.match(c, /\(x\) Approve` with `status: decided` is the approval/);
+    }
+    // propose keeps the PR file's `status: approved` as its gate.
+    assert.doesNotMatch(propose, /question-approval/);
+    assert.match(
+      off.claude,
+      /\| `stages\/02_spec\/output\/question-approval\.md` reads `status: decided` with `\(x\) Approve` — the flip \*is\* the approval, do not ask again \| `stages\/03_implement\/CONTEXT\.md` \|/,
+    );
+    assert.match(
+      off.claude,
+      /\| `stages\/03_implement\/output\/question-approval\.md` reads `status: decided` with `\(x\) Changes needed` \|/,
+    );
+    assert.match(
+      off.claude,
+      /a `stages\/\*\/output\/question-\*\.md` you wrote reads `status: decided`/,
+    );
+    assert.ok(off.claude.includes(QUESTION_RULE));
+    assert.match(off.pipeline, /`\.gitkeep` and `question-\*\.md` do not count/);
+
+    const on = await initIcm(root, standardsDir, "true");
+    for (const c of on.contracts) assert.doesNotMatch(c, /question-approval/);
+    assert.doesNotMatch(on.claude, /question-approval/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(standardsDir, { recursive: true, force: true });

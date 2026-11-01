@@ -91,12 +91,33 @@ import {
   trackerById,
 } from "./issue_tracker.js";
 import { checkForwardHealth, forwarderNeeded } from "./k8s.js";
+import {
+  type FormAnswers,
+  formDraft,
+  formHash,
+  isQuestionFile,
+  type ParsedForm,
+  parseForm,
+} from "./md_form.js";
 import { loadProjects } from "./projects.js";
 import { type CrashLoop, type ProjectHealth, projectHealth, type Started } from "./resources.js";
 import { labelOf } from "./slots.js";
 import { type InterceptRow, type InterceptsSnapshot, interceptsSnapshot } from "./status.js";
 
 export { mergeFormData, repoSelectionError, validateFormData } from "./form_schema.js";
+export {
+  applyAnswers,
+  type FormAnswers,
+  type FormQuestion,
+  formBundle,
+  formDraft,
+  formErrors,
+  formHash,
+  isQuestionFile,
+  type ParsedForm,
+  parseForm,
+  submitForm,
+} from "./md_form.js";
 export {
   type CrashLoop,
   getWorkspaceResources,
@@ -1286,7 +1307,7 @@ export async function icmStage(dir: string): Promise<IcmStage | null> {
     const files = await fs
       .readdir(path.join(dir, "stages", stages[i], "output"))
       .catch(() => [] as string[]);
-    if (!files.some((f) => !f.startsWith(".")))
+    if (!files.some((f) => !f.startsWith(".") && !isQuestionFile(f)))
       return { index: i + 1, total: stages.length, name: stages[i].replace(/^\d+_/, "") };
   }
   return null;
@@ -1596,6 +1617,59 @@ async function proposedGates(dir: string): Promise<string[]> {
   return out;
 }
 
+/** The check-in label filter: never `skip`, and only `focus` ones when any carry it. */
+function keptWorkspaces(workspaces: WorkspaceEntry[]): {
+  kept: WorkspaceEntry[];
+  dropped: WorkspaceEntry[];
+} {
+  const focus = workspaces.some((w) => w.labels.includes("focus"));
+  const keep = (w: WorkspaceEntry) =>
+    !w.labels.includes("skip") && (!focus || w.labels.includes("focus"));
+  return { kept: workspaces.filter(keep), dropped: workspaces.filter((w) => !keep(w)) };
+}
+
+/** A gate file with a proposed question, parsed for its card in the /workspaces pane. */
+export interface OpenForm {
+  workspace: string;
+  path: string;
+  /** Relative to the workspace. */
+  rel: string;
+  /** The text the form was parsed from; `submitForm` refuses if the file no longer hashes to `hash`. */
+  md: string;
+  hash: string;
+  form: ParsedForm;
+  draft: FormAnswers;
+}
+
+/**
+ * Every open form across the workspaces the check-in label filter keeps: the gates
+ * `proposedGates` finds with at least one proposed `## ` question. Unlike `checkInTriage`,
+ * it leaves `.check-in-last` alone, so the pane can poll it.
+ */
+export async function openForms(): Promise<OpenForm[]> {
+  const { workspaces } = await listWorkspaces();
+  const out: OpenForm[] = [];
+  for (const w of keptWorkspaces(workspaces).kept) {
+    for (const rel of await proposedGates(w.path)) {
+      const file = path.join(w.path, rel);
+      const md = await fs.readFile(file, "utf-8").catch(() => null);
+      if (md === null) continue;
+      const form = parseForm(md);
+      if (!form.questions.some((q) => q.status === "proposed")) continue;
+      out.push({
+        workspace: w.name,
+        path: file,
+        rel,
+        md,
+        hash: formHash(md),
+        form,
+        draft: formDraft(form),
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * Step 1 of the check-in skill in one call: each workspace's labels, container
  * and Claude state, proposed stage gates and whether its transcript moved since
@@ -1617,11 +1691,8 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
     (s) => Math.round(s.mtimeMs),
     () => null,
   );
-  const focus = workspaces.some((w) => w.labels.includes("focus"));
-  const keep = (w: WorkspaceEntry) =>
-    !w.labels.includes("skip") && (!focus || w.labels.includes("focus"));
+  const { kept, dropped } = keptWorkspaces(workspaces);
   const byName = new Map(statuses.map((s) => [s.name, s]));
-  const kept = workspaces.filter(keep);
   await shipMerged(
     kept.map((w) => w.path),
     deps,
@@ -1668,7 +1739,7 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
     root,
     since: sinceMs === null ? null : new Date(sinceMs).toISOString(),
     workspaces: rows,
-    dropped: workspaces.filter((w) => !keep(w)).map((w) => w.name),
+    dropped: dropped.map((w) => w.name),
     candidates: rows
       .filter(
         (r) =>

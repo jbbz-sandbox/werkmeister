@@ -2,11 +2,14 @@ import type { Color, EngineInterface, Register } from "claude-code";
 
 import type {
   Draft,
+  FormAnswers,
   FormBundle,
   FormField,
+  FormQuestion,
   InfraStatus,
   InterceptRow,
   InterceptsSnapshot,
+  OpenForm,
   RepoPr,
   ServiceHealth,
   WorkspaceResources,
@@ -122,6 +125,10 @@ try {
     // The create form's rules live in werkmeister-core, shared with the browser form.
     'validate-form': () => core.validateFormData(args.bundle, args.formData),
     'merge-form': () => core.mergeFormData(args.current, args.incoming),
+    // SW-309: forms on the workspace cards. Parsing, validation and the stale check are core's (md_form.ts).
+    'open-forms': () => core.openForms(),
+    'form-errors': () => core.formErrors(core.parseForm(args.md), args.answers),
+    'submit-form': () => core.submitForm(args.path, args.answers, args.hash),
   }
   if (!ops[op]) throw new Error('unknown op ' + op)
   out({ ok: true, result: await ops[op]() })
@@ -191,6 +198,13 @@ const FORM = { plugin: "werkmeister", key: "formSchema" } as const;
 const DRAFT = { plugin: "werkmeister", key: "draft" } as const;
 const FORM_BUSY = { plugin: "werkmeister", key: "formBusy" } as const;
 const FOCUSED = { plugin: "werkmeister", key: "focusedField" } as const;
+
+const FORMS = { plugin: "werkmeister", key: "forms" } as const;
+const SHEETS = { plugin: "werkmeister", key: "sheets" } as const;
+const SHEET_ERRORS = { plugin: "werkmeister", key: "sheetErrors" } as const;
+const SUBMITTING = { plugin: "werkmeister", key: "submitting" } as const;
+const OPEN_SHEET = { plugin: "werkmeister", key: "openSheet" } as const;
+const FORMS_POLL = { plugin: "werkmeister", key: "formsPoll" } as const;
 
 /** Mobile draws no Input or Select, so there the Create tab hands the form to the model instead. */
 export function createPrompt(issueId: string): string {
@@ -392,6 +406,90 @@ async function openCreate($: EngineInterface): Promise<void> {
 async function setField($: EngineInterface, key: string, value: Draft[string]): Promise<void> {
   const { value: draft = {} } = await $.state.get(DRAFT);
   await $.state.set(DRAFT, { ...draft, [key]: value });
+}
+
+/** The pane's prompt into this (root) session after a Submit: check-in step 4 relays it (SW-309 decision 5). */
+export function relayText(f: Pick<OpenForm, "workspace" | "rel">): string {
+  return `Workspaces pane: ${f.workspace}/${f.rel} decided. Relay "gate decided, continue" to that workspace (/check-in step 4).`;
+}
+
+/** Core's `q<n>[.other|.<label>]` error keys as lines under the sheet, named by question heading. */
+export function errorLines(f: OpenForm, errors: Record<string, string>): string[] {
+  return Object.entries(errors).map(([k, v]) => {
+    const [q, part] = k.split(/\.(.*)/, 2);
+    const heading = f.form.questions.find((x) => x.key === q)?.heading ?? q;
+    return `${heading}${part ? ` (${part})` : ""}: ${v}`;
+  });
+}
+
+async function loadForms($: EngineInterface): Promise<void> {
+  let forms: OpenForm[];
+  try {
+    forms = await core<OpenForm[]>($, "open-forms");
+  } catch {
+    // Keeps the last forms; the list draws one warning line instead of a note every 5 s.
+    await $.state.set(FORMS_POLL, "failed").catch(() => undefined);
+    return;
+  }
+  // The read may outlive this environment (a reload, a closed pane), which refuses the writes.
+  await $.state.set(FORMS, forms).catch(() => undefined);
+  await $.state.set(FORMS_POLL, "ok").catch(() => undefined);
+}
+
+/** Edits one question's answer, freezing the sheet as drawn the first time it is touched. */
+async function answer(
+  $: EngineInterface,
+  live: OpenForm,
+  key: string,
+  patch: FormAnswers[string],
+): Promise<void> {
+  const { value: sheets = {} } = await $.state.get(SHEETS);
+  const sheet = sheets[live.path] ?? live;
+  await $.state.set(SHEETS, {
+    ...sheets,
+    [live.path]: { ...sheet, draft: { ...sheet.draft, [key]: { ...sheet.draft[key], ...patch } } },
+  });
+}
+
+/** Drops a sheet's frozen draft and errors, then re-reads the forms. */
+async function resetSheet($: EngineInterface, path: string): Promise<void> {
+  const { value: sheets = {} } = await $.state.get(SHEETS);
+  const { value: errors = {} } = await $.state.get(SHEET_ERRORS);
+  const { [path]: _s, ...keepSheets } = sheets;
+  const { [path]: _e, ...keepErrors } = errors;
+  await $.state.set(SHEETS, keepSheets);
+  await $.state.set(SHEET_ERRORS, keepErrors);
+  await loadForms($);
+}
+
+async function submitSheet($: EngineInterface, sheet: OpenForm): Promise<void> {
+  const { value: running = "" } = await $.state.get(SUBMITTING);
+  if (running) return;
+  await $.state.set(SUBMITTING, sheet.path);
+  const refuse = async (lines: string[]) => {
+    const { value: errors = {} } = await $.state.get(SHEET_ERRORS);
+    await $.state.set(SHEET_ERRORS, { ...errors, [sheet.path]: lines });
+  };
+  try {
+    const errors = await core<Record<string, string>>($, "form-errors", {
+      md: sheet.md,
+      answers: sheet.draft,
+    });
+    if (Object.keys(errors).length) return await refuse(errorLines(sheet, errors));
+    const r = await core<{ decided: string[] }>($, "submit-form", {
+      path: sheet.path,
+      answers: sheet.draft,
+      hash: sheet.hash,
+    });
+    await resetSheet($, sheet.path);
+    await $.state.set(OPEN_SHEET, "");
+    await $.state.set(NOTE, `Saved ${sheet.workspace}/${sheet.rel}: ${r.decided.length} decided`);
+    await $.prompt.submit({ text: relayText(sheet) });
+  } catch (err) {
+    await refuse([(err as Error).message]);
+  } finally {
+    await $.state.set(SUBMITTING, "");
+  }
 }
 
 async function fetchIssue($: EngineInterface): Promise<void> {
@@ -1438,6 +1536,7 @@ function startPolling($: EngineInterface): void {
     $.clock.every(POLL_MS, () => void tick($)),
     $.clock.every(PR_POLL_MS, () => void prTick($)),
     $.clock.every(RESOURCE_POLL_MS, () => void resourceTick($)),
+    $.clock.every(POLL_MS, () => void loadForms($)),
   ];
 }
 
@@ -1501,6 +1600,7 @@ async function openPane($: EngineInterface): Promise<void> {
   await tick($);
   void prTick($);
   void resourceTick($);
+  void loadForms($);
   startPolling($);
 }
 
@@ -1636,6 +1736,30 @@ export const register: Register = (on) => {
 
   // The multi-line fields (textarea.tsx) post every edit as { value }; the element is `f:<field key>`.
   on("ui.message", { requestId: PANE }, async ($, e, next) => {
+    if (e.element.startsWith("qa:")) {
+      const data = (e.data ?? {}) as { value?: unknown; focus?: unknown };
+      if (data.focus === true) await $.state.set(FOCUSED, e.element);
+      const value = data.value;
+      if (typeof value !== "string") return {};
+      // qa:<file path>#<question key>.other | qa:<file path>#<question key>.box.<label>
+      const ref = e.element.slice(3);
+      const at = ref.lastIndexOf("#");
+      const [key, part, ...label] = ref.slice(at + 1).split(".");
+      const { value: forms = [] } = await $.state.get(FORMS);
+      const live = (forms ?? []).find((f) => f.path === ref.slice(0, at));
+      if (!live || !key) return {};
+      const { value: sheets = {} } = await $.state.get(SHEETS);
+      const draft = (sheets[live.path] ?? live).draft[key] ?? {};
+      await answer(
+        $,
+        live,
+        key,
+        part === "other"
+          ? { other: value }
+          : { boxes: { ...draft.boxes, [label.join(".")]: value } },
+      );
+      return {};
+    }
     if (!e.element.startsWith("f:")) return next(e);
     const key = e.element.slice(2);
     const data = (e.data ?? {}) as { value?: unknown; focus?: unknown; submit?: unknown };
@@ -1667,6 +1791,9 @@ export const register: Register = (on) => {
     const { value: focus = false } = await $.state.get(FOCUS);
     const { value: legend = false } = await $.state.get(LEGEND);
     const { value: prsPoll } = await $.state.get(PRS_POLL);
+    const { value: forms = null } = await $.state.get(FORMS);
+    const { value: openSheet = "" } = await $.state.get(OPEN_SHEET);
+    const { value: formsPoll = "ok" } = await $.state.get(FORMS_POLL);
     const now = new Date(await $.clock.now());
     const shown = visibleRows(rows, focus).map((r) => withLivePrs(r, prs[r.name] ?? []));
     const needing = rows.filter((r) => r.claude.agent === "needs-you").length;
@@ -1718,6 +1845,138 @@ export const register: Register = (on) => {
       </Box>
     );
 
+    const { value: sheets = {} } = await $.state.get(SHEETS);
+    const { value: sheetErrors = {} } = await $.state.get(SHEET_ERRORS);
+    const { value: submitting = "" } = await $.state.get(SUBMITTING);
+    const { value: focused = "" } = await $.state.get(FOCUSED);
+    // Desktop and terminal draw a Client: there a multi-line field is textarea.tsx; elsewhere one line.
+    const Client = "Client" in els ? els.Client : null;
+    // Where a Client draws, textarea.tsx posts edits to the ui.message handler (`qa:` keys); elsewhere Input.
+    const textBox = (
+      id: string,
+      value: string,
+      placeholder: string,
+      set: (v: string) => Promise<void>,
+    ) =>
+      Client ? (
+        <Client
+          key={id}
+          module="./textarea.tsx"
+          props={{ value, placeholder, multiline: true, focused: focused === id }}
+        />
+      ) : Input ? (
+        <Input
+          key={id}
+          placeholder={placeholder}
+          value={value}
+          submitLabel="save"
+          onInput={(v) => void set(v)}
+          onSubmit={(v) => void set(v)}
+        />
+      ) : null;
+    const question = (live: OpenForm, sheet: OpenForm, q: FormQuestion) => {
+      const open = q.status === "proposed";
+      const a = sheet.draft[q.key] ?? {};
+      const picked = open
+        ? (a.picked ?? [])
+        : q.options.filter((o) => o.checked).map((o) => o.value);
+      const base = `qa:${live.path}#${q.key}`;
+      const pick = (value: string) =>
+        answer($, live, q.key, {
+          picked:
+            q.kind === "one"
+              ? [value]
+              : picked.includes(value)
+                ? picked.filter((v) => v !== value)
+                : [...picked, value],
+        });
+      return (
+        <Box key={`q:${base}`} flexDirection="column" marginBottom={1}>
+          <Text bold dimColor={!open}>
+            {`${q.heading}${open && q.required ? " *" : ""}${open ? "" : "  ✓ decided"}`}
+          </Text>
+          {q.context.map((line, i) => (
+            <Text key={`ctx:${base}:${i}`} dimColor>
+              {line}
+            </Text>
+          ))}
+          {q.options.map((o) => {
+            const chosen = picked.includes(o.value);
+            const mark = q.kind === "one" ? (chosen ? "◉" : "○") : chosen ? "☑" : "☐";
+            const label = `${mark} ${o.value}${o.recommended ? " (recommended)" : ""}${
+              !open && o.other && o.otherText ? `: ${o.otherText}` : ""
+            }`;
+            return (
+              <Box key={`opt:${base}:${o.value}`} flexDirection="column">
+                {open ? (
+                  <Button
+                    key={`${base}:${o.value}`}
+                    plain
+                    label={label}
+                    onPress={() => void pick(o.value)}
+                  />
+                ) : (
+                  <Text key={`${base}:${o.value}`} dimColor>
+                    {label}
+                  </Text>
+                )}
+                {open &&
+                  o.other &&
+                  chosen &&
+                  textBox(`${base}.other`, a.other ?? "", "Other…", (v) =>
+                    answer($, live, q.key, { other: v }),
+                  )}
+              </Box>
+            );
+          })}
+          {open &&
+            q.boxes.map((b) => (
+              <Box key={`box:${base}:${b.label}`} flexDirection="column">
+                <Text>{`${b.label}:`}</Text>
+                {textBox(`${base}.box.${b.label}`, a.boxes?.[b.label] ?? "", b.label, (v) =>
+                  answer($, live, q.key, { boxes: { ...a.boxes, [b.label]: v } }),
+                )}
+              </Box>
+            ))}
+        </Box>
+      );
+    };
+    // One form drawn as a sheet with one Submit, inside its workspace card.
+    const sheetView = (live: OpenForm) => {
+      const sheet = sheets[live.path] ?? live;
+      const errors = sheetErrors[live.path] ?? [];
+      return (
+        <Box key={`sheet:${live.path}`} flexDirection="column" marginBottom={1}>
+          {sheet.form.title && <Text dimColor>{sheet.form.title}</Text>}
+          {Input ? sheet.form.questions.map((q) => question(live, sheet, q)) : null}
+          {Input && (
+            <Box key={`go:${live.path}`} gap={1}>
+              <Button
+                key={`submit:${live.path}`}
+                label={submitting === live.path ? "Saving…" : "Submit"}
+                variant="primary"
+                onPress={() => void submitSheet($, sheet)}
+              />
+              {(errors.length > 0 || sheet.hash !== live.hash) && (
+                <Button
+                  key={`reload:${live.path}`}
+                  label="↻ Reload"
+                  variant="secondary"
+                  onPress={() => void resetSheet($, live.path)}
+                />
+              )}
+            </Box>
+          )}
+          {sheet.hash !== live.hash && (
+            <Text color="warning">
+              The file changed on disk since you started; Submit will refuse until you reload.
+            </Text>
+          )}
+          {errors.length > 0 && <Text color="error">{errors.join("\n")}</Text>}
+        </Box>
+      );
+    };
+
     if (tab === "create") {
       if (!Input || !Select) {
         return (
@@ -1741,10 +2000,7 @@ export const register: Register = (on) => {
       const { value: formBusy = "" } = await $.state.get(FORM_BUSY);
       const text = (k: string) => (typeof draft[k] === "string" ? (draft[k] as string) : "");
       const picked = (k: string) => (Array.isArray(draft[k]) ? (draft[k] as string[]) : []);
-      // Desktop and terminal draw a Client: there a multi-line field is textarea.tsx; elsewhere one line.
-      const Client = "Client" in els ? els.Client : null;
       // Enter in a one-line field moves to the next one; the issue field's Enter fills from the issue.
-      const { value: focused = "" } = await $.state.get(FOCUSED);
       // Text fields are textarea.tsx where a Client draws (no Enter chip, multi-line when asked);
       // elsewhere the app's one-line Input.
       const textField = (f: FormField) =>
@@ -2002,6 +2258,31 @@ export const register: Register = (on) => {
               </Text>
             </Box>
           )}
+          {(forms ?? [])
+            .filter((f) => f.workspace === r.name)
+            .map((f) => {
+              const open = f.form.questions.filter((q) => q.status === "proposed").length;
+              const expanded = openSheet === f.path;
+              return (
+                <Box key={`form:${f.path}`} flexDirection="column">
+                  <Box key={`formline:${f.path}`} gap={1}>
+                    <Text>
+                      <Text color="warning">{"❓ "}</Text>
+                      <Text>{`${f.rel.replace(/^stages\//, "")} · ${open} open`}</Text>
+                    </Text>
+                    {Input && (
+                      <Button
+                        key={`answer:${f.path}`}
+                        label={expanded ? "Hide" : "Answer"}
+                        variant={expanded ? "secondary" : "primary"}
+                        onPress={() => void $.state.set(OPEN_SHEET, expanded ? "" : f.path)}
+                      />
+                    )}
+                  </Box>
+                  {expanded && sheetView(f)}
+                </Box>
+              );
+            })}
           {r.services.map((svc, i) => {
             const row = snap?.intercepts.find(
               (x) => x.feature === r.feature && x.service === svc.name,
@@ -2201,6 +2482,11 @@ export const register: Register = (on) => {
           </Text>
         )}
         {loadedRows !== undefined && rows.length === 0 && <Text dimColor>No workspaces.</Text>}
+        {formsPoll === "failed" && (
+          <Box key="forms-failed">
+            <Text color="warning">Open forms unavailable; retrying.</Text>
+          </Box>
+        )}
         {shown.map(card)}
         {messages}
       </Box>

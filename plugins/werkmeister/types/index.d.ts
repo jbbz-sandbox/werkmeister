@@ -154,6 +154,41 @@ export type FormBundle = {
   formData: Draft;
 };
 
+/** One `## ` question of a Markdown form, as werkmeister-core's parseForm gives it (md_form.ts). */
+export type FormQuestion = {
+  key: string;
+  heading: string;
+  required: boolean;
+  status: "proposed" | "decided" | null;
+  kind: "one" | "any" | null;
+  options: {
+    value: string;
+    checked: boolean;
+    recommended: boolean;
+    other: boolean;
+    otherText: string;
+  }[];
+  boxes: { label: string }[];
+  context: string[];
+};
+
+/** Per question key: picked option values, the Other text, box text by label. */
+export type FormAnswers = Record<
+  string,
+  { picked?: string[]; other?: string; boxes?: Record<string, string> }
+>;
+
+/** werkmeister-core's openForms row: one gate file with a proposed question; `draft` is what the sheet edits. */
+export type OpenForm = {
+  workspace: string;
+  path: string;
+  rel: string;
+  md: string;
+  hash: string;
+  form: { title: string | null; questions: FormQuestion[] };
+  draft: FormAnswers;
+};
+
 /** The Create tab's values by field key; a multi-pick is a list. */
 export type Draft = Record<string, string | string[] | boolean>;
 
@@ -195,6 +230,21 @@ declare module "claude-code" {
       formBusy: "" | "fetch" | "create" | "refine";
       /** The Create tab's last-clicked text field, by key: the one drawn with a cursor. */
       focusedField: string;
+      /** Open forms (gate files with a proposed question) as last read, drawn on their workspace cards; null before the first read. */
+      forms: OpenForm[] | null;
+      /**
+       * Sheets the person has touched, by file path, frozen as they were first drawn: a poll never
+       * swaps the hash under a draft, so Submit still refuses a file edited since (SW-309).
+       */
+      sheets: Record<string, OpenForm>;
+      /** Why a sheet's last Submit was refused, by file path. */
+      sheetErrors: Record<string, string[]>;
+      /** The file path whose Submit is running; '' when none. */
+      submitting: string;
+      /** The file path whose sheet is open inside its card; '' when none. */
+      openSheet: string;
+      /** How the last open-forms read ended; `failed` draws one warning line on the list. */
+      formsPoll: "ok" | "failed";
     };
   }
 }

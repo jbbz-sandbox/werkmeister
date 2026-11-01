@@ -253,7 +253,7 @@ const blank = (v: unknown) => v == null || v === "" || (Array.isArray(v) && v.le
 
 /**
  * Field key → why `formData` can't be submitted against a `buildFormSchema` bundle: required, pattern and choices,
- * plus `repoSelectionError` (under `services`). Empty when it can. For renderers without a JSON Schema validator
+ * plus `repoSelectionError` (under `services`, when the bundle has that field). Empty when it can. For renderers without a JSON Schema validator
  * (the /workspaces pane); the browser form's AJV covers the schema part and calls `repoSelectionError` itself.
  */
 export function validateFormData(
@@ -276,7 +276,8 @@ export function validateFormData(
       errors[key] = `"${v}" doesn't match the expected format`;
     }
   }
-  const repo = repoSelectionError(formData);
+  // Only the create form has a services field; a Markdown question form (md_form.ts) has none.
+  const repo = "services" in (bundle.schema["properties"] ?? {}) && repoSelectionError(formData);
   if (repo && !errors["services"]) errors["services"] = repo;
   return errors;
 }

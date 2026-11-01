@@ -27,7 +27,7 @@ single implementation shared across tiers 1–2 — only the `HostBridge`
 transport differs per entrypoint (`mcp-app`/`mcp-list` via ext-apps,
 `browser-main`/`form-main` via fetch).
 
-Deliberately unused: MCP elicitation (Claude Code/Desktop don't render it) and
+Deliberately unused: MCP elicitation (the Claude Code CLI renders flat elicitation forms since v2.1.287, but nothing here uses them yet) and
 sampling (no host implements it) — prompt refinement goes through the
 `refine-prompt` tool → local `claude` CLI.
 

@@ -18,6 +18,7 @@ import {
   type TrackerAt,
 } from "./issue_tracker.js";
 import type { Issue, IssueTrackerStrategy, TrackerId } from "./issue_trackers/types.js";
+import { isQuestionFile } from "./md_form.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
 export const ISSUE_POINTS = ["in_progress", "in_review", "merged", "done", "abandoned"] as const;
@@ -157,7 +158,9 @@ function currentStage(ws: string): string {
   }
   const empty = dirs.find((d) => {
     try {
-      return !fs.readdirSync(path.join(ws, "stages", d, "output")).some((f) => !f.startsWith("."));
+      return !fs
+        .readdirSync(path.join(ws, "stages", d, "output"))
+        .some((f) => !f.startsWith(".") && !isQuestionFile(f));
     } catch {
       return true;
     }
