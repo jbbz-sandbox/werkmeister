@@ -17,11 +17,11 @@ export interface HarnessAdapter {
   readonly id: HarnessId;
   /** One headless turn; its answer, or null on any failure. `tools` lets it call MCP tools. */
   ask(prompt: string, opts?: { tools?: boolean }): Promise<string | null>;
-  /** {@link ask}, then the JSON object in its answer; null when there is none. */
+  /** {@link HarnessAdapter.ask}, then the JSON object in its answer; null when there is none. */
   askJson(prompt: string, opts?: { tools?: boolean }): Promise<Record<string, unknown> | null>;
-  /** {@link ask}, throwing a WorkspaceError that says why it failed. */
+  /** {@link HarnessAdapter.ask}, throwing a WorkspaceError that says why it failed. */
   askOrThrow(prompt: string): Promise<string>;
-  /** Start one turn in *cwd*, continuing *sessionId* (a new session when null); *key* names it for {@link turnStatus}. */
+  /** Start one turn in *cwd*, continuing *sessionId* (a new session when null); *key* names it for {@link HarnessAdapter.turnStatus}. */
   sendTurn(
     key: string,
     cwd: string,

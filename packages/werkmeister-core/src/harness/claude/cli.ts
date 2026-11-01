@@ -12,7 +12,7 @@ import { isExecutable, runCapture, shellQuote, stripAnsi } from "../../tool_bins
 /**
  * Locate the `claude` CLI, robust to Claude Desktop's minimal PATH. Order:
  * $CLAUDE_BIN → the usual install locations → bare `claude` (resolved against
- * the augmented PATH in {@link childEnv} (tool_bins.ts)).
+ * the augmented PATH in `childEnv` (tool_bins.ts)).
  */
 export async function resolveClaudeBin(): Promise<string> {
   const candidates = [
