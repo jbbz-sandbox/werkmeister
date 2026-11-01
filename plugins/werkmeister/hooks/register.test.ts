@@ -1963,7 +1963,7 @@ test("applyFormFields replaces, clears and checks values against the form", () =
   ]);
 });
 
-test('a boolean field is a check; workspace_form takes "true" / "false" for it', () => {
+test('a boolean field is a check; workspaces_pane_fill_create_form takes "true" / "false" for it', () => {
   const bundle = {
     schema: { properties: { autonomous: { type: "boolean", title: "Autonomous run" } } },
     uiSchema: {},
@@ -1980,13 +1980,13 @@ test('a boolean field is a check; workspace_form takes "true" / "false" for it',
   ]);
 });
 
-test("the workspace_form tool opens the Create tab filled, says what is still needed, and creates nothing", async ($, on) => {
+test("the workspaces_pane_fill_create_form tool opens the Create tab filled, says what is still needed, and creates nothing", async ($, on) => {
   const w = world(on, formStubs());
   on("session.start", (_$, e) => ({ cwd: e.cwd }));
   on("fs.list", () => ({ value: [] }));
   await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
   const r = await $.tool.call({
-    tool: "mcp__werkmeister__workspace_form",
+    tool: "mcp__werkmeister__workspaces_pane_fill_create_form",
     fields: { feature: "rate-limit", starting_prompt: "Do it.\nThen test." },
   } as never);
   const text = String((r as { result?: unknown }).result);
