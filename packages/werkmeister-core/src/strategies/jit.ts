@@ -12,13 +12,13 @@ import * as path from "node:path";
 
 import { buildTesterSpecs, writeWorkspaceAgents } from "../agent_gen.js";
 import { presentArchetypes } from "../archetypes.js";
-import { buildClaudeMd, buildStandardsRoutingSection } from "../claude_md.js";
 import { DOT_DIR, dotDir, loadArchetypes } from "../config.js";
 import { type FeatureRouter, loadFeatureRouters } from "../feature_routing.js";
 import { main as gateMain, resetSessionState } from "../gate.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { noteDecisions } from "../graduate.js";
-import { writeWorkspaceHooks, writeWorkspaceSettings } from "../hooks_gen.js";
+import { buildClaudeMd, buildStandardsRoutingSection } from "../harness/claude/claude_md.js";
+import { writeWorkspaceHooks, writeWorkspaceSettings } from "../harness/claude/hooks_gen.js";
 import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import {

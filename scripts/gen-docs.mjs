@@ -9,7 +9,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -74,8 +74,11 @@ export function mcpTools(src) {
 
 export function mcpSource() {
   const dir = join(ROOT, "apps/werkmeister-mcp/src");
-  return readdirSync(dir)
+  // Top-level files first, then src/harness/claude/ (SW-187), so the tool table keeps its order.
+  const depth = (f) => f.split(sep).length;
+  return readdirSync(dir, { recursive: true })
     .filter((f) => f.endsWith(".ts"))
+    .sort((a, b) => depth(a) - depth(b) || a.localeCompare(b))
     .map((f) => readFileSync(join(dir, f), "utf8"))
     .join("\n");
 }
@@ -281,7 +284,7 @@ export function withMan(packageJson, pages) {
 /** Every region's Markdown, keyed by name. */
 export async function loadRegions() {
   const hooks = await import(
-    pathToFileURL(join(ROOT, "packages/werkmeister-core/dist/hooks_gen.js")).href
+    pathToFileURL(join(ROOT, "packages/werkmeister-core/dist/harness/claude/hooks_gen.js")).href
   );
   const tools = mcpTools(mcpSource());
   const commands = cliReference().filter((c) => !c.hidden);

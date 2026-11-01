@@ -3,6 +3,7 @@
  * `.werkmeister/pr-rules.md`. One builder so both strategies state the same rules
  * (docs/workspace-lifecycle.md is the long form).
  */
+import { DESKTOP_AUTOFIX_RULE } from "./harness/claude/desktop.js";
 
 export function buildPrRulesMd(prFileDir: string, autonomous = false): string {
   const approver = autonomous
@@ -18,7 +19,7 @@ These hold for every PR this workspace produces, whatever skill or command was a
 2. **PRs come only from code worktrees** — one per repo touched at a time, from that repo's PR file (below).
 3. **Gate.** Before a PR opens, all of these hold: every earlier stage/phase is done; the PR file's acceptance table is all PASS; the code worktree is clean; each touched service's registry test command passes (\`.werkmeister/werkmeister-context.md\`); the exercise evidence is all PASS (or \`skip_exercise\` gives the reason); the repo's release check passes; the PR file reads \`status: approved\`. The PR-file checks (stages, acceptance table, approved) run first; if one fails, the gate stops before any test command. Before lint, each test and the release check the gate waits while host load is over \`budget.host_load\`, up to 10 min in all, so with the tests it can run past a 10-minute tool call. Run \`pr open\` detached and read its log until the \`exit\` line: \`nohup sh -c 'werkmeister pr open > .werkmeister/pr-open.log 2>&1; echo "exit $?" >> .werkmeister/pr-open.log' >/dev/null 2>&1 &\`. A bare \`&\` dies when the tool call returns.
 4. **Only \`werkmeister pr open\` opens PRs.** \`gh pr create\`, \`/create-pr\` and \`finishing-a-development-branch\` are blocked inside a workspace.
-5. **Auto-fix is always on.** \`werkmeister pr watch\` wakes the session that opened the PR when a check fails, a review comes in or the PR conflicts with its base, with the cause in the message. Don't turn on Auto-fix in the Claude desktop app (\`ccd_pr\`). Never turn on auto-merge.
+5. **Auto-fix is always on.** \`werkmeister pr watch\` wakes the session that opened the PR when a check fails, a review comes in or the PR conflicts with its base, with the cause in the message. ${DESKTOP_AUTOFIX_RULE} Never turn on auto-merge.
 6. **Merge is the person's act.** Tooling never merges. Squash is the default. A PR whose commit SHAs must survive (e.g. a commit listed in \`.git-blame-ignore-revs\`) says "Merge with a merge commit" at the top of its body, and the person merges it that way; squash and rebase both rewrite SHAs.
 7. **Close out only when every PR file is \`shipped\`, \`closed\` or \`abandoned\`, and after the post-mortem:** the werkmeister \`postmortem\` skill writes \`postmortem.md\` at the workspace root. \`werkmeister workspace close\` refuses without it unless \`--skip-postmortem "<reason>"\`.
 

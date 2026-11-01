@@ -44,7 +44,7 @@ import {
   writePrGuardHook,
   writeWorkspaceHooks,
   writeWorkspaceSettings,
-} from "./hooks_gen.js";
+} from "./harness/claude/hooks_gen.js";
 import {
   installPrWatchSchedule,
   type PrWatchScheduleOptions,

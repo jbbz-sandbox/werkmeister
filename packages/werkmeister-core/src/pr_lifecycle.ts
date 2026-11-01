@@ -13,7 +13,6 @@ import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 
 import { serviceTestCommand } from "./archetypes.js";
-import { childEnv, toolBin } from "./claude_cli.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
   type ArchetypeRegistry,
@@ -62,6 +61,7 @@ import {
 } from "./sandbox.js";
 import { hostLoadLimit, portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
+import { childEnv, toolBin } from "./tool_bins.js";
 import { writeUsageSnapshot } from "./usage_snapshot.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 

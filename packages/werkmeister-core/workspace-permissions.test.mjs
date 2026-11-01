@@ -17,7 +17,7 @@ import {
   removeWorkspacePermissions,
   workspaceAllowRules,
   writeWorkspacePermissions,
-} from "./dist/hooks_gen.js";
+} from "./dist/harness/claude/hooks_gen.js";
 
 const HAND_HOOK = { hooks: [{ type: "command", command: "echo mine" }] };
 

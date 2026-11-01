@@ -14,7 +14,7 @@ import {
   buildAgentStateEntry,
   buildSessionEndEntry,
   writeWorkspaceSettings,
-} from "./dist/hooks_gen.js";
+} from "./dist/harness/claude/hooks_gen.js";
 import { idleStopFeature } from "./dist/lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { writeWorkspaceConfig } from "./dist/workspace_init.js";

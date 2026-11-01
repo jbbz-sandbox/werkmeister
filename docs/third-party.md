@@ -72,7 +72,7 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 | … docker-modem 5.0.7 | | Apache-2.0 | dockerode transport |
 | … @grpc/grpc-js 1.14.5, protobufjs | | Apache-2.0, BSD-3-Clause | dockerode's BuildKit session |
 | … ssh2 1.17.0, cpu-features 0.0.10 (optional) | | MIT | dockerode's `ssh://` hosts |
-| @anthropic-ai/claude-agent-sdk | ^0.3.288 → 0.3.288 | none (Anthropic Commercial Terms) | `detect --assist` only, an `optionalDependency` loaded lazily (`apps/cli/src/lib/assist_resolver.ts`); `detect --assist` prints the install command when it is absent. Pulls a ~240 MB `claude-agent-sdk-<platform>` binary package and peer `@anthropic-ai/sdk` (MIT). See [Terms that need attention](#terms-that-need-attention) |
+| @anthropic-ai/claude-agent-sdk | ^0.3.288 → 0.3.288 | none (Anthropic Commercial Terms) | `detect --assist` only, an `optionalDependency` loaded lazily (`apps/cli/src/lib/harness/claude/assist_resolver.ts`); `detect --assist` prints the install command when it is absent. Pulls a ~240 MB `claude-agent-sdk-<platform>` binary package and peer `@anthropic-ai/sdk` (MIT). See [Terms that need attention](#terms-that-need-attention) |
 
 ### Dev and build tooling
 
@@ -122,7 +122,7 @@ Found by grepping for the process helpers: `run([…])`, `runCapture`, `runCmd`,
 | git | required | `werkmeister-core/src/sandbox.ts`, `werkmeister-core/src/{worktrees,pr_lifecycle,git_hooks,graduate,workspace_init,machine_setup}.ts`, `apps/cli/esbuild.mjs`, `build_freshness.ts` | GPL-2.0-only |
 | docker (`docker compose`) | required | `werkmeister-core/src/{compose,compose_infra,lifecycle,pr_lifecycle,docker,caddy,infra}.ts` | Apache-2.0 |
 | node, npm, npx | required | `web_servers.ts` (`node`; `pnpm run build` in a checkout), wrapper npx bootstrap, `test_run.ts` (`npx playwright`), `scaffold.ts` (`npx @upstash/context7-mcp` in generated MCP config) | MIT, Artistic-2.0 |
-| claude | required for setup | `claude_cli.ts`, `machine_setup.ts`, `sandbox.ts` (`CLAUDE_BIN` override) | proprietary (Anthropic) |
+| claude | required for setup | `harness/claude/cli.ts` (`CLAUDE_BIN` override), `harness/claude/session.ts`, `machine_setup.ts` | proprietary (Anthropic) |
 | sh / bash | required | wrappers, `machine_setup.ts` (`bash generate-certs.sh`), `plugins/werkmeister/hooks/register.tsx` | GPL-3.0-or-later |
 | openssl | feature | `apps/cli/bin/generate-certs.sh` | Apache-2.0 |
 | sudo | feature | `generate-certs.sh` (trust cert, `/etc/hosts`); Telepresence | ISC |

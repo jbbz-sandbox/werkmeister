@@ -5,8 +5,6 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-
-import { runCapture } from "./claude_cli.js";
 import { sandboxRoot } from "./config.js";
 import { issueIdOf } from "./issue_tracker.js";
 import {
@@ -16,6 +14,7 @@ import {
   usageForDir,
   type WorkspaceUsage,
 } from "./sandbox.js";
+import { runCapture } from "./tool_bins.js";
 import { isTrue } from "./workspace_prompts.js";
 
 export interface StageTiming {

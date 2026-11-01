@@ -12,7 +12,7 @@ import {
   buildClaudeMd,
   buildRoutingTable,
   buildStandardsRoutingSection,
-} from "./dist/claude_md.js";
+} from "./dist/harness/claude/claude_md.js";
 import { pinWerkmeisterRoot } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();

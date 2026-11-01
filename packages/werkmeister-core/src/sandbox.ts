@@ -14,40 +14,52 @@
  * convenience.
  */
 import { execFile, spawn } from "node:child_process";
-import { EventEmitter } from "node:events";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import readline from "node:readline";
 import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
-import {
-  type AgentState,
-  asksQuestion,
-  claimNudge,
-  nudgePath,
-  questionOf,
-  RESUME_NUDGE,
-  readAgentState,
-  readPaused,
-  writeNudge,
-} from "./agent_state.js";
+import { claimNudge, nudgePath, RESUME_NUDGE, readPaused, writeNudge } from "./agent_state.js";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
-import {
-  askClaude,
-  childEnv,
-  extractJson,
-  extractResult,
-  isExecutable,
-  resolveClaudeBin,
-  runCapture,
-  stripAnsi,
-} from "./claude_cli.js";
+import { extractJson, extractResult } from "./harness/claude/cli.js";
+import type { ClaudeSessionSignal } from "./harness/claude/session.js";
+import type { ClaudeTranscript } from "./harness/claude/transcript.js";
+import type { WorkspaceUsage } from "./harness/claude/usage.js";
+import { type HarnessAdapter, harness } from "./harness/index.js";
 import { buildStartArgs, deferMachineSteps, type StartArgs } from "./run_start.js";
+import { isExecutable, isFile, runCapture, shellQuote, stripAnsi } from "./tool_bins.js";
 
-export { childEnv } from "./claude_cli.js";
+export { WorkspaceError } from "./errors.js";
+export {
+  type ClaudeSessionSignal,
+  type ClaudeTurnState,
+  claudeResumeCommand,
+  claudeSendArgs,
+  turnEvents,
+} from "./harness/claude/session.js";
+export {
+  type ClaudeMessage,
+  type ClaudeTranscript,
+  parseSessionLines,
+  sessionStartDir,
+} from "./harness/claude/transcript.js";
+export {
+  estimateUsd,
+  type ModelRate,
+  type ModelUsage,
+  rateFor,
+  reduceSession,
+  reduceUsageLines,
+  type SessionReduction,
+  type SessionUsage,
+  type UsageTotals,
+  usageForDir,
+  type WorkspaceUsage,
+} from "./harness/claude/usage.js";
+export { type HarnessAdapter, type HarnessId, harness } from "./harness/index.js";
 export * from "./run_start.js";
+export { childEnv } from "./tool_bins.js";
 
 // Type-only: erased at build, so this adds nothing to the bundle.
 import { isOneShotService, projectName } from "./compose.js";
@@ -56,7 +68,6 @@ import {
   dotDir,
   envVar,
   forwardSpecs,
-  modelPricingYamlPath,
   portsYamlPath,
   sandboxHome,
   servicesYamlPath,
@@ -64,7 +75,7 @@ import {
   workspacesRoot,
 } from "./config.js";
 import { containerRunning, type ProjectContainer, projectContainers } from "./docker.js";
-import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
+import { WorkspaceError } from "./errors.js";
 import { buildFormSchema } from "./form_schema.js";
 import { loadGithubOrg } from "./global_config.js";
 import { infraHealth, up as infraUp } from "./infra.js";
@@ -147,20 +158,6 @@ export { listRepoWorktrees };
 
 const execFileAsync = promisify(execFile);
 
-/**
- * A user-facing failure with a clean message (CLI not found, create failed, …).
- *
- * One code for all ~45 throw sites: they predate `SandboxError` and none of
- * their callers branches on anything finer than the class. Giving them
- * distinct codes is a separate change nothing has asked for yet.
- */
-export class WorkspaceError extends SandboxError {
-  constructor(message: string) {
-    super(message, WORKSPACE_ERROR_CODE);
-    this.name = "WorkspaceError";
-  }
-}
-
 /** The render-ready RJSF bundle {@link getFormSchema} builds for the create form. */
 export interface FormSchemaBundle {
   schema: Record<string, unknown>;
@@ -185,14 +182,6 @@ export interface CreateResult {
 async function isDir(p: string): Promise<boolean> {
   try {
     return (await fs.stat(p)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-async function isFile(p: string): Promise<boolean> {
-  try {
-    return (await fs.stat(p)).isFile();
   } catch {
     return false;
   }
@@ -432,28 +421,7 @@ export async function refinePrompt(
   instruction: string,
   formData?: Record<string, unknown>,
 ): Promise<string> {
-  const prompt = await buildRefinePrompt(text, instruction, formData);
-  const bin = await resolveClaudeBin();
-  let res: { stdout: string; stderr: string; code: number | null };
-  try {
-    res = await runCapture(bin, ["-p", prompt]);
-  } catch (e) {
-    const err = e as { code?: string; message?: string };
-    if (err.code === "ENOENT") {
-      throw new WorkspaceError(
-        "Could not find the `claude` CLI. Set CLAUDE_BIN to its path, or install Claude Code.",
-      );
-    }
-    if (e instanceof WorkspaceError) throw e;
-    throw new WorkspaceError(`Refine via claude failed: ${err.message ?? String(e)}`);
-  }
-  if (res.code !== 0) {
-    const detail = stripAnsi((res.stderr || res.stdout || "").trim());
-    throw new WorkspaceError(`claude exited with code ${res.code}:\n${detail}`);
-  }
-  const out = extractResult(stripAnsi(res.stdout));
-  if (!out) throw new WorkspaceError("Claude returned no text.");
-  return out;
+  return harness().askOrThrow(await buildRefinePrompt(text, instruction, formData));
 }
 
 /** Form keys the CLI accepts that we'll pre-populate from an issue. */
@@ -590,7 +558,7 @@ export async function applyIssueFormAnswer(
 export async function fetchIssueFormData(text: string): Promise<Record<string, unknown>> {
   const { base, prompt } = await buildIssueFormRequest(text);
   if (!prompt) return base;
-  return applyIssueFormAnswer(base, await askClaude(prompt));
+  return applyIssueFormAnswer(base, await harness().ask(prompt));
 }
 
 /**
@@ -1011,7 +979,7 @@ export interface CreateOptions {
   live?: boolean;
   /** Where inputs resolve from; $HOME by default so a stray ./.werkmeister/workspace.yml can't leak in. */
   cwd?: string;
-  /** The model behind the issue rewrite (default `askClaude`); false skips it. */
+  /** The model behind the issue rewrite (default the harness's `ask`); false skips it. */
   distill?: false | Distiller;
   /** A snapshot the caller already fetched (the CLI wizard), so it isn't fetched twice. */
   issue?: IssueSnapshot;
@@ -1026,7 +994,7 @@ const DISTILLED = ["feature", "task", "description", "starting_prompt", "service
 /** The model's rewrite of one issue into form fields (all of DISTILLED, for the wizard to show as defaults); never throws. */
 export async function distillIssue(
   issue: IssueSnapshot,
-  distill: Distiller = askClaude,
+  distill: Distiller = (p) => harness().ask(p),
 ): Promise<{ fields: Record<string, string>; warning: string | null }> {
   const briefing = issueBriefing({
     ref: issue.ref,
@@ -1098,7 +1066,10 @@ export async function prepareCreate(
   if (!resolved.task && issue.title) resolved.task = issue.title;
 
   if (opts.distill !== false && (!resolved.description || !resolved.starting_prompt)) {
-    const { fields, warning } = await distillIssue(issue, opts.distill ?? askClaude);
+    const { fields, warning } = await distillIssue(
+      issue,
+      opts.distill ?? ((p) => harness().ask(p)),
+    );
     // Only the prose: a model-picked feature or services would make unattended creates nondeterministic.
     for (const k of ["description", "starting_prompt"])
       if (!resolved[k] && fields[k]) resolved[k] = fields[k];
@@ -1335,76 +1306,6 @@ function jitPhase(dir: string): string | null {
   return null;
 }
 
-export interface ClaudeSessionSignal {
-  /** Most recent claude-send turn state this server tracked (idle = none / after restart). */
-  state: "running" | "done" | "failed" | "idle";
-  /** Working, needs you (a question or permission prompt), done or idle (SW-46). */
-  agent: AgentState;
-  /** When `agent` began, or the transcript's mtime when it is inferred from the tail; null with no session. */
-  at: string | null;
-  /** What `needs-you` is waiting on, when known. */
-  question: string | null;
-}
-
-/** Past this, a turn whose transcript ends mid-turn has died rather than gone quiet on a long tool call. */
-const LIVE_TURN_MS = 10 * 60 * 1000;
-
-/** Read the last `maxBytes` of a file, dropping a leading partial line. Cheap enough
- *  to run per-workspace in the status sweep without reading whole transcripts. */
-async function readFileTail(file: string, maxBytes = 131072): Promise<string> {
-  const fh = await fs.open(file, "r");
-  try {
-    const { size } = await fh.stat();
-    const start = Math.max(0, size - maxBytes);
-    const buf = Buffer.alloc(size - start);
-    await fh.read(buf, 0, buf.length, start);
-    let text = buf.toString("utf-8");
-    if (start > 0) {
-      const nl = text.indexOf("\n");
-      if (nl >= 0) text = text.slice(nl + 1);
-    }
-    return text;
-  } finally {
-    await fh.close();
-  }
-}
-
-/**
- * The workspace list's agent signal. A live claude-send turn this process runs
- * is working; otherwise the state file the workspace's hooks write (agent_state.ts)
- * says what the session last did. A workspace whose hooks predate it falls back
- * to the transcript tail: Claude spoke last → needs-you if it asked, else done;
- * a fresh tool row or user message → working; anything else → idle. The tail
- * can't see a permission prompt; only the Notification hook can.
- */
-async function claudeSessionSignal(
-  name: string,
-  dir: string,
-): Promise<{ signal: ClaudeSessionSignal; lastActivity: string | null }> {
-  const src = await resolveSessionSource(name).catch(() => null);
-  const lastActivity = src?.updatedAt ?? null;
-  const state: ClaudeSessionSignal["state"] = claudeTurns.get(name)?.state ?? "idle";
-  const signal = (agent: AgentState, at = lastActivity, question: string | null = null) => ({
-    signal: { state, agent, at, question },
-    lastActivity,
-  });
-  if (state === "running") return signal("working");
-  const recorded = readAgentState(dir);
-  if (recorded) return signal(recorded.state, recorded.at, recorded.question ?? null);
-  let last: ClaudeMessage | undefined;
-  try {
-    if (src?.sessionFile) last = parseSessionLines(await readFileTail(src.sessionFile)).at(-1);
-  } catch {
-    /* best-effort — no signal */
-  }
-  if (!last || !lastActivity) return signal("idle");
-  if (last.role === "assistant")
-    return asksQuestion(last.text)
-      ? signal("needs-you", lastActivity, questionOf(last.text))
-      : signal("done");
-  return signal(Date.now() - Date.parse(lastActivity) < LIVE_TURN_MS ? "working" : "idle");
-}
-
 /** Shared-infrastructure (`werkmeister infra connect`) container state — the `w9r-infra` Compose project. */
 export interface InfraStatus {
   state: "up" | "partial" | "down" | "unknown";
@@ -1543,7 +1444,11 @@ export async function getWorkspaceStatuses(): Promise<{
         const feature = await readWorkspaceFeature(dir);
         project = feature ? projectName(feature) : null;
       }
-      const { signal: claude, lastActivity } = await claudeSessionSignal(name, dir);
+      const { signal: claude, lastActivity } = await harness().agentSignal(
+        name,
+        dir,
+        await resolveSessionSource(name).catch(() => null),
+      );
       const { model, autonomous, autoStop } = await readWorkspaceConfig(dir);
       const rec = readPaused(dir);
       const paused = rec ? { at: rec.at, containers: rec.containers } : null;
@@ -2895,677 +2800,42 @@ export async function runWorkspaceAction(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Claude Code sessions
-//
-// Claude Code stores one JSONL transcript per session under
-// ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl, where <encoded-cwd> is
-// the workspace path with non-alphanumeric characters replaced by "-". The
-// newest .jsonl in a workspace's project dir is its "last opened" session.
-// ---------------------------------------------------------------------------
+// Claude Code sessions: the readers live in harness/claude/ (SW-187); these map a
+// workspace or reconcile-session name to the folder they read.
 
-export interface ClaudeMessage {
-  /** "tool" entries are compact activity rows ("Bash: npm test") from tool_use blocks. */
-  role: "user" | "assistant" | "tool";
-  text: string;
-  timestamp: string | null;
-}
-
-export interface ClaudeTranscript {
-  /** Session ID (JSONL filename stem) of the newest session, or null if none. */
-  sessionId: string | null;
-  workspacePath: string;
-  /** Last N user/assistant text messages, oldest first. */
-  messages: ClaudeMessage[];
-  /** Total sessions found for this workspace. */
-  sessionCount: number;
-  /** mtime of the newest session file (ISO), or null. */
-  updatedAt: string | null;
-}
-
-/**
- * Normalize a path the way Claude Code encodes project dirs: every character
- * that isn't [a-zA-Z0-9] becomes "-". Comparing encode(dirName) with
- * encode(workspacePath) is robust even if the exact substitution set differs,
- * because "-" maps to itself.
- */
-function encodeClaudeProjectDir(p: string): string {
-  return p.replace(/[^a-zA-Z0-9]/g, "-");
-}
-
-/** Find the Claude Code project dir for a workspace path, or null. */
-async function findClaudeProjectDir(workspacePath: string): Promise<string | null> {
-  const root = path.join(os.homedir(), ".claude", "projects");
-  const want = encodeClaudeProjectDir(workspacePath);
-  let entries: import("node:fs").Dirent[];
-  try {
-    entries = await fs.readdir(root, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  for (const e of entries) {
-    if (e.isDirectory() && encodeClaudeProjectDir(e.name) === want) {
-      return path.join(root, e.name);
-    }
-  }
-  return null;
-}
-
-/** List a project dir's session files, newest mtime first. */
-async function listSessionFiles(projectDir: string): Promise<Array<{ file: string; mtime: Date }>> {
-  let names: string[];
-  try {
-    names = await fs.readdir(projectDir);
-  } catch {
-    return [];
-  }
-  const out: Array<{ file: string; mtime: Date }> = [];
-  for (const n of names) {
-    if (!n.endsWith(".jsonl")) continue;
-    try {
-      const st = await fs.stat(path.join(projectDir, n));
-      out.push({ file: path.join(projectDir, n), mtime: st.mtime });
-    } catch {
-      /* skip unreadable */
-    }
-  }
-  return out.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-}
-
-/** Pick the session file for an optional pinned id, else the newest. */
-function pickSession<T extends { file: string }>(sessions: T[], sessionId?: string): T | null {
-  if (!sessions.length) return null;
-  if (sessionId) {
-    const match = sessions.find((s) => path.basename(s.file, ".jsonl") === sessionId);
-    if (match) return match; // else fall through to newest (stale/gone id)
-  }
-  return sessions[0];
-}
-
-/**
- * A human label for a session file: the Claude-written `ai-title` line, else
- * the first user message, else the id's first 8 chars. The `ai-title` sits a
- * dozen lines in but *after* possibly-huge attachment lines, so scan lines
- * (bounded) rather than a byte prefix, and stop as soon as it's found.
- */
-async function readSessionTitle(file: string, sessionId: string): Promise<string> {
-  let firstUser = "";
-  let scanned = 0;
-  try {
-    const rl = readline.createInterface({
-      input: createReadStream(file, "utf-8"),
-      crlfDelay: Infinity,
-    });
-    for await (const raw of rl) {
-      if (!raw.trim() || scanned++ > 60) break;
-      let e: { type?: string; aiTitle?: string; message?: { role?: string; content?: unknown } };
-      try {
-        e = JSON.parse(raw);
-      } catch {
-        continue;
-      }
-      if (e.type === "ai-title" && typeof e.aiTitle === "string" && e.aiTitle.trim()) {
-        rl.close();
-        return e.aiTitle.trim().slice(0, 80);
-      }
-      if (!firstUser && e.type === "user" && e.message?.role === "user") {
-        firstUser = cleanMessageText(extractMessageText(e.message.content)).replace(/\s+/g, " ");
-      }
-    }
-    rl.close();
-  } catch {
-    /* unreadable → fall through to fallbacks */
-  }
-  return firstUser ? firstUser.slice(0, 80) : sessionId.slice(0, 8);
-}
-
-/**
- * List a workspace's Claude sessions (newest first) with a display title, for
- * the chat panel's session picker. N is small (one workspace's sessions), so a
- * bounded per-file title scan is fine.
- */
+/** A workspace's Claude sessions (newest first) with a display title, for the chat panel's picker. */
 export async function listSessions(
   name: string,
 ): Promise<Array<{ sessionId: string; title: string; updatedAt: string; isNewest: boolean }>> {
-  const target = await resolveWorkspaceDir(name);
-  const projectDir = await findClaudeProjectDir(target);
-  if (!projectDir) return [];
-  const files = await listSessionFiles(projectDir);
-  return Promise.all(
-    files.map(async (f, i) => {
-      const sessionId = path.basename(f.file, ".jsonl");
-      return {
-        sessionId,
-        title: await readSessionTitle(f.file, sessionId),
-        updatedAt: f.mtime.toISOString(),
-        isNewest: i === 0,
-      };
-    }),
-  );
+  return harness().listSessions(await resolveWorkspaceDir(name));
 }
 
-/** Pull displayable text out of a transcript line's message content. */
-function extractMessageText(content: unknown): string {
-  if (typeof content === "string") return content.trim();
-  if (!Array.isArray(content)) return "";
-  const parts: string[] = [];
-  for (const block of content) {
-    if (block && typeof block === "object" && (block as { type?: string }).type === "text") {
-      const t = (block as { text?: string }).text;
-      if (typeof t === "string" && t.trim()) parts.push(t.trim());
-    }
-  }
-  return parts.join("\n\n");
-}
-
-/**
- * One-line summary of a tool_use input for activity rows — the first
- * meaningful string field (command, path, pattern, …), whitespace-collapsed
- * and truncated. Mirrors how vibe-kanban normalizes agent tool calls.
- */
-function summarizeToolInput(input: unknown): string {
-  if (!input || typeof input !== "object") return "";
-  const obj = input as Record<string, unknown>;
-  const preferred = [
-    "command",
-    "file_path",
-    "path",
-    "pattern",
-    "query",
-    "url",
-    "prompt",
-    "description",
-    "name",
-    "message",
-  ];
-  for (const key of preferred) {
-    const v = obj[key];
-    if (typeof v === "string" && v.trim()) return v.trim().replace(/\s+/g, " ").slice(0, 100);
-  }
-  const first = Object.values(obj).find((v) => typeof v === "string" && (v as string).trim());
-  return typeof first === "string" ? first.trim().replace(/\s+/g, " ").slice(0, 100) : "";
-}
-
-/** Strip host-injected tag blocks; returns "" if nothing user-authored remains. */
-function cleanMessageText(text: string): string {
-  const cleaned = text
-    .replace(/<([a-z][a-z0-9_-]*)>[\s\S]*?<\/\1>/gi, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (!cleaned || cleaned.startsWith("[Request interrupted")) return "";
-  return cleaned;
-}
-
-/**
- * Normalize a Claude Code session JSONL (full file text) into ordered
- * {role, text, timestamp} entries: text blocks → messages, tool_use blocks →
- * compact activity rows. The single normalizer shared by the transcript tool
- * (which then windows) and the live tailer (lib/session-stream.ts, which
- * index-addresses each entry). Positions are stable append-only, so an entry's
- * index is its identity for incremental streaming.
- */
-export function parseSessionLines(text: string): ClaudeMessage[] {
-  const entries: ClaudeMessage[] = [];
-  for (const line of text.split("\n")) {
-    if (!line.trim()) continue;
-    let entry: {
-      type?: string;
-      isMeta?: boolean;
-      timestamp?: string;
-      message?: { role?: string; content?: unknown };
-    };
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (entry.isMeta) continue;
-    if (entry.type !== "user" && entry.type !== "assistant") continue;
-    const role = entry.message?.role;
-    const ts = entry.timestamp ?? null;
-    const content = entry.message?.content;
-
-    if (role === "user") {
-      const body = cleanMessageText(extractMessageText(content));
-      if (body) entries.push({ role: "user", text: body, timestamp: ts });
-      continue;
-    }
-    if (role !== "assistant") continue;
-
-    // Assistant lines: emit text blocks as messages and tool_use blocks as
-    // compact activity rows, preserving their in-turn order.
-    if (typeof content === "string") {
-      const body = cleanMessageText(content);
-      if (body) entries.push({ role: "assistant", text: body, timestamp: ts });
-      continue;
-    }
-    if (!Array.isArray(content)) continue;
-    for (const block of content) {
-      if (!block || typeof block !== "object") continue;
-      const b = block as { type?: string; text?: string; name?: string; input?: unknown };
-      if (b.type === "text" && typeof b.text === "string") {
-        const body = cleanMessageText(b.text);
-        if (body) entries.push({ role: "assistant", text: body, timestamp: ts });
-      } else if (b.type === "tool_use" && typeof b.name === "string") {
-        const detail = summarizeToolInput(b.input);
-        entries.push({
-          role: "tool",
-          text: detail ? `${b.name}: ${detail}` : b.name,
-          timestamp: ts,
-        });
-      }
-    }
-  }
-  return entries;
-}
-
-// --- Per-workspace usage: token/model totals over session JSONL ------------
-
-export interface UsageTotals {
-  input: number;
-  output: number;
-  cacheCreation: number;
-  cacheRead: number;
-}
-export interface ModelRate {
-  input: number;
-  output: number;
-  cacheWrite: number;
-  cacheRead: number;
-}
-export interface ModelUsage {
-  model: string;
-  totals: UsageTotals;
-  estUsd: number | null;
-}
-export interface SessionUsage {
-  sessionId: string;
-  title: string;
-  updatedAt: string;
-  firstTurn: string | null;
-  lastTurn: string | null;
-  /** Assistant lines with usage: the lines the token totals count. */
-  turns: number;
-  models: string[];
-  totals: UsageTotals;
-  estUsd: number | null;
-}
-export interface WorkspaceUsage {
-  name: string;
-  totals: UsageTotals;
-  estUsd: number | null;
-  byModel: ModelUsage[];
-  sessions: SessionUsage[];
-}
-
-const zeroTotals = (): UsageTotals => ({ input: 0, output: 0, cacheCreation: 0, cacheRead: 0 });
-function addTotals(into: UsageTotals, t: UsageTotals): void {
-  into.input += t.input;
-  into.output += t.output;
-  into.cacheCreation += t.cacheCreation;
-  into.cacheRead += t.cacheRead;
-}
-
-export interface SessionReduction {
-  byModel: Map<string, UsageTotals>;
-  firstTurn: string | null;
-  lastTurn: string | null;
-  turns: number;
-  models: string[];
-}
-
-/**
- * Sum one session file's assistant `message.usage` by model, with its first and last
- * timestamps. Reads only the TOP-LEVEL usage fields (never `iterations[]`, which
- * itemizes a single tool-loop turn and would double-count). Unparseable lines are skipped.
- */
-export function reduceSession(text: string): SessionReduction {
-  const byModel = new Map<string, UsageTotals>();
-  let firstTurn: string | null = null;
-  let lastTurn: string | null = null;
-  let turns = 0;
-  for (const line of text.split("\n")) {
-    if (!line.trim()) continue;
-    let e: {
-      type?: string;
-      timestamp?: string;
-      message?: { model?: string; usage?: Record<string, number> };
-    };
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (typeof e.timestamp === "string") {
-      // ISO strings in one zone compare as times.
-      if (!firstTurn || e.timestamp < firstTurn) firstTurn = e.timestamp;
-      if (!lastTurn || e.timestamp > lastTurn) lastTurn = e.timestamp;
-    }
-    if (e.type !== "assistant") continue;
-    const u = e.message?.usage;
-    const model = e.message?.model;
-    if (!u || !model) continue;
-    turns++;
-    let acc = byModel.get(model);
-    if (!acc) {
-      acc = zeroTotals();
-      byModel.set(model, acc);
-    }
-    acc.input += u.input_tokens ?? 0;
-    acc.output += u.output_tokens ?? 0;
-    acc.cacheCreation += u.cache_creation_input_tokens ?? 0;
-    acc.cacheRead += u.cache_read_input_tokens ?? 0;
-  }
-  return { byModel, firstTurn, lastTurn, turns, models: [...byModel.keys()] };
-}
-
-export function reduceUsageLines(text: string): Map<string, UsageTotals> {
-  return reduceSession(text).byModel;
-}
-
-/** Estimate USD for one model's totals, or null when the model has no rate. */
-export function estimateUsd(t: UsageTotals, rate: ModelRate | undefined): number | null {
-  if (!rate) return null;
-  return (
-    (t.input / 1e6) * rate.input +
-    (t.output / 1e6) * rate.output +
-    (t.cacheCreation / 1e6) * rate.cacheWrite +
-    (t.cacheRead / 1e6) * rate.cacheRead
-  );
-}
-
-const DATED_MODEL_ID_RE = /-\d{8}$/;
-
-/**
- * Resolve a model id to its price rate. Claude Code writes dated model ids in
- * transcripts (e.g. `claude-haiku-4-5-20251001`) while the price table is keyed
- * by the undated base id (`claude-haiku-4-5`) — try the exact id first, then
- * strip a trailing `-YYYYMMDD` suffix and retry. Neither form present → still
- * `undefined`, preserving "unknown model → null, never guess".
- */
-export function rateFor(prices: Record<string, ModelRate>, model: string): ModelRate | undefined {
-  if (prices[model]) return prices[model];
-  const base = model.replace(DATED_MODEL_ID_RE, "");
-  return base !== model ? prices[base] : undefined;
-}
-
-// Fallback used when ~/.werkmeister/model-pricing.yaml is missing/unparseable.
-const DEFAULT_PRICES: Record<string, ModelRate> = {
-  "claude-opus-4-8": { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 },
-  "claude-sonnet-5": { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3 },
-  "claude-haiku-4-5": { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 },
-};
-
-/** Locate `~/.werkmeister/model-pricing.yaml`, mirroring resolveServicesYaml. */
-async function resolveModelPricingYaml(): Promise<string | null> {
-  return existing(modelPricingYamlPath());
-}
-
-async function loadPriceTable(): Promise<Record<string, ModelRate>> {
-  const p = await resolveModelPricingYaml();
-  if (!p) return DEFAULT_PRICES;
-  try {
-    const doc = parseYaml(await fs.readFile(p, "utf-8")) as { models?: Record<string, ModelRate> };
-    return doc?.models && Object.keys(doc.models).length ? doc.models : DEFAULT_PRICES;
-  } catch {
-    return DEFAULT_PRICES;
-  }
-}
-
-/**
- * Sum a workspace's Claude Code token usage by model and by session, with a
- * configurable USD estimate. On-demand (no cache); reads every session file's
- * lines. Counts only sessions in the workspace-root project dir.
- */
+/** A workspace's Claude Code token usage and USD estimate ({@link HarnessAdapter.usage}). */
 export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
-  return usageForDir(name, await resolveWorkspaceDir(name));
+  return harness().usage(name, await resolveWorkspaceDir(name));
 }
 
-/** {@link getWorkspaceUsage} for a folder already resolved (close-out's snapshot, SW-206). */
-export async function usageForDir(name: string, target: string): Promise<WorkspaceUsage> {
-  const empty: WorkspaceUsage = {
-    name,
-    totals: zeroTotals(),
-    estUsd: null,
-    byModel: [],
-    sessions: [],
-  };
-  const projectDir = await findClaudeProjectDir(target);
-  if (!projectDir) return empty;
-  const files = await listSessionFiles(projectDir); // newest first
-  const prices = await loadPriceTable();
-
-  const wsByModel = new Map<string, UsageTotals>();
-  const sessions: SessionUsage[] = [];
-
-  for (const f of files) {
-    let text: string;
-    try {
-      text = await fs.readFile(f.file, "utf-8");
-    } catch {
-      continue;
-    }
-    const session = reduceSession(text);
-    const perModel = session.byModel;
-    if (!perModel.size) continue;
-    const sessionTotals = zeroTotals();
-    let sessionUsd: number | null = null;
-    for (const [model, t] of perModel) {
-      let acc = wsByModel.get(model);
-      if (!acc) {
-        acc = zeroTotals();
-        wsByModel.set(model, acc);
-      }
-      addTotals(acc, t);
-      addTotals(sessionTotals, t);
-      const usd = estimateUsd(t, rateFor(prices, model));
-      if (usd != null) sessionUsd = (sessionUsd ?? 0) + usd;
-    }
-    const sessionId = path.basename(f.file, ".jsonl");
-    sessions.push({
-      sessionId,
-      title: await readSessionTitle(f.file, sessionId),
-      updatedAt: f.mtime.toISOString(),
-      firstTurn: session.firstTurn,
-      lastTurn: session.lastTurn,
-      turns: session.turns,
-      models: session.models,
-      totals: sessionTotals,
-      estUsd: sessionUsd,
-    });
-  }
-
-  const byModel: ModelUsage[] = [...wsByModel].map(([model, totals]) => ({
-    model,
-    totals,
-    estUsd: estimateUsd(totals, rateFor(prices, model)),
-  }));
-  const totals = zeroTotals();
-  let estUsd: number | null = null;
-  for (const m of byModel) {
-    addTotals(totals, m.totals);
-    if (m.estUsd != null) estUsd = (estUsd ?? 0) + m.estUsd;
-  }
-  byModel.sort(
-    (a, b) =>
-      (b.estUsd ?? 0) - (a.estUsd ?? 0) ||
-      b.totals.input + b.totals.output - (a.totals.input + a.totals.output),
-  );
-
-  return { name, totals, estUsd, byModel, sessions };
+/** The newest session file for a session key, the source the live tailer watches ({@link HarnessAdapter.sessionSource}). */
+export async function resolveSessionSource(name: string, sessionId?: string, startDir?: string) {
+  return harness().sessionSource(await resolveSessionDir(name), sessionId, startDir);
 }
 
-/**
- * Locate the newest Claude Code session file for a workspace (the source the
- * live tailer watches). Mirrors {@link getClaudeTranscript}'s file resolution
- * but returns the file path + session metadata instead of parsed messages.
- */
-export async function resolveSessionSource(
-  name: string,
-  sessionId?: string,
-  startDir?: string,
-): Promise<{
-  workspacePath: string;
-  projectDir: string | null;
-  sessionFile: string | null;
-  sessionId: string | null;
-  sessionCount: number;
-  updatedAt: string | null;
-}> {
-  const target = await resolveSessionDir(name);
-  // Claude Code files sessions by the folder they started in, which may be below the workspace.
-  const projectDir = await findClaudeProjectDir(startDir ?? target);
-  const none = {
-    workspacePath: target,
-    projectDir,
-    sessionFile: null,
-    sessionId: null,
-    sessionCount: 0,
-    updatedAt: null,
-  };
-  if (!projectDir) return { ...none, projectDir: null };
-  const sessions = await listSessionFiles(projectDir);
-  const chosen = pickSession(sessions, sessionId);
-  if (!chosen) return none;
-  return {
-    workspacePath: target,
-    projectDir,
-    sessionFile: chosen.file,
-    sessionId: path.basename(chosen.file, ".jsonl"),
-    sessionCount: sessions.length,
-    updatedAt: chosen.mtime.toISOString(),
-  };
-}
-
-/**
- * The folder session *sessionId* started in: the `cwd` its transcript records, found by
- * id in any `~/.claude/projects` dir. Null when no transcript holds one (SW-16).
- */
-export async function sessionStartDir(sessionId: string): Promise<string | null> {
-  // The id comes from a PR file; it must not walk out of the project dir.
-  if (!/^[\w-]+$/.test(sessionId)) return null;
-  const root = path.join(os.homedir(), ".claude", "projects");
-  let dirs: string[];
-  try {
-    dirs = await fs.readdir(root);
-  } catch {
-    return null;
-  }
-  for (const d of dirs) {
-    const file = path.join(root, d, `${sessionId}.jsonl`);
-    if (!(await isFile(file))) continue;
-    const rl = readline.createInterface({
-      input: createReadStream(file, "utf-8"),
-      crlfDelay: Infinity,
-    });
-    let scanned = 0;
-    try {
-      // Every message line carries `cwd`; only a few header lines come first.
-      for await (const line of rl) {
-        if (++scanned > 50) break;
-        try {
-          const cwd = JSON.parse(line)?.cwd;
-          if (typeof cwd === "string" && cwd) return cwd;
-        } catch {
-          /* a partial last line */
-        }
-      }
-    } finally {
-      rl.close();
-    }
-  }
-  return null;
-}
-
-/**
- * Read the newest Claude Code session transcript for a workspace: session ID +
- * the last `limit` user/assistant text messages (tool calls/results and meta
- * lines are skipped). Returns an empty transcript (sessionId null) when the
- * workspace has no sessions yet.
- */
+/** The newest session's last `limit` messages for a session key ({@link HarnessAdapter.transcript}). */
 export async function getClaudeTranscript(
   name: string,
   limit = 20,
   sessionId?: string,
 ): Promise<ClaudeTranscript> {
-  const target = await resolveSessionDir(name);
-  const empty: ClaudeTranscript = {
-    sessionId: null,
-    workspacePath: target,
-    messages: [],
-    sessionCount: 0,
-    updatedAt: null,
-  };
-  const projectDir = await findClaudeProjectDir(target);
-  if (!projectDir) return empty;
-  const sessions = await listSessionFiles(projectDir);
-  const chosen = pickSession(sessions, sessionId);
-  if (!chosen) return empty;
-
-  const resolvedId = path.basename(chosen.file, ".jsonl");
-  let text: string;
-  try {
-    text = await fs.readFile(chosen.file, "utf-8");
-  } catch (e) {
-    throw new WorkspaceError(`Could not read session file: ${(e as Error).message}`);
-  }
-
-  const entries = parseSessionLines(text);
-
-  // Window to the last `limit` conversational (user/assistant) messages,
-  // keeping the tool-activity rows that fall inside that window.
-  let start = entries.length;
-  let count = 0;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].role !== "tool") {
-      count++;
-      if (count > limit) break;
-    }
-    start = i;
-  }
-
-  return {
-    sessionId: resolvedId,
-    workspacePath: target,
-    messages: entries.slice(start),
-    sessionCount: sessions.length,
-    updatedAt: chosen.mtime.toISOString(),
-  };
+  return harness().transcript(await resolveSessionDir(name), limit, sessionId);
 }
 
 /**
- * `claude` argv for one headless turn. The workspace's model is passed as a flag
- * rather than left to settings.json, where a hand-set value would win.
- */
-export function claudeSendArgs(
-  body: string,
-  sessionId: string | null,
-  model: string | null,
-): string[] {
-  return [
-    "-p",
-    "--permission-mode",
-    "acceptEdits",
-    ...(model ? ["--model", model] : []),
-    ...(sessionId ? ["--resume", sessionId] : []),
-    body,
-  ];
-}
-
-/**
- * Send one message to a workspace's newest Claude Code session via
- * `claude -p --resume <sessionId>` (headless print mode), continuing the same
- * session on disk. When the workspace has no sessions yet, starts a new one
- * (plain `claude -p`).
+ * Send one message to a session key's newest Claude Code session, or start one
+ * when it has none ({@link HarnessAdapter.sendTurn}).
  *
  * FIRE-AND-FORGET: agentic turns routinely exceed the caller's MCP request
- * timeout (~60s), so this does NOT wait for the reply. The child is held for a
- * short grace period to surface immediate failures (missing CLI, bad session),
- * then detached; callers poll `claude-transcript` to watch the reply appear
- * (Claude Code appends messages to the session JSONL as the turn progresses).
- *
- * Headless mode can't prompt for tool permissions; `acceptEdits` lets it edit
- * files in the workspace without stalling.
+ * timeout (~60s), so this does NOT wait for the reply; callers poll
+ * `claude-transcript` to watch it appear.
  */
 export async function sendToClaudeSession(
   name: string,
@@ -3577,73 +2847,21 @@ export async function sendToClaudeSession(
   if (!body) throw new WorkspaceError("Message is empty.");
   const target = await resolveSessionDir(name);
   const transcript = await resolveSessionSource(name, sessionId, startDir);
-  const bin = await resolveClaudeBin();
-
   const { model } = await readWorkspaceConfig(target);
-  const args = claudeSendArgs(body, transcript.sessionId, model);
-
-  // `--resume` finds a session only from the folder it started in.
-  const child = spawn(bin, args, {
-    cwd: startDir ?? target,
-    env: childEnv(),
-    detached: true,
-    stdio: ["ignore", "ignore", "pipe"],
-  });
-
-  // Register the turn so `claude-turn-status` can report exactly when it
-  // finishes (vibe-kanban-style process tracking, instead of guessing from
-  // transcript quiescence).
-  const turn: ClaudeTurnState = {
-    pid: child.pid ?? null,
-    startedAt: new Date().toISOString(),
-    state: "running",
-    exitCode: null,
-    error: null,
-  };
-  claudeTurns.set(name, turn);
-  turnEvents.emit(name, { state: "running", error: null });
-
-  let stderr = "";
-  child.stderr?.on("data", (d) => {
-    if (stderr.length < 8192) stderr += d.toString();
-  });
-  child.on("error", (e) => {
-    turn.state = "failed";
-    turn.error = e.message;
-    turnEvents.emit(name, { state: "failed", error: turn.error });
-  });
-  child.on("exit", (code) => {
-    turn.exitCode = code;
-    if (code === 0) {
-      turn.state = "done";
-    } else {
-      turn.state = "failed";
-      const detail = stripAnsi(stderr).trim().split("\n").slice(-2).join(" ");
-      turn.error = `claude exited with code ${code}${detail ? `: ${detail}` : ""}`;
-    }
-    turnEvents.emit(name, { state: turn.state, error: turn.error });
-  });
-
-  // Grace period: catch spawn errors / immediate non-zero exits, then detach.
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 2500);
-    const settle = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    child.on("error", settle);
-    child.on("exit", settle);
-  });
-  if (turn.state === "failed") {
-    throw new WorkspaceError(`Could not start the turn — ${turn.error}`);
-  }
-  child.unref();
-
+  await harness().sendTurn(name, startDir ?? target, body, transcript.sessionId, model);
   return {
     sessionId: transcript.sessionId,
     started: true,
     startedNew: !transcript.sessionId,
   };
+}
+
+/** The most recent `claude-send` turn for a session key ({@link HarnessAdapter.turnStatus}). */
+export async function getClaudeTurnStatus(
+  name: string,
+): Promise<ReturnType<HarnessAdapter["turnStatus"]>> {
+  await resolveSessionDir(name); // validates the session key
+  return harness().turnStatus(name);
 }
 
 // ---------------------------------------------------------------------------
@@ -3699,49 +2917,6 @@ export async function getK8sForwardsHealth(): Promise<{
   };
 }
 
-export interface ClaudeTurnState {
-  pid: number | null;
-  startedAt: string;
-  state: "running" | "done" | "failed";
-  exitCode: number | null;
-  error: string | null;
-}
-
-/** In-process registry of the most recent claude-send turn per workspace. */
-const claudeTurns = new Map<string, ClaudeTurnState>();
-
-/**
- * Turn-transition bus: emits `(workspaceName, {state, error})` whenever a
- * claude-send turn flips running/done/failed. The live tailer
- * (lib/session-stream.ts) subscribes so the browser typing indicator ends the
- * instant the child exits, without polling `claude-turn-status`. Event name is
- * the workspace name; one listener per active tailer, so raise the cap.
- */
-export const turnEvents = new EventEmitter();
-turnEvents.setMaxListeners(0);
-
-/**
- * Report the state of the most recent `claude-send` turn for a workspace.
- * "idle" means no turn has been started by this server process (including
- * after a server restart — callers should fall back to transcript polling).
- */
-export async function getClaudeTurnStatus(name: string): Promise<{
-  state: "idle" | "running" | "done" | "failed";
-  startedAt: string | null;
-  exitCode: number | null;
-  error: string | null;
-}> {
-  await resolveSessionDir(name); // validates the session key
-  const turn = claudeTurns.get(name);
-  if (!turn) return { state: "idle", startedAt: null, exitCode: null, error: null };
-  return {
-    state: turn.state,
-    startedAt: turn.startedAt,
-    exitCode: turn.exitCode,
-    error: turn.error,
-  };
-}
-
 /**
  * Open a macOS Terminal window in the workspace directory resuming its newest
  * Claude Code session (`claude --resume <id>`), or starting fresh
@@ -3778,7 +2953,9 @@ export async function resumeClaudeInTerminal(
   const target = await resolveSessionDir(name);
   const resumeId = fresh ? null : (await getClaudeTranscript(name, 1, sessionId)).sessionId;
   const { model } = await readWorkspaceConfig(target);
-  await openTerminalRunning(`cd ${shellQuote(target)} && ${claudeResumeCommand(resumeId, model)}`);
+  await openTerminalRunning(
+    `cd ${shellQuote(target)} && ${harness().resumeCommand(resumeId, model)}`,
+  );
   return { path: target, sessionId: resumeId };
 }
 
@@ -3796,25 +2973,11 @@ export async function followLogsInTerminal(name: string): Promise<{ feature: str
   return { feature };
 }
 
-/** The shell command that reopens a workspace session in a terminal. */
-export function claudeResumeCommand(sessionId: string | null, model: string | null): string {
-  return [
-    "claude",
-    ...(model ? ["--model", shellQuote(model)] : []),
-    ...(sessionId ? ["--resume", sessionId] : []),
-  ].join(" ");
-}
-
 // A canonical GitHub PR URL, e.g. https://github.com/org/repo/pull/1234.
 // Exported and pure so the launchPrReconcile injection guard has a smoke test.
 const PR_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 export function isValidPrUrl(url: string): boolean {
   return PR_URL_RE.test(url);
-}
-
-/** Wrap a value in single quotes for a POSIX shell, escaping embedded quotes. */
-function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
 /** Cap the embedded diff so a huge PR can't blow up the context file / prompt. */
@@ -3909,23 +3072,8 @@ export async function launchPrReconcile(
   const ctxFile = path.join(dir, "reconcile-context.md");
   await fs.writeFile(ctxFile, buildReconcileContext(issue, pr, diff), "utf-8");
 
-  // SECURITY: the system prompt is built from third-party content (the PR
-  // author's title/body/diff, the issue description), so this must NOT run with
-  // --dangerously-skip-permissions — that would turn a prompt-injection payload
-  // in the PR into arbitrary command execution on the host. Instead:
-  //   • `-p` (headless) skips the folder-trust dialog the fresh dir would
-  //     otherwise stall on (documented behaviour) — which is the ONLY thing we
-  //     needed a bypass for, since the diff is embedded and the analysis turn
-  //     calls no tools. Headless mode also can't prompt, so any tool a payload
-  //     tries to invoke is DENIED rather than auto-approved (verified: a planted
-  //     "run bash" payload was refused and executed nothing).
-  //   • --disallowedTools hard-blocks the write/exec surface as defence in depth.
-  // NOT --bare: it skips keychain reads, which leaves the session unauthenticated
-  // ("Please run /login"). We lose --bare's leanness to keep working auth.
-  // The browser chat continues the session via `claude-send` (also `-p --resume`).
   await openTerminalRunning(
-    `cd ${shellQuote(dir)} && claude -p --disallowedTools Bash Edit Write ` +
-      `--append-system-prompt-file ${shellQuote(ctxFile)} ${shellQuote(RECONCILE_PROMPT)}`,
+    harness().reconcileCommand(dir, ctxFile, RECONCILE_PROMPT),
     false, // background: watched from the browser chat panel, don't steal focus
   );
   return { sessionKey: `${RECONCILE_PREFIX}${slug}`, slug, issue };

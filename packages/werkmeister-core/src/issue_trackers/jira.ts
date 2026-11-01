@@ -4,8 +4,8 @@
  * the same machine's `claude` has connected.
  */
 
-import { askClaudeJson } from "../claude_cli.js";
 import { loadJira, loadSandboxIssuesProject } from "../global_config.js";
+import { harness } from "../harness/index.js";
 import {
   boardColumnRest,
   createIssueRest,
@@ -90,7 +90,7 @@ const READ_ONLY =
   "Do not create, edit, transition, or comment on anything; write no prose outside the tags.";
 
 async function fetchViaMcp(key: string): Promise<Issue | null> {
-  const parsed = await askClaudeJson(
+  const parsed = await harness().askJson(
     "You are a data extractor, not an agent. Do exactly two things and nothing else:\n" +
       `1. Fetch Jira issue ${key} INCLUDING ITS COMMENTS using getJiraIssue ${jiraSitePhrase()} — request ` +
       'fields ["summary","status","issuetype","assignee","description","comment"].\n' +
@@ -125,7 +125,7 @@ async function fetchViaMcp(key: string): Promise<Issue | null> {
 }
 
 async function statusesViaMcp(keys: string[]): Promise<Record<string, string>> {
-  const parsed = await askClaudeJson(
+  const parsed = await harness().askJson(
     "You are a data extractor, not an agent. Do exactly two things and nothing else:\n" +
       `1. Run searchJiraIssuesUsingJql ${jiraSitePhrase()} with jql ` +
       `'key in (${keys.join(",")})' and fields ["status"].\n` +
@@ -150,7 +150,7 @@ async function updateViaMcp(key: string, update: IssueUpdate): Promise<void> {
     update.comment &&
       `Add this comment to Jira issue ${key} with addCommentToJiraIssue, verbatim:\n${update.comment}`,
   ].filter(Boolean);
-  const parsed = await askClaudeJson(
+  const parsed = await harness().askJson(
     `Do exactly this on the Jira site ${jiraSitePhrase()} and nothing else:\n` +
       steps.map((s, i) => `${i + 1}. ${s}`).join("\n") +
       '\nThen output ONLY <result>{"ok":true}</result>, or <result>{"ok":false,"error":"<why>"}</result> ' +

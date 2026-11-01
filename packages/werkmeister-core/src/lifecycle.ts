@@ -77,7 +77,7 @@ import {
 } from "./generate.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { reconcileGraduating } from "./graduate.js";
-import { writeAgentStateHooks } from "./hooks_gen.js";
+import { writeAgentStateHooks } from "./harness/claude/hooks_gen.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";

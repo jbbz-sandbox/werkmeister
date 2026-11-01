@@ -26,3 +26,17 @@ export class SandboxError extends Error {
     this.name = "SandboxError";
   }
 }
+
+/**
+ * A user-facing failure with a clean message (CLI not found, create failed, …).
+ *
+ * One code for all ~45 throw sites: they predate `SandboxError` and none of
+ * their callers branches on anything finer than the class. Giving them
+ * distinct codes is a separate change nothing has asked for yet.
+ */
+export class WorkspaceError extends SandboxError {
+  constructor(message: string) {
+    super(message, WORKSPACE_ERROR_CODE);
+    this.name = "WorkspaceError";
+  }
+}

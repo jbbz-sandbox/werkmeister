@@ -13,7 +13,11 @@ import * as path from "node:path";
 import { COMPOSE_FILE } from "../compose_file.js";
 import { dotDir, IDLE_SERVICE_TYPES } from "../config.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
-import { removeWorkspaceHooks, writePrGuardHook, writeWorkspaceSettings } from "../hooks_gen.js";
+import {
+  removeWorkspaceHooks,
+  writePrGuardHook,
+  writeWorkspaceSettings,
+} from "../harness/claude/hooks_gen.js";
 import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd } from "../pr_rules.js";

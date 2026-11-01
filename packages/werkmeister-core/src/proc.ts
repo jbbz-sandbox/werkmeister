@@ -11,7 +11,7 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { toolBin } from "./claude_cli.js";
+import { toolBin } from "./tool_bins.js";
 
 export interface RunOptions {
   /** Throw a ProcError when the command exits non-zero. */

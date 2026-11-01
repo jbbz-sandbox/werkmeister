@@ -44,16 +44,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { containerTestCommand, serviceTestCommand } from "./archetypes.js";
+import { containerTestCommand, serviceTestCommand } from "../../archetypes.js";
 import {
   type ArchetypeRegistry,
   dotDir,
   loadArchetypes,
   loadServices,
   type ServicesConfig,
-} from "./config.js";
-import { tempHomeWrapper } from "./temp_home.js";
-import { readAutonomous, readAutoStop, readModel } from "./workspace_prompts.js";
+} from "../../config.js";
+import { tempHomeWrapper } from "../../temp_home.js";
+import { readAutonomous, readAutoStop, readModel } from "../../workspace_prompts.js";
 
 // Markers doubling as the payload: entries containing them are werkmeister-managed.
 const _HOOK_MARKER = "werkmeister notes context";

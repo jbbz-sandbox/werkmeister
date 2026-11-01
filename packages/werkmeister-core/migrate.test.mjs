@@ -276,7 +276,9 @@ function movedHome() {
 // SW-186: what a pre-noun-group CLI left behind — old hook spellings, missing permission
 // twins, with-temp-home's `wait-load`, the stale SANDBOX_MCP_TOKEN, Desktop's `mcp` args.
 test("SW-186: rewrites pre-rename hooks, rules, wrapper, secrets and Desktop args; a re-run changes nothing", async () => {
-  const { writeWorkspaceHooks, writeWorkspaceSettings } = await import("./dist/hooks_gen.js");
+  const { writeWorkspaceHooks, writeWorkspaceSettings } = await import(
+    "./dist/harness/claude/hooks_gen.js"
+  );
   const { tempHomeWrapper, writeTempHomeWrapper } = await import("./dist/temp_home.js");
   movedHome();
   write(path.join(target, "secrets.env"), "OTHER=1\nSANDBOX_MCP_TOKEN=old\n");

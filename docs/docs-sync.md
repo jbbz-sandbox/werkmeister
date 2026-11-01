@@ -48,7 +48,7 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 
 | Region | Where | Source |
 | --- | --- | --- |
-| `autonomous-allow`, `autonomous-deny` | `docs/context-strategies.md` | `packages/werkmeister-core/src/hooks_gen.ts::autonomousRules`, `AUTONOMOUS_DENY` |
+| `autonomous-allow`, `autonomous-deny` | `docs/context-strategies.md` | `packages/werkmeister-core/src/harness/claude/hooks_gen.ts::autonomousRules`, `AUTONOMOUS_DENY` |
 | `mcp-tools` | `apps/werkmeister-mcp/README.md` | each `registerTool` / `registerAppTool` call's name and `title` in `apps/werkmeister-mcp/src` |
 | `cli-reference` | `docs/users-guide.md` | commander's commands, groups, arguments and options, through the CLI's hidden `__reference` mode, plus each command's `apps/cli/src/commands/<command>.help.md` |
 | `workspaces` | `README.md` | each `apps/*` and `packages/*` `package.json`'s `name` and `description` |

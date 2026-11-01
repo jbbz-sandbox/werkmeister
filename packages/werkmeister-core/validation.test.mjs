@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { candidateServiceNames, serviceValidation, validationRows } from "./dist/archetypes.js";
-import { buildSandboxContextMd } from "./dist/claude_md.js";
 import { loadServices } from "./dist/config.js";
+import { buildSandboxContextMd } from "./dist/harness/claude/claude_md.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
 const ARCHS = { tool: { validate: "run the tests", test: "npm test" } };

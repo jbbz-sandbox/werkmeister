@@ -19,7 +19,6 @@ import * as YAML from "yaml";
 
 import { candidateServiceNames } from "./archetypes.js";
 import { applyCaches } from "./build_caches.js";
-import { buildSandboxContextMd } from "./claude_md.js";
 import { projectName } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
 import {
@@ -46,6 +45,7 @@ import {
   stateInfraRoot,
 } from "./config.js";
 import { loadFeatureRouters } from "./feature_routing.js";
+import { buildSandboxContextMd } from "./harness/claude/claude_md.js";
 import { sandboxLock } from "./locks.js";
 import { info, success, warn } from "./reporter.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
