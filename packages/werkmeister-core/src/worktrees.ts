@@ -38,6 +38,7 @@ const _RUNTIME_FILES = [
   ".werkmeister/last-exec",
   ".werkmeister/starts.json",
   ".werkmeister/token",
+  ".werkmeister/gate-*.log",
 ];
 const _GITIGNORE_GENERATED = [
   "/.env",

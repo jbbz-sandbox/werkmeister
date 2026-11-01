@@ -38,6 +38,7 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       ".werkmeister/agent-state.json",
       ".werkmeister/last-exec",
       ".werkmeister/starts.json",
+      ".werkmeister/gate-app-test-api.log",
     ];
     assert.deepEqual(ignored(generated), generated);
     assert.deepEqual(
