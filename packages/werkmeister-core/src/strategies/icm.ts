@@ -196,7 +196,7 @@ function standardsRef(tier: Stage["standards"], r: Resolved): string {
 
 // The first stage's start is the one point no code observes, so its contract runs the move (SW-27).
 const START_ISSUE =
-  "Run `werkmeister issue start`: it moves the issue to In Progress, and does nothing when the issue is already past that or the tracker refuses.";
+  "Run `werkmeister issue start`: it moves the issue to In Progress, and does nothing when the issue is already past that or the tracker refuses. It also fetches each code worktree's base and fast-forwards a branch with no commits of its own; read its `Worktree:` lines.";
 
 function renderContract(dir: string, stage: Stage, v: IcmVars, startsIssue = false): string {
   const c = stage.contract(v);

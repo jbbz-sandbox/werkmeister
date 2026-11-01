@@ -161,7 +161,11 @@ export function resolveRepos(
  */
 export function defaultBaseRef(src: string): string {
   run(["git", "-C", src, "fetch", "origin", "--prune", "--quiet"], { capture: true });
+  return baseRef(src);
+}
 
+/** `defaultBaseRef` without the fetch: origin/HEAD, else origin/main or origin/master; throws if none. */
+export function baseRef(src: string): string {
   const originHead = (): string | null => {
     const result = run(["git", "-C", src, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], {
       capture: true,
@@ -196,6 +200,71 @@ export function defaultBaseRef(src: string): string {
   }
 
   throw new Error(`Could not determine default branch for ${src}`);
+}
+
+/** True when `dir` is a git working tree (worktree `.git` file or a `.git` dir). */
+export async function hasGit(dir: string): Promise<boolean> {
+  try {
+    await fs.promises.access(path.join(dir, ".git"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Immediate subdirectories of a workspace that are git worktrees (the repo checkouts). */
+export async function listRepoWorktrees(
+  workspaceDir: string,
+): Promise<Array<{ repo: string; dir: string }>> {
+  const entries = await fs.promises
+    .readdir(workspaceDir, { withFileTypes: true })
+    .catch((): fs.Dirent[] => []);
+  const out: Array<{ repo: string; dir: string }> = [];
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name.startsWith(".")) continue;
+    const dir = path.join(workspaceDir, e.name);
+    if (await hasGit(dir)) out.push({ repo: e.name, dir });
+  }
+  return out;
+}
+
+const firstLine = (s: string) => s.trim().split("\n")[0] ?? "";
+
+/**
+ * SW-271: bring each code worktree up to its base when a run starts, so research never maps stale code.
+ * A branch with no commits of its own is fast-forwarded; any other is only reported. One line per worktree;
+ * never throws, so the run start never fails on it.
+ */
+export function syncToBase(
+  worktrees: Array<{ repo: string; dir: string }>,
+): Array<{ ok: boolean; text: string }> {
+  return worktrees.map(({ repo, dir }) => {
+    const ok = (text: string) => ({ ok: true, text: `${repo}: ${text}` });
+    const warn = (text: string) => ({ ok: false, text: `${repo}: ${text}` });
+    const git = (...args: string[]) =>
+      // A credential prompt would hang the stage; 60 s bounds a slow or stuck fetch.
+      run(["git", "-C", dir, ...args], { capture: true, timeout: 60 });
+    const fetch = git("fetch", "origin", "--prune", "--quiet");
+    if (fetch.status !== 0)
+      return warn(`could not fetch origin (${firstLine(fetch.stderr) || "timed out"}), left as is`);
+    let base: string;
+    try {
+      base = baseRef(dir);
+    } catch {
+      return warn("no base branch found, left as is");
+    }
+    const count = (range: string) => Number(git("rev-list", "--count", range).stdout.trim());
+    const behind = count(`HEAD..${base}`);
+    if (behind === 0) return ok(`at ${base}`);
+    if (count(`${base}..HEAD`) > 0)
+      return warn(`${behind} commits behind ${base} (has its own commits, left as is)`);
+    if (worktreeIsDirty(dir))
+      return warn(`${behind} commits behind ${base} (uncommitted changes, not fast-forwarded)`);
+    const ff = git("merge", "--ff-only", "--quiet", base);
+    return ff.status === 0
+      ? ok(`fast-forwarded ${behind} commits to ${base}`)
+      : warn(`fast-forward failed (${firstLine(ff.stderr)}), ${behind} commits behind ${base}`);
+  });
 }
 
 /**

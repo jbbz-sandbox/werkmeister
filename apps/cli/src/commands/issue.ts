@@ -13,8 +13,9 @@
  * create: file a new issue and print its URL. Only trackers with an API path
  *         (Jira); GitHub issues are filed with `gh issue create`.
  * start:  inside a workspace, the first stage or phase began: move its issue to
- *         in progress, forward only (docs/workspace-lifecycle.md § Issue status).
- *         Exits 0 when the tracker refuses, so a stage never fails on it.
+ *         in progress, forward only (docs/workspace-lifecycle.md § Issue status),
+ *         then fast-forward each code worktree with no commits of its own to base.
+ *         Exits 0 when the tracker refuses or a fetch fails, so a stage never fails on it.
  * ready:  a project's open work in priority order: its board's ready column in
  *         board rank, else the scope's open issues (SW-104). The project is
  *         --project, else the workspace's, else the default one, else the only one.
@@ -42,6 +43,7 @@ import {
 } from "werkmeister-core/issue_tracker";
 import { loadProjects } from "werkmeister-core/projects";
 import { loadConfigFile } from "werkmeister-core/workspace_prompts";
+import { listRepoWorktrees, syncToBase } from "werkmeister-core/worktrees";
 
 import { error, success, warn } from "../lib/config.js";
 
@@ -142,6 +144,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       fail("Not inside a workspace — run this from a workspace folder or below.");
     const line = (await startIssue(workspace)) || "left as is (no in_progress status configured)";
     (line.includes("not moved") ? warn : success)(`Issue: ${line}`);
+    for (const r of syncToBase(await listRepoWorktrees(workspace)))
+      (r.ok ? success : warn)(`Worktree: ${r.text}`);
     return;
   }
   const update = args.action === "update" ? updateFromArgs(args) : null;
