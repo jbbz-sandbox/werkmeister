@@ -82,6 +82,32 @@ test("an unattended create takes only description and starting_prompt from the m
   );
 });
 
+test("the extractor asks for a service whose container the issue measures (SW-280)", async () => {
+  await withSandboxHome(
+    async () => {
+      await withFakeGh({ issue: ISSUE }, async () => {
+        let seen = "";
+        await quiet(() =>
+          prepareCreate(
+            { issue_id: "o/r#5" },
+            {
+              cwd: cwd(),
+              distill: async (p) => {
+                seen = p;
+                return ANSWER;
+              },
+            },
+          ),
+        );
+        assert.match(seen, /"services": array of the services the issue says to run locally/);
+        assert.match(seen, /whose container it measures or exercises/);
+        assert.match(seen, /name that service here and say to measure in its container/);
+      });
+    },
+    { config: GH },
+  );
+});
+
 test("a workspace container's own env does not leak into an unattended create (#148)", async () => {
   const keys = ["FEATURE", "SANDBOX_FEATURE", "WERKMEISTER_SLOT"];
   const prev = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
