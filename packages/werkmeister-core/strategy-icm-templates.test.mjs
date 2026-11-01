@@ -104,6 +104,20 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /as its Validation text in `werkmeister-context\.md`/, `${wt}/${d}`);
         }
         assert.doesNotMatch(c, /WERKMEISTER_CONFIG_FILE|skills check/, `${wt}/${d}`);
+        // SW-286: every exercise.md writer states the exact-cell rule the gate enforces.
+        if (c.includes("Write `output/exercise.md`")) {
+          const col = d.endsWith("_exercise") ? "detail" : "evidence";
+          assert.ok(c.includes(`\`| check | result | ${col} |\``), `${wt}/${d}`);
+          assert.match(c, /result cell is exactly `PASS` or `FAIL` — nothing else/, `${wt}/${d}`);
+          assert.match(c, /every table in `exercise\.md`/, `${wt}/${d}`);
+          assert.match(c, /superseded run in prose, not as a `FAIL` row/, `${wt}/${d}`);
+        }
+        if (d.endsWith("_propose"))
+          assert.match(
+            c,
+            /the gate reads them all — has a result cell of exactly `PASS` or `FAIL`/,
+            `${wt}/${d}`,
+          );
       }
       if (EXPECTED[wt].includes("exercise")) {
         const ex = fs.readFileSync(path.join(root, "stages", "03_exercise", "CONTEXT.md"), "utf8");
