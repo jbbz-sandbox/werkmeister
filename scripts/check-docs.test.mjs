@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { checkDoc, checkMan, isIgnored, slug } from "./check-docs.mjs";
+import { checkDoc, checkMan, isIgnored, listFiles, slug } from "./check-docs.mjs";
 
 const ctx = {
   cli: {
@@ -145,4 +145,13 @@ test("checkMan flags a stale, a missing and an orphaned man page", () => {
     ],
   );
   assert.deepEqual(checkMan({ "werkmeister.1": "old\n", "werkmeister-gone.1": "x\n" }, dir), []);
+});
+
+test("listFiles includes untracked files and skips gitignored ones", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-docs-"));
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "ign.md\n");
+  for (const f of ["tracked.md", "new.md", "ign.md"]) writeFileSync(join(root, f), "# T\n");
+  execFileSync("git", ["add", "tracked.md"], { cwd: root });
+  assert.deepEqual(listFiles(root).sort(), [".gitignore", "new.md", "tracked.md"]);
 });
