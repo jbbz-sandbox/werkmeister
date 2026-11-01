@@ -51,6 +51,23 @@ test("findWorkspaceRoot with roots returns the folder under the root, past a wor
   assert.equal(findWorkspaceRoot(path.join(root, "not-a-ws"), [root]), null);
 });
 
+// SW-285: macOS mktemp gives /var/folders/…, but process.cwd() is /private/var/folders/….
+test("findWorkspaceRoot with roots matches a cwd reached through a symlinked root (SW-285)", () => {
+  const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roots-real-")));
+  const link = `${real}-link`;
+  fs.symlinkSync(real, link);
+  const ws = path.join(real, "fx");
+  fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+  try {
+    const found = findWorkspaceRoot(ws, [link]);
+    assert.ok(found, "a cwd under the symlink's target is under the root");
+    assert.equal(fs.realpathSync(found), ws);
+  } finally {
+    fs.rmSync(link);
+    fs.rmSync(real, { recursive: true, force: true });
+  }
+});
+
 const DECIDED = { note: "decision", status: "decided" };
 
 function withGatedWorkspace(phaseGate, fn, { notesDir = true } = {}) {
