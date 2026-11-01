@@ -87,3 +87,8 @@ it("--skip-postmortem passes its reason through, alone or beside --abandon (SW-1
     skipPostmortem: "no time",
   });
 });
+
+it("--no-pr passes its reason through (SW-270)", async () => {
+  await run({ name: "ws", yes: true, noPr: "fix lived in ~/.claude" });
+  expect(closeOut).toHaveBeenLastCalledWith("ws", { noPr: "fix lived in ~/.claude" });
+});

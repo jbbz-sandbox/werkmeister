@@ -2327,6 +2327,86 @@ test("spike close-out: with a PR file it waits for ship then takes the PR path; 
   }
 });
 
+// ---- no PR needed (SW-270): the fix lived outside every repo ----------------------
+
+/** A finished ICM workspace with no PR files and one code worktree, `app`. */
+function noPrWorkspace(opts = {}) {
+  const ws = icmWorkspace({ files: {}, ...opts });
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  return ws;
+}
+const rejection = (p) =>
+  p.then(
+    () => null,
+    (e) => e,
+  );
+
+test("closeOut --no-pr: a clean, untouched workspace closes as done, not abandoned (SW-270)", async () => {
+  const ws = noPrWorkspace();
+  try {
+    let issue = null;
+    const d = deps([[/rev-list --count/, { stdout: "0\n" }]], {
+      tracker: {
+        fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+        updateIssue: async (ref, u) => (issue = [ref, u.status, u.comment]),
+      },
+    });
+    await inWorkspacesRoot(ws, (name) => closeOut(name, { noPr: "fix lived in ~/.claude" }, d));
+    assert.deepEqual(issue?.slice(0, 2), ["o/app#7", "closed"]);
+    assert.match(issue[2], /No PR needed: fix lived in ~\/\.claude/);
+    const closeout = fs.readFileSync(path.join(ws, "closeout.md"), "utf8");
+    assert.match(closeout, /^No PR needed: fix lived in ~\/\.claude$/m);
+    assert.doesNotMatch(closeout, /Abandoned/);
+    assert.equal(readUsage(ws).outcome, "shipped");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --no-pr refuses dirty, ahead-of-main or un-post-mortemed workspaces, changing nothing (SW-270)", async () => {
+  const cases = [
+    [{}, [[/status --porcelain/, { stdout: " M src/x.ts\n" }]], /app: uncommitted changes/],
+    [{}, [[/rev-list --count/, { stdout: "2\n" }]], /app: 2 commit\(s\) not on origin\/main/],
+    [{}, [[/rev-list --count/, { code: 128 }]], /app: can't tell/],
+    [{ postmortem: null }, [], /has no postmortem\.md/],
+  ];
+  for (const [opts, table, re] of cases) {
+    const ws = noPrWorkspace(opts);
+    try {
+      const err = await inWorkspacesRoot(ws, (name) =>
+        rejection(closeOut(name, { noPr: "outside every repo" }, deps(table))),
+      );
+      assert.ok(err instanceof WorkspaceError, String(err));
+      assert.match(err.message, re);
+      assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
+    } finally {
+      clean(ws);
+    }
+  }
+  // --no-pr is for a workspace with no PR files; one with PRs takes the normal path.
+  const withPr = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
+  try {
+    const err = await inWorkspacesRoot(withPr, (name) =>
+      rejection(closeOut(name, { noPr: "x" }, deps([]))),
+    );
+    assert.match(String(err), /has PR files/);
+  } finally {
+    clean(withPr);
+  }
+});
+
+test("closeOut without --no-pr: a no-PR workspace's refusal names --no-pr beside abandon (SW-270)", async () => {
+  const ws = noPrWorkspace();
+  try {
+    const err = await inWorkspacesRoot(ws, (name) => rejection(closeOut(name, {}, deps([]))));
+    assert.match(String(err), /is working \(no PR files\)/);
+    assert.match(String(err), /--no-pr "<reason>"/);
+    assert.match(String(err), /workspace abandon "<reason>"/);
+  } finally {
+    clean(ws);
+  }
+});
+
 test("callbackFields: both ids from the env, no host id outside the desktop app", () =>
   withClaudeHome({}, async () => {
     assert.deepEqual(

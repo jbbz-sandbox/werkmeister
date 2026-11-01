@@ -942,6 +942,10 @@ const SPECS: CommandSpec[] = [
         .option(
           "--skip-postmortem <reason>",
           "Close out without a post-mortem; the reason goes in closeout.md",
+        )
+        .option(
+          "--no-pr <reason>",
+          "Close out as done although there are no PR files: the work changed no repo (clean worktrees, no commits ahead). Needs postmortem.md; the reason goes in closeout.md and on the issue",
         );
     },
     namespace: ([name], o) => ({
@@ -949,6 +953,8 @@ const SPECS: CommandSpec[] = [
       yes: Boolean(o.yes),
       abandon: o.abandon ?? null,
       skipPostmortem: o.skipPostmortem ?? null,
+      // Commander reads `--no-pr <reason>` as `pr`: true by default, the reason when given.
+      noPr: typeof o.pr === "string" ? o.pr : null,
     }),
   },
   {
@@ -1357,6 +1363,10 @@ const SPECS: CommandSpec[] = [
         .option(
           "--skip-postmortem <reason>",
           "Close out without a post-mortem; the reason goes in closeout.md",
+        )
+        .option(
+          "--no-pr <reason>",
+          "Close out as done although there are no PR files: the work changed no repo (clean worktrees, no commits ahead). Needs postmortem.md; the reason goes in closeout.md and on the issue",
         );
     },
     namespace: ([name], o) => ({
@@ -1364,6 +1374,8 @@ const SPECS: CommandSpec[] = [
       yes: Boolean(o.yes),
       abandon: null,
       skipPostmortem: o.skipPostmortem ?? null,
+      // Commander reads `--no-pr <reason>` as `pr`: true by default, the reason when given.
+      noPr: typeof o.pr === "string" ? o.pr : null,
     }),
   },
   {
@@ -1390,6 +1402,7 @@ const SPECS: CommandSpec[] = [
       yes: Boolean(o.yes),
       abandon: reason,
       skipPostmortem: o.skipPostmortem ?? null,
+      noPr: null,
     }),
   },
   ...(

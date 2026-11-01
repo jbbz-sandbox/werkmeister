@@ -1884,6 +1884,21 @@ export async function removalBlockers(
   return out;
 }
 
+/** Why a no-PR close-out can't call *ws* untouched: per code worktree, uncommitted changes or commits not on its base. */
+async function untouchedBlockers(ws: string, run: Run): Promise<string[]> {
+  const out: string[] = [];
+  for (const { repo, dir } of await listRepoWorktrees(ws)) {
+    const status = await run("git", ["-C", dir, "status", "--porcelain"]);
+    if (status.code !== 0) out.push(`${repo}: can't tell whether it has uncommitted changes`);
+    else if (status.stdout.trim()) out.push(`${repo}: uncommitted changes`);
+    const base = await originBase(dir, run);
+    const n = await commitsAhead(dir, base, run);
+    if (n === null) out.push(`${repo}: can't tell whether it has commits not on ${base}`);
+    else if (n > 0) out.push(`${repo}: ${n} commit(s) not on ${base}`);
+  }
+  return out;
+}
+
 async function originBase(dir: string, run: Run): Promise<string> {
   const head = await run("git", ["-C", dir, "rev-parse", "--abbrev-ref", "origin/HEAD"]);
   return head.code === 0 && head.stdout.trim() ? head.stdout.trim() : "origin/main";
@@ -1967,11 +1982,12 @@ export async function openTerminalSessions(ws: string, run: Run = execRun): Prom
 /**
  * The one end-of-workspace verb (#160). Shipped: close the issue, write closeout.md, remove, delete
  * the merged branches. With *abandon*: record the reason, leave the issue, remove (which pushes every
- * branch) and keep the branches.
+ * branch) and keep the branches. With *noPr* (SW-270): the work changed no repo, so close as done
+ * with the reason instead of a PR.
  */
 export async function closeOut(
   name: string,
-  opts: { abandon?: string; skipPostmortem?: string } = {},
+  opts: { abandon?: string; skipPostmortem?: string; noPr?: string } = {},
   deps: Deps = defaultDeps(),
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
   const why = opts.abandon?.trim();
@@ -1984,6 +2000,17 @@ export async function closeOut(
   if (opts.skipPostmortem !== undefined && !skip) {
     throw new WorkspaceError(
       `Skipping the post-mortem needs a reason: werkmeister workspace close ${name} --skip-postmortem "<reason>"`,
+    );
+  }
+  const noPr = opts.noPr?.trim();
+  if (opts.noPr !== undefined && !noPr) {
+    throw new WorkspaceError(
+      `--no-pr needs a reason: werkmeister workspace close ${name} --no-pr "<reason>"`,
+    );
+  }
+  if (noPr && (why || skip)) {
+    throw new WorkspaceError(
+      `--no-pr closes a finished workspace as done, so it can't be combined with ${why ? "abandon" : "--skip-postmortem"}.`,
     );
   }
   const ws = await resolveWorkspaceDir(name).catch((e: Error) => {
@@ -2002,7 +2029,7 @@ export async function closeOut(
     );
   }
   try {
-    return await closeOutLocked(name, ws, why, skip, deps);
+    return await closeOutLocked(name, ws, why, skip, noPr, deps);
   } finally {
     fs.rmSync(lock, { force: true });
   }
@@ -2013,6 +2040,7 @@ async function closeOutLocked(
   ws: string,
   why: string | undefined,
   skip: string | undefined,
+  noPr: string | undefined,
   deps: Deps,
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
   const command = `werkmeister workspace ${why ? "abandon <reason>" : "close"} ${name}`;
@@ -2034,19 +2062,43 @@ async function closeOutLocked(
     String(cfg["work_type"] ?? "")
       .trim()
       .toLowerCase() === "spike";
+  // A retry (closed-out) passed these checks on its first run.
+  if (noPr && life.state !== "closed-out") {
+    if (life.prs.length) {
+      throw new WorkspaceError(
+        `'${name}' has PR files (${life.prs.map((p) => p.stem).join(", ")}); --no-pr is only for a workspace whose work needed no PR.`,
+      );
+    }
+    if (!fs.existsSync(postmortem)) {
+      throw new WorkspaceError(
+        `'${name}' has no postmortem.md. --no-pr closes a finished workspace: run the post-mortem first (the werkmeister \`postmortem\` skill).`,
+      );
+    }
+    const touched = await untouchedBlockers(ws, deps.run);
+    if (touched.length) {
+      throw new WorkspaceError(
+        `'${name}' changed a repo, so --no-pr can't close it: ${touched.join("; ")}. ` +
+          `Commit and open a PR (\`werkmeister pr open\`), or give up with \`werkmeister workspace abandon "<reason>" ${name}\`.`,
+      );
+    }
+  }
   // closed-out: closeout.md was written but removal failed; running again finishes it.
   if (
     !(
       life.state === "shipped" ||
       life.state === "abandoned" ||
       life.state === "closed-out" ||
-      spikeDone
+      spikeDone ||
+      noPr
     )
   ) {
     const detail = life.prs.map((p) => `${p.stem}: ${p.status}`).join(", ") || "no PR files";
     throw new WorkspaceError(
       `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`werkmeister pr status\` after the release, ` +
-        `or give up with \`werkmeister workspace abandon "<reason>" ${name}\`.`,
+        `or give up with \`werkmeister workspace abandon "<reason>" ${name}\`.` +
+        (life.prs.length
+          ? ""
+          : ` If the work changed no repo, close it as done: \`werkmeister workspace close ${name} --no-pr "<reason>"\`.`),
     );
   }
   // After the ship check, so an unshipped workspace hears that first.
@@ -2073,6 +2125,14 @@ async function closeOutLocked(
       // A retry: the first run already commented.
       const current = (await tracker.fetchIssue(ref))?.status ?? "";
       issueLine = `${ref} left ${current || "as is"} (abandoned)`;
+    } else if (noPr && life.state !== "closed-out") {
+      // alwaysComment: the issue may already be Done (SW-261 was), and the reason still belongs on it.
+      // Not on a retry, which would post it twice.
+      issueLine =
+        (await moveIssue(tracker, ref, "done", statuses, {
+          comment: `No PR needed: ${noPr}`,
+          alwaysComment: true,
+        })) || `${ref} left as is (no done status configured)`;
     } else {
       issueLine =
         (await moveIssue(tracker, ref, "done", statuses, {
@@ -2093,6 +2153,7 @@ async function closeOutLocked(
         issueLine,
         [
           why && `Abandoned: ${why}`,
+          noPr && `No PR needed: ${noPr}`,
           skip
             ? `Post-mortem skipped: ${skip}`
             : fs.existsSync(postmortem) && "Post-mortem: postmortem.md",

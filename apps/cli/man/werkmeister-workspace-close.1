@@ -10,9 +10,12 @@ Skip the confirmation prompt
 .TP
 \fB\-\-skip\-postmortem <reason>\fR
 Close out without a post\-mortem; the reason goes in closeout.md
+.TP
+\fB\-\-no\-pr <reason>\fR
+Close out as done although there are no PR files: the work changed no repo (clean worktrees, no commits ahead). Needs postmortem.md; the reason goes in closeout.md and on the issue
 .SH DESCRIPTION
 .PP
-The one way to end a workspace. First the post\-mortem: it refuses without \fBpostmortem.md\fR unless \fB\-\-skip\-postmortem\fR gives a reason. After every PR shipped, it closes the issue, writes \fBcloseout.md\fR, removes the workspace and deletes merged branches. \fBwerkmeister workspace abandon "<reason>"\fR instead records the reason, leaves the issue, pushes every branch and keeps them, and removes the workspace. It lists terminal Claude sessions still open in the workspace.
+The one way to end a workspace. First the post\-mortem: it refuses without \fBpostmortem.md\fR unless \fB\-\-skip\-postmortem\fR gives a reason. After every PR shipped, it closes the issue, writes \fBcloseout.md\fR, removes the workspace and deletes merged branches. \fBwerkmeister workspace abandon "<reason>"\fR instead records the reason, leaves the issue, pushes every branch and keeps them, and removes the workspace. When the work changed no repo, so there are no PR files, \fB\-\-no\-pr "<reason>"\fR closes it as done instead: it needs \fBpostmortem.md\fR, clean code worktrees and no commits ahead of their base, and the reason goes in \fBcloseout.md\fR and on the issue. It lists terminal Claude sessions still open in the workspace.
 .PP
 The full process is in docs/workspace\-lifecycle.md.
 .SH EXAMPLES
@@ -20,6 +23,7 @@ The full process is in docs/workspace\-lifecycle.md.
 .nf
 .RS 4
 werkmeister workspace close
+werkmeister workspace close \-\-no\-pr "the fix lives in ~/.claude, outside every repo"
 werkmeister workspace abandon "superseded by SW\-200" my\-feature
 .RE
 .fi

@@ -82,6 +82,7 @@ Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out
 | \`werkmeister pr adopt --no-pr "<reason>" [repo]\` | the fix is already on base with no PR: write a \`closed\` PR file with the reason |
 | \`werkmeister workspace close\` | after ship: move the issue to done if shipping didn't, write \`closeout.md\`, remove the workspace, delete merged branches |
 | \`werkmeister workspace abandon "<reason>"\` | give up: record the reason, comment it on the issue, push and keep every branch with commits of its own, remove the workspace |
+| \`werkmeister workspace close --no-pr "<reason>"\` | close out as done when the work changed no repo (no PR files, clean worktrees, no commits ahead); needs \`postmortem.md\` |
 | \`werkmeister workspace close --skip-postmortem "<reason>"\` | close out without a post-mortem, only when the person says to; the reason goes in \`closeout.md\` |
 `;
 }

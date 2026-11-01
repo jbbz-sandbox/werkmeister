@@ -153,7 +153,7 @@ repo:
 
 The workspaces pane shows the state on each card. It offers **↻ PRs** (`werkmeister pr status`) while a PR is open or merged, and one end button, which asks twice:
 
-- **✓ Close out** once every PR is shipped (or closed / abandoned), or for a spike with no PR files;
+- **✓ Close out** once every PR is shipped (or closed / abandoned), or for a spike with no PR files, or with `--no-pr "<reason>"` (MCP `no_pr`) when the work changed no repo: no PR files, `postmortem.md` present, every code worktree clean with no commits ahead of its base. It closes as done (issue moved to done with `No PR needed: <reason>`, usage outcome `shipped`), never as abandoned;
 - **✕ Abandon…** otherwise, with a reason field the second press needs filled.
 
 The workspaces MCP server has the same actions as `workspace-pr` and `close-out` (with an optional `abandon` reason).
@@ -253,6 +253,7 @@ The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the wor
 | Shipped: every PR settled, one shipped (release tag contains the merge, or merged where `ship: merge`) | `done` | `Done` | close as completed | `Shipped: <release> — <url>` |
 | `werkmeister pr open` for a follow-up after the issue is Done | — | no change | no change | `Follow-up PR opened: <url>` |
 | `werkmeister workspace close` | `done` if not already | `Done` | close if still open | `Shipped: …` |
+| `werkmeister workspace close --no-pr "<reason>"` | `done` if not already | `Done` | close if still open | `No PR needed: <reason>` (posted even when already Done) |
 | `werkmeister workspace abandon "<reason>"` | `abandoned` | no status, comment only | close as not planned | `Abandoned: <reason>` |
 | Spike | `done` at close-out | `Done` | closed | `Shipped: no PRs` |
 
