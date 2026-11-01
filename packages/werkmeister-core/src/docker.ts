@@ -99,7 +99,8 @@ function cliContextHost(): string | null {
   try {
     const result = run(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"], {
       capture: true,
-      timeout: 10,
+      // A load-starved CLI read as "no context" addresses the wrong daemon (SW-294).
+      timeout: 30,
     });
     if (result.status !== 0) return null;
     return result.stdout.trim() || null;
