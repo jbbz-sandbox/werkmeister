@@ -387,6 +387,12 @@ export function appEntry(app: WebApp): { dir: string; entry: string; bundled: bo
   return { dir: sandboxRoot(), entry: bundled, bundled: true };
 }
 
+/** The absolute path of *app*'s entry: `appEntry`'s is relative to its dir on a checkout. */
+export function appEntryPath(app: WebApp): string | undefined {
+  const e = appEntry(app);
+  return e ? path.resolve(e.dir, e.entry) : undefined;
+}
+
 /**
  * Build (optional) and start one web server.
  *

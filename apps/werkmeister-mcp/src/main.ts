@@ -26,12 +26,15 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { composeLogsStream } from "werkmeister-core/compose";
-import { DEFAULT_DAEMON_PORT } from "werkmeister-core/daemon_client";
+import { BUILD_HEADER, buildOf, DEFAULT_DAEMON_PORT } from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
 import { ownScheduler } from "werkmeister-core/scheduler_client";
+import { readQueue } from "werkmeister-core/scheduler_state";
+import { DAEMON_LABEL } from "werkmeister-core/web_servers";
 import { registerDaemonTools, registerSchedulerTool } from "./daemon_tools.js";
 import { resolveFeature, SCOPE_HEADER } from "./lib/feature.js";
 import { connectInMemoryClient } from "./lib/in_memory.js";
+import { restartGuard } from "./lib/self_restart.js";
 import { readOrCreateToken, type Scope, scopeOf } from "./lib/token.js";
 import { WORKSPACE_SCOPED_TOOLS } from "./scope.js";
 import { registerTools } from "./tools.js";
@@ -110,6 +113,22 @@ async function startHttp(): Promise<void> {
   const host = process.env.HOST ?? "127.0.0.1";
   const token = readOrCreateToken();
   const app = createMcpExpressApp({ host });
+  const guard = restartGuard({
+    entry: fs.realpathSync(process.argv[1]),
+    build: buildOf,
+    queued: () => readQueue().length,
+    // launchd sets XPC_SERVICE_NAME to the job label; a PID-file daemon has nothing to restart it.
+    exit:
+      process.env.XPC_SERVICE_NAME === DAEMON_LABEL
+        ? () => {
+            httpServer.close(() => process.exit(0));
+            // Only uncounted log follows can be left open here; close() would wait on them forever.
+            httpServer.closeAllConnections();
+          }
+        : undefined,
+    log: (msg) => console.error(`[werkmeister-mcp] ${msg}`),
+  });
+  setInterval(() => guard.check(), 5000).unref();
 
   // No browser UI here, so any Origin at all is a browser reaching a server
   // that has none. Refusing outright is both less code than an allowlist and
@@ -133,7 +152,27 @@ async function startHttp(): Promise<void> {
     }
     setScopeHeader(req, scope.scope === "workspace" ? scope.name : undefined);
     res.locals["scope"] = scope;
+    if (guard.loaded) res.setHeader(BUILD_HEADER, guard.loaded);
+    // A CLI that sees another build on disk is a cue not to wait for the next poll;
+    // checked once this response is done, so the exit can't cut the request carrying it.
+    const sent = req.headers[BUILD_HEADER];
+    if (sent && sent !== guard.loaded) res.on("close", () => guard.check());
     next();
+  });
+
+  app.get("/api/status", (_req: Request, res: Response) => {
+    res.json({ pid: process.pid, ...guard.status() });
+  });
+
+  // Calls the restart must wait for. Log follows are left out: one can stay open for hours.
+  app.use(["/api/tool", "/mcp"], (_req: Request, res: Response, next: NextFunction) => {
+    void guard.track(
+      () =>
+        new Promise<void>((done) => {
+          res.on("close", () => done());
+          next();
+        }),
+    );
   });
 
   // Host thin clients (VS Code, the SessionEnd stop): plain JSON instead of the

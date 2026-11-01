@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { Argument, Command, Option } from "commander";
 import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 import { envVar } from "werkmeister-core/config";
+import { buildOf, expectDaemonBuild } from "werkmeister-core/daemon_client";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "werkmeister-core/errors";
 import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
@@ -27,6 +28,7 @@ import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 // werkmeister-core is already this CLI's core dependency and every command
 // module loads far more of it on demand.
 import { STRATEGY_IDS } from "werkmeister-core/strategies";
+import { appEntryPath, MCP } from "werkmeister-core/web_servers";
 import budgetHelp from "./commands/budget.help.md";
 import cacheHelp from "./commands/cache.help.md";
 import cleanHelp from "./commands/clean.help.md";
@@ -1868,6 +1870,7 @@ export async function main(): Promise<void> {
   if (!parseOnly && !hookCall) {
     const warning = staleBuildWarning(BUILD_STAMP, path.resolve(_REPO_ROOT, "../.."));
     if (warning) console.error(warning);
+    expectDaemonBuild(() => buildOf(appEntryPath(MCP)));
   }
 
   if (process.argv.length <= 2) {

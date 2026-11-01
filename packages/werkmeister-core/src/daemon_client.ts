@@ -14,6 +14,7 @@ import { envVar } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
 import { load } from "./global_config.js";
+import { warn } from "./reporter.js";
 import { workspaceTokenFile } from "./workspace_token.js";
 
 export const DEFAULT_DAEMON_PORT = 3002;
@@ -72,6 +73,74 @@ async function send(url: string, init: RequestInit): Promise<Response> {
   }
 }
 
+/** Request: the build the CLI would start. Response: the build the daemon loaded (SW-306). */
+export const BUILD_HEADER = "x-werkmeister-build";
+
+/**
+ * `<version> @ <mtime>` of a daemon entry, or null when unreadable. Both parts:
+ * a dev-link rebuild moves only the mtime, while npm extracts every release with
+ * one fixed mtime, so a release moves only the version.
+ */
+export function buildOf(entry: string | undefined): string | null {
+  if (!entry) return null;
+  try {
+    const mtime = fs
+      .statSync(entry)
+      .mtime.toISOString()
+      .replace(/\.\d+Z$/, "Z");
+    for (let dir = path.dirname(entry); ; dir = path.dirname(dir)) {
+      const pkg = path.join(dir, "package.json");
+      if (fs.existsSync(pkg))
+        return `${JSON.parse(fs.readFileSync(pkg, "utf8")).version} @ ${mtime}`;
+      if (path.dirname(dir) === dir) return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+// Set only by the CLI: the VS Code extension bundles this module and must neither stat nor print.
+let expectedBuild: (() => string | null) | null = null;
+let staleWarned = false;
+
+/** Send *get*'s build with each call and warn once when the daemon loaded another. */
+export function expectDaemonBuild(get: () => string | null): void {
+  expectedBuild = get;
+}
+
+function checkBuild(onDisk: string | null, res: Response): void {
+  const loaded = res.headers.get(BUILD_HEADER);
+  if (staleWarned || !onDisk || !loaded || loaded === onDisk) return;
+  staleWarned = true;
+  warn(
+    `The werkmeister daemon runs an older build (loaded ${loaded}, on disk ${onDisk}); ` +
+      "it restarts by itself once idle, or run `werkmeister daemon restart`.",
+  );
+}
+
+export interface DaemonStatus {
+  pid: number;
+  loaded: string | null;
+  onDisk: string | null;
+  stale: boolean;
+  inFlight: number;
+  queued: number;
+  restartPending: boolean;
+}
+
+/** The daemon's own `GET /api/status`, or null when it is down or refuses. */
+export async function daemonStatus(): Promise<DaemonStatus | null> {
+  try {
+    const res = await send(`${daemonUrl()}/api/status`, {
+      headers: headers(undefined),
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.ok ? ((await res.json()) as DaemonStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ToolResult<T> {
   data: T;
   text: string;
@@ -83,12 +152,18 @@ export async function callTool<T = unknown>(
   opts: { token?: string | null; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ToolResult<T>> {
   const timeout = AbortSignal.timeout(opts.timeoutMs ?? 120_000);
+  const build = expectedBuild?.() ?? null;
   const res = await send(`${daemonUrl()}/api/tool`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...headers(opts.token) },
+    headers: {
+      "Content-Type": "application/json",
+      ...headers(opts.token),
+      ...(build ? { [BUILD_HEADER]: build } : {}),
+    },
     body: JSON.stringify({ name, arguments: args }),
     signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
   });
+  checkBuild(build, res);
   const body = (await res.json().catch(() => ({}))) as {
     structuredContent?: T;
     text?: string;
