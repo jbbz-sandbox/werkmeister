@@ -645,6 +645,8 @@ test("the first stage contract, and only it, starts the issue when there is one 
       const contract = (d) => fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8");
       assert.match(contract("01_research"), start);
       assert.match(contract("01_research"), /^1\. List what exists/m, "step numbers are kept");
+      assert.match(contract("01_research"), /`CLI:` line.*stale, stop and apply the fix/);
+      assert.doesNotMatch(contract("02_spec"), /`CLI:` line/);
       assert.doesNotMatch(contract("02_spec"), start);
     },
     { meta: { FEATURE: "demo", SERVICES: "backend", ISSUE_ID: "o/r#5" } },
