@@ -28,9 +28,19 @@ function textOf(result: CallToolResult): string {
   return part?.text ?? "Tool call failed.";
 }
 
+// The list that opened this view. Some hosts (the Desktop Code tab) refuse the
+// view's own server calls with "IPC not available", so the list falls back to it.
+let opened: unknown;
+
 const bridge: HostBridge = {
   async callTool(name, args) {
-    const res = await app.callServerTool({ name, arguments: args ?? {} });
+    let res: CallToolResult;
+    try {
+      res = await app.callServerTool({ name, arguments: args ?? {} });
+    } catch (e) {
+      if (name === "list-workspaces" && opened) return opened;
+      throw e;
+    }
     if (res.isError) throw new Error(textOf(res));
     return res.structuredContent ?? JSON.parse(textOf(res));
   },
@@ -50,9 +60,11 @@ function handleHostContextChanged(ctx: McpUiHostContext): void {
 app.onteardown = async () => ({});
 app.onerror = console.error;
 app.onhostcontextchanged = handleHostContextChanged;
-// The shared UI fetches its own data via list-workspaces; the initial tool
-// result that opened this view is redundant, so it's intentionally ignored.
-app.ontoolresult = () => {};
+// The shared UI fetches its own data via list-workspaces; the opening result is
+// kept only as the fallback above.
+app.ontoolresult = (result: CallToolResult) => {
+  opened = result.structuredContent ?? opened;
+};
 
 await app.connect();
 const ctx = app.getHostContext();
