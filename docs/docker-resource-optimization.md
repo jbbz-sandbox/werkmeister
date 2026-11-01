@@ -207,7 +207,7 @@ The defaults come from `docker info`, so a new machine needs no setup:
 | `memory` | the Docker engine's memory minus 1G |
 | `cpus` | the engine's CPU count |
 | `preempt` | `true`: a person's `up` may stop an autonomous feature to make room |
-| `host_load` | twice the host's CPU count: the gate waits before each check while the host's 1-minute load is above it, up to 30 minutes; `with-temp-home` waits the same way before its command; `0` turns the wait off |
+| `host_load` | twice the host's CPU count: the gate waits before each check while the host's 1-minute load is above it, up to 10 minutes in all per gate run; `with-temp-home` waits the same way before its command; `0` turns the wait off |
 
 Override any of them in `~/.werkmeister/config.yaml`:
 

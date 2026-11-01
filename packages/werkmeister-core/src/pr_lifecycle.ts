@@ -541,30 +541,45 @@ async function repoCheck(dir: string, file: PrFile, deps: Deps): Promise<[boolea
 }
 
 const LOAD_POLL_MS = 15_000;
-const LOAD_WAIT_MS = 30 * 60_000;
+// The whole gate run's wait, shared by every check, so lint + tests + release can't stack waits (SW-262).
+const LOAD_WAIT_MS = 10 * 60_000;
+const LOAD_PROGRESS_MS = 60_000;
 
 const readHostLoad = () => ({ load: os.loadavg(), cores: os.availableParallelism() });
 
-/** Wait for host load under the limit before gate check *check*; the note for its row, or "". */
+const minutes = (ms: number) => Number((ms / 60_000).toFixed(1));
+
+/**
+ * Wait for host load under the limit before gate check *check*, spending *budget*; the note for its row, or "".
+ * Says up front how long it may wait and prints progress each minute (SW-262, SW-266).
+ */
 export async function waitForHostLoad(
   deps: Pick<Deps, "hostLoad" | "sleep">,
   wait: boolean,
   check: string,
   skip = "--no-wait",
+  budget: { leftMs: number } = { leftMs: LOAD_WAIT_MS },
 ): Promise<string> {
   let { load, cores } = deps.hostLoad();
   const limit = hostLoadLimit(cores);
   if (!wait || limit === 0 || load[0] <= limit) return "";
+  const spent = () =>
+    `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(LOAD_WAIT_MS)} min host-load wait is spent`;
+  if (budget.leftMs <= 0) return spent();
   info(
-    `waiting for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${check}; ${skip} skips`,
+    `waiting up to ${minutes(budget.leftMs)} min for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${check}; ${skip} skips`,
   );
-  const polls = LOAD_WAIT_MS / LOAD_POLL_MS;
-  for (let n = 1; n <= polls; n++) {
+  for (let waited = LOAD_POLL_MS; budget.leftMs > 0; waited += LOAD_POLL_MS) {
     await deps.sleep(LOAD_POLL_MS);
+    budget.leftMs -= LOAD_POLL_MS;
     ({ load } = deps.hostLoad());
-    if (load[0] <= limit) return `waited ${(n * LOAD_POLL_MS) / 1000} s for host load`;
+    if (load[0] <= limit) return `waited ${waited / 1000} s for host load`;
+    if (waited % LOAD_PROGRESS_MS === 0 && budget.leftMs > 0)
+      info(
+        `still waiting for host load: ${load[0].toFixed(1)} over ${limit}, ${waited / 1000} s so far, up to ${minutes(budget.leftMs)} min left`,
+      );
   }
-  return `ran with host load ${load[0].toFixed(1)} over ${limit} after a 30 min wait`;
+  return spent();
 }
 
 /** The gate's wait for `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224). */
@@ -587,10 +602,11 @@ async function gateChecks(
 ): Promise<GateResult> {
   const checks: GateCheck[] = [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+  const loadBudget = { leftMs: LOAD_WAIT_MS };
   // A failure ends with the host load, so a timeout under load reads as load (SW-209).
   const execCheck = async (name: string, container: string, cmd: string, tail: number) => {
     touchExecMarker(ws);
-    const waited = await waitForHostLoad(deps, wait, name);
+    const waited = await waitForHostLoad(deps, wait, name, "--no-wait", loadBudget);
     touchExecMarker(ws);
     const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
     const lines = [`${cmd} → exit ${res.code}`];
